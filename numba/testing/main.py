@@ -192,6 +192,7 @@ class NumbaTestProgram(unittest.main):
     exclude_tags = None
     random_select = None
     random_seed = 42
+    timing = False
 
     def __init__(self, *args, **kwargs):
         topleveldir = kwargs.pop('topleveldir', None)
@@ -234,6 +235,8 @@ class NumbaTestProgram(unittest.main):
         parser.add_argument('-j', '--slice', dest='useslice', nargs='?',
                             type=str, const="None",
                             help='Shard the test sequence')
+        parser.add_argument('--timing', dest='timing', action='store_true',
+                            help="Record test runtime.")
 
         def git_diff_str(x):
             if x != 'ancestor':
@@ -353,6 +356,7 @@ class NumbaTestProgram(unittest.main):
             self.testRunner = ParallelTestRunner(runner.TextTestRunner,
                                                  self.multiprocess,
                                                  self.useslice,
+                                                 timing=self.timing,
                                                  verbosity=self.verbosity,
                                                  failfast=self.failfast,
                                                  buffer=self.buffer)
@@ -681,9 +685,10 @@ class _MinimalRunner(object):
     child process and run a test case with it.
     """
 
-    def __init__(self, runner_cls, runner_args):
+    def __init__(self, runner_cls, runner_args, *, timing=False):
         self.runner_cls = runner_cls
         self.runner_args = runner_args
+        self.timing = timing
 
     # Python 2 doesn't know how to pickle instance methods, so we use __call__
     # instead.
@@ -705,9 +710,12 @@ class _MinimalRunner(object):
         with self.cleanup_object(test):
             test(result)
         end_time = time.perf_counter()
+        runtime = end_time - start_time
+        if self.timing and self.runner_args.get('verbosity', 0) > 1:
+            print(f"    Runtime (seconds): {runtime}", file=result.stream)
         # HACK as cStringIO.StringIO isn't picklable in 2.x
         result.stream = _FakeStringIO(result.stream.getvalue())
-        return _MinimalResult(result, test.id(), test_runtime=end_time - start_time)
+        return _MinimalResult(result, test.id(), test_runtime=runtime)
 
     @contextlib.contextmanager
     def cleanup_object(self, test):
@@ -763,17 +771,19 @@ class ParallelTestRunner(runner.TextTestRunner):
     resultclass = ParallelTestResult
     timeout = _TIMEOUT
 
-    def __init__(self, runner_cls, nprocs, useslice, **kwargs):
+    def __init__(self, runner_cls, nprocs, useslice, timing, **kwargs):
         runner.TextTestRunner.__init__(self, **kwargs)
         self.runner_cls = runner_cls
         self.nprocs = nprocs
         self.useslice = parse_slice(useslice)
         self.runner_args = kwargs
+        self.timing = timing
 
     def _run_inner(self, result):
         # We hijack TextTestRunner.run()'s inner logic by passing this
         # method as if it were a test case.
-        child_runner = _MinimalRunner(self.runner_cls, self.runner_args)
+        child_runner = _MinimalRunner(self.runner_cls, self.runner_args,
+                                      timing=self.timing)
 
         # Split the tests and recycle the worker process to tame memory usage.
         chunk_size = 100
@@ -835,5 +845,7 @@ class ParallelTestRunner(runner.TextTestRunner):
         # This will call self._run_inner() on the created result object,
         # and print out the detailed test results at the end.
         result = super(ParallelTestRunner, self).run(self._run_inner)
-        self.stream.write(f"Total test runtime: {result.test_runtime}\n")
+        # Write timing
+        if self.timing:
+            self.stream.write(f"Total test runtime (seconds): {result.test_runtime}\n")
         return result
