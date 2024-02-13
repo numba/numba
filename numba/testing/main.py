@@ -192,7 +192,8 @@ class NumbaTestProgram(unittest.main):
     exclude_tags = None
     random_select = None
     random_seed = 42
-    timing = False
+    show_timing = False
+    write_junit = False
 
     def __init__(self, *args, **kwargs):
         topleveldir = kwargs.pop('topleveldir', None)
@@ -235,8 +236,11 @@ class NumbaTestProgram(unittest.main):
         parser.add_argument('-j', '--slice', dest='useslice', nargs='?',
                             type=str, const="None",
                             help='Shard the test sequence')
-        parser.add_argument('--timing', dest='timing', action='store_true',
-                            help="Record test runtime.")
+        parser.add_argument('--show-timing', dest='show_timing', action='store_true',
+                            help=("Print recorded timing for each test and "
+                                  "the whole suite."))
+        parser.add_argument('--junit', dest='write_junit', action='store_true',
+                            help=("Write junit xml output"))
 
         def git_diff_str(x):
             if x != 'ancestor':
@@ -356,7 +360,8 @@ class NumbaTestProgram(unittest.main):
             self.testRunner = ParallelTestRunner(runner.TextTestRunner,
                                                  self.multiprocess,
                                                  self.useslice,
-                                                 timing=self.timing,
+                                                 show_timing=self.show_timing,
+                                                 write_junit=self.write_junit,
                                                  verbosity=self.verbosity,
                                                  failfast=self.failfast,
                                                  buffer=self.buffer)
@@ -622,12 +627,26 @@ class ParallelTestResult(runner.TextTestResult):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.test_runtime = 0.0
+        self.records = []
 
     def add_results(self, result):
         """
         Add the results from the other *result* to this result.
         """
-        self.stream.write(result.stream.getvalue())
+        classname, testname = result.test_id.rsplit('.', 1)
+        streamout = result.stream.getvalue()
+        self.records.append({
+            'classname': classname,
+            'testname': testname,
+            'stream': streamout,
+            'runtime': result.test_runtime,
+            'failures': result.failures,
+            'errors': result.errors,
+            'skipped': result.skipped,
+            'expectedFailures': result.expectedFailures,
+            'unexpectedSuccesses': result.unexpectedSuccesses,
+        })
+        self.stream.write(streamout)
         self.test_runtime += result.test_runtime
         self.stream.flush()
         self.testsRun += result.testsRun
@@ -636,6 +655,37 @@ class ParallelTestResult(runner.TextTestResult):
         self.skipped.extend(result.skipped)
         self.expectedFailures.extend(result.expectedFailures)
         self.unexpectedSuccesses.extend(result.unexpectedSuccesses)
+
+    def write_junit_xml(self, output):
+        """
+        Parameters
+        ----------
+        output: file or filename
+        """
+        from xml.etree.ElementTree import Element, SubElement, ElementTree
+
+        suites = Element("testsuites", time=str(self.test_runtime))
+        suite = SubElement(suites, "testsuite", name="numba_testsuite")
+        status_to_tags = {
+            'errors': 'error',
+            'failures': 'failure',
+            'skipped': 'skipped',
+            'expectedFailures': 'failure',
+            'unexpectedSuccesses': 'failure',
+        }
+        for rec in self.records:
+            testcase = SubElement(
+                suite, "testcase", name=rec['testname'],
+                classname=rec['classname'], time=str(rec['runtime']),
+            )
+            # Add error/failure/skipped tags accordingly
+            for kind, tag in status_to_tags.items():
+                if rec[kind]:
+                    [(_id, traceback)] = rec[kind]
+                    SubElement(testcase, tag).text = traceback
+                    break
+
+        ElementTree(suites).write(output, xml_declaration=True, encoding='utf-8')
 
 
 class _MinimalResult(object):
@@ -685,10 +735,11 @@ class _MinimalRunner(object):
     child process and run a test case with it.
     """
 
-    def __init__(self, runner_cls, runner_args, *, timing=False):
+    def __init__(self, runner_cls, runner_args, *, show_timing=False, write_junit=False):
         self.runner_cls = runner_cls
         self.runner_args = runner_args
-        self.timing = timing
+        self.show_timing = show_timing
+        self.write_junit = write_junit
 
     # Python 2 doesn't know how to pickle instance methods, so we use __call__
     # instead.
@@ -711,7 +762,7 @@ class _MinimalRunner(object):
             test(result)
         end_time = time.perf_counter()
         runtime = end_time - start_time
-        if self.timing and self.runner_args.get('verbosity', 0) > 1:
+        if self.show_timing and self.runner_args.get('verbosity', 0) > 1:
             print(f"    Runtime (seconds): {runtime}", file=result.stream)
         # HACK as cStringIO.StringIO isn't picklable in 2.x
         result.stream = _FakeStringIO(result.stream.getvalue())
@@ -771,19 +822,20 @@ class ParallelTestRunner(runner.TextTestRunner):
     resultclass = ParallelTestResult
     timeout = _TIMEOUT
 
-    def __init__(self, runner_cls, nprocs, useslice, timing, **kwargs):
+    def __init__(self, runner_cls, nprocs, useslice, *, show_timing, write_junit, **kwargs):
         runner.TextTestRunner.__init__(self, **kwargs)
         self.runner_cls = runner_cls
         self.nprocs = nprocs
         self.useslice = parse_slice(useslice)
         self.runner_args = kwargs
-        self.timing = timing
+        self.show_timing = show_timing
+        self.write_junit = write_junit
 
     def _run_inner(self, result):
         # We hijack TextTestRunner.run()'s inner logic by passing this
         # method as if it were a test case.
         child_runner = _MinimalRunner(self.runner_cls, self.runner_args,
-                                      timing=self.timing)
+                                      show_timing=self.show_timing)
 
         # Split the tests and recycle the worker process to tame memory usage.
         chunk_size = 100
@@ -846,6 +898,11 @@ class ParallelTestRunner(runner.TextTestRunner):
         # and print out the detailed test results at the end.
         result = super(ParallelTestRunner, self).run(self._run_inner)
         # Write timing
-        if self.timing:
+        if self.show_timing:
             self.stream.write(f"Total test runtime (seconds): {result.test_runtime}\n")
+
+        if self.write_junit:
+            filename = f"junit_testsuites_{time.time()}.xml"
+            print("Writing junit xml file:", filename)
+            result.write_junit_xml(filename)
         return result
