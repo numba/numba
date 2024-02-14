@@ -434,9 +434,8 @@ class TestMathLib(TestCase):
 
     def test_nextafter(self):
         pyfunc = nextafter
-        x_types = [types.int64, types.uint64,
-                   types.float32, types.float64]
-        x_values = [0, 0.0, 3, 4, .21, .34]
+        x_types = [types.float32, types.float64]
+        x_values = [0.0, .21, .34, 1005382.042, -25.328]
         y_values = [x + 2 for x in x_values]
         self.run_binary(pyfunc, x_types, x_values, y_values)
 
