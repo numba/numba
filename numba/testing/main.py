@@ -781,7 +781,8 @@ class _MinimalRunner(object):
     # Python 2 doesn't know how to pickle instance methods, so we use __call__
     # instead.
 
-    def __call__(self, test):
+    def __call__(self, test_and_queue):
+        [test, queue] = test_and_queue
         # Executed in child process
         kwargs = self.runner_args
         # Force recording of output in a buffer (it will be printed out
@@ -795,6 +796,13 @@ class _MinimalRunner(object):
         result.failfast = runner.failfast
         result.buffer = runner.buffer
         start_time = time.perf_counter()
+        pid = os.getpid()
+        # Notify testsuite manager which tests are active
+        queue.put_nowait({
+            'start_time': start_time,
+            'pid': pid,
+            'test_id': test.id(),
+        })
         with self.cleanup_object(test):
             test(result)
         end_time = time.perf_counter()
@@ -805,7 +813,7 @@ class _MinimalRunner(object):
         result.stream = _FakeStringIO(result.stream.getvalue())
         return _MinimalResult(
             result, test.id(), test_runtime=runtime, start_time=start_time,
-            pid=os.getpid(),
+            pid=pid,
         )
 
     @contextlib.contextmanager
@@ -882,49 +890,78 @@ class ParallelTestRunner(runner.TextTestRunner):
         splitted_tests = [self._ptests[i:i + chunk_size]
                           for i in range(0, len(self._ptests), chunk_size)]
 
-        for tests in splitted_tests:
-            pool = multiprocessing.Pool(self.nprocs)
-            try:
-                self._run_parallel_tests(result, pool, child_runner, tests)
-            except:
-                # On exception, kill still active workers immediately
-                pool.terminate()
-                # Make sure exception is reported and not ignored
-                raise
-            else:
-                # Close the pool cleanly unless asked to early out
-                if result.shouldStop:
+        # Create the manager
+        with multiprocessing.Manager() as manager:
+            for tests in splitted_tests:
+                pool = multiprocessing.Pool(self.nprocs)
+                queue = manager.Queue()
+                try:
+                    self._run_parallel_tests(result, pool, child_runner, tests,
+                                             queue)
+                except:
+                    # On exception, kill still active workers immediately
                     pool.terminate()
-                    break
+                    # Make sure exception is reported and not ignored
+                    raise
                 else:
-                    pool.close()
-            finally:
-                # Always join the pool (this is necessary for coverage.py)
-                pool.join()
+                    # Close the pool cleanly unless asked to early out
+                    if result.shouldStop:
+                        pool.terminate()
+                        break
+                    else:
+                        pool.close()
+                finally:
+                    # Always join the pool (this is necessary for coverage.py)
+                    pool.join()
         if not result.shouldStop:
             stests = SerialSuite(self._stests)
             stests.run(result)
             return result
 
-    def _run_parallel_tests(self, result, pool, child_runner, tests):
-        remaining_ids = set(t.id() for t in tests)
+    def _run_parallel_tests(self, result, pool, child_runner, tests, queue):
         tests.sort(key=cuda_sensitive_mtime)
-        it = pool.imap_unordered(child_runner, tests)
+
+        pid_tests = collections.defaultdict(list)
+        active_tests = {}
+
+        def process_queue():
+            while not queue.empty():
+                data = queue.get_nowait()
+                active_tests[data['test_id']] = data
+                pid_tests[data['pid']].append(data['test_id'])
+
+        it = pool.imap_unordered(child_runner, zip(tests, [queue] * len(tests)))
         while True:
             try:
-                child_result = it.__next__(self.timeout)
+                try:
+                    child_result = it.__next__(self.timeout)
+                finally:
+                    process_queue()
             except StopIteration:
                 return
             except TimeoutError as e:
                 # Diagnose the names of unfinished tests
-                msg = ("Tests didn't finish before timeout (or crashed):\n%s"
-                       % "".join("- %r\n" % tid for tid in sorted(remaining_ids))
-                       )
+                msgbuf = [
+                    "Active tests didn't finish before timeout (or crashed):"
+                ]
+                active_pids = []
+                for tid, info in active_tests.items():
+                    pid = info['pid']
+                    active_pids.append(pid)
+                    msgbuf.append(f"- {tid} [PID {pid}]")
+                # Show test sequence in affected processes.
+                # These can be used to replicate the problem in case of
+                # corrupted state created by earlier tests.
+                msgbuf.append("Tests ran by each affected process:")
+                for pid in active_pids:
+                    msgbuf.append(f"- [PID {pid}]: " + ' '.join(pid_tests[pid]))
+
+                msg = '\n'.join(msgbuf)
                 e.args = (msg,) + e.args[1:]
                 raise e
             else:
                 result.add_results(child_result)
-                remaining_ids.discard(child_result.test_id)
+                del active_tests[child_result.test_id]
                 if child_result.shouldStop:
                     result.shouldStop = True
                     return
