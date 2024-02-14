@@ -4,6 +4,9 @@
 Debugging the Numba Test Suite
 ==============================
 
+.. note:: Features described here are only implemented for the parallel 
+          test runner (e.g. requires the ``-m`` flag).
+
 The Numba test suite provides some useful features for debugging test failures 
 or crashes.
 
