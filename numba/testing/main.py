@@ -11,6 +11,7 @@ import time
 import unittest
 import warnings
 import zlib
+import re
 
 from functools import lru_cache
 from io import StringIO
@@ -693,12 +694,31 @@ class ParallelTestResult(runner.TextTestResult):
             for kind, tag in status_to_tags.items():
                 if rec[kind]:
                     [(_id, traceback)] = rec[kind]
+                    traceback = _strip_ansi_escape_sequences(traceback)
                     SubElement(testcase, tag).text = traceback
                     break
         # Write XML to output
         ElementTree(suites).write(
             output, xml_declaration=True, encoding='utf-8',
         )
+
+
+def _strip_ansi_escape_sequences(text):
+    """
+    Adapting from https://stackoverflow.com/a/14693789
+    """
+    ansi_escape = re.compile(r'''
+        \x1B  # ESC
+        (?:   #  7-bit C1 Fe (except CSI)
+            [@-Z\\-_]
+        |     # or [ for CSI, followed by a control sequence
+            \[
+            [0-?]*  # Parameter bytes
+            [ -/]*  # Intermediate bytes
+            [@-~]   # Final byte
+        )
+    ''', re.VERBOSE)
+    return ansi_escape.sub('', text)
 
 
 class _MinimalResult(object):
