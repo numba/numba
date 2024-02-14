@@ -199,8 +199,6 @@ tanh_impl = unary_math_extern(math.tanh, "tanhf", "tanh")
 log2_impl = unary_math_extern(math.log2, "log2f", "log2")
 ceil_impl = unary_math_extern(math.ceil, "ceilf", "ceil", True)
 floor_impl = unary_math_extern(math.floor, "floorf", "floor", True)
-if sys.hexversion >= 0x03090000:
-    nextafter_impl = unary_math_extern(math.nextafter, "nextafterf", "nextafter")
 
 gamma_impl = unary_math_extern(math.gamma, "numba_gammaf", "numba_gamma") # work-around
 sqrt_impl = unary_math_extern(math.sqrt, "sqrtf", "sqrt")
@@ -408,6 +406,13 @@ def pow_impl(context, builder, sig, args):
 
 # -----------------------------------------------------------------------------
 
+@lower(math.nextafter, types.Float, types.Float)
+@lower(math.nextafter, types.Integer, types.Integer)
+def nextafter_impl(context, builder, sig, args):
+    impl = context.get_function(math.nextafter, sig)
+    return impl(builder, args)
+
+# -----------------------------------------------------------------------------
 
 def _unsigned(T):
     """Convert integer to unsigned integer of equivalent width."""
