@@ -16,9 +16,9 @@ import re
 from functools import lru_cache
 from io import StringIO
 from unittest import result, runner, signals, suite, loader, case
+from datetime import datetime
 
 from .loader import TestLoader
-from numba.core import config
 
 try:
     from multiprocessing import TimeoutError
@@ -979,7 +979,8 @@ class ParallelTestRunner(runner.TextTestRunner):
             self.stream.write(f"Total test runtime (seconds): {result.test_runtime}\n")
         # Write junit xml
         if self.write_junit:
-            filename = f"junit_testsuites_{time.time()}.xml"
+            tstamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            filename = f"junit_numba_{tstamp}.xml"
             print("Writing junit xml file:", filename)
             result.write_junit_xml(filename)
         return result

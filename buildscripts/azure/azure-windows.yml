@@ -69,5 +69,5 @@ jobs:
       condition: succeededOrFailed()
       displayName: Publish Test Results
       inputs:
-        testResultsFiles: 'junit_testsuites_*.xml'
+        testResultsFiles: 'junit_numba_*.xml'
         mergeTestResults: true
