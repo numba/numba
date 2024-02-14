@@ -407,10 +407,19 @@ def pow_impl(context, builder, sig, args):
 # -----------------------------------------------------------------------------
 
 @lower(math.nextafter, types.Float, types.Float)
-@lower(math.nextafter, types.Integer, types.Integer)
 def nextafter_impl(context, builder, sig, args):
-    impl = context.get_function(math.nextafter, sig)
-    return impl(builder, args)
+    assert len(args) == 2
+    mod = builder.module
+    ty = sig.args[0]
+    lty = context.get_value_type(ty)
+    func_name = {
+        types.float32: "nextafterf",
+        types.float64: "nextafter"
+        }[ty]
+    fnty = llvmlite.ir.FunctionType(lty, (lty, lty))
+    fn = cgutils.insert_pure_function(builder.module, fnty, name=func_name)
+    res = builder.call(fn, args)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 # -----------------------------------------------------------------------------
 
