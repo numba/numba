@@ -438,8 +438,16 @@ class TestMathLib(TestCase):
         x_values = [0.0, .21, .34, 1005382.042, -25.328]
         y1_values = [x + 2 for x in x_values]
         y2_values = [x - 2 for x in x_values]
+
         self.run_binary(pyfunc, x_types, x_values, y1_values)
         self.run_binary(pyfunc, x_types, x_values, y2_values)
+
+        # Test using pos/neg inf
+        self.run_binary(pyfunc, x_types, [0.0, -.5, .5], [math.inf]*3)
+        self.run_binary(pyfunc, x_types, [0.0, -.5, .5], [-math.inf]*3)
+
+        # if both args to nextafter are equal, then it is returned unchanged.
+        self.run_binary(pyfunc, x_types, x_values, x_values)
 
     def test_degrees(self):
         pyfunc = degrees
