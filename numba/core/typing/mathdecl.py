@@ -1,5 +1,4 @@
 import math
-import sys
 from numba.core import types, utils
 from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                          signature, Registry)
@@ -87,15 +86,12 @@ class Math_hypot(ConcreteTemplate):
     ]
 
 
-if sys.hexversion >= 0x03090000:
-    @infer_global(math.nextafter)
-    class Math_nextafter(ConcreteTemplate):
-        cases = [
-            signature(types.float64, types.float64, types.float64),
-            signature(types.float32, types.float32, types.float32),
-            signature(types.float64, types.int64, types.int64),
-            signature(types.float64, types.uint64, types.uint64)
-        ]
+@infer_global(math.nextafter)
+class Math_nextafter(ConcreteTemplate):
+    cases = [
+        signature(types.float64, types.float64, types.float64),
+        signature(types.float32, types.float32, types.float32),
+    ]
 
 
 @infer_global(math.isinf)
