@@ -409,7 +409,6 @@ def pow_impl(context, builder, sig, args):
 @lower(math.nextafter, types.Float, types.Float)
 def nextafter_impl(context, builder, sig, args):
     assert len(args) == 2
-    mod = builder.module
     ty = sig.args[0]
     lty = context.get_value_type(ty)
     func_name = {
