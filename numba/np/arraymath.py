@@ -3735,46 +3735,20 @@ def _less_than(a, b):
     return a < b
 
 
-def _searchsorted(func_1, func_2):
+def _searchsorted(cmp):
     # a facsimile of:
     # https://github.com/numpy/numpy/blob/4f84d719657eb455a35fcdf9e75b83eb1f97024a/numpy/core/src/npysort/binsearch.cpp#L61  # noqa: E501
 
-    def impl(a, v):
-        min_idx = 0
-        max_idx = len(a)
-
-        out = np.empty(v.size, np.intp)
-
-        last_key_val = v.flat[0]
-
-        for i in range(v.size):
-            key_val = v.flat[i]
-
-            if func_1(last_key_val, key_val):
-                max_idx = len(a)
+    def impl(a, key_val, min_idx, max_idx):
+        while min_idx < max_idx:
+            # to avoid overflow
+            mid_idx = min_idx + ((max_idx - min_idx) >> 1)
+            mid_val = a[mid_idx]
+            if cmp(mid_val, key_val):
+                min_idx = mid_idx + 1
             else:
-                min_idx = 0
-                if max_idx < len(a):
-                    max_idx += 1
-                else:
-                    max_idx = len(a)
-
-            last_key_val = key_val
-
-            while min_idx < max_idx:
-                # to avoid overflow
-                mid_idx = min_idx + ((max_idx - min_idx) >> 1)
-
-                mid_val = a[mid_idx]
-
-                if func_2(mid_val, key_val):
-                    min_idx = mid_idx + 1
-                else:
-                    max_idx = mid_idx
-
-            out[i] = min_idx
-
-        return out.reshape(v.shape)
+                max_idx = mid_idx
+        return min_idx, max_idx
 
     return impl
 
@@ -3789,17 +3763,20 @@ def make_searchsorted_implementation(np_dtype, side):
     le = _less_than_or_equal
 
     if side == 'left':
-        _impl = _searchsorted(lt, lt)
+        _impl = _searchsorted(lt)
+        _cmp = lt
     else:
         if np.issubdtype(np_dtype, np.inexact) and numpy_version < (1, 23):
             # change in behaviour for inexact types
             # introduced by:
             # https://github.com/numpy/numpy/pull/21867
-            _impl = _searchsorted(lt, le)
+            _impl = _searchsorted(le)
+            _cmp = lt
         else:
-            _impl = _searchsorted(le, le)
+            _impl = _searchsorted(le)
+            _cmp = le
 
-    return register_jitable(_impl)
+    return register_jitable(_impl), register_jitable(_cmp)
 
 
 @overload(np.searchsorted)
@@ -3817,18 +3794,40 @@ def searchsorted(a, v, side='left'):
         v_dt = as_dtype(v)
 
     np_dt = np.promote_types(as_dtype(a.dtype), v_dt)
-    _impl = make_searchsorted_implementation(np_dt, side_val)
+    _impl, _cmp = make_searchsorted_implementation(np_dt, side_val)
 
     if isinstance(v, types.Array):
         def impl(a, v, side='left'):
-            return _impl(a, v)
+            out = np.empty(v.size, dtype=np.intp)
+            last_key_val = v.flat[0]
+            min_idx = 0
+            max_idx = len(a)
+
+            for i in range(v.size):
+                key_val = v.flat[i]
+
+                if _cmp(last_key_val, key_val):
+                    max_idx = len(a)
+                else:
+                    min_idx = 0
+                    if max_idx < len(a):
+                        max_idx += 1
+                    else:
+                        max_idx = len(a)
+
+                last_key_val = key_val
+                min_idx, max_idx = _impl(a, key_val, min_idx, max_idx)
+                out[i] = min_idx
+
+            return out.reshape(v.shape)
     elif isinstance(v, types.Sequence):
         def impl(a, v, side='left'):
-            return _impl(a, np.array(v))
+            v = np.asarray(v)
+            return np.searchsorted(a, v, side=side)
     else:  # presumably `v` is scalar
         def impl(a, v, side='left'):
-            return _impl(a, np.array([v]))[0]
-
+            r, _ = _impl(a, v, 0, len(a))
+            return r
     return impl
 
 
