@@ -4825,7 +4825,7 @@ def numpy_linspace(start, stop, num=50):
         raise errors.TypingError(msg)
 
     if any(isinstance(arg, types.Complex) for arg in [start, stop]):
-        dtype = types.complex128
+        dtype = types.py_complex128
     else:
         dtype = types.float64
 
