@@ -175,52 +175,6 @@ class OmittedArgDataModel(DataModel):
         assert val == (), val
         return None
 
-
-@register_default(types.Boolean)
-@register_default(types.BooleanLiteral)
-class BooleanModel(DataModel):
-    _bit_type = ir.IntType(1)
-    _byte_type = ir.IntType(8)
-
-    def get_value_type(self):
-        return self._bit_type
-
-    def get_data_type(self):
-        return self._byte_type
-
-    def get_return_type(self):
-        return self.get_data_type()
-
-    def get_argument_type(self):
-        return self.get_data_type()
-
-    def as_data(self, builder, value):
-        return builder.zext(value, self.get_data_type())
-
-    def as_argument(self, builder, value):
-        return self.as_data(builder, value)
-
-    def as_return(self, builder, value):
-        return self.as_data(builder, value)
-
-    def from_data(self, builder, value):
-        ty = self.get_value_type()
-        resalloca = cgutils.alloca_once(builder, ty)
-        cond = builder.icmp_unsigned('==', value, value.type(0))
-        with builder.if_else(cond) as (then, otherwise):
-            with then:
-                builder.store(ty(0), resalloca)
-            with otherwise:
-                builder.store(ty(1), resalloca)
-        return builder.load(resalloca)
-
-    def from_argument(self, builder, value):
-        return self.from_data(builder, value)
-
-    def from_return(self, builder, value):
-        return self.from_data(builder, value)
-
-
 class PrimitiveModel(DataModel):
     """A primitive type can be represented natively in the target in all
     usage contexts.
@@ -349,26 +303,6 @@ class MemInfoModel(OpaqueModel):
 
     def get_nrt_meminfo(self, builder, value):
         return value
-
-
-@register_default(types.Integer)
-@register_default(types.IntegerLiteral)
-class IntegerModel(PrimitiveModel):
-    def __init__(self, dmm, fe_type):
-        be_type = ir.IntType(fe_type.bitwidth)
-        super(IntegerModel, self).__init__(dmm, fe_type, be_type)
-
-
-@register_default(types.Float)
-class FloatModel(PrimitiveModel):
-    def __init__(self, dmm, fe_type):
-        if fe_type == types.float32:
-            be_type = ir.FloatType()
-        elif fe_type == types.float64:
-            be_type = ir.DoubleType()
-        else:
-            raise NotImplementedError(fe_type)
-        super(FloatModel, self).__init__(dmm, fe_type, be_type)
 
 
 @register_default(types.CPointer)
@@ -719,8 +653,72 @@ class StructModel(CompositeModel):
         return self._models
 
 
-@register_default(types.Complex)
-class ComplexModel(StructModel):
+@register_default(types.PythonBoolean)
+@register_default(types.PythonBooleanLiteral)
+class PythonBooleanModel(DataModel):
+    _bit_type = ir.IntType(1)
+    _byte_type = ir.IntType(8)
+
+    def get_value_type(self):
+        return self._bit_type
+
+    def get_data_type(self):
+        return self._byte_type
+
+    def get_return_type(self):
+        return self.get_data_type()
+
+    def get_argument_type(self):
+        return self.get_data_type()
+
+    def as_data(self, builder, value):
+        return builder.zext(value, self.get_data_type())
+
+    def as_argument(self, builder, value):
+        return self.as_data(builder, value)
+
+    def as_return(self, builder, value):
+        return self.as_data(builder, value)
+
+    def from_data(self, builder, value):
+        ty = self.get_value_type()
+        resalloca = cgutils.alloca_once(builder, ty)
+        cond = builder.icmp_unsigned('==', value, value.type(0))
+        with builder.if_else(cond) as (then, otherwise):
+            with then:
+                builder.store(ty(0), resalloca)
+            with otherwise:
+                builder.store(ty(1), resalloca)
+        return builder.load(resalloca)
+
+    def from_argument(self, builder, value):
+        return self.from_data(builder, value)
+
+    def from_return(self, builder, value):
+        return self.from_data(builder, value)
+
+@register_default(types.PythonInteger)
+@register_default(types.PythonIntegerLiteral)
+class PythonIntegerModel(PrimitiveModel):
+    def __init__(self, dmm, fe_type):
+        be_type = ir.IntType(fe_type.bitwidth)
+        super(PythonIntegerModel, self).__init__(dmm, fe_type, be_type)
+
+@register_default(types.PythonFloat)
+class PythonFloatModel(PrimitiveModel):
+    def __init__(self, dmm, fe_type):
+        be_type = ir.DoubleType()
+        super(PythonFloatModel, self).__init__(dmm, fe_type, be_type)
+
+
+# This is required to check isinstance(x, ComplexModel)
+# within Numba internals
+class ComplexModel(StructModel): # type: ignore
+    pass
+
+
+@register_default(types.PythonComplex)
+class PythonComplexModel(ComplexModel):
     _element_type = NotImplemented
 
     def __init__(self, dmm, fe_type):
@@ -728,7 +726,81 @@ class ComplexModel(StructModel):
             ('real', fe_type.underlying_float),
             ('imag', fe_type.underlying_float),
         ]
-        super(ComplexModel, self).__init__(dmm, fe_type, members)
+        super(PythonComplexModel, self).__init__(dmm, fe_type, members)
+
+
+@register_default(types.NumPyBoolean)
+@register_default(types.NumPyBooleanLiteral)
+class NumPyBooleanModel(DataModel):
+    _bit_type = ir.IntType(1)
+    _byte_type = ir.IntType(8)
+
+    def get_value_type(self):
+        return self._bit_type
+
+    def get_data_type(self):
+        return self._byte_type
+
+    def get_return_type(self):
+        return self.get_data_type()
+
+    def get_argument_type(self):
+        return self.get_data_type()
+
+    def as_data(self, builder, value):
+        return builder.zext(value, self.get_data_type())
+
+    def as_argument(self, builder, value):
+        return self.as_data(builder, value)
+
+    def as_return(self, builder, value):
+        return self.as_data(builder, value)
+
+    def from_data(self, builder, value):
+        ty = self.get_value_type()
+        resalloca = cgutils.alloca_once(builder, ty)
+        cond = builder.icmp_unsigned('==', value, value.type(0))
+        with builder.if_else(cond) as (then, otherwise):
+            with then:
+                builder.store(ty(0), resalloca)
+            with otherwise:
+                builder.store(ty(1), resalloca)
+        return builder.load(resalloca)
+
+    def from_argument(self, builder, value):
+        return self.from_data(builder, value)
+
+    def from_return(self, builder, value):
+        return self.from_data(builder, value)
+
+@register_default(types.NumPyInteger)
+@register_default(types.NumPyIntegerLiteral)
+class NumPyIntegerModel(PrimitiveModel):
+    def __init__(self, dmm, fe_type):
+        be_type = ir.IntType(fe_type.bitwidth)
+        super(NumPyIntegerModel, self).__init__(dmm, fe_type, be_type)
+
+@register_default(types.NumPyFloat)
+class NumPyFloatModel(PrimitiveModel):
+    def __init__(self, dmm, fe_type):
+        if fe_type.bitwidth <= 32:
+            be_type = ir.FloatType()
+        elif fe_type.bitwidth <= 64:
+            be_type = ir.DoubleType()
+        else:
+            raise NotImplementedError(fe_type)
+        super(NumPyFloatModel, self).__init__(dmm, fe_type, be_type)
+
+@register_default(types.NumPyComplex)
+class NumPyComplexModel(ComplexModel):
+    _element_type = NotImplemented
+
+    def __init__(self, dmm, fe_type):
+        members = [
+            ('real', fe_type.underlying_float),
+            ('imag', fe_type.underlying_float),
+        ]
+        super(NumPyComplexModel, self).__init__(dmm, fe_type, members)
 
 
 @register_default(types.LiteralList)
