@@ -26,7 +26,7 @@ MAX_STACK = 100
 
 def make_quicksort_impl(wrap, lt=None, is_argsort=False, is_list=False, is_np_array=False):
 
-    intp = types.intp
+    intp = types.py_intp
     zero = intp(0)
 
     # Two subroutines to make the core algorithm generic wrt. argsort
