@@ -939,7 +939,7 @@ def list_extend(context, builder, sig, args):
     return context.compile_internal(builder, list_extend, sig, args)
 
 
-intp_max = types.intp.maxval
+intp_max = types.py_intp.maxval
 
 
 @overload_method(types.List, "index")
@@ -1179,7 +1179,7 @@ def literal_list_banned_reverse(lst):
     raise _banned_error
 
 
-_index_end = types.intp.maxval
+_index_end = types.py_intp.maxval
 @overload_method(types.LiteralList, 'index')
 def literal_list_index(lst, x, start=0, end=_index_end):
     # TODO: To make this work, need consts as slice for start/end so as to
