@@ -78,17 +78,6 @@ class Range(ConcreteTemplate):
         signature(types.range_state64_type, types.py_int64, types.py_int64,
                 types.py_int64),
     ]
-    if config.USE_LEGACY_TYPE_SYSTEM:
-        cases += [
-            signature(types.range_state32_type, types.int32),
-            signature(types.range_state32_type, types.int32, types.int32),
-            signature(types.range_state32_type, types.int32, types.int32,
-                    types.int32),
-            signature(types.unsigned_range_state64_type, types.uint64),
-            signature(types.unsigned_range_state64_type, types.uint64, types.uint64),
-            signature(types.unsigned_range_state64_type, types.uint64, types.uint64,
-                    types.uint64),
-        ]
 
 
 @infer
@@ -141,72 +130,42 @@ class PairSecond(AbstractTemplate):
             return signature(pair.second_type, pair)
 
 
-if config.USE_LEGACY_TYPE_SYSTEM:
-    def choose_result_bitwidth(*inputs):
-        return max(types.intp.bitwidth, *(tp.bitwidth for tp in inputs))
+def choose_result_bitwidth(*inputs):
+    return max(tp.bitwidth for tp in inputs)
 
-    def choose_result_int(*inputs):
-        """
-        Choose the integer result type for an operation on integer inputs,
-        according to the integer typing NBEP.
-        """
-        bitwidth = choose_result_bitwidth(*inputs)
-        signed = any(tp.signed for tp in inputs)
-        return types.Integer.from_bitwidth(bitwidth, signed)
+def choose_result_int(*inputs):
+    """
+    Choose the integer result type for an operation on integer inputs,
+    according to the integer typing NBEP. In accordance with the new
+    type system.
+    """
+    bitwidth = choose_result_bitwidth(*inputs)
+    signed = any(tp.signed for tp in inputs)
 
-    # The "machine" integer types to take into consideration for operator typing
-    # (according to the integer typing NBEP)
-    all_ints = (
-        sorted(set((types.intp, types.int64))) +
-        sorted(set((types.uintp, types.uint64)))
-        )
-
-    # Explicit integer rules for binary operators; smaller ints will be
-    # automatically upcast.
-    integer_binop_cases = tuple(
-        signature(choose_result_int(op1, op2), op1, op2)
-        for op1, op2 in itertools.product(all_ints, all_ints)
-        )
-else:
-    def choose_result_bitwidth(*inputs):
-        return max(tp.bitwidth for tp in inputs)
-
-    def choose_result_int(*inputs):
-        """
-        Choose the integer result type for an operation on integer inputs,
-        according to the integer typing NBEP. In accordance with the new
-        type system.
-        """
-        bitwidth = choose_result_bitwidth(*inputs)
-        signed = any(tp.signed for tp in inputs)
-
-        # If any integer is a NumPy integer, promotion should be to the
-        # respective NumPy type.
-        if any('np' in tp.name for tp in inputs):
-            return types.NumPyInteger.from_bitwidth(bitwidth, signed)
-        
-        return types.PythonInteger.from_bitwidth(bitwidth, signed)
+    # If any integer is a NumPy integer, promotion should be to the
+    # respective NumPy type.
+    if any('np' in tp.name for tp in inputs):
+        return types.NumPyInteger.from_bitwidth(bitwidth, signed)
     
-    all_ints = (
-        sorted(set((types.py_intp, types.py_int64))) +
-        sorted(set((types.np_int32, types.np_int64))) +
-        sorted(set((types.np_uint32, types.np_uint64)))
-        )
-    integer_binop_cases = tuple(
-        signature(choose_result_int(op1, op2), op1, op2)
-        for op1, op2 in itertools.product(all_ints, all_ints)
-        )
+    return types.PythonInteger.from_bitwidth(bitwidth, signed)
+
+all_ints = (
+    sorted(set((types.py_intp, types.py_int64))) +
+    sorted(set((types.np_int32, types.np_int64))) +
+    sorted(set((types.np_uint32, types.np_uint64)))
+    )
+integer_binop_cases = tuple(
+    signature(choose_result_int(op1, op2), op1, op2)
+    for op1, op2 in itertools.product(all_ints, all_ints)
+    )
 
 class BinOp(ConcreteTemplate):
     cases = list(integer_binop_cases)
-    if config.USE_LEGACY_TYPE_SYSTEM:
-        cases += [signature(op, op, op) for op in sorted(types.real_domain)]
-        cases += [signature(op, op, op) for op in sorted(types.complex_domain)]
-    else:
-        cases += [signature(op, op, op) for op in sorted(types.py_real_domain)]
-        cases += [signature(op, op, op) for op in sorted(types.py_complex_domain)]
-        cases += [signature(op, op, op) for op in sorted(types.np_real_domain)]
-        cases += [signature(op, op, op) for op in sorted(types.np_complex_domain)]
+
+    cases += [signature(op, op, op) for op in sorted(types.py_real_domain)]
+    cases += [signature(op, op, op) for op in sorted(types.py_complex_domain)]
+    cases += [signature(op, op, op) for op in sorted(types.np_real_domain)]
+    cases += [signature(op, op, op) for op in sorted(types.np_complex_domain)]
 
 
 @infer_global(operator.add)
