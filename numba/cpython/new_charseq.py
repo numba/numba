@@ -18,7 +18,7 @@ from numba.cpython import unicode
 
 s1_dtype = np.dtype('S1')
 assert s1_dtype.itemsize == 1
-bytes_type = types.Bytes(types.uint8, 1, "C", readonly=True)
+bytes_type = types.Bytes(types.c_uint8, 1, "C", readonly=True)
 
 # Currently, NumPy supports only UTF-32 arrays but this may change in
 # future and the approach used here for supporting str arrays may need

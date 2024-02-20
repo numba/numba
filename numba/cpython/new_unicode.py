@@ -71,7 +71,7 @@ if PYVERSION in ((3, 9), (3, 10), (3, 11)):
 _MAX_UNICODE = 0x10ffff
 
 # https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/stringlib/fastsearch.h#L31    # noqa: E501
-_BLOOM_WIDTH = types.intp.bitwidth
+_BLOOM_WIDTH = types.py_intp.bitwidth
 
 # DATA MODEL
 
