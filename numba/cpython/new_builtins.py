@@ -203,7 +203,7 @@ def do_minmax(context, builder, argtys, args, cmpop):
         assert ty is not None
         acc = context.cast(builder, acc, accty, ty)
         v = context.cast(builder, v, vty, ty)
-        cmpsig = typing.signature(types.boolean, ty, ty)
+        cmpsig = typing.signature(types.np_bool_, ty, ty)
         ge = context.get_function(cmpop, cmpsig)
         pred = ge(builder, (v, acc))
         res = builder.select(pred, v, acc)
@@ -295,13 +295,6 @@ def int_impl(context, builder, sig, args):
     [ty] = sig.args
     [val] = args
     res = context.cast(builder, val, ty, sig.return_type)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-@lower_builtin(float, types.StringLiteral)
-def float_literal_impl(context, builder, sig, args):
-    [ty] = sig.args
-    res = context.get_constant(sig.return_type, float(ty.literal_value))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
@@ -543,8 +536,9 @@ def lower_get_type_max_value(context, builder, sig, args):
 from numba.core.typing.builtins import IndexValue, IndexValueType
 from numba.extending import overload, register_jitable
 
-@lower_builtin(IndexValue, types.intp, types.Type)
-@lower_builtin(IndexValue, types.uintp, types.Type)
+@lower_builtin(IndexValue, types.py_intp, types.Type)
+@lower_builtin(IndexValue, types.np_intp, types.Type)
+@lower_builtin(IndexValue, types.np_uintp, types.Type)
 def impl_index_value(context, builder, sig, args):
     typ = sig.return_type
     index, value = args
