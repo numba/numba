@@ -430,10 +430,7 @@ np_types.add(np.uintp)
 
 def register_number_classes(register_global):
     for np_type in np_types:
-        if config.USE_LEGACY_TYPE_SYSTEM:
-            nb_type = getattr(types, np_type.__name__)
-        else:
-            nb_type = getattr(types, f'np_{np_type.__name__}')
+        nb_type = getattr(types, f'np_{np_type.__name__}')
 
         register_global(np_type, types.NumberClass(nb_type))
 
