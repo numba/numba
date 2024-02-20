@@ -35,31 +35,31 @@ infer_global = registry.register_global
 @infer_global(math.lgamma)
 class Math_unary(ConcreteTemplate):
     cases = [
-        signature(types.float64, types.int64),
-        signature(types.float64, types.uint64),
-        signature(types.float32, types.float32),
-        signature(types.float64, types.float64),
+        signature(types.np_float64, types.np_int64),
+        signature(types.np_float64, types.np_uint64),
+        signature(types.np_float32, types.np_float32),
+        signature(types.np_float64, types.np_float64),
     ]
 
 
 @infer_global(math.atan2)
 class Math_atan2(ConcreteTemplate):
     cases = [
-        signature(types.float64, types.int64, types.int64),
-        signature(types.float64, types.uint64, types.uint64),
-        signature(types.float32, types.float32, types.float32),
-        signature(types.float64, types.float64, types.float64),
+        signature(types.np_float64, types.np_int64, types.np_int64),
+        signature(types.np_float64, types.np_uint64, types.np_uint64),
+        signature(types.np_float32, types.np_float32, types.np_float32),
+        signature(types.np_float64, types.np_float64, types.np_float64),
     ]
 
 
 @infer_global(math.trunc)
 class Math_converter(ConcreteTemplate):
     cases = [
-        signature(types.intp, types.intp),
-        signature(types.int64, types.int64),
-        signature(types.uint64, types.uint64),
-        signature(types.int64, types.float32),
-        signature(types.int64, types.float64),
+        signature(types.np_intp, types.np_intp),
+        signature(types.np_int64, types.np_int64),
+        signature(types.np_uint64, types.np_uint64),
+        signature(types.np_int64, types.np_float32),
+        signature(types.np_int64, types.np_float64),
     ]
 
 
@@ -72,18 +72,18 @@ class Math_floor_ceil(Math_converter):
 @infer_global(math.copysign)
 class Math_copysign(ConcreteTemplate):
     cases = [
-        signature(types.float32, types.float32, types.float32),
-        signature(types.float64, types.float64, types.float64),
+        signature(types.np_float32, types.np_float32, types.np_float32),
+        signature(types.np_float64, types.np_float64, types.np_float64),
     ]
 
 
 @infer_global(math.hypot)
 class Math_hypot(ConcreteTemplate):
     cases = [
-        signature(types.float64, types.int64, types.int64),
-        signature(types.float64, types.uint64, types.uint64),
-        signature(types.float32, types.float32, types.float32),
-        signature(types.float64, types.float64, types.float64),
+        signature(types.np_float64, types.np_int64, types.np_int64),
+        signature(types.np_float64, types.np_uint64, types.np_uint64),
+        signature(types.np_float32, types.np_float32, types.np_float32),
+        signature(types.np_float64, types.np_float64, types.np_float64),
     ]
 
 
@@ -91,10 +91,10 @@ class Math_hypot(ConcreteTemplate):
 @infer_global(math.isnan)
 class Math_predicate(ConcreteTemplate):
     cases = [
-        signature(types.boolean, types.int64),
-        signature(types.boolean, types.uint64),
-        signature(types.boolean, types.float32),
-        signature(types.boolean, types.float64),
+        signature(types.np_bool_, types.np_int64),
+        signature(types.np_bool_, types.np_uint64),
+        signature(types.np_bool_, types.np_float32),
+        signature(types.np_bool_, types.np_float64),
     ]
 
 
@@ -106,37 +106,37 @@ class Math_isfinite(Math_predicate):
 @infer_global(math.pow)
 class Math_pow(ConcreteTemplate):
     cases = [
-        signature(types.float64, types.float64, types.int64),
-        signature(types.float64, types.float64, types.uint64),
-        signature(types.float32, types.float32, types.float32),
-        signature(types.float64, types.float64, types.float64),
+        signature(types.np_float64, types.np_float64, types.np_int64),
+        signature(types.np_float64, types.np_float64, types.np_uint64),
+        signature(types.np_float32, types.np_float32, types.np_float32),
+        signature(types.np_float64, types.np_float64, types.np_float64),
     ]
 
 
 @infer_global(math.gcd)
 class Math_gcd(ConcreteTemplate):
     cases = [
-        signature(types.int64, types.int64, types.int64),
-        signature(types.int32, types.int32, types.int32),
-        signature(types.int16, types.int16, types.int16),
-        signature(types.int8, types.int8, types.int8),
-        signature(types.uint64, types.uint64, types.uint64),
-        signature(types.uint32, types.uint32, types.uint32),
-        signature(types.uint16, types.uint16, types.uint16),
-        signature(types.uint8, types.uint8, types.uint8),
+        signature(types.np_int64, types.np_int64, types.np_int64),
+        signature(types.np_int32, types.np_int32, types.np_int32),
+        signature(types.np_int16, types.np_int16, types.np_int16),
+        signature(types.np_int8, types.np_int8, types.np_int8),
+        signature(types.np_uint64, types.np_uint64, types.np_uint64),
+        signature(types.np_uint32, types.np_uint32, types.np_uint32),
+        signature(types.np_uint16, types.np_uint16, types.np_uint16),
+        signature(types.np_uint8, types.np_uint8, types.np_uint8),
     ]
 
 
 @infer_global(math.frexp)
 class Math_frexp(ConcreteTemplate):
     cases = [
-        signature(types.Tuple((types.float64, types.intc)), types.float64),
-        signature(types.Tuple((types.float32, types.intc)), types.float32),
+        signature(types.Tuple((types.np_float64, types.np_intc)), types.np_float64),
+        signature(types.Tuple((types.np_float32, types.np_intc)), types.np_float32),
     ]
 
 @infer_global(math.ldexp)
 class Math_ldexp(ConcreteTemplate):
     cases = [
-        signature(types.float64, types.float64, types.intc),
-        signature(types.float32, types.float32, types.intc),
+        signature(types.np_float64, types.np_float64, types.np_intc),
+        signature(types.np_float32, types.np_float32, types.np_intc),
     ]

@@ -1404,4 +1404,4 @@ class ObjModeLiftedWith(LiftedWith):
 # Initialize typeof machinery
 _dispatcher.typeof_init(
     OmittedArg,
-    dict((str(t), t._code) for t in types.number_domain))
+    dict((str(t).split('_')[-1], t._code) for t in types.np_number_domain))
