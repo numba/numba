@@ -9,11 +9,12 @@ from numba.core import types
 
 _pep3118_int_types = set('bBhHiIlLqQnN')
 
+
 _pep3118_scalar_map = {
-    'f': types.float32,
-    'd': types.float64,
-    'Zf': types.complex64,
-    'Zd': types.complex128,
+    'f': types.np_float32,
+    'd': types.np_float64,
+    'Zf': types.np_complex64,
+    'Zd': types.np_complex128,
     }
 
 _type_map = {
