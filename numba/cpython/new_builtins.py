@@ -16,6 +16,8 @@ from numba.core.imputils import (lower_builtin, lower_getattr,
 from numba.core import typing, types, utils, cgutils
 from numba.core.extending import overload, intrinsic
 from numba.core.typeconv import Conversion
+from numba.core.typing.templates import (AbstractTemplate, infer_global,
+                                         signature)
 from numba.core.errors import (TypingError, LoweringError,
                                NumbaExperimentalFeatureWarning,
                                NumbaTypeError, RequireLiteralValue,
@@ -476,6 +478,15 @@ def get_type_min_value(typ):
     if isinstance(typ, types.Integer):
         return typ.minval
     raise NotImplementedError("Unsupported type")
+
+@infer_global(get_type_min_value)
+@infer_global(get_type_max_value)
+class MinValInfer(AbstractTemplate):
+    def generic(self, args, kws):
+        assert not kws
+        assert len(args) == 1
+        if isinstance(args[0], (types.DType, types.NumberClass)):
+            return signature(args[0].dtype, *args)
 
 @lower_builtin(get_type_min_value, types.NumberClass)
 @lower_builtin(get_type_min_value, types.DType)
