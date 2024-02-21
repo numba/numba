@@ -1155,7 +1155,7 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
         return types.BoundFunction(MethodTemplate, typ)
 
 
-def make_overload_attribute_template(typ, attr, overload_func, inline,
+def make_overload_attribute_template(typ, attr, overload_func, inline='never',
                                      prefer_literal=False,
                                      base=_OverloadAttributeTemplate,
                                      **kwargs):
