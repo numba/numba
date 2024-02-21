@@ -20,10 +20,8 @@ jobs:
         TEST_START_INDEX: 17
 
   steps:
-    - task: CondaEnvironment@1
-      inputs:
-        updateConda: no
-        packageSpecs: ''
+    - powershell: Write-Host "##vso[task.prependpath]$env:CONDA\Scripts"
+      displayName: Add conda to PATH
 
     - script: |
         buildscripts\\incremental\\setup_conda_environment.cmd
