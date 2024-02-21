@@ -6,7 +6,7 @@ import enum
 import numpy as np
 from numpy.random.bit_generator import BitGenerator
 
-from numba.core import types, utils, errors, config
+from numba.core import types, errors
 from numba.np import numpy_support
 
 
@@ -118,13 +118,16 @@ def _typeof_int(val, c):
     typ = types.py_intp
     return typ
 
+
 @typeof_impl.register(bool)
 def _typeof_bool(val, c):
     return types.py_bool
 
+
 @typeof_impl.register(float)
 def _typeof_float(val, c):
     return types.py_float64
+
 
 @typeof_impl.register(complex)
 def _typeof_complex(val, c):

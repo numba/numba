@@ -1,6 +1,6 @@
 import itertools
 from .typeconv import TypeManager, TypeCastingRules
-from numba.core import types, config
+from numba.core import types
 
 
 default_type_manager = TypeManager()
@@ -24,7 +24,7 @@ def _init_casting_rules(tm):
     tcr.promote_unsafe(types.py_bool, types.py_intp)
     tcr.promote_unsafe(types.py_int64, types.py_float64)
     tcr.promote_unsafe(types.py_float64, types.py_complex128)
-    
+
     # Pure NumPy typecasting
     tcr.promote_unsafe(types.np_bool_, types.np_int8)
     tcr.promote_unsafe(types.np_bool_, types.np_uint8)
