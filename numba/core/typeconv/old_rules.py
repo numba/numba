@@ -34,7 +34,6 @@ def _init_casting_rules(tm):
     tcr.safe_unsafe(types.int16, types.float32)
     tcr.safe_unsafe(types.int32, types.float64)
 
-
     tcr.unsafe_unsafe(types.int16, types.float16)
     tcr.unsafe_unsafe(types.int32, types.float32)
     # XXX this is inconsistent with the above; but we want to prefer
@@ -59,4 +58,3 @@ def _init_casting_rules(tm):
 
 
 default_casting_rules = _init_casting_rules(default_type_manager)
-

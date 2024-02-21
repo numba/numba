@@ -50,7 +50,8 @@ exclude =
     numba/core/annotations/pretty_annotate.py
     numba/misc/dummyarray.py
     numba/core/dataflow.py
-    numba/core/pythonapi.py
+    numba/core/old_pythonapi.py
+    numba/core/new_pythonapi.py
     numba/core/decorators.py
     numba/core/typeconv/rules.py
     numba/core/typeconv/castgraph.py
@@ -63,28 +64,36 @@ exclude =
     numba/core/types/npytypes.py
     numba/core/types/common.py
     numba/core/types/iterators.py
-    numba/core/types/scalars.py
+    numba/core/types/old_scalars.py
+    numba/core/types/new_scalars/scalars.py
     numba/core/fastmathpass.py
     numba/cpython/setobj.py
     numba/core/options.py
     numba/cpython/printimpl.py
     numba/cpython/cmathimpl.py
-    numba/cpython/tupleobj.py
+    numba/cpython/old_tupleobj.py
+    numba/cpython/new_tupleobj.py
     numba/cpython/mathimpl.py
     numba/core/registry.py
     numba/core/imputils.py
-    numba/cpython/builtins.py
-    numba/misc/quicksort.py
+    numba/cpython/old_builtins.py
+    numba/cpython/new_builtins.py
+    numba/misc/old_quicksort.py
+    numba/misc/new_quicksort.py
     numba/cpython/randomimpl.py
     numba/np/npyimpl.py
     numba/cpython/slicing.py
-    numba/cpython/numbers.py
-    numba/cpython/listobj.py
+    numba/cpython/old_numbers.py
+    numba/cpython/new_numbers.py
+    numba/cpython/old_listobj.py
+    numba/cpython/new_listobj.py
     numba/core/removerefctpass.py
-    numba/core/boxing.py
+    numba/core/old_boxing.py
+    numba/core/new_boxing.py
     numba/misc/cffiimpl.py
     numba/np/linalg.py
-    numba/cpython/rangeobj.py
+    numba/cpython/old_rangeobj.py
+    numba/cpython/new_rangeobj.py
     numba/np/npyfuncs.py
     numba/cpython/iterators.py
     numba/core/codegen.py
@@ -214,17 +223,23 @@ exclude =
     numba/tests/npyufunc/test_parallel_ufunc_issues.py
     numba/tests/npyufunc/test_parallel_env_variable.py
     numba/tests/npyufunc/test_gufunc.py
-    numba/core/typing/cmathdecl.py
-    numba/core/typing/bufproto.py
-    numba/core/typing/mathdecl.py
+    numba/core/typing/old_cmathdecl.py
+    numba/core/typing/new_cmathdecl.py
+    numba/core/typing/old_bufproto.py
+    numba/core/typing/new_bufproto.py
+    numba/core/typing/old_mathdecl.py
+    numba/core/typing/new_mathdecl.py
     numba/core/typing/listdecl.py
-    numba/core/typing/builtins.py
+    numba/core/typing/old_builtins.py
+    numba/core/typing/new_builtins.py
     numba/core/typing/randomdecl.py
     numba/core/typing/setdecl.py
-    numba/core/typing/npydecl.py
+    numba/core/typing/old_npydecl.py
+    numba/core/typing/new_npydecl.py
     numba/core/typing/arraydecl.py
     numba/core/typing/collections.py
-    numba/core/typing/ctypes_utils.py
+    numba/core/typing/old_ctypes_utils.py
+    numba/core/typing/new_ctypes_utils.py
     numba/core/typing/enumdecl.py
     numba/core/typing/cffi_utils.py
     numba/core/typing/npdatetime.py
@@ -239,7 +254,8 @@ exclude =
     numba/parfors/parfor_lowering.py
     numba/np/ufunc/array_exprs.py
     numba/np/ufunc/decorators.py
-    numba/core/datamodel/models.py
+    numba/core/datamodel/old_models.py
+    numba/core/datamodel/new_models.py
     numba/core/datamodel/packer.py
     numba/core/datamodel/testing.py
     numba/core/datamodel/manager.py

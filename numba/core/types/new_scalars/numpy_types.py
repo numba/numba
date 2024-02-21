@@ -5,8 +5,10 @@
 import numpy as np
 
 from numba.core.types.abstract import Literal
-from numba.core.types.new_scalars.scalars import (Integer, IntegerLiteral, Boolean,
-                      BooleanLiteral, Float, Complex, parse_integer_bitwidth, parse_integer_signed)
+from numba.core.types.new_scalars.scalars \
+    import (Integer, IntegerLiteral, Boolean,
+            BooleanLiteral, Float, Complex,
+            parse_integer_bitwidth, parse_integer_signed)
 from functools import total_ordering
 from numba.core.typeconv import Conversion
 
