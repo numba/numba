@@ -12,7 +12,6 @@ from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                          infer_getattr, signature,
                                          bound_function, make_callable_template)
 
-from numba.cpython.builtins import get_type_min_value, get_type_max_value
 
 from numba.core.extending import (
     typeof_impl, type_callable, models, register_model, make_attribute_wrapper,
@@ -1126,17 +1125,6 @@ class DeferredAttribute(AttributeTemplate):
 
     def generic_resolve(self, deferred, attr):
         return self.context.resolve_getattr(deferred.get(), attr)
-
-#------------------------------------------------------------------------------
-
-@infer_global(get_type_min_value)
-@infer_global(get_type_max_value)
-class MinValInfer(AbstractTemplate):
-    def generic(self, args, kws):
-        assert not kws
-        assert len(args) == 1
-        if isinstance(args[0], (types.DType, types.NumberClass)):
-            return signature(args[0].dtype, *args)
 
 
 #------------------------------------------------------------------------------
