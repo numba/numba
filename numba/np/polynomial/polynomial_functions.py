@@ -93,7 +93,7 @@ def polyutils_as_series(alist, trim=True):
         msg = 'The argument "alist" must be array-like'
         raise errors.TypingError(msg)
 
-    if not isinstance(trim, (bool, types.Boolean)):
+    if not isinstance(trim, (bool, types.Boolean, types.Omitted)):
         msg = 'The argument "trim" must be boolean'
         raise errors.TypingError(msg)
 
