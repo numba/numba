@@ -1952,7 +1952,7 @@ def choice(a, size=None, replace=True):
         raise TypeError("np.random.choice() first argument should be "
                         "int or array, got %s" % (a,))
 
-    if size in (None, types.none):
+    if size in (None, types.none, types.Omitted):
         def choice_impl(a, size=None, replace=True):
             """
             choice() implementation returning a single sample
