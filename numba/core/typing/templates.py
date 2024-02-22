@@ -709,11 +709,18 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         # global depth
         flags = targetconfig.ConfigStack.top_or_none()
 
-        # FIXME: still need to remove Omitted type
-        # a better way is to reconcile Omitted and concrete type, I guess
-        args = tuple(
-            [arg for arg in args if not isinstance(arg, types.Omitted)]
-        )
+        # FIXME: what's the real thing need to do is adding Ommitted to the args
+        # check the pyfunc signature, if exist some kwargs, e.g., default=None,
+        # check whether kws specify them, if not, please add Omitted(default=None) to args
+        ov_sig = inspect.signature(self._overload_func)
+        if len(args) + len(kws) < len(ov_sig.parameters):
+            for param in ov_sig.parameters.values():
+                name = param.name
+                default = param.default
+                if default != inspect.Parameter.empty and name not in kws:
+                    # add numba type of this param into kws
+                    # it must be an Omitted type with a default value
+                    kws[name] = types.Omitted(default)
 
         # FIXME: ensure the order is correct
         flatten_args = tuple(args) + tuple(kws.values())
@@ -830,6 +837,11 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         # check that the typing and impl sigs match up
         if self._strict:
             self._validate_sigs(self._overload_func, pyfunc)
+
+        # if "impl_pop.<locals>.impl" in str(pyfunc):
+        #     assert True
+        # print(f"[build impl]{'':{depth}} ov_sig={ov_sig} pyfunc={pyfunc} overload_func={self._overload_func} args={args} kws={kws}")
+
         # Make dispatcher
         jitdecor = jitter(**self._jit_options)
         disp = jitdecor(pyfunc)
