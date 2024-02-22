@@ -240,7 +240,10 @@ class NumbaTestProgram(unittest.main):
         parser.add_argument('--show-timing', dest='show_timing', action='store_true',
                             help=("Print recorded timing for each test and "
                                   "the whole suite."))
+        tstamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        junit_default = f"junit_numba_{tstamp}.xml"
         parser.add_argument('--junit', dest='write_junit_file', type=str,
+                            const=junit_default, nargs='?',
                             help=("Enables enables junit xml output to the "
                                   "specified file path."))
 
@@ -359,14 +362,16 @@ class NumbaTestProgram(unittest.main):
                 msg = ("Value specified for the number of processes to use in "
                     "running the suite must be > 0")
                 raise ValueError(msg)
-            self.testRunner = ParallelTestRunner(runner.TextTestRunner,
-                                                 self.multiprocess,
-                                                 self.useslice,
-                                                 show_timing=self.show_timing,
-                                                 write_junit_file=self.write_junit_file,
-                                                 verbosity=self.verbosity,
-                                                 failfast=self.failfast,
-                                                 buffer=self.buffer)
+            self.testRunner = ParallelTestRunner(
+                runner.TextTestRunner,
+                self.multiprocess,
+                self.useslice,
+                show_timing=self.show_timing,
+                write_junit_file=self.write_junit_file,
+                verbosity=self.verbosity,
+                failfast=self.failfast,
+                buffer=self.buffer
+            )
 
         def run_tests_real():
             super(NumbaTestProgram, self).runTests()
@@ -996,8 +1001,7 @@ class ParallelTestRunner(runner.TextTestRunner):
             self.stream.write(f"Total test runtime (seconds): {result.test_runtime}\n")
         # Write junit xml
         if self.write_junit_file:
-            tstamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            filename = self.write_junit_file # f"junit_numba_{tstamp}.xml"
+            filename = self.write_junit_file
             print("Writing junit xml file:", filename)
             result.write_junit_xml(filename)
         return result
