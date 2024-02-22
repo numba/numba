@@ -714,7 +714,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         # check whether kws specify them, if not, please add Omitted(default=None) to args
         ov_sig = inspect.signature(self._overload_func)
         if len(args) + len(kws) < len(ov_sig.parameters):
-            for param in ov_sig.parameters.values():
+            for param in list(ov_sig.parameters.values())[len(args):]:
                 name = param.name
                 default = param.default
                 if default != inspect.Parameter.empty and name not in kws:
