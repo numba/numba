@@ -3625,7 +3625,8 @@ def np_bincount(a, weights=None, minlength=0):
 
     check_is_integer(minlength, 'minlength')
 
-    if weights not in (None, types.none) and not isinstance(weights, types.Omitted):
+    if (weights not in (None, types.none) and
+            not isinstance(weights, types.Omitted)):
         validate_1d_array_like("bincount", weights)
         # weights is promoted to double in C impl
         # https://github.com/numpy/numpy/blob/maintenance/1.16.x/numpy/core/src/multiarray/compiled_base.c#L93-L95    # noqa: E501
@@ -3804,6 +3805,8 @@ def make_searchsorted_implementation(np_dtype, side):
 
 @overload(np.searchsorted)
 def searchsorted(a, v, side='left'):
+    if isinstance(side, types.Omitted):
+        side = side.value
     side_val = getattr(side, 'literal_value', side)
 
     if side_val not in VALID_SEARCHSORTED_SIDES:
@@ -4377,7 +4380,8 @@ def np_select(condlist, choicelist, default=0):
         raise NumbaTypeError('condlist must be a List or a Tuple')
     if not isinstance(choicelist, (types.List, types.UniTuple)):
         raise NumbaTypeError('choicelist must be a List or a Tuple')
-    if not isinstance(default, (int, types.Number, types.Boolean, types.Omitted)):
+    if not isinstance(default,
+                      (int, types.Number, types.Boolean, types.Omitted)):
         raise NumbaTypeError('default must be a scalar (number or boolean)')
     # the types of the parameters have been checked, now we test the types
     # of the content of the parameters
@@ -4469,7 +4473,7 @@ def numpy_unwrap(p, discont=None, axis=-1, period=6.283185307179586):
         raise TypingError(msg)
 
     slice1 = (slice(1, None, None),)
-    if isinstance(period, (types.Number, types.Omitted)):
+    if isinstance(period, types.Number):
         dtype = np.result_type(as_dtype(p.dtype), as_dtype(period))
     else:
         dtype = np.result_type(as_dtype(p.dtype), np.float64)
