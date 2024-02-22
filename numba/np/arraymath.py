@@ -3910,7 +3910,7 @@ def np_histogram(a, bins=10, range=None):
         # With a uniform distribution of bins, use a fast algorithm
         # independent of the number of bins
 
-        if range in (None, types.none):
+        if range in (None, types.none, types.Omitted):
             inf = float('inf')
 
             def histogram_impl(a, bins=10, range=None):
