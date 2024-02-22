@@ -3625,7 +3625,7 @@ def np_bincount(a, weights=None, minlength=0):
 
     check_is_integer(minlength, 'minlength')
 
-    if weights not in (None, types.none):
+    if weights not in (None, types.none) and not isinstance(weights, types.Omitted):
         validate_1d_array_like("bincount", weights)
         # weights is promoted to double in C impl
         # https://github.com/numpy/numpy/blob/maintenance/1.16.x/numpy/core/src/multiarray/compiled_base.c#L93-L95    # noqa: E501
@@ -3906,7 +3906,7 @@ _range = range
 
 @overload(np.histogram)
 def np_histogram(a, bins=10, range=None):
-    if isinstance(bins, (int, types.Integer)):
+    if isinstance(bins, (int, types.Integer, types.Omitted)):
         # With a uniform distribution of bins, use a fast algorithm
         # independent of the number of bins
 
@@ -4321,7 +4321,7 @@ def np_asfarray(a, dtype=np.float64):
     # convert numba dtype types into NumPy dtype
     if isinstance(dtype, types.Type):
         dtype = as_dtype(dtype)
-    if not np.issubdtype(dtype, np.inexact):
+    if not np.issubdtype(dtype, np.inexact) or isinstance(dtype, types.Omitted):
         dx = types.float64
     else:
         dx = dtype
@@ -4451,7 +4451,7 @@ def np_asarray_chkfinite(a, dtype=None):
 
 @overload(np.unwrap)
 def numpy_unwrap(p, discont=None, axis=-1, period=6.283185307179586):
-    if not isinstance(axis, (int, types.Integer)):
+    if not isinstance(axis, (int, types.Integer, types.Omitted)):
         msg = 'The argument "axis" must be an integer'
         raise TypingError(msg)
 
@@ -4464,12 +4464,12 @@ def numpy_unwrap(p, discont=None, axis=-1, period=6.283185307179586):
         msg = 'The argument "discont" must be a scalar'
         raise TypingError(msg)
 
-    if not isinstance(period, (float, types.Number)):
+    if not isinstance(period, (float, types.Number, types.Omitted)):
         msg = 'The argument "period" must be a scalar'
         raise TypingError(msg)
 
     slice1 = (slice(1, None, None),)
-    if isinstance(period, types.Number):
+    if isinstance(period, (types.Number, types.Omitted)):
         dtype = np.result_type(as_dtype(p.dtype), as_dtype(period))
     else:
         dtype = np.result_type(as_dtype(p.dtype), np.float64)

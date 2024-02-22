@@ -6525,7 +6525,7 @@ def impl_shape_unchecked(context, builder, sig, args):
 
 @extending.overload(np.lib.stride_tricks.as_strided)
 def as_strided(x, shape=None, strides=None):
-    if shape in (None, types.none):
+    if shape in (None, types.none) or isinstance(shape, types.Omitted):
         @register_jitable
         def get_shape(x, shape):
             return x.shape
@@ -6534,7 +6534,7 @@ def as_strided(x, shape=None, strides=None):
         def get_shape(x, shape):
             return shape
 
-    if strides in (None, types.none):
+    if strides in (None, types.none) or isinstance(strides, types.Omitted):
         # When *strides* is not passed, as_strided() does a non-size-checking
         # reshape(), possibly changing the original strides.  This is too
         # cumbersome to support right now, and a Web search shows all example
