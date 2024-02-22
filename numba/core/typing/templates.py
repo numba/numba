@@ -24,6 +24,7 @@ from numba.core.cpu_options import InlineOptions
 _inline_info = namedtuple('inline_info',
                           'func_ir typemap calltypes signature')
 
+depth = 0
 
 class Signature(object):
     """
@@ -218,7 +219,11 @@ def fold_arguments(pysig, args, kws, normal_handler, default_handler,
             bind_kws[n] = args[len(kwonly) + idx]
 
     # now bind
-    ba = pysig.bind(*bind_args, **bind_kws)
+    try:
+        ba = pysig.bind(*bind_args, **bind_kws)
+    except TypeError as e:
+        # print(f"<fold> pysig={pysig} bind_args={bind_args} bind_kws={bind_kws}")
+        raise e
     for i, param in enumerate(pysig.parameters.values()):
         name = param.name
         default = param.default
@@ -701,16 +706,29 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         Returning a Dispatcher object.  The Dispatcher object is cached
         internally in `self._impl_cache`.
         """
+        # global depth
         flags = targetconfig.ConfigStack.top_or_none()
-        cache_key = self.context, tuple(args), tuple(kws.items()), flags
+
+        # FIXME: still need to remove Omitted type
+        # a better way is to reconcile Omitted and concrete type, I guess
+        args = tuple(
+            [arg for arg in args if not isinstance(arg, types.Omitted)]
+        )
+
+        # FIXME: ensure the order is correct
+        flatten_args = tuple(args) + tuple(kws.values())
+
+        cache_key = self.context, flatten_args, tuple(), flags
         try:
-            impl, args = self._impl_cache[cache_key]
+            impl, _ = self._impl_cache[cache_key]
+            # print(f"[get impl 0] args={args}, kws={kws}, impl={impl}")
             return impl, args
         except KeyError:
             # pass and try outside the scope so as to not have KeyError with a
             # nested addition error in the case the _build_impl fails
             pass
         impl, args = self._build_impl(cache_key, args, kws)
+        # print(f"[get impl 1]{' ':{depth+2}} impl={impl} args={args} kws={kws}")
         return impl, args
 
     def _get_jit_decorator(self):
@@ -771,6 +789,8 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             On failure, returns `(None, None)`.
 
         """
+        global depth
+        depth += 2
         jitter = self._get_jit_decorator()
 
         # Get the overload implementation for the given types
@@ -788,6 +808,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         if ovf_result is None:
             # No implementation => fail typing
             self._impl_cache[cache_key] = None, None
+            depth -= 2
             return None, None
         elif isinstance(ovf_result, tuple):
             # The implementation returned a signature that the type-inferencer
@@ -814,9 +835,13 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         disp = jitdecor(pyfunc)
         # Make sure that the implementation can be fully compiled
         disp_type = types.Dispatcher(disp)
-        disp_type.get_call_type(self.context, args, kws)
+        sig = disp_type.get_call_type(self.context, args, kws)
+        flatten_args = sig.args
+
         if cache_key is not None:
-            self._impl_cache[cache_key] = disp, args
+            self._impl_cache[cache_key] = disp, flatten_args
+        # print(f"[build impl]{'':{depth}} disp={disp} args={args} kws={kws} flatten_args={flatten_args}")
+        depth -= 2
         return disp, args
 
     def get_impl_key(self, sig):
