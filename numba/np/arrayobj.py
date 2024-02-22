@@ -4819,7 +4819,7 @@ def numpy_linspace(start, stop, num=50):
     if not all(isinstance(arg, types.Number) for arg in [start, stop]):
         return
 
-    if not isinstance(num, (int, types.Integer)):
+    if not isinstance(num, (int, types.Integer, types.Omitted)):
         msg = 'The argument "num" must be an integer'
         raise errors.TypingError(msg)
 
