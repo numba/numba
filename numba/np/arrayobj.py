@@ -1862,7 +1862,7 @@ def numpy_transpose(a, axes=None):
     if isinstance(a, types.BaseTuple):
         raise errors.UnsupportedError("np.transpose does not accept tuples")
 
-    if axes is None:
+    if axes is None or isinstance(axes, types.Omitted):
         def np_transpose_impl(a, axes=None):
             return a.transpose()
     else:
@@ -1898,7 +1898,7 @@ def numpy_logspace(start, stop, num=50):
         raise errors.TypingError('The first argument "start" must be a number')
     if not isinstance(stop, types.Number):
         raise errors.TypingError('The second argument "stop" must be a number')
-    if not isinstance(num, (int, types.Integer)):
+    if not isinstance(num, (int, types.Integer, types.Omitted)):
         raise errors.TypingError('The third argument "num" must be an integer')
 
     def impl(start, stop, num=50):
@@ -1918,7 +1918,7 @@ def numpy_geomspace(start, stop, num=50):
         msg = 'The argument "stop" must be a number'
         raise errors.TypingError(msg)
 
-    if not isinstance(num, (int, types.Integer)):
+    if not isinstance(num, (int, types.Integer, types.Omitted)):
         msg = 'The argument "num" must be an integer'
         raise errors.TypingError(msg)
 
@@ -1982,7 +1982,7 @@ def numpy_geomspace(start, stop, num=50):
 @overload(np.rot90)
 def numpy_rot90(m, k=1):
     # supporting axes argument it needs to be included in np.flip
-    if not isinstance(k, (int, types.Integer)):
+    if not isinstance(k, (int, types.Integer, types.Omitted)):
         raise errors.TypingError('The second argument "k" must be an integer')
     if not isinstance(m, types.Array):
         raise errors.TypingError('The first argument "m" must be an array')
@@ -4555,7 +4555,7 @@ def _eye_none_handler_impl(N, M):
 @extending.overload(np.eye)
 def numpy_eye(N, M=None, k=0, dtype=float):
 
-    if dtype is None or isinstance(dtype, types.NoneType):
+    if dtype is None or isinstance(dtype, (types.NoneType, types.Omitted)):
         dt = np.dtype(float)
     elif isinstance(dtype, (types.DTypeSpec, types.Number)):
         # dtype or instance of dtype

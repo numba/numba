@@ -2841,7 +2841,7 @@ def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
 
     # reject problem if ddof invalid (either upfront if type is
     # obviously invalid, or later if value found to be non-integral)
-    if ddof in (None, types.none):
+    if ddof in (None, types.none) or isinstance(ddof, types.Omitted):
         _DDOF_HANDLER = _handle_ddof_nop
     else:
         if isinstance(ddof, (types.Integer, types.Boolean)):
@@ -4377,7 +4377,7 @@ def np_select(condlist, choicelist, default=0):
         raise NumbaTypeError('condlist must be a List or a Tuple')
     if not isinstance(choicelist, (types.List, types.UniTuple)):
         raise NumbaTypeError('choicelist must be a List or a Tuple')
-    if not isinstance(default, (int, types.Number, types.Boolean)):
+    if not isinstance(default, (int, types.Number, types.Boolean, types.Omitted)):
         raise NumbaTypeError('default must be a scalar (number or boolean)')
     # the types of the parameters have been checked, now we test the types
     # of the content of the parameters
