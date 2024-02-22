@@ -4322,9 +4322,11 @@ def np_asarray(a, dtype=None):
 @overload(np.asfarray)
 def np_asfarray(a, dtype=np.float64):
     # convert numba dtype types into NumPy dtype
+    if isinstance(dtype, types.Omitted):
+        dtype = dtype.value
     if isinstance(dtype, types.Type):
         dtype = as_dtype(dtype)
-    if not np.issubdtype(dtype, np.inexact) or isinstance(dtype, types.Omitted):
+    if not np.issubdtype(dtype, np.inexact):
         dx = types.float64
     else:
         dx = dtype

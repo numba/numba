@@ -261,6 +261,9 @@ def poly_polyval(x, c, tensor=True):
         msg = 'The argument "c" must be array-like'
         raise errors.TypingError(msg)
 
+    if isinstance(tensor, types.Omitted):
+        tensor = tensor.value
+
     if not isinstance(tensor, (bool, types.BooleanLiteral)):
         msg = 'The argument "tensor" must be boolean'
         raise errors.RequireLiteralValue(msg)
