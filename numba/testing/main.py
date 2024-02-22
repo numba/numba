@@ -647,6 +647,7 @@ class ParallelTestResult(runner.TextTestResult):
             'unexpectedSuccesses': result.unexpectedSuccesses,
             'pid': result.pid,
             'start_time': result.start_time,
+            'benchmarks': result.benchmarks,
         })
         self.stream.write(streamout)
         self.test_runtime += result.test_runtime
@@ -740,7 +741,7 @@ class _MinimalResult(object):
     __slots__ = (
         'failures', 'errors', 'skipped', 'expectedFailures',
         'unexpectedSuccesses', 'stream', 'shouldStop', 'testsRun',
-        'test_id', 'test_runtime', 'start_time', 'pid')
+        'test_id', 'test_runtime', 'start_time', 'pid', 'benchmarks')
 
     def fixup_case(self, case):
         """
@@ -750,7 +751,8 @@ class _MinimalResult(object):
         case._outcomeForDoCleanups = None
 
     def __init__(self, original_result, test_id=None, test_runtime=None,
-                 start_time=None, pid=None):
+                 start_time=None, pid=None,
+                 benchmarks=()):
         for attr in self.__slots__:
             setattr(self, attr, getattr(original_result, attr, None))
         for case, _ in self.expectedFailures:
@@ -819,13 +821,16 @@ class _MinimalRunner(object):
             test(result)
         end_time = time.perf_counter()
         runtime = end_time - start_time
+        benchmarks = getattr(result, "benchmarks", ())
         if self.show_timing and self.runner_args.get('verbosity', 0) > 1:
             print(f"    Runtime (seconds): {runtime}", file=result.stream)
+            for bench in benchmarks:
+                print(f"    {bench.show()}", file=result.stream)
         # HACK as cStringIO.StringIO isn't picklable in 2.x
         result.stream = _FakeStringIO(result.stream.getvalue())
         return _MinimalResult(
             result, test.id(), test_runtime=runtime, start_time=start_time,
-            pid=pid,
+            pid=pid, benchmarks=benchmarks,
         )
 
     @contextlib.contextmanager
