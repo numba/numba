@@ -316,7 +316,7 @@ def to_device(ary, stream=0, copy=True, to=None):
 
 
 @contextmanager
-def pinned(arg):
+def pinned(*arylist):
     yield
 
 
