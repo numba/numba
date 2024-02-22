@@ -194,7 +194,7 @@ class NumbaTestProgram(unittest.main):
     random_select = None
     random_seed = 42
     show_timing = False
-    write_junit = False
+    write_junit_file = None
 
     def __init__(self, *args, **kwargs):
         topleveldir = kwargs.pop('topleveldir', None)
@@ -240,8 +240,9 @@ class NumbaTestProgram(unittest.main):
         parser.add_argument('--show-timing', dest='show_timing', action='store_true',
                             help=("Print recorded timing for each test and "
                                   "the whole suite."))
-        parser.add_argument('--junit', dest='write_junit', action='store_true',
-                            help=("Write junit xml output"))
+        parser.add_argument('--junit', dest='write_junit_file', type=str,
+                            help=("Enables enables junit xml output to the "
+                                  "specified file path."))
 
         def git_diff_str(x):
             if x != 'ancestor':
@@ -362,7 +363,7 @@ class NumbaTestProgram(unittest.main):
                                                  self.multiprocess,
                                                  self.useslice,
                                                  show_timing=self.show_timing,
-                                                 write_junit=self.write_junit,
+                                                 write_junit_file=self.write_junit_file,
                                                  verbosity=self.verbosity,
                                                  failfast=self.failfast,
                                                  buffer=self.buffer)
@@ -667,6 +668,7 @@ class ParallelTestResult(runner.TextTestResult):
 
         suites = Element("testsuites", time=str(self.test_runtime))
         suite = SubElement(suites, "testsuite", name="numba_testsuite")
+        perf_suite = SubElement(suites, "testsuite", name="numba_perfsuite")
         status_to_tags = {
             'errors': 'error',
             'failures': 'failure',
@@ -697,6 +699,15 @@ class ParallelTestResult(runner.TextTestResult):
                     traceback = _strip_ansi_escape_sequences(traceback)
                     SubElement(testcase, tag).text = traceback
                     break
+            # Add benchmark
+            for bench in rec['benchmarks']:
+                testcase = SubElement(
+                    perf_suite, "testcase",
+                    name='.'.join([classname, testname, bench.name]),
+                    classname=filename,
+                    time=str(bench.average),
+                )
+
         # Write XML to output
         ElementTree(suites).write(
             output, xml_declaration=True, encoding='utf-8',
@@ -752,6 +763,7 @@ class _MinimalResult(object):
         self.test_runtime = test_runtime
         self.start_time = start_time
         self.pid = pid
+        self.benchmarks = tuple(benchmarks)
 
 
 class _FakeStringIO(object):
@@ -772,11 +784,11 @@ class _MinimalRunner(object):
     child process and run a test case with it.
     """
 
-    def __init__(self, runner_cls, runner_args, *, show_timing=False, write_junit=False):
+    def __init__(self, runner_cls, runner_args, *, show_timing=False, write_junit_file=False):
         self.runner_cls = runner_cls
         self.runner_args = runner_args
         self.show_timing = show_timing
-        self.write_junit = write_junit
+        self.write_junit_file = write_junit_file
 
     # Python 2 doesn't know how to pickle instance methods, so we use __call__
     # instead.
@@ -870,14 +882,14 @@ class ParallelTestRunner(runner.TextTestRunner):
     resultclass = ParallelTestResult
     timeout = _TIMEOUT
 
-    def __init__(self, runner_cls, nprocs, useslice, *, show_timing, write_junit, **kwargs):
+    def __init__(self, runner_cls, nprocs, useslice, *, show_timing, write_junit_file, **kwargs):
         runner.TextTestRunner.__init__(self, **kwargs)
         self.runner_cls = runner_cls
         self.nprocs = nprocs
         self.useslice = parse_slice(useslice)
         self.runner_args = kwargs
         self.show_timing = show_timing
-        self.write_junit = write_junit
+        self.write_junit_file = write_junit_file
 
     def _run_inner(self, result):
         # We hijack TextTestRunner.run()'s inner logic by passing this
@@ -978,9 +990,9 @@ class ParallelTestRunner(runner.TextTestRunner):
         if self.show_timing:
             self.stream.write(f"Total test runtime (seconds): {result.test_runtime}\n")
         # Write junit xml
-        if self.write_junit:
+        if self.write_junit_file:
             tstamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            filename = f"junit_numba_{tstamp}.xml"
+            filename = self.write_junit_file # f"junit_numba_{tstamp}.xml"
             print("Writing junit xml file:", filename)
             result.write_junit_xml(filename)
         return result
