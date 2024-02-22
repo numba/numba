@@ -4651,7 +4651,7 @@ def numpy_diagflat(v, k=0):
         msg = 'The argument "v" must be array-like'
         raise errors.TypingError(msg)
 
-    if not isinstance(k, (int, types.Integer)):
+    if not isinstance(k, (int, types.Integer, types.Omitted)):
         msg = 'The argument "k" must be an integer'
         raise errors.TypingError(msg)
 
