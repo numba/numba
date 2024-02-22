@@ -727,7 +727,7 @@ def type_is_scalar(typ):
 
 def check_is_integer(v, name):
     """Raises TypingError if the value is not an integer."""
-    if not isinstance(v, (int, types.Integer)):
+    if not isinstance(v, (int, types.Integer, types.Omitted)):
         raise TypingError('{} must be an integer'.format(name))
 
 
