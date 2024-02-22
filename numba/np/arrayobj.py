@@ -4755,11 +4755,11 @@ def np_arange(start, stop=None, step=None, dtype=None):
     if isinstance(dtype, types.Optional):
         dtype = dtype.type
 
-    if stop is None:
+    if stop is None or isinstance(stop, types.Omitted):
         stop = types.none
-    if step is None:
+    if step is None or isinstance(step, types.Omitted):
         step = types.none
-    if dtype is None:
+    if dtype is None or isinstance(dtype, types.Omitted):
         dtype = types.none
 
     if (not isinstance(start, types.Number) or

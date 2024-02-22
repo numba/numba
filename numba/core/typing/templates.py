@@ -25,6 +25,7 @@ _inline_info = namedtuple('inline_info',
                           'func_ir typemap calltypes signature')
 
 depth = 0
+DEBUG = False
 
 class Signature(object):
     """
@@ -222,7 +223,8 @@ def fold_arguments(pysig, args, kws, normal_handler, default_handler,
     try:
         ba = pysig.bind(*bind_args, **bind_kws)
     except TypeError as e:
-        # print(f"<fold> pysig={pysig} bind_args={bind_args} bind_kws={bind_kws}")
+        if DEBUG:
+            print(f"<fold> pysig={pysig} bind_args={bind_args} bind_kws={bind_kws}")
         raise e
     for i, param in enumerate(pysig.parameters.values()):
         name = param.name
@@ -728,14 +730,16 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         cache_key = self.context, flatten_args, tuple(), flags
         try:
             impl, _ = self._impl_cache[cache_key]
-            # print(f"[get impl 0] args={args}, kws={kws}, impl={impl}")
+            if DEBUG:
+                print(f"[get impl 0] args={args}, kws={kws}, impl={impl}")
             return impl, args
         except KeyError:
             # pass and try outside the scope so as to not have KeyError with a
             # nested addition error in the case the _build_impl fails
             pass
         impl, args = self._build_impl(cache_key, args, kws)
-        # print(f"[get impl 1]{' ':{depth+2}} impl={impl} args={args} kws={kws}")
+        if DEBUG:
+            print(f"[get impl 1]{' ':{depth+2}} impl={impl} args={args} kws={kws}")
         return impl, args
 
     def _get_jit_decorator(self):
@@ -815,6 +819,8 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         if ovf_result is None:
             # No implementation => fail typing
             self._impl_cache[cache_key] = None, None
+            if DEBUG:
+                print(f"[build impl]{'':{depth}} err? ov_sig={ov_sig} args={args} kws={kws}")
             depth -= 2
             return None, None
         elif isinstance(ovf_result, tuple):
@@ -840,7 +846,8 @@ class _OverloadFunctionTemplate(AbstractTemplate):
 
         # if "impl_pop.<locals>.impl" in str(pyfunc):
         #     assert True
-        # print(f"[build impl]{'':{depth}} ov_sig={ov_sig} pyfunc={pyfunc} overload_func={self._overload_func} args={args} kws={kws}")
+        if DEBUG:
+            print(f"[build impl]{'':{depth}} ov_sig={ov_sig} pyfunc={pyfunc} args={args} kws={kws}")
 
         # Make dispatcher
         jitdecor = jitter(**self._jit_options)
@@ -852,7 +859,8 @@ class _OverloadFunctionTemplate(AbstractTemplate):
 
         if cache_key is not None:
             self._impl_cache[cache_key] = disp, flatten_args
-        # print(f"[build impl]{'':{depth}} disp={disp} args={args} kws={kws} flatten_args={flatten_args}")
+        if DEBUG:
+            print(f"[build impl]{'':{depth}} disp={disp} args={args} kws={kws} flatten_args={flatten_args}")
         depth -= 2
         return disp, args
 
