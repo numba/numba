@@ -711,7 +711,7 @@ class ParallelTestResult(runner.TextTestResult):
                     perf_suite, "testcase",
                     name='.'.join([classname, testname, bench.name]),
                     classname=filename,
-                    time=str(bench.average),
+                    time=str(bench.duration),
                 )
 
         # Write XML to output
