@@ -12,7 +12,7 @@ from collections.abc import Sequence
 from types import MethodType, FunctionType, MappingProxyType
 
 import numba
-from numba.core import types, utils, targetconfig
+from numba.core import types, utils
 from numba.core.errors import (
     TypingError,
     InternalError,
