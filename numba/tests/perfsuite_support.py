@@ -37,7 +37,6 @@ class BenchmarkRecord:
 
 
 class PerfTestCase(TestCase):
-    _benchmark_repeat_count = 4
     __benchmark: list[BenchmarkRecord]
     _BENCHMARK_MODE = config.PERFSUITE_BENCHMARK
 
