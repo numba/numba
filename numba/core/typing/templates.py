@@ -730,12 +730,9 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                     kws[name] = types.Omitted(default)
 
         # FIXME: ensure the order is correct
-        flatten_args = list(args) + list(kws.values())
-        for idx, arg in enumerate(flatten_args):
-            if isinstance(arg, types.Omitted):
-                flatten_args[idx] = numba.typeof(arg.value)
+        flatten_args = tuple(args) + tuple(kws.values())
 
-        cache_key = self.context, tuple(flatten_args), tuple(), flags
+        cache_key = self.context, flatten_args, tuple(), flags
         try:
             impl, _ = self._impl_cache[cache_key]
             if DEBUG:
@@ -858,6 +855,8 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         if self._strict:
             self._validate_sigs(self._overload_func, pyfunc)
 
+        # if "impl_pop.<locals>.impl" in str(pyfunc):
+        #     assert True
         if DEBUG:
             print(
                 f"[build impl]{'':{depth}} ov_sig={ov_sig} "
@@ -870,18 +869,14 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         # Make sure that the implementation can be fully compiled
         disp_type = types.Dispatcher(disp)
         sig = disp_type.get_call_type(self.context, args, kws)
-        flatten_args = list(sig.args)
-        # same thing, convert Omitted to its value
-        for idx, arg in enumerate(flatten_args):
-            if isinstance(arg, types.Omitted):
-                flatten_args[idx] = numba.typeof(arg.value)
+        flatten_args = sig.args
 
         if cache_key is not None:
-            self._impl_cache[cache_key] = disp, tuple(flatten_args)
+            self._impl_cache[cache_key] = disp, flatten_args
         if DEBUG:
             print(
                 f"[build impl]{'':{depth}} disp={disp} args={args} "
-                f"kws={kws} flatten_args={flatten_args} cache_key={cache_key}"
+                f"kws={kws} flatten_args={flatten_args}"
             )
         depth -= 2
         return disp, args
