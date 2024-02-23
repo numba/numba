@@ -712,9 +712,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         Returning a Dispatcher object.  The Dispatcher object is cached
         internally in `self._impl_cache`.
         """
-        # global depth
-        flags = targetconfig.ConfigStack.top_or_none()
-
+        global depth
         # FIXME: what's the real thing need to do is adding Ommitted to the args
         # check the pyfunc signature, if exist some kwargs, e.g., default=None,
         # check whether kws specify them, if not,
@@ -732,7 +730,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         # FIXME: ensure the order is correct
         flatten_args = tuple(args) + tuple(kws.values())
 
-        cache_key = self.context, flatten_args, tuple(), flags
+        cache_key = self.context, flatten_args, tuple(), tuple()
         try:
             impl, _ = self._impl_cache[cache_key]
             if DEBUG:
@@ -876,8 +874,11 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         if DEBUG:
             print(
                 f"[build impl]{'':{depth}} disp={disp} args={args} "
-                f"kws={kws} flatten_args={flatten_args}"
+                f"kws={kws} flatten_args={flatten_args} "
+                f"cache_key={cache_key} jit_options={self._jit_options}"
             )
+        # if "impl_pop.<locals>.impl" in str(pyfunc):
+        #     assert True
         depth -= 2
         return disp, args
 

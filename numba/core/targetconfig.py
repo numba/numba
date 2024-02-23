@@ -174,15 +174,11 @@ class TargetConfig(metaclass=_MetaTargetConfig):
         # NOTE: default options will be placed at the end and grouped inside
         #       a square bracket; i.e. [optname=optval, ...]
         args = []
-        defs = []
         for k in self.options:
             msg = f"{k}={getattr(self, k)}"
-            if not self.is_set(k):
-                defs.append(msg)
-            else:
-                args.append(msg)
+            args.append(msg)
         clsname = self.__class__.__name__
-        return f"{clsname}({', '.join(args)}, [{', '.join(defs)}])"
+        return f"{clsname}({', '.join(args)})"
 
     def __hash__(self):
         return hash(tuple(sorted(self.values())))
