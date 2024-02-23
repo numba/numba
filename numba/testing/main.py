@@ -713,6 +713,13 @@ class ParallelTestResult(runner.TextTestResult):
                     classname=filename,
                     time=str(bench.duration),
                 )
+                props = SubElement(testcase, 'properties')
+                SubElement(props, 'property', name='average',
+                           value=str(bench.average))
+                SubElement(props, 'property', name='run_count',
+                           value=str(bench.run_count))
+                SubElement(props, 'property', name='repeat',
+                           value=str(bench.repeat))
 
         # Write XML to output
         ElementTree(suites).write(
