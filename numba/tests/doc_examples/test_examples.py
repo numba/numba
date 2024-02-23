@@ -338,9 +338,8 @@ class DocsExamplesTest(TestCase):
     def test_guvectorize_scalar_return(self):
         with captured_stdout():
             # magictoken.ex_guvectorize_scalar_return.begin
-            import numpy as np
-
             from numba import guvectorize, int64
+            import numpy as np
 
             @guvectorize([(int64[:], int64, int64[:])], '(n),()->()')
             def g(x, y, res):
