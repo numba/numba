@@ -702,7 +702,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         internally in `self._impl_cache`.
         """
         flags = targetconfig.ConfigStack.top_or_none()
-        dict_flags = dict(getattr(flags, "options", {}))
+        dict_flags = dict(flags.options) if flags is not None else {}
         for key, value in self._jit_options.items():
             if key in dict_flags:
                 dict_flags["key"] = value
