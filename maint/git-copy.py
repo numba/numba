@@ -48,6 +48,11 @@ $ git branch -D copied old_files, new_files, preserved_files
 Lastly, You can hand over as many files as your shell and Python implementation
 will handle. Hopefully this should suffice for all practical purposes.
 
+Dependencies
+------------
+
+* https://pypi.org/project/sh/
+
 See also
 --------
 
