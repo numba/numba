@@ -3,11 +3,11 @@ Implementation of the range object for fixed-size integers.
 """
 
 import operator
+from llvmlite.ir import Constant
 
 from numba import prange
 from numba.core import types, cgutils, errors
 from numba.cpython.listobj import ListIterInstance
-from numba.np.arrayobj import make_array
 from numba.core.imputils import (lower_builtin, lower_cast,
                                     iterator_impl, impl_ret_untracked)
 from numba.core.typing import signature
@@ -178,6 +178,44 @@ def range_to_range(context, builder, fromty, toty, val):
              for v in olditems]
     return cgutils.make_anonymous_struct(builder, items)
 
+
+def get_ary_shape_outermost(ary_ty, ary_val, context, builder):
+    """
+    Get the outermost shape of the given array.
+    """
+    real_array_type = ary_ty.as_array
+    base = cgutils.create_struct_proxy(real_array_type)
+    ndim = real_array_type.ndim
+    ary = base(context, builder, ary_val)
+
+    def set_range_metadata(builder, load, lower_bound, upper_bound):
+        """
+        Set the "range" metadata on a load instruction.
+        Note the interval is in the form [lower_bound, upper_bound).
+        """
+        range_operands = [Constant(load.type, lower_bound),
+                        Constant(load.type, upper_bound)]
+        md = builder.module.add_metadata(range_operands)
+        load.set_metadata("range", md)
+
+
+    def mark_positive(builder, load):
+        """
+        Mark the result of a load instruction as positive (or zero).
+        """
+        upper_bound = (1 << (load.type.width - 1)) - 1
+        set_range_metadata(builder, load, 0, upper_bound)
+
+    if ndim == 0:
+        return base.__getattr__(ary, "shape")
+    else:
+        ptr = ary._get_ptr_by_name("shape")
+        dimptr = cgutils.gep_inbounds(builder, ptr, 0, 0)
+        load = builder.load(dimptr)
+        mark_positive(builder, load)
+        return load
+
+
 @intrinsic
 def length_of_iterator(typingctx, val):
     """
@@ -207,10 +245,9 @@ def length_of_iterator(typingctx, val):
             intp_t = context.get_value_type(types.intp)
             iterobj = context.make_helper(builder, iterty, value=value)
             arrayty = iterty.array_type
-            ary = make_array(arrayty)(context, builder, value=iterobj.array)
-            shape = cgutils.unpack_tuple(builder, ary.shape)
+            outer_shape = get_ary_shape_outermost(arrayty, iterobj.array, context, builder)
             # array iterates along the outer dimension
-            return impl_ret_untracked(context, builder, intp_t, shape[0])
+            return impl_ret_untracked(context, builder, intp_t, outer_shape)
         return signature(types.intp, val), codegen
     elif isinstance(val, types.UniTupleIter):
         def codegen(context, builder, sig, args):
