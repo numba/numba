@@ -23,7 +23,8 @@ branch, this results in three "copies" (two copies and one original).
 
 Lastly, we remove the prefix `preserved_` again to restore the original
 `myfile.py` in a final commit. This is a 'trick' used to restore and hence
-retain the original `myfile.py`.
+retain the original `myfile.py`. And then the temporary branches are deleted
+such that only the base branch `copied` remains.
 
 If the script succeeds, the following files will be present:
 
@@ -130,5 +131,8 @@ if __name__ == "__main__":
 
     # restore the originals
     copy_files(PRESERVED_BRANCH_NAME, PRESERVED_PREFIX, remove_prefix=True)
+
+    # remove stale branches
+    sh.git.branch("-d", NEW_BRANCH_NAME, OLD_BRANCH_NAME, PRESERVED_BRANCH_NAME)
 
     print("...done")
