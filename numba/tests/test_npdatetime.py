@@ -1112,5 +1112,41 @@ class TestDatetimeArrayOps(TestCase):
         self._test_min_max(np.max, True, True)
 
 
+class TestDatetimeTypeOps(TestCase):
+    def test_isinstance_datetime(self):
+        @njit
+        def is_complex(a):
+            return isinstance(a, complex)
+        @njit
+        def is_datetime(a):
+            return isinstance(a, np.datetime64)
+        @njit
+        def is_timedelta(a):
+            return isinstance(a, np.timedelta64)
+
+        dt_a = np.datetime64(1, 'ns')
+        dt_b = np.datetime64(2, 'ns')
+        td_c = dt_b - dt_a
+
+        def check(jit_func, x):
+            with self.subTest(f'{jit_func.__name__}({type(x).__name__})'):
+                got = jit_func(x)
+                expect = jit_func.py_func(x)
+                self.assertEqual(got, expect)
+
+        fns = [
+            is_complex,
+            is_datetime,
+            is_timedelta,
+        ]
+        args = [
+            dt_a,
+            dt_b,
+            td_c,
+        ]
+        for fn, arg in itertools.product(fns, args):
+            check(fn, arg)
+
+
 if __name__ == '__main__':
     unittest.main()

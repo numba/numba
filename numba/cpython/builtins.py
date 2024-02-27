@@ -779,7 +779,7 @@ def ol_isinstance(var, typs):
                         types.Function, types.ClassType, types.UnicodeType,
                         types.ClassInstanceType, types.NoneType, types.Array,
                         types.Boolean, types.Float, types.UnicodeCharSeq,
-                        types.Complex)
+                        types.Complex, types.NPDatetime, types.NPTimedelta,)
     if not isinstance(var_ty, supported_var_ty):
         msg = f'isinstance() does not support variables of type "{var_ty}".'
         raise NumbaTypeError(msg)
@@ -834,6 +834,9 @@ def ol_isinstance(var, typs):
             numba_typ = as_numba_type(key)
             if var_ty == numba_typ:
                 return true_impl
+            elif isinstance(numba_typ, (types.NPDatetime, types.NPTimedelta)):
+                if isinstance(var_ty, type(numba_typ)):
+                    return true_impl
             elif isinstance(numba_typ, types.ClassType) and \
                     isinstance(var_ty, types.ClassInstanceType) and \
                     var_ty.key == numba_typ.instance_type.key:
