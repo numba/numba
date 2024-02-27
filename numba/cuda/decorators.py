@@ -28,8 +28,8 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
        .. note:: A kernel cannot have any return value.
     :param device: Indicates whether this is a device function.
     :type device: bool
-    :param link: A list of files containing PTX or CUDA C/C++ source to link
-       with the function
+    :param link: A list of files containing PTX or CUDA C/C++ source or
+      :class:`PTXCode <numba.cuda.PTXCode>` to link with the function.
     :type link: list
     :param debug: If True, check for exceptions thrown when executing the
        kernel. Since this degrades performance, this should only be used for
