@@ -18,10 +18,6 @@ from numba.core.typing import signature
 from numba.cpython.unsafe.numbers import trailing_zeros
 
 
-registry = Registry('mathimpl')
-lower = registry.lower
-
-
 # Helpers, shared with cmathimpl.
 _NP_FLT_FINFO = np.finfo(np.dtype('float32'))
 FLT_MAX = _NP_FLT_FINFO.max
@@ -122,13 +118,11 @@ def _unary_int_input_wrapper_impl(wrapped_impl):
 
 def unary_math_int_impl(fn, float_impl):
     impl = _unary_int_input_wrapper_impl(float_impl)
-    lower(fn, types.Integer)(impl)
 
 def unary_math_intr(fn, intrcode):
     """
     Implement the math function *fn* using the LLVM intrinsic *intrcode*.
     """
-    @lower(fn, types.Float)
     def float_impl(context, builder, sig, args):
         res = call_fp_intrinsic(builder, intrcode, args)
         return impl_ret_untracked(context, builder, sig.return_type, res)
@@ -163,8 +157,6 @@ def unary_math_extern(fn, f32extern, f64extern, int_restype=False):
         res = builder.call(fn, (val,))
         res = context.cast(builder, res, input_type, sig.return_type)
         return impl_ret_untracked(context, builder, sig.return_type, res)
-
-    lower(fn, types.Float)(float_impl)
 
     # Implement wrapper for integer inputs
     unary_math_int_impl(fn, float_impl)
@@ -206,44 +198,37 @@ trunc_impl = unary_math_extern(math.trunc, "truncf", "trunc", True)
 lgamma_impl = unary_math_extern(math.lgamma, "lgammaf", "lgamma")
 
 
-@lower(math.isnan, types.Float)
 def isnan_float_impl(context, builder, sig, args):
     [val] = args
     res = is_nan(builder, val)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower(math.isnan, types.Integer)
 def isnan_int_impl(context, builder, sig, args):
     res = cgutils.false_bit
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower(math.isinf, types.Float)
 def isinf_float_impl(context, builder, sig, args):
     [val] = args
     res = is_inf(builder, val)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-@lower(math.isinf, types.Integer)
 def isinf_int_impl(context, builder, sig, args):
     res = cgutils.false_bit
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower(math.isfinite, types.Float)
 def isfinite_float_impl(context, builder, sig, args):
     [val] = args
     res = is_finite(builder, val)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower(math.isfinite, types.Integer)
 def isfinite_int_impl(context, builder, sig, args):
     res = cgutils.true_bit
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower(math.copysign, types.Float, types.Float)
 def copysign_float_impl(context, builder, sig, args):
     lty = args[0].type
     mod = builder.module
@@ -256,7 +241,6 @@ def copysign_float_impl(context, builder, sig, args):
 # -----------------------------------------------------------------------------
 
 
-@lower(math.frexp, types.Float)
 def frexp_impl(context, builder, sig, args):
     val, = args
     fltty = context.get_data_type(sig.args[0])
@@ -273,7 +257,6 @@ def frexp_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower(math.ldexp, types.Float, types.intc)
 def ldexp_impl(context, builder, sig, args):
     val, exp = args
     fltty, intty = map(context.get_data_type, sig.args)
@@ -290,7 +273,6 @@ def ldexp_impl(context, builder, sig, args):
 # -----------------------------------------------------------------------------
 
 
-@lower(math.atan2, types.int64, types.int64)
 def atan2_s64_impl(context, builder, sig, args):
     [y, x] = args
     y = builder.sitofp(y, llvmlite.ir.DoubleType())
@@ -298,7 +280,6 @@ def atan2_s64_impl(context, builder, sig, args):
     fsig = signature(types.float64, types.float64, types.float64)
     return atan2_float_impl(context, builder, fsig, (y, x))
 
-@lower(math.atan2, types.uint64, types.uint64)
 def atan2_u64_impl(context, builder, sig, args):
     [y, x] = args
     y = builder.uitofp(y, llvmlite.ir.DoubleType())
@@ -306,7 +287,6 @@ def atan2_u64_impl(context, builder, sig, args):
     fsig = signature(types.float64, types.float64, types.float64)
     return atan2_float_impl(context, builder, fsig, (y, x))
 
-@lower(math.atan2, types.Float, types.Float)
 def atan2_float_impl(context, builder, sig, args):
     assert len(args) == 2
     mod = builder.module
@@ -325,7 +305,6 @@ def atan2_float_impl(context, builder, sig, args):
 # -----------------------------------------------------------------------------
 
 
-@lower(math.hypot, types.int64, types.int64)
 def hypot_s64_impl(context, builder, sig, args):
     [x, y] = args
     y = builder.sitofp(y, llvmlite.ir.DoubleType())
@@ -335,7 +314,6 @@ def hypot_s64_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower(math.hypot, types.uint64, types.uint64)
 def hypot_u64_impl(context, builder, sig, args):
     [x, y] = args
     y = builder.sitofp(y, llvmlite.ir.DoubleType())
@@ -345,7 +323,6 @@ def hypot_u64_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower(math.hypot, types.Float, types.Float)
 def hypot_float_impl(context, builder, sig, args):
     xty, yty = sig.args
     assert xty == yty == sig.return_type
@@ -376,7 +353,6 @@ def hypot_float_impl(context, builder, sig, args):
 
 # -----------------------------------------------------------------------------
 
-@lower(math.radians, types.Float)
 def radians_float_impl(context, builder, sig, args):
     [x] = args
     coef = context.get_constant(sig.return_type, math.pi / 180)
@@ -387,7 +363,6 @@ unary_math_int_impl(math.radians, radians_float_impl)
 
 # -----------------------------------------------------------------------------
 
-@lower(math.degrees, types.Float)
 def degrees_float_impl(context, builder, sig, args):
     [x] = args
     coef = context.get_constant(sig.return_type, 180 / math.pi)
@@ -398,8 +373,6 @@ unary_math_int_impl(math.degrees, degrees_float_impl)
 
 # -----------------------------------------------------------------------------
 
-@lower(math.pow, types.Float, types.Float)
-@lower(math.pow, types.Float, types.Integer)
 def pow_impl(context, builder, sig, args):
     impl = context.get_function(operator.pow, sig)
     return impl(builder, args)
@@ -448,6 +421,3 @@ def gcd_impl(context, builder, sig, args):
 
     res = context.compile_internal(builder, gcd, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-lower(math.gcd, types.Integer, types.Integer)(gcd_impl)
