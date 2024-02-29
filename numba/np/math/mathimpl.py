@@ -14,6 +14,7 @@ from numba.core.imputils import impl_ret_untracked
 from numba.core import types, config, cgutils
 from numba.core.typing import signature
 from numba.cpython.unsafe.numbers import trailing_zeros
+from numba.cpython.mathimpl import _unsigned
 
 
 # Helpers, shared with cmathimpl.
@@ -376,19 +377,6 @@ def pow_impl(context, builder, sig, args):
     return impl(builder, args)
 
 # -----------------------------------------------------------------------------
-
-
-def _unsigned(T):
-    """Convert integer to unsigned integer of equivalent width."""
-    pass
-
-def _unsigned_impl(T):
-    if T in types.unsigned_domain:
-        return lambda T: T
-    elif T in types.signed_domain:
-        newT = getattr(types, 'uint{}'.format(T.bitwidth))
-        return lambda T: newT(T)
-
 
 def gcd_impl(context, builder, sig, args):
     xty, yty = sig.args
