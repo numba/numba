@@ -6,10 +6,9 @@ Implement the cmath module functions.
 import cmath
 import math
 
-from numba.core.imputils import Registry, impl_ret_untracked
-from numba.core import types, cgutils
+from numba.core.imputils import impl_ret_untracked
+from numba.core import types
 from numba.core.typing import signature
-from numba.core.extending import overload
 from . import mathimpl
 
 
@@ -48,7 +47,6 @@ def isfinite_float_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@overload(cmath.rect)
 def impl_cmath_rect(r, phi):
     if all([isinstance(typ, types.Float) for typ in [r, phi]]):
         def impl(r, phi):
@@ -157,7 +155,6 @@ def log_base_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig, res)
 
 
-@overload(cmath.log10)
 def impl_cmath_log10(z):
     if not isinstance(z, types.Complex):
         return
@@ -174,7 +171,6 @@ def impl_cmath_log10(z):
     return log10_impl
 
 
-@overload(cmath.phase)
 def phase_impl(x):
     """cmath.phase(x + y j)"""
 
@@ -186,7 +182,6 @@ def phase_impl(x):
     return impl
 
 
-@overload(cmath.polar)
 def polar_impl(x):
     if not isinstance(x, types.Complex):
         return
@@ -265,7 +260,6 @@ def cos_impl(context, builder, sig, args):
     res = context.compile_internal(builder, cos_impl, sig, args)
     return impl_ret_untracked(context, builder, sig, res)
 
-@overload(cmath.cosh)
 def impl_cmath_cosh(z):
     if not isinstance(z, types.Complex):
         return
@@ -304,7 +298,6 @@ def sin_impl(context, builder, sig, args):
     res = context.compile_internal(builder, sin_impl, sig, args)
     return impl_ret_untracked(context, builder, sig, res)
 
-@overload(cmath.sinh)
 def impl_cmath_sinh(z):
     if not isinstance(z, types.Complex):
         return
@@ -341,7 +334,6 @@ def tan_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig, res)
 
 
-@overload(cmath.tanh)
 def impl_cmath_tanh(z):
     if not isinstance(z, types.Complex):
         return
@@ -396,7 +388,6 @@ def acos_impl(context, builder, sig, args):
     res = context.compile_internal(builder, acos_impl, sig, args)
     return impl_ret_untracked(context, builder, sig, res)
 
-@overload(cmath.acosh)
 def impl_cmath_acosh(z):
     if not isinstance(z, types.Complex):
         return

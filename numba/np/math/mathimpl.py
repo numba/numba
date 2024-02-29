@@ -10,10 +10,8 @@ import numpy as np
 import llvmlite.ir
 from llvmlite.ir import Constant
 
-from numba.core.imputils import Registry, impl_ret_untracked
-from numba import typeof
-from numba.core import types, utils, config, cgutils
-from numba.core.extending import overload
+from numba.core.imputils import impl_ret_untracked
+from numba.core import types, config, cgutils
 from numba.core.typing import signature
 from numba.cpython.unsafe.numbers import trailing_zeros
 
@@ -384,7 +382,6 @@ def _unsigned(T):
     """Convert integer to unsigned integer of equivalent width."""
     pass
 
-@overload(_unsigned)
 def _unsigned_impl(T):
     if T in types.unsigned_domain:
         return lambda T: T
