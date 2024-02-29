@@ -304,7 +304,7 @@ class TestCase(unittest.TestCase):
                       out)
         xml_filepath = m.group(1)
         self.assertTrue(pathlib.Path(xml_filepath).exists())
-        # If this raise the XML file is invalid
+        # If this raises, the XML file is invalid
         xml.etree.ElementTree.parse(xml_filepath)
 
 
