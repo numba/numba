@@ -1196,7 +1196,6 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
         # this doesn't work in objmode as it's effectively untyped
         if typed:
             len_func_var = scope.redefine("len_func", loc)
-            from numba.cpython.rangeobj import length_of_iterator
             stmts.append(_new_definition(func_ir, len_func_var,
                                          ir.Global('length_of_iterator',
                                                    length_of_iterator,
