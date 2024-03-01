@@ -151,6 +151,7 @@ def _int_divmod_impl(context, builder, sig, args, zerodiv_message):
     return quot, rem
 
 
+# @lower_builtin(divmod, types.Integer, types.Integer)
 def int_divmod_impl(context, builder, sig, args):
     quot, rem = _int_divmod_impl(context, builder, sig, args,
                                  "integer divmod by zero")
@@ -159,12 +160,16 @@ def int_divmod_impl(context, builder, sig, args):
                               (builder.load(quot), builder.load(rem)))
 
 
+# @lower_builtin(operator.floordiv, types.Integer, types.Integer)
+# @lower_builtin(operator.ifloordiv, types.Integer, types.Integer)
 def int_floordiv_impl(context, builder, sig, args):
     quot, rem = _int_divmod_impl(context, builder, sig, args,
                                  "integer division by zero")
     return builder.load(quot)
 
 
+# @lower_builtin(operator.truediv, types.Integer, types.Integer)
+# @lower_builtin(operator.itruediv, types.Integer, types.Integer)
 def int_truediv_impl(context, builder, sig, args):
     [va, vb] = args
     [ta, tb] = sig.args
@@ -176,6 +181,8 @@ def int_truediv_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
+# @lower_builtin(operator.mod, types.Integer, types.Integer)
+# @lower_builtin(operator.imod, types.Integer, types.Integer)
 def int_rem_impl(context, builder, sig, args):
     quot, rem = _int_divmod_impl(context, builder, sig, args,
                                  "integer modulo by zero")
@@ -234,6 +241,10 @@ def int_power_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
+# @lower_builtin(operator.pow, types.Integer, types.IntegerLiteral)
+# @lower_builtin(operator.ipow, types.Integer, types.IntegerLiteral)
+# @lower_builtin(operator.pow, types.Float, types.IntegerLiteral)
+# @lower_builtin(operator.ipow, types.Float, types.IntegerLiteral)
 def static_power_impl(context, builder, sig, args):
     """
     a ^ b, where a is an integer or real, and b a constant integer
@@ -521,6 +532,80 @@ def bool_unary_positive_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
+# lower_builtin(operator.eq, types.boolean, types.boolean)(int_eq_impl)
+# lower_builtin(operator.ne, types.boolean, types.boolean)(int_ne_impl)
+# lower_builtin(operator.lt, types.boolean, types.boolean)(int_ult_impl)
+# lower_builtin(operator.le, types.boolean, types.boolean)(int_ule_impl)
+# lower_builtin(operator.gt, types.boolean, types.boolean)(int_ugt_impl)
+# lower_builtin(operator.ge, types.boolean, types.boolean)(int_uge_impl)
+# lower_builtin(operator.neg, types.boolean)(bool_negate_impl)
+# lower_builtin(operator.pos, types.boolean)(bool_unary_positive_impl)
+
+
+# def _implement_integer_operators():
+#     ty = types.Integer
+
+#     lower_builtin(operator.add, ty, ty)(int_add_impl)
+#     lower_builtin(operator.iadd, ty, ty)(int_add_impl)
+#     lower_builtin(operator.sub, ty, ty)(int_sub_impl)
+#     lower_builtin(operator.isub, ty, ty)(int_sub_impl)
+#     lower_builtin(operator.mul, ty, ty)(int_mul_impl)
+#     lower_builtin(operator.imul, ty, ty)(int_mul_impl)
+#     lower_builtin(operator.eq, ty, ty)(int_eq_impl)
+#     lower_builtin(operator.ne, ty, ty)(int_ne_impl)
+
+#     lower_builtin(operator.lshift, ty, ty)(int_shl_impl)
+#     lower_builtin(operator.ilshift, ty, ty)(int_shl_impl)
+#     lower_builtin(operator.rshift, ty, ty)(int_shr_impl)
+#     lower_builtin(operator.irshift, ty, ty)(int_shr_impl)
+
+#     lower_builtin(operator.neg, ty)(int_negate_impl)
+#     lower_builtin(operator.pos, ty)(int_positive_impl)
+
+#     lower_builtin(operator.pow, ty, ty)(int_power_impl)
+#     lower_builtin(operator.ipow, ty, ty)(int_power_impl)
+#     lower_builtin(pow, ty, ty)(int_power_impl)
+
+#     for ty in types.unsigned_domain:
+#         lower_builtin(operator.lt, ty, ty)(int_ult_impl)
+#         lower_builtin(operator.le, ty, ty)(int_ule_impl)
+#         lower_builtin(operator.gt, ty, ty)(int_ugt_impl)
+#         lower_builtin(operator.ge, ty, ty)(int_uge_impl)
+#         lower_builtin(operator.pow, types.Float, ty)(int_power_impl)
+#         lower_builtin(operator.ipow, types.Float, ty)(int_power_impl)
+#         lower_builtin(pow, types.Float, ty)(int_power_impl)
+#         lower_builtin(abs, ty)(uint_abs_impl)
+
+#     lower_builtin(operator.lt, types.IntegerLiteral, types.IntegerLiteral)(int_slt_impl)
+#     lower_builtin(operator.gt, types.IntegerLiteral, types.IntegerLiteral)(int_slt_impl)
+#     lower_builtin(operator.le, types.IntegerLiteral, types.IntegerLiteral)(int_slt_impl)
+#     lower_builtin(operator.ge, types.IntegerLiteral, types.IntegerLiteral)(int_slt_impl)
+#     for ty in types.signed_domain:
+#         lower_builtin(operator.lt, ty, ty)(int_slt_impl)
+#         lower_builtin(operator.le, ty, ty)(int_sle_impl)
+#         lower_builtin(operator.gt, ty, ty)(int_sgt_impl)
+#         lower_builtin(operator.ge, ty, ty)(int_sge_impl)
+#         lower_builtin(operator.pow, types.Float, ty)(int_power_impl)
+#         lower_builtin(operator.ipow, types.Float, ty)(int_power_impl)
+#         lower_builtin(pow, types.Float, ty)(int_power_impl)
+#         lower_builtin(abs, ty)(int_abs_impl)
+
+# def _implement_bitwise_operators():
+#     for ty in (types.Boolean, types.Integer):
+#         lower_builtin(operator.and_, ty, ty)(int_and_impl)
+#         lower_builtin(operator.iand, ty, ty)(int_and_impl)
+#         lower_builtin(operator.or_, ty, ty)(int_or_impl)
+#         lower_builtin(operator.ior, ty, ty)(int_or_impl)
+#         lower_builtin(operator.xor, ty, ty)(int_xor_impl)
+#         lower_builtin(operator.ixor, ty, ty)(int_xor_impl)
+
+#         lower_builtin(operator.invert, ty)(int_invert_impl)
+
+# _implement_integer_operators()
+
+# _implement_bitwise_operators()
+
+
 def real_add_impl(context, builder, sig, args):
     res = builder.fadd(*args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
@@ -673,6 +758,7 @@ def real_divmod_func_body(context, builder, vx, wx):
     return builder.load(pfloordiv), builder.load(pmod)
 
 
+# @lower_builtin(divmod, types.Float, types.Float)
 def real_divmod_impl(context, builder, sig, args, loc=None):
     x, y = args
     quot = cgutils.alloca_once(builder, x.type, name="quot")
@@ -828,16 +914,52 @@ def real_sign_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
+# ty = types.Float
+
+# lower_builtin(operator.add, ty, ty)(real_add_impl)
+# lower_builtin(operator.iadd, ty, ty)(real_add_impl)
+# lower_builtin(operator.sub, ty, ty)(real_sub_impl)
+# lower_builtin(operator.isub, ty, ty)(real_sub_impl)
+# lower_builtin(operator.mul, ty, ty)(real_mul_impl)
+# lower_builtin(operator.imul, ty, ty)(real_mul_impl)
+# lower_builtin(operator.floordiv, ty, ty)(real_floordiv_impl)
+# lower_builtin(operator.ifloordiv, ty, ty)(real_floordiv_impl)
+# lower_builtin(operator.truediv, ty, ty)(real_div_impl)
+# lower_builtin(operator.itruediv, ty, ty)(real_div_impl)
+# lower_builtin(operator.mod, ty, ty)(real_mod_impl)
+# lower_builtin(operator.imod, ty, ty)(real_mod_impl)
+# lower_builtin(operator.pow, ty, ty)(real_power_impl)
+# lower_builtin(operator.ipow, ty, ty)(real_power_impl)
+# lower_builtin(pow, ty, ty)(real_power_impl)
+
+# lower_builtin(operator.eq, ty, ty)(real_eq_impl)
+# lower_builtin(operator.ne, ty, ty)(real_ne_impl)
+# lower_builtin(operator.lt, ty, ty)(real_lt_impl)
+# lower_builtin(operator.le, ty, ty)(real_le_impl)
+# lower_builtin(operator.gt, ty, ty)(real_gt_impl)
+# lower_builtin(operator.ge, ty, ty)(real_ge_impl)
+
+# lower_builtin(abs, ty)(real_abs_impl)
+
+# lower_builtin(operator.neg, ty)(real_negate_impl)
+# lower_builtin(operator.pos, ty)(real_positive_impl)
+
+# del ty
+
+
+# @lower_getattr(types.Complex, "real")
 def complex_real_impl(context, builder, typ, value):
     cplx = context.make_complex(builder, typ, value=value)
     res = cplx.real
     return impl_ret_untracked(context, builder, typ, res)
 
+# @lower_getattr(types.Complex, "imag")
 def complex_imag_impl(context, builder, typ, value):
     cplx = context.make_complex(builder, typ, value=value)
     res = cplx.imag
     return impl_ret_untracked(context, builder, typ, res)
 
+# @lower_builtin("complex.conjugate", types.Complex)
 def complex_conjugate_impl(context, builder, sig, args):
     from numba.cpython import mathimpl
     z = context.make_complex(builder, sig.args[0], args[0])
@@ -855,6 +977,15 @@ def real_imag_impl(context, builder, typ, value):
 def real_conjugate_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, args[0])
 
+# for cls in (types.Float, types.Integer):
+#     lower_getattr(cls, "real")(real_real_impl)
+#     lower_getattr(cls, "imag")(real_imag_impl)
+#     lower_builtin("complex.conjugate", cls)(real_conjugate_impl)
+
+
+# @lower_builtin(operator.pow, types.Complex, types.Complex)
+# @lower_builtin(operator.ipow, types.Complex, types.Complex)
+# @lower_builtin(pow, types.Complex, types.Complex)
 def complex_power_impl(context, builder, sig, args):
     [ca, cb] = args
     ty = sig.args[0]
@@ -1037,6 +1168,30 @@ def complex_abs_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
+# ty = types.Complex
+
+# lower_builtin(operator.add, ty, ty)(complex_add_impl)
+# lower_builtin(operator.iadd, ty, ty)(complex_add_impl)
+# lower_builtin(operator.sub, ty, ty)(complex_sub_impl)
+# lower_builtin(operator.isub, ty, ty)(complex_sub_impl)
+# lower_builtin(operator.mul, ty, ty)(complex_mul_impl)
+# lower_builtin(operator.imul, ty, ty)(complex_mul_impl)
+# lower_builtin(operator.truediv, ty, ty)(complex_div_impl)
+# lower_builtin(operator.itruediv, ty, ty)(complex_div_impl)
+# lower_builtin(operator.neg, ty)(complex_negate_impl)
+# lower_builtin(operator.pos, ty)(complex_positive_impl)
+# # Complex modulo is deprecated in python3
+
+# lower_builtin(operator.eq, ty, ty)(complex_eq_impl)
+# lower_builtin(operator.ne, ty, ty)(complex_ne_impl)
+
+# lower_builtin(abs, ty)(complex_abs_impl)
+
+# del ty
+
+
+# @lower_builtin("number.item", types.Boolean)
+# @lower_builtin("number.item", types.Number)
 def number_item_impl(context, builder, sig, args):
     """
     The no-op .item() method on booleans and numbers.
@@ -1054,18 +1209,22 @@ def number_not_impl(context, builder, sig, args):
     res = builder.not_(istrue)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+# @lower_builtin(bool, types.Boolean)
 def bool_as_bool(context, builder, sig, args):
     [val] = args
     return val
 
+# @lower_builtin(bool, types.Integer)
 def int_as_bool(context, builder, sig, args):
     [val] = args
     return builder.icmp_unsigned('!=', val, Constant(val.type, 0))
 
+# @lower_builtin(bool, types.Float)
 def float_as_bool(context, builder, sig, args):
     [val] = args
     return builder.fcmp_unordered('!=', val, Constant(val.type, 0.0))
 
+# @lower_builtin(bool, types.Complex)
 def complex_as_bool(context, builder, sig, args):
     [typ] = sig.args
     [val] = args
@@ -1077,12 +1236,21 @@ def complex_as_bool(context, builder, sig, args):
     return builder.or_(real_istrue, imag_istrue)
 
 
+# for ty in (types.Integer, types.Float, types.Complex):
+#     lower_builtin(operator.not_, ty)(number_not_impl)
+
+# lower_builtin(operator.not_, types.boolean)(number_not_impl)
+
+
 #------------------------------------------------------------------------------
 # Hashing numbers, see hashing.py
 
 #-------------------------------------------------------------------------------
 # Implicit casts between numerics
 
+# @lower_cast(types.IntegerLiteral, types.Integer)
+# @lower_cast(types.IntegerLiteral, types.Float)
+# @lower_cast(types.IntegerLiteral, types.Complex)
 def literal_int_to_number(context, builder, fromty, toty, val):
     lit = context.get_constant_generic(
         builder,
@@ -1092,6 +1260,7 @@ def literal_int_to_number(context, builder, fromty, toty, val):
     return context.cast(builder, lit, fromty.literal_type, toty)
 
 
+# @lower_cast(types.Integer, types.Integer)
 def integer_to_integer(context, builder, fromty, toty, val):
     if toty.bitwidth == fromty.bitwidth:
         # Just a change of signedness
@@ -1106,9 +1275,11 @@ def integer_to_integer(context, builder, fromty, toty, val):
         # Unsigned upcast
         return builder.zext(val, context.get_value_type(toty))
 
+# @lower_cast(types.Integer, types.voidptr)
 def integer_to_voidptr(context, builder, fromty, toty, val):
     return builder.inttoptr(val, context.get_value_type(toty))
 
+# @lower_cast(types.Float, types.Float)
 def float_to_float(context, builder, fromty, toty, val):
     lty = context.get_value_type(toty)
     if fromty.bitwidth < toty.bitwidth:
@@ -1116,6 +1287,7 @@ def float_to_float(context, builder, fromty, toty, val):
     else:
         return builder.fptrunc(val, lty)
 
+# @lower_cast(types.Integer, types.Float)
 def integer_to_float(context, builder, fromty, toty, val):
     lty = context.get_value_type(toty)
     if fromty.signed:
@@ -1123,6 +1295,7 @@ def integer_to_float(context, builder, fromty, toty, val):
     else:
         return builder.uitofp(val, lty)
 
+# @lower_cast(types.Float, types.Integer)
 def float_to_integer(context, builder, fromty, toty, val):
     lty = context.get_value_type(toty)
     if toty.signed:
@@ -1130,6 +1303,8 @@ def float_to_integer(context, builder, fromty, toty, val):
     else:
         return builder.fptoui(val, lty)
 
+# @lower_cast(types.Float, types.Complex)
+# @lower_cast(types.Integer, types.Complex)
 def non_complex_to_complex(context, builder, fromty, toty, val):
     real = context.cast(builder, val, fromty, toty.underlying_float)
     imag = context.get_constant(toty.underlying_float, 0)
@@ -1139,6 +1314,7 @@ def non_complex_to_complex(context, builder, fromty, toty, val):
     cmplx.imag = imag
     return cmplx._getvalue()
 
+# @lower_cast(types.Complex, types.Complex)
 def complex_to_complex(context, builder, fromty, toty, val):
     srcty = fromty.underlying_float
     dstty = toty.underlying_float
@@ -1149,14 +1325,18 @@ def complex_to_complex(context, builder, fromty, toty, val):
     dst.imag = context.cast(builder, src.imag, srcty, dstty)
     return dst._getvalue()
 
+# @lower_cast(types.Any, types.Boolean)
 def any_to_boolean(context, builder, fromty, toty, val):
     return context.is_true(builder, fromty, val)
 
+# @lower_cast(types.Boolean, types.Number)
 def boolean_to_any(context, builder, fromty, toty, val):
     # Casting from boolean to anything first casts to int32
     asint = builder.zext(val, ir.IntType(32))
     return context.cast(builder, asint, types.int32, toty)
 
+# @lower_cast(types.IntegerLiteral, types.Boolean)
+# @lower_cast(types.BooleanLiteral, types.Boolean)
 def literal_int_to_boolean(context, builder, fromty, toty, val):
     lit = context.get_constant_generic(
         builder,
@@ -1168,12 +1348,16 @@ def literal_int_to_boolean(context, builder, fromty, toty, val):
 #-------------------------------------------------------------------------------
 # Constants
 
+# @lower_constant(types.Complex)
 def constant_complex(context, builder, ty, pyval):
     fty = ty.underlying_float
     real = context.get_constant_generic(builder, fty, pyval.real)
     imag = context.get_constant_generic(builder, fty, pyval.imag)
     return Constant.literal_struct((real, imag))
 
+# @lower_constant(types.Integer)
+# @lower_constant(types.Float)
+# @lower_constant(types.Boolean)
 def constant_integer(context, builder, ty, pyval):
     # See https://github.com/numba/numba/issues/6979
     # llvmlite ir.IntType specialises the formatting of the constant for a
@@ -1200,3 +1384,7 @@ def scalar_view(scalar, viewty):
         def impl(scalar, viewty):
             return viewer(scalar, viewty)
         return impl
+
+
+# overload_method(types.Float, 'view')(scalar_view)
+# overload_method(types.Integer, 'view')(scalar_view)
