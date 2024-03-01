@@ -550,10 +550,10 @@ dufunc__add_loop(PyDUFuncObject * self, PyObject * args)
                                               arg_types_arr, &old_func) == 0) {
         /* TODO: Consider freeing any memory held by the old loop (somehow) */
         for (idx = 0; idx < ufunc->ntypes; idx++) {
-            if (ufunc->functions[idx] == (PyUFuncGenericFunction)loop_ptr) {
-                ufunc->data[idx] = data_ptr;
-                break;
-            }
+            // if (ufunc->functions[idx] == (PyUFuncGenericFunction)loop_ptr) {
+            //     ufunc->data[idx] = data_ptr;
+            //     break;
+            // }
         }
     } else {
         /* The following is an attempt to loosely follow the allocation
