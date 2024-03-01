@@ -10,6 +10,7 @@ from numba.core.extending import (is_jitted, overload_attribute,
                                   intrinsic)
 from numba.core.typing import npydecl
 from numba.core.typing.templates import AbstractTemplate, signature
+from numba.core.compiler_lock import global_compiler_lock
 from numba.cpython.unsafe.tuple import tuple_setitem
 from numba.np.ufunc import _internal
 from numba.parfors import array_analysis
@@ -232,6 +233,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
             argtys.append(argty)
         return self._compile_for_argtys(tuple(argtys))
 
+    @global_compiler_lock
     def _compile_for_argtys(self, argtys, return_type=None):
         """
         Given a tuple of argument types (these should be the array
