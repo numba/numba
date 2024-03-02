@@ -402,13 +402,7 @@ def auto_device(ary, stream=0, copy=True):
     return to_device(ary, stream, copy), True
 
 def as_cuda_array(obj, sync=True):
-    """Does nothing and returns the same input object.
-    
-    Primarily used as a simulated substitue of the real `as_cuda_array`
-    function for testing numba code, when GPU isn't available. 
-    
-    See :ref:`cuda array interface <cuda-array-interface>`.
-    """
+    "Do nothing, and return the same object"
     return obj
 
 
