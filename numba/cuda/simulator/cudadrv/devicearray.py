@@ -401,6 +401,16 @@ def auto_device(ary, stream=0, copy=True):
             subok=True)
     return to_device(ary, stream, copy), True
 
+def as_cuda_array(obj, sync=True):
+    """Does nothing and returns the same input object.
+    
+    Primarily used as a simulated substitue of the real `as_cuda_array`
+    function for testing numba code, when GPU isn't available. 
+    
+    See :ref:`cuda array interface <cuda-array-interface>`.
+    """
+    return obj
+
 
 def is_cuda_ndarray(obj):
     "Check if an object is a CUDA ndarray"
