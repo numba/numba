@@ -243,6 +243,9 @@ exclude =
     numba/core/datamodel/packer.py
     numba/core/datamodel/testing.py
     numba/core/datamodel/manager.py
+    numba/np/math/cmathimpl.py
+    numba/np/math/mathimpl.py
+    numba/np/math/numbers.py
 
 per-file-ignores =
     # Ignore star imports, unused imports, and "may be defined by star imports"
