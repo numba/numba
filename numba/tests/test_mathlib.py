@@ -434,7 +434,9 @@ class TestMathLib(TestCase):
 
     def test_nextafter(self):
         pyfunc = nextafter
-        x_types = [types.float32, types.float64]
+        x_types = [types.float32, types.float64,
+                   types.int32, types.int64,
+                   types.uint32, types.uint64]
         x_values = [0.0, .21, .34, 1005382.042, -25.328]
         y1_values = [x + 2 for x in x_values]
         y2_values = [x - 2 for x in x_values]
