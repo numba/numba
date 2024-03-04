@@ -3735,6 +3735,24 @@ def _less_than(a, b):
     return a < b
 
 
+@register_jitable
+def _less_then_datetime64(a, b):
+    # Original numpy code is at:
+    # https://github.com/numpy/numpy/blob/3dad50936a8dc534a81a545365f69ee9ab162ffe/numpy/_core/src/npysort/npysort_common.h#L334-L346
+    if np.isnat(a):
+        return 0
+
+    if np.isnat(b):
+        return 1
+
+    return a < b
+
+
+@register_jitable
+def _less_then_or_equal_datetime64(a, b):
+    return not _less_then_datetime64(b, a)
+
+
 def _searchsorted(cmp):
     # a facsimile of:
     # https://github.com/numpy/numpy/blob/4f84d719657eb455a35fcdf9e75b83eb1f97024a/numpy/core/src/npysort/binsearch.cpp#L61  # noqa: E501
@@ -3759,8 +3777,13 @@ VALID_SEARCHSORTED_SIDES = frozenset({'left', 'right'})
 def make_searchsorted_implementation(np_dtype, side):
     assert side in VALID_SEARCHSORTED_SIDES
 
-    lt = _less_than
-    le = _less_than_or_equal
+    if np_dtype.char in 'mM':
+        # is datetime
+        lt = _less_then_datetime64
+        le = _less_then_or_equal_datetime64
+    else:
+        lt = _less_than
+        le = _less_than_or_equal
 
     if side == 'left':
         _impl = _searchsorted(lt)

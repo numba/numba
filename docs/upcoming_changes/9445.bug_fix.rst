@@ -1,0 +1,6 @@
+Fix issues with ``np.searchsorted`` not handling ``np.datetime64``
+------------------------------------------------------------------
+
+This patch fixes two issues with ``np.searchsorted``. First, a regression is 
+fixed in the support of ``np.datetime64``. Second, adopt ``NAT``-aware 
+comparisons to fix mishandling of ``NAT`` value.

@@ -971,21 +971,7 @@ class TestDatetimeArrayOps(TestCase):
     def test_sub_td_no_match(self):
         self._test_add_sub_td_no_match(np.subtract)
 
-    def _test_min_max(self, operation, parallel, method):
-        if method:
-            if operation is np.min:
-                def impl(arr):
-                    return arr.min()
-            else:
-                def impl(arr):
-                    return arr.max()
-        else:
-            def impl(arr):
-                return operation(arr)
-
-        py_func = impl
-        cfunc = njit(parallel=parallel)(impl)
-
+    def _get_testcases(self):
         test_cases = [
             np.array([
                 DT(0, "ns"),
@@ -1067,7 +1053,24 @@ class TestDatetimeArrayOps(TestCase):
                 TD("NaT", "ns"),
             ]),
         ]
+        return test_cases
 
+    def _test_min_max(self, operation, parallel, method):
+        if method:
+            if operation is np.min:
+                def impl(arr):
+                    return arr.min()
+            else:
+                def impl(arr):
+                    return arr.max()
+        else:
+            def impl(arr):
+                return operation(arr)
+
+        py_func = impl
+        cfunc = njit(parallel=parallel)(impl)
+
+        test_cases = self._get_testcases()
         for arr in test_cases:
             py_res = py_func(arr)
             c_res = cfunc(arr)
@@ -1110,6 +1113,31 @@ class TestDatetimeArrayOps(TestCase):
     @skip_parfors_unsupported
     def test_max_method_parallel(self):
         self._test_min_max(np.max, True, True)
+
+    def test_searchsorted_datetime(self):
+        from .test_np_functions import (
+            searchsorted, searchsorted_left, searchsorted_right,
+        )
+        pyfunc_list = [searchsorted, searchsorted_left, searchsorted_right]
+        cfunc_list = [jit(fn) for fn in pyfunc_list]
+
+        def check(pyfunc, cfunc, a, v):
+            expected = pyfunc(a, v)
+            got = cfunc(a, v)
+            self.assertPreciseEqual(expected, got)
+
+        cases = self._get_testcases()
+        for pyfunc, cfunc in zip(pyfunc_list, cfunc_list):
+            for arr in cases:
+                arr = np.sort(arr)
+                for n in range(1, min(3, arr.size) + 1):
+                    idx = np.random.randint(0, arr.size, n)
+                    vs = arr[idx]
+                    if n == 1:
+                        [v] = vs
+                        check(pyfunc, cfunc, arr, v)
+                    check(pyfunc, cfunc, arr, vs)
+
 
 
 class TestDatetimeTypeOps(TestCase):
