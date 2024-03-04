@@ -26,7 +26,7 @@ class Loc(object):
     """Source location
 
     """
-    _defmatcher = re.compile(r'def\s+(\w+)\s*[\[\(]')
+    _defmatcher = re.compile(r'def\s+(\w+)')
 
     def __init__(self, filename, line, col=None, maybe_decorator=False):
         """ Arguments:
