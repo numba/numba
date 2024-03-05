@@ -704,9 +704,9 @@ cast_from_X(char kind, void *val)
         case 'd':
             return (F_INT)(*((double *) val));
         case 'c':
-            return (F_INT)(*((npy_complex64 *)val)).real;
+            return (F_INT)crealf(*((_complex_float_t *)val));
         case 'z':
-            return (F_INT)(*((npy_complex128 *)val)).real;
+            return (F_INT)creal(*((_complex_double_t *)val));
         default:
         {
             PyGILState_STATE st = PyGILState_Ensure();
