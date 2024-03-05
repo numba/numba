@@ -41,6 +41,8 @@ pyfunc_type = Opaque('pyfunc')
 voidptr = RawPointer('void*')
 
 boolean = bool_ = Boolean('bool')
+if numpy_version >= (2, 0):
+    bool = bool_
 
 byte = uint8 = Integer('uint8')
 uint16 = Integer('uint16')
@@ -185,3 +187,4 @@ deferred_type
 
 if numpy_version >= (2, 0):
     __all__.remove('float_')
+    __all__.append('bool')
