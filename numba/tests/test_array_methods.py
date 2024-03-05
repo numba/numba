@@ -361,6 +361,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_around_array(self):
         self.check_round_array(np_around_array)
 
+    @skip_if_numpy_2
     def test_round__array(self):
         self.check_round_array(np_round__array)
 
@@ -372,7 +373,10 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                 cfunc(None)
 
     def test_around_bad_out(self):
-        for py_func in (np_round_array, np_around_array, np_round__array):
+        funcs = [np_round_array, np_around_array]
+        if numpy_version < (2, 0):
+            funcs.append(np_round__array)
+        for py_func in funcs:
             cfunc = jit(nopython=True)(py_func)
             msg = '.*The argument "out" must be an array if it is provided.*'
             with self.assertRaisesRegex(TypingError, msg):
