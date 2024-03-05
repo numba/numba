@@ -12,6 +12,8 @@ from .npytypes import *
 from .scalars import *
 from .function_type import *
 
+numpy_version = tuple(map(int, np.__version__.split('.')[:2]))
+
 # Short names
 
 pyobject = PyObject('pyobject')
@@ -99,7 +101,8 @@ f8 = float64
 c8 = complex64
 c16 = complex128
 
-float_ = float32
+if numpy_version < (2, 0):
+    float_ = float32
 double = float64
 void = none
 
@@ -179,3 +182,6 @@ ffi_forced_object
 ffi
 deferred_type
 '''.split()
+
+if numpy_version >= (2, 0):
+    __all__.remove('float_')
