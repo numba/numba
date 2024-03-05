@@ -192,6 +192,8 @@ class TestZeroCounts(TestCase):
                 self.assertEqual(lz(-val), 0)
                 self.assertEqual(tz(val), tz(-val))
             for n in evens:
+                if not T.minval <= n <= T.maxval:
+                    continue
                 self.assertGreater(tz(T(n)), 0)
                 self.assertEqual(tz(T(n + 1)), 0)
 

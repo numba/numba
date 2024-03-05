@@ -4,7 +4,7 @@ import numpy as np
 
 from numba import jit, njit, typeof
 from numba.np.numpy_support import numpy_version
-from numba.tests.support import TestCase, MemoryLeakMixin, tag
+from numba.tests.support import TestCase, MemoryLeakMixin, tag, skip_if_numpy_2
 import unittest
 
 
@@ -801,6 +801,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         for a in a_variations():
             check(a)
 
+    @skip_if_numpy_2
     def test_ptp_method(self):
         # checks wiring of np.ndarray.ptp() only, `np.ptp` test above checks
         # the actual alg

@@ -10,7 +10,7 @@ from numba import jit, njit, typeof
 from numba.core import types
 from numba.core.errors import TypingError, NumbaValueError
 from numba.np.numpy_support import as_dtype, numpy_version
-from numba.tests.support import TestCase, MemoryLeakMixin, needs_blas
+from numba.tests.support import TestCase, MemoryLeakMixin, needs_blas, skip_if_numpy_2
 
 TIMEDELTA_M = 'timedelta64[M]'
 TIMEDELTA_Y = 'timedelta64[Y]'
@@ -1226,6 +1226,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check_err(np.array([1, 2]))
         check_err(np.array([]))
 
+    @skip_if_numpy_2
     def test_itemset(self):
         pyfunc = array_itemset
         cfunc = jit(nopython=True)(pyfunc)
@@ -1264,7 +1265,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         all_test_arrays = [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype),
-             np.ones((7, 3), arr_dtype) * -5]
+             np.ones((7, 3), arr_dtype) * 5]
             for arr_dtype in all_dtypes]
 
         for arr_list in all_test_arrays:
@@ -1281,7 +1282,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         all_test_arrays = [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype),
-             np.ones((7, 3), arr_dtype) * -5]
+             np.ones((7, 3), arr_dtype) * 5]
             for arr_dtype in all_dtypes]
         for arr_list in all_test_arrays:
             for arr in arr_list:
@@ -1312,7 +1313,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         all_test_arrays = [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype),
-             np.ones((7, 3), arr_dtype) * -5]
+             np.ones((7, 3), arr_dtype) * 5]
             for arr_dtype in all_dtypes]
 
         for arr_list in all_test_arrays:
@@ -1341,7 +1342,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         all_test_arrays = [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype),
-             np.ones((7, 3), arr_dtype) * -5]
+             np.ones((7, 3), arr_dtype) * 5]
             for arr_dtype in all_dtypes]
 
         out_dtypes = {np.dtype('float64'): [np.float64],
@@ -1371,7 +1372,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         all_test_arrays = [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype),
-             np.ones((7, 3), arr_dtype) * -5]
+             np.ones((7, 3), arr_dtype) * 5]
             for arr_dtype in all_dtypes]
 
         out_dtypes = {np.dtype('float64'): [np.float64],

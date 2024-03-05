@@ -19,7 +19,8 @@ from numba.core.config import IS_32BITS
 from numba.core.utils import pysignature
 from numba.np.extensions import cross2d
 from numba.tests.support import (TestCase, MemoryLeakMixin,
-                                 needs_blas, run_in_subprocess)
+                                 needs_blas, run_in_subprocess,
+                                 skip_if_numpy_2)
 import unittest
 
 
@@ -1040,14 +1041,14 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     def test_isneg_or_ispos_inf(self):
         def values():
-            yield np.NINF, None
+            yield -np.inf, None
             yield np.inf, None
-            yield np.PINF, None
+            yield np.inf, None
             yield np.asarray([-np.inf, 0., np.inf]), None
-            yield np.NINF, np.zeros(1, dtype=np.bool_)
+            yield -np.inf, np.zeros(1, dtype=np.bool_)
             yield np.inf, np.zeros(1, dtype=np.bool_)
-            yield np.PINF, np.zeros(1, dtype=np.bool_)
-            yield np.NINF, np.empty(12)
+            yield np.inf, np.zeros(1, dtype=np.bool_)
+            yield -np.inf, np.empty(12)
             yield np.asarray([-np.inf, 0., np.inf]), np.zeros(3, dtype=np.bool_)
 
         pyfuncs = [isneginf, isposinf]
@@ -5017,6 +5018,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         test_reject(make_nested_list_with_dict())
         test_reject(make_unicode_list())
 
+    @skip_if_numpy_2
     def test_asfarray(self):
         def inputs():
             yield np.array([1, 2, 3]), None
