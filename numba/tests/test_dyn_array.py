@@ -9,6 +9,7 @@ import gc
 from numba.core.errors import TypingError
 from numba import njit
 from numba.core import types, utils, config
+from numba.np import numpy_support
 from numba.tests.support import MemoryLeakMixin, TestCase, tag, skip_if_32bit
 import unittest
 
@@ -1760,7 +1761,10 @@ class TestNpStack(MemoryLeakMixin, TestCase):
         # Since np.row_stack is an alias for np.vstack, it does not need a
         # separate Numba implementation. For every test for np.vstack, the same
         # test for np.row_stack has been added.
-        for pyfunc in (np_vstack, np_row_stack):
+        functions = [np_vstack]
+        if numpy_support.numpy_version < (2, 0):
+            functions.append(np_row_stack)
+        for pyfunc in functions:
             cfunc = nrtjit(pyfunc)
 
             self.check_xxstack(pyfunc, cfunc)

@@ -2667,7 +2667,7 @@ class TestUnicodeAuxillary(BaseTest):
         """
         # requires formatting (FORMAT_VALUE) and concatenation (BUILD_STRINGS)
         def impl1(a):
-            return f"AA_{a+3}_B"
+            return f"AA_{a + 3}_B"
 
         # does not require concatenation
         def impl2(a):

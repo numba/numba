@@ -261,7 +261,9 @@ class TestNumberHashing(BaseTest):
             info = np.iinfo(ty)
             # check hash(-1) = -2
             # check hash(0) = 0
-            self.check_hash_values([ty(-1)])
+            self.check_hash_values([ty(1)])
+            if info.min < 0:
+                self.check_hash_values([ty(-1)])
             self.check_hash_values([ty(0)])
             signed = 'uint' not in str(ty)
             # check bit shifting patterns from min through to max
@@ -329,6 +331,8 @@ class TestTupleHashing(BaseTest):
     def check_tuples(self, value_generator, split):
         for values in value_generator:
             tuples = [split(a) for a in values]
+            if None in tuples:
+                continue
             self.check_hash_values(tuples)
 
     def test_homogeneous_tuples(self):
@@ -338,6 +342,8 @@ class TestTupleHashing(BaseTest):
             """
             Split i's bits into 2 integers.
             """
+            if not np.iinfo(typ).min <= i <= np.iinfo(typ).max:
+                return (None, None)
             i = typ(i)
             return (i & typ(0x5555555555555555),
                     i & typ(0xaaaaaaaaaaaaaaaa),
@@ -347,6 +353,8 @@ class TestTupleHashing(BaseTest):
             """
             Split i's bits into 3 integers.
             """
+            if not np.iinfo(typ).min <= i <= np.iinfo(typ).max:
+                return (None, None, None)
             i = typ(i)
             return (i & typ(0x2492492492492492),
                     i & typ(0x4924924924924924),

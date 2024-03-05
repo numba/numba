@@ -622,7 +622,7 @@ def carray(ptr, shape, dtype=None):
     else:
         raise TypeError("expected a ctypes pointer, got %r" % (ptr,))
 
-    nbytes = dtype.itemsize * np.product(shape, dtype=np.intp)
+    nbytes = dtype.itemsize * np.prod(shape, dtype=np.intp)
     return _get_array_from_ptr(p, nbytes, dtype).reshape(shape)
 
 

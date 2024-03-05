@@ -1214,6 +1214,10 @@ class TestMixedInts(TestCase):
     unsigned_pairs = [(u, v) for u, v in type_pairs
                       if not (u.signed or v.signed)]
 
+    def int_in_dtype_range(self, val, tp):
+        tp_info = np.iinfo(tp.key)
+        return tp_info.min <= val <= tp_info.max
+
     def get_numpy_signed_upcast(self, *vals):
         bitwidth = max(v.dtype.itemsize * 8 for v in vals)
         bitwidth = max(bitwidth, types.intp.bitwidth)
@@ -1247,6 +1251,9 @@ class TestMixedInts(TestCase):
         for xt, yt in types:
             cfunc = njit((xt, yt))(pyfunc)
             for x, y in itertools.product(operands, operands):
+                # Check if xt and yt are values with range of dtype x and y
+                if not self.int_in_dtype_range(x, xt) or not self.int_in_dtype_range(y, yt):
+                    continue
                 # Get Numpy typed scalars for the given types and values
                 x = self.get_typed_int(xt, x)
                 y = self.get_typed_int(yt, y)
@@ -1264,6 +1271,8 @@ class TestMixedInts(TestCase):
         for xt in types:
             cfunc = njit((xt,))(pyfunc)
             for x in operands:
+                if not self.int_in_dtype_range(x, xt):
+                    continue
                 x = self.get_typed_int(xt, x)
                 expected = control_func(x)
                 got = cfunc(x)
@@ -1371,6 +1380,8 @@ class TestMixedInts(TestCase):
                 # we would hit undefined behaviour.
                 maxshift = xt.bitwidth - 1
                 for y in (0, 1, 3, 5, maxshift - 1, maxshift):
+                    if not self.int_in_dtype_range(x, xt) or not self.int_in_dtype_range(y, yt):
+                        continue
                     # Get Numpy typed scalars for the given types and values
                     x = self.get_typed_int(xt, x)
                     y = self.get_typed_int(yt, y)
