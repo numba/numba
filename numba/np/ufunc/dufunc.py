@@ -17,7 +17,7 @@ from numba.np.ufunc import ufuncbuilder
 from numba.np import numpy_support
 from typing import Callable
 from llvmlite import ir
-
+from numba.core.compiler_lock import global_compiler_lock
 
 def make_dufunc_kernel(_dufunc):
     from numba.np import npyimpl
@@ -232,6 +232,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
             argtys.append(argty)
         return self._compile_for_argtys(tuple(argtys))
 
+    @global_compiler_lock
     def _compile_for_argtys(self, argtys, return_type=None):
         """
         Given a tuple of argument types (these should be the array
