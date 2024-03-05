@@ -40,6 +40,17 @@ class PerfTestCase(TestCase):
     __benchmark: list[BenchmarkRecord]
     _BENCHMARK_MODE = config.PERFSUITE_BENCHMARK
 
+    def __init_subclass__(cls) -> None:
+        super().__init_subclass__()
+
+        # If running in benchmark mode, ensure all tests are running in
+        # subprocess
+        if cls._BENCHMARK_MODE:
+            for k, v in cls.__dict__.items():
+                if k.startswith("test_"):
+                    wrapped = TestCase.run_test_in_subprocess()(v)
+                    cls.__dict__[k] = wrapped
+
     def _callTestMethod(self, method):
         """Override TestCase._callTestMethod to include logic for reporting
         benchmark results.
