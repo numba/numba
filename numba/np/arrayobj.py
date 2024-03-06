@@ -560,6 +560,34 @@ def setitem_array(context, builder, sig, args):
     store_item(context, builder, aryty, val, dataptr)
 
 
+@lower_builtin(operator.setitem, types.Array, types.Integer, types.Tuple)
+def setitem_array_tuple(context, builder, sig, args):
+    aryty, idxty, valty = sig.args
+    recty = aryty.dtype
+    ary, idx, val = args
+
+    ary = make_array(aryty)(context, builder, ary)
+
+    # normalize index
+    index_types = (idxty,)
+    indices = (idx,)
+    index_types, indices = normalize_indices(context, builder,
+                                             index_types, indices)
+
+    # Basic indexing
+    dataptr, _, _ = \
+        basic_indexing(context, builder, aryty, ary, index_types, indices,
+                       boundscheck=context.enable_boundscheck)
+
+    # Store source value the given location
+    items = cgutils.unpack_tuple(builder, val, len(valty))
+    fields = list(aryty.dtype.fields)
+    for idx, item in enumerate(items):
+        getattr_sig = signature(types.none, recty, valty.types[idx])
+        impl = context.get_setattr(fields[idx], getattr_sig)
+        impl(builder, (dataptr, item))
+
+
 @lower_builtin(len, types.Buffer)
 def array_len(context, builder, sig, args):
     (aryty,) = sig.args
