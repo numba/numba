@@ -4748,7 +4748,7 @@ def _arange_dtype(*args):
 
 
 @overload(np.arange)
-def np_arange(start, stop=None, step=None, dtype=None):
+def np_arange(start, / ,stop=None, step=None, dtype=None):
     if isinstance(stop, types.Optional):
         stop = stop.type
     if isinstance(step, types.Optional):
