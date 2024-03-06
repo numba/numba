@@ -1,4 +1,4 @@
 support assign a ``tuple`` to a row of a ``recarray``
---------------------------------------------------------
+-----------------------------------------------------
 
-Now we can assign a ``tuple`` or a ``record`` to a row of a ``recarray``.
+Users can assign a ``tuple`` or a ``record`` to the ``recarray`` row.
