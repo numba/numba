@@ -1,0 +1,4 @@
+support assign a ``tuple`` to a row of a ``recarray``
+--------------------------------------------------------
+
+support assign a ``tuple`` to a row of a ``recarray``.
