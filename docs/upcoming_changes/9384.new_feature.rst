@@ -1,4 +1,4 @@
 Added is identity comparison for numpy records and added tests as is_comparison_tests.py
--------------------------------------
+--------------------------------------------------------------------------------------------
 Added ``np.arrayobj.record_is()``
 This adds the feature of "is" identity comparison to compare numpy records along with the addition of test cases for the same.
