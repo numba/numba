@@ -26,7 +26,7 @@ from contextlib import contextmanager
 import uuid
 import importlib
 import types as pytypes
-from functools import cached_property
+from functools import cached_property, wraps
 
 import numpy as np
 
@@ -77,7 +77,12 @@ nrt_flags = Flags()
 nrt_flags.nrt = True
 
 
-tag = testing.make_tag_decorator(['important', 'long_running', 'always_test'])
+tag = testing.make_tag_decorator([
+    'important',
+    'long_running',
+    'always_test',
+    'subproc_test',
+])
 
 # Use to mark a test as a test that must always run when sharded
 always_test = tag('always_test')
@@ -569,52 +574,79 @@ class TestCase(unittest.TestCase):
         executed without error. The timeout kwarg can be used to allow more time
         for longer running tests, it defaults to 60 seconds.
         """
-        themod = self.__module__
-        thecls = type(self).__name__
+        result = self._outcome.result
         parts = (test_module, test_class, test_name)
-        fully_qualified_test = '.'.join(x for x in parts if x is not None)
-        cmd = [sys.executable, '-m', 'numba.runtests', fully_qualified_test]
-        env_copy = os.environ.copy()
-        env_copy['SUBPROC_TEST'] = '1'
-        try:
-            env_copy['COVERAGE_PROCESS_START'] = os.environ['COVERAGE_RCFILE']
-        except KeyError:
-            pass   # ignored
-        envvars = pytypes.MappingProxyType({} if envvars is None else envvars)
-        env_copy.update(envvars)
-        status = subprocess.run(cmd, stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE, timeout=timeout,
-                                env=env_copy, universal_newlines=True)
-        streams = (f'\ncaptured stdout: {status.stdout}\n'
-                   f'captured stderr: {status.stderr}')
-        self.assertEqual(status.returncode, 0, streams)
-        # Python 3.12.1 report
-        no_tests_ran = "NO TESTS RAN"
-        if no_tests_ran in status.stderr:
-            self.skipTest(no_tests_ran)
+        testpath = '.'.join(filter(lambda x: x is not None, parts))
+        self._run_in_subprocess(result, testpath, envvars)
+
+    def run(self, result=None):
+        testname = self._testMethodName
+        testMethod = getattr(self, testname)
+
+        envvars = getattr(testMethod, "envvars", None)
+        is_subproc = os.environ.get("SUBPROC_TEST", None) == "1"
+        tags = getattr(testMethod, "tags", ())
+        from numba.testing.main import ParallelTestResult
+        if not is_subproc and "subproc_test" in tags:
+            testpath = '.'.join([self.__module__, self.__class__.__name__, testname])
+            self._run_in_subprocess(result, testpath, envvars)
         else:
-            self.assertIn('OK', status.stderr)
+            return super().run(result)
+
+    def _run_in_subprocess(self, result, testpath, envvars):
+        from numba.testing.subproc_runner import subproc_test_runner
+        from numba.testing.main import ParallelTestResult, _MinimalResult
+
+        assert result is not None
+        result: unittest.TextTestResult
+        if result.showAll:
+            result.stream.writeln(f'subproc_test [{testpath}] from {os.getpid()}')
+        child_result: _MinimalResult
+        child_result = subproc_test_runner(
+            testpath,
+            env=envvars or {},
+            show_timing=getattr(result, "show_timing", False),
+            verbose=result.showAll,
+            buffer=result.buffer,
+        )
+
+        if not child_result.wasSuccessful():
+            if result.failfast:
+                result.shouldStop = True
+
+        if isinstance(result, ParallelTestResult):
+            result.add_results(child_result)
+
+        else:
+            streamout = child_result.stream.getvalue()
+            result.stream.write(streamout)
+            result.stream.flush()
+            result.testsRun += child_result.testsRun
+            result.failures.extend(child_result.failures)
+            result.errors.extend(child_result.errors)
+            result.skipped.extend(child_result.skipped)
+            result.expectedFailures.extend(child_result.expectedFailures)
+            result.unexpectedSuccesses.extend(child_result.unexpectedSuccesses)
+
+        return result
 
     def run_test_in_subprocess(maybefunc=None, timeout=60, envvars=None):
         """Runs the decorated test in a subprocess via invoking numba's test
         runner. kwargs timeout and envvars are passed through to
         subprocess_test_runner."""
         def wrapper(func):
-            def inner(self, *args, **kwargs):
+            @tag("subproc_test")
+            @wraps(maybefunc)
+            def test_inner(self, *args, **kwargs):
                 if os.environ.get("SUBPROC_TEST", None) != "1":
-                    # Not in a subprocess test env, so stage the call to run the
-                    # test in a subprocess which will set the env var.
-                    class_name = self.__class__.__name__
-                    self.subprocess_test_runner(test_module=self.__module__,
-                                                test_class=class_name,
-                                                test_name=func.__name__,
-                                                timeout=timeout,
-                                                envvars=envvars,)
+                    raise AssertionError("not reachable")
                 else:
                     # env var is set, so we're in the subprocess, run the
                     # actual test.
                     func(self)
-            return inner
+            test_inner.envvars = envvars
+            test_inner.timeout = timeout
+            return test_inner
 
         if isinstance(maybefunc, pytypes.FunctionType):
             return wrapper(maybefunc)

@@ -37,8 +37,9 @@ class BenchmarkRecord:
 
 
 class PerfTestCase(TestCase):
-    __benchmark: list[BenchmarkRecord]
+    _numba_benchmarks: list[BenchmarkRecord]
     _BENCHMARK_MODE = config.PERFSUITE_BENCHMARK
+    _numba_parallel_test_ = not _BENCHMARK_MODE
 
     def __init_subclass__(cls) -> None:
         super().__init_subclass__()
@@ -48,19 +49,17 @@ class PerfTestCase(TestCase):
         if cls._BENCHMARK_MODE:
             for k, v in cls.__dict__.items():
                 if k.startswith("test_"):
-                    wrapped = TestCase.run_test_in_subprocess()(v)
-                    cls.__dict__[k] = wrapped
+                    setattr(cls, k, TestCase.run_test_in_subprocess(v))
 
     def _callTestMethod(self, method):
         """Override TestCase._callTestMethod to include logic for reporting
         benchmark results.
         """
-        self.__benchmark = []
+        self._numba_benchmarks = []
 
         super()._callTestMethod(method)
         result = self._outcome.result
-        result.benchmarks = self.__benchmark
-        del self.__benchmark
+        result.benchmarks = self._numba_benchmarks
 
     @contextmanager
     def benchmark(self, function, name=""):
@@ -86,7 +85,7 @@ class PerfTestCase(TestCase):
                 run_count=run_count,
                 repeat=repeat,
             )
-            self.__benchmark.append(seg)
+            self._numba_benchmarks.append(seg)
         else:
             # If not in benchmark mode, run once to exercise the code.
             function()
