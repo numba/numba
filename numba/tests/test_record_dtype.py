@@ -401,6 +401,13 @@ def set_field_slice(arr):
     return arr
 
 
+def set_fields_in_one_row(arr, count, age, height, i):
+    arr[1] = arr[0]
+    arr[2] = (count, age, height)
+    arr[i] = (3, 3, 3.3)
+    return arr
+
+
 def assign_array_to_nested(dest):
     tmp = (np.arange(3) + 1).astype(np.int16)
     dest['array1'] = tmp
@@ -1245,6 +1252,16 @@ class TestRecordArraySetItem(TestCase):
             jitfunc(arr[0])
         self.assertIn("Field 'f' was not found in record with fields "
                       "('first', 'second')", str(raises.exception))
+
+    def test_set_fields_in_one_row(self):
+        dtype = [("Name", "i8"), ("Age", "i8"), ("Height", "f8")]
+        arr = np.empty((4,), dtype=dtype)
+        arr[0] = (12, 25, 180.5)
+
+        jitfunc = njit(set_fields_in_one_row)
+        self.assertEqual(
+            set_fields_in_one_row(np.copy(arr), 12, 25, 180.5, 3),
+            jitfunc(np.copy(arr), 12, 25, 180.5, 3))
 
 
 class TestSubtyping(TestCase):
