@@ -118,13 +118,13 @@ def np_arange_2_dtype(arg0, arg1, dtype):
     return np.arange(arg0, arg1, dtype=dtype)
 
 def np_arange_start_stop(start, stop):
-    return np.arange(start=start, stop=stop)
+    return np.arange(start, stop=stop)
 
 def np_arange_start_stop_step(start, stop, step):
-    return np.arange(start=start, stop=stop, step=step)
+    return np.arange(start, stop=stop, step=step)
 
 def np_arange_start_stop_step_dtype(start, stop, step, dtype):
-    return np.arange(start=start, stop=stop, step=step, dtype=dtype)
+    return np.arange(start, stop=stop, step=step, dtype=dtype)
 
 def array_fill(arr, val):
     return arr.fill(val)
