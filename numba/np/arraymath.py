@@ -4564,9 +4564,9 @@ def window_generator(func):
         def window_impl(M):
 
             if M < 1:
-                return np.array((), dtype=np.float32)
+                return np.array((), dtype=np.float64)
             if M == 1:
-                return np.ones(1, dtype=np.float32)
+                return np.ones(1, dtype=np.float64)
             return func(M)
 
         return window_impl
@@ -4667,8 +4667,8 @@ def _i0(x):
 
 @register_jitable
 def _i0n(n, alpha, beta):
-    y = np.empty_like(n, dtype=np.float32)
-    t = _i0(np.float32(beta))
+    y = np.empty_like(n, dtype=np.float64)
+    t = _i0(np.float64(beta))
     for i in range(len(y)):
         y[i] = _i0(beta * np.sqrt(1 - ((n[i] - alpha) / alpha)**2.0)) / t
 
@@ -4685,9 +4685,9 @@ def np_kaiser(M, beta):
 
     def np_kaiser_impl(M, beta):
         if M < 1:
-            return np.array((), dtype=np.float32)
+            return np.array((), dtype=np.float64)
         if M == 1:
-            return np.ones(1, dtype=np.float32)
+            return np.ones(1, dtype=np.float64)
 
         n = np.arange(0, M)
         alpha = (M - 1) / 2.0
