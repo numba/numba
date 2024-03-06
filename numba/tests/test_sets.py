@@ -255,7 +255,7 @@ class BaseTest(MemoryLeakMixin, TestCase):
         self.rnd = random.Random(42)
 
     def _range(self, stop):
-        return np.arange(int(stop))
+        return np.arange(int(stop)).tolist()
 
     def _random_choice(self, seq, n):
         """

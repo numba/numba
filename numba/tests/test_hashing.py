@@ -330,9 +330,11 @@ class TestTupleHashing(BaseTest):
 
     def check_tuples(self, value_generator, split):
         for values in value_generator:
-            tuples = [split(a) for a in values]
-            if None in tuples:
-                continue
+            tuples = []
+            for a in values:
+                a_split = split(a)
+                if a_split is not None:
+                    tuples.append(a_split)
             self.check_hash_values(tuples)
 
     def test_homogeneous_tuples(self):
@@ -343,7 +345,7 @@ class TestTupleHashing(BaseTest):
             Split i's bits into 2 integers.
             """
             if not np.iinfo(typ).min <= i <= np.iinfo(typ).max:
-                return (None, None)
+                return
             i = typ(i)
             return (i & typ(0x5555555555555555),
                     i & typ(0xaaaaaaaaaaaaaaaa),
@@ -354,7 +356,7 @@ class TestTupleHashing(BaseTest):
             Split i's bits into 3 integers.
             """
             if not np.iinfo(typ).min <= i <= np.iinfo(typ).max:
-                return (None, None, None)
+                return
             i = typ(i)
             return (i & typ(0x2492492492492492),
                     i & typ(0x4924924924924924),
