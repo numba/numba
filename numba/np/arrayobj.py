@@ -4782,7 +4782,7 @@ def np_arange(start, / ,stop=None, step=None, dtype=None):
     stop_value = getattr(stop, "literal_value", None)
     step_value = getattr(step, "literal_value", None)
 
-    def impl(start, stop=None, step=None, dtype=None):
+    def impl(start, /, stop=None, step=None, dtype=None):
         # Allow for improved performance if given literal arguments.
         lit_start = start_value if start_value is not None else start
         lit_stop = stop_value if stop_value is not None else stop
