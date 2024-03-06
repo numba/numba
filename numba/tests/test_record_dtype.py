@@ -1259,7 +1259,7 @@ class TestRecordArraySetItem(TestCase):
         arr[0] = (12, 25, 180.5)
 
         jitfunc = njit(set_fields_in_one_row)
-        self.assertEqual(
+        np.testing.assert_array_equal(
             set_fields_in_one_row(np.copy(arr), 12, 25, 180.5, 3),
             jitfunc(np.copy(arr), 12, 25, 180.5, 3))
 
