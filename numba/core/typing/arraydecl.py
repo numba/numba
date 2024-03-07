@@ -401,7 +401,7 @@ class ArrayAttribute(AttributeTemplate):
         if not args:
             return signature(ary.dtype)
 
-    if numpy_version < (1, 20):
+    if numpy_version < (2, 0):
         @bound_function("array.itemset")
         def resolve_itemset(self, ary, args, kws):
             assert not kws
