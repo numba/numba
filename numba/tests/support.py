@@ -99,6 +99,11 @@ skip_unless_py10 = unittest.skipUnless(
     "needs Python 3.10"
 )
 
+skip_unless_py312 = unittest.skipUnless(
+    utils.PYVERSION == (3, 12),
+    "needs Python 3.12"
+)
+
 skip_if_32bit = unittest.skipIf(_32bit, "Not supported on 32 bit")
 
 def expected_failure_py311(fn):
@@ -549,7 +554,8 @@ class TestCase(unittest.TestCase):
             _assertNumberEqual(first, second, delta)
 
     def subprocess_test_runner(self, test_module, test_class=None,
-                               test_name=None, envvars=None, timeout=60):
+                               test_name=None, envvars=None, timeout=60,
+                               flags=None):
         """
         Runs named unit test(s) as specified in the arguments as:
         test_module.test_class.test_name. test_module must always be supplied
@@ -558,6 +564,8 @@ class TestCase(unittest.TestCase):
         subprocess with environment variables specified in `envvars`.
         If given, envvars must be a map of form:
             environment variable name (str) -> value (str)
+        If given, flags must be a map of form:
+            flag including the `-` (str) -> value (str)
         It is most convenient to use this method in conjunction with
         @needs_subprocess as the decorator will cause the decorated test to be
         skipped unless the `SUBPROC_TEST` environment variable is set to 1
@@ -573,7 +581,13 @@ class TestCase(unittest.TestCase):
         thecls = type(self).__name__
         parts = (test_module, test_class, test_name)
         fully_qualified_test = '.'.join(x for x in parts if x is not None)
-        cmd = [sys.executable, '-m', 'numba.runtests', fully_qualified_test]
+        flags_args = []
+        if flags is not None:
+            for flag, value in flags.items():
+                flags_args.append(f'{flag}')
+                flags_args.append(f'{value}')
+        cmd = [sys.executable, *flags_args, '-m', 'numba.runtests',
+               fully_qualified_test]
         env_copy = os.environ.copy()
         env_copy['SUBPROC_TEST'] = '1'
         try:
@@ -594,6 +608,7 @@ class TestCase(unittest.TestCase):
             self.skipTest(no_tests_ran)
         else:
             self.assertIn('OK', status.stderr)
+        return status
 
     def run_test_in_subprocess(maybefunc=None, timeout=60, envvars=None):
         """Runs the decorated test in a subprocess via invoking numba's test

@@ -6,8 +6,8 @@ import sys
 
 import numpy as np
 
-from numba import jit
-from numba.tests.support import needs_blas, expected_failure_py312
+from numba import jit, types
+from numba.tests.support import needs_blas
 import unittest
 
 
@@ -30,13 +30,13 @@ class TestProfiler(unittest.TestCase):
         """
         a = np.arange(16, dtype=np.float32)
         b = np.arange(16, dtype=np.float32)
-        cfunc = jit(nopython=True)(pyfunc)
-        # Warm up JIT
-        cfunc(a, b)
+        cfunc = jit((types.float32[::1], types.float32[::1],))(pyfunc)
+        n_calls = 123
         p = profiler.Profile()
         p.enable()
         try:
-            cfunc(a, b)
+            for _ in range(n_calls):
+                cfunc(a, b)
         finally:
             p.disable()
         stats = pstats.Stats(p).strip_dirs()
@@ -45,9 +45,12 @@ class TestProfiler(unittest.TestCase):
                         code.co_firstlineno,
                         code.co_name,
                         )
+        # check the cfunc (dot) call is in the stats.
         self.assertIn(expected_key, stats.stats)
+        # check that the cfunc (dot) call has been made `n_calls` times.
+        cfunc_stats = stats.stats[expected_key]
+        self.assertEqual(cfunc_stats[:2], (n_calls, n_calls))
 
-    @expected_failure_py312
     def test_profiler(self):
         self.check_profiler_dot(dot)
 
