@@ -123,7 +123,7 @@ fi
 python -m numba.misc.POST
 
 # Now run tests based on the changes identified via git
-# NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -g -m $TEST_NPROCS -- numba.tests
+NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -g -m $TEST_NPROCS -- numba.tests
 
 # List the tests found
 echo "INFO: All discovered tests:"
