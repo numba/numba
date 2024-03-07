@@ -194,7 +194,7 @@ class CUDACachingTest(SerialMixin, DispatcherCacheUsecasesTest):
         popen = subprocess.Popen([sys.executable, "-c", code],
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE)
-        out, err = popen.communicate()
+        out, err = popen.communicate(timeout=60)
         if popen.returncode != 0:
             raise AssertionError(
                 "process failed with code %s: \n"
