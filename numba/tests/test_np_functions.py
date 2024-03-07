@@ -20,7 +20,7 @@ from numba.core.utils import pysignature
 from numba.np.extensions import cross2d
 from numba.tests.support import (TestCase, MemoryLeakMixin,
                                  needs_blas, run_in_subprocess,
-                                 skip_if_numpy_2)
+                                 skip_if_numpy_2, expected_failure_np2)
 import unittest
 
 
@@ -3207,6 +3207,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         self.assertIn("Cannot np.flip on UniTuple", str(raises.exception))
 
+    @expected_failure_np2
     def test_logspace2_basic(self):
 
         def inputs():
@@ -3249,6 +3250,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertIn('The second argument "stop" must be a number',
                       str(raises.exception))
 
+    @expected_failure_np2
     def test_logspace3_basic(self):
 
         def inputs():
@@ -3276,6 +3278,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for start, stop in inputs():
             np.testing.assert_allclose(pyfunc(start, stop), cfunc(start, stop))
 
+    @expected_failure_np2
     def test_logspace3_with_num_basic(self):
 
         def inputs():
@@ -3442,6 +3445,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertIn('Geometric sequence cannot include zero',
                       str(raises.exception))
 
+    @expected_failure_np2
     def test_geomspace_numpy(self):
         cfunc2 = jit(nopython=True)(geomspace2)
         cfunc3 = jit(nopython=True)(geomspace3)
