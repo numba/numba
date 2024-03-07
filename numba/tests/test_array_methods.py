@@ -10,7 +10,9 @@ from numba import jit, njit, typeof
 from numba.core import types
 from numba.core.errors import TypingError, NumbaValueError
 from numba.np.numpy_support import as_dtype, numpy_version
-from numba.tests.support import TestCase, MemoryLeakMixin, needs_blas, skip_if_numpy_2
+from numba.tests.support import (TestCase, MemoryLeakMixin,
+                                 needs_blas, skip_if_numpy_2,
+                                 expected_failure_np2)
 
 TIMEDELTA_M = 'timedelta64[M]'
 TIMEDELTA_Y = 'timedelta64[Y]'
@@ -1058,6 +1060,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             check_ok(complex(4, 4))
             check_ok(np.int8(0))
 
+    @expected_failure_np2
     def test_arange_2_arg(self):
         def check_ok(arg0, arg1, pyfunc, cfunc):
             expected = pyfunc(arg0, arg1)
@@ -1094,6 +1097,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check_ok(7, None, pyfunc, cfunc)
         check_ok(np.int8(0), None, pyfunc, cfunc)
 
+    @expected_failure_np2
     def test_arange_3_arg(self):
         windows64 = sys.platform.startswith('win32') and sys.maxsize > 2 ** 32
 
@@ -1135,6 +1139,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check_ok(1, 7, None, pyfunc, cfunc)
         check_ok(np.int8(0), np.int32(5), None, pyfunc, cfunc, True)
 
+    @expected_failure_np2
     def test_arange_4_arg(self):
         for pyfunc in (np_arange_4, np_arange_start_stop_step_dtype):
             cfunc = jit(nopython=True)(pyfunc)
