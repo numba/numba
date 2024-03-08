@@ -1,12 +1,14 @@
 import itertools
 import pickle
 import textwrap
+import warnings
 
 import numpy as np
 
 from numba import njit, vectorize
 from numba.tests.support import MemoryLeakMixin, TestCase
-from numba.core.errors import TypingError, NumbaNotImplementedError
+from numba.core.errors import (TypingError, NumbaNotImplementedError,
+                               NumbaExperimentalFeatureWarning)
 import unittest
 from numba.np.ufunc import dufunc
 from numba.np.numpy_support import from_dtype
@@ -412,7 +414,6 @@ class TestDUFuncAt(TestCase):
         add_at(values, index, 3)
         self.assertPreciseEqual(values, [1, 8, 6, 4])
 
-    @unittest.expectedFailure
     def test_ufunc_at_advanced_3(self):
         # Test exception thrown
         values = np.array(['a', 1], dtype=object)
@@ -499,6 +500,32 @@ class TestDUFuncAt(TestCase):
         msg = 'operands could not be broadcast together with remapped shapes'
         with self.assertRaisesRegex(ValueError, msg):
             add_at(arr, [0, 1], [1, 2, 3])
+
+    def test_ufunc_at_dynamic(self):
+        arr = np.arange(5)
+
+        @vectorize
+        def inc(x):
+            return x + 1
+
+        self.assertEqual(len(inc.types), 0)
+
+        # trying to call inc.at should trigger compilation
+        inc.at(arr, [1, 3])
+
+        self.assertGreater(len(inc.types), 0)
+
+    def test_ufunc_at_experimental_warning(self):
+        arr = np.arange(5)
+        add_at = self._generate_jit(np.add)
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always', NumbaExperimentalFeatureWarning)
+
+            add_at(arr, [0, 3], 10)
+
+        self.assertGreater(len(w), 0)
+        self.assertIn('ufunc.at feature is experimental', str(w[0].message))
 
 
 class TestDUFuncReduce(TestCase):

@@ -421,11 +421,12 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
 
             # missing second argument?
             if nin == 2 and cgutils.is_nonelike(b):
-                raise TypeError('second operand needed for ufunc')
+                raise errors.TypingError('second operand needed for ufunc')
 
             # extra second argument
             if nin == 1 and not cgutils.is_nonelike(b):
-                raise TypeError('second operand provided when ufunc is unary')
+                msg = 'second operand provided when ufunc is unary'
+                raise errors.TypingError(msg)
 
             if cgutils.is_nonelike(b):
                 self.add((a.dtype,))
@@ -777,6 +778,27 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 return impl_nd_axis_int
             # elif array.ndim == 1:
             #     return impl_1d
+
+    def at(self, a, indices, b=None):
+        # dynamic compile ufunc.at
+        args = (a,) if cgutils.is_nonelike(b) else (a, b)
+        argtys = (typeof(arg) for arg in args)
+        ewise_types = tuple(arg.dtype if isinstance(arg, types.Array) else arg
+                            for arg in argtys)
+
+        if self.find_ewise_function(ewise_types) == (None, None):
+            # cannot find a matching function and compilation is disabled
+            if self._frozen:
+                msg = "compilation disabled for %s.at(...)" % (self,)
+                raise RuntimeError(msg)
+
+            self._compile_for_args(*args)
+
+        # all good, just dispatch to the function
+        if cgutils.is_nonelike(b):
+            return super().at(a, indices)
+        else:
+            return super().at(*(a, indices, b))
 
     def _install_type(self, typingctx=None):
         """Constructs and installs a typing class for a DUFunc object in the
