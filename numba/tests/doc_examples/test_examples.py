@@ -586,7 +586,7 @@ class DocsExamplesTest(unittest.TestCase):
 
             # magictoken.ex_guvectorize_dynamic_call_four.begin
             x = np.arange(5, dtype=np.int64)
-            y = 2.2
+            y = 2
             res = np.zeros_like(x)
             g(x, y, res)
             print(res)
