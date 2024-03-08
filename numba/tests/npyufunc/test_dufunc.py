@@ -180,7 +180,7 @@ class TestDUFuncAt(TestCase):
 
         # missing second operand
         err_msg = 'second operand needed for ufunc'
-        with self.assertRaisesRegex(TypeError, err_msg):
+        with self.assertRaisesRegex(TypingError, err_msg):
             add_at(a.copy(), [2, 5, 3], None)
 
         self._compare_output(negative_at, np.negative, a.copy(), [2, 5, 3])
@@ -190,10 +190,10 @@ class TestDUFuncAt(TestCase):
 
         # extraneous second operand
         err_msg = 'second operand provided when ufunc is unary'
-        with self.assertRaisesRegex(TypeError, err_msg):
+        with self.assertRaisesRegex(TypingError, err_msg):
             negative_jit_2(a.copy(), [2, 5, 3], [1, 2, 3])
 
-        with self.assertRaises(TypeError):
+        with self.assertRaises(TypingError):
             add_at(a.copy(), [2, 5, 3], [[1, 2], 1])
 
     def test_ufunc_at_inner_loop(self):
@@ -425,7 +425,7 @@ class TestDUFuncAt(TestCase):
         # Test multiple output ufuncs raise error, NumPy gh-5665
         modf_at = self._generate_jit(np.modf)
         # NumPy raises ValueError as modf returns multiple outputs
-        with self.assertRaises(TypeError):
+        with self.assertRaises(TypingError):
             modf_at(np.arange(10), [1])
 
     def test_ufunc_at_advanced_5(self):
@@ -482,7 +482,7 @@ class TestDUFuncAt(TestCase):
         arr = np.ones(10, dtype=str)
         add_at = self._generate_jit(np.add)
         # NumPy raises `np.core._exceptions._UFuncNoLoopError`
-        with self.assertRaises(TypeError):
+        with self.assertRaises(TypingError):
             add_at(arr, [0, 1], [0, 1])
 
     def test_ufunc_at_output_casting(self):
