@@ -1449,11 +1449,13 @@ def np_ptp(a):
 
     return np_ptp_impl
 
+
 if numpy_version < (2, 0):
     overload_method(types.Array, 'ptp')(np_ptp)
 
 #----------------------------------------------------------------------------
 # Median and partitioning
+
 
 @register_jitable
 def nan_aware_less_than(a, b):
@@ -3198,6 +3200,7 @@ def impl_np_round(a, decimals=0, out=None):
 
 if numpy_version < (2, 0):
     overload(np.round_)(impl_np_round)
+
 
 @overload(np.sinc)
 def impl_np_sinc(x):

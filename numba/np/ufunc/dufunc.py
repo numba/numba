@@ -19,6 +19,7 @@ from typing import Callable
 from llvmlite import ir
 from numba.core.compiler_lock import global_compiler_lock
 
+
 def make_dufunc_kernel(_dufunc):
     from numba.np import npyimpl
 
