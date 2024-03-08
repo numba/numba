@@ -596,7 +596,7 @@ if numpy_version < (2, 0):
 
         nitems = ary.nitems
         with builder.if_then(builder.icmp_signed('!=', nitems, nitems.type(1)),
-                            likely=False):
+                             likely=False):
             msg = "itemset(): can only write to an array of size 1"
             context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
