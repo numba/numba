@@ -1,0 +1,5 @@
+Numpy 2.0 Support (Partial)
+---------------------------
+
+Added Binary Support for NumPy 2.0. However, this does not yet include
+NEP 50 related type-level changes which are still in progress.
