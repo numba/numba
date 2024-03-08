@@ -1047,7 +1047,6 @@ class MixedContainerUnroller(FunctionPass):
 
         # 0. Find the loops containing literal_unroll and store this
         #    information
-        literal_unroll_info = dict()
         unroll_info = namedtuple(
             "unroll_info", [
                 "loop", "call", "arg", "getitem"])
@@ -1068,116 +1067,145 @@ class MixedContainerUnroller(FunctionPass):
                 raise GuardException
             return some_call
 
-        for lbl, loop in loops.items():
-            # TODO: check the loop head has literal_unroll, if it does but
-            # does not conform to the following then raise
+        def find_unroll_loops(loops):
+            """This finds loops which are compliant with the form:
+            for i in range(len(literal_unroll(<something>>)))"""
+            unroll_loops = {}
+            for header_lbl, loop in loops.items():
+                # TODO: check the loop head has literal_unroll, if it does but
+                # does not conform to the following then raise
 
-            # scan loop header
-            iternexts = [_ for _ in
-                         func_ir.blocks[loop.header].find_exprs('iternext')]
-            if len(iternexts) != 1: # needs to be an single iternext driven loop
-                continue
-            for iternext in iternexts:
-                # Walk the canonicalised loop structure and check it
-                # Check loop form range(literal_unroll(container)))
-                phi = guard(get_definition, func_ir,  iternext.value)
-                if phi is None:
+                # scan loop header
+                iternexts = [_ for _ in
+                             func_ir.blocks[loop.header].find_exprs('iternext')]
+                # needs to be an single iternext driven loop
+                if len(iternexts) != 1:
                     continue
+                for iternext in iternexts:
+                    # Walk the canonicalised loop structure and check it
+                    # Check loop form range(literal_unroll(container)))
+                    phi = guard(get_definition, func_ir,  iternext.value)
+                    if phi is None:
+                        continue
 
-                # check call global "range"
-                range_call = guard(get_call_args, phi.value, range)
-                if range_call is None:
-                    continue
-                range_arg = range_call.args[0]
+                    # check call global "range"
+                    range_call = guard(get_call_args, phi.value, range)
+                    if range_call is None:
+                        continue
+                    range_arg = range_call.args[0]
 
-                # check call global "len"
-                len_call = guard(get_call_args, range_arg, len)
-                if len_call is None:
-                    continue
-                len_arg = len_call.args[0]
+                    # check call global "len"
+                    len_call = guard(get_call_args, range_arg, len)
+                    if len_call is None:
+                        continue
+                    len_arg = len_call.args[0]
 
-                # check literal_unroll
-                literal_unroll_call = guard(get_definition, func_ir, len_arg)
-                if literal_unroll_call is None:
-                    continue
-                if not isinstance(literal_unroll_call, ir.Expr):
-                    continue
-                if literal_unroll_call.op != "call":
-                    continue
-                literal_func = getattr(literal_unroll_call, 'func', None)
-                if not literal_func:
-                    continue
-                call_func = guard(get_definition, func_ir,
-                                  literal_unroll_call.func)
-                if call_func is None:
-                    continue
-                call_func = call_func.value
+                    # check literal_unroll
+                    literal_unroll_call = guard(get_definition, func_ir,
+                                                len_arg)
+                    if literal_unroll_call is None:
+                        continue
+                    if not isinstance(literal_unroll_call, ir.Expr):
+                        continue
+                    if literal_unroll_call.op != "call":
+                        continue
+                    literal_func = getattr(literal_unroll_call, 'func', None)
+                    if not literal_func:
+                        continue
+                    call_func = guard(get_definition, func_ir,
+                                      literal_unroll_call.func)
+                    if call_func is None:
+                        continue
+                    call_func_value = call_func.value
 
-                if call_func is literal_unroll:
-                    assert len(literal_unroll_call.args) == 1
-                    arg = literal_unroll_call.args[0]
-                    typemap = state.typemap
-                    resolved_arg = guard(get_definition, func_ir, arg,
-                                         lhs_only=True)
-                    ty = typemap[resolved_arg.name]
-                    assert isinstance(ty, self._accepted_types)
-                    # loop header is spelled ok, now make sure the body
-                    # actually contains a getitem
+                    if call_func_value is literal_unroll:
+                        assert len(literal_unroll_call.args) == 1
+                        unroll_loops[loop] = literal_unroll_call
+            return unroll_loops
 
-                    # find a "getitem"
-                    tuple_getitem = None
-                    for lbl in loop.body:
-                        blk = func_ir.blocks[lbl]
-                        for stmt in blk.body:
-                            if isinstance(stmt, ir.Assign):
-                                if (isinstance(stmt.value, ir.Expr) and
-                                        stmt.value.op == "getitem"):
-                                    # check for something like a[i]
-                                    if stmt.value.value != arg:
-                                        # that failed, so check for the
-                                        # definition
-                                        dfn = guard(get_definition, func_ir,
-                                                    stmt.value.value)
-                                        if dfn is None:
-                                            continue
-                                        try:
-                                            args = getattr(dfn, 'args', False)
-                                        except KeyError:
-                                            continue
-                                        if not args:
-                                            continue
-                                        if not args[0] == arg:
-                                            continue
-                                    target_ty = state.typemap[arg.name]
-                                    if not isinstance(target_ty,
-                                                      self._accepted_types):
+        def ensure_no_nested_unroll(unroll_loops):
+            # Validate loop nests, nested literal_unroll loops are unsupported.
+            # This doesn't check that there's a getitem or anything else
+            # required for the transform to work, simply just that there's no
+            # nesting.
+            for test_loop in unroll_loops:
+                for ref_loop in unroll_loops:
+                    if test_loop == ref_loop:  # comparing to self! skip
+                        continue
+                    if test_loop.header in ref_loop.body:
+                        msg = ("Nesting of literal_unroll is unsupported")
+                        loc = func_ir.blocks[test_loop.header].loc
+                        raise errors.UnsupportedError(msg, loc)
+
+        def collect_literal_unroll_info(literal_unroll_loops):
+            """Finds the loops induced by `literal_unroll`, returns a list of
+            unroll_info namedtuples for use in the transform pass.
+            """
+
+            literal_unroll_info = []
+            for loop, literal_unroll_call in literal_unroll_loops.items():
+                arg = literal_unroll_call.args[0]
+                typemap = state.typemap
+                resolved_arg = guard(get_definition, func_ir, arg,
+                                     lhs_only=True)
+                ty = typemap[resolved_arg.name]
+                assert isinstance(ty, self._accepted_types)
+                # loop header is spelled ok, now make sure the body
+                # actually contains a getitem
+
+                # find a "getitem"... only looks in the blocks that belong
+                # _solely_ to this literal_unroll (there should not be nested
+                # literal_unroll loops, this is unsupported).
+                tuple_getitem = None
+                for lbli in loop.body:
+                    blk = func_ir.blocks[lbli]
+                    for stmt in blk.body:
+                        if isinstance(stmt, ir.Assign):
+                            if (isinstance(stmt.value, ir.Expr) and
+                                    stmt.value.op == "getitem"):
+                                # check for something like a[i]
+                                if stmt.value.value != arg:
+                                    # that failed, so check for the
+                                    # definition
+                                    dfn = guard(get_definition, func_ir,
+                                                stmt.value.value)
+                                    if dfn is None:
                                         continue
-                                    tuple_getitem = stmt
-                                    break
-                        if tuple_getitem:
-                            break
-                    else:
-                        continue  # no getitem in this loop
+                                    try:
+                                        args = getattr(dfn, 'args', False)
+                                    except KeyError:
+                                        continue
+                                    if not args:
+                                        continue
+                                    if not args[0] == arg:
+                                        continue
+                                target_ty = state.typemap[arg.name]
+                                if not isinstance(target_ty,
+                                                  self._accepted_types):
+                                    continue
+                                tuple_getitem = stmt
+                                break
+                    if tuple_getitem:
+                        break
+                else:
+                    continue  # no getitem in this loop
 
-                    ui = unroll_info(loop, literal_unroll_call, arg,
-                                     tuple_getitem)
-                    literal_unroll_info[lbl] = ui
+                ui = unroll_info(loop, literal_unroll_call, arg,
+                                 tuple_getitem)
+                literal_unroll_info.append(ui)
+            return literal_unroll_info
 
+        # 1. Collect info about the literal_unroll loops, ensure they are legal
+        literal_unroll_loops = find_unroll_loops(loops)
+        # validate
+        ensure_no_nested_unroll(literal_unroll_loops)
+        # assemble info
+        literal_unroll_info = collect_literal_unroll_info(literal_unroll_loops)
         if not literal_unroll_info:
             return False
 
-        # 1. Validate loops, must not have any calls to literal_unroll
-        for test_lbl, test_loop in literal_unroll_info.items():
-            for ref_lbl, ref_loop in literal_unroll_info.items():
-                if test_lbl == ref_lbl:  # comparing to self! skip
-                    continue
-                if test_loop.loop.header in ref_loop.loop.body:
-                    msg = ("Nesting of literal_unroll is unsupported")
-                    loc = func_ir.blocks[test_loop.loop.header].loc
-                    raise errors.UnsupportedError(msg, loc)
-
         # 2. Do the unroll, get a loop and process it!
-        lbl, info = literal_unroll_info.popitem()
+        info = literal_unroll_info[0]
         self.unroll_loop(state, info)
 
         # 3. Rebuild the state, the IR has taken a hammering
@@ -1573,6 +1601,15 @@ class PropagateLiterals(FunctionPass):
                                    f'type of variable "{arg.unversioned_name}" '
                                    'due to a branch.')
                             raise errors.NumbaTypeError(msg, loc=assign.loc)
+
+                # Only propagate a PHI node if all arguments are the same
+                # constant
+                if isinstance(value, ir.Expr) and value.op == 'phi':
+                    # typemap will return None in case `inc.name` not in typemap
+                    v = [typemap.get(inc.name) for inc in value.incoming_values]
+                    # stop if the elements in `v` do not hold the same value
+                    if v[0] is not None and any([v[0] != vi for vi in v]):
+                        continue
 
                 lit = typemap.get(target.name, None)
                 if lit and isinstance(lit, types.Literal):

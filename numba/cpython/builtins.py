@@ -298,6 +298,13 @@ def int_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
+@lower_builtin(float, types.StringLiteral)
+def float_literal_impl(context, builder, sig, args):
+    [ty] = sig.args
+    res = context.get_constant(sig.return_type, float(ty.literal_value))
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
 @lower_builtin(complex, types.VarArg(types.Any))
 def complex_impl(context, builder, sig, args):
     complex_type = sig.return_type
@@ -762,7 +769,7 @@ def ol_isinstance(var, typs):
 
     # NOTE: The current implementation of `isinstance` restricts the type of the
     # instance variable to types that are well known and in common use. The
-    # danger of unrestricted tyoe comparison is that a "default" of `False` is
+    # danger of unrestricted type comparison is that a "default" of `False` is
     # required and this means that if there is a bug in the logic of the
     # comparison tree `isinstance` returns False! It's therefore safer to just
     # reject the compilation as untypable!
@@ -770,7 +777,9 @@ def ol_isinstance(var, typs):
                         types.DictType, types.LiteralStrKeyDict, types.List,
                         types.ListType, types.Tuple, types.UniTuple, types.Set,
                         types.Function, types.ClassType, types.UnicodeType,
-                        types.ClassInstanceType, types.NoneType, types.Array)
+                        types.ClassInstanceType, types.NoneType, types.Array,
+                        types.Boolean, types.Float, types.UnicodeCharSeq,
+                        types.Complex, types.NPDatetime, types.NPTimedelta,)
     if not isinstance(var_ty, supported_var_ty):
         msg = f'isinstance() does not support variables of type "{var_ty}".'
         raise NumbaTypeError(msg)
@@ -825,6 +834,9 @@ def ol_isinstance(var, typs):
             numba_typ = as_numba_type(key)
             if var_ty == numba_typ:
                 return true_impl
+            elif isinstance(numba_typ, (types.NPDatetime, types.NPTimedelta)):
+                if isinstance(var_ty, type(numba_typ)):
+                    return true_impl
             elif isinstance(numba_typ, types.ClassType) and \
                     isinstance(var_ty, types.ClassInstanceType) and \
                     var_ty.key == numba_typ.instance_type.key:
@@ -1000,4 +1012,3 @@ def ol_str_generic(object=''):
         else:
             return repr(object)
     return impl
-

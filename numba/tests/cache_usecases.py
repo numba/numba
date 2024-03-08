@@ -9,7 +9,7 @@ import sys
 
 import numpy as np
 
-from numba import jit, generated_jit, prange
+from numba import jit, prange
 from numba.core import types
 
 from numba.tests.ctypes_usecases import c_sin
@@ -38,17 +38,6 @@ def add_objmode_usecase(x, y):
 @jit(nopython=True)
 def add_nocache_usecase(x, y):
     return x + y + Z
-
-
-@generated_jit(cache=True, nopython=True)
-def generated_usecase(x, y):
-    if isinstance(x, types.Complex):
-        def impl(x, y):
-            return x + y
-    else:
-        def impl(x, y):
-            return x - y
-    return impl
 
 
 @jit(cache=True, nopython=True)
@@ -151,7 +140,6 @@ class _TestModule(TestCase):
         self.assertPreciseEqual(mod.add_objmode_usecase(2, 3), 6)
         self.assertPreciseEqual(mod.outer_uncached(3, 2), 2)
         self.assertPreciseEqual(mod.outer(3, 2), 2)
-        self.assertPreciseEqual(mod.generated_usecase(3, 2), 1)
 
         packed_rec = mod.record_return(mod.packed_arr, 1)
         self.assertPreciseEqual(tuple(packed_rec), (2, 43.5))

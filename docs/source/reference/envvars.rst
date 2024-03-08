@@ -414,6 +414,21 @@ Compilation options
 
     *Default value:* "all"
 
+.. envvar:: NUMBA_USE_LLVMLITE_MEMORY_MANAGER
+
+   Whether llvmlite's built-in memory manager is enabled. The default is to
+   enable it on 64-bit ARM platforms (macOS on Apple Silicon and Linux on
+   AArch64), where it is needed to ensure ABI compliance, specifically
+   conformance with the requirements for GOT and text segment placement in the
+   large code model.
+
+   This environment variable can be used to override the default setting and
+   force it to be enabled (``1``) or disabled (``0``). This should not normally
+   be required, but it is provided as an option for debugging and potential
+   workaround situations.
+
+   *Default value:* None (Use the default for the system)
+
 .. envvar:: NUMBA_USE_RVSDG_FRONTEND
 
    Turns on the experimental RVSDG frontend. It depends on the ``numba-rvsdg`` 

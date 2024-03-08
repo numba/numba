@@ -129,6 +129,11 @@ are:
 
 Deprecation of :term:`object mode` `fall-back` behaviour when using ``@jit``
 ============================================================================
+
+.. note::
+
+    This feature was removed in 0.59.0, see the schedule section below.
+
 The ``numba.jit`` decorator has for a long time followed the behaviour of first
 attempting to compile the decorated function in :term:`nopython mode` and should
 this compilation fail it will `fall-back` and try again to compile but this time
@@ -224,11 +229,11 @@ Essentially this keyword will have no effect following removal of this feature.
 
 Schedule
 --------
-This feature will be removed with respect to this schedule:
+This feature was removed with respect to this schedule:
 
-* Deprecation warnings will be issued in version 0.44.0.
-* Prominent notice is given in 0.57.0.
-* Removal will take place in version 0.59.0.
+* Deprecation warnings were issued in version 0.44.0.
+* Prominent notice was given in 0.57.0.
+* The feature was removed in 0.59.0.
 
 Recommendations
 ---------------
@@ -303,10 +308,10 @@ functionality has been removed.
 Schedule
 --------
 
-This feature will be removed with respect to this schedule:
+This feature was removed with respect to this schedule:
 
-* Deprecation warnings will be issued in version 0.57.0.
-* Removal will take place in version 0.59.0.
+* Deprecation warnings were issued in version 0.57.0.
+* Removal took place in version 0.59.0.
 
 Recommendations
 ---------------

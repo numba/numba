@@ -1,5 +1,3 @@
-import sys
-
 import numpy as np
 
 from numba.np.ufunc.ufuncbuilder import GUFuncBuilder
@@ -11,68 +9,10 @@ from numba.core import config
 import unittest
 
 
-def add(a, b):
-    """An addition"""
-    return a + b
-
-def equals(a, b):
-    return a == b
-
-def mul(a, b):
-    """A multiplication"""
-    return a * b
-
-def guadd(a, b, c):
-    """A generalized addition"""
-    x, y = c.shape
-    for i in range(x):
-        for j in range(y):
-            c[i, j] = a[i, j] + b[i, j]
-
-@vectorize(nopython=True)
-def inner(a, b):
-    return a + b
-
-@vectorize(["int64(int64, int64)"], nopython=True)
-def inner_explicit(a, b):
-    return a + b
-
-def outer(a, b):
-    return inner(a, b)
-
-def outer_explicit(a, b):
-    return inner_explicit(a, b)
-
-
-class Dummy: pass
-
-
-def guadd_obj(a, b, c):
-    Dummy()  # to force object mode
-    x, y = c.shape
-    for i in range(x):
-        for j in range(y):
-            c[i, j] = a[i, j] + b[i, j]
-
-def guadd_scalar_obj(a, b, c):
-    Dummy()  # to force object mode
-    x, y = c.shape
-    for i in range(x):
-        for j in range(y):
-            c[i, j] = a[i, j] + b
-
-
-class MyException(Exception):
-    pass
-
-
-def guerror(a, b, c):
-    raise MyException
-
-
 class TestUfuncBuilding(TestCase):
 
     def test_basic_ufunc(self):
+        from numba.tests.npyufunc.ufuncbuilding_usecases import add
         ufb = UFuncBuilder(add)
         cres = ufb.add("int32(int32, int32)")
         self.assertFalse(cres.objectmode)
@@ -98,6 +38,7 @@ class TestUfuncBuilding(TestCase):
         self.assertIn("An addition", ufunc.__doc__)
 
     def test_ufunc_struct(self):
+        from numba.tests.npyufunc.ufuncbuilding_usecases import add
         ufb = UFuncBuilder(add)
         cres = ufb.add("complex64(complex64, complex64)")
         self.assertFalse(cres.objectmode)
@@ -117,6 +58,7 @@ class TestUfuncBuilding(TestCase):
         check(a)
 
     def test_ufunc_forceobj(self):
+        from numba.tests.npyufunc.ufuncbuilding_usecases import add
         ufb = UFuncBuilder(add, targetoptions={'forceobj': True})
         cres = ufb.add("int32(int32, int32)")
         self.assertTrue(cres.objectmode)
@@ -130,6 +72,7 @@ class TestUfuncBuilding(TestCase):
         """
         Check nested call to an implicitly-typed ufunc.
         """
+        from numba.tests.npyufunc.ufuncbuilding_usecases import outer
         builder = UFuncBuilder(outer,
                                targetoptions={'nopython': True})
         builder.add("(int64, int64)")
@@ -140,6 +83,7 @@ class TestUfuncBuilding(TestCase):
         """
         Check nested call to an explicitly-typed ufunc.
         """
+        from numba.tests.npyufunc.ufuncbuilding_usecases import outer_explicit
         builder = UFuncBuilder(outer_explicit,
                                targetoptions={'nopython': True})
         builder.add("(int64, int64)")
@@ -160,6 +104,7 @@ class TestUfuncBuildingJitDisabled(TestUfuncBuilding):
 class TestGUfuncBuilding(TestCase):
 
     def test_basic_gufunc(self):
+        from numba.tests.npyufunc.ufuncbuilding_usecases import guadd
         gufb = GUFuncBuilder(guadd, "(x, y),(x, y)->(x, y)")
         cres = gufb.add("void(int32[:,:], int32[:,:], int32[:,:])")
         self.assertFalse(cres.objectmode)
@@ -176,6 +121,7 @@ class TestGUfuncBuilding(TestCase):
         self.assertIn("A generalized addition", ufunc.__doc__)
 
     def test_gufunc_struct(self):
+        from numba.tests.npyufunc.ufuncbuilding_usecases import guadd
         gufb = GUFuncBuilder(guadd, "(x, y),(x, y)->(x, y)")
         cres = gufb.add("void(complex64[:,:], complex64[:,:], complex64[:,:])")
         self.assertFalse(cres.objectmode)
@@ -187,6 +133,7 @@ class TestGUfuncBuilding(TestCase):
         self.assertPreciseEqual(a + a, b)
 
     def test_gufunc_struct_forceobj(self):
+        from numba.tests.npyufunc.ufuncbuilding_usecases import guadd
         gufb = GUFuncBuilder(guadd, "(x, y),(x, y)->(x, y)",
                              targetoptions=dict(forceobj=True))
         cres = gufb.add("void(complex64[:,:], complex64[:,:], complex64[:,"
@@ -215,24 +162,28 @@ class TestVectorizeDecor(TestCase):
     _supported_identities = [0, 1, None, "reorderable"]
 
     def test_vectorize(self):
+        from numba.tests.npyufunc.ufuncbuilding_usecases import add
         ufunc = vectorize(['int32(int32, int32)'])(add)
         a = np.arange(10, dtype='int32')
         b = ufunc(a, a)
         self.assertPreciseEqual(a + a, b)
 
     def test_vectorize_objmode(self):
+        from numba.tests.npyufunc.ufuncbuilding_usecases import add
         ufunc = vectorize(['int32(int32, int32)'], forceobj=True)(add)
         a = np.arange(10, dtype='int32')
         b = ufunc(a, a)
         self.assertPreciseEqual(a + a, b)
 
     def test_vectorize_bool_return(self):
+        from numba.tests.npyufunc.ufuncbuilding_usecases import equals
         ufunc = vectorize(['bool_(int32, int32)'])(equals)
         a = np.arange(10, dtype='int32')
         r = ufunc(a,a)
         self.assertPreciseEqual(r, np.ones(r.shape, dtype=np.bool_))
 
     def test_vectorize_identity(self):
+        from numba.tests.npyufunc.ufuncbuilding_usecases import add
         sig = 'int32(int32, int32)'
         for identity in self._supported_identities:
             ufunc = vectorize([sig], identity=identity)(add)
@@ -248,6 +199,7 @@ class TestVectorizeDecor(TestCase):
             vectorize([sig], identity=2)(add)
 
     def test_vectorize_no_args(self):
+        from numba.tests.npyufunc.ufuncbuilding_usecases import add
         a = np.linspace(0,1,10)
         b = np.linspace(1,2,10)
         ufunc = vectorize(add)
@@ -258,6 +210,7 @@ class TestVectorizeDecor(TestCase):
         self.assertPreciseEqual(c, a + b)
 
     def test_vectorize_only_kws(self):
+        from numba.tests.npyufunc.ufuncbuilding_usecases import mul
         a = np.linspace(0,1,10)
         b = np.linspace(1,2,10)
         ufunc = vectorize(identity=PyUFunc_One, nopython=True)(mul)
@@ -277,6 +230,7 @@ class TestVectorizeDecor(TestCase):
                 ufunc(a, a, zzz=out)
 
         # With explicit sigs
+        from numba.tests.npyufunc.ufuncbuilding_usecases import add
         ufunc = vectorize(['int32(int32, int32)'], nopython=True)(add)
         check(ufunc)
         # With implicit sig
@@ -285,6 +239,7 @@ class TestVectorizeDecor(TestCase):
         check(ufunc)  # after compiling
 
     def test_guvectorize(self):
+        from numba.tests.npyufunc.ufuncbuilding_usecases import guadd
         ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
                             "(x,y),(x,y)->(x,y)")(guadd)
         a = np.arange(10, dtype='int32').reshape(2, 5)
@@ -292,6 +247,7 @@ class TestVectorizeDecor(TestCase):
         self.assertPreciseEqual(a + a, b)
 
     def test_guvectorize_no_output(self):
+        from numba.tests.npyufunc.ufuncbuilding_usecases import guadd
         ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
                             "(x,y),(x,y),(x,y)")(guadd)
         a = np.arange(10, dtype='int32').reshape(2, 5)
@@ -300,8 +256,9 @@ class TestVectorizeDecor(TestCase):
         self.assertPreciseEqual(a + a, out)
 
     def test_guvectorize_objectmode(self):
+        from numba.tests.npyufunc.ufuncbuilding_usecases import guadd_obj
         ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
-                            "(x,y),(x,y)->(x,y)")(guadd_obj)
+                            "(x,y),(x,y)->(x,y)", forceobj=True)(guadd_obj)
         a = np.arange(10, dtype='int32').reshape(2, 5)
         b = ufunc(a, a)
         self.assertPreciseEqual(a + a, b)
@@ -310,13 +267,16 @@ class TestVectorizeDecor(TestCase):
         """
         Test passing of scalars to object mode gufuncs.
         """
+        from numba.tests.npyufunc.ufuncbuilding_usecases import guadd_scalar_obj
         ufunc = guvectorize(['(int32[:,:], int32, int32[:,:])'],
-                            "(x,y),()->(x,y)")(guadd_scalar_obj)
+                            "(x,y),()->(x,y)", forceobj=True)(guadd_scalar_obj)
         a = np.arange(10, dtype='int32').reshape(2, 5)
         b = ufunc(a, 3)
         self.assertPreciseEqual(a + 3, b)
 
     def test_guvectorize_error_in_objectmode(self):
+        from numba.tests.npyufunc.ufuncbuilding_usecases import guerror, \
+            MyException
         ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
                             "(x,y),(x,y)->(x,y)", forceobj=True)(guerror)
         a = np.arange(10, dtype='int32').reshape(2, 5)
@@ -324,6 +284,7 @@ class TestVectorizeDecor(TestCase):
             ufunc(a, a)
 
     def test_guvectorize_identity(self):
+        from numba.tests.npyufunc.ufuncbuilding_usecases import add, guadd
         args = (['(int32[:,:], int32[:,:], int32[:,:])'], "(x,y),(x,y)->(x,y)")
         for identity in self._supported_identities:
             ufunc = guvectorize(*args, identity=identity)(guadd)
@@ -339,6 +300,7 @@ class TestVectorizeDecor(TestCase):
             guvectorize(*args, identity=2)(add)
 
     def test_guvectorize_invalid_layout(self):
+        from numba.tests.npyufunc.ufuncbuilding_usecases import guadd
         sigs = ['(int32[:,:], int32[:,:], int32[:,:])']
         # Syntax error
         with self.assertRaises(ValueError) as raises:

@@ -1,7 +1,7 @@
 .. _minor-version-compatibility:
 
-CUDA Minor Version Compatiblity
-===============================
+CUDA Minor Version Compatibility
+================================
 
 CUDA `Minor Version Compatibility
 <https://docs.nvidia.com/deploy/cuda-compatibility/index.html#minor-version-compatibility>`_

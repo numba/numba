@@ -265,7 +265,7 @@ def find_top_level_loops(cfg):
 
 def _fix_loop_exit(cfg, loop):
     """
-    Fixes loop.exits for Py3.8 bytecode CFG changes.
+    Fixes loop.exits for Py3.8+ bytecode CFG changes.
     This is to handle `break` inside loops.
     """
     # Computes the common postdoms of exit nodes

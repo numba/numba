@@ -1,6 +1,10 @@
 import os
 import sys
 import subprocess
+import re
+import pathlib
+import xml.etree.ElementTree
+
 
 from numba import cuda
 import unittest
@@ -249,6 +253,59 @@ class TestCase(unittest.TestCase):
         self.assertEqual(sorted(start_indexes), expected)
         # 3. That the number of indexes matches the declared test count
         self.assertEqual(lim_start_index, pipe_yml['variables']['TEST_COUNT'])
+
+    def test_no_compilation_on_list(self):
+        # Checks that the test suite doesn't do any CPU-side compilation on
+        # listing of tests.
+        code = """if 1:
+        from unittest import mock
+        from llvmlite import binding as llvm
+        error = RuntimeError("Detected compilation during test listing")
+        with mock.patch.object(llvm.ExecutionEngine, 'finalize_object',
+                               side_effect=error):
+            import numba
+            {0}
+        """
+
+        # Run with a jit function in the test to demonstrate failure
+        with self.assertRaises(subprocess.CalledProcessError) as raises:
+            cmd = [sys.executable, "-c", code.format("numba.njit(lambda:0)()")]
+            subprocess.check_output(cmd,
+                                    stderr=subprocess.STDOUT,
+                                    timeout=60)
+        self.assertIn("Detected compilation during test listing",
+                      raises.exception.stdout.decode('UTF-8'))
+
+        # Run to validate the test suite does not trigger compilation during
+        # listing.
+        cmd = [sys.executable, "-c", code.format("numba.test('-l')")]
+        subprocess.check_call(cmd,
+                              stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL,)
+
+    def test_show_timing(self):
+        cmd = [sys.executable, '-m', 'numba.runtests', '--show-timing', '-vm1',
+               'numba.tests.test_usecases.TestUsecases.test_sum1d']
+        out = subprocess.check_output(cmd, encoding='utf8',
+                                      stderr=subprocess.STDOUT)
+        self.assertIsNotNone(
+            re.search(r"Runtime \(seconds\): \d*\.\d*", out),
+        )
+        self.assertIsNotNone(
+            re.search(r"Total test runtime \(seconds\): \d*\.\d*", out),
+        )
+
+    def test_junit_output(self):
+        cmd = [sys.executable, '-m', 'numba.runtests', '--junit', '-vm1',
+               'numba.tests.test_usecases.TestUsecases.test_sum1d']
+        out = subprocess.check_output(cmd, encoding='utf8',
+                                      stderr=subprocess.STDOUT)
+        m = re.search(r"Writing junit xml file: (junit_numba_[0-9_-]+.xml)",
+                      out)
+        xml_filepath = m.group(1)
+        self.assertTrue(pathlib.Path(xml_filepath).exists())
+        # If this raises, the XML file is invalid
+        xml.etree.ElementTree.parse(xml_filepath)
 
 
 if __name__ == '__main__':

@@ -1,21 +1,16 @@
 import itertools
 
 import unittest
+from numba import jit
 from numba.core.controlflow import CFGraph, ControlFlowAnalysis
-from numba.core.compiler import compile_isolated, Flags
 from numba.core import types
 from numba.core.bytecode import FunctionIdentity, ByteCode, _fix_LOAD_GLOBAL_arg
 from numba.core.utils import PYVERSION
 from numba.tests.support import TestCase
 
-enable_pyobj_flags = Flags()
-enable_pyobj_flags.enable_pyobject = True
+enable_pyobj_flags = {}
 
-forceobj_flags = Flags()
-forceobj_flags.force_pyobject = True
-
-no_pyobj_flags = Flags()
-no_pyobj_flags.nrt = True
+no_pyobj_flags = {'_nrt': True, 'nopython': True}
 
 
 def for_loop_usecase1(x, y):
@@ -223,8 +218,7 @@ class TestFlowControl(TestCase):
 
     def run_test(self, pyfunc, x_operands, y_operands,
                  flags=enable_pyobj_flags):
-        cr = compile_isolated(pyfunc, (types.intp, types.intp), flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit((types.intp, types.intp), **flags)(pyfunc)
         for x, y in itertools.product(x_operands, y_operands):
             pyerr = None
             cerr = None

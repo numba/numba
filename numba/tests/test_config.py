@@ -119,8 +119,8 @@ class TestConfig(TestCase):
                     "be parsed.")
         err_msg = err.decode('utf-8')
         self.assertIn(expected, err_msg)
-        ex_expected = ("The parse failed with exception: Invalid style in "
-                       "NUMBA_CAPTURED_ERRORS: not_a_known_style")
+        ex_expected = ("Invalid style in NUMBA_CAPTURED_ERRORS: "
+                       "not_a_known_style")
         self.assertIn(ex_expected, err_msg)
         self.assertIn(source_compiled, out.decode('utf-8'))
 

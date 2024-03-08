@@ -27,6 +27,8 @@ Developer Manual
    literal.rst
    llvm_timings.rst
    debugging.rst
+   testsuite.rst
    event_api.rst
    target_extension.rst
+   bytecode.rst
    mission.rst

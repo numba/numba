@@ -1,0 +1,6 @@
+Allow use of Python 3.12 PEP-695 type parameter syntax
+------------------------------------------------------
+
+A patch is added to properly parse the PEP 695 syntax. While Numba 
+does not yet take advantage of type parameters, it will no longer erroneously 
+reject functions defined with the new Python 3.12 syntax. 

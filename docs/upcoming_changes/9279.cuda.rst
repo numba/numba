@@ -1,0 +1,5 @@
+Support for Windows CUDA 12.0 toolkit conda packages
+====================================================
+
+The library paths used in CUDA toolkit 12.0 conda packages on Windows are
+added to the search paths used when detecting CUDA libraries.
