@@ -176,7 +176,7 @@ class GUFunc(serialize.ReduceMixin, UfuncBase):
         # Compile a new guvectorize function! Use the gufunc signature
         # i.e. (n,m),(m)->(n)
         # plus ewise_types to build a numba function type
-        fnty = self._get_signature(*argtys)
+        fnty = self._get_function_type(*argtys)
         self.gufunc_builder.add(fnty)
 
     def match_signature(self, ewise_types, sig):
@@ -203,7 +203,7 @@ class GUFunc(serialize.ReduceMixin, UfuncBase):
         # parsed_sig[1] has always length 1
         return len(args) == len(parsed_sig[0]) + 1
 
-    def _get_signature(self, *args):
+    def _get_function_type(self, *args):
         parsed_sig = parse_signature(self.gufunc_builder.signature)
         # ewise_types is a list of [int32, int32, int32, ...]
         ewise_types = self._get_ewise_dtypes(args)
@@ -248,7 +248,7 @@ class GUFunc(serialize.ReduceMixin, UfuncBase):
         # at this point we know the gufunc is a dynamic one
         ewise = self._get_ewise_dtypes(args)
         if not (self.ufunc and ufunc_find_matching_loop(self.ufunc, ewise)):
-            sig = self._get_signature(*args)
+            sig = self._get_function_type(*args)
             self.add(sig)
             self.build_ufunc()
         return self.ufunc(*args, **kwargs)
