@@ -1037,3 +1037,13 @@ class PreLowerStripPhis(FunctionPass):
                     blk.remove(assign)
         # do variable replacement
         replace_vars(func_ir.blocks, replace_map)
+
+        # Remove self assignment of ``x = x``
+        def remove_self_assign(stmt):
+            if isinstance(stmt, ir.Assign):
+                if stmt.target == stmt.value:
+                    return False
+            return True
+
+        for blk in func_ir.blocks.values():
+            blk.body = list(filter(remove_self_assign, blk.body))
