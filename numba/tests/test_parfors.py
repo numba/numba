@@ -2374,8 +2374,10 @@ class TestParfors(TestParforsBase):
             "-m",
             "numba.tests.parfor_iss9490_usecase",
         ]
+
         try:
-            subp.check_output(cmd, env={"PYTHONHASHSEED": "1"},
+            subp.check_output(cmd, env={**os.environ,
+                                        "PYTHONHASHSEED": "1"},
                               stderr=subp.STDOUT,
                               encoding='utf-8')
         except subp.CalledProcessError as e:
