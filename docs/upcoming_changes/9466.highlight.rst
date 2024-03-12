@@ -1,4 +1,4 @@
-Numpy 2.0 Support (Partial)
+NumPy 2.0 Binary Support
 ---------------------------
 
 Added Binary Support for NumPy 2.0. However, this does not yet include
