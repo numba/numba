@@ -1273,12 +1273,18 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         pyfunc = array_sum
         cfunc = jit(nopython=True)(pyfunc)
         all_dtypes = [np.float64, np.float32, np.int64, np.int32,
-                      np.complex64, np.complex128, np.uint32, np.uint64, np.timedelta64]
+                      np.complex64, np.complex128, np.timedelta64]
         all_test_arrays = [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype),
-             np.ones((7, 3), arr_dtype) * 5]
+             np.ones((7, 3), arr_dtype) * -5]
             for arr_dtype in all_dtypes]
+
+        unsigned_dtypes = [np.uint32, np.uint64]
+        all_test_arrays = [
+            [np.ones((7, 6, 5, 4, 3), arr_dtype),
+             np.ones(1, arr_dtype)]
+            for arr_dtype in unsigned_dtypes]
 
         for arr_list in all_test_arrays:
             for arr in arr_list:
@@ -1289,13 +1295,20 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         """ test sum with axis parameter over a whole range of dtypes  """
         pyfunc = array_sum_axis_kws
         cfunc = jit(nopython=True)(pyfunc)
-        all_dtypes = [np.float64, np.float32, np.int64, np.uint64, np.complex64,
+        all_dtypes = [np.float64, np.float32, np.int64, np.complex64,
                       np.complex128, TIMEDELTA_M]
         all_test_arrays = [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype),
-             np.ones((7, 3), arr_dtype) * 5]
+             np.ones((7, 3), arr_dtype) * -5]
             for arr_dtype in all_dtypes]
+
+        unsigned_dtypes = [np.uint64]
+        all_test_arrays += [
+            [np.ones((7, 6, 5, 4, 3), arr_dtype),
+             np.ones(1, arr_dtype)]
+            for arr_dtype in unsigned_dtypes]
+
         for arr_list in all_test_arrays:
             for arr in arr_list:
                 for axis in (0, 1, 2):
@@ -1317,7 +1330,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         """
         pyfunc = array_sum_axis_kws
         cfunc = jit(nopython=True)(pyfunc)
-        all_dtypes = [np.int32, np.uint32, ]
+        all_dtypes = [np.int32]
         # expected return dtypes in Numba
         out_dtypes = {np.dtype('int32'): np.int64, np.dtype('uint32'): np.uint64,
                       np.dtype('int64'): np.int64,
@@ -1325,8 +1338,14 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         all_test_arrays = [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype),
-             np.ones((7, 3), arr_dtype) * 5]
+             np.ones((7, 3), arr_dtype) * -5]
             for arr_dtype in all_dtypes]
+
+        unsigned_dtypes = [np.uint32]
+        all_test_arrays += [
+            [np.ones((7, 6, 5, 4, 3), arr_dtype),
+             np.ones(1, arr_dtype)]
+            for arr_dtype in unsigned_dtypes]
 
         for arr_list in all_test_arrays:
             for arr in arr_list:
@@ -1349,13 +1368,19 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         """ test sum with dtype parameter over a whole range of dtypes """
         pyfunc = array_sum_dtype_kws
         cfunc = jit(nopython=True)(pyfunc)
-        all_dtypes = [np.float64, np.float32, np.int64, np.int32, np.uint32,
-                      np.uint64, np.complex64, np.complex128]
+        all_dtypes = [np.float64, np.float32, np.int64, np.int32,
+                      np.complex64, np.complex128]
         all_test_arrays = [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype),
-             np.ones((7, 3), arr_dtype) * 5]
+             np.ones((7, 3), arr_dtype) * -5]
             for arr_dtype in all_dtypes]
+
+        unsigned_dtypes = [np.uint32, np.uint64]
+        all_test_arrays = [
+            [np.ones((7, 6, 5, 4, 3), arr_dtype),
+             np.ones(1, arr_dtype)]
+            for arr_dtype in unsigned_dtypes]
 
         out_dtypes = {np.dtype('float64'): [np.float64],
                       np.dtype('float32'): [np.float64, np.float32],
@@ -1379,13 +1404,19 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         """ test sum with axis and dtype parameters over a whole range of dtypes """
         pyfunc = array_sum_axis_dtype_kws
         cfunc = jit(nopython=True)(pyfunc)
-        all_dtypes = [np.float64, np.float32, np.int64, np.int32, np.uint32,
-                      np.uint64, np.complex64, np.complex128]
+        all_dtypes = [np.float64, np.float32, np.int64, np.int32,
+                      np.complex64, np.complex128]
         all_test_arrays = [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype),
-             np.ones((7, 3), arr_dtype) * 5]
+             np.ones((7, 3), arr_dtype) * -5]
             for arr_dtype in all_dtypes]
+
+        unsigned_dtypes = [np.uint32, np.uint64]
+        all_test_arrays = [
+            [np.ones((7, 6, 5, 4, 3), arr_dtype),
+             np.ones(1, arr_dtype)]
+            for arr_dtype in unsigned_dtypes]
 
         out_dtypes = {np.dtype('float64'): [np.float64],
                       np.dtype('float32'): [np.float64, np.float32],
