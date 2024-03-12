@@ -416,14 +416,14 @@ def get_arch_option(major, minor):
 
 
 MISSING_LIBDEVICE_FILE_MSG = '''Missing libdevice file.
-Please ensure you have a CUDA Toolkit 11.0 or higher.
+Please ensure you have a CUDA Toolkit 11.2 or higher.
 For CUDA 12, ``cuda-nvcc`` and ``cuda-nvrtc`` are required:
 
     $ conda install -c conda-forge cuda-nvcc cuda-nvrtc "cuda-version>=12.0"
 
 For CUDA 11, ``cudatoolkit`` is required:
 
-    $ conda install -c conda-forge cudatoolkit "cuda-version=11.*"
+    $ conda install -c conda-forge cudatoolkit "cuda-version=11"
 '''
 
 

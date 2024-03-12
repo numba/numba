@@ -68,7 +68,7 @@ For CUDA 12, ``cuda-nvcc`` and ``cuda-nvrtc`` are required::
 
 For CUDA 11, ``cudatoolkit`` is required::
 
-    $ conda install -c conda-forge cudatoolkit "cuda-version=11.*"
+    $ conda install -c conda-forge cudatoolkit "cuda-version=11"
 
 If you are not using Conda or if you want to use a different version of CUDA
 toolkit, the following describes how Numba searches for a CUDA toolkit
@@ -106,8 +106,7 @@ Setting CUDA Installation Path
 
 Numba searches for a CUDA toolkit installation in the following order:
 
-1. Conda installed CUDA Toolkit packages (``cuda-toolkit`` for CUDA 12, or
-   ``cudatoolkit`` for CUDA 11)
+1. Conda installed CUDA Toolkit packages
 2. Environment variable ``CUDA_HOME``, which points to the directory of the
    installed CUDA toolkit (i.e. ``/home/user/cuda-12``)
 3. System-wide installation at exactly ``/usr/local/cuda`` on Linux platforms.

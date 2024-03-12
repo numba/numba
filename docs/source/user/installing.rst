@@ -53,7 +53,7 @@ For CUDA 12, ``cuda-nvcc`` and ``cuda-nvrtc`` are required::
 
 For CUDA 11, ``cudatoolkit`` is required::
 
-    $ conda install -c conda-forge cudatoolkit "cuda-version=11.*"
+    $ conda install -c conda-forge cudatoolkit "cuda-version=11"
 
 You do not need to install the CUDA SDK from NVIDIA.
 
