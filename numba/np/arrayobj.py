@@ -6048,6 +6048,10 @@ def impl_np_vstack(tup):
         return impl
 
 
+if numpy_version >= (2, 0):
+    overload(np.row_stack)(impl_np_vstack)
+
+
 @intrinsic
 def _np_dstack(typingctx, tup):
     ret = NdStack_typer(typingctx, "np.dstack", tup, 3)
