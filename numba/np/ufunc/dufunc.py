@@ -249,6 +249,16 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
             sig = argtys
         else:
             sig = return_type(*argtys)
+
+        for k, cres in self._dispatcher.overloads.items():
+            if argtys == k.args:
+                msg = ("Compilation requested for previously compiled argument"
+                       f" types ({argtys}). This has no effect and perhaps "
+                       "indicates a bug in the calling code (compiling a "
+                       "ufunc more than once for the same signature")
+                warnings.warn(msg, errors.NumbaWarning)
+                return cres
+
         cres, argtys, return_type = ufuncbuilder._compile_element_wise_function(
             self._dispatcher, self.targetoptions, sig)
         actual_sig = ufuncbuilder._finalize_ufunc_signature(
