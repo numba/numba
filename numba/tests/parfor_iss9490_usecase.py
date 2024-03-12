@@ -27,7 +27,7 @@ def stable_fit(X, y, threshold=3):
     beta = np.zeros((X.shape[1], y.shape[1]), dtype=np.float64)
     residuals = np.full_like(y, np.nan)
     stable = np.empty((y.shape[1]))
-    for idx in range(y.shape[1]):
+    for idx in numba.prange(y.shape[1]):
         y_sub = y[:, idx]
         isna = np.isnan(y_sub)
         X_sub = X[~isna]
@@ -36,7 +36,7 @@ def stable_fit(X, y, threshold=3):
 
         # Run until minimum observations
         # or until stability is reached
-        for jdx in numba.prange(len(y_sub), min_obs - 1, -2):
+        for jdx in range(len(y_sub), min_obs - 1, -2):
             # Timeseries gets reduced by two elements
             # each iteration
             y_ = y_sub[-jdx:]
@@ -45,11 +45,10 @@ def stable_fit(X, y, threshold=3):
             resid_sub = np.dot(X_, beta_sub) - y_
             # Check for stability
             rmse = np.sqrt(np.mean(resid_sub ** 2))
-            slope = np.fabs(beta_sub[1]) / rmse < threshold
             first = np.fabs(resid_sub[0]) / rmse < threshold
             last = np.fabs(resid_sub[-1]) / rmse < threshold
             # Break if stability is reached
-            is_stable = slope & first & last
+            is_stable = first & last
             if is_stable:
                 break
 
