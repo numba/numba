@@ -1060,7 +1060,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             check_ok(complex(4, 4))
             check_ok(np.int8(0))
 
-    @expected_failure_np2
     def test_arange_2_arg(self):
         def check_ok(arg0, arg1, pyfunc, cfunc):
             expected = pyfunc(arg0, arg1)
@@ -1083,21 +1082,23 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             check_ok(-8, -1, pyfunc, cfunc)
             check_ok(4, 0.5, pyfunc, cfunc)
             check_ok(0.5, 4, pyfunc, cfunc)
-            check_ok(complex(1, 1), complex(4, 4), pyfunc, cfunc)
-            check_ok(complex(4, 4), complex(1, 1), pyfunc, cfunc)
             check_ok(3, None, pyfunc, cfunc)
+            if numpy_version < (2, 0):
+                check_ok(complex(1, 1), complex(4, 4), pyfunc, cfunc)
+                check_ok(complex(4, 4), complex(1, 1), pyfunc, cfunc)
 
         pyfunc = np_arange_1_dtype
         cfunc = jit(nopython=True)(pyfunc)
 
         check_ok(5, np.float32, pyfunc, cfunc)
         check_ok(2.0, np.int32, pyfunc, cfunc)
-        check_ok(10, np.complex128, pyfunc, cfunc)
-        check_ok(np.complex64(10), np.complex128, pyfunc, cfunc)
         check_ok(7, None, pyfunc, cfunc)
         check_ok(np.int8(0), None, pyfunc, cfunc)
 
-    @expected_failure_np2
+        if numpy_version < (2, 0):
+            check_ok(10, np.complex128, pyfunc, cfunc)
+            check_ok(np.complex64(10), np.complex128, pyfunc, cfunc)
+
     def test_arange_3_arg(self):
         windows64 = sys.platform.startswith('win32') and sys.maxsize > 2 ** 32
 
@@ -1119,7 +1120,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             check_ok(0, -10, -2, pyfunc, cfunc)
             check_ok(0.5, 4, 2, pyfunc, cfunc)
             check_ok(0, 1, 0.1, pyfunc, cfunc)
-            check_ok(0, complex(4, 4), complex(1, 1), pyfunc, cfunc)
             check_ok(3, 6, None, pyfunc, cfunc)
             check_ok(3, None, None, pyfunc, cfunc)
             check_ok(np.int8(0), np.int8(5), np.int8(1), pyfunc, cfunc)
@@ -1128,18 +1128,20 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             i8 = np.int8
             check_ok(i8(0), i8(5), i8(1), pyfunc, cfunc, True) # C int
             check_ok(np.int64(0), i8(5), i8(1), pyfunc, cfunc, True) # int64
+            if numpy_version < (2, 0):
+                check_ok(0, complex(4, 4), complex(1, 1), pyfunc, cfunc)
 
         pyfunc = np_arange_2_dtype
         cfunc = jit(nopython=True)(pyfunc)
 
         check_ok(1, 5, np.float32, pyfunc, cfunc)
         check_ok(2.0, 8, np.int32, pyfunc, cfunc)
-        check_ok(-2, 10, np.complex128, pyfunc, cfunc)
-        check_ok(3, np.complex64(10), np.complex128, pyfunc, cfunc)
         check_ok(1, 7, None, pyfunc, cfunc)
         check_ok(np.int8(0), np.int32(5), None, pyfunc, cfunc, True)
+        if numpy_version < (2, 0):
+            check_ok(-2, 10, np.complex128, pyfunc, cfunc)
+            check_ok(3, np.complex64(10), np.complex128, pyfunc, cfunc)
 
-    @expected_failure_np2
     def test_arange_4_arg(self):
         for pyfunc in (np_arange_4, np_arange_start_stop_step_dtype):
             cfunc = jit(nopython=True)(pyfunc)
@@ -1153,10 +1155,11 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             check_ok(-8, -1, 3, np.int32)
             check_ok(0, -10, -2, np.float32)
             check_ok(0.5, 4, 2, None)
-            check_ok(0, 1, 0.1, np.complex128)
-            check_ok(0, complex(4, 4), complex(1, 1), np.complex128)
             check_ok(3, 6, None, None)
             check_ok(3, None, None, None)
+            if numpy_version < (2, 0):
+                check_ok(0, 1, 0.1, np.complex128)
+                check_ok(0, complex(4, 4), complex(1, 1), np.complex128)
 
     def test_arange_throws(self):
         # Exceptions leak references
