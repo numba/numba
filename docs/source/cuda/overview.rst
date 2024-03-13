@@ -68,7 +68,7 @@ For CUDA 12, ``cuda-nvcc`` and ``cuda-nvrtc`` are required::
 
 For CUDA 11, ``cudatoolkit`` is required::
 
-    $ conda install -c conda-forge cudatoolkit "cuda-version=11"
+    $ conda install -c conda-forge cudatoolkit "cuda-version>=11.2,<12.0"
 
 If you are not using Conda or if you want to use a different version of CUDA
 toolkit, the following describes how Numba searches for a CUDA toolkit
