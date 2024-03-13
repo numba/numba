@@ -2368,6 +2368,7 @@ class TestParfors(TestParforsBase):
         self.assertEqual(expected, njit(parallel=False)(def_in_loop)(4))
         self.assertEqual(expected, njit(parallel=True)(def_in_loop)(4))
 
+    @needs_lapack  # use of np.linalg.solve
     def test_issue9490_non_det_ssa_problem(self):
         cmd = [
             sys.executable,
