@@ -801,6 +801,6 @@ for func in comparison_functions:
 for func in bit_twiddling_functions:
     register_numpy_ufunc(func, register_global)
 
-for func in math_operations:
-    if func in ('log2', 'log', 'log10'):
+for func in ('log', 'log2', 'log10'):
+    if func in math_operations:
         register_numpy_ufunc(func, register_global)
