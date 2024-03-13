@@ -254,6 +254,10 @@ class TestNumberHashing(BaseTest):
 
     def test_ints(self):
         minmax = []
+        # Temporarily set promotions state to legacy,
+        # to ensure overflow logic works
+        initial_state = np._get_promotion_state()
+        np._set_promotion_state("legacy")
         for ty in [np.int8, np.uint8, np.int16, np.uint16,
                    np.int32, np.uint32, np.int64, np.uint64]:
             for a in self.int_samples(ty):
@@ -261,9 +265,7 @@ class TestNumberHashing(BaseTest):
             info = np.iinfo(ty)
             # check hash(-1) = -2
             # check hash(0) = 0
-            self.check_hash_values([ty(1)])
-            if info.min < 0:
-                self.check_hash_values([ty(-1)])
+            self.check_hash_values([ty(-1)])
             self.check_hash_values([ty(0)])
             signed = 'uint' not in str(ty)
             # check bit shifting patterns from min through to max
@@ -307,6 +309,9 @@ class TestNumberHashing(BaseTest):
         self.check_hash_values([np.int32(-0x7fffffff)])
         self.check_hash_values([np.int32(-0x7ffffff6)])
         self.check_hash_values([np.int32(-0x7fffff9c)])
+        # Reset numpy promotion state to initial state
+        # since the setting is global
+        np._set_promotion_state(initial_state)
 
 
     @skip_unless_py10_or_later
@@ -330,22 +335,19 @@ class TestTupleHashing(BaseTest):
 
     def check_tuples(self, value_generator, split):
         for values in value_generator:
-            tuples = []
-            for a in values:
-                a_split = split(a)
-                if a_split is not None:
-                    tuples.append(a_split)
+            tuples = [split(a) for a in values]
             self.check_hash_values(tuples)
 
     def test_homogeneous_tuples(self):
         typ = np.uint64
-
+        # Temporarily set promotions state to legacy,
+        # to ensure overflow logic works
+        initial_state = np._get_promotion_state()
+        np._set_promotion_state("legacy")
         def split2(i):
             """
             Split i's bits into 2 integers.
             """
-            if not np.iinfo(typ).min <= i <= np.iinfo(typ).max:
-                return
             i = typ(i)
             return (i & typ(0x5555555555555555),
                     i & typ(0xaaaaaaaaaaaaaaaa),
@@ -355,8 +357,6 @@ class TestTupleHashing(BaseTest):
             """
             Split i's bits into 3 integers.
             """
-            if not np.iinfo(typ).min <= i <= np.iinfo(typ).max:
-                return
             i = typ(i)
             return (i & typ(0x2492492492492492),
                     i & typ(0x4924924924924924),
@@ -371,6 +371,9 @@ class TestTupleHashing(BaseTest):
         # Untypable empty tuples are replaced with (7,).
         self.check_hash_values([(7,), (0,), (0, 0), (0.5,),
                                 (0.5, (7,), (-2, 3, (4, 6)))])
+        # Reset numpy promotion state to initial state,
+        # since the setting is global
+        np._set_promotion_state(initial_state)
 
     def test_heterogeneous_tuples(self):
         modulo = 2**63
