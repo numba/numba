@@ -20,7 +20,7 @@ from numba.core.utils import pysignature
 from numba.np.extensions import cross2d
 from numba.tests.support import (TestCase, MemoryLeakMixin,
                                  needs_blas, run_in_subprocess,
-                                 skip_if_numpy_2, expected_failure_np2)
+                                 skip_if_numpy_2)
 import unittest
 
 
@@ -3207,7 +3207,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         self.assertIn("Cannot np.flip on UniTuple", str(raises.exception))
 
-    @expected_failure_np2
     def test_logspace2_basic(self):
 
         def inputs():
@@ -3222,12 +3221,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield -1.0, 60.0
             yield 0.0, np.e
             yield 0.0, np.pi
-            yield np.complex64(1), np.complex64(2)
-            yield np.complex64(2j), np.complex64(4j)
-            yield np.complex64(2), np.complex64(4j)
-            yield np.complex64(1 + 2j), np.complex64(3 + 4j)
-            yield np.complex64(1 - 2j), np.complex64(3 - 4j)
-            yield np.complex64(-1 + 2j), np.complex64(3 + 4j)
+            if numpy_version < (2, 0):
+                yield np.complex64(1), np.complex64(2)
+                yield np.complex64(2j), np.complex64(4j)
+                yield np.complex64(2), np.complex64(4j)
+                yield np.complex64(1 + 2j), np.complex64(3 + 4j)
+                yield np.complex64(1 - 2j), np.complex64(3 - 4j)
+                yield np.complex64(-1 + 2j), np.complex64(3 + 4j)
 
         pyfunc = logspace2
         cfunc = jit(nopython=True)(pyfunc)
@@ -3250,7 +3250,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertIn('The second argument "stop" must be a number',
                       str(raises.exception))
 
-    @expected_failure_np2
     def test_logspace3_basic(self):
 
         def inputs():
@@ -3265,12 +3264,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield -1.0, 60.0
             yield 0.0, np.e
             yield 0.0, np.pi
-            yield np.complex64(1), np.complex64(2)
-            yield np.complex64(2j), np.complex64(4j)
-            yield np.complex64(2), np.complex64(4j)
-            yield np.complex64(1 + 2j), np.complex64(3 + 4j)
-            yield np.complex64(1 - 2j), np.complex64(3 - 4j)
-            yield np.complex64(-1 + 2j), np.complex64(3 + 4j)
+            if numpy_version < (2, 0):
+                yield np.complex64(1), np.complex64(2)
+                yield np.complex64(2j), np.complex64(4j)
+                yield np.complex64(2), np.complex64(4j)
+                yield np.complex64(1 + 2j), np.complex64(3 + 4j)
+                yield np.complex64(1 - 2j), np.complex64(3 - 4j)
+                yield np.complex64(-1 + 2j), np.complex64(3 + 4j)
 
         pyfunc = logspace3
         cfunc = jit(nopython=True)(pyfunc)
@@ -3278,7 +3278,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for start, stop in inputs():
             np.testing.assert_allclose(pyfunc(start, stop), cfunc(start, stop))
 
-    @expected_failure_np2
     def test_logspace3_with_num_basic(self):
 
         def inputs():
@@ -3293,12 +3292,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield -1.0, 60.0, 90
             yield 0.0, np.e, 20
             yield 0.0, np.pi, 30
-            yield np.complex64(1), np.complex64(2), 40
-            yield np.complex64(2j), np.complex64(4j), 50
-            yield np.complex64(2), np.complex64(4j), 60
-            yield np.complex64(1 + 2j), np.complex64(3 + 4j), 70
-            yield np.complex64(1 - 2j), np.complex64(3 - 4j), 80
-            yield np.complex64(-1 + 2j), np.complex64(3 + 4j), 90
+            if numpy_version < (2, 0):
+                yield np.complex64(1), np.complex64(2), 40
+                yield np.complex64(2j), np.complex64(4j), 50
+                yield np.complex64(2), np.complex64(4j), 60
+                yield np.complex64(1 + 2j), np.complex64(3 + 4j), 70
+                yield np.complex64(1 - 2j), np.complex64(3 - 4j), 80
+                yield np.complex64(-1 + 2j), np.complex64(3 + 4j), 90
 
         pyfunc = logspace3
         cfunc = jit(nopython=True)(pyfunc)
@@ -3445,7 +3445,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertIn('Geometric sequence cannot include zero',
                       str(raises.exception))
 
-    @expected_failure_np2
     def test_geomspace_numpy(self):
         cfunc2 = jit(nopython=True)(geomspace2)
         cfunc3 = jit(nopython=True)(geomspace3)
@@ -3512,8 +3511,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                                 abs_tol=1e-13)
 
         # Logarithmic spirals
-        y = cfunc3(-1 + 0j, 1 + 0j, num=3)
-        self.assertPreciseEqual(y, pfunc3(-1 + 0j, 1 + 0j, num=3))
+        if numpy_version < (2, 0):
+            y = cfunc3(-1 + 0j, 1 + 0j, num=3)
+            self.assertPreciseEqual(y, pfunc3(-1 + 0j, 1 + 0j, num=3))
 
         y = cfunc3(0 + 3j, -3 + 0j, 3)
         self.assertPreciseEqual(y, pfunc3(0 + 3j, -3 + 0j, 3), abs_tol=1e-15)
