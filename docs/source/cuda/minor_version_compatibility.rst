@@ -42,7 +42,7 @@ To install with pip, use the NVIDIA package index:
 
    pip install --extra-index-url https://pypi.nvidia.com pynvjitlink-cu12
 
-CUDA 12
+CUDA 11
 ~~~~~~~
 
 To use MVC support, the ``cubinlinker`` and ``ptxcompiler`` compiler packages
