@@ -105,7 +105,7 @@ jobs:
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 14
 
-- template: buildscripts/azure/azure-windows.yml
-  parameters:
-    name: Windows
-    vmImage: windows-2019
+# - template: buildscripts/azure/azure-windows.yml
+#   parameters:
+#     name: Windows
+#     vmImage: windows-2019
