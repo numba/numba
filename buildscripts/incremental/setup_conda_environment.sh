@@ -34,12 +34,15 @@ conda list
 # NOTE: gitpython is needed for CI testing to do the test slicing
 # NOTE: pyyaml is used to ensure that the Azure CI config is valid
 
-conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml
+conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON pip gitpython pyyaml
 
 # Activate first
 set +v
 source activate $CONDA_ENV
 set -v
+
+# Install NumPy 2.0 wheels
+pip install -i https://pypi.anaconda.org/scientific-python-nightly-wheels/simple numpy==2.0.0b1
 
 # Install optional packages into activated env
 echo "PYTHON=$PYTHON"
