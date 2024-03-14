@@ -21,6 +21,7 @@ from numba.tests.support import (TestCase, skip_unless_py10_or_later,
 
 from numba.cpython.unicode import compile_time_get_string_data
 from numba.cpython import hashing
+from numba.np.numpy_support import numpy_version
 
 
 def hash_usecase(x):
@@ -254,10 +255,12 @@ class TestNumberHashing(BaseTest):
 
     def test_ints(self):
         minmax = []
-        # Temporarily set promotions state to legacy,
-        # to ensure overflow logic works
-        initial_state = np._get_promotion_state()
-        np._set_promotion_state("legacy")
+        if numpy_version >= (2, 0):
+            # Temporarily set promotions state to legacy,
+            # to ensure overflow logic works
+            initial_state = np._get_promotion_state()
+            np._set_promotion_state("legacy")
+
         for ty in [np.int8, np.uint8, np.int16, np.uint16,
                    np.int32, np.uint32, np.int64, np.uint64]:
             for a in self.int_samples(ty):
@@ -309,9 +312,10 @@ class TestNumberHashing(BaseTest):
         self.check_hash_values([np.int32(-0x7fffffff)])
         self.check_hash_values([np.int32(-0x7ffffff6)])
         self.check_hash_values([np.int32(-0x7fffff9c)])
-        # Reset numpy promotion state to initial state
-        # since the setting is global
-        np._set_promotion_state(initial_state)
+        if numpy_version >= (2, 0):
+            # Reset numpy promotion state to initial state
+            # since the setting is global
+            np._set_promotion_state(initial_state)
 
 
     @skip_unless_py10_or_later
@@ -340,10 +344,12 @@ class TestTupleHashing(BaseTest):
 
     def test_homogeneous_tuples(self):
         typ = np.uint64
-        # Temporarily set promotions state to legacy,
-        # to ensure overflow logic works
-        initial_state = np._get_promotion_state()
-        np._set_promotion_state("legacy")
+        if numpy_version >= (2, 0):
+            # Temporarily set promotions state to legacy,
+            # to ensure overflow logic works
+            initial_state = np._get_promotion_state()
+            np._set_promotion_state("legacy")
+
         def split2(i):
             """
             Split i's bits into 2 integers.
@@ -371,9 +377,11 @@ class TestTupleHashing(BaseTest):
         # Untypable empty tuples are replaced with (7,).
         self.check_hash_values([(7,), (0,), (0, 0), (0.5,),
                                 (0.5, (7,), (-2, 3, (4, 6)))])
-        # Reset numpy promotion state to initial state,
-        # since the setting is global
-        np._set_promotion_state(initial_state)
+        
+        if numpy_version >= (2, 0):
+            # Reset numpy promotion state to initial state,
+            # since the setting is global
+            np._set_promotion_state(initial_state)
 
     def test_heterogeneous_tuples(self):
         modulo = 2**63
