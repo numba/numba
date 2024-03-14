@@ -5,8 +5,8 @@ variables:
   # Change the following along with adding new TEST_START_INDEX.
   TEST_COUNT: 15
 
-# jobs:
-# # Mac and Linux use the same template with different matrixes
+jobs:
+# Mac and Linux use the same template with different matrixes
 # - template: buildscripts/azure/azure-linux-macos.yml
 #   parameters:
 #     name: macOS
