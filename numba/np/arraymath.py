@@ -1575,9 +1575,6 @@ def _median_inner(temp_arry, n):
     The main logic of the median() call.  *temp_arry* must be disposable,
     as this function will mutate it.
     """
-    # check if temp_arry is empty, return nan 
-    if n == 0 : 
-        return np.nan
     low = 0
     high = n - 1
     half = n >> 1
@@ -1598,7 +1595,11 @@ def np_median(a):
         # workspace anyway
         temp_arry = a.flatten()
         n = temp_arry.shape[0]
-        return _median_inner(temp_arry, n)
+        if n != 0: 
+            return _median_inner(temp_arry, n)
+        else:
+            raise ValueError('Cannot compute median of an empty array')
+            
 
     return median_impl
 
