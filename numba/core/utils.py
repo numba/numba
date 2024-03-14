@@ -418,7 +418,7 @@ class MutableSortedSet(MutableSet[T], _tp.Generic[T]):
         return len(self._values)
 
     def __iter__(self):
-        return iter(k for k in (self._values))
+        return iter(k for k in sorted(self._values))
 
     def __contains__(self, x: T) -> bool:
         return self._values.__contains__(x)
