@@ -31,66 +31,81 @@ variables:
     matrix:
       py310_np200_0:
         PYTHON: '3.10'
+        NUMPY: '1.26'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 0
       py310_np200_1:
         PYTHON: '3.10'
+        NUMPY: '1.26'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 1
       py310_np200_2:
         PYTHON: '3.10'
+        NUMPY: '1.26'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 2
       py310_np200_3:
         PYTHON: '3.10'
+        NUMPY: '1.26'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 3
       py310_np200_4:
         PYTHON: '3.10'
+        NUMPY: '1.26'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 4
       py310_np200_5:
         PYTHON: '3.10'
+        NUMPY: '1.26'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 5
       py310_np200_6:
         PYTHON: '3.10'
+        NUMPY: '1.26'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 6
       py310_np200_7:
         PYTHON: '3.10'
+        NUMPY: '1.26'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 7
       py310_np200_8:
         PYTHON: '3.10'
+        NUMPY: '1.26'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 8
       py310_np200_9:
         PYTHON: '3.10'
+        NUMPY: '1.26'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 9
       py310_np200_10:
         PYTHON: '3.10'
+        NUMPY: '1.26'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 10
       py310_np200_11:
         PYTHON: '3.10'
+        NUMPY: '1.26'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 11
       py310_np200_12:
         PYTHON: '3.10'
+        NUMPY: '1.26'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 12
       py310_np200_13:
         PYTHON: '3.10'
+        NUMPY: '1.26'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 13
       py310_np200_14:
         PYTHON: '3.10'
+        NUMPY: '1.26'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 14
 
-# - template: buildscripts/azure/azure-windows.yml
-#   parameters:
-#     name: Windows
-#     vmImage: windows-2019
+- template: buildscripts/azure/azure-windows.yml
+  parameters:
+    name: Windows
+    vmImage: windows-2019
