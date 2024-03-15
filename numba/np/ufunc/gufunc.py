@@ -248,7 +248,11 @@ class GUFunc(serialize.ReduceMixin, UfuncBase):
         # at this point we know the gufunc is a dynamic one
         ewise = self._get_ewise_dtypes(args)
         if not (self.ufunc and ufunc_find_matching_loop(self.ufunc, ewise)):
-            sig = self._get_function_type(*args)
-            self.add(sig)
+            # A previous call (@njit -> @guvectorize) may have compiled a
+            # version for the element-wise dtypes. In this case, we don't need
+            # to compile it again, just build the (g)ufunc
+            if not self.find_ewise_function(ewise) != (None, None):
+                sig = self._get_function_type(*args)
+                self.add(sig)
             self.build_ufunc()
         return self.ufunc(*args, **kwargs)
