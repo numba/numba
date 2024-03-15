@@ -549,7 +549,8 @@ class TestCase(unittest.TestCase):
             _assertNumberEqual(first, second, delta)
 
     def subprocess_test_runner(self, test_module, test_class=None,
-                               test_name=None, envvars=None, timeout=60):
+                               test_name=None, envvars=None, timeout=60,
+                               _subproc_test_env="1"):
         """
         Runs named unit test(s) as specified in the arguments as:
         test_module.test_class.test_name. test_module must always be supplied
@@ -560,7 +561,8 @@ class TestCase(unittest.TestCase):
             environment variable name (str) -> value (str)
         It is most convenient to use this method in conjunction with
         @needs_subprocess as the decorator will cause the decorated test to be
-        skipped unless the `SUBPROC_TEST` environment variable is set to 1
+        skipped unless the `SUBPROC_TEST` environment variable is set to
+        the same value of ``_subproc_test_env``
         (this special environment variable is set by this method such that the
         specified test(s) will not be skipped in the subprocess).
 
@@ -575,7 +577,7 @@ class TestCase(unittest.TestCase):
         fully_qualified_test = '.'.join(x for x in parts if x is not None)
         cmd = [sys.executable, '-m', 'numba.runtests', fully_qualified_test]
         env_copy = os.environ.copy()
-        env_copy['SUBPROC_TEST'] = '1'
+        env_copy['SUBPROC_TEST'] = _subproc_test_env
         try:
             env_copy['COVERAGE_PROCESS_START'] = os.environ['COVERAGE_RCFILE']
         except KeyError:
@@ -601,15 +603,18 @@ class TestCase(unittest.TestCase):
         subprocess_test_runner."""
         def wrapper(func):
             def inner(self, *args, **kwargs):
-                if os.environ.get("SUBPROC_TEST", None) != "1":
+                if os.environ.get("SUBPROC_TEST", None) != func.__name__:
                     # Not in a subprocess test env, so stage the call to run the
                     # test in a subprocess which will set the env var.
                     class_name = self.__class__.__name__
-                    self.subprocess_test_runner(test_module=self.__module__,
-                                                test_class=class_name,
-                                                test_name=func.__name__,
-                                                timeout=timeout,
-                                                envvars=envvars,)
+                    self.subprocess_test_runner(
+                        test_module=self.__module__,
+                        test_class=class_name,
+                        test_name=func.__name__,
+                        timeout=timeout,
+                        envvars=envvars,
+                        _subproc_test_env=func.__name__,
+                    )
                 else:
                     # env var is set, so we're in the subprocess, run the
                     # actual test.

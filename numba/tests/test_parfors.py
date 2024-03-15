@@ -2368,6 +2368,23 @@ class TestParfors(TestParforsBase):
         self.assertEqual(expected, njit(parallel=False)(def_in_loop)(4))
         self.assertEqual(expected, njit(parallel=True)(def_in_loop)(4))
 
+    @needs_lapack  # use of np.linalg.solve
+    def test_issue9490_non_det_ssa_problem(self):
+        cmd = [
+            sys.executable,
+            "-m",
+            "numba.tests.parfor_iss9490_usecase",
+        ]
+
+        try:
+            subp.check_output(cmd, env={**os.environ,
+                                        "PYTHONHASHSEED": "1"},
+                              stderr=subp.STDOUT,
+                              encoding='utf-8')
+        except subp.CalledProcessError as e:
+            msg = f"subprocess failed with output:\n{e.output}"
+            self.fail(msg=msg)
+
 
 @skip_parfors_unsupported
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
