@@ -163,11 +163,15 @@ class GUFunc(serialize.ReduceMixin, UfuncBase):
             # Matching element-wise signature was not found; must
             # compile.
             if self._frozen:
-                raise TypeError("cannot call %s with types %s"
-                                % (self, argtys))
+                msg = f"cannot call {self} with types {argtys}"
+                raise errors.TypingError(msg)
             self._compile_for_argtys(ewise_types)
             # double check to ensure there is a match
             sig, _ = self.find_ewise_function(ewise_types)
+            if sig == (None, None):
+                msg = f"Fail to compile {self.__name__} with types {argtys}"
+                raise errors.TypingError(msg)
+
             assert sig is not None
 
         return signature(types.none, *argtys)
