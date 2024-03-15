@@ -4,6 +4,7 @@ import pickle
 import numpy as np
 
 from numba import void, float32, float64, int32, int64, jit, guvectorize
+from numba.core.errors import TypingError
 from numba.np.ufunc import GUVectorize
 from numba.tests.support import tag, TestCase
 
@@ -665,6 +666,51 @@ class TestGUVectorizeJit(TestCase):
         gufunc(x, expected)
         self.assertPreciseEqual(res, expected)
 
+    def test_gufunc_ndim_mismatch(self):
+        signature = "(n, m), (n, n, n) -> (m), (n, n)"
+        @guvectorize(signature)
+        def bar(x, y, res, out):
+            res[0] = 123
+            out[0] = 456
+
+        @jit(nopython=True)
+        def foo(x, y, res, out):
+            bar(x, y, res, out)
+
+        N, M = 2, 3
+        x = np.arange(N**2).reshape(N, N)
+        y = np.arange(N**3).reshape(N, N, N)
+        res = np.arange(M)
+        out = np.arange(N**2).reshape(N, N)
+
+        # calling with a 1d array should result in an error
+        with self.assertRaises(TypingError) as raises:
+            x_ = np.arange(N * N)
+            foo(x_, y, res, out)
+        msg = ('bar: Input operand 0 does not have enough dimensions (has '
+               f'1, gufunc core with signature {signature} requires 2)')
+        self.assertIn(msg, str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            y_ = np.arange(N * N).reshape(N, N)
+            foo(x, y_, res, out)
+        msg = ('bar: Input operand 1 does not have enough dimensions (has '
+               f'2, gufunc core with signature {signature} requires 3)')
+        self.assertIn(msg, str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            res_ = np.array(3)
+            foo(x, y, res_, out)
+        msg = ('bar: Output operand 0 does not have enough dimensions (has '
+               f'0, gufunc core with signature {signature} requires 1)')
+        self.assertIn(msg, str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            out_ = np.arange(N)
+            foo(x, y, res, out_)
+        msg = ('bar: Output operand 1 does not have enough dimensions (has '
+               f'1, gufunc core with signature {signature} requires 2)')
+        self.assertIn(msg, str(raises.exception))
 
 if __name__ == '__main__':
     unittest.main()

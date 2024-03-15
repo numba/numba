@@ -142,7 +142,7 @@ class GUFunc(serialize.ReduceMixin, UfuncBase):
 
     def expected_ndims(self):
         parsed_sig = parse_signature(self.gufunc_builder.signature)
-        return tuple(map(len, parsed_sig[0])) + tuple(map(len, parsed_sig[1]))
+        return (tuple(map(len, parsed_sig[0])), tuple(map(len, parsed_sig[1])))
 
     def _type_me(self, argtys, kws):
         """
@@ -154,6 +154,21 @@ class GUFunc(serialize.ReduceMixin, UfuncBase):
         """
         assert not kws
         ufunc = self.ufunc
+        sig = self.gufunc_builder.signature
+        inp_ndims, out_ndims = self.expected_ndims()
+        ndims = inp_ndims + out_ndims
+
+        assert len(argtys), len(ndims)
+        for idx, arg in enumerate(argtys):
+            if isinstance(arg, types.Array) and arg.ndim < ndims[idx]:
+                kind = "Input" if idx < len(inp_ndims) else "Output"
+                i = idx if idx < len(inp_ndims) else idx - len(inp_ndims)
+                msg = (
+                    f"{self.__name__}: {kind} operand {i} does not have "
+                    f"enough dimensions (has {arg.ndim}, gufunc core with "
+                    f"signature {sig} requires {ndims[idx]})")
+                raise errors.TypingError(msg)
+
         _handle_inputs_result = npydecl.Numpy_rules_ufunc._handle_inputs(
             ufunc, argtys, kws)
         ewise_types, _, _, _ = _handle_inputs_result
@@ -260,4 +275,5 @@ class GUFunc(serialize.ReduceMixin, UfuncBase):
                 sig = self._get_function_type(*args)
                 self.add(sig)
             self.build_ufunc()
+
         return self.ufunc(*args, **kwargs)

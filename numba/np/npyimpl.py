@@ -495,6 +495,7 @@ def numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
 def numpy_gufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
     arguments = []
     expected_ndims = kernel_class.dufunc.expected_ndims()
+    expected_ndims = expected_ndims[0] + expected_ndims[1]
     is_input = [True] * ufunc.nin + [False] * ufunc.nout
     for arg, ty, exp_ndim, is_inp in zip(args, sig.args, expected_ndims, is_input):  # noqa: E501
         if isinstance(ty, types.ArrayCompatible):
