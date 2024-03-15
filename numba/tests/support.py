@@ -150,6 +150,14 @@ skip_ppc64le_issue6465 = unittest.skipIf(platform.machine() == 'ppc64le',
                                           "parameter area' in "
                                           "LowerCall_64SVR4"))
 
+# LLVM PPC issue.
+# Sample error message:
+#   Invalid PPC CTR loop!
+#   UNREACHABLE executed at /llvm/lib/Target/PowerPC/PPCCTRLoops.cpp:179!
+skip_ppc64le_invalid_ctr_loop = unittest.skipIf(
+    platform.machine() == 'ppc64le',
+    "Invalid PPC CTR loop")
+
 # fenv.h on M1 may have various issues:
 # https://github.com/numba/numba/issues/7822#issuecomment-1065356758
 _uname = platform.uname()
