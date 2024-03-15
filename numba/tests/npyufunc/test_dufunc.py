@@ -240,6 +240,39 @@ class TestDUFuncMethods(TestCase):
         with self.assertRaisesRegex(TypingError, exc_msg):
             foo('a')
 
+    def test_dufunc_negative_axis(self):
+        duadd = vectorize('int64(int64, int64)', identity=0)(pyuadd)
+
+        @njit
+        def foo(a, axis):
+            return duadd.reduce(a, axis=axis)
+
+        a = np.arange(40).reshape(5, 4, 2)
+        cases = (0, -1, (0, -1), (-1, -2), (1, -1), -3)
+        for axis in cases:
+            expected = duadd.reduce(a, axis)
+            got = foo(a, axis)
+            self.assertPreciseEqual(expected, got)
+
+    def test_dufunc_invalid_axis(self):
+        duadd = vectorize('int64(int64, int64)', identity=0)(pyuadd)
+
+        @njit
+        def foo(a, axis):
+            return duadd.reduce(a, axis=axis)
+
+        a = np.arange(40).reshape(5, 4, 2)
+        cases = ((0, 0), (0, 1, 0), (0, -3), (-1, -1), (-1, 2))
+        for axis in cases:
+            msg = "duplicate value in 'axis'"
+            with self.assertRaisesRegex(ValueError, msg):
+                foo(a, axis)
+
+        cases = (-4, 3, (0, -4),)
+        for axis in cases:
+            with self.assertRaisesRegex(ValueError, "Invalid axis"):
+                foo(a, axis)
+
 
 class TestDUFuncPickling(MemoryLeakMixin, unittest.TestCase):
     def check(self, ident, result_type):

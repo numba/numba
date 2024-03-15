@@ -676,3 +676,11 @@ class NdIndex(AbstractTemplate):
         if all(isinstance(x, types.Integer) for x in shape):
             iterator_type = types.NumpyNdIndexType(len(shape))
             return signature(iterator_type, *args)
+
+
+@infer_global(operator.eq)
+class DtypeEq(AbstractTemplate):
+    def generic(self, args, kws):
+        [lhs, rhs] = args
+        if isinstance(lhs, types.DType) and isinstance(rhs, types.DType):
+            return signature(types.boolean, lhs, rhs)

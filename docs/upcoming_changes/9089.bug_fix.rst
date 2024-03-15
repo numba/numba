@@ -1,0 +1,4 @@
+Handling of `None` args fixed in `PythonAPI.call`.
+--------------------------------------------------
+
+Fixing segfault when `args=None` was passed to `PythonAPI.call`.

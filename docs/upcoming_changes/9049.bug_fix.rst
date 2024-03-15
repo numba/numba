@@ -1,0 +1,5 @@
+Support multiple outputs in a ``@guvectorize`` function
+=======================================================
+
+This PR fixes `Numba #9058 <https://github.com/numba/numba/pull/9058>`_
+where it is now possible to call a guvectorize with multiple outputs.

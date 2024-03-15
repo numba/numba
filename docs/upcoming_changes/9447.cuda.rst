@@ -1,0 +1,5 @@
+Fixed caching of kernels that use target-specific overloads
+-----------------------------------------------------------
+
+Caching of kernels using target-specific overloads now works. This includes use
+of cooperative group sync, which is now implemented with a target-specific overload.

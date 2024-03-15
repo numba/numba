@@ -28,7 +28,7 @@ class FunctionDescriptor(object):
 
     Note that while `FunctionIdentity` denotes a Python function
     which is being concretely compiled by Numba, `FunctionDescriptor`
-    may be more "abstract": e.g. a function decorated with `@generated_jit`.
+    may be more "abstract".
     """
     __slots__ = ('native', 'modname', 'qualname', 'doc', 'typemap',
                  'calltypes', 'args', 'kws', 'restype', 'argtypes',

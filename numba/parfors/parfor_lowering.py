@@ -52,6 +52,15 @@ class ParforLower(lowering.Lower):
         else:
             super().lower_inst(inst)
 
+    @property
+    def _disable_sroa_like_opt(self):
+        """
+        Force disable this because Parfor use-defs is incompatible---it only
+        considers use-defs in blocks that must be executing.
+        See https://github.com/numba/numba/commit/017e2ff9db87fc34149b49dd5367ecbf0bb45268
+        """
+        return True
+
 
 def _lower_parfor_parallel(lowerer, parfor):
     if parfor.lowerer is None:
@@ -1668,7 +1677,9 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     intp_t = context.get_value_type(types.intp)
     uintp_t = context.get_value_type(types.uintp)
     intp_ptr_t = llvmlite.ir.PointerType(intp_t)
+    intp_ptr_ptr_t = llvmlite.ir.PointerType(intp_ptr_t)
     uintp_ptr_t = llvmlite.ir.PointerType(uintp_t)
+    uintp_ptr_ptr_t = llvmlite.ir.PointerType(uintp_ptr_t)
     zero = context.get_constant(types.uintp, 0)
     one = context.get_constant(types.uintp, 1)
     one_type = one.type
@@ -1684,9 +1695,11 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     if index_var_typ.signed:
         sched_type = intp_t
         sched_ptr_type = intp_ptr_t
+        sched_ptr_ptr_type = intp_ptr_ptr_t
     else:
         sched_type = uintp_t
         sched_ptr_type = uintp_ptr_t
+        sched_ptr_ptr_type = uintp_ptr_ptr_t
 
     # Call do_scheduling with appropriate arguments
     dim_starts = cgutils.alloca_once(
@@ -1713,6 +1726,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         builder.store(stop, builder.gep(dim_stops,
                                         [context.get_constant(types.uintp, i)]))
 
+    # Prepare to call get/set parallel_chunksize and get the number of threads.
     get_chunksize = cgutils.get_or_insert_function(
         builder.module,
         llvmlite.ir.FunctionType(uintp_t, []),
@@ -1728,7 +1742,9 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         llvmlite.ir.FunctionType(llvmlite.ir.IntType(types.intp.bitwidth), []),
         "get_num_threads")
 
+    # Get the current number of threads.
     num_threads = builder.call(get_num_threads, [])
+    # Get the current chunksize so we can use it and restore the value later.
     current_chunksize = builder.call(get_chunksize, [])
 
     with cgutils.if_unlikely(builder, builder.icmp_signed('<=', num_threads,
@@ -1738,6 +1754,9 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
                                                   ("Invalid number of threads. "
                                                    "This likely indicates a bug in Numba.",))
 
+    # Call get_sched_size from gufunc_scheduler.cpp that incorporates the size of the work,
+    # the number of threads and the selected chunk size.  This will tell us how many entries
+    # in the schedule we will need.
     get_sched_size_fnty = llvmlite.ir.FunctionType(uintp_t, [uintp_t, uintp_t, intp_ptr_t, intp_ptr_t])
     get_sched_size = cgutils.get_or_insert_function(
         builder.module,
@@ -1747,11 +1766,27 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
                                                   context.get_constant(types.uintp, num_dim),
                                                   dim_starts,
                                                   dim_stops])
+    # Set the chunksize to zero so that any nested calls get the default chunk size behavior.
     builder.call(set_chunksize, [zero])
 
+    # Each entry in the schedule is 2 times the number of dimensions long.
     multiplier = context.get_constant(types.uintp, num_dim * 2)
+    # Compute the total number of entries in the schedule.
     sched_size = builder.mul(num_divisions, multiplier)
-    sched = builder.alloca(sched_type, size=sched_size, name="sched")
+
+    # Prepare to dynamically allocate memory to hold the schedule.
+    alloc_sched_fnty = llvmlite.ir.FunctionType(sched_ptr_type, [uintp_t])
+    alloc_sched_func = cgutils.get_or_insert_function(
+        builder.module,
+        alloc_sched_fnty,
+        name="allocate_sched")
+    # Call gufunc_scheduler.cpp to allocate the schedule.
+    # This may or may not do pooling.
+    alloc_space = builder.call(alloc_sched_func, [sched_size])
+    # Allocate a slot in the entry block to store the schedule pointer.
+    sched = cgutils.alloca_once(builder, sched_ptr_type)
+    # Store the schedule pointer into that slot.
+    builder.store(alloc_space, sched)
 
     debug_flag = 1 if config.DEBUG_ARRAY_OPT else 0
     scheduling_fnty = llvmlite.ir.FunctionType(
@@ -1765,11 +1800,12 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
                                                        scheduling_fnty,
                                                        name="do_scheduling_unsigned")
 
+    # Call the scheduling routine that decides how to break up the work.
     builder.call(
         do_scheduling, [
             context.get_constant(
                 types.uintp, num_dim), dim_starts, dim_stops, num_divisions,
-            sched, context.get_constant(
+            builder.load(sched), context.get_constant(
                     types.intp, debug_flag)])
 
     # Get the LLVM vars for the Numba IR reduction array vars.
@@ -1810,7 +1846,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         name="pargs")
     array_strides = []
     # sched goes first
-    builder.store(builder.bitcast(sched, byte_ptr_t), args)
+    builder.store(builder.bitcast(builder.load(sched), byte_ptr_t), args)
     array_strides.append(context.get_constant(types.intp, sizeof_intp))
     rv_to_arg_dict = {}
     # followed by other arguments
@@ -1963,6 +1999,14 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         cgutils.printf(builder, "after calling kernel %p\n", fn)
 
     builder.call(set_chunksize, [current_chunksize])
+
+    # Deallocate the schedule's memory.
+    dealloc_sched_fnty = llvmlite.ir.FunctionType(llvmlite.ir.VoidType(), [sched_ptr_type])
+    dealloc_sched_func = cgutils.get_or_insert_function(
+        builder.module,
+        dealloc_sched_fnty,
+        name="deallocate_sched")
+    builder.call(dealloc_sched_func, [builder.load(sched)])
 
     for k, v in rv_to_arg_dict.items():
         arg, rv_arg = v

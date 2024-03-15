@@ -25,17 +25,15 @@ class TestVectTypeInfer(unittest.TestCase):
             float_(double, float_),
         ])(add)
 
-        cfunc = jit(func)
-
         def numba_type_equal(a, b):
             self.assertEqual(a.dtype, b.dtype)
             self.assertEqual(a.ndim, b.ndim)
 
-        numba_type_equal(cfunc(np.dtype(np.float64), np.dtype('i')), bool_[:])
-        numba_type_equal(cfunc(np.dtype(np.float64), np.dtype(np.float64)),
+        numba_type_equal(func(np.dtype(np.float64), np.dtype('i')), bool_[:])
+        numba_type_equal(func(np.dtype(np.float64), np.dtype(np.float64)),
                          double[:])
         # This is because the double(double, double) matches first
-        numba_type_equal(cfunc(np.dtype(np.float64), np.dtype(np.float32)),
+        numba_type_equal(func(np.dtype(np.float64), np.dtype(np.float32)),
                          double[:])
 
 

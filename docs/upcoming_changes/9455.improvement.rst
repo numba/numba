@@ -1,0 +1,5 @@
+Expand ``isinstance()`` support for NumPy datetime types
+--------------------------------------------------------
+
+Adds support of ``numpy.datetime64`` and ``numpy.timedelta64`` types in 
+``isinstance()``.

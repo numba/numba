@@ -27,7 +27,9 @@
  *
  */
 
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 11)
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 12)
+/* empty */
+#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 11)
 #ifndef Py_BUILD_CORE
     #define Py_BUILD_CORE 1
 #endif
@@ -118,7 +120,7 @@ else { \
     } \
 } \
 
-#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 10)
+#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 10 || PY_MINOR_VERSION == 11)
 
 /*
  * Code originally from:
@@ -649,7 +651,13 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
     fn = (PyCFunctionWithKeywords) PyCFunction_GET_FUNCTION(cfunc);
     tstate = PyThreadState_GET();
 
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 11)
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 12)
+    /* FIXME: as per the changes from PEP 669 Numba does not support profiling
+     * (yet?). Just skip frame injection entirely. JIT compiled functions will
+     * NOT show up in cProfile profiler.
+     */
+    if (0)
+#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 11)
     /*
      * On Python 3.11, _PyEval_EvalFrameDefault stops using PyTraceInfo since 
      * it's now baked into ThreadState.
@@ -715,7 +723,9 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
         }
         /* Populate the 'fast locals' in `frame` */
         PyFrame_LocalsToFast(frame, 0);
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 11)
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 12)
+        /* empty */
+#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 11)
         C_TRACE(result, fn(PyCFunction_GET_SELF(cfunc), args, kws), frame);
 #else
         tstate->frame = frame;
@@ -1252,25 +1262,18 @@ static PyTypeObject DispatcherType = {
     0,                                           /* tp_del */
     0,                                           /* tp_version_tag */
     0,                                           /* tp_finalize */
-/* The docs suggest Python 3.8 has no tp_vectorcall
- * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Doc/c-api/typeobj.rst?plain=1#L146
- * but the header has it:
- * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Include/cpython/object.h#L257
- */
     0,                                           /* tp_vectorcall */
-#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 8)
-/* This is Python 3.8 only.
- * See: https://github.com/python/cpython/blob/3.8/Include/cpython/object.h
- * there's a tp_print preserved for backwards compatibility. xref:
- * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Include/cpython/object.h#L260
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 12)
+/* This was introduced first in 3.12
+ * https://github.com/python/cpython/issues/91051
  */
-    0,                                           /* tp_print */
+    0,                                           /* tp_watched */
 #endif
 
 /* WARNING: Do not remove this, only modify it! It is a version guard to
  * act as a reminder to update this struct on Python version update! */
 #if (PY_MAJOR_VERSION == 3)
-#if ! ((PY_MINOR_VERSION == 8) || (PY_MINOR_VERSION == 9) || (PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11))
+#if ! ((PY_MINOR_VERSION == 9) || (PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11) || (PY_MINOR_VERSION == 12))
 #error "Python minor version is not supported."
 #endif
 #else

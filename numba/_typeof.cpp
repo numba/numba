@@ -720,18 +720,20 @@ void cache_typecode(PyArray_Descr* descr, int typecode) {
 }
 
 static
-PyObject* ndarray_key(int ndim, int layout, PyArray_Descr* descr) {
+PyObject* ndarray_key(int ndim, int layout, int readonly, PyArray_Descr* descr) {
     PyObject* tmpndim = PyLong_FromLong(ndim);
     PyObject* tmplayout = PyLong_FromLong(layout);
-    PyObject* key = PyTuple_Pack(3, tmpndim, tmplayout, descr);
+    PyObject* tmpreadonly = PyLong_FromLong(readonly);
+    PyObject* key = PyTuple_Pack(4, tmpndim, tmplayout, tmpreadonly, descr);
     Py_DECREF(tmpndim);
     Py_DECREF(tmplayout);
+    Py_DECREF(tmpreadonly);
     return key;
 }
 
 static
-int get_cached_ndarray_typecode(int ndim, int layout, PyArray_Descr* descr) {
-    PyObject* key = ndarray_key(ndim, layout, descr);
+int get_cached_ndarray_typecode(int ndim, int layout, int readonly, PyArray_Descr* descr) {
+    PyObject* key = ndarray_key(ndim, layout, readonly, descr);
     PyObject *tmpobject = PyDict_GetItem(ndarray_typecache, key);
     if (tmpobject == NULL)
         return -1;
@@ -741,9 +743,9 @@ int get_cached_ndarray_typecode(int ndim, int layout, PyArray_Descr* descr) {
 }
 
 static
-void cache_ndarray_typecode(int ndim, int layout, PyArray_Descr* descr,
+void cache_ndarray_typecode(int ndim, int layout, int readonly, PyArray_Descr* descr,
                             int typecode) {
-    PyObject* key = ndarray_key(ndim, layout, descr);
+    PyObject* key = ndarray_key(ndim, layout, readonly, descr);
     PyObject* value = PyLong_FromLong(typecode);
     PyDict_SetItem(ndarray_typecache, key, value);
     Py_DECREF(key);
@@ -756,6 +758,7 @@ int typecode_ndarray(PyObject *dispatcher, PyArrayObject *ary) {
     int dtype;
     int ndim = PyArray_NDIM(ary);
     int layout = 0;
+    int readonly = 0;
 
     /* The order in which we check for the right contiguous-ness is important.
        The order must match the order by numba.numpy_support.map_layout.
@@ -798,11 +801,12 @@ FALLBACK:
         return typecode_using_fingerprint(dispatcher, (PyObject *) ary);
 
     /* Check type cache */
-    typecode = get_cached_ndarray_typecode(ndim, layout, PyArray_DESCR(ary));
+    readonly = !PyArray_ISWRITEABLE(ary);
+    typecode = get_cached_ndarray_typecode(ndim, layout, readonly, PyArray_DESCR(ary));
     if (typecode == -1) {
         /* First use of this type, use fallback and populate the cache */
         typecode = typecode_fallback_keep_ref(dispatcher, (PyObject*)ary);
-        cache_ndarray_typecode(ndim, layout, PyArray_DESCR(ary), typecode);
+        cache_ndarray_typecode(ndim, layout, readonly, PyArray_DESCR(ary), typecode);
     }
     return typecode;
 }

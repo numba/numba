@@ -1,0 +1,11 @@
+Add ``TargetLibraryInfo`` pass to CPU LLVM pipeline.
+""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+The ``TargetLibraryInfo`` pass makes sure that the optimisations that take place
+during call simplification are appropriate for the target, without this the
+target is assumed to be Linux and code will be optimised to produce e.g. math
+symbols that do not exit on Windows. Historically this issue has been avoided
+through the use of Numba internal libraries carrying wrapped symbols, but doing
+so potentially detriments performance. As a result of this change Numba internal
+libraries are smaller and there is an increase in optimisation opportunity in
+code using ``exp2`` and ``log2`` functions.

@@ -21,17 +21,17 @@ class TestCudaFrexpLdexp(CUDATestCase):
         aryexp = np.zeros(1, dtype=np.int32)
         compiled[1, 1](aryx, aryexp, arg)
         np.testing.assert_array_equal(aryx, nptype(0.785375))
-        self.assertEquals(aryexp, 2)
+        self.assertEqual(aryexp, 2)
 
         arg = np.inf
         compiled[1, 1](aryx, aryexp, arg)
         np.testing.assert_array_equal(aryx, nptype(np.inf))
-        self.assertEquals(aryexp, 0)  # np.frexp gives -1
+        self.assertEqual(aryexp, 0)  # np.frexp gives -1
 
         arg = np.nan
         compiled[1, 1](aryx, aryexp, arg)
         np.testing.assert_array_equal(aryx, nptype(np.nan))
-        self.assertEquals(aryexp, 0)  # np.frexp gives -1
+        self.assertEqual(aryexp, 0)  # np.frexp gives -1
 
     def template_test_ldexp(self, nptype, nbtype):
         compiled = cuda.jit(void(nbtype[:], nbtype, int32))(simple_ldexp)

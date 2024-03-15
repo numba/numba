@@ -33,7 +33,7 @@ import numpy as np
 from numba import testing, types
 from numba.core import errors, typing, utils, config, cpu
 from numba.core.typing import cffi_utils
-from numba.core.compiler import (compile_extra, compile_isolated, Flags,
+from numba.core.compiler import (compile_extra, Flags,
                                  DEFAULT_FLAGS, CompilerBase,
                                  DefaultPassBuilder)
 from numba.core.typed_passes import IRLegalization
@@ -107,6 +107,12 @@ def expected_failure_py311(fn):
     else:
         return fn
 
+def expected_failure_py312(fn):
+    if utils.PYVERSION == (3, 12):
+        return unittest.expectedFailure(fn)
+    else:
+        return fn
+
 _msg = "SciPy needed for test"
 skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
 
@@ -148,10 +154,6 @@ skip_ppc64le_issue6465 = unittest.skipIf(platform.machine() == 'ppc64le',
 # https://github.com/numba/numba/issues/7822#issuecomment-1065356758
 _uname = platform.uname()
 IS_OSX_ARM64 = _uname.system == 'Darwin' and _uname.machine == 'arm64'
-skip_m1_llvm_rtdyld_failure  = unittest.skipIf(IS_OSX_ARM64,
-    "skip tests that contribute to triggering an AssertionError in LLVM's "
-    "RuntimeDyLd on OSX arm64. (see: numba#8567)")
-
 skip_m1_fenv_errors = unittest.skipIf(IS_OSX_ARM64,
     "fenv.h-like functionality unreliable on OSX arm64")
 
@@ -202,37 +204,6 @@ def ignore_internal_warnings():
                             message=r".*TBB_INTERFACE_VERSION.*",
                             category=errors.NumbaWarning,
                             module=r'numba\.np\.ufunc\.parallel.*')
-
-
-class CompilationCache(object):
-    """
-    A cache of compilation results for various signatures and flags.
-    This can make tests significantly faster (or less slow).
-    """
-
-    def __init__(self):
-        self.typingctx = typing.Context()
-        self.targetctx = cpu.CPUContext(self.typingctx, 'cpu')
-        self.cr_cache = {}
-
-    def compile(self, func, args, return_type=None, flags=DEFAULT_FLAGS):
-        """
-        Compile the function or retrieve an already compiled result
-        from the cache.
-        """
-        from numba.core.registry import cpu_target
-
-        cache_key = (func, args, return_type, flags)
-        if cache_key in self.cr_cache:
-            cr = self.cr_cache[cache_key]
-        else:
-            # Register the contexts in case for nested @jit or @overload calls
-            # (same as compile_isolated())
-            with cpu_target.nested_context(self.typingctx, self.targetctx):
-                cr = compile_extra(self.typingctx, self.targetctx, func,
-                                   args, return_type, flags, locals={})
-            self.cr_cache[cache_key] = cr
-        return cr
 
 
 class TestCase(unittest.TestCase):
@@ -577,19 +548,6 @@ class TestCase(unittest.TestCase):
         else:
             _assertNumberEqual(first, second, delta)
 
-    def run_nullary_func(self, pyfunc, flags):
-        """
-        Compile the 0-argument *pyfunc* with the given *flags*, and check
-        it returns the same result as the pure Python function.
-        The got and expected results are returned.
-        """
-        cr = compile_isolated(pyfunc, (), flags=flags)
-        cfunc = cr.entry_point
-        expected = pyfunc()
-        got = cfunc()
-        self.assertPreciseEqual(got, expected)
-        return got, expected
-
     def subprocess_test_runner(self, test_module, test_class=None,
                                test_name=None, envvars=None, timeout=60):
         """
@@ -630,9 +588,12 @@ class TestCase(unittest.TestCase):
         streams = (f'\ncaptured stdout: {status.stdout}\n'
                    f'captured stderr: {status.stderr}')
         self.assertEqual(status.returncode, 0, streams)
-        self.assertIn('OK', status.stderr)
-        self.assertNotIn('FAIL', status.stderr)
-        self.assertNotIn('ERROR', status.stderr)
+        # Python 3.12.1 report
+        no_tests_ran = "NO TESTS RAN"
+        if no_tests_ran in status.stderr:
+            self.skipTest(no_tests_ran)
+        else:
+            self.assertIn('OK', status.stderr)
 
     def run_test_in_subprocess(maybefunc=None, timeout=60, envvars=None):
         """Runs the decorated test in a subprocess via invoking numba's test
@@ -1234,7 +1195,7 @@ def print_azure_matrix():
     base_path = os.path.dirname(os.path.abspath(__file__))
     azure_pipe = os.path.join(base_path, '..', '..', 'azure-pipelines.yml')
     if not os.path.isfile(azure_pipe):
-        self.skipTest("'azure-pipelines.yml' is not available")
+        raise RuntimeError("'azure-pipelines.yml' is not available")
     with open(os.path.abspath(azure_pipe), 'rt') as f:
         data = f.read()
     pipe_yml = yaml.load(data, Loader=Loader)
@@ -1251,7 +1212,7 @@ def print_azure_matrix():
     winpath = ['..', '..', 'buildscripts', 'azure', 'azure-windows.yml']
     azure_windows = os.path.join(base_path, *winpath)
     if not os.path.isfile(azure_windows):
-        self.skipTest("'azure-windows.yml' is not available")
+        raise RuntimeError("'azure-windows.yml' is not available")
     with open(os.path.abspath(azure_windows), 'rt') as f:
         data = f.read()
     windows_yml = yaml.load(data, Loader=Loader)
@@ -1267,3 +1228,15 @@ def print_azure_matrix():
     for npver, pys in sorted(py2np_map.items()):
         for pyver, count in pys.items():
             print(f" {npver} |  {pyver:<4}  |   {count}")
+
+    # print the "reverse" map
+    rev_map = defaultdict(lambda: defaultdict(int))
+    for npver, pys in sorted(py2np_map.items()):
+        for pyver, count in pys.items():
+            rev_map[pyver][npver] = count
+    print("\nPython | NumPy | Count")
+    print("-----------------------")
+    sorter = lambda x: int(x[0].split('.')[1])
+    for pyver, nps in sorted(rev_map.items(), key=sorter):
+        for npver, count in nps.items():
+            print(f" {pyver:<4} |  {npver}  |   {count}")
