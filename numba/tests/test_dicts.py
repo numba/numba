@@ -229,5 +229,21 @@ class TestCompiledDict(TestCase):
             str(raises.exception),
         )
 
+    def test_dict_get_with_default_value(self):
+        # Test dict.get() with default value, then use the value as arr index
+        @njit
+        def goo(arr):
+            d = {0: 0, 1: 1}
+            d[0] = 0
+            v1 = d.get(0, 0)
+            arr[v1] = -1
+            v2 = d.get(2, 9)
+            arr[v2] = -2
+            _ = d.get(3)
+            return arr
+
+        arr = np.arange(10)
+        np.testing.assert_array_equal(goo.py_func(arr.copy()), goo(arr.copy()))
+
 if __name__ == '__main__':
     unittest.main()
