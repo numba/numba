@@ -2380,7 +2380,8 @@ class TestParfors(TestParforsBase):
 
         try:
             subp.check_output(cmd, env={**os.environ,
-                                        "PYTHONHASHSEED": "1"},
+                                        "PYTHONHASHSEED": "1",
+                                        "NUMBA_NUM_THREADS": "1"},
                               stderr=subp.STDOUT,
                               encoding='utf-8')
         except subp.CalledProcessError as e:
