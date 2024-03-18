@@ -72,7 +72,7 @@ conda activate numba_ci
 if [ $NUMBA_CUDA_USE_NVIDIA_BINDING == "1" ]
 then
   gpuci_logger "Install NVIDIA CUDA Python bindings";
-  gpuci_mamba_retry install cuda-python=11.8;
+  gpuci_mamba_retry install cuda-python=11.8 cuda-cudart=11.5 cuda-nvrtc=11.5;
 fi;
 
 gpuci_logger "Install numba"

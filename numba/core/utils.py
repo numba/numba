@@ -385,6 +385,28 @@ def order_by_target_specificity(target, templates, fnkey=''):
 T = _tp.TypeVar('T')
 
 
+class OrderedSet(MutableSet[T]):
+
+    def __init__(self, iterable: _tp.Iterable[T] = ()):
+        # Just uses a dictionary under-the-hood to maintain insertion order.
+        self._data = dict.fromkeys(iterable, None)
+
+    def __contains__(self, key):
+        return key in self._data
+
+    def __iter__(self):
+        return iter(self._data)
+
+    def __len__(self):
+        return len(self._data)
+
+    def add(self, item):
+        self._data[item] = None
+
+    def discard(self, item):
+        self._data.pop(item, None)
+
+
 class MutableSortedSet(MutableSet[T], _tp.Generic[T]):
     """Mutable Sorted Set
     """
