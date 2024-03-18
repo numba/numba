@@ -92,7 +92,7 @@ class EnumTest(CUDATestCase):
             if x > int16(RequestError.internal_error):
                 out[0] = x - int32(RequestError.not_found)
             else:
-                out[0] = x + int8(Shape.circle)
+                out[0] = x + int16(Shape.circle)
 
         cuda_f = cuda.jit(f)
         for x in [300, 450, 550]:
