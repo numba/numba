@@ -234,7 +234,7 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
                 ary_core,
                 order='C' if self_core.flags['C_CONTIGUOUS'] else 'F',
                 subok=True,
-                copy=not ary_core.flags['WRITEABLE'])
+                copy=None)
             check_array_compatibility(self_core, ary_core)
             _driver.host_to_device(self, ary_core, self.alloc_size,
                                    stream=stream)
