@@ -45,12 +45,17 @@ Note that Numba, like Anaconda, only supports PPC in 64-bit little-endian mode.
 To enable CUDA GPU support for Numba, install the latest `graphics drivers from
 NVIDIA <https://www.nvidia.com/Download/index.aspx>`_ for your platform.
 (Note that the open source Nouveau drivers shipped by default with many Linux
-distributions do not support CUDA.)  Then install the ``cudatoolkit`` package::
+distributions do not support CUDA.)  Then install the CUDA Toolkit package.
 
-    $ conda install cudatoolkit
+For CUDA 12, ``cuda-nvcc`` and ``cuda-nvrtc`` are required::
+
+    $ conda install -c conda-forge cuda-nvcc cuda-nvrtc "cuda-version>=12.0"
+
+For CUDA 11, ``cudatoolkit`` is required::
+
+    $ conda install -c conda-forge cudatoolkit "cuda-version>=11.2,<12.0"
 
 You do not need to install the CUDA SDK from NVIDIA.
-
 
 Installing using pip on x86/x86_64 Platforms
 --------------------------------------------

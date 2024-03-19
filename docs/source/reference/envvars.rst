@@ -489,8 +489,8 @@ GPU support
 
    The default compute capability (a string of the type ``major.minor``) to
    target when compiling to PTX using ``cuda.compile_ptx``. The default is
-   5.2, which is the lowest non-deprecated compute capability in the most
-   recent version of the CUDA toolkit supported (11.0 at present).
+   5.0, which is the lowest non-deprecated compute capability in the most
+   recent version of the CUDA toolkit supported (12.4 at present).
 
 .. envvar:: NUMBA_ENABLE_CUDASIM
 
