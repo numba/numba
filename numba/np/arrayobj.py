@@ -2555,6 +2555,7 @@ def np_shape(a):
         return np.asarray(a).shape
     return impl
 
+
 @overload(np.size)
 def np_size(a):
     if not type_can_asarray(a):
