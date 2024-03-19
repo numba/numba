@@ -174,6 +174,9 @@ def numpy_fill_diagonal(arr, val, wrap=False):
 def numpy_shape(arr):
     return np.shape(arr)
 
+def numpy_size(arr):
+    return np.size(arr)
+
 
 def numpy_flatnonzero(a):
     return np.flatnonzero(a)

@@ -332,6 +332,10 @@ def get_shape(rec):
     return np.shape(rec.j)
 
 
+def get_size(rec):
+    return np.size(rec.j)
+
+
 def get_charseq(ary, i):
     return ary[i].n
 
