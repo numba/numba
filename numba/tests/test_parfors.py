@@ -2377,11 +2377,16 @@ class TestParfors(TestParforsBase):
             "-m",
             "numba.tests.parfor_iss9490_usecase",
         ]
-
+        envs = {
+            **os.environ,
+            # Reproducer consistently fail with the following hashseed.
+            "PYTHONHASHSEED": "1",
+            # See https://github.com/numba/numba/issues/9501
+            # for details of why num-thread pinning is needed.
+            "NUMBA_NUM_THREADS": "1",
+        }
         try:
-            subp.check_output(cmd, env={**os.environ,
-                                        "PYTHONHASHSEED": "1",
-                                        "NUMBA_NUM_THREADS": "1"},
+            subp.check_output(cmd, env=envs,
                               stderr=subp.STDOUT,
                               encoding='utf-8')
         except subp.CalledProcessError as e:
