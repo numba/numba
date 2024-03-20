@@ -55,4 +55,7 @@ class NotifyCompilerCoverage(NotifyCoverageBase):
         covdata = coverage.CoverageData(no_disk=True)
         covdata.set_context("numba_compiled")
         covdata.add_arcs(self._arcs_data)
-        self._cov.get_data().update(covdata)
+        curdata = self._cov.get_data()
+        with curdata._lock:
+            # update() is not locked
+            curdata.update(covdata)
