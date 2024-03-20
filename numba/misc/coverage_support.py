@@ -51,7 +51,8 @@ class NotifyCompilerCoverage(NotifyCoverageBase):
         self._arcs_data[loc.filename].add((loc.line, loc.line))
 
     def close(self):
-        covdata = coverage.CoverageData()
+        # Avoid writing to disk. Other processes can corrupt the file.
+        covdata = coverage.CoverageData(no_disk=True)
         covdata.set_context("numba_compiled")
         covdata.add_arcs(self._arcs_data)
         self._cov.get_data().update(covdata)
