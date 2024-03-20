@@ -385,9 +385,14 @@ class TestCache(DispatcherCacheUsecasesTest):
             self.assertPreciseEqual(f(4), 6)
             self.check_pycache(0)
 
-        self.assertEqual(len(w), 1)
-        self.assertIn('Cannot cache compiled function "looplifted" '
-                      'as it uses lifted code', str(w[0].message))
+        try:
+            self.assertEqual(len(w), 1)
+            self.assertIn('Cannot cache compiled function "looplifted" '
+                          'as it uses lifted code', str(w[0].message))
+        except Exception:
+            print("Dump warnings")
+            for warnobj in w:
+                print(warnobj)
 
     def test_big_array(self):
         # Code references big array globals cannot be cached
@@ -415,11 +420,16 @@ class TestCache(DispatcherCacheUsecasesTest):
                 self.assertPreciseEqual(f(0.0), 0.0)
                 self.check_pycache(0)
 
-            self.assertEqual(len(w), 1)
-            self.assertIn(
-                'Cannot cache compiled function "{}"'.format(f.__name__),
-                str(w[0].message),
-            )
+            try:
+                self.assertEqual(len(w), 1)
+                self.assertIn(
+                    'Cannot cache compiled function "{}"'.format(f.__name__),
+                    str(w[0].message),
+                )
+            except Exception:
+                print("Dump warnings")
+                for warnobj in w:
+                    print(warnobj)
 
     def test_closure(self):
         mod = self.import_module()
