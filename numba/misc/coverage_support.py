@@ -3,6 +3,7 @@ from collections import defaultdict
 from abc import ABC, abstractmethod
 
 from numba.core import ir
+from numba.core.compiler_lock import global_compiler_lock
 
 
 try:
@@ -55,7 +56,8 @@ class NotifyCompilerCoverage(NotifyCoverageBase):
         covdata = coverage.CoverageData(no_disk=True)
         covdata.set_context("numba_compiled")
         covdata.add_arcs(self._arcs_data)
-        curdata = self._cov.get_data()
-        with curdata._lock:
-            # update() is not locked
-            curdata.update(covdata)
+        with global_compiler_lock:
+            curdata = self._cov.get_data()
+            with curdata._lock:
+                # update() is not locked
+                curdata.update(covdata)
