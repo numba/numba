@@ -14,7 +14,7 @@ else:
     coverage_available = True
 
 
-def get_active_coverage() -> Optional[coverage.Coverage]:
+def get_active_coverage() -> Optional["coverage.Coverage"]:
     cov = None
     if coverage_available:
         cov = coverage.Coverage.current()
