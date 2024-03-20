@@ -59,7 +59,6 @@ gpuci_mamba_retry create -n numba_ci -y \
                   "rapidsai-nightly::cubinlinker" \
                   "conda-forge::ptxcompiler" \
                   "numba/label/dev::llvmlite" \
-                  "scipy" \
                   "cffi" \
                   "psutil" \
                   "gcc_linux-64=7" \
