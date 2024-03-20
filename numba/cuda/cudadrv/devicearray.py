@@ -870,7 +870,7 @@ def auto_device(obj, stream=0, copy=True, user_explicit=False):
             # that are already `ndarray`s.
             obj = np.array(
                 obj,
-                copy=False,
+                copy=None,
                 subok=True)
             sentry_contiguous(obj)
             devobj = from_array_like(obj, stream=stream)
