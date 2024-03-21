@@ -26,8 +26,11 @@ def get_active_coverage() -> Optional["coverage.Coverage"]:
 
 @cache
 def _get_coverage_data():
+    # Make a singleton CoverageData.
+    # Avoid writing to disk. Other processes can corrupt the file.
     covdata = coverage.CoverageData(no_disk=True)
     cov = get_active_coverage()
+    assert cov is not None, "no active Coverage instance"
 
     @atexit.register
     def _finalize():
@@ -62,10 +65,10 @@ class NotifyCompilerCoverage(NotifyCoverageBase):
         self._arcs_data = defaultdict(set)
 
     def notify(self, loc: ir.Loc):
-        self._arcs_data[loc.filename].add((loc.line, loc.line))
+        if loc.filename.endswith(".py"):
+            self._arcs_data[loc.filename].add((loc.line, loc.line))
 
     def close(self):
-        # Avoid writing to disk. Other processes can corrupt the file.
         covdata = self._covdata
         with covdata._lock:
             covdata.set_context("numba_compiled")
