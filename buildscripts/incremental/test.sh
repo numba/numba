@@ -134,6 +134,7 @@ python -m numba.runtests -l
 # directive in .coveragerc
 echo "INFO: Running shard of discovered tests: ($TEST_START_INDEX:$TEST_COUNT)"
 if [ "$RUN_COVERAGE" == "yes" ]; then
+    echo "INFO: Running with coverage"
     export PYTHONPATH=.
     coverage erase
     $SEGVCATCH coverage run runtests.py -b -j "$TEST_START_INDEX:$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS --junit -- numba.tests

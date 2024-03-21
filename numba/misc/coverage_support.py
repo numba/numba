@@ -2,7 +2,7 @@ from typing import Optional
 from collections import defaultdict
 from abc import ABC, abstractmethod
 import atexit
-
+from pathlib import Path
 from numba.core import ir
 
 
@@ -49,24 +49,17 @@ class NotifyCompilerCoverage(NotifyCoverageBase):
         self._arcs_data = defaultdict(set)
 
     def notify(self, loc: ir.Loc):
-        self._arcs_data[loc.filename].add((loc.line, loc.line))
+        if Path(loc.filename).exists():
+            self._arcs_data[loc.filename].add((loc.line, loc.line))
 
     def close(self):
         # Avoid writing to disk. Other processes can corrupt the file.
         covdata = coverage.CoverageData(no_disk=True)
         covdata.set_context("numba_compiled")
         covdata.add_arcs(self._arcs_data)
+        cov = self._cov
 
-        @todos.append
+        @atexit.register
         def finalize():
-            curdata = self._cov.get_data()
+            curdata = cov.get_data()
             curdata.update(covdata)
-
-
-todos = []
-
-
-@atexit.register
-def finalize():
-    for todo in todos:
-        todo()
