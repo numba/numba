@@ -2,6 +2,8 @@ from typing import Optional
 from collections import defaultdict
 from abc import ABC, abstractmethod
 import atexit
+from functools import cache
+
 from numba.core import ir
 
 
@@ -14,17 +16,29 @@ else:
 
 
 def get_active_coverage() -> Optional["coverage.Coverage"]:
+    """Get active coverage instance or return None if not found.
+    """
     cov = None
     if coverage_available:
         cov = coverage.Coverage.current()
     return cov
 
 
+@cache
+def _get_coverage_data():
+    covdata = coverage.CoverageData(no_disk=True)
+    cov = get_active_coverage()
+
+    @atexit.register
+    def _finalize():
+        cov.get_data().update(covdata)
+
+    return covdata
+
+
 class NotifyCoverageBase(ABC):
-    def __init__(self, cov=None):
-        self._cov = cov or get_active_coverage()
-        if self._cov is None:
-            raise RuntimeError("no active Coverage object")
+    def __init__(self):
+        self._covdata = _get_coverage_data()
         self._init()
 
     def _init(self):
@@ -52,12 +66,7 @@ class NotifyCompilerCoverage(NotifyCoverageBase):
 
     def close(self):
         # Avoid writing to disk. Other processes can corrupt the file.
-        covdata = coverage.CoverageData(no_disk=True)
-        covdata.set_context("numba_compiled")
-        covdata.add_arcs(self._arcs_data)
-        cov = self._cov
-
-        @atexit.register
-        def _finalize():
-            curdata = cov.get_data()
-            cov.get_data().update(covdata)
+        covdata = self._covdata
+        with covdata._lock:
+            covdata.set_context("numba_compiled")
+            covdata.add_arcs(self._arcs_data)
