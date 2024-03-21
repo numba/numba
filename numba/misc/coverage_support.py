@@ -2,7 +2,6 @@ from typing import Optional
 from collections import defaultdict
 from abc import ABC, abstractmethod
 import atexit
-from pathlib import Path
 from numba.core import ir
 
 
@@ -49,8 +48,7 @@ class NotifyCompilerCoverage(NotifyCoverageBase):
         self._arcs_data = defaultdict(set)
 
     def notify(self, loc: ir.Loc):
-        if Path(loc.filename).exists():
-            self._arcs_data[loc.filename].add((loc.line, loc.line))
+        self._arcs_data[loc.filename].add((loc.line, loc.line))
 
     def close(self):
         # Avoid writing to disk. Other processes can corrupt the file.
@@ -60,6 +58,6 @@ class NotifyCompilerCoverage(NotifyCoverageBase):
         cov = self._cov
 
         @atexit.register
-        def finalize():
+        def _finalize():
             curdata = cov.get_data()
-            curdata.update(covdata)
+            cov.get_data().update(covdata)
