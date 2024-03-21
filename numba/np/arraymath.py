@@ -1598,7 +1598,7 @@ def np_median(a):
         if n != 0: 
             return _median_inner(temp_arry, n)
         else:
-            raise ValueError('Cannot compute median of an empty array')
+            return np.nan
             
 
     return median_impl
