@@ -20,7 +20,8 @@ from numba.core.utils import pysignature
 from numba.np.extensions import cross2d
 from numba.tests.support import (TestCase, MemoryLeakMixin,
                                  needs_blas, run_in_subprocess,
-                                 skip_if_numpy_2)
+                                 skip_if_numpy_2, IS_NUMPY_2,
+                                 IS_OSX_ARM64)
 import unittest
 
 
@@ -4663,6 +4664,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc(x, xp, fp)
             self.assertPreciseEqual(expected, got, abs_tol=atol)
 
+    @unittest.skipIf(IS_NUMPY_2 and IS_OSX_ARM64, "NEP 50 interaction issue.")
     def test_interp_complex_stress_tests(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)

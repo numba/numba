@@ -101,8 +101,9 @@ skip_unless_py10 = unittest.skipUnless(
 
 skip_if_32bit = unittest.skipIf(_32bit, "Not supported on 32 bit")
 
-skip_if_numpy_2 = unittest.skipIf(numpy_support.numpy_version == (2, 0),
-                                  "Not supported on numpy 2.0")
+IS_NUMPY_2 = numpy_support.numpy_version >= (2, 0)
+skip_if_numpy_2 = unittest.skipIf(IS_NUMPY_2,
+                                  "Not supported on numpy 2.0+")
 
 def expected_failure_py311(fn):
     if utils.PYVERSION == (3, 11):
