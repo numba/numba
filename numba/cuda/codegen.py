@@ -13,6 +13,18 @@ import tempfile
 CUDA_TRIPLE = 'nvptx64-nvidia-cuda'
 
 
+class PTXCode :
+    """
+    Store in-memory PTX code to link with a compiled function.
+    """
+
+    def __init__(self, ptx) :
+        self._ptx = ptx
+
+    def __str__(self) :
+        return self._ptx
+
+
 def run_nvdisasm(cubin, flags):
     # nvdisasm only accepts input from a file, so we need to write out to a
     # temp file and clean up afterwards.
@@ -169,7 +181,10 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         for ptx in ptxes:
             linker.add_ptx(ptx.encode())
         for path in self._linking_files:
-            linker.add_file_guess_ext(path)
+            if isinstance(path, PTXCode):
+                linker.add_ptx(path._ptx.encode(encoding='ascii'))
+            else :
+                linker.add_file_guess_ext(path)
         if self.needs_cudadevrt:
             linker.add_file_guess_ext(get_cudalib('cudadevrt', static=True))
 

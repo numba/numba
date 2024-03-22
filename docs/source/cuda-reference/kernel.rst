@@ -10,6 +10,14 @@ be configured and launched:
 .. autofunction:: numba.cuda.jit
 
 
+.. _cuda-ptx-code:
+
+The ``cuda.PTXCode`` class is used to store in-memory PTX code to be linked
+with a CUDA dispatcher object
+
+.. autoclass:: numba.cuda.PTXCode
+
+
 Dispatcher objects
 ------------------
 
