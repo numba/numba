@@ -712,5 +712,108 @@ class TestGUVectorizeJit(TestCase):
                f'1, gufunc core with signature {signature} requires 2)')
         self.assertIn(msg, str(raises.exception))
 
+    def test_mismatch_inner_dimensions(self):
+        @guvectorize('(n),(n) -> ()')
+        def bar(x, y, res):
+            res[0] = 123
+
+        @jit(nopython=True)
+        def foo(x, y, res):
+            bar(x, y, res)
+
+        N = 2
+        M = 3
+        x = np.empty((5, 3, N))
+        y = np.empty((M,))
+        res = np.zeros((5, 3))
+
+        # ensure first that NumPy raises an exception
+        with self.assertRaises(ValueError) as np_raises:
+            bar(x, y, res)
+        msg = ('Input operand 1 has a mismatch in its core dimension 0, with '
+               'gufunc signature (n),(n) -> () (size 3 is different from 2)')
+        self.assertIn(msg, str(np_raises.exception))
+
+
+        with self.assertRaises(ValueError) as raises:
+            foo(x, y, res)
+        msg = ('Operand has a mismatch in one of its core dimensions')
+        self.assertIn(msg, str(raises.exception))
+
+    def test_mismatch_inner_dimensions_input_output(self):
+        @guvectorize('(n),(m) -> (n)')
+        def bar(x, y, res):
+            res[0] = 123
+
+        @jit(nopython=True)
+        def foo(x, y, res):
+            bar(x, y, res)
+
+        N = 2
+        M = 3
+        x = np.empty((5, 3, N))
+        y = np.empty((M,))
+        res = np.zeros((5, 3))
+
+        # ensure first that NumPy raises an exception
+        with self.assertRaises(ValueError) as np_raises:
+            bar(x, y, res)
+        msg = ('Output operand 0 has a mismatch in its core dimension 0, with '
+               'gufunc signature (n),(m) -> (n) (size 3 is different from 2)')
+        self.assertIn(msg, str(np_raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            foo(x, y, res)
+        msg = ('Operand has a mismatch in one of its core dimensions')
+        self.assertIn(msg, str(raises.exception))
+
+    def test_mismatch_inner_dimensions_output(self):
+        @guvectorize('(n),(m) -> (m),(m)')
+        def bar(x, y, res, out):
+            res[0] = 123
+            out[0] = 456
+
+        @jit(nopython=True)
+        def foo(x, y, res, out):
+            bar(x, y, res, out)
+
+        N = 2
+        M = 3
+        x = np.empty((N,))
+        y = np.empty((M,))
+        res = np.zeros((N,))
+        out = np.zeros((M,))
+
+        # ensure first that NumPy raises an exception
+        with self.assertRaises(ValueError) as np_raises:
+            bar(x, y, res, out)
+        msg = ('Output operand 0 has a mismatch in its core dimension 0, with '
+               'gufunc signature (n),(m) -> (m),(m) (size 2 is different from 3)')
+        self.assertIn(msg, str(np_raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            foo(x, y, res, out)
+        msg = ('Operand has a mismatch in one of its core dimensions')
+        self.assertIn(msg, str(raises.exception))
+
+    def test_mismatch_loop_shape(self):
+        @guvectorize('(n),(n) -> ()')
+        def bar(x, y, res):
+            res[0] = 123
+
+        @jit(nopython=True)
+        def foo(x, y, res):
+            bar(x, y, res)
+
+        N = 2
+        x = np.empty((2, 5, 3, N,))
+        y = np.empty((5, 3, N,))
+        res = np.zeros((5, 3))
+
+        with self.assertRaises(ValueError) as raises:
+            foo(x, y, res)
+        msg = ('Loop and array shapes are incompatible')
+        self.assertIn(msg, str(raises.exception))
+
 if __name__ == '__main__':
     unittest.main()

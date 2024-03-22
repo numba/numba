@@ -14,6 +14,7 @@ import numpy as np
 import operator
 
 from numba.np import arrayobj, ufunc_db, numpy_support
+from numba.np.ufunc.sigparse import parse_signature
 from numba.core.imputils import (Registry, impl_ret_new_ref, force_error_model,
                                  impl_ret_borrowed)
 from numba.core import typing, types, utils, cgutils, callconv
@@ -235,6 +236,61 @@ class _ArrayGUHelper(namedtuple('_ArrayHelper', ('context', 'builder',
                                          self.inner_arr_ty, arrty, arr,
                                          index_types, indices)
             return impl_ret_borrowed(context, builder, self.inner_arr_ty, res)
+
+    def guard_shape(self, loopshape):
+        def raise_impl(loop_shape, array_shape):
+            # If their sizes are different
+            if len(loop_shape) != len(array_shape):
+                # Ideally we should call `np.broadcast_shapes` with loop and
+                # array shapes. But since broadcasting is not supported here,
+                # we just raise an error
+                # TODO: check why raising a dynamic exception here fails
+                raise ValueError('Loop and array shapes are incompatible')
+
+        context, builder = self.context, self.builder
+        sig = types.none(
+            types.UniTuple(types.intp, len(loopshape)),
+            types.UniTuple(types.intp, len(self.shape)),
+        )
+        tup = (context.make_tuple(builder, sig.args[0], loopshape),
+               context.make_tuple(builder, sig.args[1], self.shape))
+        context.compile_internal(builder, raise_impl, sig, tup)
+
+    def guard_match_core_dims(self, other: '_ArrayGUHelper', inner_ndims: int):
+        # arguments with the same signature should match their core dimensions
+        #
+        # @guvectorize('(n,m), (n,m) -> (n)')
+        # def foo(x, y, res):
+        #     ...
+        #
+        # x and y should have the same core (2D) dimensions
+        def raise_impl(self_shape, other_shape, ndims):
+            same = True
+            a, b = len(self_shape) - ndims, len(other_shape) - ndims
+            for i in range(ndims):
+                same &= self_shape[a + i] == other_shape[b + i]
+            if not same:
+                # NumPy raises the following:
+                # ValueError: gufunc: Input operand 1 has a mismatch in its
+                # core dimension 0, with gufunc signature (n),(n) -> ()
+                # (size 3 is different from 2)
+                # But since we cannot raise a dynamic exception here, we just
+                # (try) something meaninful
+                msg = ('Operand has a mismatch in one of its core dimensions. '
+                       'Please, check if all arguments to a @guvectorize '
+                       'function have the same core dimensions.')
+                raise ValueError(msg)
+
+        context, builder = self.context, self.builder
+        sig = types.none(
+            types.UniTuple(types.intp, len(self.shape)),
+            types.UniTuple(types.intp, len(other.shape)),
+            types.intp,
+        )
+        tup = (context.make_tuple(builder, sig.args[0], self.shape),
+               context.make_tuple(builder, sig.args[1], other.shape),
+               context.get_value_type(types.intp)(inner_ndims))
+        context.compile_internal(builder, raise_impl, sig, tup)
 
 
 def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
@@ -537,6 +593,24 @@ def numpy_gufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
     indices = [inp.create_iter_indices() for inp in arguments]
     loopshape_ndim = outputs[0].ndim - outputs[0].inner_arr_ty.ndim
     loopshape = outputs[0].shape[ : loopshape_ndim]
+
+    _sig = parse_signature(ufunc.gufunc_builder.signature)
+    for (idx_a, sig_a), (idx_b, sig_b) in itertools.combinations(
+            zip(range(len(arguments)),
+            _sig[0] + _sig[1]),
+            r = 2
+    ):
+        # For each pair of arguments, both inputs and outputs, must match their
+        # inner dimensions if their signatures are the same.
+        arg_a, arg_b = arguments[idx_a], arguments[idx_b]
+        if sig_a == sig_b and \
+                all(isinstance(x, _ArrayGUHelper) for x in (arg_a, arg_b)):
+            arg_a, arg_b = arguments[idx_a], arguments[idx_b]
+            arg_a.guard_match_core_dims(arg_b, len(sig_a))
+
+    for arg in arguments[:ufunc.nin]:
+        if isinstance(arg, _ArrayGUHelper):
+            arg.guard_shape(loopshape)
 
     with cgutils.loop_nest(builder,
                            loopshape,
