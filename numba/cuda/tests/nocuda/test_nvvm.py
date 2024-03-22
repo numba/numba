@@ -42,7 +42,7 @@ class TestNvvmWithoutCuda(unittest.TestCase):
 
         # Parse with LLVM then dump the parsed module into NVVM
         parsed = llvm.parse_assembly(str(m))
-        ptx = nvvm.llvm_to_ptx(str(parsed))
+        ptx = nvvm.compile_ir(str(parsed))
 
         # Ensure all characters appear in the generated constant array.
         elements = ", ".join([str(i) for i in range(256)])

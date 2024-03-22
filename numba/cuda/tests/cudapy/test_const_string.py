@@ -10,7 +10,7 @@ class TestConstStringCodegen(unittest.TestCase):
     def test_const_string(self):
         # These imports are incompatible with CUDASIM
         from numba.cuda.descriptor import cuda_target
-        from numba.cuda.cudadrv.nvvm import llvm_to_ptx
+        from numba.cuda.cudadrv.nvvm import compile_ir
 
         targetctx = cuda_target.target_context
         mod = targetctx.create_module("")
@@ -48,7 +48,7 @@ class TestConstStringCodegen(unittest.TestCase):
                              r"19\s+x\s+i8\]", str(mod))
         self.assertEqual(len(matches), 1)
 
-        ptx = llvm_to_ptx(str(mod)).decode('ascii')
+        ptx = compile_ir(str(mod)).decode('ascii')
         matches = list(re.findall(r"\.const.*__conststring__", ptx))
 
         self.assertEqual(len(matches), 1)
