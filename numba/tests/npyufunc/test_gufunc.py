@@ -727,13 +727,12 @@ class TestGUVectorizeJit(TestCase):
         y = np.empty((M,))
         res = np.zeros((5, 3))
 
-        # ensure first that NumPy raises an exception
+        # ensure that NumPy raises an exception
         with self.assertRaises(ValueError) as np_raises:
             bar(x, y, res)
         msg = ('Input operand 1 has a mismatch in its core dimension 0, with '
                'gufunc signature (n),(n) -> () (size 3 is different from 2)')
         self.assertIn(msg, str(np_raises.exception))
-
 
         with self.assertRaises(ValueError) as raises:
             foo(x, y, res)
@@ -755,7 +754,7 @@ class TestGUVectorizeJit(TestCase):
         y = np.empty((M,))
         res = np.zeros((5, 3))
 
-        # ensure first that NumPy raises an exception
+        # ensure that NumPy raises an exception
         with self.assertRaises(ValueError) as np_raises:
             bar(x, y, res)
         msg = ('Output operand 0 has a mismatch in its core dimension 0, with '
@@ -784,7 +783,7 @@ class TestGUVectorizeJit(TestCase):
         res = np.zeros((N,))
         out = np.zeros((M,))
 
-        # ensure first that NumPy raises an exception
+        # ensure that NumPy raises an exception
         with self.assertRaises(ValueError) as np_raises:
             bar(x, y, res, out)
         msg = ('Output operand 0 has a mismatch in its core dimension 0, with '
@@ -806,12 +805,43 @@ class TestGUVectorizeJit(TestCase):
             bar(x, y, res)
 
         N = 2
-        x = np.empty((2, 5, 3, N,))
+        x = np.empty((1, 5, 3, N,))
         y = np.empty((5, 3, N,))
         res = np.zeros((5, 3))
 
         with self.assertRaises(ValueError) as raises:
             foo(x, y, res)
+        msg = ('Loop and array shapes are incompatible')
+        self.assertIn(msg, str(raises.exception))
+
+    def test_mismatch_loop_shape_2(self):
+        @guvectorize('(n),(n) -> (), (n)')
+        def gufunc(x, y, res, out):
+            res[0] = x.sum()
+            for i in range(x.shape[0]):
+                out[i] += x[i] + y.sum()
+
+        @jit
+        def jit_func(x, y, res, out):
+            gufunc(x, y, res, out)
+
+        N = 2
+
+        x = np.arange(4*N).reshape((4, N))
+        y = np.arange(N)
+        res = np.empty((3,))
+        out = np.zeros((3, N))
+
+        # ensure that NumPy raises an exception
+        with self.assertRaises(ValueError) as np_raises:
+            gufunc(x, y, res, out)
+        msg = ('operands could not be broadcast together with remapped shapes '
+               '[original->remapped]: (4,2)->(4,newaxis) (2,)->() '
+               '(3,)->(3,newaxis) (3,2)->(3,2)  and requested shape (2)')
+        self.assertIn(msg, str(np_raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            jit_func(x, y, res, out)
         msg = ('Loop and array shapes are incompatible')
         self.assertIn(msg, str(raises.exception))
 

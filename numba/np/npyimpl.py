@@ -238,9 +238,18 @@ class _ArrayGUHelper(namedtuple('_ArrayHelper', ('context', 'builder',
             return impl_ret_borrowed(context, builder, self.inner_arr_ty, res)
 
     def guard_shape(self, loopshape):
+        inner_ndim = self.inner_arr_ty.ndim
         def raise_impl(loop_shape, array_shape):
-            # If their sizes are different
-            if len(loop_shape) != len(array_shape):
+            # This would in fact be a test for broadcasting.
+            # Broadcast would fail if, ignoring the core dimensions, the
+            # remaining ones are different than indices given by loop shape.
+
+            remaining = len(array_shape) - inner_ndim
+            _raise = (remaining > len(loop_shape))
+            if not _raise:
+                for i in range(remaining):
+                    _raise |= (array_shape[i] != loop_shape[i])
+            if _raise:
                 # Ideally we should call `np.broadcast_shapes` with loop and
                 # array shapes. But since broadcasting is not supported here,
                 # we just raise an error
@@ -256,7 +265,7 @@ class _ArrayGUHelper(namedtuple('_ArrayHelper', ('context', 'builder',
                context.make_tuple(builder, sig.args[1], self.shape))
         context.compile_internal(builder, raise_impl, sig, tup)
 
-    def guard_match_core_dims(self, other: '_ArrayGUHelper', inner_ndims: int):
+    def guard_match_core_dims(self, other: '_ArrayGUHelper', ndims: int):
         # arguments with the same signature should match their core dimensions
         #
         # @guvectorize('(n,m), (n,m) -> (n)')
@@ -264,7 +273,7 @@ class _ArrayGUHelper(namedtuple('_ArrayHelper', ('context', 'builder',
         #     ...
         #
         # x and y should have the same core (2D) dimensions
-        def raise_impl(self_shape, other_shape, ndims):
+        def raise_impl(self_shape, other_shape):
             same = True
             a, b = len(self_shape) - ndims, len(other_shape) - ndims
             for i in range(ndims):
@@ -285,11 +294,9 @@ class _ArrayGUHelper(namedtuple('_ArrayHelper', ('context', 'builder',
         sig = types.none(
             types.UniTuple(types.intp, len(self.shape)),
             types.UniTuple(types.intp, len(other.shape)),
-            types.intp,
         )
         tup = (context.make_tuple(builder, sig.args[0], self.shape),
-               context.make_tuple(builder, sig.args[1], other.shape),
-               context.get_value_type(types.intp)(inner_ndims))
+               context.make_tuple(builder, sig.args[1], other.shape),)
         context.compile_internal(builder, raise_impl, sig, tup)
 
 
