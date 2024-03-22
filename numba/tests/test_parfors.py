@@ -44,7 +44,8 @@ from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                                  override_env_config, linux_only, tag,
                                  skip_parfors_unsupported, _32bit, needs_blas,
                                  needs_lapack, disabled_test, skip_unless_scipy,
-                                 needs_subprocess)
+                                 needs_subprocess,
+                                 skip_ppc64le_invalid_ctr_loop)
 from numba.core.extending import register_jitable
 from numba.core.bytecode import _fix_LOAD_GLOBAL_arg
 from numba.core import utils
@@ -2369,16 +2370,23 @@ class TestParfors(TestParforsBase):
         self.assertEqual(expected, njit(parallel=True)(def_in_loop)(4))
 
     @needs_lapack  # use of np.linalg.solve
+    @skip_ppc64le_invalid_ctr_loop
     def test_issue9490_non_det_ssa_problem(self):
         cmd = [
             sys.executable,
             "-m",
             "numba.tests.parfor_iss9490_usecase",
         ]
-
+        envs = {
+            **os.environ,
+            # Reproducer consistently fail with the following hashseed.
+            "PYTHONHASHSEED": "1",
+            # See https://github.com/numba/numba/issues/9501
+            # for details of why num-thread pinning is needed.
+            "NUMBA_NUM_THREADS": "1",
+        }
         try:
-            subp.check_output(cmd, env={**os.environ,
-                                        "PYTHONHASHSEED": "1"},
+            subp.check_output(cmd, env=envs,
                               stderr=subp.STDOUT,
                               encoding='utf-8')
         except subp.CalledProcessError as e:

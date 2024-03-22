@@ -1,5 +1,0 @@
-Improvement to ``np.searchsorted``
-----------------------------------
-
-Fixed a performance regression introduced in Numba 0.59 which made
-``np.searchsorted`` considerably slower.
