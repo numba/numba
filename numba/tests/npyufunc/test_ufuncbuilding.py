@@ -1,4 +1,8 @@
+import pickle
+import unittest
+
 import numpy as np
+from numpy.testing import assert_array_equal
 
 from numba.np.ufunc.ufuncbuilder import GUFuncBuilder
 from numba import vectorize, guvectorize
@@ -6,7 +10,6 @@ from numba.np.ufunc import PyUFunc_One
 from numba.np.ufunc.dufunc import DUFunc as UFuncBuilder
 from numba.tests.support import tag, TestCase
 from numba.core import config
-import unittest
 
 
 class TestUfuncBuilding(TestCase):
@@ -317,6 +320,58 @@ class TestVectorizeDecor(TestCase):
         # (error message depends on Numpy version)
 
 
+class NEP13Array:
+    """https://numpy.org/neps/nep-0013-ufunc-overrides.html"""
+    def __init__(self, array):
+        self.array = array
+
+    def __array__(self):
+        return self.array
+
+    def tolist(self):
+        return self.array.tolist()
+
+    def __array_ufunc__(self, ufunc, method, *args, **kwargs):
+        if method != "__call__":
+            return NotImplemented
+
+        return NEP13Array(ufunc(*[np.asarray(x) for x in args], **kwargs))
+
+
+class FakeDaskArray:
+    """This class defines both the NEP13 protocol and the dask collection protocol
+    (https://docs.dask.org/en/stable/custom-collections.html). This is a stand-in for
+    dask array, dask dataframe, and for any wrapper around them (e.g. xarray or pint).
+    """
+
+    def __init__(self, array):
+        self.array = array
+
+    def __array_ufunc__(self, ufunc, method, *args, **kwargs):
+        if method != "__call__":
+            return NotImplemented
+
+        # Simulate sending the ufunc over the network and applying it on a remote worker
+        ufunc = pickle.loads(pickle.dumps(ufunc))
+        args = [x.array if isinstance(x, FakeDaskArray) else x for x in args]
+        return FakeDaskArray(ufunc(*args, **kwargs))
+
+    def _dask_method(self, *args, **kwargs):
+        raise AssertionError("called potentially expensive method")
+
+    __array__ = _dask_method
+    __dask_graph__ = _dask_method
+    __dask_keys__ = _dask_method
+    __dask_optimize__ = _dask_method
+    __dask_postcompute__ = _dask_method
+    __dask_postpersist__ = _dask_method
+    __dask_scheduler__ = _dask_method
+    __dask_tokenize__ = _dask_method
+    compute = _dask_method
+    persist = _dask_method
+    visualize = _dask_method
+
+
 class TestNEP13WithoutSignature(TestCase):
 
     def test_all(self):
@@ -325,23 +380,6 @@ class TestNEP13WithoutSignature(TestCase):
         @vectorize(nopython=True)
         def new_ufunc(hundreds, tens, ones):
             return 100*hundreds + 10*tens + ones
-
-        # https://numpy.org/neps/nep-0013-ufunc-overrides.html
-        class NEP13Array:
-            def __init__(self, array):
-                self.array = array
-
-            def __array__(self):
-                return self.array
-
-            def tolist(self):
-                return self.array.tolist()
-
-            def __array_ufunc__(self, ufunc, method, *args, **kwargs):
-                if method != "__call__":
-                    return NotImplemented
-
-                return NEP13Array(ufunc(*[np.asarray(x) for x in args], **kwargs))
 
         # give it integers
         a = np.array([1, 2, 3], dtype=np.int64)
@@ -384,6 +422,39 @@ class TestNEP13WithoutSignature(TestCase):
         nep13_3 = new_ufunc(a, b, NEP13Array(c))
         self.assertIsInstance(nep13_3, NEP13Array)
         self.assertEqual(nep13_3.tolist(), [161.7, 283.8, 405.9])
+
+
+class TestDask(unittest.TestCase):
+    """Test that numba ufuncs are compatible with dask collections and wrappers around
+    dask (e.g. xarray or pint) and that they can be serialized, sent over the network,
+    deserialized on a different host and applied remotely.
+    """
+
+    def test_dask_array(self):
+        a = FakeDaskArray(np.arange(4, dtype=np.float64))
+        expect = np.arange(4, dtype=np.float64) * 2
+
+        @vectorize(["f8(f8)"])
+        def double_static_vectorize(x):
+            return x * 2
+
+        @vectorize()
+        def double_dynamic_vectorize(x):
+            return x * 2
+
+        @guvectorize(["f8,f8[:]"], "()->()")
+        def double_guvectorize(x, out):
+            out[:] = x * 2
+
+        for func in (
+            double_static_vectorize,
+            double_dynamic_vectorize,
+            double_guvectorize,
+        ):
+            with self.subTest(func):
+                b = func(a)
+                assert isinstance(b, FakeDaskArray)
+                assert_array_equal(b.array, expect)
 
 
 class TestVectorizeDecorJitDisabled(TestVectorizeDecor):
