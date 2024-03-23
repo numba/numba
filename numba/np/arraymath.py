@@ -1595,7 +1595,11 @@ def np_median(a):
         # workspace anyway
         temp_arry = a.flatten()
         n = temp_arry.shape[0]
-        return _median_inner(temp_arry, n)
+        if n != 0: 
+            return _median_inner(temp_arry, n)
+        else:
+            return np.nan
+            
 
     return median_impl
 
