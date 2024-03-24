@@ -77,8 +77,8 @@ class Integer(Number):
 class IntegerLiteral(Literal, Integer):
     def __init__(self, value):
         self._literal_init(value)
-        name = 'Literal[int]({})'.format(value)
         basetype = self.literal_type
+        name = f'Literal[{basetype}]({value})'
         Integer.__init__(
             self,
             name=name,
