@@ -13,7 +13,7 @@ from numba.core.imputils import (lower_builtin, lower_getattr,
                                     impl_ret_untracked)
 from numba.core import typing, types, utils, errors, cgutils, optional
 from numba.core.extending import intrinsic, overload_method
-from numba.cpython.unsafe.numbers import viewer
+from numba.cpython.unsafe.numbers import viewer, byteswap
 
 def _int_arith_flags(rettype):
     """
@@ -1202,6 +1202,17 @@ def number_item_impl(context, builder, sig, args):
     The no-op .item() method on booleans and numbers.
     """
     return args[0]
+
+
+@overload_method(types.Boolean, "byteswap")
+@overload_method(types.Number, "byteswap")
+def number_byteswap(a, inplace=False):
+    def number_byteswap_impl(a, inplace=False):
+        if inplace:
+            raise ValueError("cannot byteswap a scalar in-place")
+        return byteswap(a)
+
+    return number_byteswap_impl
 
 
 #------------------------------------------------------------------------------
