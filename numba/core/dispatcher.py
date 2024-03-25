@@ -254,7 +254,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         # but newer python uses a different name
         self.__code__ = self.func_code
         # a place to keep an active reference to the types of the active call
-        self._types_active_call = []
+        self._types_active_call = None
         # Default argument values match the py_func
         self.__defaults__ = py_func.__defaults__
 
@@ -385,6 +385,21 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         """
         return self._compiling_counter
 
+    def _setup_call(self):
+        """This is used by Dispatcher_call.
+
+        This method must return a callable which is called in the equivalent
+        of the "finally" block of Dispatcher_call.
+        """
+        self._types_active_call = []
+        return self._teardown_call
+
+    def _teardown_call(self):
+        """Used by _setup_call. Performs clean up when Dispatcher_call ends.
+        """
+        self._types_active_call = None
+        return None
+
     def _compile_for_args(self, *args, **kws):
         """
         For internal use.  Compile a specialized version of the function
@@ -416,6 +431,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                 argtypes.append(self.typeof_pyval(a))
 
         return_val = None
+        self._types_active_call.clear()
         try:
             return_val = self.compile(tuple(argtypes))
         except errors.ForceLiteralArg as e:
@@ -485,8 +501,6 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                     e.patch_message('\n'.join((str(e).rstrip(), help_msg)))
             # ignore the FULL_TRACEBACKS config, this needs reporting!
             raise e
-        finally:
-            self._types_active_call = []
         return return_val
 
     def inspect_llvm(self, signature=None):
@@ -736,7 +750,8 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         else:
             if tp is None:
                 tp = types.pyobject
-        self._types_active_call.append(tp)
+        if self._types_active_call is not None:
+            self._types_active_call.append(tp)
         return tp
 
     def _callback_add_timer(self, duration, cres, lock_name):
