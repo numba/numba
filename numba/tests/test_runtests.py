@@ -303,9 +303,27 @@ class TestCase(unittest.TestCase):
         m = re.search(r"Writing junit xml file: (junit_numba_[0-9_-]+.xml)",
                       out)
         xml_filepath = m.group(1)
-        self.assertTrue(pathlib.Path(xml_filepath).exists())
-        # If this raises, the XML file is invalid
+        path = pathlib.Path(xml_filepath)
+        self.assertTrue(path.exists())
+        # If this raise the XML file is invalid
         xml.etree.ElementTree.parse(xml_filepath)
+        # Remove the file.
+        path.unlink()
+
+    def test_junit_output_named(self):
+        cmd = [sys.executable, '-m', 'numba.runtests', '--junit=temp_delme.xml',
+               '-vm1', 'numba.tests.test_usecases.TestUsecases.test_sum1d']
+        out = subprocess.check_output(cmd, encoding='utf8',
+                                      stderr=subprocess.STDOUT)
+        m = re.search(r"Writing junit xml file: (temp_delme.xml)",
+                      out)
+        xml_filepath = m.group(1)
+        path = pathlib.Path(xml_filepath)
+        self.assertTrue(path.exists())
+        # If this raise the XML file is invalid
+        xml.etree.ElementTree.parse(xml_filepath)
+        # Remove the file.
+        path.unlink()
 
 
 if __name__ == '__main__':

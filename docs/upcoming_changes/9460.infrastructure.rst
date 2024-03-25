@@ -1,0 +1,9 @@
+Initial development on performance testing suite
+------------------------------------------------
+
+Initial development work has begun on a performance testing suite, aka 
+_perfsuite_. The goal is to migrate existing benchmarks from the separate 
+https://github.com/numba/numba-benchmark repository into the main codebase. 
+This will allow performance testing to be run regularly as part of continuous 
+integration. Regular automated testing will help ensure performance regressions 
+are quickly identified as code changes are made.
