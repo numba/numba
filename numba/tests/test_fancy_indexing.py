@@ -1,3 +1,4 @@
+import collections
 import itertools
 
 import numpy as np
@@ -243,17 +244,61 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError):
             cfunc(A, [1.7])
 
-        # check unsupported arg raises
-        with self.assertRaises(TypingError):
-            take_kws = jit(nopython=True)(np_take_kws)
-            take_kws(A, 1, 1)
-
-        # check kwarg unsupported raises
-        with self.assertRaises(TypingError):
-            take_kws = jit(nopython=True)(np_take_kws)
-            take_kws(A, 1, axis=1)
-
         #exceptions leak refs
+        self.disable_leak_check()
+
+    def test_np_take_axis(self):
+        pyfunc = np_take_kws
+        cfunc = jit(nopython=True)(pyfunc)
+
+        nt = collections.namedtuple('inputs', ['arrays', 'indices', 'axis'])
+
+        triples = (
+            nt(
+                arrays=(
+                    np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]]),
+                ),
+                indices=(
+                    np.array([0, 2, 1]),
+                    np.array([1, 2, 1, 2, 1]),
+                    np.array([0]),
+                    1,
+                    (0,),
+                    (0, 1),
+                ),
+                axis=(0, 1, -1),
+            ),
+            nt(
+                arrays=(
+                    np.arange(5),
+                    np.array([123]),
+                ),
+                indices=(
+                    0,
+                    (0,),
+                    np.asarray([0])
+                ),
+                axis=(0,)
+            )
+        )
+
+        for arrays, indices, axis in triples:
+            for array in arrays:
+                for indice in indices:
+                    for ax in axis:
+                        expected = np.take(array, indice, axis=ax)
+                        got = cfunc(array, indice, axis=ax)
+                        self.assertPreciseEqual(expected, got)
+
+
+    def test_np_take_axis_exception(self):
+        cfunc = jit(nopython=True)(np_take_kws)
+        arr = np.arange(9).reshape(3, 3)
+        msg = 'axis 2 is out of bounds for array of dimension 2'
+        indices = np.array([0, 1, 2])
+        with self.assertRaisesRegex(ValueError, msg):
+            cfunc(arr, indices, axis=2)
+
         self.disable_leak_check()
 
     def test_newaxis(self):
