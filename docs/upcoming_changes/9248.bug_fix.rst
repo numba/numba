@@ -1,0 +1,7 @@
+Fix automatic unwrapping of optional type
+"""""""""""""""""""""""""""""""""""""""""
+
+Previously, if an extension code (e.g. ``@overload``) raises a ``TypingError``
+due to the lack of support of optional type, there were no automatic unwrapping 
+of the  optional typed arguments. However, if the extension code rejects by
+returning ``None``, automatic unwrapping is done. This is now fixed.
