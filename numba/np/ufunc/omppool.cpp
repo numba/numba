@@ -225,8 +225,36 @@ static void launch_threads(int count)
     if(count < 1)
         return;
     omp_set_num_threads(count);
-    omp_set_nested(0x1); // enable nesting, control depth with OMP env var
     _INIT_NUM_THREADS = count;
+
+#if defined(_MSC_VER) || defined(__PPC__)
+    // Visual Studio only supports OpenMP 2.0, so we set nested parallelism
+    // using omp_set_nested().
+    //
+    // (https://docs.microsoft.com/en-us/cpp/parallel/openmp/openmp-in-visual-cpp?view=msvc-170)
+    //
+    // For PowerPC, using omp_set_max_active_levels() results in a fail in
+    // numba.tests.test_num_threads.TestNumThreadsBackends.test_nested_parallelism_3_omp_4
+    // for unknown reasons, the root cause of which may or may not be related
+    // to the method by which the level of nested parallelism is configured. In
+    // lieu of debugging this issue, we continue to use the deprecated
+    // omp_set_nested() function on PowerPC.
+    omp_set_nested(0x1);
+#else // defined(_MSC_VER) || defined(__PPC__)
+    // Enable up to 32 levels of nested parallelism, or whatever the
+    // implementation supports. From the OpenMP 3.0 spec, p.127:
+    //
+    //     "If the number of parallel levels requested exceeds the number of
+    //     levels of parallelism supported by the implementation, the value of
+    //     the max-active-levels-var ICV will be set to the number of parallel
+    //     levels support by the implementation."
+    //
+    // (https://www.openmp.org/wp-content/uploads/spec30.pdf)
+    //
+    // 32 levels is likely to be far in excess of any practical use case, and
+    // therefore should not present any real-world limitation.
+    omp_set_max_active_levels(32);
+#endif // defined(_MSC_VER) || defined(__PPC__)
 }
 
 static void synchronize(void)
