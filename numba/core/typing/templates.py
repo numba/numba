@@ -16,7 +16,6 @@ from numba.core import types, utils, targetconfig
 from numba.core.errors import (
     TypingError,
     InternalError,
-    InternalTargetMismatchError,
 )
 from numba.core.cpu_options import InlineOptions
 
@@ -1096,24 +1095,18 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
         """
         attr = self._attr
 
-        try:
-            registry = self._get_target_registry('method')
-        except InternalTargetMismatchError:
-            # Target mismatch. Do not register attribute lookup here.
-            pass
-        else:
-            lower_builtin = registry.lower
+        registry = self._get_target_registry('method')
 
-            @lower_builtin((self.key, attr), self.key, types.VarArg(types.Any))
-            def method_impl(context, builder, sig, args):
-                typ = sig.args[0]
-                typing_context = context.typing_context
-                fnty = self._get_function_type(typing_context, typ)
-                sig = self._get_signature(typing_context, fnty, sig.args, {})
-                call = context.get_function(fnty, sig)
-                # Link dependent library
-                context.add_linking_libs(getattr(call, 'libs', ()))
-                return call(builder, args)
+        @registry.lower((self.key, attr), self.key, types.VarArg(types.Any))
+        def method_impl(context, builder, sig, args):
+            typ = sig.args[0]
+            typing_context = context.typing_context
+            fnty = self._get_function_type(typing_context, typ)
+            sig = self._get_signature(typing_context, fnty, sig.args, {})
+            call = context.get_function(fnty, sig)
+            # Link dependent library
+            context.add_linking_libs(getattr(call, 'libs', ()))
+            return call(builder, args)
 
     def _resolve(self, typ, attr):
         if self._attr != attr:
@@ -1162,7 +1155,7 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
         return types.BoundFunction(MethodTemplate, typ)
 
 
-def make_overload_attribute_template(typ, attr, overload_func, inline,
+def make_overload_attribute_template(typ, attr, overload_func, inline='never',
                                      prefer_literal=False,
                                      base=_OverloadAttributeTemplate,
                                      **kwargs):

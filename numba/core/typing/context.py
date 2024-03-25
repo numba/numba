@@ -435,9 +435,30 @@ class BaseContext(object):
         except KeyError:
             loader = templates.RegistryLoader(registry)
             self._registries[registry] = loader
+
+        from numba.core.target_extension import (get_local_target,
+                                                 resolve_target_str)
+        current_target = get_local_target(self)
+
+        def is_for_this_target(ftcls):
+            metadata = getattr(ftcls, 'metadata', None)
+            if metadata is None:
+                return True
+
+            target_str = metadata.get('target')
+            if target_str is None:
+                return True
+
+            ft_target = resolve_target_str(target_str)
+            return current_target.inherits_from(ft_target)
+
         for ftcls in loader.new_registrations('functions'):
+            if not is_for_this_target(ftcls):
+                continue
             self.insert_function(ftcls(self))
         for ftcls in loader.new_registrations('attributes'):
+            if not is_for_this_target(ftcls):
+                continue
             self.insert_attributes(ftcls(self))
         for gv, gty in loader.new_registrations('globals'):
             existing = self._lookup_global(gv)
