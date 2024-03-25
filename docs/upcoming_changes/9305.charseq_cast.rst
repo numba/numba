@@ -1,0 +1,5 @@
+Implement casting from charseq to charseq
+=========================================
+
+Allows automatic casting from dtype "S<N>" to "S<M>" 
+if M is larger or equal to N.
