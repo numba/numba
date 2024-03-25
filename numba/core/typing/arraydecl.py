@@ -253,6 +253,24 @@ class SetItemBuffer(AbstractTemplate):
                 else:
                     # Incompatible scalar type
                     return
+        elif isinstance(res, types.Record):
+            if isinstance(val, types.Record):
+                if len(val.fields) != len(res.fields):
+                    for res_item, val_item in zip(res.fields.values(), val.fields.values()):
+                        if not self.context.can_convert(val_item, res_item):
+                            # incompatible types
+                            return
+                    return signature(types.none, ary, idx, val)
+            elif isinstance(val, types.BaseTuple):
+                if len(val) == len(res.fields):
+                    for res_item, val_item in zip(ary.dtype.fields.values(), val.types):
+                        if not self.context.can_convert(val_item, res_item.type):
+                            # incompatible types
+                            return
+                    return signature(types.none, ary, idx, val)
+            else:
+                # other-type-to-record conversions are unsupported
+                return
         elif not isinstance(val, types.Array):
             # Single item assignment
             if not self.context.can_convert(val, res):
