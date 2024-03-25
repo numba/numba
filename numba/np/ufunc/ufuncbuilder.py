@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import functools
 import inspect
 import warnings
 from contextlib import contextmanager
@@ -10,10 +11,11 @@ from numba.core.descriptors import TargetDescriptor
 from numba.core.extending import is_jitted
 from numba.core.errors import NumbaDeprecationWarning
 from numba.core.options import TargetOptions, include_default_options
+from numba.core.typing.typeof import typeof
 from numba.core.registry import cpu_target
 from numba.core.target_extension import dispatcher_registry, target_registry
 from numba.core import utils, types, serialize, compiler, sigutils
-from numba.np.numpy_support import as_dtype
+from numba.np.numpy_support import as_dtype, ufunc_find_matching_loop
 from numba.np.ufunc import _internal
 from numba.np.ufunc.sigparse import parse_signature
 from numba.np.ufunc.wrappers import build_ufunc_wrapper, build_gufunc_wrapper
@@ -335,24 +337,37 @@ class UFuncBuilder(_BaseUFuncBuilder):
         return _build_element_wise_ufunc_wrapper(cres, signature)
 
 
-class GUFuncBuilder(_BaseUFuncBuilder):
+class GUFuncBuilder(serialize.ReduceMixin, _BaseUFuncBuilder):
 
     # TODO handle scalar
     def __init__(self, py_func, signature, identity=None, cache=False,
-                 targetoptions={}, writable_args=()):
+                 is_dynamic=False, targetoptions={}, writable_args=()):
         self.py_func = py_func
-        self.identity = parse_identity(identity)
+        self._identity = parse_identity(identity)
         with _suppress_deprecation_warning_nopython_not_supplied():
             self.nb_func = jit(_target='npyufunc', cache=cache)(py_func)
-        self.signature = signature
+        self._signature = signature
         self.sin, self.sout = parse_signature(signature)
         self.targetoptions = targetoptions
         self.cache = cache
         self._sigs = []
         self._cres = {}
+        self._frozen = False
+        self.ufunc = None
+        self._is_dynamic = is_dynamic
 
         transform_arg = _get_transform_arg(py_func)
         self.writable_args = tuple([transform_arg(a) for a in writable_args])
+
+        functools.update_wrapper(self, py_func)
+
+    def disable_compile(self):
+        """
+        Disable the compilation of new signatures at call time.
+        """
+        # If disabling compilation then there must be at least one signature
+        assert len(self._sigs) > 0
+        self._frozen = True
 
     def _finalize_signature(self, cres, args, return_type):
         if not cres.objectmode and cres.signature.return_type != types.void:
@@ -388,9 +403,10 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         ufunc = _internal.fromfunc(
             self.py_func.__name__, self.py_func.__doc__,
             func_list, type_list, nin, nout, datalist,
-            keepalive, self.identity, self.signature, self.writable_args
+            keepalive, self._identity, self._signature, self.writable_args
         )
-        return ufunc
+        self.ufunc = ufunc
+        return self
 
     def build(self, cres):
         """
@@ -414,6 +430,155 @@ class GUFuncBuilder(_BaseUFuncBuilder):
                 ty = a
             dtypenums.append(as_dtype(ty).num)
         return dtypenums, ptr, env
+
+    def _reduce_states(self):
+        dct = dict(
+            py_func=self.py_func,
+            signature=self._signature,
+            identity=self.identity,
+            cache=self.cache,
+            is_dynamic=self._is_dynamic,
+            targetoptions=self.targetoptions,
+            writable_args=self.writable_args,
+            typesigs=self._sigs,
+            frozen=self._frozen,
+        )
+        return dct
+
+    @classmethod
+    def _rebuild(cls, py_func, signature, identity, cache, is_dynamic,
+                 targetoptions, writable_args, typesigs, frozen):
+        self = cls(py_func=py_func, signature=signature, identity=identity,
+                   cache=cache, is_dynamic=is_dynamic,
+                   targetoptions=targetoptions, writable_args=writable_args)
+        for sig in typesigs:
+            self.add(sig)
+        self.build_ufunc()
+        self._frozen = frozen
+        return self
+
+    def __repr__(self):
+        return f"<numba._GUFunc '{self.__name__}'>"
+
+    @property
+    def is_dynamic(self):
+        return self._is_dynamic
+
+    @property
+    def nin(self):
+        return self.ufunc.nin
+
+    @property
+    def nout(self):
+        return self.ufunc.nout
+
+    @property
+    def nargs(self):
+        return self.ufunc.nargs
+
+    @property
+    def ntypes(self):
+        return self.ufunc.ntypes
+
+    @property
+    def types(self):
+        return self.ufunc.types
+
+    @property
+    def identity(self):
+        return self.ufunc.identity
+
+    @property
+    def signature(self):
+        return self.ufunc.signature
+
+    @property
+    def accumulate(self):
+        return self.ufunc.accumulate
+
+    @property
+    def at(self):
+        return self.ufunc.at
+
+    @property
+    def outer(self):
+        return self.ufunc.outer
+
+    @property
+    def reduce(self):
+        return self.ufunc.reduce
+
+    @property
+    def reduceat(self):
+        return self.ufunc.reduceat
+
+    def _get_ewise_dtypes(self, args):
+        argtys = map(lambda x: typeof(x), args)
+        tys = []
+        for argty in argtys:
+            if isinstance(argty, types.Array):
+                tys.append(argty.dtype)
+            else:
+                tys.append(argty)
+        return tys
+
+    def _num_args_match(self, *args):
+        # parsed_sig = parse_signature(self.gufunc_builder.signature)
+        parsed_sig = parse_signature(self._signature)
+        return len(args) == len(parsed_sig[0]) + len(parsed_sig[1])
+
+    def _get_signature(self, *args):
+        # parsed_sig = parse_signature(self.gufunc_builder.signature)
+        parsed_sig = parse_signature(self._signature)
+        # ewise_types is a list of [int32, int32, int32, ...]
+        ewise_types = self._get_ewise_dtypes(args)
+
+        # first time calling the gufunc
+        # generate a signature based on input arguments
+        l = []
+        for idx, sig_dim in enumerate(parsed_sig[0]):
+            ndim = len(sig_dim)
+            if ndim == 0:  # append scalar
+                l.append(ewise_types[idx])
+            else:
+                l.append(types.Array(ewise_types[idx], ndim, 'A'))
+
+        offset = len(parsed_sig[0])
+        # add return type to signature
+        for idx, sig_dim in enumerate(parsed_sig[1]):
+            retty = ewise_types[idx + offset]
+            ret_ndim = len(sig_dim) or 1  # small hack to return scalars
+            l.append(types.Array(retty, ret_ndim, 'A'))
+
+        return types.none(*l)
+
+    def __call__(self, *args, **kwargs):
+        # If compilation is disabled OR it is NOT a dynamic gufunc
+        # call the underlying gufunc
+        if self._frozen or not self.is_dynamic:
+            return self.ufunc(*args, **kwargs)
+        elif "out" in kwargs:
+            # If "out" argument is supplied
+            args += (kwargs.pop("out"),)
+
+        if self._num_args_match(*args) is False:
+            # It is not allowed to call a dynamic gufunc without
+            # providing all the arguments
+            # see: https://github.com/numba/numba/pull/5938#discussion_r506429392  # noqa: E501
+            msg = (
+                f"Too few arguments for function '{self.__name__}'. "
+                "Note that the pattern `out = gufunc(Arg1, Arg2, ..., ArgN)` "
+                "is not allowed. Use `gufunc(Arg1, Arg2, ..., ArgN, out) "
+                "instead.")
+            raise TypeError(msg)
+
+        # at this point we know the gufunc is a dynamic one
+        ewise = self._get_ewise_dtypes(args)
+        if not (self.ufunc and ufunc_find_matching_loop(self.ufunc, ewise)):
+            sig = self._get_signature(*args)
+            self.add(sig)
+            self.build_ufunc()
+        return self.ufunc(*args, **kwargs)
 
 
 def _get_transform_arg(py_func):

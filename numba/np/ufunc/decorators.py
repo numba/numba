@@ -4,8 +4,8 @@ from numba.np.ufunc import _internal
 from numba.np.ufunc.parallel import ParallelUFuncBuilder, ParallelGUFuncBuilder
 
 from numba.core.registry import DelayedRegistry
+from numba.np.ufunc.ufuncbuilder import GUFuncBuilder
 from numba.np.ufunc import dufunc
-from numba.np.ufunc import gufunc
 
 
 class _BaseVectorize(object):
@@ -43,7 +43,7 @@ class Vectorize(_BaseVectorize):
 
 
 class GUVectorize(_BaseVectorize):
-    target_registry = DelayedRegistry({'cpu': gufunc.GUFunc,
+    target_registry = DelayedRegistry({'cpu': GUFuncBuilder,
                                        'parallel': ParallelGUFuncBuilder,})
 
     def __new__(cls, func, signature, **kws):
@@ -51,14 +51,10 @@ class GUVectorize(_BaseVectorize):
         cache = cls.get_cache(kws)
         imp = cls.get_target_implementation(kws)
         writable_args = cls.get_writable_args(kws)
-        if imp is gufunc.GUFunc:
-            is_dyn = kws.pop('is_dynamic', False)
-            return imp(func, signature, identity=identity, cache=cache,
-                       is_dynamic=is_dyn, targetoptions=kws,
-                       writable_args=writable_args)
-        else:
-            return imp(func, signature, identity=identity, cache=cache,
-                       targetoptions=kws, writable_args=writable_args)
+        is_dynamic = kws.pop('is_dynamic', False)
+        return imp(func, signature, identity=identity, cache=cache,
+                   is_dynamic=is_dynamic, targetoptions=kws,
+                   writable_args=writable_args)
 
 
 def vectorize(ftylist_or_function=(), **kws):
