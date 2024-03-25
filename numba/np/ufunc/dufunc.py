@@ -104,6 +104,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
         self._install_type()
         self._lower_me = DUFuncLowerer(self)
         self._install_cg()
+        self.reorderable = (identity != _internal.PyUFunc_None)
         self.__name__ = dispatcher.py_func.__name__
         self.__doc__ = dispatcher.py_func.__doc__
 
@@ -295,17 +296,19 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 msg = 'The first argument "array" must be array-like'
                 raise errors.NumbaTypeError(msg)
 
-            axis_int = isinstance(axis, types.Integer)
+            axis_tuple = isinstance(axis, types.BaseTuple)
             axis_int_tuple = isinstance(axis, types.UniTuple) and \
                 isinstance(axis.dtype, types.Integer)
             axis_empty_tuple = isinstance(axis, types.Tuple) and len(axis) == 0
             axis_none = cgutils.is_nonelike(axis)
-            axis_tuple_size = len(axis) if axis_int_tuple else 0
 
-            if self.ufunc.identity is None and not (
-                    (axis_int_tuple and axis_tuple_size == 1) or
-                    axis_empty_tuple or axis_int or axis_none):
-                msg = (f"reduction operation '{self.ufunc.__name__}' is not "
+            identity_none = self.ufunc.identity is None
+            ufunc_name = self.ufunc.__name__
+
+            # In NumPy, a ufunc is reorderable if its identity type is **not**
+            # PyUfunc_None.
+            if not self.reorderable and axis_tuple and len(axis) > 1:
+                msg = (f"reduction operation '{ufunc_name}' is not "
                        "reorderable, so at most one axis may be specified")
                 raise errors.NumbaTypeError(msg)
 
@@ -429,6 +432,11 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 return idx, e
 
             def impl_1d(ufunc, array, axis=0, dtype=None, initial=None):
+                if identity_none and initial is None and len(array) == 0:
+                    msg = ('zero-size array to reduction operation '
+                           f'{ufunc_name} which has no identity')
+                    raise ValueError(msg)
+
                 start = 0
                 if init_none and id_none:
                     start = 1
@@ -456,6 +464,11 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
 
                 if axis < 0 or axis >= array.ndim:
                     raise ValueError("Invalid axis")
+
+                if identity_none and initial is None and array.shape[axis] == 0:
+                    msg = ('zero-size array to reduction operation '
+                           f'{ufunc_name} which has no identity')
+                    raise ValueError(msg)
 
                 # create result array
                 shape = tuple_slice(array.shape, axis)
@@ -564,8 +577,6 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 # axis is default value (0) or an integer
                 # ufunc(array, axis=0)
                 return impl_nd_axis_int
-            # elif array.ndim == 1:
-            #     return impl_1d
 
     def _install_type(self, typingctx=None):
         """Constructs and installs a typing class for a DUFunc object in the
