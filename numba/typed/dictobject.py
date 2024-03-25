@@ -746,11 +746,14 @@ def impl_get(dct, key, default=None):
     keyty = dct.key_type
     valty = dct.value_type
     _sentry_safe_cast_default(default, valty)
+    use_optional = cgutils.is_nonelike(default)
 
     def impl(dct, key, default=None):
         castedkey = _cast(key, keyty)
         ix, val = _dict_lookup(dct, castedkey, hash(castedkey))
         if ix > DKIX.EMPTY:
+            if not use_optional:
+                val = _nonoptional(val)
             return val
         return default
 

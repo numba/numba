@@ -1,0 +1,4 @@
+Support return `int` rather than always `Optional` in `dct.get(key, default)`
+-----------------------------------------------------------------------------
+
+Supports return `int` rather than always `Optional` in `dct.get(key, default)`.
