@@ -530,6 +530,21 @@ class TestRandom(BaseTest):
             paramlist=[{'low': 1.5, 'high': 1e6},
                        {'low': -2.5, 'high': 1e3},
                        {'low': 1.5, 'high': -2.5}])
+    def test_njit_with_np_random_uniform_error(self):
+        
+            try:
+                @numba.njit
+                def uniform():
+                    return np.random.uniform(0, 1, size=())
+
+                uniform()
+            except TypingError:
+                # This block will be executed if a TypingError is raised
+                self.fail("Unexpected TypingError for size=()")
+            else:
+                pass
+
+
 
     def _check_triangular(self, func2, func3, ptr):
         """
