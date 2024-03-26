@@ -1237,7 +1237,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             check(arr)
 
         # check scalar values
-        for t in [1, False, 3.14, np.int8(4), np.float32(2.718), ]:
+        for t in [1, False, 3.14, np.int8(4), np.float32(2.718)]:
             check(t)
 
 
