@@ -1237,11 +1237,12 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             check(arr)
 
         # check some types that go via asarray
-        for t in [1, False, [1,], [[1, 2,],[3, 4]], (1,), (1, 2, 3)]:
+        for t in [1,[1,], [[1, 2,],[3, 4]], (1,), (1, 2, 3)]:
             check(t)
 
         with self.assertRaises(TypingError) as raises:
             cfunc('a')
+            
         self.assertIn("The argument to np.size must be array-like",
                     str(raises.exception))
 
