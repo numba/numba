@@ -1236,9 +1236,10 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             arr = np.empty(t)
             check(arr)
 
-        # check some types that go via asarray
-        for t in [1,[1,], [[1, 2,],[3, 4]], (1,), (1, 2, 3)]:
+    # check scalar values
+        for t in [1, False, 3.14, np.int8(4), np.float32(2.718), [1,], [[1, 2,],[3, 4]], (1,), (1, 2, 3)]:
             check(t)
+
 
         with self.assertRaises(TypingError) as raises:
             cfunc('a')
