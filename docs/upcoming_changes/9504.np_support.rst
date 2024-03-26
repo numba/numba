@@ -1,0 +1,4 @@
+added support for ``np.size()``
+====================================================
+
+added ``np.size()`` support for numpy,which was previously unsupported.
