@@ -259,8 +259,9 @@ class BasicUFuncTest(BaseUFuncTest):
 
     def signed_unsigned_cmp_test(self, comparison_ufunc):
         self.basic_ufunc_test(comparison_ufunc)
+        from numba.np.np_global_consts import numpy_version
 
-        if numpy_support.numpy_version < (1, 25):
+        if numpy_version < (1, 25):
             return
 
         # Test additional implementations that specifically handle signed /

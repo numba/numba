@@ -2,6 +2,7 @@ import struct
 
 import numpy as np
 from numba.core import utils
+from numba.np.np_global_consts import numpy_version
 
 from .abstract import *
 from .containers import *
@@ -12,7 +13,6 @@ from .npytypes import *
 from .scalars import *
 from .function_type import *
 
-numpy_version = tuple(map(int, np.__version__.split('.')[:2]))
 
 # Short names
 
