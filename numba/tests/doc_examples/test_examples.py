@@ -383,6 +383,29 @@ class DocsExamplesTest(TestCase):
             # magictoken.gufunc_jit_call.end
             self.assertPreciseEqual(x, res)
 
+    def test_guvectorize_jit_fail(self):
+        with captured_stdout():
+            # magictoken.gufunc_jit_fail.begin
+            import numpy as np
+            from numba import jit, guvectorize
+
+            @guvectorize('(n)->(n)')
+            def copy(x, res):
+                for i in range(x.shape[0]):
+                    res[i] = x[i]
+
+            @jit(nopython=True)
+            def jit_fn(x, res):
+                copy(x, res)
+
+            x = np.ones((1, 5))
+            res = np.empty((5,))
+            with self.assertRaises(ValueError) as raises:
+                jit_fn(x, res)
+            # magictoken.gufunc_jit_fail.end
+            self.assertIn('Loop and array shapes are incompatible',
+                          str(raises.exception))
+
     def test_guvectorize_overwrite(self):
         with captured_stdout():
             # magictoken.ex_guvectorize_overwrite.begin
