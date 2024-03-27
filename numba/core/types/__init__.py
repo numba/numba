@@ -53,6 +53,8 @@ void = none
 
 if config.USE_LEGACY_TYPE_SYSTEM: # type: ignore
     boolean = bool_ = Boolean('bool')
+    if numpy_version >= (2, 0):
+        bool = bool_
 
     byte = uint8 = Integer('uint8')
     uint16 = Integer('uint16')
@@ -140,8 +142,10 @@ if config.USE_LEGACY_TYPE_SYSTEM: # type: ignore
     c8 = complex64
     c16 = complex128
 
-    np_float_ = float_ = float32
+    np_float_ = float32
     np_double = double = float64
+    if numpy_version < (2, 0):
+        float_ = float32
 
     _make_signed = lambda x: globals()["int%d" % (np.dtype(x).itemsize * 8)]
     _make_unsigned = lambda x: globals()["uint%d" % (np.dtype(x).itemsize * 8)]
