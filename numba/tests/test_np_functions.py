@@ -13,7 +13,7 @@ import numpy as np
 from numba import jit, njit, typeof
 from numba.core import types
 from numba.typed import List, Dict
-from numba.np.numpy_support import numpy_version
+from numba.np.np_global_consts import numpy_version
 from numba.core.errors import TypingError, NumbaDeprecationWarning
 from numba.core.config import IS_32BITS
 from numba.core.utils import pysignature

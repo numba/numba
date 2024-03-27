@@ -8,12 +8,10 @@ from numba.core import errors, types
 from numba.core.typing.templates import signature
 from numba.np import npdatetime_helpers
 from numba.core.errors import TypingError
+from numba.np.np_global_consts import sizeof_unicode_char
 
 # re-export
 from numba.core.cgutils import is_nonelike   # noqa: F401
-
-
-numpy_version = tuple(map(int, np.__version__.split('.')[:2]))
 
 
 FROM_DTYPE = {
@@ -39,8 +37,6 @@ FROM_DTYPE = {
 
 re_typestr = re.compile(r'[<>=\|]([a-z])(\d+)?$', re.I)
 re_datetimestr = re.compile(r'[<>=\|]([mM])8?(\[([a-z]+)\])?$', re.I)
-
-sizeof_unicode_char = np.dtype('U1').itemsize
 
 
 def _from_str_dtype(dtype):

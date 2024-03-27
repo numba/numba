@@ -11,7 +11,7 @@ from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                          AbstractTemplate, infer_global, infer,
                                          infer_getattr, signature)
 from numba.np import npdatetime_helpers
-from numba.np.numpy_support import numpy_version
+from numba.np.np_global_consts import numpy_version
 
 
 # timedelta64-only operations

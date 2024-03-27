@@ -21,7 +21,7 @@ from numba.tests.support import (TestCase, skip_unless_py10_or_later,
 
 from numba.cpython.unicode import compile_time_get_string_data
 from numba.cpython import hashing
-from numba.np.numpy_support import numpy_version
+from numba.np.np_global_consts import numpy_version
 
 
 def hash_usecase(x):

@@ -51,6 +51,7 @@ from numba.core.extending import (
     models,
 )
 from numba.core.datamodel.models import OpaqueModel
+from numba.np.np_global_consts import numpy_version
 
 try:
     import scipy
@@ -101,7 +102,7 @@ skip_unless_py10 = unittest.skipUnless(
 
 skip_if_32bit = unittest.skipIf(_32bit, "Not supported on 32 bit")
 
-IS_NUMPY_2 = numpy_support.numpy_version >= (2, 0)
+IS_NUMPY_2 = numpy_version >= (2, 0)
 skip_if_numpy_2 = unittest.skipIf(IS_NUMPY_2,
                                   "Not supported on numpy 2.0+")
 
@@ -118,7 +119,7 @@ def expected_failure_py312(fn):
         return fn
 
 def expected_failure_np2(fn):
-    if numpy_support.numpy_version == (2, 0):
+    if numpy_version == (2, 0):
         return unittest.expectedFailure(fn)
     else:
         return fn
