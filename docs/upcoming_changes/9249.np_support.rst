@@ -1,4 +1,0 @@
-Adds support for checking if dtypes are equal.
-----------------------------------------------
-
-Support is added for checking if two dtype objects are equal, for example `assert X.dtype == np.dtype(np.float64)`.

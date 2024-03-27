@@ -54,8 +54,9 @@ requirements:
     # Exclude 0.3.20 too
     # https://github.com/numba/numba/issues/8096
     - libopenblas >=0.3.18, !=0.3.20     # [arm64]
-    # CUDA 10.2 or later is required for CUDA support
-    - cudatoolkit >=10.2
+    # CUDA 11.2 or later is required for CUDA support
+    - cuda-version >=11.2
+    - cudatoolkit >=11.2
     # scipy 1.0 or later
     - scipy >=1.0
     # CUDA Python 11.6 or later
