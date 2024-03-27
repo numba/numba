@@ -134,8 +134,8 @@ def to_device(obj, stream=0, copy=True, to=None):
 
 
 @require_context
-def device_array(shape, dtype=np.float_, strides=None, order='C', stream=0):
-    """device_array(shape, dtype=np.float_, strides=None, order='C', stream=0)
+def device_array(shape, dtype=np.float64, strides=None, order='C', stream=0):
+    """device_array(shape, dtype=np.float64, strides=None, order='C', stream=0)
 
     Allocate an empty device ndarray. Similar to :meth:`numpy.empty`.
     """
@@ -146,9 +146,9 @@ def device_array(shape, dtype=np.float_, strides=None, order='C', stream=0):
 
 
 @require_context
-def managed_array(shape, dtype=np.float_, strides=None, order='C', stream=0,
+def managed_array(shape, dtype=np.float64, strides=None, order='C', stream=0,
                   attach_global=True):
-    """managed_array(shape, dtype=np.float_, strides=None, order='C', stream=0,
+    """managed_array(shape, dtype=np.float64, strides=None, order='C', stream=0,
                      attach_global=True)
 
     Allocate a np.ndarray with a buffer that is managed.
@@ -176,8 +176,8 @@ def managed_array(shape, dtype=np.float_, strides=None, order='C', stream=0,
 
 
 @require_context
-def pinned_array(shape, dtype=np.float_, strides=None, order='C'):
-    """pinned_array(shape, dtype=np.float_, strides=None, order='C')
+def pinned_array(shape, dtype=np.float64, strides=None, order='C'):
+    """pinned_array(shape, dtype=np.float64, strides=None, order='C')
 
     Allocate an :class:`ndarray <numpy.ndarray>` with a buffer that is pinned
     (pagelocked).  Similar to :func:`np.empty() <numpy.empty>`.
@@ -192,9 +192,9 @@ def pinned_array(shape, dtype=np.float_, strides=None, order='C'):
 
 
 @require_context
-def mapped_array(shape, dtype=np.float_, strides=None, order='C', stream=0,
+def mapped_array(shape, dtype=np.float64, strides=None, order='C', stream=0,
                  portable=False, wc=False):
-    """mapped_array(shape, dtype=np.float_, strides=None, order='C', stream=0,
+    """mapped_array(shape, dtype=np.float64, strides=None, order='C', stream=0,
                     portable=False, wc=False)
 
     Allocate a mapped ndarray with a buffer that is pinned and mapped on

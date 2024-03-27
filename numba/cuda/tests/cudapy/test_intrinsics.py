@@ -809,8 +809,8 @@ class TestCudaIntrinsic(CUDATestCase):
             with self.subTest(op=op):
                 kernel = cuda.jit("void(b1[:], f2, f2)")(fn)
 
-                expected = np.zeros(1, dtype=np.bool8)
-                got = np.zeros(1, dtype=np.bool8)
+                expected = np.zeros(1, dtype=np.bool_)
+                got = np.zeros(1, dtype=np.bool_)
                 arg2 = np.float16(2)
                 arg3 = np.float16(3)
                 arg4 = np.float16(4)
@@ -840,7 +840,7 @@ class TestCudaIntrinsic(CUDATestCase):
         for fn in functions:
             with self.subTest(fn=fn):
                 compiled = cuda.jit("void(b1[:], f2, f2, f2)")(fn)
-                ary = np.zeros(1, dtype=np.bool8)
+                ary = np.zeros(1, dtype=np.bool_)
                 arg1 = np.float16(2.)
                 arg2 = np.float16(3.)
                 arg3 = np.float16(4.)
