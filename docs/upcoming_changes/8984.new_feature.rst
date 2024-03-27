@@ -1,0 +1,8 @@
+Enhance guvectorize support in JIT code
+---------------------------------------
+
+Generalized universal function support is extended, it is now possible to call
+a ``@guvectorize`` decorated function from within a JIT-compiled function.
+However, please note that broadcasting is not supported yet. Calling a
+guvectorize function in a scenario where broadcast is needed may result in
+incorrect behavior.
