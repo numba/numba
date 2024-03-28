@@ -702,15 +702,18 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         internally in `self._impl_cache`.
         """
         flags = targetconfig.ConfigStack.top_or_none()
-        dict_flags = dict(flags.options) if flags is not None else {}
+
+        # update dict_flags with flags and self._jit_options
+        dict_flags = {}
+        if flags is not None:
+            for k in flags.options:
+                dict_flags[k] = str(getattr(flags, k))
         for key, value in self._jit_options.items():
             if key in dict_flags:
-                dict_flags["key"] = value
+                dict_flags[key] = str(value)
 
-        # FIXME: what's the real thing need to do is adding Ommitted to the args
         # check the pyfunc signature, if exist some kwargs, e.g., default=None,
-        # check whether kws specify them, if not,
-        # please add Omitted(default=None) to args
+        # if kws didn't specify them, add Omitted(default=None) to args
         ov_sig = inspect.signature(self._overload_func)
         if len(args) + len(kws) < len(ov_sig.parameters):
             for param in list(ov_sig.parameters.values())[len(args):]:
@@ -728,7 +731,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             self.context,
             flatten_args,
             tuple(),
-            tuple(dict_flags.items()),
+            tuple(sorted(dict_flags.items(), key=lambda item: item[0])),
         )
         try:
             impl, _ = self._impl_cache[cache_key]
