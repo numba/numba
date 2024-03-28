@@ -1,0 +1,5 @@
+Replace all occurrences of ``compile_internal`` by ``@overload``
+----------------------------------------------------------------
+
+``context.compile_internal`` was removed from ``cmathimpl.py`` in favor of
+``@overload``
