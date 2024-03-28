@@ -5,6 +5,7 @@ import sys
 import unittest
 from numba.tests.support import captured_stdout
 from numba.core.config import IS_WIN32
+from numba.np.numpy_support import numpy_version
 
 
 class MatplotlibBlocker:
@@ -482,7 +483,10 @@ class DocsExamplesTest(unittest.TestCase):
 
             self.assertEqual(result, 12)
             if IS_WIN32:
-                correct = ['ll->q']
+                if numpy_version < (2, 0):
+                    correct = ['ll->q']
+                else:
+                    correct = ['qq->q']
             else:
                 correct = ['ll->l']
             self.assertEqual(f.types, correct)
@@ -497,7 +501,10 @@ class DocsExamplesTest(unittest.TestCase):
 
             self.assertEqual(result, 2.0)
             if IS_WIN32:
-                correct = ['ll->q', 'dd->d']
+                if numpy_version < (2, 0):
+                    correct = ['ll->q', 'dd->d']
+                else:
+                    correct = ['qq->q', 'dd->d']
             else:
                 correct = ['ll->l', 'dd->d']
             self.assertEqual(f.types, correct)
@@ -512,7 +519,10 @@ class DocsExamplesTest(unittest.TestCase):
 
             self.assertEqual(result, 2.0)
             if IS_WIN32:
-                correct = ['ll->q', 'dd->d']
+                if numpy_version < (2, 0):
+                    correct = ['ll->q', 'dd->d']
+                else:
+                    correct = ['qq->q', 'dd->d']
             else:
                 correct = ['ll->l', 'dd->d']
             self.assertEqual(f.types, correct)
@@ -586,7 +596,7 @@ class DocsExamplesTest(unittest.TestCase):
 
             # magictoken.ex_guvectorize_dynamic_call_four.begin
             x = np.arange(5, dtype=np.int64)
-            y = 2.2
+            y = 2
             res = np.zeros_like(x)
             g(x, y, res)
             print(res)

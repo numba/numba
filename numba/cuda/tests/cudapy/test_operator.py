@@ -261,7 +261,7 @@ class TestOperatorModule(CUDATestCase):
             with self.subTest(op=op):
                 kernel = cuda.jit("void(b1[:], f2, f2)")(fn)
 
-                got = np.zeros(1, dtype=np.bool8)
+                got = np.zeros(1, dtype=np.bool_)
                 arg1 = np.random.random(1).astype(np.float16)
                 arg2 = np.random.random(1).astype(np.float16)
 
@@ -284,7 +284,7 @@ class TestOperatorModule(CUDATestCase):
             with self.subTest(op=op, ty=ty):
                 kernel = cuda.jit(fn)
 
-                got = np.zeros(1, dtype=np.bool8)
+                got = np.zeros(1, dtype=np.bool_)
                 arg1 = np.random.random(1).astype(np.float16)
                 arg2 = (np.random.random(1) * 100).astype(ty)
 
@@ -302,7 +302,7 @@ class TestOperatorModule(CUDATestCase):
         for fn in functions:
             with self.subTest(fn=fn):
                 compiled = cuda.jit("void(b1[:], f2, f2, f2)")(fn)
-                ary = np.zeros(1, dtype=np.bool8)
+                ary = np.zeros(1, dtype=np.bool_)
                 arg1 = np.float16(2.)
                 arg2 = np.float16(3.)
                 arg3 = np.float16(4.)
@@ -319,7 +319,7 @@ class TestOperatorModule(CUDATestCase):
         for fn in functions:
             with self.subTest(fn=fn):
                 compiled = cuda.jit("void(b1[:], f2, f2, f2)")(fn)
-                ary = np.zeros(1, dtype=np.bool8)
+                ary = np.zeros(1, dtype=np.bool_)
                 arg1 = np.float16(2.)
                 arg2 = np.float16(3.)
                 arg3 = np.float16(1.)

@@ -17,6 +17,7 @@ from numba.np.ufunc import ufuncbuilder
 from numba.np import numpy_support
 from typing import Callable
 from llvmlite import ir
+from numba.core.compiler_lock import global_compiler_lock
 
 
 def make_dufunc_kernel(_dufunc):
@@ -232,6 +233,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
             argtys.append(argty)
         return self._compile_for_argtys(tuple(argtys))
 
+    @global_compiler_lock
     def _compile_for_argtys(self, argtys, return_type=None):
         """
         Given a tuple of argument types (these should be the array
@@ -247,6 +249,16 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
             sig = argtys
         else:
             sig = return_type(*argtys)
+
+        for k, cres in self._dispatcher.overloads.items():
+            if argtys == k.args:
+                msg = ("Compilation requested for previously compiled argument"
+                       f" types ({argtys}). This has no effect and perhaps "
+                       "indicates a bug in the calling code (compiling a "
+                       "ufunc more than once for the same signature")
+                warnings.warn(msg, errors.NumbaWarning)
+                return cres
+
         cres, argtys, return_type = ufuncbuilder._compile_element_wise_function(
             self._dispatcher, self.targetoptions, sig)
         actual_sig = ufuncbuilder._finalize_ufunc_signature(
