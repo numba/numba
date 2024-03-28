@@ -59,6 +59,8 @@ gpuci_mamba_retry create -n numba_ci -y \
                   "rapidsai-nightly::cubinlinker" \
                   "conda-forge::ptxcompiler" \
                   "numba/label/dev::llvmlite" \
+                  "numpy=${NUMPY_VER}" \
+                  "scipy" \
                   "cffi" \
                   "psutil" \
                   "gcc_linux-64=7" \
@@ -66,8 +68,6 @@ gpuci_mamba_retry create -n numba_ci -y \
                   "setuptools"
 
 conda activate numba_ci
-
-pip install -i https://pypi.anaconda.org/scientific-python-nightly-wheels/simple numpy==2.0.0b1
 
 if [ $NUMBA_CUDA_USE_NVIDIA_BINDING == "1" ]
 then

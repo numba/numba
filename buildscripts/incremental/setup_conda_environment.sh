@@ -34,15 +34,12 @@ conda list
 # NOTE: gitpython is needed for CI testing to do the test slicing
 # NOTE: pyyaml is used to ensure that the Azure CI config is valid
 
-conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON pip gitpython pyyaml
+conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml
 
 # Activate first
 set +v
 source activate $CONDA_ENV
 set -v
-
-# Install NumPy 2.0 wheels
-pip install -i https://pypi.anaconda.org/scientific-python-nightly-wheels/simple numpy==2.0.0b1
 
 # Install optional packages into activated env
 echo "PYTHON=$PYTHON"
@@ -53,7 +50,7 @@ if [ "${VANILLA_INSTALL}" != "yes" ]; then
     # pexpect is used to run the gdb tests.
     # ipykernel is used for testing ipython behaviours.
     if [ $PYTHON \< "3.12" ]; then
-        $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipykernel pygments pexpect
+        $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipykernel scipy pygments pexpect
     else
         # At the time of writing `ipykernel` was not available for Python 3.12
         $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython scipy pygments pexpect
@@ -77,7 +74,7 @@ elif  [[ $(uname) == Darwin ]]; then
 fi
 
 # Install latest correct build
-$CONDA_INSTALL -c numba/label/dev llvmlite=0.43
+$CONDA_INSTALL -c numba/label/dev llvmlite=0.42
 
 # Install dependencies for building the documentation
 if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx docutils sphinx_rtd_theme pygments numpydoc; fi
