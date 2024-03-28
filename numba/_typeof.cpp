@@ -12,7 +12,9 @@
 
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/ndarrayobject.h>
-
+#if NPY_ABI_VERSION >= 0x02000000
+    #include <numpy/npy_2_compat.h>
+#endif
 
 /* Cached typecodes for basic scalar types */
 static int tc_int8;
@@ -232,7 +234,11 @@ compute_dtype_fingerprint(string_writer_t *w, PyArray_Descr *descr)
 #if NPY_API_VERSION >= 0x00000007
     if (PyTypeNum_ISDATETIME(typenum)) {
         PyArray_DatetimeMetaData *md;
+#if NPY_ABI_VERSION >= 0x02000000
+        md = &(((PyArray_DatetimeDTypeMetaData *)PyDataType_C_METADATA(descr))->meta);
+#else
         md = &(((PyArray_DatetimeDTypeMetaData *)descr->c_metadata)->meta);
+#endif
         TRY(string_writer_put_char, w, (char) typenum);
         TRY(string_writer_put_char, w, (char) md->base);
         return string_writer_put_int32(w, (char) md->num);

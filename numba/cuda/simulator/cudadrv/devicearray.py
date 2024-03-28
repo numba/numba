@@ -3,6 +3,7 @@ The Device Array API is not implemented in the simulator. This module provides
 stubs to allow tests to import correctly.
 '''
 from contextlib import contextmanager
+from numba.np.numpy_support import numpy_version
 
 import numpy as np
 
@@ -165,7 +166,7 @@ class FakeCUDAArray(object):
                 ary_core,
                 order='C' if self_core.flags['C_CONTIGUOUS'] else 'F',
                 subok=True,
-                copy=False)
+                copy=False if numpy_version < (2, 0) else None)
             check_array_compatibility(self_core, ary_core)
         np.copyto(self_core._ary, ary_core)
 
@@ -299,7 +300,9 @@ def check_array_compatibility(ary1, ary2):
 
 
 def to_device(ary, stream=0, copy=True, to=None):
-    ary = np.array(ary, copy=False, subok=True)
+    ary = np.array(ary,
+                   copy=False if numpy_version < (2, 0) else None,
+                   subok=True)
     sentry_contiguous(ary)
     if to is None:
         buffer_dtype = np.int64 if ary.dtype.char in 'Mm' else ary.dtype
@@ -327,11 +330,11 @@ def mapped_array(*args, **kwargs):
     return device_array(*args, **kwargs)
 
 
-def pinned_array(shape, dtype=np.float_, strides=None, order='C'):
+def pinned_array(shape, dtype=np.float64, strides=None, order='C'):
     return np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order)
 
 
-def managed_array(shape, dtype=np.float_, strides=None, order='C'):
+def managed_array(shape, dtype=np.float64, strides=None, order='C'):
     return np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order)
 
 
@@ -397,7 +400,7 @@ def auto_device(ary, stream=0, copy=True):
     if not isinstance(ary, np.void):
         ary = np.array(
             ary,
-            copy=False,
+            copy=False if numpy_version < (2, 0) else None,
             subok=True)
     return to_device(ary, stream, copy), True
 

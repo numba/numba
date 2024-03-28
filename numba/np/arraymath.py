@@ -1422,7 +1422,6 @@ def _early_return_impl(val):
     return impl
 
 
-@overload_method(types.Array, 'ptp')
 @overload(np.ptp)
 def np_ptp(a):
 
@@ -1451,8 +1450,12 @@ def np_ptp(a):
     return np_ptp_impl
 
 
+if numpy_version < (2, 0):
+    overload_method(types.Array, 'ptp')(np_ptp)
+
 #----------------------------------------------------------------------------
 # Median and partitioning
+
 
 @register_jitable
 def nan_aware_less_than(a, b):
@@ -3140,7 +3143,6 @@ def round_ndigits(x, ndigits):
 
 @overload(np.around)
 @overload(np.round)
-@overload(np.round_)
 def impl_np_round(a, decimals=0, out=None):
     if not type_can_asarray(a):
         raise TypingError('The argument "a" must be array-like')
@@ -3194,6 +3196,10 @@ def impl_np_round(a, decimals=0, out=None):
                     out[index] = np.round(val, decimals)
                 return out
             return impl
+
+
+if numpy_version < (2, 0):
+    overload(np.round_)(impl_np_round)
 
 
 @overload(np.sinc)
@@ -4338,19 +4344,20 @@ def np_asarray(a, dtype=None):
     return impl
 
 
-@overload(np.asfarray)
-def np_asfarray(a, dtype=np.float64):
-    # convert numba dtype types into NumPy dtype
-    if isinstance(dtype, types.Type):
-        dtype = as_dtype(dtype)
-    if not np.issubdtype(dtype, np.inexact):
-        dx = types.float64
-    else:
-        dx = dtype
+if numpy_version < (2, 0):
+    @overload(np.asfarray)
+    def np_asfarray(a, dtype=np.float64):
+        # convert numba dtype types into NumPy dtype
+        if isinstance(dtype, types.Type):
+            dtype = as_dtype(dtype)
+        if not np.issubdtype(dtype, np.inexact):
+            dx = types.float64
+        else:
+            dx = dtype
 
-    def impl(a, dtype=np.float64):
-        return np.asarray(a, dx)
-    return impl
+        def impl(a, dtype=np.float64):
+            return np.asarray(a, dx)
+        return impl
 
 
 @overload(np.extract)
@@ -4583,9 +4590,9 @@ def window_generator(func):
         def window_impl(M):
 
             if M < 1:
-                return np.array((), dtype=np.float_)
+                return np.array((), dtype=np.float64)
             if M == 1:
-                return np.ones(1, dtype=np.float_)
+                return np.ones(1, dtype=np.float64)
             return func(M)
 
         return window_impl
@@ -4686,8 +4693,8 @@ def _i0(x):
 
 @register_jitable
 def _i0n(n, alpha, beta):
-    y = np.empty_like(n, dtype=np.float_)
-    t = _i0(np.float_(beta))
+    y = np.empty_like(n, dtype=np.float64)
+    t = _i0(np.float64(beta))
     for i in range(len(y)):
         y[i] = _i0(beta * np.sqrt(1 - ((n[i] - alpha) / alpha)**2.0)) / t
 
@@ -4704,9 +4711,9 @@ def np_kaiser(M, beta):
 
     def np_kaiser_impl(M, beta):
         if M < 1:
-            return np.array((), dtype=np.float_)
+            return np.array((), dtype=np.float64)
         if M == 1:
-            return np.ones(1, dtype=np.float_)
+            return np.ones(1, dtype=np.float64)
 
         n = np.arange(0, M)
         alpha = (M - 1) / 2.0

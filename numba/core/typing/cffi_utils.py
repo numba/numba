@@ -85,7 +85,7 @@ def _type_map():
             ffi.typeof('uint32_t') :            types.uintc,
             ffi.typeof('int64_t') :             types.longlong,
             ffi.typeof('uint64_t') :            types.ulonglong,
-            ffi.typeof('float') :               types.float_,
+            ffi.typeof('float') :               types.float32,
             ffi.typeof('double') :              types.double,
             ffi.typeof('ssize_t') :             types.intp,
             ffi.typeof('size_t') :              types.uintp,

@@ -18,6 +18,7 @@ from numba.cuda.cudadrv import devices
 from numba.cuda.cudadrv import driver as _driver
 from numba.core import types, config
 from numba.np.unsafe.ndarray import to_fixed_tuple
+from numba.np.numpy_support import numpy_version
 from numba.misc import dummyarray
 from numba.np import numpy_support
 from numba.cuda.api_util import prepare_shape_strides_dtype
@@ -234,7 +235,8 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
                 ary_core,
                 order='C' if self_core.flags['C_CONTIGUOUS'] else 'F',
                 subok=True,
-                copy=not ary_core.flags['WRITEABLE'])
+                copy=(not ary_core.flags['WRITEABLE'])
+                if numpy_version < (2, 0) else None)
             check_array_compatibility(self_core, ary_core)
             _driver.host_to_device(self, ary_core, self.alloc_size,
                                    stream=stream)
@@ -870,7 +872,7 @@ def auto_device(obj, stream=0, copy=True, user_explicit=False):
             # that are already `ndarray`s.
             obj = np.array(
                 obj,
-                copy=False,
+                copy=False if numpy_version < (2, 0) else None,
                 subok=True)
             sentry_contiguous(obj)
             devobj = from_array_like(obj, stream=stream)

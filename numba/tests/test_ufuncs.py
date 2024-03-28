@@ -18,6 +18,7 @@ from numba.np import numpy_support
 from numba.core.registry import cpu_target
 from numba.core.base import BaseContext
 from numba.np import ufunc_db
+from numba.tests.support import expected_failure_np2
 
 is32bits = tuple.__itemsize__ == 4
 iswindows = sys.platform.startswith('win32')
@@ -1695,6 +1696,8 @@ class TestLoopTypesComplex(_LoopTypesTester):
 
 
 TestLoopTypesComplex.autogenerate()
+expected_failure_np2(TestLoopTypesComplex.test_sign_F_F)
+expected_failure_np2(TestLoopTypesComplex.test_sign_D_D)
 
 
 class TestLoopTypesDatetime(_LoopTypesTester):
