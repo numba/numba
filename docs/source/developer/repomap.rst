@@ -333,8 +333,6 @@ that must be matched during type inference.
 - :ghfile:`numba/core/typing` - Type signature module
 - :ghfile:`numba/core/typing/templates.py` - Base classes for type signature
   templates
-- :ghfile:`numba/core/typing/cmathdecl.py` - Python complex math (``cmath``)
-  module
 - :ghfile:`numba/core/typing/bufproto.py` - Interpreting objects supporting the
   buffer protocol
 - :ghfile:`numba/core/typing/mathdecl.py` - Python ``math`` module

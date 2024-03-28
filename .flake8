@@ -68,7 +68,6 @@ exclude =
     numba/cpython/setobj.py
     numba/core/options.py
     numba/cpython/printimpl.py
-    numba/cpython/cmathimpl.py
     numba/cpython/tupleobj.py
     numba/cpython/mathimpl.py
     numba/core/registry.py
@@ -214,7 +213,6 @@ exclude =
     numba/tests/npyufunc/test_parallel_ufunc_issues.py
     numba/tests/npyufunc/test_parallel_env_variable.py
     numba/tests/npyufunc/test_gufunc.py
-    numba/core/typing/cmathdecl.py
     numba/core/typing/bufproto.py
     numba/core/typing/mathdecl.py
     numba/core/typing/listdecl.py

@@ -6,52 +6,43 @@ Implement the cmath module functions.
 import cmath
 import math
 
-from numba.core.imputils import Registry, impl_ret_untracked
+from numba.core.imputils import Registry
 from numba.core import types, cgutils
-from numba.core.typing import signature
-from numba.cpython import builtins, mathimpl
+from numba.cpython import mathimpl
 from numba.core.extending import overload
 
 registry = Registry('cmathimpl')
 lower = registry.lower
 
 
-def is_nan(builder, z):
-    return builder.fcmp_unordered('uno', z.real, z.imag)
+@overload(cmath.isnan)
+def isnan_float_impl(z):
+    if not isinstance(z, types.Complex):
+        return
 
-def is_inf(builder, z):
-    return builder.or_(mathimpl.is_inf(builder, z.real),
-                       mathimpl.is_inf(builder, z.imag))
-
-def is_finite(builder, z):
-    return builder.and_(mathimpl.is_finite(builder, z.real),
-                        mathimpl.is_finite(builder, z.imag))
+    def impl(z):
+        return math.isnan(z.real) or math.isnan(z.imag)
+    return impl
 
 
-@lower(cmath.isnan, types.Complex)
-def isnan_float_impl(context, builder, sig, args):
-    [typ] = sig.args
-    [value] = args
-    z = context.make_complex(builder, typ, value=value)
-    res = is_nan(builder, z)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+@overload(cmath.isinf)
+def isinf_float_impl(z):
+    if not isinstance(z, types.Complex):
+        return
 
-@lower(cmath.isinf, types.Complex)
-def isinf_float_impl(context, builder, sig, args):
-    [typ] = sig.args
-    [value] = args
-    z = context.make_complex(builder, typ, value=value)
-    res = is_inf(builder, z)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+    def impl(z):
+        return math.isinf(z.real) or math.isinf(z.imag)
+    return impl
 
 
-@lower(cmath.isfinite, types.Complex)
-def isfinite_float_impl(context, builder, sig, args):
-    [typ] = sig.args
-    [value] = args
-    z = context.make_complex(builder, typ, value=value)
-    res = is_finite(builder, z)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+@overload(cmath.isfinite)
+def isfinite_float_impl(z):
+    if not isinstance(z, types.Complex):
+        return
+
+    def impl(z):
+        return math.isfinite(z.real) and math.isfinite(z.imag)
+    return impl
 
 
 @overload(cmath.rect)
@@ -81,89 +72,78 @@ def impl_cmath_rect(r, phi):
         return impl
 
 
-def intrinsic_complex_unary(inner_func):
-    def wrapper(context, builder, sig, args):
-        [typ] = sig.args
-        [value] = args
-        z = context.make_complex(builder, typ, value=value)
-        x = z.real
-        y = z.imag
-        # Same as above: math.isfinite() is unavailable on 2.x so we precompute
-        # its value and pass it to the pure Python implementation.
-        x_is_finite = mathimpl.is_finite(builder, x)
-        y_is_finite = mathimpl.is_finite(builder, y)
-        inner_sig = signature(sig.return_type,
-                              *(typ.underlying_float,) * 2 + (types.boolean,) * 2)
-        res = context.compile_internal(builder, inner_func, inner_sig,
-                                        (x, y, x_is_finite, y_is_finite))
-        return impl_ret_untracked(context, builder, sig, res)
-    return wrapper
-
-
 NAN = float('nan')
 INF = float('inf')
 
-@lower(cmath.exp, types.Complex)
-@intrinsic_complex_unary
-def exp_impl(x, y, x_is_finite, y_is_finite):
-    """cmath.exp(x + y j)"""
-    if x_is_finite:
-        if y_is_finite:
-            c = math.cos(y)
-            s = math.sin(y)
-            r = math.exp(x)
-            return complex(r * c, r * s)
+
+@overload(cmath.exp)
+def exp_impl(z):
+    if not isinstance(z, types.Complex):
+        return
+
+    def _exp_impl(z):
+        """cmath.exp(x + y j)"""
+        x, y = z.real, z.imag
+        x_is_finite = math.isfinite(x)
+        y_is_finite = math.isfinite(y)
+        if x_is_finite:
+            if y_is_finite:
+                c = math.cos(y)
+                s = math.sin(y)
+                r = math.exp(x)
+                return complex(r * c, r * s)
+            else:
+                return complex(NAN, NAN)
+        elif math.isnan(x):
+            if y:
+                return complex(x, x)  # nan + j nan
+            else:
+                return complex(x, y)  # nan + 0j
+        elif x > 0.0:
+            # x == +inf
+            if y_is_finite:
+                real = math.cos(y)
+                imag = math.sin(y)
+                # Avoid NaNs if math.cos(y) or math.sin(y) == 0
+                # (e.g. cmath.exp(inf + 0j) == inf + 0j)
+                if real != 0:
+                    real *= x
+                if imag != 0:
+                    imag *= x
+                return complex(real, imag)
+            else:
+                return complex(x, NAN)
         else:
-            return complex(NAN, NAN)
-    elif math.isnan(x):
-        if y:
-            return complex(x, x)  # nan + j nan
-        else:
-            return complex(x, y)  # nan + 0j
-    elif x > 0.0:
-        # x == +inf
-        if y_is_finite:
-            real = math.cos(y)
-            imag = math.sin(y)
-            # Avoid NaNs if math.cos(y) or math.sin(y) == 0
-            # (e.g. cmath.exp(inf + 0j) == inf + 0j)
-            if real != 0:
-                real *= x
-            if imag != 0:
-                imag *= x
-            return complex(real, imag)
-        else:
-            return complex(x, NAN)
+            # x == -inf
+            if y_is_finite:
+                r = math.exp(x)
+                c = math.cos(y)
+                s = math.sin(y)
+                return complex(r * c, r * s)
+            else:
+                r = 0
+                return complex(r, r)
+    return _exp_impl
+
+
+@overload(cmath.log)
+def log_base_impl(x, base=None):
+    if not isinstance(x, types.Complex):
+        return
+
+    if cgutils.is_nonelike(base):
+        def impl(x, base=None):
+            """cmath.log(z + y j)"""
+            z, y = x.real, x.imag
+            a = math.log(math.hypot(z, y))
+            b = math.atan2(y, z)
+            return complex(a, b)
+        return impl
     else:
-        # x == -inf
-        if y_is_finite:
-            r = math.exp(x)
-            c = math.cos(y)
-            s = math.sin(y)
-            return complex(r * c, r * s)
-        else:
-            r = 0
-            return complex(r, r)
-
-@lower(cmath.log, types.Complex)
-@intrinsic_complex_unary
-def log_impl(x, y, x_is_finite, y_is_finite):
-    """cmath.log(x + y j)"""
-    a = math.log(math.hypot(x, y))
-    b = math.atan2(y, x)
-    return complex(a, b)
-
-
-@lower(cmath.log, types.Complex, types.Complex)
-def log_base_impl(context, builder, sig, args):
-    """cmath.log(z, base)"""
-    [z, base] = args
-
-    def log_base(z, base):
-        return cmath.log(z) / cmath.log(base)
-
-    res = context.compile_internal(builder, log_base, sig, args)
-    return impl_ret_untracked(context, builder, sig, res)
+        def log_base(x, base=None):
+            """cmath.log(x, base)"""
+            return cmath.log(x) / cmath.log(base)
+        return log_base
 
 
 @overload(cmath.log10)
@@ -206,13 +186,13 @@ def polar_impl(x):
     return impl
 
 
-@lower(cmath.sqrt, types.Complex)
-def sqrt_impl(context, builder, sig, args):
+@overload(cmath.sqrt)
+def sqrt_impl(z):
     # We risk spurious overflow for components >= FLT_MAX / (1 + sqrt(2)).
 
     SQRT2 = 1.414213562373095048801688724209698079E0
     ONE_PLUS_SQRT2 = (1. + SQRT2)
-    theargflt = sig.args[0].underlying_float
+    theargflt = z.underlying_float if isinstance(z, types.Complex) else z
     # Get a type specific maximum value so scaling for overflow is based on that
     MAX = mathimpl.DBL_MAX if theargflt.bitwidth == 64 else mathimpl.FLT_MAX
     # THRES will be double precision, should not impact typing as it's just
@@ -221,7 +201,7 @@ def sqrt_impl(context, builder, sig, args):
     # of this value in the case of a 32bit argument.
     THRES = MAX / ONE_PLUS_SQRT2
 
-    def sqrt_impl(z):
+    def _sqrt_impl(z):
         """cmath.sqrt(z)"""
         # This is NumPy's algorithm, see npy_csqrt() in npy_math_complex.c.src
         a = z.real
@@ -263,18 +243,19 @@ def sqrt_impl(context, builder, sig, args):
         else:
             return complex(real, imag)
 
-    res = context.compile_internal(builder, sqrt_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig, res)
+    return _sqrt_impl
 
 
-@lower(cmath.cos, types.Complex)
-def cos_impl(context, builder, sig, args):
-    def cos_impl(z):
+@overload(cmath.cos)
+def cos_impl(z):
+    if not isinstance(z, types.Complex):
+        return
+
+    def _cos_impl(z):
         """cmath.cos(z) = cmath.cosh(z j)"""
         return cmath.cosh(complex(-z.imag, z.real))
+    return _cos_impl
 
-    res = context.compile_internal(builder, cos_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig, res)
 
 @overload(cmath.cosh)
 def impl_cmath_cosh(z):
@@ -302,19 +283,21 @@ def impl_cmath_cosh(z):
                 imag = -imag
             return complex(real, imag)
         return complex(math.cos(y) * math.cosh(x),
-                    math.sin(y) * math.sinh(x))
+                       math.sin(y) * math.sinh(x))
     return cosh_impl
 
 
-@lower(cmath.sin, types.Complex)
-def sin_impl(context, builder, sig, args):
-    def sin_impl(z):
+@overload(cmath.sin)
+def sin_impl(z):
+    if not isinstance(z, types.Complex):
+        return
+
+    def _sin_impl(z):
         """cmath.sin(z) = -j * cmath.sinh(z j)"""
         r = cmath.sinh(complex(-z.imag, z.real))
         return complex(r.imag, -r.real)
+    return _sin_impl
 
-    res = context.compile_internal(builder, sin_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig, res)
 
 @overload(cmath.sinh)
 def impl_cmath_sinh(z):
@@ -343,15 +326,16 @@ def impl_cmath_sinh(z):
     return sinh_impl
 
 
-@lower(cmath.tan, types.Complex)
-def tan_impl(context, builder, sig, args):
-    def tan_impl(z):
+@overload(cmath.tan)
+def tan_impl(z):
+    if not isinstance(z, types.Complex):
+        return
+
+    def _tan_impl(z):
         """cmath.tan(z) = -j * cmath.tanh(z j)"""
         r = cmath.tanh(complex(-z.imag, z.real))
         return complex(r.imag, -r.real)
-
-    res = context.compile_internal(builder, tan_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig, res)
+    return _tan_impl
 
 
 @overload(cmath.tanh)
@@ -384,12 +368,15 @@ def impl_cmath_tanh(z):
     return tanh_impl
 
 
-@lower(cmath.acos, types.Complex)
-def acos_impl(context, builder, sig, args):
+@overload(cmath.acos)
+def acos_impl(z):
+    if not isinstance(z, types.Complex):
+        return
+
     LN_4 = math.log(4)
     THRES = mathimpl.FLT_MAX / 4
 
-    def acos_impl(z):
+    def _acos_impl(z):
         """cmath.acos(z)"""
         # CPython's algorithm (see c_acos() in cmathmodule.c)
         if abs(z.real) > THRES or abs(z.imag) > THRES:
@@ -406,9 +393,8 @@ def acos_impl(context, builder, sig, args):
             real = 2. * math.atan2(s1.real, s2.real)
             imag = math.asinh(s2.real * s1.imag - s2.imag * s1.real)
             return complex(real, imag)
+    return _acos_impl
 
-    res = context.compile_internal(builder, acos_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig, res)
 
 @overload(cmath.acosh)
 def impl_cmath_acosh(z):
@@ -439,13 +425,16 @@ def impl_cmath_acosh(z):
     return acosh_impl
 
 
-@lower(cmath.asinh, types.Complex)
-def asinh_impl(context, builder, sig, args):
-    LN_4 = math.log(4)
+@overload(cmath.asinh)
+def asinh_impl(z):
+    if not isinstance(z, types.Complex):
+        return
+
     THRES = mathimpl.FLT_MAX / 4
 
-    def asinh_impl(z):
+    def _asinh_impl(z):
         """cmath.asinh(z)"""
+        LN_4 = math.log(4)
         # CPython's algorithm (see c_asinh() in cmathmodule.c)
         if abs(z.real) > THRES or abs(z.imag) > THRES:
             real = math.copysign(
@@ -459,23 +448,27 @@ def asinh_impl(context, builder, sig, args):
             real = math.asinh(s1.real * s2.imag - s2.real * s1.imag)
             imag = math.atan2(z.imag, s1.real * s2.real - s1.imag * s2.imag)
             return complex(real, imag)
+    return _asinh_impl
 
-    res = context.compile_internal(builder, asinh_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig, res)
 
-@lower(cmath.asin, types.Complex)
-def asin_impl(context, builder, sig, args):
-    def asin_impl(z):
+@overload(cmath.asin)
+def asin_impl(z):
+    if not isinstance(z, types.Complex):
+        return
+
+    def _asin_impl(z):
         """cmath.asin(z) = -j * cmath.asinh(z j)"""
         r = cmath.asinh(complex(-z.imag, z.real))
         return complex(r.imag, -r.real)
+    return _asin_impl
 
-    res = context.compile_internal(builder, asin_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig, res)
 
-@lower(cmath.atan, types.Complex)
-def atan_impl(context, builder, sig, args):
-    def atan_impl(z):
+@overload(cmath.atan)
+def atan_impl(z):
+    if not isinstance(z, types.Complex):
+        return
+
+    def _atan_impl(z):
         """cmath.atan(z) = -j * cmath.atanh(z j)"""
         r = cmath.atanh(complex(-z.imag, z.real))
         if math.isinf(z.real) and math.isnan(z.imag):
@@ -483,18 +476,19 @@ def atan_impl(context, builder, sig, args):
             return complex(r.imag, r.real)
         else:
             return complex(r.imag, -r.real)
+    return _atan_impl
 
-    res = context.compile_internal(builder, atan_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig, res)
 
-@lower(cmath.atanh, types.Complex)
-def atanh_impl(context, builder, sig, args):
-    LN_4 = math.log(4)
+@overload(cmath.atanh)
+def atanh_impl(z):
+    if not isinstance(z, types.Complex):
+        return
+
     THRES_LARGE = math.sqrt(mathimpl.FLT_MAX / 4)
     THRES_SMALL = math.sqrt(mathimpl.FLT_MIN)
     PI_12 = math.pi / 2
 
-    def atanh_impl(z):
+    def _atanh_impl(z):
         """cmath.atanh(z)"""
         # CPython's algorithm (see c_atanh() in cmathmodule.c)
         if z.real < 0.:
@@ -511,9 +505,9 @@ def atanh_impl(context, builder, sig, args):
             elif math.isinf(z.real):
                 real = 0.
             else:
-                # may be safe from overflow, depending on hypot's implementation...
+                # may be safe from overflow, depending on hypot's implementation
                 h = math.hypot(z.real * 0.5, z.imag * 0.5)
-                real = z.real/4./h/h
+                real = z.real/4./h/h  # noqa: E226
             imag = -math.copysign(PI_12, -z.imag)
         elif z.real == 1. and ay < THRES_SMALL:
             # C99 standard says:  atanh(1+/-0.) should be inf +/- 0j
@@ -538,5 +532,4 @@ def atanh_impl(context, builder, sig, args):
         else:
             return complex(real, imag)
 
-    res = context.compile_internal(builder, atanh_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig, res)
+    return _atanh_impl
