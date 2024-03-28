@@ -8,7 +8,6 @@ from numba.core import (cgutils, config, debuginfo, itanium_mangler, types,
 from numba.core.dispatcher import Dispatcher
 from numba.core.base import BaseContext
 from numba.core.callconv import BaseCallConv, MinimalCallConv
-from numba.core.typing import cmathdecl
 from numba.core import datamodel
 
 from .cudadrv import nvvm
@@ -27,7 +26,6 @@ class CUDATypingContext(typing.BaseContext):
         self.install_registry(cudadecl.registry)
         self.install_registry(cffi_utils.registry)
         self.install_registry(cudamath.registry)
-        self.install_registry(cmathdecl.registry)
         self.install_registry(libdevicedecl.registry)
         self.install_registry(enumdecl.registry)
         self.install_registry(vector_types.typing_registry)
