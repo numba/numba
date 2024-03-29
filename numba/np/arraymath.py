@@ -13,8 +13,9 @@ import numpy as np
 
 from numba.core import types, cgutils
 from numba.core.extending import overload, overload_method, register_jitable
-from numba.np.numpy_support import (as_dtype, type_can_asarray, type_is_scalar, is_nonelike,
-                                    check_is_integer, lt_floats, lt_complex)
+from numba.np.numpy_support import (as_dtype, type_can_asarray, type_is_scalar,
+                                    is_nonelike, check_is_integer, lt_floats,
+                                    lt_complex)
 from numba.np.np_global_consts import numpy_version
 from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
                                  impl_ret_new_ref, impl_ret_untracked)
