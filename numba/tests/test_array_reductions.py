@@ -306,6 +306,9 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             expected = pyfunc(arr)
             got = cfunc(arr)
             self.assertPreciseEqual(got, expected)
+        
+        check([])
+
 
         # Odd sizes
         def check_odd(a):
