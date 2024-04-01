@@ -199,7 +199,7 @@ def _get_equal(context, module, datamodel, container_element_type):
     return equal_fn
 
 
-def _get_primitive_equal(context, module, datamodel, container_element_type):
+def _get_primitive_equal(context, module, datamodel, element_type):
     assert not datamodel.contains_nrt_meminfo()
 
     data_ptr_ty = ir.IntType(8).as_pointer()
@@ -207,8 +207,8 @@ def _get_primitive_equal(context, module, datamodel, container_element_type):
     equal_fn = cgutils.get_or_insert_function(
         module,
         equal_fnty,
-        name='.numba_{}.{}_equal'.format(context.fndesc.mangled_name,
-                                         container_element_type),
+        name='.numba_{}.{}_equal'.format(
+            context.fndesc.mangled_name, element_type),
     )
     builder = ir.IRBuilder(equal_fn.append_basic_block())
     lhs_ptr = builder.bitcast(equal_fn.args[0], datamodel.be_type.as_pointer())
