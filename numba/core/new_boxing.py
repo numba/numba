@@ -122,6 +122,48 @@ def unbox_float(typ, obj, c):
     return NativeValue(val, is_error=c.pyapi.c_api_error())
 
 
+@box(types.PythonComplex)
+def box_py_complex(typ, val, c):
+    cval = c.context.make_complex(c.builder, typ, value=val)
+    assert typ == types.py_complex128
+    freal, fimag = cval.real, cval.imag
+    return c.pyapi.complex_from_doubles(freal, fimag)
+
+
+@unbox(types.PythonComplex)
+@unbox(types.NumPyComplex)
+def unbox_py_complex(typ, obj, c):
+    cplx = c.context.make_complex(c.builder, typ)
+    ok = c.pyapi.complex_adaptor(obj, cplx._getpointer())
+    failed = cgutils.is_false(c.builder, ok)
+    return NativeValue(cplx._getvalue(), is_error=failed)
+
+
+@box(types.NumPyComplex)
+def box_np_complex(typ, val, c):
+    cval = c.context.make_complex(c.builder, typ, value=val)
+    if typ == types.np_complex64:
+        # TODO: Type System Changes, this branch misbehaves
+        freal = c.builder.fpext(cval.real, c.pyapi.double)
+        fimag = c.builder.fpext(cval.imag, c.pyapi.double)
+    else:
+        assert typ == types.np_complex128
+        freal, fimag = cval.real, cval.imag
+    py_scalar = c.pyapi.complex_from_doubles(freal, fimag)
+
+    numpy_name = c.context.insert_const_string(c.builder.module, 'numpy')
+    numpy_module = c.pyapi.import_module_noblock(numpy_name)
+    type_str = typ.name.split('np_')[1]
+
+    np_scalar_constructor = c.pyapi.object_getattr_string(numpy_module, type_str)
+    np_scalar = c.pyapi.call_function_objargs(np_scalar_constructor, (py_scalar,))
+
+    c.pyapi.decref(np_scalar_constructor)
+    c.pyapi.decref(py_scalar)
+
+    return np_scalar
+
+
 @box(types.NoneType)
 def box_none(typ, val, c):
     return c.pyapi.make_none()
