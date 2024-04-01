@@ -270,8 +270,8 @@ def _get_zero(context, module, datamodel, element_type):
     # this is a zero constant of the right type
     if hasattr(datamodel.fe_type, 'width'):
         width = datamodel.fe_type.width
-    elif hasattr(datamodel.fe_type, 'width'):
-        width = datamodel.fe_type.width
+    elif hasattr(datamodel.be_type, 'width'):
+        width = datamodel.be_type.width
     else:
         raise NumbaTypeError(f"Don't know the width of {datamodel}")
 
