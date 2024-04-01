@@ -1,5 +1,5 @@
 import enum
-
+import re
 import numpy as np
 
 from numba.core.types.abstract import Dummy, Hashable, Literal, Number, Type
@@ -13,9 +13,7 @@ class Boolean(Hashable):
     pass
 
 def parse_integer_bitwidth(name):
-    for prefix in ('int', 'uint'):
-        if name.startswith(prefix):
-            bitwidth = int(name[len(prefix):])
+    bitwidth = int(re.findall(r'\d+', name)[-1])
     return bitwidth
 
 

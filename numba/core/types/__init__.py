@@ -273,7 +273,7 @@ else:
 
     ### NumPy Datatypes ###
     # Numpy Integers
-    np_bool_ = NumPyBoolean('np_bool_')
+    np_bool_ = np_bool = NumPyBoolean('np_bool_')
     np_byte = np_int8 = NumPyInteger('np_int8')
     np_int16 = NumPyInteger('np_int16')
     np_int32 = NumPyInteger('np_int32')
@@ -336,6 +336,6 @@ else:
     '''
 
 __all__ = all_str.split()
-if numpy_version >= (2, 0):
+if numpy_version >= (2, 0) and config.USE_LEGACY_TYPE_SYSTEM:
     __all__.remove('float_')
     __all__.append('bool')
