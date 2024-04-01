@@ -10,8 +10,7 @@ from numba.core import typing
 from numba.core.registry import cpu_target
 from numba.core.typeconv import Conversion
 from numba.core.extending import intrinsic
-from numba.core.errors import (NumbaTypeError, TypingError,
-                               NumbaTypeSafetyWarning)
+from numba.core.errors import TypingError, NumbaTypeSafetyWarning
 
 
 def _as_bytes(builder, ptr):
@@ -268,14 +267,8 @@ def _get_zero(context, module, datamodel, element_type):
     casted_data_ptr = builder.bitcast(
         zero_fn.args[0], datamodel.be_type.as_pointer())
     # this is a zero constant of the right type
-    if hasattr(datamodel.fe_type, 'width'):
-        width = datamodel.fe_type.width
-    elif hasattr(datamodel.be_type, 'width'):
-        width = datamodel.be_type.width
-    else:
-        raise NumbaTypeError(f"Don't know the width of {datamodel}")
-
-    zero_constant = ir.IntType(width)(0)
+    zero_constant = context.get_constant_generic(
+        builder, datamodel.fe_type, 0)
     builder.store(zero_constant, casted_data_ptr)
     builder.ret_void()
     return zero_fn
