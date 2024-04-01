@@ -181,6 +181,7 @@ class OmittedArgDataModel(DataModel):
 class BooleanModel(DataModel):
     _bit_type = ir.IntType(1)
     _byte_type = ir.IntType(8)
+    be_type = ir.IntType(1)
 
     def get_value_type(self):
         return self._bit_type

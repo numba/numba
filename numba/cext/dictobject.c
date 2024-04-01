@@ -381,13 +381,13 @@ set_index(NB_DictKeys *dk, Py_ssize_t i, Py_ssize_t ix)
 
 /* INV_USABLE_FRACTION gives the inverse of USABLE_FRACTION.
  * Used for sizing a new dictionary to a specified number of keys.
- * 
+ *
  * NOTE: If the denominator of the USABLE_FRACTION ratio is not a power
  * of 2, must add 1 to the result of the inverse for correct sizing.
- * 
+ *
  * For example, when USABLE_FRACTION ratio = 5/8 (8 is a power of 2):
  * #define INV_USABLE_FRACTION(n) (((n) << 3)/5)  // inv_ratio: 8/5
- * 
+ *
  * When USABLE_FRACTION ratio = 5/7 (7 is not a power of 2):
  * #define INV_USABLE_FRACTION(n) ((7*(n))/5 + 1)  // inv_ratio: 7/5
  */
@@ -420,32 +420,38 @@ get_entry(NB_DictKeys *dk, Py_ssize_t idx) {
 }
 
 static void
-zero_key(NB_DictKeys *dk, char *data){
-    memset(data, 0, dk->key_size);
-}
-
-static void
-zero_val(NB_DictKeys *dk, char *data){
-    memset(data, 0, dk->val_size);
-}
-
-static void
-copy_key(NB_DictKeys *dk, char *dst, const char *src){
-    memcpy(dst, src, dk->key_size);
-}
-
-static void
-copy_val(NB_DictKeys *dk, char *dst, const char *src){
-    memcpy(dst, src, dk->val_size);
-}
-
-/* Returns -1 for error; 0 for not equal; 1 for equal */
-static int
-key_equal(NB_DictKeys *dk, const char *lhs, const char *rhs) {
-    if ( dk->methods.key_equal ) {
-        return dk->methods.key_equal(lhs, rhs);
+key_zero(NB_DictKeys *dk, char *data){
+    if ( dk->methods.key_zero ) {
+        return dk->methods.key_zero(data);
     } else {
-        return memcmp(lhs, rhs, dk->key_size) == 0;
+        memset(data, 0, dk->key_size);
+    }
+}
+
+static void
+value_zero(NB_DictKeys *dk, char *data){
+    if ( dk->methods.value_zero ) {
+        return dk->methods.value_zero(data);
+    } else {
+        memset(data, 0, dk->key_size);
+    }
+}
+
+static void
+key_copy(NB_DictKeys *dk, char *dst, const char *src){
+    if ( dk->methods.key_copy ) {
+        dk->methods.key_copy(dst, src);
+    } else {
+        memcpy(dst, src, dk->key_size);
+    }
+}
+
+static void
+value_copy(NB_DictKeys *dk, char *dst, const char *src){
+    if ( dk->methods.value_copy ) {
+        dk->methods.value_copy(dst, src);
+    } else {
+        memcpy(dst, src, dk->key_size);
     }
 }
 
@@ -641,7 +647,7 @@ numba_dict_lookup(NB_Dict *d, const char *key_bytes, Py_hash_t hash, char *oldva
     for (;;) {
         Py_ssize_t ix = get_index(dk, i);
         if (ix == DKIX_EMPTY) {
-            zero_val(dk, oldval_bytes);
+            value_zero(dk, oldval_bytes);
             return ix;
         }
         if (ix >= 0) {
@@ -651,7 +657,7 @@ numba_dict_lookup(NB_Dict *d, const char *key_bytes, Py_hash_t hash, char *oldva
                 int cmp;
 
                 startkey = entry_get_key(dk, ep);
-                cmp = key_equal(dk, startkey, key_bytes);
+                cmp = dk->methods.key_equal(startkey, key_bytes);
                 if (cmp < 0) {
                     // error'ed in comparison
                     memset(oldval_bytes, 0, dk->val_size);
@@ -659,7 +665,7 @@ numba_dict_lookup(NB_Dict *d, const char *key_bytes, Py_hash_t hash, char *oldva
                 }
                 if (cmp > 0) {
                     // key is equal; retrieve the value.
-                    copy_val(dk, oldval_bytes, entry_get_val(dk, ep));
+                    value_copy(dk, oldval_bytes, entry_get_val(dk, ep));
                     return ix;
                 }
             }
@@ -734,10 +740,10 @@ numba_dict_insert(
         hashpos = find_empty_slot(dk, hash);
         ep = get_entry(dk, dk->nentries);
         set_index(dk, hashpos, dk->nentries);
-        copy_key(dk, entry_get_key(dk, ep), key_bytes);
+        key_copy(dk, entry_get_key(dk, ep), key_bytes);
         assert ( hash != -1 );
         ep->hash = hash;
-        copy_val(dk, entry_get_val(dk, ep), val_bytes);
+        value_copy(dk, entry_get_val(dk, ep), val_bytes);
 
         /* incref */
         dk_incref_key(dk, key_bytes);
@@ -753,7 +759,7 @@ numba_dict_insert(
         /* decref old value */
         dk_decref_val(dk, oldval_bytes);
         // Replace the previous value
-        copy_val(dk, entry_get_val(dk, get_entry(dk, ix)), val_bytes);
+        value_copy(dk, entry_get_val(dk, get_entry(dk, ix)), val_bytes);
 
         /* incref */
         dk_incref_val(dk, val_bytes);
@@ -893,8 +899,8 @@ numba_dict_delitem(NB_Dict *d, Py_hash_t hash, Py_ssize_t ix)
     dk_decref_val(dk, entry_get_val(dk, ep));
 
     /* zero the entries */
-    zero_key(dk, entry_get_key(dk, ep));
-    zero_val(dk, entry_get_val(dk, ep));
+    key_zero(dk, entry_get_key(dk, ep));
+    value_zero(dk, entry_get_val(dk, ep));
     ep->hash = DKIX_EMPTY; // to mark it as empty;
 
     return OK;
@@ -931,11 +937,11 @@ numba_dict_popitem(NB_Dict *d, char *key_bytes, char *val_bytes)
     key_ptr = entry_get_key(d->keys, ep);
     val_ptr = entry_get_val(d->keys, ep);
 
-    copy_key(d->keys, key_bytes, key_ptr);
-    copy_val(d->keys, val_bytes, val_ptr);
+    key_copy(d->keys, key_bytes, key_ptr);
+    value_copy(d->keys, val_bytes, val_ptr);
 
-    zero_key(d->keys, key_ptr);
-    zero_val(d->keys, val_ptr);
+    key_zero(d->keys, key_ptr);
+    value_zero(d->keys, val_ptr);
 
     /* We can't dk_usable++ since there is DKIX_DUMMY in indices */
     d->keys->nentries = i;
