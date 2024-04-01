@@ -15,12 +15,12 @@ class TestTypes(TestCase):
         @njit
         def foo(x):
             return x
-        
+
         cases = [
             # Python types
             1,
             1.2,
-            (1+2j),
+            (1 + 2j),
             True,
             # Numpy types
             np.int32(1),

@@ -1230,5 +1230,3 @@ class TestGeneratorCaching(TestCase, SerialMixin):
         # Check that the function can be retrieved successfully from the cache.
         res = run_in_new_process_caching(test_generator_caching)
         self.assertEqual(res['exitcode'], 0)
-x = TestHelperFuncs()
-x.test_check_types()
