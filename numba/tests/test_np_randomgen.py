@@ -56,8 +56,8 @@ class TestHelperFuncs(TestCase):
             numba_func(rng)
         self.assertIn(
             'Argument loc is not one of the expected type(s): '
-            + '[<class \'numba.core.types.scalars.Float\'>, '
-            + '<class \'numba.core.types.scalars.Integer\'>, '
+            + '[<class \'numba.core.types.old_scalars.Float\'>, '
+            + '<class \'numba.core.types.old_scalars.Integer\'>, '
             + '<class \'int\'>, <class \'float\'>]',
             str(raises.exception)
         )
@@ -1230,3 +1230,5 @@ class TestGeneratorCaching(TestCase, SerialMixin):
         # Check that the function can be retrieved successfully from the cache.
         res = run_in_new_process_caching(test_generator_caching)
         self.assertEqual(res['exitcode'], 0)
+x = TestHelperFuncs()
+x.test_check_types()
