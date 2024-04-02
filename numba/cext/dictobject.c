@@ -433,7 +433,7 @@ value_zero(NB_DictKeys *dk, char *data){
     if ( dk->methods.value_zero ) {
         return dk->methods.value_zero(data);
     } else {
-        memset(data, 0, dk->key_size);
+        memset(data, 0, dk->val_size);
     }
 }
 
