@@ -455,6 +455,16 @@ value_copy(NB_DictKeys *dk, char *dst, const char *src){
     }
 }
 
+/* Returns -1 for error; 0 for not equal; 1 for equal */
+static int
+key_equal(NB_DictKeys *dk, const char *lhs, const char *rhs) {
+    if ( dk->methods.key_equal ) {
+        return dk->methods.key_equal(lhs, rhs);
+    } else {
+        return memcmp(lhs, rhs, dk->key_size) == 0;
+    }
+}
+
 static char *
 entry_get_key(NB_DictKeys *dk, NB_DictEntry* entry) {
     char * out = entry->keyvalue;
@@ -657,7 +667,7 @@ numba_dict_lookup(NB_Dict *d, const char *key_bytes, Py_hash_t hash, char *oldva
                 int cmp;
 
                 startkey = entry_get_key(dk, ep);
-                cmp = dk->methods.key_equal(startkey, key_bytes);
+                cmp = key_equal(dk, startkey, key_bytes);
                 if (cmp < 0) {
                     // error'ed in comparison
                     memset(oldval_bytes, 0, dk->val_size);

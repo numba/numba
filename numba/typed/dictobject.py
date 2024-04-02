@@ -324,7 +324,8 @@ def _dict_set_method_table(typingctx, dp, keyty, valty):
                 builder.bitcast(key_decref, key_decref_ptr.type.pointee),
                 key_decref_ptr,
             )
-        else:
+
+        if isinstance(dm_key, models.PrimitiveModel):
             # dm_key is a primitive type, e.g., int64
             # generate key_equal, key_copy, key_zero
             key_equal = _get_primitive_equal(
@@ -371,7 +372,8 @@ def _dict_set_method_table(typingctx, dp, keyty, valty):
                 builder.bitcast(val_decref, value_decref_ptr.type.pointee),
                 value_decref_ptr,
             )
-        else:
+
+        if isinstance(dm_val, models.PrimitiveModel):
             # dm_val doesn't contain meminfo, is a primitive type, e.g., int64
             # generate value_copy, value_zero
             value_copy = _get_copy(
