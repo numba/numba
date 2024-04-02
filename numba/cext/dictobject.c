@@ -451,7 +451,7 @@ value_copy(NB_DictKeys *dk, char *dst, const char *src){
     if ( dk->methods.value_copy ) {
         dk->methods.value_copy(dst, src);
     } else {
-        memcpy(dst, src, dk->key_size);
+        memcpy(dst, src, dk->val_size);
     }
 }
 

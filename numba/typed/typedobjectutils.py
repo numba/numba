@@ -221,11 +221,11 @@ def _get_primitive_equal(context, module, datamodel, element_type):
         res = builder.icmp_unsigned('==', lhs, rhs)
     with builder.if_else(res) as (then, orelse):
         with then:
-            builder.ret(context.get_constant(types.int32, 1))
+            builder.ret(context.get_constant_generic(builder, types.int32, 1))
         with orelse:
-            builder.ret(context.get_constant(types.int32, 0))
+            builder.ret(context.get_constant_generic(builder, types.int32, 0))
 
-    builder.ret(context.get_constant(types.int32, -1))
+    builder.ret(context.get_constant_generic(builder, types.int32, -1))
 
     return equal_fn
 
