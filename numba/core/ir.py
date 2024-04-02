@@ -336,6 +336,9 @@ class Inst(EqualityCheckMixin, AbstractRHS):
         else:
             return []
 
+    def __repr__(self):
+        return self.__str__()
+
 
 class Stmt(Inst):
     """
