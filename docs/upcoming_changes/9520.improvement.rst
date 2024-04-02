@@ -1,0 +1,5 @@
+support primitive types faster compare, copy, and zero methods in dict
+----------------------------------------------------------------------
+
+Support primitive types to have faster key and value compare, copy, and zero
+methods in TypedDict. This is a performance optimization for TypedDict.
