@@ -206,8 +206,7 @@ def _get_primitive_equal(context, module, datamodel, func_name_suffix):
     equal_fn = cgutils.get_or_insert_function(
         module,
         equal_fnty,
-        name='.numba_{}.{}_equal'.format(
-            context.fndesc.mangled_name, func_name_suffix),
+        name=f".numba_{context.fndesc.mangled_name}.{func_name_suffix}_equal",
     )
 
     # populate the body of equal_fn
@@ -240,8 +239,7 @@ def _get_copy(context, module, datamodel, func_name_suffix):
     copy_fn = cgutils.get_or_insert_function(
         module,
         copy_fnty,
-        '.numba_{}.{}_copy'.format(context.fndesc.mangled_name,
-                                   func_name_suffix),
+        name=f".numba_{context.fndesc.mangled_name}.{func_name_suffix}_copy",
     )
 
     # populate the body of copy_fn
@@ -264,8 +262,7 @@ def _get_zero(context, module, datamodel, func_name_suffix):
     zero_fn = cgutils.get_or_insert_function(
         module,
         zero_fnty,
-        '.numba_{}.{}_zero'.format(context.fndesc.mangled_name,
-                                   func_name_suffix),
+        name=f".numba_{context.fndesc.mangled_name}.{func_name_suffix}_zero",
     )
 
     # populate the body of zero_fn
