@@ -36,7 +36,8 @@ from numba.core import typing
 from numba.typed.typedobjectutils import (_as_bytes, _cast, _nonoptional,
                                           _sentry_safe_cast_default,
                                           _get_incref_decref,
-                                          _get_equal, _container_get_data,
+                                          _get_container_equal,
+                                          _container_get_data,
                                           _get_primitive_equal,
                                           _get_copy, _get_zero,)
 
@@ -308,7 +309,8 @@ def _dict_set_method_table(typingctx, dp, keyty, valty):
 
         dm_key = context.data_model_manager[keyty.instance_type]
         if dm_key.contains_nrt_meminfo():
-            key_equal = _get_equal(context, builder.module, dm_key, "dict_key")
+            key_equal = _get_container_equal(
+                context, builder.module, dm_key, "dict_key")
             key_incref, key_decref = _get_incref_decref(
                 context, builder.module, dm_key, "dict_key"
             )

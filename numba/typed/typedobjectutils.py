@@ -149,7 +149,7 @@ def _get_incref_decref(context, module, datamodel, container_element_type):
     return incref_fn, decref_fn
 
 
-def _get_equal(context, module, datamodel, container_element_type):
+def _get_container_equal(context, module, datamodel, func_name_suffix):
     assert datamodel.contains_nrt_meminfo()
 
     fe_type = datamodel.fe_type
@@ -174,13 +174,13 @@ def _get_equal(context, module, datamodel, container_element_type):
 
     wrapfn = cgutils.get_or_insert_function(
         module, wrapfnty, name='.numba_{}.{}_equal.wrap'.format(
-            context.fndesc.mangled_name, container_element_type))
+            context.fndesc.mangled_name, func_name_suffix))
     build_wrapper(wrapfn)
 
     equal_fnty = ir.FunctionType(ir.IntType(32), [data_ptr_ty, data_ptr_ty])
     equal_fn = cgutils.get_or_insert_function(
         module, equal_fnty, name='.numba_{}.{}_equal'.format(
-            context.fndesc.mangled_name, container_element_type),)
+            context.fndesc.mangled_name, func_name_suffix))
     builder = ir.IRBuilder(equal_fn.append_basic_block())
     lhs = datamodel.load_from_data_pointer(builder, equal_fn.args[0])
     rhs = datamodel.load_from_data_pointer(builder, equal_fn.args[1])
@@ -199,26 +199,29 @@ def _get_equal(context, module, datamodel, container_element_type):
     return equal_fn
 
 
-def _get_primitive_equal(context, module, datamodel, element_type):
-    assert not datamodel.contains_nrt_meminfo()
-
+def _get_primitive_equal(context, module, datamodel, func_name_suffix):
+    # construct equal_fn
     data_ptr_ty = ir.IntType(8).as_pointer()
     equal_fnty = ir.FunctionType(ir.IntType(32), [data_ptr_ty, data_ptr_ty])
     equal_fn = cgutils.get_or_insert_function(
         module,
         equal_fnty,
         name='.numba_{}.{}_equal'.format(
-            context.fndesc.mangled_name, element_type),
+            context.fndesc.mangled_name, func_name_suffix),
     )
+
+    # populate the body of equal_fn
     builder = ir.IRBuilder(equal_fn.append_basic_block())
     lhs_ptr = builder.bitcast(equal_fn.args[0], datamodel.be_type.as_pointer())
     lhs = builder.load(lhs_ptr)
     rhs_ptr = builder.bitcast(equal_fn.args[1], datamodel.be_type.as_pointer())
     rhs = builder.load(rhs_ptr)
+
     if datamodel.fe_type.signed:
         res = builder.icmp_signed('==', lhs, rhs)
     else:
         res = builder.icmp_unsigned('==', lhs, rhs)
+
     with builder.if_else(res) as (then, orelse):
         with then:
             builder.ret(context.get_constant_generic(builder, types.int32, 1))
@@ -230,43 +233,45 @@ def _get_primitive_equal(context, module, datamodel, element_type):
     return equal_fn
 
 
-def _get_copy(context, module, datamodel, element_type):
-    # this is a char * ptr
+def _get_copy(context, module, datamodel, func_name_suffix):
+    # construct copy_fn
     data_ptr_ty = ir.IntType(8).as_pointer()
     copy_fnty = ir.FunctionType(ir.VoidType(), [data_ptr_ty, data_ptr_ty])
     copy_fn = cgutils.get_or_insert_function(
         module,
         copy_fnty,
-        '.numba_{}.{}_copy'.format(context.fndesc.mangled_name, element_type),
+        '.numba_{}.{}_copy'.format(context.fndesc.mangled_name,
+                                   func_name_suffix),
     )
+
+    # populate the body of copy_fn
     builder = ir.IRBuilder(copy_fn.append_basic_block())
-    # this is a pointer to the right type
     casted_dst_ptr = builder.bitcast(
         copy_fn.args[0], datamodel.be_type.as_pointer())
     casted_src_ptr = builder.bitcast(
         copy_fn.args[1], datamodel.be_type.as_pointer())
-    # this is a zero constant of the right type
+
     src_value = builder.load(casted_src_ptr)
     builder.store(src_value, casted_dst_ptr)
     builder.ret_void()
     return copy_fn
 
 
-def _get_zero(context, module, datamodel, element_type):
-    # this is a char * ptr
+def _get_zero(context, module, datamodel, func_name_suffix):
+    # construct zero_fn
     data_ptr_ty = ir.IntType(8).as_pointer()
     zero_fnty = ir.FunctionType(ir.VoidType(), [data_ptr_ty])
     zero_fn = cgutils.get_or_insert_function(
         module,
         zero_fnty,
         '.numba_{}.{}_zero'.format(context.fndesc.mangled_name,
-                                   element_type),
+                                   func_name_suffix),
     )
+
+    # populate the body of zero_fn
     builder = ir.IRBuilder(zero_fn.append_basic_block())
-    # this is a pointer to the right type
     casted_data_ptr = builder.bitcast(
         zero_fn.args[0], datamodel.be_type.as_pointer())
-    # this is a zero constant of the right type
     zero_constant = context.get_constant_generic(
         builder, datamodel.fe_type, 0)
     builder.store(zero_constant, casted_data_ptr)
