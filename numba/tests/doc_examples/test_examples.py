@@ -3,7 +3,8 @@
 
 import sys
 import unittest
-from numba.tests.support import captured_stdout
+
+from numba.tests.support import TestCase, captured_stdout
 from numba.core.config import IS_WIN32
 from numba.np.numpy_support import numpy_version
 
@@ -18,7 +19,7 @@ class MatplotlibBlocker:
             raise ImportError(msg)
 
 
-class DocsExamplesTest(unittest.TestCase):
+class DocsExamplesTest(TestCase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -357,6 +358,54 @@ class DocsExamplesTest(unittest.TestCase):
 
             self.assertIsInstance(result, np.integer)
             self.assertEqual(result, 20)
+
+    def test_guvectorize_jit(self):
+        with captured_stdout():
+            # magictoken.gufunc_jit.begin
+            import numpy as np
+
+            from numba import jit, guvectorize
+
+            @guvectorize('(n)->(n)')
+            def copy(x, res):
+                for i in range(x.shape[0]):
+                    res[i] = x[i]
+
+            @jit(nopython=True)
+            def jit_fn(x, res):
+                copy(x, res)
+            # magictoken.gufunc_jit.end
+
+            # magictoken.gufunc_jit_call.begin
+            x = np.arange(5, dtype='i4')
+            res = np.zeros_like(x)
+            jit_fn(x, res)
+            # At this point, res == np.array([0, 1, 2, 3, 4], 'i4').
+            # magictoken.gufunc_jit_call.end
+            self.assertPreciseEqual(x, res)
+
+    def test_guvectorize_jit_fail(self):
+        with captured_stdout():
+            # magictoken.gufunc_jit_fail.begin
+            import numpy as np
+            from numba import jit, guvectorize
+
+            @guvectorize('(n)->(n)')
+            def copy(x, res):
+                for i in range(x.shape[0]):
+                    res[i] = x[i]
+
+            @jit(nopython=True)
+            def jit_fn(x, res):
+                copy(x, res)
+
+            x = np.ones((1, 5))
+            res = np.empty((5,))
+            with self.assertRaises(ValueError) as raises:
+                jit_fn(x, res)
+            # magictoken.gufunc_jit_fail.end
+            self.assertIn('Loop and array shapes are incompatible',
+                          str(raises.exception))
 
     def test_guvectorize_overwrite(self):
         with captured_stdout():

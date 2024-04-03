@@ -13,6 +13,7 @@ from numba.core.typing import npydecl
 from numba.core.typing.templates import AbstractTemplate, signature
 from numba.cpython.unsafe.tuple import tuple_setitem
 from numba.np.ufunc import _internal
+from numba.np.ufunc.ufunc_base import UfuncBase, UfuncLowererBase
 from numba.parfors import array_analysis
 from numba.np.ufunc import ufuncbuilder
 from numba.np import numpy_support
@@ -142,52 +143,25 @@ def make_dufunc_kernel(_dufunc):
         dufunc = _dufunc
 
         def __init__(self, context, builder, outer_sig):
-            super(DUFuncKernel, self).__init__(context, builder, outer_sig)
+            super().__init__(context, builder, outer_sig)
             self.inner_sig, self.cres = self.dufunc.find_ewise_function(
                 outer_sig.args)
-
-        def generate(self, *args):
-            isig = self.inner_sig
-            osig = self.outer_sig
-            cast_args = [self.cast(val, inty, outty)
-                         for val, inty, outty in
-                         zip(args, osig.args, isig.args)]
-            if self.cres.objectmode:
-                func_type = self.context.call_conv.get_function_type(
-                    types.pyobject, [types.pyobject] * len(isig.args))
-            else:
-                func_type = self.context.call_conv.get_function_type(
-                    isig.return_type, isig.args)
-            module = self.builder.block.function.module
-            entry_point = cgutils.get_or_insert_function(
-                module, func_type,
-                self.cres.fndesc.llvm_func_name)
-            entry_point.attributes.add("alwaysinline")
-
-            _, res = self.context.call_conv.call_function(
-                self.builder, entry_point, isig.return_type, isig.args,
-                cast_args)
-            return self.cast(res, isig.return_type, osig.return_type)
 
     DUFuncKernel.__name__ += _dufunc.ufunc.__name__
     return DUFuncKernel
 
 
-class DUFuncLowerer(object):
+class DUFuncLowerer(UfuncLowererBase):
     '''Callable class responsible for lowering calls to a specific DUFunc.
     '''
     def __init__(self, dufunc):
-        self.kernel = make_dufunc_kernel(dufunc)
-        self.libs = []
-
-    def __call__(self, context, builder, sig, args):
         from numba.np import npyimpl
-        return npyimpl.numpy_ufunc_kernel(context, builder, sig, args,
-                                          self.kernel.dufunc.ufunc,
-                                          self.kernel)
+        super().__init__(dufunc,
+                         make_dufunc_kernel,
+                         npyimpl.numpy_ufunc_kernel)
 
 
-class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
+class DUFunc(serialize.ReduceMixin, _internal._DUFunc, UfuncBase):
     """
     Dynamic universal function (DUFunc) intended to act like a normal
     Numpy ufunc, but capable of call-time (just-in-time) compilation
@@ -212,11 +186,11 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
         super(DUFunc, self).__init__(dispatcher, identity=identity)
         # Loop over a copy of the keys instead of the keys themselves,
         # since we're changing the dictionary while looping.
-        self._install_type()
-        self._lower_me = DUFuncLowerer(self)
-        self._install_cg()
         self.__name__ = dispatcher.py_func.__name__
         self.__doc__ = dispatcher.py_func.__doc__
+        self._lower_me = DUFuncLowerer(self)
+        self._install_cg()
+        self._install_type()
 
     def _reduce_states(self):
         """
@@ -379,6 +353,9 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
         self._keepalive.append((ptr, cres.library, env))
         self._lower_me.libs.append(cres.library)
         return cres
+
+    def match_signature(self, ewise_types, sig):
+        return sig.args == ewise_types
 
     def _install_ufunc_attributes(self, template) -> None:
 
@@ -887,24 +864,6 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
             raise NotImplementedError("typing gufuncs (nout > 1)")
         outtys.extend(argtys)
         return signature(*outtys)
-
-    def _install_cg(self, targetctx=None):
-        """
-        Install an implementation function for a DUFunc object in the
-        given target context.  If no target context is given, then
-        _install_cg() installs into the target context of the
-        dispatcher object (should be same default context used by
-        jit() and njit()).
-        """
-        if targetctx is None:
-            targetctx = self._dispatcher.targetdescr.target_context
-        _any = types.Any
-        _arr = types.Array
-        # Either all outputs are explicit or none of them are
-        sig0 = (_any,) * self.ufunc.nin + (_arr,) * self.ufunc.nout
-        sig1 = (_any,) * self.ufunc.nin
-        targetctx.insert_func_defn(
-            [(self._lower_me, self, sig) for sig in (sig0, sig1)])
 
 
 array_analysis.MAP_TYPES.append(DUFunc)
