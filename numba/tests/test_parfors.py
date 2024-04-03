@@ -5,10 +5,10 @@
 
 
 import math
+import os
 import re
 import dis
 import numbers
-import os
 import platform
 import sys
 import subprocess
@@ -27,26 +27,25 @@ import numba.parfors.parfor
 from numba import (njit, prange, parallel_chunksize,
                    get_parallel_chunksize, set_parallel_chunksize,
                    set_num_threads, get_num_threads, typeof)
-from numba.core import (types, typing, errors, ir, rewrites,
+from numba.core import (types, errors, ir, rewrites,
                         typed_passes, inline_closurecall, config, compiler, cpu)
 from numba.extending import (overload_method, register_model,
                              typeof_impl, unbox, NativeValue, models)
 from numba.core.registry import cpu_target
 from numba.core.annotations import type_annotations
 from numba.core.ir_utils import (find_callname, guard, build_definitions,
-                            get_definition, is_getitem, is_setitem,
-                            index_var_of_get_setitem)
+                                 get_definition, is_getitem, is_setitem,
+                                 index_var_of_get_setitem)
 from numba.np.unsafe.ndarray import empty_inferred as unsafe_empty
-from numba.core.bytecode import ByteCodeIter
-from numba.core.compiler import (compile_isolated, Flags, CompilerBase,
-                                 DefaultPassBuilder)
+from numba.core.compiler import (CompilerBase, DefaultPassBuilder)
 from numba.core.compiler_machinery import register_pass, AnalysisPass
 from numba.core.typed_passes import IRLegalization
 from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
-                      override_env_config, linux_only, tag,
-                      skip_parfors_unsupported, _32bit, needs_blas,
-                      needs_lapack, disabled_test, skip_unless_scipy,
-                      needs_subprocess, expected_failure_py312)
+                                 override_env_config, linux_only, tag,
+                                 skip_parfors_unsupported, _32bit, needs_blas,
+                                 needs_lapack, disabled_test, skip_unless_scipy,
+                                 needs_subprocess,
+                                 skip_ppc64le_invalid_ctr_loop)
 from numba.core.extending import register_jitable
 from numba.core.bytecode import _fix_LOAD_GLOBAL_arg
 from numba.core import utils
@@ -152,34 +151,19 @@ class TestParforsBase(TestCase):
 
     _numba_parallel_test_ = False
 
-    def __init__(self, *args):
-        # flags for njit()
-        self.cflags = Flags()
-        self.cflags.nrt = True
-
-        # flags for njit(parallel=True)
-        self.pflags = Flags()
-        self.pflags.auto_parallel = cpu.ParallelOptions(True)
-        self.pflags.nrt = True
-
-        # flags for njit(parallel=True, fastmath=True)
-        self.fast_pflags = Flags()
-        self.fast_pflags.auto_parallel = cpu.ParallelOptions(True)
-        self.fast_pflags.nrt = True
-        self.fast_pflags.fastmath = cpu.FastMathOptions(True)
-        super(TestParforsBase, self).__init__(*args)
-
-    def _compile_this(self, func, sig, flags):
-        return compile_isolated(func, sig, flags=flags)
+    def _compile_this(self, func, sig, **flags):
+        # This method originally used `compile_isolated` which returns a
+        # "CompileResult", hence this does the same.
+        return njit(sig, **flags)(func).overloads[sig]
 
     def compile_parallel(self, func, sig):
-        return self._compile_this(func, sig, flags=self.pflags)
+        return self._compile_this(func, sig, parallel=True)
 
     def compile_parallel_fastmath(self, func, sig):
-        return self._compile_this(func, sig, flags=self.fast_pflags)
+        return self._compile_this(func, sig, parallel=True, fastmath=True)
 
     def compile_njit(self, func, sig):
-        return self._compile_this(func, sig, flags=self.cflags)
+        return self._compile_this(func, sig)
 
     def compile_all(self, pyfunc, *args, **kwargs):
         sig = tuple([numba.typeof(x) for x in args])
@@ -359,7 +343,17 @@ class TestParforsBase(TestCase):
     def _get_gufunc_modules(self, cres, magicstr, checkstr=None):
         """ gets the gufunc LLVM Modules"""
         _modules = [x for x in cres.library._codegen._engine._ee._modules]
-        return self._filter_mod(_modules, magicstr, checkstr=checkstr)
+        # make sure to only use modules that are actually used by cres and
+        # aren't just in the EE by virtue of shared compilation context.
+        potential_matches = self._filter_mod(_modules, magicstr,
+                                             checkstr=checkstr)
+
+        lib_asm = cres.library.get_asm_str()
+        ret = []
+        for mod in potential_matches:
+            if mod.name in lib_asm:
+                ret.append(mod)
+        return ret
 
     def _get_gufunc_info(self, cres, fn):
         """ helper for gufunc IR/asm generation"""
@@ -470,8 +464,8 @@ def example_kmeans_test(A, numCenter, numIter, init_centroids):
     return centroids
 
 def get_optimized_numba_ir(test_func, args, **kws):
-    typingctx = typing.Context()
-    targetctx = cpu.CPUContext(typingctx, 'cpu')
+    typingctx = cpu_target.typing_context
+    targetctx = cpu_target.target_context
     test_ir = compiler.run_frontend(test_func)
     if kws:
         options = cpu.ParallelOptions(kws)
@@ -480,58 +474,57 @@ def get_optimized_numba_ir(test_func, args, **kws):
 
     tp = TestPipeline(typingctx, targetctx, args, test_ir)
 
-    with cpu_target.nested_context(typingctx, targetctx):
-        typingctx.refresh()
-        targetctx.refresh()
+    typingctx.refresh()
+    targetctx.refresh()
 
-        inline_pass = inline_closurecall.InlineClosureCallPass(tp.state.func_ir,
-                                                               options,
-                                                               typed=True)
-        inline_pass.run()
+    inline_pass = inline_closurecall.InlineClosureCallPass(tp.state.func_ir,
+                                                            options,
+                                                            typed=True)
+    inline_pass.run()
 
-        rewrites.rewrite_registry.apply('before-inference', tp.state)
+    rewrites.rewrite_registry.apply('before-inference', tp.state)
 
-        tp.state.typemap, tp.state.return_type, tp.state.calltypes, _ = \
-        typed_passes.type_inference_stage(tp.state.typingctx,
-            tp.state.targetctx, tp.state.func_ir, tp.state.args, None)
+    tp.state.typemap, tp.state.return_type, tp.state.calltypes, _ = \
+    typed_passes.type_inference_stage(tp.state.typingctx,
+        tp.state.targetctx, tp.state.func_ir, tp.state.args, None)
 
-        type_annotations.TypeAnnotation(
-            func_ir=tp.state.func_ir,
-            typemap=tp.state.typemap,
-            calltypes=tp.state.calltypes,
-            lifted=(),
-            lifted_from=None,
-            args=tp.state.args,
-            return_type=tp.state.return_type,
-            html_output=config.HTML)
+    type_annotations.TypeAnnotation(
+        func_ir=tp.state.func_ir,
+        typemap=tp.state.typemap,
+        calltypes=tp.state.calltypes,
+        lifted=(),
+        lifted_from=None,
+        args=tp.state.args,
+        return_type=tp.state.return_type,
+        html_output=config.HTML)
 
-        diagnostics = numba.parfors.parfor.ParforDiagnostics()
+    diagnostics = numba.parfors.parfor.ParforDiagnostics()
 
-        preparfor_pass = numba.parfors.parfor.PreParforPass(
-            tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
-            tp.state.typingctx, tp.state.targetctx, options,
-            swapped=diagnostics.replaced_fns)
-        preparfor_pass.run()
+    preparfor_pass = numba.parfors.parfor.PreParforPass(
+        tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
+        tp.state.typingctx, tp.state.targetctx, options,
+        swapped=diagnostics.replaced_fns)
+    preparfor_pass.run()
 
-        rewrites.rewrite_registry.apply('after-inference', tp.state)
+    rewrites.rewrite_registry.apply('after-inference', tp.state)
 
-        flags = compiler.Flags()
-        parfor_pass = numba.parfors.parfor.ParforPass(
-            tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
-            tp.state.return_type, tp.state.typingctx, tp.state.targetctx,
-            options, flags, tp.state.metadata, diagnostics=diagnostics)
-        parfor_pass.run()
-        parfor_pass = numba.parfors.parfor.ParforFusionPass(
-            tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
-            tp.state.return_type, tp.state.typingctx, tp.state.targetctx,
-            options, flags, tp.state.metadata, diagnostics=diagnostics)
-        parfor_pass.run()
-        parfor_pass = numba.parfors.parfor.ParforPreLoweringPass(
-            tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
-            tp.state.return_type, tp.state.typingctx, tp.state.targetctx,
-            options, flags, tp.state.metadata, diagnostics=diagnostics)
-        parfor_pass.run()
-        test_ir._definitions = build_definitions(test_ir.blocks)
+    flags = compiler.Flags()
+    parfor_pass = numba.parfors.parfor.ParforPass(
+        tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
+        tp.state.return_type, tp.state.typingctx, tp.state.targetctx,
+        options, flags, tp.state.metadata, diagnostics=diagnostics)
+    parfor_pass.run()
+    parfor_pass = numba.parfors.parfor.ParforFusionPass(
+        tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
+        tp.state.return_type, tp.state.typingctx, tp.state.targetctx,
+        options, flags, tp.state.metadata, diagnostics=diagnostics)
+    parfor_pass.run()
+    parfor_pass = numba.parfors.parfor.ParforPreLoweringPass(
+        tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
+        tp.state.return_type, tp.state.typingctx, tp.state.targetctx,
+        options, flags, tp.state.metadata, diagnostics=diagnostics)
+    parfor_pass.run()
+    test_ir._definitions = build_definitions(test_ir.blocks)
 
     return test_ir, tp
 
@@ -2376,6 +2369,30 @@ class TestParfors(TestParforsBase):
         self.assertEqual(expected, njit(parallel=False)(def_in_loop)(4))
         self.assertEqual(expected, njit(parallel=True)(def_in_loop)(4))
 
+    @needs_lapack  # use of np.linalg.solve
+    @skip_ppc64le_invalid_ctr_loop
+    def test_issue9490_non_det_ssa_problem(self):
+        cmd = [
+            sys.executable,
+            "-m",
+            "numba.tests.parfor_iss9490_usecase",
+        ]
+        envs = {
+            **os.environ,
+            # Reproducer consistently fail with the following hashseed.
+            "PYTHONHASHSEED": "1",
+            # See https://github.com/numba/numba/issues/9501
+            # for details of why num-thread pinning is needed.
+            "NUMBA_NUM_THREADS": "1",
+        }
+        try:
+            subp.check_output(cmd, env=envs,
+                              stderr=subp.STDOUT,
+                              encoding='utf-8')
+        except subp.CalledProcessError as e:
+            msg = f"subprocess failed with output:\n{e.output}"
+            self.fail(msg=msg)
+
 
 @skip_parfors_unsupported
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
@@ -2385,7 +2402,6 @@ class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
 
     def test_reduction(self):
         # issue4299
-        @njit(parallel=True)
         def test_impl(arr):
             return arr.sum()
 
@@ -2393,7 +2409,7 @@ class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
         self.check(test_impl, arr)
 
     def test_multiple_reduction_vars(self):
-        @njit(parallel=True)
+
         def test_impl(arr):
             a = 0.
             b = 1.
@@ -3223,7 +3239,7 @@ class TestParforsMisc(TestParforsBase):
         self.assertPreciseEqual(f(r), f.py_func(r))
 
     def test_issue6774(self):
-        @njit(parallel=True)
+
         def test_impl():
             n = 5
             na_mask = np.ones((n,))
@@ -3286,6 +3302,22 @@ class TestParforsMisc(TestParforsBase):
                 ListType(intp),
             )
         )
+
+    def test_lookup_cycle_detection(self):
+        # This test is added due to a bug discovered in the PR 9244 patch.
+        # The cyclic detection was incorrectly flagging cycles.
+        @njit(parallel=True)
+        def foo():
+            # The following `acc` variable is used in the `lookup()` function
+            # in parfor's reduction code.
+            acc = 0
+            for n in prange(1):
+                for i in range(1):
+                    for j in range(1):
+                        acc += 1
+            return acc
+
+        self.assertEqual(foo(), foo.py_func())
 
 
 @skip_parfors_unsupported
@@ -4040,7 +4072,6 @@ class TestPrangeBasic(TestPrangeBase):
 class TestPrangeSpecific(TestPrangeBase):
     """ Tests specific features/problems found under prange"""
 
-    @expected_failure_py312
     def test_prange_two_instances_same_reduction_var(self):
         # issue4922 - multiple uses of same reduction variable
         def test_impl(n):
@@ -4052,7 +4083,6 @@ class TestPrangeSpecific(TestPrangeBase):
             return c
         self.prange_tester(test_impl, 9)
 
-    @expected_failure_py312
     def test_prange_conflicting_reduction_ops(self):
         def test_impl(n):
             c = 0
@@ -4169,19 +4199,25 @@ class TestPrangeSpecific(TestPrangeBase):
         cres = self.compile_parallel_fastmath(pfunc, ())
         ir = self._get_gufunc_ir(cres)
         _id = '%[A-Z_0-9]?(.[0-9]+)+[.]?[i]?'
-        recipr_str = '\s+%s = fmul fast double %s, 5.000000e-01'
+        recipr_str = r'\s+%s = fmul fast double %s, 5.000000e-01'
         reciprocal_inst = re.compile(recipr_str % (_id, _id))
-        fadd_inst = re.compile('\s+%s = fadd fast double %s, %s'
+        fadd_inst = re.compile(r'\s+%s = fadd fast double %s, %s'
                                % (_id, _id, _id))
         # check there is something like:
         #  %.329 = fmul fast double %.325, 5.000000e-01
         #  %.337 = fadd fast double %A.07, %.329
+        found = False
         for name, kernel in ir.items():
-            splitted = kernel.splitlines()
-            for i, x in enumerate(splitted):
-                if reciprocal_inst.match(x):
-                    break
-            self.assertTrue(fadd_inst.match(splitted[i + 1]))
+            # make sure to look at the kernel corresponding to the cres/pfunc
+            if name in cres.library.get_llvm_str():
+                splitted = kernel.splitlines()
+                for i, x in enumerate(splitted):
+                    if reciprocal_inst.match(x):
+                        self.assertTrue(fadd_inst.match(splitted[i + 1]))
+                        found = True
+                        break
+
+        self.assertTrue(found, "fast instruction pattern was not found.")
 
     def test_parfor_alias1(self):
         def test_impl(n):
@@ -4620,7 +4656,7 @@ class TestParforsVectorizer(TestPrangeBase):
             asm = self._get_gufunc_asm(cres)
 
             if assertions:
-                schedty = re.compile('call\s+\w+\*\s+@do_scheduling_(\w+)\(')
+                schedty = re.compile(r'call\s+\w+\*\s+@do_scheduling_(\w+)\(')
                 matches = schedty.findall(cres.library.get_llvm_str())
                 self.assertGreaterEqual(len(matches), 1) # at least 1 parfor call
                 self.assertEqual(matches[0], schedule_type)
@@ -4629,6 +4665,7 @@ class TestParforsVectorizer(TestPrangeBase):
             return asm
 
     @linux_only
+    @TestCase.run_test_in_subprocess
     def test_vectorizer_fastmath_asm(self):
         """ This checks that if fastmath is set and the underlying hardware
         is suitable, and the function supplied is amenable to fastmath based
@@ -4669,6 +4706,7 @@ class TestParforsVectorizer(TestPrangeBase):
             self.assertTrue('zmm' not in v)
 
     @linux_only
+    @TestCase.run_test_in_subprocess(envvars={'NUMBA_BOUNDSCHECK': '0'})
     def test_unsigned_refusal_to_vectorize(self):
         """ This checks that if fastmath is set and the underlying hardware
         is suitable, and the function supplied is amenable to fastmath based
@@ -4690,12 +4728,12 @@ class TestParforsVectorizer(TestPrangeBase):
         arg = np.zeros(10)
 
         # Boundschecking breaks vectorization
-        with override_env_config('NUMBA_BOUNDSCHECK', '0'):
-            novec_asm = self.get_gufunc_asm(will_not_vectorize, 'signed', arg,
-                                            fastmath=True)
+        self.assertFalse(config.BOUNDSCHECK)
+        novec_asm = self.get_gufunc_asm(will_not_vectorize, 'signed', arg,
+                                        fastmath=True)
 
-            vec_asm = self.get_gufunc_asm(will_vectorize, 'unsigned', arg,
-                                          fastmath=True)
+        vec_asm = self.get_gufunc_asm(will_vectorize, 'unsigned', arg,
+                                        fastmath=True)
 
         for v in novec_asm.values():
             # vector variant should not be present
@@ -4715,6 +4753,7 @@ class TestParforsVectorizer(TestPrangeBase):
     @linux_only
     # needed as 32bit doesn't have equivalent signed/unsigned instruction
     # generation for this function
+    @TestCase.run_test_in_subprocess(envvars={'NUMBA_BOUNDSCHECK': '0'})
     def test_signed_vs_unsigned_vec_asm(self):
         """ This checks vectorization for signed vs unsigned variants of a
         trivial accumulator, the only meaningful difference should be the
@@ -4736,11 +4775,11 @@ class TestParforsVectorizer(TestPrangeBase):
             return A
 
         # Boundschecking breaks the diff check below because of the pickled exception
-        with override_env_config('NUMBA_BOUNDSCHECK', '0'):
-            signed_asm = self.get_gufunc_asm(signed_variant, 'signed',
-                                             fastmath=True)
-            unsigned_asm = self.get_gufunc_asm(unsigned_variant, 'unsigned',
-                                               fastmath=True)
+        self.assertFalse(config.BOUNDSCHECK)
+        signed_asm = self.get_gufunc_asm(signed_variant, 'signed',
+                                            fastmath=True)
+        unsigned_asm = self.get_gufunc_asm(unsigned_variant, 'unsigned',
+                                            fastmath=True)
 
         def strip_instrs(asm):
             acc = []

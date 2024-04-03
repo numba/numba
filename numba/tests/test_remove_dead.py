@@ -5,11 +5,10 @@
 
 import numba
 import numba.parfors.parfor
-from numba.core import ir_utils, cpu
-from numba.core.compiler import compile_isolated, Flags
-from numba.core import types, typing, ir, config, compiler
+from numba import njit
+from numba.core import ir_utils
+from numba.core import types, ir,  compiler
 from numba.core.registry import cpu_target
-from numba.core.annotations import type_annotations
 from numba.core.ir_utils import (copy_propagate, apply_copy_propagate,
                             get_name_var_table, remove_dels, remove_dead,
                             remove_call_handlers, alias_func_extensions)
@@ -62,27 +61,23 @@ class TestRemoveDead(unittest.TestCase):
     _numba_parallel_test_ = False
 
     def compile_parallel(self, func, arg_types):
-        fast_pflags = Flags()
-        fast_pflags.auto_parallel = cpu.ParallelOptions(True)
-        fast_pflags.nrt = True
-        fast_pflags.fastmath = cpu.FastMathOptions(True)
-        return compile_isolated(func, arg_types, flags=fast_pflags).entry_point
+        return njit(arg_types, parallel=True, fastmath=True)(func)
 
     def test1(self):
-        typingctx = typing.Context()
-        targetctx = cpu.CPUContext(typingctx)
+        typingctx = cpu_target.typing_context
+        targetctx = cpu_target.target_context
         test_ir = compiler.run_frontend(test_will_propagate)
-        with cpu_target.nested_context(typingctx, targetctx):
-            typingctx.refresh()
-            targetctx.refresh()
-            args = (types.int64, types.int64, types.int64)
-            typemap, _, calltypes, _ = type_inference_stage(typingctx, targetctx, test_ir, args, None)
-            remove_dels(test_ir.blocks)
-            in_cps, out_cps = copy_propagate(test_ir.blocks, typemap)
-            apply_copy_propagate(test_ir.blocks, in_cps, get_name_var_table(test_ir.blocks), typemap, calltypes)
 
-            remove_dead(test_ir.blocks, test_ir.arg_names, test_ir)
-            self.assertFalse(findLhsAssign(test_ir, "x"))
+        typingctx.refresh()
+        targetctx.refresh()
+        args = (types.int64, types.int64, types.int64)
+        typemap, _, calltypes, _ = type_inference_stage(typingctx, targetctx, test_ir, args, None)
+        remove_dels(test_ir.blocks)
+        in_cps, out_cps = copy_propagate(test_ir.blocks, typemap)
+        apply_copy_propagate(test_ir.blocks, in_cps, get_name_var_table(test_ir.blocks), typemap, calltypes)
+
+        remove_dead(test_ir.blocks, test_ir.arg_names, test_ir)
+        self.assertFalse(findLhsAssign(test_ir, "x"))
 
     def test2(self):
         def call_np_random_seed():

@@ -1,8 +1,8 @@
 import numpy as np
-from numba import njit
+from numba import njit, jit
 from numba.core.errors import TypingError
 import unittest
-from numba.tests.support import TestCase, force_pyobj_flags
+from numba.tests.support import TestCase
 
 
 def build_map():
@@ -16,11 +16,15 @@ def build_map_from_local_vars():
 
 class DictTestCase(TestCase):
 
-    def test_build_map(self, flags=force_pyobj_flags):
-        self.run_nullary_func(build_map, flags=flags)
+    def check(self, pyfunc):
+        cfunc = jit(forceobj=True)(pyfunc)
+        self.assertPreciseEqual(pyfunc(), cfunc())
 
-    def test_build_map_from_local_vars(self, flags=force_pyobj_flags):
-        self.run_nullary_func(build_map_from_local_vars, flags=flags)
+    def test_build_map(self):
+        self.check(build_map)
+
+    def test_build_map_from_local_vars(self):
+        self.check(build_map_from_local_vars)
 
 
 class TestCompiledDict(TestCase):

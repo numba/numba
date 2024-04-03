@@ -1,0 +1,5 @@
+``numba.cuda.gpus.current`` documentation correction
+====================================================
+
+``numba.cuda.gpus.current`` was erroneously described
+as a function, is now described as an attribute.

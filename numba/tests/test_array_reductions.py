@@ -2,10 +2,9 @@ from itertools import product, combinations_with_replacement
 
 import numpy as np
 
-from numba import jit, typeof
-from numba.core.compiler import compile_isolated
+from numba import jit, njit, typeof
 from numba.np.numpy_support import numpy_version
-from numba.tests.support import TestCase, MemoryLeakMixin, tag
+from numba.tests.support import TestCase, MemoryLeakMixin, tag, skip_if_numpy_2
 import unittest
 
 
@@ -182,10 +181,9 @@ def full_test_arrays(dtype):
     return array_list
 
 def run_comparative(compare_func, test_array):
-    arrty = typeof(test_array)
-    cres = compile_isolated(compare_func, [arrty])
+    cfunc = njit(compare_func)
     numpy_result = compare_func(test_array)
-    numba_result = cres.entry_point(test_array)
+    numba_result = cfunc(test_array)
 
     return numpy_result, numba_result
 
@@ -554,9 +552,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.assertEqual(arrty.ndim, 1)
         self.assertEqual(arrty.layout, 'C')
 
-        cres = compile_isolated(array_sum_global, [arrty])
-        cfunc = cres.entry_point
-
+        cfunc = njit((arrty,),)(array_sum_global)
         self.assertEqual(np.sum(arr), cfunc(arr))
 
     def test_array_prod_int_1d(self):
@@ -565,9 +561,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.assertEqual(arrty.ndim, 1)
         self.assertEqual(arrty.layout, 'C')
 
-        cres = compile_isolated(array_prod, [arrty])
-        cfunc = cres.entry_point
-
+        cfunc = njit((arrty,))(array_prod)
         self.assertEqual(arr.prod(), cfunc(arr))
 
     def test_array_prod_float_1d(self):
@@ -576,9 +570,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.assertEqual(arrty.ndim, 1)
         self.assertEqual(arrty.layout, 'C')
 
-        cres = compile_isolated(array_prod, [arrty])
-        cfunc = cres.entry_point
-
+        cfunc = njit((arrty,))(array_prod)
         np.testing.assert_allclose(arr.prod(), cfunc(arr))
 
     def test_array_prod_global(self):
@@ -587,9 +579,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.assertEqual(arrty.ndim, 1)
         self.assertEqual(arrty.layout, 'C')
 
-        cres = compile_isolated(array_prod_global, [arrty])
-        cfunc = cres.entry_point
-
+        cfunc = njit((arrty,))(array_prod_global)
         np.testing.assert_allclose(np.prod(arr), cfunc(arr))
 
     def check_cumulative(self, pyfunc):
@@ -811,6 +801,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         for a in a_variations():
             check(a)
 
+    @skip_if_numpy_2
     def test_ptp_method(self):
         # checks wiring of np.ndarray.ptp() only, `np.ptp` test above checks
         # the actual alg

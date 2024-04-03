@@ -23,7 +23,6 @@ from numba.core.typing import npydecl
 from numba.core.extending import overload, intrinsic
 
 from numba.core import errors
-from numba.cpython import builtins
 
 registry = Registry('npyimpl')
 

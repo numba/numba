@@ -2,7 +2,7 @@ import warnings
 import unittest
 from contextlib import contextmanager
 
-from numba import jit, generated_jit, vectorize, guvectorize
+from numba import jit, vectorize, guvectorize
 from numba.core.errors import (NumbaDeprecationWarning,
                                NumbaPendingDeprecationWarning, NumbaWarning)
 from numba.tests.support import TestCase, needs_setuptools
@@ -18,52 +18,18 @@ def _catch_numba_deprecation_warnings():
 
 class TestDeprecation(TestCase):
 
-    def check_warning(self, warnings, expected_str, category):
+    def check_warning(self, warnings, expected_str, category, check_rtd=True):
         self.assertEqual(len(warnings), 1)
         self.assertEqual(warnings[0].category, category)
         self.assertIn(expected_str, str(warnings[0].message))
-        self.assertIn("https://numba.readthedocs.io", str(warnings[0].message))
-
-    @TestCase.run_test_in_subprocess
-    def test_jitfallback(self):
-        # tests that @jit falling back to object mode raises a
-        # NumbaDeprecationWarning
-        with _catch_numba_deprecation_warnings() as w:
-            # ignore the warning about the nopython kwarg not being supplied
-            warnings.filterwarnings("ignore",
-                                    message=(r".*The 'nopython' keyword "
-                                             r"argument was not supplied.*"),
-                                    category=NumbaDeprecationWarning,)
-
-            def foo():
-                return []  # empty list cannot be typed
-            jit(foo)()
-
-            msg = ("Fall-back from the nopython compilation path to the object "
-                   "mode compilation path")
-
-            self.check_warning(w, msg, NumbaDeprecationWarning)
-
-    @TestCase.run_test_in_subprocess
-    def test_default_missing_nopython_kwarg(self):
-        # test that not supplying `nopython` kwarg to @jit raises a warning
-        # about the default changing.
-        with _catch_numba_deprecation_warnings() as w:
-
-            @jit
-            def foo():
-                pass
-
-            foo()
-
-            msg = "The 'nopython' keyword argument was not supplied"
-            self.check_warning(w, msg, NumbaDeprecationWarning)
+        if check_rtd:
+            self.assertIn("https://numba.readthedocs.io",
+                          str(warnings[0].message))
 
     @TestCase.run_test_in_subprocess
     def test_explicit_false_nopython_kwarg(self):
         # tests that explicitly setting `nopython=False` in @jit raises a
-        # warning about the default changing and it being an error in the
-        # future.
+        # warning about it doing nothing.
         with _catch_numba_deprecation_warnings() as w:
 
             @jit(nopython=False)
@@ -73,23 +39,7 @@ class TestDeprecation(TestCase):
             foo()
 
             msg = "The keyword argument 'nopython=False' was supplied"
-            self.check_warning(w, msg, NumbaDeprecationWarning)
-
-    @TestCase.run_test_in_subprocess
-    def test_default_missing_nopython_kwarg_silent_if_forceobj(self):
-        # Checks that if forceobj is set and the nopython kwarg is also not
-        # present then no warning is raised. The user intentially wants objmode.
-
-        with _catch_numba_deprecation_warnings() as w:
-
-            @jit(forceobj=True)
-            def foo():
-                object()
-
-            foo()
-
-        # no warnings should be raised.
-        self.assertFalse(w)
+            self.check_warning(w, msg, NumbaDeprecationWarning, check_rtd=False)
 
     @TestCase.run_test_in_subprocess
     def test_vectorize_missing_nopython_kwarg_not_reported(self):
@@ -116,49 +66,7 @@ class TestDeprecation(TestCase):
                 return a + 1
 
         msg = "The keyword argument 'nopython=False' was supplied"
-        self.check_warning(w, msg, NumbaDeprecationWarning)
-
-    @TestCase.run_test_in_subprocess
-    def test_vectorize_objmode_missing_nopython_kwarg_not_reported(self):
-        # Checks that use of @vectorize without a nopython kwarg doesn't raise
-        # a warning about lack of the nopython kwarg, but does raise a warning
-        # about falling back to obj mode to compile.
-
-        with _catch_numba_deprecation_warnings() as w:
-            # This compiles via objmode fallback
-            @vectorize('float64(float64)')
-            def foo(a):
-                object()
-                return a + 1
-
-        msg = ("Fall-back from the nopython compilation path to the object "
-               "mode compilation path")
-        self.check_warning(w, msg, NumbaDeprecationWarning)
-
-    @TestCase.run_test_in_subprocess
-    def test_vectorize_objmode_nopython_false_is_reported(self):
-        # Checks that use of @vectorize with a nopython kwarg set to False
-        # doesn't raise a warning about lack of the nopython kwarg, but does
-        # raise a warning about it being False and then a warning about falling
-        # back to obj mode to compile.
-
-        with _catch_numba_deprecation_warnings() as w:
-            # This compiles via objmode fallback with a warning about
-            # nopython=False supplied.
-            @vectorize('float64(float64)', nopython=False)
-            def foo(a):
-                object()
-                return a + 1
-
-        # 2 warnings: 1. use of nopython=False, then, 2. objmode fallback
-        self.assertEqual(len(w), 2)
-
-        msg = "The keyword argument 'nopython=False' was supplied"
-        self.check_warning([w[0]], msg, NumbaDeprecationWarning)
-
-        msg = ("Fall-back from the nopython compilation path to the object "
-               "mode compilation path")
-        self.check_warning([w[1]], msg, NumbaDeprecationWarning)
+        self.check_warning(w, msg, NumbaDeprecationWarning, check_rtd=False)
 
     @TestCase.run_test_in_subprocess
     def test_vectorize_objmode_direct_compilation_no_warnings(self):
@@ -174,7 +82,7 @@ class TestDeprecation(TestCase):
         self.assertFalse(w)
 
     @TestCase.run_test_in_subprocess
-    def test_vectorize_objmode_compilation_nopython_false_no_warnings(self):
+    def test_vectorize_objmode_compilation_nopython_false_warns(self):
         # Checks that use of @vectorize with forceobj set and nopython set as
         # False raises no warnings.
 
@@ -185,7 +93,8 @@ class TestDeprecation(TestCase):
                 object()
                 return a + 1
 
-        self.assertFalse(w)
+        msg = "The keyword argument 'nopython=False' was supplied"
+        self.check_warning(w, msg, NumbaDeprecationWarning, check_rtd=False)
 
     @TestCase.run_test_in_subprocess
     def test_vectorize_parallel_true_no_warnings(self):
@@ -220,7 +129,7 @@ class TestDeprecation(TestCase):
                 return x + 1
 
         msg = "The keyword argument 'nopython=False' was supplied"
-        self.check_warning(w, msg, NumbaDeprecationWarning)
+        self.check_warning(w, msg, NumbaDeprecationWarning, check_rtd=False)
 
     @TestCase.run_test_in_subprocess
     def test_vectorize_calling_jit_with_nopython_false_warns_from_jit(self):
@@ -239,20 +148,6 @@ class TestDeprecation(TestCase):
                 pass
 
         self.assertFalse(w)
-
-        # Now check the same compilation but this time compiling through to a
-        # @jit call.
-        with _catch_numba_deprecation_warnings() as w:
-            @vectorize('float64(float64)', forceobj=True)
-            def foo(x): # noqa : F811
-                return bar(x + 1)
-
-            @jit
-            def bar(x): # noqa : F811
-                return x
-
-        msg = "The 'nopython' keyword argument was not supplied"
-        self.check_warning(w, msg, NumbaDeprecationWarning)
 
     @TestCase.run_test_in_subprocess
     def test_guvectorize_implicit_nopython_no_warnings(self):
@@ -335,24 +230,6 @@ class TestDeprecation(TestCase):
                 msg = ("\'reflected %s\' found for argument" % container)
                 self.assertIn(msg, warn_msg)
                 self.assertIn("https://numba.readthedocs.io", warn_msg)
-
-    @TestCase.run_test_in_subprocess
-    def test_generated_jit(self):
-
-        with _catch_numba_deprecation_warnings() as w:
-
-            @generated_jit
-            def bar():
-                return lambda : None
-
-            @jit(nopython=True)
-            def foo():
-                bar()
-
-            foo()
-
-            self.check_warning(w, "numba.generated_jit is deprecated",
-                               NumbaDeprecationWarning)
 
     @needs_setuptools
     @TestCase.run_test_in_subprocess

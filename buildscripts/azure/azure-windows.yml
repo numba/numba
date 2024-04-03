@@ -20,10 +20,8 @@ jobs:
         TEST_START_INDEX: 17
 
   steps:
-    - task: CondaEnvironment@1
-      inputs:
-        updateConda: no
-        packageSpecs: ''
+    - powershell: Write-Host "##vso[task.prependpath]$env:CONDA\Scripts"
+      displayName: Add conda to PATH
 
     - script: |
         buildscripts\\incremental\\setup_conda_environment.cmd
@@ -62,5 +60,12 @@ jobs:
         set NUMBA_CAPTURED_ERRORS=new_style
         set NUMBA_ENABLE_CUDASIM=1
         echo "Running shard of discovered tests: %TEST_START_INDEX%:%TEST_COUNT%"
-        python runtests.py -m 2 -b -j "%TEST_START_INDEX%:%TEST_COUNT%"  --exclude-tags='long_running'  -- numba.tests
+        python runtests.py -m 2 -b -j "%TEST_START_INDEX%:%TEST_COUNT%"  --exclude-tags='long_running' --junit -- numba.tests
       displayName: 'Test shard of test files'
+
+    - task: PublishTestResults@2
+      condition: succeededOrFailed()
+      displayName: Publish Test Results
+      inputs:
+        testResultsFiles: 'junit_numba_*.xml'
+        mergeTestResults: true

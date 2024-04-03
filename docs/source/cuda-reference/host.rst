@@ -50,9 +50,9 @@ Numba maintains a list of supported CUDA-capable devices:
 
 Alternatively, the current device can be obtained:
 
-.. function:: numba.cuda.gpus.current
+.. attribute:: numba.cuda.gpus.current
 
-   Return the currently-selected device.
+   The currently-selected device.
 
 Getting a device through :attr:`numba.cuda.gpus` always provides an instance of
 :class:`numba.cuda.cudadrv.devices._DeviceContextManager`, which acts as a

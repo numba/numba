@@ -1,10 +1,4 @@
 import copy
-import os
-import signal
-import subprocess
-import sys
-import tempfile
-import threading
 import warnings
 import numpy as np
 
@@ -13,7 +7,7 @@ from numba.core.transforms import find_setupwiths, with_lifting
 from numba.core.withcontexts import bypass_context, call_context, objmode_context
 from numba.core.bytecode import FunctionIdentity, ByteCode
 from numba.core.interpreter import Interpreter
-from numba.core import typing, errors, cpu
+from numba.core import errors
 from numba.core.registry import cpu_target
 from numba.core.compiler import compile_ir, DEFAULT_FLAGS
 from numba import njit, typeof, objmode, types
@@ -196,8 +190,8 @@ class TestWithFinding(TestCase):
 class BaseTestWithLifting(TestCase):
     def setUp(self):
         super(BaseTestWithLifting, self).setUp()
-        self.typingctx = typing.Context()
-        self.targetctx = cpu.CPUContext(self.typingctx)
+        self.typingctx = cpu_target.typing_context
+        self.targetctx = cpu_target.target_context
         self.flags = DEFAULT_FLAGS
 
     def check_extracted_with(self, func, expect_count, expected_stdout):
@@ -218,10 +212,8 @@ class BaseTestWithLifting(TestCase):
         typingctx = self.typingctx
         targetctx = self.targetctx
         flags = self.flags
-        # Register the contexts in case for nested @jit or @overload calls
-        with cpu_target.nested_context(typingctx, targetctx):
-            return compile_ir(typingctx, targetctx, the_ir, args,
-                              return_type, flags, locals={})
+        return compile_ir(typingctx, targetctx, the_ir, args,
+                            return_type, flags, locals={})
 
 
 class TestLiftByPass(BaseTestWithLifting):
@@ -548,7 +540,7 @@ class TestLiftObj(MemoryLeak, TestCase):
             njit(foo)(123)
         # Check that an error occurred in with-lifting in objmode
         pat = ("During: resolving callee type: "
-               "type\(ObjModeLiftedWith\(<.*>\)\)")
+               r"type\(ObjModeLiftedWith\(<.*>\)\)")
         self.assertRegex(str(raises.exception), pat)
 
     def test_case07_mystery_key_error(self):
@@ -822,7 +814,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         with self.assertRaisesRegex(
             errors.CompilerError,
             ("Error handling objmode argument 'val'. "
-             "Global 'gv_type2' is not defined\.")
+             r"Global 'gv_type2' is not defined.")
         ):
             global_var()
 

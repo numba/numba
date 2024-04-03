@@ -84,7 +84,7 @@ import numba.core.types as types
 from numba.core.types import *
 
 # Re-export decorators
-from numba.core.decorators import (cfunc, generated_jit, jit, njit, stencil,
+from numba.core.decorators import (cfunc, jit, njit, stencil,
                                    jit_module)
 
 # Re-export vectorize decorators and the thread layer querying function
@@ -142,7 +142,7 @@ __all__ = """
     """.split() + types.__all__ + errors.__all__
 
 
-_min_llvmlite_version = (0, 42, 0)
+_min_llvmlite_version = (0, 43, 0)
 _min_llvm_version = (14, 0, 0)
 
 def _ensure_llvm():
