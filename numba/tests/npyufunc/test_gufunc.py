@@ -736,7 +736,9 @@ class TestGUVectorizeJit(TestCase):
 
         with self.assertRaises(ValueError) as raises:
             foo(x, y, res)
-        msg = ('Operand has a mismatch in one of its core dimensions')
+        msg = ('operand 0 has a mismatch with operand 1 one of its core '
+               'dimension(s), with bar signature (n),(n) -> () '
+               '(shape (5, 3, 2) is different from (3))')
         self.assertIn(msg, str(raises.exception))
 
     def test_mismatch_inner_dimensions_input_output(self):
@@ -763,7 +765,9 @@ class TestGUVectorizeJit(TestCase):
 
         with self.assertRaises(ValueError) as raises:
             foo(x, y, res)
-        msg = ('Operand has a mismatch in one of its core dimensions')
+        msg = ('operand 0 has a mismatch with operand 2 one of its core '
+               'dimension(s), with bar signature (n),(m) -> (n) '
+               '(shape (5, 3, 2) is different from (5, 3))')
         self.assertIn(msg, str(raises.exception))
 
     def test_mismatch_inner_dimensions_output(self):
@@ -792,7 +796,9 @@ class TestGUVectorizeJit(TestCase):
 
         with self.assertRaises(ValueError) as raises:
             foo(x, y, res, out)
-        msg = ('Operand has a mismatch in one of its core dimensions')
+        msg = ('operand 1 has a mismatch with operand 2 one of its core '
+               'dimension(s), with bar signature (n),(m) -> (m),(m) '
+               '(shape (3) is different from (2))')
         self.assertIn(msg, str(raises.exception))
 
     def test_mismatch_loop_shape(self):
