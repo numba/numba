@@ -69,7 +69,6 @@ exclude =
     numba/core/options.py
     numba/cpython/printimpl.py
     numba/cpython/cmathimpl.py
-    numba/cpython/tupleobj.py
     numba/cpython/mathimpl.py
     numba/core/registry.py
     numba/core/imputils.py
