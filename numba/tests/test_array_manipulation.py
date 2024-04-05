@@ -1221,7 +1221,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
         self.assertIn("The argument to np.shape must be array-like",
                       str(raises.exception))
-        
+
     def test_size(self):
         pyfunc = numpy_size
         cfunc = jit(nopython=True)(pyfunc)
