@@ -1240,12 +1240,11 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         for t in [1, False, 3.14, np.int8(4), np.float32(2.718)]:
             check(t)
 
-
         with self.assertRaises(TypingError) as raises:
             cfunc('a')
-            
+
         self.assertIn("The argument to np.size must be array-like",
-                    str(raises.exception))
+                      str(raises.exception))
 
     def test_flatnonzero_basic(self):
         pyfunc = numpy_flatnonzero
