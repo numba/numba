@@ -149,7 +149,7 @@ def _get_incref_decref(context, module, datamodel, container_element_type):
     return incref_fn, decref_fn
 
 
-def _get_container_equal(context, module, datamodel, func_name_suffix):
+def _get_container_equal(context, module, datamodel):
     assert datamodel.contains_nrt_meminfo()
 
     fe_type = datamodel.fe_type
@@ -173,14 +173,18 @@ def _get_container_equal(context, module, datamodel, func_name_suffix):
         context.call_conv.return_value(builder, intres)
 
     wrapfn = cgutils.get_or_insert_function(
-        module, wrapfnty, name='.numba_{}.{}_equal.wrap'.format(
-            context.fndesc.mangled_name, func_name_suffix))
+        module,
+        wrapfnty,
+        name=f".numba_{context.fndesc.mangled_name}.dict_key_equal.wrap",
+    )
     build_wrapper(wrapfn)
 
     equal_fnty = ir.FunctionType(ir.IntType(32), [data_ptr_ty, data_ptr_ty])
     equal_fn = cgutils.get_or_insert_function(
-        module, equal_fnty, name='.numba_{}.{}_equal'.format(
-            context.fndesc.mangled_name, func_name_suffix))
+        module,
+        equal_fnty,
+        name=f".numba_{context.fndesc.mangled_name}.dict_key_equal",
+    )
     builder = ir.IRBuilder(equal_fn.append_basic_block())
     lhs = datamodel.load_from_data_pointer(builder, equal_fn.args[0])
     rhs = datamodel.load_from_data_pointer(builder, equal_fn.args[1])
@@ -199,14 +203,15 @@ def _get_container_equal(context, module, datamodel, func_name_suffix):
     return equal_fn
 
 
-def _get_primitive_equal(context, module, datamodel, func_name_suffix):
+def _get_primitive_equal(context, module, datamodel):
     # construct equal_fn
-    data_ptr_ty = ir.IntType(8).as_pointer()
-    equal_fnty = ir.FunctionType(ir.IntType(32), [data_ptr_ty, data_ptr_ty])
+    int8_ptr_t = cgutils.int8_t.as_pointer()
+
+    equal_fnty = ir.FunctionType(cgutils.int32_t, [int8_ptr_t, int8_ptr_t])
     equal_fn = cgutils.get_or_insert_function(
         module,
         equal_fnty,
-        name=f".numba_{context.fndesc.mangled_name}.{func_name_suffix}_equal",
+        name=f".numba_{context.fndesc.mangled_name}.dict_key_equal",
     )
 
     # populate the body of equal_fn
@@ -221,14 +226,7 @@ def _get_primitive_equal(context, module, datamodel, func_name_suffix):
     else:
         res = builder.icmp_unsigned('==', lhs, rhs)
 
-    with builder.if_else(res) as (then, orelse):
-        with then:
-            builder.ret(context.get_constant_generic(builder, types.int32, 1))
-        with orelse:
-            builder.ret(context.get_constant_generic(builder, types.int32, 0))
-
-    builder.ret(context.get_constant_generic(builder, types.int32, -1))
-
+    builder.ret(builder.zext(res, cgutils.int32_t))
     return equal_fn
 
 

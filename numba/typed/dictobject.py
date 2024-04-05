@@ -310,7 +310,7 @@ def _dict_set_method_table(typingctx, dp, keyty, valty):
         dm_key = context.data_model_manager[keyty.instance_type]
         if dm_key.contains_nrt_meminfo():
             key_equal = _get_container_equal(
-                context, builder.module, dm_key, "dict_key")
+                context, builder.module, dm_key)
             key_incref, key_decref = _get_incref_decref(
                 context, builder.module, dm_key, "dict_key"
             )
@@ -334,7 +334,6 @@ def _dict_set_method_table(typingctx, dp, keyty, valty):
                 context,
                 builder.module,
                 dm_key,
-                "dict_key",
             )
             key_copy = _get_copy(
                 context,
