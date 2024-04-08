@@ -15,7 +15,7 @@ from numba.core.imputils import impl_ret_untracked
 from numba.core import typing, types, errors, lowering, cgutils
 from numba.core.extending import register_jitable
 from numba.np import npdatetime
-from numba.cpython import cmathimpl, mathimpl, numbers
+from numba.np.math import cmathimpl, mathimpl, numbers
 
 # some NumPy constants. Note that we could generate some of them using
 # the math library, but having the values copied from npy_math seems to

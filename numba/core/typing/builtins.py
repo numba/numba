@@ -995,6 +995,13 @@ class Float(AbstractTemplate):
 
         [arg] = args
 
+        if isinstance(arg, types.UnicodeType):
+            msg = 'argument must be a string literal'
+            raise errors.RequireLiteralValue(msg)
+
+        if isinstance(arg, types.StringLiteral):
+            return signature(types.float64, arg)
+
         if arg not in types.number_domain:
             raise errors.NumbaTypeError("float() only support for numbers")
 

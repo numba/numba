@@ -586,21 +586,22 @@ def array_item(context, builder, sig, args):
     return load_item(context, builder, aryty, ary.data)
 
 
-@lower_builtin("array.itemset", types.Array, types.Any)
-def array_itemset(context, builder, sig, args):
-    aryty, valty = sig.args
-    ary, val = args
-    assert valty == aryty.dtype
-    ary = make_array(aryty)(context, builder, ary)
+if numpy_version < (2, 0):
+    @lower_builtin("array.itemset", types.Array, types.Any)
+    def array_itemset(context, builder, sig, args):
+        aryty, valty = sig.args
+        ary, val = args
+        assert valty == aryty.dtype
+        ary = make_array(aryty)(context, builder, ary)
 
-    nitems = ary.nitems
-    with builder.if_then(builder.icmp_signed('!=', nitems, nitems.type(1)),
-                         likely=False):
-        msg = "itemset(): can only write to an array of size 1"
-        context.call_conv.return_user_exc(builder, ValueError, (msg,))
+        nitems = ary.nitems
+        with builder.if_then(builder.icmp_signed('!=', nitems, nitems.type(1)),
+                             likely=False):
+            msg = "itemset(): can only write to an array of size 1"
+            context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
-    store_item(context, builder, aryty, val, ary.data)
-    return context.get_dummy_value()
+        store_item(context, builder, aryty, val, ary.data)
+        return context.get_dummy_value()
 
 
 # ------------------------------------------------------------------------------
@@ -4747,7 +4748,7 @@ def _arange_dtype(*args):
 
 
 @overload(np.arange)
-def np_arange(start, stop=None, step=None, dtype=None):
+def np_arange(start, / ,stop=None, step=None, dtype=None):
     if isinstance(stop, types.Optional):
         stop = stop.type
     if isinstance(step, types.Optional):
@@ -4781,7 +4782,7 @@ def np_arange(start, stop=None, step=None, dtype=None):
     stop_value = getattr(stop, "literal_value", None)
     step_value = getattr(step, "literal_value", None)
 
-    def impl(start, stop=None, step=None, dtype=None):
+    def impl(start, /, stop=None, step=None, dtype=None):
         # Allow for improved performance if given literal arguments.
         lit_start = start_value if start_value is not None else start
         lit_stop = stop_value if stop_value is not None else stop
@@ -6045,6 +6046,10 @@ def impl_np_vstack(tup):
         def impl(tup):
             return _np_vstack(tup)
         return impl
+
+
+if numpy_version >= (2, 0):
+    overload(np.row_stack)(impl_np_vstack)
 
 
 @intrinsic

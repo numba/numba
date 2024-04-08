@@ -1,0 +1,4 @@
+Add support for ``math.log2``.
+------------------------------
+
+Support for ``math.log2`` is added.

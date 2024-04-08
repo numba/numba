@@ -1,4 +1,0 @@
-Support negative axis in ufunc.reduce
-"""""""""""""""""""""""""""""""""""""
-
-Fixed a bug in ufunc.reduce to correctly handle negative axis values.

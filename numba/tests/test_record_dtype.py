@@ -929,7 +929,7 @@ class TestRecordDtype(TestCase):
         np.testing.assert_equal(expect, got)
 
     def test_record_dtype_with_titles_roundtrip(self):
-        recdtype = np.dtype([(("title a", 'a'), np.float_), ('b', np.float_)])
+        recdtype = np.dtype([(("title a", 'a'), np.float64), ('b', np.float64)])
         nbtype = numpy_support.from_dtype(recdtype)
         self.assertTrue(nbtype.is_title('title a'))
         self.assertFalse(nbtype.is_title('a'))

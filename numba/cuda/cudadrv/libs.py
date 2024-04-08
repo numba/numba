@@ -1,8 +1,9 @@
-"""Cudatoolkit libraries lookup utilities.
+"""CUDA Toolkit libraries lookup utilities.
 
-Cudatoolkit libraries can be available via either:
+CUDA Toolkit libraries can be available via either:
 
-- the `cudatoolkit` conda package,
+- the `cuda-nvcc` and `cuda-nvrtc` conda packages for CUDA 12,
+- the `cudatoolkit` conda package for CUDA 11,
 - a user supplied location from CUDA_HOME,
 - a system wide location,
 - package-specific locations (e.g. the Debian NVIDIA packages),
