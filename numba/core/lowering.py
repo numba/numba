@@ -16,10 +16,8 @@ from numba.core.funcdesc import default_mangler
 from numba.core.environment import Environment
 from numba.core.analysis import compute_use_defs, must_use_alloca
 from numba.misc.firstlinefinder import get_func_body_first_lineno
-from numba.misc.coverage_support import (
-    get_active_coverage,
-    NotifyCompilerCoverage,
-)
+from numba.misc.coverage_support import get_registered_loc_notify
+
 
 _VarArgItem = namedtuple("_VarArgItem", ("vararg", "index"))
 
@@ -73,9 +71,7 @@ class BaseLower(object):
                                       directives_only=directives_only)
 
         # Loc notify objects
-        self._loc_notify_registry = []
-        if get_active_coverage() is not None:
-            self._loc_notify_registry.append(NotifyCompilerCoverage())
+        self._loc_notify_registry = get_registered_loc_notify()
 
         # Subclass initialization
         self.init()

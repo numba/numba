@@ -4,7 +4,7 @@ Implement code coverage support.
 Currently contains logic to extend ``coverage`` with line covered by the
 compiler.
 """
-from typing import Optional
+from typing import Optional, Sequence, Callable
 from collections import defaultdict
 from abc import ABC, abstractmethod
 import atexit
@@ -28,6 +28,14 @@ def get_active_coverage() -> Optional["coverage.Coverage"]:
     if coverage_available:
         cov = coverage.Coverage.current()
     return cov
+
+
+_the_registry: Callable[[], Optional["NotifyLocBase"]] = []
+
+
+def get_registered_loc_notify() -> Sequence["NotifyLocBase"]:
+    return list(filter(lambda x: x is not None,
+                       (factory() for factory in _the_registry)))
 
 
 @cache
@@ -78,3 +86,9 @@ class NotifyCompilerCoverage(NotifyLocBase):
         with covdata._lock:
             covdata.set_context("numba_compiled")
             covdata.add_arcs(self._arcs_data)
+
+
+@_the_registry.append
+def _register_coverage_notifier():
+    if get_active_coverage() is not None:
+        return NotifyCompilerCoverage()
