@@ -417,6 +417,14 @@ class GUFuncBuilder(serialize.ReduceMixin, _BaseUFuncBuilder, UfuncBase):
         self._lower_me = GUFuncLowerer(self)
         self._install_cg()
 
+    def disable_compile(self):
+        """
+        Disable the compilation of new signatures at call time.
+        """
+        # If disabling compilation then there must be at least one signature
+        assert len(self._dispatcher.overloads) > 0
+        self._frozen = True
+
     def _finalize_signature(self, cres, args, return_type):
         if not cres.objectmode and cres.signature.return_type != types.void:
             raise TypeError("gufunc kernel must have void return type")
