@@ -12,7 +12,8 @@ import operator
 from functools import cached_property
 import numpy as np
 from numba import njit, types
-from numba.extending import overload, intrinsic, overload_classmethod
+from numba.extending import (overload, overload_attribute,
+                             overload_classmethod, intrinsic)
 from numba.core.target_extension import (
     JitDecorator,
     target_registry,
@@ -41,6 +42,7 @@ from numba.core import compiler
 from numba.core.compiler import CompilerBase, DefaultPassBuilder
 from numba.core.compiler_machinery import FunctionPass, register_pass
 from numba.core.typed_passes import PreLowerStripPhis
+from numba.tests.test_extending import mydummy_type, MyDummyType
 
 # Define a new target, this target extends GPU, this places the DPU in the
 # target hierarchy as a type of GPU.
@@ -703,6 +705,29 @@ class TestTargetHierarchySelection(TestCase):
             r = foo()
         from numba.core.runtime import nrt
         self.assertIsInstance(r, nrt.MemInfo)
+
+    def test_overload_attribute_target(self):
+        @overload_attribute(MyDummyType, 'dpu_only', target='dpu')
+        def ov_dummy_dpu_attr(obj):
+            def imp(obj):
+                return 42
+
+            return imp
+
+        # Ensure that we cannot use the DPU target-specific attribute on the
+        # CPU, and that an appropriate typing error is raised
+        with self.assertRaisesRegex(errors.TypingError,
+                                    "Unknown attribute 'dpu_only'"):
+            @njit(types.void(mydummy_type))
+            def illegal_target_attr_use(x):
+                return x.dpu_only
+
+        # Ensure that the DPU target-specific attribute is usable and works
+        # correctly when the target is DPU - note eager compilation via
+        # signature
+        @djit(types.void(types.int64[::1], mydummy_type))
+        def cuda_target_attr_use(res, dummy):
+            res[0] = dummy.dpu_only
 
 
 class TestTargetOffload(TestCase):
