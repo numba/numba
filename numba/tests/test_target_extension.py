@@ -520,7 +520,7 @@ class TestTargetHierarchySelection(TestCase):
 
     def test_invalid_target_jit(self):
 
-        with self.assertRaises(errors.NumbaValueError) as raises:
+        with self.assertRaises(errors.NonexistentTargetError) as raises:
             @njit(_target='invalid_silicon')
             def foo():
                 pass
@@ -537,7 +537,7 @@ class TestTargetHierarchySelection(TestCase):
 
         # This is a typing error at present as it fails during typing when the
         # overloads are walked.
-        with self.assertRaises(errors.TypingError) as raises:
+        with self.assertRaises(errors.NonexistentTargetError) as raises:
             @overload(bar, target='invalid_silicon')
             def ol_bar():
                 return lambda : None

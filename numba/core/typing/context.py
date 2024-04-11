@@ -449,7 +449,30 @@ class BaseContext(object):
             if target_str is None:
                 return True
 
-            ft_target = resolve_target_str(target_str)
+            # There may be pending registrations for nonexistent targets.
+            # Ideally it would be impossible to leave a registration pending
+            # for an invalid target, but in practice this is exceedingly
+            # difficult to guard against - many things are registered at import
+            # time, and eagerly reporting an error when registering for invalid
+            # targets would require that all target registration code is
+            # executed prior to all typing registrations during the import
+            # process; attempting to enforce this would impose constraints on
+            # execution order during import that would be very difficult to
+            # resolve and maintain in the presence of typical code maintenance.
+            # Furthermore, these constraints would be imposed not only on
+            # Numba internals, but also on its dependents.
+            #
+            # Instead of that enforcement, we simply catch any occurrences of
+            # registrations for targets that don't exist, and report that
+            # they're not for this target. They will then not be encountered
+            # again during future typing context refreshes (because the
+            # loader's new registrations are a stream_list that doesn't yield
+            # previously-yielded items).
+            try:
+                ft_target = resolve_target_str(target_str)
+            except errors.NonexistentTargetError:
+                return False
+
             return current_target.inherits_from(ft_target)
 
         for ftcls in loader.new_registrations('functions'):
