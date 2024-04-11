@@ -283,6 +283,10 @@ dpu_target = DPUTarget("dpu")
 class DPUDispatcher(Dispatcher):
     targetdescr = dpu_target
 
+    def compile(self, sig):
+        with target_override('dpu'):
+            return super().compile(sig)
+
 
 # Register a dispatcher for the DPU target, a lot of the code uses this
 # internally to work out what to do RE compilation
@@ -318,6 +322,8 @@ class djit(JitDecorator):
         topt = {}
         if "nopython" in self._kwargs:
             topt["nopython"] = True
+
+        topt['target_backend'] = 'dpu'
 
         # It would be easy to specialise the default compilation pipeline for
         # this target here.
