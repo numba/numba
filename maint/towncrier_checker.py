@@ -66,16 +66,21 @@ if __name__ == "__main__":
 
     # Find PRs that are mentioned in CHANGE_LOG already
     # (most likely cherrypicked to previous bugfix releases)
-    with open(Path(os.path.dirname(__file__)) / ".." / "CHANGE_LOG") as fin:
-        # Use regex to find all PR numbers in the file and remove them
-        pr_re = re.compile(r"\#(\d+)")
-        prs_in_changelog = [
-            match.group(1) for match in pr_re.finditer(fin.read())
-        ]
-        to_remove = {pr for pr in prs if pr in prs_in_changelog}
-        for pr in to_remove:
-            print(f"Removing {pr} as already in CHANGELOG")
-            del prs[pr]
+    basepath = Path(os.path.dirname(__file__)) / ".."
+    oldchangelog = basepath / "CHANGE_LOG"
+    newchangelogs = (basepath / "docs" / "source" / "release").glob("*.rst")
+    for path in [oldchangelog, *newchangelogs]:
+        print('Checking', path)
+        with open(path) as fin:
+            # Use regex to find all PR numbers in the file and remove them
+            pr_re = re.compile(r"\#(\d+)")
+            prs_in_changelog = [
+                match.group(1) for match in pr_re.finditer(fin.read())
+            ]
+            to_remove = {pr for pr in prs if pr in prs_in_changelog}
+            for pr in to_remove:
+                print(f"Removing {pr} as already in CHANGELOG")
+                del prs[pr]
 
     # Print PRs with missing notes
     if prs:

@@ -35,6 +35,15 @@ def ufunc_db():
         impl = get_binary_impl_for_fn_and_ty(fn, sig.args[0])
         return impl(context, builder, sig, args)
 
+    def np_real_log_impl(context, builder, sig, args):
+        return np_unary_impl(math.log, context, builder, sig, args)
+
+    def np_real_log2_impl(context, builder, sig, args):
+        return np_unary_impl(math.log2, context, builder, sig, args)
+
+    def np_real_log10_impl(context, builder, sig, args):
+        return np_unary_impl(math.log10, context, builder, sig, args)
+
     def np_real_sin_impl(context, builder, sig, args):
         return np_unary_impl(math.sin, context, builder, sig, args)
 
@@ -628,4 +637,26 @@ def ufunc_db():
         'qq->q': numbers.int_shr_impl,
         'QQ->Q': numbers.int_shr_impl,
     }
+
+    db[np.log] = {
+        'f->f': np_real_log_impl,
+        'd->d': np_real_log_impl,
+        'F->F': npyfuncs.np_complex_log_impl,
+        'D->D': npyfuncs.np_complex_log_impl,
+    }
+
+    db[np.log2] = {
+        'f->f': np_real_log2_impl,
+        'd->d': np_real_log2_impl,
+        'F->F': npyfuncs.np_complex_log2_impl,
+        'D->D': npyfuncs.np_complex_log2_impl,
+    }
+
+    db[np.log10] = {
+        'f->f': np_real_log10_impl,
+        'd->d': np_real_log10_impl,
+        'F->F': npyfuncs.np_complex_log10_impl,
+        'D->D': npyfuncs.np_complex_log10_impl,
+    }
+
     return db

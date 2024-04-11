@@ -1,5 +1,0 @@
-Move minimum supported Python version to 3.9.
----------------------------------------------
-
-Support for Python 3.8 has been removed, Numba's minimum supported Python
-version is now Python 3.9.

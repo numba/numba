@@ -658,6 +658,9 @@ class TestBuiltins(TestCase):
         for typ in typs:
             cfunc = jit((typ,), **nrt_no_pyobj_flags)(pyfunc)
             for v in args:
+                tp_info = np.iinfo(typ.key)
+                if not (tp_info.min <= v <= tp_info.max):
+                    continue
                 self.assertPreciseEqual(cfunc(typ(v)), pyfunc(typ(v)))
 
                 if typ.signed:

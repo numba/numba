@@ -14,6 +14,7 @@ infer_global = registry.register_global
 @infer_global(math.log)
 @infer_global(math.log1p)
 @infer_global(math.log10)
+@infer_global(math.log2)
 @infer_global(math.sin)
 @infer_global(math.cos)
 @infer_global(math.tan)

@@ -1,4 +1,0 @@
-Added support for np.unwrap() function.
----------------------------------------
-
-Support is added for ``numpy.unwrap()``. The ``axis`` argument is only supported when its value equals -1.

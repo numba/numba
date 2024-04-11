@@ -91,6 +91,10 @@ def log10(x):
     return math.log10(x)
 
 
+def log2(x):
+    return math.log2(x)
+
+
 def floor(x):
     return math.floor(x)
 
@@ -279,6 +283,14 @@ class TestMathLib(TestCase):
 
     def test_log10(self):
         pyfunc = log10
+        x_types = [types.int16, types.int32, types.int64,
+                   types.uint16, types.uint32, types.uint64,
+                   types.float32, types.float64]
+        x_values = [1, 10, 100, 1000, 100000, 1000000, 0.1, 1.1]
+        self.run_unary(pyfunc, x_types, x_values)
+
+    def test_log2(self):
+        pyfunc = log2
         x_types = [types.int16, types.int32, types.int64,
                    types.uint16, types.uint32, types.uint64,
                    types.float32, types.float64]
