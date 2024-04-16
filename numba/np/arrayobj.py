@@ -2556,6 +2556,16 @@ def np_shape(a):
         return np.asarray(a).shape
     return impl
 
+
+@overload(np.size)
+def np_size(a):
+    if not type_can_asarray(a):
+        raise errors.TypingError("The argument to np.size must be array-like")
+
+    def impl(a):
+        return np.asarray(a).size
+    return impl
+
 # ------------------------------------------------------------------------------
 
 
