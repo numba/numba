@@ -473,7 +473,14 @@ def _lower_trivial_inplace_binops(parfor, lowerer, thread_count_var, reduce_info
         if _lower_var_to_var_assign(lowerer, inst):
             pass
         # Is inplace-binop for the reduction?
-        elif _is_inplace_binop_and_rhs_is_init(inst, reduce_info.redvar_name):
+        elif _is_right_op_and_rhs_is_init(inst, reduce_info.redvar_name, "inplace_binop"):
+            fn = inst.value.fn
+            redvar_result = _emit_binop_reduce_call(
+                fn, lowerer, thread_count_var, reduce_info,
+            )
+            lowerer.storevar(redvar_result, name=inst.target.name)
+        # Is binop for the reduction?
+        elif _is_right_op_and_rhs_is_init(inst, reduce_info.redvar_name, "binop"):
             fn = inst.value.fn
             redvar_result = _emit_binop_reduce_call(
                 fn, lowerer, thread_count_var, reduce_info,
@@ -579,9 +586,14 @@ def _emit_binop_reduce_call(binop, lowerer, thread_count_var, reduce_info):
     kernel = {
         operator.iadd: reduction_add,
         operator.isub: reduction_add,
+        operator.add: reduction_add,
+        operator.sub: reduction_add,
         operator.imul: reduction_mul,
         operator.ifloordiv: reduction_mul,
         operator.itruediv: reduction_mul,
+        operator.mul: reduction_mul,
+        operator.floordiv: reduction_mul,
+        operator.truediv: reduction_mul,
     }[binop]
 
     ctx = lowerer.context
@@ -612,7 +624,7 @@ def _emit_binop_reduce_call(binop, lowerer, thread_count_var, reduce_info):
     return redvar_result
 
 
-def _is_inplace_binop_and_rhs_is_init(inst, redvar_name):
+def _is_right_op_and_rhs_is_init(inst, redvar_name, op):
     """Is ``inst`` an inplace-binop and the RHS is the reduction init?
     """
     if not isinstance(inst, ir.Assign):
@@ -620,7 +632,7 @@ def _is_inplace_binop_and_rhs_is_init(inst, redvar_name):
     rhs = inst.value
     if not isinstance(rhs, ir.Expr):
         return False
-    if rhs.op != "inplace_binop":
+    if rhs.op != op:
         return False
     if rhs.rhs.name != f"{redvar_name}#init":
         return False

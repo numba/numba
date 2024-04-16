@@ -1,0 +1,4 @@
+Add support for parfor binop reductions.
+----------------------------------------
+
+Previously, only operations with inplace operations like += could be used as reductions in pranges.  Now, with this PR, binop reductions of the form a = a binop b can be used.
