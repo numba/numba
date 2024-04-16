@@ -12,13 +12,13 @@ comment:
   require_head: true
 coverage:
   precision: 2
-  range:
-  - 70.0
-  - 100.0
   round: down
   status:
     changes: false
-    patch: false
     project:
+      informational: true
+    patch:
       default:
         target: auto
+        threshold: 10%
+        base: auto 
