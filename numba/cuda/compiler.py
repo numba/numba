@@ -361,14 +361,14 @@ def compile(pyfunc, sig, debug=False, lineinfo=False, device=True,
 
 def compile_for_current_device(pyfunc, sig, debug=False, lineinfo=False,
                                device=True, fastmath=False, opt=True,
-                               abi="c", abi_info=None):
+                               abi="c", abi_info=None, output='ptx'):
     """Compile a Python function to PTX or LTO-IR for a given signature for the
     current device's compute capabilility. This calls :func:`compile` with an
     appropriate ``cc`` value for the current device."""
     cc = get_current_device().compute_capability
-    return compile_ptx(pyfunc, sig, debug=debug, lineinfo=lineinfo,
-                       device=device, fastmath=fastmath, cc=cc, opt=opt,
-                       abi=abi, abi_info=abi_info)
+    return compile(pyfunc, sig, debug=debug, lineinfo=lineinfo, device=device,
+                   fastmath=fastmath, cc=cc, opt=opt, abi=abi,
+                   abi_info=abi_info, output=output)
 
 
 def compile_ptx(pyfunc, sig, debug=False, lineinfo=False, device=False,
@@ -379,7 +379,7 @@ def compile_ptx(pyfunc, sig, debug=False, lineinfo=False, device=False,
     device function with the C ABI."""
     return compile(pyfunc, sig, debug=debug, lineinfo=lineinfo, device=device,
                    fastmath=fastmath, cc=cc, opt=opt, abi=abi,
-                   abi_info=abi_info)
+                   abi_info=abi_info, output='ptx')
 
 
 def compile_ptx_for_current_device(pyfunc, sig, debug=False, lineinfo=False,
@@ -387,10 +387,10 @@ def compile_ptx_for_current_device(pyfunc, sig, debug=False, lineinfo=False,
                                    abi="numba", abi_info=None):
     """Compile a Python function to PTX for a given signature for the current
     device's compute capabilility. See :func:`compile_ptx`."""
-    return compile_for_current_device(pyfunc, sig, debug=debug,
-                                      lineinfo=lineinfo, device=device,
-                                      fastmath=fastmath, opt=opt, abi=abi,
-                                      abi_info=abi_info)
+    cc = get_current_device().compute_capability
+    return compile_ptx(pyfunc, sig, debug=debug, lineinfo=lineinfo,
+                       device=device, fastmath=fastmath, cc=cc, opt=opt,
+                       abi=abi, abi_info=abi_info)
 
 
 def declare_device_function(name, restype, argtypes):
