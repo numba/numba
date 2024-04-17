@@ -117,9 +117,6 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
     def get_llvm_str(self):
         return "\n\n".join(self.llvm_strs)
 
-    def get_asm_str(self, cc=None):
-        return self._get_ptx(cc=cc)
-
     def _ensure_cc(self, cc):
         if cc:
             return cc
@@ -127,7 +124,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         device = devices.get_context().device
         return device.compute_capability
 
-    def _get_ptx(self, cc=None):
+    def get_asm_str(self, cc=None):
         cc = self._ensure_cc(cc)
 
         ptxes = self._ptx_cache.get(cc, None)
@@ -187,7 +184,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
             ltoir = self.get_ltoir(cc=cc)
             linker.add_ltoir(ltoir)
         else:
-            ptx = self._get_ptx(cc=cc)
+            ptx = self.get_asm_str(cc=cc)
             linker.add_ptx(ptx.encode())
 
         for path in self._linking_files:
