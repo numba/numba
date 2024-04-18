@@ -928,7 +928,7 @@ def find_setitems_block(setitems, itemsset, block, typemap):
             # unavailable for hoisting.
             rhs = inst.value
             if isinstance(rhs, ir.Expr):
-                if rhs.op == "build_tuple":
+                if rhs.op in ["build_tuple", "build_list", "build_set", "build_map"]:
                     for item in rhs.items:
                         if getattr(typemap[item.name], "mutable", False):
                             itemsset.add(item.name)
