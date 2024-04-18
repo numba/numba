@@ -985,7 +985,10 @@ class TraceRunner(object):
         blk = state.pop_block()
         state.reset_stack(blk['entry_stack'])
 
-    if PYVERSION in ((3, 12), (3, 13)):
+    if PYVERSION in ((3, 13),):
+        def op_END_FOR(self, state, inst):
+            state.pop()
+    elif PYVERSION in ((3, 12),):
         def op_END_FOR(self, state, inst):
             state.pop()
             state.pop()
