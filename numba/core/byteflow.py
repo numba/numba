@@ -898,6 +898,8 @@ class TraceRunner(object):
         state.append(inst)
         state.fork(pc=inst.get_jump_target())
 
+    op_JUMP_BACKWARD_NO_INTERRUPT = op_JUMP_BACKWARD
+
     def op_JUMP_ABSOLUTE(self, state, inst):
         state.append(inst)
         state.fork(pc=inst.get_jump_target())

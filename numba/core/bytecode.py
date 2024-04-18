@@ -106,7 +106,8 @@ class ByteCodeInst(object):
         assert self.is_jump
         if PYVERSION in ((3, 13),):
             if self.opcode in (dis.opmap[k]
-                               for k in ["JUMP_BACKWARD"]):
+                               for k in ["JUMP_BACKWARD",
+                                         "JUMP_BACKWARD_NO_INTERRUPT"]):
                 return self.next - (self.arg * 2)
         elif PYVERSION in ((3, 12),):
             if self.opcode in (dis.opmap[k]

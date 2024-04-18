@@ -2916,6 +2916,8 @@ class Interpreter(object):
         jmp = ir.Jump(inst.get_jump_target(), loc=self.loc)
         self.current_block.append(jmp)
 
+    op_JUMP_BACKWARD_NO_INTERRUPT = op_JUMP_BACKWARD
+
     def op_POP_BLOCK(self, inst, kind=None):
         if kind is None:
             self.syntax_blocks.pop()
