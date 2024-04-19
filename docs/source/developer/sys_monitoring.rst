@@ -71,9 +71,14 @@ the interpreter itself), Numba has to look for tool-event combinations at
 appropriate locations in the dispatch sequence and then manually call the
 associated callbacks (essentially doing what the interpreter does when it issues
 an event). In the case of the Numba dispatcher, only a few events are relevant
-and only two are supported, namely
-``sys.monitoring.events.PY_START`` (Python function starting) and
-``sys.monitoring.events.PY_RETURN`` (Python function returning).
+and only four are supported, namely
+
+* ``sys.monitoring.events.PY_START`` (Python function starting).
+* ``sys.monitoring.events.PY_RETURN`` (Python function returning).
+* ``sys.monitoring.events.RAISE`` (Python function raised an exception).
+* ``sys.monitoring.events.PY_UNWIND`` (Python function exiting during exception
+  unwinding).
+
 These events don't really exist in the machine code, but would exist had the
 interpreter interpreted the equivalent bytecode. The dispatcher therefore checks
 for monitoring of ``PY_START`` just before control is transferred to the machine
@@ -81,7 +86,10 @@ code and calls any associated callbacks. The same is done for ``PY_RETURN`` just
 after control is transferred back to the dispatcher from the machine code. This
 behaviour essentially emulates the interpreter executing bytecode and lets
 tools such as ``cProfile`` be able to "see" the Numba compiled function as part
-of the standard interpreted execution.
+of the standard interpreted execution. In the case of an exception being raised
+in the machine code, the associated error state is handled just after control is
+transferred back to the dispatcher, at this point ``RAISE`` and ``PY_UNWIND``
+event monitoring is checked and registered callbacks are invoked.
 
 A note on offsets. The callback functions often take an "offset" argument which
 is the bytecode offset at which the event triggering the callback was

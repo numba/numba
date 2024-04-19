@@ -815,7 +815,7 @@ static int invoke_monitoring(PyThreadState * tstate, int event, Dispatcher *self
     // executed the bytecode present in the function that's been JIT compiled.
     // As a result we need to tell any tool that has a callback registered for a
     // PY_MONITORING_EVENT_PY_START that a Python function is about to start
-    // (and do something similar for when a function returns).
+    // (and do something similar for when a function returns/raises).
     // This is a total lie as the execution is in machine code, but telling this
     // lie makes it look like a python function has started executing at the
     // point the machine code function starts and tools like profilers will be
@@ -918,16 +918,16 @@ static int invoke_monitoring(PyThreadState * tstate, int event, Dispatcher *self
         // closure, it's whereever the `RESUME` bytecode appears). However,
         // we don't know which bytecode will be associated with the return
         // (without huge effort to wire that through to here). Therefore
-        // zero is also used for return, the main use case, cProfile, seems
-        // to manage to do something sensible even though this is
-        // inaccurate.
+        // zero is also used for return/raise/unwind, the main use case,
+        // cProfile, seems to manage to do something sensible even though this
+        // is inaccurate.
         offset_obj = PyLong_FromSsize_t(0); // incref offset_obj
 
         // This is adapted from call_one_instrument. Note that Numba has to care
-        // about all events even though it only emits fake events for PY_START
-        // and PY_RETURN, this is because of the ability of `objmode` to call
-        // back into the interpreter and essentially create a continued Python
-        // execution environment/stack from there.
+        // about all events even though it only emits fake events for PY_START,
+        // PY_RETURN, RAISE and PY_UNWIND, this is because of the ability of
+        // `objmode` to call back into the interpreter and essentially create a
+        // continued Python execution environment/stack from there.
         while(tools) {
             // The tools registered are set as bits in `tools` and provide an
             // index into monitoring_callables. This is presumably used by
@@ -956,7 +956,8 @@ static int invoke_monitoring(PyThreadState * tstate, int event, Dispatcher *self
 
             // Need to call the callback instrument. Need to know the number of
             // arguments, this is based on whether the `retval` (return value)
-            // is NULL (it indicates whether this is a PY_START or a PY_RETURN).
+            // is NULL (it indicates whether this is a PY_START, or something
+            // like a PY_RETURN, which has 3 arguments).
             size_t nargsf = (retval == NULL ? 2 : 3) | PY_VECTORCALL_ARGUMENTS_OFFSET;
 
             // call the instrumentation, look at the args to the callback
@@ -1008,6 +1009,16 @@ int static inline invoke_monitoring_PY_RETURN(PyThreadState * tstate, Dispatcher
     return invoke_monitoring(tstate, PY_MONITORING_EVENT_PY_RETURN, self, retval);
 }
 
+/* invoke monitoring for RAISE if it is set */
+int static inline invoke_monitoring_RAISE(PyThreadState * tstate, Dispatcher *self, PyObject * exception) {
+    return invoke_monitoring(tstate, PY_MONITORING_EVENT_RAISE, self, exception);
+}
+
+/* invoke monitoring for PY_UNWIND if it is set */
+int static inline invoke_monitoring_PY_UNWIND(PyThreadState * tstate, Dispatcher *self, PyObject * exception) {
+    return invoke_monitoring(tstate, PY_MONITORING_EVENT_PY_UNWIND, self, exception);
+}
+
 /* A custom, fast, inlinable version of PyCFunction_Call() */
 static PyObject *
 call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyObject *locals)
@@ -1015,6 +1026,7 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
     PyCFunctionWithKeywords fn = NULL;
     PyThreadState *tstate = NULL;
     PyObject * pyresult = NULL;
+    PyObject * pyexception = NULL;
 
     assert(PyCFunction_Check(cfunc));
     assert(PyCFunction_GET_FLAGS(cfunc) == (METH_VARARGS | METH_KEYWORDS));
@@ -1026,11 +1038,49 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
     }
     // make call
     pyresult = fn(PyCFunction_GET_SELF(cfunc), args, kws);
-    if (pyresult == NULL){
-        // TODO: could call monitoring RAISE callbacks here? Would have to know
-        // if the exception is a StopIteration though as that goes via a
-        // different path.
-        return NULL; // exception in Numba call, start to unwind
+    if (pyresult == NULL) {
+        // pyresult == NULL, which means the Numba function raised an exception
+        // which is now pending.
+        //
+        // NOTE: that _ALL_ exceptions trigger the RAISE event, even a
+        // StopIteration exception. To get a STOP_ITERATION event, the
+        // StopIteration exception must be "implied" i.e. a for loop exhausting
+        // a generator, whereas those coming from the executing the binary
+        // wrapped in this dispatcher must always be explicit (this is after all
+        // a function dispatcher).
+        //
+        // NOTE: That it is necessary to trigger both a `RAISE` event, as this
+        // triggered by an exception being raised, and a `PY_UNWIND` event, as
+        // this is the event for  "exiting from a python function during
+        // exception unwinding" (see CPython sys.monitoring docs).
+        //
+        // In the following, if the call to PyErr_GetRaisedException returns
+        // NULL, it means that something has cleared the error indicator and
+        // this is a most surprising state to occur (shouldn't be possible!).
+        //
+        // TODO: This makes the exception raising path a little slower as the
+        // exception state is suspended and resumed regardless of whether
+        // monitoring for such an event is set. In future it might be worth
+        // checking the tstate->interp->monitors.tools[event] and only doing the
+        // suspend/resume if something is listening for the event.
+        pyexception = PyErr_GetRaisedException();
+        if (pyexception != NULL) {
+            if(invoke_monitoring_RAISE(tstate, self, pyexception) != 0){
+                // If the monitoring callback raised, return NULL so that the
+                // exception can propagate.
+                return NULL;
+            }
+            if(invoke_monitoring_PY_UNWIND(tstate, self, pyexception) != 0){
+                // If the monitoring callback raised, return NULL so that the
+                // exception can propagate.
+                return NULL;
+            }
+            // reset the exception
+            PyErr_SetRaisedException(pyexception);
+        }
+        // Exception in Numba call as pyresult == NULL, start to unwind by
+        // returning NULL.
+        return NULL;
     }
     // issue PY_RETURN if event is set
     if(invoke_monitoring_PY_RETURN(tstate, self, pyresult) != 0){

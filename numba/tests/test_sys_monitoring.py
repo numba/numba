@@ -26,6 +26,9 @@ def generate_usecase():
 if PYVERSION == (3, 12):
     PY_START = sys.monitoring.events.PY_START
     PY_RETURN = sys.monitoring.events.PY_RETURN
+    RAISE = sys.monitoring.events.RAISE
+    PY_UNWIND = sys.monitoring.events.PY_UNWIND
+    STOP_ITERATION = sys.monitoring.events.STOP_ITERATION
     NO_EVENTS = sys.monitoring.events.NO_EVENTS
 
 
@@ -392,9 +395,157 @@ class TestMonitoring(TestCase):
         self.check_py_start_calls(opt_tool)
         self.check_py_return_calls(opt_tool)
 
-    def test_raising_callback_unwinds_from_jit(self):
+    def test_raising_under_monitoring(self):
+        # Check that Numba can raise an exception whilst monitoring is running
+        # and that 1. `RAISE` is issued 2. `PY_UNWIND` is issued, 3. that
+        # `PY_RETURN` is not issued.
+
+        ret_callback = Mock()
+        raise_callback = Mock()
+        unwind_callback = Mock()
+
+        msg = 'exception raised'
+
+        @jit('()')
+        def foo():
+            raise ValueError(msg)
+
+        store_raised = None
+        try:
+            tool_id = self.tool_id
+            sys.monitoring.use_tool_id(tool_id, "custom_monitor")
+            sys.monitoring.register_callback(tool_id, PY_RETURN, ret_callback)
+            sys.monitoring.register_callback(tool_id, RAISE, raise_callback)
+            sys.monitoring.register_callback(tool_id, PY_UNWIND,
+                                             unwind_callback)
+            sys.monitoring.set_events(tool_id, PY_RETURN | RAISE | PY_UNWIND)
+            try:
+                foo()
+            except ValueError as raises:
+                store_raised = raises
+            # switch off monitoring
+            sys.monitoring.set_events(tool_id, NO_EVENTS)
+            # check that the ret_callback was called once (by Numba unpickle to
+            # fetch the exception info out of the stored bytes).
+            ret_callback.assert_called_once()
+            # and that elements that are feasible to check about the call are
+            # as expected
+            the_call = ret_callback.call_args_list[0]
+            self.assertEqual(the_call.args[0], _numba_unpickle.__code__)
+            self.assertEqual(the_call.args[2][0], ValueError)
+            self.assertEqual(the_call.args[2][1][0], msg)
+
+            # check that the RAISE event callback was triggered
+            raise_callback.assert_called()
+            numba_unpickle_call = raise_callback.call_args_list[0]
+            self.assertEqual(numba_unpickle_call.args[0],
+                             _numba_unpickle.__code__)
+            self.assertIsInstance(numba_unpickle_call.args[2], KeyError)
+            foo_call = raise_callback.call_args_list[1]
+            self.assertEqual(foo_call.args[0], foo.py_func.__code__)
+            self.assertIsInstance(foo_call.args[2], ValueError)
+            self.assertIn(msg, str(foo_call.args[2]))
+
+            # check that PY_UNWIND event callback was called
+            unwind_callback.assert_called_once()
+            unwind_call = unwind_callback.call_args_list[0]
+            self.assertEqual(unwind_call.args[0], foo.py_func.__code__)
+            self.assertIsInstance(unwind_call.args[2], ValueError)
+            self.assertIn(msg, str(unwind_call.args[2]))
+        finally:
+            sys.monitoring.set_events(tool_id, NO_EVENTS)
+            sys.monitoring.register_callback(tool_id, PY_RETURN, None)
+            sys.monitoring.register_callback(tool_id, RAISE, None)
+            sys.monitoring.register_callback(tool_id, PY_UNWIND, None)
+            sys.monitoring.free_tool_id(tool_id)
+
+        self.assertIn(msg, str(store_raised))
+
+    def test_stop_iteration_under_monitoring(self):
+        # Check that Numba can raise an StopIteration exception whilst
+        # monitoring is running and that:
+        # 1. RAISE is issued for an explicitly raised StopIteration exception.
+        # 2. PY_RETURN is issued appropriately for the unwinding stack
+        # 3. STOP_ITERATION is not issued as there is no implicit StopIteration
+        #    raised.
+
+        return_callback = Mock()
+        raise_callback = Mock()
+        stopiter_callback = Mock()
+
+        msg = 'exception raised'
+
+        @jit('()')
+        def foo():
+            raise StopIteration(msg)
+
+        store_raised = None
+        try:
+            tool_id = self.tool_id
+            sys.monitoring.use_tool_id(tool_id, "custom_monitor")
+            sys.monitoring.register_callback(tool_id, PY_RETURN,
+                                             return_callback)
+            sys.monitoring.register_callback(tool_id, RAISE,
+                                             raise_callback)
+            sys.monitoring.register_callback(tool_id, STOP_ITERATION,
+                                             stopiter_callback)
+            sys.monitoring.set_events(tool_id,
+                                      PY_RETURN | STOP_ITERATION | RAISE)
+            try:
+                foo()
+            except StopIteration as raises:
+                store_raised = raises
+            # switch off monitoring
+            sys.monitoring.set_events(tool_id, NO_EVENTS)
+            # check that the return_callback was called once (by Numba unpickle
+            # to fetch the exception info out of the stored bytes).
+            return_callback.assert_called_once()
+            # and that elements that are feasible to check about the call are
+            # as expected
+            the_call = return_callback.call_args_list[0]
+            self.assertEqual(the_call.args[0], _numba_unpickle.__code__)
+            self.assertEqual(the_call.args[2][0], StopIteration)
+            self.assertEqual(the_call.args[2][1][0], msg)
+
+            # check that the RAISE event callback was triggered
+            raise_callback.assert_called()
+            # check that it's 3 long (numba unpickle, jit(foo), the test method)
+            self.assertEqual(raise_callback.call_count, 3)
+
+            # check the numba pickle call
+            numba_unpickle_call = raise_callback.call_args_list[0]
+            self.assertEqual(numba_unpickle_call.args[0],
+                             _numba_unpickle.__code__)
+            self.assertIsInstance(numba_unpickle_call.args[2], KeyError)
+
+            # check the jit(foo) call
+            foo_call = raise_callback.call_args_list[1]
+            self.assertEqual(foo_call.args[0], foo.py_func.__code__)
+            self.assertIsInstance(foo_call.args[2], StopIteration)
+            self.assertIn(msg, str(foo_call.args[2]))
+
+            # check the test method call
+            meth_call = raise_callback.call_args_list[2]
+            test_method_code = sys._getframe().f_code
+            self.assertEqual(meth_call.args[0], test_method_code)
+            self.assertIsInstance(meth_call.args[2], StopIteration)
+            self.assertIn(msg, str(meth_call.args[2]))
+
+            # check that the STOP_ITERATION event was not triggered
+            stopiter_callback.assert_not_called()
+        finally:
+            sys.monitoring.set_events(tool_id, NO_EVENTS)
+            sys.monitoring.register_callback(tool_id, PY_RETURN, None)
+            sys.monitoring.register_callback(tool_id, STOP_ITERATION, None)
+            sys.monitoring.register_callback(tool_id, RAISE, None)
+            sys.monitoring.free_tool_id(tool_id)
+
+        self.assertIn(msg, str(store_raised))
+
+    def test_raising_callback_unwinds_from_jit_on_success_path(self):
         # An event callback can legitimately raise an exception, this test
-        # makes sure Numba's dispatcher handles it ok.
+        # makes sure Numba's dispatcher handles it ok on the "successful path",
+        # i.e. the JIT compiled function didn't raise an exception at runtime.
 
         msg = "deliberately broken callback"
 
@@ -418,45 +569,110 @@ class TestMonitoring(TestCase):
         callback.assert_called_once()
         self.assertIn(msg, str(store_raised))
 
-    def test_raising_under_monitoring(self):
-        # Check that Numba can raise an exception whilst monitoring is running
-        # and that a `PY_RETURN` is not issued.
+    def test_raising_callback_unwinds_from_jit_on_raising_path(self):
+        # An event callback can legitimately raise an exception, this test
+        # makes sure Numba's dispatcher handles it ok on the
+        # "unsuccessful path", i.e. the JIT compiled function raised an
+        # exception at runtime. This test checks the RAISE event, as the
+        # callback itself raises, it overrides the exception coming from the
+        # JIT compiled function.
 
-        callback = Mock()
-        msg = 'exception raised'
+        msg_callback = "deliberately broken callback"
+        msg_execution = "deliberately broken execution"
 
-        @jit('()')
-        def foo():
-            raise ValueError(msg)
+        callback = Mock(side_effect=ValueError(msg_callback))
+
+        class LocalException(Exception):
+            pass
+
+        @jit("()")
+        def raising():
+            raise LocalException(msg_execution)
 
         store_raised = None
         try:
-            event = PY_RETURN
+            event = RAISE
             tool_id = self.tool_id
             sys.monitoring.use_tool_id(tool_id, "custom_monitor")
-            sys.monitoring.register_callback(tool_id, event, callback)
             sys.monitoring.set_events(tool_id, event)
-            try:
-                foo()
-            except ValueError as raises:
-                store_raised = raises
-            # switch off monitoring
-            sys.monitoring.set_events(tool_id, NO_EVENTS)
-            # check that the callback was called once (by Numba unpickle to
-            # fetch the exception info out of the stored bytes).
-            callback.assert_called_once()
-            # and that elements that are feasible to check about the call are
-            # as expected
-            the_call = callback.call_args_list[0]
-            self.assertEqual(the_call.args[0], _numba_unpickle.__code__)
-            self.assertEqual(the_call.args[2][0], ValueError)
-            self.assertEqual(the_call.args[2][1][0], msg)
+            sys.monitoring.register_callback(tool_id, event, callback)
+            raising()
+        except ValueError as raises:
+            store_raised = raises
         finally:
-            sys.monitoring.set_events(tool_id, NO_EVENTS)
             sys.monitoring.register_callback(tool_id, event, None)
+            sys.monitoring.set_events(tool_id, NO_EVENTS)
             sys.monitoring.free_tool_id(tool_id)
 
-        self.assertIn(msg, str(store_raised))
+        callback.assert_called()
+        # Called 3x (numba unpickle, ValueError in callback, the test method)
+        self.assertEqual(callback.call_count, 3)
+
+        # check the numba unpickle call
+        numba_unpickle_call = callback.call_args_list[0]
+        self.assertEqual(numba_unpickle_call.args[0], _numba_unpickle.__code__)
+        self.assertIsInstance(numba_unpickle_call.args[2], KeyError)
+
+        # check the jit(raising) call
+        raising_call = callback.call_args_list[1]
+        self.assertEqual(raising_call.args[0], raising.py_func.__code__)
+        self.assertIs(raising_call.args[2], callback.side_effect)
+
+        # check the test method call
+        meth_call = callback.call_args_list[2]
+        test_method_code = sys._getframe().f_code
+        self.assertEqual(meth_call.args[0], test_method_code)
+        self.assertIs(meth_call.args[2], callback.side_effect)
+
+        # check the stored exception is the expected exception
+        self.assertIs(store_raised, callback.side_effect)
+
+    def test_raising_callback_unwinds_from_jit_on_unwind_path(self):
+        # An event callback can legitimately raise an exception, this test
+        # makes sure Numba's dispatcher handles it ok on the
+        # "unsuccessful path", i.e. the JIT compiled function raised an
+        # exception at runtime. This test checks the PY_UNWIND event. CPython
+        # seems to not notice the PY_UNWIND coming from the exception arising
+        # from the raise in the event callback, it just has the PY_UNWIND from
+        # the raise in the JIT compiled function.
+
+        msg_callback = "deliberately broken callback"
+        msg_execution = "deliberately broken execution"
+
+        callback = Mock(side_effect=ValueError(msg_callback))
+
+        class LocalException(Exception):
+            pass
+
+        @jit("()")
+        def raising():
+            raise LocalException(msg_execution)
+
+        store_raised = None
+        try:
+            event = PY_UNWIND
+            tool_id = self.tool_id
+            sys.monitoring.use_tool_id(tool_id, "custom_monitor")
+            sys.monitoring.set_events(tool_id, event)
+            sys.monitoring.register_callback(tool_id, event, callback)
+            raising()
+        except ValueError as raises:
+            store_raised = raises
+        finally:
+            sys.monitoring.register_callback(tool_id, event, None)
+            sys.monitoring.set_events(tool_id, NO_EVENTS)
+            sys.monitoring.free_tool_id(tool_id)
+
+        callback.assert_called_once()
+
+        # check the jit(raising) call
+        raising_call = callback.call_args_list[0]
+        self.assertEqual(raising_call.args[0], raising.py_func.__code__)
+        self.assertEqual(type(raising_call.args[2]), LocalException)
+        self.assertEqual(str(raising_call.args[2]), msg_execution)
+
+        # check the stored_raise
+        self.assertIs(store_raised, callback.side_effect)
 
     def test_monitoring_multiple_threads(self):
         # two threads, different tools and events registered on each thread.
