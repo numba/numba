@@ -176,6 +176,7 @@ unary_math_intr(math.fabs, 'llvm.fabs')
 exp_impl = unary_math_intr(math.exp, 'llvm.exp')
 log_impl = unary_math_intr(math.log, 'llvm.log')
 log10_impl = unary_math_intr(math.log10, 'llvm.log10')
+log2_impl = unary_math_intr(math.log2, 'llvm.log2')
 sin_impl = unary_math_intr(math.sin, 'llvm.sin')
 cos_impl = unary_math_intr(math.cos, 'llvm.cos')
 

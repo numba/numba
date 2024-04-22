@@ -45,12 +45,17 @@ Note that Numba, like Anaconda, only supports PPC in 64-bit little-endian mode.
 To enable CUDA GPU support for Numba, install the latest `graphics drivers from
 NVIDIA <https://www.nvidia.com/Download/index.aspx>`_ for your platform.
 (Note that the open source Nouveau drivers shipped by default with many Linux
-distributions do not support CUDA.)  Then install the ``cudatoolkit`` package::
+distributions do not support CUDA.)  Then install the CUDA Toolkit package.
 
-    $ conda install cudatoolkit
+For CUDA 12, ``cuda-nvcc`` and ``cuda-nvrtc`` are required::
+
+    $ conda install -c conda-forge cuda-nvcc cuda-nvrtc "cuda-version>=12.0"
+
+For CUDA 11, ``cudatoolkit`` is required::
+
+    $ conda install -c conda-forge cudatoolkit "cuda-version>=11.2,<12.0"
 
 You do not need to install the CUDA SDK from NVIDIA.
-
 
 Installing using pip on x86/x86_64 Platforms
 --------------------------------------------
@@ -262,6 +267,8 @@ information.
 +----------++--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
 | Numba     | Release date | Python                    | NumPy                      | llvmlite                     | LLVM              | TBB                         |
 +===========+==============+===========================+============================+==============================+===================+=============================+
+| 0.59.1    | 2024-03-18   | 3.9.x <= version < 3.13   | 1.22 <= version < 1.27     | 0.42.x                       | 14.x              | 2021.6 <= version           |
++-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
 | 0.59.0    | 2024-01-31   | 3.9.x <= version < 3.13   | 1.22 <= version < 1.27     | 0.42.x                       | 14.x              | 2021.6 <= version           |
 +-----------+--------------+---------------------------+----------------------------+------------------------------+-------------------+-----------------------------+
 | 0.58.1    | 2023-10-17   | 3.8.x <= version < 3.12   | 1.22 <= version < 1.27     | 0.41.x                       | 14.x              | 2021.6 <= version           |

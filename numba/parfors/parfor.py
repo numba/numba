@@ -3803,12 +3803,22 @@ def get_reduction_init(nodes):
     # there could be multiple extra assignments after the reduce node
     # See: test_reduction_var_reuse
     acc_expr = list(filter(lambda x: isinstance(x.value, ir.Expr), nodes))[-1].value
-    require(isinstance(acc_expr, ir.Expr) and acc_expr.op=='inplace_binop')
-    if acc_expr.fn == operator.iadd or acc_expr.fn == operator.isub:
-        return 0, acc_expr.fn
-    if (  acc_expr.fn == operator.imul
-       or acc_expr.fn == operator.itruediv ):
-        return 1, acc_expr.fn
+    require(isinstance(acc_expr, ir.Expr) and acc_expr.op in ['inplace_binop', 'binop'])
+    acc_expr_fn = acc_expr.fn
+    if acc_expr.op == 'binop':
+        if acc_expr_fn == operator.add:
+            acc_expr_fn = operator.iadd
+        elif acc_expr_fn == operator.sub:
+            acc_expr_fn = operator.isub
+        elif acc_expr_fn == operator.mul:
+            acc_expr_fn = operator.imul
+        elif acc_expr_fn == operator.truediv:
+            acc_expr_fn = operator.itruediv
+    if acc_expr_fn == operator.iadd or acc_expr_fn == operator.isub:
+        return 0, acc_expr_fn
+    if (  acc_expr_fn == operator.imul
+       or acc_expr_fn == operator.itruediv ):
+        return 1, acc_expr_fn
     return None, None
 
 def supported_reduction(x, func_ir):

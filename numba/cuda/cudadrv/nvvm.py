@@ -330,6 +330,7 @@ CTK_SUPPORTED = {
     (12, 1): ((5, 0), (9, 0)),
     (12, 2): ((5, 0), (9, 0)),
     (12, 3): ((5, 0), (9, 0)),
+    (12, 4): ((5, 0), (9, 0)),
 }
 
 
@@ -416,10 +417,14 @@ def get_arch_option(major, minor):
 
 
 MISSING_LIBDEVICE_FILE_MSG = '''Missing libdevice file.
-Please ensure you have package cudatoolkit >= 11.0
-Install package by:
+Please ensure you have a CUDA Toolkit 11.2 or higher.
+For CUDA 12, ``cuda-nvcc`` and ``cuda-nvrtc`` are required:
 
-    conda install cudatoolkit
+    $ conda install -c conda-forge cuda-nvcc cuda-nvrtc "cuda-version>=12.0"
+
+For CUDA 11, ``cudatoolkit`` is required:
+
+    $ conda install -c conda-forge cudatoolkit "cuda-version>=11.2,<12.0"
 '''
 
 

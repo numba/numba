@@ -14,6 +14,8 @@ from numba.core.errors import (TypingError, RequireLiteralValue, NumbaTypeError,
                                NumbaKeyError, NumbaIndexError)
 from numba.core.cgutils import is_nonelike
 
+numpy_version = tuple(map(int, np.__version__.split('.')[:2]))
+
 
 Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
 
@@ -399,14 +401,15 @@ class ArrayAttribute(AttributeTemplate):
         if not args:
             return signature(ary.dtype)
 
-    @bound_function("array.itemset")
-    def resolve_itemset(self, ary, args, kws):
-        assert not kws
-        # We don't support explicit arguments as that's exactly equivalent
-        # to regular indexing.  The no-argument form is interesting to
-        # allow some degree of genericity when writing functions.
-        if len(args) == 1:
-            return signature(types.none, ary.dtype)
+    if numpy_version < (2, 0):
+        @bound_function("array.itemset")
+        def resolve_itemset(self, ary, args, kws):
+            assert not kws
+            # We don't support explicit arguments as that's exactly equivalent
+            # to regular indexing.  The no-argument form is interesting to
+            # allow some degree of genericity when writing functions.
+            if len(args) == 1:
+                return signature(types.none, ary.dtype)
 
     @bound_function("array.nonzero")
     def resolve_nonzero(self, ary, args, kws):
