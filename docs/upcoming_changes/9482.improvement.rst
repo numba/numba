@@ -1,5 +1,5 @@
 Python 3.12 ``sys.monitoring`` support is added to Numba's dispatcher.
-======================================================================
+----------------------------------------------------------------------
 
 Python 3.12 introduced a new module ``sys.monitoring`` that makes available an
 event driven monitoring API for use in tools that need to monitor execution e.g.
