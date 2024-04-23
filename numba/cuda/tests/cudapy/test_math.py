@@ -660,8 +660,8 @@ class TestCudaMath(CUDATestCase):
     #---------------------------------------------------------------------------
     # test_math_nextafter
     def test_math_nextafter(self):
-        self.unary_template_float32(math_nextafter, np.nextafter)
-        self.unary_template_float64(math_nextafter, np.nextafter)
+        self.binary_template_float32(math_nextafter, np.nextafter)
+        self.binary_template_float64(math_nextafter, np.nextafter)
 
     #---------------------------------------------------------------------------
     # test_math_trunc
