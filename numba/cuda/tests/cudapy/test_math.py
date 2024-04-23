@@ -158,6 +158,11 @@ def math_floor(A, B):
     B[i] = math.floor(A[i])
 
 
+def math_nextafter(A, B):
+    i = cuda.grid(1)
+    B[i] = math.nextafter(A[i])
+
+
 def math_copysign(A, B, C):
     i = cuda.grid(1)
     C[i] = math.copysign(A[i], B[i])
@@ -393,6 +398,7 @@ class TestCudaMath(CUDATestCase):
         self.unary_template_float16(math_sqrt, np.sqrt)
         self.unary_template_float16(math_ceil, np.ceil)
         self.unary_template_float16(math_floor, np.floor)
+        self.unary_template_float16(math_nextafter, np.next_after)
 
     @skip_on_cudasim("numpy does not support trunc for float16")
     @skip_unless_cc_53
@@ -650,6 +656,12 @@ class TestCudaMath(CUDATestCase):
         self.unary_template_float64(math_floor, np.floor)
         self.unary_template_int64(math_floor, np.floor)
         self.unary_template_uint64(math_floor, np.floor)
+
+    #---------------------------------------------------------------------------
+    # test_math_nextafter
+    def test_math_nextafter(self):
+        self.unary_template_float32(math_nextafter, np.nextafter)
+        self.unary_template_float64(math_nextafter, np.nextafter)
 
     #---------------------------------------------------------------------------
     # test_math_trunc
