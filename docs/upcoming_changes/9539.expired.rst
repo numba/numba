@@ -1,0 +1,7 @@
+Removal of ``numba.core.retarget``
+----------------------------------
+
+The experimental features implemented in ``numba.core.retarget`` have been
+removed. These features were primarily used in numba-dpex, but that project has
+replaced its use of ``numba.core.retarget`` with a preference for
+*target extension API*.
