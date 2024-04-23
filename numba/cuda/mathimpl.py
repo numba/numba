@@ -60,9 +60,11 @@ binarys += [('pow', 'powf', math.pow)]
 binarys += [('fmod', 'fmodf', math.fmod)]
 binarys += [('hypot', 'hypotf', math.hypot)]
 binarys += [('remainder', 'remainderf', math.remainder)]
+binarys += [('nextafter', 'nextafterf', math.nextafter)]
 
 binarys_fastmath = {}
 binarys_fastmath['powf'] = 'fast_powf'
+binarys_fastmath['nextafterf'] = 'fast_nextafterf'
 
 
 @lower(math.isinf, types.Integer)
