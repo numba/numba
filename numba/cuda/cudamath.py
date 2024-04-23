@@ -79,6 +79,7 @@ class Math_hypot(ConcreteTemplate):
 
 @infer_global(math.copysign)
 @infer_global(math.fmod)
+@infer_global(math.nextafter)
 class Math_binary(ConcreteTemplate):
     cases = [
         signature(types.float32, types.float32, types.float32),
