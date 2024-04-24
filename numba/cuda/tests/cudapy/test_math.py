@@ -158,9 +158,9 @@ def math_floor(A, B):
     B[i] = math.floor(A[i])
 
 
-def math_nextafter(A, B):
+def math_nextafter(A, B, C):
     i = cuda.grid(1)
-    B[i] = math.nextafter(A[i])
+    C[i] = math.nextafter(A[i], B[i])
 
 
 def math_copysign(A, B, C):
