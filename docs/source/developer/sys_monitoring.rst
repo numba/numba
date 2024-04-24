@@ -3,9 +3,9 @@
 Notes on ``sys.monitoring``
 ===========================
 
-..NOTE: This documentation was written at the advent of Python 3.12. Future
-        versions of Python may behave differently. It is however hoped that most
-        of the concepts herein will remain relevant.
+.. note:: This documentation was written at the advent of Python 3.12. Future
+          versions of Python may behave differently. It is however hoped that
+          most of the concepts herein will remain relevant.
 
 Python 3.12 introduced a new monitoring system under ``sys.monitoring``. This
 system lets users monitor a selection of events that may be interesting for e.g.
@@ -42,7 +42,7 @@ monitoring on a code object. In practice this instructs the interpreter to
 augment the bytecode at runtime by switching certain opcodes for
 "instrumented" opcodes. These instrumented opcodes go via a special path in the
 interpreter loop whereby they will issue an "event" in association with a
-particular instruction at a particular offset. For example, a ``RETURN``
+particular instruction at a particular offset. For example, a ``RETURN`` opcode
 might be replaced by an ``INSTRUMENTED_RETURN`` and a ``PY_RETURN`` event
 would by issued when the instrumented instruction is interpreted. This event and
 the offset at which it occurred being forwarded to the monitoring system.
@@ -53,9 +53,9 @@ by analysing the code object at dispatch time. However, it's possible for a user
 to de-instrument the code object and/or dynamically disable monitoring at a
 particular code location whilst executing, and as a result emulating the
 semantics of this would be prohibitively challenging and would likely require
-constant interaction with interpreter. As a result, Numba does not support local
-event monitoring, the compiled function will still execute correctly if it has
-been set, it just has no effect on ``sys.monitoring``.
+constant interaction with the interpreter. As a result, Numba does not support
+local event monitoring, the compiled function will still execute correctly if it
+has been set, it just has no effect on ``sys.monitoring``.
 
 Considering per-thread global monitoring, this manifests as the user setting
 some global state on the interpreter for a given thread. This state can be
