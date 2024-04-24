@@ -1,8 +1,8 @@
 from numba import cuda, njit, types
 from numba.core.errors import TypingError
 from numba.core.extending import overload, overload_attribute
+from numba.core.typing.typeof import typeof
 from numba.cuda.testing import CUDATestCase, skip_on_cudasim, unittest
-from numba.tests.test_extending import mydummy_type, MyDummyType
 import numpy as np
 
 
@@ -297,6 +297,9 @@ class TestOverload(CUDATestCase):
         self.check_overload_cpu(kernel, expected)
 
     def test_overload_attribute_target(self):
+        MyDummy, MyDummyType = self.make_dummy_type()
+        mydummy_type = typeof(MyDummy())
+
         @overload_attribute(MyDummyType, 'cuda_only', target='cuda')
         def ov_dummy_cuda_attr(obj):
             def imp(obj):
@@ -308,7 +311,7 @@ class TestOverload(CUDATestCase):
         # CPU, and that an appropriate typing error is raised
         with self.assertRaisesRegex(TypingError,
                                     "Unknown attribute 'cuda_only'"):
-            @njit(types.void(mydummy_type))
+            @njit(types.int64(mydummy_type))
             def illegal_target_attr_use(x):
                 return x.cuda_only
 

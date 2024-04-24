@@ -33,6 +33,7 @@ from numba.core import callconv
 from numba.core.codegen import CPUCodegen, JITCodeLibrary
 from numba.core.callwrapper import PyCallWrapper
 from numba.core.imputils import RegistryLoader, Registry
+from numba.core.typing.typeof import typeof
 from numba import _dynfunc
 import llvmlite.binding as ll
 from llvmlite import ir as llir
@@ -42,7 +43,6 @@ from numba.core import compiler
 from numba.core.compiler import CompilerBase, DefaultPassBuilder
 from numba.core.compiler_machinery import FunctionPass, register_pass
 from numba.core.typed_passes import PreLowerStripPhis
-from numba.tests.test_extending import mydummy_type, MyDummyType
 
 # Define a new target, this target extends GPU, this places the DPU in the
 # target hierarchy as a type of GPU.
@@ -711,6 +711,9 @@ class TestTargetHierarchySelection(TestCase):
         self.assertIsInstance(r, nrt.MemInfo)
 
     def test_overload_attribute_target(self):
+        MyDummy, MyDummyType = self.make_dummy_type()
+        mydummy_type = typeof(MyDummy())
+
         @overload_attribute(MyDummyType, 'dpu_only', target='dpu')
         def ov_dummy_dpu_attr(obj):
             def imp(obj):
@@ -722,7 +725,7 @@ class TestTargetHierarchySelection(TestCase):
         # CPU, and that an appropriate typing error is raised
         with self.assertRaisesRegex(errors.TypingError,
                                     "Unknown attribute 'dpu_only'"):
-            @njit(types.void(mydummy_type))
+            @njit(types.int64(mydummy_type))
             def illegal_target_attr_use(x):
                 return x.dpu_only
 
