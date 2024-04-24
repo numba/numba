@@ -277,23 +277,27 @@ class _ArrayGUHelper(namedtuple('_ArrayHelper', ('context', 'builder',
         name = ufunc.__name__
         signature = ufunc.gufunc_builder.signature
         ndims = len(signature[idx_self])
+        n_args = len(parse_signature(signature)[0])
+        kind = 'Input' if idx_other < n_args else 'Output'
 
         @register_jitable
         def raise_impl(self_shape, other_shape):
-            same = True
             a, b = len(self_shape) - ndims, len(other_shape) - ndims
             for i in range(ndims):
-                same &= self_shape[a + i] == other_shape[b + i]
-            if not same:
-                # NumPy raises the following:
-                # ValueError: gufunc: Input operand 1 has a mismatch in its
-                # core dimension 0, with gufunc signature (n),(n) -> ()
-                # (size 3 is different from 2)
-                msg = (f'{name}: operand {idx_self} has a mismatch with '
-                       f'operand {idx_other} one of its core dimension(s), '
-                       f'with {name} signature {signature} '
-                       f'(shape {self_shape} is different from {other_shape})')
-                raise ValueError(msg)
+                same = self_shape[a + i] == other_shape[b + i]
+                if not same:
+                    # NumPy raises the following:
+                    # ValueError: gufunc: Input operand 1 has a mismatch in its
+                    # core dimension 0, with gufunc signature (n),(n) -> ()
+                    # (size 3 is different from 2)
+                    pos = idx_other - n_args
+                    pos = pos if pos >= 0 else idx_other
+                    msg = (f'{name}: {kind} operand {pos} '
+                           f'has a mismatch in its core dimension {i}, '
+                           f'with gufunc signature {signature} '
+                           f'(size {other_shape[b + i]} is different from '
+                           f'{self_shape[a + i]})')
+                    raise ValueError(msg)
 
         context, builder = self.context, self.builder
         sig = types.none(

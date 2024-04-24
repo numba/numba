@@ -1,6 +1,5 @@
-Introduce ``context.call_overload`` and update exc message raised in gufunc
----------------------------------------------------------------------------
+Introduce ``context.call_overload`` and update the exception message raised in ``@guvectorize``
+-----------------------------------------------------------------------------------------------
 
-Previously, ``guard_match_core_dim`` would raise a generic exception message.
-With the usage of ``context.call_overload``, it can raise a dynamic exception
-with a meaningful message.
+Previously, ``@guvectorize`` would raise a generic exception message. Now, the
+exception is raised with a meaningful message.

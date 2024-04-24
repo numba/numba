@@ -909,9 +909,10 @@ class BaseContext(object):
         Like compile_internal but for overloads
         """
         fnty = self.typing_context.resolve_value_type(impl)
-        sig = fnty.get_call_type(self.typing_context, (*sig.args,), {})
-        impl = self.get_function(fnty, sig)
-        return impl(builder, args)
+        impl_sig = fnty.get_call_type(self.typing_context, (*sig.args,), {})
+        impl = self.get_function(fnty, impl_sig)
+        res = impl(builder, args)
+        return self.cast(builder, res, impl_sig.return_type, sig.return_type)
 
     def call_unresolved(self, builder, name, sig, args):
         """
