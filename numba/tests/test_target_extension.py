@@ -323,8 +323,6 @@ class djit(JitDecorator):
         if "nopython" in self._kwargs:
             topt["nopython"] = True
 
-        topt['target_backend'] = 'dpu'
-
         # It would be easy to specialise the default compilation pipeline for
         # this target here.
         pipeline_class = compiler.Compiler
