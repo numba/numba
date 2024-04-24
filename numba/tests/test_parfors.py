@@ -2393,6 +2393,41 @@ class TestParfors(TestParforsBase):
             msg = f"subprocess failed with output:\n{e.output}"
             self.fail(msg=msg)
 
+    def test_fusion_aliasing1(self):
+        # Forbid fusion if read-after-write or write-after-read
+        # conflict with arrays that could alias.
+        def test_impl(a, b, c):
+            c[:] = a * b
+            d = a * b
+            return d
+
+        def comparer(a, b):
+            np.testing.assert_equal(a, b)
+
+        a = np.arange(50)
+        b = np.arange(50)
+        cptypes = (numba.int64[:], numba.int64[:], numba.int64[:])
+        self.assertEqual(countParfors(test_impl, cptypes), 3)
+        self.check(test_impl, a[:40], b[:40], a[10:], check_arg_equality=[comparer, comparer, comparer])
+
+    def test_fusion_aliasing2(self):
+        # Forbid fusion if read-after-write or write-after-read
+        # conflict with arrays that could alias.
+        def test_impl(a, b):
+            c = a[10:]
+            c[:] = a[:40] * b[:40]
+            d = a[:40] * b[:40]
+            return d
+
+        def comparer(a, b):
+            np.testing.assert_equal(a, b)
+
+        a = np.arange(50)
+        b = np.arange(50)
+        cptypes = (numba.int64[:], numba.int64[:])
+        self.assertEqual(countParfors(test_impl, cptypes), 3)
+        self.check(test_impl, a, b, check_arg_equality=[comparer, comparer])
+
 
 @skip_parfors_unsupported
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
