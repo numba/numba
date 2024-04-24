@@ -279,8 +279,8 @@ class CompilationUnit(object):
 
         self._try_error(err, 'Failed to get size of compiled result.')
 
-        ptxbuf = (c_char * reslen.value)()
-        err = self.driver.nvvmGetCompiledResult(self._handle, ptxbuf)
+        output_buffer = (c_char * reslen.value)()
+        err = self.driver.nvvmGetCompiledResult(self._handle, output_buffer)
         self._try_error(err, 'Failed to get compiled result.')
 
         # get log
@@ -288,7 +288,7 @@ class CompilationUnit(object):
         if self.log:
             warnings.warn(self.log, category=NvvmWarning)
 
-        return ptxbuf[:]
+        return output_buffer[:]
 
     def _try_error(self, err, msg):
         self.driver.check_error(err, "%s\n%s" % (msg, self.get_log()))
@@ -615,7 +615,7 @@ def llvm_replace(llvmir):
     return llvmir
 
 
-def llvm_to_ptx(llvmir, **opts):
+def compile_ir(llvmir, **opts):
     if isinstance(llvmir, str):
         llvmir = [llvmir]
 
