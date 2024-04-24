@@ -10,6 +10,14 @@ from numba.core.funcdesc import default_mangler
 from numba.tests.support import TestCase, unittest
 
 
+class TestCompilerFlags(TestCase):
+    def test_setting_invalid_attribute(self):
+        flags = Flags()
+        msg = "'Flags' object has no attribute 'this_really_does_not_exist'"
+        with self.assertRaisesRegex(AttributeError, msg):
+            flags.this_really_does_not_exist = True
+
+
 class TestCompilerFlagCachedOverload(TestCase):
     def test_fastmath_in_overload(self):
         def fastmath_status():
