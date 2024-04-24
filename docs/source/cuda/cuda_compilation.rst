@@ -16,9 +16,9 @@ the following function:
 .. autofunction:: numba.cuda.compile
    :noindex:
 
-If a device is available and code for the compute capability of the current
-device is required (for example when building a JIT compilation workflow using
-Numba), the ``compile_for_current_device`` function can be used:
+If a device is available and compiled code for the compute capability of the
+current device is required (for example when building a JIT compilation
+workflow using Numba), the ``compile_for_current_device`` function can be used:
 
 .. autofunction:: numba.cuda.compile_for_current_device
    :noindex:
@@ -55,9 +55,9 @@ ABI device functions requires three issues to be addressed:
 A simple way to address all these issues is to compile device functions with
 the C ABI instead. This results in the following:
 
-- The name of the compiled device function in the generated code can be
-  controlled. By default it will match the name of the function in Python, so
-  it is easy to determine.  This is the function's ``__name__``, rather than
+- The name of the device function in the compiled code can be controlled. By
+  default it will match the name of the function in Python, so it is easy to
+  determine.  This is the function's ``__name__``, rather than
   ``__qualname__``, because ``__qualname__`` encodes additional scoping
   information that would make the function name hard to predict, and in a lot
   of cases, an illegal identifier in C.

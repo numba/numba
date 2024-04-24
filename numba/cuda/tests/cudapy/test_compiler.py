@@ -215,6 +215,13 @@ class TestCompile(unittest.TestCase):
         header = int.from_bytes(ltoir[:4], byteorder='little')
         self.assertEqual(header, LTOIR_MAGIC)
 
+    def test_compile_to_invalid_error(self):
+        illegal_output = "illegal"
+        msg = f"Unsupported output type: {illegal_output}"
+        with self.assertRaisesRegex(NotImplementedError, msg):
+            compile(f_module, int32(int32, int32), device=True,
+                    output=illegal_output)
+
 
 @skip_on_cudasim('Compilation unsupported in the simulator')
 class TestCompileForCurrentDevice(CUDATestCase):

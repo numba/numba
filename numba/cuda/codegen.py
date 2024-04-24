@@ -118,7 +118,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         return "\n\n".join(self.llvm_strs)
 
     def _ensure_cc(self, cc):
-        if cc:
+        if cc is not None:
             return cc
 
         device = devices.get_context().device
@@ -157,7 +157,7 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         cc = self._ensure_cc(cc)
 
         ltoir = self._ltoir_cache.get(cc, None)
-        if ltoir:
+        if ltoir is not None:
             return ltoir
 
         arch = nvvm.get_arch_option(*cc)
