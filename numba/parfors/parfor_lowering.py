@@ -922,6 +922,20 @@ def find_setitems_block(setitems, itemsset, block, typemap):
         elif isinstance(inst, parfor.Parfor):
             find_setitems_block(setitems, itemsset, inst.init_block, typemap)
             find_setitems_body(setitems, itemsset, inst.loop_body, typemap)
+        elif isinstance(inst, ir.Assign):
+            # If something of mutable type is given to a build_tuple or
+            # used in a call then consider it unanalyzable and so
+            # unavailable for hoisting.
+            rhs = inst.value
+            if isinstance(rhs, ir.Expr):
+                if rhs.op in ["build_tuple", "build_list", "build_set", "build_map"]:
+                    for item in rhs.items:
+                        if getattr(typemap[item.name], "mutable", False):
+                            itemsset.add(item.name)
+                elif rhs.op == "call":
+                    for item in list(rhs.args) + [x[1] for x in rhs.kws]:
+                        if getattr(typemap[item.name], "mutable", False):
+                            itemsset.add(item.name)
 
 def find_setitems_body(setitems, itemsset, loop_body, typemap):
     """
