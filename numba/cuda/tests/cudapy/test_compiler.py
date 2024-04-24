@@ -214,6 +214,7 @@ class TestCompile(unittest.TestCase):
         LTOIR_MAGIC = 0x7F4E43ED
         header = int.from_bytes(ltoir[:4], byteorder='little')
         self.assertEqual(header, LTOIR_MAGIC)
+        self.assertEqual(resty, int32)
 
     def test_compile_to_invalid_error(self):
         illegal_output = "illegal"
