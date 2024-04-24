@@ -717,6 +717,13 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
         PyObject *builtins = PyEval_GetBuiltins();
         PyFrameObject *frame = NULL;
         PyObject *result = NULL;
+#if (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 9) || (PY_MINOR_VERSION == 10))
+        // Only used in 3.9 and 3.10, to help with saving/restoring exception state
+        PyObject *pyexc = NULL;
+        PyObject *err_type = NULL;
+        PyObject *err_value = NULL;
+        PyObject *err_traceback = NULL;
+#endif
 
         if (!code) {
             PyErr_Format(PyExc_RuntimeError, "No __code__ attribute found.");
@@ -734,17 +741,31 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
         if (frame == NULL) {
             goto error;
         }
-        /* Populate the 'fast locals' in `frame` */
-        PyFrame_LocalsToFast(frame, 0);
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 12)
-        /* empty */
-#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 11)
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 11)
+        // Python 3.11 improved the frame infrastructure such that frames are
+        // updated by the virtual machine, no need to do PyFrame_LocalsToFast
+        // and PyFrame_FastToLocals to ensure `frame->f_locals` is consistent.
         C_TRACE(result, fn(PyCFunction_GET_SELF(cfunc), args, kws), frame);
 #else
+        // Populate the 'fast locals' in `frame`
+        PyFrame_LocalsToFast(frame, 0);
         tstate->frame = frame;
+
+        // make the call
         C_TRACE(result, fn(PyCFunction_GET_SELF(cfunc), args, kws));
-        /* write changes back to locals? */
+
+        // write changes back to locals?
+        // PyFrame_FastToLocals can clear the exception indicator, therefore
+        // this state needs saving and restoring across the call if the
+        // exception indicator is set.
+        pyexc = PyErr_Occurred();
+        if (pyexc != NULL) {
+            PyErr_Fetch(&err_type, &err_value, &err_traceback);
+        }
         PyFrame_FastToLocals(frame);
+        if (pyexc != NULL) {
+            PyErr_Restore(err_type, err_value, err_traceback);
+        }
         tstate->frame = frame->f_back;
 #endif
     error:
