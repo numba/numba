@@ -70,6 +70,7 @@ exclude =
     numba/cpython/printimpl.py
     numba/cpython/cmathimpl.py
     numba/cpython/mathimpl.py
+    numba/cpython/tupleobj.py
     numba/core/registry.py
     numba/core/imputils.py
     numba/cpython/builtins.py
