@@ -21,6 +21,7 @@ def set_refprune_flags(flags):
 class TestRefOpPruning(TestCase):
 
     _numba_parallel_test_ = False
+    _NUMBA_USE_LEGACY_PM_1_ENV = {'NUMBA_USE_LLVM_LEGACY_PASS_MANAGER': '1'}
 
     def check(self, func, *argtys, **prune_types):
         """
@@ -129,7 +130,11 @@ class TestRefOpPruning(TestCase):
             self.check(func, (types.intp), basicblock=True, diamond=False,
                        fanout=True, fanout_raise=False)
 
-    @TestCase.run_test_in_subprocess
+    # FIXME: Checks in the test need to updated to account for new PM changes.
+    # The FunctionPassManager pipeline in new pass manager is set-up quite
+    # differently compared to the legacy pass manager pipeline. Hence, there
+    # are some differences in the output LLVM IR
+    @TestCase.run_test_in_subprocess(envvars=_NUMBA_USE_LEGACY_PM_1_ENV)
     def test_fanout_3(self):
         # fanout with raise
         def func(n):

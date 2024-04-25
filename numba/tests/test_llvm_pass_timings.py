@@ -42,8 +42,11 @@ class TestLLVMPassTimings(TestCase):
                 c += i
             return c
 
-        with override_config('LLVM_PASS_TIMINGS', True):
-            foo(10)
+        # FIXME: Pass timings is not fully supported right now in NewPassManager
+        # infra in llvmlite
+        with override_config('USE_LLVM_LEGACY_PASS_MANAGER', True):
+            with override_config('LLVM_PASS_TIMINGS', True):
+                foo(10)
 
         md = foo.get_metadata(foo.signatures[0])
         timings = md['llvm_pass_timings']
