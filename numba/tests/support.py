@@ -572,8 +572,7 @@ class TestCase(unittest.TestCase):
             _assertNumberEqual(first, second, delta)
 
     def subprocess_test_runner(self, test_module, test_class=None,
-                               test_name=None, envvars=None, timeout=60,
-                               _subproc_test_env="1"):
+                               test_name=None, envvars=None, timeout=60):
         """
         Runs named unit test(s) as specified in the arguments as:
         test_module.test_class.test_name. test_module must always be supplied
@@ -584,8 +583,7 @@ class TestCase(unittest.TestCase):
             environment variable name (str) -> value (str)
         It is most convenient to use this method in conjunction with
         @needs_subprocess as the decorator will cause the decorated test to be
-        skipped unless the `SUBPROC_TEST` environment variable is set to
-        the same value of ``_subproc_test_env``
+        skipped unless the `SUBPROC_TEST` environment variable is set to 1
         (this special environment variable is set by this method such that the
         specified test(s) will not be skipped in the subprocess).
 
