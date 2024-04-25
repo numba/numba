@@ -21,6 +21,7 @@ from numba.tests.support import (TestCase, skip_unless_py10_or_later,
 
 from numba.cpython.unicode import compile_time_get_string_data
 from numba.cpython import hashing
+from numba.np.numpy_support import numpy_version
 
 
 def hash_usecase(x):
@@ -231,6 +232,23 @@ class TestNumberHashing(BaseTest):
     Test hashing of number types.
     """
 
+    def setUp(self):
+        if numpy_version >= (2, 0):
+            # Temporarily set promotions state to legacy,
+            # to ensure overflow logic works
+            self.initial_state = np._get_promotion_state()
+            np._set_promotion_state("legacy")
+
+        return super().setUp()
+
+    def tearDown(self) -> None:
+        if numpy_version >= (2, 0):
+            # Reset numpy promotion state to initial state
+            # since the setting is global
+            np._set_promotion_state(self.initial_state)
+
+        return super().tearDown()
+
     def check_floats(self, typ):
         for a in self.float_samples(typ):
             self.assertEqual(a.dtype, np.dtype(typ))
@@ -254,6 +272,7 @@ class TestNumberHashing(BaseTest):
 
     def test_ints(self):
         minmax = []
+
         for ty in [np.int8, np.uint8, np.int16, np.uint16,
                    np.int32, np.uint32, np.int64, np.uint64]:
             for a in self.int_samples(ty):
@@ -306,7 +325,6 @@ class TestNumberHashing(BaseTest):
         self.check_hash_values([np.int32(-0x7ffffff6)])
         self.check_hash_values([np.int32(-0x7fffff9c)])
 
-
     @skip_unless_py10_or_later
     def test_py310_nan_hash(self):
         # On Python 3.10+ nan's hash to a value which is based on the pointer to
@@ -325,6 +343,23 @@ class TestTupleHashing(BaseTest):
     """
     Test hashing of tuples.
     """
+
+    def setUp(self):
+        if numpy_version >= (2, 0):
+            # Temporarily set promotions state to legacy,
+            # to ensure overflow logic works
+            self.initial_state = np._get_promotion_state()
+            np._set_promotion_state("legacy")
+
+        return super().setUp()
+
+    def tearDown(self) -> None:
+        if numpy_version >= (2, 0):
+            # Reset numpy promotion state to initial state
+            # since the setting is global
+            np._set_promotion_state(self.initial_state)
+
+        return super().tearDown()
 
     def check_tuples(self, value_generator, split):
         for values in value_generator:

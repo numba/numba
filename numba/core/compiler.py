@@ -138,13 +138,6 @@ detail""",
         default=cpu.InlineOptions("never"),
         doc="TODO",
     )
-    # Defines a new target option for tracking the "target backend".
-    # This will be the XYZ in @jit(_target=XYZ).
-    target_backend = Option(
-        type=str,
-        default="cpu", # if not set, default to CPU
-        doc="backend"
-    )
 
     dbg_extend_lifetimes = Option(
         type=bool,

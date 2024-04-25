@@ -1,5 +1,0 @@
-Fix propagation of literal values in PHI nodes.
------------------------------------------------
-
-Fixed a bug in the literal propagation pass where a PHI node could be wrongly
-replaced by a constant.

@@ -106,6 +106,10 @@ skip_unless_py10 = unittest.skipUnless(
 
 skip_if_32bit = unittest.skipIf(_32bit, "Not supported on 32 bit")
 
+IS_NUMPY_2 = numpy_support.numpy_version >= (2, 0)
+skip_if_numpy_2 = unittest.skipIf(IS_NUMPY_2,
+                                  "Not supported on numpy 2.0+")
+
 def expected_failure_py311(fn):
     if utils.PYVERSION == (3, 11):
         return unittest.expectedFailure(fn)
@@ -114,6 +118,12 @@ def expected_failure_py311(fn):
 
 def expected_failure_py312(fn):
     if utils.PYVERSION == (3, 12):
+        return unittest.expectedFailure(fn)
+    else:
+        return fn
+
+def expected_failure_np2(fn):
+    if numpy_support.numpy_version == (2, 0):
         return unittest.expectedFailure(fn)
     else:
         return fn
@@ -154,6 +164,14 @@ skip_ppc64le_issue6465 = unittest.skipIf(platform.machine() == 'ppc64le',
                                          ("Hits: 'mismatch in size of "
                                           "parameter area' in "
                                           "LowerCall_64SVR4"))
+
+# LLVM PPC issue.
+# Sample error message:
+#   Invalid PPC CTR loop!
+#   UNREACHABLE executed at /llvm/lib/Target/PowerPC/PPCCTRLoops.cpp:179!
+skip_ppc64le_invalid_ctr_loop = unittest.skipIf(
+    platform.machine() == 'ppc64le',
+    "Invalid PPC CTR loop")
 
 # fenv.h on M1 may have various issues:
 # https://github.com/numba/numba/issues/7822#issuecomment-1065356758
@@ -554,7 +572,8 @@ class TestCase(unittest.TestCase):
             _assertNumberEqual(first, second, delta)
 
     def subprocess_test_runner(self, test_module, test_class=None,
-                               test_name=None, envvars=None, timeout=60):
+                               test_name=None, envvars=None, timeout=60,
+                               _subproc_test_env="1"):
         """
         Runs named unit test(s) as specified in the arguments as:
         test_module.test_class.test_name. test_module must always be supplied
@@ -565,7 +584,8 @@ class TestCase(unittest.TestCase):
             environment variable name (str) -> value (str)
         It is most convenient to use this method in conjunction with
         @needs_subprocess as the decorator will cause the decorated test to be
-        skipped unless the `SUBPROC_TEST` environment variable is set to 1
+        skipped unless the `SUBPROC_TEST` environment variable is set to
+        the same value of ``_subproc_test_env``
         (this special environment variable is set by this method such that the
         specified test(s) will not be skipped in the subprocess).
 

@@ -19,7 +19,9 @@ from numba.core.config import IS_32BITS
 from numba.core.utils import pysignature
 from numba.np.extensions import cross2d
 from numba.tests.support import (TestCase, MemoryLeakMixin,
-                                 needs_blas, run_in_subprocess)
+                                 needs_blas, run_in_subprocess,
+                                 skip_if_numpy_2, IS_NUMPY_2,
+                                 IS_OSX_ARM64)
 import unittest
 
 
@@ -1040,14 +1042,14 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     def test_isneg_or_ispos_inf(self):
         def values():
-            yield np.NINF, None
+            yield -np.inf, None
             yield np.inf, None
-            yield np.PINF, None
+            yield np.inf, None
             yield np.asarray([-np.inf, 0., np.inf]), None
-            yield np.NINF, np.zeros(1, dtype=np.bool_)
+            yield -np.inf, np.zeros(1, dtype=np.bool_)
             yield np.inf, np.zeros(1, dtype=np.bool_)
-            yield np.PINF, np.zeros(1, dtype=np.bool_)
-            yield np.NINF, np.empty(12)
+            yield np.inf, np.zeros(1, dtype=np.bool_)
+            yield -np.inf, np.empty(12)
             yield np.asarray([-np.inf, 0., np.inf]), np.zeros(3, dtype=np.bool_)
 
         pyfuncs = [isneginf, isposinf]
@@ -3220,12 +3222,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield -1.0, 60.0
             yield 0.0, np.e
             yield 0.0, np.pi
-            yield np.complex64(1), np.complex64(2)
-            yield np.complex64(2j), np.complex64(4j)
-            yield np.complex64(2), np.complex64(4j)
-            yield np.complex64(1 + 2j), np.complex64(3 + 4j)
-            yield np.complex64(1 - 2j), np.complex64(3 - 4j)
-            yield np.complex64(-1 + 2j), np.complex64(3 + 4j)
+            if numpy_version < (2, 0):
+                yield np.complex64(1), np.complex64(2)
+                yield np.complex64(2j), np.complex64(4j)
+                yield np.complex64(2), np.complex64(4j)
+                yield np.complex64(1 + 2j), np.complex64(3 + 4j)
+                yield np.complex64(1 - 2j), np.complex64(3 - 4j)
+                yield np.complex64(-1 + 2j), np.complex64(3 + 4j)
 
         pyfunc = logspace2
         cfunc = jit(nopython=True)(pyfunc)
@@ -3262,12 +3265,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield -1.0, 60.0
             yield 0.0, np.e
             yield 0.0, np.pi
-            yield np.complex64(1), np.complex64(2)
-            yield np.complex64(2j), np.complex64(4j)
-            yield np.complex64(2), np.complex64(4j)
-            yield np.complex64(1 + 2j), np.complex64(3 + 4j)
-            yield np.complex64(1 - 2j), np.complex64(3 - 4j)
-            yield np.complex64(-1 + 2j), np.complex64(3 + 4j)
+            if numpy_version < (2, 0):
+                yield np.complex64(1), np.complex64(2)
+                yield np.complex64(2j), np.complex64(4j)
+                yield np.complex64(2), np.complex64(4j)
+                yield np.complex64(1 + 2j), np.complex64(3 + 4j)
+                yield np.complex64(1 - 2j), np.complex64(3 - 4j)
+                yield np.complex64(-1 + 2j), np.complex64(3 + 4j)
 
         pyfunc = logspace3
         cfunc = jit(nopython=True)(pyfunc)
@@ -3289,12 +3293,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield -1.0, 60.0, 90
             yield 0.0, np.e, 20
             yield 0.0, np.pi, 30
-            yield np.complex64(1), np.complex64(2), 40
-            yield np.complex64(2j), np.complex64(4j), 50
-            yield np.complex64(2), np.complex64(4j), 60
-            yield np.complex64(1 + 2j), np.complex64(3 + 4j), 70
-            yield np.complex64(1 - 2j), np.complex64(3 - 4j), 80
-            yield np.complex64(-1 + 2j), np.complex64(3 + 4j), 90
+            if numpy_version < (2, 0):
+                yield np.complex64(1), np.complex64(2), 40
+                yield np.complex64(2j), np.complex64(4j), 50
+                yield np.complex64(2), np.complex64(4j), 60
+                yield np.complex64(1 + 2j), np.complex64(3 + 4j), 70
+                yield np.complex64(1 - 2j), np.complex64(3 - 4j), 80
+                yield np.complex64(-1 + 2j), np.complex64(3 + 4j), 90
 
         pyfunc = logspace3
         cfunc = jit(nopython=True)(pyfunc)
@@ -3507,8 +3512,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                                 abs_tol=1e-13)
 
         # Logarithmic spirals
-        y = cfunc3(-1 + 0j, 1 + 0j, num=3)
-        self.assertPreciseEqual(y, pfunc3(-1 + 0j, 1 + 0j, num=3))
+        if numpy_version < (2, 0):
+            y = cfunc3(-1 + 0j, 1 + 0j, num=3)
+            self.assertPreciseEqual(y, pfunc3(-1 + 0j, 1 + 0j, num=3))
 
         y = cfunc3(0 + 3j, -3 + 0j, 3)
         self.assertPreciseEqual(y, pfunc3(0 + 3j, -3 + 0j, 3), abs_tol=1e-15)
@@ -4658,6 +4664,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc(x, xp, fp)
             self.assertPreciseEqual(expected, got, abs_tol=atol)
 
+    @unittest.skipIf(IS_NUMPY_2 and IS_OSX_ARM64, "NEP 50 interaction issue.")
     def test_interp_complex_stress_tests(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
@@ -5017,6 +5024,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         test_reject(make_nested_list_with_dict())
         test_reject(make_unicode_list())
 
+    @skip_if_numpy_2
     def test_asfarray(self):
         def inputs():
             yield np.array([1, 2, 3]), None
