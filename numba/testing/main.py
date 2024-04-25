@@ -12,9 +12,10 @@ import unittest
 import warnings
 import zlib
 import re
+import io
+from queue import Queue
 
 from functools import lru_cache
-from io import StringIO
 from unittest import result, runner, signals, suite, loader, case
 from datetime import datetime
 
@@ -158,18 +159,6 @@ class SerialSuite(unittest.TestSuite):
             super(SerialSuite, self).addTest(test)
 
 
-class BasicTestRunner(runner.TextTestRunner):
-    def __init__(self, useslice, **kwargs):
-        runner.TextTestRunner.__init__(self, **kwargs)
-        self.useslice = parse_slice(useslice)
-
-    def run(self, test):
-        run = list(filter(self.useslice, _flatten_suite(test)))
-        run.sort(key=cuda_sensitive_mtime)
-        wrapped = unittest.TestSuite(run)
-        return super(BasicTestRunner, self).run(wrapped)
-
-
 # "unittest.main" is really the TestProgram class!
 # (defined in a module named itself "unittest.main"...)
 
@@ -194,7 +183,7 @@ class NumbaTestProgram(unittest.main):
     random_select = None
     random_seed = 42
     show_timing = False
-    write_junit = False
+    write_junit_file = None
 
     def __init__(self, *args, **kwargs):
         topleveldir = kwargs.pop('topleveldir', None)
@@ -240,8 +229,12 @@ class NumbaTestProgram(unittest.main):
         parser.add_argument('--show-timing', dest='show_timing', action='store_true',
                             help=("Print recorded timing for each test and "
                                   "the whole suite."))
-        parser.add_argument('--junit', dest='write_junit', action='store_true',
-                            help=("Write junit xml output"))
+        tstamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        junit_default = f"junit_numba_{tstamp}.xml"
+        parser.add_argument('--junit', dest='write_junit_file', type=str,
+                            const=junit_default, nargs='?',
+                            help=("Enables enables junit xml output to the "
+                                  "specified file path."))
 
         def git_diff_str(x):
             if x != 'ancestor':
@@ -358,14 +351,16 @@ class NumbaTestProgram(unittest.main):
                 msg = ("Value specified for the number of processes to use in "
                     "running the suite must be > 0")
                 raise ValueError(msg)
-            self.testRunner = ParallelTestRunner(runner.TextTestRunner,
-                                                 self.multiprocess,
-                                                 self.useslice,
-                                                 show_timing=self.show_timing,
-                                                 write_junit=self.write_junit,
-                                                 verbosity=self.verbosity,
-                                                 failfast=self.failfast,
-                                                 buffer=self.buffer)
+            self.testRunner = ParallelTestRunner(
+                NumbaTestRunner,
+                self.multiprocess,
+                self.useslice,
+                show_timing=self.show_timing,
+                write_junit_file=self.write_junit_file,
+                verbosity=self.verbosity,
+                failfast=self.failfast,
+                buffer=self.buffer
+            )
 
         def run_tests_real():
             super(NumbaTestProgram, self).runTests()
@@ -620,36 +615,101 @@ class RefleakTestRunner(runner.TextTestRunner):
     resultclass = RefleakTestResult
 
 
+class MultiplexedStdOut(io.StringIO):
+    def __init__(self, stdout):
+        super().__init__()
+        self.stdout = stdout
+
+    def write(self, s):
+        self.stdout.write(s)
+        return super().write(s)
+
+    def flush(self):
+        self.stdout.flush()
+        super().flush()
+
+    writeln = runner._WritelnDecorator.writeln
+
+    def __reduce__(self):
+        # Reduce as a _FakeStringIO
+        return _FakeStringIO(self.getvalue()).__reduce__()
+
+    def __repr__(self):
+        stream = self.stdout
+        if isinstance(stream, runner._WritelnDecorator):
+            stream = stream.stream
+        return f"{self.__class__.__name__}({stream})"
+
+
 class ParallelTestResult(runner.TextTestResult):
     """
     A TestResult able to inject results from other results.
     """
+    show_timing = False
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.test_runtime = 0.0
         self.records = []
+        self.stream = MultiplexedStdOut(self.stream)
+
+    def startTest(self, test: unittest.TestCase) -> None:
+        super().startTest(test)
+        self.start_time = time.perf_counter()
+
+    def stopTest(self, test: unittest.TestCase) -> None:
+        super().stopTest(test)
+        self.stop_time = time.perf_counter()
+        self.runtime = self.stop_time - self.start_time
+        if self.wasSuccessful() and self.show_timing and self.showAll:
+            self.stream.writeln(f"    Runtime (seconds): {self.runtime}")
+            benchmarks = getattr(test, "_numba_benchmarks", ())
+            for bench in benchmarks:
+                self.stream.writeln(f"    {bench.show()}")
+
+    def printErrors(self) -> None:
+        if os.environ.get("_NUMBA_TEST_NO_PRINT_ERROR", None) == "1":
+            return
+        return super().printErrors()
+
+    def printErrorList(self, flavour, errors) -> None:
+        if os.environ.get("_NUMBA_TEST_NO_PRINT_ERROR", None) == "1":
+            return
+        return super().printErrorList(flavour, errors)
 
     def add_results(self, result):
         """
         Add the results from the other *result* to this result.
         """
         streamout = result.stream.getvalue()
-        self.records.append({
-            'test_id': result.test_id,
-            'stream': streamout,
-            'runtime': result.test_runtime,
-            'failures': result.failures,
-            'errors': result.errors,
-            'skipped': result.skipped,
-            'expectedFailures': result.expectedFailures,
-            'unexpectedSuccesses': result.unexpectedSuccesses,
-            'pid': result.pid,
-            'start_time': result.start_time,
-        })
+
+        if result.test_id is not None:
+            # Suproc-test will have duplicated records. In that case,
+            # skip adding to the records for parent process.
+            duplicated = False
+            for rec in result.records:
+                if rec['test_id'] == result.test_id:
+                    duplicated = True
+
+            if not duplicated:
+                self.records.append({
+                    'test_id': result.test_id,
+                    'stream': streamout,
+                    'runtime': result.test_runtime,
+                    'failures': result.failures,
+                    'errors': result.errors,
+                    'skipped': result.skipped,
+                    'expectedFailures': result.expectedFailures,
+                    'unexpectedSuccesses': result.unexpectedSuccesses,
+                    'pid': result.pid,
+                    'start_time': result.start_time,
+                    'benchmarks': result.benchmarks,
+                })
+        self.records.extend(result.records)
         self.stream.write(streamout)
-        self.test_runtime += result.test_runtime
         self.stream.flush()
+        if result.test_runtime is not None:
+            self.test_runtime += result.test_runtime
         self.testsRun += result.testsRun
         self.failures.extend(result.failures)
         self.errors.extend(result.errors)
@@ -663,10 +723,16 @@ class ParallelTestResult(runner.TextTestResult):
         ----------
         output: file or filename
         """
-        from xml.etree.ElementTree import Element, SubElement, ElementTree
+        from xml.etree.ElementTree import (
+            Element,
+            SubElement,
+            ElementTree,
+            indent,
+        )
 
         suites = Element("testsuites", time=str(self.test_runtime))
         suite = SubElement(suites, "testsuite", name="numba_testsuite")
+        perf_suite = SubElement(suites, "testsuite", name="numba_perfsuite")
         status_to_tags = {
             'errors': 'error',
             'failures': 'failure',
@@ -697,10 +763,44 @@ class ParallelTestResult(runner.TextTestResult):
                     traceback = _strip_ansi_escape_sequences(traceback)
                     SubElement(testcase, tag).text = traceback
                     break
-        # Write XML to output
+            # Add benchmark
+            for bench in rec['benchmarks']:
+                testcase = SubElement(
+                    perf_suite, "testcase",
+                    name='.'.join([classname, testname, bench.name]),
+                    classname=filename,
+                    time=str(bench.duration),
+                )
+                props = SubElement(testcase, 'properties')
+                SubElement(props, 'property', name='average',
+                           value=str(bench.average))
+                SubElement(props, 'property', name='run_count',
+                           value=str(bench.run_count))
+                SubElement(props, 'property', name='repeat',
+                           value=str(bench.repeat))
+
+        # pretty print
+        indent(suites, space="\t", level=0)
         ElementTree(suites).write(
             output, xml_declaration=True, encoding='utf-8',
         )
+
+
+class NumbaTestRunner(runner.TextTestRunner):
+    resultclass = ParallelTestResult
+
+
+class BasicTestRunner(NumbaTestRunner):
+
+    def __init__(self, useslice, **kwargs):
+        runner.TextTestRunner.__init__(self, **kwargs)
+        self.useslice = parse_slice(useslice)
+
+    def run(self, test):
+        run = list(filter(self.useslice, _flatten_suite(test)))
+        run.sort(key=cuda_sensitive_mtime)
+        wrapped = unittest.TestSuite(run)
+        return super(BasicTestRunner, self).run(wrapped)
 
 
 def _strip_ansi_escape_sequences(text):
@@ -729,7 +829,8 @@ class _MinimalResult(object):
     __slots__ = (
         'failures', 'errors', 'skipped', 'expectedFailures',
         'unexpectedSuccesses', 'stream', 'shouldStop', 'testsRun',
-        'test_id', 'test_runtime', 'start_time', 'pid')
+        'test_id', 'test_runtime', 'start_time', 'pid', 'benchmarks', '_ok',
+        'records',)
 
     def fixup_case(self, case):
         """
@@ -739,9 +840,12 @@ class _MinimalResult(object):
         case._outcomeForDoCleanups = None
 
     def __init__(self, original_result, test_id=None, test_runtime=None,
-                 start_time=None, pid=None):
+                 start_time=None, pid=None,
+                 benchmarks=()):
         for attr in self.__slots__:
             setattr(self, attr, getattr(original_result, attr, None))
+        self._ok = original_result.wasSuccessful()
+        assert isinstance(self._ok, bool)
         for case, _ in self.expectedFailures:
             self.fixup_case(case)
         for case, _ in self.errors:
@@ -749,9 +853,24 @@ class _MinimalResult(object):
         for case, _ in self.failures:
             self.fixup_case(case)
         self.test_id = test_id
-        self.test_runtime = test_runtime
+        if hasattr(original_result, "test_runtime"):
+            self.test_runtime = original_result.test_runtime
+        if test_runtime is not None:
+            self.test_runtime = test_runtime
         self.start_time = start_time
-        self.pid = pid
+        self.pid = pid or os.getpid()
+        extra_benchmarks = []
+        self.records = getattr(original_result, "records", [])
+        for rec in getattr(original_result, "records", []):
+            extra_benchmarks.extend(rec['benchmarks'])
+        self.benchmarks = tuple([*benchmarks, *extra_benchmarks])
+
+    def __repr__(self):
+        d = {k: getattr(self, k) for k in self.__slots__}
+        return f"{self.__class__.__name__}({d})"
+
+    def wasSuccessful(self):
+        return self._ok
 
 
 class _FakeStringIO(object):
@@ -772,11 +891,11 @@ class _MinimalRunner(object):
     child process and run a test case with it.
     """
 
-    def __init__(self, runner_cls, runner_args, *, show_timing=False, write_junit=False):
+    def __init__(self, runner_cls, runner_args, *, show_timing=False, write_junit_file=False):
         self.runner_cls = runner_cls
         self.runner_args = runner_args
         self.show_timing = show_timing
-        self.write_junit = write_junit
+        self.write_junit_file = write_junit_file
 
     # Python 2 doesn't know how to pickle instance methods, so we use __call__
     # instead.
@@ -785,9 +904,10 @@ class _MinimalRunner(object):
         [test, queue] = test_and_queue
         # Executed in child process
         kwargs = self.runner_args
+        kwargs['stream'] = io.StringIO()
+
         # Force recording of output in a buffer (it will be printed out
         # by the parent).
-        kwargs['stream'] = StringIO()
         runner = self.runner_cls(**kwargs)
         result = runner._makeResult()
         # Avoid child tracebacks when Ctrl-C is pressed.
@@ -795,25 +915,30 @@ class _MinimalRunner(object):
         signals.registerResult(result)
         result.failfast = runner.failfast
         result.buffer = runner.buffer
-        start_time = time.perf_counter()
+        result.show_timing = self.show_timing
+        result.runtime = None
         pid = os.getpid()
         # Notify testsuite manager which tests are active
-        queue.put_nowait({
-            'start_time': start_time,
-            'pid': pid,
-            'test_id': test.id(),
-        })
-        with self.cleanup_object(test):
+        start_time = time.perf_counter()
+        if queue is not None:
+            queue.put_nowait({
+                'start_time': start_time,
+                'pid': pid,
+                'test_id': test.id(),
+            })
+        with self.cleanup_object(test) as iobuf:
             test(result)
-        end_time = time.perf_counter()
-        runtime = end_time - start_time
-        if self.show_timing and self.runner_args.get('verbosity', 0) > 1:
-            print(f"    Runtime (seconds): {runtime}", file=result.stream)
+
+            if not result.buffer:
+                result.stream.write(iobuf.getvalue())
+
+        benchmarks = getattr(result, "benchmarks", ())
+
         # HACK as cStringIO.StringIO isn't picklable in 2.x
         result.stream = _FakeStringIO(result.stream.getvalue())
         return _MinimalResult(
-            result, test.id(), test_runtime=runtime, start_time=start_time,
-            pid=pid,
+            result, test.id(), test_runtime=result.runtime, start_time=start_time,
+            pid=pid, benchmarks=benchmarks
         )
 
     @contextlib.contextmanager
@@ -823,12 +948,17 @@ class _MinimalRunner(object):
         (or any other object).
         """
         vanilla_attrs = set(test.__dict__)
-        try:
-            yield test
-        finally:
-            spurious_attrs = set(test.__dict__) - vanilla_attrs
-            for name in spurious_attrs:
-                del test.__dict__[name]
+        # Replace stdio otherwise `print()` will still go to stdio
+        original_io = sys.stderr, sys.stdout
+        with io.StringIO() as buf:
+            sys.stderr = sys.stdout = buf
+            try:
+                yield buf
+            finally:
+                sys.stderr, sys.stdout = original_io
+                spurious_attrs = set(test.__dict__) - vanilla_attrs
+                for name in spurious_attrs:
+                    del test.__dict__[name]
 
 
 def _split_nonparallel_tests(test, sliced):
@@ -870,14 +1000,14 @@ class ParallelTestRunner(runner.TextTestRunner):
     resultclass = ParallelTestResult
     timeout = _TIMEOUT
 
-    def __init__(self, runner_cls, nprocs, useslice, *, show_timing, write_junit, **kwargs):
+    def __init__(self, runner_cls, nprocs, useslice, *, show_timing, write_junit_file, **kwargs):
         runner.TextTestRunner.__init__(self, **kwargs)
         self.runner_cls = runner_cls
         self.nprocs = nprocs
         self.useslice = parse_slice(useslice)
         self.runner_args = kwargs
         self.show_timing = show_timing
-        self.write_junit = write_junit
+        self.write_junit_file = write_junit_file
 
     def _run_inner(self, result):
         # We hijack TextTestRunner.run()'s inner logic by passing this
@@ -889,15 +1019,42 @@ class ParallelTestRunner(runner.TextTestRunner):
         chunk_size = 100
         splitted_tests = [self._ptests[i:i + chunk_size]
                           for i in range(0, len(self._ptests), chunk_size)]
+        # Run parallel test
+        if splitted_tests:
+            result = self._run_test_in_pool(result, child_runner, splitted_tests,
+                                            nprocs=self.nprocs)
+        if not result.shouldStop and self._stests:
+            # Run serial test
+            if result.showAll:
+                print("\nstart serial tests\n")
+            self._run_test_in_serial(result, child_runner, self._stests)
+        return result
 
+    @classmethod
+    def _run_test_in_serial(cls, result, child_runner, tests):
+        tests.sort(key=cuda_sensitive_mtime)
+        queue = Queue()
+
+        for test in tests:
+            child_result = child_runner((test, queue))
+            result.add_results(child_result)
+
+            if child_result.shouldStop:
+                result.shouldStop = True
+                break
+
+    @classmethod
+    def _run_test_in_pool(cls, result, child_runner, splitted_tests, *, nprocs):
         # Create the manager
-        with multiprocessing.Manager() as manager:
+        mp = multiprocessing.get_context("spawn")
+
+        with mp.Manager() as manager:
             for tests in splitted_tests:
-                pool = multiprocessing.Pool(self.nprocs)
+                pool = mp.Pool(nprocs)
                 queue = manager.Queue()
                 try:
-                    self._run_parallel_tests(result, pool, child_runner, tests,
-                                             queue)
+                    cls._run_parallel_tests(result, pool, child_runner, tests,
+                                            queue)
                 except:
                     # On exception, kill still active workers immediately
                     pool.terminate()
@@ -913,12 +1070,10 @@ class ParallelTestRunner(runner.TextTestRunner):
                 finally:
                     # Always join the pool (this is necessary for coverage.py)
                     pool.join()
-        if not result.shouldStop:
-            stests = SerialSuite(self._stests)
-            stests.run(result)
-            return result
+        return result
 
-    def _run_parallel_tests(self, result, pool, child_runner, tests, queue):
+    @classmethod
+    def _run_parallel_tests(cls, result, pool, child_runner, tests, queue):
         tests.sort(key=cuda_sensitive_mtime)
 
         pid_tests = collections.defaultdict(list)
@@ -934,7 +1089,7 @@ class ParallelTestRunner(runner.TextTestRunner):
         while True:
             try:
                 try:
-                    child_result = it.__next__(self.timeout)
+                    child_result = it.__next__(cls.timeout)
                 finally:
                     process_queue()
             except StopIteration:
@@ -969,8 +1124,13 @@ class ParallelTestRunner(runner.TextTestRunner):
     def run(self, test):
         self._ptests, self._stests = _split_nonparallel_tests(test,
                                                               self.useslice)
-        print("Parallel: %s. Serial: %s" % (len(self._ptests),
-                                            len(self._stests)))
+        if len(self._stests) == 0 and len(self._ptests) == 1:
+            self._stests = self._ptests
+            self._ptests = []
+            print("Only one test. Run in serial")
+        else:
+            print("Parallel: %s. Serial: %s" % (len(self._ptests),
+                                                len(self._stests)))
         # This will call self._run_inner() on the created result object,
         # and print out the detailed test results at the end.
         result = super(ParallelTestRunner, self).run(self._run_inner)
@@ -978,9 +1138,8 @@ class ParallelTestRunner(runner.TextTestRunner):
         if self.show_timing:
             self.stream.write(f"Total test runtime (seconds): {result.test_runtime}\n")
         # Write junit xml
-        if self.write_junit:
-            tstamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            filename = f"junit_numba_{tstamp}.xml"
+        if self.write_junit_file:
+            filename = self.write_junit_file
             print("Writing junit xml file:", filename)
             result.write_junit_xml(filename)
         return result

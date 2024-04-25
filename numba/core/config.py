@@ -586,6 +586,11 @@ class _EnvReloader(object):
             "NUMBA_LLVM_PASS_TIMINGS", int, 0,
         )
 
+        # Perfsuite support.
+        PERFSUITE_BENCHMARK = _readenv(
+            "NUMBA_PERFSUITE_BENCHMARK", int, 0,
+        )
+
         # Inject the configuration values into the module globals
         for name, value in locals().copy().items():
             if name.isupper():
