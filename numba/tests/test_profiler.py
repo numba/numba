@@ -6,16 +6,42 @@ import sys
 
 import numpy as np
 
-from numba import jit
-from numba.tests.support import needs_blas, expected_failure_py312
+from numba import jit, types
+from numba.tests.support import needs_blas
 import unittest
 
 
-def dot(a, b):
-    sum = 0
-    for i in range(len(a)):
-        sum += a[i]*b[i]
-    return sum
+def generate_standard_dot_case():
+
+    @jit((types.float32[::1], types.float32[::1],))
+    def dot(a, b):
+        sum = 0
+        for i in range(len(a)):
+            sum += a[i]*b[i]
+        return sum
+
+    return dot, dot
+
+
+def generate_raising_dot_case():
+
+    @jit((types.float32[::1], types.float32[::1],))
+    def raising_dot(a, b):
+        # this is like dot above, it does all the work, but the raises
+        sum = 0
+        for i in range(len(a)):
+            sum += a[i]*b[i]
+        raise ValueError("problem with dot")
+
+
+    def call_raising_dot(a, b):
+        try:
+            raising_dot(a, b)
+        except ValueError:
+            pass
+
+    return raising_dot, call_raising_dot
+
 
 def np_dot(a, b):
     return np.dot(a, b)
@@ -23,33 +49,48 @@ def np_dot(a, b):
 
 class TestProfiler(unittest.TestCase):
 
-    def check_profiler_dot(self, pyfunc):
+    def check_profiler_dot(self, caller, cfunc):
         """
         Make sure the jit-compiled function shows up in the profile stats
         as a regular Python function.
         """
         a = np.arange(16, dtype=np.float32)
         b = np.arange(16, dtype=np.float32)
-        cfunc = jit(nopython=True)(pyfunc)
-        # Warm up JIT
-        cfunc(a, b)
+        n_calls = 123
         p = profiler.Profile()
         p.enable()
         try:
-            cfunc(a, b)
+            for _ in range(n_calls):
+                caller(a, b)
         finally:
             p.disable()
         stats = pstats.Stats(p).strip_dirs()
-        code = pyfunc.__code__
-        expected_key = (os.path.basename(code.co_filename),
-                        code.co_firstlineno,
-                        code.co_name,
-                        )
-        self.assertIn(expected_key, stats.stats)
 
-    @expected_failure_py312
+        def check_stats_for_key(stats, code, n_calls):
+            expected_key = (os.path.basename(code.co_filename),
+                            code.co_firstlineno,
+                            code.co_name,
+                            )
+            # check the key is in the stats
+            self.assertIn(expected_key, stats.stats)
+            # check that call for the key has been made `n_calls` times.
+            func_stats = stats.stats[expected_key]
+            self.assertEqual(func_stats[:2], (n_calls, n_calls))
+
+        # check the JIT compiled function
+        check_stats_for_key(stats, cfunc.py_func.__code__, n_calls)
+
+        # check the caller if it's not the same as the cfunc
+        if caller is not cfunc:
+            check_stats_for_key(stats, caller.__code__, n_calls)
+
     def test_profiler(self):
-        self.check_profiler_dot(dot)
+        dot, _ = generate_standard_dot_case()
+        self.check_profiler_dot(dot, dot)
+
+    def test_profiler_for_raising_function(self):
+        raising_dot, call_raising_dot = generate_raising_dot_case()
+        self.check_profiler_dot(call_raising_dot, raising_dot)
 
     @needs_blas
     def test_profiler_np_dot(self):
