@@ -123,6 +123,10 @@ def hypot(x, y):
     return math.hypot(x, y)
 
 
+def nextafter(x, y):
+    return math.nextafter(x, y)
+
+
 def degrees(x):
     return math.degrees(x)
 
@@ -439,6 +443,25 @@ class TestMathLib(TestCase):
                 self.assertRaisesRegex(RuntimeWarning,
                                         'overflow encountered in .*scalar',
                                         naive_hypot, val, val)
+
+    def test_nextafter(self):
+        pyfunc = nextafter
+        x_types = [types.float32, types.float64,
+                   types.int32, types.int64,
+                   types.uint32, types.uint64]
+        x_values = [0.0, .21, .34, 1005382.042, -25.328]
+        y1_values = [x + 2 for x in x_values]
+        y2_values = [x - 2 for x in x_values]
+
+        self.run_binary(pyfunc, x_types, x_values, y1_values)
+        self.run_binary(pyfunc, x_types, x_values, y2_values)
+
+        # Test using pos/neg inf
+        self.run_binary(pyfunc, x_types, [0.0, -.5, .5], [math.inf]*3)
+        self.run_binary(pyfunc, x_types, [0.0, -.5, .5], [-math.inf]*3)
+
+        # if both args to nextafter are equal, then it is returned unchanged.
+        self.run_binary(pyfunc, x_types, x_values, x_values)
 
     def test_degrees(self):
         pyfunc = degrees

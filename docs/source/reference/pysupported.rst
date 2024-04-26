@@ -1077,6 +1077,7 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.log2`
 * :func:`math.log10`
 * :func:`math.log1p`
+* :func:`math.nextafter`
 * :func:`math.pow`
 * :func:`math.radians`
 * :func:`math.sin`

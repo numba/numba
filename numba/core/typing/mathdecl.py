@@ -87,6 +87,14 @@ class Math_hypot(ConcreteTemplate):
     ]
 
 
+@infer_global(math.nextafter)
+class Math_nextafter(ConcreteTemplate):
+    cases = [
+        signature(types.float64, types.float64, types.float64),
+        signature(types.float32, types.float32, types.float32),
+    ]
+
+
 @infer_global(math.isinf)
 @infer_global(math.isnan)
 class Math_predicate(ConcreteTemplate):
