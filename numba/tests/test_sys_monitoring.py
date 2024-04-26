@@ -285,8 +285,9 @@ class TestMonitoring(TestCase):
         finally:
             # It is necessary to restart events that have been disabled. The
             # "disabled" state of the `PY_START` event for the tool
-            # `self.tool_id` "leaks" into subsequent tests. These tests then end
-            # up failing as events that should trigger do not! It's not really
+            # `self.tool_id` "leaks" into subsequent tests. These subsequent
+            # tests then end up failing as events that should have been
+            # triggered are not triggered due to the state leak! It's not really
             # clear why this happens, if it is part of the design or a side
             # effect of the design, or if this behaviour is simply a bug in
             # CPython itself.
