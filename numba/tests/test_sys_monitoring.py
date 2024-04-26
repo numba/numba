@@ -1,5 +1,4 @@
 import dis
-import functools
 import queue
 import sys
 import threading
@@ -11,7 +10,6 @@ from numba.core.utils import PYVERSION
 from numba.core.serialize import _numba_unpickle
 
 
-@functools.cache
 def generate_usecase():
     @jit('int64(int64)',)
     def foo(x):
@@ -285,6 +283,14 @@ class TestMonitoring(TestCase):
             self.assertEqual(result, self.call_foo_result)
             callback.assert_called()
         finally:
+            # It is necessary to restart events that have been disabled. The
+            # "disabled" state of the `PY_START` event for the tool
+            # `self.tool_id` "leaks" into subsequent tests. These tests then end
+            # up failing as events that should trigger do not! It's not really
+            # clear why this happens, if it is part of the design or a side
+            # effect of the design, or if this behaviour is simply a bug in
+            # CPython itself.
+            sys.monitoring.restart_events()
             sys.monitoring.register_callback(tool_id, event, None)
             sys.monitoring.set_events(tool_id, NO_EVENTS)
             sys.monitoring.free_tool_id(tool_id)
