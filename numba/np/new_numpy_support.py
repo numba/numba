@@ -147,7 +147,7 @@ def as_dtype(nbtype):
     """
     nbtype = types.unliteral(nbtype)
     if isinstance(nbtype, (types.Complex, types.Integer, types.Float)):
-        return np.dtype(str(nbtype))
+        return np.dtype(str(nbtype).split("_")[-1])
     if nbtype is types.bool_:
         return np.dtype('?')
     if isinstance(nbtype, (types.NPDatetime, types.NPTimedelta)):

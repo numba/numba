@@ -44,9 +44,9 @@ ll_bytes = cgutils.voidptr_t
 
 _meminfo_listptr = types.MemInfoPointer(types.voidptr)
 
-INDEXTY = types.intp
+INDEXTY = types.np_intp
 
-index_types = types.integer_domain
+index_types = types.np_integer_domain
 
 DEFAULT_ALLOCATED = 0
 

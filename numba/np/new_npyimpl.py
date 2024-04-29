@@ -183,8 +183,8 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
                                   str(tyinp)))
 
 
-_broadcast_onto_sig = types.intp(types.intp, types.CPointer(types.intp),
-                                 types.intp, types.CPointer(types.intp))
+_broadcast_onto_sig = types.py_intp(types.py_intp, types.CPointer(types.py_intp),
+                                 types.py_intp, types.CPointer(types.py_intp))
 def _broadcast_onto(src_ndim, src_shape, dest_ndim, dest_shape):
     '''Low-level utility function used in calculating a shape for
     an implicit output array.  This function assumes that the

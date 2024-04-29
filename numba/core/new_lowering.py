@@ -461,7 +461,7 @@ class Lower(BaseLower):
             fl = self.blkmap[inst.falsebr]
 
             condty = self.typeof(inst.cond.name)
-            pred = self.context.cast(self.builder, cond, condty, types.boolean)
+            pred = self.context.cast(self.builder, cond, condty, types.py_bool)
             assert pred.type == llvmlite.ir.IntType(1),\
                 ("cond is not i1: %s" % pred.type)
             self.builder.cbranch(pred, tr, fl)
@@ -1239,7 +1239,7 @@ class Lower(BaseLower):
 
             itemty = ty.iterator_type.yield_type
             tup = self.context.get_constant_undef(resty)
-            pairty = types.Pair(itemty, types.boolean)
+            pairty = types.Pair(itemty, types.py_bool)
             getiter_sig = typing.signature(ty.iterator_type, ty)
             getiter_impl = self.context.get_function('getiter',
                                                      getiter_sig)

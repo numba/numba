@@ -554,3 +554,9 @@ class UnicodeIteratorType(SimpleIteratorType):
         name = "iter_unicode"
         self.data = dtype
         super(UnicodeIteratorType, self).__init__(name, dtype)
+
+class NotImplementedType(Opaque): # name aliases the python type but nevermind
+    def __init__(self):
+        super().__init__(name="NotImplemented")
+
+not_implemented_type = NotImplementedType()

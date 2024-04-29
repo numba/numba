@@ -1087,7 +1087,7 @@ class BaseContext(object):
         assert isinstance(intaddr, int), 'dyn addr not of int type'
         mod = builder.module
         llvoidptr = self.get_value_type(types.voidptr)
-        addr = self.get_constant(types.uintp, intaddr).inttoptr(llvoidptr)
+        addr = self.get_constant(types.py_intp, intaddr).inttoptr(llvoidptr)
         # Use a unique name by embedding the address value
         symname = 'numba.dynamic.globals.{:x}'.format(intaddr)
         gv = cgutils.add_global_variable(mod, llvoidptr, symname)

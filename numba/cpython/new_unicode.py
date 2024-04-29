@@ -81,9 +81,9 @@ class UnicodeModel(models.StructModel):
     def __init__(self, dmm, fe_type):
         members = [
             ('data', types.voidptr),
-            ('length', types.intp),
-            ('kind', types.int32),
-            ('is_ascii', types.uint32),
+            ('length', types.c_intp),
+            ('kind', types.c_int32),
+            ('is_ascii', types.c_uint32),
             ('hash', _Py_hash_t),
             ('meminfo', types.MemInfoPointer(types.voidptr)),
             # A pointer to the owner python str/unicode object

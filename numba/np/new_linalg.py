@@ -34,14 +34,14 @@ ll_intp_p = intp_t.as_pointer()
 # _lapack.c and is present to accommodate potential future 64bit int
 # based LAPACK use.
 F_INT_nptype = np.int32
-F_INT_nbtype = types.int32
+F_INT_nbtype = types.np_int32
 
 # BLAS kinds as letters
 _blas_kinds = {
-    types.float32: 's',
-    types.float64: 'd',
-    types.complex64: 'c',
-    types.complex128: 'z',
+    types.np_float32: 's',
+    types.np_float64: 'd',
+    types.np_complex64: 'c',
+    types.np_complex128: 'z',
 }
 
 
@@ -817,7 +817,7 @@ def dot_3(left, right, out):
         return lambda left, right, out: _impl(left, right, out)
 
 
-fatal_error_func = types.ExternalFunction("numba_fatal_error", types.intc())
+fatal_error_func = types.ExternalFunction("numba_fatal_error", types.np_intc())
 
 
 @register_jitable
