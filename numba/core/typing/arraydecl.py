@@ -13,8 +13,7 @@ from numba.core.errors import (TypingError, RequireLiteralValue, NumbaTypeError,
                                NumbaNotImplementedError, NumbaAssertionError,
                                NumbaKeyError, NumbaIndexError)
 from numba.core.cgutils import is_nonelike
-
-numpy_version = tuple(map(int, np.__version__.split('.')[:2]))
+from numba.np.np_global_consts import numpy_version
 
 
 Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
