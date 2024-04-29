@@ -137,7 +137,7 @@ class TestEvent(TestCase):
         ev.unregister("numba:compile", listener)
 
     def test_lifted_dispatcher(self):
-        @jit
+        @jit(forceobj=True)
         def foo():
             object()   # to trigger loop-lifting
             c = 0

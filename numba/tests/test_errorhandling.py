@@ -2,11 +2,13 @@
 Unspecified error handling tests
 """
 
+import sys
+import subprocess
 import numpy as np
 import os
 import warnings
 
-from numba import jit, njit, typed, int64, types
+from numba import jit, njit, types
 from numba.core import errors
 from numba.experimental import structref
 from numba.extending import (overload, intrinsic, overload_method,
@@ -23,10 +25,6 @@ from numba.tests.support import (skip_parfors_unsupported, override_config,
                                  SerialMixin, skip_unless_cffi,
                                  skip_unless_scipy, TestCase)
 import unittest
-
-# used in TestMiscErrorHandling::test_handling_of_write_to_*_global
-_global_list = [1, 2, 3, 4]
-_global_dict = typed.Dict.empty(int64, int64)
 
 
 class TestErrorHandlingBeforeLowering(unittest.TestCase):
@@ -135,18 +133,12 @@ class TestMiscErrorHandling(unittest.TestCase):
             self.assertIn(ex, str(raises.exception))
 
     def test_handling_of_write_to_reflected_global(self):
-        @njit
-        def foo():
-            _global_list[0] = 10
-
-        self.check_write_to_globals(foo)
+        from numba.tests.errorhandling_usecases import global_reflected_write
+        self.check_write_to_globals(njit(global_reflected_write))
 
     def test_handling_of_write_to_typed_dict_global(self):
-        @njit
-        def foo():
-            _global_dict[0] = 10
-
-        self.check_write_to_globals(foo)
+        from numba.tests.errorhandling_usecases import global_dict_write
+        self.check_write_to_globals(njit(global_dict_write))
 
     @skip_parfors_unsupported
     def test_handling_forgotten_numba_internal_import(self):
@@ -479,10 +471,54 @@ class TestCapturedErrorHandling(SerialMixin, TestCase):
                     expected = "object has no attribute 'some_invalid_attr'"
                     self.assertIn(expected, str(raises.exception))
 
-    @TestCase.run_test_in_subprocess(
-        envvars={"NUMBA_CAPTURED_ERRORS": "old_style"},
-    )
-    def test_old_style_deprecation(self):
+    def _run_in_separate_process(self, runcode, env):
+        # Run code in separate process with -Wall and specific env-vars
+        code = f"""if 1:
+            {runcode}\n
+            """
+        # On windows, missing the base environment variable can cause
+        # Fatal Python error: _Py_HashRandomization_Init: failed to get random
+        #                     numbers to initialize Python
+        proc_env = os.environ.copy()
+        proc_env.update(env)
+        popen = subprocess.Popen([sys.executable, "-Wall", "-c", code],
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE,
+                                 env=proc_env)
+
+        out, err = popen.communicate()
+        if popen.returncode != 0:
+            raise AssertionError("process failed with code %s: stderr follows"
+                                 "\n%s\n" % (popen.returncode, err.decode()))
+        return out, err
+
+    def test_old_style_deprecation_on_import(self):
+        from numba.core.config import _old_style_deprecation_msg
+
+        code = """
+        import numba
+        """
+        # Check that the deprecated message is shown
+        # if NUMBA_CAPTURED_ERRORS=old_style
+        env = {"NUMBA_CAPTURED_ERRORS": "old_style"}
+        _out, err = self._run_in_separate_process(code, env)
+        self.assertIn(_old_style_deprecation_msg, err.decode())
+
+        # Check that the deprecated message is NOT shown
+        # if NUMBA_CAPTURED_ERRORS is unset
+        env = {"NUMBA_CAPTURED_ERRORS": ""}
+        _out, err = self._run_in_separate_process(code, env)
+        # Check that the deprecated message is not shown
+        self.assertNotIn("NumbaPendingDeprecationWarning", err.decode())
+
+        # Check that the deprecated message is NOT shown
+        # if NUMBA_CAPTURED_ERRORS=new_style
+        env = {"NUMBA_CAPTURED_ERRORS": "new_style"}
+        _out, err = self._run_in_separate_process(code, env)
+        # Check that the deprecated message is not shown
+        self.assertNotIn("NumbaPendingDeprecationWarning", err.decode())
+
+    def _test_old_style_deprecation(self):
         # Verify that old_style error raise the correct deprecation warning
         warnings.simplefilter("always", errors.NumbaPendingDeprecationWarning)
 
@@ -504,6 +540,17 @@ class TestCapturedErrorHandling(SerialMixin, TestCase):
                 "error-capturing",
                 str(warns.warnings[0].message),
             )
+
+    # Check deprecation warning when NUMBA_CAPTURED_ERRORS=old_style
+    test_old_style_deprecation = TestCase.run_test_in_subprocess(
+        envvars={"NUMBA_CAPTURED_ERRORS": "old_style"},
+    )(_test_old_style_deprecation)
+
+    # Check deprecation warning when NUMBA_CAPTURED_ERRORS=default
+    # ("default" means "old_style")
+    test_default_old_style_deprecation = TestCase.run_test_in_subprocess(
+        envvars={"NUMBA_CAPTURED_ERRORS": "default"},
+    )(_test_old_style_deprecation)
 
     @TestCase.run_test_in_subprocess(
         envvars={"NUMBA_CAPTURED_ERRORS": "old_style"},

@@ -3,8 +3,8 @@ import copy
 import warnings
 from numba.core.tracing import event
 
-from numba.core import (utils, errors, typing, interpreter, bytecode, postproc,
-                        config, callconv, cpu)
+from numba.core import (utils, errors, interpreter, bytecode, postproc, config,
+                        callconv, cpu)
 from numba.parfors.parfor import ParforDiagnostics
 from numba.core.errors import CompilerError
 from numba.core.environment import lookup_environment
@@ -137,13 +137,6 @@ detail""",
         type=cpu.InlineOptions,
         default=cpu.InlineOptions("never"),
         doc="TODO",
-    )
-    # Defines a new target option for tracking the "target backend".
-    # This will be the XYZ in @jit(_target=XYZ).
-    target_backend = Option(
-        type=str,
-        default="cpu", # if not set, default to CPU
-        doc="backend"
     )
 
     dbg_extend_lifetimes = Option(
@@ -301,22 +294,6 @@ def sanitize_compile_result_entries(entries):
 def compile_result(**entries):
     entries = sanitize_compile_result_entries(entries)
     return CompileResult(**entries)
-
-
-def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
-                     locals={}):
-    """
-    Compile the function in an isolated environment (typing and target
-    context).
-    Good for testing.
-    """
-    from numba.core.registry import cpu_target
-    typingctx = typing.Context()
-    targetctx = cpu.CPUContext(typingctx, target='cpu')
-    # Register the contexts in case for nested @jit or @overload calls
-    with cpu_target.nested_context(typingctx, targetctx):
-        return compile_extra(typingctx, targetctx, func, args, return_type,
-                             flags, locals)
 
 
 def run_frontend(func, inline_closures=False, emit_dels=False):
@@ -541,15 +518,12 @@ class Compiler(CompilerBase):
     """
 
     def define_pipelines(self):
-        # this maintains the objmode fallback behaviour
-        pms = []
-        if not self.state.flags.force_pyobject:
-            pms.append(DefaultPassBuilder.define_nopython_pipeline(self.state))
-        if self.state.status.can_fallback or self.state.flags.force_pyobject:
-            pms.append(
-                DefaultPassBuilder.define_objectmode_pipeline(self.state)
-            )
-        return pms
+        if self.state.flags.force_pyobject:
+            # either object mode
+            return [DefaultPassBuilder.define_objectmode_pipeline(self.state),]
+        else:
+            # or nopython mode
+            return [DefaultPassBuilder.define_nopython_pipeline(self.state),]
 
 
 class DefaultPassBuilder(object):

@@ -32,11 +32,14 @@ else
   export NUMBA_CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY=0;
 fi;
 
-# Test with different NumPy versions with each toolkit (it's not worth testing
-# the Cartesian product of versions here, we just need to test with different
-# CUDA and NumPy versions).
+# Test with different NumPy and Python versions with each toolkit (it's not
+# worth testing the Cartesian product of versions here, we just need to test
+# with different CUDA, NumPy, and Python versions).
 declare -A CTK_NUMPY_VMAP=( ["11.2"]="1.22" ["11.3"]="1.23" ["11.5"]="1.25" ["11.8"]="1.26")
 NUMPY_VER="${CTK_NUMPY_VMAP[$CUDA_TOOLKIT_VER]}"
+
+declare -A CTK_PYTHON_VMAP=( ["11.2"]="3.9" ["11.3"]="3.10" ["11.5"]="3.11" ["11.8"]="3.12")
+PYTHON_VER="${CTK_PYTHON_VMAP[$CUDA_TOOLKIT_VER]}"
 
 ################################################################################
 # SETUP - Check environment
@@ -51,9 +54,9 @@ nvidia-smi
 gpuci_logger "Create testing env"
 . /opt/conda/etc/profile.d/conda.sh
 gpuci_mamba_retry create -n numba_ci -y \
-                  "python=3.10" \
+                  "python=${PYTHON_VER}" \
                   "cudatoolkit=${CUDA_TOOLKIT_VER}" \
-                  "rapidsai::cubinlinker" \
+                  "rapidsai-nightly::cubinlinker" \
                   "conda-forge::ptxcompiler" \
                   "numba/label/dev::llvmlite" \
                   "numpy=${NUMPY_VER}" \
@@ -69,7 +72,7 @@ conda activate numba_ci
 if [ $NUMBA_CUDA_USE_NVIDIA_BINDING == "1" ]
 then
   gpuci_logger "Install NVIDIA CUDA Python bindings";
-  gpuci_mamba_retry install nvidia::cuda-python=11.7.0;
+  gpuci_mamba_retry install cuda-python=11.8 cuda-cudart=11.5 cuda-nvrtc=11.5;
 fi;
 
 gpuci_logger "Install numba"

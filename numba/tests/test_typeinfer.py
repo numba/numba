@@ -1,13 +1,14 @@
 import os, sys, subprocess
+import dis
 import itertools
 
 import numpy as np
 
 import numba
-from numba.core.compiler import compile_isolated
-from numba import jit
+from numba import jit, njit
 from numba.core import errors, ir, types, typing, typeinfer, utils
 from numba.core.typeconv import Conversion
+from numba.extending import overload_method
 
 from numba.tests.support import TestCase, tag
 from numba.tests.test_typeconv import CompatibilityTestMixin
@@ -30,6 +31,11 @@ f64 = types.float64
 c64 = types.complex64
 c128 = types.complex128
 
+skip_unless_load_fast_and_clear = unittest.skipUnless(
+    "LOAD_FAST_AND_CLEAR" in dis.opmap,
+    "Requires LOAD_FAST_AND_CLEAR opcode",
+)
+
 
 class TestArgRetCasting(unittest.TestCase):
     def test_arg_ret_casting(self):
@@ -38,8 +44,9 @@ class TestArgRetCasting(unittest.TestCase):
 
         args = (i32,)
         return_type = f32
-        cres = compile_isolated(foo, args, return_type)
-        self.assertTrue(isinstance(cres.entry_point(123), float))
+        cfunc = njit(return_type(*args))(foo)
+        cres = cfunc.overloads[args]
+        self.assertTrue(isinstance(cfunc(123), float))
         self.assertEqual(cres.signature.args, args)
         self.assertEqual(cres.signature.return_type, return_type)
 
@@ -50,7 +57,7 @@ class TestArgRetCasting(unittest.TestCase):
         args = (types.Array(i32, 1, 'C'),)
         return_type = f32
         try:
-            cres = compile_isolated(foo, args, return_type)
+            njit(return_type(*args))(foo)
         except errors.TypingError as e:
             pass
         else:
@@ -63,7 +70,8 @@ class TestArgRetCasting(unittest.TestCase):
 
         args = (u32,)
         return_type = u8
-        cres = compile_isolated(foo, args, return_type)
+        cfunc = njit(return_type(*args))(foo)
+        cres = cfunc.overloads[args]
         typemap = cres.type_annotation.typemap
         # Argument "iters" must be uint32
         self.assertEqual(typemap['iters'], u32)
@@ -503,14 +511,13 @@ class TestUnifyUseCases(unittest.TestCase):
                 res += a[i]
             return res
 
-        argtys = [types.Array(c128, 1, 'C')]
-        cres = compile_isolated(pyfunc, argtys)
-        return (pyfunc, cres)
+        argtys = (types.Array(c128, 1, 'C'),)
+        cfunc = njit(argtys)(pyfunc)
+        return (pyfunc, cfunc)
 
     def test_complex_unify_issue599(self):
-        pyfunc, cres = self._actually_test_complex_unify()
+        pyfunc, cfunc = self._actually_test_complex_unify()
         arg = np.array([1.0j])
-        cfunc = cres.entry_point
         self.assertEqual(cfunc(arg), pyfunc(arg))
 
     def test_complex_unify_issue599_multihash(self):
@@ -540,7 +547,7 @@ class TestUnifyUseCases(unittest.TestCase):
 
         args = (i32, i64)
         # Check if compilation is successful
-        cres = compile_isolated(foo, args)
+        njit(args)(foo)
 
 
 def issue_797(x0, y0, x1, y1, grid):
@@ -706,6 +713,98 @@ class TestMiscIssues(TestCase):
                     return_vars[varname] = typemap[varname]
 
         self.assertTrue(all(vt == types.float64 for vt in return_vars.values()))
+
+    def test_issue_9162(self):
+        @overload_method(types.Array, "aabbcc")
+        def ol_aabbcc(self):
+
+            def impl(self):
+                return self.sum()
+
+            return impl
+
+        @jit
+        def foo(ar):
+            return ar.aabbcc()
+
+        ar = np.ones(2)
+        ret = foo(ar)
+
+        overload = [value for value in foo.overloads.values()][0]
+        typemap = overload.type_annotation.typemap
+        calltypes = overload.type_annotation.calltypes
+        for call_op in calltypes:
+            name = call_op.list_vars()[0].name
+            fc_ty = typemap[name]
+            self.assertIsInstance(fc_ty, types.BoundFunction)
+            tmplt = fc_ty.template
+            info = tmplt.get_template_info(tmplt)
+            py_file = info["filename"]
+            self.assertIn("test_typeinfer.py", py_file)
+
+    @skip_unless_load_fast_and_clear
+    def test_load_fast_and_clear(self):
+        @njit
+        def foo(a):
+            [x for x in (0,)]
+            if a:
+                # the test code cannot use a constant here due to constant
+                # propagation issues.
+                x = 3 + a
+            x += 10
+            return x
+
+        self.assertEqual(foo(True), foo.py_func(True))
+        # Interpreted version should raise an exception
+        with self.assertRaises(UnboundLocalError):
+            foo.py_func(False)
+        # Compiled version returns 10 as x is zero initialized.
+        self.assertEqual(foo(False), 10)
+
+    @skip_unless_load_fast_and_clear
+    def test_load_fast_and_clear_variant_2(self):
+        @njit
+        def foo():
+            # The use of a literal False triggers different bytecode generation
+            # necessary for this test. See test_load_fast_and_clear_variant_4.
+            if False:
+                x = 1
+            [x for x in (1,)]
+            # This return uses undefined variable
+            return x
+
+        with self.assertRaises(errors.TypingError) as raises:
+            foo()
+        self.assertIn("return value is undefined", str(raises.exception))
+
+    @skip_unless_load_fast_and_clear
+    def test_load_fast_and_clear_variant_3(self):
+        @njit
+        def foo():
+            # The use of a literal False triggers different bytecode generation
+            # necessary for this test. See test_load_fast_and_clear_variant_4.
+            if False:
+                x = 1
+            [x for x in (1,)]
+            # This print uses undefined variable
+            print(1, 2, 3, x)
+
+        with self.assertRaises(errors.TypingError) as raises:
+            foo()
+        self.assertIn("undefined variable used in call argument #4", str(raises.exception))
+
+    @skip_unless_load_fast_and_clear
+    def test_load_fast_and_clear_variant_4(self):
+        @njit
+        def foo(a):
+            # This test variant is to show that non-literal boolean value here
+            # produces a different behavior.
+            if a:
+                x = a
+            [x for x in (1,)]
+            return x
+        self.assertEqual(foo(123), 123)
+        self.assertEqual(foo(0), 0)
 
 
 class TestFoldArguments(unittest.TestCase):

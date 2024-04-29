@@ -282,8 +282,6 @@ _options_mixin = include_default_options(
     "error_model",
     "inline",
     "forceinline",
-    # Add "target_backend" as a accepted option for the CPU in @jit(...)
-    "target_backend",
     "_dbg_extend_lifetimes",
     "_dbg_optnone",
 )
@@ -319,9 +317,6 @@ class CPUTargetOptions(_options_mixin, TargetOptions):
         flags.inherit_if_not_set("fastmath")
 
         flags.inherit_if_not_set("error_model", default="python")
-
-        # Add "target_backend" as a option that inherits from the caller
-        flags.inherit_if_not_set("target_backend")
 
         flags.inherit_if_not_set("forceinline")
 

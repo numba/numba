@@ -1,0 +1,6 @@
+Fix parfor variable hoisting analysis.
+--------------------------------------
+
+If a variable is used to build a container (e.g., tuple, list, map, set) or is passed as an
+argument to a call then conservatively assume it could escape the current iteration of
+the parfor and so should not be hoisted.

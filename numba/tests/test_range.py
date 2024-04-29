@@ -4,12 +4,12 @@ import sys
 
 import numpy
 
-from numba.core.compiler import compile_isolated
 from numba import jit, njit
 from numba.core import types, utils
 from numba.tests.support import tag
 
-from numba.cpython.rangeobj import length_of_iterator
+from numba.core.inline_closurecall import length_of_iterator
+
 def loop1(n):
     s = 0
     for i in range(n):
@@ -65,20 +65,17 @@ class TestRange(unittest.TestCase):
 
     def test_loop1_int16(self):
         pyfunc = loop1
-        cres = compile_isolated(pyfunc, [types.int16])
-        cfunc = cres.entry_point
+        cfunc = njit((types.int16,))(pyfunc)
         self.assertTrue(cfunc(5), pyfunc(5))
 
     def test_loop2_int16(self):
         pyfunc = loop2
-        cres = compile_isolated(pyfunc, [types.int16, types.int16])
-        cfunc = cres.entry_point
+        cfunc = njit((types.int16, types.int16))(pyfunc)
         self.assertTrue(cfunc(1, 6), pyfunc(1, 6))
 
     def test_loop3_int32(self):
         pyfunc = loop3
-        cres = compile_isolated(pyfunc, [types.int32] * 3)
-        cfunc = cres.entry_point
+        cfunc = njit((types.int32, types.int32, types.int32))(pyfunc)
         arglist = [
             (1, 2, 1),
             (2, 8, 3),
@@ -93,8 +90,7 @@ class TestRange(unittest.TestCase):
         typelist = [types.int16, types.int32, types.int64]
         arglist = [5, 0, -5]
         for typ in typelist:
-            cres = compile_isolated(pyfunc, [typ])
-            cfunc = cres.entry_point
+            cfunc = njit((typ,))(pyfunc)
             for arg in arglist:
                 self.assertEqual(cfunc(typ(arg)), pyfunc(typ(arg)))
 
@@ -103,8 +99,7 @@ class TestRange(unittest.TestCase):
         typelist = [types.int16, types.int32, types.int64]
         arglist = [(1,6), (6,1), (-5, -1)]
         for typ in typelist:
-            cres = compile_isolated(pyfunc, [typ] * 2)
-            cfunc = cres.entry_point
+            cfunc = njit((typ, typ))(pyfunc)
             for args in arglist:
                 args_ = tuple(typ(x) for x in args)
                 self.assertEqual(cfunc(*args_), pyfunc(*args_))
@@ -119,8 +114,7 @@ class TestRange(unittest.TestCase):
             (-10, -10, -2),
         ]
         for typ in typelist:
-            cres = compile_isolated(pyfunc, [typ] * 3)
-            cfunc = cres.entry_point
+            cfunc = njit((typ, typ, typ))(pyfunc)
             for args in arglist:
                 args_ = tuple(typ(x) for x in args)
                 self.assertEqual(cfunc(*args_), pyfunc(*args_))
@@ -131,15 +125,13 @@ class TestRange(unittest.TestCase):
         typelist = [types.int16, types.int32, types.int64]
         arglist = [5, 0, -5]
         for typ in typelist:
-            cres = compile_isolated(range_iter_func, [typ])
-            cfunc = cres.entry_point
+            cfunc = njit((typ,))(range_iter_func)
             for arg in arglist:
                 self.assertEqual(cfunc(typ(arg)), range_func(typ(arg)))
 
     def test_range_iter_list(self):
         range_iter_func = range_iter_len2
-        cres = compile_isolated(range_iter_func, [types.List(types.intp)])
-        cfunc = cres.entry_point
+        cfunc = njit((types.List(types.intp, reflected=True),))(range_iter_func)
         arglist = [1, 2, 3, 4, 5]
         self.assertEqual(cfunc(arglist), len(arglist))
 
@@ -152,8 +144,7 @@ class TestRange(unittest.TestCase):
                    (-1, 4, 10),
                    (5, -5, -2),]
 
-        cres = compile_isolated(pyfunc, (types.int64,) * 3)
-        cfunc = cres.entry_point
+        cfunc = njit((types.int64, types.int64, types.int64),)(pyfunc)
         for arg in arglist:
             self.assertEqual(cfunc(*arg), pyfunc(*arg))
 

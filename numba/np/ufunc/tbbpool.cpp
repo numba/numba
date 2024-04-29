@@ -342,6 +342,8 @@ MOD_INIT(tbbpool)
     SetAttrStringFromVoidPointer(m, set_parallel_chunksize);
     SetAttrStringFromVoidPointer(m, get_parallel_chunksize);
     SetAttrStringFromVoidPointer(m, get_sched_size);
+    SetAttrStringFromVoidPointer(m, allocate_sched);
+    SetAttrStringFromVoidPointer(m, deallocate_sched);
 
     return MOD_SUCCESS_VAL(m);
 }

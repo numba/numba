@@ -4,19 +4,14 @@ from itertools import permutations
 import numpy as np
 
 import unittest
-from numba.core.compiler import compile_isolated, Flags
 from numba import jit, njit, from_dtype, typeof
-from numba.np.numpy_support import numpy_version
 from numba.core.errors import TypingError
 from numba.core import types, errors
-from numba.tests.support import (TestCase, MemoryLeakMixin, CompilationCache,
-                                 tag)
+from numba.tests.support import TestCase, MemoryLeakMixin
 
-enable_pyobj_flags = Flags()
-enable_pyobj_flags.enable_pyobject = True
+enable_pyobj_flags = {'forceobj': True}
 
-no_pyobj_flags = Flags()
-no_pyobj_flags.nrt = True
+no_pyobj_flags = {'_nrt': True, 'nopython': True}
 
 
 def from_generic(pyfuncs_to_use):
@@ -41,10 +36,11 @@ def from_generic(pyfuncs_to_use):
     return decorator
 
 
+@njit
 def array_reshape(arr, newshape):
     return arr.reshape(newshape)
 
-
+@njit
 def numpy_array_reshape(arr, newshape):
     return np.reshape(arr, newshape)
 
@@ -88,22 +84,28 @@ def transpose_array(a):
 def numpy_transpose_array(a):
     return np.transpose(a)
 
+
+@njit
 def numpy_transpose_array_axes_kwarg(arr, axes):
     return np.transpose(arr, axes=axes)
 
 
+@njit
 def numpy_transpose_array_axes_kwarg_copy(arr, axes):
     return np.transpose(arr, axes=axes).copy()
 
 
+@njit
 def array_transpose_axes(arr, axes):
     return arr.transpose(axes)
 
 
+@njit
 def array_transpose_axes_copy(arr, axes):
     return arr.transpose(axes).copy()
 
 
+@njit
 def transpose_issue_4708(m, n):
     r1 = np.reshape(np.arange(m * n * 3), (m, 3, n))
     r2 = np.reshape(np.arange(n * 3), (n, 3))
@@ -172,6 +174,9 @@ def numpy_fill_diagonal(arr, val, wrap=False):
 def numpy_shape(arr):
     return np.shape(arr)
 
+def numpy_size(arr):
+    return np.size(arr)
+
 
 def numpy_flatnonzero(a):
     return np.flatnonzero(a)
@@ -188,21 +193,15 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
     """
     Check shape-changing operations on arrays.
     """
-
-    def setUp(self):
-        super(TestArrayManipulation, self).setUp()
-        self.ccache = CompilationCache()
-
     def test_array_reshape(self):
         pyfuncs_to_use = [array_reshape, numpy_array_reshape]
 
         def generic_run(pyfunc, arr, shape):
-            cres = compile_isolated(pyfunc, (typeof(arr), typeof(shape)))
-            return cres.entry_point(arr, shape)
+            return pyfunc(arr, shape)
 
         @from_generic(pyfuncs_to_use)
         def check(pyfunc, arr, shape):
-            expected = pyfunc(arr, shape)
+            expected = pyfunc.py_func(arr, shape)
             self.memory_leak_setup()
             got = generic_run(pyfunc, arr, shape)
             self.assertPreciseEqual(got, expected)
@@ -311,14 +310,10 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
                           array_transpose_axes,
                           array_transpose_axes_copy]
 
-        def run(pyfunc, arr, axes):
-            cres = self.ccache.compile(pyfunc, (typeof(arr), typeof(axes)))
-            return cres.entry_point(arr, axes)
-
         @from_generic(pyfuncs_to_use)
         def check(pyfunc, arr, axes):
-            expected = pyfunc(arr, axes)
-            got = run(pyfunc, arr, axes)
+            expected = pyfunc.py_func(arr, axes)
+            got = pyfunc(arr, axes)
             self.assertPreciseEqual(got, expected)
             self.assertEqual(got.flags.f_contiguous,
                              expected.flags.f_contiguous)
@@ -328,21 +323,21 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         @from_generic(pyfuncs_to_use)
         def check_err_axis_repeated(pyfunc, arr, axes):
             with self.assertRaises(ValueError) as raises:
-                run(pyfunc, arr, axes)
+                pyfunc(arr, axes)
             self.assertEqual(str(raises.exception),
                              "repeated axis in transpose")
 
         @from_generic(pyfuncs_to_use)
         def check_err_axis_oob(pyfunc, arr, axes):
             with self.assertRaises(ValueError) as raises:
-                run(pyfunc, arr, axes)
+                pyfunc(arr, axes)
             self.assertEqual(str(raises.exception),
                              "axis is out of bounds for array of given dimension")
 
         @from_generic(pyfuncs_to_use)
         def check_err_invalid_args(pyfunc, arr, axes):
             with self.assertRaises((TypeError, TypingError)):
-                run(pyfunc, arr, axes)
+                pyfunc(arr, axes)
 
         arrs = [np.arange(24),
                 np.arange(24).reshape(4, 6),
@@ -362,8 +357,8 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
         @from_generic([transpose_issue_4708])
         def check_issue_4708(pyfunc, m, n):
-            expected = pyfunc(m, n)
-            got = njit(pyfunc)(m, n)
+            expected = pyfunc.py_func(m, n)
+            got = pyfunc(m, n)
             # values in arrays are equals,
             # but stronger assertions not hold (layout and strides equality)
             np.testing.assert_equal(got, expected)
@@ -451,15 +446,12 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
     def test_expand_dims(self):
         pyfunc = expand_dims
-
-        def run(arr, axis):
-            cres = self.ccache.compile(pyfunc, (typeof(arr), typeof(axis)))
-            return cres.entry_point(arr, axis)
+        cfunc = njit(pyfunc)
 
         def check(arr, axis):
             expected = pyfunc(arr, axis)
             self.memory_leak_setup()
-            got = run(arr, axis)
+            got = cfunc(arr, axis)
             self.assertPreciseEqual(got, expected)
             del got
             self.memory_leak_teardown()
@@ -557,12 +549,11 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         self.check_atleast_nd(pyfunc, cfunc)
 
     def check_as_strided(self, pyfunc):
-        def run(arr):
-            cres = self.ccache.compile(pyfunc, (typeof(arr),))
-            return cres.entry_point(arr)
+        cfunc = njit(pyfunc)
+
         def check(arr):
             expected = pyfunc(arr)
-            got = run(arr)
+            got = cfunc(arr)
             self.assertPreciseEqual(got, expected)
 
         arr = np.arange(24)
@@ -690,8 +681,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             arraytype1 = arraytype1.copy(layout='A')
 
         self.assertEqual(arraytype1.layout, layout)
-        cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit((arraytype1,), **flags)(pyfunc)
 
         expected = pyfunc(a)
         got = cfunc(a)
@@ -707,8 +697,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             # compile
             arraytype1 = typeof(a)
             self.assertEqual(arraytype1.layout, assume_layout)
-            cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
-            cfunc = cr.entry_point
+            cfunc = jit((arraytype1,), **flags)(pyfunc)
 
             expected = pyfunc(a)
             got = cfunc(a)
@@ -742,8 +731,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
         pyfunc = ravel_array_size
         arraytype1 = typeof(a)
-        cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit((arraytype1,), **flags)(pyfunc)
 
         expected = pyfunc(a)
         got = cfunc(a)
@@ -761,8 +749,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             a = np.arange(9).reshape(3, 3)
 
             arraytype1 = typeof(a)
-            cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
-            cfunc = cr.entry_point
+            cfunc = jit((arraytype1,), **flags)(pyfunc)
 
             expected = pyfunc(a)
             got = cfunc(a)
@@ -778,8 +765,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
         pyfunc = squeeze_array
         arraytype1 = typeof(a)
-        cr = compile_isolated(pyfunc, (arraytype1,), flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit((arraytype1,), **flags)(pyfunc)
 
         expected = pyfunc(a)
         got = cfunc(a)
@@ -840,14 +826,12 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             arraytype1 = from_dtype(np.dtype([('x', np.int32),
                                               ('y', np.int32)]))
             arraytype2 = types.Array(types.int32, 2, 'C')
-            compile_isolated(bad_index, (arraytype1, arraytype2),
-                             flags=no_pyobj_flags)
+            njit((arraytype1, arraytype2))(bad_index)
         self.assertIn('Unsupported array index type', str(raises.exception))
 
     def test_bad_float_index_npm(self):
         with self.assertTypingError() as raises:
-            compile_isolated(bad_float_index,
-                             (types.Array(types.float64, 2, 'C'),))
+            njit((types.Array(types.float64, 2, 'C'),))(bad_float_index)
         self.assertIn('Unsupported array index type float64',
                       str(raises.exception))
 
@@ -1236,6 +1220,30 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             cfunc('a')
 
         self.assertIn("The argument to np.shape must be array-like",
+                      str(raises.exception))
+
+    def test_size(self):
+        pyfunc = numpy_size
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(x):
+            expected = pyfunc(x)
+            got = cfunc(x)
+            self.assertPreciseEqual(got, expected)
+
+        # check arrays
+        for t in [(), (1,), (2, 3,), (4, 5, 6)]:
+            arr = np.empty(t)
+            check(arr)
+
+        # check scalar values
+        for t in [1, False, 3.14, np.int8(4), np.float32(2.718)]:
+            check(t)
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc('a')
+
+        self.assertIn("The argument to np.size must be array-like",
                       str(raises.exception))
 
     def test_flatnonzero_basic(self):

@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import warnings
+import traceback
 
 # YAML needed to use file based Numba config
 try:
@@ -69,14 +70,29 @@ def _os_supports_avx():
             return False
 
 
+_old_style_deprecation_msg = (
+    "Explicitly setting NUMBA_CAPTURED_ERRORS=old_style is deprecated. "
+    "See details at "
+    "https://numba.readthedocs.io/en/latest/reference/deprecation.html#deprecation-of-old-style-numba-captured-errors" # noqa: E501
+)
+
+
 # Choose how to handle captured errors
 def _validate_captured_errors_style(style_str):
+    # to prevent circular import
+    from numba.core.errors import NumbaPendingDeprecationWarning
+
     rendered_style = str(style_str)
-    if rendered_style not in ('new_style', 'old_style'):
+    if rendered_style not in ('new_style', 'old_style', 'default'):
         msg = ("Invalid style in NUMBA_CAPTURED_ERRORS: "
                f"{rendered_style}")
         raise ValueError(msg)
     else:
+        if rendered_style == 'default':
+            rendered_style = 'old_style'
+        elif rendered_style == 'old_style':
+            warnings.warn(_old_style_deprecation_msg,
+                          NumbaPendingDeprecationWarning)
         return rendered_style
 
 
@@ -193,10 +209,11 @@ class _EnvReloader(object):
                 return default() if callable(default) else default
             try:
                 return ctor(value)
-            except Exception as e:
+            except Exception:
                 warnings.warn(f"Environment variable '{name}' is defined but "
                               f"its associated value '{value}' could not be "
-                              f"parsed.\nThe parse failed with exception: {e}.",
+                              "parsed.\nThe parse failed with exception:\n"
+                              f"{traceback.format_exc()}",
                               RuntimeWarning)
                 return default
 
@@ -555,6 +572,11 @@ class _EnvReloader(object):
         LLVM_REFPRUNE_FLAGS = _readenv(
             "NUMBA_LLVM_REFPRUNE_FLAGS", str,
             "all" if LLVM_REFPRUNE_PASS else "",
+        )
+
+        # llvmlite memory manager
+        USE_LLVMLITE_MEMORY_MANAGER = _readenv(
+            "NUMBA_USE_LLVMLITE_MEMORY_MANAGER", int, None
         )
 
         # Timing support.

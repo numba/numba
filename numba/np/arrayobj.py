@@ -17,7 +17,8 @@ from numba import pndindex, literal_unroll
 from numba.core import types, typing, errors, cgutils, extending
 from numba.np.numpy_support import (as_dtype, from_dtype, carray, farray,
                                     is_contiguous, is_fortran,
-                                    check_is_integer, type_is_scalar)
+                                    check_is_integer, type_is_scalar,
+                                    lt_complex, lt_floats)
 from numba.np.numpy_support import type_can_asarray, is_nonelike, numpy_version
 from numba.core.imputils import (lower_builtin, lower_getattr,
                                  lower_getattr_generic,
@@ -586,21 +587,22 @@ def array_item(context, builder, sig, args):
     return load_item(context, builder, aryty, ary.data)
 
 
-@lower_builtin("array.itemset", types.Array, types.Any)
-def array_itemset(context, builder, sig, args):
-    aryty, valty = sig.args
-    ary, val = args
-    assert valty == aryty.dtype
-    ary = make_array(aryty)(context, builder, ary)
+if numpy_version < (2, 0):
+    @lower_builtin("array.itemset", types.Array, types.Any)
+    def array_itemset(context, builder, sig, args):
+        aryty, valty = sig.args
+        ary, val = args
+        assert valty == aryty.dtype
+        ary = make_array(aryty)(context, builder, ary)
 
-    nitems = ary.nitems
-    with builder.if_then(builder.icmp_signed('!=', nitems, nitems.type(1)),
-                         likely=False):
-        msg = "itemset(): can only write to an array of size 1"
-        context.call_conv.return_user_exc(builder, ValueError, (msg,))
+        nitems = ary.nitems
+        with builder.if_then(builder.icmp_signed('!=', nitems, nitems.type(1)),
+                             likely=False):
+            msg = "itemset(): can only write to an array of size 1"
+            context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
-    store_item(context, builder, aryty, val, ary.data)
-    return context.get_dummy_value()
+        store_item(context, builder, aryty, val, ary.data)
+        return context.get_dummy_value()
 
 
 # ------------------------------------------------------------------------------
@@ -2555,6 +2557,16 @@ def np_shape(a):
         return np.asarray(a).shape
     return impl
 
+
+@overload(np.size)
+def np_size(a):
+    if not type_can_asarray(a):
+        raise errors.TypingError("The argument to np.size must be array-like")
+
+    def impl(a):
+        return np.asarray(a).size
+    return impl
+
 # ------------------------------------------------------------------------------
 
 
@@ -4151,6 +4163,13 @@ def iternext_numpy_nditer2(context, builder, sig, args, result):
     nditer.iternext_specific(context, builder, result)
 
 
+@lower_builtin(operator.eq, types.DType, types.DType)
+def dtype_eq_impl(context, builder, sig, args):
+    arg1, arg2 = sig.args
+    res = ir.Constant(ir.IntType(1), int(arg1 == arg2))
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
 # ------------------------------------------------------------------------------
 # Numpy array constructors
 
@@ -4795,7 +4814,7 @@ def _arange_dtype(*args):
 
 
 @overload(np.arange)
-def np_arange(start, stop=None, step=None, dtype=None):
+def np_arange(start, / ,stop=None, step=None, dtype=None):
     if isinstance(stop, types.Optional):
         stop = stop.type
     if isinstance(step, types.Optional):
@@ -4829,7 +4848,7 @@ def np_arange(start, stop=None, step=None, dtype=None):
     stop_value = getattr(stop, "literal_value", None)
     step_value = getattr(step, "literal_value", None)
 
-    def impl(start, stop=None, step=None, dtype=None):
+    def impl(start, /, stop=None, step=None, dtype=None):
         # Allow for improved performance if given literal arguments.
         lit_start = start_value if start_value is not None else start
         lit_stop = stop_value if stop_value is not None else stop
@@ -6095,6 +6114,10 @@ def impl_np_vstack(tup):
         return impl
 
 
+if numpy_version >= (2, 0):
+    overload(np.row_stack)(impl_np_vstack)
+
+
 @intrinsic
 def _np_dstack(typingctx, tup):
     ret = NdStack_typer(typingctx, "np.dstack", tup, 3)
@@ -6399,42 +6422,52 @@ def numpy_dsplit(ary, indices_or_sections):
 _sorts = {}
 
 
-def lt_floats(a, b):
-    # Adapted from NumPy commit 717c7acf which introduced the behavior of
-    # putting NaNs at the end.
-    # The code is later moved to numpy/core/src/npysort/npysort_common.h
-    # This info is gathered as of NumPy commit d8c09c50
-    return a < b or (np.isnan(b) and not np.isnan(a))
+def default_lt(a, b):
+    """
+    Trivial comparison function between two keys.
+    """
+    return a < b
 
 
-def get_sort_func(kind, is_float, is_argsort=False):
+def get_sort_func(kind, lt_impl, is_argsort=False):
     """
     Get a sort implementation of the given kind.
     """
-    key = kind, is_float, is_argsort
+    key = kind, lt_impl.__name__, is_argsort
+
     try:
         return _sorts[key]
     except KeyError:
         if kind == 'quicksort':
             sort = quicksort.make_jit_quicksort(
-                lt=lt_floats if is_float else None,
+                lt=lt_impl,
                 is_argsort=is_argsort,
                 is_np_array=True)
             func = sort.run_quicksort
         elif kind == 'mergesort':
             sort = mergesort.make_jit_mergesort(
-                lt=lt_floats if is_float else None,
+                lt=lt_impl,
                 is_argsort=is_argsort)
             func = sort.run_mergesort
         _sorts[key] = func
         return func
 
 
+def lt_implementation(dtype):
+    if isinstance(dtype, types.Float):
+        return lt_floats
+    elif isinstance(dtype, types.Complex):
+        return lt_complex
+    else:
+        return default_lt
+
+
 @lower_builtin("array.sort", types.Array)
 def array_sort(context, builder, sig, args):
     arytype = sig.args[0]
+
     sort_func = get_sort_func(kind='quicksort',
-                              is_float=isinstance(arytype.dtype, types.Float))
+                              lt_impl=lt_implementation(arytype.dtype))
 
     def array_sort_impl(arr):
         # Note we clobber the return value
@@ -6460,8 +6493,9 @@ def impl_np_sort(a):
 @lower_builtin(np.argsort, types.Array, types.StringLiteral)
 def array_argsort(context, builder, sig, args):
     arytype, kind = sig.args
+
     sort_func = get_sort_func(kind=kind.literal_value,
-                              is_float=isinstance(arytype.dtype, types.Float),
+                              lt_impl=lt_implementation(arytype.dtype),
                               is_argsort=True)
 
     def array_argsort_impl(arr):

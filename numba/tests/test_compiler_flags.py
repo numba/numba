@@ -90,7 +90,7 @@ class TestFlagMangling(TestCase):
         argtypes = types.int32,
         flags = Flags()
         flags.nrt = True
-        flags.target_backend = "myhardware"
+        flags.inline = "always"
         name = default_mangler(
             fname, argtypes, abi_tags=[flags.get_mangle_string()],
         )

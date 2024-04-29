@@ -27,11 +27,7 @@ from numba.core.config import (PYVERSION, MACHINE_BITS, # noqa: F401
 from numba.core import config
 from numba.core import types
 
-if PYVERSION <= (3, 8):
-    # This is needed for Python-3.8 and before due to the lack of PEP-585.
-    from typing import MutableSet, MutableMapping, Mapping, Sequence
-else:
-    from collections.abc import Mapping, Sequence, MutableSet, MutableMapping
+from collections.abc import Mapping, Sequence, MutableSet, MutableMapping
 
 
 def erase_traceback(exc_value):
@@ -387,6 +383,28 @@ def order_by_target_specificity(target, templates, fnkey=''):
 
 
 T = _tp.TypeVar('T')
+
+
+class OrderedSet(MutableSet[T]):
+
+    def __init__(self, iterable: _tp.Iterable[T] = ()):
+        # Just uses a dictionary under-the-hood to maintain insertion order.
+        self._data = dict.fromkeys(iterable, None)
+
+    def __contains__(self, key):
+        return key in self._data
+
+    def __iter__(self):
+        return iter(self._data)
+
+    def __len__(self):
+        return len(self._data)
+
+    def add(self, item):
+        self._data[item] = None
+
+    def discard(self, item):
+        self._data.pop(item, None)
 
 
 class MutableSortedSet(MutableSet[T], _tp.Generic[T]):
@@ -751,3 +769,31 @@ def get_hashable_key(value):
         return id(value)
     else:
         return value
+
+
+class threadsafe_cached_property(functools.cached_property):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._lock = threading.RLock()
+
+    def __get__(self, *args, **kwargs):
+        with self._lock:
+            return super().__get__(*args, **kwargs)
+
+
+def dump_llvm(fndesc, module):
+    print(("LLVM DUMP %s" % fndesc).center(80, '-'))
+    if config.HIGHLIGHT_DUMPS:
+        try:
+            from pygments import highlight
+            from pygments.lexers import LlvmLexer as lexer
+            from pygments.formatters import Terminal256Formatter
+            from numba.misc.dump_style import by_colorscheme
+            print(highlight(module.__repr__(), lexer(),
+                            Terminal256Formatter( style=by_colorscheme())))
+        except ImportError:
+            msg = "Please install pygments to see highlighted dumps"
+            raise ValueError(msg)
+    else:
+        print(module)
+    print('=' * 80)

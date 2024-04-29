@@ -319,6 +319,9 @@ Supported NumPy features:
   * :func:`numpy.less_equal`
   * :func:`numpy.not_equal`
   * :func:`numpy.equal`
+  * :func:`numpy.log`
+  * :func:`numpy.log2`
+  * :func:`numpy.log10`
   * :func:`numpy.logical_and`
   * :func:`numpy.logical_or`
   * :func:`numpy.logical_xor`
