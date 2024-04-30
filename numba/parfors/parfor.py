@@ -32,7 +32,8 @@ import numba.core.ir
 from numba.core import types, typing, utils, errors, ir, analysis, postproc, rewrites, typeinfer, config, ir_utils
 from numba import prange, pndindex
 from numba.np.npdatetime_helpers import datetime_minimum, datetime_maximum
-from numba.np.numpy_support import as_dtype, numpy_version
+from numba.np.numpy_support import as_dtype
+from numba.np.np_global_consts import numpy_version
 from numba.core.typing.templates import infer_global, AbstractTemplate
 from numba.stencils.stencilparfor import StencilPass
 from numba.core.extending import register_jitable, lower_builtin

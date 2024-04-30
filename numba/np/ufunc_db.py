@@ -13,7 +13,6 @@ import sys
 
 # this is lazily initialized to avoid circular imports
 IS_WIN32 = sys.platform.startswith('win32')
-numpy_version = tuple(map(int, np.__version__.split('.')[:2]))
 _ufunc_db = None
 
 
@@ -51,7 +50,7 @@ def _fill_ufunc_db(ufunc_db):
     # module.
     from numba.np import npyfuncs
     from numba.np.math import cmathimpl, mathimpl, numbers
-    from numba.np.numpy_support import numpy_version
+    from numba.np.np_global_consts import numpy_version
 
     ufunc_db[np.isnat] = {
         # datetime & timedelta

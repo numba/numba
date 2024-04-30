@@ -5,7 +5,7 @@ import sys
 import unittest
 from numba.tests.support import captured_stdout
 from numba.core.config import IS_WIN32
-from numba.np.numpy_support import numpy_version
+from numba.np.np_global_consts import numpy_version
 
 
 class MatplotlibBlocker:

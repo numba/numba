@@ -3,7 +3,7 @@ The Device Array API is not implemented in the simulator. This module provides
 stubs to allow tests to import correctly.
 '''
 from contextlib import contextmanager
-from numba.np.numpy_support import numpy_version
+from numba.np.np_global_consts import numpy_version
 
 import numpy as np
 

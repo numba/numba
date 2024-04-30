@@ -12,7 +12,8 @@ from numba.core import types, cgutils
 from numba.core.cgutils import create_constant_array
 from numba.core.imputils import (lower_builtin, lower_constant,
                                  impl_ret_untracked, lower_cast)
-from numba.np import npdatetime_helpers, numpy_support, npyfuncs
+from numba.np import npdatetime_helpers, numpy_support
+from numba.np.npyfuncs import np_datetime_isnat_impl
 from numba.extending import overload_method
 from numba.core.config import IS_32BITS
 from numba.core.errors import LoweringError
@@ -795,7 +796,7 @@ def _cast_to_timedelta(context, builder, val):
 @lower_builtin(np.isnat, types.NPDatetime)
 @lower_builtin(np.isnat, types.NPTimedelta)
 def _np_isnat_impl(context, builder, sig, args):
-    return npyfuncs.np_datetime_isnat_impl(context, builder, sig, args)
+    return np_datetime_isnat_impl(context, builder, sig, args)
 
 
 @lower_cast(types.NPDatetime, types.Integer)
