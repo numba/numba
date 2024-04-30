@@ -424,7 +424,7 @@ class _EnvReloader(object):
 
         CAPTURED_ERRORS = _readenv("NUMBA_CAPTURED_ERRORS",
                                    _validate_captured_errors_style,
-                                   'default')
+                                   'new_style')
 
         # CUDA Configs
 
