@@ -1,0 +1,5 @@
+Deprecate `old_style` error-capturing
+-------------------------------------
+
+Per deprecation schedule, `old_style` error-capturing is deprecated and the
+`default` is now `new_style`.
