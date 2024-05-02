@@ -1,0 +1,4 @@
+Support math.log, math.log2 and math.log10 in CUDA
+--------------------------------------------------
+
+CUDA target now supports ``np.log``, ``np.log2`` and ``np.log10``.

@@ -309,7 +309,7 @@ class TestDispatcher(CUDATestCase):
 
         # The two best matches are output in the error message, as well
         # as the actual argument types.
-        self.assertRegexpMatches(
+        self.assertRegex(
             str(cm.exception),
             r"Ambiguous overloading for <function add_kernel [^>]*> "
             r"\(Array\(float64, 1, 'C', False, aligned=True\), float64,"

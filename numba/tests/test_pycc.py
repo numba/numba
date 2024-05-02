@@ -1,5 +1,5 @@
 import contextlib
-import imp
+import importlib
 import os
 import shutil
 import subprocess
@@ -94,7 +94,7 @@ class TestCC(BasePYCCTest):
         self.skip_if_no_external_compiler() # external compiler needed
         from numba.tests import compile_with_pycc
         self._test_module = compile_with_pycc
-        imp.reload(self._test_module)
+        importlib.reload(self._test_module)
 
     @contextlib.contextmanager
     def check_cc_compiled(self, cc):
@@ -173,9 +173,6 @@ class TestCC(BasePYCCTest):
         # Compiling for the host CPU should always succeed
         self.check_compile_for_cpu("host")
 
-    @unittest.skipIf(sys.platform == 'darwin' and
-                     utils.PYVERSION == (3, 8),
-                     'distutils incorrectly using gcc on python 3.8 builds')
     def test_compile_helperlib(self):
         with self.check_cc_compiled(self._test_module.cc_helperlib) as lib:
             res = lib.power(2, 7)

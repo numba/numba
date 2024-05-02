@@ -116,10 +116,11 @@ jit_module({jit_options})
         with create_temp_module(source_lines=source_lines,
                                 **jit_options) as test_module:
             self.assertEqual(test_module.add.targetoptions, jit_options)
-            # Test that manual jit-wrapping overrides jit_module options
+            # Test that manual jit-wrapping overrides jit_module options,
+            # `forceobj` will automatically apply `nopython=False`.
             self.assertEqual(test_module.inc.targetoptions,
                              {'nogil': True, 'forceobj': True,
-                              'boundscheck': None})
+                              'boundscheck': None, 'nopython': False})
 
     def test_jit_module_logging_output(self):
         logger = logging.getLogger('numba.core.decorators')

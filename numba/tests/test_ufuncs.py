@@ -18,6 +18,7 @@ from numba.np import numpy_support
 from numba.core.registry import cpu_target
 from numba.core.base import BaseContext
 from numba.np import ufunc_db
+from numba.tests.support import expected_failure_np2
 
 is32bits = tuple.__itemsize__ == 4
 iswindows = sys.platform.startswith('win32')
@@ -255,6 +256,56 @@ class BasicUFuncTest(BaseUFuncTest):
                               input_tuple, result_i, expected_i)
                     else:
                         raise
+
+    def signed_unsigned_cmp_test(self, comparison_ufunc):
+        self.basic_ufunc_test(comparison_ufunc)
+
+        if numpy_support.numpy_version < (1, 25):
+            return
+
+        # Test additional implementations that specifically handle signed /
+        # unsigned comparisons added in NumPy 1.25:
+        # https://github.com/numpy/numpy/pull/23713
+        additional_inputs = (
+            (np.int64(-1), np.uint64(0)),
+            (np.int64(-1), np.uint64(1)),
+            (np.int64(0), np.uint64(0)),
+            (np.int64(0), np.uint64(1)),
+            (np.int64(1), np.uint64(0)),
+            (np.int64(1), np.uint64(1)),
+
+            (np.uint64(0), np.int64(-1)),
+            (np.uint64(0), np.int64(0)),
+            (np.uint64(0), np.int64(1)),
+            (np.uint64(1), np.int64(-1)),
+            (np.uint64(1), np.int64(0)),
+            (np.uint64(1), np.int64(1)),
+
+            (np.array([-1, -1, 0, 0, 1, 1], dtype=np.int64),
+             np.array([0, 1, 0, 1, 0, 1], dtype=np.uint64)),
+
+            (np.array([0, 1, 0, 1, 0, 1], dtype=np.uint64),
+             np.array([-1, -1, 0, 0, 1, 1], dtype=np.int64))
+        )
+
+        pyfunc = self._make_ufunc_usecase(comparison_ufunc)
+
+        for a, b in additional_inputs:
+            input_types = (typeof(a), typeof(b))
+            output_type = types.Array(types.bool_, 1, 'C')
+            argtys = input_types + (output_type,)
+            cfunc = self._compile(pyfunc, argtys)
+
+            if isinstance(a, np.ndarray):
+                result = np.zeros(a.shape, dtype=np.bool_)
+            else:
+                result = np.zeros(1, dtype=np.bool_)
+
+            expected = np.zeros_like(result)
+
+            pyfunc(a, b, expected)
+            cfunc(a, b, result)
+            np.testing.assert_equal(expected, result)
 
 
 class TestUFuncs(BasicUFuncTest, TestCase):
@@ -505,22 +556,22 @@ class TestUFuncs(BasicUFuncTest, TestCase):
     ############################################################################
     # Comparison functions
     def test_greater_ufunc(self):
-        self.basic_ufunc_test(np.greater)
+        self.signed_unsigned_cmp_test(np.greater)
 
     def test_greater_equal_ufunc(self):
-        self.basic_ufunc_test(np.greater_equal)
+        self.signed_unsigned_cmp_test(np.greater_equal)
 
     def test_less_ufunc(self):
-        self.basic_ufunc_test(np.less)
+        self.signed_unsigned_cmp_test(np.less)
 
     def test_less_equal_ufunc(self):
-        self.basic_ufunc_test(np.less_equal)
+        self.signed_unsigned_cmp_test(np.less_equal)
 
     def test_not_equal_ufunc(self):
-        self.basic_ufunc_test(np.not_equal)
+        self.signed_unsigned_cmp_test(np.not_equal)
 
     def test_equal_ufunc(self):
-        self.basic_ufunc_test(np.equal)
+        self.signed_unsigned_cmp_test(np.equal)
 
     def test_logical_and_ufunc(self):
         self.basic_ufunc_test(np.logical_and)
@@ -961,9 +1012,14 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
         return self.binary_int_op_test(*args, **kws)
 
     def inplace_op_test(self, operator, lhs_values, rhs_values,
-                        lhs_dtypes, rhs_dtypes):
+                        lhs_dtypes, rhs_dtypes, precise=True):
         operator_func = _make_inplace_ufunc_op_usecase(operator)
         pyfunc = operator_func
+
+        if precise:
+            assertion = self.assertPreciseEqual
+        else:
+            assertion = np.testing.assert_allclose
 
         # The left operand can only be an array, while the right operand
         # can be either an array or a scalar
@@ -984,14 +1040,16 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
             pyfunc(expected, rhs)
             got = lhs.copy()
             cfunc(got, rhs)
-            self.assertPreciseEqual(got, expected)
+            assertion(got, expected)
 
-    def inplace_float_op_test(self, operator, lhs_values, rhs_values):
+    def inplace_float_op_test(self, operator, lhs_values, rhs_values,
+                              precise=True):
         # Also accept integer inputs for the right operand (they should
         # be converted to float).
         return self.inplace_op_test(operator, lhs_values, rhs_values,
                                     (np.float32, np.float64),
-                                    (np.float32, np.float64, np.int64))
+                                    (np.float32, np.float64, np.int64),
+                                    precise=precise)
 
     def inplace_int_op_test(self, operator, lhs_values, rhs_values):
         self.inplace_op_test(operator, lhs_values, rhs_values,
@@ -1049,8 +1107,10 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
         self.inplace_float_op_test(operator.imod, [-1, 1.5, 3], [-5, 2, 2.5])
 
     def test_inplace_pow(self):
-        self.inplace_float_op_test('**=', [-1, 1.5, 3], [-5, 2, 2.5])
-        self.inplace_float_op_test(operator.ipow, [-1, 1.5, 3], [-5, 2, 2.5])
+        self.inplace_float_op_test('**=', [-1, 1.5, 3], [-5, 2, 2.5],
+                                   precise=False)
+        self.inplace_float_op_test(operator.ipow, [-1, 1.5, 3], [-5, 2, 2.5],
+                                   precise=False)
 
     def test_inplace_and(self):
         self.inplace_bitwise_op_test('&=', [0, 1, 2, 3, 51],
@@ -1288,15 +1348,6 @@ class TestUfuncIssues(TestCase):
         a = np.arange(10, dtype='f8')
         b = np.arange(10, dtype='f8')
         self.assertPreciseEqual(foo(a, b), (a + b) + (a + b))
-
-    @unittest.skipIf(numpy_support.numpy_version >= (1, 22),
-                     "Complex floor division support removed in NumPy 1.22")
-    def test_issue_713(self):
-        def foo(x,y):
-            return np.floor_divide(x,y)
-
-        cfunc = njit((types.complex128, types.complex128))(foo)
-        self.assertEqual(foo(1j, 1j), cfunc(1j, 1j))
 
     def test_issue_2006(self):
         """
@@ -1645,6 +1696,8 @@ class TestLoopTypesComplex(_LoopTypesTester):
 
 
 TestLoopTypesComplex.autogenerate()
+expected_failure_np2(TestLoopTypesComplex.test_sign_F_F)
+expected_failure_np2(TestLoopTypesComplex.test_sign_D_D)
 
 
 class TestLoopTypesDatetime(_LoopTypesTester):

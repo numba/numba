@@ -422,6 +422,22 @@ The following reduction functions are supported:
 * :func:`numpy.quantile` (only the 2 first arguments, complex dtypes
   unsupported)
 
+Polynomials
+-----------
+
+The following polynomial classes are supported:
+* :class:`numpy.polynomial.polynomial.Polynomial` (only the first three arguments)
+
+The following polynomial functions are supported:
+* :func:`numpy.polynomial.polynomial.polyadd()`
+* :func:`numpy.polynomial.polynomial.polydiv()`
+* :func:`numpy.polynomial.polynomial.polyint()` (only the 2 first arguments)
+* :func:`numpy.polynomial.polynomial.polymul()`
+* :func:`numpy.polynomial.polynomial.polysub()`
+* :func:`numpy.polynomial.polynomial.polyval()` (the argument ``tensor`` must be a boolean constant)
+* :func:`numpy.polynomial.polyutils.as_series()`
+* :func:`numpy.polynomial.polyutils.trimseq()`
+
 Other functions
 ---------------
 
@@ -467,7 +483,9 @@ The following top-level functions are supported:
 
 * :func:`numpy.delete` (only the 2 first arguments)
 * :func:`numpy.diag`
+* :func:`numpy.diagflat`
 * :func:`numpy.digitize`
+* :func:`numpy.dsplit`
 * :func:`numpy.dstack`
 * :func:`numpy.dtype` (only the first argument)
 * :func:`numpy.ediff1d`
@@ -485,11 +503,14 @@ The following top-level functions are supported:
 * :func:`numpy.frombuffer` (only the 2 first arguments)
 * :func:`numpy.full` (only the 3 first arguments)
 * :func:`numpy.full_like` (only the 3 first arguments)
+* :func:`numpy.geomspace` (only the 3 first arguments)
 * :func:`numpy.hamming`
 * :func:`numpy.hanning`
 * :func:`numpy.histogram` (only the 3 first arguments)
+* :func:`numpy.hsplit`
 * :func:`numpy.hstack`
 * :func:`numpy.identity`
+* :func:`numpy.indices` (only the first argument)
 * :func:`numpy.isclose`
 * :func:`numpy.kaiser`
 * :func:`numpy.iscomplex`
@@ -514,11 +535,13 @@ The following top-level functions are supported:
 * :func:`numpy.ravel` (no order argument; 'C' order only)
 * :func:`numpy.repeat` (no axis argument)
 * :func:`numpy.reshape` (no order argument; 'C' order only)
+* :func:`numpy.resize`
 * :func:`numpy.roll` (only the 2 first arguments; second argument ``shift``
   must be an integer)
 * :func:`numpy.roots`
 * :func:`numpy.rot90` (only the 2 first arguments)
 * :func:`numpy.round_`
+* :func:`numpy.row_stack`
 * :func:`numpy.searchsorted` (only the 3 first arguments)
 * :func:`numpy.select` (only using homogeneous lists or tuples for the first
   two arguments, condlist and choicelist). Additionally, these two arguments
@@ -538,12 +561,15 @@ The following top-level functions are supported:
 * :func:`numpy.tril` (second argument ``k`` must be an integer)
 * :func:`numpy.tril_indices` (all arguments must be integer)
 * :func:`numpy.tril_indices_from` (second argument ``k`` must be an integer)
+* :func:`numpy.trim_zeros` (for NumPy array arguments only)
 * :func:`numpy.triu` (second argument ``k`` must be an integer)
 * :func:`numpy.triu_indices` (all arguments must be integer)
 * :func:`numpy.triu_indices_from` (second argument ``k`` must be an integer)
 * :func:`numpy.union1d` (For unicode arrays, only supports arrays of the same dtype)
 * :func:`numpy.unique` (only the first argument)
+* :func:`numpy.unwrap` (third argument ``axis`` must equal -1)
 * :func:`numpy.vander`
+* :func:`numpy.vsplit`
 * :func:`numpy.vstack`
 * :func:`numpy.where`
 * :func:`numpy.zeros` (only the 2 first arguments)
@@ -974,15 +1000,13 @@ Floating functions
  copysign            Yes          Yes
  nextafter           Yes          Yes
  modf                Yes          No
- ldexp               Yes (*)      Yes
+ ldexp               Yes          Yes
  frexp               Yes          No
  floor               Yes          Yes
  ceil                Yes          Yes
  trunc               Yes          Yes
  spacing             Yes          Yes
 ==============  =============  ===============
-
-(\*) not supported on windows 32 bit
 
 
 Datetime functions

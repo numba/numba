@@ -105,17 +105,7 @@ class _Kernel(serialize.ReduceMixin):
                if (f'__numba_wrapper_{fn}' in lib.get_asm_str())]
 
         if res:
-            if not config.CUDA_USE_NVIDIA_BINDING:
-                s = "https://numba.readthedocs.io/en/stable/cuda/bindings.html"
-                msg = ("Use of float16 requires the use of the NVIDIA CUDA "
-                       "bindings and setting the "
-                       "NUMBA_CUDA_USE_NVIDIA_BINDING environment variable to "
-                       "1. Relevant documentation is available here:\n"
-                       f"{s}")
-                raise NotImplementedError(msg)
-
             # Path to the source containing the foreign function
-
             basedir = os.path.dirname(os.path.abspath(__file__))
             functions_cu_path = os.path.join(basedir,
                                              'cpp_function_wrappers.cu')
@@ -248,6 +238,14 @@ class _Kernel(serialize.ReduceMixin):
         Returns the PTX code for this kernel.
         '''
         return self._codelibrary.get_asm_str(cc=cc)
+
+    def inspect_sass_cfg(self):
+        '''
+        Returns the CFG of the SASS for this kernel.
+
+        Requires nvdisasm to be available on the PATH.
+        '''
+        return self._codelibrary.get_sass_cfg()
 
     def inspect_sass(self):
         '''
@@ -561,6 +559,14 @@ class CUDACache(Cache):
     Implements a cache that saves and loads CUDA kernels and compile results.
     """
     _impl_class = CUDACacheImpl
+
+    def load_overload(self, sig, target_context):
+        # Loading an overload refreshes the context to ensure it is
+        # initialized. To initialize the correct (i.e. CUDA) target, we need to
+        # enforce that the current target is the CUDA target.
+        from numba.core.target_extension import target_override
+        with target_override('cuda'):
+            return super().load_overload(sig, target_context)
 
 
 class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
@@ -963,6 +969,27 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
             else:
                 return {sig: overload.inspect_asm(cc)
                         for sig, overload in self.overloads.items()}
+
+    def inspect_sass_cfg(self, signature=None):
+        '''
+        Return this kernel's CFG for the device in the current context.
+
+        :param signature: A tuple of argument types.
+        :return: The CFG for the given signature, or a dict of CFGs
+                 for all previously-encountered signatures.
+
+        The CFG for the device in the current context is returned.
+
+        Requires nvdisasm to be available on the PATH.
+        '''
+        if self.targetoptions.get('device'):
+            raise RuntimeError('Cannot get the CFG of a device function')
+
+        if signature is not None:
+            return self.overloads[signature].inspect_sass_cfg()
+        else:
+            return {sig: defn.inspect_sass_cfg()
+                    for sig, defn in self.overloads.items()}
 
     def inspect_sass(self, signature=None):
         '''

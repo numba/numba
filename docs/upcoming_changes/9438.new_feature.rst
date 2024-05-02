@@ -1,0 +1,4 @@
+Add math.nextafter support for nopython mode.
+---------------------------------------------
+
+Support ``math.nextafter`` in nopython mode.

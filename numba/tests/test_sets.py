@@ -3,19 +3,14 @@ import unittest
 from collections import namedtuple
 import contextlib
 import itertools
-import math
 import random
-import sys
 from numba.core.errors import TypingError
 
 import numpy as np
 
-from numba.core.compiler import compile_isolated, Flags, errors
-from numba import jit
-from numba.core import types
-import unittest
+from numba import jit, njit
 from numba.tests.support import (TestCase, enable_pyobj_flags, MemoryLeakMixin,
-                                 tag, compile_function)
+                                 compile_function)
 
 
 Point = namedtuple('Point', ('a', 'b'))
@@ -260,7 +255,7 @@ class BaseTest(MemoryLeakMixin, TestCase):
         self.rnd = random.Random(42)
 
     def _range(self, stop):
-        return np.arange(int(stop))
+        return np.arange(int(stop)).tolist()
 
     def _random_choice(self, seq, n):
         """
@@ -309,16 +304,22 @@ class BaseTest(MemoryLeakMixin, TestCase):
 
 class TestSetLiterals(BaseTest):
 
-    def test_build_set(self, flags=enable_pyobj_flags):
+    def check(self, pyfunc):
+        cfunc = njit(pyfunc)
+        expected = pyfunc()
+        got = cfunc()
+        self.assertPreciseEqual(expected, got)
+        return got, expected
+
+    def test_build_set(self):
         pyfunc = set_literal_return_usecase((1, 2, 3, 2))
-        self.run_nullary_func(pyfunc, flags=flags)
+        self.check(pyfunc)
 
     def test_build_heterogeneous_set(self, flags=enable_pyobj_flags):
         pyfunc = set_literal_return_usecase((1, 2.0, 3j, 2))
-        self.run_nullary_func(pyfunc, flags=flags)
+        self.check(pyfunc)
         pyfunc = set_literal_return_usecase((2.0, 2))
-        got, expected = self.run_nullary_func(pyfunc, flags=flags)
-
+        got, expected = self.check(pyfunc)
         self.assertIs(type(got.pop()), type(expected.pop()))
 
     def test_build_set_nopython(self):
@@ -716,7 +717,7 @@ class TestUnboxing(BaseTest):
         with self.assertRaises(TypeError) as raises:
             yield
         if msg is not None:
-            self.assertRegexpMatches(str(raises.exception), msg)
+            self.assertRegex(str(raises.exception), msg)
 
     def check_unary(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)

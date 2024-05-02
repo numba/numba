@@ -176,6 +176,7 @@ unary_math_intr(math.fabs, 'llvm.fabs')
 exp_impl = unary_math_intr(math.exp, 'llvm.exp')
 log_impl = unary_math_intr(math.log, 'llvm.log')
 log10_impl = unary_math_intr(math.log10, 'llvm.log10')
+log2_impl = unary_math_intr(math.log2, 'llvm.log2')
 sin_impl = unary_math_intr(math.sin, 'llvm.sin')
 cos_impl = unary_math_intr(math.cos, 'llvm.cos')
 
@@ -406,6 +407,21 @@ def pow_impl(context, builder, sig, args):
 
 # -----------------------------------------------------------------------------
 
+@lower(math.nextafter, types.Float, types.Float)
+def nextafter_impl(context, builder, sig, args):
+    assert len(args) == 2
+    ty = sig.args[0]
+    lty = context.get_value_type(ty)
+    func_name = {
+        types.float32: "nextafterf",
+        types.float64: "nextafter"
+        }[ty]
+    fnty = llvmlite.ir.FunctionType(lty, (lty, lty))
+    fn = cgutils.insert_pure_function(builder.module, fnty, name=func_name)
+    res = builder.call(fn, args)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+# -----------------------------------------------------------------------------
 
 def _unsigned(T):
     """Convert integer to unsigned integer of equivalent width."""

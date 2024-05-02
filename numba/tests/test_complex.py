@@ -1,18 +1,14 @@
-import cmath
 import itertools
 import math
 import sys
 
-from numba.core.compiler import compile_isolated, Flags, utils
-from numba.core import types
-from numba.tests.support import TestCase, tag
+from numba import jit, types
+from numba.tests.support import TestCase
 from .complex_usecases import *
 import unittest
 
-enable_pyobj_flags = Flags()
-enable_pyobj_flags.enable_pyobject = True
-
-no_pyobj_flags = Flags()
+enable_pyobj_flags = {'forceobj': True}
+no_pyobj_flags = {'nopython': True}
 
 
 class BaseComplexTest(object):
@@ -39,8 +35,7 @@ class BaseComplexTest(object):
     def run_unary(self, pyfunc, x_types, x_values, ulps=1, abs_tol=None,
                   flags=enable_pyobj_flags):
         for tx in x_types:
-            cr = compile_isolated(pyfunc, [tx], flags=flags)
-            cfunc = cr.entry_point
+            cfunc = jit((tx,), **flags)(pyfunc)
             prec = 'single' if tx in (types.float32, types.complex64) else 'double'
             for vx in x_values:
                 try:
@@ -56,8 +51,7 @@ class BaseComplexTest(object):
     def run_binary(self, pyfunc, value_types, values, ulps=1,
                    flags=enable_pyobj_flags):
         for tx, ty in value_types:
-            cr = compile_isolated(pyfunc, [tx, ty], flags=flags)
-            cfunc = cr.entry_point
+            cfunc = jit((tx, ty), **flags)(pyfunc)
             prec = ('single'
                     if set([tx, ty]) & set([types.float32, types.complex64])
                     else 'double')

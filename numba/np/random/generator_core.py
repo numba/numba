@@ -7,7 +7,6 @@ from numba.core import cgutils, types
 from numba.core.extending import (intrinsic, make_attribute_wrapper, models,
                                   overload, register_jitable,
                                   register_model)
-from numba.np.numpy_support import numpy_version
 from numba import float32
 
 
@@ -114,14 +113,8 @@ _generate_next_binding(next_uint32, types.uint32)
 _generate_next_binding(next_uint64, types.uint64)
 
 
-# This is for keeping parity with: https://github.com/numpy/numpy/pull/20314
-if numpy_version >= (1, 22):
-    @register_jitable
-    def next_float(bitgen):
-        return float32(float32(next_uint32(bitgen) >> 8)
-                       * float32(1.0) / float32(16777216.0))
-else:
-    @register_jitable
-    def next_float(bitgen):
-        return float32(float32(next_uint32(bitgen) >> 9)
-                       * float32(1.0) / float32(8388608.0))
+# See: https://github.com/numpy/numpy/pull/20314
+@register_jitable
+def next_float(bitgen):
+    return float32(float32(next_uint32(bitgen) >> 8)
+                   * float32(1.0) / float32(16777216.0))

@@ -3,6 +3,7 @@ Tests gdb bindings
 """
 import os
 import platform
+import re
 import subprocess
 import sys
 import threading
@@ -193,6 +194,11 @@ class TestGdbBinding(TestCase):
         def test_template(self):
             o, e = self.run_test_in_separate_process(injected_method)
             dbgmsg = f'\nSTDOUT={o}\nSTDERR={e}\n'
+            # If the test was skipped in the subprocess, then mark this as a
+            # skipped test.
+            m = re.search(r"\.\.\. skipped '(.*?)'", e)
+            if m is not None:
+                self.skipTest(m.group(1))
             self.assertIn('GNU gdb', o, msg=dbgmsg)
             self.assertIn('OK', e, msg=dbgmsg)
             self.assertNotIn('FAIL', e, msg=dbgmsg)

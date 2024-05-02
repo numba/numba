@@ -554,12 +554,7 @@ class Dispatcher(WeakType, Callable, Dummy):
         A strong reference to the underlying numba.dispatcher.Dispatcher
         instance.
         """
-        disp = self._get_object()
-        # TODO: improve interface to avoid the dynamic check here
-        if hasattr(disp, "_get_dispatcher_for_current_target"):
-            return disp._get_dispatcher_for_current_target()
-        else:
-            return disp
+        return self._get_object()
 
     def get_overload(self, sig):
         """
@@ -578,7 +573,11 @@ class Dispatcher(WeakType, Callable, Dummy):
 
     def can_convert_to(self, typingctx, other):
         if isinstance(other, types.FunctionType):
-            if self.dispatcher.get_compile_result(other.signature):
+            try:
+                self.dispatcher.get_compile_result(other.signature)
+            except errors.NumbaError:
+                return None
+            else:
                 return Conversion.safe
 
 

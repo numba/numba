@@ -265,7 +265,7 @@ def find_top_level_loops(cfg):
 
 def _fix_loop_exit(cfg, loop):
     """
-    Fixes loop.exits for Py3.8 bytecode CFG changes.
+    Fixes loop.exits for Py3.8+ bytecode CFG changes.
     This is to handle `break` inside loops.
     """
     # Computes the common postdoms of exit nodes
@@ -309,7 +309,7 @@ def dead_branch_prune(func_ir, called_args):
             if isinstance(branch_or_jump, ir.Branch):
                 branch = branch_or_jump
                 pred = guard(get_definition, func_ir, branch.cond.name)
-                if pred is not None and pred.op == "call":
+                if pred is not None and getattr(pred, "op", None) == "call":
                     function = guard(get_definition, func_ir, pred.func)
                     if (function is not None and
                         isinstance(function, ir.Global) and

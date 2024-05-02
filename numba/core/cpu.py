@@ -73,9 +73,9 @@ class CPUContext(BaseContext):
                                    unicode,) # noqa F401
         from numba.core import optional # noqa F401
         from numba.misc import gdb_hook, literal # noqa F401
-        from numba.np import linalg, polynomial, arraymath, arrayobj # noqa F401
-        from numba.np.random import (generator_core, # noqa F401
-                                     generator_methods,) # noqa F401
+        from numba.np import linalg, arraymath, arrayobj # noqa F401
+        from numba.np.random import generator_core, generator_methods # noqa F401
+        from numba.np.polynomial import polynomial_core, polynomial_functions # noqa F401
         from numba.typed import typeddict, dictimpl # noqa F401
         from numba.typed import typedlist, listobject # noqa F401
         from numba.experimental import jitclass, function_type # noqa F401
@@ -282,8 +282,6 @@ _options_mixin = include_default_options(
     "error_model",
     "inline",
     "forceinline",
-    # Add "target_backend" as a accepted option for the CPU in @jit(...)
-    "target_backend",
     "_dbg_extend_lifetimes",
     "_dbg_optnone",
 )
@@ -319,9 +317,6 @@ class CPUTargetOptions(_options_mixin, TargetOptions):
         flags.inherit_if_not_set("fastmath")
 
         flags.inherit_if_not_set("error_model", default="python")
-
-        # Add "target_backend" as a option that inherits from the caller
-        flags.inherit_if_not_set("target_backend")
 
         flags.inherit_if_not_set("forceinline")
 

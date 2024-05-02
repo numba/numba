@@ -406,7 +406,7 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
         expected = get_item(arr, index)
         got = numba_get_item(arr, index)
         # Sanity check: In advanced indexing, the result is always a copy.
-        self.assertNotIn(expected.base, orig_base)
+        self.assertIsNot(expected.base, orig_base)
 
         # Note: Numba may not return the same array strides and
         # contiguity as NumPy

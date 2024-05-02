@@ -15,7 +15,7 @@ from numba.core.imputils import impl_ret_untracked
 from numba.core import typing, types, errors, lowering, cgutils
 from numba.core.extending import register_jitable
 from numba.np import npdatetime
-from numba.cpython import cmathimpl, mathimpl, numbers
+from numba.np.math import cmathimpl, mathimpl, numbers
 
 # some NumPy constants. Note that we could generate some of them using
 # the math library, but having the values copied from npy_math seems to
@@ -648,13 +648,11 @@ def np_complex_exp_impl(context, builder, sig, args):
 def np_real_exp2_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
-    dispatch_table = {
-        types.float32: 'numba_exp2f',
-        types.float64: 'numba_exp2',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'exp2')
+    ll_ty = args[0].type
+    fnty = llvmlite.ir.FunctionType(ll_ty, [ll_ty,])
+    fn = cgutils.insert_pure_function(builder.module, fnty,
+                                      name='llvm.exp2')
+    return builder.call(fn, [args[0]])
 
 
 def np_complex_exp2_impl(context, builder, sig, args):
@@ -687,13 +685,11 @@ def np_complex_log_impl(context, builder, sig, args):
 def np_real_log2_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
-    dispatch_table = {
-        types.float32: 'numba_log2f',
-        types.float64: 'numba_log2',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'log2')
+    ll_ty = args[0].type
+    fnty = llvmlite.ir.FunctionType(ll_ty, [ll_ty,])
+    fn = cgutils.insert_pure_function(builder.module, fnty,
+                                      name='llvm.log2')
+    return builder.call(fn, [args[0]])
 
 def np_complex_log2_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)

@@ -214,6 +214,9 @@ instead. For example::
     $ NUMBA_USE_TYPEGUARD=1 python runtests.py
 
 
+See also: :ref:`Debugging the Test Suite <developer-testsuite>`
+
+
 Running coverage
 ''''''''''''''''
 
@@ -252,7 +255,7 @@ A code review should try to assess the following criteria:
 * general design and correctness
 * code structure and maintainability
 * coding conventions
-* docstrings, comments
+* docstrings, comments and release notes (if necessary)
 * test coverage
 
 
@@ -320,6 +323,14 @@ There is potential for confusion between the Numba module ``typing`` and Python 
 hints, as well as between Numba types---such as ``Dict`` or ``Literal``---and ``typing`` types of the same name.
 To mitigate the risk of confusion we use a naming convention by which objects of the built-in ``typing`` module are
 imported with an ``pt`` prefix. For example, ``typing.Dict`` is imported as ``from typing import Dict as ptDict``.
+
+Release Notes
+'''''''''''''
+
+Pull Requests that add significant user-facing modifications may need to be mentioned in the release notes.
+To add a release note, a short ``.rst`` file needs creating containing a summary of the change and it needs to be placed in 
+``docs/upcoming_changes``. The file ``docs/upcoming_changes/README.rst`` details the format
+and file naming conventions.
 
 Stability
 '''''''''

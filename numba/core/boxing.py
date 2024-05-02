@@ -6,7 +6,7 @@ from llvmlite import ir
 
 from numba.core import types, cgutils
 from numba.core.pythonapi import box, unbox, reflect, NativeValue
-from numba.core.errors import NumbaNotImplementedError
+from numba.core.errors import NumbaNotImplementedError, TypingError
 from numba.core.typing.typeof import typeof, Purpose
 
 from numba.cpython import setobj, listobj
@@ -179,6 +179,14 @@ def unbox_enum(typ, obj, c):
     """
     valobj = c.pyapi.object_getattr_string(obj, "value")
     return c.unbox(typ.dtype, valobj)
+
+
+@box(types.UndefVar)
+def box_undefvar(typ, val, c):
+    """This type cannot be boxed, there's no Python equivalent"""
+    msg = ("UndefVar type cannot be boxed, there is no Python equivalent of "
+           "this type.")
+    raise TypingError(msg)
 
 #
 # Composite types
@@ -1230,11 +1238,9 @@ def unbox_numpy_random_bitgenerator(typ, obj, c):
 
             # Want to do ctypes.cast(CFunctionType, ctypes.c_void_p), create an
             # args tuple for that.
-            extra_refs.append(ct_voidptr_ty)
             args = c.pyapi.tuple_pack([interface_next_fn, ct_voidptr_ty])
             with cgutils.early_exit_if_null(c.builder, stack, args):
                 handle_failure()
-            extra_refs.append(ct_voidptr_ty)
 
             # Call ctypes.cast()
             interface_next_fn_casted = c.pyapi.call(ct_cast, args)
