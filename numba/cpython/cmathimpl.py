@@ -6,17 +6,13 @@ Implement the cmath module functions.
 import cmath
 import math
 
-from numba.core.imputils import Registry
 from numba.core import types, cgutils
 from numba.cpython import mathimpl
 from numba.core.extending import overload
 
-registry = Registry('cmathimpl')
-lower = registry.lower
-
 
 @overload(cmath.isnan)
-def isnan_float_impl(z):
+def isnan_complex_impl(z):
     if not isinstance(z, types.Complex):
         return
 
@@ -26,7 +22,7 @@ def isnan_float_impl(z):
 
 
 @overload(cmath.isinf)
-def isinf_float_impl(z):
+def isinf_complex_impl(z):
     if not isinstance(z, types.Complex):
         return
 
@@ -36,7 +32,7 @@ def isinf_float_impl(z):
 
 
 @overload(cmath.isfinite)
-def isfinite_float_impl(z):
+def isfinite_complex_impl(z):
     if not isinstance(z, types.Complex):
         return
 
@@ -188,11 +184,14 @@ def polar_impl(x):
 
 @overload(cmath.sqrt)
 def sqrt_impl(z):
+    if not isinstance(z, types.Complex):
+        return
+
     # We risk spurious overflow for components >= FLT_MAX / (1 + sqrt(2)).
 
     SQRT2 = 1.414213562373095048801688724209698079E0
     ONE_PLUS_SQRT2 = (1. + SQRT2)
-    theargflt = z.underlying_float if isinstance(z, types.Complex) else z
+    theargflt = z.underlying_float
     # Get a type specific maximum value so scaling for overflow is based on that
     MAX = mathimpl.DBL_MAX if theargflt.bitwidth == 64 else mathimpl.FLT_MAX
     # THRES will be double precision, should not impact typing as it's just
@@ -507,7 +506,7 @@ def atanh_impl(z):
             else:
                 # may be safe from overflow, depending on hypot's implementation
                 h = math.hypot(z.real * 0.5, z.imag * 0.5)
-                real = z.real/4./h/h  # noqa: E226
+                real = z.real / 4. / h / h
             imag = -math.copysign(PI_12, -z.imag)
         elif z.real == 1. and ay < THRES_SMALL:
             # C99 standard says:  atanh(1+/-0.) should be inf +/- 0j
