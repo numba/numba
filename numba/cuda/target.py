@@ -95,7 +95,7 @@ class CUDATargetContext(BaseContext):
         from numba.cpython import numbers, tupleobj, slicing # noqa: F401
         from numba.cpython import rangeobj, iterators, enumimpl # noqa: F401
         from numba.cpython import unicode, charseq # noqa: F401
-        from numba.cpython import cmathimpl
+        from numba.cpython import cmathimpl # noqa: F401
         from numba.misc import cffiimpl
         from numba.np import arrayobj # noqa: F401
         from numba.np import npdatetime # noqa: F401
@@ -109,7 +109,6 @@ class CUDATargetContext(BaseContext):
         self.install_registry(cffiimpl.registry)
         self.install_registry(printimpl.registry)
         self.install_registry(libdeviceimpl.registry)
-        self.install_registry(cmathimpl.registry)
         self.install_registry(mathimpl.registry)
         self.install_registry(vector_types.impl_registry)
 

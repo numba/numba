@@ -7,6 +7,7 @@ Use get_ufunc_info() to get the information related to a ufunc.
 """
 
 import math
+import cmath
 import numpy as np
 from functools import lru_cache
 from numba.core import typing
@@ -21,7 +22,7 @@ def get_ufunc_info(ufunc_key):
 @lru_cache
 def ufunc_db():
     # Imports here are at function scope to avoid circular imports
-    from numba.cpython import cmathimpl, mathimpl, numbers
+    from numba.cpython import mathimpl, numbers
     from numba.np import npyfuncs
     from numba.np.numpy_support import numpy_version
 
@@ -161,6 +162,11 @@ def ufunc_db():
     def np_real_atanh_impl(context, builder, sig, args):
         return np_unary_impl(math.atanh, context, builder, sig, args)
 
+    def cuda_complex_call_impl(impl):
+        def inner(context, builder, sig, args):
+            return context.call_overload(builder, impl, sig, args)
+        return inner
+
     db = {}
 
     db[np.sin] = {
@@ -180,29 +186,29 @@ def ufunc_db():
     db[np.tan] = {
         'f->f': np_real_tan_impl,
         'd->d': np_real_tan_impl,
-        'F->F': cmathimpl.tan_impl,
-        'D->D': cmathimpl.tan_impl,
+        'F->F': cuda_complex_call_impl(cmath.tan),
+        'D->D': cuda_complex_call_impl(cmath.tan),
     }
 
     db[np.arcsin] = {
         'f->f': np_real_asin_impl,
         'd->d': np_real_asin_impl,
-        'F->F': cmathimpl.asin_impl,
-        'D->D': cmathimpl.asin_impl,
+        'F->F': cuda_complex_call_impl(cmath.asin),
+        'D->D': cuda_complex_call_impl(cmath.asin),
     }
 
     db[np.arccos] = {
         'f->f': np_real_acos_impl,
         'd->d': np_real_acos_impl,
-        'F->F': cmathimpl.acos_impl,
-        'D->D': cmathimpl.acos_impl,
+        'F->F': cuda_complex_call_impl(cmath.acos),
+        'D->D': cuda_complex_call_impl(cmath.acos),
     }
 
     db[np.arctan] = {
         'f->f': np_real_atan_impl,
         'd->d': np_real_atan_impl,
-        'F->F': cmathimpl.atan_impl,
-        'D->D': cmathimpl.atan_impl,
+        'F->F': cuda_complex_call_impl(cmath.atan),
+        'D->D': cuda_complex_call_impl(cmath.atan),
     }
 
     db[np.arctan2] = {
@@ -239,8 +245,8 @@ def ufunc_db():
     db[np.arcsinh] = {
         'f->f': np_real_asinh_impl,
         'd->d': np_real_asinh_impl,
-        'F->F': cmathimpl.asinh_impl,
-        'D->D': cmathimpl.asinh_impl,
+        'F->F': cuda_complex_call_impl(cmath.asinh),
+        'D->D': cuda_complex_call_impl(cmath.asinh),
     }
 
     db[np.arccosh] = {
@@ -253,8 +259,8 @@ def ufunc_db():
     db[np.arctanh] = {
         'f->f': np_real_atanh_impl,
         'd->d': np_real_atanh_impl,
-        'F->F': cmathimpl.atanh_impl,
-        'D->D': cmathimpl.atanh_impl,
+        'F->F': cuda_complex_call_impl(cmath.atanh),
+        'D->D': cuda_complex_call_impl(cmath.atanh),
     }
 
     db[np.deg2rad] = {
