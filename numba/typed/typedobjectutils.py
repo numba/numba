@@ -149,7 +149,7 @@ def _get_incref_decref(context, module, datamodel, container_element_type):
     return incref_fn, decref_fn
 
 
-def _get_container_equal(context, module, datamodel):
+def _get_container_equal(context, module, datamodel, container_element_type):
     assert datamodel.contains_nrt_meminfo()
 
     fe_type = datamodel.fe_type
@@ -172,10 +172,11 @@ def _get_container_equal(context, module, datamodel):
         intres = context.cast(builder, res, types.boolean, types.int32)
         context.call_conv.return_value(builder, intres)
 
+    mangled_name = context.fndesc.mangled_name
     wrapfn = cgutils.get_or_insert_function(
         module,
         wrapfnty,
-        name=f".numba_{context.fndesc.mangled_name}.dict_key_equal.wrap",
+        name=f".numba_{mangled_name}.{container_element_type}_equal.wrap",
     )
     build_wrapper(wrapfn)
 
@@ -183,7 +184,7 @@ def _get_container_equal(context, module, datamodel):
     equal_fn = cgutils.get_or_insert_function(
         module,
         equal_fnty,
-        name=f".numba_{context.fndesc.mangled_name}.dict_key_equal",
+        name=f".numba_{mangled_name}.{container_element_type}_equal",
     )
     builder = ir.IRBuilder(equal_fn.append_basic_block())
     lhs = datamodel.load_from_data_pointer(builder, equal_fn.args[0])
