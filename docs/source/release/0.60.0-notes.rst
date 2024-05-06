@@ -1,0 +1,206 @@
+
+Version 0.60.0 (Release Date)
+=============================
+
+.. contents:: Table of Contents
+   :depth: 2
+
+This is a major Numba release. Numba now has binary support for
+NumPy 2.0. Users should note that this does NOT yet include NEP 50
+related type-level changes which are still in progress. This
+release does not guarantee execution level compatibility with
+NumPy 2.0 and hence users should expect some type and numerical
+deviations with respect to normal Python behavior while using
+Numba with NumPy 2.0.
+
+Please find a summary of all noteworthy items below.
+
+Highlights
+~~~~~~~~~~
+
+NumPy 2.0 Binary Support
+------------------------
+
+Added Binary Support for NumPy 2.0. However, this does not yet include
+NEP 50 related type-level changes which are still in progress.
+
+Following is a summary of the user facing changes:
+
+* The ``ptp()`` method previously available for arrays has been deprecated. 
+  Instead, it is recommended to use the ``np.ptp(arr)`` function.
+* The data type ``np.bool8`` has been deprecated and replaced with ``np.bool``. 
+* The ``np.product`` function is deprecated; users are advised to use 
+  ``np.prod`` instead.
+* Starting from NumPy version 2.0, the ``itemset()`` method has been removed 
+  from the ``ndarray`` class. To achieve the same functionality, utilize 
+  the assignment operation ``arr[index] = value``.
+* Deprecated constants ``np.PINF`` and ``np.NINF`` should be replaced with 
+  ``np.inf`` for positive infinity and ``-np.inf`` for negative infinity, 
+  respectively.
+
+(`PR-#9466 <https://github.com/numba/numba/pull/9466>`__)
+
+
+New Features
+~~~~~~~~~~~~
+
+Enhance guvectorize support in JIT code
+---------------------------------------
+
+Generalized universal function support is extended, it is now possible to call
+a ``@guvectorize`` decorated function from within a JIT-compiled function.
+However, please note that broadcasting is not supported yet. Calling a
+guvectorize function in a scenario where broadcast is needed may result in
+incorrect behavior.
+
+(`PR-#8984 <https://github.com/numba/numba/pull/8984>`__)
+
+Add experimental support for ufunc.at
+-------------------------------------
+
+Experimental support for ``ufunc.at`` is added.
+
+(`PR-#9239 <https://github.com/numba/numba/pull/9239>`__)
+
+Add ``float(<string literal>)`` ctor
+====================================
+
+Support for ``float(<string literal>)`` is added.
+
+(`PR-#9378 <https://github.com/numba/numba/pull/9378>`__)
+
+Add support for ``math.log2``.
+------------------------------
+
+Support for ``math.log2`` is added.
+
+(`PR-#9416 <https://github.com/numba/numba/pull/9416>`__)
+
+Add math.nextafter support for nopython mode.
+---------------------------------------------
+
+Support ``math.nextafter`` in nopython mode.
+
+(`PR-#9438 <https://github.com/numba/numba/pull/9438>`__)
+
+Add support for parfor binop reductions.
+----------------------------------------
+
+Previously, only operations with inplace operations like += could be used as reductions in pranges.  Now, with this PR, binop reductions of the form a = a binop b can be used.
+
+(`PR-#9521 <https://github.com/numba/numba/pull/9521>`__)
+
+
+Improvements
+~~~~~~~~~~~~
+
+Expand ``isinstance()`` support for NumPy datetime types
+--------------------------------------------------------
+
+Adds support of ``numpy.datetime64`` and ``numpy.timedelta64`` types in 
+``isinstance()``.
+
+(`PR-#9455 <https://github.com/numba/numba/pull/9455>`__)
+
+Python 3.12 ``sys.monitoring`` support is added to Numba's dispatcher.
+----------------------------------------------------------------------
+
+Python 3.12 introduced a new module ``sys.monitoring`` that makes available an
+event driven monitoring API for use in tools that need to monitor execution e.g.
+debuggers or profilers. Numba's dispatcher class (the code that handles transfer
+of control between the Python interpreter and compiled code) has been updated to
+emit ``sys.monitoring.events.PY_START`` and ``sys.monitoring.events.PY_RETURN``
+as appropriate. This allows tools that are watching for these events to identify
+when control has entered and returned from compiled code. As a result of this
+change, Numba compiled code is now identified by ``cProfile`` in the same way
+that it has been historically i.e. it will be present in performance profiles.
+
+(`PR-#9482 <https://github.com/numba/numba/pull/9482>`__)
+
+
+NumPy Support
+~~~~~~~~~~~~~
+
+Added support for ``np.size()``
+-------------------------------
+
+Added ``np.size()`` support for numpy, which was previously unsupported.
+
+(`PR-#9504 <https://github.com/numba/numba/pull/9504>`__)
+
+
+CUDA API Changes
+~~~~~~~~~~~~~~~~
+
+Support for compilation to LTO-IR
+---------------------------------
+
+Support for compiling device functions to LTO-IR in the compilation API is
+added.
+
+(`PR-#9274 <https://github.com/numba/numba/pull/9274>`__)
+
+Support math.log, math.log2 and math.log10 in CUDA
+--------------------------------------------------
+
+CUDA target now supports ``np.log``, ``np.log2`` and ``np.log10``.
+
+(`PR-#9417 <https://github.com/numba/numba/pull/9417>`__)
+
+
+Bug Fixes
+~~~~~~~~~
+
+Fix parfor variable hoisting analysis.
+--------------------------------------
+
+If a variable is used to build a container (e.g., tuple, list, map, set) or is passed as an
+argument to a call then conservatively assume it could escape the current iteration of
+the parfor and so should not be hoisted.
+
+(`PR-#9532 <https://github.com/numba/numba/pull/9532>`__)
+
+
+Deprecations
+~~~~~~~~~~~~
+
+Deprecate `old_style` error-capturing
+-------------------------------------
+
+Per deprecation schedule, `old_style` error-capturing is deprecated and the
+`default` is now `new_style`.
+
+(`PR-#9549 <https://github.com/numba/numba/pull/9549>`__)
+
+
+Expired Deprecations
+~~~~~~~~~~~~~~~~~~~~
+
+Removal of ``numba.core.retarget``
+----------------------------------
+
+The experimental features implemented in ``numba.core.retarget`` have been
+removed. These features were primarily used in numba-dpex, but that project has
+replaced its use of ``numba.core.retarget`` with a preference for
+*target extension API*.
+
+(`PR-#9539 <https://github.com/numba/numba/pull/9539>`__)
+
+
+Documentation Changes
+~~~~~~~~~~~~~~~~~~~~~
+
+``numba.cuda.gpus.current`` documentation correction
+====================================================
+
+``numba.cuda.gpus.current`` was erroneously described
+as a function, is now described as an attribute.
+
+(`PR-#9394 <https://github.com/numba/numba/pull/9394>`__)
+
+CUDA 12 conda installation documentation
+----------------------------------------
+
+Installation instructions have been added for CUDA 12 conda users.
+
+(`PR-#9487 <https://github.com/numba/numba/pull/9487>`__)
