@@ -1,6 +1,6 @@
 
-Version 0.60.0 (Release Date)
-=============================
+Version 0.60.0 (8 May 2024)
+===========================
 
 .. contents:: Table of Contents
    :depth: 2
@@ -207,6 +207,7 @@ Installation instructions have been added for CUDA 12 conda users.
 (`PR-#9487 <https://github.com/numba/numba/pull/9487>`__)
 
 Pull-Requests:
+~~~~~~~~~~~~~~
 
 * PR `#8984 <https://github.com/numba/numba/pull/8984>`_: Support @gufunc inside @jit (`guilhermeleobas <https://github.com/guilhermeleobas>`_)
 * PR `#9239 <https://github.com/numba/numba/pull/9239>`_: ufunc.at (`guilhermeleobas <https://github.com/guilhermeleobas>`_)
@@ -239,9 +240,8 @@ Pull-Requests:
 * PR `#9539 <https://github.com/numba/numba/pull/9539>`_: Revert PR #6870 `numba.core.retarget` (`sklam <https://github.com/sklam>`_)
 * PR `#9549 <https://github.com/numba/numba/pull/9549>`_: Make new_style the default error capturing mode (`gmarkall <https://github.com/gmarkall>`_ `sklam <https://github.com/sklam>`_)
 
-Total PRs: 29
-
 Authors:
+~~~~~~~~
 
 * `bdice <https://github.com/bdice>`_
 * `DrTodd13 <https://github.com/DrTodd13>`_
@@ -255,5 +255,3 @@ Authors:
 * `shourya5 <https://github.com/shourya5>`_
 * `sklam <https://github.com/sklam>`_
 * `stuartarchibald <https://github.com/stuartarchibald>`_
-
-Total authors: 12
