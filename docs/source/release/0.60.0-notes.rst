@@ -63,7 +63,7 @@ Experimental support for ``ufunc.at`` is added.
 (`PR-#9239 <https://github.com/numba/numba/pull/9239>`__)
 
 Add ``float(<string literal>)`` ctor
-====================================
+------------------------------------
 
 Support for ``float(<string literal>)`` is added.
 
@@ -191,7 +191,7 @@ Documentation Changes
 ~~~~~~~~~~~~~~~~~~~~~
 
 ``numba.cuda.gpus.current`` documentation correction
-====================================================
+----------------------------------------------------
 
 ``numba.cuda.gpus.current`` was erroneously described
 as a function, is now described as an attribute.
