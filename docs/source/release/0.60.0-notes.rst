@@ -205,3 +205,55 @@ CUDA 12 conda installation documentation
 Installation instructions have been added for CUDA 12 conda users.
 
 (`PR-#9487 <https://github.com/numba/numba/pull/9487>`__)
+
+Pull-Requests:
+
+* PR `#8984 <https://github.com/numba/numba/pull/8984>`_: Support @gufunc inside @jit (`guilhermeleobas <https://github.com/guilhermeleobas>`_)
+* PR `#9239 <https://github.com/numba/numba/pull/9239>`_: ufunc.at (`guilhermeleobas <https://github.com/guilhermeleobas>`_)
+* PR `#9274 <https://github.com/numba/numba/pull/9274>`_: CUDA: Add support for compilation to LTO-IR (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9364 <https://github.com/numba/numba/pull/9364>`_: Release notes fixes for appropriate Towncrier header underlines (`kc611 <https://github.com/kc611>`_)
+* PR `#9367 <https://github.com/numba/numba/pull/9367>`_: Document release notes generation (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9369 <https://github.com/numba/numba/pull/9369>`_: Fix release notes link in bug report template (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9378 <https://github.com/numba/numba/pull/9378>`_: Add `float(<string literal>)` ctor (`guilhermeleobas <https://github.com/guilhermeleobas>`_)
+* PR `#9394 <https://github.com/numba/numba/pull/9394>`_: fix `TypeError: '_DeviceContextManager' object is not callable` (`i7878 <https://github.com/i7878>`_)
+* PR `#9411 <https://github.com/numba/numba/pull/9411>`_: Doc updates for 0.59.0 final. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#9416 <https://github.com/numba/numba/pull/9416>`_: Add math.log2 support (`guilhermeleobas <https://github.com/guilhermeleobas>`_)
+* PR `#9417 <https://github.com/numba/numba/pull/9417>`_: Add np.log* bindings for CUDA (`guilhermeleobas <https://github.com/guilhermeleobas>`_ `gmarkall <https://github.com/gmarkall>`_)
+* PR `#9425 <https://github.com/numba/numba/pull/9425>`_: Post release for 0.59.0 (`sklam <https://github.com/sklam>`_)
+* PR `#9436 <https://github.com/numba/numba/pull/9436>`_: Add timing and junit xml output to testsuite (`sklam <https://github.com/sklam>`_)
+* PR `#9437 <https://github.com/numba/numba/pull/9437>`_: Remove dependencies between Numba's Cpython and NumPy module (`kc611 <https://github.com/kc611>`_)
+* PR `#9438 <https://github.com/numba/numba/pull/9438>`_: Add math.nextafter support for nopython mode. (`groutr <https://github.com/groutr>`_)
+* PR `#9454 <https://github.com/numba/numba/pull/9454>`_: Don't attempt to register overloads that aren't for this target in `BaseContext` and related fixes (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9455 <https://github.com/numba/numba/pull/9455>`_: Support datetime types in `isinstance()` (`sklam <https://github.com/sklam>`_)
+* PR `#9456 <https://github.com/numba/numba/pull/9456>`_: Update release checklist (`sklam <https://github.com/sklam>`_)
+* PR `#9466 <https://github.com/numba/numba/pull/9466>`_: Numpy 2.0 binary support testing (`kc611 <https://github.com/kc611>`_)
+* PR `#9468 <https://github.com/numba/numba/pull/9468>`_: adding git-copy.py script (`esc <https://github.com/esc>`_)
+* PR `#9482 <https://github.com/numba/numba/pull/9482>`_: Add support for `sys.monitoring` events. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#9487 <https://github.com/numba/numba/pull/9487>`_: Add CUDA 12 conda installation docs (`bdice <https://github.com/bdice>`_ `gmarkall <https://github.com/gmarkall>`_)
+* PR `#9488 <https://github.com/numba/numba/pull/9488>`_: Update overview.rst (`jftsang <https://github.com/jftsang>`_)
+* PR `#9502 <https://github.com/numba/numba/pull/9502>`_: Post release task for 0.59.1 (`sklam <https://github.com/sklam>`_)
+* PR `#9504 <https://github.com/numba/numba/pull/9504>`_: added np.size() overload and added tests (`shourya5 <https://github.com/shourya5>`_)
+* PR `#9521 <https://github.com/numba/numba/pull/9521>`_: Support binop reduction. (`DrTodd13 <https://github.com/DrTodd13>`_)
+* PR `#9531 <https://github.com/numba/numba/pull/9531>`_: Module pass manager: Don't add passes for unsupported LLVM versions (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9532 <https://github.com/numba/numba/pull/9532>`_: Fix hoisting bug to exclude variables used in containers or calls. (`DrTodd13 <https://github.com/DrTodd13>`_)
+* PR `#9539 <https://github.com/numba/numba/pull/9539>`_: Revert PR #6870 `numba.core.retarget` (`sklam <https://github.com/sklam>`_)
+* PR `#9549 <https://github.com/numba/numba/pull/9549>`_: Make new_style the default error capturing mode (`gmarkall <https://github.com/gmarkall>`_ `sklam <https://github.com/sklam>`_)
+
+Total PRs: 29
+
+Authors:
+
+* `bdice <https://github.com/bdice>`_
+* `DrTodd13 <https://github.com/DrTodd13>`_
+* `esc <https://github.com/esc>`_
+* `gmarkall <https://github.com/gmarkall>`_
+* `groutr <https://github.com/groutr>`_
+* `guilhermeleobas <https://github.com/guilhermeleobas>`_
+* `i7878 <https://github.com/i7878>`_
+* `jftsang <https://github.com/jftsang>`_
+* `kc611 <https://github.com/kc611>`_
+* `shourya5 <https://github.com/shourya5>`_
+* `sklam <https://github.com/sklam>`_
+* `stuartarchibald <https://github.com/stuartarchibald>`_
+
+Total authors: 12
