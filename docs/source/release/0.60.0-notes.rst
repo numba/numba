@@ -86,7 +86,8 @@ Support ``math.nextafter`` in nopython mode.
 Add support for parfor binop reductions.
 ----------------------------------------
 
-Previously, only operations with inplace operations like += could be used as reductions in pranges.  Now, with this PR, binop reductions of the form a = a binop b can be used.
+Previously, only operations with inplace operations like `+=` could be used as reductions
+in `prange`s.  Now, with this PR, binop reductions of the form `a = a binop b` can be used.
 
 (`PR-#9521 <https://github.com/numba/numba/pull/9521>`__)
 
@@ -124,7 +125,7 @@ NumPy Support
 Added support for ``np.size()``
 -------------------------------
 
-Added ``np.size()`` support for numpy, which was previously unsupported.
+Added ``np.size()`` support for NumPy, which was previously unsupported.
 
 (`PR-#9504 <https://github.com/numba/numba/pull/9504>`__)
 
