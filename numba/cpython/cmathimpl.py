@@ -13,8 +13,6 @@ from numba.core.extending import overload
 
 @overload(cmath.isnan)
 def isnan_complex_impl(z):
-    if not isinstance(z, types.Complex):
-        return
 
     def impl(z):
         return math.isnan(z.real) or math.isnan(z.imag)
@@ -23,8 +21,6 @@ def isnan_complex_impl(z):
 
 @overload(cmath.isinf)
 def isinf_complex_impl(z):
-    if not isinstance(z, types.Complex):
-        return
 
     def impl(z):
         return math.isinf(z.real) or math.isinf(z.imag)
@@ -33,8 +29,6 @@ def isinf_complex_impl(z):
 
 @overload(cmath.isfinite)
 def isfinite_complex_impl(z):
-    if not isinstance(z, types.Complex):
-        return
 
     def impl(z):
         return math.isfinite(z.real) and math.isfinite(z.imag)
@@ -74,8 +68,6 @@ INF = float('inf')
 
 @overload(cmath.exp)
 def exp_impl(z):
-    if not isinstance(z, types.Complex):
-        return
 
     def _exp_impl(z):
         """cmath.exp(x + y j)"""
@@ -124,8 +116,6 @@ def exp_impl(z):
 
 @overload(cmath.log)
 def log_base_impl(x, base=None):
-    if not isinstance(x, types.Complex):
-        return
 
     if cgutils.is_nonelike(base):
         def impl(x, base=None):
@@ -144,8 +134,6 @@ def log_base_impl(x, base=None):
 
 @overload(cmath.log10)
 def impl_cmath_log10(z):
-    if not isinstance(z, types.Complex):
-        return
 
     LN_10 = 2.302585092994045684
 
@@ -163,9 +151,6 @@ def impl_cmath_log10(z):
 def phase_impl(x):
     """cmath.phase(x + y j)"""
 
-    if not isinstance(x, types.Complex):
-        return
-
     def impl(x):
         return math.atan2(x.imag, x.real)
     return impl
@@ -173,8 +158,6 @@ def phase_impl(x):
 
 @overload(cmath.polar)
 def polar_impl(x):
-    if not isinstance(x, types.Complex):
-        return
 
     def impl(x):
         r, i = x.real, x.imag
@@ -245,8 +228,6 @@ def sqrt_impl(z):
 
 @overload(cmath.cos)
 def cos_impl(z):
-    if not isinstance(z, types.Complex):
-        return
 
     def _cos_impl(z):
         """cmath.cos(z) = cmath.cosh(z j)"""
@@ -256,8 +237,6 @@ def cos_impl(z):
 
 @overload(cmath.cosh)
 def impl_cmath_cosh(z):
-    if not isinstance(z, types.Complex):
-        return
 
     def cosh_impl(z):
         """cmath.cosh(z)"""
@@ -286,8 +265,6 @@ def impl_cmath_cosh(z):
 
 @overload(cmath.sin)
 def sin_impl(z):
-    if not isinstance(z, types.Complex):
-        return
 
     def _sin_impl(z):
         """cmath.sin(z) = -j * cmath.sinh(z j)"""
@@ -298,8 +275,6 @@ def sin_impl(z):
 
 @overload(cmath.sinh)
 def impl_cmath_sinh(z):
-    if not isinstance(z, types.Complex):
-        return
 
     def sinh_impl(z):
         """cmath.sinh(z)"""
@@ -325,8 +300,6 @@ def impl_cmath_sinh(z):
 
 @overload(cmath.tan)
 def tan_impl(z):
-    if not isinstance(z, types.Complex):
-        return
 
     def _tan_impl(z):
         """cmath.tan(z) = -j * cmath.tanh(z j)"""
@@ -337,8 +310,6 @@ def tan_impl(z):
 
 @overload(cmath.tanh)
 def impl_cmath_tanh(z):
-    if not isinstance(z, types.Complex):
-        return
 
     def tanh_impl(z):
         """cmath.tanh(z)"""
@@ -367,8 +338,6 @@ def impl_cmath_tanh(z):
 
 @overload(cmath.acos)
 def acos_impl(z):
-    if not isinstance(z, types.Complex):
-        return
 
     LN_4 = math.log(4)
     THRES = mathimpl.FLT_MAX / 4
@@ -395,8 +364,6 @@ def acos_impl(z):
 
 @overload(cmath.acosh)
 def impl_cmath_acosh(z):
-    if not isinstance(z, types.Complex):
-        return
 
     LN_4 = math.log(4)
     THRES = mathimpl.FLT_MAX / 4
@@ -424,8 +391,6 @@ def impl_cmath_acosh(z):
 
 @overload(cmath.asinh)
 def asinh_impl(z):
-    if not isinstance(z, types.Complex):
-        return
 
     THRES = mathimpl.FLT_MAX / 4
 
@@ -450,8 +415,6 @@ def asinh_impl(z):
 
 @overload(cmath.asin)
 def asin_impl(z):
-    if not isinstance(z, types.Complex):
-        return
 
     def _asin_impl(z):
         """cmath.asin(z) = -j * cmath.asinh(z j)"""
@@ -462,8 +425,6 @@ def asin_impl(z):
 
 @overload(cmath.atan)
 def atan_impl(z):
-    if not isinstance(z, types.Complex):
-        return
 
     def _atan_impl(z):
         """cmath.atan(z) = -j * cmath.atanh(z j)"""
@@ -478,8 +439,6 @@ def atan_impl(z):
 
 @overload(cmath.atanh)
 def atanh_impl(z):
-    if not isinstance(z, types.Complex):
-        return
 
     THRES_LARGE = math.sqrt(mathimpl.FLT_MAX / 4)
     THRES_SMALL = math.sqrt(mathimpl.FLT_MIN)
