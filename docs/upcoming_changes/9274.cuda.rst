@@ -1,5 +1,0 @@
-Support for compilation to LTO-IR
----------------------------------
-
-Support for compiling device functions to LTO-IR in the compilation API is
-added.

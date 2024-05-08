@@ -1,4 +1,0 @@
-Add ``float(<string literal>)`` ctor
-====================================
-
-Support for ``float(<string literal>)`` is added.
