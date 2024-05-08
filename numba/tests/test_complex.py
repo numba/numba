@@ -13,6 +13,13 @@ no_pyobj_flags = {'nopython': True}
 
 class BaseComplexTest(object):
 
+    def real_values(self):
+        reals = [-0.0, +0.0, 1, -1, +1.5, -3.5,
+                 float('-inf'), float('+inf'), -math.pi, +math.pi]
+        if sys.platform != 'win32':
+            reals += [float('nan')]
+        return reals
+
     def basic_values(self):
         reals = [-0.0, +0.0, 1, -1, +1.5, -3.5,
                  float('-inf'), float('+inf')]
@@ -131,6 +138,9 @@ class TestCMath(BaseComplexTest, TestCase):
                          values=None):
         self.run_unary(pyfunc, [types.complex128],
                        values or self.more_values(), flags=flags, ulps=ulps,
+                       abs_tol=abs_tol)
+        self.run_unary(pyfunc, [types.int32, types.int64],
+                       values or self.real_values(), flags=flags, ulps=ulps,
                        abs_tol=abs_tol)
         # Avoid discontinuities around pi when in single precision.
         self.run_unary(pyfunc, [types.complex64],
