@@ -184,14 +184,12 @@ def polar_impl(x):
 
 @overload(cmath.sqrt)
 def sqrt_impl(z):
-    if not isinstance(z, types.Complex):
-        return
-
     # We risk spurious overflow for components >= FLT_MAX / (1 + sqrt(2)).
 
     SQRT2 = 1.414213562373095048801688724209698079E0
     ONE_PLUS_SQRT2 = (1. + SQRT2)
-    theargflt = z.underlying_float
+    theargflt = z.underlying_float if isinstance(z, types.Complex) else z
+
     # Get a type specific maximum value so scaling for overflow is based on that
     MAX = mathimpl.DBL_MAX if theargflt.bitwidth == 64 else mathimpl.FLT_MAX
     # THRES will be double precision, should not impact typing as it's just
