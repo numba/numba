@@ -908,6 +908,9 @@ class BaseContext(object):
         """
         Like compile_internal but for overloads
         """
+        # For functions defined in an inner scope, Numba needs to refresh the
+        # typing context to add new definitions
+        self.typing_context.refresh()
         fnty = self.typing_context.resolve_value_type(impl)
         impl_sig = fnty.get_call_type(self.typing_context, (*sig.args,), {})
         impl = self.get_function(fnty, impl_sig)

@@ -306,7 +306,6 @@ class _ArrayGUHelper(namedtuple('_ArrayHelper', ('context', 'builder',
         )
         tup = (context.make_tuple(builder, sig.args[0], self.shape),
                context.make_tuple(builder, sig.args[1], other.shape),)
-        context.typing_context.refresh()
         context.call_overload(builder, raise_impl, sig, tup)
 
 
