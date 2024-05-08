@@ -139,15 +139,15 @@ JIT functions
 Generated JIT functions
 -----------------------
 
-.. decorator:: numba.generated_jit(nopython=False, nogil=False, cache=False, forceobj=False, locals={})
+Like the :func:`~numba.jit` decorator, but calls the decorated function at
+compile-time, passing the *types* of the function's arguments.
+The decorated function must return a callable which will be compiled as
+the function's implementation for those types, allowing flexible kinds of
+specialization.
 
-   Like the :func:`~numba.jit` decorator, but calls the decorated function at
-   compile-time, passing the *types* of the function's arguments.
-   The decorated function must return a callable which will be compiled as
-   the function's implementation for those types, allowing flexible kinds of
-   specialization.
-
-   The :func:`~numba.generated_jit` decorator returns a :class:`Dispatcher` object.
+If you are looking for this functionality, see the
+:ref:`high-level extension API <high-level-extending>` ``@overload`` family of
+decorators.
 
 
 Dispatcher objects
@@ -155,11 +155,11 @@ Dispatcher objects
 
 .. class:: Dispatcher
 
-   The class of objects created by calling :func:`~numba.jit` or
-   :func:`~numba.generated_jit`.  You shouldn't try to create such an object
-   in any other way.  Calling a Dispatcher object calls the compiled
-   specialization for the arguments with which it is called, letting it
-   act as an accelerated replacement for the Python function which was compiled.
+   The class of objects created by calling :func:`~numba.jit`. You shouldn't try
+   to create such an object in any other way.  Calling a Dispatcher object calls
+   the compiled specialization for the arguments with which it is called,
+   letting it act as an accelerated replacement for the Python function which
+   was compiled.
 
    In addition, Dispatcher objects have the following methods and attributes:
 
@@ -345,6 +345,13 @@ Vectorized functions (ufuncs and DUFuncs)
    The compiled function can be cached to reduce future compilation time.
    It is enabled by setting *cache* to True. Only the "cpu" and "parallel"
    targets support caching.
+
+   The ufuncs created by this function respect `NEP-13 <https://numpy.org/neps/nep-0013-ufunc-overrides.html>`_,
+   NumPy's mechanism for overriding ufuncs. If any of the arguments of the
+   ufunc's ``__call__`` have a ``__array_ufunc__`` method, that method will
+   be called (in Python, not the compiled context), which may pre-process
+   and/or post-process the arguments and return value of the compiled ufunc
+   (or might not even call it).
 
 
 .. decorator:: numba.guvectorize(signatures, layout, *, identity=None, nopython=True, target='cpu', forceobj=False, cache=False, locals={})

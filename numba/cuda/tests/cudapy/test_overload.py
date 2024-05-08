@@ -1,7 +1,8 @@
-from numba import cuda, njit
-from numba.core.extending import overload
+from numba import cuda, njit, types
+from numba.core.errors import TypingError
+from numba.core.extending import overload, overload_attribute
+from numba.core.typing.typeof import typeof
 from numba.cuda.testing import CUDATestCase, skip_on_cudasim, unittest
-
 import numpy as np
 
 
@@ -294,6 +295,32 @@ class TestOverload(CUDATestCase):
         # Also check that the CPU overloads are used on the CPU
         expected = GENERIC_TARGET_OL_CALLS_TARGET_OL * GENERIC_TARGET_OL
         self.check_overload_cpu(kernel, expected)
+
+    def test_overload_attribute_target(self):
+        MyDummy, MyDummyType = self.make_dummy_type()
+        mydummy_type = typeof(MyDummy())
+
+        @overload_attribute(MyDummyType, 'cuda_only', target='cuda')
+        def ov_dummy_cuda_attr(obj):
+            def imp(obj):
+                return 42
+
+            return imp
+
+        # Ensure that we cannot use the CUDA target-specific attribute on the
+        # CPU, and that an appropriate typing error is raised
+        with self.assertRaisesRegex(TypingError,
+                                    "Unknown attribute 'cuda_only'"):
+            @njit(types.int64(mydummy_type))
+            def illegal_target_attr_use(x):
+                return x.cuda_only
+
+        # Ensure that the CUDA target-specific attribute is usable and works
+        # correctly when the target is CUDA - note eager compilation via
+        # signature
+        @cuda.jit(types.void(types.int64[::1], mydummy_type))
+        def cuda_target_attr_use(res, dummy):
+            res[0] = dummy.cuda_only
 
 
 if __name__ == '__main__':

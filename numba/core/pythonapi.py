@@ -12,11 +12,13 @@ from numba import _helperlib
 from numba.core import (
     types, utils, config, lowering, cgutils, imputils, serialize,
 )
+from numba.core.utils import PYVERSION
 
 PY_UNICODE_1BYTE_KIND = _helperlib.py_unicode_1byte_kind
 PY_UNICODE_2BYTE_KIND = _helperlib.py_unicode_2byte_kind
 PY_UNICODE_4BYTE_KIND = _helperlib.py_unicode_4byte_kind
-PY_UNICODE_WCHAR_KIND = _helperlib.py_unicode_wchar_kind
+if PYVERSION in ((3, 9), (3, 10), (3, 11)):
+    PY_UNICODE_WCHAR_KIND = _helperlib.py_unicode_wchar_kind
 
 
 class _Registry(object):
@@ -195,7 +197,6 @@ class PythonAPI(object):
         self.py_unicode_1byte_kind = _helperlib.py_unicode_1byte_kind
         self.py_unicode_2byte_kind = _helperlib.py_unicode_2byte_kind
         self.py_unicode_4byte_kind = _helperlib.py_unicode_4byte_kind
-        self.py_unicode_wchar_kind = _helperlib.py_unicode_wchar_kind
 
     def get_env_manager(self, env, env_body, env_ptr):
         return EnvironmentManager(self, env, env_body, env_ptr)
@@ -944,13 +945,16 @@ class PythonAPI(object):
         return self.builder.call(fn, args)
 
     def call(self, callee, args=None, kws=None):
-        if args is None:
-            args = self.get_null_object()
+        if args_was_none := args is None:
+            args = self.tuple_new(0)
         if kws is None:
             kws = self.get_null_object()
         fnty = ir.FunctionType(self.pyobj, [self.pyobj] * 3)
         fn = self._get_function(fnty, name="PyObject_Call")
-        return self.builder.call(fn, (callee, args, kws))
+        result = self.builder.call(fn, (callee, args, kws))
+        if args_was_none:
+            self.decref(args)
+        return result
 
     def object_type(self, obj):
         """Emit a call to ``PyObject_Type(obj)`` to get the type of ``obj``.

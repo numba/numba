@@ -12,12 +12,12 @@ part of your code can subsequently run at native machine code speed!
 
 Out of the box Numba works with the following:
 
-* OS: Windows (32 and 64 bit), OSX, Linux (64 bit). Unofficial support on
+* OS: Windows (64 bit), OSX, Linux (64 bit). Unofficial support on
   \*BSD.
 * Architecture: x86, x86_64, ppc64le, armv8l (aarch64), M1/Arm64.
 * GPUs: Nvidia CUDA.
 * CPython
-* NumPy 1.21 - 1.24
+* NumPy 1.22 - 1.26
 
 How do I get it?
 ----------------
@@ -61,7 +61,7 @@ Numba works well on code that looks like this::
 
     x = np.arange(100).reshape(10, 10)
 
-    @jit(nopython=True) # Set "nopython" mode for best performance, equivalent to @njit
+    @jit
     def go_fast(a): # Function is compiled to machine code when called the first time
         trace = 0.0
         for i in range(a.shape[0]):   # Numba likes loops
@@ -78,7 +78,7 @@ It won't work very well, if at all, on code that looks like this::
 
     x = {'a': [1, 2, 3], 'b': [20, 30, 40]}
 
-    @jit
+    @jit(forceobj=True, looplift=True) # Need to use object mode, try and compile loops!
     def use_pandas(a): # Function will not benefit from Numba jit
         df = pd.DataFrame.from_dict(a) # Numba doesn't know about pd.DataFrame
         df += 1                        # Numba doesn't understand what this is
@@ -90,23 +90,25 @@ Note that Pandas is not understood by Numba and as a result Numba would simply
 run this code via the interpreter but with the added cost of the Numba internal
 overheads!
 
-What is ``nopython`` mode?
---------------------------
+What is ``object mode``?
+------------------------
 The Numba ``@jit`` decorator fundamentally operates in two compilation modes,
 ``nopython`` mode and ``object`` mode. In the ``go_fast`` example above,
-``nopython=True`` is set in the ``@jit`` decorator; this is instructing Numba to
-operate in ``nopython`` mode. The behaviour of the ``nopython`` compilation mode
-is to essentially compile the decorated function so that it will run entirely
-without the involvement of the Python interpreter. This is the recommended and
-best-practice way to use the Numba ``jit`` decorator as it leads to the best
-performance.
+the ``@jit`` decorator defaults to operating in ``nopython`` mode. The behaviour
+of the ``nopython`` compilation mode is to essentially compile the decorated
+function so that it will run entirely without the involvement of the Python
+interpreter. This is the recommended and best-practice way to use the Numba
+``jit`` decorator as it leads to the best performance.
 
 Should the compilation in ``nopython`` mode fail, Numba can compile using
-``object mode``. This is a fall back mode for the ``@jit`` decorator if
-``nopython=True`` is not set (as seen in the ``use_pandas`` example above). In
-this mode Numba will identify loops that it can compile and compile those into
-functions that run in machine code, and it will run the rest of the code in the
-interpreter. For best performance avoid using this mode!
+``object mode``. This achieved through using the ``forceobj=True`` key word
+argument to the ``@jit`` decorator (as seen in the ``use_pandas`` example
+above). In this mode Numba will compile the function with the assumption that
+everything is a Python object and essentially run the code in the interpreter.
+Specifying ``looplift=True`` might gain some performance over pure
+``object mode`` as Numba will try and compile loops into functions that run in
+machine code, and it will run the rest of the code in the interpreter.
+For best performance avoid using ``object mode`` mode in general!
 
 How to measure the performance of Numba?
 ----------------------------------------

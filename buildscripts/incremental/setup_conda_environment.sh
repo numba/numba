@@ -27,15 +27,6 @@ source deactivate
 # Display root environment (for debugging)
 conda list
 
-# Use conda-forge for NumPy 1.24 - at the time of writing it is not available
-# on the defaults channel.
-
-if [ "${NUMPY}" == "1.24" ]; then
-  NUMPY_CHANNEL_PKG=conda-forge::numpy
-else
-  NUMPY_CHANNEL_PKG=numpy
-fi
-
 # If VANILLA_INSTALL is yes, then only Python, NumPy and pip are installed, this
 # is to catch tests/code paths that require an optional package and are not
 # guarding against the possibility that it does not exist in the environment.
@@ -43,7 +34,7 @@ fi
 # NOTE: gitpython is needed for CI testing to do the test slicing
 # NOTE: pyyaml is used to ensure that the Azure CI config is valid
 
-conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON $NUMPY_CHANNEL_PKG=$NUMPY pip gitpython pyyaml
+conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml
 
 # Activate first
 set +v
@@ -58,12 +49,23 @@ if [ "${VANILLA_INSTALL}" != "yes" ]; then
     # dependencies, but exercised in the test suite
     # pexpect is used to run the gdb tests.
     # ipykernel is used for testing ipython behaviours.
-    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipykernel scipy pygments pexpect
+    if [ $PYTHON \< "3.12" ]; then
+        $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipykernel scipy pygments pexpect
+    else
+        # At the time of writing `ipykernel` was not available for Python 3.12
+        $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython scipy pygments pexpect
+    fi
 fi
 
 # Install the compiler toolchain and gdb (if available)
 if [[ $(uname) == Linux ]]; then
-    $CONDA_INSTALL gcc_linux-64 gxx_linux-64 gdb gdb-pretty-printer
+    if [ $PYTHON \< "3.12" ]; then
+        $CONDA_INSTALL gcc_linux-64 gxx_linux-64 gdb gdb-pretty-printer
+    else
+        # At the time of writing gdb and gdb-pretty-printer were not available
+        # for 3.12.
+        $CONDA_INSTALL gcc_linux-64 gxx_linux-64
+    fi
 elif  [[ $(uname) == Darwin ]]; then
     $CONDA_INSTALL clang_osx-64 clangxx_osx-64
     # Install llvm-openmp on OSX for headers during build and runtime during
@@ -72,10 +74,7 @@ elif  [[ $(uname) == Darwin ]]; then
 fi
 
 # Install latest correct build
-$CONDA_INSTALL -c numba/label/dev llvmlite=0.41
-
-# Install importlib-metadata for Python < 3.9
-if [ $PYTHON \< "3.9" ]; then $CONDA_INSTALL importlib_metadata; fi
+$CONDA_INSTALL -c numba/label/dev llvmlite=0.43
 
 # Install dependencies for building the documentation
 if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx docutils sphinx_rtd_theme pygments numpydoc; fi
@@ -88,6 +87,8 @@ if [ "$TEST_SVML" == "yes" ]; then $CONDA_INSTALL -c numba icc_rt; fi
 if [ "$TEST_THREADING" == "tbb" ]; then $CONDA_INSTALL "tbb>=2021.6" "tbb-devel>=2021.6"; fi
 # Install typeguard
 if [ "$RUN_TYPEGUARD" == "yes" ]; then $CONDA_INSTALL "conda-forge::typeguard==3.0.1"; fi
+# Install RVSDG
+if [ "$TEST_RVSDG" == "yes" ]; then $PIP_INSTALL numba-rvsdg; fi
 
 # environment dump for debug
 # echo "DEBUG ENV:"

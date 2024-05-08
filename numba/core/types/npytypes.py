@@ -635,3 +635,15 @@ class NumPyRandomGeneratorType(Type):
     def __init__(self, *args, **kwargs):
         super(NumPyRandomGeneratorType, self).__init__(*args, **kwargs)
         self.name = 'NumPyRandomGeneratorType'
+
+
+class PolynomialType(Type):
+    def __init__(self, coef, domain=None, window=None, n_args=1):
+        super(PolynomialType, self).__init__(name=f'PolynomialType({coef}, {domain}, {domain}, {n_args})')
+        self.coef = coef
+        self.domain = domain
+        self.window = window
+        # We use n_args to keep track of the number of arguments in the
+        # constructor, since the types of domain and window arguments depend on
+        # that and we need that information when boxing
+        self.n_args = n_args

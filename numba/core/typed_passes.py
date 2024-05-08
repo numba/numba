@@ -1,6 +1,7 @@
 import abc
 from contextlib import contextmanager
 from collections import defaultdict, namedtuple
+from functools import partial
 from copy import copy
 import warnings
 
@@ -23,7 +24,8 @@ from numba.core.ir_utils import (raise_on_unsupported_feature, warn_deprecated,
                                  dead_code_elimination, simplify_CFG,
                                  get_definition,
                                  build_definitions, compute_cfg_from_blocks,
-                                 is_operator_or_getitem)
+                                 is_operator_or_getitem,
+                                 replace_vars)
 from numba.core import postproc
 from llvmlite import binding as llvm
 
@@ -68,9 +70,12 @@ def type_inference_stage(typingctx, targetctx, interp, args, return_type,
     if len(args) != interp.arg_count:
         raise TypeError("Mismatch number of argument types")
     warnings = errors.WarningsFixer(errors.NumbaWarning)
+
     infer = typeinfer.TypeInferer(typingctx, interp, warnings)
-    with typingctx.callstack.register(targetctx.target, infer, interp.func_id,
-                                      args):
+    callstack_ctx = typingctx.callstack.register(targetctx.target, infer,
+                                                 interp.func_id, args)
+    # Setup two contexts: 1) callstack setup/teardown 2) flush warnings
+    with callstack_ctx, warnings:
         # Seed argument types
         for index, (name, ty) in enumerate(zip(interp.arg_names, args)):
             infer.seed_argument(name, index, ty)
@@ -87,9 +92,6 @@ def type_inference_stage(typingctx, targetctx, interp, args, return_type,
         # return errors in case of partial typing
         errs = infer.propagate(raise_errors=raise_errors)
         typemap, restype, calltypes = infer.unify(raise_errors=raise_errors)
-
-    # Output all Numba warnings
-    warnings.flush()
 
     return _TypingResults(typemap, restype, calltypes, errs)
 
@@ -881,6 +883,10 @@ class PreLowerStripPhis(FunctionPass):
     def run_pass(self, state):
         state.func_ir = self._strip_phi_nodes(state.func_ir)
         state.func_ir._definitions = build_definitions(state.func_ir.blocks)
+        if "flags" in state and state.flags.auto_parallel.enabled:
+            self._simplify_conditionally_defined_variable(state.func_ir)
+            state.func_ir._definitions = build_definitions(state.func_ir.blocks)
+
         # Rerun postprocessor to update metadata
         post_proc = postproc.PostProcessor(state.func_ir)
         post_proc.run(emit_dels=False)
@@ -956,3 +962,78 @@ class PreLowerStripPhis(FunctionPass):
 
         func_ir.blocks = newblocks
         return func_ir
+
+    def _simplify_conditionally_defined_variable(self, func_ir):
+        """
+        Rewrite assignments like:
+
+            ver1 = null()
+            ...
+            ver1 = ver
+            ...
+            uses(ver1)
+
+        into:
+            # delete all assignments to ver1
+            uses(ver)
+
+        This is only needed for parfors because the SSA pass will create extra
+        variable assignments that the parfor code does not expect.
+        This pass helps avoid problems by reverting the effect of SSA.
+        """
+        any_block = next(iter(func_ir.blocks.values()))
+        scope = any_block.scope
+        defs = func_ir._definitions
+
+        def unver_or_undef(unver, defn):
+            # Is the definition undefined or pointing to the unversioned name?
+            if isinstance(defn, ir.Var):
+                if defn.unversioned_name == unver:
+                    return True
+            elif isinstance(defn, ir.Expr):
+                if defn.op == "null":
+                    return True
+            return False
+
+        def legalize_all_versioned_names(var):
+            # Are all versioned names undefined or defined to the same
+            # variable chain?
+            if not var.versioned_names:
+                return False
+            for versioned in var.versioned_names:
+                vs = defs.get(versioned, ())
+                if not all(map(partial(unver_or_undef, k), vs)):
+                    return False
+            return True
+
+        # Find unversioned variables that met the conditions
+        suspects = set()
+        for k in defs:
+            try:
+                # This may fail?
+                var = scope.get_exact(k)
+            except errors.NotDefinedError:
+                continue
+            # is the var name unversioned?
+            if var.unversioned_name == k:
+                if legalize_all_versioned_names(var):
+                    suspects.add(var)
+
+        delete_set = set()
+        replace_map = {}
+        for var in suspects:
+            # rewrite Var uses to the unversioned name
+            for versioned in var.versioned_names:
+                ver_var = scope.get_exact(versioned)
+                # delete assignment to the versioned name
+                delete_set.add(ver_var)
+                # replace references to versioned name with the unversioned
+                replace_map[versioned] = var
+
+        # remove assignments to the versioned names
+        for _label, blk in func_ir.blocks.items():
+            for assign in blk.find_insts(ir.Assign):
+                if assign.target in delete_set:
+                    blk.remove(assign)
+        # do variable replacement
+        replace_vars(func_ir.blocks, replace_map)

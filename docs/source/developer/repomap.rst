@@ -100,8 +100,6 @@ Dispatching
   for different type signatures.
 - :ghfile:`numba/_dispatcher.cpp` - C++ dispatcher implementation (for speed on
   common data types)
-- :ghfile:`numba/core/retarget.py` - Support for dispatcher objects to switch
-  target via a specific with-context.
 
 
 Compiler Pipeline
@@ -218,6 +216,8 @@ Misc Support
   (also imports local copy of ``six``)
 - :ghfile:`numba/misc/appdirs.py` - Vendored package for determining application
   config directories on every platform
+- :ghfile:`numba/misc/POST.py` - A power-on-self-test script Numba uses in CI
+  to make sure the test runner and compilation is working.
 - :ghfile:`numba/core/compiler_lock.py` - Global compiler lock because Numba's
   usage of LLVM is not thread-safe
 - :ghfile:`numba/misc/special.py` - Python stub implementations of special Numba
@@ -425,7 +425,8 @@ typing and implementation to be specified together.
 - :ghfile:`numba/np/npyfuncs.py` - Kernels used in generating some
   NumPy ufuncs
 - :ghfile:`numba/np/npyimpl.py` - Implementations of most NumPy ufuncs
-- :ghfile:`numba/np/polynomial.py` - ``numpy.roots`` function
+- :ghfile:`numba/np/polynomial/polynomial_functions.py` - Implementations of NumPy ``Polynomial`` functions
+- :ghfile:`numba/np/polynomial/polynomial_core.py` - Implementations of NumPy ``Polynomial`` class
 - :ghfile:`numba/np/ufunc_db.py` - Big table mapping types to ufunc
   implementations
 

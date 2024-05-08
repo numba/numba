@@ -25,6 +25,7 @@ Numba for CUDA GPUs
    external-memory.rst
    bindings.rst
    cuda_ffi.rst
+   cuda_compilation.rst
    caching.rst
    minor_version_compatibility.rst
    faq.rst

@@ -11,6 +11,7 @@ from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                          AbstractTemplate, infer_global, infer,
                                          infer_getattr, signature)
 from numba.np import npdatetime_helpers
+from numba.np.numpy_support import numpy_version
 
 
 # timedelta64-only operations
@@ -144,13 +145,22 @@ class TimedeltaTrueDiv(TimedeltaDivOp):
 class TimedeltaFloorDiv(TimedeltaDivOp):
     key = operator.floordiv
 
-@infer_global(operator.eq)
-class TimedeltaCmpEq(TimedeltaCmpOp):
-    key = operator.eq
+if numpy_version >= (1, 25):
+    @infer_global(operator.eq)
+    class TimedeltaCmpEq(TimedeltaOrderedCmpOp):
+        key = operator.eq
 
-@infer_global(operator.ne)
-class TimedeltaCmpNe(TimedeltaCmpOp):
-    key = operator.ne
+    @infer_global(operator.ne)
+    class TimedeltaCmpNe(TimedeltaOrderedCmpOp):
+        key = operator.ne
+else:
+    @infer_global(operator.eq)
+    class TimedeltaCmpEq(TimedeltaCmpOp):
+        key = operator.eq
+
+    @infer_global(operator.ne)
+    class TimedeltaCmpNe(TimedeltaCmpOp):
+        key = operator.ne
 
 @infer_global(operator.lt)
 class TimedeltaCmpLt(TimedeltaOrderedCmpOp):
@@ -228,7 +238,6 @@ class DatetimeMinusDatetime(AbstractTemplate):
         left, right = args
         if isinstance(left, types.NPDatetime) and isinstance(right,
                                                              types.NPDatetime):
-            # All units compatible...
             unit = npdatetime_helpers.get_best_unit(left.unit, right.unit)
             return signature(types.NPTimedelta(unit), left, right)
 

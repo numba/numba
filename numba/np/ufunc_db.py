@@ -9,9 +9,11 @@ ufunc
 
 
 import numpy as np
-
+import sys
 
 # this is lazily initialized to avoid circular imports
+IS_WIN32 = sys.platform.startswith('win32')
+numpy_version = tuple(map(int, np.__version__.split('.')[:2]))
 _ufunc_db = None
 
 
@@ -48,7 +50,7 @@ def _fill_ufunc_db(ufunc_db):
     # imports if done at global scope when importing the numba
     # module.
     from numba.np import npyfuncs
-    from numba.cpython import cmathimpl, mathimpl, numbers
+    from numba.np.math import cmathimpl, mathimpl, numbers
     from numba.np.numpy_support import numpy_version
 
     ufunc_db[np.isnat] = {
@@ -231,11 +233,6 @@ def _fill_ufunc_db(ufunc_db):
         'ff->f': npyfuncs.np_real_floor_div_impl,
         'dd->d': npyfuncs.np_real_floor_div_impl,
     }
-    if numpy_version < (1, 22): # removed in 1.22+
-        ufunc_db[np.floor_divide].update({
-            'FF->F': npyfuncs.np_complex_floor_div_impl,
-            'DD->D': npyfuncs.np_complex_floor_div_impl,
-        })
 
     ufunc_db[np.remainder] = {
         'bb->b': npyfuncs.np_int_srem_impl,
@@ -620,6 +617,10 @@ def _fill_ufunc_db(ufunc_db):
         'FF->?': npyfuncs.np_complex_gt_impl,
         'DD->?': npyfuncs.np_complex_gt_impl,
     }
+    if numpy_version >= (1, 25):
+        ufunc_db[np.greater].update({
+            'qQ->?': numbers.int_signed_unsigned_cmp('>'),
+            'Qq->?': numbers.int_unsigned_signed_cmp('>')})
 
     ufunc_db[np.greater_equal] = {
         '??->?': numbers.int_uge_impl,
@@ -638,6 +639,10 @@ def _fill_ufunc_db(ufunc_db):
         'FF->?': npyfuncs.np_complex_ge_impl,
         'DD->?': npyfuncs.np_complex_ge_impl,
     }
+    if numpy_version >= (1, 25):
+        ufunc_db[np.greater_equal].update({
+            'qQ->?': numbers.int_signed_unsigned_cmp('>='),
+            'Qq->?': numbers.int_unsigned_signed_cmp('>=')})
 
     ufunc_db[np.less] = {
         '??->?': numbers.int_ult_impl,
@@ -656,6 +661,10 @@ def _fill_ufunc_db(ufunc_db):
         'FF->?': npyfuncs.np_complex_lt_impl,
         'DD->?': npyfuncs.np_complex_lt_impl,
     }
+    if numpy_version >= (1, 25):
+        ufunc_db[np.less].update({
+            'qQ->?': numbers.int_signed_unsigned_cmp('<'),
+            'Qq->?': numbers.int_unsigned_signed_cmp('<')})
 
     ufunc_db[np.less_equal] = {
         '??->?': numbers.int_ule_impl,
@@ -674,6 +683,10 @@ def _fill_ufunc_db(ufunc_db):
         'FF->?': npyfuncs.np_complex_le_impl,
         'DD->?': npyfuncs.np_complex_le_impl,
     }
+    if numpy_version >= (1, 25):
+        ufunc_db[np.less_equal].update({
+            'qQ->?': numbers.int_signed_unsigned_cmp('<='),
+            'Qq->?': numbers.int_unsigned_signed_cmp('<=')})
 
     ufunc_db[np.not_equal] = {
         '??->?': numbers.int_ne_impl,
@@ -692,6 +705,10 @@ def _fill_ufunc_db(ufunc_db):
         'FF->?': npyfuncs.np_complex_ne_impl,
         'DD->?': npyfuncs.np_complex_ne_impl,
     }
+    if numpy_version >= (1, 25):
+        ufunc_db[np.not_equal].update({
+            'qQ->?': numbers.int_signed_unsigned_cmp('!='),
+            'Qq->?': numbers.int_unsigned_signed_cmp('!=')})
 
     ufunc_db[np.equal] = {
         '??->?': numbers.int_eq_impl,
@@ -710,6 +727,10 @@ def _fill_ufunc_db(ufunc_db):
         'FF->?': npyfuncs.np_complex_eq_impl,
         'DD->?': npyfuncs.np_complex_eq_impl,
     }
+    if numpy_version >= (1, 25):
+        ufunc_db[np.equal].update({
+            'qQ->?': numbers.int_signed_unsigned_cmp('=='),
+            'Qq->?': numbers.int_unsigned_signed_cmp('==')})
 
     ufunc_db[np.logical_and] = {
         '??->?': npyfuncs.np_logical_and_impl,
@@ -963,6 +984,9 @@ def _fill_ufunc_db(ufunc_db):
         'di->d': npyfuncs.np_real_ldexp_impl,
         'dl->d': npyfuncs.np_real_ldexp_impl,
     }
+    if numpy_version >= (2, 0) and IS_WIN32:
+        ufunc_db[np.ldexp]['fq->f'] = ufunc_db[np.ldexp].pop('fl->f')
+        ufunc_db[np.ldexp]['dq->d'] = ufunc_db[np.ldexp].pop('dl->d')
 
     # bit twiddling functions
     ufunc_db[np.bitwise_and] = {

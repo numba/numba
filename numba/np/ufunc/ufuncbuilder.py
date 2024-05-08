@@ -28,7 +28,6 @@ _options_mixin = include_default_options(
     "forceobj",
     "boundscheck",
     "fastmath",
-    "target_backend",
     "writable_args"
 )
 

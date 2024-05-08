@@ -35,6 +35,14 @@ class CUDATestCase(SerialMixin, TestCase):
         config.CUDA_LOW_OCCUPANCY_WARNINGS = self._low_occupancy_warnings
         config.CUDA_WARN_ON_IMPLICIT_COPY = self._warn_on_implicit_copy
 
+    def skip_if_lto(self, reason):
+        # Some linkers need the compute capability to be specified, so we
+        # always specify it here.
+        cc = devices.get_context().device.compute_capability
+        linker = driver.Linker.new(cc=cc)
+        if linker.lto:
+            self.skipTest(reason)
+
 
 class ContextResettingTestCase(CUDATestCase):
     """
@@ -119,6 +127,19 @@ def skip_if_mvc_enabled(reason):
                            reason)
 
 
+def skip_if_mvc_libraries_unavailable(fn):
+    libs_available = False
+    try:
+        import cubinlinker  # noqa: F401
+        import ptxcompiler  # noqa: F401
+        libs_available = True
+    except ImportError:
+        pass
+
+    return unittest.skipUnless(libs_available,
+                               "Requires cubinlinker and ptxcompiler")(fn)
+
+
 def cc_X_or_above(major, minor):
     if not config.ENABLE_CUDASIM:
         cc = devices.get_context().device.compute_capability
@@ -154,15 +175,12 @@ def skip_with_cuda_python(reason):
     return unittest.skipIf(driver.USE_NV_BINDING, reason)
 
 
-def skip_unless_cuda_python(reason):
-    return unittest.skipIf(not driver.USE_NV_BINDING, reason)
-
-
 def cudadevrt_missing():
     if config.ENABLE_CUDASIM:
         return False
     try:
-        libs.check_static_lib('cudadevrt')
+        path = libs.get_cudalib('cudadevrt', static=True)
+        libs.check_static_lib(path)
     except FileNotFoundError:
         return True
     return False

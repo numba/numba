@@ -15,9 +15,9 @@ from numba.cuda.extending import intrinsic
 def _type_grid_function(ndim):
     val = ndim.literal_value
     if val == 1:
-        restype = types.int32
+        restype = types.int64
     elif val in (2, 3):
-        restype = types.UniTuple(types.int32, val)
+        restype = types.UniTuple(types.int64, val)
     else:
         raise ValueError('argument can only be 1, 2, 3')
 
@@ -48,7 +48,7 @@ def grid(typingctx, ndim):
 
     def codegen(context, builder, sig, args):
         restype = sig.return_type
-        if restype == types.int32:
+        if restype == types.int64:
             return nvvmutils.get_global_id(builder, dim=1)
         elif isinstance(restype, types.UniTuple):
             ids = nvvmutils.get_global_id(builder, dim=restype.count)
@@ -80,15 +80,16 @@ def gridsize(typingctx, ndim):
     sig = _type_grid_function(ndim)
 
     def _nthreads_for_dim(builder, dim):
+        i64 = ir.IntType(64)
         ntid = nvvmutils.call_sreg(builder, f"ntid.{dim}")
         nctaid = nvvmutils.call_sreg(builder, f"nctaid.{dim}")
-        return builder.mul(ntid, nctaid)
+        return builder.mul(builder.sext(ntid, i64), builder.sext(nctaid, i64))
 
     def codegen(context, builder, sig, args):
         restype = sig.return_type
         nx = _nthreads_for_dim(builder, 'x')
 
-        if restype == types.int32:
+        if restype == types.int64:
             return nx
         elif isinstance(restype, types.UniTuple):
             ny = _nthreads_for_dim(builder, 'y')

@@ -161,13 +161,6 @@ class NVVM(object):
         self._supported_ccs = get_supported_ccs()
 
     @property
-    def is_nvvm70(self):
-        # NVVM70 uses NVVM IR version 1.6. See the documentation for
-        # nvvmAddModuleToProgram in
-        # https://docs.nvidia.com/cuda/libnvvm-api/group__compilation.html
-        return (self._majorIR, self._minorIR) >= (1, 6)
-
-    @property
     def data_layout(self):
         if (self._majorIR, self._minorIR) < (1, 8):
             return _datalayout_original
@@ -238,72 +231,46 @@ class CompilationUnit(object):
         self.driver.check_error(err, 'Failed to add module')
 
     def compile(self, **options):
-        """Perform Compilation
+        """Perform Compilation.
 
-        The valid compiler options are
+        Compilation options are accepted as keyword arguments, with the
+        following considerations:
 
-         *   - -opt=
-         *     - 0 (disable optimizations)
-         *     - 3 (default, enable optimizations)
-         *   - -arch=
-         *     - compute_XX where XX is in (35, 37, 50, 52, 53, 60, 61, 62, 70,
-         *                                  72, 75, 80, 86, 89, 90).
-         *       The default is compute_52.
-         *   - -ftz=
-         *     - 0 (default, preserve denormal values, when performing
-         *          single-precision floating-point operations)
-         *     - 1 (flush denormal values to zero, when performing
-         *          single-precision floating-point operations)
-         *   - -prec-sqrt=
-         *     - 0 (use a faster approximation for single-precision
-         *          floating-point square root)
-         *     - 1 (default, use IEEE round-to-nearest mode for
-         *          single-precision floating-point square root)
-         *   - -prec-div=
-         *     - 0 (use a faster approximation for single-precision
-         *          floating-point division and reciprocals)
-         *     - 1 (default, use IEEE round-to-nearest mode for
-         *          single-precision floating-point division and reciprocals)
-         *   - -fma=
-         *     - 0 (disable FMA contraction)
-         *     - 1 (default, enable FMA contraction)
-         *
-         """
+        - Underscores (`_`) in option names are converted to dashes (`-`), to
+          match NVVM's option name format.
+        - Options that take a value will be emitted in the form
+          "-<name>=<value>".
+        - Booleans passed as option values will be converted to integers.
+        - Options which take no value (such as `-gen-lto`) should have a value
+          of `None` passed in and will be emitted in the form "-<name>".
 
-        # stringify options
-        opts = []
+        For documentation on NVVM compilation options, see the CUDA Toolkit
+        Documentation:
 
-        if 'opt' in options:
-            opts.append('-opt=%d' % options.pop('opt'))
+        https://docs.nvidia.com/cuda/libnvvm-api/index.html#_CPPv418nvvmCompileProgram11nvvmProgramiPPKc
+        """
 
-        if options.get('arch'):
-            opts.append('-arch=%s' % options.pop('arch'))
+        def stringify_option(k, v):
+            k = k.replace('_', '-')
 
-        other_options = (
-            'ftz',
-            'prec_sqrt',
-            'prec_div',
-            'fma',
-        )
+            if v is None:
+                return f'-{k}'
 
-        for k in other_options:
-            if k in options:
-                v = int(bool(options.pop(k)))
-                opts.append('-%s=%d' % (k.replace('_', '-'), v))
+            if isinstance(v, bool):
+                v = int(v)
 
-        # If there are any option left
-        if options:
-            optstr = ', '.join(map(repr, options.keys()))
-            raise NvvmError("unsupported option {0}".format(optstr))
+            return f'-{k}={v}'
 
-        c_opts = (c_char_p * len(opts))(*[c_char_p(x.encode('utf8'))
-                                          for x in opts])
+        options = [stringify_option(k, v) for k, v in options.items()]
+
+        c_opts = (c_char_p * len(options))(*[c_char_p(x.encode('utf8'))
+                                             for x in options])
         # verify
-        err = self.driver.nvvmVerifyProgram(self._handle, len(opts), c_opts)
+        err = self.driver.nvvmVerifyProgram(self._handle, len(options), c_opts)
         self._try_error(err, 'Failed to verify\n')
 
         # compile
-        err = self.driver.nvvmCompileProgram(self._handle, len(opts), c_opts)
+        err = self.driver.nvvmCompileProgram(self._handle, len(options), c_opts)
         self._try_error(err, 'Failed to compile\n')
 
         # get result
@@ -312,8 +279,8 @@ class CompilationUnit(object):
 
         self._try_error(err, 'Failed to get size of compiled result.')
 
-        ptxbuf = (c_char * reslen.value)()
-        err = self.driver.nvvmGetCompiledResult(self._handle, ptxbuf)
+        output_buffer = (c_char * reslen.value)()
+        err = self.driver.nvvmGetCompiledResult(self._handle, output_buffer)
         self._try_error(err, 'Failed to get compiled result.')
 
         # get log
@@ -321,7 +288,7 @@ class CompilationUnit(object):
         if self.log:
             warnings.warn(self.log, category=NvvmWarning)
 
-        return ptxbuf[:]
+        return output_buffer[:]
 
     def _try_error(self, err, msg):
         self.driver.check_error(err, "%s\n%s" % (msg, self.get_log()))
@@ -352,8 +319,6 @@ COMPUTE_CAPABILITIES = (
 
 # Maps CTK version -> (min supported cc, max supported cc) inclusive
 CTK_SUPPORTED = {
-    (11, 0): ((3, 5), (8, 0)),
-    (11, 1): ((3, 5), (8, 6)),
     (11, 2): ((3, 5), (8, 6)),
     (11, 3): ((3, 5), (8, 6)),
     (11, 4): ((3, 5), (8, 7)),
@@ -363,6 +328,9 @@ CTK_SUPPORTED = {
     (11, 8): ((3, 5), (9, 0)),
     (12, 0): ((5, 0), (9, 0)),
     (12, 1): ((5, 0), (9, 0)),
+    (12, 2): ((5, 0), (9, 0)),
+    (12, 3): ((5, 0), (9, 0)),
+    (12, 4): ((5, 0), (9, 0)),
 }
 
 
@@ -449,10 +417,14 @@ def get_arch_option(major, minor):
 
 
 MISSING_LIBDEVICE_FILE_MSG = '''Missing libdevice file.
-Please ensure you have package cudatoolkit >= 11.0
-Install package by:
+Please ensure you have a CUDA Toolkit 11.2 or higher.
+For CUDA 12, ``cuda-nvcc`` and ``cuda-nvrtc`` are required:
 
-    conda install cudatoolkit
+    $ conda install -c conda-forge cuda-nvcc cuda-nvrtc "cuda-version>=12.0"
+
+For CUDA 11, ``cudatoolkit`` is required:
+
+    $ conda install -c conda-forge cudatoolkit "cuda-version>=11.2,<12.0"
 '''
 
 
@@ -471,21 +443,9 @@ class LibDevice(object):
         return self.bc
 
 
-ir_numba_cas_hack = """
-define internal {T} @___numba_atomic_{T}_cas_hack({T}* %ptr, {T} %cmp, {T} %val) alwaysinline {{
-    %out = cmpxchg volatile {T}* %ptr, {T} %cmp, {T} %val monotonic
-    ret {T} %out
-}}
-""" # noqa: E501
-
-cas_nvvm70 = """
+cas_nvvm = """
     %cas_success = cmpxchg volatile {Ti}* %iptr, {Ti} %old, {Ti} %new monotonic monotonic
     %cas = extractvalue {{ {Ti}, i1 }} %cas_success, 0
-""" # noqa: E501
-
-
-cas_nvvm34 = """
-    %cas = cmpxchg volatile {Ti}* %iptr, {Ti} %old, {Ti} %new monotonic
 """ # noqa: E501
 
 
@@ -585,10 +545,7 @@ done:
 
 
 def ir_cas(Ti):
-    if NVVM().is_nvvm70:
-        return cas_nvvm70.format(Ti=Ti)
-    else:
-        return cas_nvvm34.format(Ti=Ti)
+    return cas_nvvm.format(Ti=Ti)
 
 
 def ir_numba_atomic_binary(T, Ti, OP, FUNC):
@@ -609,19 +566,6 @@ def ir_numba_atomic_inc(T, Tu):
 
 def ir_numba_atomic_dec(T, Tu):
     return ir_numba_atomic_dec_template.format(T=T, Tu=Tu, CAS=ir_cas(T))
-
-
-def _replace_datalayout(llvmir):
-    """
-    Find the line containing the datalayout and replace it
-    """
-    lines = llvmir.splitlines()
-    for i, ln in enumerate(lines):
-        if ln.startswith("target datalayout"):
-            tmp = 'target datalayout = "{0}"'
-            lines[i] = tmp.format(NVVM().data_layout)
-            break
-    return '\n'.join(lines)
 
 
 def llvm_replace(llvmir):
@@ -663,31 +607,15 @@ def llvm_replace(llvmir):
         ('immarg', '')
     ]
 
-    if not NVVM().is_nvvm70:
-        # Replace with our cmpxchg implementation because LLVM 3.5 has a new
-        # semantic for cmpxchg.
-        replacements += [
-            ('declare i32 @"___numba_atomic_i32_cas_hack"(i32* %".1", i32 %".2", i32 %".3")',  # noqa: E501
-             ir_numba_cas_hack.format(T='i32')),
-            ('declare i64 @"___numba_atomic_i64_cas_hack"(i64* %".1", i64 %".2", i64 %".3")',  # noqa: E501
-             ir_numba_cas_hack.format(T='i64'))
-        ]
-        # Newer LLVMs generate a shorthand for datalayout that NVVM34 does not
-        # know
-        llvmir = _replace_datalayout(llvmir)
-
     for decl, fn in replacements:
         llvmir = llvmir.replace(decl, fn)
 
-    if NVVM().is_nvvm70:
-        llvmir = llvm100_to_70_ir(llvmir)
-    else:
-        llvmir = llvm100_to_34_ir(llvmir)
+    llvmir = llvm140_to_70_ir(llvmir)
 
     return llvmir
 
 
-def llvm_to_ptx(llvmir, **opts):
+def compile_ir(llvmir, **opts):
     if isinstance(llvmir, str):
         llvmir = [llvmir]
 
@@ -710,44 +638,12 @@ def llvm_to_ptx(llvmir, **opts):
     return cu.compile(**opts)
 
 
-re_metadata_def = re.compile(r"\!\d+\s*=")
-re_metadata_correct_usage = re.compile(r"metadata\s*\![{'\"0-9]")
-re_metadata_ref = re.compile(r"\!\d+")
-
-debuginfo_pattern = r"\!{i32 \d, \!\"Debug Info Version\", i32 \d}"
-re_metadata_debuginfo = re.compile(debuginfo_pattern.replace(' ', r'\s+'))
-
 re_attributes_def = re.compile(r"^attributes #\d+ = \{ ([\w\s]+)\ }")
-supported_attributes = {'alwaysinline', 'cold', 'inlinehint', 'minsize',
-                        'noduplicate', 'noinline', 'noreturn', 'nounwind',
-                        'optnone', 'optisze', 'readnone', 'readonly'}
-
-re_getelementptr = re.compile(r"\bgetelementptr\s(?:inbounds )?\(?")
-
-re_load = re.compile(r"=\s*\bload\s(?:\bvolatile\s)?")
-
-re_call = re.compile(r"(call\s[^@]+\))(\s@)")
-re_range = re.compile(r"\s*!range\s+!\d+")
-
-re_type_tok = re.compile(r"[,{}()[\]]")
-
-re_annotations = re.compile(r"\bnonnull\b")
-
-re_unsupported_keywords = re.compile(r"\b(local_unnamed_addr|writeonly)\b")
-
-re_parenthesized_list = re.compile(r"\((.*)\)")
-
-re_spflags = re.compile(r"spFlags: (.*),")
-
-spflagmap = {
-    'DISPFlagDefinition': 'isDefinition',
-    'DISPFlagOptimized': 'isOptimized',
-}
 
 
-def llvm100_to_70_ir(ir):
+def llvm140_to_70_ir(ir):
     """
-    Convert LLVM 10.0 IR for LLVM 7.0.
+    Convert LLVM 14.0 IR for LLVM 7.0.
     """
     buf = []
     for line in ir.splitlines():
@@ -763,153 +659,43 @@ def llvm100_to_70_ir(ir):
     return '\n'.join(buf)
 
 
-def llvm100_to_34_ir(ir):
+def set_cuda_kernel(function):
     """
-    Convert LLVM 10.0 IR for LLVM 3.4.
+    Mark a function as a CUDA kernel. Kernels have the following requirements:
+
+    - Metadata that marks them as a kernel.
+    - Addition to the @llvm.used list, so that they will not be discarded.
+    - The noinline attribute is not permitted, because this causes NVVM to emit
+      a warning, which counts as failing IR verification.
+
+    Presently it is assumed that there is one kernel per module, which holds
+    for Numba-jitted functions. If this changes in future or this function is
+    to be used externally, this function may need modification to add to the
+    @llvm.used list rather than creating it.
     """
-    def parse_out_leading_type(s):
-        par_level = 0
-        pos = 0
-        # Parse out the first <ty> (which may be an aggregate type)
-        while True:
-            m = re_type_tok.search(s, pos)
-            if m is None:
-                # End of line
-                raise RuntimeError("failed parsing leading type: %s" % (s,))
-                break
-            pos = m.end()
-            tok = m.group(0)
-            if tok == ',':
-                if par_level == 0:
-                    # End of operand
-                    break
-            elif tok in '{[(':
-                par_level += 1
-            elif tok in ')]}':
-                par_level -= 1
-        return s[pos:].lstrip()
+    module = function.module
 
-    buf = []
-    for line in ir.splitlines():
-
-        # Fix llvm.dbg.cu
-        if line.startswith('!numba.llvm.dbg.cu'):
-            line = line.replace('!numba.llvm.dbg.cu', '!llvm.dbg.cu')
-
-        # We insert a dummy inlineasm to put debuginfo
-        if (line.lstrip().startswith('tail call void asm sideeffect "// dbg')
-                and '!numba.dbg' in line):
-            # Fix the metadata
-            line = line.replace('!numba.dbg', '!dbg')
-        if re_metadata_def.match(line):
-            # Rewrite metadata since LLVM 3.7 dropped the "metadata" type prefix
-            if None is re_metadata_correct_usage.search(line):
-                # Reintroduce the "metadata" prefix
-                line = line.replace('!{', 'metadata !{')
-                line = line.replace('!"', 'metadata !"')
-
-                assigpos = line.find('=')
-                lhs, rhs = line[:assigpos + 1], line[assigpos + 1:]
-
-                # Fix metadata reference
-                def fix_metadata_ref(m):
-                    return 'metadata ' + m.group(0)
-                line = ' '.join((lhs,
-                                 re_metadata_ref.sub(fix_metadata_ref, rhs)))
-        if line.startswith('source_filename ='):
-            continue    # skip line
-        if re_unsupported_keywords.search(line) is not None:
-            line = re_unsupported_keywords.sub(lambda m: '', line)
-
-        if line.startswith('attributes #'):
-            # Remove function attributes unsupported pre-3.8
-            m = re_attributes_def.match(line)
-            attrs = m.group(1).split()
-            attrs = ' '.join(a for a in attrs if a in supported_attributes)
-            line = line.replace(m.group(1), attrs)
-        if 'getelementptr ' in line:
-            # Rewrite "getelementptr ty, ty* ptr, ..."
-            # to "getelementptr ty *ptr, ..."
-            m = re_getelementptr.search(line)
-            if m is None:
-                raise RuntimeError("failed parsing getelementptr: %s" % (line,))
-            pos = m.end()
-            line = line[:pos] + parse_out_leading_type(line[pos:])
-        if 'load ' in line:
-            # Rewrite "load ty, ty* ptr"
-            # to "load ty *ptr"
-            m = re_load.search(line)
-            if m:
-                pos = m.end()
-                line = line[:pos] + parse_out_leading_type(line[pos:])
-        if 'call ' in line:
-            # Rewrite "call ty (...) @foo"
-            # to "call ty (...)* @foo"
-            line = re_call.sub(r"\1*\2", line)
-
-            # no !range metadata on calls
-            line = re_range.sub('', line).rstrip(',')
-
-            if '@llvm.memset' in line:
-                line = re_parenthesized_list.sub(
-                    _replace_llvm_memset_usage,
-                    line,
-                )
-        if 'declare' in line:
-            if '@llvm.memset' in line:
-                line = re_parenthesized_list.sub(
-                    _replace_llvm_memset_declaration,
-                    line,
-                )
-
-        # Remove unknown annotations
-        line = re_annotations.sub('', line)
-
-        buf.append(line)
-
-    return '\n'.join(buf)
-
-
-def _replace_llvm_memset_usage(m):
-    """Replace `llvm.memset` usage for llvm7+.
-
-    Used as functor for `re.sub.
-    """
-    params = list(m.group(1).split(','))
-    align_attr = re.search(r'align (\d+)', params[0])
-    if not align_attr:
-        raise ValueError("No alignment attribute found on memset dest")
-    else:
-        align = align_attr.group(1)
-    params.insert(-1, 'i32 {}'.format(align))
-    out = ', '.join(params)
-    return '({})'.format(out)
-
-
-def _replace_llvm_memset_declaration(m):
-    """Replace `llvm.memset` declaration for llvm7+.
-
-    Used as functor for `re.sub.
-    """
-    params = list(m.group(1).split(','))
-    params.insert(-1, 'i32')
-    out = ', '.join(params)
-    return '({})'.format(out)
-
-
-def set_cuda_kernel(lfunc):
-    mod = lfunc.module
-
-    mdstr = ir.MetaDataString(mod, "kernel")
+    # Add kernel metadata
+    mdstr = ir.MetaDataString(module, "kernel")
     mdvalue = ir.Constant(ir.IntType(32), 1)
-    md = mod.add_metadata((lfunc, mdstr, mdvalue))
+    md = module.add_metadata((function, mdstr, mdvalue))
 
-    nmd = cgutils.get_or_insert_named_metadata(mod, 'nvvm.annotations')
+    nmd = cgutils.get_or_insert_named_metadata(module, 'nvvm.annotations')
     nmd.add(md)
 
-    # Marking a kernel 'noinline' causes NVVM to generate a warning, so remove
-    # it if it is present.
-    lfunc.attributes.discard('noinline')
+    # Create the used list
+    ptrty = ir.IntType(8).as_pointer()
+    usedty = ir.ArrayType(ptrty, 1)
+
+    fnptr = function.bitcast(ptrty)
+
+    llvm_used = ir.GlobalVariable(module, usedty, 'llvm.used')
+    llvm_used.linkage = 'appending'
+    llvm_used.section = 'llvm.metadata'
+    llvm_used.initializer = ir.Constant(usedty, [fnptr])
+
+    # Remove 'noinline' if it is present.
+    function.attributes.discard('noinline')
 
 
 def add_ir_version(mod):

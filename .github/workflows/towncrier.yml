@@ -1,0 +1,31 @@
+
+name: Check Release Notes
+on:
+  pull_request: {}
+
+env:
+  GITHUB_PR_NUMBER: ${{github.event.pull_request.number}}
+
+jobs:
+  check:
+    name: Check release notes
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip_release_notes') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+      - name: Install towncrier
+        run: |
+          python3 -m pip install towncrier==23.6 "importlib_resources<6" rstcheck
+      - name: Run towncrier
+        run: |
+          git fetch --no-tags origin +refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}
+          towncrier check --compare-with remotes/origin/${BASE_BRANCH}
+          python maint/towncrier_rst_validator.py --pull_request_id $GITHUB_PR_NUMBER
+    env:
+      BASE_BRANCH: ${{ github.base_ref }}

@@ -692,7 +692,10 @@ class BaseContext(object):
         This implements implicit conversions as can happen due to the
         granularity of the Numba type system, or lax Python semantics.
         """
-        if fromty == toty or toty == types.Any:
+        if fromty is types._undef_var:
+            # Special case for undefined variable
+            return self.get_constant_null(toty)
+        elif fromty == toty or toty == types.Any:
             return val
         try:
             impl = self._casts.find((fromty, toty))

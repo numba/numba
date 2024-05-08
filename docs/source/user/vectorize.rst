@@ -111,7 +111,7 @@ reduction, accumulation or broadcasting.  Using the example above:
    `Standard features of ufuncs <http://docs.scipy.org/doc/numpy/reference/ufuncs.html#ufunc>`_ (NumPy documentation).
 
 .. note::
-   Only the broadcasting features of ufuncs are supported in compiled code.
+   Only the broadcasting and reduce features of ufuncs are supported in compiled code.
 
 The :func:`~numba.vectorize` decorator supports multiple ufunc targets:
 
@@ -140,6 +140,16 @@ The "cuda" target works well for big data sizes (approx. greater than 1MB) and
 high compute intensity algorithms.  Transferring memory to and from the GPU adds
 significant overhead.
 
+
+Starting in Numba 0.59, the ``cpu`` target supports the following attributes
+and methods in compiled code:
+
+- ``ufunc.nin``
+- ``ufunc.nout``
+- ``ufunc.nargs``
+- ``ufunc.identity``
+- ``ufunc.signature``
+- ``ufunc.reduce()`` (only the first 5 arguments - experimental feature)
 
 .. _guvectorize:
 
@@ -497,3 +507,26 @@ One can also verify that NumPy ufunc casting rules are working as expected:
 If you need precise support for various type signatures, you should not rely on dynamic
 compilation and instead, specify the types them as first
 argument in the :func:`~numba.guvectorize` decorator.
+
+``@guvectorize`` functions can also be called from jitted ones. For instance:
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_guvectorize_jit`` of ``numba/tests/doc_examples/test_examples.py``
+   :start-after: magictoken.gufunc_jit.begin
+   :end-before: magictoken.gufunc_jit.end
+   :dedent: 12
+   :linenos:
+
+.. warning::
+   Broadcasting is not supported yet. Calling a guvectorize function in a
+   scenario where broadcasting is needed may result in incorrect behavior.
+   Numba will attempt to detect those cases and raise an exception.
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_examples.py
+   :language: python
+   :caption: from ``test_guvectorize_jit`` of ``numba/tests/doc_examples/test_examples.py``
+   :start-after: magictoken.gufunc_jit_fail.begin
+   :end-before: magictoken.gufunc_jit_fail.end
+   :dedent: 12
+   :linenos:

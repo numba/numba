@@ -15,10 +15,12 @@
     #define uint32_t unsigned __int32
     #define _complex_float_t _Fcomplex
     #define _complex_float_ctor(r, i) _FCbuild(r, i)
+    #define _complex_double_t _Dcomplex
 #else
     #include <stdint.h>
     #define _complex_float_t complex float
     #define _complex_float_ctor(r, i) (r + I * i)
+    #define _complex_double_t complex double
 #endif
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/ndarrayobject.h>
@@ -120,30 +122,6 @@ numba_ldexpf(float x, int exp)
     if (Py_IS_FINITE(x) && x && exp)
         x = ldexpf(x, exp);
     return x;
-}
-
-NUMBA_EXPORT_FUNC(double)
-numba_exp2(double x)
-{
-    return exp2(x);
-}
-
-NUMBA_EXPORT_FUNC(float)
-numba_exp2f(float x)
-{
-    return exp2f(x);
-}
-
-NUMBA_EXPORT_FUNC(double)
-numba_log2(double x)
-{
-    return log2(x);
-}
-
-NUMBA_EXPORT_FUNC(float)
-numba_log2f(float x)
-{
-    return log2f(x);
 }
 
 /* provide complex power */
@@ -855,7 +833,8 @@ static void traceback_add(const char *funcname, const char *filename, int lineno
     if (!frame)
         goto error;
 
-#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 11) /* 3.11 */
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 12) /* 3.12 */
+#elif (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 11) /* 3.11 */
 
     /* unsafe cast to our copy of _frame to access the f_lineno field */
     typedef struct _frame py_frame;
@@ -872,8 +851,15 @@ static void traceback_add(const char *funcname, const char *filename, int lineno
     Py_DECREF(frame);
     return;
 
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 12) /* 3.12 */
+error:
+    _PyErr_ChainExceptions1(exc);
+#elif (PY_MAJOR_VERSION == 3) && ((PY_MINOR_VERSION == 9) || (PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11)) /* 3.11 and below */
 error:
     _PyErr_ChainExceptions(exc, val, tb);
+#else
+#error "Python major version is not supported."
+#endif
 }
 
 

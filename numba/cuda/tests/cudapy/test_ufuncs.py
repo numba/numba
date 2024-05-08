@@ -62,6 +62,29 @@ class TestUFuncs(BasicUFuncTest, TestCase):
              types.Array(types.float64, 2, 'F')),
         ])
 
+        # Add tests for other integer types
+        self.inputs.extend([
+            (np.uint8(0), types.uint8),
+            (np.uint8(1), types.uint8),
+            (np.int8(-1), types.int8),
+            (np.int8(0), types.int8),
+
+            (np.uint16(0), types.uint16),
+            (np.uint16(1), types.uint16),
+            (np.int16(-1), types.int16),
+            (np.int16(0), types.int16),
+
+            (np.ulonglong(0), types.ulonglong),
+            (np.ulonglong(1), types.ulonglong),
+            (np.longlong(-1), types.longlong),
+            (np.longlong(0), types.longlong),
+
+            (np.array([0,1], dtype=np.ulonglong),
+             types.Array(types.ulonglong, 1, 'C')),
+            (np.array([0,1], dtype=np.longlong),
+             types.Array(types.longlong, 1, 'C')),
+        ])
+
         self._low_occupancy_warnings = config.CUDA_LOW_OCCUPANCY_WARNINGS
         self._warn_on_implicit_copy = config.CUDA_WARN_ON_IMPLICIT_COPY
 
@@ -83,6 +106,25 @@ class TestUFuncs(BasicUFuncTest, TestCase):
         # We return an already-configured kernel so that basic_ufunc_test can
         # call it just like it does for a CPU function
         return cuda.jit(args)(pyfunc)[1, 1]
+
+    def basic_int_ufunc_test(self, name=None):
+        skip_inputs = [
+            types.float32,
+            types.float64,
+            types.Array(types.float32, 1, 'C'),
+            types.Array(types.float32, 2, 'C'),
+            types.Array(types.float64, 1, 'C'),
+            types.Array(types.float64, 2, 'C'),
+            types.Array(types.float64, 3, 'C'),
+            types.Array(types.float64, 2, 'F'),
+            types.complex64,
+            types.complex128,
+            types.Array(types.complex64, 1, 'C'),
+            types.Array(types.complex64, 2, 'C'),
+            types.Array(types.complex128, 1, 'C'),
+            types.Array(types.complex128, 2, 'C'),
+        ]
+        self.basic_ufunc_test(name, skip_inputs=skip_inputs)
 
     ############################################################################
     # Trigonometric Functions
@@ -153,6 +195,82 @@ class TestUFuncs(BasicUFuncTest, TestCase):
 
     def test_radians_ufunc(self):
         self.basic_ufunc_test(np.radians, kinds='f')
+
+    ############################################################################
+    # Comparison functions
+    def test_greater_ufunc(self):
+        self.signed_unsigned_cmp_test(np.greater)
+
+    def test_greater_equal_ufunc(self):
+        self.signed_unsigned_cmp_test(np.greater_equal)
+
+    def test_less_ufunc(self):
+        self.signed_unsigned_cmp_test(np.less)
+
+    def test_less_equal_ufunc(self):
+        self.signed_unsigned_cmp_test(np.less_equal)
+
+    def test_not_equal_ufunc(self):
+        self.signed_unsigned_cmp_test(np.not_equal)
+
+    def test_equal_ufunc(self):
+        self.signed_unsigned_cmp_test(np.equal)
+
+    def test_logical_and_ufunc(self):
+        self.basic_ufunc_test(np.logical_and)
+
+    def test_logical_or_ufunc(self):
+        self.basic_ufunc_test(np.logical_or)
+
+    def test_logical_xor_ufunc(self):
+        self.basic_ufunc_test(np.logical_xor)
+
+    def test_logical_not_ufunc(self):
+        self.basic_ufunc_test(np.logical_not)
+
+    def test_maximum_ufunc(self):
+        self.basic_ufunc_test(np.maximum)
+
+    def test_minimum_ufunc(self):
+        self.basic_ufunc_test(np.minimum)
+
+    def test_fmax_ufunc(self):
+        self.basic_ufunc_test(np.fmax)
+
+    def test_fmin_ufunc(self):
+        self.basic_ufunc_test(np.fmin)
+
+    def test_bitwise_and_ufunc(self):
+        self.basic_int_ufunc_test(np.bitwise_and)
+
+    def test_bitwise_or_ufunc(self):
+        self.basic_int_ufunc_test(np.bitwise_or)
+
+    def test_bitwise_xor_ufunc(self):
+        self.basic_int_ufunc_test(np.bitwise_xor)
+
+    def test_invert_ufunc(self):
+        self.basic_int_ufunc_test(np.invert)
+
+    def test_bitwise_not_ufunc(self):
+        self.basic_int_ufunc_test(np.bitwise_not)
+
+    # Note: there is no entry for np.left_shift and np.right_shift
+    # because their implementations in NumPy have undefined behavior
+    # when the second argument is a negative. See the comment in
+    # numba/tests/test_ufuncs.py for more details.
+
+    ############################################################################
+    # Mathematical Functions
+
+    def test_log_ufunc(self):
+        self.basic_ufunc_test(np.log, kinds='cf')
+
+    def test_log2_ufunc(self):
+        self.basic_ufunc_test(np.log2, kinds='cf')
+
+    def test_log10_ufunc(self):
+        self.basic_ufunc_test(np.log10, kinds='cf')
 
 
 if __name__ == '__main__':
