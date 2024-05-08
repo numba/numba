@@ -332,6 +332,10 @@ def get_shape(rec):
     return np.shape(rec.j)
 
 
+def get_size(rec):
+    return np.size(rec.j)
+
+
 def get_charseq(ary, i):
     return ary[i].n
 
@@ -929,7 +933,7 @@ class TestRecordDtype(TestCase):
         np.testing.assert_equal(expect, got)
 
     def test_record_dtype_with_titles_roundtrip(self):
-        recdtype = np.dtype([(("title a", 'a'), np.float_), ('b', np.float_)])
+        recdtype = np.dtype([(("title a", 'a'), np.float64), ('b', np.float64)])
         nbtype = numpy_support.from_dtype(recdtype)
         self.assertTrue(nbtype.is_title('title a'))
         self.assertFalse(nbtype.is_title('a'))
@@ -1610,6 +1614,20 @@ class TestNestedArrays(TestCase):
 
         arg = nbarr[0]
         pyfunc = get_shape
+        ty = typeof(arg)
+        arr_expected = pyfunc(arg)
+        cfunc = self.get_cfunc(pyfunc, (ty,))
+        arr_res = cfunc(arg)
+        np.testing.assert_equal(arr_res, arr_expected)
+
+    def test_size(self):
+        # test getting the size of a nestedarray inside a record
+        nbarr = np.recarray(2, dtype=recordwith2darray)
+        nbarr[0] = np.array([(1, ((1, 2), (4, 5), (2, 3)))],
+                            dtype=recordwith2darray)[0]
+
+        arg = nbarr[0]
+        pyfunc = get_size
         ty = typeof(arg)
         arr_expected = pyfunc(arg)
         cfunc = self.get_cfunc(pyfunc, (ty,))

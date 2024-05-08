@@ -60,9 +60,15 @@ Presently 11.2 is the minimum required toolkit version. An NVIDIA driver
 sufficient for the toolkit version is also required (see also
 :ref:`minor-version-compatibility`).
 
-If you are using Conda, you can install the CUDA toolkit with::
+Conda users can install the CUDA Toolkit into a conda environment.
 
-   $ conda install cudatoolkit
+For CUDA 12, ``cuda-nvcc`` and ``cuda-nvrtc`` are required::
+
+    $ conda install -c conda-forge cuda-nvcc cuda-nvrtc "cuda-version>=12.0"
+
+For CUDA 11, ``cudatoolkit`` is required::
+
+    $ conda install -c conda-forge cudatoolkit "cuda-version>=11.2,<12.0"
 
 If you are not using Conda or if you want to use a different version of CUDA
 toolkit, the following describes how Numba searches for a CUDA toolkit
@@ -82,7 +88,7 @@ release.
 
 You can install the NVIDIA bindings with::
 
-   $ conda install nvidia::cuda-python
+   $ conda install -c conda-forge cuda-python
 
 if you are using Conda, or::
 
@@ -100,23 +106,21 @@ Setting CUDA Installation Path
 
 Numba searches for a CUDA toolkit installation in the following order:
 
-1. Conda installed `cudatoolkit` package.
+1. Conda installed CUDA Toolkit packages
 2. Environment variable ``CUDA_HOME``, which points to the directory of the
-   installed CUDA toolkit (i.e. ``/home/user/cuda-10``)
+   installed CUDA toolkit (i.e. ``/home/user/cuda-12``)
 3. System-wide installation at exactly ``/usr/local/cuda`` on Linux platforms.
-   Versioned installation paths (i.e. ``/usr/local/cuda-10.0``) are intentionally
+   Versioned installation paths (i.e. ``/usr/local/cuda-12.0``) are intentionally
    ignored.  Users can use ``CUDA_HOME`` to select specific versions.
 
 In addition to the CUDA toolkit libraries, which can be installed by conda into
 an environment or installed system-wide by the `CUDA SDK installer
-<(https://developer.nvidia.com/cuda-downloads)>`_, the CUDA target in Numba
+<https://developer.nvidia.com/cuda-downloads>`_, the CUDA target in Numba
 also requires an up-to-date NVIDIA graphics driver.  Updated graphics drivers
 are also installed by the CUDA SDK installer, so there is no need to do both.
-Note that on macOS, the CUDA SDK must be installed to get the required driver,
-and the driver is only supported on macOS prior to 10.14 (Mojave).  If the
-``libcuda`` library is in a non-standard location, users can set environment
-variable ``NUMBA_CUDA_DRIVER`` to the file path (not the directory path) of the
-shared library file.
+If the ``libcuda`` library is in a non-standard location, users can set
+environment variable ``NUMBA_CUDA_DRIVER`` to the file path (not the directory
+path) of the shared library file.
 
 
 Missing CUDA Features

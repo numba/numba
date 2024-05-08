@@ -41,9 +41,6 @@ export NUMBA_DEVELOPER_MODE=1
 # enable the fault handler
 export PYTHONFAULTHANDLER=1
 
-# enable new style error handling
-export NUMBA_CAPTURED_ERRORS="new_style"
-
 # Disable NumPy dispatching to AVX512_SKX feature extensions if the chip is
 # reported to support the feature and NumPy >= 1.22 as this results in the use
 # of low accuracy SVML libm replacements in ufunc loops.
@@ -136,16 +133,16 @@ echo "INFO: Running shard of discovered tests: ($TEST_START_INDEX:$TEST_COUNT)"
 if [ "$RUN_COVERAGE" == "yes" ]; then
     export PYTHONPATH=.
     coverage erase
-    $SEGVCATCH coverage run runtests.py -b -j "$TEST_START_INDEX:$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
+    $SEGVCATCH coverage run runtests.py -b -j "$TEST_START_INDEX:$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS --junit -- numba.tests
 elif [ "$RUN_TYPEGUARD" == "yes" ]; then
     echo "INFO: Running with typeguard"
-    NUMBA_USE_TYPEGUARD=1 NUMBA_ENABLE_CUDASIM=1 PYTHONWARNINGS="ignore:::typeguard" $SEGVCATCH python runtests.py -b -j "$TEST_START_INDEX:$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
+    NUMBA_USE_TYPEGUARD=1 NUMBA_ENABLE_CUDASIM=1 PYTHONWARNINGS="ignore:::typeguard" $SEGVCATCH python runtests.py -b -j "$TEST_START_INDEX:$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS --junit -- numba.tests
 else
-    NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -j "$TEST_START_INDEX:$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
+    NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -j "$TEST_START_INDEX:$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS --junit -- numba.tests
 fi
 
 # Now run with RVSDG enabled for a subset of tests
 if [[ "$TEST_RVSDG" == "yes" ]]; then
     echo "Running RVSDG tests..."
-    NUMBA_USE_RVSDG_FRONTEND=1 NUMBA_CAPTURED_ERRORS=new_style NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -m $TEST_NPROCS -- numba.tests.test_usecases
+    NUMBA_USE_RVSDG_FRONTEND=1 NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -m $TEST_NPROCS --junit -- numba.tests.test_usecases
 fi

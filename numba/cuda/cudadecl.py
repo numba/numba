@@ -5,6 +5,7 @@ from numba.core.typing.npydecl import (parse_dtype, parse_shape,
                                        register_numpy_ufunc,
                                        trigonometric_functions,
                                        comparison_functions,
+                                       math_operations,
                                        bit_twiddling_functions)
 from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                          AbstractTemplate, CallableTemplate,
@@ -799,3 +800,7 @@ for func in comparison_functions:
 
 for func in bit_twiddling_functions:
     register_numpy_ufunc(func, register_global)
+
+for func in math_operations:
+    if func in ('log', 'log2', 'log10'):
+        register_numpy_ufunc(func, register_global)

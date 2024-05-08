@@ -279,8 +279,8 @@ class CompilationUnit(object):
 
         self._try_error(err, 'Failed to get size of compiled result.')
 
-        ptxbuf = (c_char * reslen.value)()
-        err = self.driver.nvvmGetCompiledResult(self._handle, ptxbuf)
+        output_buffer = (c_char * reslen.value)()
+        err = self.driver.nvvmGetCompiledResult(self._handle, output_buffer)
         self._try_error(err, 'Failed to get compiled result.')
 
         # get log
@@ -288,7 +288,7 @@ class CompilationUnit(object):
         if self.log:
             warnings.warn(self.log, category=NvvmWarning)
 
-        return ptxbuf[:]
+        return output_buffer[:]
 
     def _try_error(self, err, msg):
         self.driver.check_error(err, "%s\n%s" % (msg, self.get_log()))
@@ -330,6 +330,7 @@ CTK_SUPPORTED = {
     (12, 1): ((5, 0), (9, 0)),
     (12, 2): ((5, 0), (9, 0)),
     (12, 3): ((5, 0), (9, 0)),
+    (12, 4): ((5, 0), (9, 0)),
 }
 
 
@@ -416,10 +417,14 @@ def get_arch_option(major, minor):
 
 
 MISSING_LIBDEVICE_FILE_MSG = '''Missing libdevice file.
-Please ensure you have package cudatoolkit >= 11.0
-Install package by:
+Please ensure you have a CUDA Toolkit 11.2 or higher.
+For CUDA 12, ``cuda-nvcc`` and ``cuda-nvrtc`` are required:
 
-    conda install cudatoolkit
+    $ conda install -c conda-forge cuda-nvcc cuda-nvrtc "cuda-version>=12.0"
+
+For CUDA 11, ``cudatoolkit`` is required:
+
+    $ conda install -c conda-forge cudatoolkit "cuda-version>=11.2,<12.0"
 '''
 
 
@@ -610,7 +615,7 @@ def llvm_replace(llvmir):
     return llvmir
 
 
-def llvm_to_ptx(llvmir, **opts):
+def compile_ir(llvmir, **opts):
     if isinstance(llvmir, str):
         llvmir = [llvmir]
 

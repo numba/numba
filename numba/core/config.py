@@ -71,8 +71,8 @@ def _os_supports_avx():
 
 
 _old_style_deprecation_msg = (
-    "Explicitly setting NUMBA_CAPTURED_ERRORS=old_style is deprecated. "
-    "See details at "
+    "NUMBA_CAPTURED_ERRORS=old_style is deprecated. "
+    "It will be removed in the next release. See details at "
     "https://numba.readthedocs.io/en/latest/reference/deprecation.html#deprecation-of-old-style-numba-captured-errors" # noqa: E501
 )
 
@@ -80,7 +80,7 @@ _old_style_deprecation_msg = (
 # Choose how to handle captured errors
 def _validate_captured_errors_style(style_str):
     # to prevent circular import
-    from numba.core.errors import NumbaPendingDeprecationWarning
+    from numba.core.errors import NumbaDeprecationWarning
 
     rendered_style = str(style_str)
     if rendered_style not in ('new_style', 'old_style', 'default'):
@@ -89,10 +89,10 @@ def _validate_captured_errors_style(style_str):
         raise ValueError(msg)
     else:
         if rendered_style == 'default':
-            rendered_style = 'old_style'
+            rendered_style = 'new_style'
         elif rendered_style == 'old_style':
             warnings.warn(_old_style_deprecation_msg,
-                          NumbaPendingDeprecationWarning)
+                          NumbaDeprecationWarning)
         return rendered_style
 
 
@@ -424,7 +424,7 @@ class _EnvReloader(object):
 
         CAPTURED_ERRORS = _readenv("NUMBA_CAPTURED_ERRORS",
                                    _validate_captured_errors_style,
-                                   'old_style')
+                                   'new_style')
 
         # CUDA Configs
 

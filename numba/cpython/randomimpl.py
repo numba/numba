@@ -16,7 +16,6 @@ from numba.core.imputils import (Registry, impl_ret_untracked,
                                     impl_ret_new_ref)
 from numba.core.typing import signature
 from numba.core import types, cgutils
-from numba.np import arrayobj
 from numba.core.errors import NumbaTypeError
 
 
