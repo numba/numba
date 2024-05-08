@@ -40,7 +40,7 @@ requirements:
   run:
     - python >=3.9
     # NumPy 1.22.0, 1.22.1, 1.22.2 are all broken for ufuncs, see #7756
-    - numpy >=1.22.3
+    - numpy >=1.22.3,<2.1
     # On channel https://anaconda.org/numba/
     - llvmlite 0.43.*
   run_constrained:
