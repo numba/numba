@@ -214,6 +214,7 @@ Pull-Requests:
 * PR `#9274 <https://github.com/numba/numba/pull/9274>`_: CUDA: Add support for compilation to LTO-IR (`gmarkall <https://github.com/gmarkall>`_)
 * PR `#9364 <https://github.com/numba/numba/pull/9364>`_: Release notes fixes for appropriate Towncrier header underlines (`kc611 <https://github.com/kc611>`_)
 * PR `#9367 <https://github.com/numba/numba/pull/9367>`_: Document release notes generation (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9368 <https://github.com/numba/numba/pull/9368>`_: Added 0.59.0 release notes (`kc611 <https://github.com/kc611>`_)
 * PR `#9369 <https://github.com/numba/numba/pull/9369>`_: Fix release notes link in bug report template (`gmarkall <https://github.com/gmarkall>`_)
 * PR `#9378 <https://github.com/numba/numba/pull/9378>`_: Add `float(<string literal>)` ctor (`guilhermeleobas <https://github.com/guilhermeleobas>`_)
 * PR `#9394 <https://github.com/numba/numba/pull/9394>`_: fix `TypeError: '_DeviceContextManager' object is not callable` (`i7878 <https://github.com/i7878>`_)
