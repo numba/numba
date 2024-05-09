@@ -665,22 +665,26 @@ class CPUCodeLibrary(CodeLibrary):
                     fpm.run(func)
                     fpm.finalize()
 
-    def _optimize_final_module(self):
+    def _pre_optimize_final_module(self):
         """
         Internal: optimize this library's final module.
         """
+
         cheap_name = "Module passes (cheap optimization for refprune)"
         with self._recorded_timings.record(cheap_name):
             # A cheaper optimisation pass is run first to try and get as many
             # refops into the same function as possible via inlining
             self._codegen._mpm_cheap.run(self._final_module)
+
         # Refop pruning is then run on the heavily inlined function
         if not config.LLVM_REFPRUNE_PASS:
             self._final_module = remove_redundant_nrt_refct(self._final_module)
-        full_name = "Module passes (full optimization)"
+
+    def _post_optimize_compiled_module(self):
+        full_name = "Module passes (full optimization after linking)"
         with self._recorded_timings.record(full_name):
             # The full optimisation suite is then run on the refop pruned IR
-            self._codegen._mpm_full.run(self._final_module)
+            self._codegen._mpm_full.run(self._compiled_module)
 
     def _get_module_for_linking(self):
         """
@@ -745,59 +749,89 @@ class CPUCodeLibrary(CodeLibrary):
 
         self._raise_if_finalized()
 
-        if config.DUMP_FUNC_OPT:
-            dump("FUNCTION OPTIMIZED DUMP %s" % self.name,
-                 self.get_llvm_str(), 'llvm')
+        self._pre_optimize_final_module()
+
+        self._finalize_dynamic_globals()
+
+        self._finalized = True
+
+    def _trigger_compile(self):
+        self._ensure_finalized()
+
+        self._compiled_module = self._final_module.clone()
 
         # Link libraries for shared code
         seen = set()
-        for library in self._linking_libraries:
-            if library not in seen:
-                seen.add(library)
-                self._final_module.link_in(
-                    library._get_module_for_linking(), preserve=True,
-                )
+        link_modules = []
 
+        def walk_linklibs(library):
+            for lib in library._linking_libraries:
+                if lib not in seen:
+                    walk_linklibs(lib)
+                    link_modules.append(lib)
+                    seen.add(lib)
+
+        walk_linklibs(self)
+
+        for library in link_modules[::-1]:
+            self._compiled_module.link_in(
+                library._get_module_for_linking(), preserve=True,
+            )
+
+        # TODO Include ref pune pass somehow after linking?
         # Optimize the module after all dependences are linked in above,
         # to allow for inlining.
-        self._optimize_final_module()
+        self._post_optimize_compiled_module()
 
-        self._final_module.verify()
-        self._finalize_final_module()
+        if config.DUMP_FUNC_OPT:
+            # TODO should get_llvm_str return the compiled_module?
+            dump("FUNCTION OPTIMIZED DUMP %s" % self.name,
+                 self.get_llvm_str(), 'llvm')
+
+        self._compiled_module.verify()
+
+        self._verify_declare_only_symbols()
+
+        # Remember this on the module, for the object cache hooks
+        self._compiled_module.__library = weakref.proxy(self)
+
+        self._compile_final_module()
+        self._is_compiled = True
+
+    def _ensure_compiled(self):
+        if not self._is_compiled:
+            self._trigger_compile()
 
     def _finalize_dynamic_globals(self):
         # Scan for dynamic globals
+        for lib in self._linking_libraries:
+            lib._ensure_finalized()
+            self._dynamic_globals.extend(lib._dynamic_globals)
+
         for gv in self._final_module.global_variables:
             if gv.name.startswith('numba.dynamic.globals'):
                 self._dynamic_globals.append(gv.name)
 
     def _verify_declare_only_symbols(self):
         # Verify that no declare-only function compiled by numba.
-        for fn in self._final_module.functions:
+        for fn in self._compiled_module.functions:
             # We will only check for symbol name starting with '_ZN5numba'
             if fn.is_declaration and fn.name.startswith('_ZN5numba'):
                 msg = 'Symbol {} not linked properly'
                 raise AssertionError(msg.format(fn.name))
 
-    def _finalize_final_module(self):
+    def _compile_final_module(self):
         """
         Make the underlying LLVM module ready to use.
         """
-        self._finalize_dynamic_globals()
-        self._verify_declare_only_symbols()
-
-        # Remember this on the module, for the object cache hooks
-        self._final_module.__library = weakref.proxy(self)
 
         # It seems add_module() must be done only here and not before
         # linking in other modules, otherwise get_pointer_to_function()
         # could fail.
-        cleanup = self._codegen._add_module(self._final_module)
+        cleanup = self._codegen._add_module(self._compiled_module)
         if cleanup:
             weakref.finalize(self, cleanup)
-        self._finalize_specific()
-
-        self._finalized = True
+        self._compile_specific()
 
         if config.DUMP_OPTIMIZED:
             dump("OPTIMIZED DUMP %s" % self.name, self.get_llvm_str(), 'llvm')
@@ -918,7 +952,7 @@ class CPUCodeLibrary(CodeLibrary):
         representation.  We also include its bitcode for further inlining
         with other libraries.
         """
-        self._ensure_finalized()
+        self._ensure_compiled()
         data = (self._get_compiled_object(),
                 self._get_module_for_linking().as_bitcode())
         return (self.name, 'object', data)
@@ -955,7 +989,7 @@ class AOTCodeLibrary(CPUCodeLibrary):
 
         This function implicitly calls .finalize().
         """
-        self._ensure_finalized()
+        self._ensure_compiled()
         return self._codegen._tm.emit_object(self._final_module)
 
     def emit_bitcode(self):
@@ -964,10 +998,10 @@ class AOTCodeLibrary(CPUCodeLibrary):
 
         This function implicitly calls .finalize().
         """
-        self._ensure_finalized()
+        self._ensure_compiled()
         return self._final_module.as_bitcode()
 
-    def _finalize_specific(self):
+    def _compile_specific(self):
         pass
 
 
@@ -987,15 +1021,15 @@ class JITCodeLibrary(CPUCodeLibrary):
               library.
             - non-zero if the symbol is defined.
         """
-        self._ensure_finalized()
+        self._ensure_compiled()
         ee = self._codegen._engine
         if not ee.is_symbol_defined(name):
             return 0
         else:
             return self._codegen._engine.get_function_address(name)
 
-    def _finalize_specific(self):
-        self._codegen._scan_and_fix_unresolved_refs(self._final_module)
+    def _compile_specific(self):
+        self._codegen._scan_and_fix_unresolved_refs(self._compiled_module)
         with self._recorded_timings.record("Finalize object"):
             self._codegen._engine.finalize_object()
 
