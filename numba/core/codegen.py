@@ -669,6 +669,7 @@ class CPUCodeLibrary(CodeLibrary):
         """
         Internal: optimize this library's final module.
         """
+        self._raise_if_finalized()
 
         cheap_name = "Module passes (cheap optimization for refprune)"
         with self._recorded_timings.record(cheap_name):
@@ -696,6 +697,7 @@ class CPUCodeLibrary(CodeLibrary):
         See discussion in https://github.com/numba/numba/pull/890
         """
         self._ensure_finalized()
+        assert len(str(self._final_module)) == self._orig_final_length
         if self._shared_module is not None:
             return self._shared_module
         mod = self._final_module
@@ -719,9 +721,11 @@ class CPUCodeLibrary(CodeLibrary):
                 # to an ELF file
                 mod.get_function(name).linkage = 'linkonce_odr'
         self._shared_module = mod
+        assert len(str(self._final_module)) == self._orig_final_length
         return mod
 
     def add_linking_library(self, library):
+        self._raise_if_finalized()
         library._ensure_finalized()
         self._linking_libraries.append(library)
 
@@ -735,6 +739,7 @@ class CPUCodeLibrary(CodeLibrary):
         self.add_llvm_module(ll_module)
 
     def add_llvm_module(self, ll_module):
+        self._raise_if_finalized()
         self._optimize_functions(ll_module)
         # TODO: we shouldn't need to recreate the LLVM module object
         if not config.LLVM_REFPRUNE_PASS:
@@ -753,12 +758,15 @@ class CPUCodeLibrary(CodeLibrary):
 
         self._finalize_dynamic_globals()
 
+        self._orig_final_length = len(str(self._final_module))
+
         self._finalized = True
 
     def _trigger_compile(self):
         self._ensure_finalized()
 
         self._compiled_module = self._final_module.clone()
+        assert len(str(self._final_module)) == self._orig_final_length
 
         # Link libraries for shared code
         seen = set()
@@ -796,6 +804,7 @@ class CPUCodeLibrary(CodeLibrary):
         self._compiled_module.__library = weakref.proxy(self)
 
         self._compile_final_module()
+        assert len(str(self._final_module)) == self._orig_final_length
         self._is_compiled = True
 
     def _ensure_compiled(self):
@@ -859,11 +868,11 @@ class CPUCodeLibrary(CodeLibrary):
 
     def get_llvm_str(self):
         self._sentry_cache_disable_inspection()
-        return str(self._final_module)
+        return str(self._compiled_module)
 
     def get_asm_str(self):
         self._sentry_cache_disable_inspection()
-        return str(self._codegen._tm.emit_assembly(self._final_module))
+        return str(self._codegen._tm.emit_assembly(self._compiled_module))
 
     def get_function_cfg(self, name, py_func=None, **kwargs):
         """
@@ -943,8 +952,8 @@ class CPUCodeLibrary(CodeLibrary):
         """
         Serialize this library using its bitcode as the cached representation.
         """
-        self._ensure_finalized()
-        return (self.name, 'bitcode', self._final_module.as_bitcode())
+        self._ensure_compiled()
+        return (self.name, 'bitcode', self._compiled_module.as_bitcode())
 
     def serialize_using_object_code(self):
         """
@@ -959,6 +968,7 @@ class CPUCodeLibrary(CodeLibrary):
 
     @classmethod
     def _unserialize(cls, codegen, state):
+        raise NotImplementedError()
         name, kind, data = state
         self = codegen.create_library(name)
         assert isinstance(self, cls)
