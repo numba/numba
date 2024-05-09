@@ -101,6 +101,12 @@ class Flags(TargetConfig):
         default=False,
         doc="TODO",
     )
+    no_wrapper = Option(
+        type=bool,
+        default=False,
+        doc="Do not generate any dispatchable functions. This function can only "
+            "be called from other jit functions",
+    )
     auto_parallel = Option(
         type=cpu.ParallelOptions,
         default=cpu.ParallelOptions(False),

@@ -647,6 +647,7 @@ class CPUCodeLibrary(CodeLibrary):
             str(self._codegen._create_empty_module(self.name)))
         self._final_module.name = cgutils.normalize_ir_text(self.name)
         self._shared_module = None
+        self._is_compiled = False
 
     def _optimize_functions(self, ll_module):
         """
