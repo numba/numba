@@ -4671,7 +4671,6 @@ def generate_getitem_setitem_with_axis(ndim, kind):
 
     if kind == 'getitem':
         fn = '''
-            @register_jitable
             def _getitem(a, idx, axis):
                 if axis == 0:
                     return a[idx, ...]
@@ -4684,7 +4683,6 @@ def generate_getitem_setitem_with_axis(ndim, kind):
             '''
     else:
         fn = '''
-            @register_jitable
             def _setitem(a, idx, axis, vals):
                 if axis == 0:
                     a[idx, ...] = vals
@@ -4699,7 +4697,8 @@ def generate_getitem_setitem_with_axis(ndim, kind):
 
     fn = textwrap.dedent(fn)
     exec(fn, globals())
-    return globals()[f'_{kind}']
+    fn = globals()[f'_{kind}']
+    return register_jitable(fn)
 
 
 @overload(np.take)
