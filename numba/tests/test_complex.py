@@ -139,7 +139,7 @@ class TestCMath(BaseComplexTest, TestCase):
         self.run_unary(pyfunc, [types.complex128],
                        values or self.more_values(), flags=flags, ulps=ulps,
                        abs_tol=abs_tol)
-        self.run_unary(pyfunc, [types.int32, types.int64],
+        self.run_unary(pyfunc, [types.float64],
                        values or self.real_values(), flags=flags, ulps=ulps,
                        abs_tol=abs_tol)
         # Avoid discontinuities around pi when in single precision.
