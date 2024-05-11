@@ -1,6 +1,6 @@
 
-Version 0.60.0 (8 May 2024)
-===========================
+Version 0.60.0rc1 (14 May 2024)
+===============================
 
 .. contents:: Table of Contents
    :depth: 2
