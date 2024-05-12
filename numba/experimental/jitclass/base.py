@@ -18,6 +18,18 @@ from numba.experimental.jitclass import _box
 
 C = pt.TypeVar("C", bound=pt.Callable)
 
+
+class JitMethod(pt.Generic[C]):
+    """
+    Container class to defer compilation until we can determine the jitclass
+    njit options
+    """
+    def __init__(
+        self, implementation: C, njit_options: dict[str, bool]
+    ) -> None:
+        self.implementation = implementation
+        self.njit_options = njit_options
+
 ##############################################################################
 # Data model
 
@@ -195,9 +207,13 @@ def register_class_type(
     for basecls in reversed(inspect.getmro(cls)):
         clsdct.update(basecls.__dict__)
 
-    methods, props, static_methods, others = {}, {}, {}, {}
+    pre_jitted_methods, methods, props, static_methods, others = (
+        {}, {}, {}, {}, {}
+    )
     for k, v in clsdct.items():
-        if isinstance(v, pytypes.FunctionType):
+        if isinstance(v, JitMethod):
+            pre_jitted_methods[k] = v
+        elif isinstance(v, pytypes.FunctionType):
             methods[k] = v
         elif isinstance(v, property):
             props[k] = v
@@ -228,7 +244,12 @@ def register_class_type(
         else:
             return pt.cast(C, njit(**njit_options)(f))
 
-    jit_methods = {k: _njit_if_needed(v) for k, v in methods.items()}
+    jit_methods = {
+        k: _njit_if_needed(v) for k, v in methods.items()
+    } | {
+        k: njit(**(njit_options | v.njit_options))(v.implementation)
+        for k, v in pre_jitted_methods.items()
+    }
 
     jit_props = {}
     for k, v in props.items():
