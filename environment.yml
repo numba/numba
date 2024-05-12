@@ -1,0 +1,11 @@
+name: numbadev
+channels:
+  - defaults
+dependencies:
+  - python=3.10
+  - numba/label/dev::llvmlite
+  - numpy
+  - scipy
+  - jinja2
+  - cffi
+
