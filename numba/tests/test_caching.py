@@ -1071,5 +1071,70 @@ class TestCFuncCache(BaseCacheTest):
         self.run_in_separate_process()
 
 
+class TestJitclassMethodCaching(DispatcherCacheUsecasesTest):
+    here = os.path.dirname(__file__)
+    usecases_file = os.path.join(here, "jitclass_cache_usecases.py")
+    modname = "jitclass_caching_test_fodder"
+
+    def run_in_separate_process(self, *, envvars={}):
+        # Cached functions can be run from a distinct process.
+        code = """if 1:
+            import sys
+
+            sys.path.insert(0, %(tempdir)r)
+            mod = __import__(%(modname)r)
+            mod.self_test()
+
+            f = mod.add_usecase
+            assert f.cache_hits == 1
+            f = mod.outer
+            assert f.cache_hits == 1
+            f = mod.div_usecase
+            assert f.cache_hits == 1
+            """ % dict(tempdir=self.tempdir, modname=self.modname)
+
+        subp_env = os.environ.copy()
+        subp_env.update(envvars)
+        popen = subprocess.Popen([sys.executable, "-c", code],
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                 env=subp_env)
+        _, err = popen.communicate()
+        if popen.returncode != 0:
+            raise AssertionError(f"process failed with code {popen.returncode}:"
+                                 f"stderr follows\n{err.decode()}\n")
+
+    def check_module(self, mod):
+        mod.self_test()
+
+    def test_caching(self):
+        self.check_pycache(0)
+        mod = self.import_module()
+        self.check_pycache(0)  # 4 index, 0 data
+
+        print(dir(mod.MyJitClass))
+        print(mod.MyJitClass.__jit_methods)
+        print(inspect.getsource(mod.MyJitClass.cached_undecorated_function))
+        self.check_hits(mod.MyJitClass.cached_undecorated_function, 0, 0)
+        self.check_hits(mod.MyJitClass.cached_decorated_function_inherits_cache_setting, 0, 0)
+        self.check_hits(mod.MyJitClass.cached_decorated_function_sets_cache_to_true, 0, 0)
+        self.check_hits(mod.MyJitClass.uncached_function, 0, 0)
+
+        self.check_module(mod)
+
+        # Reload module to hit the cache
+        mod = self.import_module()
+        self.check_pycache(4)  # 4 index, 0 data
+
+        self.check_hits(mod.MyJitClass.cached_undecorated_function, 0, 0)
+        self.check_hits(mod.MyJitClass.cached_decorated_function_inherits_cache_setting, 0, 0)
+        self.check_hits(mod.MyJitClass.cached_decorated_function_sets_cache_to_true, 0, 0)
+        self.check_hits(mod.MyJitClass.uncached_function, 0, 0)
+
+        self.check_module(mod)
+
+        self.run_in_separate_process()
+        self.assertEqual(True, False)
+
+
 if __name__ == '__main__':
     unittest.main()

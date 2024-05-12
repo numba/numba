@@ -15,8 +15,10 @@ from numba.core.typing import templates
 from numba.core.typing.asnumbatype import as_numba_type
 from numba.core.serialize import disable_pickling
 from numba.experimental.jitclass import _box
+from numba.type_hints import ClassSpecType
 
 C = pt.TypeVar("C", bound=pt.Callable)
+T = pt.TypeVar("T", bound=pt.Type)
 
 
 class JitMethod(pt.Generic[C]):
@@ -173,8 +175,9 @@ def _add_linking_libs(context, call):
 
 
 def register_class_type(
-    cls, spec, class_ctor, builder, njit_options: dict[str, bool]
-):
+    cls: T, spec: ClassSpecType, class_ctor, builder,
+    njit_options: dict[str, bool]
+) -> T:
     """
     Internal function to create a jitclass.
 
@@ -275,6 +278,11 @@ def register_class_type(
     jit_class_dct = dict(class_type=class_type, __doc__=docstring)
     jit_class_dct.update(jit_static_methods)
     cls = JitClassType(cls.__name__, (cls,), jit_class_dct)
+
+    # TODO: added to facilitate testing. there must be a better way though
+    cls.__jit_methods = jit_methods
+    cls.__jit_props = jit_props
+    cls.__static_jit_methods = jit_static_methods
 
     # Register resolution of the class object
     typingctx = cpu_target.typing_context

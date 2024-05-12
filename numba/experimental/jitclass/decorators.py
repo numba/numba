@@ -7,6 +7,7 @@ from numba.type_hints import ClassSpecType, FuncSpecType
 
 C = pt.TypeVar("C", bound=pt.Callable)
 T = pt.TypeVar("T", bound=pt.Type)
+
 if pt.TYPE_CHECKING:
     @pt.overload
     def jitmethod(
