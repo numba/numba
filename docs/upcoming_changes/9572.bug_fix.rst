@@ -1,0 +1,5 @@
+set annotation as empty in OverloadFunctionTemplate
+---------------------------------------------------
+
+Given numba doesn't use python type hints for now, we can set annotation (i.e.,
+type hints) as empty in `OverloadFunctionTemplate` to avoid `TypingError`.
