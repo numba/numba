@@ -11,6 +11,16 @@ from numba.cpython import mathimpl
 from numba.core.extending import overload
 
 
+def redispatch_if_not_complex(fn):
+    def wrapper(overload):
+        def inner(z):
+            if not isinstance(z, types.Complex):
+                return lambda z: fn(complex(z))
+            return overload(z)
+        return inner
+    return wrapper
+
+
 @overload(cmath.isnan)
 def isnan_complex_impl(z):
 
@@ -438,6 +448,7 @@ def atan_impl(z):
 
 
 @overload(cmath.atanh)
+@redispatch_if_not_complex(cmath.atanh)
 def atanh_impl(z):
 
     THRES_LARGE = math.sqrt(mathimpl.FLT_MAX / 4)
@@ -450,8 +461,7 @@ def atanh_impl(z):
         if z.real < 0.:
             # Reduce to case where z.real >= 0., using atanh(z) = -atanh(-z).
             negate = True
-            # can't do z = -z as "0.0" won't become "-0.0"
-            z = complex(-z.real, -z.imag)
+            z = -z
         else:
             negate = False
 
