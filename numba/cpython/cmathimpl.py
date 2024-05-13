@@ -450,7 +450,8 @@ def atanh_impl(z):
         if z.real < 0.:
             # Reduce to case where z.real >= 0., using atanh(z) = -atanh(-z).
             negate = True
-            z = -z
+            # can't do z = -z as "0.0" won't become "-0.0"
+            z = complex(-z.real, -z.imag)
         else:
             negate = False
 
