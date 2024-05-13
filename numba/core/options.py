@@ -84,7 +84,6 @@ class DefaultOptions:
     no_rewrites = _mapping("no_rewrites")
     no_cpython_wrapper = _mapping("no_cpython_wrapper")
     no_cfunc_wrapper = _mapping("no_cfunc_wrapper")
-    no_wrapper = _mapping("no_wrapper")
 
     parallel = _mapping("auto_parallel")
     fastmath = _mapping("fastmath")

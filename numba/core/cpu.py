@@ -277,7 +277,6 @@ _options_mixin = include_default_options(
     "no_rewrites",
     "no_cpython_wrapper",
     "no_cfunc_wrapper",
-    "no_wrapper",
     "parallel",
     "fastmath",
     "error_model",
@@ -316,8 +315,6 @@ class CPUTargetOptions(_options_mixin, TargetOptions):
         flags.enable_pyobject_looplift = True
 
         flags.inherit_if_not_set("fastmath")
-
-        flags.inherit_if_not_set("no_wrapper")
 
         flags.inherit_if_not_set("error_model", default="python")
 
