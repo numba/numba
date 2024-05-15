@@ -757,10 +757,14 @@ class CPUCodeLibrary(CodeLibrary):
                     library._get_module_for_linking(), preserve=True,
                 )
 
-        # For Better Vectorization
+        # Two Tactics below For Better Vectorization
+        # 1. change fn.linkage
         for fn in self._final_module.functions:
             if fn.linkage == ll.Linkage.linkonce_odr:
                 fn.linkage = "internal"
+
+        # 2. call _optimize_functions once more
+        self._optimize_functions(self._final_module)
 
         # Optimize the module after all dependences are linked in above,
         # to allow for inlining.
