@@ -70,7 +70,7 @@ class CPUContext(BaseContext):
                                    hashing, heapq, iterators, # noqa F401
                                    listobj, numbers, rangeobj, # noqa F401
                                    setobj, slicing, tupleobj, # noqa F401
-                                   unicode,) # noqa F401
+                                   unicode, cmathimpl) # noqa F401
         from numba.core import optional # noqa F401
         from numba.misc import gdb_hook, literal # noqa F401
         from numba.np import linalg, arraymath, arrayobj # noqa F401
@@ -83,11 +83,10 @@ class CPUContext(BaseContext):
 
         # Add target specific implementations
         from numba.np import npyimpl
-        from numba.cpython import cmathimpl, mathimpl, printimpl, randomimpl
+        from numba.cpython import mathimpl, printimpl, randomimpl
         from numba.misc import cffiimpl
         from numba.experimental.jitclass.base import ClassBuilder as \
             jitclassimpl
-        self.install_registry(cmathimpl.registry)
         self.install_registry(cffiimpl.registry)
         self.install_registry(mathimpl.registry)
         self.install_registry(npyimpl.registry)
