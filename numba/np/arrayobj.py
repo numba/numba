@@ -4743,13 +4743,17 @@ def numpy_take(a, indices, axis=None):
         if isinstance(a, types.Array) and isinstance(indices, types.Integer):
             t = (0,) * (a.ndim - 1)
 
+            # np.squeeze is too hard to implement in Numba as the tuple "t"
+            # needs to be allocated beforehand we don't know it's size until
+            # code gets executed.
             @register_jitable
-            def _squeeze(r):
-                # np.squeeze is too hard to implement in Numba
+            def _squeeze(r, axis):
                 tup = tuple(t)
                 j = 0
-                for s in r.shape:
-                    if s != 1:
+                assert axis < len(r.shape) and r.shape[axis] == 1, r.shape
+                for idx in range(len(r.shape)):
+                    s = r.shape[idx]
+                    if idx != axis:
                         tup = tuple_setitem(tup, j, s)
                         j += 1
                 return r.reshape(tup)
@@ -4758,7 +4762,9 @@ def numpy_take(a, indices, axis=None):
                 r = np.take(a, (indices,), axis=axis)
                 if a.ndim == 1:
                     return r[0]
-                return _squeeze(r)
+                if axis < 0:
+                    axis += a.ndim
+                return _squeeze(r, axis)
             return take_impl
 
         if isinstance(a, types.Array) and \

@@ -232,6 +232,11 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
             for ind in test_indices:
                 check(A, ind)
 
+        # https://github.com/numpy/numpy/blob/main/numpy/_core/tests/test_numeric.py#L319-L325
+        indices = [1, 2, 4]
+        a = np.array([1, 2, 3, 4, 5])
+        check(a, indices)
+
         #check illegal access raises
         szA = A.size
         illegal_indices = [szA, -szA - 1, np.array(szA), np.array(-szA - 1),
@@ -279,7 +284,16 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
                     np.asarray([0])
                 ),
                 axis=(0,)
-            )
+            ),
+            nt(
+                arrays=(
+                    np.ones((10, 1, 11, 1, 12, 1, 13)),
+                ),
+                indices=(
+                    0,
+                ),
+                axis=(1, 3, 5)
+            ),
         )
 
         for arrays, indices, axis in triples:
