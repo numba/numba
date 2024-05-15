@@ -668,7 +668,6 @@ class CPUCodeLibrary(CodeLibrary):
         """
         Internal: optimize this library's final module.
         """
-        # Do we really need to remove _mpm_cheap? looks no difference to my test case
         cheap_name = "Module passes (cheap optimization for refprune)"
         with self._recorded_timings.record(cheap_name):
             # A cheaper optimisation pass is run first to try and get as many
@@ -749,40 +748,22 @@ class CPUCodeLibrary(CodeLibrary):
             dump("FUNCTION OPTIMIZED DUMP %s" % self.name,
                  self.get_llvm_str(), 'llvm')
 
-        # setting this flag before finalization avoids
-        # a recursion error since of _get_module_for_linking,
-        # but if finialization failes this leads the module in
-        # an invalid state.
-        self._finalized = True
-
-        # Create the module that is linked into other modules
-        # before module level optimization.
-        self._get_module_for_linking()
-
-        # why need to recursively link in all dependences? rather than a loop
         # Link libraries for shared code
         seen = set()
-        link_modules = []
+        for library in self._linking_libraries:
+            if library not in seen:
+                seen.add(library)
+                self._final_module.link_in(
+                    library._get_module_for_linking(), preserve=True,
+                )
 
-        def _walk_libs(parent):
-            for lib in parent._linking_libraries:
-                if lib in seen:
-                    continue
-                seen.add(lib)
-                link_modules.append(lib._get_module_for_linking())
-                _walk_libs(lib)
-
-        _walk_libs(self)
-
-        for module in link_modules:
-            self._final_module.link_in(module, preserve=True)
-
-        # why change linkage to "internal"?
+        # Two Tactics below For Better Vectorization
+        # 1. change fn.linkage
         for fn in self._final_module.functions:
             if fn.linkage == ll.Linkage.linkonce_odr:
                 fn.linkage = "internal"
 
-        # why need to add function optimization here?
+        # 2. call _optimize_functions once more
         self._optimize_functions(self._final_module)
 
         # Optimize the module after all dependences are linked in above,
@@ -823,6 +804,8 @@ class CPUCodeLibrary(CodeLibrary):
         if cleanup:
             weakref.finalize(self, cleanup)
         self._finalize_specific()
+
+        self._finalized = True
 
         if config.DUMP_OPTIMIZED:
             dump("OPTIMIZED DUMP %s" % self.name, self.get_llvm_str(), 'llvm')
