@@ -1,3 +1,4 @@
+import os
 import warnings
 import functools
 import locale
@@ -668,29 +669,18 @@ class CPUCodeLibrary(CodeLibrary):
         """
         Internal: optimize this library's final module.
         """
-        seen = set()
-        link_modules = []
-        def walk_libs(parent):
-            for lib in parent._linking_libraries:
-                if lib in seen:
-                    continue
-                seen.add(lib)
-                link_modules.append(lib._get_module_for_linking())
-                walk_libs(lib)
-
-        walk_libs(self)
-
-        for module in link_modules:
-            self._final_module.link_in(module, preserve=True)
-
-        for fn in self._final_module.functions:
-            if fn.linkage == ll.Linkage.linkonce_odr:
-                fn.linkage = "internal"
-
-        self._optimize_functions(self._final_module)
-
+        # Do we really need to remove _mpm_cheap? looks no difference to my test case
+        cheap_name = "Module passes (cheap optimization for refprune)"
+        with self._recorded_timings.record(cheap_name):
+            # A cheaper optimisation pass is run first to try and get as many
+            # refops into the same function as possible via inlining
+            self._codegen._mpm_cheap.run(self._final_module)
+        # Refop pruning is then run on the heavily inlined function
+        if not config.LLVM_REFPRUNE_PASS:
+            self._final_module = remove_redundant_nrt_refct(self._final_module)
         full_name = "Module passes (full optimization)"
         with self._recorded_timings.record(full_name):
+            # The full optimisation suite is then run on the refop pruned IR
             self._codegen._mpm_full.run(self._final_module)
 
     def _get_module_for_linking(self):
@@ -719,11 +709,12 @@ class CPUCodeLibrary(CodeLibrary):
             raise RuntimeError("library unfit for linking: "
                                "no available functions in %s"
                                % (self,))
-        mod = mod.clone()
-        for name in to_fix:
-            # NOTE: this will mark the symbol WEAK if serialized
-            # to an ELF file
-            mod.get_function(name).linkage = 'linkonce_odr'
+        if to_fix:
+            mod = mod.clone()
+            for name in to_fix:
+                # NOTE: this will mark the symbol WEAK if serialized
+                # to an ELF file
+                mod.get_function(name).linkage = 'linkonce_odr'
         self._shared_module = mod
         return mod
 
@@ -755,19 +746,45 @@ class CPUCodeLibrary(CodeLibrary):
 
         self._raise_if_finalized()
 
-        # TODO Doing this before finalization is finished avoids
-        # a recursion error because of _get_module_for_linking,
-        # but if finialization failes this leads the module in
-        # an invalid state.
-        self._finalized = True
-
         if config.DUMP_FUNC_OPT:
             dump("FUNCTION OPTIMIZED DUMP %s" % self.name,
                  self.get_llvm_str(), 'llvm')
 
+        # setting this flag before finalization avoids
+        # a recursion error since of _get_module_for_linking,
+        # but if finialization failes this leads the module in
+        # an invalid state.
+        self._finalized = True
+
         # Create the module that is linked into other modules
         # before module level optimization.
         self._get_module_for_linking()
+
+        # why need to recursively link in all dependences? rather than a loop
+        # Link libraries for shared code
+        seen = set()
+        link_modules = []
+
+        def _walk_libs(parent):
+            for lib in parent._linking_libraries:
+                if lib in seen:
+                    continue
+                seen.add(lib)
+                link_modules.append(lib._get_module_for_linking())
+                _walk_libs(lib)
+
+        _walk_libs(self)
+
+        for module in link_modules:
+            self._final_module.link_in(module, preserve=True)
+
+        # why change linkage to "internal"?
+        for fn in self._final_module.functions:
+            if fn.linkage == ll.Linkage.linkonce_odr:
+                fn.linkage = "internal"
+
+        # why need to add function optimization here?
+        self._optimize_functions(self._final_module)
 
         # Optimize the module after all dependences are linked in above,
         # to allow for inlining.
@@ -1351,7 +1368,7 @@ class JITCPUCodegen(CPUCodegen):
     A codegen implementation suitable for Just-In-Time compilation.
     """
 
-    _library_class = JITCodeLibrary
+        _library_class = JITCodeLibrary
 
     def _customize_tm_options(self, options):
         # As long as we don't want to ship the code to another machine,
