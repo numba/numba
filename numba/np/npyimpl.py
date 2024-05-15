@@ -601,7 +601,7 @@ def numpy_gufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
     loopshape_ndim = outputs[0].ndim - outputs[0].inner_arr_ty.ndim
     loopshape = outputs[0].shape[ : loopshape_ndim]
 
-    _sig = parse_signature(ufunc.gufunc_builder.signature)
+    _sig = parse_signature(ufunc._signature)
     for (idx_a, sig_a), (idx_b, sig_b) in itertools.combinations(
             zip(range(len(arguments)),
             _sig[0] + _sig[1]),
