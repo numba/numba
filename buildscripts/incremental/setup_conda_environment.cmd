@@ -25,7 +25,7 @@ conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip scipy j
 
 call activate %CONDA_ENV%
 @rem Install latest llvmlite build
-%CONDA_INSTALL% -c numba/label/dev llvmlite=0.43
+%CONDA_INSTALL% -c numba/label/dev llvmlite=0.44
 @rem Install dependencies for building the documentation
 if "%BUILD_DOC%" == "yes" (%CONDA_INSTALL% sphinx sphinx_rtd_theme pygments)
 @rem Install dependencies for code coverage (codecov.io)
