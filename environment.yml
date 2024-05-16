@@ -1,6 +1,7 @@
 name: numbadev
 channels:
   - defaults
+  - conda-forge
 dependencies:
   - python=3.10
   - numba/label/dev::llvmlite
@@ -8,4 +9,10 @@ dependencies:
   - scipy
   - jinja2
   - cffi
-
+  # developer aids
+  - python-lsp-server
+  - pylsp-mypy
+  - conda-lock
+  - setuptools
+  - ipython
+  - debugpy
