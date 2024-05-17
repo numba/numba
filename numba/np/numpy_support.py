@@ -88,7 +88,7 @@ def from_dtype(dtype):
     Return a Numba Type instance corresponding to the given Numpy *dtype*.
     NotImplementedError is raised on unsupported Numpy dtypes.
     """
-    if type(dtype) == type and issubclass(dtype, np.generic):
+    if type(dtype) is type and issubclass(dtype, np.generic):
         dtype = np.dtype(dtype)
     elif getattr(dtype, "fields", None) is not None:
         return from_struct_dtype(dtype)
@@ -622,7 +622,7 @@ def carray(ptr, shape, dtype=None):
     else:
         raise TypeError("expected a ctypes pointer, got %r" % (ptr,))
 
-    nbytes = dtype.itemsize * np.product(shape, dtype=np.intp)
+    nbytes = dtype.itemsize * np.prod(shape, dtype=np.intp)
     return _get_array_from_ptr(p, nbytes, dtype).reshape(shape)
 
 

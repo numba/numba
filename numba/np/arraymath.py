@@ -1422,7 +1422,6 @@ def _early_return_impl(val):
     return impl
 
 
-@overload_method(types.Array, 'ptp')
 @overload(np.ptp)
 def np_ptp(a):
 
@@ -1451,8 +1450,12 @@ def np_ptp(a):
     return np_ptp_impl
 
 
+if numpy_version < (2, 0):
+    overload_method(types.Array, 'ptp')(np_ptp)
+
 #----------------------------------------------------------------------------
 # Median and partitioning
+
 
 @register_jitable
 def nan_aware_less_than(a, b):
@@ -3140,7 +3143,6 @@ def round_ndigits(x, ndigits):
 
 @overload(np.around)
 @overload(np.round)
-@overload(np.round_)
 def impl_np_round(a, decimals=0, out=None):
     if not type_can_asarray(a):
         raise TypingError('The argument "a" must be array-like')
@@ -3194,6 +3196,10 @@ def impl_np_round(a, decimals=0, out=None):
                     out[index] = np.round(val, decimals)
                 return out
             return impl
+
+
+if numpy_version < (2, 0):
+    overload(np.round_)(impl_np_round)
 
 
 @overload(np.sinc)
@@ -3735,46 +3741,38 @@ def _less_than(a, b):
     return a < b
 
 
-def _searchsorted(func_1, func_2):
+@register_jitable
+def _less_then_datetime64(a, b):
+    # Original numpy code is at:
+    # https://github.com/numpy/numpy/blob/3dad50936a8dc534a81a545365f69ee9ab162ffe/numpy/_core/src/npysort/npysort_common.h#L334-L346
+    if np.isnat(a):
+        return 0
+
+    if np.isnat(b):
+        return 1
+
+    return a < b
+
+
+@register_jitable
+def _less_then_or_equal_datetime64(a, b):
+    return not _less_then_datetime64(b, a)
+
+
+def _searchsorted(cmp):
     # a facsimile of:
     # https://github.com/numpy/numpy/blob/4f84d719657eb455a35fcdf9e75b83eb1f97024a/numpy/core/src/npysort/binsearch.cpp#L61  # noqa: E501
 
-    def impl(a, v):
-        min_idx = 0
-        max_idx = len(a)
-
-        out = np.empty(v.size, np.intp)
-
-        last_key_val = v.flat[0]
-
-        for i in range(v.size):
-            key_val = v.flat[i]
-
-            if func_1(last_key_val, key_val):
-                max_idx = len(a)
+    def impl(a, key_val, min_idx, max_idx):
+        while min_idx < max_idx:
+            # to avoid overflow
+            mid_idx = min_idx + ((max_idx - min_idx) >> 1)
+            mid_val = a[mid_idx]
+            if cmp(mid_val, key_val):
+                min_idx = mid_idx + 1
             else:
-                min_idx = 0
-                if max_idx < len(a):
-                    max_idx += 1
-                else:
-                    max_idx = len(a)
-
-            last_key_val = key_val
-
-            while min_idx < max_idx:
-                # to avoid overflow
-                mid_idx = min_idx + ((max_idx - min_idx) >> 1)
-
-                mid_val = a[mid_idx]
-
-                if func_2(mid_val, key_val):
-                    min_idx = mid_idx + 1
-                else:
-                    max_idx = mid_idx
-
-            out[i] = min_idx
-
-        return out.reshape(v.shape)
+                max_idx = mid_idx
+        return min_idx, max_idx
 
     return impl
 
@@ -3785,21 +3783,29 @@ VALID_SEARCHSORTED_SIDES = frozenset({'left', 'right'})
 def make_searchsorted_implementation(np_dtype, side):
     assert side in VALID_SEARCHSORTED_SIDES
 
-    lt = _less_than
-    le = _less_than_or_equal
+    if np_dtype.char in 'mM':
+        # is datetime
+        lt = _less_then_datetime64
+        le = _less_then_or_equal_datetime64
+    else:
+        lt = _less_than
+        le = _less_than_or_equal
 
     if side == 'left':
-        _impl = _searchsorted(lt, lt)
+        _impl = _searchsorted(lt)
+        _cmp = lt
     else:
         if np.issubdtype(np_dtype, np.inexact) and numpy_version < (1, 23):
             # change in behaviour for inexact types
             # introduced by:
             # https://github.com/numpy/numpy/pull/21867
-            _impl = _searchsorted(lt, le)
+            _impl = _searchsorted(le)
+            _cmp = lt
         else:
-            _impl = _searchsorted(le, le)
+            _impl = _searchsorted(le)
+            _cmp = le
 
-    return register_jitable(_impl)
+    return register_jitable(_impl), register_jitable(_cmp)
 
 
 @overload(np.searchsorted)
@@ -3817,148 +3823,110 @@ def searchsorted(a, v, side='left'):
         v_dt = as_dtype(v)
 
     np_dt = np.promote_types(as_dtype(a.dtype), v_dt)
-    _impl = make_searchsorted_implementation(np_dt, side_val)
+    _impl, _cmp = make_searchsorted_implementation(np_dt, side_val)
 
     if isinstance(v, types.Array):
         def impl(a, v, side='left'):
-            return _impl(a, v)
+            out = np.empty(v.size, dtype=np.intp)
+            last_key_val = v.flat[0]
+            min_idx = 0
+            max_idx = len(a)
+
+            for i in range(v.size):
+                key_val = v.flat[i]
+
+                if _cmp(last_key_val, key_val):
+                    max_idx = len(a)
+                else:
+                    min_idx = 0
+                    if max_idx < len(a):
+                        max_idx += 1
+                    else:
+                        max_idx = len(a)
+
+                last_key_val = key_val
+                min_idx, max_idx = _impl(a, key_val, min_idx, max_idx)
+                out[i] = min_idx
+
+            return out.reshape(v.shape)
     elif isinstance(v, types.Sequence):
         def impl(a, v, side='left'):
-            return _impl(a, np.array(v))
+            v = np.asarray(v)
+            return np.searchsorted(a, v, side=side)
     else:  # presumably `v` is scalar
         def impl(a, v, side='left'):
-            return _impl(a, np.array([v]))[0]
-
+            r, _ = _impl(a, v, 0, len(a))
+            return r
     return impl
 
 
 @overload(np.digitize)
 def np_digitize(x, bins, right=False):
-    @register_jitable
-    def are_bins_increasing(bins):
-        n = len(bins)
-        is_increasing = True
-        is_decreasing = True
-        if n > 1:
-            prev = bins[0]
-            for i in range(1, n):
-                cur = bins[i]
-                is_increasing = is_increasing and not prev > cur
-                is_decreasing = is_decreasing and not prev < cur
-                if not is_increasing and not is_decreasing:
-                    raise ValueError("bins must be monotonically increasing "
-                                     "or decreasing")
-                prev = cur
-        return is_increasing
 
-    # NOTE: the algorithm is slightly different from searchsorted's,
-    # as the edge cases (bin boundaries, NaN) give different results.
+    if isinstance(x, types.Array) and x.dtype in types.complex_domain:
+        raise TypingError('x may not be complex')
 
     @register_jitable
-    def digitize_scalar(x, bins, right):
-        # bins are monotonically-increasing
-        n = len(bins)
-        lo = 0
-        hi = n
+    def _monotonicity(bins):
 
-        if right:
-            if np.isnan(x):
-                # Find the first nan (i.e. the last from the end of bins,
-                # since there shouldn't be many of them in practice)
-                for i in range(n, 0, -1):
-                    if not np.isnan(bins[i - 1]):
-                        return i
-                return 0
-            while hi > lo:
-                mid = (lo + hi) >> 1
-                if bins[mid] < x:
-                    # mid is too low => narrow to upper bins
-                    lo = mid + 1
-                else:
-                    # mid is too high, or is a NaN => narrow to lower bins
-                    hi = mid
+        # all bin edges hold the same value
+        if len(bins) == 0:
+            return 1
+
+        # Skip repeated values at the beginning of the array
+        last_value = bins[0]
+        i = 1
+        while i < len(bins) and bins[i] == last_value:
+            i += 1
+
+        # all bin edges hold the same value
+        if i == len(bins):
+            return 1
+
+        next_value = bins[i]
+
+        if last_value < next_value:
+            # Possibly monotonic increasing
+            for i in range(i + 1, len(bins)):
+                last_value = next_value
+                next_value = bins[i]
+                if last_value > next_value:
+                    return 0
+            return 1
+
         else:
-            if np.isnan(x):
-                # NaNs end up in the last bin
-                return n
-            while hi > lo:
-                mid = (lo + hi) >> 1
-                if bins[mid] <= x:
-                    # mid is too low => narrow to upper bins
-                    lo = mid + 1
-                else:
-                    # mid is too high, or is a NaN => narrow to lower bins
-                    hi = mid
+            # last > next, possibly monotonic decreasing
+            for i in range(i + 1, len(bins)):
+                last_value = next_value
+                next_value = bins[i]
+                if last_value < next_value:
+                    return 0
+            return -1
 
-        return lo
+    def digitize_impl(x, bins, right=False):
 
-    @register_jitable
-    def digitize_scalar_decreasing(x, bins, right):
-        # bins are monotonically-decreasing
-        n = len(bins)
-        lo = 0
-        hi = n
+        mono = _monotonicity(bins)
 
+        if mono == 0:
+            raise ValueError(
+                "bins must be monotonically increasing or decreasing"
+            )
+
+        # this is backwards because the arguments below are swapped
         if right:
-            if np.isnan(x):
-                # Find the last nan
-                for i in range(0, n):
-                    if not np.isnan(bins[i]):
-                        return i
-                return n
-            while hi > lo:
-                mid = (lo + hi) >> 1
-                if bins[mid] < x:
-                    # mid is too high => narrow to lower bins
-                    hi = mid
-                else:
-                    # mid is too low, or is a NaN => narrow to upper bins
-                    lo = mid + 1
+            if mono == -1:
+                # reverse the bins, and invert the results
+                return len(bins) - np.searchsorted(bins[::-1], x, side='left')
+            else:
+                return np.searchsorted(bins, x, side='left')
         else:
-            if np.isnan(x):
-                # NaNs end up in the first bin
-                return 0
-            while hi > lo:
-                mid = (lo + hi) >> 1
-                if bins[mid] <= x:
-                    # mid is too high => narrow to lower bins
-                    hi = mid
-                else:
-                    # mid is too low, or is a NaN => narrow to upper bins
-                    lo = mid + 1
+            if mono == -1:
+                # reverse the bins, and invert the results
+                return len(bins) - np.searchsorted(bins[::-1], x, side='right')
+            else:
+                return np.searchsorted(bins, x, side='right')
 
-        return lo
-
-    if isinstance(x, types.Array):
-        # N-d array and output
-
-        def digitize_impl(x, bins, right=False):
-            is_increasing = are_bins_increasing(bins)
-            out = np.empty(x.shape, np.intp)
-            for view, outview in np.nditer((x, out)):
-                if is_increasing:
-                    index = digitize_scalar(view.item(), bins, right)
-                else:
-                    index = digitize_scalar_decreasing(view.item(), bins, right)
-                outview.itemset(index)
-            return out
-
-        return digitize_impl
-
-    elif isinstance(x, types.Sequence):
-        # 1-d sequence and output
-
-        def digitize_impl(x, bins, right=False):
-            is_increasing = are_bins_increasing(bins)
-            out = np.empty(len(x), np.intp)
-            for i in range(len(x)):
-                if is_increasing:
-                    out[i] = digitize_scalar(x[i], bins, right)
-                else:
-                    out[i] = digitize_scalar_decreasing(x[i], bins, right)
-            return out
-
-        return digitize_impl
+    return digitize_impl
 
 
 _range = range
@@ -4328,7 +4296,6 @@ def np_asarray(a, dtype=None):
     if not type_can_asarray(a):
         return None
 
-    impl = None
     if isinstance(a, types.Array):
         if is_nonelike(dtype) or a.dtype == dtype.dtype:
             def impl(a, dtype=None):
@@ -4371,23 +4338,26 @@ def np_asarray(a, dtype=None):
 
         def impl(a, dtype=None):
             return arr.copy()
-
-    return impl
-
-
-@overload(np.asfarray)
-def np_asfarray(a, dtype=np.float64):
-    # convert numba dtype types into NumPy dtype
-    if isinstance(dtype, types.Type):
-        dtype = as_dtype(dtype)
-    if not np.issubdtype(dtype, np.inexact):
-        dx = types.float64
     else:
-        dx = dtype
+        impl = None
 
-    def impl(a, dtype=np.float64):
-        return np.asarray(a, dx)
     return impl
+
+
+if numpy_version < (2, 0):
+    @overload(np.asfarray)
+    def np_asfarray(a, dtype=np.float64):
+        # convert numba dtype types into NumPy dtype
+        if isinstance(dtype, types.Type):
+            dtype = as_dtype(dtype)
+        if not np.issubdtype(dtype, np.inexact):
+            dx = types.float64
+        else:
+            dx = dtype
+
+        def impl(a, dtype=np.float64):
+            return np.asarray(a, dx)
+        return impl
 
 
 @overload(np.extract)
@@ -4620,9 +4590,9 @@ def window_generator(func):
         def window_impl(M):
 
             if M < 1:
-                return np.array((), dtype=np.float_)
+                return np.array((), dtype=np.float64)
             if M == 1:
-                return np.ones(1, dtype=np.float_)
+                return np.ones(1, dtype=np.float64)
             return func(M)
 
         return window_impl
@@ -4723,8 +4693,8 @@ def _i0(x):
 
 @register_jitable
 def _i0n(n, alpha, beta):
-    y = np.empty_like(n, dtype=np.float_)
-    t = _i0(np.float_(beta))
+    y = np.empty_like(n, dtype=np.float64)
+    t = _i0(np.float64(beta))
     for i in range(len(y)):
         y[i] = _i0(beta * np.sqrt(1 - ((n[i] - alpha) / alpha)**2.0)) / t
 
@@ -4741,9 +4711,9 @@ def np_kaiser(M, beta):
 
     def np_kaiser_impl(M, beta):
         if M < 1:
-            return np.array((), dtype=np.float_)
+            return np.array((), dtype=np.float64)
         if M == 1:
-            return np.ones(1, dtype=np.float_)
+            return np.ones(1, dtype=np.float64)
 
         n = np.arange(0, M)
         alpha = (M - 1) / 2.0

@@ -80,8 +80,6 @@ class StencilFunc(object):
         # stencils only supported for CPU context currently
         self._typingctx = registry.cpu_target.typing_context
         self._targetctx = registry.cpu_target.target_context
-        self._typingctx.refresh()
-        self._targetctx.refresh()
         self._install_type(self._typingctx)
         self.neighborhood = self.options.get("neighborhood")
         self._type_cache = {}
@@ -766,6 +764,7 @@ class StencilFunc(object):
         return new_func
 
     def __call__(self, *args, **kwargs):
+        self._typingctx.refresh()
         if (self.neighborhood is not None and
             len(self.neighborhood) != args[0].ndim):
             raise ValueError("{} dimensional neighborhood specified for {} "

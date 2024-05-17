@@ -26,8 +26,8 @@ def _ensure_critical_deps():
 
     PYVERSION = sys.version_info[:2]
 
-    if PYVERSION < (3, 8):
-        msg = ("Numba needs Python 3.8 or greater. Got Python "
+    if PYVERSION < (3, 9):
+        msg = ("Numba needs Python 3.9 or greater. Got Python "
                f"{PYVERSION[0]}.{PYVERSION[1]}.")
         raise ImportError(msg)
 
@@ -84,7 +84,7 @@ import numba.core.types as types
 from numba.core.types import *
 
 # Re-export decorators
-from numba.core.decorators import (cfunc, generated_jit, jit, njit, stencil,
+from numba.core.decorators import (cfunc, jit, njit, stencil,
                                    jit_module)
 
 # Re-export vectorize decorators and the thread layer querying function
@@ -142,7 +142,7 @@ __all__ = """
     """.split() + types.__all__ + errors.__all__
 
 
-_min_llvmlite_version = (0, 42, 0)
+_min_llvmlite_version = (0, 44, 0)
 _min_llvm_version = (14, 0, 0)
 
 def _ensure_llvm():

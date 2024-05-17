@@ -23,7 +23,7 @@ labels: task
   * [ ] Build farm CUDA testing has passed
   * [ ] Build farm wheel testing has passed
 * [ ] Annotated tag X.Y.Z on release branch (no `v` prefix).
-  `git tag -am "Version X.Y.Z" X.Y.Z
+  `git tag -am "Version X.Y.Z" X.Y.Z`
 * [ ] Build and upload conda packages on buildfarm (check `upload`).
 * [ ] Build wheels and sdist on the buildfarm (check "upload").
 * [ ] Verify packages uploaded to Anaconda Cloud and move to
@@ -31,6 +31,7 @@ labels: task
 * [ ] Upload wheels and sdist to PyPI (upload from `ci_artifacts`).
 * [ ] Verify wheels for all platforms arrived on PyPi.
 * [ ] Verify ReadTheDocs build.
+* [ ] Create a release on Github at https://github.com/numba/numba/releases (FINAL ONLY).
 * [ ] Post link to X and to Mastodon and...
 * [ ] Post announcement to discourse group and ping the release testers group
   using `@RC_Testers` (RC ONLY).
@@ -44,5 +45,4 @@ labels: task
 * [ ] Update release checklist template with any additional bullet points that
       may have arisen during the release.
 * [ ] Ping Anaconda Distro team to trigger a build for `defaults` (FINAL ONLY).
-* [ ] Create a release on Github at https://github.com/numba/numba/releases (FINAL ONLY).
 * [ ] Close milestone (and then close this release issue).

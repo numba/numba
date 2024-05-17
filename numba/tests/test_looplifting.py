@@ -8,7 +8,7 @@ import unittest
 
 
 looplift_flags = Flags()
-looplift_flags.enable_pyobject = True
+looplift_flags.force_pyobject = True
 looplift_flags.enable_looplift = True
 
 pyobject_looplift_flags = looplift_flags.copy()
@@ -197,23 +197,6 @@ class TestLoopLifting(MemoryLeakMixin, TestCase):
         got = list(cres.entry_point(*args))
         self.assertPreciseEqual(expected, got)
 
-    def check_no_lift_nopython(self, pyfunc, argtypes, args):
-        """
-        Check that pyfunc will fail loop-lifting if pyobject mode
-        is disabled inside the loop, succeed otherwise.
-        """
-        cres = compile_isolated(pyfunc, argtypes,
-                                flags=looplift_flags)
-        self.assertTrue(cres.lifted)
-        with self.assertTypingError():
-            cres.entry_point(*args)
-        cres = compile_isolated(pyfunc, argtypes,
-                                flags=pyobject_looplift_flags)
-        self.assertTrue(cres.lifted)
-        expected = pyfunc(*args)
-        got = cres.entry_point(*args)
-        self.assertPreciseEqual(expected, got)
-
     def test_lift1(self):
         self.check_lift_ok(lift1, (types.intp,), (123,))
 
@@ -244,9 +227,6 @@ class TestLoopLifting(MemoryLeakMixin, TestCase):
     def test_reject_gen2(self):
         self.check_no_lift_generator(reject_gen2, (types.intp,), (123,))
 
-    def test_reject_npm1(self):
-        self.check_no_lift_nopython(reject_npm1, (types.intp,), (123,))
-
 
 class TestLoopLiftingAnnotate(TestCase):
     def test_annotate_1(self):
@@ -266,7 +246,7 @@ class TestLoopLiftingAnnotate(TestCase):
 
             return x
 
-        cfoo = jit(foo)
+        cfoo = jit(forceobj=True)(foo)
 
         x = np.arange(10)
         xcopy = x.copy()
@@ -303,7 +283,7 @@ class TestLoopLiftingAnnotate(TestCase):
                 x[j] *= 2
             return x
 
-        cfoo = jit(foo)
+        cfoo = jit(forceobj=True)(foo)
 
         x = np.arange(10)
         xcopy = x.copy()
@@ -380,7 +360,7 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
 
         a = np.ones(10)
         b = object()
-        jitted = jit(lift_issue2368)
+        jitted = jit(forceobj=True)(lift_issue2368)
 
         expected = lift_issue2368(a, b)
         got = jitted(a, b)
@@ -519,7 +499,7 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
             h = h - bar(x)
             return h
 
-        cfoo = jit(foo)
+        cfoo = jit(forceobj=True)(foo)
         self.assertEqual(foo(10), cfoo(10))
 
     def test_recompilation_loop(self):
@@ -538,7 +518,7 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
                 c = c * A[::-1][k]   # the slice that is failing in static_getitem
             return c
 
-        cfoo = jit(foo)
+        cfoo = jit(forceobj=True)(foo)
         # First run just works
         args = np.arange(10), 1
         self.assertEqual(foo(*args), cfoo(*args))
@@ -553,35 +533,11 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
         # Ensure that is really a new overload for the lifted loop
         self.assertEqual(len(lifted.signatures), 2)
 
-    def test_lift_listcomp_block0(self):
-
-        def foo(X):
-            [y for y in (1,)]
-            for x in (1,):
-                pass
-            return X
-
-        # this is not nice, if you have 2+? liftable loops with one of them
-        # being list comp and in block 0 and force objmode compilation is set,
-        # in py27 this leads to a BUILD_LIST that is a lifting candidate with an
-        # entry of block 0, this is a problem as the loop lift prelude would be
-        # written to block -1 and havoc ensues. Therefore block 0 loop lifts
-        # are banned under this set of circumstances.
-
-        # check all compile and execute
-        from numba import jit
-        f = jit()(foo)
-        f(1)
-        self.assertEqual(f.overloads[f.signatures[0]].lifted, ())
-
-        f = jit(forceobj=True)(foo)
-        f(1)
-        self.assertEqual(len(f.overloads[f.signatures[0]].lifted), 1)
 
     def test_lift_objectmode_issue_4223(self):
         from numba import jit
 
-        @jit
+        @jit(forceobj=True)
         def foo(a, b, c, d, x0, y0, n):
             xs, ys = np.zeros(n), np.zeros(n)
             xs[0], ys[0] = x0, y0

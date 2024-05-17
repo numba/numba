@@ -41,9 +41,6 @@ export NUMBA_DEVELOPER_MODE=1
 # enable the fault handler
 export PYTHONFAULTHANDLER=1
 
-# enable new style error handling
-export NUMBA_CAPTURED_ERRORS="new_style"
-
 # Disable NumPy dispatching to AVX512_SKX feature extensions if the chip is
 # reported to support the feature and NumPy >= 1.22 as this results in the use
 # of low accuracy SVML libm replacements in ufunc loops.
@@ -119,32 +116,33 @@ if [[ $(uname) == "Darwin" ]]; then
     export SDKROOT=`pwd`/MacOSX10.10.sdk
 fi
 
+# First run Numba's Power-On-Self-Test to make sure testing will likely work
+python -m numba.misc.POST
+
+# Now run tests based on the changes identified via git
+NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -g -m $TEST_NPROCS -- numba.tests
+
+# List the tests found
+echo "INFO: All discovered tests:"
+python -m numba.runtests -l
+
+# Now run the Numba test suite with sharding
+# Note that coverage is run from the checkout dir to match the "source"
+# directive in .coveragerc
+echo "INFO: Running shard of discovered tests: ($TEST_START_INDEX:$TEST_COUNT)"
+if [ "$RUN_COVERAGE" == "yes" ]; then
+    export PYTHONPATH=.
+    coverage erase
+    $SEGVCATCH coverage run runtests.py -b -j "$TEST_START_INDEX:$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS --junit -- numba.tests
+elif [ "$RUN_TYPEGUARD" == "yes" ]; then
+    echo "INFO: Running with typeguard"
+    NUMBA_USE_TYPEGUARD=1 NUMBA_ENABLE_CUDASIM=1 PYTHONWARNINGS="ignore:::typeguard" $SEGVCATCH python runtests.py -b -j "$TEST_START_INDEX:$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS --junit -- numba.tests
+else
+    NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -j "$TEST_START_INDEX:$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS --junit -- numba.tests
+fi
+
+# Now run with RVSDG enabled for a subset of tests
 if [[ "$TEST_RVSDG" == "yes" ]]; then
     echo "Running RVSDG tests..."
-    NUMBA_USE_RVSDG_FRONTEND=1 NUMBA_CAPTURED_ERRORS=new_style NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -m $TEST_NPROCS -- numba.tests.test_usecases
-else
-    # First run Numba's Power-On-Self-Test to make sure testing will likely work
-    python -m numba.misc.POST
-
-    # Now run tests based on the changes identified via git
-    NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -g -m $TEST_NPROCS -- numba.tests
-
-    # List the tests found
-    echo "INFO: All discovered tests:"
-    python -m numba.runtests -l
-
-    # Now run the Numba test suite with sharding
-    # Note that coverage is run from the checkout dir to match the "source"
-    # directive in .coveragerc
-    echo "INFO: Running shard of discovered tests: ($TEST_START_INDEX:$TEST_COUNT)"
-    if [ "$RUN_COVERAGE" == "yes" ]; then
-        export PYTHONPATH=.
-        coverage erase
-        $SEGVCATCH coverage run runtests.py -b -j "$TEST_START_INDEX:$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
-    elif [ "$RUN_TYPEGUARD" == "yes" ]; then
-        echo "INFO: Running with typeguard"
-        NUMBA_USE_TYPEGUARD=1 NUMBA_ENABLE_CUDASIM=1 PYTHONWARNINGS="ignore:::typeguard" $SEGVCATCH python runtests.py -b -j "$TEST_START_INDEX:$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
-    else
-        NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -j "$TEST_START_INDEX:$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
-    fi
+    NUMBA_USE_RVSDG_FRONTEND=1 NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -m $TEST_NPROCS --junit -- numba.tests.test_usecases
 fi

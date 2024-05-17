@@ -1178,7 +1178,8 @@ class CPUCodegen(Codegen):
         self._tm_features = self._customize_tm_features()
         self._customize_tm_options(tm_options)
         tm = target.create_target_machine(**tm_options)
-        engine = ll.create_mcjit_compiler(llvm_module, tm)
+        use_lmm = config.USE_LLVMLITE_MEMORY_MANAGER
+        engine = ll.create_mcjit_compiler(llvm_module, tm, use_lmm=use_lmm)
 
         if config.ENABLE_PROFILING:
             engine.enable_jit_events()
@@ -1225,6 +1226,7 @@ class CPUCodegen(Codegen):
 
     def _module_pass_manager(self, **kwargs):
         pm = ll.create_module_pass_manager()
+        pm.add_target_library_info(ll.get_process_triple())
         self._tm.add_analysis_passes(pm)
         cost = kwargs.pop("cost", None)
         with self._pass_manager_builder(**kwargs) as pmb:
@@ -1235,20 +1237,9 @@ class CPUCodegen(Codegen):
             # This knocks loops into rotated form early to reduce the likelihood
             # of vectorization failing due to unknown PHI nodes.
             pm.add_loop_rotate_pass()
-            if ll.llvm_version_info[0] < 12:
-                # LLVM 11 added LFTR to the IV Simplification pass,
-                # this interacted badly with the existing use of the
-                # InstructionCombiner here and ended up with PHI nodes that
-                # prevented vectorization from working. The desired
-                # vectorization effects can be achieved with this in LLVM 11
-                # (and also < 11) but at a potentially slightly higher cost:
-                pm.add_licm_pass()
-                pm.add_cfg_simplification_pass()
-            else:
-                # These passes are required to get SVML to vectorize tests
-                # properly on LLVM 14
-                pm.add_instruction_combining_pass()
-                pm.add_jump_threading_pass()
+            # These passes are required to get SVML to vectorize tests
+            pm.add_instruction_combining_pass()
+            pm.add_jump_threading_pass()
 
         if config.LLVM_REFPRUNE_PASS:
             pm.add_refprune_pass(_parse_refprune_flags())
@@ -1256,6 +1247,7 @@ class CPUCodegen(Codegen):
 
     def _function_pass_manager(self, llvm_module, **kwargs):
         pm = ll.create_function_pass_manager(llvm_module)
+        pm.add_target_library_info(llvm_module.triple)
         self._tm.add_analysis_passes(pm)
         with self._pass_manager_builder(**kwargs) as pmb:
             pmb.populate(pm)

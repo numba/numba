@@ -24,6 +24,7 @@ from collections import defaultdict, OrderedDict, namedtuple
 from contextlib import contextmanager
 import operator
 from dataclasses import make_dataclass
+import warnings
 
 from llvmlite import ir as lir
 from numba.core.imputils import impl_ret_untracked
@@ -2375,7 +2376,27 @@ class ConvertLoopPass:
         # We go over all loops, smaller loops first (inner first)
         for loop, s in sorted(sized_loops, key=lambda tup: tup[1]):
             if len(loop.entries) != 1 or len(loop.exits) != 1:
+                if not config.DISABLE_PERFORMANCE_WARNINGS:
+                    for entry in loop.entries:
+                        for inst in blocks[entry].body:
+                            # if prange or pndindex call
+                            if (
+                                isinstance(inst, ir.Assign)
+                                and isinstance(inst.value, ir.Expr)
+                                and inst.value.op == "call"
+                                and self._is_parallel_loop(
+                                    inst.value.func.name, call_table)
+                            ):
+                                msg = "\nprange or pndindex loop " \
+                                      "will not be executed in " \
+                                      "parallel due to there being more than one " \
+                                      "entry to or exit from the loop (e.g., an " \
+                                      "assertion)."
+                                warnings.warn(
+                                    errors.NumbaPerformanceWarning(
+                                        msg, inst.loc))
                 continue
+
             entry = list(loop.entries)[0]
             for inst in blocks[entry].body:
                 # if prange or pndindex call
@@ -3782,12 +3803,22 @@ def get_reduction_init(nodes):
     # there could be multiple extra assignments after the reduce node
     # See: test_reduction_var_reuse
     acc_expr = list(filter(lambda x: isinstance(x.value, ir.Expr), nodes))[-1].value
-    require(isinstance(acc_expr, ir.Expr) and acc_expr.op=='inplace_binop')
-    if acc_expr.fn == operator.iadd or acc_expr.fn == operator.isub:
-        return 0, acc_expr.fn
-    if (  acc_expr.fn == operator.imul
-       or acc_expr.fn == operator.itruediv ):
-        return 1, acc_expr.fn
+    require(isinstance(acc_expr, ir.Expr) and acc_expr.op in ['inplace_binop', 'binop'])
+    acc_expr_fn = acc_expr.fn
+    if acc_expr.op == 'binop':
+        if acc_expr_fn == operator.add:
+            acc_expr_fn = operator.iadd
+        elif acc_expr_fn == operator.sub:
+            acc_expr_fn = operator.isub
+        elif acc_expr_fn == operator.mul:
+            acc_expr_fn = operator.imul
+        elif acc_expr_fn == operator.truediv:
+            acc_expr_fn = operator.itruediv
+    if acc_expr_fn == operator.iadd or acc_expr_fn == operator.isub:
+        return 0, acc_expr_fn
+    if (  acc_expr_fn == operator.imul
+       or acc_expr_fn == operator.itruediv ):
+        return 1, acc_expr_fn
     return None, None
 
 def supported_reduction(x, func_ir):
@@ -3827,17 +3858,30 @@ def get_reduce_nodes(reduction_node, nodes, func_ir):
     reduce_nodes = None
     defs = {}
 
-    def lookup(var, varonly=True, start=None):
-        val = defs.get(var.name, None)
-        if isinstance(val, ir.Var):
+    def cyclic_lookup(var, varonly=True, start=None):
+        """Lookup definition of ``var``.
+        Returns ``None`` if variable definition forms a cycle.
+        """
+        lookedup_var = defs.get(var.name, None)
+        if isinstance(lookedup_var, ir.Var):
             if start is None:
-                start = val
-            elif start == var:
+                start = lookedup_var
+            elif start == lookedup_var:
                 # cycle detected
                 return None
-            return lookup(val, start=start)
+            return cyclic_lookup(lookedup_var, start=start)
         else:
-            return var if (varonly or val is None) else val
+            return var if (varonly or lookedup_var is None) else lookedup_var
+
+    def noncyclic_lookup(*args, **kwargs):
+        """Similar to cyclic_lookup but raise AssertionError if a cycle is
+        detected.
+        """
+        res = cyclic_lookup(*args, **kwargs)
+        if res is None:
+            raise AssertionError("unexpected cycle in lookup()")
+        return res
+
     name = reduction_node.name
     unversioned_name = reduction_node.unversioned_name
     for i, stmt in enumerate(nodes):
@@ -3845,14 +3889,52 @@ def get_reduce_nodes(reduction_node, nodes, func_ir):
         rhs = stmt.value
         defs[lhs.name] = rhs
         if isinstance(rhs, ir.Var) and rhs.name in defs:
-            rhs = lookup(rhs)
+            rhs = cyclic_lookup(rhs)
         if isinstance(rhs, ir.Expr):
-            in_vars = set(lookup(v, True).name for v in rhs.list_vars())
+            in_vars = set(noncyclic_lookup(v, True).name
+                          for v in rhs.list_vars())
             if name in in_vars:
                 # reductions like sum have an assignment afterwards
                 # e.g. $2 = a + $1; a = $2
                 # reductions that are functions calls like max() don't have an
                 # extra assignment afterwards
+
+                # This code was created when Numba had an IR generation strategy
+                # where a binop for a reduction would be followed by an
+                # assignment as follows:
+                #$c.4.15 = inplace_binop(fn=<iadd>, ...>, lhs=c.3, rhs=$const20)
+                #c.4 = $c.4.15
+
+                # With Python 3.12 changes, Numba may separate that assignment
+                # to a new basic block.  The code below looks and sees if an
+                # assignment to the reduction var follows the reduction operator
+                # and if not it searches the rest of the reduction nodes to find
+                # the assignment that should follow the reduction operator
+                # and then reorders the reduction nodes so that assignment
+                # follows the reduction operator.
+                if (i + 1 < len(nodes) and
+                    ((not isinstance(nodes[i + 1], ir.Assign)) or
+                     nodes[i + 1].target.unversioned_name != unversioned_name)):
+                    foundj = None
+                    # Iterate through the rest of the reduction nodes.
+                    for j, jstmt in enumerate(nodes[i + 1:]):
+                        # If this stmt is an assignment where the right-hand
+                        # side of the assignment is the output of the reduction
+                        # operator.
+                        if isinstance(jstmt, ir.Assign) and jstmt.value == lhs:
+                            # Remember the index of this node.  Because of
+                            # nodes[i+1] above, we have to add i + 1 to j below
+                            # to get the index in the original nodes list.
+                            foundj = i + j + 1
+                            break
+                    if foundj is not None:
+                        # If we found the correct assignment then move it to
+                        # after the reduction operator.
+                        nodes = (nodes[:i + 1] +   # nodes up to operator
+                                 nodes[foundj:foundj + 1] + # assignment node
+                                 nodes[i + 1:foundj] + # between op and assign
+                                 nodes[foundj + 1:]) # after assignment node
+
                 if (not (i+1 < len(nodes) and isinstance(nodes[i+1], ir.Assign)
                         and nodes[i+1].target.unversioned_name == unversioned_name)
                         and lhs.unversioned_name != unversioned_name):
@@ -3865,7 +3947,8 @@ def get_reduce_nodes(reduction_node, nodes, func_ir):
                 if not supported_reduction(rhs, func_ir):
                     raise ValueError(("Use of reduction variable " + unversioned_name +
                                       " in an unsupported reduction function."))
-                args = [ (x.name, lookup(x, True)) for x in get_expr_args(rhs) ]
+                args = [(x.name, noncyclic_lookup(x, True))
+                        for x in get_expr_args(rhs) ]
                 non_red_args = [ x for (x, y) in args if y.name != name ]
                 assert len(non_red_args) == 1
                 args = [ (x, y) for (x, y) in args if x != y.name ]

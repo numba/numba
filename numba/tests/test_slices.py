@@ -115,7 +115,7 @@ class TestSlices(MemoryLeakMixin, TestCase):
                 # Catch cases of 0, or more than 3 arguments.
                 # This becomes a typing error in numba
                 n_args = len(args)
-                self.assertRegexpMatches(
+                self.assertRegex(
                     str(py_type_e),
                     r"slice expected at (most|least) (3|1) arguments?, got {}"
                     .format(n_args)

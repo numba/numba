@@ -8,22 +8,20 @@ jobs:
     vmImage: ${{ parameters.vmImage }}
   strategy:
     matrix:
-      py38_np122:
-        PYTHON: '3.8'
-        NUMPY: '1.22.3'
+      py39_np122:
+        PYTHON: '3.9'
+        NUMPY: '1.22'
         CONDA_ENV: 'testenv'
-        TEST_START_INDEX: 18
-      py311_np126:
-        PYTHON: '3.11'
+        TEST_START_INDEX: 16
+      py312_np126:
+        PYTHON: '3.12'
         NUMPY: '1.26'
         CONDA_ENV: 'testenv'
-        TEST_START_INDEX: 19
+        TEST_START_INDEX: 17
 
   steps:
-    - task: CondaEnvironment@1
-      inputs:
-        updateConda: no
-        packageSpecs: ''
+    - powershell: Write-Host "##vso[task.prependpath]$env:CONDA\Scripts"
+      displayName: Add conda to PATH
 
     - script: |
         buildscripts\\incremental\\setup_conda_environment.cmd
@@ -51,7 +49,6 @@ jobs:
 
     - script: |
         call activate %CONDA_ENV%
-        set NUMBA_CAPTURED_ERRORS=new_style
         set NUMBA_ENABLE_CUDASIM=1
         echo "Running shard of discovered tests: %TEST_START_INDEX%,None,%TEST_COUNT%"
         python -m numba.runtests -b -v -g -m 2 -- numba.tests
@@ -59,8 +56,14 @@ jobs:
 
     - script: |
         call activate %CONDA_ENV%
-        set NUMBA_CAPTURED_ERRORS=new_style
         set NUMBA_ENABLE_CUDASIM=1
         echo "Running shard of discovered tests: %TEST_START_INDEX%:%TEST_COUNT%"
-        python runtests.py -m 2 -b -j "%TEST_START_INDEX%:%TEST_COUNT%"  --exclude-tags='long_running'  -- numba.tests
+        python runtests.py -m 2 -b -j "%TEST_START_INDEX%:%TEST_COUNT%"  --exclude-tags='long_running' --junit -- numba.tests
       displayName: 'Test shard of test files'
+
+    - task: PublishTestResults@2
+      condition: succeededOrFailed()
+      displayName: Publish Test Results
+      inputs:
+        testResultsFiles: 'junit_numba_*.xml'
+        mergeTestResults: true

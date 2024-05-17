@@ -10,7 +10,6 @@ from textwrap import dedent
 
 import numpy as np
 
-from numba.core.compiler import Flags
 from numba import jit, njit, typeof
 from numba.core import types
 from numba.typed import List, Dict
@@ -19,13 +18,11 @@ from numba.core.errors import TypingError, NumbaDeprecationWarning
 from numba.core.config import IS_32BITS
 from numba.core.utils import pysignature
 from numba.np.extensions import cross2d
-from numba.tests.support import (TestCase, CompilationCache, MemoryLeakMixin,
-                                 needs_blas, run_in_subprocess)
+from numba.tests.support import (TestCase, MemoryLeakMixin,
+                                 needs_blas, run_in_subprocess,
+                                 skip_if_numpy_2, IS_NUMPY_2,
+                                 IS_OSX_ARM64)
 import unittest
-
-
-no_pyobj_flags = Flags()
-no_pyobj_flags.nrt = True
 
 
 def sinc(x):
@@ -483,12 +480,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     def setUp(self):
         super(TestNPFunctions, self).setUp()
-        self.ccache = CompilationCache()
         self.rnd = np.random.RandomState(42)
 
-    def run_unary(self, pyfunc, x_types, x_values, flags=no_pyobj_flags,
-                  func_extra_types=None, func_extra_args=None,
-                  ignore_sign_on_zero=False, abs_tol=None, **kwargs):
+    def run_unary(self, pyfunc, x_types, x_values, func_extra_types=None,
+                  func_extra_args=None, ignore_sign_on_zero=False, abs_tol=None,
+                  **kwargs):
         """
         Runs tests for a unary function operating in the numerical real space.
 
@@ -498,7 +494,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                  functions to be tested.
         x_types: the types of the values being tested, see numba.types
         x_values: the numerical values of the values to be tested
-        flags: flags to pass to the CompilationCache::ccache::compile function
         func_extra_types: the types of additional arguments to the numpy
                           function
         func_extra_args:  additional arguments to the numpy function
@@ -515,9 +510,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             if func_extra_args is None:
                 func_extra_types = func_extra_args = [()]
             for xtypes, xargs in zip(func_extra_types, func_extra_args):
-                cr = self.ccache.compile(pyfunc, (tx,) + xtypes,
-                                         flags=flags)
-                cfunc = cr.entry_point
+                cfunc = njit((tx,) + xtypes,)(pyfunc)
                 got = cfunc(vx, *xargs)
                 expected = pyfunc(vx, *xargs)
                 try:
@@ -658,7 +651,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
             self.assertPreciseEqual(expected, received)
 
-    def test_angle(self, flags=no_pyobj_flags):
+    def test_angle(self):
         """
         Tests the angle() function.
         This test is purely to assert numerical computations are correct.
@@ -711,7 +704,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc = jit(nopython=True)(pyfunc)
             expected = pyfunc(x)
             got = cfunc(x)
-            self.assertEquals(expected, got)
+            self.assertEqual(expected, got)
 
     def test_angle_exceptions(self):
         pyfunc = angle1
@@ -1049,14 +1042,14 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     def test_isneg_or_ispos_inf(self):
         def values():
-            yield np.NINF, None
+            yield -np.inf, None
             yield np.inf, None
-            yield np.PINF, None
+            yield np.inf, None
             yield np.asarray([-np.inf, 0., np.inf]), None
-            yield np.NINF, np.zeros(1, dtype=np.bool_)
+            yield -np.inf, np.zeros(1, dtype=np.bool_)
             yield np.inf, np.zeros(1, dtype=np.bool_)
-            yield np.PINF, np.zeros(1, dtype=np.bool_)
-            yield np.NINF, np.empty(12)
+            yield np.inf, np.zeros(1, dtype=np.bool_)
+            yield -np.inf, np.empty(12)
             yield np.asarray([-np.inf, 0., np.inf]), np.zeros(3, dtype=np.bool_)
 
         pyfuncs = [isneginf, isposinf]
@@ -1490,6 +1483,113 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         # Sequence input
         check(list(values), bins1)
+
+        # per https://github.com/numba/numba/issues/8768
+        check(np.array([np.nan, 1]), np.array([1.5, np.nan]))
+
+    def test_digitize_non_monotonic_bins(self):
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        pyfunc = digitize
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check_error(*args):
+            for fn in (pyfunc, cfunc):
+                with self.assertRaises(ValueError) as raises:
+                    fn(*args)
+
+                msg = 'bins must be monotonically increasing or decreasing'
+                self.assertIn(msg, str(raises.exception))
+
+        x = np.array([np.nan, 1])
+        bins = np.array([np.nan, 1.5, 2.3, np.nan])
+        check_error(x, bins)
+
+        x = [-1, 0, 1, 2]
+        bins = [0, 0, 1, 0]
+        check_error(x, bins)
+
+        bins = [1, 1, 0, 1]
+        check_error(x, bins)
+
+    def test_digitize_supplemental(self):
+        # inspired by the tests in
+        # https://github.com/numpy/numpy/blob/a277f62/numpy/lib/tests/test_function_base.py
+
+        pyfunc = digitize
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(*args):
+            expected = pyfunc(*args)
+            got = cfunc(*args)
+            self.assertPreciseEqual(expected, got)
+
+        # forward
+        x = np.arange(-6, 5)
+        bins = np.arange(-5, 5)
+        check(x, bins)
+
+        # reverse
+        x = np.arange(5, -6, -1)
+        bins = np.arange(5, -5, -1)
+        check(x, bins)
+
+        # random
+        x = self.rnd.rand(10)
+        bins = np.linspace(x.min(), x.max(), 10)
+        check(x, bins)
+
+        # right_basic
+        x = [1, 5, 4, 10, 8, 11, 0]
+        bins = [1, 5, 10]
+        check(x, bins)
+
+        # right_open
+        x = np.arange(-6, 5)
+        bins = np.arange(-6, 4)
+        check(x, bins, True)
+
+        # right_open_reverse
+        x = np.arange(5, -6, -1)
+        bins = np.arange(4, -6, -1)
+        check(x, bins, True)
+
+        # right_open_random
+        x = self.rnd.rand(10)
+        bins = np.linspace(x.min(), x.max(), 10)
+        check(x, bins, True)
+
+        # monotonic
+        x = [-1, 0, 1, 2]
+        bins = [0, 0, 1]
+        check(x, bins)
+
+        bins = [1, 1, 0]
+        check(x, bins)
+
+        bins = [1, 1, 1, 1]
+        check(x, bins)
+
+        # large_integers_increasing
+        x = 2 ** 54  # loses precision in a float
+        check([x], [x - 1, x + 1])
+
+    def test_digitize_raise_if_x_complex(self):
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        pyfunc = digitize
+        cfunc = jit(nopython=True)(pyfunc)
+
+        x = np.array([1 + 1j])
+        y = np.array([1., 3., 4.5, 8.])
+        msg = 'x may not be complex'
+
+        for func in pyfunc, cfunc:
+            with self.assertTypingError() as raises:
+                func(x, y)
+                self.assertIn(msg, str(raises.exception))
 
     def test_histogram(self):
         pyfunc = histogram
@@ -3122,12 +3222,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield -1.0, 60.0
             yield 0.0, np.e
             yield 0.0, np.pi
-            yield np.complex64(1), np.complex64(2)
-            yield np.complex64(2j), np.complex64(4j)
-            yield np.complex64(2), np.complex64(4j)
-            yield np.complex64(1 + 2j), np.complex64(3 + 4j)
-            yield np.complex64(1 - 2j), np.complex64(3 - 4j)
-            yield np.complex64(-1 + 2j), np.complex64(3 + 4j)
+            if numpy_version < (2, 0):
+                yield np.complex64(1), np.complex64(2)
+                yield np.complex64(2j), np.complex64(4j)
+                yield np.complex64(2), np.complex64(4j)
+                yield np.complex64(1 + 2j), np.complex64(3 + 4j)
+                yield np.complex64(1 - 2j), np.complex64(3 - 4j)
+                yield np.complex64(-1 + 2j), np.complex64(3 + 4j)
 
         pyfunc = logspace2
         cfunc = jit(nopython=True)(pyfunc)
@@ -3164,12 +3265,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield -1.0, 60.0
             yield 0.0, np.e
             yield 0.0, np.pi
-            yield np.complex64(1), np.complex64(2)
-            yield np.complex64(2j), np.complex64(4j)
-            yield np.complex64(2), np.complex64(4j)
-            yield np.complex64(1 + 2j), np.complex64(3 + 4j)
-            yield np.complex64(1 - 2j), np.complex64(3 - 4j)
-            yield np.complex64(-1 + 2j), np.complex64(3 + 4j)
+            if numpy_version < (2, 0):
+                yield np.complex64(1), np.complex64(2)
+                yield np.complex64(2j), np.complex64(4j)
+                yield np.complex64(2), np.complex64(4j)
+                yield np.complex64(1 + 2j), np.complex64(3 + 4j)
+                yield np.complex64(1 - 2j), np.complex64(3 - 4j)
+                yield np.complex64(-1 + 2j), np.complex64(3 + 4j)
 
         pyfunc = logspace3
         cfunc = jit(nopython=True)(pyfunc)
@@ -3191,12 +3293,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield -1.0, 60.0, 90
             yield 0.0, np.e, 20
             yield 0.0, np.pi, 30
-            yield np.complex64(1), np.complex64(2), 40
-            yield np.complex64(2j), np.complex64(4j), 50
-            yield np.complex64(2), np.complex64(4j), 60
-            yield np.complex64(1 + 2j), np.complex64(3 + 4j), 70
-            yield np.complex64(1 - 2j), np.complex64(3 - 4j), 80
-            yield np.complex64(-1 + 2j), np.complex64(3 + 4j), 90
+            if numpy_version < (2, 0):
+                yield np.complex64(1), np.complex64(2), 40
+                yield np.complex64(2j), np.complex64(4j), 50
+                yield np.complex64(2), np.complex64(4j), 60
+                yield np.complex64(1 + 2j), np.complex64(3 + 4j), 70
+                yield np.complex64(1 - 2j), np.complex64(3 - 4j), 80
+                yield np.complex64(-1 + 2j), np.complex64(3 + 4j), 90
 
         pyfunc = logspace3
         cfunc = jit(nopython=True)(pyfunc)
@@ -3409,8 +3512,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                                 abs_tol=1e-13)
 
         # Logarithmic spirals
-        y = cfunc3(-1 + 0j, 1 + 0j, num=3)
-        self.assertPreciseEqual(y, pfunc3(-1 + 0j, 1 + 0j, num=3))
+        if numpy_version < (2, 0):
+            y = cfunc3(-1 + 0j, 1 + 0j, num=3)
+            self.assertPreciseEqual(y, pfunc3(-1 + 0j, 1 + 0j, num=3))
 
         y = cfunc3(0 + 3j, -3 + 0j, 3)
         self.assertPreciseEqual(y, pfunc3(0 + 3j, -3 + 0j, 3), abs_tol=1e-15)
@@ -4126,11 +4230,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         a = np.asarray([1.0, np.nan])
         b = np.asarray([1.0, np.nan])
         self.assertFalse(cfunc(a, b))
-        self.assertEquals(pyfunc(a, b, equal_nan=True),
-                          cfunc(a, b, equal_nan=True))
+        self.assertEqual(pyfunc(a, b, equal_nan=True),
+                         cfunc(a, b, equal_nan=True))
 
         b = np.asarray([np.nan, 1.0])
-        self.assertEquals(pyfunc(a, b), cfunc(a, b))
+        self.assertEqual(pyfunc(a, b), cfunc(a, b))
 
         noise_levels = [1.0, 1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 0.0]
         zero_array = np.zeros((25, 4))
@@ -4187,7 +4291,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         ]
 
         for (x, y) in numpy_data:
-            self.assertEquals(pyfunc(x, y), cfunc(x, y))
+            self.assertEqual(pyfunc(x, y), cfunc(x, y))
 
     def test_ip_not_allclose_numpy(self):
         # https://github.com/numpy/numpy/blob/4adc87dff15a247e417d50f10cc4def8e1c17a03/numpy/core/tests/test_numeric.py#L2422-L2441    # noqa: E501
@@ -4214,7 +4318,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         ]
 
         for (x, y) in numpy_data:
-            self.assertEquals(pyfunc(x, y), cfunc(x, y))
+            self.assertEqual(pyfunc(x, y), cfunc(x, y))
 
     def test_return_class_is_ndarray_numpy(self):
         # https://github.com/numpy/numpy/blob/4adc87dff15a247e417d50f10cc4def8e1c17a03/numpy/core/tests/test_numeric.py#L2460-L2468    # noqa: E501
@@ -4236,8 +4340,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         x = np.array([1.0, np.nan])
 
-        self.assertEquals(pyfunc(x, x, equal_nan=True),
-                          cfunc(x, x, equal_nan=True))
+        self.assertEqual(pyfunc(x, x, equal_nan=True),
+                         cfunc(x, x, equal_nan=True))
 
     def test_no_parameter_modification_numpy(self):
         # https://github.com/numpy/numpy/blob/4adc87dff15a247e417d50f10cc4def8e1c17a03/numpy/core/tests/test_numeric.py#L2443-L2448    # noqa: E501
@@ -4261,7 +4365,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         min_int = np.iinfo(np.int_).min
         a = np.array([min_int], dtype=np.int_)
 
-        self.assertEquals(pyfunc(a, a), cfunc(a, a))
+        self.assertEqual(pyfunc(a, a), cfunc(a, a))
 
     def test_allclose_exception(self):
         self.disable_leak_check()
@@ -4560,6 +4664,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc(x, xp, fp)
             self.assertPreciseEqual(expected, got, abs_tol=atol)
 
+    @unittest.skipIf(IS_NUMPY_2 and IS_OSX_ARM64, "NEP 50 interaction issue.")
     def test_interp_complex_stress_tests(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
@@ -4919,6 +5024,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         test_reject(make_nested_list_with_dict())
         test_reject(make_unicode_list())
 
+    @skip_if_numpy_2
     def test_asfarray(self):
         def inputs():
             yield np.array([1, 2, 3]), None
@@ -6141,8 +6247,9 @@ def foo():
         # typing part of the `np.MachAr` overload, which may already have been
         # executed for the given types and so an empty in memory cache is
         # needed.
-        msg = r'`np.MachAr` is deprecated \(NumPy 1.22\)'
+        msg = r'.*`np.MachAr` is deprecated \(NumPy 1.22\)'
         with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('ignore')  # override warning behavior
             warnings.filterwarnings("always", message=msg,
                                     category=NumbaDeprecationWarning,)
             f = njit(lambda : np.MachAr().eps)
@@ -6168,8 +6275,8 @@ class TestRegistryImports(TestCase):
         """)
         result, error = run_in_subprocess(code)
         # Assert that the bytestring "OK" was printed to stdout
-        self.assertEquals(b"OK", result.strip())
-        self.assertEquals(b"", error.strip())
+        self.assertEqual(b"OK", result.strip())
+        self.assertEqual(b"", error.strip())
 
 
 if __name__ == '__main__':

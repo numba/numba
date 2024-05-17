@@ -587,21 +587,22 @@ def array_item(context, builder, sig, args):
     return load_item(context, builder, aryty, ary.data)
 
 
-@lower_builtin("array.itemset", types.Array, types.Any)
-def array_itemset(context, builder, sig, args):
-    aryty, valty = sig.args
-    ary, val = args
-    assert valty == aryty.dtype
-    ary = make_array(aryty)(context, builder, ary)
+if numpy_version < (2, 0):
+    @lower_builtin("array.itemset", types.Array, types.Any)
+    def array_itemset(context, builder, sig, args):
+        aryty, valty = sig.args
+        ary, val = args
+        assert valty == aryty.dtype
+        ary = make_array(aryty)(context, builder, ary)
 
-    nitems = ary.nitems
-    with builder.if_then(builder.icmp_signed('!=', nitems, nitems.type(1)),
-                         likely=False):
-        msg = "itemset(): can only write to an array of size 1"
-        context.call_conv.return_user_exc(builder, ValueError, (msg,))
+        nitems = ary.nitems
+        with builder.if_then(builder.icmp_signed('!=', nitems, nitems.type(1)),
+                             likely=False):
+            msg = "itemset(): can only write to an array of size 1"
+            context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
-    store_item(context, builder, aryty, val, ary.data)
-    return context.get_dummy_value()
+        store_item(context, builder, aryty, val, ary.data)
+        return context.get_dummy_value()
 
 
 # ------------------------------------------------------------------------------
@@ -2556,6 +2557,16 @@ def np_shape(a):
         return np.asarray(a).shape
     return impl
 
+
+@overload(np.size)
+def np_size(a):
+    if not type_can_asarray(a):
+        raise errors.TypingError("The argument to np.size must be array-like")
+
+    def impl(a):
+        return np.asarray(a).size
+    return impl
+
 # ------------------------------------------------------------------------------
 
 
@@ -4152,6 +4163,13 @@ def iternext_numpy_nditer2(context, builder, sig, args, result):
     nditer.iternext_specific(context, builder, result)
 
 
+@lower_builtin(operator.eq, types.DType, types.DType)
+def dtype_eq_impl(context, builder, sig, args):
+    arg1, arg2 = sig.args
+    res = ir.Constant(ir.IntType(1), int(arg1 == arg2))
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
 # ------------------------------------------------------------------------------
 # Numpy array constructors
 
@@ -4820,7 +4838,7 @@ def _arange_dtype(*args):
 
 
 @overload(np.arange)
-def np_arange(start, stop=None, step=None, dtype=None):
+def np_arange(start, / ,stop=None, step=None, dtype=None):
     if isinstance(stop, types.Optional):
         stop = stop.type
     if isinstance(step, types.Optional):
@@ -4854,7 +4872,7 @@ def np_arange(start, stop=None, step=None, dtype=None):
     stop_value = getattr(stop, "literal_value", None)
     step_value = getattr(step, "literal_value", None)
 
-    def impl(start, stop=None, step=None, dtype=None):
+    def impl(start, /, stop=None, step=None, dtype=None):
         # Allow for improved performance if given literal arguments.
         lit_start = start_value if start_value is not None else start
         lit_stop = stop_value if stop_value is not None else stop
@@ -6118,6 +6136,10 @@ def impl_np_vstack(tup):
         def impl(tup):
             return _np_vstack(tup)
         return impl
+
+
+if numpy_version >= (2, 0):
+    overload(np.row_stack)(impl_np_vstack)
 
 
 @intrinsic
