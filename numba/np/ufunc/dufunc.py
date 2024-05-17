@@ -497,7 +497,6 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc, UfuncBase):
                 msg = 'The first argument "array" must be array-like'
                 raise errors.NumbaTypeError(msg)
 
-            axis_tuple = isinstance(axis, types.BaseTuple)
             axis_int_tuple = isinstance(axis, types.UniTuple) and \
                 isinstance(axis.dtype, types.Integer)
             axis_empty_tuple = isinstance(axis, types.Tuple) and len(axis) == 0
@@ -508,7 +507,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc, UfuncBase):
 
             # In NumPy, a ufunc is reorderable if its identity type is **not**
             # PyUfunc_None.
-            if not self.reorderable and axis_tuple and len(axis) > 1:
+            if not self.reorderable and axis_int_tuple and len(axis) > 1:
                 msg = (f"reduction operation '{ufunc_name}' is not "
                        "reorderable, so at most one axis may be specified")
                 raise errors.NumbaTypeError(msg)
