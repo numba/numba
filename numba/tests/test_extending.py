@@ -1,3 +1,4 @@
+import inspect
 import math
 import operator
 import sys
@@ -8,12 +9,13 @@ import warnings
 import re
 
 import numpy as np
+from llvmlite import ir
 
+import numba
 from numba import njit, jit, vectorize, guvectorize, objmode
 from numba.core import types, errors, typing, compiler, cgutils
 from numba.core.typed_passes import type_inference_stage
 from numba.core.registry import cpu_target
-from numba.core.compiler import compile_isolated
 from numba.core.imputils import lower_constant
 from numba.tests.support import (
     TestCase,
@@ -564,8 +566,8 @@ class TestLowLevelExtending(TestCase):
     Test the low-level two-tier extension API.
     """
 
-    # We check with both @jit and compile_isolated(), to exercise the
-    # registration logic.
+    # Check with `@jit` from within the test process and also in a new test
+    # process so as to check the registration mechanism.
 
     def test_func1(self):
         pyfunc = call_func1_nullary
@@ -576,22 +578,19 @@ class TestLowLevelExtending(TestCase):
         self.assertPreciseEqual(cfunc(None), 42)
         self.assertPreciseEqual(cfunc(18.0), 6.0)
 
+    @TestCase.run_test_in_subprocess
     def test_func1_isolated(self):
-        pyfunc = call_func1_nullary
-        cr = compile_isolated(pyfunc, ())
-        self.assertPreciseEqual(cr.entry_point(), 42)
-        pyfunc = call_func1_unary
-        cr = compile_isolated(pyfunc, (types.float64,))
-        self.assertPreciseEqual(cr.entry_point(18.0), 6.0)
+        self.test_func1()
 
     def test_type_callable_keeps_function(self):
         self.assertIs(type_func1, type_func1_)
         self.assertIsNotNone(type_func1)
 
+    @TestCase.run_test_in_subprocess
     def test_cast_mydummy(self):
         pyfunc = get_dummy
-        cr = compile_isolated(pyfunc, (), types.float64)
-        self.assertPreciseEqual(cr.entry_point(), 42.0)
+        cfunc = njit(types.float64(),)(pyfunc)
+        self.assertPreciseEqual(cfunc(), 42.0)
 
     def test_mk_func_literal(self):
         """make sure make_function is passed to typer class as a literal
@@ -2065,6 +2064,184 @@ class TestOverloadPreferLiteral(TestCase):
         self.assertEqual(a, 100)
         self.assertEqual(b, 200)
         self.assertEqual(c, 300)
+
+
+class TestIntrinsicPreferLiteral(TestCase):
+    def test_intrinsic(self):
+        def intrin(context, x):
+            # This intrinsic will return 0xcafe if `x` is a literal `1`.
+            sig = signature(types.intp, x)
+            if isinstance(x, types.IntegerLiteral):
+                # With prefer_literal=False, this branch will not be reached
+                if x.literal_value == 1:
+                    def codegen(context, builder, signature, args):
+                        atype = signature.args[0]
+                        llrtype = context.get_value_type(atype)
+                        return ir.Constant(llrtype, 0xcafe)
+                    return sig, codegen
+                else:
+                    raise errors.TypingError('literal value')
+            else:
+                def codegen(context, builder, signature, args):
+                    atype = signature.return_type
+                    llrtype = context.get_value_type(atype)
+                    int_100 = ir.Constant(llrtype, 100)
+                    return builder.mul(args[0], int_100)
+                return sig, codegen
+
+        prefer_lit = intrinsic(prefer_literal=True)(intrin)
+        non_lit = intrinsic(prefer_literal=False)(intrin)
+
+        @njit
+        def check_prefer_lit(x):
+            return prefer_lit(1), prefer_lit(2), prefer_lit(x)
+
+        a, b, c = check_prefer_lit(3)
+        self.assertEqual(a, 0xcafe)
+        self.assertEqual(b, 200)
+        self.assertEqual(c, 300)
+
+        @njit
+        def check_non_lit(x):
+            return non_lit(1), non_lit(2), non_lit(x)
+
+        a, b, c = check_non_lit(3)
+        self.assertEqual(a, 100)
+        self.assertEqual(b, 200)
+        self.assertEqual(c, 300)
+
+
+class TestNumbaInternalOverloads(TestCase):
+
+    def test_signatures_match_overloaded_api(self):
+        # This is a "best-effort" test to try and ensure that Numba's internal
+        # overload declarations have signatures with argument names that match
+        # the API they are overloading. The purpose of ensuring there is a
+        # match is so that users can use call-by-name for positional arguments.
+
+        # Set this to:
+        # 0 to make violations raise a ValueError (default).
+        # 1 to get violations reported to STDOUT
+        # 2 to get a verbose output of everything that was checked and its state
+        #   reported to STDOUT.
+        DEBUG = 0
+
+        # np.random.* does not have a signature exposed to `inspect`... so
+        # custom parse the docstrings.
+        def sig_from_np_random(x):
+            if not x.startswith('_'):
+                thing = getattr(np.random, x)
+                if inspect.isbuiltin(thing):
+                    docstr = thing.__doc__.splitlines()
+                    for l in docstr:
+                        if l:
+                            sl = l.strip()
+                            if sl.startswith(x): # its the signature
+                                # special case np.random.seed, it has `self` in
+                                # the signature whereas all the other functions
+                                # do not!?
+                                if x == "seed":
+                                    sl = "seed(seed)"
+
+                                fake_impl = f"def {sl}:\n\tpass"
+                                l = {}
+                                try:
+                                    exec(fake_impl, {}, l)
+                                except SyntaxError:
+                                    # likely elipsis, e.g. rand(d0, d1, ..., dn)
+                                    if DEBUG == 2:
+                                        print("... skipped as cannot parse "
+                                              "signature")
+                                    return None
+                                else:
+                                    fn = l.get(x)
+                                    return inspect.signature(fn)
+
+        def checker(func, overload_func):
+            if DEBUG == 2:
+                print(f"Checking: {func}")
+
+            def create_message(func, overload_func, func_sig, ol_sig):
+                msg = []
+                s = (f"{func} from module '{getattr(func, '__module__')}' "
+                     "has mismatched sig.")
+                msg.append(s)
+                msg.append(f"    - expected: {func_sig}")
+                msg.append(f"    -      got: {ol_sig}")
+                lineno = inspect.getsourcelines(overload_func)[1]
+                tmpsrcfile = inspect.getfile(overload_func)
+                srcfile = tmpsrcfile.replace(numba.__path__[0], '')
+                msg.append(f"from {srcfile}:{lineno}")
+                msgstr = '\n' + '\n'.join(msg)
+                return msgstr
+
+            func_sig = None
+            try:
+                func_sig = inspect.signature(func)
+            except ValueError:
+                # probably a built-in/C code, see if it's a np.random function
+                if fname := getattr(func, '__name__', False):
+                    if maybe_func := getattr(np.random, fname, False):
+                        if maybe_func == func:
+                            # it's a built-in from np.random
+                            func_sig = sig_from_np_random(fname)
+
+            if func_sig is not None:
+                ol_sig = inspect.signature(overload_func)
+                x = list(func_sig.parameters.keys())
+                y = list(ol_sig.parameters.keys())
+                for a, b in zip(x[:len(y)], y):
+                    if a != b:
+                        p = func_sig.parameters[a]
+                        if p.kind == p.POSITIONAL_ONLY:
+                            # probably a built-in/C code
+                            if DEBUG == 2:
+                                print("... skipped as positional only "
+                                      "arguments found")
+                            break
+                        elif '*' in str(p): # probably *args or similar
+                            if DEBUG == 2:
+                                print("... skipped as contains *args")
+                            break
+                        else:
+                            # Only error/report on functions that have a module
+                            # or are from somewhere other than Numba.
+                            if (not func.__module__ or
+                                    not func.__module__.startswith("numba")):
+                                msgstr = create_message(func, overload_func,
+                                                        func_sig, ol_sig)
+                                if DEBUG != 0:
+                                    if DEBUG == 2:
+                                        print("... INVALID")
+                                    if msgstr:
+                                        print(msgstr)
+                                    break
+                                else:
+                                    raise ValueError(msgstr)
+                            else:
+                                if DEBUG == 2:
+                                    if not func.__module__:
+                                        print("... skipped as no __module__ "
+                                              "present")
+                                    else:
+                                        print("... skipped as Numba internal")
+                                break
+                else:
+                    if DEBUG == 2:
+                        print("... OK")
+
+        # Compile something to make sure that the typing context registries
+        # are populated with everything from the CPU target.
+        njit(lambda : None).compile(())
+        tyctx = numba.core.typing.context.Context()
+        tyctx.refresh()
+
+        # Walk the registries and check each function that is an overload
+        regs = tyctx._registries
+        for k, v in regs.items():
+            for item in k.functions:
+                if getattr(item, '_overload_func', False):
+                    checker(item.key, item._overload_func)
 
 
 if __name__ == "__main__":

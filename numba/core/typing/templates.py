@@ -9,14 +9,13 @@ import inspect
 import os.path
 from collections import namedtuple
 from collections.abc import Sequence
-from types import MethodType, FunctionType
+from types import MethodType, FunctionType, MappingProxyType
 
 import numba
 from numba.core import types, utils, targetconfig
 from numba.core.errors import (
     TypingError,
     InternalError,
-    InternalTargetMismatchError,
 )
 from numba.core.cpu_options import InlineOptions
 
@@ -999,15 +998,18 @@ class _IntrinsicTemplate(_TemplateTargetHelperMixin, AbstractTemplate):
         return info
 
 
-def make_intrinsic_template(handle, defn, name, kwargs):
+def make_intrinsic_template(handle, defn, name, *, prefer_literal=False,
+                            kwargs=None):
     """
     Make a template class for a intrinsic handle *handle* defined by the
     function *defn*.  The *name* is used for naming the new template class.
     """
+    kwargs = MappingProxyType({} if kwargs is None else kwargs)
     base = _IntrinsicTemplate
     name = "_IntrinsicTemplate_%s" % (name)
     dct = dict(key=handle, _definition_func=staticmethod(defn),
-               _impl_cache={}, _overload_cache={}, metadata=kwargs)
+               _impl_cache={}, _overload_cache={},
+               prefer_literal=prefer_literal, metadata=kwargs)
     return type(base)(name, (base,), dct)
 
 
@@ -1093,30 +1095,26 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
         """
         attr = self._attr
 
-        try:
-            registry = self._get_target_registry('method')
-        except InternalTargetMismatchError:
-            # Target mismatch. Do not register attribute lookup here.
-            pass
-        else:
-            lower_builtin = registry.lower
+        registry = self._get_target_registry('method')
 
-            @lower_builtin((self.key, attr), self.key, types.VarArg(types.Any))
-            def method_impl(context, builder, sig, args):
-                typ = sig.args[0]
-                typing_context = context.typing_context
-                fnty = self._get_function_type(typing_context, typ)
-                sig = self._get_signature(typing_context, fnty, sig.args, {})
-                call = context.get_function(fnty, sig)
-                # Link dependent library
-                context.add_linking_libs(getattr(call, 'libs', ()))
-                return call(builder, args)
+        @registry.lower((self.key, attr), self.key, types.VarArg(types.Any))
+        def method_impl(context, builder, sig, args):
+            typ = sig.args[0]
+            typing_context = context.typing_context
+            fnty = self._get_function_type(typing_context, typ)
+            sig = self._get_signature(typing_context, fnty, sig.args, {})
+            call = context.get_function(fnty, sig)
+            # Link dependent library
+            context.add_linking_libs(getattr(call, 'libs', ()))
+            return call(builder, args)
 
     def _resolve(self, typ, attr):
         if self._attr != attr:
             return None
 
         if isinstance(typ, types.TypeRef):
+            assert typ == self.key
+        elif isinstance(typ, types.Callable):
             assert typ == self.key
         else:
             assert isinstance(typ, self.key)
@@ -1138,10 +1136,26 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
                 if sig is not None:
                     return sig.as_method()
 
+            def get_template_info(self):
+                basepath = os.path.dirname(os.path.dirname(numba.__file__))
+                impl = self._overload_func
+                code, firstlineno, path = self.get_source_code_info(impl)
+                sig = str(utils.pysignature(impl))
+                info = {
+                    'kind': "overload_method",
+                    'name': getattr(impl, '__qualname__', impl.__name__),
+                    'sig': sig,
+                    'filename': utils.safe_relpath(path, start=basepath),
+                    'lines': (firstlineno, firstlineno + len(code) - 1),
+                    'docstring': impl.__doc__
+                }
+
+                return info
+
         return types.BoundFunction(MethodTemplate, typ)
 
 
-def make_overload_attribute_template(typ, attr, overload_func, inline,
+def make_overload_attribute_template(typ, attr, overload_func, inline='never',
                                      prefer_literal=False,
                                      base=_OverloadAttributeTemplate,
                                      **kwargs):

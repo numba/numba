@@ -239,7 +239,7 @@ class ProcessedPassTimings:
                 else:
                     attrs.append(f"{k}_time")
                     attrs.append(f"{k}_percent")
-                    pat += f"\\s+(?:{n}\\s*\\({n}%\\)|-+)"
+                    pat += rf"\s+(?:{n}\s*\({n}%\)|-+)"
 
             # put default value 0.0 to all missing attributes
             missing = {}

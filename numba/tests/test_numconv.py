@@ -1,6 +1,6 @@
 import itertools
 import unittest
-from numba.core.compiler import compile_isolated
+from numba import njit
 from numba.core import types
 
 
@@ -10,8 +10,8 @@ def template(fromty, toty):
             y = x
             return y
 
-        cres = compile_isolated(cast, args=[fromty], return_type=toty)
-        self.assertAlmostEqual(cres.entry_point(1), 1)
+        cfunc = njit(toty(fromty))(cast)
+        self.assertAlmostEqual(cfunc(1), 1)
 
     return closure
 

@@ -23,6 +23,7 @@ def ufunc_db():
     # Imports here are at function scope to avoid circular imports
     from numba.cpython import cmathimpl, mathimpl, numbers
     from numba.np import npyfuncs
+    from numba.np.numpy_support import numpy_version
 
     def np_unary_impl(fn, context, builder, sig, args):
         npyfuncs._check_arity_and_homogeneity(sig, args, 1)
@@ -33,6 +34,15 @@ def ufunc_db():
         npyfuncs._check_arity_and_homogeneity(sig, args, 2)
         impl = get_binary_impl_for_fn_and_ty(fn, sig.args[0])
         return impl(context, builder, sig, args)
+
+    def np_real_log_impl(context, builder, sig, args):
+        return np_unary_impl(math.log, context, builder, sig, args)
+
+    def np_real_log2_impl(context, builder, sig, args):
+        return np_unary_impl(math.log2, context, builder, sig, args)
+
+    def np_real_log10_impl(context, builder, sig, args):
+        return np_unary_impl(math.log10, context, builder, sig, args)
 
     def np_real_sin_impl(context, builder, sig, args):
         return np_unary_impl(math.sin, context, builder, sig, args)
@@ -287,6 +297,10 @@ def ufunc_db():
         'FF->?': npyfuncs.np_complex_gt_impl,
         'DD->?': npyfuncs.np_complex_gt_impl,
     }
+    if numpy_version >= (1, 25):
+        db[np.greater].update({
+            'qQ->?': numbers.int_signed_unsigned_cmp('>'),
+            'Qq->?': numbers.int_unsigned_signed_cmp('>')})
 
     db[np.greater_equal] = {
         '??->?': numbers.int_uge_impl,
@@ -305,6 +319,10 @@ def ufunc_db():
         'FF->?': npyfuncs.np_complex_ge_impl,
         'DD->?': npyfuncs.np_complex_ge_impl,
     }
+    if numpy_version >= (1, 25):
+        db[np.greater_equal].update({
+            'qQ->?': numbers.int_signed_unsigned_cmp('>='),
+            'Qq->?': numbers.int_unsigned_signed_cmp('>=')})
 
     db[np.less] = {
         '??->?': numbers.int_ult_impl,
@@ -323,6 +341,10 @@ def ufunc_db():
         'FF->?': npyfuncs.np_complex_lt_impl,
         'DD->?': npyfuncs.np_complex_lt_impl,
     }
+    if numpy_version >= (1, 25):
+        db[np.less].update({
+            'qQ->?': numbers.int_signed_unsigned_cmp('<'),
+            'Qq->?': numbers.int_unsigned_signed_cmp('<')})
 
     db[np.less_equal] = {
         '??->?': numbers.int_ule_impl,
@@ -341,6 +363,10 @@ def ufunc_db():
         'FF->?': npyfuncs.np_complex_le_impl,
         'DD->?': npyfuncs.np_complex_le_impl,
     }
+    if numpy_version >= (1, 25):
+        db[np.less_equal].update({
+            'qQ->?': numbers.int_signed_unsigned_cmp('<='),
+            'Qq->?': numbers.int_unsigned_signed_cmp('<=')})
 
     db[np.not_equal] = {
         '??->?': numbers.int_ne_impl,
@@ -359,6 +385,10 @@ def ufunc_db():
         'FF->?': npyfuncs.np_complex_ne_impl,
         'DD->?': npyfuncs.np_complex_ne_impl,
     }
+    if numpy_version >= (1, 25):
+        db[np.not_equal].update({
+            'qQ->?': numbers.int_signed_unsigned_cmp('!='),
+            'Qq->?': numbers.int_unsigned_signed_cmp('!=')})
 
     db[np.equal] = {
         '??->?': numbers.int_eq_impl,
@@ -377,6 +407,10 @@ def ufunc_db():
         'FF->?': npyfuncs.np_complex_eq_impl,
         'DD->?': npyfuncs.np_complex_eq_impl,
     }
+    if numpy_version >= (1, 25):
+        db[np.equal].update({
+            'qQ->?': numbers.int_signed_unsigned_cmp('=='),
+            'Qq->?': numbers.int_unsigned_signed_cmp('==')})
 
     db[np.logical_and] = {
         '??->?': npyfuncs.np_logical_and_impl,
@@ -603,4 +637,26 @@ def ufunc_db():
         'qq->q': numbers.int_shr_impl,
         'QQ->Q': numbers.int_shr_impl,
     }
+
+    db[np.log] = {
+        'f->f': np_real_log_impl,
+        'd->d': np_real_log_impl,
+        'F->F': npyfuncs.np_complex_log_impl,
+        'D->D': npyfuncs.np_complex_log_impl,
+    }
+
+    db[np.log2] = {
+        'f->f': np_real_log2_impl,
+        'd->d': np_real_log2_impl,
+        'F->F': npyfuncs.np_complex_log2_impl,
+        'D->D': npyfuncs.np_complex_log2_impl,
+    }
+
+    db[np.log10] = {
+        'f->f': np_real_log10_impl,
+        'd->d': np_real_log10_impl,
+        'F->F': npyfuncs.np_complex_log10_impl,
+        'D->D': npyfuncs.np_complex_log10_impl,
+    }
+
     return db

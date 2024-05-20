@@ -20,6 +20,18 @@ from numba.core.lowering import BaseLower
 # out wrong results.
 _unsupported_builtins = set([locals])
 
+
+class _Undefined:
+    """
+    A sentinel value for undefined variable created by Expr.undef.
+    """
+    def __repr__(self):
+        return "<undefined>"
+
+
+_UNDEFINED = _Undefined()
+
+
 # Map operators to methods on the PythonAPI class
 PYTHON_BINOPMAP = {
     operator.add: ("number_add", False),
@@ -422,6 +434,10 @@ class PyLower(BaseLower):
         elif expr.op == 'null':
             # Make null value
             return cgutils.get_null_value(self.pyapi.pyobj)
+
+        elif expr.op == 'undef':
+            # Use a sentinel value for undefined variable
+            return self.lower_const(_UNDEFINED)
 
         else:
             raise NotImplementedError(expr)

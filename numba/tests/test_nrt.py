@@ -8,7 +8,6 @@ import numpy as np
 
 from numba import njit
 from numba.core import types
-from numba.core.compiler import compile_isolated, Flags
 from numba.core.runtime import (
     rtsys,
     nrtopt,
@@ -20,17 +19,14 @@ from numba.core.typing import signature
 from numba.core.imputils import impl_ret_untracked
 from llvmlite import ir
 import llvmlite.binding as llvm
-import numba.core.typing.cffi_utils as cffi_support
 from numba.core.unsafe.nrt import NRT_get_api
 
 from numba.tests.support import (EnableNRTStatsMixin, TestCase, temp_directory,
                                  import_dynamic, skip_if_32bit,
-                                 run_in_subprocess)
+                                 skip_unless_cffi, run_in_subprocess)
 from numba.core.registry import cpu_target
 import unittest
 
-enable_nrt_flags = Flags()
-enable_nrt_flags.nrt = True
 
 linux_only = unittest.skipIf(not sys.platform.startswith('linux'),
                              'linux only test')
@@ -358,12 +354,9 @@ class TestNRTIssue(TestCase):
 
         # Note the return type isn't the same as the tuple type above:
         # the first element is a complex rather than a float.
-        cres = compile_isolated(f, (),
-                                types.Tuple((types.complex128,
-                                             types.Array(types.int32, 1, 'C')
-                                             ))
-                                )
-        z, arr = cres.entry_point()
+        cfunc = njit((types.Tuple((types.complex128,
+                                   types.Array(types.int32, 1, 'C') )))())(f)
+        z, arr = cfunc()
         self.assertPreciseEqual(z, 0j)
         self.assertPreciseEqual(arr, np.zeros(1, dtype=np.int32))
 
@@ -599,7 +592,7 @@ br i1 %.294, label %B42, label %B160
         self.assertEqual(foo(10), 22) # expect (10 + 1) * 2 = 22
 
 
-@unittest.skipUnless(cffi_support.SUPPORTED, "cffi required")
+@skip_unless_cffi
 class TestNrtExternalCFFI(EnableNRTStatsMixin, TestCase):
     """Testing the use of externally compiled C code that use NRT
     """

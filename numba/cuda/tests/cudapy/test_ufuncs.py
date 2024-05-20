@@ -199,22 +199,22 @@ class TestUFuncs(BasicUFuncTest, TestCase):
     ############################################################################
     # Comparison functions
     def test_greater_ufunc(self):
-        self.basic_ufunc_test(np.greater)
+        self.signed_unsigned_cmp_test(np.greater)
 
     def test_greater_equal_ufunc(self):
-        self.basic_ufunc_test(np.greater_equal)
+        self.signed_unsigned_cmp_test(np.greater_equal)
 
     def test_less_ufunc(self):
-        self.basic_ufunc_test(np.less)
+        self.signed_unsigned_cmp_test(np.less)
 
     def test_less_equal_ufunc(self):
-        self.basic_ufunc_test(np.less_equal)
+        self.signed_unsigned_cmp_test(np.less_equal)
 
     def test_not_equal_ufunc(self):
-        self.basic_ufunc_test(np.not_equal)
+        self.signed_unsigned_cmp_test(np.not_equal)
 
     def test_equal_ufunc(self):
-        self.basic_ufunc_test(np.equal)
+        self.signed_unsigned_cmp_test(np.equal)
 
     def test_logical_and_ufunc(self):
         self.basic_ufunc_test(np.logical_and)
@@ -259,6 +259,18 @@ class TestUFuncs(BasicUFuncTest, TestCase):
     # because their implementations in NumPy have undefined behavior
     # when the second argument is a negative. See the comment in
     # numba/tests/test_ufuncs.py for more details.
+
+    ############################################################################
+    # Mathematical Functions
+
+    def test_log_ufunc(self):
+        self.basic_ufunc_test(np.log, kinds='cf')
+
+    def test_log2_ufunc(self):
+        self.basic_ufunc_test(np.log2, kinds='cf')
+
+    def test_log10_ufunc(self):
+        self.basic_ufunc_test(np.log10, kinds='cf')
 
 
 if __name__ == '__main__':
