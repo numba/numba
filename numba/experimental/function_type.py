@@ -57,6 +57,8 @@ class FunctionModel(models.StructModel):
             # address of PyObject* referencing the Python function
             # object:
             ('pyaddr', types.voidptr),
+            # address of the underlying function object
+            ('numba_addr', types.voidptr),
         ]
         super(FunctionModel, self).__init__(dmm, fe_type, members)
 
@@ -271,6 +273,10 @@ def lower_cast_dispatcher_to_function_type(context, builder, fromty, toty, val):
 
         sfunc = cgutils.create_struct_proxy(toty)(context, builder)
         sfunc.addr = addr
+
+        # numba func name
+        fn = context.declare_function(builder.module, cres.fndesc)
+        sfunc.numba_addr = builder.bitcast(fn, llvoidptr)
 
         # Link-in the dispatcher library
         context.active_code_library.add_linking_library(cres.library)

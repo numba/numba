@@ -1091,21 +1091,35 @@ class Lower(BaseLower):
             raise UnsupportedError(
                 f'mismatch of function types:'
                 f' expected {fnty} but got {types.FunctionType(sig)}')
-        ftype = fnty.ftype
         argvals = self.fold_call_args(
             fnty, sig, expr.args, expr.vararg, expr.kws,
         )
+        ftype = self.context.call_conv.get_function_type(
+            signature.return_type,
+            signature.args
+        ).as_pointer()
         func_ptr = self.__get_function_pointer(ftype, expr.func.name, sig=sig)
-        res = self.builder.call(func_ptr, argvals, cconv=fnty.cconv)
+
+        ctx = self.context
+        status, res = ctx.call_conv.call_function(
+            self.builder, func_ptr, sig.return_type, sig.args, argvals
+        )
         return res
 
-    def __get_function_pointer(self, ftype, fname, sig=None):
-        from numba.experimental.function_type import lower_get_wrapper_address
+    def __get_function_pointer(self, llty, fname, sig=None):
+        from numba.experimental.function_type import (
+            lower_get_wrapper_address,
 
-        llty = self.context.get_value_type(ftype)
+        )
+
         fstruct = self.loadvar(fname)
-        addr = self.builder.extract_value(fstruct, 0,
-                                          name='addr_of_%s' % (fname))
+
+        struct = cgutils.create_struct_proxy(self.typeof(fname))(
+            self.context, self.builder, value=fstruct
+        )
+
+        addr = struct.numba_addr
+        addr.name = f'addr_of_{fname}'
 
         fptr = cgutils.alloca_once(self.builder, llty,
                                    name="fptr_of_%s" % (fname))
@@ -1129,7 +1143,7 @@ class Lower(BaseLower):
                         cgutils.is_null(self.builder, addr1), likely=False):
                     self.return_exception(
                         RuntimeError,
-                        exc_args=(f"{ftype} function address is null",),
+                        exc_args=(f"{llty} function address is null",),
                         loc=self.loc)
                 addr2 = self.pyapi.long_as_voidptr(addr1)
                 self.builder.store(self.builder.bitcast(addr2, llty), fptr)
