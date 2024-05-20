@@ -1123,7 +1123,7 @@ class Lower(BaseLower):
                 self.builder.store(res, res_slot)
 
             with orelse:
-                llty = self.context.call_conv.get_function_type(
+                llty = ctx.call_conv.get_function_type(
                     sig.return_type,
                     sig.args
                 ).as_pointer()
@@ -1136,7 +1136,7 @@ class Lower(BaseLower):
                 self.builder.store(res, res_slot)
         return self.builder.load(res_slot)
 
-    def __get_first_class_function_pointer(self, ftype, fname, sig=None):
+    def __get_first_class_function_pointer(self, ftype, fname, sig):
         from numba.experimental.function_type import lower_get_wrapper_address
 
         llty = self.context.get_value_type(ftype)
