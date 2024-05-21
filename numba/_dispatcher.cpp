@@ -569,7 +569,7 @@ Dispatcher_Insert(Dispatcher *self, PyObject *args, PyObject *kwds)
         return NULL;
     }
 
-    if (!cuda && !PyObject_TypeCheck(cfunc, &PyCFunction_Type) && !(cfunc == Py_None) ) {
+    if (!cuda && !PyObject_TypeCheck(cfunc, &PyCFunction_Type) && cfunc != Py_None) {
         PyErr_SetString(PyExc_TypeError, "must be builtin_function_or_method");
         return NULL;
     }
@@ -677,7 +677,7 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
 
 #if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 11)
     /*
-     * On Python 3.11, _PyEval_EvalFrameDefault stops using PyTraceInfo since 
+     * On Python 3.11, _PyEval_EvalFrameDefault stops using PyTraceInfo since
      * it's now baked into ThreadState.
      * https://github.com/python/cpython/pull/26623
      */

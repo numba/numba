@@ -94,8 +94,7 @@ class Flags(TargetConfig):
     no_cpython_wrapper = Option(
         type=bool,
         default=False,
-        doc="Do not generate any dispatchable functions. This function can only "
-            "be called from other jit functions",
+        doc="TODO",
     )
     no_cfunc_wrapper = Option(
         type=bool,

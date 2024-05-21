@@ -676,7 +676,6 @@ class CPUCodeLibrary(CodeLibrary):
             # A cheaper optimisation pass is run first to try and get as many
             # refops into the same function as possible via inlining
             self._codegen._mpm_cheap.run(self._final_module)
-
         # Refop pruning is then run on the heavily inlined function
         if not config.LLVM_REFPRUNE_PASS:
             self._final_module = remove_redundant_nrt_refct(self._final_module)
@@ -697,7 +696,6 @@ class CPUCodeLibrary(CodeLibrary):
         See discussion in https://github.com/numba/numba/pull/890
         """
         self._ensure_finalized()
-        assert len(str(self._final_module)) == self._orig_final_length
         if self._shared_module is not None:
             return self._shared_module
         mod = self._final_module
@@ -721,7 +719,6 @@ class CPUCodeLibrary(CodeLibrary):
                 # to an ELF file
                 mod.get_function(name).linkage = 'linkonce_odr'
         self._shared_module = mod
-        assert len(str(self._final_module)) == self._orig_final_length
         return mod
 
     def add_linking_library(self, library):
@@ -755,18 +752,13 @@ class CPUCodeLibrary(CodeLibrary):
         self._raise_if_finalized()
 
         self._pre_optimize_final_module()
-
         self._finalize_dynamic_globals()
-
-        self._orig_final_length = len(str(self._final_module))
-
         self._finalized = True
 
     def _trigger_compile(self):
         self._ensure_finalized()
 
         self._compiled_module = self._final_module.clone()
-        assert len(str(self._final_module)) == self._orig_final_length
 
         # Link libraries for shared code
         seen = set()
@@ -786,7 +778,6 @@ class CPUCodeLibrary(CodeLibrary):
                 library._get_module_for_linking(), preserve=True,
             )
 
-        # TODO Include ref pune pass somehow after linking?
         # Optimize the module after all dependences are linked in above,
         # to allow for inlining.
         self._post_optimize_compiled_module()
@@ -797,14 +788,12 @@ class CPUCodeLibrary(CodeLibrary):
                  self.get_llvm_str(), 'llvm')
 
         self._compiled_module.verify()
-
         self._verify_declare_only_symbols()
 
         # Remember this on the module, for the object cache hooks
         self._compiled_module.__library = weakref.proxy(self)
 
         self._compile_final_module()
-        assert len(str(self._final_module)) == self._orig_final_length
         self._is_compiled = True
 
     def _ensure_compiled(self):
@@ -968,6 +957,7 @@ class CPUCodeLibrary(CodeLibrary):
 
     @classmethod
     def _unserialize(cls, codegen, state):
+        # Emm, why this?
         raise NotImplementedError()
         name, kind, data = state
         self = codegen.create_library(name)
