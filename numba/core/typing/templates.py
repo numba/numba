@@ -262,6 +262,7 @@ class FunctionTemplate(ABC):
     # non-literals.
     # subclass overide-able
     prefer_literal = False
+    override = False
     # metadata
     metadata = {}
 
@@ -704,11 +705,13 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         cache_key = self.context, tuple(args), tuple(kws.items()), flags
         try:
             impl, args = self._impl_cache[cache_key]
+            # print("# get impl  : impl_cache hit")
             return impl, args
         except KeyError:
             # pass and try outside the scope so as to not have KeyError with a
             # nested addition error in the case the _build_impl fails
             pass
+        # print(f"# build impl: overload_func={self._overload_func}")
         impl, args = self._build_impl(cache_key, args, kws)
         return impl, args
 
@@ -877,7 +880,8 @@ class _OverloadFunctionTemplate(AbstractTemplate):
 
 
 def make_overload_template(func, overload_func, jit_options, strict,
-                           inline, prefer_literal=False, **kwargs):
+                           inline, prefer_literal=False,
+                           override=False, **kwargs):
     """
     Make a template class for function *func* overloaded by *overload_func*.
     Compiler options are passed as a dictionary to *jit_options*.
@@ -889,7 +893,7 @@ def make_overload_template(func, overload_func, jit_options, strict,
                _impl_cache={}, _compiled_overloads={}, _jit_options=jit_options,
                _strict=strict, _inline=staticmethod(InlineOptions(inline)),
                _inline_overloads={}, prefer_literal=prefer_literal,
-               metadata=kwargs)
+               override=override, metadata=kwargs)
     return type(base)(name, (base,), dct)
 
 

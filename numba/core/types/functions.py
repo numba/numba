@@ -269,6 +269,9 @@ class BaseFunction(Callable):
         so as to support more input types.
         """
         if type(other) is type(self) and other.typing_key == self.typing_key:
+            # If len(self.templates) > 1 or len(other.templates) > 1?
+            if len(other.templates) == 1 and other.templates[0].override:
+                return other
             return type(self)(self.templates + other.templates)
 
     def get_impl_key(self, sig):

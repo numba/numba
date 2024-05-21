@@ -493,6 +493,8 @@ class BaseContext(object):
                 if newty is None:
                     raise TypeError("cannot augment %s with %s"
                                     % (existing, gty))
+                # if "foo" in str(gv):
+                #     print(f"# Augmented global {gv} with {gty} to {newty}")
                 self._remove_global(gv)
                 self._insert_global(gv, newty)
 
@@ -524,6 +526,8 @@ class BaseContext(object):
         except TypeError:
             pass
         self._globals[gv] = gty
+        # if "foo" in str(gv):
+        #     print(f"# Inserted global {gv} with {gty}")
 
     def _remove_global(self, gv):
         """
@@ -545,6 +549,9 @@ class BaseContext(object):
     def insert_function(self, ft):
         key = ft.key
         self._functions[key].append(ft)
+        # if "foo" in str(key):
+        #     print(f"# Inserted function {key}"
+        #           f"size={len(self._functions[key])}")
 
     def insert_user_function(self, fn, ft):
         """Insert a user function.
