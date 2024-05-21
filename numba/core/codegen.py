@@ -957,8 +957,6 @@ class CPUCodeLibrary(CodeLibrary):
 
     @classmethod
     def _unserialize(cls, codegen, state):
-        # Emm, why this?
-        raise NotImplementedError()
         name, kind, data = state
         self = codegen.create_library(name)
         assert isinstance(self, cls)

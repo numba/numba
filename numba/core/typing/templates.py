@@ -823,12 +823,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         Return the key for looking up the implementation for the given
         signature on the target context.
         """
-        cfunc = self._compiled_overloads[sig.args]
-        if cfunc is not None:
-            return cfunc
-
-        dispatcher, _ = self._get_impl(sig.args, {})
-        return dispatcher.overloads[sig.args].fndesc
+        return self._compiled_overloads[sig.args]
 
     @classmethod
     def get_source_info(cls):

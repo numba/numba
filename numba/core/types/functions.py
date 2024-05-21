@@ -566,10 +566,7 @@ class Dispatcher(WeakType, Callable, Dummy):
         """
         Get the implementation key for the given signature.
         """
-        cfunc = self.get_overload(sig)
-        if cfunc is not None:
-            return cfunc
-        return self.dispatcher.overloads[sig.args].fndesc
+        return self.get_overload(sig)
 
     def unify(self, context, other):
         return utils.unified_function_type((self, other), require_precise=False)
