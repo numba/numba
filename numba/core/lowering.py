@@ -1117,42 +1117,45 @@ class Lower(BaseLower):
         Returns:
             The result of calling the function.
         """
+        context = self.context
+        builder = self.builder
         # Determine if jit address is available
         fstruct = self.loadvar(fname)
         struct = cgutils.create_struct_proxy(self.typeof(fname))(
-            self.context, self.builder, value=fstruct
+            context, builder, value=fstruct
         )
         jit_addr = struct.jit_addr
         jit_addr.name = f'jit_addr_of_{fname}'
 
-        ctx = self.context
-        res_slot = cgutils.alloca_once(self.builder,
+        ctx = context
+        res_slot = cgutils.alloca_once(builder,
                                        ctx.get_value_type(sig.return_type))
 
-        if_jit_addr_is_null = self.builder.if_else(
-            cgutils.is_null(self.builder, jit_addr),
+        if_jit_addr_is_null = builder.if_else(
+            cgutils.is_null(builder, jit_addr),
             likely=False
         )
         with if_jit_addr_is_null as (then, orelse):
             with then:
                 func_ptr = self.__get_first_class_function_pointer(
                     ftype, fname, sig)
-                res = self.builder.call(func_ptr, argvals)
-                self.builder.store(res, res_slot)
+                res = builder.call(func_ptr, argvals)
+                builder.store(res, res_slot)
 
             with orelse:
                 llty = ctx.call_conv.get_function_type(
                     sig.return_type,
                     sig.args
                 ).as_pointer()
-                func_ptr = self.builder.bitcast(jit_addr, llty)
+                func_ptr = builder.bitcast(jit_addr, llty)
                 # call
                 status, res = ctx.call_conv.call_function(
-                    self.builder, func_ptr, sig.return_type, sig.args, argvals
+                    builder, func_ptr, sig.return_type, sig.args, argvals
                 )
-                # XXX handle status
-                self.builder.store(res, res_slot)
-        return self.builder.load(res_slot)
+                with cgutils.if_unlikely(builder, status.is_error):
+                    context.call_conv.return_status_propagate(builder, status)
+                builder.store(res, res_slot)
+        return builder.load(res_slot)
 
     def __get_first_class_function_pointer(self, ftype, fname, sig):
         from numba.experimental.function_type import lower_get_wrapper_address
