@@ -1,4 +1,5 @@
 import re
+import sys
 import unittest
 import types as pytypes
 from numba import jit, njit, cfunc, types, int64, float64, float32, errors
@@ -7,7 +8,8 @@ from numba.core.config import IS_WIN32
 import ctypes
 import warnings
 
-from .support import TestCase, MemoryLeakMixin, redirect_c_stderr
+from .support import TestCase, MemoryLeakMixin
+from .support import redirect_c_stderr, captured_stderr
 
 import numpy as np
 
@@ -1387,10 +1389,17 @@ class TestExceptionInFunctionType(MemoryLeakMixin, TestCase):
 
         self.assertEqual(callme(c_add, 12, 32), 44)
 
-        with redirect_c_stderr() as stderr:
+        # If unittest is buffering (-b), the message goes to Python level stderr
+        # otherwise, it goes to C stderr.
+        with redirect_c_stderr() as c_stderr, captured_stderr() as stderr:
             # raise ignored and result is garbage
             callme(c_add, 100, 1)
-        err = stderr.read()
+            sys.stderr.flush()
+
+        err = c_stderr.read()
+        if not err:
+            err = stderr.getvalue()
+
         self.assertIn("Exception ignored in:", err)
         self.assertIn(str(MyError(101)), err)
 
