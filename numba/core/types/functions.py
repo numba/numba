@@ -526,9 +526,6 @@ class Dispatcher(WeakType, Callable, Dummy):
 
     def __init__(self, dispatcher):
         self._store_object(dispatcher)
-        # callers are the dispatcher types that call this dispatcher
-        # can this set include itself?
-        self.callers = set()
         super(Dispatcher, self).__init__("type(%s)" % dispatcher)
 
     def dump(self, tab=''):

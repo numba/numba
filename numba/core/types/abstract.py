@@ -269,6 +269,11 @@ class Callable(Type):
     Base class for callables.
     """
 
+    def __init__(self, name):
+        # callers are used to track the functions that call this callable
+        self.callers = set()
+        super(Callable, self).__init__(name)
+
     @abstractmethod
     def get_call_type(self, context, args, kws):
         """
