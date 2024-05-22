@@ -1099,22 +1099,40 @@ class Lower(BaseLower):
         )
 
     def __call_first_class_function_pointer(self, ftype, fname, sig, argvals):
+        """
+        Calls a first-class function pointer.
+
+        This function is responsible for calling a first-class function pointer,
+        which can either be a JIT-compiled function or a Python function. It
+        determines if a JIT address is available, and if so, calls the function
+        using the JIT address. Otherwise, it calls the function using a function
+        pointer obtained from the `__get_first_class_function_pointer` method.
+
+        Args:
+            ftype: The type of the function.
+            fname: The name of the function.
+            sig: The signature of the function.
+            argvals: The argument values to pass to the function.
+
+        Returns:
+            The result of calling the function.
+        """
         # Determine if jit address is available
         fstruct = self.loadvar(fname)
         struct = cgutils.create_struct_proxy(self.typeof(fname))(
             self.context, self.builder, value=fstruct
         )
         jit_addr = struct.jit_addr
-        jit_addr.name = f'addr_of_{fname}'
+        jit_addr.name = f'jit_addr_of_{fname}'
+
+        ctx = self.context
+        res_slot = cgutils.alloca_once(self.builder,
+                                       ctx.get_value_type(sig.return_type))
 
         if_jit_addr_is_null = self.builder.if_else(
             cgutils.is_null(self.builder, jit_addr),
             likely=False
         )
-
-        ctx = self.context
-        res_slot = cgutils.alloca_once(self.builder,
-                                       ctx.get_value_type(sig.return_type))
         with if_jit_addr_is_null as (then, orelse):
             with then:
                 func_ptr = self.__get_first_class_function_pointer(
