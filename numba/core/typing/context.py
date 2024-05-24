@@ -70,15 +70,7 @@ class CallStack(Sequence):
         try:
             yield
         finally:
-            # pop the latest frame from stack and populate the callers for it
-            callee_id = self._stack.pop().func_id
-            key = callee_id.modname + "." + callee_id.func_qualname
-            if self._stack:
-                caller_id = self._stack[-1].func_id
-                val = caller_id.modname + "." + caller_id.func_qualname
-                typeinfer.context.callers[key].append(val)
-                # print(f"# append callers {key} ->"
-                # f" {val}: {typeinfer.context.callers[key]}")
+            self._stack.pop()
             self._lock.release()
 
     def finditer(self, py_func):
@@ -150,7 +142,7 @@ class BaseContext(object):
         self.tm = rules.default_type_manager
         self.callstack = CallStack()
         # add comments
-        self.callers = defaultdict(list)
+        self.callers = defaultdict(set)
         self.disp_map = utils.UniqueDict()
 
         # Initialize
@@ -535,8 +527,6 @@ class BaseContext(object):
         except TypeError:
             pass
         self._globals[gv] = gty
-        # if "foo" in str(gv):
-        #     print(f"# Inserted global {gv} with {gty}")
 
     def _remove_global(self, gv, oldty=None, newty=None):
         """
@@ -569,7 +559,6 @@ class BaseContext(object):
                     continue
                 disp = self.disp_map[caller]()
                 disp.override()
-                print(f"# dispatcher override {disp}")
 
     def insert_global(self, gv, gty):
         self._insert_global(gv, gty)
@@ -579,15 +568,12 @@ class BaseContext(object):
 
     def insert_disp_map(self, disp):
         py_func = disp.py_func
-        if "foo" in str(py_func):
-            ...
         key = py_func.__module__ + "." + py_func.__qualname__
         try:
             disp = weakref.ref(disp)
         except TypeError:
             pass
         self.disp_map[key] = disp
-        # print(f"# append disp_map {key} -> {disp}")
 
     def insert_attributes(self, at):
         key = at.key

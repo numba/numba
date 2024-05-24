@@ -134,7 +134,7 @@ def overload(func, jit_options={}, strict=True, inline='never',
         if callable(func):
             infer_global(func, types.Function(template))
         if override:
-            # CUDA doesn't support overload, so this is fine.
+            # can CUDA target reach here? I think no.
             from numba.core.registry import cpu_target
             cpu_target.typing_context.refresh()
         return overload_func
