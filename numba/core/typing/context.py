@@ -70,7 +70,15 @@ class CallStack(Sequence):
         try:
             yield
         finally:
-            self._stack.pop()
+            # pop the latest frame from stack and populate the callers for it
+            callee_id = self._stack.pop().func_id
+            key = callee_id.modname + "." + callee_id.func_qualname
+            if self._stack:
+                caller_id = self._stack[-1].func_id
+                val = caller_id.modname + "." + caller_id.func_qualname
+                typeinfer.context.callers[key].append(val)
+                # print(f"# append callers {key} ->"
+                # f" {val}: {typeinfer.context.callers[key]}")
             self._lock.release()
 
     def finditer(self, py_func):
@@ -141,6 +149,9 @@ class BaseContext(object):
         self._globals = utils.UniqueDict()
         self.tm = rules.default_type_manager
         self.callstack = CallStack()
+        # add comments
+        self.callers = defaultdict(list)
+        self.disp_map = utils.UniqueDict()
 
         # Initialize
         self.init()
@@ -493,9 +504,7 @@ class BaseContext(object):
                 if newty is None:
                     raise TypeError("cannot augment %s with %s"
                                     % (existing, gty))
-                # if "foo" in str(gv):
-                #     print(f"# Augmented global {gv} with {gty} to {newty}")
-                self._remove_global(gv)
+                self._remove_global(gv, existing, newty)
                 self._insert_global(gv, newty)
 
     def _lookup_global(self, gv):
@@ -529,18 +538,56 @@ class BaseContext(object):
         # if "foo" in str(gv):
         #     print(f"# Inserted global {gv} with {gty}")
 
-    def _remove_global(self, gv):
+    def _remove_global(self, gv, oldty=None, newty=None):
         """
         Remove the registered type for global value *gv*.
         """
+        self._override_global(gv, oldty, newty)
         try:
             gv = weakref.ref(gv)
         except TypeError:
             pass
         del self._globals[gv]
 
+    def _override_global(self, gv, oldty, newty):
+        fnty = types.Function
+        if not isinstance(oldty, fnty) or not isinstance(newty, fnty):
+            return
+
+        oldtmpl = oldty.templates[0]
+        newtmpl = newty.templates[0]
+        if not newtmpl.override:
+            return
+
+        for _, impl_cache in oldtmpl._impl_cache.items():
+            disp, _ = impl_cache
+            py_func = disp.py_func
+            old_key = py_func.__module__ + "." + py_func.__qualname__
+
+            for caller in self.callers[old_key]:
+                if caller not in self.disp_map:
+                    continue
+                disp = self.disp_map[caller]()
+                disp.override()
+                print(f"# dispatcher override {disp}")
+
     def insert_global(self, gv, gty):
         self._insert_global(gv, gty)
+        # also populate the disp_map
+        if isinstance(gty, types.Dispatcher):
+            self.insert_disp_map(gv)
+
+    def insert_disp_map(self, disp):
+        py_func = disp.py_func
+        if "foo" in str(py_func):
+            ...
+        key = py_func.__module__ + "." + py_func.__qualname__
+        try:
+            disp = weakref.ref(disp)
+        except TypeError:
+            pass
+        self.disp_map[key] = disp
+        # print(f"# append disp_map {key} -> {disp}")
 
     def insert_attributes(self, at):
         key = at.key
@@ -549,9 +596,6 @@ class BaseContext(object):
     def insert_function(self, ft):
         key = ft.key
         self._functions[key].append(ft)
-        # if "foo" in str(key):
-        #     print(f"# Inserted function {key}"
-        #           f"size={len(self._functions[key])}")
 
     def insert_user_function(self, fn, ft):
         """Insert a user function.

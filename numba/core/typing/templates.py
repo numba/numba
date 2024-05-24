@@ -703,17 +703,15 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         """
         flags = targetconfig.ConfigStack.top_or_none()
         cache_key = self.context, tuple(args), tuple(kws.items()), flags
-        try:
-            impl, args = self._impl_cache[cache_key]
-            # print("# get impl  : impl_cache hit")
-            return impl, args
-        except KeyError:
-            # pass and try outside the scope so as to not have KeyError with a
-            # nested addition error in the case the _build_impl fails
-            pass
-        # print(f"# build impl: overload_func={self._overload_func}")
-        impl, args = self._build_impl(cache_key, args, kws)
-        return impl, args
+        cache_val = self._impl_cache.get(cache_key, None)
+        if cache_val:
+            # find a cached one
+            disp, args = cache_val
+        else:
+            # no luck, then compile a new dispatcher
+            disp, args = self._build_impl(cache_key, args, kws)
+
+        return disp, args
 
     def _get_jit_decorator(self):
         """Gets a jit decorator suitable for the current target"""
