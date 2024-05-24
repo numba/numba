@@ -47,8 +47,9 @@ def stable_fit(X, y, threshold=3):
             rmse = np.sqrt(np.mean(resid_sub ** 2))
             first = np.fabs(resid_sub[0]) / rmse < threshold
             last = np.fabs(resid_sub[-1]) / rmse < threshold
+            slope = np.fabs(beta_sub[1]) / rmse < threshold
             # Break if stability is reached
-            is_stable = first & last
+            is_stable = slope & first & last
             if is_stable:
                 break
 
