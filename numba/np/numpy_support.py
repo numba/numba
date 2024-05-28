@@ -125,7 +125,7 @@ _as_dtype_letters = {
 def as_dtype(nbtype):
     """
     Return a numpy dtype instance corresponding to the given Numba type.
-    NotImplementedError is if no correspondence is known.
+    NumbaNotImplementedError is if no correspondence is known.
     """
     nbtype = types.unliteral(nbtype)
     if isinstance(nbtype, (types.Complex, types.Integer, types.Float)):
