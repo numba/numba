@@ -1175,15 +1175,26 @@ class TestDatetimeTypeOps(TestCase):
         for fn, arg in itertools.product(fns, args):
             check(fn, arg)
 
+
 class TestDatetimeIssues(TestCase):
-    @unittest.expectedFailure
     def test_10y_issue_9585(self):
         @njit
         def f(x):
             return x + 1
 
         arr = np.array('2010', dtype='datetime64[10Y]')
-        f(arr)
+
+        with self.assertRaises(TypingError) as e:
+            f(arr)
+
+        message = e.exception.args[0]
+
+        argument_index = "argument 0"
+        self.assertIn(argument_index, message)
+
+        unsupported_type = "Unsupported array dtype: datetime64[10Y]"
+        self.assertIn(unsupported_type, message)
+
 
 if __name__ == '__main__':
     unittest.main()

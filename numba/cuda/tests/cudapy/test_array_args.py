@@ -2,6 +2,7 @@ import numpy as np
 from collections import namedtuple
 
 from numba import cuda
+from numba.core.errors import TypingError
 from numba.cuda.testing import unittest, CUDATestCase
 
 
@@ -195,6 +196,27 @@ class TestCudaArrayArg(CUDATestCase):
         self.assertEqual(r[2], 10)
         self.assertEqual(r[3], 4)
         self.assertEqual(r[4], 3)
+
+
+class TestDatetimeIssues(CUDATestCase):
+    # See also numba.tests.test_npdatetime.TestDatetimeIssues.
+
+    def test_10y_issue_9585(self):
+        @cuda.jit
+        def f(x):
+            return x + 1
+
+        arr = np.array('2010', dtype='datetime64[10Y]')
+
+        with self.assertRaises(TypingError) as e:
+            f[1, 1](arr)
+
+        # Note that the CUDA target doesn't report which argument caused the
+        # exception, so we can't check for it here as we do with the CPU
+        # target.
+        message = e.exception.args[0]
+        unsupported_type = "Unsupported array dtype: datetime64[10Y]"
+        self.assertIn(unsupported_type, message)
 
 
 if __name__ == '__main__':
