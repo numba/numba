@@ -3,7 +3,7 @@ from collections import namedtuple
 
 from numba import cuda
 from numba.core.errors import TypingError
-from numba.cuda.testing import unittest, CUDATestCase
+from numba.cuda.testing import skip_on_cudasim, unittest, CUDATestCase
 
 
 class TestCudaArrayArg(CUDATestCase):
