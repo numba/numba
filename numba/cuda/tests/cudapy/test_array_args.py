@@ -201,6 +201,7 @@ class TestCudaArrayArg(CUDATestCase):
 class TestDatetimeIssues(CUDATestCase):
     # See also numba.tests.test_npdatetime.TestDatetimeIssues.
 
+    @skip_on_cudasim("Typing not used on cudasim")
     def test_10y_issue_9585(self):
         @cuda.jit
         def f(x):
