@@ -585,6 +585,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def check_cumulative(self, pyfunc):
         arr = np.arange(2, 10, dtype=np.int16)
         expected, got = run_comparative(pyfunc, arr)
+        arr = np.array([255, 2], dtype=np.uint8)
+        expected, got = run_comparative(pyfunc, arr)
         self.assertPreciseEqual(got, expected)
         arr = np.linspace(2, 8, 6)
         expected, got = run_comparative(pyfunc, arr)
