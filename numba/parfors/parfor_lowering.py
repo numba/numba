@@ -888,7 +888,7 @@ def _hoist_internal(inst, dep_on_param, call_table, hoisted, not_hoisted,
 
     uses = set()
     visit_vars_inner(inst.value, find_vars, uses)
-    unhoistable = {assgn.target.name for assgn, _reason in not_hoisted}
+    unhoistable = {assgn.target.name for assgn, _ in not_hoisted}
     use_unhoist = uses & unhoistable
     diff = uses.difference(dep_on_param)
     diff |= use_unhoist
