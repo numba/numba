@@ -1175,6 +1175,15 @@ class TestDatetimeTypeOps(TestCase):
         for fn, arg in itertools.product(fns, args):
             check(fn, arg)
 
+class TestDatetimeIssues(TestCase):
+    @unittest.expectedFailure
+    def test_10y_issue_9585(self):
+        @njit
+        def f(x):
+            return x + 1
+
+        arr = np.array('2010', dtype='datetime64[10Y]')
+        f(arr)
 
 if __name__ == '__main__':
     unittest.main()
