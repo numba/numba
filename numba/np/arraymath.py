@@ -379,11 +379,11 @@ def array_cumsum(a):
         is_signed_integer = a.dtype in types.signed_domain
         is_unsigned_integer = a.dtype in types.unsigned_domain
         is_bool = a.dtype == types.bool_
-        if (is_signed_integer and a.dtype.bitwidth < types.intp.bitwidth)\
+        if (is_signed_integer and a.dtype.bitwidth < types.int_.bitwidth)\
                 or is_bool:
-            dtype = as_dtype(types.intp)
-        elif (is_unsigned_integer and a.dtype.bitwidth < types.uintp.bitwidth):
-            dtype = as_dtype(types.uintp)
+            dtype = as_dtype(types.int_)
+        elif (is_unsigned_integer and a.dtype.bitwidth < types.uint.bitwidth):
+            dtype = as_dtype(types.uint)
         else:
             dtype = as_dtype(a.dtype)
 
@@ -407,11 +407,11 @@ def array_cumprod(a):
         is_signed_integer = a.dtype in types.signed_domain
         is_unsigned_integer = a.dtype in types.unsigned_domain
         is_bool = a.dtype == types.bool_
-        if (is_signed_integer and a.dtype.bitwidth < types.intp.bitwidth)\
+        if (is_signed_integer and a.dtype.bitwidth < types.int_.bitwidth)\
                 or is_bool:
-            dtype = as_dtype(types.intp)
-        elif (is_unsigned_integer and a.dtype.bitwidth < types.uintp.bitwidth):
-            dtype = as_dtype(types.uintp)
+            dtype = as_dtype(types.int_)
+        elif (is_unsigned_integer and a.dtype.bitwidth < types.uint.bitwidth):
+            dtype = as_dtype(types.uint)
         else:
             dtype = as_dtype(a.dtype)
 
