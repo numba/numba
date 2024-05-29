@@ -711,12 +711,15 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             # no luck, then compile a new dispatcher
             disp, args = self._build_impl(cache_key, args, kws)
 
-        py_func = disp.py_func
-        key = py_func.__module__ + "." + py_func.__qualname__
-        caller_id = self.context.callstack._stack[-1].func_id
-        val = caller_id.modname + "." + caller_id.func_qualname
-        self.context.callers[key].add(val)
-        # print(f"# add callers {key} - {val} {self.context.callers[key]}")
+        try:
+            py_func = disp.py_func
+            key = py_func.__module__ + "." + py_func.__qualname__
+            caller_id = self.context.callstack._stack[-1].func_id
+            val = caller_id.modname + "." + caller_id.func_qualname
+            self.context.callers[key].add(val)
+        except (AttributeError, TypeError):
+            # some dispatcher doesn't have py_func?
+            pass
 
         return disp, args
 

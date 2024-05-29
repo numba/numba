@@ -568,12 +568,12 @@ class BaseContext(object):
             self.insert_disp_map(gv)
 
     def insert_disp_map(self, disp):
-        py_func = disp.py_func
         try:
+            py_func = disp.py_func
             key = py_func.__module__ + "." + py_func.__qualname__
             disp = weakref.ref(disp)
             self.disp_map[key].append(disp)
-        except TypeError:
+        except (AttributeError, TypeError):
             # py_func is defined via exec() and has no __module__
             pass
 
