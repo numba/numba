@@ -714,9 +714,11 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         try:
             py_func = disp.py_func
             key = py_func.__module__ + "." + py_func.__qualname__
-            caller_id = self.context.callstack._stack[-1].func_id
-            val = caller_id.modname + "." + caller_id.func_qualname
-            self.context.callers[key].add(val)
+            cs = self.context.callstack
+            if len(cs._stack):
+                caller_id = cs._stack[-1].func_id
+                val = caller_id.modname + "." + caller_id.func_qualname
+                self.context.callers[key].add(val)
         except (AttributeError, TypeError):
             # some dispatcher doesn't have py_func?
             pass

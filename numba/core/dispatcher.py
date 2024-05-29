@@ -957,7 +957,6 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         self._make_finalizer()()
         self._reset_overloads()
         self._cache.flush()
-        # force _can_compile to be True to allow recompilation
         self._can_compile = True
         return sigs, old_can_compile
 
