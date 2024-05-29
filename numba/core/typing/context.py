@@ -143,7 +143,7 @@ class BaseContext(object):
         self.callstack = CallStack()
         # add comments
         self.callers = defaultdict(set)
-        self.disp_map = utils.UniqueDict()
+        self.disp_map = defaultdict(list)
 
         # Initialize
         self.init()
@@ -557,8 +557,9 @@ class BaseContext(object):
             for caller in self.callers[old_key]:
                 if caller not in self.disp_map:
                     continue
-                disp = self.disp_map[caller]()
-                disp.override()
+                for disp_weakref in self.disp_map[caller]:
+                    disp = disp_weakref()
+                    disp.override()
 
     def insert_global(self, gv, gty):
         self._insert_global(gv, gty)
@@ -569,11 +570,8 @@ class BaseContext(object):
     def insert_disp_map(self, disp):
         py_func = disp.py_func
         key = py_func.__module__ + "." + py_func.__qualname__
-        try:
-            disp = weakref.ref(disp)
-        except TypeError:
-            pass
-        self.disp_map[key] = disp
+        disp = weakref.ref(disp)
+        self.disp_map[key].append(disp)
 
     def insert_attributes(self, at):
         key = at.key
