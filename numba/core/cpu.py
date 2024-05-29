@@ -71,7 +71,7 @@ class CPUContext(BaseContext):
                                    listobj, numbers, rangeobj, # noqa F401
                                    setobj, slicing, tupleobj, # noqa F401
                                    unicode,) # noqa F401
-        from numba.core import optional # noqa F401
+        from numba.core import optional, inline_closurecall # noqa F401
         from numba.misc import gdb_hook, literal # noqa F401
         from numba.np import linalg, arraymath, arrayobj # noqa F401
         from numba.np.random import generator_core, generator_methods # noqa F401
