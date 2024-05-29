@@ -319,7 +319,7 @@ def to_device(ary, stream=0, copy=True, to=None):
 
 
 @contextmanager
-def pinned(arg):
+def pinned(*arylist):
     yield
 
 
@@ -403,6 +403,10 @@ def auto_device(ary, stream=0, copy=True):
             copy=False if numpy_version < (2, 0) else None,
             subok=True)
     return to_device(ary, stream, copy), True
+
+def as_cuda_array(obj, sync=True):
+    "Do nothing, and return the same object"
+    return obj
 
 
 def is_cuda_ndarray(obj):
