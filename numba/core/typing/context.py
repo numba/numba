@@ -549,8 +549,9 @@ class BaseContext(object):
         if not newtmpl.override:
             return
 
-        for _, impl_cache in oldtmpl._impl_cache.items():
-            disp, _ = impl_cache
+        processed_disps = set()
+
+        def override_dispatcher(disp):
             py_func = disp.py_func
             old_key = py_func.__module__ + "." + py_func.__qualname__
 
@@ -558,8 +559,16 @@ class BaseContext(object):
                 if caller not in self.disp_map:
                     continue
                 for disp_weakref in self.disp_map[caller]:
-                    disp = disp_weakref()
-                    disp.override()
+                    new_disp = disp_weakref()
+                    if new_disp in processed_disps:
+                        continue
+                    new_disp.override()
+                    processed_disps.add(new_disp)
+                    override_dispatcher(new_disp)
+
+        for _, impl_cache in oldtmpl._impl_cache.items():
+            disp, _ = impl_cache
+            override_dispatcher(disp)
 
     def insert_global(self, gv, gty):
         self._insert_global(gv, gty)
