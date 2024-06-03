@@ -74,10 +74,15 @@ pull-requests and authors. To prepare to use it:
   public repositories. This can be done in
   `Github Personal Access Tokens settings
   <https://github.com/settings/tokens?type=beta>`_.
-* Establish the base commit for the changelog. This is the common commit between
-  ``main`` and the last release branch, which can be determined by running ``git
-  merge-base main <branch>``. For example, ``branch`` may be ``release0.58`` if
-  generating the release notes for the 0.59 release.
+* Establish the base commit for the changelog. There are two known approaches
+  here:
+
+  * Finding a base-commit using ``git``. This is the common commit between
+    ``main`` and the last release branch, which can be determined by running
+    ``git merge-base main <branch>``. For example, ``branch`` may be
+    ``release0.58`` if generating the release notes for the 0.59 release.
+  * Using the development commit for the release. For example for the
+    `0.59.0rc1` release this would be `0.59.0dev0`.
 
 The script can then be invoked in the root of the repository with:
 
