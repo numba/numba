@@ -491,6 +491,17 @@ class TestInlinedClosure(TestCase):
         # so allclose should be sufficient for comparison here.
         np.testing.assert_allclose(consume(), 4 + 1.1)
 
+    @TestCase.run_test_in_subprocess
+    def test_issue_9577(self):
+        @njit
+        def _inner():
+            range_start = 0
+            for _ in range(1):
+                np.array([1 for _ in range(range_start, 7)])
+                range_start = 0
+
+        _inner()
+
 
 if __name__ == '__main__':
     unittest.main()
