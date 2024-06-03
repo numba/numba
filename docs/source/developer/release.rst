@@ -51,8 +51,23 @@ of cherry-picks, the recipe is therefore slightly different.
 Generating Release Notes
 ------------------------
 
-The script ``maint/gitlog2changelog.py`` is used to generate release notes. To
-prepare to use it:
+The Numba release notes consist of two parts and there are two tools which need
+to be invoked.
+
+* Release summary and overview of noteworthy items: use ``towncrier``
+* Pull-request and author list: use ``maint/gitlog2changelog.py``
+
+
+Using ``towncrier``
+...................
+
+TBD
+
+Using ``maint/gitlog2changelog.py``
+...................................
+
+The script ``maint/gitlog2changelog.py`` is used to generate the list of
+pull-requests and authors. To prepare to use it:
 
 * Install dependencies: ``conda install docopt pygithub gitpython``.
 * Generate a fine-grained Personal Access Token on Github with read access to
