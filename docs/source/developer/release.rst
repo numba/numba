@@ -116,3 +116,14 @@ like:
    * `DrTodd13 <https://github.com/DrTodd13>`_
 
    <... some output omitted ...>
+
+Note that, the list may contain duplicates and thus you need to manually check
+and eliminate these duplictes! The duplicates are commonly the result of
+pull-requests that have been commited to the `main` branch and have then been
+cherry picked to a `release` branch. This can happen when issues are fixed for
+release candidates or when resolved issues are backported for patch releases.
+
+Note also, that you must manually add the pull-request for the changelog itself
+once it has been opened. This must be done after opening the pull-request
+itself, since the link and number for the pull-request will not exists
+beforehand.
