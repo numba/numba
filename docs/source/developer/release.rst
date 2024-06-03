@@ -61,7 +61,15 @@ to be invoked.
 Using ``towncrier``
 ...................
 
-TBD
+Before each release, generate the changelog using Towncrier. 
+This will collect all news fragments, combine them, and output
+the result to a single changelog file. During the changelog creation 
+user is asked if the existing news fragments are to be deleted. 
+In case of release notes generation, they are to be deleted so 
+that they aren't accidentally included in post-release changelog creation. 
+
+`towncrier build --version=0.xx.x`
+
 
 Using ``maint/gitlog2changelog.py``
 ...................................
