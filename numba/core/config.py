@@ -573,6 +573,12 @@ class _EnvReloader(object):
             "NUMBA_LLVM_REFPRUNE_FLAGS", str,
             "all" if LLVM_REFPRUNE_PASS else "",
         )
+        LLVM_REMARKS = _readenv(
+            "NUMBA_LLVM_REMARKS", int, 0,
+        )
+        LLVM_REMARKS_FILE = _readenv(
+            "NUMBA_LLVM_REMARKS_FILE", str, "",
+        )
 
         # llvmlite memory manager
         USE_LLVMLITE_MEMORY_MANAGER = _readenv(

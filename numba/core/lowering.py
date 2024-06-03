@@ -57,7 +57,7 @@ class BaseLower(object):
 
         # Debuginfo
         dibuildercls = (self.context.DIBuilder
-                        if self.context.enable_debuginfo
+                        if self.context.enable_debuginfo or config.LLVM_REMARKS
                         else debuginfo.DummyDIBuilder)
 
         # debuginfo def location
