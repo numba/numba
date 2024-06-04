@@ -1085,23 +1085,37 @@ class TestJitclassMethodCaching(DispatcherCacheUsecasesTest):
             mod = __import__(%(modname)r)
             mod.self_test()
 
-            f = mod.add_usecase
-            assert f.cache_hits == 1
-            f = mod.outer
-            assert f.cache_hits == 1
-            f = mod.div_usecase
-            assert f.cache_hits == 1
+            def check_hits(func, hits, misses):
+                st = func.stats
+                assert sum(st.cache_hits.values()) == hits, st.cache_hits
+                assert sum(st.cache_misses.values()) == misses, st.cache_misses
+
+            jit_methods = mod.MyJitClass.class_type.jit_methods
+            check_hits(jit_methods["cached_undecorated_function"], 1, 0)
+            check_hits(
+                jit_methods["cached_decorated_function_inherits_cache_setting"],
+                1, 0
+            )
+            check_hits(
+                jit_methods["cached_decorated_function_sets_cache_to_true"],
+                1, 0
+            )
+            check_hits(jit_methods["uncached_function"], 0, 1)
             """ % dict(tempdir=self.tempdir, modname=self.modname)
 
         subp_env = os.environ.copy()
         subp_env.update(envvars)
         popen = subprocess.Popen([sys.executable, "-c", code],
-                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE,
                                  env=subp_env)
-        _, err = popen.communicate()
+        out, err = popen.communicate()
         if popen.returncode != 0:
-            raise AssertionError(f"process failed with code {popen.returncode}:"
-                                 f"stderr follows\n{err.decode()}\n")
+            raise AssertionError(
+                f"process failed with code {popen.returncode}:"
+                f"stdout follows\n{out.decode()}\n"
+                f"stderr follows\n{err.decode()}\n"
+            )
 
     def check_module(self, mod):
         mod.self_test()
@@ -1109,31 +1123,40 @@ class TestJitclassMethodCaching(DispatcherCacheUsecasesTest):
     def test_caching(self):
         self.check_pycache(0)
         mod = self.import_module()
-        self.check_pycache(0)  # 4 index, 0 data
+        self.check_pycache(0)  # 0 index, 0 data
 
-        print(dir(mod.MyJitClass))
-        print(mod.MyJitClass.__jit_methods)
-        print(inspect.getsource(mod.MyJitClass.cached_undecorated_function))
-        self.check_hits(mod.MyJitClass.cached_undecorated_function, 0, 0)
-        self.check_hits(mod.MyJitClass.cached_decorated_function_inherits_cache_setting, 0, 0)
-        self.check_hits(mod.MyJitClass.cached_decorated_function_sets_cache_to_true, 0, 0)
-        self.check_hits(mod.MyJitClass.uncached_function, 0, 0)
-
-        self.check_module(mod)
-
-        # Reload module to hit the cache
-        mod = self.import_module()
-        self.check_pycache(4)  # 4 index, 0 data
-
-        self.check_hits(mod.MyJitClass.cached_undecorated_function, 0, 0)
-        self.check_hits(mod.MyJitClass.cached_decorated_function_inherits_cache_setting, 0, 0)
-        self.check_hits(mod.MyJitClass.cached_decorated_function_sets_cache_to_true, 0, 0)
-        self.check_hits(mod.MyJitClass.uncached_function, 0, 0)
+        # we haven't called the functions yet so cache should be empty
+        jit_methods = mod.MyJitClass.class_type.jit_methods
+        self.check_hits(jit_methods["cached_undecorated_function"], 0, 0)
+        self.check_hits(
+            jit_methods["cached_decorated_function_inherits_cache_setting"],
+            0, 0
+        )
+        self.check_hits(
+            jit_methods["cached_decorated_function_sets_cache_to_true"], 0, 0
+        )
+        self.check_hits(jit_methods["uncached_function"], 0, 0)
 
         self.check_module(mod)
 
+        # now we've called the functions they should all be missed once
+        self.check_hits(jit_methods["cached_undecorated_function"], 0, 1)
+        self.check_hits(
+            jit_methods["cached_decorated_function_inherits_cache_setting"],
+            0, 1
+        )
+        self.check_hits(
+            jit_methods["cached_decorated_function_sets_cache_to_true"],
+            0, 1
+        )
+        self.check_hits(jit_methods["uncached_function"], 0, 1)
+
+        # other tests reload the module to hit the cache, but that doesn't seem
+        # to work here. my guess is that the jitclass is being cached in such
+        # a way that the reload mechanism isn't deleting it. running in another
+        # process seems sufficient to me to demonstrate that the methods are in
+        # fact cached
         self.run_in_separate_process()
-        self.assertEqual(True, False)
 
 
 if __name__ == '__main__':

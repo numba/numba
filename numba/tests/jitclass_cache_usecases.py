@@ -51,10 +51,19 @@ class _TestModule(TestCase):
     """
 
     def check_module(self, mod):
-        c: MyJitClass = mod.MyJitClass(1,2,3)
-        self.assertPreciseEqual(c.cached_undecorated_function(4), 5)
-        self.assertPreciseEqual(c.cached_decorated_function_inherits_cache_setting(5), 7)
-        self.assertPreciseEqual(c.cached_decorated_function_sets_cache_to_true(6), 9)
+        c: MyJitClass = mod.MyJitClass(1, 2, 3)
+        self.assertPreciseEqual(c.a, 1)
+        self.assertPreciseEqual(c.b, 2)
+        self.assertPreciseEqual(c.c, 3)
+        self.assertPreciseEqual(
+            c.cached_undecorated_function(4), 5
+        )
+        self.assertPreciseEqual(
+            c.cached_decorated_function_inherits_cache_setting(5), 7
+        )
+        self.assertPreciseEqual(
+            c.cached_decorated_function_sets_cache_to_true(6), 9
+        )
         self.assertPreciseEqual(c.uncached_function(7), 13)
 
 
