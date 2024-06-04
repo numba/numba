@@ -39,7 +39,7 @@ def jitmethod(  # noqa: F811
     if (
         func_or_spec is not None
         and spec is None
-        and not isinstance(func_or_spec, type)
+        and not callable(func_or_spec)
     ):
         # Used like
         # @jitmethod([("x", intp)])
@@ -48,20 +48,10 @@ def jitmethod(  # noqa: F811
         spec = pt.cast(pt.Optional[FuncSpecType], func_or_spec)
         func_or_spec = None
 
-    def wrap(func: C) -> C:
-        if config.DISABLE_JIT: # type: ignore[attr-defined]
-            return func
-        else:
-            from numba.experimental.jitclass.base import JitMethod
+    def wrap(func: C) -> JitMethod[C]:
+        from numba.experimental.jitclass.base import JitMethod
 
-            # TODO: trick the type checker into thinking we return the function
-            #       unchanged. this makes type hinting JitMethod easier but
-            #       we should probably do it properly by giving JitMethod a
-            #       __call__ method that inherits the type hint of the stored
-            #       implementation
-            return pt.cast(
-                C, JitMethod(implementation=func, njit_options=njit_options)
-            )
+        return JitMethod(implementation=func, njit_options=njit_options)
 
     if func_or_spec is None:
         return wrap
