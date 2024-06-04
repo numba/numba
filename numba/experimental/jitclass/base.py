@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import dataclasses
 import inspect
 import operator
 import types as pytypes
@@ -21,16 +24,14 @@ C = pt.TypeVar("C", bound=pt.Callable)
 T = pt.TypeVar("T", bound=pt.Type)
 
 
+@dataclasses.dataclass
 class JitMethod(pt.Generic[C]):
     """
     Container class to defer compilation until we can determine the jitclass
     njit options
     """
-    def __init__(
-        self, implementation: C, njit_options: dict[str, bool]
-    ) -> None:
-        self.implementation = implementation
-        self.njit_options = njit_options
+    implementation: C
+    njit_options: dict[str, bool]
 
 ##############################################################################
 # Data model
