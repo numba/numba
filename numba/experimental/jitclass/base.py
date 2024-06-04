@@ -244,16 +244,16 @@ def register_class_type(
         if v.fdel is not None:
             raise TypeError("deleter is not supported: {0}".format(k))
 
-    def _njit_if_needed(f: C) -> C:
+    def _njit_if_needed(f: C, opts: dict[str, bool] = njit_options) -> C:
         if is_jitted(f):
             return f
         else:
-            return pt.cast(C, njit(**njit_options)(f))
+            return pt.cast(C, njit(**opts)(f))
 
     jit_methods = {
         k: _njit_if_needed(v) for k, v in methods.items()
     } | {
-        k: njit(**(njit_options | v.njit_options))(v.implementation)
+        k: _njit_if_needed(v.implementation, njit_options | v.njit_options)
         for k, v in pre_jitted_methods.items()
     }
 
@@ -280,12 +280,6 @@ def register_class_type(
 
     jit_class_dct = dict(class_type=class_type, __doc__=docstring)
     jit_class_dct.update(jit_static_methods)
-    cls = JitClassType(cls.__name__, (cls,), jit_class_dct)
-
-    # TODO: added to facilitate testing. there must be a better way though
-    cls.__jit_methods = jit_methods
-    cls.__jit_props = jit_props
-    cls.__static_jit_methods = jit_static_methods
     cls = pt.cast(T, JitClassType(cls.__name__, (cls,), jit_class_dct))
 
     # Register resolution of the class object
