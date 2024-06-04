@@ -101,7 +101,7 @@ class JitClassType(type):
     """
     The type of any jitclass.
     """
-    def __new__(cls, name, bases, dct):
+    def __new__(cls, name: str, bases, dct):
         if len(bases) != 1:
             raise TypeError("must have exactly one base class")
         [base] = bases
@@ -176,8 +176,9 @@ def _add_linking_libs(context, call):
 
 
 def register_class_type(
-    cls: T, spec: ClassSpecType, class_ctor, builder,
-    njit_options: dict[str, bool]
+    cls: T, spec: pt.Optional[ClassSpecType],
+    class_ctor: pt.Type[types.ClassType],
+    builder: pt.Type[ClassBuilder], njit_options: dict[str, bool]
 ) -> T:
     """
     Internal function to create a jitclass.
@@ -195,6 +196,7 @@ def register_class_type(
         spec = OrderedDict()
     elif isinstance(spec, Sequence):
         spec = OrderedDict(spec)
+    pt.cast(OrderedDict[str, pt.Type], spec)
 
     # Extend spec with class annotations.
     for attr, py_type in pt.get_type_hints(cls).items():
@@ -207,7 +209,7 @@ def register_class_type(
     spec = _fix_up_private_attr(cls.__name__, spec)
 
     # Copy methods from base classes
-    clsdct = {}
+    clsdct: dict[str, pt.Any] = {}
     for basecls in reversed(inspect.getmro(cls)):
         clsdct.update(basecls.__dict__)
 
@@ -284,6 +286,7 @@ def register_class_type(
     cls.__jit_methods = jit_methods
     cls.__jit_props = jit_props
     cls.__static_jit_methods = jit_static_methods
+    cls = pt.cast(T, JitClassType(cls.__name__, (cls,), jit_class_dct))
 
     # Register resolution of the class object
     typingctx = cpu_target.typing_context
