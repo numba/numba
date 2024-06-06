@@ -102,12 +102,16 @@ class BaseGeneratorLower:
         argsty = retty.elements[1]
         statesty = retty.elements[2]
 
+        lower.debug_print("# low_init_func incref")
+
         self.incref_arguments(lower, builder)
 
         argsval = self.arg_packer.as_data(builder, lower.fnargs)
         statesval = Constant(statesty, None)
         gen_struct = cgutils.make_anonymous_struct(builder, [resume_index, argsval, statesval], retty)
         retval = self.box_generator_struct(lower, gen_struct)
+
+        lower.debug_print("# low_init_func before return")
 
         self.call_conv.return_value(builder, retval)
         lower.post_lower()
@@ -127,6 +131,7 @@ class BaseGeneratorLower:
         yielded value).
         """
         lower.setup_function(self.gendesc)
+        lower.debug_print("# lower_next_func: {0}".format(self.gendesc.unique_name))
         builder = lower.builder
         function = lower.function
 
