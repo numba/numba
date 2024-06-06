@@ -4,6 +4,7 @@ Support for lowering generators.
 
 import llvmlite.ir
 from llvmlite.ir import Constant, IRBuilder
+
 from numba.core import types, config, cgutils
 from numba.core.funcdesc import FunctionDescriptor
 
@@ -21,7 +22,8 @@ class GeneratorDescriptor(FunctionDescriptor):
         function described by *fndesc*, with type *gentype*.
 
         The generator inherits the env_name from the *fndesc*.
-        All emitted functions for the generator share the same Env.
+        
+        All emitted functions for the generator shares the same Env.
 
         Parameters
         ----------
@@ -45,17 +47,16 @@ class GeneratorDescriptor(FunctionDescriptor):
         argtypes = (gentype,)
         qualname = fndesc.qualname + '.next'
         unique_name = fndesc.unique_name + '.next'
-        return cls(
-            fndesc.native, fndesc.modname, qualname, unique_name,
-            fndesc.doc, fndesc.typemap, restype, fndesc.calltypes,
-            args, fndesc.kws, argtypes=argtypes, mangler=mangler,
-            inline=False, env_name=fndesc.env_name
-        )
+        return cls(fndesc.native, fndesc.modname, qualname, unique_name,
+                   fndesc.doc, fndesc.typemap, restype, fndesc.calltypes,
+                   args, fndesc.kws, argtypes=argtypes, mangler=mangler,
+                   inline=False, env_name=fndesc.env_name)
 
     @property
     def llvm_finalizer_name(self):
         """
-        The LLVM name of the generator's finalizer function.
+        The LLVM name of the generator's finalizer function
+        (if <generator type>.has_finalizer is true).
 
         Returns
         -------
@@ -88,9 +89,9 @@ class BaseGeneratorLower:
         self.geninfo = lower.generator_info
         self.gentype = self.get_generator_type()
         self.gendesc = GeneratorDescriptor.from_generator_fndesc(
-            # Helps packing non-omitted arguments into a structure
             lower.func_ir, self.fndesc, self.gentype, self.context.mangler
         )
+        # Helps packing non-omitted arguments into a structure
         self.arg_packer = self.context.get_data_packer(self.fndesc.argtypes)
 
         self.resume_blocks = {}
@@ -150,6 +151,7 @@ class BaseGeneratorLower:
 
         # Init argument values
         lower.extract_function_arguments()
+        
         lower.pre_lower()
 
         # Initialize the return structure (i.e. the generator structure).
@@ -232,6 +234,7 @@ class BaseGeneratorLower:
         # Add block for StopIteration on entry
         stop_block = self.add_stop_iteration_block(builder, function)
 
+        # Add prologue switch to resume blocks
         builder.position_at_end(prologue)
 
         # First Python block is also the resume point on first next() call
@@ -245,7 +248,6 @@ class BaseGeneratorLower:
         # Close tail of entry block
         builder.position_at_end(entry_block_tail)
         
-        # Add prologue switch to resume blocks
         builder.branch(prologue)
 
     def add_stop_iteration_block(self, builder, function):
@@ -385,13 +387,13 @@ class GeneratorLower(BaseGeneratorLower):
         self.debug_print(builder, "# generator: finalize")
         if self.context.enable_nrt:
             # Always dereference all arguments
+            # self.debug_print(builder, "# generator: clear args")
             args_ptr = self.get_pointer(builder, genptr, 1)
             for ty, val in self.arg_packer.load(builder, args_ptr):
                 self.context.nrt.decref(builder, ty, val)
 
         self.debug_print(builder, "# generator: finalize end")
         builder.ret_void()
-
 
 class PyGeneratorLower(BaseGeneratorLower):
     """
@@ -527,6 +529,7 @@ class LowerYield:
         Lower the suspend of a yield point.
         """
         self.lower.debug_print("# generator suspend")
+        # Save live vars in state
         self.save_live_vars()
         self.save_resume_index()
         self.lower.debug_print("# generator suspend end")
@@ -560,6 +563,7 @@ class LowerYield:
             # IncRef newly stored value
             if self.context.enable_nrt:
                 self.context.nrt.incref(self.builder, ty, val)
+
             self.context.pack_value(self.builder, ty, val, state_slot)
 
     def save_resume_index(self):
