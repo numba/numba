@@ -88,6 +88,7 @@ class BaseGeneratorLower:
         self.geninfo = lower.generator_info
         self.gentype = self.get_generator_type()
         self.gendesc = GeneratorDescriptor.from_generator_fndesc(
+            # Helps packing non-omitted arguments into a structure
             lower.func_ir, self.fndesc, self.gentype, self.context.mangler
         )
         self.arg_packer = self.context.get_data_packer(self.fndesc.argtypes)
@@ -241,8 +242,10 @@ class BaseGeneratorLower:
         for index, block in self.resume_blocks.items():
             switch.add_case(index, block)
 
-        # Add prologue switch to resume blocks
+        # Close tail of entry block
         builder.position_at_end(entry_block_tail)
+        
+        # Add prologue switch to resume blocks
         builder.branch(prologue)
 
     def add_stop_iteration_block(self, builder, function):
