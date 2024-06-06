@@ -404,8 +404,8 @@ class _EnvReloader(object):
                 disabled_cpus = {'corei7-avx', 'core-avx-i',
                                  'sandybridge', 'ivybridge'}
                 # Disable known baseline CPU names that virtual machines may
-                # incorrectly report has AVX support.
-                # This can problems with SVML-pass use of AVX512.
+                # incorrectly report as having AVX support.
+                # This can cause problems with the SVML-pass's use of AVX512.
                 # See https://github.com/numba/numba/issues/9582
                 disabled_cpus |= {'nocona'}
                 return cpu_name not in disabled_cpus
