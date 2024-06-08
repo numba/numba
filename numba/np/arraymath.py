@@ -66,7 +66,15 @@ def ol__ufunc_reduce_inner(op, array):
     assert isinstance(op.typing_key, np.ufunc), op.typing_key
 
     ufunc = op.typing_key
-    identity = ufunc.identity
+
+    input_dtype = as_dtype(array.dtype)
+    _, _, return_dtype = ufunc.resolve_dtypes(
+        (None, input_dtype, None),
+        casting='unsafe',
+        reduction=True,
+    )
+
+    identity = np.array(ufunc.identity, return_dtype).take(0)
 
     def implementation(op, array):
         out = identity
