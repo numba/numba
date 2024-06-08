@@ -41,6 +41,41 @@ def _check_blas():
 _HAVE_BLAS = _check_blas()
 
 
+def _ufunc_reduce(op, array):
+    return op.reduce(array, None)
+
+
+@overload(_ufunc_reduce)
+def ol__ufunc_reduce(op, array):
+    def impl_axis_none(op, array):
+        return _ufunc_reduce_inner(op, array)
+
+    if not isinstance(array, types.Array):
+        return None  # invalid
+    else:
+        return impl_axis_none
+
+
+def _ufunc_reduce_inner(op, array):
+    return op.reduce(array, None)
+
+
+@overload(_ufunc_reduce_inner)
+def ol__ufunc_reduce_inner(op, array):
+    assert isinstance(op, types.Function), op
+    assert isinstance(op.typing_key, np.ufunc), op.typing_key
+
+    ufunc = op.typing_key
+    identity = ufunc.identity
+
+    def implementation(op, array):
+        out = identity
+        for aa in np.nditer(array):
+            out = op(out, aa.item())
+        return out
+    return implementation
+
+
 @intrinsic
 def _create_tuple_result_shape(tyctx, shape_list, shape_tuple):
     """
