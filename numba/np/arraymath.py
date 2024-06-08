@@ -22,6 +22,8 @@ from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
 from numba.np.arrayobj import (make_array, load_item, store_item,
                                _empty_nd_impl)
 from numba.np.linalg import ensure_blas
+from numba.np.unsafe.ndarray import empty_inferred
+from numba.np.unsafe.ndarray import to_fixed_tuple
 
 from numba.core.extending import intrinsic
 from numba.core.errors import (RequireLiteralValue, TypingError,
@@ -51,10 +53,54 @@ def ol__ufunc_reduce(op, array, axis, dtype, initial):
     def impl_axis_none(op, array, axis, dtype, initial):
         return _ufunc_reduce_inner(op, array, dtype, initial)
 
+    def impl_axis_tuple(op, array, axis, dtype, initial):
+        axes = _ufunc_reduce_newaxes(axis, array)
+        newaxes = to_fixed_tuple(axes, array.ndim)
+        arrayt = array.transpose(newaxes)
+        out = empty_inferred(arrayt.shape[:I])
+
+        for ii in np.ndindex(out.shape):
+            out[ii] = _ufunc_reduce_inner(op, arrayt[ii], dtype, initial)
+        return out
+
     if not isinstance(array, types.Array):
         return None  # invalid
     if isinstance(axis, types.NoneType):
         return impl_axis_none
+    if not isinstance(axis, types.BaseTuple):
+        axis = types.UniTuple(axis, 1)
+    if not all(isinstance(t, types.Integer) for t in axis):
+        return None  # invalid
+    if len(axis) <= array.ndim:
+        I = array.ndim - len(axis)  # output's number of dimensions
+        return impl_axis_tuple
+    # else, invalid
+
+
+@register_jitable
+def _ufunc_reduce_newaxes(axis, a):
+    axis = np.asarray(axis, np.intp)
+    axes = np.empty(a.ndim, np.intp)
+
+    for ii in np.ndindex(axis.shape):
+        if not -a.ndim <= axis[ii] < a.ndim:
+            raise np.exceptions.AxisError(axis[ii], a.ndim)
+        axis[ii] %= a.ndim
+
+    i = 0
+    for k in range(a.ndim):
+        for ax in np.nditer(axis):
+            if k == ax:
+                break
+        else:
+            axes[i] = k
+            i += 1
+
+    if i != a.ndim-axis.size:
+        raise ValueError("duplicate value in 'axis'")
+    else:
+        axes[i:] = axis
+    return axes
 
 
 def _ufunc_reduce_inner(op, array, dtype, initial):
