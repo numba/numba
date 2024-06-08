@@ -68,6 +68,9 @@ def ol__ufunc_reduce_inner(op, array, dtype):
 
     ufunc = op.typing_key
 
+    zero_size_message = (f"zero-size array to reduction operation "
+                         f"{ufunc.__name__!s} which has no identity")
+
     if isinstance(dtype, types.NoneType):
         return_dtype = None  # inferred below
     elif isinstance(dtype, types.Literal):
@@ -83,13 +86,27 @@ def ol__ufunc_reduce_inner(op, array, dtype):
         reduction=True,
     )
 
-    identity = np.array(ufunc.identity, return_dtype).take(0)
+    if ufunc.identity is None:
+        identity = None
+    else:
+        identity = np.array(ufunc.identity, return_dtype).take(0)
+
     # prefer a numba dtype for use within the implementation
     true_dtype = from_dtype(return_dtype)
 
     def implementation(op, array, dtype):
-        out = identity
-        for aa in np.nditer(array):
+        iterator = np.nditer(array)
+
+        if identity is not None:
+            out = identity
+        else:
+            for aa in iterator:
+                out = aa.astype(true_dtype).item()
+                break
+            else:
+                raise ValueError(zero_size_message)
+
+        for aa in iterator:
             out = op(out, aa.item())
         # numba's type inference does not demote floats, force it
         return true_dtype(out)
