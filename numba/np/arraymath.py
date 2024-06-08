@@ -41,14 +41,14 @@ def _check_blas():
 _HAVE_BLAS = _check_blas()
 
 
-def _ufunc_reduce(op, array):
-    return op.reduce(array, None)
+def _ufunc_reduce(op, array, dtype):
+    return op.reduce(array, None, dtype)
 
 
 @overload(_ufunc_reduce)
-def ol__ufunc_reduce(op, array):
-    def impl_axis_none(op, array):
-        return _ufunc_reduce_inner(op, array)
+def ol__ufunc_reduce(op, array, dtype):
+    def impl_axis_none(op, array, dtype):
+        return _ufunc_reduce_inner(op, array, dtype)
 
     if not isinstance(array, types.Array):
         return None  # invalid
@@ -56,27 +56,35 @@ def ol__ufunc_reduce(op, array):
         return impl_axis_none
 
 
-def _ufunc_reduce_inner(op, array):
-    return op.reduce(array, None)
+def _ufunc_reduce_inner(op, array, dtype):
+    return op.reduce(array, None, dtype)
 
 
 @overload(_ufunc_reduce_inner)
-def ol__ufunc_reduce_inner(op, array):
+def ol__ufunc_reduce_inner(op, array, dtype):
     assert isinstance(op, types.Function), op
     assert isinstance(op.typing_key, np.ufunc), op.typing_key
 
     ufunc = op.typing_key
 
+    if isinstance(dtype, types.NoneType):
+        return_dtype = None  # inferred below
+    elif isinstance(dtype, types.Literal):
+        return_dtype = np.dtype(dtype.literal_value)
+    else:
+        return_dtype = as_dtype(dtype)
+
     input_dtype = as_dtype(array.dtype)
     _, _, return_dtype = ufunc.resolve_dtypes(
         (None, input_dtype, None),
+        signature=(return_dtype, None, None),
         casting='unsafe',
         reduction=True,
     )
 
     identity = np.array(ufunc.identity, return_dtype).take(0)
 
-    def implementation(op, array):
+    def implementation(op, array, dtype):
         out = identity
         for aa in np.nditer(array):
             out = op(out, aa.item())
