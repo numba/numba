@@ -132,7 +132,7 @@ def ol__ufunc_reduce_inner(op, array, dtype, initial):
     # ValueError: reduce only supported for functions returning a single value
     assert ufunc.nout == 1, ufunc.nout
     # ValueError: reduction operation {ufunc.__name__!r} is not reorderable, so at most one axis may be specified
-    assert ufunc.identity is not None or array.ndim <= 1, ufunc.identity
+    assert ufunc.identity is not None or getattr(array, 'ndim', 0) <= 1, ufunc.identity
 
     zero_size_message = (f"zero-size array to reduction operation "
                          f"{ufunc.__name__!s} which has no identity")
@@ -144,7 +144,7 @@ def ol__ufunc_reduce_inner(op, array, dtype, initial):
     else:
         return_dtype = as_dtype(dtype)
 
-    input_dtype = as_dtype(array.dtype)
+    input_dtype = as_dtype(getattr(array, 'dtype', array))
     _, _, return_dtype = ufunc.resolve_dtypes(
         (None, input_dtype, None),
         signature=(return_dtype, None, None),
