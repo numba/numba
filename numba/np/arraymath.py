@@ -63,8 +63,12 @@ def ol__ufunc_reduce(op, array, axis, dtype, initial):
         arrayt = array.transpose(newaxes)
         out = empty_inferred(arrayt.shape[:I])
 
-        for ii in np.ndindex(out.shape):
-            out[ii] = _ufunc_reduce_inner(op, arrayt[ii], dtype, initial)
+        if newaxes[:I] == oldaxes:  # no transpose, use 'array'
+            for ii in np.ndindex(out.shape):
+                out[ii] = _ufunc_reduce_inner(op, array[ii], dtype, initial)
+        else:
+            for ii in np.ndindex(out.shape):
+                out[ii] = _ufunc_reduce_inner(op, arrayt[ii], dtype, initial)
         return out
 
     if not isinstance(array, types.Array):
@@ -79,6 +83,7 @@ def ol__ufunc_reduce(op, array, axis, dtype, initial):
         return impl_axis_all
     if len(axis) < array.ndim:
         I = array.ndim - len(axis)  # output's number of dimensions
+        oldaxes = tuple(range(array.ndim)[:I])
         return impl_axis_some
     # else, invalid
 
