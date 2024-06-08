@@ -42,18 +42,18 @@ def _check_blas():
 _HAVE_BLAS = _check_blas()
 
 
-def _ufunc_reduce(op, array, dtype, initial):
-    return op.reduce(array, None, dtype, initial=initial)
+def _ufunc_reduce(op, array, axis, dtype, initial):
+    return op.reduce(array, axis, dtype, initial=initial)
 
 
 @overload(_ufunc_reduce)
-def ol__ufunc_reduce(op, array, dtype, initial):
-    def impl_axis_none(op, array, dtype, initial):
+def ol__ufunc_reduce(op, array, axis, dtype, initial):
+    def impl_axis_none(op, array, axis, dtype, initial):
         return _ufunc_reduce_inner(op, array, dtype, initial)
 
     if not isinstance(array, types.Array):
         return None  # invalid
-    else:
+    if isinstance(axis, types.NoneType):
         return impl_axis_none
 
 
