@@ -16,6 +16,7 @@ from numba.core.extending import overload, overload_method, register_jitable
 from numba.np.numpy_support import (as_dtype, type_can_asarray, type_is_scalar,
                                     numpy_version, is_nonelike,
                                     check_is_integer, lt_floats, lt_complex)
+from numba.np.numpy_support import from_dtype
 from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
                                  impl_ret_new_ref, impl_ret_untracked)
 from numba.np.arrayobj import (make_array, load_item, store_item,
@@ -83,12 +84,15 @@ def ol__ufunc_reduce_inner(op, array, dtype):
     )
 
     identity = np.array(ufunc.identity, return_dtype).take(0)
+    # prefer a numba dtype for use within the implementation
+    true_dtype = from_dtype(return_dtype)
 
     def implementation(op, array, dtype):
         out = identity
         for aa in np.nditer(array):
             out = op(out, aa.item())
-        return out
+        # numba's type inference does not demote floats, force it
+        return true_dtype(out)
     return implementation
 
 
