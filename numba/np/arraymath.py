@@ -53,7 +53,11 @@ def ol__ufunc_reduce(op, array, axis, dtype, initial):
     def impl_axis_none(op, array, axis, dtype, initial):
         return _ufunc_reduce_inner(op, array, dtype, initial)
 
-    def impl_axis_tuple(op, array, axis, dtype, initial):
+    def impl_axis_all(op, array, axis, dtype, initial):
+        _ufunc_reduce_newaxes(axis, array)
+        return _ufunc_reduce_inner(op, array, dtype, initial)
+
+    def impl_axis_some(op, array, axis, dtype, initial):
         axes = _ufunc_reduce_newaxes(axis, array)
         newaxes = to_fixed_tuple(axes, array.ndim)
         arrayt = array.transpose(newaxes)
@@ -71,9 +75,11 @@ def ol__ufunc_reduce(op, array, axis, dtype, initial):
         axis = types.UniTuple(axis, 1)
     if not all(isinstance(t, types.Integer) for t in axis):
         return None  # invalid
-    if len(axis) <= array.ndim:
+    if len(axis) == array.ndim:
+        return impl_axis_all
+    if len(axis) < array.ndim:
         I = array.ndim - len(axis)  # output's number of dimensions
-        return impl_axis_tuple
+        return impl_axis_some
     # else, invalid
 
 
