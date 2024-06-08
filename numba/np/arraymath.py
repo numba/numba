@@ -44,26 +44,27 @@ def _check_blas():
 _HAVE_BLAS = _check_blas()
 
 
-def _ufunc_reduce(op, array, axis, dtype, initial):
-    return op.reduce(array, axis, dtype, initial=initial)
+# TODO: out and keepdims
+def _ufunc_reduce(op, array, axis, dtype, out, keepdims, initial):
+    return op.reduce(array, axis, dtype, out, keepdims, initial)
 
 
 @overload(_ufunc_reduce)
-def ol__ufunc_reduce(op, array, axis, dtype, initial):
-    def impl_axis_none(op, array, axis, dtype, initial):
+def ol__ufunc_reduce(op, array, axis, dtype, out, keepdims, initial):
+    def impl_axis_none(op, array, axis, dtype, out, keepdims, initial):
         return _ufunc_reduce_inner(op, array, dtype, initial)
 
     # allow axis to be either 0 or -1 for 0-dim/scalars
-    def impl_axis_int_scalar(op, array, axis, dtype, initial):
+    def impl_axis_int_scalar(op, array, axis, dtype, out, keepdims, initial):
         if not -1 <= axis < 1:
             raise np.exceptions.AxisError(axis, 0)
         return _ufunc_reduce_inner(op, array, dtype, initial)
 
-    def impl_axis_all(op, array, axis, dtype, initial):
+    def impl_axis_all(op, array, axis, dtype, out, keepdims, initial):
         _ufunc_reduce_newaxes(axis, array)
         return _ufunc_reduce_inner(op, array, dtype, initial)
 
-    def impl_axis_some(op, array, axis, dtype, initial):
+    def impl_axis_some(op, array, axis, dtype, out, keepdims, initial):
         axes = _ufunc_reduce_newaxes(axis, array)
         newaxes = to_fixed_tuple(axes, array.ndim)
         arrayt = array.transpose(newaxes)
