@@ -68,6 +68,15 @@ def ol__ufunc_reduce_inner(op, array, dtype, initial):
 
     ufunc = op.typing_key
 
+    # RuntimeError: Reduction not defined on ufunc with signature
+    assert ufunc.signature is None, ufunc.signature
+    # ValueError: reduce only supported for binary functions
+    assert ufunc.nin == 2, ufunc.nin
+    # ValueError: reduce only supported for functions returning a single value
+    assert ufunc.nout == 1, ufunc.nout
+    # ValueError: reduction operation {ufunc.__name__!r} is not reorderable, so at most one axis may be specified
+    assert ufunc.identity is not None or array.ndim <= 1, ufunc.identity
+
     zero_size_message = (f"zero-size array to reduction operation "
                          f"{ufunc.__name__!s} which has no identity")
 
