@@ -42,14 +42,14 @@ def _check_blas():
 _HAVE_BLAS = _check_blas()
 
 
-def _ufunc_reduce(op, array, dtype):
-    return op.reduce(array, None, dtype)
+def _ufunc_reduce(op, array, dtype, initial):
+    return op.reduce(array, None, dtype, initial=initial)
 
 
 @overload(_ufunc_reduce)
-def ol__ufunc_reduce(op, array, dtype):
-    def impl_axis_none(op, array, dtype):
-        return _ufunc_reduce_inner(op, array, dtype)
+def ol__ufunc_reduce(op, array, dtype, initial):
+    def impl_axis_none(op, array, dtype, initial):
+        return _ufunc_reduce_inner(op, array, dtype, initial)
 
     if not isinstance(array, types.Array):
         return None  # invalid
@@ -57,12 +57,12 @@ def ol__ufunc_reduce(op, array, dtype):
         return impl_axis_none
 
 
-def _ufunc_reduce_inner(op, array, dtype):
-    return op.reduce(array, None, dtype)
+def _ufunc_reduce_inner(op, array, dtype, initial):
+    return op.reduce(array, None, dtype, initial=initial)
 
 
 @overload(_ufunc_reduce_inner)
-def ol__ufunc_reduce_inner(op, array, dtype):
+def ol__ufunc_reduce_inner(op, array, dtype, initial):
     assert isinstance(op, types.Function), op
     assert isinstance(op.typing_key, np.ufunc), op.typing_key
 
@@ -94,10 +94,13 @@ def ol__ufunc_reduce_inner(op, array, dtype):
     # prefer a numba dtype for use within the implementation
     true_dtype = from_dtype(return_dtype)
 
-    def implementation(op, array, dtype):
+    def implementation(op, array, dtype, initial):
         iterator = np.nditer(array)
 
-        if identity is not None:
+        if initial is not None:
+            # must cast initial to the output data type before use
+            out = true_dtype(initial)
+        elif identity is not None:
             out = identity
         else:
             for aa in iterator:
