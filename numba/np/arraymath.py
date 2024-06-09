@@ -179,15 +179,14 @@ def ol__ufunc_reduce_inner(op, array, dtype, initial):
             out = identity
         else:
             for aa in iterator:
-                out = aa.astype(true_dtype).item()
+                out = true_dtype(aa.item())
                 break
             else:
                 raise ValueError(zero_size_message)
 
         for aa in iterator:
-            out = op(out, aa.item())
-        # numba's type inference does not demote floats, force it
-        return true_dtype(out)
+            out = true_dtype(op(out, aa.item()))
+        return out
     return implementation
 
 
