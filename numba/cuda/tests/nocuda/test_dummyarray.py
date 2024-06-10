@@ -2,8 +2,10 @@ import unittest
 import itertools
 import numpy as np
 from numba.cuda.cudadrv.dummyarray import Array
+from numba.cuda.testing import skip_on_cudasim
 
 
+@skip_on_cudasim("Tests internals of the CUDA driver device array")
 class TestSlicing(unittest.TestCase):
 
     def assertSameContig(self, arr, nparr):
@@ -162,6 +164,7 @@ class TestSlicing(unittest.TestCase):
         self.assertEqual(z.flags['F_CONTIGUOUS'], arr.flags['F_CONTIGUOUS'])
 
 
+@skip_on_cudasim("Tests internals of the CUDA driver device array")
 class TestReshape(unittest.TestCase):
     def test_reshape_2d2d(self):
         nparr = np.empty((4, 5))
@@ -275,6 +278,7 @@ class TestReshape(unittest.TestCase):
         self.assertIn(expected_message, str(raises.exception))
 
 
+@skip_on_cudasim("Tests internals of the CUDA driver device array")
 class TestSqueeze(unittest.TestCase):
     def test_squeeze(self):
         nparr = np.empty((1, 2, 1, 4, 1, 3))
@@ -303,6 +307,7 @@ class TestSqueeze(unittest.TestCase):
             arr.squeeze(axis=(2, 3))
 
 
+@skip_on_cudasim("Tests internals of the CUDA driver device array")
 class TestExtent(unittest.TestCase):
     def test_extent_1d(self):
         nparr = np.empty(4)
@@ -335,6 +340,7 @@ class TestExtent(unittest.TestCase):
         self.assertEqual(len(list(arr[::2].iter_contiguous_extent())), 2)
 
 
+@skip_on_cudasim("Tests internals of the CUDA driver device array")
 class TestIterate(unittest.TestCase):
     def test_for_loop(self):
         # for #4201
