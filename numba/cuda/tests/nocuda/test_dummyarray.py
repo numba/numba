@@ -1,7 +1,7 @@
 import unittest
 import itertools
 import numpy as np
-from numba.misc.dummyarray import Array
+from numba.cuda.cudadrv.dummyarray import Array
 
 
 class TestSlicing(unittest.TestCase):
