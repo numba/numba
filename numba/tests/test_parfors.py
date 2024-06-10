@@ -29,8 +29,6 @@ from numba import (njit, prange, parallel_chunksize,
                    set_num_threads, get_num_threads, typeof)
 from numba.core import (types, errors, ir, rewrites,
                         typed_passes, inline_closurecall, config, compiler, cpu)
-from numba.typed import Dict, List
-
 from numba.extending import (overload_method, register_model,
                              typeof_impl, unbox, NativeValue, models)
 from numba.core.registry import cpu_target
@@ -232,10 +230,6 @@ class TestParforsBase(TestCase):
                     new_args.append(copy.deepcopy(x))
                 elif isinstance(x, list):
                     new_args.append(x[:])
-                elif isinstance(x, Dict):
-                    new_args.append(copy.copy(x))
-                elif isinstance(x, List):
-                    new_args.append(copy.copy(x))
                 else:
                     raise ValueError('Unsupported argument type encountered')
             return tuple(new_args)
@@ -4090,11 +4084,6 @@ class TestPrangeBasic(TestPrangeBase):
         self.prange_tester(test_impl, x, par, 2)
 
 
-@register_jitable
-def test_call_hoisting_outcall(a,b):
-    return (a, b)
-
-
 @skip_parfors_unsupported
 class TestPrangeSpecific(TestPrangeBase):
     """ Tests specific features/problems found under prange"""
@@ -4433,34 +4422,6 @@ class TestPrangeSpecific(TestPrangeBase):
             return a
 
         self.prange_tester(test_impl)
-
-    def test_tuple_hoisting(self):
-        # issue9529
-        def test_impl(inputs):
-            outputs = [(Dict.empty(key_type=types.int64, value_type=types.float64), np.zeros(1)) for _ in range(len(inputs))]
-            for i in range(len(inputs)):
-                y = inputs[i]
-                out = np.zeros(1)
-                out[0] = i
-                outputs[i] = (inputs[i], out)
-            return outputs[0][1][0]
-
-        N = config.NUMBA_NUM_THREADS + 1
-        self.prange_tester(test_impl, [Dict.empty(key_type=types.int64, value_type=types.float64) for i in range(N)])
-
-    def test_call_hoisting(self):
-        # issue9529
-        def test_impl(inputs):
-            outputs = [(Dict.empty(key_type=types.int64, value_type=types.float64), np.zeros(1)) for _ in range(len(inputs))]
-            for i in range(len(inputs)):
-                y = inputs[i]
-                out = np.zeros(1)
-                out[0] = i
-                outputs[i] = test_call_hoisting_outcall(inputs[i], out)
-            return outputs[0][1][0]
-
-        N = config.NUMBA_NUM_THREADS + 1
-        self.prange_tester(test_impl, [Dict.empty(key_type=types.int64, value_type=types.float64) for i in range(N)])
 
     def test_record_array_setitem(self):
         # issue6704
