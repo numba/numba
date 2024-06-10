@@ -888,7 +888,10 @@ def _hoist_internal(inst, dep_on_param, call_table, hoisted, not_hoisted,
 
     uses = set()
     visit_vars_inner(inst.value, find_vars, uses)
+    unhoistable = {assgn.target.name for assgn, _ in not_hoisted}
+    use_unhoist = uses & unhoistable
     diff = uses.difference(dep_on_param)
+    diff |= use_unhoist
     if config.DEBUG_ARRAY_OPT >= 1:
         print("_hoist_internal:", inst, "uses:", uses, "diff:", diff)
     if len(diff) == 0 and is_pure(inst.value, None, call_table):
