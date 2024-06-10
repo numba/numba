@@ -400,9 +400,15 @@ class _EnvReloader(object):
                 # on some CPUs (list at
                 # http://llvm.org/bugs/buglist.cgi?quicksearch=avx).
                 # For now we'd rather disable it, since it can pessimize code
-                cpu_name = ll.get_host_cpu_name()
-                return cpu_name not in ('corei7-avx', 'core-avx-i',
-                                        'sandybridge', 'ivybridge')
+                cpu_name = CPU_NAME or ll.get_host_cpu_name()
+                disabled_cpus = {'corei7-avx', 'core-avx-i',
+                                 'sandybridge', 'ivybridge'}
+                # Disable known baseline CPU names that virtual machines may
+                # incorrectly report as having AVX support.
+                # This can cause problems with the SVML-pass's use of AVX512.
+                # See https://github.com/numba/numba/issues/9582
+                disabled_cpus |= {'nocona'}
+                return cpu_name not in disabled_cpus
 
         ENABLE_AVX = _readenv("NUMBA_ENABLE_AVX", int, avx_default)
 
