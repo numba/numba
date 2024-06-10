@@ -2378,6 +2378,8 @@ class TestParfors(TestParforsBase):
     @needs_lapack  # use of np.linalg.solve
     @skip_ppc64le_invalid_ctr_loop
     def test_issue9490_non_det_ssa_problem(self):
+        # Test modified to include https://github.com/numba/numba/issues/9581
+        # which is an issue with hoisting
         cmd = [
             sys.executable,
             "-m",
