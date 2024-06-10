@@ -688,25 +688,6 @@ class CPUCodeLibrary(CodeLibrary):
                 res_full = self._codegen._mpm_full.run(self._final_module)
 
         if config.LLVM_REMARKS:
-            def demangle_functions(yml_string):
-                yml_string = yml_string.splitlines()
-                for line_idx in range(len(yml_string)):
-                    line = yml_string[line_idx].split(" ")
-                    if "Function:" in line or "Callee:" in line or "Caller:" in line:
-                        func_name = line[-1]
-                        try:
-                            demangled_name = TargetConfig.demangle(func_name)
-                        except:
-                            demangled_name = func_name
-                        line[-1] = demangled_name
-                        yml_string[line_idx] = " ".join(line)
-
-                yml_string = "\n".join(yml_string)
-                return yml_string
-
-            yml_string_cheap = demangle_functions(yml_string_cheap)
-            yml_string_full = demangle_functions(yml_string_full)
-
             if config.LLVM_REMARKS_FILE:
                 with open(config.LLVM_REMARKS_FILE, "a") as f:
                     f.write(yml_string_cheap)
