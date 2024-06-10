@@ -260,7 +260,8 @@ class TestReshape(unittest.TestCase):
 
         with self.assertRaises(ValueError) as raises:
             arr.reshape(-1, -1, 3)
-        self.assertIn('can only specify one unknown dimension', str(raises.exception))
+        self.assertIn('can only specify one unknown dimension',
+                      str(raises.exception))
 
     def test_reshape_infer_invalid_shape(self):
         nparr = np.empty((3, 4, 5))
@@ -269,7 +270,9 @@ class TestReshape(unittest.TestCase):
 
         with self.assertRaises(ValueError) as raises:
             arr.reshape(-1, 7)
-        self.assertIn('cannot infer valid shape for unknown dimension', str(raises.exception))
+
+        expected_message = 'cannot infer valid shape for unknown dimension'
+        self.assertIn(expected_message, str(raises.exception))
 
 
 class TestSqueeze(unittest.TestCase):
@@ -278,6 +281,7 @@ class TestSqueeze(unittest.TestCase):
         arr = Array.from_desc(
             0, nparr.shape, nparr.strides, nparr.dtype.itemsize
         )
+
         def _assert_equal_shape_strides(arr1, arr2):
             self.assertEqual(arr1.shape, arr2.shape)
             self.assertEqual(arr1.strides, arr2.strides)
@@ -342,9 +346,8 @@ class TestIterate(unittest.TestCase):
         x = 0  # just a placeholder
         # this loop should not raise AssertionError
         for val in arr:
-            x = val
+            x = val  # noqa: F841
 
 
 if __name__ == '__main__':
     unittest.main()
-
