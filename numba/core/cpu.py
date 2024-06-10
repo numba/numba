@@ -322,4 +322,4 @@ class CPUTargetOptions(_options_mixin, TargetOptions):
 
         if flags.forceinline:
             # forceinline turns off optnone, just like clang.
-            flags.optnone = False
+            flags.dbg_optnone = False

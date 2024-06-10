@@ -152,6 +152,7 @@ class TargetConfig(metaclass=_MetaTargetConfig):
     >>> tc.a_bool_option = True  # invokes the setter
     >>> print(tc.an_int_option)  # print the default
     """
+    __slots__ = ["_values"]
 
     # Used for compression in mangling.
     # Set to -15 to disable the header and checksum for smallest output.
