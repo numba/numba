@@ -1,7 +1,7 @@
 ---
 name: Subsequent Release Candidate Checklist (maintainer only)
 about: Checklist template for all subsequent releases (RC 2-N, FINAL and PATCH) of every series
-title: Numba X.Y.Zrc1 Checklist (FIXME)
+title: Numba X.Y.Z Checklist (FIXME)
 labels: task
 
 ---
