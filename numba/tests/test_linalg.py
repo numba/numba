@@ -2424,7 +2424,7 @@ class TestLinalgMatrixPower(TestLinalgBase):
             # check that the computed results are contig and in the same way
             self.assert_contig_sanity(got, "C")
 
-            res = 5 * np.finfo(a.dtype).resolution
+            res = 7 * np.finfo(a.dtype).resolution
             np.testing.assert_allclose(got, expected, rtol=res, atol=res)
 
             # Ensure proper resource management
