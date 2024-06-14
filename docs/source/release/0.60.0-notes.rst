@@ -248,7 +248,6 @@ Pull-Requests:
 * PR `#9602 <https://github.com/numba/numba/pull/9602>`_: Fix numpy2.0 incompatbility issues (`sklam <https://github.com/sklam>`_)
 * PR `#9603 <https://github.com/numba/numba/pull/9603>`_: Disable AVX for nocona (`sklam <https://github.com/sklam>`_)
 
-
 Authors:
 ~~~~~~~~
 
