@@ -884,6 +884,21 @@ class ArrayModel(StructModel):
         ]
         super(ArrayModel, self).__init__(dmm, fe_type, members)
 
+    def from_argument(self, builder, value):
+        ary = self._from("from_argument", builder, value)
+        layout = self.fe_type.layout
+        if layout in ('C', 'F'):
+            # Add assumption about unit-strides to help optimization
+            strides = self.get(builder, ary, "strides")
+            if strides.type.count > 0:
+                dataptr = self.get(builder, ary, "data")
+                sizeof = cgutils.sizeof(builder, dataptr.type)
+                which_stride = strides.type.count - 1 if layout == 'C' else 0
+                unit_stride = builder.extract_value(strides, which_stride)
+                cond = builder.icmp_signed("==", unit_stride, sizeof)
+                builder.assume(cond)
+        return ary
+
 
 @register_default(types.ArrayFlags)
 class ArrayFlagsModel(StructModel):

@@ -960,11 +960,12 @@ def pointer_add(builder, ptr, offset, return_type=None):
     Note the computation is done in bytes, and ignores the width of
     the pointed item type.
     """
-    intptr = builder.ptrtoint(ptr, intp_t)
+    base_type = ptr.type
+    arrayi8 = builder.bitcast(ptr, int8_t.as_pointer())
     if isinstance(offset, int):
         offset = intp_t(offset)
-    intptr = builder.add(intptr, offset)
-    return builder.inttoptr(intptr, return_type or ptr.type)
+    offsetted = builder.gep(arrayi8, [offset])
+    return builder.bitcast(offsetted, base_type)
 
 
 def memset(builder, ptr, size, value):
