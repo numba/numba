@@ -1,12 +1,19 @@
 [flake8]
 ignore =
-    E20,   # Extra space in brackets
-    E231,E241,  # Multiple spaces around ","
-    E26,   # Comments
-    E731,  # Assigning lambda expression
-    E741,  # Ambiguous variable names
-    W503,  # line break before binary operator
-    W504,  # line break after binary operator
+    # Extra space in brackets
+    E20,
+    # Multiple spaces around ","
+    E231,E241,
+    # Comments
+    E26,
+    # Assigning lambda expression
+    E731,
+    # Ambiguous variable names
+    E741,
+    # line break before binary operator
+    W503,
+    # line break after binary operator
+    W504,
 max-line-length = 80
 
 exclude =
@@ -22,13 +29,13 @@ exclude =
     __init__.py
     # Ignore vendored files
     numba/cloudpickle/*
+    versioneer.py
     # Grandfather in existing failing files.  This list should shrink over time
     numba/stencils/stencil.py
     numba/core/transforms.py
     numba/core/tracing.py
     numba/core/withcontexts.py
     numba/_version.py
-    numba/core/inline_closurecall.py
     numba/core/ir_utils.py
     numba/core/pylowering.py
     numba/python_utils.py
@@ -67,9 +74,7 @@ exclude =
     numba/core/registry.py
     numba/core/imputils.py
     numba/cpython/builtins.py
-    numba/core/cpu.py
     numba/misc/quicksort.py
-    numba/core/callconv.py
     numba/cpython/randomimpl.py
     numba/np/npyimpl.py
     numba/cpython/slicing.py
@@ -83,7 +88,6 @@ exclude =
     numba/np/npyfuncs.py
     numba/cpython/iterators.py
     numba/core/codegen.py
-    numba/np/polynomial.py
     numba/misc/mergesort.py
     numba/core/base.py
     numba/np/npdatetime.py
@@ -123,7 +127,6 @@ exclude =
     numba/tests/matmul_usecase.py
     numba/tests/complex_usecases.py
     numba/tests/test_array_exprs.py
-    numba/tests/test_polynomial.py
     numba/tests/test_wrapper.py
     numba/tests/test_obj_lifetime.py
     numba/tests/test_intwidth.py
@@ -135,7 +138,6 @@ exclude =
     numba/tests/test_slices.py
     numba/tests/test_mandelbrot.py
     numba/tests/compile_with_pycc.py
-    numba/tests/test_deprecations.py
     numba/tests/test_looplifting.py
     numba/tests/test_storeslice.py
     numba/tests/recursion_usecases.py
@@ -150,7 +152,6 @@ exclude =
     numba/tests/test_numberctor.py
     numba/tests/test_globals.py
     numba/tests/test_typingerror.py
-    numba/tests/test_object_mode.py
     numba/tests/test_copy_propagate.py
     numba/tests/test_ctypes.py
     numba/tests/test_typeof.py
@@ -163,7 +164,6 @@ exclude =
     numba/tests/test_indexing.py
     numba/tests/test_pycc.py
     numba/tests/annotation_usecases.py
-    numba/tests/test_extended_arg.py
     numba/tests/test_alignment.py
     numba/tests/test_multi3.py
     numba/tests/test_overlap.py
@@ -172,7 +172,6 @@ exclude =
     numba/tests/test_enums.py
     numba/tests/test_profiler.py
     numba/tests/test_numpyadapt.py
-    numba/tests/test_stencils.py
     numba/tests/cache_usecases.py
     numba/tests/true_div_usecase.py
     numba/tests/test_dataflow.py
@@ -195,7 +194,6 @@ exclude =
     numba/tests/test_complex.py
     numba/tests/test_hashing.py
     numba/tests/test_sys_stdin_assignment.py
-    numba/tests/test_ufuncs.py
     numba/tests/pdlike_usecase.py
     numba/tests/test_range.py
     numba/tests/test_nrt_refct.py
@@ -245,6 +243,9 @@ exclude =
     numba/core/datamodel/packer.py
     numba/core/datamodel/testing.py
     numba/core/datamodel/manager.py
+    numba/np/math/cmathimpl.py
+    numba/np/math/mathimpl.py
+    numba/np/math/numbers.py
 
 per-file-ignores =
     # Ignore star imports, unused imports, and "may be defined by star imports"
@@ -256,9 +257,10 @@ per-file-ignores =
     # contain the URLs of the reference pages in the online libdevice
     # documentation.
     numba/cuda/libdevice.py:E501
-    # Ignore too-long lines in the CUDA doc examples, prioritising readability
+    # Ignore too-long lines in the doc examples, prioritising readability
     # in the docs over line length in the example source (especially given that
     # the test code is already indented by 8 spaces)
     numba/cuda/tests/doc_examples/test_random.py:E501
     numba/cuda/tests/doc_examples/test_cg.py:E501
     numba/cuda/tests/doc_examples/test_matmul.py:E501
+    numba/tests/doc_examples/test_interval_example.py:E501

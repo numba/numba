@@ -1,4 +1,3 @@
-import ctypes
 import json
 import locale
 import multiprocessing
@@ -10,6 +9,7 @@ from contextlib import redirect_stdout
 from datetime import datetime
 from io import StringIO
 from subprocess import check_output, PIPE, CalledProcessError
+import numpy as np
 import llvmlite.binding as llvmbind
 from llvmlite import __version__ as llvmlite_version
 from numba import cuda as cu, __version__ as version_number
@@ -61,6 +61,15 @@ _cu_rt_ver = 'CUDA Runtime Version'
 _cu_nvidia_bindings = 'NVIDIA CUDA Bindings'
 _cu_nvidia_bindings_used = 'NVIDIA CUDA Bindings In Use'
 _cu_detect_out, _cu_lib_test = 'CUDA Detect Output', 'CUDA Lib Test'
+_cu_mvc_available = 'NVIDIA CUDA Minor Version Compatibility Available'
+_cu_mvc_needed = 'NVIDIA CUDA Minor Version Compatibility Needed'
+_cu_mvc_in_use = 'NVIDIA CUDA Minor Version Compatibility In Use'
+# NumPy info
+_numpy_version = 'NumPy Version'
+_numpy_supported_simd_features = 'NumPy Supported SIMD features'
+_numpy_supported_simd_dispatch = 'NumPy Supported SIMD dispatch'
+_numpy_supported_simd_baseline = 'NumPy Supported SIMD baseline'
+_numpy_AVX512_SKX_detected = 'NumPy AVX512_SKX detected'
 # SVML info
 _svml_state, _svml_loaded = 'SVML State', 'SVML Lib Loaded'
 _llvm_svml_patched = 'LLVM SVML Patched'
@@ -330,7 +339,7 @@ def get_sysinfo():
         msg_not_found = "CUDA driver library cannot be found"
         msg_disabled_by_user = "CUDA is disabled"
         msg_end = " or no CUDA enabled devices are present."
-        msg_generic_problem = "CUDA device intialisation problem."
+        msg_generic_problem = "CUDA device initialisation problem."
         msg = getattr(e, 'msg', None)
         if msg is not None:
             if msg_not_found in msg:
@@ -354,15 +363,14 @@ def get_sysinfo():
             sys_info[_cu_detect_out] = output.getvalue()
             output.close()
 
-            sys_info[_cu_drv_ver] = cudriver.get_version()
-
-            rtver = ctypes.c_int(0)
-            curuntime.cudaRuntimeGetVersion(ctypes.byref(rtver))
-            sys_info[_cu_rt_ver] = rtver.value
+            cu_drv_ver = cudriver.get_version()
+            cu_rt_ver = curuntime.get_version()
+            sys_info[_cu_drv_ver] = '%s.%s' % cu_drv_ver
+            sys_info[_cu_rt_ver] = '%s.%s' % cu_rt_ver
 
             output = StringIO()
             with redirect_stdout(output):
-                cudadrv.libs.test(sys.platform, print_paths=False)
+                cudadrv.libs.test()
             sys_info[_cu_lib_test] = output.getvalue()
             output.close()
 
@@ -375,11 +383,39 @@ def get_sysinfo():
 
             nv_binding_used = bool(cudadrv.driver.USE_NV_BINDING)
             sys_info[_cu_nvidia_bindings_used] = nv_binding_used
+
+            try:
+                from ptxcompiler import compile_ptx  # noqa: F401
+                from cubinlinker import CubinLinker  # noqa: F401
+                sys_info[_cu_mvc_available] = True
+            except ImportError:
+                sys_info[_cu_mvc_available] = False
+
+            sys_info[_cu_mvc_needed] = cu_rt_ver > cu_drv_ver
+            sys_info[_cu_mvc_in_use] = bool(
+                config.CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY)
         except Exception as e:
             _warning_log.append(
                 "Warning (cuda): Probing CUDA failed "
                 "(device and driver present, runtime problem?)\n"
                 f"(cuda) {type(e)}: {e}")
+
+    # NumPy information
+    sys_info[_numpy_version] = np.version.full_version
+    try:
+        # NOTE: These consts were added in NumPy 1.20
+        from numpy.core._multiarray_umath import (__cpu_features__,
+                                                  __cpu_dispatch__,
+                                                  __cpu_baseline__,)
+    except ImportError:
+        sys_info[_numpy_AVX512_SKX_detected] = False
+    else:
+        feat_filtered = [k for k, v in __cpu_features__.items() if v]
+        sys_info[_numpy_supported_simd_features] = feat_filtered
+        sys_info[_numpy_supported_simd_dispatch] = __cpu_dispatch__
+        sys_info[_numpy_supported_simd_baseline] = __cpu_baseline__
+        sys_info[_numpy_AVX512_SKX_detected] = \
+            __cpu_features__.get("AVX512_SKX", False)
 
     # SVML information
     # Replicate some SVML detection logic from numba.__init__ here.
@@ -564,10 +600,30 @@ def display_sysinfo(info=None, sep_pos=45):
         ("CUDA NVIDIA Bindings Available", info.get(_cu_nvidia_bindings, '?')),
         ("CUDA NVIDIA Bindings In Use",
          info.get(_cu_nvidia_bindings_used, '?')),
+        ("CUDA Minor Version Compatibility Available",
+         info.get(_cu_mvc_available, '?')),
+        ("CUDA Minor Version Compatibility Needed",
+         info.get(_cu_mvc_needed, '?')),
+        ("CUDA Minor Version Compatibility In Use",
+         info.get(_cu_mvc_in_use, '?')),
         ("CUDA Detect Output:",),
         (info.get(_cu_detect_out, "None"),),
         ("CUDA Libraries Test Output:",),
         (info.get(_cu_lib_test, "None"),),
+        ("",),
+        ("__NumPy Information__",),
+        ("NumPy Version", info.get(_numpy_version, '?')),
+        ("NumPy Supported SIMD features",
+         DisplaySeq(info.get(_numpy_supported_simd_features, [])
+                    or ('None found.',))),
+        ("NumPy Supported SIMD dispatch",
+         DisplaySeq(info.get(_numpy_supported_simd_dispatch, [])
+                    or ('None found.',))),
+        ("NumPy Supported SIMD baseline",
+         DisplaySeq(info.get(_numpy_supported_simd_baseline, [])
+                    or ('None found.',))),
+        ("NumPy AVX512_SKX support detected",
+         info.get(_numpy_AVX512_SKX_detected, '?')),
         ("",),
         ("__SVML Information__",),
         ("SVML State, config.USING_SVML", info.get(_svml_state, '?')),

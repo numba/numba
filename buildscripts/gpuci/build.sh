@@ -16,13 +16,30 @@ cd "$WORKSPACE"
 # Determine CUDA release version
 export CUDA_REL=${CUDA_VERSION%.*}
 
-# Test with NVIDIA Bindings on CUDA 11.4
-if [ $CUDA_TOOLKIT_VER == "11.4" ]
+# Test with NVIDIA Bindings on CUDA 11.5
+if [ $CUDA_TOOLKIT_VER == "11.5" ]
 then
   export NUMBA_CUDA_USE_NVIDIA_BINDING=1;
 else
   export NUMBA_CUDA_USE_NVIDIA_BINDING=0;
 fi;
+
+# Test with Minor Version Compatibility on CUDA 11.8
+if [ $CUDA_TOOLKIT_VER == "11.8" ]
+then
+  export NUMBA_CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY=1;
+else
+  export NUMBA_CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY=0;
+fi;
+
+# Test with different NumPy and Python versions with each toolkit (it's not
+# worth testing the Cartesian product of versions here, we just need to test
+# with different CUDA, NumPy, and Python versions).
+declare -A CTK_NUMPY_VMAP=( ["11.2"]="1.22" ["11.3"]="1.23" ["11.5"]="1.25" ["11.8"]="1.26")
+NUMPY_VER="${CTK_NUMPY_VMAP[$CUDA_TOOLKIT_VER]}"
+
+declare -A CTK_PYTHON_VMAP=( ["11.2"]="3.9" ["11.3"]="3.10" ["11.5"]="3.11" ["11.8"]="3.12")
+PYTHON_VER="${CTK_PYTHON_VMAP[$CUDA_TOOLKIT_VER]}"
 
 ################################################################################
 # SETUP - Check environment
@@ -39,20 +56,23 @@ gpuci_logger "Create testing env"
 gpuci_mamba_retry create -n numba_ci -y \
                   "python=${PYTHON_VER}" \
                   "cudatoolkit=${CUDA_TOOLKIT_VER}" \
+                  "rapidsai-nightly::cubinlinker" \
+                  "conda-forge::ptxcompiler" \
                   "numba/label/dev::llvmlite" \
-                  "numpy=1.21" \
+                  "numpy=${NUMPY_VER}" \
                   "scipy" \
                   "cffi" \
                   "psutil" \
                   "gcc_linux-64=7" \
-                  "gxx_linux-64=7"
+                  "gxx_linux-64=7" \
+                  "setuptools"
 
 conda activate numba_ci
 
 if [ $NUMBA_CUDA_USE_NVIDIA_BINDING == "1" ]
 then
   gpuci_logger "Install NVIDIA CUDA Python bindings";
-  gpuci_mamba_retry install nvidia::cuda-python;
+  gpuci_mamba_retry install cuda-python=11.8 cuda-cudart=11.5 cuda-nvrtc=11.5;
 fi;
 
 gpuci_logger "Install numba"

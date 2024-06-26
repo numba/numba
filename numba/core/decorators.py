@@ -49,7 +49,7 @@ def jit(signature_or_function=None, locals={}, cache=False,
             nopython: bool
                 Set to True to disable the use of PyObjects and Python API
                 calls. The default behavior is to allow the use of PyObjects
-                and Python API. Default value is False.
+                and Python API. Default value is True.
 
             forceobj: bool
                 Set to True to force the use of PyObjects for every value.
@@ -138,17 +138,30 @@ def jit(signature_or_function=None, locals={}, cache=False,
                 return x + y
 
     """
+    forceobj = options.get('forceobj', False)
     if 'argtypes' in options:
         raise DeprecationError(_msg_deprecated_signature_arg.format('argtypes'))
     if 'restype' in options:
         raise DeprecationError(_msg_deprecated_signature_arg.format('restype'))
-    if options.get('nopython', False) and options.get('forceobj', False):
+    nopython = options.get('nopython', None)
+    if nopython is not None:
+        assert type(nopython) is bool, "nopython option must be a bool"
+    if nopython is True and forceobj:
         raise ValueError("Only one of 'nopython' or 'forceobj' can be True.")
-
-    if "_target" in options:
-        # Set the "target_backend" option if "_target" is defined.
-        options['target_backend'] = options['_target']
     target = options.pop('_target', 'cpu')
+
+    if nopython is False:
+        msg = ("The keyword argument 'nopython=False' was supplied. From "
+               "Numba 0.59.0 the default is True and supplying this argument "
+               "has no effect.")
+        warnings.warn(msg, NumbaDeprecationWarning)
+    # nopython is True by default since 0.59.0, but if `forceobj` is set
+    # `nopython` needs to set to False so that things like typing of args in the
+    # dispatcher layer continues to work.
+    if forceobj:
+        options['nopython'] = False
+    else:
+        options['nopython'] = True
 
     options['boundscheck'] = boundscheck
 
@@ -221,26 +234,6 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
         return disp
 
     return wrapper
-
-
-def generated_jit(function=None, cache=False,
-                  pipeline_class=None, **options):
-    """
-    This decorator allows flexible type-based compilation
-    of a jitted function.  It works as `@jit`, except that the decorated
-    function is called at compile-time with the *types* of the arguments
-    and should return an implementation function for those types.
-    """
-    dispatcher_args = {}
-    if pipeline_class is not None:
-        dispatcher_args['pipeline_class'] = pipeline_class
-    wrapper = _jit(sigs=None, locals={}, target='cpu', cache=cache,
-                   targetoptions=options, impl_kind='generated',
-                   **dispatcher_args)
-    if function is not None:
-        return wrapper(function)
-    else:
-        return wrapper
 
 
 def njit(*args, **kws):

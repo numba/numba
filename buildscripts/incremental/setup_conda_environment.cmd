@@ -5,7 +5,6 @@ set CONDA_CONFIG=cmd /C conda config
 %CONDA_CONFIG% --set remote_connect_timeout_secs 30.15
 %CONDA_CONFIG% --set remote_max_retries 10
 %CONDA_CONFIG% --set remote_read_timeout_secs 120.2
-%CONDA_CONFIG% --set restore_free_channel true
 %CONDA_CONFIG% --set show_channel_urls true
 cmd /C conda info
 %CONDA_CONFIG% --show
@@ -26,15 +25,13 @@ conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip scipy j
 
 call activate %CONDA_ENV%
 @rem Install latest llvmlite build
-%CONDA_INSTALL% -c numba/label/dev llvmlite
-@rem Install required backports for older Pythons
-if %PYTHON% LSS 3.9 (%CONDA_INSTALL% importlib_metadata)
+%CONDA_INSTALL% -c numba/label/dev llvmlite=0.44
 @rem Install dependencies for building the documentation
 if "%BUILD_DOC%" == "yes" (%CONDA_INSTALL% sphinx sphinx_rtd_theme pygments)
 @rem Install dependencies for code coverage (codecov.io)
 if "%RUN_COVERAGE%" == "yes" (%PIP_INSTALL% codecov)
 @rem Install TBB
-%CONDA_INSTALL% -c numba tbb=2021 tbb-devel
+%CONDA_INSTALL% "tbb>=2021.6" "tbb-devel>=2021.6"
 if %errorlevel% neq 0 exit /b %errorlevel%
 
 echo "DEBUG ENV:"

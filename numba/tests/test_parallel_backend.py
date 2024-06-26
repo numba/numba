@@ -8,6 +8,7 @@ import itertools
 import multiprocessing
 import os
 import random
+import re
 import subprocess
 import sys
 import textwrap
@@ -18,8 +19,7 @@ import numpy as np
 
 from numba import jit, vectorize, guvectorize, set_num_threads
 from numba.tests.support import (temp_directory, override_config, TestCase, tag,
-                                 skip_parfors_unsupported, linux_only,
-                                 needs_external_compilers)
+                                 skip_parfors_unsupported, linux_only)
 
 import queue as t_queue
 from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
@@ -397,6 +397,11 @@ class TestSpecificBackend(TestInSubprocess, TestParallelBackendBase):
             o, e = self.run_test_in_separate_process(injected_method, backend)
             if self._DEBUG:
                 print('stdout:\n "%s"\n stderr:\n "%s"' % (o, e))
+            # If the test was skipped in the subprocess, then mark this as a
+            # skipped test.
+            m = re.search(r"\.\.\. skipped '(.*?)'", e)
+            if m is not None:
+                self.skipTest(m.group(1))
             self.assertIn('OK', e)
             self.assertTrue('FAIL' not in e)
             self.assertTrue('ERROR' not in e)
@@ -687,8 +692,50 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
             self.assertIn("failed with code", e_msg)
             # raised a SIGABRT, but the value is platform specific so just check
             # the error message
-            self.assertIn("Terminating: Nested parallel kernel launch detected",
-                          e_msg)
+            expected = ("Numba workqueue threading layer is terminating: "
+                        "Concurrent access has been detected.")
+            self.assertIn(expected, e_msg)
+
+    @unittest.skipUnless(_HAVE_OS_FORK, "Test needs fork(2)")
+    def test_workqueue_handles_fork_from_non_main_thread(self):
+        # For context see #7872, but essentially the multiprocessing pool
+        # implementation has a number of Python threads for handling the worker
+        # processes, one of which calls fork(2), this results in a fork from a
+        # non-main thread.
+
+        runme = """if 1:
+            from numba import njit, prange, threading_layer
+            import numpy as np
+            import multiprocessing
+
+            if __name__ == "__main__":
+                # Need for force fork context (OSX default is "spawn")
+                multiprocessing.set_start_method('fork')
+
+                @njit(parallel=True)
+                def func(x):
+                    return 10. * x
+
+                arr = np.arange(2.)
+
+                # run in single process to start Numba's thread pool
+                np.testing.assert_allclose(func(arr), func.py_func(arr))
+
+                # now run in a multiprocessing pool to get a fork from a
+                # non-main thread
+                with multiprocessing.Pool(10) as p:
+                    result = p.map(func, [arr])
+                np.testing.assert_allclose(result,
+                                           func.py_func(np.expand_dims(arr, 0)))
+
+                assert threading_layer() == "workqueue"
+        """
+        cmdline = [sys.executable, '-c', runme]
+        env = os.environ.copy()
+        env['NUMBA_THREADING_LAYER'] = "workqueue"
+        env['NUMBA_NUM_THREADS'] = "4"
+
+        self.run_cmd(cmdline, env=env)
 
 
 # 32bit or windows py27 (not that this runs on windows)
@@ -778,13 +825,13 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
         body = """if 1:
             X = np.arange(1000000.)
             Y = np.arange(1000000.)
-            q = multiprocessing.Queue()
+            ctx = multiprocessing.get_context('fork')
+            q = ctx.Queue()
 
             # Start OpenMP runtime on parent via parallel function
             Z = busy_func(X, Y, q)
 
             # fork() underneath with no exec, will abort
-            ctx = multiprocessing.get_context('fork')
             proc = ctx.Process(target = busy_func, args=(X, Y, q))
             proc.start()
             proc.join()
@@ -810,12 +857,12 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
         body = """if 1:
             X = np.arange(1000000.)
             Y = np.arange(1000000.)
-            q = multiprocessing.Queue()
+            ctx = multiprocessing.get_context('spawn')
+            q = ctx.Queue()
 
             # Start OpenMP runtime and run on parent via parallel function
             Z = busy_func(X, Y, q)
             procs = []
-            ctx = multiprocessing.get_context('spawn')
             for x in range(20): # start a lot to try and get overlap
                 ## fork() + exec() to run some OpenMP on children
                 proc = ctx.Process(target = busy_func, args=(X, Y, q))
@@ -896,11 +943,11 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
         body = """if 1:
             X = np.arange(1000000.)
             Y = np.arange(1000000.)
-            q = multiprocessing.Queue()
+            ctx = multiprocessing.get_context('fork')
+            q = ctx.Queue()
 
             # this is ok
             procs = []
-            ctx = multiprocessing.get_context('fork')
             for x in range(10):
                 # fork() underneath with but no OpenMP in parent, this is ok
                 proc = ctx.Process(target = busy_func, args=(X, Y, q))
@@ -954,7 +1001,7 @@ class TestTBBSpecificIssues(ThreadLayerTestHelper):
         # trigger a standard compilation of the function and the thread pools
         # won't have started yet as the parallelisation compiler passes for
         # `work` won't yet have run. This mitigates the fork() call from 1.
-        # occuring after 2. The result of this is that 3. can be tested using
+        # occurring after 2. The result of this is that 3. can be tested using
         # the threading etc herein with the state being known as the above
         # described, i.e. the TBB threading layer has not experienced a fork().
 
@@ -1022,9 +1069,11 @@ class TestTBBSpecificIssues(ThreadLayerTestHelper):
             print("OUT:", out)
             print("ERR:", err)
 
-    @needs_external_compilers
     @linux_only # fork required.
     def test_lifetime_of_task_scheduler_handle(self):
+
+        self.skip_if_no_external_compiler() # external compiler needed
+
         # See PR #7280 for context.
         BROKEN_COMPILERS = 'SKIP: COMPILATION FAILED'
         runme = """if 1:
@@ -1032,11 +1081,11 @@ class TestTBBSpecificIssues(ThreadLayerTestHelper):
             import sys
             import multiprocessing as mp
             from tempfile import TemporaryDirectory, NamedTemporaryFile
-            from numba.pycc.platform import Toolchain, _external_compiler_ok
+            from numba.pycc.platform import Toolchain, external_compiler_works
             from numba import njit, prange, threading_layer
             import faulthandler
             faulthandler.enable()
-            if not _external_compiler_ok:
+            if not external_compiler_works():
                 raise AssertionError('External compilers are not found.')
             with TemporaryDirectory() as tmpdir:
                 with NamedTemporaryFile(dir=tmpdir) as tmpfile:

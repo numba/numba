@@ -11,8 +11,8 @@ def generate_input(n):
 
 class TestCudaNonDet(CUDATestCase):
     def test_for_pre(self):
-        """Test issue with loop not running due to bad sign-extension at the for loop
-        precondition.
+        """Test issue with loop not running due to bad sign-extension at the for
+        loop precondition.
         """
 
         @cuda.jit(void(float32[:, :], float32[:, :], float32[:]))

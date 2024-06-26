@@ -1,8 +1,6 @@
 """gdb printing extension for Numba types.
 """
 import re
-import sys
-_PYVERSION = sys.version_info[:2]
 
 try:
     import gdb.printing
@@ -57,7 +55,7 @@ class NumbaArrayPrinter:
                 # NOTE: need to deal with "Alignment" else dtype size is wrong
                 arr_info = [x.strip() for x in matcher.match(ty_str).groups()]
                 dtype_str, ndim_str, order_str = arr_info
-                rstr = 'Record\\((.*\\[.*\\]);([0-9]+);(True|False)'
+                rstr = r'Record\((.*\[.*\]);([0-9]+);(True|False)'
                 rstr_match = re.match(rstr, dtype_str)
                 # balign is unused, it's the alignment
                 fields, balign, is_aligned_str = rstr_match.groups()
@@ -177,16 +175,10 @@ class NumbaUnicodeTypePrinter:
             # This needs sorting out, encoding is wrong
             this_proc = gdb.selected_inferior()
             mem = this_proc.read_memory(int(data), nitems * kind)
-            if _PYVERSION < (3, 0):
-                try:
-                    buf = unicode(mem, 'utf-8') # noqa F821
-                except UnicodeDecodeError as e:
-                    buf = "ERROR: %s" % str(e)
+            if isinstance(mem, memoryview):
+                buf = bytes(mem).decode()
             else:
-                if isinstance(mem, memoryview):
-                    buf = bytes(mem).decode()
-                else:
-                    buf = mem.decode('utf-8')
+                buf = mem.decode('utf-8')
         else:
             buf = str(data)
         return "'%s'" % buf

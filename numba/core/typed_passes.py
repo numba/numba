@@ -1,5 +1,7 @@
+import abc
 from contextlib import contextmanager
 from collections import defaultdict, namedtuple
+from functools import partial
 from copy import copy
 import warnings
 
@@ -8,7 +10,11 @@ from numba.core import (errors, types, typing, ir, funcdesc, rewrites,
 
 from numba.parfors.parfor import PreParforPass as _parfor_PreParforPass
 from numba.parfors.parfor import ParforPass as _parfor_ParforPass
+from numba.parfors.parfor import ParforFusionPass as _parfor_ParforFusionPass
+from numba.parfors.parfor import ParforPreLoweringPass as \
+    _parfor_ParforPreLoweringPass
 from numba.parfors.parfor import Parfor
+from numba.parfors.parfor_lowering import ParforLower
 
 from numba.core.compiler_machinery import (FunctionPass, LoweringPass,
                                            AnalysisPass, register_pass)
@@ -18,7 +24,8 @@ from numba.core.ir_utils import (raise_on_unsupported_feature, warn_deprecated,
                                  dead_code_elimination, simplify_CFG,
                                  get_definition,
                                  build_definitions, compute_cfg_from_blocks,
-                                 is_operator_or_getitem)
+                                 is_operator_or_getitem,
+                                 replace_vars)
 from numba.core import postproc
 from llvmlite import binding as llvm
 
@@ -63,9 +70,12 @@ def type_inference_stage(typingctx, targetctx, interp, args, return_type,
     if len(args) != interp.arg_count:
         raise TypeError("Mismatch number of argument types")
     warnings = errors.WarningsFixer(errors.NumbaWarning)
+
     infer = typeinfer.TypeInferer(typingctx, interp, warnings)
-    with typingctx.callstack.register(targetctx.target, infer, interp.func_id,
-                                      args):
+    callstack_ctx = typingctx.callstack.register(targetctx.target, infer,
+                                                 interp.func_id, args)
+    # Setup two contexts: 1) callstack setup/teardown 2) flush warnings
+    with callstack_ctx, warnings:
         # Seed argument types
         for index, (name, ty) in enumerate(zip(interp.arg_names, args)):
             infer.seed_argument(name, index, ty)
@@ -82,9 +92,6 @@ def type_inference_stage(typingctx, targetctx, interp, args, return_type,
         # return errors in case of partial typing
         errs = infer.propagate(raise_errors=raise_errors)
         typemap, restype, calltypes = infer.unify(raise_errors=raise_errors)
-
-    # Output all Numba warnings
-    warnings.flush()
 
     return _TypingResults(typemap, restype, calltypes, errs)
 
@@ -334,6 +341,64 @@ class ParforPass(FunctionPass):
         return True
 
 
+@register_pass(mutates_CFG=True, analysis_only=False)
+class ParforFusionPass(FunctionPass):
+
+    _name = "parfor_fusion_pass"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        """
+        Do fusion of parfor nodes.
+        """
+        # Ensure we have an IR and type information.
+        assert state.func_ir
+        parfor_pass = _parfor_ParforFusionPass(state.func_ir,
+                                               state.typemap,
+                                               state.calltypes,
+                                               state.return_type,
+                                               state.typingctx,
+                                               state.targetctx,
+                                               state.flags.auto_parallel,
+                                               state.flags,
+                                               state.metadata,
+                                               state.parfor_diagnostics)
+        parfor_pass.run()
+
+        return True
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class ParforPreLoweringPass(FunctionPass):
+
+    _name = "parfor_prelowering_pass"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        """
+        Prepare parfors for lowering.
+        """
+        # Ensure we have an IR and type information.
+        assert state.func_ir
+        parfor_pass = _parfor_ParforPreLoweringPass(state.func_ir,
+                                                    state.typemap,
+                                                    state.calltypes,
+                                                    state.return_type,
+                                                    state.typingctx,
+                                                    state.targetctx,
+                                                    state.flags.auto_parallel,
+                                                    state.flags,
+                                                    state.metadata,
+                                                    state.parfor_diagnostics)
+        parfor_pass.run()
+
+        return True
+
+
 @register_pass(mutates_CFG=False, analysis_only=True)
 class DumpParforDiagnostics(AnalysisPass):
 
@@ -352,13 +417,22 @@ class DumpParforDiagnostics(AnalysisPass):
         return True
 
 
-@register_pass(mutates_CFG=True, analysis_only=False)
-class NativeLowering(LoweringPass):
+class BaseNativeLowering(abc.ABC, LoweringPass):
+    """The base class for a lowering pass. The lowering functionality must be
+    specified in inheriting classes by providing an appropriate lowering class
+    implementation in the overridden `lowering_class` property."""
 
-    _name = "native_lowering"
+    _name = None
 
     def __init__(self):
         LoweringPass.__init__(self)
+
+    @property
+    @abc.abstractmethod
+    def lowering_class(self):
+        """Returns the class that performs the lowering of the IR describing the
+        function that is the target of the current compilation."""
+        pass
 
     def run_pass(self, state):
         if state.library is None:
@@ -389,8 +463,8 @@ class NativeLowering(LoweringPass):
                     noalias=flags.noalias, abi_tags=[flags.get_mangle_string()])
 
             with targetctx.push_code_library(library):
-                lower = lowering.Lower(targetctx, library, fndesc, interp,
-                                       metadata=metadata)
+                lower = self.lowering_class(targetctx, library, fndesc, interp,
+                                            metadata=metadata)
                 lower.lower()
                 if not flags.no_cpython_wrapper:
                     lower.create_cpython_wrapper(flags.release_gil)
@@ -432,6 +506,28 @@ class NativeLowering(LoweringPass):
             # Save the LLVM pass timings
             metadata['llvm_pass_timings'] = library.recorded_timings
         return True
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class NativeLowering(BaseNativeLowering):
+    """Lowering pass for a native function IR described solely in terms of
+     Numba's standard `numba.core.ir` nodes."""
+    _name = "native_lowering"
+
+    @property
+    def lowering_class(self):
+        return lowering.Lower
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class NativeParforLowering(BaseNativeLowering):
+    """Lowering pass for a native function IR described using Numba's standard
+    `numba.core.ir` nodes and also parfor.Parfor nodes."""
+    _name = "native_parfor_lowering"
+
+    @property
+    def lowering_class(self):
+        return ParforLower
 
 
 @register_pass(mutates_CFG=False, analysis_only=True)
@@ -787,6 +883,10 @@ class PreLowerStripPhis(FunctionPass):
     def run_pass(self, state):
         state.func_ir = self._strip_phi_nodes(state.func_ir)
         state.func_ir._definitions = build_definitions(state.func_ir.blocks)
+        if "flags" in state and state.flags.auto_parallel.enabled:
+            self._simplify_conditionally_defined_variable(state.func_ir)
+            state.func_ir._definitions = build_definitions(state.func_ir.blocks)
+
         # Rerun postprocessor to update metadata
         post_proc = postproc.PostProcessor(state.func_ir)
         post_proc.run(emit_dels=False)
@@ -862,3 +962,78 @@ class PreLowerStripPhis(FunctionPass):
 
         func_ir.blocks = newblocks
         return func_ir
+
+    def _simplify_conditionally_defined_variable(self, func_ir):
+        """
+        Rewrite assignments like:
+
+            ver1 = null()
+            ...
+            ver1 = ver
+            ...
+            uses(ver1)
+
+        into:
+            # delete all assignments to ver1
+            uses(ver)
+
+        This is only needed for parfors because the SSA pass will create extra
+        variable assignments that the parfor code does not expect.
+        This pass helps avoid problems by reverting the effect of SSA.
+        """
+        any_block = next(iter(func_ir.blocks.values()))
+        scope = any_block.scope
+        defs = func_ir._definitions
+
+        def unver_or_undef(unver, defn):
+            # Is the definition undefined or pointing to the unversioned name?
+            if isinstance(defn, ir.Var):
+                if defn.unversioned_name == unver:
+                    return True
+            elif isinstance(defn, ir.Expr):
+                if defn.op == "null":
+                    return True
+            return False
+
+        def legalize_all_versioned_names(var):
+            # Are all versioned names undefined or defined to the same
+            # variable chain?
+            if not var.versioned_names:
+                return False
+            for versioned in var.versioned_names:
+                vs = defs.get(versioned, ())
+                if not all(map(partial(unver_or_undef, k), vs)):
+                    return False
+            return True
+
+        # Find unversioned variables that met the conditions
+        suspects = set()
+        for k in defs:
+            try:
+                # This may fail?
+                var = scope.get_exact(k)
+            except errors.NotDefinedError:
+                continue
+            # is the var name unversioned?
+            if var.unversioned_name == k:
+                if legalize_all_versioned_names(var):
+                    suspects.add(var)
+
+        delete_set = set()
+        replace_map = {}
+        for var in suspects:
+            # rewrite Var uses to the unversioned name
+            for versioned in var.versioned_names:
+                ver_var = scope.get_exact(versioned)
+                # delete assignment to the versioned name
+                delete_set.add(ver_var)
+                # replace references to versioned name with the unversioned
+                replace_map[versioned] = var
+
+        # remove assignments to the versioned names
+        for _label, blk in func_ir.blocks.items():
+            for assign in blk.find_insts(ir.Assign):
+                if assign.target in delete_set:
+                    blk.remove(assign)
+        # do variable replacement
+        replace_vars(func_ir.blocks, replace_map)

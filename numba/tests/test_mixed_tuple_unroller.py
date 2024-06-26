@@ -978,9 +978,26 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
         self.assertEqual(foo(k), foo.py_func(k))
 
     def test_22(self):
+        # NOTE: This test "worked" as a side effect of a bug that was discovered
+        # during work that added support for Python 3.12. In the literal_unroll
+        # transform, there was an accidental overwrite of a dictionary key that
+        # could occur if nested unrolls happened to have the conditions:
+        #
+        # 1. outer unroll induction varible not used in the induced loop.
+        # 2. the `max_label` from numba.core.ir_utils was in a specific state
+        #    such that a collision occurred.
+        # 3. the bug existed in the algorithm that checked for getitem access.
+        #
+        # This exceedingly rare usecase is now considered illegal as a result,
+        # by banning this behaviour the analysis is considerably more simple.
+        # Further there is no loss of functionality as the outer loop can be
+        # trivially replaced (in the following) by using a `range(len())` based
+        # iteration over `a` as there's no need for the loop in `a` to be
+        # versioned!
+
         @njit
         def foo(z):
-            a = (12, 12.7, 3j, 4, z, 2 * z)
+            a = (12, 12.7, 3j, 4, z, 2 * z, 'a')
             b = (23, 23.9, 6j, 8)
 
             def bar():
@@ -998,7 +1015,12 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
 
         f = 9
         k = f
-        self.assertEqual(foo(k), foo.py_func(k))
+
+        with self.assertRaises(errors.UnsupportedError) as raises:
+            foo(k)
+
+        self.assertIn("Nesting of literal_unroll is unsupported",
+                      str(raises.exception))
 
     def test_23(self):
         # unroll from closure that ends up banned as it leads to nesting
@@ -1654,7 +1676,7 @@ class TestMore(TestCase):
 
         self.assertIn("getiter", str(raises.exception))
         re = r".*Tuple\(int[0-9][0-9], float64\).*"
-        self.assertRegexpMatches(str(raises.exception), re)
+        self.assertRegex(str(raises.exception), re)
 
     def test_unroll_tuple_of_dict(self):
 
@@ -1817,6 +1839,47 @@ class TestMore(TestCase):
             return out
 
         self.assertEqual(foo(), foo.py_func())
+
+    def test_unroll_with_non_conformant_loops_present(self):
+        # See issue #8311
+
+        @njit('(Tuple((int64, float64)),)')
+        def foo(tup):
+            for t in literal_unroll(tup):
+                pass
+
+            x = 1
+            while x == 1:
+                x = 0
+
+    def test_literal_unroll_legalize_var_names01(self):
+        # See issue #8939
+        test = np.array([(1, 2), (2, 3)], dtype=[("a1", "f8"), ("a2", "f8")])
+        fields = tuple(test.dtype.fields.keys())
+
+        @njit
+        def foo(arr):
+            res = 0
+            for k in literal_unroll(fields):
+                res = res + np.abs(arr[k]).sum()
+            return res
+
+        self.assertEqual(foo(test), 8.0)
+
+    def test_literal_unroll_legalize_var_names02(self):
+        # See issue #8939
+        test = np.array([(1, 2), (2, 3)],
+                        dtype=[("a1[0]", "f8"), ("a2[1]", "f8")])
+        fields = tuple(test.dtype.fields.keys())
+
+        @njit
+        def foo(arr):
+            res = 0
+            for k in literal_unroll(fields):
+                res = res + np.abs(arr[k]).sum()
+            return res
+
+        self.assertEqual(foo(test), 8.0)
 
 
 def capture(real_pass):

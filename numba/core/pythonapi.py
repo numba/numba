@@ -12,11 +12,13 @@ from numba import _helperlib
 from numba.core import (
     types, utils, config, lowering, cgutils, imputils, serialize,
 )
+from numba.core.utils import PYVERSION
 
 PY_UNICODE_1BYTE_KIND = _helperlib.py_unicode_1byte_kind
 PY_UNICODE_2BYTE_KIND = _helperlib.py_unicode_2byte_kind
 PY_UNICODE_4BYTE_KIND = _helperlib.py_unicode_4byte_kind
-PY_UNICODE_WCHAR_KIND = _helperlib.py_unicode_wchar_kind
+if PYVERSION in ((3, 9), (3, 10), (3, 11)):
+    PY_UNICODE_WCHAR_KIND = _helperlib.py_unicode_wchar_kind
 
 
 class _Registry(object):
@@ -195,7 +197,6 @@ class PythonAPI(object):
         self.py_unicode_1byte_kind = _helperlib.py_unicode_1byte_kind
         self.py_unicode_2byte_kind = _helperlib.py_unicode_2byte_kind
         self.py_unicode_4byte_kind = _helperlib.py_unicode_4byte_kind
-        self.py_unicode_wchar_kind = _helperlib.py_unicode_wchar_kind
 
     def get_env_manager(self, env, env_body, env_ptr):
         return EnvironmentManager(self, env, env_body, env_ptr)
@@ -662,7 +663,6 @@ class PythonAPI(object):
     #
     # Concrete slice API
     #
-
     def slice_as_ints(self, obj):
         """
         Read the members of a slice of integers.
@@ -696,6 +696,11 @@ class PythonAPI(object):
         fnty = ir.FunctionType(self.pyobj, [self.pyobj])
         fn = self._get_function(fnty, name="PySequence_Tuple")
         return self.builder.call(fn, [obj])
+
+    def sequence_concat(self, obj1, obj2):
+        fnty = ir.FunctionType(self.pyobj, [self.pyobj, self.pyobj])
+        fn = self._get_function(fnty, name="PySequence_Concat")
+        return self.builder.call(fn, [obj1, obj2])
 
     def list_new(self, szval):
         fnty = ir.FunctionType(self.pyobj, [self.py_ssize_t])
@@ -940,13 +945,16 @@ class PythonAPI(object):
         return self.builder.call(fn, args)
 
     def call(self, callee, args=None, kws=None):
-        if args is None:
-            args = self.get_null_object()
+        if args_was_none := args is None:
+            args = self.tuple_new(0)
         if kws is None:
             kws = self.get_null_object()
         fnty = ir.FunctionType(self.pyobj, [self.pyobj] * 3)
         fn = self._get_function(fnty, name="PyObject_Call")
-        return self.builder.call(fn, (callee, args, kws))
+        result = self.builder.call(fn, (callee, args, kws))
+        if args_was_none:
+            self.decref(args)
+        return result
 
     def object_type(self, obj):
         """Emit a call to ``PyObject_Type(obj)`` to get the type of ``obj``.
@@ -1146,6 +1154,23 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name=fname)
         return self.builder.call(fn, [kind, string, size])
 
+    def bytes_as_string(self, obj):
+        fnty = ir.FunctionType(self.cstring, [self.pyobj])
+        fname = "PyBytes_AsString"
+        fn = self._get_function(fnty, name=fname)
+        return self.builder.call(fn, [obj])
+
+    def bytes_as_string_and_size(self, obj, p_buffer, p_length):
+        fnty = ir.FunctionType(
+            ir.IntType(32),
+            [self.pyobj, self.cstring.as_pointer(), self.py_ssize_t.as_pointer()],
+        )
+        fname = "PyBytes_AsStringAndSize"
+        fn = self._get_function(fnty, name=fname)
+        result = self.builder.call(fn, [obj, p_buffer, p_length])
+        ok = self.builder.icmp_signed("!=", Constant(result.type, -1), result)
+        return ok
+
     def bytes_from_string_and_size(self, string, size):
         fnty = ir.FunctionType(self.pyobj, [self.cstring, self.py_ssize_t])
         fname = "PyBytes_FromStringAndSize"
@@ -1328,7 +1353,8 @@ class PythonAPI(object):
     def unserialize(self, structptr):
         """
         Unserialize some data.  *structptr* should be a pointer to
-        a {i8* data, i32 length} structure.
+        a {i8* data, i32 length, i8* hashbuf, i8* func_ptr, i32 alloc_flag}
+        structure.
         """
         fnty = ir.FunctionType(self.pyobj,
                              (self.voidptr, ir.IntType(32), self.voidptr))
@@ -1338,10 +1364,21 @@ class PythonAPI(object):
         hashed = self.builder.extract_value(self.builder.load(structptr), 2)
         return self.builder.call(fn, (ptr, n, hashed))
 
+    def build_dynamic_excinfo_struct(self, struct_gv, exc_args):
+        """
+        Serialize some data at runtime. Returns a pointer to a python tuple
+        (bytes_data, hash) where the first element is the serialized data as
+        bytes and the second its hash.
+        """
+        fnty = ir.FunctionType(self.pyobj, (self.pyobj, self.pyobj))
+        fn = self._get_function(fnty, name="numba_runtime_build_excinfo_struct")
+        return self.builder.call(fn, (struct_gv, exc_args))
+
     def serialize_uncached(self, obj):
         """
         Same as serialize_object(), but don't create a global variable,
-        simply return a literal {i8* data, i32 length, i8* hashbuf} structure.
+        simply return a literal for structure:
+        {i8* data, i32 length, i8* hashbuf, i8* func_ptr, i32 alloc_flag}
         """
         # First make the array constant
         data = serialize.dumps(obj)
@@ -1361,14 +1398,17 @@ class PythonAPI(object):
             arr.bitcast(self.voidptr),
             Constant(ir.IntType(32), arr.type.pointee.count),
             hasharr.bitcast(self.voidptr),
+            cgutils.get_null_value(self.voidptr),
+            Constant(ir.IntType(32), 0),
             ])
         return struct
 
     def serialize_object(self, obj):
         """
         Serialize the given object in the bitcode, and return it
-        as a pointer to a {i8* data, i32 length}, structure constant
-        (suitable for passing to unserialize()).
+        as a pointer to a
+        {i8* data, i32 length, i8* hashbuf, i8* fn_ptr, i32 alloc_flag},
+        structure constant (suitable for passing to unserialize()).
         """
         try:
             gv = self.module.__serialized[obj]

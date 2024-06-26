@@ -1,8 +1,7 @@
 import itertools
 from llvmlite import ir
-from numba.core import cgutils
+from numba.core import cgutils, targetconfig
 from .cudadrv import nvvm
-from .api import current_context
 
 
 def declare_atomic_cas_int(lmod, isize):
@@ -15,29 +14,21 @@ def declare_atomic_cas_int(lmod, isize):
 
 
 def atomic_cmpxchg(builder, lmod, isize, ptr, cmp, val):
-    if nvvm.NVVM().is_nvvm70:
-        out = builder.cmpxchg(ptr, cmp, val, 'monotonic', 'monotonic')
-        return builder.extract_value(out, 0)
-    else:
-        return builder.call(declare_atomic_cas_int(lmod, isize),
-                            (ptr, cmp, val))
-
-# For atomic intrinsics, "numba_nvvm" prevents LLVM 9 onwards auto-upgrading
-# them into atomicrmw instructions that are not recognized by NVVM. It is
-# replaced with "nvvm" in llvm_to_ptx later, after the module has been parsed
-# and dumped by LLVM.
+    out = builder.cmpxchg(ptr, cmp, val, 'monotonic', 'monotonic')
+    return builder.extract_value(out, 0)
 
 
 def declare_atomic_add_float32(lmod):
-    fname = 'llvm.numba_nvvm.atomic.load.add.f32.p0f32'
+    fname = 'llvm.nvvm.atomic.load.add.f32.p0f32'
     fnty = ir.FunctionType(ir.FloatType(),
                            (ir.PointerType(ir.FloatType(), 0), ir.FloatType()))
     return cgutils.get_or_insert_function(lmod, fnty, fname)
 
 
 def declare_atomic_add_float64(lmod):
-    if current_context().device.compute_capability >= (6, 0):
-        fname = 'llvm.numba_nvvm.atomic.load.add.f64.p0f64'
+    flags = targetconfig.ConfigStack().top()
+    if flags.compute_capability >= (6, 0):
+        fname = 'llvm.nvvm.atomic.load.add.f64.p0f64'
     else:
         fname = '___numba_atomic_double_add'
     fnty = ir.FunctionType(ir.DoubleType(),
@@ -157,22 +148,6 @@ def declare_cudaCGSynchronize(lmod):
     return cgutils.get_or_insert_function(lmod, fnty, fname)
 
 
-def insert_addrspace_conv(lmod, elemtype, addrspace):
-    addrspacename = {
-        nvvm.ADDRSPACE_SHARED: 'shared',
-        nvvm.ADDRSPACE_LOCAL: 'local',
-        nvvm.ADDRSPACE_CONSTANT: 'constant',
-    }[addrspace]
-    tyname = str(elemtype)
-    tyname = {'float': 'f32', 'double': 'f64'}.get(tyname, tyname)
-    s2g_name_fmt = 'llvm.nvvm.ptr.' + addrspacename + '.to.gen.p0%s.p%d%s'
-    s2g_name = s2g_name_fmt % (tyname, addrspace, tyname)
-    elem_ptr_ty = ir.PointerType(elemtype)
-    elem_ptr_ty_addrspace = ir.PointerType(elemtype, addrspace)
-    s2g_fnty = ir.FunctionType(elem_ptr_ty, [elem_ptr_ty_addrspace])
-    return cgutils.get_or_insert_function(lmod, s2g_fnty, s2g_name)
-
-
 def declare_string(builder, value):
     lmod = builder.basic_block.function.module
     cval = cgutils.make_bytearray(value.encode("utf-8") + b"\x00")
@@ -182,12 +157,7 @@ def declare_string(builder, value):
     gl.global_constant = True
     gl.initializer = cval
 
-    charty = ir.IntType(8)
-    constcharptrty = ir.PointerType(charty, nvvm.ADDRSPACE_CONSTANT)
-    charptr = builder.bitcast(gl, constcharptrty)
-
-    conv = insert_addrspace_conv(lmod, charty, nvvm.ADDRSPACE_CONSTANT)
-    return builder.call(conv, [charptr])
+    return builder.addrspacecast(gl, ir.PointerType(ir.IntType(8)), 'generic')
 
 
 def declare_vprint(lmod):
@@ -247,9 +217,10 @@ class SRegBuilder(object):
         return call_sreg(self.builder, 'nctaid.%s' % xyz)
 
     def getdim(self, xyz):
-        tid = self.tid(xyz)
-        ntid = self.ntid(xyz)
-        nctaid = self.ctaid(xyz)
+        i64 = ir.IntType(64)
+        tid = self.builder.sext(self.tid(xyz), i64)
+        ntid = self.builder.sext(self.ntid(xyz), i64)
+        nctaid = self.builder.sext(self.ctaid(xyz), i64)
         res = self.builder.add(self.builder.mul(ntid, nctaid), tid)
         return res
 

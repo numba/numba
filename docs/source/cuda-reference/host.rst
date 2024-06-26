@@ -50,9 +50,9 @@ Numba maintains a list of supported CUDA-capable devices:
 
 Alternatively, the current device can be obtained:
 
-.. function:: numba.cuda.gpus.current
+.. attribute:: numba.cuda.gpus.current
 
-   Return the currently-selected device.
+   The currently-selected device.
 
 Getting a device through :attr:`numba.cuda.gpus` always provides an instance of
 :class:`numba.cuda.cudadrv.devices._DeviceContextManager`, which acts as a
@@ -95,32 +95,48 @@ the functionality of the selected device:
       Delete the context for the device. This will destroy all memory
       allocations, events, and streams created within the context.
 
+   .. attribute:: supports_float16
+
+      Return ``True`` if the device supports float16 operations, ``False``
+      otherwise.
+
 
 Compilation
 -----------
 
-Numba provides an entry point for compiling a Python function to PTX without
-invoking any of the driver API. This can be useful for:
+Numba provides an entry point for compiling a Python function without invoking
+any of the driver API. This can be useful for:
 
 - Generating PTX that is to be inlined into other PTX code (e.g. from outside
   the Numba / Python ecosystem).
+- Generating PTX or LTO-IR to link with objects from non-Python translation
+  units.
 - Generating code when there is no device present.
 - Generating code prior to a fork without initializing CUDA.
 
 .. note:: It is the user's responsibility to manage any ABI issues arising from
-   the use of compilation to PTX.
+   the use of compilation to PTX / LTO-IR. Passing the ``abi="c"`` keyword
+   argument can provide a solution to most issues that may arise - see
+   :ref:`cuda-using-the-c-abi`.
 
-.. autofunction:: numba.cuda.compile_ptx
+.. autofunction:: numba.cuda.compile
 
 
 The environment variable ``NUMBA_CUDA_DEFAULT_PTX_CC`` can be set to control
-the default compute capability targeted by ``compile_ptx`` - see
-:ref:`numba-envvars-gpu-support`. If PTX for the compute capability of the
-current device is required, the ``compile_ptx_for_current_device`` function can
+the default compute capability targeted by ``compile`` - see
+:ref:`numba-envvars-gpu-support`. If code for the compute capability of the
+current device is required, the ``compile_for_current_device`` function can
 be used:
 
-.. autofunction:: numba.cuda.compile_ptx_for_current_device
+.. autofunction:: numba.cuda.compile_for_current_device
 
+
+Numba also provides two functions that may be used in legacy code that
+specifically compile to PTX only:
+
+.. autofunction:: numba.cuda.compile_ptx
+
+.. autofunction:: numba.cuda.compile_ptx_for_current_device
 
 
 Measurement

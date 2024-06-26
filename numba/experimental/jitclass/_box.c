@@ -11,7 +11,7 @@ typedef struct {
 
 /* Store function defined in numba.core.runtime._nrt_python for use in box_dealloc.
  * It points to a function is code segment that does not need user deallocation
- * and does not disappear while the process is stil running.
+ * and does not disappear while the process is still running.
  */
 static void (*MemInfo_release)(void*) = NULL;
 
@@ -52,43 +52,71 @@ static const char Box_doc[] = "A box for numba created jit-class instance";
 
 static PyTypeObject BoxType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    "_box.Box",                /*tp_name*/
-    sizeof(BoxObject),         /*tp_basicsize*/
-    0,                         /*tp_itemsize*/
-    (destructor)box_dealloc,   /*tp_dealloc*/
-    0,                         /*tp_print*/
-    0,                         /*tp_getattr*/
-    0,                         /*tp_setattr*/
-    0,                         /*tp_compare*/
-    0,                         /*tp_repr*/
-    0,                         /*tp_as_number*/
-    0,                         /*tp_as_sequence*/
-    0,                         /*tp_as_mapping*/
-    0,                         /*tp_hash */
-    0,                         /*tp_call*/
-    0,                         /*tp_str*/
-    0,                         /*tp_getattro*/
-    0,                         /*tp_setattro*/
-    0,                         /*tp_as_buffer*/
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /*tp_flags*/
-    Box_doc,                   /* tp_doc */
-    0,                         /* tp_traverse */
-    0,                         /* tp_clear */
-    0,                         /* tp_richcompare */
-    0,                         /* tp_weaklistoffset */
-    0,                         /* tp_iter */
-    0,                         /* tp_iternext */
-    0,                         /* tp_methods */
-    0,                         /* tp_members */
-    0,                         /* tp_getset */
-    0,                         /* tp_base */
-    0,                         /* tp_dict */
-    0,                         /* tp_descr_get */
-    0,                         /* tp_descr_set */
-    0,                         /* tp_dictoffset */
-    (initproc)Box_init,        /* tp_init */
-    0,                         /* tp_alloc */
-    PyType_GenericNew,         /* tp_new */
+    "_box.Box",                               /* tp_name */
+    sizeof(BoxObject),                        /* tp_basicsize */
+    0,                                        /* tp_itemsize */
+    (destructor)box_dealloc,                  /* tp_dealloc */
+    0,                                        /* tp_vectorcall_offset */
+    0,                                        /* tp_getattr */
+    0,                                        /* tp_setattr */
+    0,                                        /* tp_as_async */
+    0,                                        /* tp_repr */
+    0,                                        /* tp_as_number */
+    0,                                        /* tp_as_sequence */
+    0,                                        /* tp_as_mapping */
+    0,                                        /* tp_hash */
+    0,                                        /* tp_call */
+    0,                                        /* tp_str */
+    0,                                        /* tp_getattro */
+    0,                                        /* tp_setattro */
+    0,                                        /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /* tp_flags */
+    Box_doc,                                  /* tp_doc */
+    0,                                        /* tp_traverse */
+    0,                                        /* tp_clear */
+    0,                                        /* tp_richcompare */
+    0,                                        /* tp_weaklistoffset */
+    0,                                        /* tp_iter */
+    0,                                        /* tp_iternext */
+    0,                                        /* tp_methods */
+    0,                                        /* tp_members */
+    0,                                        /* tp_getset */
+    0,                                        /* tp_base */
+    0,                                        /* tp_dict */
+    0,                                        /* tp_descr_get */
+    0,                                        /* tp_descr_set */
+    0,                                        /* tp_dictoffset */
+    (initproc)Box_init,                       /* tp_init */
+    0,                                        /* tp_alloc */
+    PyType_GenericNew,                        /* tp_new */
+    0,                                        /* tp_free */
+    0,                                        /* tp_is_gc */
+    0,                                        /* tp_bases */
+    0,                                        /* tp_mro */
+    0,                                        /* tp_cache */
+    0,                                        /* tp_subclasses */
+    0,                                        /* tp_weaklist */
+    0,                                        /* tp_del */
+    0,                                        /* tp_version_tag */
+    0,                                        /* tp_finalize */
+    0,                                        /* tp_vectorcall */
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 12)
+/* This was introduced first in 3.12
+ * https://github.com/python/cpython/issues/91051
+ */
+    0,                                           /* tp_watched */
+#endif
+
+/* WARNING: Do not remove this, only modify it! It is a version guard to
+ * act as a reminder to update this struct on Python version update! */
+#if (PY_MAJOR_VERSION == 3)
+#if ! ((PY_MINOR_VERSION == 9) || (PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11) || (PY_MINOR_VERSION == 12))
+#error "Python minor version is not supported."
+#endif
+#else
+#error "Python major version is not supported."
+#endif
+/* END WARNING*/
 };
 
 

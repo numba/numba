@@ -1,27 +1,16 @@
 import collections
-import sys
 import weakref
 import gc
 import operator
 from itertools import takewhile
 
 import unittest
-from numba import njit
-from numba.core.controlflow import CFGraph, Loop
-from numba.core.compiler import (compile_extra, compile_isolated, Flags,
-                                 CompilerBase, DefaultPassBuilder)
+from numba import njit, jit
+from numba.core.compiler import CompilerBase, DefaultPassBuilder
 from numba.core.untyped_passes import PreserveIR
 from numba.core.typed_passes import IRLegalization
 from numba.core import types, ir
 from numba.tests.support import TestCase, override_config, SerialMixin
-
-enable_pyobj_flags = Flags()
-enable_pyobj_flags.enable_pyobject = True
-
-forceobj_flags = Flags()
-forceobj_flags.force_pyobject = True
-
-no_pyobj_flags = Flags()
 
 
 class _Dummy(object):
@@ -248,8 +237,10 @@ class TestObjLifetime(TestCase):
     """
 
     def compile(self, pyfunc):
-        cr = compile_isolated(pyfunc, (types.pyobject,), flags=forceobj_flags)
-        return cr.entry_point
+        # Note: looplift must be disabled. The test require the function
+        #       control-flow to be unchanged.
+        cfunc = jit((types.pyobject,), forceobj=True, looplift=False)(pyfunc)
+        return cfunc
 
     def compile_and_record(self, pyfunc, raises=None):
         rec = RefRecorder()

@@ -2,13 +2,15 @@ import collections
 import functools
 import sys
 
-from numba.core import utils
 from numba.core.ir import Loc
 from numba.core.errors import UnsupportedError
+from numba.core.utils import PYVERSION
 
 # List of bytecodes creating a new block in the control flow graph
 # (in addition to explicit jump labels).
-NEW_BLOCKERS = frozenset(['SETUP_LOOP', 'FOR_ITER', 'SETUP_WITH'])
+NEW_BLOCKERS = frozenset([
+    'SETUP_LOOP', 'FOR_ITER', 'SETUP_WITH', 'BEFORE_WITH'
+])
 
 
 class CFBlock(object):
@@ -180,8 +182,8 @@ class CFGraph(object):
         the nodes in its dominance frontier.
 
         The dominance frontier _df(N) is the set of all nodes that are
-        immediate successors to blocks dominanted by N but which aren't
-        stricly dominanted by N
+        immediate successors to blocks dominated by N but which aren't
+        strictly dominated by N
         """
         return self._df
 
@@ -194,47 +196,47 @@ class CFGraph(object):
         """
         return self._domtree
 
-    @utils.cached_property
+    @functools.cached_property
     def _exit_points(self):
         return self._find_exit_points()
 
-    @utils.cached_property
+    @functools.cached_property
     def _doms(self):
         return self._find_dominators()
 
-    @utils.cached_property
+    @functools.cached_property
     def _back_edges(self):
         return self._find_back_edges()
 
-    @utils.cached_property
+    @functools.cached_property
     def _topo_order(self):
         return self._find_topo_order()
 
-    @utils.cached_property
+    @functools.cached_property
     def _descs(self):
         return self._find_descendents()
 
-    @utils.cached_property
+    @functools.cached_property
     def _loops(self):
         return self._find_loops()
 
-    @utils.cached_property
+    @functools.cached_property
     def _in_loops(self):
         return self._find_in_loops()
 
-    @utils.cached_property
+    @functools.cached_property
     def _post_doms(self):
         return self._find_post_dominators()
 
-    @utils.cached_property
+    @functools.cached_property
     def _idom(self):
         return self._find_immediate_dominators()
 
-    @utils.cached_property
+    @functools.cached_property
     def _df(self):
         return self._find_dominance_frontier()
 
-    @utils.cached_property
+    @functools.cached_property
     def _domtree(self):
         return self._find_dominator_tree()
 
@@ -712,7 +714,7 @@ class CFGraph(object):
 
     def __eq__(self, other):
         if not isinstance(other, CFGraph):
-            raise NotImplementedError
+            return NotImplemented
 
         for x in ['_nodes', '_edge_data', '_entry_point', '_preds', '_succs']:
             this = getattr(self, x, None)
@@ -791,7 +793,7 @@ class ControlFlowAnalysis(object):
             elif inst.is_jump:
                 # this catches e.g. try... except
                 l = Loc(self.bytecode.func_id.filename, inst.lineno)
-                if inst.opname in {"SETUP_EXCEPT", "SETUP_FINALLY"}:
+                if inst.opname in {"SETUP_FINALLY"}:
                     msg = "'try' block not supported until python3.7 or later"
                 else:
                     msg = "Use of unsupported opcode (%s) found" % inst.opname
@@ -925,6 +927,11 @@ class ControlFlowAnalysis(object):
     op_JUMP_IF_FALSE = _op_ABSOLUTE_JUMP_IF
     op_JUMP_IF_TRUE = _op_ABSOLUTE_JUMP_IF
 
+    op_POP_JUMP_FORWARD_IF_FALSE = _op_ABSOLUTE_JUMP_IF
+    op_POP_JUMP_BACKWARD_IF_FALSE = _op_ABSOLUTE_JUMP_IF
+    op_POP_JUMP_FORWARD_IF_TRUE = _op_ABSOLUTE_JUMP_IF
+    op_POP_JUMP_BACKWARD_IF_TRUE = _op_ABSOLUTE_JUMP_IF
+
     def _op_ABSOLUTE_JUMP_OR_POP(self, inst):
         self.jump(inst.get_jump_target())
         self.jump(inst.next, pops=1)
@@ -941,9 +948,20 @@ class ControlFlowAnalysis(object):
         self.jump(inst.get_jump_target())
         self._force_new_block = True
 
+    op_JUMP_BACKWARD = op_JUMP_FORWARD
+
     def op_RETURN_VALUE(self, inst):
         self._curblock.terminating = True
         self._force_new_block = True
+
+    if PYVERSION in ((3, 12), ):
+        def op_RETURN_CONST(self, inst):
+            self._curblock.terminating = True
+            self._force_new_block = True
+    elif PYVERSION in ((3, 9), (3, 10), (3, 11)):
+        pass
+    else:
+        raise NotImplementedError(PYVERSION)
 
     def op_RAISE_VARARGS(self, inst):
         self._curblock.terminating = True

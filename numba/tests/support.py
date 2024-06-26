@@ -4,6 +4,7 @@ Assorted utilities for use in tests.
 
 import cmath
 import contextlib
+from collections import defaultdict
 import enum
 import gc
 import math
@@ -25,12 +26,14 @@ from contextlib import contextmanager
 import uuid
 import importlib
 import types as pytypes
+from functools import cached_property
 
 import numpy as np
 
-from numba import testing
+from numba import testing, types
 from numba.core import errors, typing, utils, config, cpu
-from numba.core.compiler import (compile_extra, compile_isolated, Flags,
+from numba.core.typing import cffi_utils
+from numba.core.compiler import (compile_extra, Flags,
                                  DEFAULT_FLAGS, CompilerBase,
                                  DefaultPassBuilder)
 from numba.core.typed_passes import IRLegalization
@@ -38,14 +41,29 @@ from numba.core.untyped_passes import PreserveIR
 import unittest
 from numba.core.runtime import rtsys
 from numba.np import numpy_support
-from numba.pycc.platform import _external_compiler_ok
-
+from numba.core.runtime import _nrt_python as _nrt
+from numba.core.extending import (
+    overload_method,
+    typeof_impl,
+    register_model,
+    unbox,
+    NativeValue,
+    models,
+)
+from numba.core.datamodel.models import OpaqueModel
 
 try:
     import scipy
 except ImportError:
     scipy = None
 
+# Make sure that coverage is set up.
+try:
+    import coverage
+except ImportError:
+    pass
+else:
+    coverage.process_startup()
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.enable_pyobject = True
@@ -59,7 +77,10 @@ nrt_flags = Flags()
 nrt_flags.nrt = True
 
 
-tag = testing.make_tag_decorator(['important', 'long_running'])
+tag = testing.make_tag_decorator(['important', 'long_running', 'always_test'])
+
+# Use to mark a test as a test that must always run when sharded
+always_test = tag('always_test')
 
 _32bit = sys.maxsize <= 2 ** 32
 is_parfors_unsupported = _32bit
@@ -67,21 +88,56 @@ skip_parfors_unsupported = unittest.skipIf(
     is_parfors_unsupported,
     'parfors not supported',
 )
-skip_py38_or_later = unittest.skipIf(
-    utils.PYVERSION >= (3, 8),
-    "unsupported on py3.8 or later"
-)
 
 skip_unless_py10_or_later = unittest.skipUnless(
     utils.PYVERSION >= (3, 10),
     "needs Python 3.10 or later"
 )
 
+skip_unless_py10 = unittest.skipUnless(
+    utils.PYVERSION == (3, 10),
+    "needs Python 3.10"
+)
+
+skip_unless_py312 = unittest.skipUnless(
+    utils.PYVERSION == (3, 12),
+    "needs Python 3.12"
+)
+
+skip_if_32bit = unittest.skipIf(_32bit, "Not supported on 32 bit")
+
+IS_NUMPY_2 = numpy_support.numpy_version >= (2, 0)
+skip_if_numpy_2 = unittest.skipIf(IS_NUMPY_2,
+                                  "Not supported on numpy 2.0+")
+
+def expected_failure_py311(fn):
+    if utils.PYVERSION == (3, 11):
+        return unittest.expectedFailure(fn)
+    else:
+        return fn
+
+def expected_failure_py312(fn):
+    if utils.PYVERSION == (3, 12):
+        return unittest.expectedFailure(fn)
+    else:
+        return fn
+
+def expected_failure_np2(fn):
+    if numpy_support.numpy_version == (2, 0):
+        return unittest.expectedFailure(fn)
+    else:
+        return fn
+
 _msg = "SciPy needed for test"
 skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
 
+skip_unless_cffi = unittest.skipUnless(cffi_utils.SUPPORTED, 'requires cffi')
+
 _lnx_reason = 'linux only test'
 linux_only = unittest.skipIf(not sys.platform.startswith('linux'), _lnx_reason)
+
+_win_reason = 'Windows-only test'
+windows_only = unittest.skipIf(not sys.platform.startswith('win'), _win_reason)
 
 _is_armv7l = platform.machine() == 'armv7l'
 
@@ -108,6 +164,14 @@ skip_ppc64le_issue6465 = unittest.skipIf(platform.machine() == 'ppc64le',
                                          ("Hits: 'mismatch in size of "
                                           "parameter area' in "
                                           "LowerCall_64SVR4"))
+
+# LLVM PPC issue.
+# Sample error message:
+#   Invalid PPC CTR loop!
+#   UNREACHABLE executed at /llvm/lib/Target/PowerPC/PPCCTRLoops.cpp:179!
+skip_ppc64le_invalid_ctr_loop = unittest.skipIf(
+    platform.machine() == 'ppc64le',
+    "Invalid PPC CTR loop")
 
 # fenv.h on M1 may have various issues:
 # https://github.com/numba/numba/issues/7822#issuecomment-1065356758
@@ -141,10 +205,15 @@ _exec_cond = os.environ.get('SUBPROC_TEST', None) == '1'
 needs_subprocess = unittest.skipUnless(_exec_cond, "needs subprocess harness")
 
 
-# decorate for test needs external compilers
-needs_external_compilers = unittest.skipIf(not _external_compiler_ok,
-                                           ('Compatible external compilers are '
-                                            'missing'))
+try:
+    import setuptools
+    has_setuptools = True
+except ImportError:
+    has_setuptools = False
+
+
+# decorator for a test that need setuptools
+needs_setuptools = unittest.skipUnless(has_setuptools, 'Test needs setuptools')
 
 
 def ignore_internal_warnings():
@@ -160,44 +229,13 @@ def ignore_internal_warnings():
                             module=r'numba\.np\.ufunc\.parallel.*')
 
 
-class CompilationCache(object):
-    """
-    A cache of compilation results for various signatures and flags.
-    This can make tests significantly faster (or less slow).
-    """
-
-    def __init__(self):
-        self.typingctx = typing.Context()
-        self.targetctx = cpu.CPUContext(self.typingctx, 'cpu')
-        self.cr_cache = {}
-
-    def compile(self, func, args, return_type=None, flags=DEFAULT_FLAGS):
-        """
-        Compile the function or retrieve an already compiled result
-        from the cache.
-        """
-        from numba.core.registry import cpu_target
-
-        cache_key = (func, args, return_type, flags)
-        if cache_key in self.cr_cache:
-            cr = self.cr_cache[cache_key]
-        else:
-            # Register the contexts in case for nested @jit or @overload calls
-            # (same as compile_isolated())
-            with cpu_target.nested_context(self.typingctx, self.targetctx):
-                cr = compile_extra(self.typingctx, self.targetctx, func,
-                                   args, return_type, flags, locals={})
-            self.cr_cache[cache_key] = cr
-        return cr
-
-
 class TestCase(unittest.TestCase):
 
     longMessage = True
 
     # A random state yielding the same random numbers for any test case.
     # Use as `self.random.<method name>`
-    @utils.cached_property
+    @cached_property
     def random(self):
         return np.random.RandomState(42)
 
@@ -234,11 +272,22 @@ class TestCase(unittest.TestCase):
         """
         old_refcounts = [sys.getrefcount(x) for x in objects]
         yield
+        gc.collect()
         new_refcounts = [sys.getrefcount(x) for x in objects]
         for old, new, obj in zip(old_refcounts, new_refcounts, objects):
             if old != new:
                 self.fail("Refcount changed from %d to %d for object: %r"
                           % (old, new, obj))
+
+    def assertRefCountEqual(self, *objects):
+        gc.collect()
+        rc = [sys.getrefcount(x) for x in objects]
+        rc_0 = rc[0]
+        for i in range(len(objects))[1:]:
+            rc_i = rc[i]
+            if rc_0 != rc_i:
+                self.fail(f"Refcount for objects does not match. "
+                          f"#0({rc_0}) != #{i}({rc_i}) does not match.")
 
     @contextlib.contextmanager
     def assertNoNRTLeak(self):
@@ -515,28 +564,16 @@ class TestCase(unittest.TestCase):
             _assertNumberEqual(first.imag, second.imag, delta)
         elif isinstance(first, (np.timedelta64, np.datetime64)):
             # Since Np 1.16 NaT == NaT is False, so special comparison needed
-            if numpy_support.numpy_version >= (1, 16) and np.isnat(first):
+            if np.isnat(first):
                 self.assertEqual(np.isnat(first), np.isnat(second))
             else:
                 _assertNumberEqual(first, second, delta)
         else:
             _assertNumberEqual(first, second, delta)
 
-    def run_nullary_func(self, pyfunc, flags):
-        """
-        Compile the 0-argument *pyfunc* with the given *flags*, and check
-        it returns the same result as the pure Python function.
-        The got and expected results are returned.
-        """
-        cr = compile_isolated(pyfunc, (), flags=flags)
-        cfunc = cr.entry_point
-        expected = pyfunc()
-        got = cfunc()
-        self.assertPreciseEqual(got, expected)
-        return got, expected
-
     def subprocess_test_runner(self, test_module, test_class=None,
-                               test_name=None, envvars=None, timeout=60):
+                               test_name=None, envvars=None, timeout=60,
+                               flags=None, _subproc_test_env="1"):
         """
         Runs named unit test(s) as specified in the arguments as:
         test_module.test_class.test_name. test_module must always be supplied
@@ -545,9 +582,12 @@ class TestCase(unittest.TestCase):
         subprocess with environment variables specified in `envvars`.
         If given, envvars must be a map of form:
             environment variable name (str) -> value (str)
+        If given, flags must be a map of form:
+            flag including the `-` (str) -> value (str)
         It is most convenient to use this method in conjunction with
         @needs_subprocess as the decorator will cause the decorated test to be
-        skipped unless the `SUBPROC_TEST` environment variable is set
+        skipped unless the `SUBPROC_TEST` environment variable is set to
+        the same value of ``_subproc_test_env``
         (this special environment variable is set by this method such that the
         specified test(s) will not be skipped in the subprocess).
 
@@ -560,9 +600,19 @@ class TestCase(unittest.TestCase):
         thecls = type(self).__name__
         parts = (test_module, test_class, test_name)
         fully_qualified_test = '.'.join(x for x in parts if x is not None)
-        cmd = [sys.executable, '-m', 'numba.runtests', fully_qualified_test]
+        flags_args = []
+        if flags is not None:
+            for flag, value in flags.items():
+                flags_args.append(f'{flag}')
+                flags_args.append(f'{value}')
+        cmd = [sys.executable, *flags_args, '-m', 'numba.runtests',
+               fully_qualified_test]
         env_copy = os.environ.copy()
-        env_copy['SUBPROC_TEST'] = '1'
+        env_copy['SUBPROC_TEST'] = _subproc_test_env
+        try:
+            env_copy['COVERAGE_PROCESS_START'] = os.environ['COVERAGE_RCFILE']
+        except KeyError:
+            pass   # ignored
         envvars = pytypes.MappingProxyType({} if envvars is None else envvars)
         env_copy.update(envvars)
         status = subprocess.run(cmd, stdout=subprocess.PIPE,
@@ -571,9 +621,79 @@ class TestCase(unittest.TestCase):
         streams = (f'\ncaptured stdout: {status.stdout}\n'
                    f'captured stderr: {status.stderr}')
         self.assertEqual(status.returncode, 0, streams)
-        self.assertIn('OK', status.stderr)
-        self.assertNotIn('FAIL', status.stderr)
-        self.assertNotIn('ERROR', status.stderr)
+        # Python 3.12.1 report
+        no_tests_ran = "NO TESTS RAN"
+        if no_tests_ran in status.stderr:
+            self.skipTest(no_tests_ran)
+        else:
+            self.assertIn('OK', status.stderr)
+        return status
+
+    def run_test_in_subprocess(maybefunc=None, timeout=60, envvars=None):
+        """Runs the decorated test in a subprocess via invoking numba's test
+        runner. kwargs timeout and envvars are passed through to
+        subprocess_test_runner."""
+        def wrapper(func):
+            def inner(self, *args, **kwargs):
+                if os.environ.get("SUBPROC_TEST", None) != func.__name__:
+                    # Not in a subprocess test env, so stage the call to run the
+                    # test in a subprocess which will set the env var.
+                    class_name = self.__class__.__name__
+                    self.subprocess_test_runner(
+                        test_module=self.__module__,
+                        test_class=class_name,
+                        test_name=func.__name__,
+                        timeout=timeout,
+                        envvars=envvars,
+                        _subproc_test_env=func.__name__,
+                    )
+                else:
+                    # env var is set, so we're in the subprocess, run the
+                    # actual test.
+                    func(self)
+            return inner
+
+        if isinstance(maybefunc, pytypes.FunctionType):
+            return wrapper(maybefunc)
+        else:
+            return wrapper
+
+    def make_dummy_type(self):
+        """Use to generate a dummy type unique to this test. Returns a python
+        Dummy class and a corresponding Numba type DummyType."""
+
+        # Use test_id to make sure no collision is possible.
+        test_id = self.id()
+        DummyType = type('DummyTypeFor{}'.format(test_id), (types.Opaque,), {})
+
+        dummy_type = DummyType("my_dummy")
+        register_model(DummyType)(OpaqueModel)
+
+        class Dummy(object):
+            pass
+
+        @typeof_impl.register(Dummy)
+        def typeof_dummy(val, c):
+            return dummy_type
+
+        @unbox(DummyType)
+        def unbox_dummy(typ, obj, c):
+            return NativeValue(c.context.get_dummy_value())
+
+        return Dummy, DummyType
+
+    def skip_if_no_external_compiler(self):
+        """
+        Call this to ensure the test is skipped if no suitable external compiler
+        is found. This is a method on the TestCase opposed to a stand-alone
+        decorator so as to make it "lazy" via runtime evaluation opposed to
+        running at test-discovery time.
+        """
+        # This is a local import to avoid deprecation warnings being generated
+        # through the use of the numba.pycc module.
+        from numba.pycc.platform import external_compiler_works
+        if not external_compiler_works():
+            self.skipTest("No suitable external compiler was found.")
 
 
 class SerialMixin(object):
@@ -631,32 +751,6 @@ def compile_function(name, code, globs):
     ns = {}
     eval(co, globs, ns)
     return ns[name]
-
-def tweak_code(func, codestring=None, consts=None):
-    """
-    Tweak the code object of the given function by replacing its
-    *codestring* (a bytes object) and *consts* tuple, optionally.
-    """
-    co = func.__code__
-    tp = type(co)
-    if codestring is None:
-        codestring = co.co_code
-    if consts is None:
-        consts = co.co_consts
-    if utils.PYVERSION >= (3, 8):
-        new_code = tp(co.co_argcount, co.co_posonlyargcount,
-                      co.co_kwonlyargcount, co.co_nlocals,
-                      co.co_stacksize, co.co_flags, codestring,
-                      consts, co.co_names, co.co_varnames,
-                      co.co_filename, co.co_name, co.co_firstlineno,
-                      co.co_lnotab)
-    else:
-        new_code = tp(co.co_argcount, co.co_kwonlyargcount, co.co_nlocals,
-                      co.co_stacksize, co.co_flags, codestring,
-                      consts, co.co_names, co.co_varnames,
-                      co.co_filename, co.co_name, co.co_firstlineno,
-                      co.co_lnotab)
-    func.__code__ = new_code
 
 
 _trashcan_dir = 'numba-tests'
@@ -764,6 +858,16 @@ def capture_cache_log():
             yield out
 
 
+class EnableNRTStatsMixin(object):
+    """Mixin to enable the NRT statistics counters."""
+
+    def setUp(self):
+        _nrt.memsys_enable_stats()
+
+    def tearDown(self):
+        _nrt.memsys_disable_stats()
+
+
 class MemoryLeak(object):
 
     __enable_leak_check = True
@@ -792,16 +896,16 @@ class MemoryLeak(object):
         self.__enable_leak_check = False
 
 
-class MemoryLeakMixin(MemoryLeak):
+class MemoryLeakMixin(EnableNRTStatsMixin, MemoryLeak):
 
     def setUp(self):
         super(MemoryLeakMixin, self).setUp()
         self.memory_leak_setup()
 
     def tearDown(self):
-        super(MemoryLeakMixin, self).tearDown()
         gc.collect()
         self.memory_leak_teardown()
+        super(MemoryLeakMixin, self).tearDown()
 
 
 @contextlib.contextmanager
@@ -1030,11 +1134,11 @@ def strace(work, syscalls, timeout=10):
         strace_binary = shutil.which('strace')
         if strace_binary is None:
             raise ValueError("No valid 'strace' binary could be found")
-        cmd = ['strace', # strace
-            '-q', # quietly (no attach/detach print out)
-            '-p', str(parent_pid), # this PID
-            '-e', ','.join(syscalls), # these syscalls
-            '-o', ntf.name] # put output into this file
+        cmd = [strace_binary, # strace
+               '-q', # quietly (no attach/detach print out)
+               '-p', str(parent_pid), # this PID
+               '-e', ','.join(syscalls), # these syscalls
+               '-o', ntf.name] # put output into this file
 
         # redirect stdout, stderr is handled by the `-o` flag to strace.
         popen = subprocess.Popen(cmd, stdout=subprocess.PIPE,)
@@ -1081,8 +1185,14 @@ def strace(work, syscalls, timeout=10):
     return strace_data
 
 
-def _strace_supported():
+def strace_supported():
     """Checks if strace is supported and working"""
+
+    # Only support this on linux where the `strace` binary is likely to be the
+    # strace needed.
+    if not sys.platform.startswith('linux'):
+        return False
+
     def force_clone(): # subprocess triggers a clone
         subprocess.run([sys.executable, '-c', 'exit()'])
 
@@ -1092,12 +1202,6 @@ def _strace_supported():
     except Exception:
         return False
     return syscall in ''.join(trace)
-
-
-_HAVE_STRACE = _strace_supported()
-
-
-needs_strace = unittest.skipUnless(_HAVE_STRACE, "needs working strace")
 
 
 class IRPreservingTestPipeline(CompilerBase):
@@ -1116,3 +1220,60 @@ class IRPreservingTestPipeline(CompilerBase):
 
         pipeline.finalize()
         return [pipeline]
+
+
+def print_azure_matrix():
+    """This is a utility function that prints out the map of NumPy to Python
+    versions and how many of that combination are being tested across all the
+    declared config for azure-pipelines. It is useful to run when updating the
+    azure-pipelines config to be able to quickly see what the coverage is."""
+    import yaml
+    from yaml import Loader
+    base_path = os.path.dirname(os.path.abspath(__file__))
+    azure_pipe = os.path.join(base_path, '..', '..', 'azure-pipelines.yml')
+    if not os.path.isfile(azure_pipe):
+        raise RuntimeError("'azure-pipelines.yml' is not available")
+    with open(os.path.abspath(azure_pipe), 'rt') as f:
+        data = f.read()
+    pipe_yml = yaml.load(data, Loader=Loader)
+
+    templates = pipe_yml['jobs']
+    # first look at the items in the first two templates, this is osx/linux
+    py2np_map = defaultdict(lambda: defaultdict(int))
+    for tmplt in templates[:2]:
+        matrix = tmplt['parameters']['matrix']
+        for setup in matrix.values():
+            py2np_map[setup['NUMPY']][setup['PYTHON']]+=1
+
+    # next look at the items in the windows only template
+    winpath = ['..', '..', 'buildscripts', 'azure', 'azure-windows.yml']
+    azure_windows = os.path.join(base_path, *winpath)
+    if not os.path.isfile(azure_windows):
+        raise RuntimeError("'azure-windows.yml' is not available")
+    with open(os.path.abspath(azure_windows), 'rt') as f:
+        data = f.read()
+    windows_yml = yaml.load(data, Loader=Loader)
+
+    # There's only one template in windows and its keyed differently to the
+    # above, get its matrix.
+    matrix = windows_yml['jobs'][0]['strategy']['matrix']
+    for setup in matrix.values():
+        py2np_map[setup['NUMPY']][setup['PYTHON']]+=1
+
+    print("NumPy | Python | Count")
+    print("-----------------------")
+    for npver, pys in sorted(py2np_map.items()):
+        for pyver, count in pys.items():
+            print(f" {npver} |  {pyver:<4}  |   {count}")
+
+    # print the "reverse" map
+    rev_map = defaultdict(lambda: defaultdict(int))
+    for npver, pys in sorted(py2np_map.items()):
+        for pyver, count in pys.items():
+            rev_map[pyver][npver] = count
+    print("\nPython | NumPy | Count")
+    print("-----------------------")
+    sorter = lambda x: int(x[0].split('.')[1])
+    for pyver, nps in sorted(rev_map.items(), key=sorter):
+        for npver, count in nps.items():
+            print(f" {pyver:<4} |  {npver}  |   {count}")

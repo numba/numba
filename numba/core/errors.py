@@ -11,13 +11,23 @@ import warnings
 import numba.core.config
 import numpy as np
 from collections import defaultdict
-from numba.core.utils import (chain_exception, use_old_style_errors,
-                              use_new_style_errors)
 from functools import wraps
 from abc import abstractmethod
 
 # Filled at the end
 __all__ = []
+
+
+def _is_numba_core_config_loaded():
+    """
+    To detect if numba.core.config has been initialized due to circular imports.
+    """
+    try:
+        numba.core.config
+    except AttributeError:
+        return False
+    else:
+        return True
 
 
 class NumbaWarning(Warning):
@@ -28,7 +38,10 @@ class NumbaWarning(Warning):
     def __init__(self, msg, loc=None, highlighting=True, ):
         self.msg = msg
         self.loc = loc
-        if highlighting:
+
+        # If a warning is emitted inside validation of env-vars in
+        # numba.core.config. Highlighting will not be available.
+        if highlighting and _is_numba_core_config_loaded():
             highlight = termcolor().errmsg
         else:
             def highlight(x):
@@ -47,13 +60,13 @@ class NumbaPerformanceWarning(NumbaWarning):
     """
 
 
-class NumbaDeprecationWarning(NumbaWarning):
+class NumbaDeprecationWarning(NumbaWarning, DeprecationWarning):
     """
     Warning category for use of a deprecated feature.
     """
 
 
-class NumbaPendingDeprecationWarning(NumbaWarning):
+class NumbaPendingDeprecationWarning(NumbaWarning, PendingDeprecationWarning):
     """
     Warning category for use of a feature that is pending deprecation.
     """
@@ -101,6 +114,12 @@ class NumbaIRAssumptionWarning(NumbaPedanticWarning):
 class NumbaDebugInfoWarning(NumbaWarning):
     """
     Warning category for an issue with the emission of debug information.
+    """
+
+
+class NumbaSystemWarning(NumbaWarning):
+    """
+    Warning category for an issue with the system configuration.
     """
 
 # These are needed in the color formatting of errors setup
@@ -457,6 +476,9 @@ class WarningsFixer(object):
     An object "fixing" warnings of a given category caught during
     certain phases.  The warnings can have their filename and lineno fixed,
     and they are deduplicated as well.
+
+    When used as a context manager, any warnings caught by `.catch_warnings()`
+    will be flushed at the exit of the context manager.
     """
 
     def __init__(self, category):
@@ -501,6 +523,12 @@ class WarningsFixer(object):
             for msg in sorted(messages):
                 warnings.warn_explicit(msg, category, filename, lineno)
         self._warnings.clear()
+
+    def __enter__(self):
+        return
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.flush()
 
 
 class NumbaError(Exception):
@@ -614,7 +642,7 @@ class LoweringError(NumbaError):
 
 class UnsupportedParforsError(NumbaError):
     """
-    An error ocurred because parfors is not supported on the platform.
+    An error occurred because parfors is not supported on the platform.
     """
     pass
 
@@ -673,7 +701,7 @@ class ConstantInferenceError(NumbaError):
 
 class InternalError(NumbaError):
     """
-    For wrapping internal error occured within the compiler
+    For wrapping internal error occurred within the compiler
     """
 
     def __init__(self, exception):
@@ -690,6 +718,12 @@ class InternalTargetMismatchError(InternalError):
                f"not inherit. Local target is {target_hw}, declared "
                f"target class is {hw_clazz}.")
         super().__init__(msg)
+
+
+class NonexistentTargetError(InternalError):
+    """For signalling that a target that does not exist was requested.
+    """
+    pass
 
 
 class RequireLiteralValue(TypingError):
@@ -729,6 +763,9 @@ class ForceLiteralArg(NumbaError):
     def bind_fold_arguments(self, fold_arguments):
         """Bind the fold_arguments function
         """
+        # to avoid circular import
+        from numba.core.utils import chain_exception
+
         e = ForceLiteralArg(self.requested_args, fold_arguments,
                             loc=self.loc)
         return chain_exception(e, self)
@@ -813,6 +850,12 @@ def new_error_context(fmt_, *args, **kwargs):
     format string.  If there are additional arguments, it will be used as
     ``fmt_.format(*args, **kwargs)`` to produce the final message string.
     """
+    # Import here to avoid circular import.
+    from numba.core.utils import (
+        use_old_style_errors,
+        use_new_style_errors,
+    )
+
     errcls = kwargs.pop('errcls_', InternalError)
 
     loc = kwargs.get('loc', None)

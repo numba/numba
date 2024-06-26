@@ -9,7 +9,7 @@ import numpy as np
 import unittest
 from numba.core import types, typing, cgutils, cpu
 from numba.core.compiler_lock import global_compiler_lock
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, run_in_subprocess
 
 
 machine_int = ir.IntType(types.intp.bitwidth)
@@ -115,6 +115,37 @@ class StructureTestCase(TestCase):
             as (context, builder, inst):
             inst.a = ir.Constant(ir.DoubleType(), 1.23)
             inst.b = ir.Constant(ir.FloatType(), 4.56)
+
+
+class TestCGContext(TestCase):
+    """Tests for code generation context functionality"""
+
+    def test_printf(self):
+        # Tests the printf() method
+
+        value = 123456
+
+        code = f"""if 1:
+        from numba import njit, types
+        from numba.extending import intrinsic
+
+        @intrinsic
+        def printf(tyctx, int_arg):
+            sig = types.void(int_arg)
+            def codegen(cgctx, builder, sig, llargs):
+                cgctx.printf(builder, \"%d\\n\", *llargs)
+            return sig, codegen
+
+        @njit
+        def foo():
+            printf({value})
+
+        foo()
+        """
+
+        out, _ = run_in_subprocess(code)
+        self.assertIn(str(value), out.decode())
+
 
 
 if __name__ == '__main__':

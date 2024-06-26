@@ -92,8 +92,9 @@ When working with a source checkout of Numba you will also need a development
 build of llvmlite. These are available from the ``numba/label/dev`` channel on
 `anaconda.org <https://anaconda.org/numba/llvmlite>`_.
 
-
-Then, to create an environment with a few of the most common dependencies::
+To create an environment with the required dependencies, noting the use of the 
+double-colon syntax (``numba/label/dev::llvmlite``) to install the latest
+development version of the llvmlite library::
 
    $ conda create -n numbaenv python=3.10 numba/label/dev::llvmlite numpy scipy jinja2 cffi
 
@@ -149,6 +150,8 @@ arguments:
 Note that Numba's CI and the conda recipe for Linux build with the ``--werror``
 and ``--wall`` flags, so any contributions that change the CPython extensions
 should be tested with these flags too.
+
+.. _running-tests:
 
 Running tests
 '''''''''''''
@@ -211,6 +214,32 @@ instead. For example::
     $ NUMBA_USE_TYPEGUARD=1 python runtests.py
 
 
+See also: :ref:`Debugging the Test Suite <developer-testsuite>`
+
+
+Running coverage
+''''''''''''''''
+
+Coverage reports can be produced using `coverage.py
+<https://coverage.readthedocs.io/en/stable/index.html>`_. To record coverage
+info for the test suite, run::
+
+    coverage run -m numba.runtests <runtests args>
+
+Next, combine coverage files (potentially for multiple runs) with::
+
+    coverage combine
+
+The combined output can be transformed into various report formats - see the
+`coverage CLI usage reference
+<https://coverage.readthedocs.io/en/stable/cmd.html#command-line-usage>`_.
+For example, to produce an HTML report, run::
+
+    coverage html
+
+Following this command, the report can be viewed by opening ``htmlcov/index.html``.
+
+
 Development rules
 -----------------
 
@@ -226,8 +255,29 @@ A code review should try to assess the following criteria:
 * general design and correctness
 * code structure and maintainability
 * coding conventions
-* docstrings, comments
+* docstrings, comments and release notes (if necessary)
 * test coverage
+
+
+Policy on large scale changes to code formatting
+''''''''''''''''''''''''''''''''''''''''''''''''
+
+Please note that pull requests making large scale changes to format the code
+base are in general not accepted. Such changes often increase the likelihood of
+merge conflicts for other pull requests, which inevitably take time and
+resources to resolve. They also require a lot of effort to check as Numba aims
+to compile code that is valid even if it is not ideal. For example, in a test of
+``operator.eq``::
+
+    if x == None: # Valid code, even if the recommended form is `if x is None:`
+
+This tests Numba's compilation of comparison with ``None``, and therefore
+should not be changed, even though most style checkers will suggest it should.
+
+This policy has been adopted by the core developers so as to try and make best
+use of limited resources. Whilst it would be great to have an extremely tidy
+code base, priority is given to fixes and features over code formatting changes.
+
 
 Coding conventions
 ''''''''''''''''''
@@ -266,13 +316,21 @@ circumstances should ``type: ignore`` comments be used.
 
 If you are contributing a new feature, we encourage you to use type hints, even if the file is not currently in the
 checklist. If you want to contribute type hints to enable a new file to be in the checklist, please add the file to the
-``files`` variable in ``mypy.ini``, and decide what level of compliance you are targetting. Level 3 is basic static
+``files`` variable in ``mypy.ini``, and decide what level of compliance you are targeting. Level 3 is basic static
 checks, while levels 2 and 1 represent stricter checking. The levels are described in details in ``mypy.ini``.
 
 There is potential for confusion between the Numba module ``typing`` and Python built-in module ``typing`` used for type
 hints, as well as between Numba types---such as ``Dict`` or ``Literal``---and ``typing`` types of the same name.
 To mitigate the risk of confusion we use a naming convention by which objects of the built-in ``typing`` module are
 imported with an ``pt`` prefix. For example, ``typing.Dict`` is imported as ``from typing import Dict as ptDict``.
+
+Release Notes
+'''''''''''''
+
+Pull Requests that add significant user-facing modifications may need to be mentioned in the release notes.
+To add a release note, a short ``.rst`` file needs creating containing a summary of the change and it needs to be placed in 
+``docs/upcoming_changes``. The file ``docs/upcoming_changes/README.rst`` details the format
+and file naming conventions.
 
 Stability
 '''''''''
@@ -408,60 +466,32 @@ The Numba documentation is split over two repositories:
   `Numba repository <https://github.com/numba/numba>`_.
 
 * The `Numba homepage <https://numba.pydata.org>`_ has its sources in a
-  separate repository at https://github.com/numba/numba-webpage
+  separate repository at https://github.com/numba/numba.github.com.
 
 
 Main documentation
 ''''''''''''''''''
 
 This documentation is under the ``docs`` directory of the `Numba repository`_.
-It is built with `Sphinx <http://sphinx-doc.org/>`_ and
-`numpydoc <https://numpydoc.readthedocs.io/>`_, which are available using
-conda or pip; i.e. ``conda install sphinx numpydoc``.
+It is built with `Sphinx <http://sphinx-doc.org/>`_, `numpydoc
+<https://numpydoc.readthedocs.io/>`_ and the
+`sphinx-rtd-theme <https://sphinx-rtd-theme.readthedocs.io/en/stable/>`_.
 
-To build the documentation, you need the bootstrap theme::
+To install all dependencies for building the documentation, use::
 
-   $ pip install sphinx_bootstrap_theme
+   $ conda install sphinx numpydoc sphinx_rtd_theme
 
 You can edit the source files under ``docs/source/``, after which you can
-build and check the documentation::
+build and check the documentation under ``docs/``::
 
    $ make html
    $ open _build/html/index.html
-
-Core developers can upload this documentation to the Numba website
-at https://numba.pydata.org by using the ``gh-pages.py`` script under ``docs``::
-
-   $ python gh-pages.py version  # version can be 'dev' or '0.16' etc
-
-then verify the repository under the ``gh-pages`` directory and use
-``git push``.
 
 Web site homepage
 '''''''''''''''''
 
 The Numba homepage on https://numba.pydata.org can be fetched from here:
-https://github.com/numba/numba-webpage
-
-After pushing documentation to a new version, core developers will want to
-update the website.  Some notable files:
-
-* ``index.rst``       # Update main page
-* ``_templates/sidebar_versions.html``    # Update sidebar links
-* ``doc.rst``         # Update after adding a new version for numba docs
-* ``download.rst``    # Updata after uploading new numba version to pypi
-
-After updating run::
-
-   $ make html
-
-and check out ``_build/html/index.html``.  To push updates to the Web site::
-
-   $ python _scripts/gh-pages.py
-
-then verify the repository under the ``gh-pages`` directory.  Make sure the
-``CNAME`` file is present and contains a single line for ``numba.pydata.org``.
-Finally, use ``git push`` to update the website.
+https://github.com/numba/numba.github.com
 
 
 .. _typeguard: https://typeguard.readthedocs.io/en/latest/

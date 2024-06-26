@@ -1,12 +1,14 @@
 import unittest
 import types as pytypes
 from numba import jit, njit, cfunc, types, int64, float64, float32, errors
-from numba import literal_unroll
-from numba.core.config import IS_32BITS, IS_WIN32
+from numba import literal_unroll, typeof
+from numba.core.config import IS_WIN32
 import ctypes
 import warnings
 
-from .support import TestCase
+from .support import TestCase, MemoryLeakMixin
+
+import numpy as np
 
 
 def dump(foo):  # FOR DEBUGGING, TO BE REMOVED
@@ -584,26 +586,13 @@ class TestFunctionTypeExtensions(TestCase):
                 self._name = fname
                 if fname == 'cos':
                     # test for double-precision math function
-                    if IS_WIN32 and IS_32BITS:
-                        # 32-bit Windows math library does not provide
-                        # a double-precision cos function, so
-                        # disabling the function
-                        addr = None
-                        signature = None
-                    else:
-                        addr = ctypes.cast(self.lib.cos, ctypes.c_voidp).value
-                        signature = float64(float64)
+                    addr = ctypes.cast(self.lib.cos, ctypes.c_voidp).value
+                    signature = float64(float64)
                 elif fname == 'sinf':
                     # test for single-precision math function
-                    if IS_WIN32 and IS_32BITS:
-                        # 32-bit Windows math library provides sin
-                        # (instead of sinf) that is a single-precision
-                        # sin function
-                        addr = ctypes.cast(self.lib.sin, ctypes.c_voidp).value
-                    else:
-                        # Other 32/64 bit platforms define sinf as the
-                        # single-precision sin function
-                        addr = ctypes.cast(self.lib.sinf, ctypes.c_voidp).value
+                    # Other 32/64 bit platforms define sinf as the
+                    # single-precision sin function
+                    addr = ctypes.cast(self.lib.sinf, ctypes.c_voidp).value
                     signature = float32(float32)
                 else:
                     raise NotImplementedError(
@@ -1255,6 +1244,35 @@ class TestBasicSubtyping(TestCase):
         got = bar(tup, tup_bar)
         expected = foo1(a) + foo2(a) + bar1(a) + bar2(a)
         self.assertEqual(got, expected)
+
+
+class TestMultiFunctionType(MemoryLeakMixin, TestCase):
+
+    def test_base(self):
+        # The test is adapted from https://github.com/numba/numba/issues/9071
+        nb_array = typeof(np.ones(2))
+        callee_int_type = types.FunctionType(int64(int64))
+        sig_int = int64(callee_int_type, int64)
+        callee_array_type = types.FunctionType(float64(nb_array))
+        sig_array = float64(callee_array_type, nb_array)
+
+        @njit([sig_int, sig_array])
+        def caller(callee, a):
+            return callee(a)
+
+        @njit
+        def callee_int(b):
+            return b
+
+        @njit
+        def callee_array(c):
+            return c.sum()
+
+        b = 1
+        c = np.ones(2)
+
+        self.assertEqual(caller(callee_int, b), b)
+        self.assertEqual(caller(callee_array, c), c.sum())
 
 
 if __name__ == '__main__':

@@ -4,9 +4,11 @@ import ctypes
 import enum
 
 import numpy as np
+from numpy.random.bit_generator import BitGenerator
 
 from numba.core import types, utils, errors
 from numba.np import numpy_support
+
 
 # terminal color markup
 _termcolor = errors.termcolor()
@@ -45,6 +47,10 @@ def typeof_impl(val, c):
     if tp is not None:
         return tp
 
+    tp = getattr(val, "_numba_type_", None)
+    if tp is not None:
+        return tp
+
     # cffi is handled here as it does not expose a public base class
     # for exported functions or CompiledFFI instances.
     from numba.core.typing import cffi_utils
@@ -54,7 +60,7 @@ def typeof_impl(val, c):
         if cffi_utils.is_ffi_instance(val):
             return types.ffi
 
-    return getattr(val, "_numba_type_", None)
+    return None
 
 
 def _typeof_buffer(val, c):
@@ -233,6 +239,9 @@ def _typeof_dtype(val, c):
 
 @typeof_impl.register(np.ndarray)
 def _typeof_ndarray(val, c):
+    if isinstance(val, np.ma.MaskedArray):
+        msg = "Unsupported array type: numpy.ma.MaskedArray."
+        raise errors.NumbaTypeError(msg)
     try:
         dtype = numpy_support.from_dtype(val.dtype)
     except errors.NumbaNotImplementedError:
@@ -265,3 +274,21 @@ def _typeof_nb_type(val, c):
         return types.NumberClass(val)
     else:
         return types.TypeRef(val)
+
+
+@typeof_impl.register(BitGenerator)
+def typeof_numpy_random_bitgen(val, c):
+    return types.NumPyRandomBitGeneratorType(val)
+
+
+@typeof_impl.register(np.random.Generator)
+def typeof_random_generator(val, c):
+    return types.NumPyRandomGeneratorType(val)
+
+
+@typeof_impl.register(np.polynomial.polynomial.Polynomial)
+def typeof_numpy_polynomial(val, c):
+    coef = typeof(val.coef)
+    domain = typeof(val.domain)
+    window = typeof(val.window)
+    return types.PolynomialType(coef, domain, window)

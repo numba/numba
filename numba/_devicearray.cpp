@@ -41,10 +41,10 @@ PyTypeObject DeviceArrayType = {
     sizeof(DeviceArray),                         /* tp_basicsize */
     0,                                           /* tp_itemsize */
     0,                                           /* tp_dealloc */
-    0,                                           /* tp_print */
+    0,                                           /* tp_vectorcall_offset */
     0,                                           /* tp_getattr */
     0,                                           /* tp_setattr */
-    0,                                           /* tp_compare */
+    0,                                           /* tp_as_async */
     0,                                           /* tp_repr */
     0,                                           /* tp_as_number */
     0,                                           /* tp_as_sequence */
@@ -85,10 +85,24 @@ PyTypeObject DeviceArrayType = {
     0,                                           /* tp_del */
     0,                                           /* tp_version_tag */
     0,                                           /* tp_finalize */
-#if PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION == 8
     0,                                           /* tp_vectorcall */
-    0,                                           /* tp_print */
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 12)
+/* This was introduced first in 3.12
+ * https://github.com/python/cpython/issues/91051
+ */
+    0,                                           /* tp_watched */
 #endif
+
+/* WARNING: Do not remove this, only modify it! It is a version guard to
+ * act as a reminder to update this struct on Python version update! */
+#if (PY_MAJOR_VERSION == 3)
+#if ! ((PY_MINOR_VERSION == 9) || (PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11) || (PY_MINOR_VERSION == 12))
+#error "Python minor version is not supported."
+#endif
+#else
+#error "Python major version is not supported."
+#endif
+/* END WARNING*/
 };
 
 /* CUDA device array C API */
@@ -124,7 +138,9 @@ MOD_INIT(_devicearray) {
         goto error_occurred;
 
     error = PyDict_SetItemString(d, "_DEVICEARRAY_API", c_api);
-    Py_DECREF(c_api);
+    /* Decref and set c_api to NULL, Py_XDECREF in error_occurred will have no
+     * effect. */
+    Py_CLEAR(c_api);
 
     if (error)
         goto error_occurred;

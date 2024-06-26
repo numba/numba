@@ -31,10 +31,22 @@ class FakeDriver(object):
 
 driver = FakeDriver()
 
-Linker = None
+
+class Linker:
+    @classmethod
+    def new(cls, max_registers=0, lineinfo=False, cc=None):
+        return Linker()
+
+    @property
+    def lto(self):
+        return False
 
 
 class LinkerError(RuntimeError):
+    pass
+
+
+class NvrtcError(RuntimeError):
     pass
 
 

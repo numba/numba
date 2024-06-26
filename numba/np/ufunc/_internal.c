@@ -34,9 +34,9 @@ cleaner_dealloc(PyUFuncCleaner *self)
     if (ufunc->functions)
         PyArray_free(ufunc->functions);
     if (ufunc->types)
-        PyArray_free(ufunc->types);
+        PyArray_free((void *)ufunc->types);
     if (ufunc->data)
-        PyArray_free(ufunc->data);
+        PyArray_free((void *)ufunc->data);
     PyObject_Del(self);
 }
 
@@ -45,16 +45,11 @@ PyTypeObject PyUFuncCleaner_Type = {
     "numba._UFuncCleaner",                      /* tp_name*/
     sizeof(PyUFuncCleaner),                     /* tp_basicsize*/
     0,                                          /* tp_itemsize */
-    /* methods */
     (destructor) cleaner_dealloc,               /* tp_dealloc */
-    0,                                          /* tp_print */
+    0,                                          /* tp_vectorcall_offset */
     0,                                          /* tp_getattr */
     0,                                          /* tp_setattr */
-#if defined(NPY_PY3K)
-    0,                                          /* tp_reserved */
-#else
-    0,                                          /* tp_compare */
-#endif
+    0,                                          /* tp_as_async */
     0,                                          /* tp_repr */
     0,                                          /* tp_as_number */
     0,                                          /* tp_as_sequence */
@@ -93,6 +88,25 @@ PyTypeObject PyUFuncCleaner_Type = {
     0,                                          /* tp_weaklist */
     0,                                          /* tp_del */
     0,                                          /* tp_version_tag */
+    0,                                          /* tp_finalize */
+    0,                                          /* tp_vectorcall */
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 12)
+/* This was introduced first in 3.12
+ * https://github.com/python/cpython/issues/91051
+ */
+    0,                                           /* tp_watched */
+#endif
+
+/* WARNING: Do not remove this, only modify it! It is a version guard to
+ * act as a reminder to update this struct on Python version update! */
+#if (PY_MAJOR_VERSION == 3)
+#if ! ((PY_MINOR_VERSION == 9) || (PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11) || (PY_MINOR_VERSION == 12))
+#error "Python minor version is not supported."
+#endif
+#else
+#error "Python major version is not supported."
+#endif
+/* END WARNING*/
 };
 
 /* ______________________________________________________________________
@@ -182,7 +196,7 @@ dufunc_init(PyDUFuncObject *self, PyObject *args, PyObject *kws)
     PyObject *dispatcher=NULL, *keepalive=NULL, *py_func_obj=NULL, *tmp;
     PyUFuncObject *ufunc=NULL;
     int identity=PyUFunc_None;
-    int nin=-1, nout=1;
+    int nin=-1, nout=1, idx;
     const char *name=NULL, *doc=NULL;
 
     static char * kwlist[] = {"dispatcher", "identity", "_keepalive", "nin",
@@ -229,6 +243,10 @@ dufunc_init(PyDUFuncObject *self, PyObject *args, PyObject *kws)
                                                      name, doc, 0);
     if (!ufunc) {
         return -1;
+    }
+
+    for (idx = 0; idx < nout; idx++) {
+        ufunc->op_flags[idx + nin] |= NPY_ITER_READWRITE | NPY_ITER_UPDATEIFCOPY | NPY_ITER_ALLOCATE;
     }
 
     /* Construct a keepalive list if none was given. */
@@ -281,9 +299,7 @@ static struct _ufunc_dispatch {
     PyCFunctionWithKeywords ufunc_accumulate;
     PyCFunctionWithKeywords ufunc_reduceat;
     PyCFunctionWithKeywords ufunc_outer;
-#if NPY_API_VERSION >= 0x00000008
     PyCFunction ufunc_at;
-#endif
 } ufunc_dispatch;
 
 static int
@@ -299,10 +315,8 @@ init_ufunc_dispatch(int *numpy_uses_fastcall)
             if (strncmp(crnt_name, "accumulate", 11) == 0) {
                 ufunc_dispatch.ufunc_accumulate =
                     (PyCFunctionWithKeywords)crnt->ml_meth;
-#if NPY_API_VERSION >= 0x00000008
             } else if (strncmp(crnt_name, "at", 3) == 0) {
                 ufunc_dispatch.ufunc_at = crnt->ml_meth;
-#endif
             } else {
                 result = -1;
             }
@@ -322,9 +336,14 @@ init_ufunc_dispatch(int *numpy_uses_fastcall)
             } else if (strncmp(crnt_name, "reduceat", 9) == 0) {
                 ufunc_dispatch.ufunc_reduceat =
                     (PyCFunctionWithKeywords)crnt->ml_meth;
+            } else if (strncmp(crnt_name, "resolve_dtypes", 15) == 0) {
+              /* Ignored */
             } else {
                 result = -1;
             }
+            break;
+        case '_':
+            // We ignore private methods
             break;
         default:
             result = -1; /* Unknown method */
@@ -337,6 +356,9 @@ init_ufunc_dispatch(int *numpy_uses_fastcall)
                 *numpy_uses_fastcall = crnt->ml_flags & METH_FASTCALL;
             }
             else if (*numpy_uses_fastcall != (crnt->ml_flags & METH_FASTCALL)) {
+                PyErr_Format(PyExc_RuntimeError,
+                    "ufunc.%s() flags do not match numpy_uses_fastcall",
+                    crnt_name);
                 return -1;
             }
         }
@@ -347,11 +369,13 @@ init_ufunc_dispatch(int *numpy_uses_fastcall)
                   && (ufunc_dispatch.ufunc_accumulate != NULL)
                   && (ufunc_dispatch.ufunc_reduceat != NULL)
                   && (ufunc_dispatch.ufunc_outer != NULL)
-#if NPY_API_VERSION >= 0x00000008
                   && (ufunc_dispatch.ufunc_at != NULL)
-#endif
                   );
+    } else {
+        char const * const fmt = "Unexpected ufunc method %s()";
+        PyErr_Format(PyExc_RuntimeError, fmt, crnt_name);
     }
+
     return result;
 }
 
@@ -421,13 +445,11 @@ dufunc_outer_fast(PyDUFuncObject * self,
 }
 
 
-#if NPY_API_VERSION >= 0x00000008
 static PyObject *
 dufunc_at(PyDUFuncObject * self, PyObject * args)
 {
     return ufunc_dispatch.ufunc_at((PyObject*)self->ufunc, args);
 }
-#endif
 
 static PyObject *
 dufunc__compile_for_args(PyDUFuncObject * self, PyObject * args,
@@ -474,7 +496,6 @@ dufunc__add_loop(PyDUFuncObject * self, PyObject * args)
     int idx=-1, usertype=NPY_VOID;
     int *arg_types_arr=NULL;
     PyObject *arg_types=NULL, *loop_obj=NULL, *data_obj=NULL;
-    PyUFuncGenericFunction old_func=NULL;
 
     if (self->frozen) {
         PyErr_SetString(PyExc_ValueError,
@@ -522,16 +543,6 @@ dufunc__add_loop(PyDUFuncObject * self, PyObject * args)
                                         (PyUFuncGenericFunction)loop_ptr,
                                         arg_types_arr, data_ptr) < 0) {
             goto _dufunc__add_loop_fail;
-        }
-    } else if (PyUFunc_ReplaceLoopBySignature(ufunc,
-                                              (PyUFuncGenericFunction)loop_ptr,
-                                              arg_types_arr, &old_func) == 0) {
-        /* TODO: Consider freeing any memory held by the old loop (somehow) */
-        for (idx = 0; idx < ufunc->ntypes; idx++) {
-            if (ufunc->functions[idx] == (PyUFuncGenericFunction)loop_ptr) {
-                ufunc->data[idx] = data_ptr;
-                break;
-            }
         }
     } else {
         /* The following is an attempt to loosely follow the allocation
@@ -605,11 +616,9 @@ static struct PyMethodDef dufunc_methods[] = {
     {"outer",
         (PyCFunction)dufunc_outer,
         METH_VARARGS | METH_KEYWORDS, NULL},
-#if NPY_API_VERSION >= 0x00000008
     {"at",
         (PyCFunction)dufunc_at,
         METH_VARARGS, NULL},
-#endif
     {"_compile_for_args",
         (PyCFunction)dufunc__compile_for_args,
         METH_VARARGS | METH_KEYWORDS,
@@ -639,11 +648,9 @@ static struct PyMethodDef dufunc_methods_fast[] = {
     {"outer",
         (PyCFunction)dufunc_outer_fast,
         METH_FASTCALL | METH_KEYWORDS, NULL},
-#if NPY_API_VERSION >= 0x00000008
     {"at",
         (PyCFunction)dufunc_at,
         METH_VARARGS, NULL},
-#endif
     {"_compile_for_args",
         (PyCFunction)dufunc__compile_for_args,
         METH_VARARGS | METH_KEYWORDS,
@@ -691,12 +698,11 @@ PyTypeObject PyDUFunc_Type = {
     "numba._DUFunc",                            /* tp_name*/
     sizeof(PyDUFuncObject),                     /* tp_basicsize*/
     0,                                          /* tp_itemsize */
-    /* methods */
     (destructor) dufunc_dealloc,                /* tp_dealloc */
-    0,                                          /* tp_print */
+    0,                                          /* tp_vectorcall_offset */
     0,                                          /* tp_getattr */
     0,                                          /* tp_setattr */
-    0,                                          /* tp_compare/tp_reserved */
+    0,                                          /* tp_as_async */
     (reprfunc) dufunc_repr,                     /* tp_repr */
     0,                                          /* tp_as_number */
     0,                                          /* tp_as_sequence */
@@ -735,6 +741,25 @@ PyTypeObject PyDUFunc_Type = {
     0,                                          /* tp_weaklist */
     0,                                          /* tp_del */
     0,                                          /* tp_version_tag */
+    0,                                          /* tp_finalize */
+    0,                                          /* tp_vectorcall */
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 12)
+/* This was introduced first in 3.12
+ * https://github.com/python/cpython/issues/91051
+ */
+    0,                                           /* tp_watched */
+#endif
+
+/* WARNING: Do not remove this, only modify it! It is a version guard to
+ * act as a reminder to update this struct on Python version update! */
+#if (PY_MAJOR_VERSION == 3)
+#if ! ((PY_MINOR_VERSION == 9) || (PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11) || (PY_MINOR_VERSION == 12))
+#error "Python minor version is not supported."
+#endif
+#else
+#error "Python major version is not supported."
+#endif
+/* END WARNING*/
 };
 
 /* ______________________________________________________________________
@@ -787,9 +812,7 @@ MOD_INIT(_internal)
     if (PyModule_AddIntMacro(m, PyUFunc_One)
         || PyModule_AddIntMacro(m, PyUFunc_Zero)
         || PyModule_AddIntMacro(m, PyUFunc_None)
-#if NPY_API_VERSION >= 0x00000007
         || PyModule_AddIntMacro(m, PyUFunc_ReorderableNone)
-#endif
         )
         return MOD_ERROR_VAL;
 

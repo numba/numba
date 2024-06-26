@@ -1,7 +1,7 @@
 from numba import cuda
 from numpy import array as np_array
 from numba.np.ufunc import deviceufunc
-from numba.np.ufunc.deviceufunc import (UFuncMechanism, GenerializedUFunc,
+from numba.np.ufunc.deviceufunc import (UFuncMechanism, GeneralizedUFunc,
                                         GUFuncCallSteps)
 
 
@@ -10,17 +10,9 @@ class CUDAUFuncDispatcher(object):
     Invoke the CUDA ufunc specialization for the given inputs.
     """
 
-    def __init__(self, types_to_retty_kernels):
+    def __init__(self, types_to_retty_kernels, pyfunc):
         self.functions = types_to_retty_kernels
-        self._maxblocksize = 0  # ignored
-
-    @property
-    def max_blocksize(self):
-        return self._maxblocksize
-
-    @max_blocksize.setter
-    def max_blocksize(self, blksz):
-        self._max_blocksize = blksz
+        self.__name__ = pyfunc.__name__
 
     def __call__(self, *args, **kws):
         """
@@ -93,6 +85,10 @@ class _CUDAGUFuncCallSteps(GUFuncCallSteps):
         '_stream',
     ]
 
+    def __init__(self, nin, nout, args, kwargs):
+        super().__init__(nin, nout, args, kwargs)
+        self._stream = kwargs.get('stream', 0)
+
     def is_device_array(self, obj):
         return cuda.is_cuda_array(obj)
 
@@ -113,17 +109,18 @@ class _CUDAGUFuncCallSteps(GUFuncCallSteps):
         out = devary.copy_to_host(hostary, stream=self._stream)
         return out
 
-    def device_array(self, shape, dtype):
+    def allocate_device_array(self, shape, dtype):
         return cuda.device_array(shape=shape, dtype=dtype, stream=self._stream)
-
-    def prepare_inputs(self):
-        self._stream = self.kwargs.get('stream', 0)
 
     def launch_kernel(self, kernel, nelem, args):
         kernel.forall(nelem, stream=self._stream)(*args)
 
 
-class CUDAGenerializedUFunc(GenerializedUFunc):
+class CUDAGeneralizedUFunc(GeneralizedUFunc):
+    def __init__(self, kernelmap, engine, pyfunc):
+        self.__name__ = pyfunc.__name__
+        super().__init__(kernelmap, engine)
+
     @property
     def _call_steps(self):
         return _CUDAGUFuncCallSteps
@@ -172,7 +169,7 @@ class CUDAUFuncMechanism(UFuncMechanism):
     def to_host(self, devary, stream):
         return devary.copy_to_host(stream=stream)
 
-    def device_array(self, shape, dtype, stream):
+    def allocate_device_array(self, shape, dtype, stream):
         return cuda.device_array(shape=shape, dtype=dtype, stream=stream)
 
     def broadcast_device(self, ary, shape):
@@ -215,7 +212,7 @@ class CUDAVectorize(deviceufunc.DeviceVectorize):
         return cuda.jit(fnobj)
 
     def build_ufunc(self):
-        return CUDAUFuncDispatcher(self.kernelmap)
+        return CUDAUFuncDispatcher(self.kernelmap, self.pyfunc)
 
     @property
     def _kernel_template(self):
@@ -236,7 +233,9 @@ def __gufunc_{name}({args}):
 class CUDAGUFuncVectorize(deviceufunc.DeviceGUFuncVectorize):
     def build_ufunc(self):
         engine = deviceufunc.GUFuncEngine(self.inputsig, self.outputsig)
-        return CUDAGenerializedUFunc(kernelmap=self.kernelmap, engine=engine)
+        return CUDAGeneralizedUFunc(kernelmap=self.kernelmap,
+                                    engine=engine,
+                                    pyfunc=self.pyfunc)
 
     def _compile_kernel(self, fnobj, sig):
         return cuda.jit(sig)(fnobj)

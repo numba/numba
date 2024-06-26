@@ -2,12 +2,26 @@ from collections import namedtuple, OrderedDict
 import dis
 import inspect
 import itertools
+
 from types import CodeType, ModuleType
 
 from numba.core import errors, utils, serialize
 from numba.core.utils import PYVERSION
 
+
+if PYVERSION in ((3, 12), ):
+    from opcode import _inline_cache_entries
+    # Instruction/opcode length in bytes
+    INSTR_LEN = 2
+elif PYVERSION in ((3, 9), (3, 10), (3, 11)):
+    pass
+else:
+    raise NotImplementedError(PYVERSION)
+
+
 opcode_info = namedtuple('opcode_info', ['argsize'])
+_ExceptionTableEntry = namedtuple("_ExceptionTableEntry",
+                                  "start end target depth lasti")
 
 # The following offset is used as a hack to inject a NOP at the start of the
 # bytecode. So that function starting with `while True` will not have block-0
@@ -90,18 +104,37 @@ class ByteCodeInst(object):
         # https://bugs.python.org/issue27129
         # https://github.com/python/cpython/pull/25069
         assert self.is_jump
-        if PYVERSION >= (3, 10):
+        if PYVERSION in ((3, 12), ):
+            if self.opcode in (dis.opmap[k]
+                               for k in ["JUMP_BACKWARD"]):
+                return self.offset - (self.arg - 1) * 2
+        elif PYVERSION in ((3, 11), ):
+            if self.opcode in (dis.opmap[k]
+                               for k in ("JUMP_BACKWARD",
+                                         "POP_JUMP_BACKWARD_IF_TRUE",
+                                         "POP_JUMP_BACKWARD_IF_FALSE",
+                                         "POP_JUMP_BACKWARD_IF_NONE",
+                                         "POP_JUMP_BACKWARD_IF_NOT_NONE",)):
+                return self.offset - (self.arg - 1) * 2
+        elif PYVERSION in ((3, 9), (3, 10)):
+            pass
+        else:
+            raise NotImplementedError(PYVERSION)
+
+        if PYVERSION in ((3, 10), (3, 11), (3, 12)):
             if self.opcode in JREL_OPS:
                 return self.next + self.arg * 2
             else:
                 assert self.opcode in JABS_OPS
                 return self.arg * 2 - 2
-        else:
+        elif PYVERSION in ((3, 9),):
             if self.opcode in JREL_OPS:
                 return self.next + self.arg
             else:
                 assert self.opcode in JABS_OPS
                 return self.arg
+        else:
+            raise NotImplementedError(PYVERSION)
 
     def __repr__(self):
         return '%s(arg=%s, lineno=%d)' % (self.opname, self.arg, self.lineno)
@@ -143,12 +176,40 @@ def _unpack_opargs(code):
             for j in range(ARG_LEN):
                 arg |= code[i + j] << (8 * j)
             i += ARG_LEN
+            if PYVERSION in ((3, 12), ):
+                # Python 3.12 introduced cache slots. We need to account for
+                # cache slots when we determine the offset of the next opcode.
+                # The number of cache slots is specific to each opcode and can
+                # be looked up in the _inline_cache_entries dictionary.
+                i += _inline_cache_entries[op] * INSTR_LEN
+            elif PYVERSION in ((3, 9), (3, 10), (3, 11)):
+                pass
+            else:
+                raise NotImplementedError(PYVERSION)
             if op == EXTENDED_ARG:
+                # This is a deviation from what dis does...
+                # In python 3.11 it seems like EXTENDED_ARGs appear more often
+                # and are also used as jump targets. So as to not have to do
+                # "book keeping" for where EXTENDED_ARGs have been "skipped"
+                # they are replaced with NOPs so as to provide a legal jump
+                # target and also ensure that the bytecode offsets are correct.
+                yield (offset, OPCODE_NOP, arg, i)
                 extended_arg = arg << 8 * ARG_LEN
+                offset = i
                 continue
         else:
             arg = None
             i += NO_ARG_LEN
+            if PYVERSION in ((3, 12), ):
+                # Python 3.12 introduced cache slots. We need to account for
+                # cache slots when we determine the offset of the next opcode.
+                # The number of cache slots is specific to each opcode and can
+                # be looked up in the _inline_cache_entries dictionary.
+                i += _inline_cache_entries[op] * INSTR_LEN
+            elif PYVERSION in ((3, 9), (3, 10), (3, 11)):
+                pass
+            else:
+                raise NotImplementedError(PYVERSION)
 
         extended_arg = 0
         yield (offset, op, arg, i)
@@ -196,12 +257,13 @@ class ByteCodeIter(object):
         return buf
 
 
-class ByteCode(object):
+class _ByteCode(object):
     """
     The decoded bytecode of a function, and related information.
     """
     __slots__ = ('func_id', 'co_names', 'co_varnames', 'co_consts',
-                 'co_cellvars', 'co_freevars', 'table', 'labels')
+                 'co_cellvars', 'co_freevars', 'exception_entries',
+                 'table', 'labels')
 
     def __init__(self, func_id):
         code = func_id.code
@@ -219,6 +281,7 @@ class ByteCode(object):
         self.co_consts = code.co_consts
         self.co_cellvars = code.co_cellvars
         self.co_freevars = code.co_freevars
+
         self.table = table
         self.labels = sorted(labels)
 
@@ -233,7 +296,7 @@ class ByteCode(object):
                 table[adj_offset].lineno = lineno
         # Assign unfilled lineno
         # Start with first bytecode's lineno
-        known = table[_FIXED_OFFSET].lineno
+        known = code.co_firstlineno
         for inst in table.values():
             if inst.lineno >= 0:
                 known = inst.lineno
@@ -258,7 +321,8 @@ class ByteCode(object):
                 return ' '
 
         return '\n'.join('%s %10s\t%s' % ((label_marker(i),) + i)
-                         for i in self.table.items())
+                         for i in self.table.items()
+                         if i[1].opname != "CACHE")
 
     @classmethod
     def _compute_used_globals(cls, func, table, co_consts, co_names):
@@ -274,7 +338,7 @@ class ByteCode(object):
         # Look for LOAD_GLOBALs in the bytecode
         for inst in table.values():
             if inst.opname == 'LOAD_GLOBAL':
-                name = co_names[inst.arg]
+                name = co_names[_fix_LOAD_GLOBAL_arg(inst.arg)]
                 if name not in d:
                     try:
                         value = globs[name]
@@ -298,13 +362,187 @@ class ByteCode(object):
                                           self.co_consts, self.co_names)
 
 
+def _fix_LOAD_GLOBAL_arg(arg):
+    if PYVERSION in ((3, 11), (3, 12)):
+        return arg >> 1
+    elif PYVERSION in ((3, 9), (3, 10)):
+        return arg
+    else:
+        raise NotImplementedError(PYVERSION)
+
+
+class ByteCodePy311(_ByteCode):
+
+    def __init__(self, func_id):
+        super().__init__(func_id)
+        entries = dis.Bytecode(func_id.code).exception_entries
+        self.exception_entries = tuple(map(self.fixup_eh, entries))
+
+    @staticmethod
+    def fixup_eh(ent):
+        # Patch up the exception table offset
+        # because we add a NOP in _patched_opargs
+        out = dis._ExceptionTableEntry(
+            start=ent.start + _FIXED_OFFSET, end=ent.end + _FIXED_OFFSET,
+            target=ent.target + _FIXED_OFFSET,
+            depth=ent.depth, lasti=ent.lasti,
+        )
+        return out
+
+    def find_exception_entry(self, offset):
+        """
+        Returns the exception entry for the given instruction offset
+        """
+        candidates = []
+        for ent in self.exception_entries:
+            if ent.start <= offset < ent.end:
+                candidates.append((ent.depth, ent))
+        if candidates:
+            ent = max(candidates)[1]
+            return ent
+
+
+class ByteCodePy312(ByteCodePy311):
+
+    def __init__(self, func_id):
+        super().__init__(func_id)
+
+        # initialize lazy property
+        self._ordered_offsets = None
+
+        # Fixup offsets for all exception entries.
+        entries = [self.fixup_eh(e) for e in
+                   dis.Bytecode(func_id.code).exception_entries
+                   ]
+
+        # Remove exceptions, innermost ones first
+        # Can be done by using a stack
+        entries = self.remove_build_list_swap_pattern(entries)
+
+        # If this is a generator, we need to skip any exception table entries
+        # that point to the exception handler with the highest offset.
+        if func_id.is_generator:
+            # Get the exception handler with the highest offset.
+            max_exception_target = max([e.target for e in entries])
+            # Remove any exception table entries that point to that exception
+            # handler.
+            entries = [e for e in entries if e.target != max_exception_target]
+
+        self.exception_entries = tuple(entries)
+
+    @property
+    def ordered_offsets(self):
+        if not self._ordered_offsets:
+            # Get an ordered list of offsets.
+            self._ordered_offsets = [o for o in self.table]
+        return self._ordered_offsets
+
+    def remove_build_list_swap_pattern(self, entries):
+        """ Find the following bytecode pattern:
+
+            BUILD_{LIST, MAP, SET}
+            SWAP(2)
+            FOR_ITER
+            ...
+            END_FOR
+            SWAP(2)
+
+            This pattern indicates that a list/dict/set comprehension has
+            been inlined. In this case we can skip the exception blocks
+            entirely along with the dead exceptions that it points to.
+            A pair of exception that sandwiches these exception will
+            also be merged into a single exception.
+        """
+
+        def pop_and_merge_exceptions(entries: list,
+                                     entry_to_remove: _ExceptionTableEntry):
+            lower_entry_idx = entries.index(entry_to_remove) - 1
+            upper_entry_idx = entries.index(entry_to_remove) + 1
+
+            # Merge the upper and lower exceptions if possible.
+            if lower_entry_idx >= 0 and upper_entry_idx < len(entries):
+                lower_entry = entries[lower_entry_idx]
+                upper_entry = entries[upper_entry_idx]
+                if lower_entry.target == upper_entry.target:
+                    entries[lower_entry_idx] = _ExceptionTableEntry(
+                        lower_entry.start,
+                        upper_entry.end,
+                        lower_entry.target,
+                        lower_entry.depth,
+                        upper_entry.lasti)
+                    entries.remove(upper_entry)
+
+            # Remove the exception entry.
+            entries.remove(entry_to_remove)
+            # Remove dead exceptions, if any, that the entry above may point to.
+            entries = [e for e in entries
+                       if not e.start == entry_to_remove.target]
+            return entries
+
+        work_remaining = True
+        while work_remaining:
+            # Temporarily set work_remaining to False, if we find a pattern
+            # then work is not complete, hence we set it again to True.
+            work_remaining = False
+            for entry in entries.copy():
+                # Check start of pattern, three instructions.
+                # Work out the index of the instruction.
+                index = self.ordered_offsets.index(entry.start)
+                # If there is a BUILD_{LIST, MAP, SET} instruction at this
+                # location.
+                curr_inst = self.table[self.ordered_offsets[index]]
+                if curr_inst.opname not in ("BUILD_LIST",
+                                            "BUILD_MAP",
+                                            "BUILD_SET"):
+                    continue
+                # Check if the BUILD_{LIST, MAP, SET} instruction is followed
+                # by a SWAP(2).
+                next_inst = self.table[self.ordered_offsets[index + 1]]
+                if not next_inst.opname == "SWAP" and next_inst.arg == 2:
+                    continue
+                next_inst = self.table[self.ordered_offsets[index + 2]]
+                # Check if the SWAP is followed by a FOR_ITER
+                if not next_inst.opname == "FOR_ITER":
+                    continue
+
+                # Check end of pattern, two instructions.
+                # Check for the corresponding END_FOR, exception table end is
+                # non-inclusive, so subtract one.
+                index = self.ordered_offsets.index(entry.end)
+                curr_inst = self.table[self.ordered_offsets[index - 1]]
+                if not curr_inst.opname == "END_FOR":
+                    continue
+                # END_FOR must be followed by SWAP(2)
+                next_inst = self.table[self.ordered_offsets[index]]
+                if not next_inst.opname == "SWAP" and next_inst.arg == 2:
+                    continue
+                # If all conditions are met that means this exception entry
+                # is for a list/dict/set comprehension and can be removed.
+                # Also if there exist exception entries above and below this
+                # entry pointing to the same target. those can be merged into
+                # a single bigger exception block.
+                entries = pop_and_merge_exceptions(entries, entry)
+                work_remaining = True
+        return entries
+
+
+if PYVERSION == (3, 11):
+    ByteCode = ByteCodePy311
+elif PYVERSION == (3, 12):
+    ByteCode = ByteCodePy312
+elif PYVERSION < (3, 11):
+    ByteCode = _ByteCode
+else:
+    raise NotImplementedError(PYVERSION)
+
+
 class FunctionIdentity(serialize.ReduceMixin):
     """
     A function's identity and metadata.
 
     Note this typically represents a function whose bytecode is
     being compiled, not necessarily the top-level user function
-    (the two might be distinct, e.g. in the `@generated_jit` case).
+    (the two might be distinct).
     """
     _unique_ids = itertools.count(1)
 

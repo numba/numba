@@ -3,7 +3,6 @@ import functools
 import threading
 import numpy as np
 from numba import cuda
-from numba.core import utils
 from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 
 
@@ -19,10 +18,6 @@ def with_asyncio_loop(f):
     return runner
 
 
-asyncio_create_task = asyncio.create_task if utils.PYVERSION >= (3, 7) \
-    else asyncio.ensure_future
-
-
 @skip_on_cudasim('CUDA Driver API unsupported in the simulator')
 class TestCudaStream(CUDATestCase):
     def test_add_callback(self):
@@ -32,6 +27,17 @@ class TestCudaStream(CUDATestCase):
         stream = cuda.stream()
         callback_event = threading.Event()
         stream.add_callback(callback, callback_event)
+        self.assertTrue(callback_event.wait(1.0))
+
+    def test_add_callback_with_default_arg(self):
+        callback_event = threading.Event()
+
+        def callback(stream, status, arg):
+            self.assertIsNone(arg)
+            callback_event.set()
+
+        stream = cuda.stream()
+        stream.add_callback(callback)
         self.assertTrue(callback_event.wait(1.0))
 
     @with_asyncio_loop
@@ -52,7 +58,7 @@ class TestCudaStream(CUDATestCase):
             return h_dst.mean()
 
         values_in = [1, 2, 3, 4]
-        tasks = [asyncio_create_task(async_cuda_fn(v)) for v in values_in]
+        tasks = [asyncio.create_task(async_cuda_fn(v)) for v in values_in]
         values_out = await asyncio.gather(*tasks)
         self.assertTrue(np.allclose(values_in, values_out))
 

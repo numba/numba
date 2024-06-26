@@ -53,6 +53,11 @@ class TypeVar(object):
 
     def add_type(self, tp, loc):
         assert isinstance(tp, types.Type), type(tp)
+        # Special case for _undef_var.
+        # If the typevar is the _undef_var, use the incoming type directly.
+        if self.type is types._undef_var:
+            self.type = tp
+            return self.type
 
         if self.locked:
             if tp != self.type:
@@ -606,14 +611,14 @@ class CallConstraint(object):
                             else self.args)
             folded = e.fold_arguments(folding_args, self.kws)
             requested = set()
-            unsatisified = set()
+            unsatisfied = set()
             for idx in e.requested_args:
                 maybe_arg = typeinfer.func_ir.get_definition(folded[idx])
                 if isinstance(maybe_arg, ir.Arg):
                     requested.add(maybe_arg.index)
                 else:
-                    unsatisified.add(idx)
-            if unsatisified:
+                    unsatisfied.add(idx)
+            if unsatisfied:
                 raise TypingError("Cannot request literal type.", loc=self.loc)
             elif requested:
                 raise ForceLiteralArg(requested, loc=self.loc)
@@ -1247,6 +1252,17 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
             retty = self.get_generator_type(typdict, retty,
                                             raise_errors=raise_errors)
 
+        def check_undef_var_in_calls():
+            # Check for undefined variables in the call arguments.
+            for callnode, calltype in self.calltypes.items():
+                if calltype is not None:
+                    for i, v in enumerate(calltype.args, start=1):
+                        if v is types._undef_var:
+                            m = f"undefined variable used in call argument #{i}"
+                            raise TypingError(m, loc=callnode.loc)
+
+        check_undef_var_in_calls()
+
         self.debug.unify_finished(typdict, retty, fntys)
 
         return typdict, retty, fntys
@@ -1373,7 +1389,11 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
         rettypes = set()
         for var in self._get_return_vars():
             rettypes.add(typemap[var.name])
-        return self._unify_return_types(rettypes)
+        retty = self._unify_return_types(rettypes)
+        # Check return value is not undefined
+        if retty is types._undef_var:
+            raise TypingError("return value is undefined")
+        return retty
 
     def get_state_token(self):
         """The algorithm is monotonic.  It can only grow or "refine" the
@@ -1397,6 +1417,8 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
         elif isinstance(inst, ir.StoreMap):
             self.typeof_storemap(inst)
         elif isinstance(inst, (ir.Jump, ir.Branch, ir.Return, ir.Del)):
+            pass
+        elif isinstance(inst, (ir.DynamicRaise, ir.DynamicTryRaise)):
             pass
         elif isinstance(inst, (ir.StaticRaise, ir.StaticTryRaise)):
             pass
@@ -1726,6 +1748,9 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
         elif expr.op == 'make_function':
             self.lock_type(target.name, types.MakeFunctionLiteral(expr),
                            loc=inst.loc, literal_value=expr)
+
+        elif expr.op == 'undef':
+            self.add_type(target.name, types._undef_var, loc=inst.loc)
 
         else:
             msg = "Unsupported op-code encountered: %s" % expr

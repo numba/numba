@@ -310,6 +310,7 @@ class EnumModel(ProxyModel):
 @register_default(types.Object)
 @register_default(types.Module)
 @register_default(types.Phantom)
+@register_default(types.UndefVar)
 @register_default(types.ContextManager)
 @register_default(types.Dispatcher)
 @register_default(types.ObjModeDispatcher)
@@ -898,6 +899,13 @@ class NestedArrayModel(ArrayModel):
     def __init__(self, dmm, fe_type):
         self._be_type = dmm.lookup(fe_type.dtype).get_data_type()
         super(NestedArrayModel, self).__init__(dmm, fe_type)
+
+    def as_storage_type(self):
+        """Return the LLVM type representation for the storage of
+        the nestedarray.
+        """
+        ret = ir.ArrayType(self._be_type, self._fe_type.nitems)
+        return ret
 
 
 @register_default(types.Optional)

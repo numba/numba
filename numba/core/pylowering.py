@@ -6,6 +6,7 @@ Lowering implementation for object mode.
 import builtins
 import operator
 import inspect
+from functools import cached_property
 
 import llvmlite.ir
 
@@ -18,6 +19,18 @@ from numba.core.lowering import BaseLower
 # Issue #475: locals() is unsupported as calling it naively would give
 # out wrong results.
 _unsupported_builtins = set([locals])
+
+
+class _Undefined:
+    """
+    A sentinel value for undefined variable created by Expr.undef.
+    """
+    def __repr__(self):
+        return "<undefined>"
+
+
+_UNDEFINED = _Undefined()
+
 
 # Map operators to methods on the PythonAPI class
 PYTHON_BINOPMAP = {
@@ -171,7 +184,7 @@ class PyLower(BaseLower):
             msg = f"{type(inst)}, {inst}"
             raise NumbaNotImplementedError(msg)
 
-    @utils.cached_property
+    @cached_property
     def _omitted_typobj(self):
         """Return a `OmittedArg` type instance as a LLVM value suitable for
         testing at runtime.
@@ -289,8 +302,10 @@ class PyLower(BaseLower):
             args = self.pyapi.tuple_pack(argvals)
             if expr.vararg:
                 # Expand *args
-                new_args = self.pyapi.number_add(args,
-                                                 self.loadvar(expr.vararg.name))
+                varargs = self.pyapi.sequence_tuple(
+                                self.loadvar(expr.vararg.name))
+                new_args = self.pyapi.sequence_concat(args, varargs)
+                self.decref(varargs)
                 self.decref(args)
                 args = new_args
             if not expr.kws:
@@ -419,6 +434,10 @@ class PyLower(BaseLower):
         elif expr.op == 'null':
             # Make null value
             return cgutils.get_null_value(self.pyapi.pyobj)
+
+        elif expr.op == 'undef':
+            # Use a sentinel value for undefined variable
+            return self.lower_const(_UNDEFINED)
 
         else:
             raise NotImplementedError(expr)

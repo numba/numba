@@ -3,6 +3,7 @@ import copy
 import sys
 from itertools import permutations, takewhile
 from contextlib import contextmanager
+from functools import cached_property
 
 from llvmlite import ir as llvmir
 from llvmlite.ir import Constant
@@ -156,10 +157,6 @@ def _load_global_helpers():
         for py_name, c_address in c_helpers.items():
             c_name = "numba_" + py_name
             ll.add_symbol(c_name, c_address)
-
-    # Add Numpy C helpers (npy_XXX)
-    for c_name, c_address in _helperlib.npymath_exports.items():
-        ll.add_symbol(c_name, c_address)
 
     # Add all built-in exception classes
     for obj in utils.builtins.__dict__.values():
@@ -329,14 +326,14 @@ class BaseContext(object):
     def target_data(self):
         raise NotImplementedError
 
-    @utils.cached_property
+    @cached_property
     def nonconst_module_attrs(self):
         """
         All module attrs are constant for targets using BaseContext.
         """
         return tuple()
 
-    @utils.cached_property
+    @cached_property
     def nrt(self):
         from numba.core.runtime.context import NRTContext
         return NRTContext(self, self.enable_nrt)
@@ -695,7 +692,10 @@ class BaseContext(object):
         This implements implicit conversions as can happen due to the
         granularity of the Numba type system, or lax Python semantics.
         """
-        if fromty == toty or toty == types.Any:
+        if fromty is types._undef_var:
+            # Special case for undefined variable
+            return self.get_constant_null(toty)
+        elif fromty == toty or toty == types.Any:
             return val
         try:
             impl = self._casts.find((fromty, toty))
@@ -789,7 +789,7 @@ class BaseContext(object):
             cstr = self.insert_const_string(mod, format_string)
         else:
             cstr = format_string
-        fnty = Type.function(Type.int(), (GENERIC_POINTER,), var_arg=True)
+        fnty = llvmir.FunctionType(llvmir.IntType(32), (GENERIC_POINTER,), var_arg=True)
         fn = cgutils.get_or_insert_function(mod, fnty, "printf")
         return builder.call(fn, (cstr,) + tuple(args))
 
