@@ -12,14 +12,6 @@ import subprocess
 from sys import intern
 
 import os.path
-import shutil
-import json
-import glob
-import pathlib
-import collections
-from pygments import highlight
-from pygments.lexers.c_cpp import CppLexer
-from pygments.formatters import HtmlFormatter
 
 from numba.core import config
 
