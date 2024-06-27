@@ -535,7 +535,8 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             kws = []
             args = []
             pos_arg = None
-            for x in sig.parameters.values():
+            for x_w_annotation in sig.parameters.values():
+                x = x_w_annotation.replace(annotation=utils.pyParameter.empty)
                 if x.default == utils.pyParameter.empty:
                     args.append(x)
                     if x.kind == utils.pyParameter.VAR_POSITIONAL:

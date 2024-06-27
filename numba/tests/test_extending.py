@@ -1230,6 +1230,28 @@ class TestHighLevelExtending(TestCase):
         expected = (42.5 + args[0], '42.5' + args[1])
         self.assertPreciseEqual(foo(*args), expected)
 
+    def test_overload_with_different_annotations(self):
+        # Issue #9571
+        def generic_add(a, b):
+            pass
+
+        @overload(generic_add)
+        def ol_generic_add(a: types.Number, b: types.Number):
+            if isinstance(a, types.Integer) and isinstance(b, types.Integer):
+                def impl(a: types.Integer, b: types.Integer):
+                    return a + b
+                return impl
+            elif isinstance(a, types.Float) and isinstance(b, types.Float):
+                def impl(a: types.Float, b: types.Float):
+                    return a + b
+                return impl
+
+        @njit
+        def foo():
+            return generic_add(1, 2), generic_add(1.0, 2.0)
+
+        self.assertEqual(foo(), (3, 3.0))
+
 
 def _assert_cache_stats(cfunc, expect_hit, expect_misses):
     hit = cfunc._cache_hits[cfunc.signatures[0]]
@@ -2180,8 +2202,10 @@ class TestNumbaInternalOverloads(TestCase):
                 func_sig = inspect.signature(func)
             except ValueError:
                 # probably a built-in/C code, see if it's a np.random function
-                if fname := getattr(func, '__name__', False):
-                    if maybe_func := getattr(np.random, fname, False):
+                fname = getattr(func, '__name__', False)
+                if fname:
+                    maybe_func = getattr(np.random, fname, False)
+                    if maybe_func:
                         if maybe_func == func:
                             # it's a built-in from np.random
                             func_sig = sig_from_np_random(fname)
