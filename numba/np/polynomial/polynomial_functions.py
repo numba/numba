@@ -93,7 +93,7 @@ def polyutils_as_series(alist, trim=True):
         msg = 'The argument "alist" must be array-like'
         raise errors.TypingError(msg)
 
-    if not isinstance(trim, (bool, types.Boolean)):
+    if not isinstance(trim, (bool, types.Boolean, types.Omitted)):
         msg = 'The argument "trim" must be boolean'
         raise errors.TypingError(msg)
 
@@ -260,6 +260,9 @@ def poly_polyval(x, c, tensor=True):
     if not type_can_asarray(c):
         msg = 'The argument "c" must be array-like'
         raise errors.TypingError(msg)
+
+    if isinstance(tensor, types.Omitted):
+        tensor = tensor.value
 
     if not isinstance(tensor, (bool, types.BooleanLiteral)):
         msg = 'The argument "tensor" must be boolean'

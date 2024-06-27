@@ -701,9 +701,39 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         internally in `self._impl_cache`.
         """
         flags = targetconfig.ConfigStack.top_or_none()
-        cache_key = self.context, tuple(args), tuple(kws.items()), flags
+
+        # update dict_flags with flags and self._jit_options
+        dict_flags = {}
+        if flags is not None:
+            for k in flags.options:
+                dict_flags[k] = str(getattr(flags, k))
+        for key, value in self._jit_options.items():
+            if key in dict_flags:
+                dict_flags[key] = str(value)
+
+        # check the pyfunc signature, if exist some kwargs, e.g., default=None,
+        # if kws didn't specify them, add Omitted(default=None) to args
+        ov_sig = inspect.signature(self._overload_func)
+        if len(args) + len(kws) < len(ov_sig.parameters):
+            for param in list(ov_sig.parameters.values())[len(args):]:
+                name = param.name
+                default = param.default
+                if default != inspect.Parameter.empty and name not in kws:
+                    # add numba type of this param into kws
+                    # it must be an Omitted type with a default value
+                    kws[name] = types.Omitted(default)
+
+        # FIXME: ensure the order is correct
+        flatten_args = tuple(args) + tuple(kws.values())
+
+        cache_key = (
+            self.context,
+            flatten_args,
+            tuple(),
+            tuple(sorted(dict_flags.items(), key=lambda item: item[0])),
+        )
         try:
-            impl, args = self._impl_cache[cache_key]
+            impl, _ = self._impl_cache[cache_key]
             return impl, args
         except KeyError:
             # pass and try outside the scope so as to not have KeyError with a
@@ -808,14 +838,20 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         # check that the typing and impl sigs match up
         if self._strict:
             self._validate_sigs(self._overload_func, pyfunc)
+
         # Make dispatcher
         jitdecor = jitter(**self._jit_options)
         disp = jitdecor(pyfunc)
         # Make sure that the implementation can be fully compiled
         disp_type = types.Dispatcher(disp)
-        disp_type.get_call_type(self.context, args, kws)
-        if cache_key is not None:
-            self._impl_cache[cache_key] = disp, args
+        sig = disp_type.get_call_type(self.context, args, kws)
+
+        if sig is not None:
+            flatten_args = sig.args
+
+            if cache_key is not None:
+                self._impl_cache[cache_key] = disp, flatten_args
+
         return disp, args
 
     def get_impl_key(self, sig):
