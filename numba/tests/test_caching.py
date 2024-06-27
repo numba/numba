@@ -1,4 +1,5 @@
 import inspect
+from pathlib import Path
 import llvmlite.binding as ll
 import multiprocessing
 import numpy as np
@@ -771,7 +772,7 @@ def add(x, y):
 
         locator = _ZipCacheLocator.from_function(mock_func, zip_path)
         self.assertIsNotNone(locator)
-        self.assertEqual(locator._zip_path, "/path/to/archive.zip")
+        self.assertEqual(locator._zip_path, str(Path("/path/to/archive.zip")))
         self.assertEqual(locator._internal_path, "module.py")
 
     def test_zip_locator_non_zip_path(self):
