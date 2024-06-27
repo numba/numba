@@ -319,6 +319,9 @@ class _ZipCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
         self._py_file = py_file
         self._lineno = py_func.__code__.co_firstlineno
         self._zip_path, self._internal_path = self._split_zip_path(py_file)
+        # We use AppDirs at the moment. A more advanced version of this could also allow
+        # a provided `cache_dir`, though that starts to create (cache location x source
+        # type) number of cache classes.
         appdirs = AppDirs(appname="numba", appauthor=False)
         cache_dir = appdirs.user_cache_dir
         cache_subpath = self.get_suitable_cache_subpath(py_file)
