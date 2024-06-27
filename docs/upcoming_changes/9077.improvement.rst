@@ -2,7 +2,7 @@ First-class function improvements
 ---------------------------------
 
 Passing a jit function as a parameter to another jit function that accepts it as
- a ``FunctionType`` has two new improvements.
+a ``FunctionType`` has two new improvements.
 
 First, the compiler can now inline a jit function that is passed as a non-local 
 variable (like a global variable) to another jit function. Previously, the 
