@@ -17,6 +17,8 @@ import uuid
 import warnings
 
 from numba.misc.appdirs import AppDirs
+import zipfile
+from pathlib import Path
 
 import numba
 from numba.core.errors import NumbaWarning
@@ -308,6 +310,45 @@ class _IPythonCacheLocator(_CacheLocator):
         return self
 
 
+class _ZipCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
+    """
+    A locator for functions backed by Python modules within a zip archive.
+    """
+
+    def __init__(self, py_func, py_file):
+        self._py_file = py_file
+        self._lineno = py_func.__code__.co_firstlineno
+        self._zip_path, self._internal_path = self._split_zip_path(py_file)
+        appdirs = AppDirs(appname="numba", appauthor=False)
+        cache_dir = appdirs.user_cache_dir
+        cache_subpath = self.get_suitable_cache_subpath(py_file)
+        self._cache_path = os.path.join(cache_dir, cache_subpath)
+
+    @staticmethod
+    def _split_zip_path(py_file):
+        path = Path(py_file)
+        for i, part in enumerate(path.parts):
+            if part.endswith(".zip"):
+                zip_path = str(Path(*path.parts[: i + 1]))
+                internal_path = str(Path(*path.parts[i + 1 :]))
+                return zip_path, internal_path
+        return None, None
+
+    def get_cache_path(self):
+        return self._cache_path
+
+    def get_source_stamp(self):
+        if self._zip_path:
+            st = os.stat(self._zip_path)
+            return st.st_mtime, st.st_size
+        return super().get_source_stamp()
+
+    @classmethod
+    def from_function(cls, py_func, py_file):
+        if ".zip" not in py_file:
+            return None
+        return cls(py_func, py_file)
+
 class CacheImpl(metaclass=ABCMeta):
     """
     Provides the core machinery for caching.
@@ -315,10 +356,14 @@ class CacheImpl(metaclass=ABCMeta):
     - control the filename of the cache.
     - provide the cache locator
     """
-    _locator_classes = [_UserProvidedCacheLocator,
-                        _InTreeCacheLocator,
-                        _UserWideCacheLocator,
-                        _IPythonCacheLocator]
+
+    _locator_classes = [
+        _UserProvidedCacheLocator,
+        _InTreeCacheLocator,
+        _UserWideCacheLocator,
+        _IPythonCacheLocator,
+        _ZipCacheLocator,
+    ]
 
     def __init__(self, py_func):
         self._lineno = py_func.__code__.co_firstlineno
