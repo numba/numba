@@ -394,6 +394,11 @@ class CPUCallConv(BaseCallConv):
         exc = (exc, exc_args, locinfo)
         return exc
 
+    def emit_excinfo_store_with_md(self, builder, value, excinfo_ptr):
+        store = builder.store(value, excinfo_ptr)
+        md = builder.module.add_metadata([ir.IntType(1)(1)])
+        store.set_metadata("numba_exception_output", md)
+
     def set_static_user_exc(self, builder, exc, exc_args=None, loc=None,
                             func_name=None):
         if exc is not None and not issubclass(exc, BaseException):
@@ -447,9 +452,7 @@ class CPUCallConv(BaseCallConv):
         exc = self.build_excinfo_struct(exc, exc_args, loc, func_name)
         struct_gv = pyapi.serialize_object(exc)
         excptr = self._get_excinfo_argument(builder.function)
-        store = builder.store(struct_gv, excptr)
-        md = builder.module.add_metadata([ir.IntType(1)(1)])
-        store.set_metadata("numba_exception_output", md)
+        self.emit_excinfo_store_with_md(builder, struct_gv, excptr)
 
     def return_user_exc(self, builder, exc, exc_args=None, loc=None,
                         func_name=None):
@@ -712,7 +715,7 @@ class CPUCallConv(BaseCallConv):
                       int32_t(len(struct_type)))
         for idx, arg in enumerate(exc_fields):
             builder.store(arg, builder.gep(excinfo_p, [zero, int32_t(idx)]))
-        builder.store(excinfo_p, excinfo_pp)
+        self.emit_excinfo_store_with_md(builder, excinfo_p, excinfo_pp)
 
     def return_dynamic_user_exc(self, builder, exc, exc_args, nb_types,
                                 loc=None, func_name=None):
@@ -762,12 +765,12 @@ class CPUCallConv(BaseCallConv):
         # will run normally.
         excinfoptr = self._get_excinfo_argument(builder.function)
         null = cgutils.get_null_value(excinfoptr.type.pointee)
-        builder.store(null, excinfoptr)
+        self.emit_excinfo_store_with_md(builder, null, excinfoptr)
 
     def return_status_propagate(self, builder, status):
         trystatus = self.check_try_status(builder)
         excptr = self._get_excinfo_argument(builder.function)
-        builder.store(status.excinfoptr, excptr)
+        self.emit_excinfo_store_with_md(builder, status.excinfoptr, excptr)
         with builder.if_then(builder.not_(trystatus.in_try)):
             self._return_errcode_raw(builder, status.code)
 
