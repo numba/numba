@@ -1,0 +1,16 @@
+First-class function improvements
+---------------------------------
+
+Passing a jit function as a parameter to another jit function that accepts it as
+a ``FunctionType`` has two new improvements.
+
+First, the compiler can now inline a jit function that is passed as a non-local 
+variable (like a global variable) to another jit function. Previously, the 
+interpreter had to introspect the function address for first-class function 
+calls, which prevented inlining. With this improvement, the compiler can 
+statically determine the referenced jit function and link in the corresponding 
+LLVM module for optimization, bypassing the need for the GIL entirely.
+
+Second, jit functions used as first-class functions can now raise exceptions. 
+Before this improvement, they were subject to the same restrictions as 
+``@cfunc`` decorated functions, where any exceptions raised were ignored.

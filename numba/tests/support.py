@@ -973,6 +973,13 @@ def redirect_c_stdout():
     return redirect_fd(fd)
 
 
+def redirect_c_stderr():
+    """Redirect C stderr
+    """
+    fd = sys.__stderr__.fileno()
+    return redirect_fd(fd)
+
+
 def run_in_new_process_caching(func, cache_dir_prefix=__name__, verbose=True):
     """Spawn a new process to run `func` with a temporary cache directory.
 

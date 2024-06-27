@@ -1091,15 +1091,73 @@ class Lower(BaseLower):
             raise UnsupportedError(
                 f'mismatch of function types:'
                 f' expected {fnty} but got {types.FunctionType(sig)}')
-        ftype = fnty.ftype
         argvals = self.fold_call_args(
             fnty, sig, expr.args, expr.vararg, expr.kws,
         )
-        func_ptr = self.__get_function_pointer(ftype, expr.func.name, sig=sig)
-        res = self.builder.call(func_ptr, argvals, cconv=fnty.cconv)
-        return res
+        return self.__call_first_class_function_pointer(
+            fnty.ftype, expr.func.name, sig, argvals,
+        )
 
-    def __get_function_pointer(self, ftype, fname, sig=None):
+    def __call_first_class_function_pointer(self, ftype, fname, sig, argvals):
+        """
+        Calls a first-class function pointer.
+
+        This function is responsible for calling a first-class function pointer,
+        which can either be a JIT-compiled function or a Python function. It
+        determines if a JIT address is available, and if so, calls the function
+        using the JIT address. Otherwise, it calls the function using a function
+        pointer obtained from the `__get_first_class_function_pointer` method.
+
+        Args:
+            ftype: The type of the function.
+            fname: The name of the function.
+            sig: The signature of the function.
+            argvals: The argument values to pass to the function.
+
+        Returns:
+            The result of calling the function.
+        """
+        context = self.context
+        builder = self.builder
+        # Determine if jit address is available
+        fstruct = self.loadvar(fname)
+        struct = cgutils.create_struct_proxy(self.typeof(fname))(
+            context, builder, value=fstruct
+        )
+        jit_addr = struct.jit_addr
+        jit_addr.name = f'jit_addr_of_{fname}'
+
+        ctx = context
+        res_slot = cgutils.alloca_once(builder,
+                                       ctx.get_value_type(sig.return_type))
+
+        if_jit_addr_is_null = builder.if_else(
+            cgutils.is_null(builder, jit_addr),
+            likely=False
+        )
+        with if_jit_addr_is_null as (then, orelse):
+            with then:
+                func_ptr = self.__get_first_class_function_pointer(
+                    ftype, fname, sig)
+                res = builder.call(func_ptr, argvals)
+                builder.store(res, res_slot)
+
+            with orelse:
+                llty = ctx.call_conv.get_function_type(
+                    sig.return_type,
+                    sig.args
+                ).as_pointer()
+                func_ptr = builder.bitcast(jit_addr, llty)
+                # call
+                status, res = ctx.call_conv.call_function(
+                    builder, func_ptr, sig.return_type, sig.args, argvals
+                )
+                with cgutils.if_unlikely(builder, status.is_error):
+                    context.call_conv.return_status_propagate(builder, status)
+                builder.store(res, res_slot)
+        return builder.load(res_slot)
+
+    def __get_first_class_function_pointer(self, ftype, fname, sig):
         from numba.experimental.function_type import lower_get_wrapper_address
 
         llty = self.context.get_value_type(ftype)

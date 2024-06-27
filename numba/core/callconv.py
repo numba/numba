@@ -876,9 +876,11 @@ class CPUCallConv(BaseCallConv):
                LLVM style string: "noinline fast"
                Equivalent iterable: ("noinline", "fast")
         """
-        # XXX better fix for callees that are not function values
-        #     (pointers to function; thus have no `.args` attribute)
-        retty = self._get_return_argument(callee.function_type).pointee
+        retty = self.get_return_type(resty).pointee
+        actual_retty = self._get_return_argument(callee.function_type).pointee
+        if retty != actual_retty:
+            m = f"Function type returns {actual_retty} but resty={retty}"
+            raise ValueError(m)
 
         retvaltmp = cgutils.alloca_once(builder, retty)
         # initialize return value to zeros
