@@ -169,23 +169,28 @@ def ol__ufunc_reduce_inner(op, array, dtype, initial):
     # prefer a numba dtype for use within the implementation
     true_dtype = from_dtype(return_dtype)
 
+    @register_jitable(locals={'rv': true_dtype})  # force a return data type
+    def apply(op, a, b):
+        rv = op(a, b)
+        return rv
+
     def implementation(op, array, dtype, initial):
         iterator = np.nditer(array)
 
         if initial is not None:
             # must cast initial to the output data type before use
-            out = true_dtype(initial)
+            out = np.array(initial, true_dtype).item()
         elif identity is not None:
             out = identity
         else:
             for aa in iterator:
-                out = true_dtype(aa.item())
+                out = aa.astype(true_dtype).item()
                 break
             else:
                 raise ValueError(zero_size_message)
 
         for aa in iterator:
-            out = true_dtype(op(out, aa.item()))
+            out = apply(op, out, aa.item())
         return out
     return implementation
 
