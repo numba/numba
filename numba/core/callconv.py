@@ -684,7 +684,10 @@ class CPUCallConv(BaseCallConv):
 
         # serialize comp. time args
         pyapi = self.context.get_python_api(builder)
-        exc = self.build_excinfo_struct(exc, exc_args, loc, func_name)
+        dummy = self.context.get_dummy_value()
+        exc_args_static = tuple(
+            [dummy if isinstance(arg, ir.Value) else arg for arg in exc_args])
+        exc = self.build_excinfo_struct(exc, exc_args_static, loc, func_name)
         excinfo_pp = self._get_excinfo_argument(builder.function)
         struct_gv = builder.load(pyapi.serialize_object(exc))
 
