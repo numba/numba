@@ -19,6 +19,7 @@ User Manual
    performance-tips.rst
    threading-layer.rst
    cli.rst
+   code_coverage.rst
    troubleshoot.rst
    faq.rst
    examples.rst
