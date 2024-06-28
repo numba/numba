@@ -891,9 +891,10 @@ class ParallelTestRunner(runner.TextTestRunner):
                           for i in range(0, len(self._ptests), chunk_size)]
 
         # Create the manager
-        with multiprocessing.Manager() as manager:
+        mpc = multiprocessing.get_context("spawn")
+        with mpc.Manager() as manager:
             for tests in splitted_tests:
-                pool = multiprocessing.Pool(self.nprocs)
+                pool = mpc.Pool(self.nprocs)
                 queue = manager.Queue()
                 try:
                     self._run_parallel_tests(result, pool, child_runner, tests,

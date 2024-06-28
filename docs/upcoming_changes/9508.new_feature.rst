@@ -1,0 +1,7 @@
+Added compile-time code coverage
+--------------------------------
+
+Support for emitting compile-time coverage data is added.
+This feature is automatically activated when running Python under ``coverage``. 
+It collects data during the compiler's lowering phase, showing source lines 
+compiled into LLVM-IR, excluding dead-code eliminated lines. 

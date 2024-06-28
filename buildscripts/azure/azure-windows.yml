@@ -51,7 +51,7 @@ jobs:
         call activate %CONDA_ENV%
         set NUMBA_ENABLE_CUDASIM=1
         echo "Running shard of discovered tests: %TEST_START_INDEX%,None,%TEST_COUNT%"
-        python -m numba.runtests -b -v -g -m 2 -- numba.tests
+        python -m numba.runtests -b -v -g=ancestor -m 2 -- numba.tests
       displayName: 'Test modified test files'
 
     - script: |

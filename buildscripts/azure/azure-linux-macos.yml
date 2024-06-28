@@ -49,6 +49,18 @@ jobs:
         export PATH=$HOME/miniconda3/bin:$PATH
         buildscripts/incremental/test.sh
       displayName: 'Test'
+    
+    - script: |
+        pip install codecov-cli
+        codecovcli --auto-load-params-from AzurePipelines --codecov-yml-path codecov.yml upload-process --git-service github --plugin pycoverage --disable-search --file cov.xml --commit-sha $(system.pullRequest.sourceCommitId)
+      displayName: 'Upload to codecov.io (tokenless)' 
+      condition: eq(variables['RUN_COVERAGE'], 'yes')
+    
+    - task: PublishCodeCoverageResults@2
+      condition: eq(variables['RUN_COVERAGE'], 'yes')
+      inputs:
+        codeCoverageTool: Cobertura
+        summaryFileLocation: '$(System.DefaultWorkingDirectory)/**/cov.xml'
 
     - task: PublishTestResults@2
       condition: succeededOrFailed()
@@ -56,3 +68,5 @@ jobs:
       inputs:
         testResultsFiles: 'junit_numba_*.xml'
         mergeTestResults: true
+
+
