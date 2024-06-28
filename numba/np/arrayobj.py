@@ -32,6 +32,7 @@ from numba.core.extending import (register_jitable, overload, overload_method,
                                   intrinsic, overload_attribute)
 from numba.misc import quicksort, mergesort
 from numba.cpython import slicing
+from numba.cpython.charseq import _make_constant_bytes, bytes_type
 from numba.cpython.unsafe.tuple import tuple_setitem, build_full_slice_tuple
 from numba.core.extending import overload_classmethod
 from numba.core.typing.npydecl import (parse_dtype as ty_parse_dtype,
@@ -2870,6 +2871,42 @@ def array_ctypes_to_pointer(context, builder, fromty, toty, val):
     return impl_ret_untracked(context, builder, toty, res)
 
 
+@lower_cast(types.Array, types.Bytes)
+def array_to_bytes(context, builder, fromty, toty, val):
+    arrty = make_array(fromty)
+    arr = arrty(context, builder, val)
+
+    itemsize = arr.itemsize
+    nbytes = builder.mul(itemsize, arr.nitems)
+
+    bstr = _make_constant_bytes(context, builder, nbytes)
+
+    if (fromty.is_c_contig and fromty.layout == "C"):
+        cgutils.raw_memcpy(builder, bstr.data, arr.data, arr.nitems, itemsize)
+    else:
+        shape = cgutils.unpack_tuple(builder, arr.shape)
+        strides = cgutils.unpack_tuple(builder, arr.strides)
+        layout = fromty.layout
+        intp_t = context.get_value_type(types.intp)
+
+        byteidx = cgutils.alloca_once(
+            builder, intp_t, name="byteptr", zfill=True
+        )
+        with cgutils.loop_nest(builder, shape, intp_t) as indices:
+            ptr = cgutils.get_item_pointer2(
+                context, builder, arr.data, shape, strides, layout, indices
+            )
+            srcptr = builder.bitcast(ptr, bstr.data.type)
+
+            idx = builder.load(byteidx)
+            destptr = builder.gep(bstr.data, [idx])
+
+            cgutils.memcpy(builder, destptr, srcptr, itemsize)
+            builder.store(builder.add(idx, itemsize), byteidx)
+
+    return bstr._getvalue()
+
+
 def _call_contiguous_check(checker, context, builder, aryty, ary):
     """Helper to invoke the contiguous checker function on an array
 
@@ -5059,6 +5096,25 @@ def array_astype(context, builder, sig, args):
         store_item(context, builder, rettype, item, dest_ptr)
 
     return impl_ret_new_ref(context, builder, sig.return_type, ret._getvalue())
+
+
+@intrinsic
+def _array_tobytes_intrinsic(typingctx, b):
+    assert isinstance(b, types.Array)
+    sig = bytes_type(b)
+
+    def codegen(context, builder, sig, args):
+        [arr] = args
+        return array_to_bytes(context, builder, b, bytes_type, arr)
+    return sig, codegen
+
+
+@overload_method(types.Array, "tobytes")
+def impl_array_tobytes(arr):
+    if isinstance(arr, types.Array):
+        def impl(arr):
+            return _array_tobytes_intrinsic(arr)
+        return impl
 
 
 @intrinsic
