@@ -410,3 +410,12 @@ def tuple_index(tup, value):
 def in_seq_empty_tuple(x, y):
     if isinstance(x, types.Tuple) and not x.types:
         return lambda x, y: False
+
+
+@overload_method(types.UniTuple, '__str__')
+def ol_tuple_str(tup):
+    if isinstance(tup.dtype, types.Integer):
+        def impl(tup):
+            seq = ", ".join(map(str, tup))
+            return f"({seq})"
+        return impl
