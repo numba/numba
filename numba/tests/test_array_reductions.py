@@ -307,6 +307,10 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             got = cfunc(arr)
             self.assertPreciseEqual(got, expected)
 
+        # check for empty array
+        a = np.array([])
+        check(a)
+
         # Odd sizes
         def check_odd(a):
             check(a)
