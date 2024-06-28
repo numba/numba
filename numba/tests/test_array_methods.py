@@ -1583,16 +1583,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError):
             cfunc(A, [1.7])
 
-        # check unsupported arg raises
-        with self.assertRaises(TypingError):
-            take_kws = jit(nopython=True)(array_take_kws)
-            take_kws(A, 1, 1)
-
-        # check kwarg unsupported raises
-        with self.assertRaises(TypingError):
-            take_kws = jit(nopython=True)(array_take_kws)
-            take_kws(A, 1, axis=1)
-
         #exceptions leak refs
         self.disable_leak_check()
 

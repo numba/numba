@@ -1,0 +1,4 @@
+Add ``axis`` support to ``np.take``
+-----------------------------------
+
+Add support for ``axis`` keyword in ``np.take``.
