@@ -531,6 +531,18 @@ class TestRandom(BaseTest):
                        {'low': -2.5, 'high': 1e3},
                        {'low': 1.5, 'high': -2.5}])
 
+    def test_numpy_uniform_empty_size(self):
+        self._check_any_distrib_kwargs(
+            jit_with_kwargs("np.random.uniform", ['low', 'high', 'size']),
+            get_np_state_ptr(),
+            'uniform',
+            paramlist=[{'low': 1.5, 'high': 1e6, 'size': ()},
+                       {'low': -2.5, 'high': 1e3, 'size': ()},
+                       {'low': 1.5, 'high': -2.5, 'size': ()},
+                       {'low': 1.5, 'high': 1e6, 'size': None},
+                       {'low': -2.5, 'high': 1e3, 'size': None},
+                       {'low': 1.5, 'high': -2.5, 'size': None},])
+
     def _check_triangular(self, func2, func3, ptr):
         """
         Check a triangular()-like function.
