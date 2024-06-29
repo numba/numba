@@ -667,6 +667,12 @@ def np_uniform_impl3(low, high, size):
         return lambda low, high, size: np.random.uniform(low, high)
     if (isinstance(low, (types.Float, types.Integer)) and isinstance(
             high, (types.Float, types.Integer)) and
+       (isinstance(size, types.Tuple) and len(size.types) == 0)):
+        # When calling np.random.uniform with size = (), the returned value isn't a
+        # float like when size = None. Instead, it's an array of shape ()
+        return lambda low, high, size: np.array(np.random.uniform(low, high))
+    if (isinstance(low, (types.Float, types.Integer)) and isinstance(
+            high, (types.Float, types.Integer)) and
        (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
                                             and isinstance(size.dtype,
                                                            types.Integer)))):
