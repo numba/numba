@@ -4,6 +4,7 @@ of jitclasses for use inside the python interpreter.
 """
 
 from functools import wraps, partial
+import typing as pt
 
 from llvmlite import ir
 
@@ -30,14 +31,14 @@ def method(__numba_self_, *args):
 """
 
 
-def _generate_property(field, template, fname):
+def _generate_property(field, jit_options: dict[str, pt.Any], template, fname):
     """
     Generate simple function that get/set a field of the instance
     """
     source = template.format(field)
     glbls = {}
     exec(source, glbls)
-    return njit(glbls[fname])
+    return njit(glbls[fname], **jit_options)
 
 
 _generate_getter = partial(_generate_property, template=_getter_code_template,
@@ -46,15 +47,15 @@ _generate_setter = partial(_generate_property, template=_setter_code_template,
                            fname='mutator')
 
 
-def _generate_method(name, func):
+def _generate_method(name, func, jit_options: dict[str, pt.Any]):
     """
     Generate a wrapper for calling a method.  Note the wrapper will only
     accept positional arguments.
     """
     source = _method_code_template.format(method=name)
-    glbls = {}
+    glbls: dict[str, pt.Callable] = {}
     exec(source, glbls)
-    method = njit(glbls['method'])
+    method = njit(glbls['method'], **jit_options)
 
     @wraps(func)
     def wrapper(*args, **kwargs):
@@ -64,6 +65,10 @@ def _generate_method(name, func):
 
 
 _cache_specialized_box = {}
+
+
+def _remove_njit(opts: dict[str, pt.Any]) -> dict[str, pt.Any]:
+    return {k: v for k, v in opts.items() if k != "nopython"}
 
 
 def _specialize_box(typ):
@@ -81,17 +86,21 @@ def _specialize_box(typ):
            }
     # Inject attributes as class properties
     for field in typ.struct:
-        getter = _generate_getter(field)
-        setter = _generate_setter(field)
+        getter = _generate_getter(field, {})
+        setter = _generate_setter(field, {})
         dct[field] = property(getter, setter)
     # Inject properties as class properties
     for field, impdct in typ.jit_props.items():
         getter = None
         setter = None
         if 'get' in impdct:
-            getter = _generate_getter(field)
+            getter = _generate_getter(
+                field, _remove_njit(impdct["get"].targetoptions)
+            )
         if 'set' in impdct:
-            setter = _generate_setter(field)
+            setter = _generate_setter(
+                field, _remove_njit(impdct["set"].targetoptions)
+            )
         # get docstring from either the fget or fset
         imp = impdct.get('get') or impdct.get('set') or None
         doc = getattr(imp, '__doc__', None)
@@ -167,11 +176,17 @@ def _specialize_box(typ):
             and name not in supported_dunders
         ):
             raise TypeError(f"Method '{name}' is not supported.")
-        dct[name] = _generate_method(name, func)
+        dct[name] = _generate_method(
+            name, func, _remove_njit(typ.jit_methods[name].targetoptions)
+        )
 
     # Inject static methods as class members
     for name, func in typ.static_methods.items():
-        dct[name] = _generate_method(name, func)
+        dct[name] = _generate_method(
+            name,
+            func,
+            _remove_njit(typ.jit_static_methods[name].targetoptions)
+        )
 
     # Create subclass
     subcls = type(typ.classname, (_box.Box,), dct)
