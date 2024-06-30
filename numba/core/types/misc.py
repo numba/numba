@@ -8,6 +8,7 @@ from numba.core.typeconv import Conversion
 from numba.core.errors import TypingError, LiteralTypingError
 from numba.core.ir import UndefinedType
 from numba.core.utils import get_hashable_key
+from numba.misc.inspection import find_class_source
 
 
 class PyObject(Dummy):
@@ -438,7 +439,7 @@ class ClassType(Callable, Opaque):
         fielddesc = ','.join("{0}:{1}".format(k, v) for k, v in struct.items())
         try:
             source_hash = hashlib.md5(
-                inspect.getsource(class_def).encode()
+                find_class_source(class_def).encode()
             ).hexdigest()
         except OSError:
             source_hash = str(id(self))
