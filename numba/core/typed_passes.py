@@ -487,7 +487,9 @@ class BaseNativeLowering(abc.ABC, LoweringPass):
                 del lower
 
             from numba.core.compiler import _LowerResult  # TODO: move this
-            if flags.no_compile:
+            if flags.no_compile or flags.no_cpython_wrapper:
+                if flags.no_cpython_wrapper:
+                    targetctx.insert_user_function(fndesc, fndesc, [library])
                 state['cr'] = _LowerResult(fndesc, call_helper,
                                            cfunc=None, env=env)
             else:
