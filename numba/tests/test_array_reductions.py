@@ -592,6 +592,12 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         arr = arr.reshape((3, 2))
         expected, got = run_comparative(pyfunc, arr)
         self.assertPreciseEqual(got, expected)
+        arr = np.array([127, 2], dtype=np.int8)
+        expected, got = run_comparative(pyfunc, arr)
+        self.assertPreciseEqual(got, expected)
+        arr = np.array([255, 2], dtype=np.uint8)
+        expected, got = run_comparative(pyfunc, arr)
+        self.assertPreciseEqual(got, expected)
 
     def test_array_cumsum(self):
         self.check_cumulative(array_cumsum)
