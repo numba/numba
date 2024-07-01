@@ -1,9 +1,11 @@
 import unittest
 import itertools
 import numpy as np
-from numba.misc.dummyarray import Array
+from numba.cuda.cudadrv.dummyarray import Array
+from numba.cuda.testing import skip_on_cudasim
 
 
+@skip_on_cudasim("Tests internals of the CUDA driver device array")
 class TestSlicing(unittest.TestCase):
 
     def assertSameContig(self, arr, nparr):
@@ -162,6 +164,7 @@ class TestSlicing(unittest.TestCase):
         self.assertEqual(z.flags['F_CONTIGUOUS'], arr.flags['F_CONTIGUOUS'])
 
 
+@skip_on_cudasim("Tests internals of the CUDA driver device array")
 class TestReshape(unittest.TestCase):
     def test_reshape_2d2d(self):
         nparr = np.empty((4, 5))
@@ -260,7 +263,8 @@ class TestReshape(unittest.TestCase):
 
         with self.assertRaises(ValueError) as raises:
             arr.reshape(-1, -1, 3)
-        self.assertIn('can only specify one unknown dimension', str(raises.exception))
+        self.assertIn('can only specify one unknown dimension',
+                      str(raises.exception))
 
     def test_reshape_infer_invalid_shape(self):
         nparr = np.empty((3, 4, 5))
@@ -269,15 +273,19 @@ class TestReshape(unittest.TestCase):
 
         with self.assertRaises(ValueError) as raises:
             arr.reshape(-1, 7)
-        self.assertIn('cannot infer valid shape for unknown dimension', str(raises.exception))
+
+        expected_message = 'cannot infer valid shape for unknown dimension'
+        self.assertIn(expected_message, str(raises.exception))
 
 
+@skip_on_cudasim("Tests internals of the CUDA driver device array")
 class TestSqueeze(unittest.TestCase):
     def test_squeeze(self):
         nparr = np.empty((1, 2, 1, 4, 1, 3))
         arr = Array.from_desc(
             0, nparr.shape, nparr.strides, nparr.dtype.itemsize
         )
+
         def _assert_equal_shape_strides(arr1, arr2):
             self.assertEqual(arr1.shape, arr2.shape)
             self.assertEqual(arr1.strides, arr2.strides)
@@ -299,6 +307,7 @@ class TestSqueeze(unittest.TestCase):
             arr.squeeze(axis=(2, 3))
 
 
+@skip_on_cudasim("Tests internals of the CUDA driver device array")
 class TestExtent(unittest.TestCase):
     def test_extent_1d(self):
         nparr = np.empty(4)
@@ -331,6 +340,7 @@ class TestExtent(unittest.TestCase):
         self.assertEqual(len(list(arr[::2].iter_contiguous_extent())), 2)
 
 
+@skip_on_cudasim("Tests internals of the CUDA driver device array")
 class TestIterate(unittest.TestCase):
     def test_for_loop(self):
         # for #4201
@@ -342,9 +352,8 @@ class TestIterate(unittest.TestCase):
         x = 0  # just a placeholder
         # this loop should not raise AssertionError
         for val in arr:
-            x = val
+            x = val  # noqa: F841
 
 
 if __name__ == '__main__':
     unittest.main()
-

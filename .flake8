@@ -48,7 +48,6 @@ exclude =
     numba/core/caching.py
     numba/core/debuginfo.py
     numba/core/annotations/pretty_annotate.py
-    numba/misc/dummyarray.py
     numba/core/dataflow.py
     numba/core/pythonapi.py
     numba/core/decorators.py
@@ -104,7 +103,6 @@ exclude =
     numba/tests/test_jitmethod.py
     numba/tests/test_inlining.py
     numba/tests/test_array_manipulation.py
-    numba/tests/test_dummyarray.py
     numba/tests/test_smart_array.py
     numba/tests/test_linalg.py
     numba/tests/test_threadsafety.py
@@ -234,7 +232,6 @@ exclude =
     numba/testing/notebook.py
     numba/testing/main.py
     numba/np/unsafe/ndarray.py
-    numba/np/ufunc/deviceufunc.py
     numba/np/ufunc/sigparse.py
     numba/parfors/parfor_lowering.py
     numba/np/ufunc/array_exprs.py

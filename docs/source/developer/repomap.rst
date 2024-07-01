@@ -236,8 +236,6 @@ Misc Support
 - :ghfile:`numba/np/unsafe/ndarray.py` - NumPy array helpers
 - :ghfile:`numba/core/unsafe/bytes.py` - Copying and dereferencing data from
   void pointers
-- :ghfile:`numba/misc/dummyarray.py` - Used by GPU backends to hold array
-  information on the host, but not the data.
 - :ghfile:`numba/core/callwrapper.py` - Handles argument unboxing and releasing
   the GIL when moving from Python to nopython mode
 - :ghfile:`numba/np/numpy_support.py` - Helper functions for working with NumPy
@@ -438,8 +436,6 @@ Ufunc Compiler and Runtime
 - :ghfile:`numba/np/ufunc/_internal.{h,c}` - Python extension module with
   helper functions that use CPython & NumPy C API
 - :ghfile:`numba/np/ufunc/_ufunc.c` - Used by `_internal.c`
-- :ghfile:`numba/np/ufunc/deviceufunc.py` - Custom ufunc dispatch for
-  non-CPU targets
 - :ghfile:`numba/np/ufunc/gufunc_scheduler.{h,cpp}` - Schedule work chunks
   to threads
 - :ghfile:`numba/np/ufunc/dufunc.py` - Special ufunc that can compile new
@@ -519,6 +515,7 @@ Note that the CUDA target does reuse some parts of the CPU target.
   and associated unit tests
 - :ghfile:`numba/cuda/decorators.py` - Compiler decorators for CUDA kernels
   and device functions
+- :ghfile:`numba/cuda/deviceufunc.py` - Custom ufunc dispatch for CUDA
 - :ghfile:`numba/cuda/dispatcher.py` - Dispatcher for CUDA JIT functions
 - :ghfile:`numba/cuda/printimpl.py` - Special implementation of device printing
 - :ghfile:`numba/cuda/libdevice.py` - Registers libdevice functions
@@ -556,6 +553,8 @@ Note that the CUDA target does reuse some parts of the CPU target.
   on GPU
 - :ghfile:`numba/cuda/codegen.py` - Code generator object for CUDA target
 - :ghfile:`numba/cuda/cudadrv/` - Wrapper around CUDA driver API
+- :ghfile:`numba/cuda/cudadrv/dummyarray.py` - Used to hold array information
+  on the host, but not the data.
 - :ghfile:`numba/cuda/tests/` - CUDA unit tests, skipped when CUDA is not
   detected
 - :ghfile:`numba/cuda/tests/cudasim/` - Tests of CUDA simulator
