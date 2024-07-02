@@ -325,7 +325,10 @@ numba_adapt_ndarray(PyObject *obj, arystruct_t* arystruct) {
     npy_intp *p;
 
     if (!PyArray_Check(obj)) {
-        return -1;
+        obj = PyObject_CallMethod(obj, "__array__", NULL);
+        if (!obj) {
+            return -1;
+        }
     }
 
     ndary = (PyArrayObject*)obj;

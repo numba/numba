@@ -687,7 +687,10 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         try:
             tp = typeof(val, Purpose.argument)
         except ValueError:
-            tp = types.pyobject
+            if hasattr(val, '__array__'):
+                tp = typeof(val.__array__(), Purpose.argument)
+            else:
+                tp = types.pyobject
         else:
             if tp is None:
                 tp = types.pyobject
