@@ -843,6 +843,9 @@ def _gammavariate_impl(_random):
 def gamma_impl(shape, scale, size):
     if is_nonelike(size):
         return lambda shape, scale, size: np.random.gamma(shape, scale)
+    if is_empty_tuple(size):
+        # Handle size = ()
+        return lambda shape, scale, size: np.array(np.random.gamma(shape, scale))
     if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                            isinstance(size.dtype,
                                                       types.Integer)):
