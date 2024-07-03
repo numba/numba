@@ -2225,6 +2225,12 @@ def noncentral_chisquare(df, nonc, size=None):
              validate_noncentral_chisquare_input(df, nonc)
              return noncentral_chisquare_single(df, nonc)
          return noncentral_chisquare_impl
+     if is_empty_tuple(size):
+         # Handle size = ()
+         def noncentral_chisquare_impl(df, nonc, size=None):
+             validate_noncentral_chisquare_input(df, nonc)
+             return np.array(noncentral_chisquare_single(df, nonc))
+         return noncentral_chisquare_impl
      elif isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
                                               and isinstance(size.dtype,
                                                              types.Integer)):
