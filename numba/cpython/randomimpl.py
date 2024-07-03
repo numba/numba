@@ -1754,6 +1754,9 @@ def rayleigh_impl1(scale):
 def rayleigh_impl2(scale, size):
     if is_nonelike(size):
         return lambda scale, size: np.random.rayleigh(scale)
+    if is_empty_tuple(size):
+        # Handle size = ()
+        return lambda scale, size: np.array(np.random.rayleigh(scale))
     if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                            isinstance(size.dtype,
                                                       types.Integer)):
