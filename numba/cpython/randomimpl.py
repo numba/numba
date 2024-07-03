@@ -1821,6 +1821,8 @@ def standard_t_impl(df):
 def standard_t_impl2(df, size):
     if is_nonelike(size):
         return lambda df, size: np.random.standard_t(df)
+    if is_empty_tuple(size):
+        return lambda df, size: np.array(np.random.standard_t(df))
     if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                            isinstance(size.dtype,
                                                       types.Integer)):
