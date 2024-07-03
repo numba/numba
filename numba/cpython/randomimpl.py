@@ -759,6 +759,11 @@ def triangular_impl(left, mode, right, size=None):
         return lambda left, mode, right, size=None: np.random.triangular(left,
                                                                          mode,
                                                                          right)
+    if is_empty_tuple(size):
+        # Handle size = ()
+        return lambda left, mode, right, size=None: np.array(
+            np.random.triangular(left, mode, right)
+        )
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                             isinstance(size.dtype,
                                                        types.Integer))):
