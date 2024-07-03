@@ -1222,6 +1222,14 @@ def is_nonelike(ty):
     )
 
 
+def is_empty_tuple(ty):
+    """ returns if 'ty' is an empty tuple """
+    return (
+        isinstance(ty, types.Tuple) and
+        len(ty.types) == 0
+    )
+
+
 def create_constant_array(ty, val):
     """
     Create an LLVM-constant of a fixed-length array from Python values.

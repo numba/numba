@@ -10,7 +10,7 @@ import numpy as np
 
 from llvmlite import ir
 
-from numba.core.cgutils import is_nonelike
+from numba.core.cgutils import is_nonelike, is_empty_tuple
 from numba.core.extending import intrinsic, overload, register_jitable
 from numba.core.imputils import (Registry, impl_ret_untracked,
                                     impl_ret_new_ref)
@@ -667,7 +667,7 @@ def np_uniform_impl3(low, high, size):
         return lambda low, high, size: np.random.uniform(low, high)
     if (isinstance(low, (types.Float, types.Integer)) and isinstance(
             high, (types.Float, types.Integer)) and
-       (isinstance(size, types.Tuple) and len(size.types) == 0)):
+        is_empty_tuple(size)):
         # When calling np.random.uniform with size = (), the returned value isn't a
         # float like when size = None. Instead, it's an array of shape ()
         return lambda low, high, size: np.array(np.random.uniform(low, high))
