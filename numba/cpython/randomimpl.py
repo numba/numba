@@ -1429,6 +1429,10 @@ def hypergeometric_impl(ngood, nbad, nsample, size):
     if is_nonelike(size):
         return lambda ngood, nbad, nsample, size:\
             np.random.hypergeometric(ngood, nbad, nsample)
+    if is_empty_tuple(size):
+        # Handle size = ()
+        return lambda ngood, nbad, nsample, size:\
+            np.array(np.random.hypergeometric(ngood, nbad, nsample))
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
                                             and isinstance(size.dtype,
                                                            types.Integer))):
