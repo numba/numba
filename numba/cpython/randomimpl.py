@@ -1016,6 +1016,9 @@ def np_log_normal_impl2(mean, sigma):
 def lognormal_impl(mean, sigma, size):
     if is_nonelike(size):
         return lambda mean, sigma, size: np.random.lognormal(mean, sigma)
+    if is_empty_tuple(size):
+        # Handle size = ()
+        return lambda mean, sigma, size: np.array(np.random.lognormal(mean, sigma))
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                             isinstance(size.dtype,
                                                        types.Integer))):
