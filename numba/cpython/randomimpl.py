@@ -258,6 +258,9 @@ def random_impl0():
 def random_impl1(size=None):
     if is_nonelike(size):
         return lambda size=None: np.random.random()
+    if is_empty_tuple(size):
+        # Handle size = ()
+        return lambda size=None: np.array(np.random.random())
     if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
                                            and isinstance(size.dtype,
                                                           types.Integer)):
