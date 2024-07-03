@@ -1273,6 +1273,8 @@ def chisquare_impl(df):
 def chisquare_impl2(df, size):
     if is_nonelike(size):
         return lambda df, size: np.random.chisquare(df)
+    if is_empty_tuple(size):
+        return lambda df, size: np.array(np.random.chisquare(df))
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                             isinstance(size.dtype,
                                                        types.Integer))):
