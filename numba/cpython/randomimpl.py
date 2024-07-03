@@ -1566,6 +1566,8 @@ def logseries_impl(p):
 def logseries_impl(p, size):
     if is_nonelike(size):
         return lambda p, size: np.random.logseries(p)
+    if is_empty_tuple(size):
+        return lambda p, size: np.array(np.random.logseries(p))
     if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                            isinstance(size.dtype,
                                                       types.Integer)):
