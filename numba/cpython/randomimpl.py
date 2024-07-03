@@ -1355,6 +1355,9 @@ def geometric_impl(p):
 def geometric_impl(p, size):
     if is_nonelike(size):
         return lambda p, size: np.random.geometric(p)
+    if is_empty_tuple(size):
+        # Handle size = ()
+        return lambda p, size: np.array(np.random.geometric(p))
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                             isinstance(size.dtype,
                                                        types.Integer))):
