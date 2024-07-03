@@ -1210,6 +1210,9 @@ def _vonmisesvariate_impl(_random):
 def vonmises_impl(mu, kappa, size):
     if is_nonelike(size):
         return lambda mu, kappa, size: np.random.vonmises(mu, kappa)
+    if is_empty_tuple(size):
+        # Handle size = ()
+        return lambda mu, kappa, size: np.array(np.random.vonmises(mu, kappa))
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
                                             and isinstance(size.dtype,
                                                            types.Integer))):
