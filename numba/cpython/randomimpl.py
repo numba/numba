@@ -2113,7 +2113,7 @@ def dirichlet(alpha, size=None):
             "array or sequence, got %s" % (alpha,)
         )
 
-    if size in (None, types.none):
+    if size in (None, types.none) or is_empty_tuple(size):
 
         def dirichlet_impl(alpha, size=None):
             out = np.empty(len(alpha))
