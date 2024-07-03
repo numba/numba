@@ -1820,7 +1820,7 @@ def standard_t_impl(df):
 @overload(np.random.standard_t)
 def standard_t_impl2(df, size):
     if is_nonelike(size):
-        return lambda p, size: np.random.standard_t(p)
+        return lambda df, size: np.random.standard_t(df)
     if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                            isinstance(size.dtype,
                                                       types.Integer)):
