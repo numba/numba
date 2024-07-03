@@ -992,6 +992,9 @@ def exponential_impl():
 def standard_exponential_impl(size):
     if is_nonelike(size):
         return lambda size: np.random.standard_exponential()
+    if is_empty_tuple(size):
+        # Handle size = ()
+        return lambda size: np.array(np.random.standard_exponential())
     if (isinstance(size, types.Integer) or
        (isinstance(size, types.UniTuple) and isinstance(size.dtype,
                                                         types.Integer))
