@@ -316,6 +316,9 @@ def np_gauss_impl2(loc, scale):
 def standard_normal_impl1(size):
     if is_nonelike(size):
         return lambda size: np.random.standard_normal()
+    if is_empty_tuple(size):
+        # Handle size = ()
+        return lambda size: np.array(np.random.standard_normal())
     if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                            isinstance(size.dtype,
                                                       types.Integer)):
