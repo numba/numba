@@ -1385,6 +1385,9 @@ def gumbel_impl(loc, scale):
 def gumbel_impl3(loc, scale, size):
     if is_nonelike(size):
         return lambda loc, scale, size: np.random.gumbel(loc, scale)
+    if is_empty_tuple(size):
+        # Handle size = ()
+        return lambda loc, scale, size: np.array(np.random.gumbel(loc, scale))
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
                                             and isinstance(size.dtype,
                                                            types.Integer))):
