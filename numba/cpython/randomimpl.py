@@ -1467,6 +1467,9 @@ def laplace_impl2(loc, scale):
 def laplace_impl3(loc, scale, size):
     if is_nonelike(size):
         return lambda loc, scale, size: np.random.laplace(loc, scale)
+    if is_empty_tuple(size):
+        # Handle size = ()
+        return lambda loc, scale, size: np.array(np.random.laplace(loc, scale))
     if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                            isinstance(size.dtype,
                                                       types.Integer)):
