@@ -1074,6 +1074,9 @@ def pareto_impl(a):
 def pareto_impl(a, size):
     if is_nonelike(size):
         return lambda a, size: np.random.pareto(a)
+    if is_empty_tuple(size):
+        # Handle size = ()
+        return lambda a, size: np.array(np.random.pareto(a))
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                             isinstance(size.dtype,
                                                        types.Integer))):
