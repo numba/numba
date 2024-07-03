@@ -1909,6 +1909,9 @@ def zipf_impl(a):
 def zipf_impl(a, size):
     if is_nonelike(size):
         return lambda a, size: np.random.zipf(a)
+    if is_empty_tuple(size):
+        # Handle size = ()
+        return lambda a, size: np.array(np.random.zipf(a))
     if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                            isinstance(size.dtype,
                                                       types.Integer)):
