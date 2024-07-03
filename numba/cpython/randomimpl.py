@@ -1307,6 +1307,11 @@ def f_impl(dfnum, dfden, size):
             dfden, (types.Float, types.Integer)) and
        is_nonelike(size)):
         return lambda dfnum, dfden, size: np.random.f(dfnum, dfden)
+    if (isinstance(dfnum, (types.Float, types.Integer)) and isinstance(
+            dfden, (types.Float, types.Integer)) and
+       is_empty_tuple(size)):
+        # Handle size = ()
+        return lambda dfnum, dfden, size: np.array(np.random.f(dfnum, dfden))
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
                                             and isinstance(size.dtype,
                                                            types.Integer))):
