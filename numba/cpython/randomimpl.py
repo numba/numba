@@ -333,6 +333,11 @@ def np_gauss_impl3(loc, scale, size):
         return lambda loc, scale, size: np.random.normal(loc, scale)
     if (isinstance(loc, (types.Float, types.Integer)) and isinstance(
             scale, (types.Float, types.Integer)) and
+       is_empty_tuple(size)):
+        # Handle size = ()
+        return lambda loc, scale, size: np.array(np.random.normal(loc, scale))
+    if (isinstance(loc, (types.Float, types.Integer)) and isinstance(
+            scale, (types.Float, types.Integer)) and
        (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
                                             and isinstance(size.dtype,
                                                            types.Integer)))):
