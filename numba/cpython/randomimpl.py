@@ -1138,6 +1138,9 @@ def weibull_impl(a):
 def weibull_impl2(a, size):
     if is_nonelike(size):
         return lambda a, size: np.random.weibull(a)
+    if is_empty_tuple(size):
+        # Handle size = ()
+        return lambda a, size: np.array(np.random.weibull(a))
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                             isinstance(size.dtype,
                                                        types.Integer))):
