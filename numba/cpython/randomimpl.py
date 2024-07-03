@@ -1244,6 +1244,10 @@ def binomial_impl(n, p):
 def binomial_impl(n, p, size):
     if is_nonelike(size):
         return lambda n, p, size: np.random.binomial(n, p)
+    if is_empty_tuple(size):
+        # When calling np.random.binomial with size = (), the returned value isn't a
+        # float like when size = None. Instead, it's an array of shape ()
+        return lambda n, p, size: np.array(np.random.binomial(n, p))
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                             isinstance(size.dtype,
                                                        types.Integer))):
