@@ -606,6 +606,10 @@ def np_randint_impl_3(low, high, size):
        is_nonelike(size)):
         return lambda low, high, size: np.random.randint(low, high)
     if (isinstance(low, types.Integer) and isinstance(high, types.Integer) and
+       is_empty_tuple(size)):
+        # Handle size = ()
+        return lambda low, high, size: np.array(np.random.randint(low, high))
+    if (isinstance(low, types.Integer) and isinstance(high, types.Integer) and
        (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
                                             and isinstance(size.dtype,
                                                            types.Integer)))):
