@@ -1678,6 +1678,9 @@ def poisson_impl1(lam):
 def poisson_impl2(lam, size):
     if isinstance(lam, (types.Float, types.Integer)) and is_nonelike(size):
         return lambda lam, size: np.random.poisson(lam)
+    if isinstance(lam, (types.Float, types.Integer)) and is_empty_tuple(size):
+        # Handle size = ()
+        return lambda lam, size: np.array(np.random.poisson(lam))
     if isinstance(lam, (types.Float, types.Integer)) and (
             isinstance(size, types.Integer) or
        (isinstance(size, types.UniTuple) and isinstance(size.dtype,
