@@ -667,7 +667,7 @@ def np_uniform_impl3(low, high, size):
         return lambda low, high, size: np.random.uniform(low, high)
     if (isinstance(low, (types.Float, types.Integer)) and isinstance(
             high, (types.Float, types.Integer)) and
-        is_empty_tuple(size)):
+       is_empty_tuple(size)):
         # When calling np.random.uniform with size = (), the returned value isn't a
         # float like when size = None. Instead, it's an array of shape ()
         return lambda low, high, size: np.array(np.random.uniform(low, high))
@@ -906,6 +906,10 @@ def _betavariate_impl(gamma):
 def beta_impl(a, b, size):
     if is_nonelike(size):
         return lambda a, b, size: np.random.beta(a, b)
+    if is_empty_tuple(size):
+        # When calling np.random.beta with size = (), the returned value isn't a
+        # float like when size = None. Instead, it's an array of shape ()
+        return lambda a, b, size: np.array(np.random.beta(a, b))
     if (isinstance(size, types.Integer) or (isinstance(size, types.UniTuple)
                                             and isinstance(size.dtype,
                                                            types.Integer))):
