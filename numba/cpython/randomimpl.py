@@ -1868,6 +1868,9 @@ def wald_impl(mean, scale):
 def wald_impl2(mean, scale, size):
     if is_nonelike(size):
         return lambda mean, scale, size: np.random.wald(mean, scale)
+    if is_empty_tuple(size):
+        # Handle size = ()
+        return lambda mean, scale, size: np.array(np.random.wald(mean, scale))
     if isinstance(size, types.Integer) or (isinstance(size, types.UniTuple) and
                                            isinstance(size.dtype,
                                                       types.Integer)):
