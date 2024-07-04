@@ -33,6 +33,12 @@ class JitMethod(pt.Generic[C]):
     implementation: C
     njit_options: dict[str, bool]
 
+    def __call__(self, *args, **kwargs):
+        raise RuntimeError(
+            "Jit methods must not be called without first being compiled! "
+            "Your class is probably missing a ``jitclass`` decorator!"
+        )
+
 ##############################################################################
 # Data model
 
