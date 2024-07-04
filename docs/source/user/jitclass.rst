@@ -172,6 +172,34 @@ instance of the type specified.
 
     NotInitialisingContainer() # segmentation fault/memory access violation
 
+Controlling compilation
+=======================
+
+Compilation of jitclasses can be controlled in the following ways using the 
+same keyword arguments supported by ``njit``:
+
+- Keyword arguments to the ``jitclass`` decorator apply those arguments to all
+  functions in the class.
+- Individual functions can be decorated with the ``jitmethod`` decorator to
+  add extra keyword arguments or override those given in the ``jitclass`` 
+  decorator.
+
+.. code-block:: python
+   
+    from numba.experimental import jitclass, jitmethod
+
+    @jitclass([("x", float64)], nogil=True)
+    class MyClass:
+        # this is compiled with nopython=True, nogil=True
+        def function_a(self, y):
+            ...
+
+        # this is compiled with nopython=True, nogil=False, and parallel=True
+        @jitmethod(nogil=False, parallel=True)
+        def function_b(self, y):
+            ...
+   
+
 
 Support operations
 ==================
