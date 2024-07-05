@@ -1,0 +1,5 @@
+Fix calls to ``numpy.random`` distributions with ``size=()``
+------------------------------------------------------------
+
+Calling any of the ``numpy.random`` distributions with ``size=()`` used
+to raise a ``TypingError``, while this behavior is supported by NumPy.
