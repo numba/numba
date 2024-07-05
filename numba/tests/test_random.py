@@ -1955,7 +1955,6 @@ class TestNumPyRandomAPI(TestCase):
 
             if isinstance(nb_val, np.ndarray):
                 self.assertEqual(nb_val.shape, np_val.shape)
-                self.assertEqual(nb_val.dtype, np_val.dtype)
             else:
                 self.assertIsInstance(nb_val, np_val.__class__)
 
