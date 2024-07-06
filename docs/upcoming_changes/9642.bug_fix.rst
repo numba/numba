@@ -1,0 +1,4 @@
+follow the NVVM IR form: not use . in identifier
+------------------------------------------------
+
+NVVM IR identifier uses a stricter form than LLVM IR.
