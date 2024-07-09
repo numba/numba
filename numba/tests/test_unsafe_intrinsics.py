@@ -9,7 +9,10 @@ from numba.np.unsafe.ndarray import to_fixed_tuple, empty_inferred
 from numba.core.unsafe.bytes import memcpy_region
 from numba.core.unsafe.refcount import dump_refcount
 from numba.cpython.unsafe.numbers import trailing_zeros, leading_zeros
+from numba.core.unsafe import asserts
 from numba.core.errors import TypingError
+from numba.core.extending import overload
+from numba.tests.test_typeinfer import get_func_typing_errs as run_typeinfer
 
 
 class TestTupleIntrinsic(TestCase):
@@ -230,3 +233,60 @@ class TestZeroCounts(TestCase):
 
     def test_leading_zeros_error(self):
         self.check_error_msg(leading_zeros)
+
+
+class TestCompileTimeAsserts(TestCase):
+    def test_assert_lower(self):
+        def selection(x):
+            pass
+
+        @overload(selection, prefer_literal=True)
+        def ov_selection(x):
+            assert isinstance(x, types.Literal)
+            literal_x = x.literal_value
+            if literal_x == 0:
+                def impl(x):
+                    asserts.assert_not_lowering("x=0")
+                    return 0
+            elif literal_x == 1:
+                def impl(x):
+                    return 1
+            return impl
+
+        # Test lowering asserts bypassed
+        @njit
+        def udt():
+            return selection(1)
+
+        self.assertEqual(udt(), 1)
+
+        # Test lowering asserts
+        @njit
+        def udt():
+            return selection(0)
+
+        with self.assertRaisesRegex(AssertionError, "x=0"):
+            udt()
+
+        # Unexecuted branches still trigger lowering asserts
+        @njit
+        def udt(a):
+            if a:
+                selection(0)
+            return selection(1)
+
+        with self.assertRaisesRegex(AssertionError, "x=0"):
+            udt(a=False)
+
+        # Test bypassing lowering will not trigger lowering asserts
+        def udt():
+            asserts.assert_not_lowering("should be bypassed")
+
+        run_typeinfer(udt, ())
+
+    def test_assert_typing(self):
+        def udt():
+            asserts.assert_not_typing("should not be typing")
+
+        with self.assertRaisesRegex(AssertionError, "should not be typing"):
+            run_typeinfer(udt, ())

@@ -15,6 +15,7 @@ from numba.core.untyped_passes import (ReconstructSSA, TranslateByteCode,
                                        IRProcessing, DeadBranchPrune,
                                        PreserveIR)
 from numba.core.compiler import DefaultPassBuilder, CompilerBase, PassManager
+from numba.core.unsafe import asserts
 
 
 _GLOBAL = 123
@@ -1009,3 +1010,31 @@ class TestBranchPrunePostSemanticConstRewrites(TestBranchPruneBase):
                 self.assertIsInstance(inst.value, ir.Const)
                 binop_consts.add(inst.value.value)
         self.assertEqual(binop_consts, {len(x) for x in inp})
+
+
+class TestBranchPruneWithCompilerAsserts(MemoryLeakMixin, TestCase):
+    def test_pruning_kill_negative_branch(self):
+        @njit
+        def is_none(a):
+            if a is None:
+                return True
+            else:
+                asserts.assert_not_typing("False branch")
+                return False
+
+        self.assertEqual(is_none(None), True)
+        with self.assertRaisesRegex(AssertionError, "False branch"):
+            is_none(1)
+
+    def test_pruning_kill_positive_branch(self):
+        @njit
+        def is_not_none(a):
+            if a is not None:
+                asserts.assert_not_typing("True branch")
+                return True
+            else:
+                return False
+
+        self.assertEqual(is_not_none(None), False)
+        with self.assertRaisesRegex(AssertionError, "True branch"):
+            is_not_none(1)
