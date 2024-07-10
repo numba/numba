@@ -1,6 +1,7 @@
 # Tests numba.analysis functions
 import collections
 import types as pytypes
+import unittest
 
 import numpy as np
 from numba.core.compiler import run_frontend, Flags, StateDict
@@ -1038,3 +1039,20 @@ class TestBranchPruneWithCompilerAsserts(MemoryLeakMixin, TestCase):
         self.assertEqual(is_not_none(None), False)
         with self.assertRaisesRegex(AssertionError, "True branch"):
             is_not_none(1)
+
+    @unittest.expectedFailure
+    def test_pruning_is_none_with_other_types(self):
+        """Test that DeadBranchPrune can kill the branch checking
+        `a is None` when `a` is not a `NoneType`.
+        """
+        @njit
+        def is_none(a):
+            if a is None:
+                asserts.assert_not_typing("True branch")
+                return True
+            else:
+                return False
+
+        self.assertEqual(is_none(True), False)
+        with self.assertRaisesRegex(AssertionError, "True branch"):
+            is_none(1)
