@@ -1,0 +1,8 @@
+Add compile-time assertion intrinsics
+-------------------------------------
+
+Add ``numba.core.unsafe.asserts.assert_not_typing(msg)`` and 
+``numba.core.unsafe.asserts.assert_not_lowering(msg)`` intrinics that functions
+like a C `#error` directive for detecting when JIT code is unexpectedly entering
+type-inference and lowering, respectively. These are useful for debugging 
+and asserting behavior dead-code elimination.
