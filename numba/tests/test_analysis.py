@@ -1055,4 +1055,4 @@ class TestBranchPruneWithCompilerAsserts(MemoryLeakMixin, TestCase):
 
         self.assertEqual(is_none(True), False)
         with self.assertRaisesRegex(AssertionError, "True branch"):
-            is_none(1)
+            is_none(None)
