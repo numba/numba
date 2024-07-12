@@ -1644,23 +1644,6 @@ class LiteralPropagationSubPipelinePass(FunctionPass):
         FunctionPass.__init__(self)
 
     def run_pass(self, state):
-        # Determine whether to even attempt this pass... if there's no
-        # `isinstance` as a global or as a freevar then just skip.
-
-        found = False
-        func_ir = state.func_ir
-        for blk in func_ir.blocks.values():
-            for asgn in blk.find_insts(ir.Assign):
-                if isinstance(asgn.value, (ir.Global, ir.FreeVar)):
-                    value = asgn.value.value
-                    if value is isinstance or value is hasattr:
-                        found = True
-                        break
-            if found:
-                break
-        if not found:
-            return False
-
         # run as subpipeline
         from numba.core.compiler_machinery import PassManager
         from numba.core.typed_passes import PartialTypeInference
@@ -1671,6 +1654,7 @@ class LiteralPropagationSubPipelinePass(FunctionPass):
 
         # rewrite consts / dead branch pruning
         pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
+        print("HERE")
         pm.add_pass(DeadBranchPrune, "dead branch pruning")
 
         pm.finalize()
