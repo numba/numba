@@ -194,7 +194,7 @@ class DeadBranchPrune(SSACompliantMixin, FunctionPass):
                'pass encountered during compilation of '
                'function "%s"' % (state.func_id.func_name,))
         with fallback_context(state, msg):
-            dead_branch_prune(state.func_ir, state.args)
+            dead_branch_prune(state.func_ir, state.args, state.typemap)
 
         return True
 
@@ -1606,7 +1606,11 @@ class PropagateLiterals(FunctionPass):
                 # constant
                 if isinstance(value, ir.Expr) and value.op == 'phi':
                     # typemap will return None in case `inc.name` not in typemap
-                    v = [typemap.get(inc.name) for inc in value.incoming_values]
+                    v = [(typemap.get(inc.name)
+                          if inc is not ir.UNDEFINED
+                          else None)
+                         for inc in value.incoming_values
+                         ]
                     # stop if the elements in `v` do not hold the same value
                     if v[0] is not None and any([v[0] != vi for vi in v]):
                         continue
@@ -1623,10 +1627,6 @@ class PropagateLiterals(FunctionPass):
                     block.remove(assign)
 
                     changed = True
-
-        # reset type inference now we are done with the partial results
-        state.typemap = None
-        state.calltypes = None
 
         if changed:
             # Rebuild definitions
@@ -1654,8 +1654,9 @@ class LiteralPropagationSubPipelinePass(FunctionPass):
 
         # rewrite consts / dead branch pruning
         pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
-        print("HERE")
         pm.add_pass(DeadBranchPrune, "dead branch pruning")
+        pm.add_pass(RemoveTypeInferenceResults,
+                    "remove states set by type inference")
 
         pm.finalize()
         pm.run(state)
@@ -1663,6 +1664,19 @@ class LiteralPropagationSubPipelinePass(FunctionPass):
 
     def get_analysis_usage(self, AU):
         AU.add_required(ReconstructSSA)
+
+
+@register_pass(mutates_CFG=False, analysis_only=False)
+class RemoveTypeInferenceResults(FunctionPass):
+    _name = "remove_type_inference_results"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        state.typemap = None
+        state.calltypes = None
+        return True
 
 
 @register_pass(mutates_CFG=True, analysis_only=False)

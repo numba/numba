@@ -2,11 +2,15 @@
 Compile-time assertions.
 """
 from inspect import signature
-from numba.core import types
+from numba.core import types, errors
 from numba.core.extending import intrinsic, sentry_literal_args
 
 
 _sig_of_assert = signature(lambda msg: None)
+
+
+class BailTypingError(AssertionError):
+    pass
 
 
 @intrinsic(prefer_literal=True)
@@ -15,8 +19,10 @@ def assert_not_typing(typingctx, msg):
 
     Raises AssertionError during typing
     """
-    sentry_literal_args(_sig_of_assert, ("msg",), (msg,), {})
-    raise AssertionError(f"typing should fail: {msg.literal_value!r}")
+    if isinstance(msg, types.Literal):
+        raise BailTypingError(f"typing should fail: {msg.literal_value!r}")
+    else:
+        raise errors.TypingError(f"{msg} must be literal")
 
 
 @intrinsic

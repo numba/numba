@@ -288,7 +288,7 @@ nullified = namedtuple('nullified', 'condition, taken_br, rewrite_stmt')
 
 
 # Functions to manipulate IR
-def dead_branch_prune(func_ir, called_args):
+def dead_branch_prune(func_ir, called_args, typemap=None):
     """
     Removes dead branches based on constant inference from function args.
     This directly mutates the IR.
@@ -300,6 +300,7 @@ def dead_branch_prune(func_ir, called_args):
                                      GuardException)
 
     DEBUG = 0
+    typemap = {} if typemap is None else typemap
 
     def find_branches(func_ir):
         # find *all* branches
@@ -371,6 +372,29 @@ def dead_branch_prune(func_ir, called_args):
             print("Pruning %s" % kill, branch, pred)
         taken = do_prune(take_truebr, blk)
         return True, taken
+
+    def prune_by_typemap(branch, condition, blk, typemap):
+        lhs = typemap[condition.lhs.name]
+        rhs = typemap[condition.rhs.name]
+        # Only prune testing `x is None` or `x is not None`
+        # when `x` is not of Optional type.
+        if (isinstance(lhs, types.Type) and isinstance(rhs, types.Type)
+                and condition.fn in (operator.is_, operator.is_not)
+                # any of the args is none
+                and any(x is types.none for x in (lhs, rhs))
+                # none of the args is optional
+                and not any(isinstance(x, types.Optional) for x in (lhs, rhs))):
+            try:
+                take_truebr = condition.fn(lhs, rhs)
+            except TypeError:
+                return False, None
+            if DEBUG > 0:
+                kill = branch.falsebr if take_truebr else branch.truebr
+                print("Pruning %s" % kill, branch, lhs, rhs, condition.fn)
+            taken = do_prune(take_truebr, blk)
+            return True, taken
+        else:
+            return False, None
 
     class Unknown(object):
         pass
@@ -451,6 +475,15 @@ def dead_branch_prune(func_ir, called_args):
                     # add the condition to the list of nullified conditions
                     nullified_conditions.append(nullified(condition, taken,
                                                           True))
+            elif typemap:
+                # handle ``var cond var``
+                prune_stat, taken = prune_by_typemap(branch, condition, blk,
+                                                     typemap)
+                if prune_stat:
+                    # add the condition to the list of nullified conditions
+                    nullified_conditions.append(nullified(condition, taken,
+                                                          True))
+
         else:
             # see if this is a branch on a constant value predicate
             resolved_const = Unknown()

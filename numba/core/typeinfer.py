@@ -156,8 +156,11 @@ class ConstraintNetwork(object):
             loc = constraint.loc
             with typeinfer.warnings.catch_warnings(filename=loc.filename,
                                                    lineno=loc.line):
+                from numba.core.unsafe.asserts import BailTypingError
                 try:
                     constraint(typeinfer)
+                except BailTypingError as e:
+                    errors.append(e)
                 except ForceLiteralArg as e:
                     errors.append(e)
                 except TypingError as e:
