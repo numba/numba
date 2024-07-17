@@ -144,7 +144,7 @@ def unary_math_extern(fn, f32extern, f64extern, int_restype=False):
     If *int_restype* is true, then the function's return value should be
     integral, otherwise floating-point.
     """
-    f_restype = types.int64 if int_restype else None
+    f_restype = types.py_int64 if int_restype else None
 
     def float_impl(context, builder, sig, args):
         """
@@ -274,7 +274,7 @@ def frexp_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower(math.ldexp, types.Float, types.intc)
+@lower(math.ldexp, types.Float, types.np_intc)
 def ldexp_impl(context, builder, sig, args):
     val, exp = args
     fltty, intty = map(context.get_data_type, sig.args)
@@ -291,7 +291,7 @@ def ldexp_impl(context, builder, sig, args):
 # -----------------------------------------------------------------------------
 
 
-@lower(math.atan2, types.int64, types.int64)
+@lower(math.atan2, types.np_int64, types.np_int64)
 def atan2_s64_impl(context, builder, sig, args):
     [y, x] = args
     y = builder.sitofp(y, llvmlite.ir.DoubleType())
@@ -299,7 +299,7 @@ def atan2_s64_impl(context, builder, sig, args):
     fsig = signature(types.float64, types.float64, types.float64)
     return atan2_float_impl(context, builder, fsig, (y, x))
 
-@lower(math.atan2, types.uint64, types.uint64)
+@lower(math.atan2, types.np_uint64, types.np_uint64)
 def atan2_u64_impl(context, builder, sig, args):
     [y, x] = args
     y = builder.uitofp(y, llvmlite.ir.DoubleType())
@@ -326,7 +326,7 @@ def atan2_float_impl(context, builder, sig, args):
 # -----------------------------------------------------------------------------
 
 
-@lower(math.hypot, types.int64, types.int64)
+@lower(math.hypot, types.np_int64, types.np_int64)
 def hypot_s64_impl(context, builder, sig, args):
     [x, y] = args
     y = builder.sitofp(y, llvmlite.ir.DoubleType())
@@ -336,7 +336,7 @@ def hypot_s64_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower(math.hypot, types.uint64, types.uint64)
+@lower(math.hypot, types.np_uint64, types.np_uint64)
 def hypot_u64_impl(context, builder, sig, args):
     [x, y] = args
     y = builder.sitofp(y, llvmlite.ir.DoubleType())

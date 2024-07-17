@@ -18,11 +18,35 @@ from contextlib import contextmanager, ExitStack
 # Scalar types
 #
 
-@box(types.Boolean)
-def box_bool(typ, val, c):
+def box_np_scalars(typ, val, c, py_boxing_func, py_type):
+    py_scalar = py_boxing_func(py_type, val, c)
+
+    numpy_name = c.context.insert_const_string(c.builder.module, 'numpy')
+    numpy_module = c.pyapi.import_module_noblock(numpy_name)
+    type_str = typ.name.split('np_')[1]
+
+    np_scalar_constructor = c.pyapi.object_getattr_string(numpy_module, type_str)
+    np_scalar = c.pyapi.call_function_objargs(np_scalar_constructor, (py_scalar,))
+
+    c.pyapi.decref(numpy_module)
+    c.pyapi.decref(np_scalar_constructor)
+    c.pyapi.decref(py_scalar)
+
+    return np_scalar
+
+
+@box(types.PythonBoolean)
+def box_py_bool(typ, val, c):
     return c.pyapi.bool_from_bool(val)
 
-@unbox(types.Boolean)
+
+@box(types.NumPyBoolean)
+def box_np_bool(typ, val, c):
+    return box_np_scalars(typ, val, c, box_py_bool, types.py_bool)
+
+
+@unbox(types.PythonBoolean)
+@unbox(types.NumPyBoolean)
 def unbox_boolean(typ, obj, c):
     istrue = c.pyapi.object_istrue(obj)
     zero = ir.Constant(istrue.type, 0)
@@ -30,23 +54,17 @@ def unbox_boolean(typ, obj, c):
     return NativeValue(val, is_error=c.pyapi.c_api_error())
 
 
-@box(types.IntegerLiteral)
-@box(types.BooleanLiteral)
+@box(types.PythonIntegerLiteral)
+@box(types.PythonBooleanLiteral)
+@box(types.NumPyIntegerLiteral)
+@box(types.NumPyBooleanLiteral)
 def box_literal_integer(typ, val, c):
     val = c.context.cast(c.builder, val, typ, typ.literal_type)
     return c.box(typ.literal_type, val)
 
 
-@box(types.Integer)
-def box_integer(typ, val, c):
-    if typ.signed:
-        ival = c.builder.sext(val, c.pyapi.longlong)
-        return c.pyapi.long_from_longlong(ival)
-    else:
-        ullval = c.builder.zext(val, c.pyapi.ulonglong)
-        return c.pyapi.long_from_ulonglong(ullval)
-
-@unbox(types.Integer)
+@unbox(types.PythonInteger)
+@unbox(types.NumPyInteger)
 def unbox_integer(typ, obj, c):
     ll_type = c.context.get_argument_type(typ)
     val = cgutils.alloca_once(c.builder, ll_type)
@@ -59,66 +77,90 @@ def unbox_integer(typ, obj, c):
         c.pyapi.decref(longobj)
         c.builder.store(c.builder.trunc(llval, ll_type), val)
     return NativeValue(c.builder.load(val),
-                       is_error=c.pyapi.c_api_error())
+                        is_error=c.pyapi.c_api_error())
 
 
-@box(types.Float)
-def box_float(typ, val, c):
-    if typ == types.float32:
-        dbval = c.builder.fpext(val, c.pyapi.double)
+@box(types.PythonInteger)
+def box_py_integer(typ, val, c):
+    if typ.signed:
+        ival = c.builder.sext(val, c.pyapi.longlong)
+        return c.pyapi.long_from_longlong(ival)
     else:
-        assert typ == types.float64
-        dbval = val
-    return c.pyapi.float_from_double(dbval)
+        ullval = c.builder.zext(val, c.pyapi.ulonglong)
+        return c.pyapi.long_from_ulonglong(ullval)
 
-@unbox(types.Float)
+
+@box(types.NumPyInteger)
+def box_np_integer(typ, val, c):
+    return box_np_scalars(typ, val, c, box_py_integer, types.py_intp)
+
+
+@box(types.PythonFloat)
+def box_py_float(typ, val, c):
+    return c.pyapi.float_from_double(val)
+
+
+@box(types.NumPyFloat)
+def box_np_float(typ, val, c):
+    if typ.bitwidth <= 32:
+        val = c.builder.fpext(val, c.pyapi.double)
+    return box_np_scalars(typ, val, c, box_py_float, types.py_float64)
+
+
+@unbox(types.PythonFloat)
+@unbox(types.NumPyFloat)
 def unbox_float(typ, obj, c):
     fobj = c.pyapi.number_float(obj)
     dbval = c.pyapi.float_as_double(fobj)
     c.pyapi.decref(fobj)
-    if typ == types.float32:
+    if typ.bitwidth <= 32:
         val = c.builder.fptrunc(dbval,
                                 c.context.get_argument_type(typ))
     else:
-        assert typ == types.float64
         val = dbval
     return NativeValue(val, is_error=c.pyapi.c_api_error())
 
 
-@box(types.Complex)
-def box_complex(typ, val, c):
+@box(types.PythonComplex)
+def box_py_complex(typ, val, c):
     cval = c.context.make_complex(c.builder, typ, value=val)
+    assert typ == types.py_complex128
+    freal, fimag = cval.real, cval.imag
+    return c.pyapi.complex_from_doubles(freal, fimag)
 
-    if typ == types.complex64:
+
+@unbox(types.PythonComplex)
+@unbox(types.NumPyComplex)
+def unbox_py_complex(typ, obj, c):
+    cplx = c.context.make_complex(c.builder, typ)
+    ok = c.pyapi.complex_adaptor(obj, cplx._getpointer())
+    failed = cgutils.is_false(c.builder, ok)
+    return NativeValue(cplx._getvalue(), is_error=failed)
+
+
+@box(types.NumPyComplex)
+def box_np_complex(typ, val, c):
+    cval = c.context.make_complex(c.builder, typ, value=val)
+    if typ == types.np_complex64:
+        # TODO: Type System Changes, this branch misbehaves
         freal = c.builder.fpext(cval.real, c.pyapi.double)
         fimag = c.builder.fpext(cval.imag, c.pyapi.double)
     else:
-        assert typ == types.complex128
+        assert typ == types.np_complex128
         freal, fimag = cval.real, cval.imag
-    return c.pyapi.complex_from_doubles(freal, fimag)
+    py_scalar = c.pyapi.complex_from_doubles(freal, fimag)
 
-@unbox(types.Complex)
-def unbox_complex(typ, obj, c):
-    # First unbox to complex128, since that's what CPython gives us
-    c128 = c.context.make_complex(c.builder, types.complex128)
-    ok = c.pyapi.complex_adaptor(obj, c128._getpointer())
-    failed = cgutils.is_false(c.builder, ok)
+    numpy_name = c.context.insert_const_string(c.builder.module, 'numpy')
+    numpy_module = c.pyapi.import_module_noblock(numpy_name)
+    type_str = typ.name.split('np_')[1]
 
-    with cgutils.if_unlikely(c.builder, failed):
-        c.pyapi.err_set_string("PyExc_TypeError",
-                               "conversion to %s failed" % (typ,))
+    np_scalar_constructor = c.pyapi.object_getattr_string(numpy_module, type_str)
+    np_scalar = c.pyapi.call_function_objargs(np_scalar_constructor, (py_scalar,))
 
-    if typ == types.complex64:
-        # Downcast to complex64 if necessary
-        cplx = c.context.make_complex(c.builder, typ)
-        cplx.real = c.context.cast(c.builder, c128.real,
-                                   types.float64, types.float32)
-        cplx.imag = c.context.cast(c.builder, c128.imag,
-                                   types.float64, types.float32)
-    else:
-        assert typ == types.complex128
-        cplx = c128
-    return NativeValue(cplx._getvalue(), is_error=failed)
+    c.pyapi.decref(np_scalar_constructor)
+    c.pyapi.decref(py_scalar)
+
+    return np_scalar
 
 
 @box(types.NoneType)

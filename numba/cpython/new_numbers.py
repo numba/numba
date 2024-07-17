@@ -1,5 +1,6 @@
 import math
 import numbers
+import itertools
 
 import numpy as np
 import operator
@@ -11,7 +12,7 @@ from numba.core.imputils import (lower_builtin, lower_getattr,
                                     lower_getattr_generic, lower_cast,
                                     lower_constant, impl_ret_borrowed,
                                     impl_ret_untracked)
-from numba.core import typing, types, utils, errors, cgutils, optional
+from numba.core import typing, types, utils, errors, cgutils, optional, config
 from numba.core.extending import intrinsic, overload_method
 from numba.cpython.unsafe.numbers import viewer
 
@@ -537,14 +538,14 @@ def bool_unary_positive_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-lower_builtin(operator.eq, types.boolean, types.boolean)(int_eq_impl)
-lower_builtin(operator.ne, types.boolean, types.boolean)(int_ne_impl)
-lower_builtin(operator.lt, types.boolean, types.boolean)(int_ult_impl)
-lower_builtin(operator.le, types.boolean, types.boolean)(int_ule_impl)
-lower_builtin(operator.gt, types.boolean, types.boolean)(int_ugt_impl)
-lower_builtin(operator.ge, types.boolean, types.boolean)(int_uge_impl)
-lower_builtin(operator.neg, types.boolean)(bool_negate_impl)
-lower_builtin(operator.pos, types.boolean)(bool_unary_positive_impl)
+lower_builtin(operator.eq, types.np_bool_, types.np_bool_)(int_eq_impl)
+lower_builtin(operator.ne, types.np_bool_, types.np_bool_)(int_ne_impl)
+lower_builtin(operator.lt, types.np_bool_, types.np_bool_)(int_ult_impl)
+lower_builtin(operator.le, types.np_bool_, types.np_bool_)(int_ule_impl)
+lower_builtin(operator.gt, types.np_bool_, types.np_bool_)(int_ugt_impl)
+lower_builtin(operator.ge, types.np_bool_, types.np_bool_)(int_uge_impl)
+lower_builtin(operator.neg, types.np_bool_)(bool_negate_impl)
+lower_builtin(operator.pos, types.np_bool_)(bool_unary_positive_impl)
 
 
 def _implement_integer_operators():
@@ -571,7 +572,7 @@ def _implement_integer_operators():
     lower_builtin(operator.ipow, ty, ty)(int_power_impl)
     lower_builtin(pow, ty, ty)(int_power_impl)
 
-    for ty in types.unsigned_domain:
+    for ty in types.np_unsigned_domain:
         lower_builtin(operator.lt, ty, ty)(int_ult_impl)
         lower_builtin(operator.le, ty, ty)(int_ule_impl)
         lower_builtin(operator.gt, ty, ty)(int_ugt_impl)
@@ -585,7 +586,8 @@ def _implement_integer_operators():
     lower_builtin(operator.gt, types.IntegerLiteral, types.IntegerLiteral)(int_slt_impl)
     lower_builtin(operator.le, types.IntegerLiteral, types.IntegerLiteral)(int_slt_impl)
     lower_builtin(operator.ge, types.IntegerLiteral, types.IntegerLiteral)(int_slt_impl)
-    for ty in types.signed_domain:
+    for ty in itertools.chain(types.py_signed_domain,
+                              types.np_signed_domain):
         lower_builtin(operator.lt, ty, ty)(int_slt_impl)
         lower_builtin(operator.le, ty, ty)(int_sle_impl)
         lower_builtin(operator.gt, ty, ty)(int_sgt_impl)
@@ -1244,7 +1246,8 @@ def complex_as_bool(context, builder, sig, args):
 for ty in (types.Integer, types.Float, types.Complex):
     lower_builtin(operator.not_, ty)(number_not_impl)
 
-lower_builtin(operator.not_, types.boolean)(number_not_impl)
+
+lower_builtin(operator.not_, types.py_bool)(number_not_impl)
 
 
 #------------------------------------------------------------------------------

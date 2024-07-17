@@ -56,8 +56,8 @@ class TestHelperFuncs(TestCase):
             numba_func(rng)
         self.assertIn(
             'Argument loc is not one of the expected type(s): '
-            + '[<class \'numba.core.types.scalars.Float\'>, '
-            + '<class \'numba.core.types.scalars.Integer\'>, '
+            + '[<class \'numba.core.types.old_scalars.Float\'>, '
+            + '<class \'numba.core.types.old_scalars.Integer\'>, '
             + '<class \'int\'>, <class \'float\'>]',
             str(raises.exception)
         )

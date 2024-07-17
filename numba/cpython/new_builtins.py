@@ -16,6 +16,8 @@ from numba.core.imputils import (lower_builtin, lower_getattr,
 from numba.core import typing, types, utils, cgutils
 from numba.core.extending import overload, intrinsic
 from numba.core.typeconv import Conversion
+from numba.core.typing.templates import (AbstractTemplate, infer_global,
+                                         signature)
 from numba.core.errors import (TypingError, LoweringError,
                                NumbaExperimentalFeatureWarning,
                                NumbaTypeError, RequireLiteralValue,
@@ -203,7 +205,7 @@ def do_minmax(context, builder, argtys, args, cmpop):
         assert ty is not None
         acc = context.cast(builder, acc, accty, ty)
         v = context.cast(builder, v, vty, ty)
-        cmpsig = typing.signature(types.boolean, ty, ty)
+        cmpsig = typing.signature(types.np_bool_, ty, ty)
         ge = context.get_function(cmpop, cmpsig)
         pred = ge(builder, (v, acc))
         res = builder.select(pred, v, acc)
@@ -484,6 +486,15 @@ def get_type_min_value(typ):
         return typ.minval
     raise NotImplementedError("Unsupported type")
 
+@infer_global(get_type_min_value)
+@infer_global(get_type_max_value)
+class MinValInfer(AbstractTemplate):
+    def generic(self, args, kws):
+        assert not kws
+        assert len(args) == 1
+        if isinstance(args[0], (types.DType, types.NumberClass)):
+            return signature(args[0].dtype, *args)
+
 @lower_builtin(get_type_min_value, types.NumberClass)
 @lower_builtin(get_type_min_value, types.DType)
 def lower_get_type_min_value(context, builder, sig, args):
@@ -543,8 +554,9 @@ def lower_get_type_max_value(context, builder, sig, args):
 from numba.core.typing.builtins import IndexValue, IndexValueType
 from numba.extending import overload, register_jitable
 
-@lower_builtin(IndexValue, types.intp, types.Type)
-@lower_builtin(IndexValue, types.uintp, types.Type)
+@lower_builtin(IndexValue, types.py_intp, types.Type)
+@lower_builtin(IndexValue, types.np_intp, types.Type)
+@lower_builtin(IndexValue, types.np_uintp, types.Type)
 def impl_index_value(context, builder, sig, args):
     typ = sig.return_type
     index, value = args
