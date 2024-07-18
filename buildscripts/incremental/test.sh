@@ -140,7 +140,7 @@ echo "INFO: Running shard of discovered tests: ($TEST_START_INDEX:$TEST_COUNT)"
 if [ "$RUN_COVERAGE" == "yes" ]; then
     echo "INFO: Running with coverage"
     export PYTHONPATH=.
-    $SEGVCATCH coverage run runtests.py -b -j "$TEST_START_INDEX:$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS --junit -- numba.tests
+    $SEGVCATCH coverage run runtests.py -b --random=0.01 --exclude-tags='long_running' -m $TEST_NPROCS --junit -- numba.tests
     echo "INFO: Post-process coverage"
     coverage combine
     coverage xml -o cov.xml
