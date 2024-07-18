@@ -50,6 +50,12 @@ jobs:
         buildscripts/incremental/test.sh
       displayName: 'Test'
     
+    - script: |
+        pip install codecov-cli
+        codecovcli --auto-load-params-from AzurePipelines --codecov-yml-path codecov.yml upload-process --git-service github --plugin pycoverage --disable-search --file cov.xml --commit-sha $(system.pullRequest.sourceCommitId)
+      displayName: 'Upload to codecov.io (tokenless)' 
+      condition: eq(variables['RUN_COVERAGE'], 'yes')
+    
     - task: PublishCodeCoverageResults@2
       condition: eq(variables['RUN_COVERAGE'], 'yes')
       inputs:
