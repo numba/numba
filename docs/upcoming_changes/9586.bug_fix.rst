@@ -1,0 +1,8 @@
+Fix ParallelAccelerator hoisting logic bug
+------------------------------------------
+
+A bug in the hoisting logic of the ParallelAccelerator is fixed.
+The bug caused invalid hoisting of operations that depended on non-hoistable
+operations, leading to incorrect execution. With this fix, the hoisting logic
+now correctly identifies and handles dependencies on non-hoistable operations,
+ensuring that operations are hoisted and executed correctly.

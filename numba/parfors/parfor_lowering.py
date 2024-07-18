@@ -473,7 +473,14 @@ def _lower_trivial_inplace_binops(parfor, lowerer, thread_count_var, reduce_info
         if _lower_var_to_var_assign(lowerer, inst):
             pass
         # Is inplace-binop for the reduction?
-        elif _is_inplace_binop_and_rhs_is_init(inst, reduce_info.redvar_name):
+        elif _is_right_op_and_rhs_is_init(inst, reduce_info.redvar_name, "inplace_binop"):
+            fn = inst.value.fn
+            redvar_result = _emit_binop_reduce_call(
+                fn, lowerer, thread_count_var, reduce_info,
+            )
+            lowerer.storevar(redvar_result, name=inst.target.name)
+        # Is binop for the reduction?
+        elif _is_right_op_and_rhs_is_init(inst, reduce_info.redvar_name, "binop"):
             fn = inst.value.fn
             redvar_result = _emit_binop_reduce_call(
                 fn, lowerer, thread_count_var, reduce_info,
@@ -579,9 +586,14 @@ def _emit_binop_reduce_call(binop, lowerer, thread_count_var, reduce_info):
     kernel = {
         operator.iadd: reduction_add,
         operator.isub: reduction_add,
+        operator.add: reduction_add,
+        operator.sub: reduction_add,
         operator.imul: reduction_mul,
         operator.ifloordiv: reduction_mul,
         operator.itruediv: reduction_mul,
+        operator.mul: reduction_mul,
+        operator.floordiv: reduction_mul,
+        operator.truediv: reduction_mul,
     }[binop]
 
     ctx = lowerer.context
@@ -612,7 +624,7 @@ def _emit_binop_reduce_call(binop, lowerer, thread_count_var, reduce_info):
     return redvar_result
 
 
-def _is_inplace_binop_and_rhs_is_init(inst, redvar_name):
+def _is_right_op_and_rhs_is_init(inst, redvar_name, op):
     """Is ``inst`` an inplace-binop and the RHS is the reduction init?
     """
     if not isinstance(inst, ir.Assign):
@@ -620,7 +632,7 @@ def _is_inplace_binop_and_rhs_is_init(inst, redvar_name):
     rhs = inst.value
     if not isinstance(rhs, ir.Expr):
         return False
-    if rhs.op != "inplace_binop":
+    if rhs.op != op:
         return False
     if rhs.rhs.name != f"{redvar_name}#init":
         return False
@@ -876,7 +888,10 @@ def _hoist_internal(inst, dep_on_param, call_table, hoisted, not_hoisted,
 
     uses = set()
     visit_vars_inner(inst.value, find_vars, uses)
+    unhoistable = {assgn.target.name for assgn, _ in not_hoisted}
+    use_unhoist = uses & unhoistable
     diff = uses.difference(dep_on_param)
+    diff |= use_unhoist
     if config.DEBUG_ARRAY_OPT >= 1:
         print("_hoist_internal:", inst, "uses:", uses, "diff:", diff)
     if len(diff) == 0 and is_pure(inst.value, None, call_table):
@@ -910,6 +925,20 @@ def find_setitems_block(setitems, itemsset, block, typemap):
         elif isinstance(inst, parfor.Parfor):
             find_setitems_block(setitems, itemsset, inst.init_block, typemap)
             find_setitems_body(setitems, itemsset, inst.loop_body, typemap)
+        elif isinstance(inst, ir.Assign):
+            # If something of mutable type is given to a build_tuple or
+            # used in a call then consider it unanalyzable and so
+            # unavailable for hoisting.
+            rhs = inst.value
+            if isinstance(rhs, ir.Expr):
+                if rhs.op in ["build_tuple", "build_list", "build_set", "build_map"]:
+                    for item in rhs.items:
+                        if getattr(typemap[item.name], "mutable", False):
+                            itemsset.add(item.name)
+                elif rhs.op == "call":
+                    for item in list(rhs.args) + [x[1] for x in rhs.kws]:
+                        if getattr(typemap[item.name], "mutable", False):
+                            itemsset.add(item.name)
 
 def find_setitems_body(setitems, itemsset, loop_body, typemap):
     """

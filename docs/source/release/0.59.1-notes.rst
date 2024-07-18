@@ -1,0 +1,71 @@
+Version 0.59.1 (18 March 2024)
+------------------------------
+
+This is a bug-fix release to fix regressions in 0.59.0.
+
+
+CUDA API Changes
+~~~~~~~~~~~~~~~~
+
+Fixed caching of kernels that use target-specific overloads
+===========================================================
+
+Caching of kernels using target-specific overloads now works. This includes use
+of cooperative group sync, which is now implemented with a target-specific overload.
+
+(`PR-#9447 <https://github.com/numba/numba/pull/9447>`__)
+
+
+Performance Improvements and Changes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Improvement to ``np.searchsorted``
+==================================
+
+Fixed a performance regression introduced in Numba 0.59 which made
+``np.searchsorted`` considerably slower.
+
+(`PR-#9448 <https://github.com/numba/numba/pull/9448>`__)
+
+
+Bug Fixes
+~~~~~~~~~
+
+Fix issues with ``np.searchsorted`` not handling ``np.datetime64``
+==================================================================
+
+This patch fixes two issues with ``np.searchsorted``. First, a regression is
+fixed in the support of ``np.datetime64``. Second, adopt ``NAT``-aware
+comparisons to fix mishandling of ``NAT`` value.
+
+(`PR-#9445 <https://github.com/numba/numba/pull/9445>`__)
+
+Allow use of Python 3.12 PEP-695 type parameter syntax
+======================================================
+
+A patch is added to properly parse the PEP 695 syntax. While Numba
+does not yet take advantage of type parameters, it will no longer erroneously
+reject functions defined with the new Python 3.12 syntax.
+
+(`PR-#9459 <https://github.com/numba/numba/pull/9459>`__)
+
+
+Pull-Requests:
+~~~~~~~~~~~~~~
+
+* PR `#9445 <https://github.com/numba/numba/pull/9445>`_: Fix #9427 np.searchsorted on datetime64 (`sklam <https://github.com/sklam>`_)
+* PR `#9447 <https://github.com/numba/numba/pull/9447>`_: Fix Issue #9432, caching of kernels using target-specific overloads (such as CG sync) (`gmarkall <https://github.com/gmarkall>`_ `sklam <https://github.com/sklam>`_)
+* PR `#9448 <https://github.com/numba/numba/pull/9448>`_: Fix `np.searchsorted` regression (`guilhermeleobas <https://github.com/guilhermeleobas>`_)
+* PR `#9449 <https://github.com/numba/numba/pull/9449>`_: Remove deprecated CondaEnvironment@1 (`sklam <https://github.com/sklam>`_)
+* PR `#9450 <https://github.com/numba/numba/pull/9450>`_: Fix gpuci versions (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9459 <https://github.com/numba/numba/pull/9459>`_: Support pep695 type param syntax (`sklam <https://github.com/sklam>`_)
+* PR `#9491 <https://github.com/numba/numba/pull/9491>`_: Fix non-deterministic bug caused by unstableness in SSA (`sklam <https://github.com/sklam>`_, `loicdtx <https://github.com/loicdtx>`_)
+
+
+Authors:
+~~~~~~~~
+
+* `gmarkall <https://github.com/gmarkall>`_
+* `guilhermeleobas <https://github.com/guilhermeleobas>`_
+* `sklam <https://github.com/sklam>`_
+* `loicdtx <https://github.com/loicdtx>`_

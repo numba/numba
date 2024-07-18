@@ -148,10 +148,6 @@ def jit(signature_or_function=None, locals={}, cache=False,
         assert type(nopython) is bool, "nopython option must be a bool"
     if nopython is True and forceobj:
         raise ValueError("Only one of 'nopython' or 'forceobj' can be True.")
-
-    if "_target" in options:
-        # Set the "target_backend" option if "_target" is defined.
-        options['target_backend'] = options['_target']
     target = options.pop('_target', 'cpu')
 
     if nopython is False:

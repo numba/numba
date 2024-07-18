@@ -124,6 +124,47 @@ class TestConfig(TestCase):
         self.assertIn(ex_expected, err_msg)
         self.assertIn(source_compiled, out.decode('utf-8'))
 
+    def test_default_error_style_handling(self):
+        # ensure that the default is new_style
+        new_env = os.environ.copy()
+        new_env['NUMBA_CAPTURED_ERRORS'] = 'default'
+        code = ("from numba.core import config\n"
+                "print('---->', config.CAPTURED_ERRORS)\n"
+                "assert config.CAPTURED_ERRORS == 'new_style'")
+        out, err = run_in_subprocess(dedent(code), env=new_env)
+        err_msg = err.decode('utf-8')
+        out_msg = out.decode('utf-8')
+        ex_expected = "----> new_style"
+        self.assertIn(ex_expected, out_msg, msg=err_msg)
+
+    @unittest.skipUnless(config.ENABLE_AVX,
+                         "test expects NUMBA_ENABLE_AVX==True")
+    def test_nocona_disables_avx(self):
+        # test with nocona
+        new_env = os.environ.copy()
+        new_env.pop('NUMBA_ENABLE_AVX', None)  # clear NUMBA_ENABLE_AVX
+
+        new_env['NUMBA_CPU_NAME'] = 'nocona'
+        code = ("from numba.core import config\n"
+                "print('---->', bool(config.ENABLE_AVX))\n"
+                "assert not config.ENABLE_AVX")
+        out, err = run_in_subprocess(dedent(code), env=new_env)
+        err_msg = err.decode('utf-8')
+        out_msg = out.decode('utf-8')
+        ex_expected = "----> False"
+        self.assertIn(ex_expected, out_msg, msg=err_msg)
+
+        # test with skylake-avx512
+        new_env['NUMBA_CPU_NAME'] = 'skylake-avx512'
+        code = ("from numba.core import config\n"
+                "print('---->', bool(config.ENABLE_AVX))\n"
+                "assert config.ENABLE_AVX")
+        out, err = run_in_subprocess(dedent(code), env=new_env)
+        err_msg = err.decode('utf-8')
+        out_msg = out.decode('utf-8')
+        ex_expected = "----> True"
+        self.assertIn(ex_expected, out_msg, msg=err_msg)
+
 
 class TestNumbaOptLevel(TestCase):
     # Tests that the setting of NUMBA_OPT influences the "cheap" module pass.

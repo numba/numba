@@ -41,6 +41,8 @@ from numba.core.targetconfig import TargetConfig, Option, ConfigStack
 
 
 class Flags(TargetConfig):
+    __slots__ = ()
+
     enable_looplift = Option(
         type=bool,
         default=False,
@@ -137,13 +139,6 @@ detail""",
         type=cpu.InlineOptions,
         default=cpu.InlineOptions("never"),
         doc="TODO",
-    )
-    # Defines a new target option for tracking the "target backend".
-    # This will be the XYZ in @jit(_target=XYZ).
-    target_backend = Option(
-        type=str,
-        default="cpu", # if not set, default to CPU
-        doc="backend"
     )
 
     dbg_extend_lifetimes = Option(

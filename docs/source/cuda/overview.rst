@@ -115,7 +115,7 @@ Numba searches for a CUDA toolkit installation in the following order:
 
 In addition to the CUDA toolkit libraries, which can be installed by conda into
 an environment or installed system-wide by the `CUDA SDK installer
-<(https://developer.nvidia.com/cuda-downloads)>`_, the CUDA target in Numba
+<https://developer.nvidia.com/cuda-downloads>`_, the CUDA target in Numba
 also requires an up-to-date NVIDIA graphics driver.  Updated graphics drivers
 are also installed by the CUDA SDK installer, so there is no need to do both.
 If the ``libcuda`` library is in a non-standard location, users can set

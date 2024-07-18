@@ -6,6 +6,7 @@ the buffer protocol.
 import functools
 import math
 import operator
+import textwrap
 
 from llvmlite import ir
 from llvmlite.ir import Constant
@@ -586,21 +587,22 @@ def array_item(context, builder, sig, args):
     return load_item(context, builder, aryty, ary.data)
 
 
-@lower_builtin("array.itemset", types.Array, types.Any)
-def array_itemset(context, builder, sig, args):
-    aryty, valty = sig.args
-    ary, val = args
-    assert valty == aryty.dtype
-    ary = make_array(aryty)(context, builder, ary)
+if numpy_version < (2, 0):
+    @lower_builtin("array.itemset", types.Array, types.Any)
+    def array_itemset(context, builder, sig, args):
+        aryty, valty = sig.args
+        ary, val = args
+        assert valty == aryty.dtype
+        ary = make_array(aryty)(context, builder, ary)
 
-    nitems = ary.nitems
-    with builder.if_then(builder.icmp_signed('!=', nitems, nitems.type(1)),
-                         likely=False):
-        msg = "itemset(): can only write to an array of size 1"
-        context.call_conv.return_user_exc(builder, ValueError, (msg,))
+        nitems = ary.nitems
+        with builder.if_then(builder.icmp_signed('!=', nitems, nitems.type(1)),
+                             likely=False):
+            msg = "itemset(): can only write to an array of size 1"
+            context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
-    store_item(context, builder, aryty, val, ary.data)
-    return context.get_dummy_value()
+        store_item(context, builder, aryty, val, ary.data)
+        return context.get_dummy_value()
 
 
 # ------------------------------------------------------------------------------
@@ -1656,8 +1658,23 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
                                       builder.icmp_signed('!=', u, v))
 
         with builder.if_then(shape_error, likely=False):
-            msg = "cannot assign slice from input of different size"
-            context.call_conv.return_user_exc(builder, ValueError, (msg,))
+            def raise_impl(src_shapes, index_shape):
+                return ("cannot assign slice of shape " +
+                        f"({', '.join([str(x) for x in src_shapes])}) from " +
+                        "input of shape " +
+                        f"({', '.join([str(x) for x in index_shape])})")
+
+            sig = types.unicode_type(
+                types.UniTuple(types.int64, len(src_shapes)),
+                types.UniTuple(types.int64, len(index_shape)))
+            tup = (context.make_tuple(builder, sig.args[0], src_shapes),
+                   context.make_tuple(builder, sig.args[1], index_shape))
+
+            res = context.compile_internal(builder, raise_impl, sig, tup)
+            msg = impl_ret_new_ref(context, builder, sig, res)
+            context.call_conv.return_dynamic_user_exc(builder, ValueError,
+                                                      (msg,),
+                                                      (types.unicode_type,))
 
         # Check for array overlap
         src_start, src_end = get_array_memory_extents(context, builder, srcty,
@@ -1689,8 +1706,17 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         shape_error = builder.icmp_signed('!=', index_shape[0], seq_len)
 
         with builder.if_then(shape_error, likely=False):
-            msg = "cannot assign slice from input of different size"
-            context.call_conv.return_user_exc(builder, ValueError, (msg,))
+            def raise_impl(seq_len, input_shape):
+                return (f"cannot assign slice of shape ({seq_len}, )" +
+                        f"from input of shape ({input_shape}, )")
+
+            tup = (seq_len, index_shape[0])
+            sig = types.unicode_type(types.int64, types.int64)
+            res = context.compile_internal(builder, raise_impl, sig, tup)
+            msg = impl_ret_new_ref(context, builder, sig, res)
+            context.call_conv.return_dynamic_user_exc(builder, ValueError,
+                                                      (msg,),
+                                                      (types.unicode_type,))
 
         def src_getitem(source_indices):
             idx, = source_indices
@@ -2553,6 +2579,16 @@ def np_shape(a):
 
     def impl(a):
         return np.asarray(a).shape
+    return impl
+
+
+@overload(np.size)
+def np_size(a):
+    if not type_can_asarray(a):
+        raise errors.TypingError("The argument to np.size must be array-like")
+
+    def impl(a):
+        return np.asarray(a).size
     return impl
 
 # ------------------------------------------------------------------------------
@@ -4672,52 +4708,131 @@ def numpy_diagflat(v, k=0):
     return impl
 
 
+def generate_getitem_setitem_with_axis(ndim, kind):
+    assert kind in ('getitem', 'setitem')
+
+    if kind == 'getitem':
+        fn = '''
+            def _getitem(a, idx, axis):
+                if axis == 0:
+                    return a[idx, ...]
+        '''
+        for i in range(1, ndim):
+            lst = (':',) * i
+            fn += f'''
+                elif axis == {i}:
+                    return a[{", ".join(lst)}, idx, ...]
+            '''
+    else:
+        fn = '''
+            def _setitem(a, idx, axis, vals):
+                if axis == 0:
+                    a[idx, ...] = vals
+        '''
+
+        for i in range(1, ndim):
+            lst = (':',) * i
+            fn += f'''
+                elif axis == {i}:
+                    a[{", ".join(lst)}, idx, ...] = vals
+            '''
+
+    fn = textwrap.dedent(fn)
+    exec(fn, globals())
+    fn = globals()[f'_{kind}']
+    return register_jitable(fn)
+
+
 @overload(np.take)
 @overload_method(types.Array, 'take')
-def numpy_take(a, indices):
+def numpy_take(a, indices, axis=None):
 
-    if isinstance(a, types.Array) and isinstance(indices, types.Integer):
-        def take_impl(a, indices):
-            if indices > (a.size - 1) or indices < -a.size:
-                raise IndexError("Index out of bounds")
-            return a.ravel()[indices]
-        return take_impl
-
-    if all(isinstance(arg, types.Array) for arg in [a, indices]):
-        F_order = indices.layout == 'F'
-
-        def take_impl(a, indices):
-            ret = np.empty(indices.size, dtype=a.dtype)
-            if F_order:
-                walker = indices.copy()  # get C order
-            else:
-                walker = indices
-            it = np.nditer(walker)
-            i = 0
-            flat = a.ravel()
-            for x in it:
-                if x > (a.size - 1) or x < -a.size:
+    if cgutils.is_nonelike(axis):
+        if isinstance(a, types.Array) and isinstance(indices, types.Integer):
+            def take_impl(a, indices, axis=None):
+                if indices > (a.size - 1) or indices < -a.size:
                     raise IndexError("Index out of bounds")
-                ret[i] = flat[x]
-                i = i + 1
-            return ret.reshape(indices.shape)
-        return take_impl
+                return a.ravel()[indices]
+            return take_impl
 
-    if isinstance(a, types.Array) and \
-            isinstance(indices, (types.List, types.BaseTuple)):
-        def take_impl(a, indices):
-            convert = np.array(indices)
-            ret = np.empty(convert.size, dtype=a.dtype)
-            it = np.nditer(convert)
-            i = 0
-            flat = a.ravel()
-            for x in it:
-                if x > (a.size - 1) or x < -a.size:
-                    raise IndexError("Index out of bounds")
-                ret[i] = flat[x]
-                i = i + 1
-            return ret.reshape(convert.shape)
-        return take_impl
+        if isinstance(a, types.Array) and isinstance(indices, types.Array):
+            F_order = indices.layout == 'F'
+
+            def take_impl(a, indices, axis=None):
+                ret = np.empty(indices.size, dtype=a.dtype)
+                if F_order:
+                    walker = indices.copy()  # get C order
+                else:
+                    walker = indices
+                it = np.nditer(walker)
+                i = 0
+                flat = a.ravel()
+                for x in it:
+                    if x > (a.size - 1) or x < -a.size:
+                        raise IndexError("Index out of bounds")
+                    ret[i] = flat[x]
+                    i = i + 1
+                return ret.reshape(indices.shape)
+            return take_impl
+
+        if isinstance(a, types.Array) and \
+                isinstance(indices, (types.List, types.BaseTuple)):
+            def take_impl(a, indices, axis=None):
+                convert = np.array(indices)
+                return np.take(a, convert)
+            return take_impl
+    else:
+        if isinstance(a, types.Array) and isinstance(indices, types.Integer):
+            t = (0,) * (a.ndim - 1)
+
+            # np.squeeze is too hard to implement in Numba as the tuple "t"
+            # needs to be allocated beforehand we don't know it's size until
+            # code gets executed.
+            @register_jitable
+            def _squeeze(r, axis):
+                tup = tuple(t)
+                j = 0
+                assert axis < len(r.shape) and r.shape[axis] == 1, r.shape
+                for idx in range(len(r.shape)):
+                    s = r.shape[idx]
+                    if idx != axis:
+                        tup = tuple_setitem(tup, j, s)
+                        j += 1
+                return r.reshape(tup)
+
+            def take_impl(a, indices, axis=None):
+                r = np.take(a, (indices,), axis=axis)
+                if a.ndim == 1:
+                    return r[0]
+                if axis < 0:
+                    axis += a.ndim
+                return _squeeze(r, axis)
+            return take_impl
+
+        if isinstance(a, types.Array) and \
+                isinstance(indices, (types.Array, types.List, types.BaseTuple)):
+
+            ndim = a.ndim
+
+            _getitem = generate_getitem_setitem_with_axis(ndim, 'getitem')
+            _setitem = generate_getitem_setitem_with_axis(ndim, 'setitem')
+
+            def take_impl(a, indices, axis=None):
+                if axis < 0:
+                    axis += a.ndim
+
+                if axis < 0 or axis >= a.ndim:
+                    msg = (f"axis {axis} is out of bounds for array "
+                           f"of dimension {a.ndim}")
+                    raise ValueError(msg)
+
+                shape = tuple_setitem(a.shape, axis, len(indices))
+                out = np.empty(shape, dtype=a.dtype)
+                for i in range(len(indices)):
+                    y = _getitem(a, indices[i], axis)
+                    _setitem(out, i, axis, y)
+                return out
+            return take_impl
 
 
 def _arange_dtype(*args):
@@ -4747,7 +4862,7 @@ def _arange_dtype(*args):
 
 
 @overload(np.arange)
-def np_arange(start, stop=None, step=None, dtype=None):
+def np_arange(start, / ,stop=None, step=None, dtype=None):
     if isinstance(stop, types.Optional):
         stop = stop.type
     if isinstance(step, types.Optional):
@@ -4781,7 +4896,7 @@ def np_arange(start, stop=None, step=None, dtype=None):
     stop_value = getattr(stop, "literal_value", None)
     step_value = getattr(step, "literal_value", None)
 
-    def impl(start, stop=None, step=None, dtype=None):
+    def impl(start, /, stop=None, step=None, dtype=None):
         # Allow for improved performance if given literal arguments.
         lit_start = start_value if start_value is not None else start
         lit_stop = stop_value if stop_value is not None else stop
@@ -6045,6 +6160,10 @@ def impl_np_vstack(tup):
         def impl(tup):
             return _np_vstack(tup)
         return impl
+
+
+if numpy_version >= (2, 0):
+    overload(np.row_stack)(impl_np_vstack)
 
 
 @intrinsic

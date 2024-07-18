@@ -29,6 +29,8 @@ from numba import (njit, prange, parallel_chunksize,
                    set_num_threads, get_num_threads, typeof)
 from numba.core import (types, errors, ir, rewrites,
                         typed_passes, inline_closurecall, config, compiler, cpu)
+from numba.typed import Dict, List
+
 from numba.extending import (overload_method, register_model,
                              typeof_impl, unbox, NativeValue, models)
 from numba.core.registry import cpu_target
@@ -44,7 +46,8 @@ from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                                  override_env_config, linux_only, tag,
                                  skip_parfors_unsupported, _32bit, needs_blas,
                                  needs_lapack, disabled_test, skip_unless_scipy,
-                                 needs_subprocess)
+                                 needs_subprocess,
+                                 skip_ppc64le_invalid_ctr_loop)
 from numba.core.extending import register_jitable
 from numba.core.bytecode import _fix_LOAD_GLOBAL_arg
 from numba.core import utils
@@ -229,6 +232,10 @@ class TestParforsBase(TestCase):
                     new_args.append(copy.deepcopy(x))
                 elif isinstance(x, list):
                     new_args.append(x[:])
+                elif isinstance(x, Dict):
+                    new_args.append(copy.copy(x))
+                elif isinstance(x, List):
+                    new_args.append(copy.copy(x))
                 else:
                     raise ValueError('Unsupported argument type encountered')
             return tuple(new_args)
@@ -2369,16 +2376,25 @@ class TestParfors(TestParforsBase):
         self.assertEqual(expected, njit(parallel=True)(def_in_loop)(4))
 
     @needs_lapack  # use of np.linalg.solve
+    @skip_ppc64le_invalid_ctr_loop
     def test_issue9490_non_det_ssa_problem(self):
+        # Test modified to include https://github.com/numba/numba/issues/9581
+        # which is an issue with hoisting
         cmd = [
             sys.executable,
             "-m",
             "numba.tests.parfor_iss9490_usecase",
         ]
-
+        envs = {
+            **os.environ,
+            # Reproducer consistently fail with the following hashseed.
+            "PYTHONHASHSEED": "1",
+            # See https://github.com/numba/numba/issues/9501
+            # for details of why num-thread pinning is needed.
+            "NUMBA_NUM_THREADS": "1",
+        }
         try:
-            subp.check_output(cmd, env={**os.environ,
-                                        "PYTHONHASHSEED": "1"},
+            subp.check_output(cmd, env=envs,
                               stderr=subp.STDOUT,
                               encoding='utf-8')
         except subp.CalledProcessError as e:
@@ -3458,6 +3474,20 @@ class TestParforsDiagnostics(TestParforsBase):
         diagnostics = cpfunc.metadata['parfor_diagnostics']
         self.assert_diagnostics(diagnostics, parfors_count=2)
 
+    def test_reduction_binop(self):
+        def test_impl():
+            n = 10
+            a = np.ones(n + 1) # prevent fusion
+            acc = 0
+            for i in prange(n):
+                acc = acc - a[i]
+            return acc
+
+        self.check(test_impl,)
+        cpfunc = self.compile_parallel(test_impl, ())
+        diagnostics = cpfunc.metadata['parfor_diagnostics']
+        self.assert_diagnostics(diagnostics, parfors_count=2)
+
     def test_setitem(self):
         def test_impl():
             n = 10
@@ -4060,6 +4090,11 @@ class TestPrangeBasic(TestPrangeBase):
         self.prange_tester(test_impl, x, par, 2)
 
 
+@register_jitable
+def test_call_hoisting_outcall(a,b):
+    return (a, b)
+
+
 @skip_parfors_unsupported
 class TestPrangeSpecific(TestPrangeBase):
     """ Tests specific features/problems found under prange"""
@@ -4399,6 +4434,34 @@ class TestPrangeSpecific(TestPrangeBase):
 
         self.prange_tester(test_impl)
 
+    def test_tuple_hoisting(self):
+        # issue9529
+        def test_impl(inputs):
+            outputs = [(Dict.empty(key_type=types.int64, value_type=types.float64), np.zeros(1)) for _ in range(len(inputs))]
+            for i in range(len(inputs)):
+                y = inputs[i]
+                out = np.zeros(1)
+                out[0] = i
+                outputs[i] = (inputs[i], out)
+            return outputs[0][1][0]
+
+        N = config.NUMBA_NUM_THREADS + 1
+        self.prange_tester(test_impl, [Dict.empty(key_type=types.int64, value_type=types.float64) for i in range(N)], patch_instance=[1])
+
+    def test_call_hoisting(self):
+        # issue9529
+        def test_impl(inputs):
+            outputs = [(Dict.empty(key_type=types.int64, value_type=types.float64), np.zeros(1)) for _ in range(len(inputs))]
+            for i in range(len(inputs)):
+                y = inputs[i]
+                out = np.zeros(1)
+                out[0] = i
+                outputs[i] = test_call_hoisting_outcall(inputs[i], out)
+            return outputs[0][1][0]
+
+        N = config.NUMBA_NUM_THREADS + 1
+        self.prange_tester(test_impl, [Dict.empty(key_type=types.int64, value_type=types.float64) for i in range(N)], patch_instance=[1])
+
     def test_record_array_setitem(self):
         # issue6704
         state_dtype = np.dtype([('var', np.int32)])
@@ -4463,17 +4526,6 @@ class TestPrangeSpecific(TestPrangeBase):
         n = 128
         X = np.random.ranf(n)
         self.prange_tester(test_impl, X)
-
-    @skip_parfors_unsupported
-    def test_issue_due_to_max_label(self):
-        # Run the actual test in a new process since it can only reproduce in
-        # a fresh state.
-        out = subp.check_output(
-            [sys.executable, '-m', 'numba.tests.parfors_max_label_error'],
-            timeout=30,
-            stderr=subp.STDOUT, # redirect stderr to stdout
-        )
-        self.assertIn("TEST PASSED", out.decode())
 
     @skip_parfors_unsupported
     def test_issue7578(self):

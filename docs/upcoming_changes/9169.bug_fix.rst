@@ -1,6 +1,0 @@
-``numpy.digitize`` implementation behaviour aligned with numpy
---------------------------------------------------------------
-
-The implementation of ``numpy.digitize`` is updated to behave per
-numpy in a wider set of cases, including where the supplied bins
-are not in fact monotonic.

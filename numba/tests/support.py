@@ -99,7 +99,16 @@ skip_unless_py10 = unittest.skipUnless(
     "needs Python 3.10"
 )
 
+skip_unless_py312 = unittest.skipUnless(
+    utils.PYVERSION == (3, 12),
+    "needs Python 3.12"
+)
+
 skip_if_32bit = unittest.skipIf(_32bit, "Not supported on 32 bit")
+
+IS_NUMPY_2 = numpy_support.numpy_version >= (2, 0)
+skip_if_numpy_2 = unittest.skipIf(IS_NUMPY_2,
+                                  "Not supported on numpy 2.0+")
 
 def expected_failure_py311(fn):
     if utils.PYVERSION == (3, 11):
@@ -109,6 +118,12 @@ def expected_failure_py311(fn):
 
 def expected_failure_py312(fn):
     if utils.PYVERSION == (3, 12):
+        return unittest.expectedFailure(fn)
+    else:
+        return fn
+
+def expected_failure_np2(fn):
+    if numpy_support.numpy_version == (2, 0):
         return unittest.expectedFailure(fn)
     else:
         return fn
@@ -150,12 +165,21 @@ skip_ppc64le_issue6465 = unittest.skipIf(platform.machine() == 'ppc64le',
                                           "parameter area' in "
                                           "LowerCall_64SVR4"))
 
+# LLVM PPC issue.
+# Sample error message:
+#   Invalid PPC CTR loop!
+#   UNREACHABLE executed at /llvm/lib/Target/PowerPC/PPCCTRLoops.cpp:179!
+skip_ppc64le_invalid_ctr_loop = unittest.skipIf(
+    platform.machine() == 'ppc64le',
+    "Invalid PPC CTR loop")
+
 # fenv.h on M1 may have various issues:
 # https://github.com/numba/numba/issues/7822#issuecomment-1065356758
 _uname = platform.uname()
-IS_OSX_ARM64 = _uname.system == 'Darwin' and _uname.machine == 'arm64'
-skip_m1_fenv_errors = unittest.skipIf(IS_OSX_ARM64,
-    "fenv.h-like functionality unreliable on OSX arm64")
+IS_MACOS = _uname.system == 'Darwin'
+skip_macos_fenv_errors = unittest.skipIf(IS_MACOS,
+    "fenv.h-like functionality unreliable on macOS")
+IS_MACOS_ARM64 = IS_MACOS and _uname.machine == 'arm64'
 
 try:
     import scipy.linalg.cython_lapack
@@ -550,7 +574,7 @@ class TestCase(unittest.TestCase):
 
     def subprocess_test_runner(self, test_module, test_class=None,
                                test_name=None, envvars=None, timeout=60,
-                               _subproc_test_env="1"):
+                               flags=None, _subproc_test_env="1"):
         """
         Runs named unit test(s) as specified in the arguments as:
         test_module.test_class.test_name. test_module must always be supplied
@@ -559,6 +583,8 @@ class TestCase(unittest.TestCase):
         subprocess with environment variables specified in `envvars`.
         If given, envvars must be a map of form:
             environment variable name (str) -> value (str)
+        If given, flags must be a map of form:
+            flag including the `-` (str) -> value (str)
         It is most convenient to use this method in conjunction with
         @needs_subprocess as the decorator will cause the decorated test to be
         skipped unless the `SUBPROC_TEST` environment variable is set to
@@ -575,7 +601,13 @@ class TestCase(unittest.TestCase):
         thecls = type(self).__name__
         parts = (test_module, test_class, test_name)
         fully_qualified_test = '.'.join(x for x in parts if x is not None)
-        cmd = [sys.executable, '-m', 'numba.runtests', fully_qualified_test]
+        flags_args = []
+        if flags is not None:
+            for flag, value in flags.items():
+                flags_args.append(f'{flag}')
+                flags_args.append(f'{value}')
+        cmd = [sys.executable, *flags_args, '-m', 'numba.runtests',
+               fully_qualified_test]
         env_copy = os.environ.copy()
         env_copy['SUBPROC_TEST'] = _subproc_test_env
         try:
@@ -596,6 +628,7 @@ class TestCase(unittest.TestCase):
             self.skipTest(no_tests_ran)
         else:
             self.assertIn('OK', status.stderr)
+        return status
 
     def run_test_in_subprocess(maybefunc=None, timeout=60, envvars=None):
         """Runs the decorated test in a subprocess via invoking numba's test
@@ -938,6 +971,13 @@ def redirect_c_stdout():
     """Redirect C stdout
     """
     fd = sys.__stdout__.fileno()
+    return redirect_fd(fd)
+
+
+def redirect_c_stderr():
+    """Redirect C stderr
+    """
+    fd = sys.__stderr__.fileno()
     return redirect_fd(fd)
 
 

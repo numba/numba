@@ -213,9 +213,12 @@ class TestWrappers(TestCase):
         # Checks that the cpython and cfunc wrapper produces a call with the
         # "noinline" attr present for the decorated function.
 
+        # Creating a refcounted object induces a side-effect that prevents IPO
+        # from eliding the call to the function with LLVM 15. See Issue #9658:
+        # https://github.com/numba/numba/issues/9658
         @njit
         def foo():
-            pass
+            return list([1])
 
         foo()
         sig = foo.signatures[0]

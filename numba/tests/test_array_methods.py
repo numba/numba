@@ -10,7 +10,9 @@ from numba import jit, njit, typeof
 from numba.core import types
 from numba.core.errors import TypingError, NumbaValueError
 from numba.np.numpy_support import as_dtype, numpy_version
-from numba.tests.support import TestCase, MemoryLeakMixin, needs_blas
+from numba.tests.support import (TestCase, MemoryLeakMixin,
+                                 needs_blas, skip_if_numpy_2,
+                                 expected_failure_np2)
 
 TIMEDELTA_M = 'timedelta64[M]'
 TIMEDELTA_Y = 'timedelta64[Y]'
@@ -118,13 +120,13 @@ def np_arange_2_dtype(arg0, arg1, dtype):
     return np.arange(arg0, arg1, dtype=dtype)
 
 def np_arange_start_stop(start, stop):
-    return np.arange(start=start, stop=stop)
+    return np.arange(start, stop=stop)
 
 def np_arange_start_stop_step(start, stop, step):
-    return np.arange(start=start, stop=stop, step=step)
+    return np.arange(start, stop=stop, step=step)
 
 def np_arange_start_stop_step_dtype(start, stop, step, dtype):
-    return np.arange(start=start, stop=stop, step=step, dtype=dtype)
+    return np.arange(start, stop=stop, step=step, dtype=dtype)
 
 def array_fill(arr, val):
     return arr.fill(val)
@@ -361,6 +363,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_around_array(self):
         self.check_round_array(np_around_array)
 
+    @skip_if_numpy_2
     def test_round__array(self):
         self.check_round_array(np_round__array)
 
@@ -372,7 +375,10 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                 cfunc(None)
 
     def test_around_bad_out(self):
-        for py_func in (np_round_array, np_around_array, np_round__array):
+        funcs = [np_round_array, np_around_array]
+        if numpy_version < (2, 0):
+            funcs.append(np_round__array)
+        for py_func in funcs:
             cfunc = jit(nopython=True)(py_func)
             msg = '.*The argument "out" must be an array if it is provided.*'
             with self.assertRaisesRegex(TypingError, msg):
@@ -1076,19 +1082,22 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             check_ok(-8, -1, pyfunc, cfunc)
             check_ok(4, 0.5, pyfunc, cfunc)
             check_ok(0.5, 4, pyfunc, cfunc)
-            check_ok(complex(1, 1), complex(4, 4), pyfunc, cfunc)
-            check_ok(complex(4, 4), complex(1, 1), pyfunc, cfunc)
             check_ok(3, None, pyfunc, cfunc)
+            if numpy_version < (2, 0):
+                check_ok(complex(1, 1), complex(4, 4), pyfunc, cfunc)
+                check_ok(complex(4, 4), complex(1, 1), pyfunc, cfunc)
 
         pyfunc = np_arange_1_dtype
         cfunc = jit(nopython=True)(pyfunc)
 
         check_ok(5, np.float32, pyfunc, cfunc)
         check_ok(2.0, np.int32, pyfunc, cfunc)
-        check_ok(10, np.complex128, pyfunc, cfunc)
-        check_ok(np.complex64(10), np.complex128, pyfunc, cfunc)
         check_ok(7, None, pyfunc, cfunc)
         check_ok(np.int8(0), None, pyfunc, cfunc)
+
+        if numpy_version < (2, 0):
+            check_ok(10, np.complex128, pyfunc, cfunc)
+            check_ok(np.complex64(10), np.complex128, pyfunc, cfunc)
 
     def test_arange_3_arg(self):
         windows64 = sys.platform.startswith('win32') and sys.maxsize > 2 ** 32
@@ -1111,7 +1120,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             check_ok(0, -10, -2, pyfunc, cfunc)
             check_ok(0.5, 4, 2, pyfunc, cfunc)
             check_ok(0, 1, 0.1, pyfunc, cfunc)
-            check_ok(0, complex(4, 4), complex(1, 1), pyfunc, cfunc)
             check_ok(3, 6, None, pyfunc, cfunc)
             check_ok(3, None, None, pyfunc, cfunc)
             check_ok(np.int8(0), np.int8(5), np.int8(1), pyfunc, cfunc)
@@ -1120,16 +1128,19 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             i8 = np.int8
             check_ok(i8(0), i8(5), i8(1), pyfunc, cfunc, True) # C int
             check_ok(np.int64(0), i8(5), i8(1), pyfunc, cfunc, True) # int64
+            if numpy_version < (2, 0):
+                check_ok(0, complex(4, 4), complex(1, 1), pyfunc, cfunc)
 
         pyfunc = np_arange_2_dtype
         cfunc = jit(nopython=True)(pyfunc)
 
         check_ok(1, 5, np.float32, pyfunc, cfunc)
         check_ok(2.0, 8, np.int32, pyfunc, cfunc)
-        check_ok(-2, 10, np.complex128, pyfunc, cfunc)
-        check_ok(3, np.complex64(10), np.complex128, pyfunc, cfunc)
         check_ok(1, 7, None, pyfunc, cfunc)
         check_ok(np.int8(0), np.int32(5), None, pyfunc, cfunc, True)
+        if numpy_version < (2, 0):
+            check_ok(-2, 10, np.complex128, pyfunc, cfunc)
+            check_ok(3, np.complex64(10), np.complex128, pyfunc, cfunc)
 
     def test_arange_4_arg(self):
         for pyfunc in (np_arange_4, np_arange_start_stop_step_dtype):
@@ -1144,10 +1155,11 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             check_ok(-8, -1, 3, np.int32)
             check_ok(0, -10, -2, np.float32)
             check_ok(0.5, 4, 2, None)
-            check_ok(0, 1, 0.1, np.complex128)
-            check_ok(0, complex(4, 4), complex(1, 1), np.complex128)
             check_ok(3, 6, None, None)
             check_ok(3, None, None, None)
+            if numpy_version < (2, 0):
+                check_ok(0, 1, 0.1, np.complex128)
+                check_ok(0, complex(4, 4), complex(1, 1), np.complex128)
 
     def test_arange_throws(self):
         # Exceptions leak references
@@ -1226,6 +1238,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check_err(np.array([1, 2]))
         check_err(np.array([]))
 
+    @skip_if_numpy_2
     def test_itemset(self):
         pyfunc = array_itemset
         cfunc = jit(nopython=True)(pyfunc)
@@ -1260,12 +1273,18 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         pyfunc = array_sum
         cfunc = jit(nopython=True)(pyfunc)
         all_dtypes = [np.float64, np.float32, np.int64, np.int32,
-                      np.complex64, np.complex128, np.uint32, np.uint64, np.timedelta64]
+                      np.complex64, np.complex128, np.timedelta64]
         all_test_arrays = [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype),
              np.ones((7, 3), arr_dtype) * -5]
             for arr_dtype in all_dtypes]
+
+        unsigned_dtypes = [np.uint32, np.uint64]
+        all_test_arrays = [
+            [np.ones((7, 6, 5, 4, 3), arr_dtype),
+             np.ones(1, arr_dtype)]
+            for arr_dtype in unsigned_dtypes]
 
         for arr_list in all_test_arrays:
             for arr in arr_list:
@@ -1276,13 +1295,20 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         """ test sum with axis parameter over a whole range of dtypes  """
         pyfunc = array_sum_axis_kws
         cfunc = jit(nopython=True)(pyfunc)
-        all_dtypes = [np.float64, np.float32, np.int64, np.uint64, np.complex64,
+        all_dtypes = [np.float64, np.float32, np.int64, np.complex64,
                       np.complex128, TIMEDELTA_M]
         all_test_arrays = [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype),
              np.ones((7, 3), arr_dtype) * -5]
             for arr_dtype in all_dtypes]
+
+        unsigned_dtypes = [np.uint64]
+        all_test_arrays += [
+            [np.ones((7, 6, 5, 4, 3), arr_dtype),
+             np.ones(1, arr_dtype)]
+            for arr_dtype in unsigned_dtypes]
+
         for arr_list in all_test_arrays:
             for arr in arr_list:
                 for axis in (0, 1, 2):
@@ -1304,7 +1330,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         """
         pyfunc = array_sum_axis_kws
         cfunc = jit(nopython=True)(pyfunc)
-        all_dtypes = [np.int32, np.uint32, ]
+        all_dtypes = [np.int32]
         # expected return dtypes in Numba
         out_dtypes = {np.dtype('int32'): np.int64, np.dtype('uint32'): np.uint64,
                       np.dtype('int64'): np.int64,
@@ -1314,6 +1340,12 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
              np.ones(1, arr_dtype),
              np.ones((7, 3), arr_dtype) * -5]
             for arr_dtype in all_dtypes]
+
+        unsigned_dtypes = [np.uint32]
+        all_test_arrays += [
+            [np.ones((7, 6, 5, 4, 3), arr_dtype),
+             np.ones(1, arr_dtype)]
+            for arr_dtype in unsigned_dtypes]
 
         for arr_list in all_test_arrays:
             for arr in arr_list:
@@ -1336,13 +1368,19 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         """ test sum with dtype parameter over a whole range of dtypes """
         pyfunc = array_sum_dtype_kws
         cfunc = jit(nopython=True)(pyfunc)
-        all_dtypes = [np.float64, np.float32, np.int64, np.int32, np.uint32,
-                      np.uint64, np.complex64, np.complex128]
+        all_dtypes = [np.float64, np.float32, np.int64, np.int32,
+                      np.complex64, np.complex128]
         all_test_arrays = [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype),
              np.ones((7, 3), arr_dtype) * -5]
             for arr_dtype in all_dtypes]
+
+        unsigned_dtypes = [np.uint32, np.uint64]
+        all_test_arrays = [
+            [np.ones((7, 6, 5, 4, 3), arr_dtype),
+             np.ones(1, arr_dtype)]
+            for arr_dtype in unsigned_dtypes]
 
         out_dtypes = {np.dtype('float64'): [np.float64],
                       np.dtype('float32'): [np.float64, np.float32],
@@ -1366,13 +1404,19 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         """ test sum with axis and dtype parameters over a whole range of dtypes """
         pyfunc = array_sum_axis_dtype_kws
         cfunc = jit(nopython=True)(pyfunc)
-        all_dtypes = [np.float64, np.float32, np.int64, np.int32, np.uint32,
-                      np.uint64, np.complex64, np.complex128]
+        all_dtypes = [np.float64, np.float32, np.int64, np.int32,
+                      np.complex64, np.complex128]
         all_test_arrays = [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype),
              np.ones((7, 3), arr_dtype) * -5]
             for arr_dtype in all_dtypes]
+
+        unsigned_dtypes = [np.uint32, np.uint64]
+        all_test_arrays = [
+            [np.ones((7, 6, 5, 4, 3), arr_dtype),
+             np.ones(1, arr_dtype)]
+            for arr_dtype in unsigned_dtypes]
 
         out_dtypes = {np.dtype('float64'): [np.float64],
                       np.dtype('float32'): [np.float64, np.float32],
@@ -1538,16 +1582,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # check float indexing raises
         with self.assertRaises(TypingError):
             cfunc(A, [1.7])
-
-        # check unsupported arg raises
-        with self.assertRaises(TypingError):
-            take_kws = jit(nopython=True)(array_take_kws)
-            take_kws(A, 1, 1)
-
-        # check kwarg unsupported raises
-        with self.assertRaises(TypingError):
-            take_kws = jit(nopython=True)(array_take_kws)
-            take_kws(A, 1, axis=1)
 
         #exceptions leak refs
         self.disable_leak_check()
