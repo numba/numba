@@ -4,7 +4,7 @@ Implement code coverage support.
 Currently contains logic to extend ``coverage`` with line covered by the
 compiler.
 """
-from typing import Optional, Sequence, Callable
+from typing import Optional, Sequence, Callable, no_type_check
 from collections import defaultdict
 from abc import ABC, abstractmethod
 import atexit
@@ -21,7 +21,8 @@ else:
     coverage_available = True
 
 
-def get_active_coverage() -> Optional["coverage.Coverage"]:
+@no_type_check
+def get_active_coverage():
     """Get active coverage instance or return None if not found.
     """
     cov = None
