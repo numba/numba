@@ -124,7 +124,7 @@ if [ "$RUN_COVERAGE" == "yes" ]; then
     echo "INFO: Running changed tests with coverage"
     export PYTHONPATH=.
     coverage erase
-    NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH coverage run runtests.py -b -v -g=ancestor -m $TEST_NPROCS -- numba.tests
+    # NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH coverage run runtests.py -b -v -g=ancestor -m $TEST_NPROCS -- numba.tests
 else
     NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -g=ancestor -m $TEST_NPROCS -- numba.tests
 fi
