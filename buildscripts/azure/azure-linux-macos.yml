@@ -52,7 +52,9 @@ jobs:
     
     - script: |
         pip install codecov-cli
-        codecovcli --auto-load-params-from AzurePipelines --codecov-yml-path codecov.yml upload-process --git-service github --plugin pycoverage --disable-search --file cov.xml --commit-sha $(system.pullRequest.sourceCommitId)
+        codecovcli --auto-load-params-from AzurePipelines --codecov-yml-path codecov.yml upload-process --git-service github --plugin pycoverage --disable-search --file cov.xml --commit-sha $(system.pullRequest.sourceCommitId) -t $CODECOV_TOKEN
+      env:
+        CODECOV_TOKEN: $(CODECOV_TOKEN)
       displayName: 'Upload to codecov.io (tokenless)' 
       condition: eq(variables['RUN_COVERAGE'], 'yes')
     
