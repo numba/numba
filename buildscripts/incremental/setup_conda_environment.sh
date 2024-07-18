@@ -67,8 +67,10 @@ if [[ $(uname) == Linux ]]; then
         $CONDA_INSTALL gcc_linux-64 gxx_linux-64
     fi
 elif  [[ $(uname) == Darwin ]]; then
-    # Pin clang version to avoid issue with changing sysconfig in buildnum 1
-    $CONDA_INSTALL clang_osx-64=14.0.6='*_0' clangxx_osx-64=14.0.6='*_0'
+    # Avoid clang_osx-64=14.0.6=hecd8cb5_1 due to issue with sysconfig
+    # Avoid clang_osx-64=14.0.6=hecd8cb5_0 and 12.0.0=h7ad7729_2 due to issue 
+    # with missing x86_64-apple-darwin13.4.0-ar
+    $CONDA_INSTALL clang_osx-64=10 clangxx_osx-64=10
     # Install llvm-openmp on OSX for headers during build and runtime during
     # testing
     $CONDA_INSTALL llvm-openmp
