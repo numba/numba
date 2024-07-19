@@ -12,6 +12,12 @@ jobs:
       ${{ insert }}: ${{ parameters.matrix }}
 
   steps:
+
+    - bash: |
+        echo "Using my secret variable: $MY_SECRET"
+        # Your Bash script here
+      env:
+        MY_SECRET: $(mySecret)
     - script: |
         set -e
         echo "Installing Miniconda"
