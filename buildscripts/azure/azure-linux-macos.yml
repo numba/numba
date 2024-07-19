@@ -52,6 +52,7 @@ jobs:
     
     - script: |
         pip install codecov-cli
+        echo $CODECOV_TOKEN
         codecovcli -v --auto-load-params-from AzurePipelines --codecov-yml-path codecov.yml upload-process --git-service github --plugin pycoverage --disable-search --file cov.xml --commit-sha $(system.pullRequest.sourceCommitId) -t $CODECOV_TOKEN
       env:
         CODECOV_TOKEN: $(CODECOV_TOKEN)
