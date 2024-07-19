@@ -49,12 +49,11 @@ jobs:
     #     export PATH=$HOME/miniconda3/bin:$PATH
     #     buildscripts/incremental/test.sh
     #   displayName: 'Test'
-    
     - script: |
         pip install codecov-cli
         echo "token=$MY_CODECOV_TOKEN"
-        echo "token=$(CODECOV_TOKEN)"
-        codecovcli -v --auto-load-params-from AzurePipelines --codecov-yml-path codecov.yml upload-process --git-service github --plugin pycoverage --disable-search --file cov.xml --commit-sha $(system.pullRequest.sourceCommitId) -t $MY_CODECOV_TOKEN
+        echo "token=${CODECOV_TOKEN}"
+        codecovcli -v --auto-load-params-from AzurePipelines --codecov-yml-path codecov.yml upload-process --git-service github --plugin pycoverage --disable-search --file cov.xml --commit-sha $(system.pullRequest.sourceCommitId) -t ${CODECOV_TOKEN}
       env:
         MY_CODECOV_TOKEN: $(CODECOV_TOKEN)
       displayName: 'Upload to codecov.io' 
