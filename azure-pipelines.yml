@@ -6,7 +6,7 @@ variables:
   TEST_COUNT: 18
 
 jobs:
-Mac and Linux use the same template with different matrixes
+# Mac and Linux use the same template with different matrixes
 - template: buildscripts/azure/azure-linux-macos.yml
   parameters:
     name: macOS
