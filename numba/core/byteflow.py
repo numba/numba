@@ -499,16 +499,20 @@ class TraceRunner(object):
 
     def op_LOAD_ATTR(self, state, inst):
         item = state.pop()
-        if PYVERSION in ((3, 12), (3, 13)):
+        res = state.make_temp()
+        if PYVERSION in ((3, 13),):
+            state.push(res)  # the attr
             if inst.arg & 1:
                 state.push(state.make_null())
+        elif PYVERSION in ((3, 12),):
+            if inst.arg & 1:
+                state.push(state.make_null())
+            state.push(res)
         elif PYVERSION in ((3, 9), (3, 10), (3, 11)):
-            pass
+            state.push(res)
         else:
             raise NotImplementedError(PYVERSION)
-        res = state.make_temp()
         state.append(inst, item=item, res=res)
-        state.push(res)
 
     def op_LOAD_FAST(self, state, inst):
         name = state.get_varname(inst)
@@ -1168,13 +1172,13 @@ class TraceRunner(object):
         narg = inst.arg
         args = list(reversed([state.pop() for _ in range(narg)]))
         if PYVERSION == (3, 13):
+            null_or_self = state.pop()
             # position of the callable is fixed
-            null_or_firstarg = state.pop()
             callable = state.pop()
-            if not _is_null_temp_reg(null_or_firstarg):
-                args = [null_or_firstarg, *args]
+            if not _is_null_temp_reg(null_or_self):
+                args = [null_or_self, *args]
             kw_names = None
-        elif PYVERSION <= (3, 13):
+        elif PYVERSION < (3, 13):
             callable_or_firstarg = state.pop()
             null_or_callable = state.pop()
             if _is_null_temp_reg(null_or_callable):
