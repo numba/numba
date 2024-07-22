@@ -230,6 +230,14 @@ def use_old_style_errors():
     return res
 
 
+def handle_new_style_errors(e):
+    from numba.core import errors
+
+    if use_new_style_errors():
+        if not isinstance(e, errors.NumbaError) or getattr(e, 'panic', False):
+            raise e
+
+
 class ThreadLocalStack:
     """A TLS stack container.
 

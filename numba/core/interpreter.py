@@ -1825,6 +1825,8 @@ class Interpreter(object):
                 if not config.FULL_TRACEBACKS:
                     raise err from None
                 else:
+                    m = f"handling op: {inst} | offset: {inst.offset}"
+                    err.add_context(m)
                     raise err
 
     # --- Scope operations ---

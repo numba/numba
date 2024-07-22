@@ -578,7 +578,7 @@ class UnsupportedError(NumbaError):
     """
     Numba does not have an implementation for this functionality.
     """
-    pass
+    panic = True
 
 
 class UnsupportedRewriteError(UnsupportedError):

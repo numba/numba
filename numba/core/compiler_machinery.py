@@ -359,9 +359,7 @@ class PassManager(object):
             except _EarlyPipelineCompletion as e:
                 raise e
             except Exception as e:
-                if (utils.use_new_style_errors() and not
-                        isinstance(e, errors.NumbaError)):
-                    raise e
+                utils.handle_new_style_errors(e)
                 msg = "Failed in %s mode pipeline (step: %s)" % \
                     (self.pipeline_name, pass_desc)
                 patched_exception = self._patch_error(msg, e)
