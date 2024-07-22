@@ -281,7 +281,10 @@ def _drop_ignored_attrs(dct):
     # ignore anything defined by object
     drop = set(['__weakref__',
                 '__module__',
-                '__dict__'])
+                '__dict__',
+                # new in python 3.13
+                '__firstlineno__',
+                '__static_attributes__'])
 
     if '__annotations__' in dct:
         drop.add('__annotations__')
