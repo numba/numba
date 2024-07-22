@@ -2245,6 +2245,17 @@ class Interpreter(object):
 
             src_value = self.get(self.code_locals[oparg2])
             self.store(value=src_value, name=load_value)
+
+        def op_STORE_FAST_STORE_FAST(self, inst, value1, value2):
+            oparg = inst.arg
+            oparg1 = oparg >> 4
+            oparg2 = oparg & 15
+
+            dstname = self.code_locals[oparg1]
+            self.store(value=self.get(value1), name=dstname)
+            dstname = self.code_locals[oparg2]
+            self.store(value=self.get(value2), name=dstname)
+
     else:
         assert PYVERSION < (3, 13)
 

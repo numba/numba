@@ -13,6 +13,7 @@ from numba.core.ir import Loc
 from numba.core.errors import UnsupportedError
 
 _logger = logging.getLogger(__name__)
+# logging.basicConfig(level=logging.DEBUG)
 
 _EXCEPT_STACK_OFFSET = 6
 _FINALLY_POP = _EXCEPT_STACK_OFFSET
@@ -539,6 +540,11 @@ class TraceRunner(object):
             load_value = state.get_varname_by_arg(oparg2)
             state.append(inst, store_value=store_value, load_value=load_value)
             state.push(load_value)
+
+        def op_STORE_FAST_STORE_FAST(self, state, inst):
+            value1 = state.pop()
+            value2 = state.pop()
+            state.append(inst, value1=value1, value2=value2)
 
     else:
         assert PYVERSION < (3, 13)
