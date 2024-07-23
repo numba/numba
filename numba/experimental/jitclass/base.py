@@ -281,10 +281,10 @@ def _drop_ignored_attrs(dct):
     # ignore anything defined by object
     drop = set(['__weakref__',
                 '__module__',
-                '__dict__',
-                # new in python 3.13
-                '__firstlineno__',
-                '__static_attributes__'])
+                '__dict__'])
+    if utils.PYVERSION == (3, 13):
+        # new in python 3.13
+        drop |= set(['__firstlineno__', '__static_attributes__'])
 
     if '__annotations__' in dct:
         drop.add('__annotations__')
@@ -303,7 +303,7 @@ def _drop_ignored_attrs(dct):
         drop.add('__hash__')
 
     for k in drop:
-        del dct[k]
+        dct[k]
 
 
 class ClassBuilder(object):
