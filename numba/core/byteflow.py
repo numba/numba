@@ -11,6 +11,7 @@ from numba.core.utils import UniqueDict, PYVERSION, ALL_BINOPS_TO_OPERATORS
 from numba.core.controlflow import NEW_BLOCKERS, CFGraph
 from numba.core.ir import Loc
 from numba.core.errors import UnsupportedError
+from numba.core.bytecode import ByteCodeInst
 
 _logger = logging.getLogger(__name__)
 # logging.basicConfig(level=logging.DEBUG)
@@ -87,6 +88,12 @@ class Flow(object):
     Simulate execution to recover dataflow and controlflow information.
     """
     def __init__(self, bytecode):
+        co = bytecode.func_id.code
+        _logger.debug("code object:\n%s", co)
+        _logger.debug("co.co_names:\n%s", co.co_names)
+        _logger.debug("co.co_varnames:\n%s", co.co_varnames)
+        _logger.debug("co.co_freevars:\n%s", co.co_freevars)
+        _logger.debug("co.co_cellvars:\n%s", co.co_cellvars)
         _logger.debug("bytecode dump:\n%s", bytecode.dump())
         self._bytecode = bytecode
         self.block_infos = UniqueDict()
@@ -482,6 +489,7 @@ class TraceRunner(object):
         raise NotImplementedError(PYVERSION)
 
     def op_COPY_FREE_VARS(self, state, inst):
+        state.copy_free_vars()
         state.append(inst)
 
     def op_MAKE_CELL(self, state, inst):
@@ -516,7 +524,17 @@ class TraceRunner(object):
         state.append(inst, item=item, res=res)
 
     def op_LOAD_FAST(self, state, inst):
-        name = state.get_varname(inst)
+        if PYVERSION in [(3, 13),] and state.has_copy_free_vars():
+            try:
+                name = state.get_varname(inst)
+            except IndexError:   # oparg is out of range
+                # Handle this like a LOAD_DEREF
+                res = state.make_temp()
+                state.append(inst, res=res, as_load_deref=True)
+                state.push(res)
+                return
+        else:
+            name = state.get_varname(inst)
         res = state.make_temp(name)
         state.append(inst, res=res)
         state.push(res)
@@ -1631,6 +1649,23 @@ class TraceRunner(object):
         )
         state.push(res)
 
+    def op_SET_FUNCTION_ATTRIBUTE(self, state, inst):
+        assert PYVERSION >= (3, 13)
+        if inst.arg in {0x1, 0x2, 0x4}:
+            # 0x01 a tuple of default values for positional-only and
+            #      positional-or-keyword parameters in positional order
+            # 0x02 a dictionary of keyword-only parameters’ default values
+            # 0x04 a tuple of strings containing parameters’ annotations
+            raise NotImplementedError(f"SET_FUNCTION_ATTRIBUTE({inst.arg})")
+        elif inst.arg == 0x8:
+            # 0x08 a tuple containing cells for free variables, making a closure
+            make_func_stack = state.pop()
+            closure_data = state.pop()
+            state.set_function_attribute(make_func_stack, closure=closure_data)
+            state.push(make_func_stack)
+        else:
+            raise AssertionError("unreachable")
+
     def op_MAKE_CLOSURE(self, state, inst):
         self.op_MAKE_FUNCTION(state, inst, MAKE_CLOSURE=True)
 
@@ -2028,6 +2063,15 @@ class StatePy311(_State):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._kw_names = None
+        self._copy_free_vars_flag = False
+
+    def has_copy_free_vars(self):
+        return self._copy_free_vars_flag
+
+    def copy_free_vars(self):
+        """Set flag to indicate COPY_FREE_VARS was executed
+        """
+        self._copy_free_vars_flag = True
 
     def pop_kw_names(self):
         out = self._kw_names
@@ -2055,7 +2099,18 @@ class StatePy311(_State):
         return self.make_temp(prefix="null$")
 
 
-if PYVERSION >= (3, 11):
+class StatePy313(StatePy311):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._make_func_attrs = {}
+
+    def set_function_attribute(self, make_func_res, **kwargs):
+        self._make_func_attrs[make_func_res] = kwargs
+
+
+if PYVERSION >= (3, 13):
+    State = StatePy313
+elif PYVERSION >= (3, 11):
     State = StatePy311
 elif PYVERSION < (3, 11):
     State = _State

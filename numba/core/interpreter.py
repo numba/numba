@@ -2220,9 +2220,19 @@ class Interpreter(object):
         stmt = ir.DelItem(base, self.get(indexvar), loc=self.loc)
         self.current_block.append(stmt)
 
-    def op_LOAD_FAST(self, inst, res):
+    def _op_LOAD_FAST(self, inst, res):
         srcname = self.code_locals[inst.arg]
         self.store(value=self.get(srcname), name=res)
+
+    if PYVERSION == (3, 13):
+        def op_LOAD_FAST(self, inst, res, as_load_deref=False):
+            if as_load_deref:
+                self.op_LOAD_DEREF(inst, res)
+            else:
+                self._op_LOAD_FAST(inst, res)
+
+    else:
+        op_LOAD_FAST = _op_LOAD_FAST
 
     if PYVERSION in ((3, 13),):
         def op_LOAD_FAST_LOAD_FAST(self, inst, value1, value2):
