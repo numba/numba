@@ -2235,16 +2235,16 @@ class Interpreter(object):
         op_LOAD_FAST = _op_LOAD_FAST
 
     if PYVERSION in ((3, 13),):
-        def op_LOAD_FAST_LOAD_FAST(self, inst, value1, value2):
+        def op_LOAD_FAST_LOAD_FAST(self, inst, res1, res2):
             oparg = inst.arg
             oparg1 = oparg >> 4
             oparg2 = oparg & 15
             src1 = self.get(self.code_locals[oparg1])
             src2 = self.get(self.code_locals[oparg2])
-            self.store(value=src1, name=value1)
-            self.store(value=src2, name=value2)
+            self.store(value=src1, name=res1)
+            self.store(value=src2, name=res2)
 
-        def op_STORE_FAST_LOAD_FAST(self, inst, store_value, load_value):
+        def op_STORE_FAST_LOAD_FAST(self, inst, store_value, load_res):
             oparg = inst.arg
             oparg1 = oparg >> 4
             oparg2 = oparg & 15
@@ -2254,7 +2254,7 @@ class Interpreter(object):
             self.store(value=dst_value, name=dstname)
 
             src_value = self.get(self.code_locals[oparg2])
-            self.store(value=src_value, name=load_value)
+            self.store(value=src_value, name=load_res)
 
         def op_STORE_FAST_STORE_FAST(self, inst, value1, value2):
             oparg = inst.arg

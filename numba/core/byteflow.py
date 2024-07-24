@@ -560,20 +560,23 @@ class TraceRunner(object):
             oparg = inst.arg
             oparg1 = oparg >> 4
             oparg2 = oparg & 15
-            value1 = state.get_varname_by_arg(oparg1)
-            value2 = state.get_varname_by_arg(oparg2)
-            state.append(inst, value1=value1, value2=value2)
-            state.push(value1)
-            state.push(value2)
+            name1 = state.get_varname_by_arg(oparg1)
+            name2 = state.get_varname_by_arg(oparg2)
+            res1 = state.make_temp(name1)
+            res2 = state.make_temp(name2)
+            state.append(inst, res1=res1, res2=res2)
+            state.push(res1)
+            state.push(res2)
 
         def op_STORE_FAST_LOAD_FAST(self, state, inst):
             oparg = inst.arg
             # oparg1 = oparg >> 4  # not needed
             oparg2 = oparg & 15
             store_value = state.pop()
-            load_value = state.get_varname_by_arg(oparg2)
-            state.append(inst, store_value=store_value, load_value=load_value)
-            state.push(load_value)
+            load_name = state.get_varname_by_arg(oparg2)
+            load_res = state.make_temp(load_name)
+            state.append(inst, store_value=store_value, load_res=load_res)
+            state.push(load_res)
 
         def op_STORE_FAST_STORE_FAST(self, state, inst):
             value1 = state.pop()
