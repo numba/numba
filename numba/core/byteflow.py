@@ -358,7 +358,13 @@ class TraceRunner(object):
             _logger.debug("stack %s", state._stack)
         fn = getattr(self, "op_{}".format(inst.opname), None)
         if fn is not None:
-            fn(state, inst)
+            try:
+                fn(state, inst)
+            except Exception as e:
+                e.add_note(f"{inst!r} at {inst.offset}")
+                e.add_note(state._bytecode.dump())
+                raise
+
         else:
             msg = "Use of unsupported opcode (%s) found" % inst.opname
             raise UnsupportedError(msg, loc=self.get_debug_loc(inst.lineno))
