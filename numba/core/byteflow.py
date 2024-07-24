@@ -2160,9 +2160,13 @@ def adapt_state_infos(state):
         if inst.opname == "MAKE_FUNCTION":
             data.update(state.get_function_attributes(data['res']))
         return offset, data
-
+    if PYVERSION == (3, 13):
+        insts = tuple(map(process_function_attributes, state.instructions))
+    else:
+        assert PYVERSION < (3, 13)
+        insts = tuple(state.instructions)
     return AdaptBlockInfo(
-        insts=tuple(map(process_function_attributes, state.instructions)),
+        insts=insts,
         outgoing_phis=state.outgoing_phis,
         blockstack=state.blockstack_initial,
         active_try_block=state.find_initial_try_block(),
