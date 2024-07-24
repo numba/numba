@@ -578,6 +578,11 @@ class UnsupportedError(NumbaError):
     """
     Numba does not have an implementation for this functionality.
     """
+
+
+class UnsupportedBytecodeError(UnsupportedError):
+    """Unsupported bytecode is non-recoverable
+    """
     panic = True
 
 

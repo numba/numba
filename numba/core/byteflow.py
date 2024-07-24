@@ -10,7 +10,7 @@ from functools import total_ordering
 from numba.core.utils import UniqueDict, PYVERSION, ALL_BINOPS_TO_OPERATORS
 from numba.core.controlflow import NEW_BLOCKERS, CFGraph
 from numba.core.ir import Loc
-from numba.core.errors import UnsupportedError
+from numba.core.errors import UnsupportedBytecodeError
 from numba.core.bytecode import ByteCodeInst
 
 _logger = logging.getLogger(__name__)
@@ -319,7 +319,7 @@ class Flow(object):
                 msg = ("The 'with (context manager) as "
                        "(variable):' construct is not "
                        "supported.")
-                raise UnsupportedError(msg)
+                raise UnsupportedBytecodeError(msg)
 
 
 def _is_null_temp_reg(reg):
@@ -367,7 +367,7 @@ class TraceRunner(object):
 
         else:
             msg = "Use of unsupported opcode (%s) found" % inst.opname
-            raise UnsupportedError(msg, loc=self.get_debug_loc(inst.lineno))
+            raise UnsupportedBytecodeError(msg, loc=self.get_debug_loc(inst.lineno))
 
     def _adjust_except_stack(self, state):
         """
@@ -428,7 +428,7 @@ class TraceRunner(object):
         """
         if inst.arg != 0:
             msg = "format spec in f-strings not supported yet"
-            raise UnsupportedError(msg, loc=self.get_debug_loc(inst.lineno))
+            raise UnsupportedBytecodeError(msg, loc=self.get_debug_loc(inst.lineno))
         value = state.pop()
         strvar = state.make_temp()
         res = state.make_temp()
@@ -985,7 +985,7 @@ class TraceRunner(object):
                 # No re-raising within a try-except block.
                 # But we allow bare reraise.
                 if state.has_active_try():
-                    raise UnsupportedError(
+                    raise UnsupportedBytecodeError(
                         "The re-raising of an exception is not yet supported.",
                         loc=self.get_debug_loc(inst.lineno),
                     )
@@ -1009,7 +1009,7 @@ class TraceRunner(object):
             if inst.arg == 0:
                 exc = None
                 if in_exc_block:
-                    raise UnsupportedError(
+                    raise UnsupportedBytecodeError(
                         "The re-raising of an exception is not yet supported.",
                         loc=self.get_debug_loc(inst.lineno),
                     )
@@ -1051,7 +1051,7 @@ class TraceRunner(object):
         if inst.arg != 0:
             msg = ('Unsupported use of a bytecode related to try..finally'
                    ' or a with-context')
-            raise UnsupportedError(msg, loc=self.get_debug_loc(inst.lineno))
+            raise UnsupportedBytecodeError(msg, loc=self.get_debug_loc(inst.lineno))
 
     def op_CALL_FINALLY(self, state, inst):
         pass
@@ -1173,7 +1173,7 @@ class TraceRunner(object):
         def op_POP_EXCEPT(self, state, inst):
             blk = state.pop_block()
             if blk['kind'] not in {BlockKind('EXCEPT'), BlockKind('FINALLY')}:
-                raise UnsupportedError(
+                raise UnsupportedBytecodeError(
                     f"POP_EXCEPT got an unexpected block: {blk['kind']}",
                     loc=self.get_debug_loc(inst.lineno),
                 )
@@ -1295,7 +1295,7 @@ class TraceRunner(object):
         def op_CALL_FUNCTION_EX(self, state, inst):
             if inst.arg & 1 and PYVERSION < (3, 10):
                 errmsg = "CALL_FUNCTION_EX with **kwargs not supported"
-                raise UnsupportedError(errmsg)
+                raise UnsupportedBytecodeError(errmsg)
             if inst.arg & 1:
                 varkwarg = state.pop()
             else:

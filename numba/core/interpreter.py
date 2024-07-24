@@ -6,7 +6,11 @@ import logging
 import textwrap
 
 from numba.core import errors, ir, config
-from numba.core.errors import NotDefinedError, UnsupportedError, error_extras
+from numba.core.errors import (
+    NotDefinedError,
+    UnsupportedBytecodeError,
+    error_extras,
+)
 from numba.core.ir_utils import get_definition, guard
 from numba.core.utils import (PYVERSION, BINOPS_TO_OPERATORS,
                               INPLACE_BINOPS_TO_OPERATORS,)
@@ -108,7 +112,7 @@ def _remove_assignment_definition(old_body, idx, func_ir, already_deleted_defs):
         func_ir._definitions[lhs].remove(rhs)
         already_deleted_defs[lhs].add(rhs)
     elif rhs not in already_deleted_defs[lhs]:
-        raise UnsupportedError(
+        raise UnsupportedBytecodeError(
             "Inconsistency found in the definitions while executing"
             " a peephole optimization. This suggests an internal"
             " error or inconsistency elsewhere in the compiler."
@@ -211,7 +215,7 @@ def _call_function_ex_replace_kws_large(
         ):
             # We cannot handle this format so raise the
             # original error message.
-            raise UnsupportedError(errmsg)
+            raise UnsupportedBytecodeError(errmsg)
         key_var_name = const_stmt.target.name
         key_val = const_stmt.value.value
         search_start += 1
@@ -257,7 +261,7 @@ def _call_function_ex_replace_kws_large(
         ):
             # We cannot handle this format so raise the
             # original error message.
-            raise UnsupportedError(errmsg)
+            raise UnsupportedBytecodeError(errmsg)
         setitem_stmt = old_body[search_start + 1]
         if not (
             isinstance(setitem_stmt, ir.Assign)
@@ -277,7 +281,7 @@ def _call_function_ex_replace_kws_large(
             # getattr. If for some reason this doesn't match the code
             # format, we raise the original error message. This check
             # is meant as a precaution.
-            raise UnsupportedError(errmsg)
+            raise UnsupportedBytecodeError(errmsg)
         arg_var = setitem_stmt.value.args[1]
         # Append the (key, value) pair.
         kws.append((key_val, arg_var))
@@ -421,7 +425,7 @@ def _call_function_ex_replace_args_large(
                 and concat_stmt.value.fn == operator.add
             ):
                 # We cannot handle this format.
-                raise UnsupportedError(errmsg)
+                raise UnsupportedBytecodeError(errmsg)
             lhs_name = concat_stmt.value.lhs.name
             rhs_name = concat_stmt.value.rhs.name
             # The previous statement should be a
@@ -439,7 +443,7 @@ def _call_function_ex_replace_args_large(
                 and len(arg_tuple_stmt.value.items) == 1
             ):
                 # We cannot handle this format.
-                raise UnsupportedError(errmsg)
+                raise UnsupportedBytecodeError(errmsg)
             if arg_tuple_stmt.target.name == lhs_name:
                 # The tuple should always be generated on the RHS.
                 raise AssertionError("unreachable")
@@ -447,7 +451,7 @@ def _call_function_ex_replace_args_large(
                 target_name = lhs_name
             else:
                 # We cannot handle this format.
-                raise UnsupportedError(errmsg)
+                raise UnsupportedBytecodeError(errmsg)
             total_args.append(
                 arg_tuple_stmt.value.items[0]
             )
@@ -497,7 +501,7 @@ def _call_function_ex_replace_args_large(
         # If we reached the start we never found the build_tuple.
         # We cannot handle this format so raise the
         # original error message.
-        raise UnsupportedError(errmsg)
+        raise UnsupportedBytecodeError(errmsg)
     # Reverse the arguments so we get the correct order.
     return total_args[::-1]
 
@@ -586,7 +590,7 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                     # If we couldn't find where the kwargs are created
                     # then it should be a normal **kwargs call
                     # so we produce an unsupported message.
-                    raise UnsupportedError(errmsg)
+                    raise UnsupportedBytecodeError(errmsg)
                 # Determine the kws
                 if keyword_def.value.items:
                     # n_kws <= 15 case.
@@ -638,7 +642,7 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                     if args:
                         # If we have vararg then args is expected to
                         # be an empty list.
-                        raise UnsupportedError(errmsg)
+                        raise UnsupportedBytecodeError(errmsg)
                     vararg_loc = start_search
                     args_def = None
                     found = False
@@ -654,7 +658,7 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                     if not found:
                         # If we couldn't find where the args are created
                         # then we can't handle this format.
-                        raise UnsupportedError(errmsg)
+                        raise UnsupportedBytecodeError(errmsg)
                     if (
                         isinstance(args_def.value, ir.Expr)
                         and args_def.value.op == "build_tuple"
@@ -683,7 +687,7 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                         # If there is a call with vararg we need to check
                         # if the list -> tuple conversion failed and if so
                         # throw an error.
-                        raise UnsupportedError(errmsg)
+                        raise UnsupportedBytecodeError(errmsg)
                     else:
                         # Here the IR is an initial empty build_tuple.
                         # Then for each arg, a new tuple with a single
@@ -747,7 +751,7 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                     # exception.
                     expr = func_ir._definitions[vararg_name][0]
                     if isinstance(expr, ir.Expr) and expr.op == "list_to_tuple":
-                        raise UnsupportedError(errmsg)
+                        raise UnsupportedBytecodeError(errmsg)
 
             new_body.append(stmt)
         # Replace the block body if we changed the IR
@@ -1197,7 +1201,7 @@ def peep_hole_fuse_dict_add_updates(func_ir):
                             else:
                                 # If we cannot remove _update_from_bytecode
                                 # Then raise an error for the user.
-                                raise UnsupportedError(errmsg)
+                                raise UnsupportedBytecodeError(errmsg)
 
             # Check if we need to drop any maps from being tracked.
             # Skip the setitem/_update_from_bytecode getattr that
@@ -1507,7 +1511,7 @@ class Interpreter(object):
             first = uservar[0]
             loc = self.current_scope.get(first).loc
             msg = "Exception object cannot be stored into variable ({})."
-            raise errors.UnsupportedError(msg.format(first), loc=loc)
+            raise errors.UnsupportedBytecodeError(msg.format(first), loc=loc)
 
     def init_first_block(self):
         # Define variables receiving the function arguments
@@ -3227,7 +3231,7 @@ class Interpreter(object):
                 "Probably caused by complex control-flow constructs; "
                 "e.g. try-except"
             )
-            raise errors.UnsupportedError(msg, loc=self.loc)
+            raise errors.UnsupportedBytecodeError(msg, loc=self.loc)
         fcode = assume_code_const.value
         if name:
             name = self.get(name)
@@ -3303,7 +3307,7 @@ class Interpreter(object):
                "op_LIST_EXTEND at the start of a block.\n\nThis could be "
                "due to the use of a branch in a tuple unpacking statement.")
         if not self.current_block.body:
-            raise errors.UnsupportedError(msg)
+            raise errors.UnsupportedBytecodeError(msg)
 
         # is last emitted statement a build_tuple?
         stmt = self.current_block.body[-1]
@@ -3333,7 +3337,7 @@ class Interpreter(object):
                     ok = False
                     break
         if ok and build_empty_list is None:
-            raise errors.UnsupportedError(msg)
+            raise errors.UnsupportedBytecodeError(msg)
         if ok:
             stmts = self.current_block.body
             build_tuple_asgn = self.current_block.body[-1]
