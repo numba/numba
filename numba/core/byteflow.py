@@ -489,7 +489,6 @@ class TraceRunner(object):
         raise NotImplementedError(PYVERSION)
 
     def op_COPY_FREE_VARS(self, state, inst):
-        state.copy_free_vars()
         state.append(inst)
 
     def op_MAKE_CELL(self, state, inst):
@@ -524,11 +523,22 @@ class TraceRunner(object):
         state.append(inst, item=item, res=res)
 
     def op_LOAD_FAST(self, state, inst):
-        if PYVERSION in [(3, 13),] and state.has_copy_free_vars():
+        assert PYVERSION <= (3, 13)
+        if PYVERSION in [(3, 13)]:
             try:
                 name = state.get_varname(inst)
             except IndexError:   # oparg is out of range
                 # Handle this like a LOAD_DEREF
+                # Assume MAKE_CELL and COPY_FREE_VARS has correctly setup the
+                # states.
+                # According to https://github.com/python/cpython/blob/9ac606080a0074cdf7589d9b7c9413a73e0ddf37/Objects/codeobject.c#L730C9-L759
+                # localsplus is locals + cells + freevars
+                bc = state._bytecode
+                num_varnames = len(bc.co_varnames)
+                num_freevars = len(bc.co_freevars)
+                num_cellvars = len(bc.co_cellvars)
+                max_fast_local = num_cellvars + num_freevars
+                assert 0 <= inst.arg - num_varnames < max_fast_local
                 res = state.make_temp()
                 state.append(inst, res=res, as_load_deref=True)
                 state.push(res)
@@ -2063,15 +2073,6 @@ class StatePy311(_State):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._kw_names = None
-        self._copy_free_vars_flag = False
-
-    def has_copy_free_vars(self):
-        return self._copy_free_vars_flag
-
-    def copy_free_vars(self):
-        """Set flag to indicate COPY_FREE_VARS was executed
-        """
-        self._copy_free_vars_flag = True
 
     def pop_kw_names(self):
         out = self._kw_names
