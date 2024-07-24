@@ -303,7 +303,7 @@ def _drop_ignored_attrs(dct):
         drop.add('__hash__')
 
     for k in drop:
-        dct[k]
+        dct.pop(k)
 
 
 class ClassBuilder(object):
