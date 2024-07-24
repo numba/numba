@@ -1661,20 +1661,24 @@ class TraceRunner(object):
 
     def op_SET_FUNCTION_ATTRIBUTE(self, state, inst):
         assert PYVERSION >= (3, 13)
-        if inst.arg in {0x1, 0x2, 0x4}:
+        make_func_stack = state.pop()
+        data = state.pop()
+        if inst.arg == 0x1:
             # 0x01 a tuple of default values for positional-only and
             #      positional-or-keyword parameters in positional order
-            # 0x02 a dictionary of keyword-only parameters’ default values
+            state.set_function_attribute(make_func_stack, defaults=data)
+        elif inst.arg & 0x2:
+            # 0x02 a tuple of strings containing parameters’ annotations
+            state.set_function_attribute(make_func_stack, kwdefaults=data)
+        elif inst.arg & 0x4:
             # 0x04 a tuple of strings containing parameters’ annotations
-            raise NotImplementedError(f"SET_FUNCTION_ATTRIBUTE({inst.arg})")
+            state.set_function_attribute(make_func_stack, annotations=data)
         elif inst.arg == 0x8:
             # 0x08 a tuple containing cells for free variables, making a closure
-            make_func_stack = state.pop()
-            closure_data = state.pop()
-            state.set_function_attribute(make_func_stack, closure=closure_data)
-            state.push(make_func_stack)
+            state.set_function_attribute(make_func_stack, closure=data)
         else:
             raise AssertionError("unreachable")
+        state.push(make_func_stack)
 
     def op_MAKE_CLOSURE(self, state, inst):
         self.op_MAKE_FUNCTION(state, inst, MAKE_CLOSURE=True)
@@ -2103,10 +2107,13 @@ class StatePy311(_State):
 class StatePy313(StatePy311):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._make_func_attrs = {}
+        self._make_func_attrs = defaultdict(dict)
 
     def set_function_attribute(self, make_func_res, **kwargs):
-        self._make_func_attrs[make_func_res] = kwargs
+        self._make_func_attrs[make_func_res].update(kwargs)
+
+    def get_function_attributes(self, make_func_res):
+        return self._make_func_attrs[make_func_res]
 
 
 if PYVERSION >= (3, 13):
@@ -2141,8 +2148,15 @@ AdaptBlockInfo = namedtuple(
 
 
 def adapt_state_infos(state):
+    def process_function_attributes(inst_pair):
+        offset, data = inst_pair
+        inst = state._bytecode[offset]
+        if inst.opname == "MAKE_FUNCTION":
+            data.update(state.get_function_attributes(data['res']))
+        return offset, data
+
     return AdaptBlockInfo(
-        insts=tuple(state.instructions),
+        insts=tuple(map(process_function_attributes, state.instructions)),
         outgoing_phis=state.outgoing_phis,
         blockstack=state.blockstack_initial,
         active_try_block=state.find_initial_try_block(),
