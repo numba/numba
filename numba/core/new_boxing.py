@@ -132,9 +132,24 @@ def box_py_complex(typ, val, c):
 @unbox(types.PythonComplex)
 @unbox(types.NumPyComplex)
 def unbox_py_complex(typ, obj, c):
-    cplx = c.context.make_complex(c.builder, typ)
-    ok = c.pyapi.complex_adaptor(obj, cplx._getpointer())
+    c128 = c.context.make_complex(c.builder, types.py_complex128)
+    ok = c.pyapi.complex_adaptor(obj, c128._getpointer())
     failed = cgutils.is_false(c.builder, ok)
+
+    with cgutils.if_unlikely(c.builder, failed):
+        c.pyapi.err_set_string("PyExc_TypeError",
+                               "conversion to %s failed" % (typ,))
+
+    if typ == types.np_complex64:
+        # Downcast to complex64 if necessary
+        cplx = c.context.make_complex(c.builder, typ)
+        cplx.real = c.context.cast(c.builder, c128.real,
+                                   types.py_float64, types.np_float32)
+        cplx.imag = c.context.cast(c.builder, c128.imag,
+                                   types.py_float64, types.np_float32)
+    else:
+        cplx = c128
+
     return NativeValue(cplx._getvalue(), is_error=failed)
 
 

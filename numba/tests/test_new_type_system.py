@@ -25,6 +25,7 @@ class TestTypes(TestCase):
             # Numpy types
             np.int32(1),
             np.float64(1.2),
+            np.complex64(1 + 2j),
             np.complex128(1 + 2j),
             np.bool_(True),
             np.datetime64('2020-01-01'),
@@ -32,5 +33,5 @@ class TestTypes(TestCase):
         ]
 
         for case in cases:
-            assert foo(case) == case
-            assert type(foo(case)) == type(case)
+            self.assertEqual(foo(case), case)
+            self.assertEqual(type(foo(case)), type(case))
