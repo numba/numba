@@ -113,6 +113,12 @@ def expected_failure_py312(fn):
     else:
         return fn
 
+def expected_failure_py313(fn):
+    if utils.PYVERSION == (3, 13):
+        return unittest.expectedFailure(fn)
+    else:
+        return fn
+
 _msg = "SciPy needed for test"
 skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
 

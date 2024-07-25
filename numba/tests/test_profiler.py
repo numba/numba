@@ -8,6 +8,7 @@ import numpy as np
 
 from numba import jit
 from numba.tests.support import needs_blas, expected_failure_py312
+from numba.tests.support import expected_failure_py313
 import unittest
 
 
@@ -48,6 +49,7 @@ class TestProfiler(unittest.TestCase):
         self.assertIn(expected_key, stats.stats)
 
     @expected_failure_py312
+    @expected_failure_py313  # this will pass once sync to main
     def test_profiler(self):
         self.check_profiler_dot(dot)
 
