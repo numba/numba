@@ -1928,6 +1928,10 @@ class Interpreter(object):
                                           loc=self.loc)
             self.store(expr, st)
 
+    def op_FORMAT_SIMPLE(self, inst, value, res, strvar):
+        # Same as FORMAT_VALUE
+        return self.op_FORMAT_VALUE(inst, value, res, strvar)
+
     def op_FORMAT_VALUE(self, inst, value, res, strvar):
         """
         FORMAT_VALUE(flags): flags argument specifies format spec which is not
