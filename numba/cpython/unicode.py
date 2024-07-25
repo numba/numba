@@ -2047,7 +2047,7 @@ def _is_upper(is_lower, is_upper, is_title):
     def impl(a):
         l = len(a)
         if l == 1:
-            return is_upper(_get_code_point(a, 0))
+            return is_upper(_get_code_point(a, 0)) != 0
         if l == 0:
             return False
         cased = False
