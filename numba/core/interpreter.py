@@ -1831,6 +1831,7 @@ class Interpreter(object):
                 else:
                     m = f"handling op: {inst} | offset: {inst.offset}"
                     err.add_context(m)
+                    err.add_context(self.bytecode.dump())
                     raise err
 
     # --- Scope operations ---
@@ -2373,7 +2374,11 @@ class Interpreter(object):
         def op_LOAD_DEREF(self, inst, res):
             name = self.func_id.func.__code__._varname_from_oparg(inst.arg)
             if name in self.code_cellvars:
-                gl = self.get(name)
+                try:
+                    gl = self.get(name)
+                except NotDefinedError:
+                    msg = "Unsupported use of cell variable encountered"
+                    raise NotImplementedError(msg)
             elif name in self.code_freevars:
                 idx = self.code_freevars.index(name)
                 value = self.get_closure_value(idx)
@@ -3252,7 +3257,7 @@ class Interpreter(object):
                 try:
                     gl = self.get(name)
                 except NotDefinedError:
-                    msg = "Unsupported use of op_LOAD_CLOSURE encountered"
+                    msg = "Unsupported use of cell variable encountered"
                     raise NotImplementedError(msg)
             elif name in self.code_freevars:
                 idx = self.code_freevars.index(name)
@@ -3270,7 +3275,7 @@ class Interpreter(object):
                 try:
                     gl = self.get(name)
                 except NotDefinedError:
-                    msg = "Unsupported use of op_LOAD_CLOSURE encountered"
+                    msg = "Unsupported use of cell variable encountered"
                     raise NotImplementedError(msg)
             else:
                 idx = inst.arg - n_cellvars

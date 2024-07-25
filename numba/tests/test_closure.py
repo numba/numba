@@ -400,13 +400,13 @@ class TestInlinedClosure(TestCase):
         with self.assertRaises(NotImplementedError) as raises:
             cfunc = jit(nopython=True)(outer3)
             cfunc(var)
-        msg = "Unsupported use of op_LOAD_CLOSURE encountered"
+        msg = "Unsupported use of cell variable encountered"
         self.assertIn(msg, str(raises.exception))
 
         with self.assertRaises(NotImplementedError) as raises:
             cfunc = jit(nopython=True)(outer4)
             cfunc(var)
-        msg = "Unsupported use of op_LOAD_CLOSURE encountered"
+        msg = "Unsupported use of cell variable encountered"
         self.assertIn(msg, str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
