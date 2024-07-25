@@ -6184,8 +6184,9 @@ def foo():
         tystr = ty.__name__
         basestr = basefunc.__name__
         funcstr = self.template % (tystr, basestr)
-        eval(compile(funcstr, '<string>', 'exec'))
-        return locals()['foo']
+        dct = {}
+        exec(compile(funcstr, '<string>', 'exec'), globals(), dct)
+        return dct['foo']
 
     @unittest.skipIf(numpy_version >= (1, 24), "NumPy < 1.24 required")
     def test_MachAr(self):
