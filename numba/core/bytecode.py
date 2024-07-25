@@ -224,13 +224,16 @@ def _unpack_opargs_pre_3_13(code):
 if PYVERSION in ((3, 13),):
 
     def _unpack_opargs(code):
-        instlist = list(dis._get_instructions_bytes(code))
-        for i, inst in enumerate(instlist):
-            if i + 1 < len(instlist):
-                nextoffset = instlist[i + 1].offset
+        buf = []
+        for i, start_offset, op, arg in dis._unpack_opargs(code):
+            buf.append((start_offset, op, arg))
+        for i, (start_offset, op, arg) in enumerate(buf):
+            if i + 1 < len(buf):
+                next_offset = buf[i + 1][0]
             else:
-                nextoffset = inst.offset + 2
-            yield inst.start_offset, inst.opcode, inst.arg, nextoffset
+                next_offset = len(code)
+            yield (start_offset, op, arg, next_offset)
+
 else:
     _unpack_opargs = _unpack_opargs_pre_3_13
 
