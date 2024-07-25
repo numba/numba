@@ -471,8 +471,15 @@ class ByteCodePy312(ByteCodePy311):
             entirely along with the dead exceptions that it points to.
             A pair of exception that sandwiches these exception will
             also be merged into a single exception.
-        """
 
+            Update for Python 3.13, the ending of the pattern has a extra
+            POP_TOP:
+
+            ...
+            END_FOR
+            POP_TOP
+            SWAP(2)
+        """
         def pop_and_merge_exceptions(entries: list,
                                      entry_to_remove: _ExceptionTableEntry):
             lower_entry_idx = entries.index(entry_to_remove) - 1
@@ -524,17 +531,35 @@ class ByteCodePy312(ByteCodePy311):
                 if not next_inst.opname == "FOR_ITER":
                     continue
 
-                # Check end of pattern, two instructions.
-                # Check for the corresponding END_FOR, exception table end is
-                # non-inclusive, so subtract one.
-                index = self.ordered_offsets.index(entry.end)
-                curr_inst = self.table[self.ordered_offsets[index - 1]]
-                if not curr_inst.opname == "END_FOR":
-                    continue
-                # END_FOR must be followed by SWAP(2)
-                next_inst = self.table[self.ordered_offsets[index]]
-                if not next_inst.opname == "SWAP" and next_inst.arg == 2:
-                    continue
+                if PYVERSION == (3, 13):
+                    # Check end of pattern, two instructions.
+                    # Check for the corresponding END_FOR, exception table end is
+                    # non-inclusive, so subtract one.
+                    index = self.ordered_offsets.index(entry.end)
+                    curr_inst = self.table[self.ordered_offsets[index - 2]]
+                    if not curr_inst.opname == "END_FOR":
+                        continue
+                    next_inst = self.table[self.ordered_offsets[index - 1]]
+                    if not next_inst.opname == "POP_TOP":
+                        continue
+                    # END_FOR must be followed by SWAP(2)
+                    next_inst = self.table[self.ordered_offsets[index]]
+                    if not next_inst.opname == "SWAP" and next_inst.arg == 2:
+                        continue
+                else:
+
+                    assert PYVERSION < (3, 13)
+                    # Check end of pattern, two instructions.
+                    # Check for the corresponding END_FOR, exception table end is
+                    # non-inclusive, so subtract one.
+                    index = self.ordered_offsets.index(entry.end)
+                    curr_inst = self.table[self.ordered_offsets[index - 1]]
+                    if not curr_inst.opname == "END_FOR":
+                        continue
+                    # END_FOR must be followed by SWAP(2)
+                    next_inst = self.table[self.ordered_offsets[index]]
+                    if not next_inst.opname == "SWAP" and next_inst.arg == 2:
+                        continue
                 # If all conditions are met that means this exception entry
                 # is for a list/dict/set comprehension and can be removed.
                 # Also if there exist exception entries above and below this
