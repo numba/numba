@@ -1,7 +1,7 @@
 """
 Implement code coverage support.
 
-Currently contains logic to extend ``coverage`` with line covered by the
+Currently contains logic to extend ``coverage`` with lines covered by the
 compiler.
 """
 from typing import Optional, Sequence, Callable, no_type_check
@@ -72,7 +72,8 @@ class NotifyCompilerCoverage(NotifyLocBase):
     """
     Use to notify ``coverage`` about compiled lines.
 
-    The compiled lines under "numba_compiled" context in the coverage data.
+    The compiled lines are under the "numba_compiled" context in the coverage
+    data.
     """
     def __init__(self):
         self._arcs_data = defaultdict(set)
