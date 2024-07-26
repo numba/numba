@@ -35,6 +35,9 @@ _the_registry: Callable[[], Optional["NotifyLocBase"]] = []
 
 
 def get_registered_loc_notify() -> Sequence["NotifyLocBase"]:
+    """
+    Returns a list of the registered NotifyLocBase instances.
+    """
     return list(filter(lambda x: x is not None,
                        (factory() for factory in _the_registry)))
 
@@ -51,6 +54,7 @@ def _get_coverage_data():
 
     @atexit.register
     def _finalize():
+        # Update active coverage
         cov.get_data().update(covdata)
 
     return covdata
