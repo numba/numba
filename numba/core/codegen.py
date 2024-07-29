@@ -670,9 +670,9 @@ class CPUCodeLibrary(CodeLibrary):
         """
 
         mpm_cheap = self._codegen._module_pass_manager(loop_vectorize=self._codegen._loopvect,
-                                                    slp_vectorize=False,
-                                                    opt=self._codegen._opt_level,
-                                                    cost="cheap")
+                                   slp_vectorize=False,
+                                   opt=self._codegen._opt_level,
+                                   cost="cheap")
 
         mpm_full = self._codegen._module_pass_manager()
 
