@@ -38,7 +38,7 @@ class TestPassManagerOptimization(TestCase):
         self.assertGreater(len(blocks), 1)
         block = blocks[0]
 
-        # Find sequence without non-debug instructions
+        # Find sequence with non-debug instructions
         instrs = [x for x in block.instructions if x.opcode != 'call']
         op_expect = {'fadd', 'fmul', 'fdiv'}
         started = False
