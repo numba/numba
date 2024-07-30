@@ -2054,7 +2054,7 @@ def choice(a, size=None, replace=True):
         raise TypeError("np.random.choice() first argument should be "
                         "int or array, got %s" % (a,))
 
-    if size in (None, types.none):
+    if size in (None, types.none) or isinstance(size, types.Omitted):
         def choice_impl(a, size=None, replace=True):
             """
             choice() implementation returning a single sample
@@ -2145,7 +2145,7 @@ def multinomial(n, pvals, size=None):
         raise TypeError("np.random.multinomial(): pvals should be an "
                         "array or sequence, got %s" % (pvals,))
 
-    if size in (None, types.none):
+    if size in (None, types.none) or isinstance(size, types.Omitted):
         def multinomial_impl(n, pvals, size=None):
             """
             multinomial(..., size=None)

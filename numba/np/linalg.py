@@ -2253,7 +2253,7 @@ def _get_norm_impl(x, ord_flag):
         # 1D cases
 
         # handle "ord" being "None", must be done separately
-        if ord_flag in (None, types.none):
+        if ord_flag in (None, types.none) or isinstance(ord_flag, types.Omitted):
             def oneD_impl(x, ord=None):
                 return _oneD_norm_2(x)
         else:
@@ -2506,10 +2506,10 @@ def matrix_rank_impl(A, tol=None):
 
     _check_linalg_1_or_2d_matrix(A, "matrix_rank")
 
-    def _2d_matrix_rank_impl(A, tol):
+    def _2d_matrix_rank_impl(A, tol=None):
 
         # handle the tol==None case separately for type inference to work
-        if tol in (None, types.none):
+        if tol in (None, types.none) or isinstance(tol, types.Omitted):
             nb_type = getattr(A.dtype, "underlying_float", A.dtype)
             np_type = np_support.as_dtype(nb_type)
             eps_val = np.finfo(np_type).eps
@@ -2529,7 +2529,7 @@ def matrix_rank_impl(A, tol=None):
                 return _get_rank_from_singular_values(s, tol)
             return _2d_tol_not_none_impl
 
-    def _get_matrix_rank_impl(A, tol):
+    def _get_matrix_rank_impl(A, tol=None):
         ndim = A.ndim
         if ndim == 1:
             # NOTE: Technically, the numpy implementation could be argued as
@@ -2647,7 +2647,7 @@ def matrix_trace_impl(a, offset=0):
 
     _check_linalg_matrix(a, "trace", la_prefix=False)
 
-    if not isinstance(offset, (int, types.Integer)):
+    if not isinstance(offset, (int, types.Integer, types.Omitted)):
         raise NumbaTypeError("integer argument expected, got %s" % offset)
 
     def matrix_trace_impl(a, offset=0):

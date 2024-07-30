@@ -1888,7 +1888,7 @@ def numpy_transpose(a, axes=None):
     if isinstance(a, types.BaseTuple):
         raise errors.UnsupportedError("np.transpose does not accept tuples")
 
-    if axes is None:
+    if axes is None or isinstance(axes, types.Omitted):
         def np_transpose_impl(a, axes=None):
             return a.transpose()
     else:
@@ -1924,7 +1924,7 @@ def numpy_logspace(start, stop, num=50):
         raise errors.TypingError('The first argument "start" must be a number')
     if not isinstance(stop, types.Number):
         raise errors.TypingError('The second argument "stop" must be a number')
-    if not isinstance(num, (int, types.Integer)):
+    if not isinstance(num, (int, types.Integer, types.Omitted)):
         raise errors.TypingError('The third argument "num" must be an integer')
 
     def impl(start, stop, num=50):
@@ -1944,7 +1944,7 @@ def numpy_geomspace(start, stop, num=50):
         msg = 'The argument "stop" must be a number'
         raise errors.TypingError(msg)
 
-    if not isinstance(num, (int, types.Integer)):
+    if not isinstance(num, (int, types.Integer, types.Omitted)):
         msg = 'The argument "num" must be an integer'
         raise errors.TypingError(msg)
 
@@ -2008,7 +2008,7 @@ def numpy_geomspace(start, stop, num=50):
 @overload(np.rot90)
 def numpy_rot90(m, k=1):
     # supporting axes argument it needs to be included in np.flip
-    if not isinstance(k, (int, types.Integer)):
+    if not isinstance(k, (int, types.Integer, types.Omitted)):
         raise errors.TypingError('The second argument "k" must be an integer')
     if not isinstance(m, types.Array):
         raise errors.TypingError('The first argument "m" must be an array')
@@ -4591,7 +4591,7 @@ def _eye_none_handler_impl(N, M):
 @extending.overload(np.eye)
 def numpy_eye(N, M=None, k=0, dtype=float):
 
-    if dtype is None or isinstance(dtype, types.NoneType):
+    if dtype is None or isinstance(dtype, (types.NoneType, types.Omitted)):
         dt = np.dtype(float)
     elif isinstance(dtype, (types.DTypeSpec, types.Number)):
         # dtype or instance of dtype
@@ -4687,7 +4687,7 @@ def numpy_diagflat(v, k=0):
         msg = 'The argument "v" must be array-like'
         raise errors.TypingError(msg)
 
-    if not isinstance(k, (int, types.Integer)):
+    if not isinstance(k, (int, types.Integer, types.Omitted)):
         msg = 'The argument "k" must be an integer'
         raise errors.TypingError(msg)
 
@@ -4870,11 +4870,11 @@ def np_arange(start, / ,stop=None, step=None, dtype=None):
     if isinstance(dtype, types.Optional):
         dtype = dtype.type
 
-    if stop is None:
+    if stop is None or isinstance(stop, types.Omitted):
         stop = types.none
-    if step is None:
+    if step is None or isinstance(step, types.Omitted):
         step = types.none
-    if dtype is None:
+    if dtype is None or isinstance(dtype, types.Omitted):
         dtype = types.none
 
     if (not isinstance(start, types.Number) or
@@ -4934,7 +4934,7 @@ def numpy_linspace(start, stop, num=50):
     if not all(isinstance(arg, types.Number) for arg in [start, stop]):
         return
 
-    if not isinstance(num, (int, types.Integer)):
+    if not isinstance(num, (int, types.Integer, types.Omitted)):
         msg = 'The argument "num" must be an integer'
         raise errors.TypingError(msg)
 
@@ -6644,7 +6644,7 @@ def impl_shape_unchecked(context, builder, sig, args):
 
 @extending.overload(np.lib.stride_tricks.as_strided)
 def as_strided(x, shape=None, strides=None):
-    if shape in (None, types.none):
+    if shape in (None, types.none) or isinstance(shape, types.Omitted):
         @register_jitable
         def get_shape(x, shape):
             return x.shape
@@ -6653,7 +6653,7 @@ def as_strided(x, shape=None, strides=None):
         def get_shape(x, shape):
             return shape
 
-    if strides in (None, types.none):
+    if strides in (None, types.none) or isinstance(strides, types.Omitted):
         # When *strides* is not passed, as_strided() does a non-size-checking
         # reshape(), possibly changing the original strides.  This is too
         # cumbersome to support right now, and a Web search shows all example

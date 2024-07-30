@@ -2844,7 +2844,7 @@ def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
 
     # reject problem if ddof invalid (either upfront if type is
     # obviously invalid, or later if value found to be non-integral)
-    if ddof in (None, types.none):
+    if ddof in (None, types.none) or isinstance(ddof, types.Omitted):
         _DDOF_HANDLER = _handle_ddof_nop
     else:
         if isinstance(ddof, (types.Integer, types.Boolean)):
@@ -3631,7 +3631,8 @@ def np_bincount(a, weights=None, minlength=0):
 
     check_is_integer(minlength, 'minlength')
 
-    if weights not in (None, types.none):
+    if (weights not in (None, types.none) and
+            not isinstance(weights, types.Omitted)):
         validate_1d_array_like("bincount", weights)
         # weights is promoted to double in C impl
         # https://github.com/numpy/numpy/blob/maintenance/1.16.x/numpy/core/src/multiarray/compiled_base.c#L93-L95    # noqa: E501
@@ -3810,6 +3811,8 @@ def make_searchsorted_implementation(np_dtype, side):
 
 @overload(np.searchsorted)
 def searchsorted(a, v, side='left'):
+    if isinstance(side, types.Omitted):
+        side = side.value
     side_val = getattr(side, 'literal_value', side)
 
     if side_val not in VALID_SEARCHSORTED_SIDES:
@@ -3934,11 +3937,11 @@ _range = range
 
 @overload(np.histogram)
 def np_histogram(a, bins=10, range=None):
-    if isinstance(bins, (int, types.Integer)):
+    if isinstance(bins, (int, types.Integer, types.Omitted)):
         # With a uniform distribution of bins, use a fast algorithm
         # independent of the number of bins
 
-        if range in (None, types.none):
+        if range in (None, types.none) or isinstance(range, types.Omitted):
             inf = float('inf')
 
             def histogram_impl(a, bins=10, range=None):
@@ -4348,6 +4351,8 @@ if numpy_version < (2, 0):
     @overload(np.asfarray)
     def np_asfarray(a, dtype=np.float64):
         # convert numba dtype types into NumPy dtype
+        if isinstance(dtype, types.Omitted):
+            dtype = dtype.value
         if isinstance(dtype, types.Type):
             dtype = as_dtype(dtype)
         if not np.issubdtype(dtype, np.inexact):
@@ -4406,7 +4411,8 @@ def np_select(condlist, choicelist, default=0):
         raise NumbaTypeError('condlist must be a List or a Tuple')
     if not isinstance(choicelist, (types.List, types.UniTuple)):
         raise NumbaTypeError('choicelist must be a List or a Tuple')
-    if not isinstance(default, (int, types.Number, types.Boolean)):
+    if not isinstance(default,
+                      (int, types.Number, types.Boolean, types.Omitted)):
         raise NumbaTypeError('default must be a scalar (number or boolean)')
     # the types of the parameters have been checked, now we test the types
     # of the content of the parameters
@@ -4480,7 +4486,7 @@ def np_asarray_chkfinite(a, dtype=None):
 
 @overload(np.unwrap)
 def numpy_unwrap(p, discont=None, axis=-1, period=6.283185307179586):
-    if not isinstance(axis, (int, types.Integer)):
+    if not isinstance(axis, (int, types.Integer, types.Omitted)):
         msg = 'The argument "axis" must be an integer'
         raise TypingError(msg)
 
@@ -4493,7 +4499,7 @@ def numpy_unwrap(p, discont=None, axis=-1, period=6.283185307179586):
         msg = 'The argument "discont" must be a scalar'
         raise TypingError(msg)
 
-    if not isinstance(period, (float, types.Number)):
+    if not isinstance(period, (float, types.Number, types.Omitted)):
         msg = 'The argument "period" must be a scalar'
         raise TypingError(msg)
 
