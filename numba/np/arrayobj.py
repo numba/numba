@@ -4240,7 +4240,7 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
     allocsize_mult = builder.smul_with_overflow(arrlen, itemsize)
     allocsize = builder.extract_value(allocsize_mult, 0)
     overflow = builder.or_(overflow, builder.extract_value(allocsize_mult, 1))
-    cgutils.printf(builder, "arrlen: %d - %d - %d\n", itemsize, itemsize, allocsize)
+    cgutils.printf(builder, "arrlen: %d - %d - %d - %d\n", arrlen, itemsize, allocsize, overflow)
 
     with builder.if_then(overflow, likely=False):
         # Raise same error as numpy, see:
