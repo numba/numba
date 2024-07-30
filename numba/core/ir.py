@@ -1495,7 +1495,7 @@ class FunctionIR(object):
         self.block_entry_vars = {}
 
     def derive(self, blocks, arg_count=None, arg_names=None,
-               force_non_generator=False):
+               force_non_generator=False, loc=None):
         """
         Derive a new function IR from this one, using the given blocks,
         and possibly modifying the argument count and generator flag.
@@ -1506,7 +1506,7 @@ class FunctionIR(object):
 
         new_ir = copy.copy(self)
         new_ir.blocks = blocks
-        new_ir.loc = firstblock.loc
+        new_ir.loc = firstblock.loc if loc is None else loc
         if force_non_generator:
             new_ir.is_generator = False
         if arg_count is not None:
