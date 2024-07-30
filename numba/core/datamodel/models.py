@@ -179,7 +179,7 @@ class OmittedArgDataModel(DataModel):
 @register_default(types.Boolean)
 @register_default(types.BooleanLiteral)
 class BooleanModel(DataModel):
-    _bit_type = ir.IntType(1)
+    be_type = _bit_type = ir.IntType(1)
     _byte_type = ir.IntType(8)
 
     def get_value_type(self):

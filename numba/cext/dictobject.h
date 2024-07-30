@@ -12,15 +12,24 @@ typedef struct {
 
 
 typedef int (*dict_key_comparator_t)(const char *lhs, const char *rhs);
+typedef void (*dict_copy_op_t)(char *dst, const char *src);
+typedef void (*dict_zero_op_t)(char *data);
 typedef void (*dict_refcount_op_t)(const void*);
 
 
 typedef struct {
+    /* these five funcs are for all types */
     dict_key_comparator_t    key_equal;
+    dict_copy_op_t           key_copy;
+    dict_zero_op_t           key_zero;
+    dict_copy_op_t           value_copy;
+    dict_zero_op_t           value_zero;
+    /* if key or value is a container type, then need inc/dec ref */
     dict_refcount_op_t       key_incref;
     dict_refcount_op_t       key_decref;
     dict_refcount_op_t       value_incref;
     dict_refcount_op_t       value_decref;
+
 } type_based_methods_table;
 
 
