@@ -378,10 +378,23 @@ def static_getitem_tuple(context, builder, sig, args):
 def tuple_to_tuple(context, builder, fromty, toty, val):
     if (isinstance(fromty, types.BaseNamedTuple)
         or isinstance(toty, types.BaseNamedTuple)):
-        # Disallowed by typing layer
+        # Namedtuple casts handled below
         raise NotImplementedError
 
     if len(fromty) != len(toty):
+        # Disallowed by typing layer
+        raise NotImplementedError
+
+    olditems = cgutils.unpack_tuple(builder, val, len(fromty))
+    items = [context.cast(builder, v, f, t)
+             for v, f, t in zip(olditems, fromty, toty)]
+    return context.make_tuple(builder, toty, items)
+
+
+@lower_cast(types.BaseNamedTuple, types.BaseNamedTuple)
+def namedtuple_to_namedtuple(context, builder, fromty, toty, val):
+    if (fromty.instance_class != toty.instance_class
+        or fromty.count != toty.count):
         # Disallowed by typing layer
         raise NotImplementedError
 
