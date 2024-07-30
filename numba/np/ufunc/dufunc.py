@@ -871,9 +871,9 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc, UfuncBase):
                         arr_reduce = ufunc.reduce(arr_slice, axis=axis)
                         setitem(out, j, axis, arr_reduce)
                     elif indices[i] >= indices[i + 1]:
-                        idx = np.asarray([indices[i]])
+                        idx = indices[i]
                         arr_slice = np.take(array, idx, axis)
-                        if array.ndim > 1:
+                        if array_ndim > 1:
                             _slice = tuple_slice(array.shape, axis)
                             arr_slice = arr_slice.reshape(_slice)
                         setitem(out, j, axis, arr_slice)

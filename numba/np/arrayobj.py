@@ -4803,6 +4803,12 @@ def numpy_take(a, indices, axis=None):
             def take_impl(a, indices, axis=None):
                 r = np.take(a, (indices,), axis=axis)
                 if a.ndim == 1:
+                    # caveats
+                    # >>> isinstance(np.take(1d_arr, 0), int)
+                    # True
+                    # >>> isinstance(np.take(1d_arr, (0,)), int)
+                    # False
+                    # The latter returns an array
                     return r[0]
                 if axis < 0:
                     axis += a.ndim
@@ -4831,8 +4837,8 @@ def numpy_take(a, indices, axis=None):
                 for i in range(len(indices)):
                     y = _getitem(a, indices[i], axis)
                     _setitem(out, i, axis, y)
-                if ndim == 1:
-                    return out[0]
+                # if ndim == 1:
+                #     return out[0]
                 return out
             return take_impl
 
