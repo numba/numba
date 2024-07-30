@@ -1658,8 +1658,23 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
                                       builder.icmp_signed('!=', u, v))
 
         with builder.if_then(shape_error, likely=False):
-            msg = "cannot assign slice from input of different size"
-            context.call_conv.return_user_exc(builder, ValueError, (msg,))
+            def raise_impl(src_shapes, index_shape):
+                return ("cannot assign slice of shape " +
+                        f"({', '.join([str(x) for x in src_shapes])}) from " +
+                        "input of shape " +
+                        f"({', '.join([str(x) for x in index_shape])})")
+
+            sig = types.unicode_type(
+                types.UniTuple(types.int64, len(src_shapes)),
+                types.UniTuple(types.int64, len(index_shape)))
+            tup = (context.make_tuple(builder, sig.args[0], src_shapes),
+                   context.make_tuple(builder, sig.args[1], index_shape))
+
+            res = context.compile_internal(builder, raise_impl, sig, tup)
+            msg = impl_ret_new_ref(context, builder, sig, res)
+            context.call_conv.return_dynamic_user_exc(builder, ValueError,
+                                                      (msg,),
+                                                      (types.unicode_type,))
 
         # Check for array overlap
         src_start, src_end = get_array_memory_extents(context, builder, srcty,
@@ -1691,8 +1706,17 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         shape_error = builder.icmp_signed('!=', index_shape[0], seq_len)
 
         with builder.if_then(shape_error, likely=False):
-            msg = "cannot assign slice from input of different size"
-            context.call_conv.return_user_exc(builder, ValueError, (msg,))
+            def raise_impl(seq_len, input_shape):
+                return (f"cannot assign slice of shape ({seq_len}, )" +
+                        f"from input of shape ({input_shape}, )")
+
+            tup = (seq_len, index_shape[0])
+            sig = types.unicode_type(types.int64, types.int64)
+            res = context.compile_internal(builder, raise_impl, sig, tup)
+            msg = impl_ret_new_ref(context, builder, sig, res)
+            context.call_conv.return_dynamic_user_exc(builder, ValueError,
+                                                      (msg,),
+                                                      (types.unicode_type,))
 
         def src_getitem(source_indices):
             idx, = source_indices
@@ -4689,7 +4713,6 @@ def generate_getitem_setitem_with_axis(ndim, kind):
 
     if kind == 'getitem':
         fn = '''
-            @register_jitable
             def _getitem(a, idx, axis):
                 if axis == 0:
                     return a[idx, ...]
@@ -4702,7 +4725,6 @@ def generate_getitem_setitem_with_axis(ndim, kind):
             '''
     else:
         fn = '''
-            @register_jitable
             def _setitem(a, idx, axis, vals):
                 if axis == 0:
                     a[idx, ...] = vals
@@ -4717,7 +4739,8 @@ def generate_getitem_setitem_with_axis(ndim, kind):
 
     fn = textwrap.dedent(fn)
     exec(fn, globals())
-    return globals()[f'_{kind}']
+    fn = globals()[f'_{kind}']
+    return register_jitable(fn)
 
 
 @overload(np.take)
@@ -4759,6 +4782,33 @@ def numpy_take(a, indices, axis=None):
                 return np.take(a, convert)
             return take_impl
     else:
+        if isinstance(a, types.Array) and isinstance(indices, types.Integer):
+            t = (0,) * (a.ndim - 1)
+
+            # np.squeeze is too hard to implement in Numba as the tuple "t"
+            # needs to be allocated beforehand we don't know it's size until
+            # code gets executed.
+            @register_jitable
+            def _squeeze(r, axis):
+                tup = tuple(t)
+                j = 0
+                assert axis < len(r.shape) and r.shape[axis] == 1, r.shape
+                for idx in range(len(r.shape)):
+                    s = r.shape[idx]
+                    if idx != axis:
+                        tup = tuple_setitem(tup, j, s)
+                        j += 1
+                return r.reshape(tup)
+
+            def take_impl(a, indices, axis=None):
+                r = np.take(a, (indices,), axis=axis)
+                if a.ndim == 1:
+                    return r[0]
+                if axis < 0:
+                    axis += a.ndim
+                return _squeeze(r, axis)
+            return take_impl
+
         if isinstance(a, types.Array) and \
                 isinstance(indices, (types.Array, types.List, types.BaseTuple)):
 

@@ -2901,7 +2901,7 @@ def np_corrcoef(x, y=None, rowvar=True):
     y_dt = determine_dtype(y)
     dtype = np.result_type(x_dt, y_dt, np.float64)
 
-    if dtype == np.complex_:
+    if dtype == np.complex128:
         clip_fn = _clip_complex
     else:
         clip_fn = _clip_corr

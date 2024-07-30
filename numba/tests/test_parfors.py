@@ -2378,6 +2378,8 @@ class TestParfors(TestParforsBase):
     @needs_lapack  # use of np.linalg.solve
     @skip_ppc64le_invalid_ctr_loop
     def test_issue9490_non_det_ssa_problem(self):
+        # Test modified to include https://github.com/numba/numba/issues/9581
+        # which is an issue with hoisting
         cmd = [
             sys.executable,
             "-m",
@@ -4444,7 +4446,7 @@ class TestPrangeSpecific(TestPrangeBase):
             return outputs[0][1][0]
 
         N = config.NUMBA_NUM_THREADS + 1
-        self.prange_tester(test_impl, [Dict.empty(key_type=types.int64, value_type=types.float64) for i in range(N)])
+        self.prange_tester(test_impl, [Dict.empty(key_type=types.int64, value_type=types.float64) for i in range(N)], patch_instance=[1])
 
     def test_call_hoisting(self):
         # issue9529
@@ -4458,7 +4460,7 @@ class TestPrangeSpecific(TestPrangeBase):
             return outputs[0][1][0]
 
         N = config.NUMBA_NUM_THREADS + 1
-        self.prange_tester(test_impl, [Dict.empty(key_type=types.int64, value_type=types.float64) for i in range(N)])
+        self.prange_tester(test_impl, [Dict.empty(key_type=types.int64, value_type=types.float64) for i in range(N)], patch_instance=[1])
 
     def test_record_array_setitem(self):
         # issue6704

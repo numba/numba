@@ -41,6 +41,8 @@ from numba.core.targetconfig import TargetConfig, Option, ConfigStack
 
 
 class Flags(TargetConfig):
+    __slots__ = ()
+
     enable_looplift = Option(
         type=bool,
         default=False,

@@ -772,18 +772,18 @@ class PythonAPI(object):
         return self.builder.call(fn, [tup])
 
     def tuple_new(self, count):
-        fnty = ir.FunctionType(self.pyobj, [ir.IntType(32)])
+        fnty = ir.FunctionType(self.pyobj, [self.py_ssize_t])
         fn = self._get_function(fnty, name='PyTuple_New')
-        return self.builder.call(fn, [self.context.get_constant(types.int32,
-                                                                count)])
+        return self.builder.call(fn, [self.py_ssize_t(count)])
 
     def tuple_setitem(self, tuple_val, index, item):
         """
         Steals a reference to `item`.
         """
-        fnty = ir.FunctionType(ir.IntType(32), [self.pyobj, ir.IntType(32), self.pyobj])
+        fnty = ir.FunctionType(ir.IntType(32),
+                               [self.pyobj, self.py_ssize_t, self.pyobj])
         setitem_fn = self._get_function(fnty, name='PyTuple_SetItem')
-        index = self.context.get_constant(types.int32, index)
+        index = self.py_ssize_t(index)
         self.builder.call(setitem_fn, [tuple_val, index, item])
 
     #

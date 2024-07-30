@@ -1,4 +1,0 @@
-CUDA 12 conda installation documentation
-----------------------------------------
-
-Installation instructions have been added for CUDA 12 conda users.
