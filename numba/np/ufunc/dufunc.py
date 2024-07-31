@@ -861,8 +861,8 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc, UfuncBase):
                     out = np.zeros(shape, dtype=dt)
 
                 # short-circuit to avoid overflow on Windows
-                # if len(indices) == 0:
-                #     return out
+                if len(indices) == 0:
+                    return out
 
                 j = 0
                 for i in range(sz - 1):
