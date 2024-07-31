@@ -18,7 +18,7 @@ from numba.np.random._constants import (wi_double, ki_double,
                                         INT64_MAX, ziggurat_nor_inv_r)
 from numba.np.random.generator_core import (next_double, next_float,
                                             next_uint32, next_uint64)
-from numba.core import types
+from numba import types
 # All of the following implementations are direct translations from:
 # https://github.com/numpy/numpy/blob/7cfef93c77599bd387ecc6a15d186c5a46024dac/numpy/random/src/distributions/distributions.c
 

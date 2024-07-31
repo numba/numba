@@ -985,7 +985,7 @@ class OptionalModel(StructModel):
     def __init__(self, dmm, fe_type):
         members = [
             ('data', fe_type.type),
-            ('valid', types.boolean),
+            ('valid', types.py_bool),
         ]
         self._value_model = dmm.lookup(fe_type.type)
         super(OptionalModel, self).__init__(dmm, fe_type, members)

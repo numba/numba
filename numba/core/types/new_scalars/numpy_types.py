@@ -30,7 +30,7 @@ class NumPyInteger(Integer):
         return cls(name)
 
     def cast_python_value(self, value):
-        return getattr(np, self.name)(value)
+        return getattr(np, self.name.split('np_')[-1])(value)
 
     def __lt__(self, other):
         if self.__class__ is not other.__class__:
@@ -81,7 +81,7 @@ Literal.ctor_map[np.integer] = NumPyIntegerLiteral
 
 class NumPyBoolean(Boolean):
     def cast_python_value(self, value):
-        return bool(value)
+        return np.bool_(value)
 
 
 class NumPyBooleanLiteral(BooleanLiteral, NumPyBoolean):
@@ -111,7 +111,7 @@ class NumPyFloat(Float):
         self.bitwidth = bitwidth
 
     def cast_python_value(self, value):
-        return np.float_(value)
+        return getattr(np, self.name.split('np_')[-1])(value)
 
     def __lt__(self, other):
         if self.__class__ is not other.__class__:
@@ -130,7 +130,7 @@ class NumPyComplex(Complex):
         self.bitwidth = bitwidth
 
     def cast_python_value(self, value):
-        return np.complex_(value)
+        return getattr(np, self.name.split('np_')[-1])(value)
 
     def __lt__(self, other):
         if self.__class__ is not other.__class__:

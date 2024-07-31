@@ -37,6 +37,7 @@ if config.USE_LEGACY_TYPE_SYSTEM:
 
         np.dtype(object): types.pyobject,
     }
+    nb_type_to_np_type = lambda x: np.dtype(str(x))
 else:
     FROM_DTYPE = {
         np.dtype('bool'): types.np_bool_,
@@ -58,6 +59,7 @@ else:
 
         np.dtype(object): types.pyobject,
     }
+    nb_type_to_np_type = lambda x: np.dtype(str(x).split("_")[-1])
 
 
 re_typestr = re.compile(r'[<>=\|]([a-z])(\d+)?$', re.I)
@@ -152,7 +154,7 @@ def as_dtype(nbtype):
     """
     nbtype = types.unliteral(nbtype)
     if isinstance(nbtype, (types.Complex, types.Integer, types.Float)):
-        return np.dtype(str(nbtype))
+        return nb_type_to_np_type(nbtype)
     if nbtype is types.bool_:
         return np.dtype('?')
     if isinstance(nbtype, (types.NPDatetime, types.NPTimedelta)):

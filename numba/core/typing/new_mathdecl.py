@@ -80,6 +80,11 @@ class Math_copysign(ConcreteTemplate):
 @infer_global(math.hypot)
 class Math_hypot(ConcreteTemplate):
     cases = [
+        # Python cases
+        signature(types.py_float64, types.py_int64, types.py_int64),
+        signature(types.py_float64, types.py_float64, types.py_float64),
+
+        # NumPy cases
         signature(types.np_float64, types.np_int64, types.np_int64),
         signature(types.np_float64, types.np_uint64, types.np_uint64),
         signature(types.np_float32, types.np_float32, types.np_float32),

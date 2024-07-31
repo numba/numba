@@ -1,6 +1,6 @@
 import numpy as np
 
-from numba.core import types
+from numba import types
 from numba.core.extending import register_jitable
 
 from numba.np.random._constants import (UINT32_MAX, UINT64_MAX,

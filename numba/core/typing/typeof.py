@@ -308,3 +308,10 @@ def typeof_numpy_polynomial(val, c):
     domain = typeof(val.domain)
     window = typeof(val.window)
     return types.PolynomialType(coef, domain, window)
+
+if not config.USE_LEGACY_TYPE_SYSTEM:
+    @typeof_impl.register(type(NotImplemented))
+    def typeof_NotImplemented(val, c):
+        return types.not_implemented_type
+
+    typeof(NotImplemented)
