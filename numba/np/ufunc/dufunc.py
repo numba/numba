@@ -862,36 +862,38 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc, UfuncBase):
 
                 # short-circuit to avoid overflow on Windows
                 if len(indices) > 0:
-                    j = 0
-                    for i in range(sz - 1):
-                        if indices[i] < indices[i + 1]:
-                            idx = np.arange(indices[i], indices[i + 1])
-                            if array.ndim > 1:
-                                arr_slice = np.take(array, idx, axis)
-                            else:
-                                arr_slice = array[idx]
-                            arr_reduce = ufunc.reduce(arr_slice, axis=axis)
-                            setitem(out, j, axis, arr_reduce)
-                        elif indices[i] >= indices[i + 1]:
-                            idx = indices[i]
-                            arr_slice = np.take(array, idx, axis)
-                            if array_ndim > 1:
-                                _slice = tuple_slice(array.shape, axis)
-                                arr_slice = arr_slice.reshape(_slice)
-                            setitem(out, j, axis, arr_slice)
-                        elif indices[i] >= sz or indices[i] < 0:
-                            # TODO: Improve error message
-                            raise ValueError('error!')
-                        j += 1
+                    return out
 
-                    # last index
-                    idx = np.arange(indices[i + 1], array.shape[axis])
-                    if array.ndim > 1:
+                j = 0
+                for i in range(len(indices) - 1):
+                    if indices[i] < indices[i + 1]:
+                        idx = np.arange(indices[i], indices[i + 1])
+                        if array.ndim > 1:
+                            arr_slice = np.take(array, idx, axis)
+                        else:
+                            arr_slice = array[idx]
+                        arr_reduce = ufunc.reduce(arr_slice, axis=axis)
+                        setitem(out, j, axis, arr_reduce)
+                    elif indices[i] >= indices[i + 1]:
+                        idx = indices[i]
                         arr_slice = np.take(array, idx, axis)
-                    else:
-                        arr_slice = array[idx]
-                    arr_reduce = ufunc.reduce(arr_slice, axis)
-                    setitem(out, j, axis, arr_reduce)
+                        if array_ndim > 1:
+                            _slice = tuple_slice(array.shape, axis)
+                            arr_slice = arr_slice.reshape(_slice)
+                        setitem(out, j, axis, arr_slice)
+                    elif indices[i] >= sz or indices[i] < 0:
+                        # TODO: Improve error message
+                        raise ValueError('error!')
+                    j += 1
+
+                # last index
+                idx = np.arange(indices[i + 1], array.shape[axis])
+                if array.ndim > 1:
+                    arr_slice = np.take(array, idx, axis)
+                else:
+                    arr_slice = array[idx]
+                arr_reduce = ufunc.reduce(arr_slice, axis)
+                setitem(out, j, axis, arr_reduce)
 
                 return out
 
