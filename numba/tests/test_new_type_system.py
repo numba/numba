@@ -60,6 +60,11 @@ class TestDunderMethods(TestCase):
         np.complex128((4 + 3j))
     ]
 
+    def setUp(self) -> None:
+        if config.USE_LEGACY_TYPE_SYSTEM:
+            self.skipTest("This test is only for the new type system")
+        return super().setUp()
+
     def test_dunder_add(self):
         @njit
         def foo(a, b):
