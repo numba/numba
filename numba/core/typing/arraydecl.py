@@ -846,21 +846,6 @@ def generic_index(self, args, kws):
     return signature(types.intp, recvr=self.this)
 
 
-def install_array_method(name, generic, prefer_literal=True):
-    my_attr = {"key": "array." + name, "generic": generic,
-               "prefer_literal": prefer_literal}
-    temp_class = type("Array_" + name, (AbstractTemplate,), my_attr)
-
-    def array_attribute_attachment(self, ary):
-        return types.BoundFunction(temp_class, ary)
-
-    setattr(ArrayAttribute, "resolve_" + name, array_attribute_attachment)
-
-
-# Functions that return a machine-width type, to avoid overflows
-install_array_method("sum", sum_expand, prefer_literal=True)
-
-
 @infer_global(operator.eq)
 class CmpOpEqArray(AbstractTemplate):
     #key = operator.eq
