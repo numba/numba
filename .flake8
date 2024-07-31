@@ -50,7 +50,8 @@ exclude =
     numba/core/annotations/pretty_annotate.py
     numba/misc/dummyarray.py
     numba/core/dataflow.py
-    numba/core/pythonapi.py
+    numba/core/old_pythonapi.py
+    numba/core/new_pythonapi.py
     numba/core/decorators.py
     numba/core/typeconv/rules.py
     numba/core/typeconv/castgraph.py
