@@ -1,6 +1,7 @@
 """Provides Numba type, FunctionType, that makes functions as
 instances of a first-class function type.
 """
+from functools import partial
 
 from numba.extending import typeof_impl
 from numba.extending import models, register_model
@@ -9,7 +10,7 @@ from numba.core.imputils import lower_constant, lower_cast
 from numba.core.ccallback import CFunc
 from numba.core import cgutils
 from llvmlite import ir
-from numba.core import types
+from numba.core import types, errors
 from numba.core.types import (FunctionType, UndefinedFunctionType,
                               FunctionPrototype, WrapperAddressProtocol)
 from numba.core.dispatcher import Dispatcher
@@ -52,11 +53,16 @@ class FunctionModel(models.StructModel):
     """
     def __init__(self, dmm, fe_type):
         members = [
-            # address of cfunc wrapper function:
-            ('addr', types.voidptr),
-            # address of PyObject* referencing the Python function
+            # Address of cfunc wrapper function.
+            # This uses a C callconv and doesn't not support exceptions.
+            ('c_addr', types.voidptr),
+            # Address of PyObject* referencing the Python function
             # object:
-            ('pyaddr', types.voidptr),
+            ('py_addr', types.voidptr),
+            # Address of the underlying function object.
+            # Calling through this function pointer supports all features of
+            # regular numba function as it follows the same Numba callconv.
+            ('jit_addr', types.voidptr),
         ]
         super(FunctionModel, self).__init__(dmm, fe_type, members)
 
@@ -74,26 +80,26 @@ def lower_constant_function_type(context, builder, typ, pyval):
     if isinstance(pyval, CFunc):
         addr = pyval._wrapper_address
         sfunc = cgutils.create_struct_proxy(typ)(context, builder)
-        sfunc.addr = context.add_dynamic_addr(builder, addr,
-                                              info=str(typ))
-        sfunc.pyaddr = context.add_dynamic_addr(builder, id(pyval),
-                                                info=type(pyval).__name__)
+        sfunc.c_addr = context.add_dynamic_addr(builder, addr,
+                                                info=str(typ))
+        sfunc.py_addr = context.add_dynamic_addr(builder, id(pyval),
+                                                 info=type(pyval).__name__)
         return sfunc._getvalue()
 
     if isinstance(pyval, Dispatcher):
         sfunc = cgutils.create_struct_proxy(typ)(context, builder)
-        sfunc.pyaddr = context.add_dynamic_addr(builder, id(pyval),
-                                                info=type(pyval).__name__)
+        sfunc.py_addr = context.add_dynamic_addr(builder, id(pyval),
+                                                 info=type(pyval).__name__)
         return sfunc._getvalue()
 
     if isinstance(pyval, WrapperAddressProtocol):
         addr = pyval.__wrapper_address__()
         assert typ.check_signature(pyval.signature())
         sfunc = cgutils.create_struct_proxy(typ)(context, builder)
-        sfunc.addr = context.add_dynamic_addr(builder, addr,
-                                              info=str(typ))
-        sfunc.pyaddr = context.add_dynamic_addr(builder, id(pyval),
-                                                info=type(pyval).__name__)
+        sfunc.c_addr = context.add_dynamic_addr(builder, addr,
+                                                info=str(typ))
+        sfunc.py_addr = context.add_dynamic_addr(builder, id(pyval),
+                                                 info=type(pyval).__name__)
         return sfunc._getvalue()
 
     # TODO: implement support for pytypes.FunctionType, ctypes.CFUNCTYPE
@@ -166,9 +172,24 @@ def _get_wrapper_address(func, sig):
     return addr
 
 
-def lower_get_wrapper_address(context, builder, func, sig,
-                              failure_mode='return_exc'):
-    """Low-level call to _get_wrapper_address(func, sig).
+def _get_jit_address(func, sig):
+    """Similar to ``_get_wrapper_address()`` but get the `.jit_addr` instead.
+    """
+    if isinstance(func, Dispatcher):
+        cres = func.get_compile_result(sig)
+        jit_name = cres.fndesc.llvm_func_name
+        addr = cres.library.get_pointer_to_function(jit_name)
+    else:
+        addr = 0
+    if not isinstance(addr, int):
+        raise TypeError(
+            f'jit address must be integer, got {type(addr)} instance')
+    return addr
+
+
+def _lower_get_address(context, builder, func, sig, failure_mode,
+                       *, function_name):
+    """Low-level call to <function_name>(func, sig).
 
     When calling this function, GIL must be acquired.
     """
@@ -182,8 +203,7 @@ def lower_get_wrapper_address(context, builder, func, sig,
 
     modname = context.insert_const_string(builder.module, __name__)
     numba_mod = pyapi.import_module_noblock(modname)
-    numba_func = pyapi.object_getattr_string(
-        numba_mod, '_get_wrapper_address')
+    numba_func = pyapi.object_getattr_string(numba_mod, function_name)
     pyapi.decref(numba_mod)
     sig_obj = pyapi.unserialize(pyapi.serialize_object(sig))
 
@@ -191,7 +211,7 @@ def lower_get_wrapper_address(context, builder, func, sig,
 
     if failure_mode != 'ignore':
         with builder.if_then(cgutils.is_null(builder, addr), likely=False):
-            # _get_wrapper_address has raised an exception, propagate it
+            # *function_name* has raised an exception, propagate it
             # to the caller.
             if failure_mode == 'return_exc':
                 context.call_conv.return_exc(builder)
@@ -200,8 +220,19 @@ def lower_get_wrapper_address(context, builder, func, sig,
             else:
                 raise NotImplementedError(failure_mode)
     # else the caller will handle addr == NULL
-
     return addr  # new reference or NULL
+
+
+lower_get_wrapper_address = partial(
+    _lower_get_address,
+    function_name="_get_wrapper_address",
+)
+
+
+lower_get_jit_address = partial(
+    _lower_get_address,
+    function_name="_get_jit_address",
+)
 
 
 @unbox(FunctionType)
@@ -212,11 +243,16 @@ def unbox_function_type(typ, obj, c):
 
     addr = lower_get_wrapper_address(
         c.context, c.builder, obj, typ.signature, failure_mode='return_null')
-    sfunc.addr = c.pyapi.long_as_voidptr(addr)
+    sfunc.c_addr = c.pyapi.long_as_voidptr(addr)
     c.pyapi.decref(addr)
 
     llty = c.context.get_value_type(types.voidptr)
-    sfunc.pyaddr = c.builder.ptrtoint(obj, llty)
+    sfunc.py_addr = c.builder.ptrtoint(obj, llty)
+
+    addr = lower_get_jit_address(
+        c.context, c.builder, obj, typ.signature, failure_mode='return_null')
+    sfunc.jit_addr = c.pyapi.long_as_voidptr(addr)
+    c.pyapi.decref(addr)
 
     return NativeValue(sfunc._getvalue())
 
@@ -227,7 +263,7 @@ def box_function_type(typ, val, c):
 
     sfunc = cgutils.create_struct_proxy(typ)(c.context, c.builder, value=val)
     pyaddr_ptr = cgutils.alloca_once(c.builder, c.pyapi.pyobj)
-    raw_ptr = c.builder.inttoptr(sfunc.pyaddr, c.pyapi.pyobj)
+    raw_ptr = c.builder.inttoptr(sfunc.py_addr, c.pyapi.pyobj)
     with c.builder.if_then(cgutils.is_null(c.builder, raw_ptr),
                            likely=False):
         cstr = f"first-class function {typ} parent object not set"
@@ -249,17 +285,48 @@ def lower_cast_function_type_to_function_type(
 def lower_cast_dispatcher_to_function_type(context, builder, fromty, toty, val):
     toty = toty.get_precise()
 
-    pyapi = context.get_python_api(builder)
+    sig = toty.signature
+    dispatcher = fromty.dispatcher
+    llvoidptr = context.get_value_type(types.voidptr)
     sfunc = cgutils.create_struct_proxy(toty)(context, builder)
+    # Always store the python function
+    sfunc.py_addr = builder.ptrtoint(val, llvoidptr)
 
-    gil_state = pyapi.gil_ensure()
-    addr = lower_get_wrapper_address(
-        context, builder, val, toty.signature,
-        failure_mode='return_exc')
-    sfunc.addr = pyapi.long_as_voidptr(addr)
-    pyapi.decref(addr)
-    pyapi.gil_release(gil_state)
+    # Attempt to compile the Dispatcher to the expected function type
+    try:
+        cres = dispatcher.get_compile_result(sig)
+    except errors.NumbaError:
+        cres = None
 
-    llty = context.get_value_type(types.voidptr)
-    sfunc.pyaddr = builder.ptrtoint(val, llty)
+    # If compilation is successful, we can by-pass using GIL to get the cfunc
+    if cres is not None:
+        # Declare cfunc in the current module
+        wrapper_name = cres.fndesc.llvm_cfunc_wrapper_name
+        llfnptr = context.get_value_type(toty.ftype)
+        llfnty = llfnptr.pointee
+        fn = cgutils.get_or_insert_function(
+            builder.module, llfnty, wrapper_name,
+        )
+        addr = builder.bitcast(fn, llvoidptr)
+        # Store the cfunc
+        sfunc.c_addr = addr
+        # Store the jit func
+        fn = context.declare_function(builder.module, cres.fndesc)
+        sfunc.jit_addr = builder.bitcast(fn, llvoidptr)
+        # Link-in the dispatcher library
+        context.active_code_library.add_linking_library(cres.library)
+
+    else:
+        # Use lower_get_wrapper_address() to get the cfunc
+        lower_get_wrapper_address
+        pyapi = context.get_python_api(builder)
+
+        gil_state = pyapi.gil_ensure()
+        addr = lower_get_wrapper_address(
+            context, builder, val, toty.signature,
+            failure_mode='return_exc')
+        sfunc.c_addr = pyapi.long_as_voidptr(addr)
+        pyapi.decref(addr)
+        pyapi.gil_release(gil_state)
+
     return sfunc._getvalue()

@@ -10,7 +10,7 @@ jobs:
 - template: buildscripts/azure/azure-linux-macos.yml
   parameters:
     name: macOS
-    vmImage: macos-11
+    vmImage: macos-12
     matrix:
       py39_np122:
         PYTHON: '3.9'
