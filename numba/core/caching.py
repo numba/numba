@@ -335,16 +335,14 @@ class _ZipCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
                 zip_path = str(Path(*path.parts[: i + 1]))
                 internal_path = str(Path(*path.parts[i + 1 :]))
                 return zip_path, internal_path
-        return None, None
+        raise ValueError("No zip file found in path")
 
     def get_cache_path(self):
         return self._cache_path
 
     def get_source_stamp(self):
-        if self._zip_path:
-            st = os.stat(self._zip_path)
-            return st.st_mtime, st.st_size
-        return super().get_source_stamp()
+        st = os.stat(self._zip_path)
+        return st.st_mtime, st.st_size
 
     @classmethod
     def from_function(cls, py_func, py_file):
