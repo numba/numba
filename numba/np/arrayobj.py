@@ -4824,11 +4824,12 @@ def numpy_take(a, indices, axis=None):
             _setitem = generate_getitem_setitem_with_axis(ndim, 'setitem')
 
             def take_impl(a, indices, axis=None):
+                ax = axis
                 if axis < 0:
                     axis += a.ndim
 
                 if axis < 0 or axis >= a.ndim:
-                    msg = (f"axis {axis} is out of bounds for array "
+                    msg = (f"axis {ax} is out of bounds for array "
                            f"of dimension {a.ndim}")
                     raise ValueError(msg)
 
@@ -4837,8 +4838,6 @@ def numpy_take(a, indices, axis=None):
                 for i in range(len(indices)):
                     y = _getitem(a, indices[i], axis)
                     _setitem(out, i, axis, y)
-                # if ndim == 1:
-                #     return out[0]
                 return out
             return take_impl
 

@@ -964,13 +964,12 @@ class TestDUFuncReduceAt(TestDUFuncMethodsBase):
                 for ax in axis:
                     self._compare_output(np.add, array, idx, axis=ax)
 
-    @unittest.expectedFailure
     def test_reduceat_invalid_axis(self):
         arr = np.ones((4, 4))
         idx = np.asarray([0, 3, 1, 2])
         add_reduceat = self._reduceat(np.add, 0)
 
-        for ax in (2, -2):  # needs gh-9296
+        for ax in (2, -3):  # needs gh-9296
             msg = (f'axis {ax} is out of bounds for array of dimension '
                    f'{arr.ndim}')
             with self.assertRaisesRegex(ValueError, msg):
