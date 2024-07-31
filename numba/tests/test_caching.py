@@ -1,3 +1,4 @@
+import importlib
 import inspect
 from pathlib import Path
 import llvmlite.binding as ll
@@ -704,9 +705,11 @@ class TestCache(DispatcherCacheUsecasesTest):
         err = execute_with_input()
         self.assertIn("cache hits = 1", err.strip())
 
-    def test_zip_caching(self):
-        import importlib
-        import sys
+class TestCacheZip(DispatcherCacheUsecasesTest):
+
+    def setUp(self):
+        super().setUp()
+
 
         # Create a simple Python module to be zipped
         mod_content = """
@@ -726,43 +729,44 @@ def add(x, y):
 
         # Add the zip file to sys.path
         sys.path.insert(0, zip_path)
+        self.modname = "test_module"
 
-        try:
-            # First import and call
-            import test_module  # type: ignore
+    def tearDown(self):
+        # Clean up: remove the zip file from sys.path
+        sys.path.pop(0)
+        # Remove the module from sys.modules to clean up
+        sys.modules.pop("test_module", None)
 
-            result1 = test_module.add(2, 3)
-            self.assertEqual(result1, 5)
-            self.assertEqual(
-                test_module.add.stats.cache_hits[(type(None), type(None))], 0
-            )
+    def test_zip_caching(self):
+        # (note that `self.import_module()` fails because its checks are incompatible
+        # with the zip file, so we just use normal imports here)
 
-            # Record the initial cache hits
-            initial_cache_hits = dict(test_module.add._cache_hits)
+        # First import and call
+        import test_module  # type: ignore
 
-            # Remove the module and reimport
-            del sys.modules["test_module"]
-            importlib.invalidate_caches()
-            import test_module  # type: ignore
+        result1 = test_module.add(2, 3)
+        self.assertEqual(result1, 5)
+        self.assertEqual(
+            test_module.add.stats.cache_hits[(type(None), type(None))], 0
+        )
 
-            # Second call: should use the cache
-            result2 = test_module.add(2, 3)
-            self.assertEqual(result2, 5)
+        # Record the initial cache hits
+        self.check_hits(test_module.add, 0)
 
-            # Check if the cache was hit
-            new_cache_hits = dict(test_module.add._cache_hits)
-            self.assertGreater(
-                sum(new_cache_hits.values()),
-                sum(initial_cache_hits.values()),
-                "Cache was not hit on second import",
-            )
+        # Remove the module and reimport
+        del sys.modules["test_module"]
+        importlib.invalidate_caches()
+        import test_module  # type: ignore
 
-        finally:
-            # Clean up: remove the zip file from sys.path
-            sys.path.pop(0)
-            # Remove the module from sys.modules to clean up
-            sys.modules.pop("test_module", None)
+        # Second call: should use the cache
+        result2 = test_module.add(2, 3)
+        self.assertEqual(result2, 5)
 
+        # Check if the cache was hit
+        self.check_hits(test_module.add, 1)
+
+class TestCacheZipLib(DispatcherCacheUsecasesTest):
+    """ZipCache tests that don't require the setup/teardown from `TestCacheZip`"""
     def test_zip_locator_creation(self):
 
         def mock_func():
