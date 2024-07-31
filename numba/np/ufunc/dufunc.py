@@ -860,6 +860,10 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc, UfuncBase):
                 if out_none:
                     out = np.zeros(shape, dtype=dt)
 
+                # short-circuit to avoid overflow on Windows
+                if len(indices) == 0:
+                    return out
+
                 j = 0
                 for i in range(sz - 1):
                     if indices[i] < indices[i + 1]:
