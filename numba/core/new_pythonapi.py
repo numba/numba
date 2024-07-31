@@ -736,7 +736,7 @@ class PythonAPI(object):
         fnty = ir.FunctionType(self.pyobj, [self.pyobj, self.py_ssize_t])
         fn = self._get_function(fnty, name="PyList_GetItem")
         if isinstance(idx, int):
-            idx = self.context.get_constant(types.intp, idx)
+            idx = self.context.get_constant(types.py_intp, idx)
         return self.builder.call(fn, [lst, idx])
 
     def list_setslice(self, lst, start, stop, obj):
@@ -758,13 +758,13 @@ class PythonAPI(object):
         """
         fnty = ir.FunctionType(self.pyobj, [self.pyobj, self.py_ssize_t])
         fn = self._get_function(fnty, name="PyTuple_GetItem")
-        idx = self.context.get_constant(types.intp, idx)
+        idx = self.context.get_constant(types.py_intp, idx)
         return self.builder.call(fn, [tup, idx])
 
     def tuple_pack(self, items):
         fnty = ir.FunctionType(self.pyobj, [self.py_ssize_t], var_arg=True)
         fn = self._get_function(fnty, name="PyTuple_Pack")
-        n = self.context.get_constant(types.intp, len(items))
+        n = self.context.get_constant(types.py_intp, len(items))
         args = [n]
         args.extend(items)
         return self.builder.call(fn, args)
@@ -775,9 +775,10 @@ class PythonAPI(object):
         return self.builder.call(fn, [tup])
 
     def tuple_new(self, count):
-        fnty = ir.FunctionType(self.pyobj, [self.py_ssize_t])
+        fnty = ir.FunctionType(self.pyobj, [ir.IntType(64)])
         fn = self._get_function(fnty, name='PyTuple_New')
-        return self.builder.call(fn, [self.py_ssize_t(count)])
+        return self.builder.call(fn, [self.context.get_constant(types.py_intp,
+                                                                count)])
 
     def tuple_setitem(self, tuple_val, index, item):
         """
@@ -984,9 +985,9 @@ class PythonAPI(object):
         ops = ['<', '<=', '==', '!=', '>', '>=']
         if opstr in ops:
             opid = ops.index(opstr)
-            fnty = ir.FunctionType(self.pyobj, [self.pyobj, self.pyobj, ir.IntType(32)])
+            fnty = ir.FunctionType(self.pyobj, [self.pyobj, self.pyobj, ir.IntType(self.bitwidth)])
             fn = self._get_function(fnty, name="PyObject_RichCompare")
-            lopid = self.context.get_constant(types.int32, opid)
+            lopid = self.context.get_constant(types.py_intp, opid)
             return self.builder.call(fn, (lhs, rhs, lopid))
         elif opstr == 'is':
             bitflag = self.builder.icmp_unsigned('==', lhs, rhs)
@@ -1219,7 +1220,7 @@ class PythonAPI(object):
     def nrt_adapt_ndarray_to_python(self, aryty, ary, dtypeptr):
         assert self.context.enable_nrt, "NRT required"
 
-        intty = ir.IntType(32)
+        intty = ir.IntType(self.bitwidth)
         # Embed the Python type of the array (maybe subclass) in the LLVM IR.
         serial_aryty_pytype = self.unserialize(self.serialize_object(aryty.box_type))
 
@@ -1228,8 +1229,8 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="NRT_adapt_ndarray_to_python_acqref")
         fn.args[0].add_attribute('nocapture')
 
-        ndim = self.context.get_constant(types.int32, aryty.ndim)
-        writable = self.context.get_constant(types.int32, int(aryty.mutable))
+        ndim = self.context.get_constant(types.py_intp, aryty.ndim)
+        writable = self.context.get_constant(types.py_intp, int(aryty.mutable))
 
         aryptr = cgutils.alloca_once_value(self.builder, ary)
         return self.builder.call(fn, [self.builder.bitcast(aryptr,
@@ -1345,10 +1346,10 @@ class PythonAPI(object):
 
     def list_pack(self, items):
         n = len(items)
-        seq = self.list_new(self.context.get_constant(types.intp, n))
+        seq = self.list_new(self.context.get_constant(types.py_intp, n))
         with self.if_object_ok(seq):
             for i in range(n):
-                idx = self.context.get_constant(types.intp, i)
+                idx = self.context.get_constant(types.py_intp, i)
                 self.incref(items[i])
                 self.list_setitem(seq, idx, items[i])
         return seq
@@ -1592,7 +1593,7 @@ class PythonAPI(object):
 
     def string_from_constant_string(self, string):
         cstr = self.context.insert_const_string(self.module, string)
-        sz = self.context.get_constant(types.intp, len(string))
+        sz = self.context.get_constant(types.py_intp, len(string))
         return self.string_from_string_and_size(cstr, sz)
 
     def call_jit_code(self, func, sig, args):
