@@ -861,14 +861,15 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc, UfuncBase):
                     out = np.zeros(shape, dtype=dt)
 
                 # short-circuit to avoid overflow on Windows
-                if len(indices) == 0:
-                    return out
+                # if len(indices) == 0:
+                #     return out
+                # print(indices)
 
                 j = 0
                 for i in range(len(indices) - 1):
                     if indices[i] < indices[i + 1]:
                         idx = np.arange(indices[i], indices[i + 1])
-                        if array.ndim > 1:
+                        if array_ndim > 1:
                             arr_slice = np.take(array, idx, axis)
                         else:
                             arr_slice = array[idx]
