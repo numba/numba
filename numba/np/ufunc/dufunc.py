@@ -849,6 +849,15 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc, UfuncBase):
 
             def impl(ufunc, array, indices, axis=0, dtype=None, out=None):
                 sz = indices.shape[0]
+
+                ax = axis
+                if axis < 0:
+                    axis += array_ndim
+
+                if axis < 0 or axis >= array_ndim:
+                    raise ValueError(f"axis {ax} is out of bounds for array "
+                                     f"of dimension {array_ndim}")
+
                 shape = tuple_setitem(array.shape, axis, sz)
 
                 if not out_none and out.shape != shape:
@@ -888,8 +897,8 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc, UfuncBase):
                     j += 1
 
                 # last index
-                idx = np.arange(indices[i + 1], array.shape[axis])
-                if array.ndim > 1:
+                idx = np.arange(indices[-1], array.shape[axis])
+                if array_ndim > 1:
                     arr_slice = np.take(array, idx, axis)
                 else:
                     arr_slice = array[idx]
