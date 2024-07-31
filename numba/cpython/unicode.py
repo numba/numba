@@ -20,7 +20,7 @@ from numba.core.extending import (
 from numba.core.imputils import (lower_constant, lower_cast, lower_builtin,
                                  iternext_impl, impl_ret_new_ref, RefType)
 from numba.core.datamodel import register_default, StructModel
-from numba.core import types, cgutils
+from numba.core import types, cgutils, config
 from numba.core.utils import PYVERSION
 from numba.core.pythonapi import (
     PY_UNICODE_1BYTE_KIND,
@@ -71,7 +71,10 @@ if PYVERSION in ((3, 9), (3, 10), (3, 11)):
 _MAX_UNICODE = 0x10ffff
 
 # https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/stringlib/fastsearch.h#L31    # noqa: E501
-_BLOOM_WIDTH = types.intp.bitwidth
+if config.USE_LEGACY_TYPE_SYSTEM:
+    _BLOOM_WIDTH = types.intp.bitwidth
+else:
+    _BLOOM_WIDTH = types.py_intp.bitwidth
 
 # DATA MODEL
 
@@ -79,11 +82,19 @@ _BLOOM_WIDTH = types.intp.bitwidth
 @register_model(types.UnicodeType)
 class UnicodeModel(models.StructModel):
     def __init__(self, dmm, fe_type):
+        if config.USE_LEGACY_TYPE_SYSTEM:
+            lengthty = types.intp
+            kindty = types.int32
+            is_asciity = types.uint32
+        else:
+            lengthty = types.c_intp
+            kindty = types.c_int32
+            is_asciity = types.c_uint32
         members = [
             ('data', types.voidptr),
-            ('length', types.intp),
-            ('kind', types.int32),
-            ('is_ascii', types.uint32),
+            ('length', lengthty),
+            ('kind', kindty),
+            ('is_ascii', is_asciity),
             ('hash', _Py_hash_t),
             ('meminfo', types.MemInfoPointer(types.voidptr)),
             # A pointer to the owner python str/unicode object

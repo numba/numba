@@ -5,7 +5,7 @@ from numba.core.typeconv import Conversion
 from numba.core.errors import TypingError, LiteralTypingError
 from numba.core.ir import UndefinedType
 from numba.core.utils import get_hashable_key
-
+from numba.core import config
 
 class PyObject(Dummy):
     """
@@ -554,3 +554,10 @@ class UnicodeIteratorType(SimpleIteratorType):
         name = "iter_unicode"
         self.data = dtype
         super(UnicodeIteratorType, self).__init__(name, dtype)
+
+if not config.USE_LEGACY_TYPE_SYSTEM:
+    class NotImplementedType(Opaque): # name aliases the python type but nevermind
+        def __init__(self):
+            super().__init__(name="NotImplemented")
+
+    not_implemented_type = NotImplementedType()

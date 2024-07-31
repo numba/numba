@@ -413,21 +413,38 @@ for func in ['sum', 'argsort', 'nonzero', 'ravel']:
 # -----------------------------------------------------------------------------
 # Numpy scalar constructors
 
-# Register np.int8, etc. as converters to the equivalent Numba types
-np_types = set(getattr(np, str(nb_type)) for nb_type in types.number_domain)
-np_types.add(np.bool_)
-# Those may or may not be aliases (depending on the Numpy build / version)
-np_types.add(np.intc)
-np_types.add(np.intp)
-np_types.add(np.uintc)
-np_types.add(np.uintp)
+if config.USE_LEGACY_TYPE_SYSTEM:
+    # Register np.int8, etc. as converters to the equivalent Numba types
+    np_types = set(getattr(np, str(nb_type)) for nb_type in types.number_domain)
+    np_types.add(np.bool_)
+    # Those may or may not be aliases (depending on the Numpy build / version)
+    np_types.add(np.intc)
+    np_types.add(np.intp)
+    np_types.add(np.uintc)
+    np_types.add(np.uintp)
 
 
-def register_number_classes(register_global):
-    for np_type in np_types:
-        nb_type = getattr(types, np_type.__name__)
+    def register_number_classes(register_global):
+        for np_type in np_types:
+            nb_type = getattr(types, np_type.__name__)
 
-        register_global(np_type, types.NumberClass(nb_type))
+            register_global(np_type, types.NumberClass(nb_type))
+else:
+    # Register np.int8, etc. as converters to the equivalent Numba types
+    np_types = set(getattr(np, str(nb_type).split('np_')[-1]) for nb_type in types.np_number_domain)
+    np_types.add(np.bool_)
+    # Those may or may not be aliases (depending on the Numpy build / version)
+    np_types.add(np.intc)
+    np_types.add(np.intp)
+    np_types.add(np.uintc)
+    np_types.add(np.uintp)
+
+
+    def register_number_classes(register_global):
+        for np_type in np_types:
+            nb_type = getattr(types, f'np_{np_type.__name__}')
+
+            register_global(np_type, types.NumberClass(nb_type))
 
 
 register_number_classes(infer_global)

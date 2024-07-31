@@ -4,17 +4,25 @@ Typing support for the buffer protocol (PEP 3118).
 
 import array
 
-from numba.core import types
+from numba.core import types, config
 
 
 _pep3118_int_types = set('bBhHiIlLqQnN')
 
-_pep3118_scalar_map = {
-    'f': types.float32,
-    'd': types.float64,
-    'Zf': types.complex64,
-    'Zd': types.complex128,
-    }
+if config.USE_LEGACY_TYPE_SYSTEM: # Old type system
+    _pep3118_scalar_map = {
+        'f': types.float32,
+        'd': types.float64,
+        'Zf': types.complex64,
+        'Zd': types.complex128,
+        }
+else: # New type system
+    _pep3118_scalar_map = {
+        'f': types.np_float32,
+        'd': types.np_float64,
+        'Zf': types.np_complex64,
+        'Zd': types.np_complex128,
+        }
 
 _type_map = {
     bytearray: types.ByteArray,

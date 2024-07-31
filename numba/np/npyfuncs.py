@@ -12,7 +12,7 @@ import numpy as np
 
 from numba.core.extending import overload
 from numba.core.imputils import impl_ret_untracked
-from numba.core import typing, types, errors, lowering, cgutils
+from numba.core import typing, types, errors, lowering, cgutils, config
 from numba.core.extending import register_jitable
 from numba.np import npdatetime
 from numba.np.math import cmathimpl, mathimpl, numbers
@@ -44,9 +44,13 @@ def _check_arity_and_homogeneity(sig, args, arity, return_type = None):
         msg = '{0} called with invalid types: {1}'.format(fname, sig)
         assert False, msg
 
+if config.USE_LEGACY_TYPE_SYSTEM:
+    cast_arg_ty = types.float64
+else:
+    cast_arg_ty = types.np_float64
 
 def _call_func_by_name_with_cast(context, builder, sig, args,
-                                 func_name, ty=types.float64):
+                                 func_name, ty=cast_arg_ty):
     # it is quite common in NumPy to have loops implemented as a call
     # to the double version of the function, wrapped in casts. This
     # helper function facilitates that.
