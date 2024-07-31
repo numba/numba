@@ -476,9 +476,11 @@ class Lower(BaseLower):
 
             condty = self.typeof(inst.cond.name)
             if config.USE_LEGACY_TYPE_SYSTEM:
-                pred = self.context.cast(self.builder, cond, condty, types.boolean)
+                pred = self.context.cast(self.builder, cond,
+                                         condty, types.boolean)
             else:
-                pred = self.context.cast(self.builder, cond, condty, types.py_bool)
+                pred = self.context.cast(self.builder, cond,
+                                         condty, types.py_bool)
             assert pred.type == llvmlite.ir.IntType(1),\
                 ("cond is not i1: %s" % pred.type)
             self.builder.cbranch(pred, tr, fl)

@@ -43,7 +43,7 @@ class TestDunderMethods(TestCase):
         True,
         10,
         1.1,
-        1+2j,
+        1 + 2j,
         np.bool_(True),
         np.int8(1),
         np.int16(2),
@@ -57,43 +57,53 @@ class TestDunderMethods(TestCase):
         np.float32(3.2),
         np.float64(5.5),
         # np.complex64((20+5j)),
-        np.complex128((4+3j))
+        np.complex128((4 + 3j))
     ]
 
     def test_dunder_add(self):
         @njit
         def foo(a, b):
             return a.__add__(b)
-        
+
         for x, y in itertools.product(self.type_cases, self.type_cases):
             res = foo(x, y)
             py_res = foo.py_func(x, y)
 
-            assert res == py_res, f"Failed for {x} and {y}; gave answer {res} should be {py_res}" 
-            assert type(res) == type(py_res), f"Failed for type {type(x)} and {type(y)}; gave answer {type(res)} should be {type(py_res)}" 
+            assert res == py_res, (
+                f"Failed for {x} and {y};" +
+                f" gave answer {res} should be {py_res}")
+            assert type(res) is type(py_res), (
+                f"Failed for type {type(x)} and {type(y)};" +
+                f" gave answer {type(res)} should be {type(py_res)}")
 
     def test_dunder_radd(self):
         @njit
         def foo(a, b):
             return a.__radd__(b)
-        
+
         for x, y in itertools.product(self.type_cases, self.type_cases):
             res = foo(x, y)
             py_res = foo.py_func(x, y)
 
-            assert res == py_res, f"Failed for {x} and {y}; gave answer {res} should be {py_res}" 
-            assert type(res) == type(py_res), f"Failed for type {type(x)} and {type(y)}; gave answer {type(res)} should be {type(py_res)}" 
-
+            assert res == py_res, (
+                f"Failed for {x} and {y};" +
+                f" gave answer {res} should be {py_res}")
+            assert type(res) is type(py_res), (
+                f"Failed for type {type(x)} and {type(y)};" +
+                f" gave answer {type(res)} should be {type(py_res)}")
 
     def test_add(self):
         @njit
         def foo(a, b):
             return a + b
-        
+
         for x, y in itertools.product(self.type_cases, self.type_cases):
             res = foo(x, y)
             py_res = foo.py_func(x, y)
 
-            assert res == py_res, f"Failed for {x} and {y}; gave answer {res} should be {py_res}" 
-            assert type(res) == type(py_res), f"Failed for type {type(x)} and {type(y)}; gave answer {type(res)} should be {type(py_res)}" 
-
+            assert res == py_res, (
+                f"Failed for {x} and {y};" +
+                f" gave answer {res} should be {py_res}")
+            assert type(res) is type(py_res), (
+                f"Failed for type {type(x)} and {type(y)};" +
+                f" gave answer {type(res)} should be {type(py_res)}")
