@@ -35,6 +35,13 @@ def box_np_scalars(typ, val, c, py_boxing_func, py_type):
     return c.builder.load(np_scalar)
 
 
+@box(types.NotImplementedType)
+def box_NotImplementedType(typ, val, c):
+    ni_struct  = c.pyapi.get_c_object("_Py_NotImplementedStruct")
+    c.pyapi.incref(ni_struct)
+    return ni_struct
+
+
 @box(types.PythonBoolean)
 def box_py_bool(typ, val, c):
     return c.pyapi.bool_from_bool(val)

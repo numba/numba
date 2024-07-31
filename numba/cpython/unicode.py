@@ -82,11 +82,19 @@ else:
 @register_model(types.UnicodeType)
 class UnicodeModel(models.StructModel):
     def __init__(self, dmm, fe_type):
+        if config.USE_LEGACY_TYPE_SYSTEM:
+            lengthty = types.intp
+            kindty = types.int32
+            is_asciity = types.uint32
+        else:
+            lengthty = types.c_intp
+            kindty = types.c_int32
+            is_asciity = types.c_uint32
         members = [
             ('data', types.voidptr),
-            ('length', types.intp),
-            ('kind', types.int32),
-            ('is_ascii', types.uint32),
+            ('length', lengthty),
+            ('kind', kindty),
+            ('is_ascii', is_asciity),
             ('hash', _Py_hash_t),
             ('meminfo', types.MemInfoPointer(types.voidptr)),
             # A pointer to the owner python str/unicode object
