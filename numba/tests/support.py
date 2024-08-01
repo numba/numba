@@ -176,9 +176,10 @@ skip_ppc64le_invalid_ctr_loop = unittest.skipIf(
 # fenv.h on M1 may have various issues:
 # https://github.com/numba/numba/issues/7822#issuecomment-1065356758
 _uname = platform.uname()
-IS_OSX_ARM64 = _uname.system == 'Darwin' and _uname.machine == 'arm64'
-skip_m1_fenv_errors = unittest.skipIf(IS_OSX_ARM64,
-    "fenv.h-like functionality unreliable on OSX arm64")
+IS_MACOS = _uname.system == 'Darwin'
+skip_macos_fenv_errors = unittest.skipIf(IS_MACOS,
+    "fenv.h-like functionality unreliable on macOS")
+IS_MACOS_ARM64 = IS_MACOS and _uname.machine == 'arm64'
 
 try:
     import scipy.linalg.cython_lapack
