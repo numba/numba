@@ -1113,13 +1113,9 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
     return pyresult;
 }
 #elif  (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 13)
-/* Temporary code*/
-static PyObject *
-call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyObject *locals)
-{
-    PyCFunctionWithKeywords fn = NULL;
-    fn = (PyCFunctionWithKeywords) PyCFunction_GET_FUNCTION(cfunc);
-    return fn(PyCFunction_GET_SELF(cfunc), args, kws);
+extern "C" {
+    PyObject *
+    call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyObject *locals);
 }
 #else
 #error "Python version is not supported."

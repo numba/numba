@@ -8,7 +8,6 @@ import numpy as np
 
 from numba import jit, types
 from numba.tests.support import needs_blas
-from numba.tests.support import expected_failure_py313
 import unittest
 
 
@@ -85,7 +84,6 @@ class TestProfiler(unittest.TestCase):
         if caller is not cfunc:
             check_stats_for_key(stats, caller.__code__, n_calls)
 
-    @expected_failure_py313  # this will pass once sync to main
     def test_profiler(self):
         dot, _ = generate_standard_dot_case()
         self.check_profiler_dot(dot, dot)
