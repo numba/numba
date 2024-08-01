@@ -569,7 +569,7 @@ Dispatcher_Insert(Dispatcher *self, PyObject *args, PyObject *kwds)
         return NULL;
     }
 
-    if (!cuda && !PyObject_TypeCheck(cfunc, &PyCFunction_Type) ) {
+    if (!cuda && !PyObject_TypeCheck(cfunc, &PyCFunction_Type) && !(cfunc == Py_None) ) {
         PyErr_SetString(PyExc_TypeError, "must be builtin_function_or_method");
         return NULL;
     }
@@ -664,6 +664,11 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
 {
     PyCFunctionWithKeywords fn;
     PyThreadState *tstate;
+
+    if (cfunc == Py_None) {
+        // TODO Return a proper error
+        return Py_None;
+    }
 
     assert(PyCFunction_Check(cfunc));
     assert(PyCFunction_GET_FLAGS(cfunc) == (METH_VARARGS | METH_KEYWORDS));
