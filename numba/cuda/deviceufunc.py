@@ -460,7 +460,7 @@ class DeviceGUFuncVectorize(_BaseUFuncBuilder):
         if not valid_return_type:
             raise TypeError('guvectorized functions cannot return values: '
                             f'signature {sig} specifies {return_type} return '
-                           'type')
+                            'type')
 
         funcname = self.py_func.__name__
         src = expand_gufunc_template(self._kernel_template, indims,
@@ -717,7 +717,7 @@ class GeneralizedUFunc(object):
         # Creating new dimension
         elif len(ary.shape) < len(newshape):
             assert newshape[-len(ary.shape):] == ary.shape, \
-               "cannot add dim and reshape at the same time"
+                "cannot add dim and reshape at the same time"
             return self._broadcast_add_axis(ary, newshape)
 
         # Collapsing dimension
@@ -859,7 +859,8 @@ class GUFuncCallSteps(metaclass=ABCMeta):
 
     def prepare_outputs(self, schedule, outdtypes):
         """
-        Returns a list of output parameters that all reside on the target device.
+        Returns a list of output parameters that all reside on the target
+        device.
 
         Outputs that were passed-in to the GUFunc are used if they reside on the
         device; other outputs are allocated as necessary.
