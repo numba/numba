@@ -26,7 +26,7 @@ class Loc(object):
     """Source location
 
     """
-    _defmatcher = re.compile(r'def\s+(\w+)\(.*')
+    _defmatcher = re.compile(r'def\s+(\w+)')
 
     def __init__(self, filename, line, col=None, maybe_decorator=False):
         """ Arguments:
@@ -82,10 +82,11 @@ class Loc(object):
     def _raw_function_name(self):
         defn = self._find_definition()
         if defn:
-            return self._defmatcher.match(defn.strip()).groups()[0]
-        else:
-            # Probably exec(<string>) or REPL.
-            return None
+            m = self._defmatcher.match(defn.strip())
+            if m:
+                return m.groups()[0]
+        # Probably exec(<string>) or REPL.
+        return None
 
     def get_lines(self):
         if self.lines is None:

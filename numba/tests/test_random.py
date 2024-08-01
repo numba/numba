@@ -531,6 +531,18 @@ class TestRandom(BaseTest):
                        {'low': -2.5, 'high': 1e3},
                        {'low': 1.5, 'high': -2.5}])
 
+    def test_numpy_uniform_empty_size(self):
+        self._check_any_distrib_kwargs(
+            jit_with_kwargs("np.random.uniform", ['low', 'high', 'size']),
+            get_np_state_ptr(),
+            'uniform',
+            paramlist=[{'low': 1.5, 'high': 1e6, 'size': ()},
+                       {'low': -2.5, 'high': 1e3, 'size': ()},
+                       {'low': 1.5, 'high': -2.5, 'size': ()},
+                       {'low': 1.5, 'high': 1e6, 'size': None},
+                       {'low': -2.5, 'high': 1e3, 'size': None},
+                       {'low': 1.5, 'high': -2.5, 'size': None},])
+
     def _check_triangular(self, func2, func3, ptr):
         """
         Check a triangular()-like function.
@@ -1834,6 +1846,60 @@ class TestProcesses(ConcurrencyBaseTest):
 
 
 class TestNumPyRandomAPI(TestCase):
+    API_CALL_TESTS = {"np.random.beta": {'a': 1., 'b': 2., 'size': 3},
+                      "np.random.binomial": {'n': 1, 'p': 0.3, 'size': 3},
+                      "np.random.chisquare": {'df': 2., 'size': 3},
+                      "np.random.choice": {'a': 2, 'size': 3},
+                      "np.random.dirichlet": {'alpha': (2,), 'size': 3},
+                      "np.random.exponential": {'scale': 1., 'size': 3},
+                      "np.random.f": {'dfnum': 1., 'dfden': 2., 'size': 3},
+                      "np.random.gamma": {'shape': 2, 'scale': 2.0, 'size': 3},
+                      "np.random.geometric": {'p': 1., 'size': 3},
+                      "np.random.gumbel": {'loc': 0., 'scale': 1., 'size': 3},
+                      "np.random.hypergeometric": {'ngood': 1, 'nbad': 1,
+                                                   'nsample': 1, 'size': 3},
+                      "np.random.laplace": {'loc': 0., 'scale': 1., 'size': 3},
+                      "np.random.logistic": {'loc': 0., 'scale': 1., 'size': 3},
+                      "np.random.lognormal": {'mean': 0., 'sigma': 1., 'size': 3},
+                      "np.random.logseries": {'p': 0.5, 'size': 3},
+                      "np.random.multinomial": {'n': 1, 'pvals': (1,), 'size': 3},
+                      "np.random.negative_binomial": {'n': 1, 'p': 0.5},
+                      "np.random.noncentral_chisquare": {'df': 1., 'nonc': 1.,
+                                                         'size': 3},
+                      "np.random.normal": {'loc': 0., 'scale': 1., 'size': 3},
+                      "np.random.pareto": {'a': 2., 'size': 3},
+                      # NOTE: The NumPy impl of permutation "takes no keyword
+                      # arguments".
+                      # "np.random.permutation": {'x': (1, 2, 3)},
+                      "np.random.poisson": {'lam': 1., 'size': 3},
+                      "np.random.power": {'a': 2., 'size': 3},
+                      # NOTE: The NumPy impl of rand essentially takes *args so kwargs
+                      # are unsupported.
+                      # "np.random.rand": {'d0': 1, 'd1': 2, ...}}
+                      "np.random.randint": {'low': 1, 'high': 2, 'size': 3},
+                      # NOTE: The NumPy impl of randn essentially takes *args so
+                      # kwargs are unsupported.
+                      # "np.random.randn":  {'d0': 1, 'd1': 2, ...}}
+                      "np.random.random": {'size': 3},
+                      "np.random.random_sample": {'size': 3},
+                      "np.random.ranf": {'size': 3},
+                      "np.random.rayleigh": {'scale': 1., 'size': 3},
+                      "np.random.sample": {'size': 3},
+                      "np.random.seed": {'seed': 4},
+                      # NOTE: The NumPy impl of shuffle "takes no keyword arguments".
+                      # "np.random.shuffle"
+                      "np.random.standard_cauchy": {'size': 3},
+                      "np.random.standard_exponential": {'size': 3},
+                      "np.random.standard_gamma": {'shape': 2., 'size': 3},
+                      "np.random.standard_normal": {'size': 3},
+                      "np.random.standard_t": {'df': 2., 'size': 3},
+                      "np.random.triangular": {'left': 1., 'mode': 2., 'right': 3.,
+                                               'size': 3},
+                      "np.random.uniform": {'low': 1., 'high': 2., 'size': 3},
+                      "np.random.vonmises": {'mu': 1., 'kappa': 2., 'size': 3},
+                      "np.random.wald": {'mean': 1., 'scale': 2., 'size': 3},
+                      "np.random.weibull": {'a': 1., 'size': 3},
+                      "np.random.zipf": {'a': 2., 'size': 3},}
 
     def test_call_by_name(self):
         # Checks that the NumPy impls in Numba can be used via call-by-name
@@ -1844,62 +1910,8 @@ class TestNumPyRandomAPI(TestCase):
 
         # Herein, it doesn't matter what the values are, the names and types
         # just have to make sense.
-        data = {"np.random.beta": {'a': 1., 'b': 2., 'size': 3},
-                "np.random.binomial": {'n': 1, 'p': 0.3, 'size': 3},
-                "np.random.chisquare": {'df': 2., 'size': 3},
-                "np.random.choice": {'a': 2, 'size': 3},
-                "np.random.dirichlet": {'alpha': (2,), 'size': 3},
-                "np.random.exponential": {'scale': 1., 'size': 3},
-                "np.random.f": {'dfnum': 1., 'dfden': 2., 'size': 3},
-                "np.random.gamma": {'shape': 2, 'scale': 2.0, 'size': 3},
-                "np.random.geometric": {'p': 1., 'size': 3},
-                "np.random.gumbel": {'loc': 0., 'scale': 1., 'size': 3},
-                "np.random.hypergeometric": {'ngood': 1, 'nbad': 1,
-                                             'nsample': 1, 'size': 3},
-                "np.random.laplace": {'loc': 0., 'scale': 1., 'size': 3},
-                "np.random.logistic": {'loc': 0., 'scale': 1., 'size': 3},
-                "np.random.lognormal": {'mean': 0., 'sigma': 1., 'size': 3},
-                "np.random.logseries": {'p': 0.5, 'size': 3},
-                "np.random.multinomial": {'n': 1, 'pvals': (1,), 'size': 3},
-                "np.random.negative_binomial": {'n': 1, 'p': 0.5},
-                "np.random.noncentral_chisquare": {'df': 1., 'nonc': 1.,
-                                                   'size': 3},
-                "np.random.normal": {'loc': 0., 'scale': 1., 'size': 3},
-                "np.random.pareto": {'a': 2., 'size': 3},
-                # NOTE: The NumPy impl of permutation "takes no keyword
-                # arguments".
-                # "np.random.permutation": {'x': (1, 2, 3)},
-                "np.random.poisson": {'lam': 1., 'size': 3},
-                "np.random.power": {'a': 2., 'size': 3},
-                # NOTE: The NumPy impl of rand essentially takes *args so kwargs
-                # are unsupported.
-                # "np.random.rand": {'d0': 1, 'd1': 2, ...}}
-                "np.random.randint": {'low': 1, 'high': 2, 'size': 3},
-                # NOTE: The NumPy impl of randn essentially takes *args so
-                # kwargs are unsupported.
-                # "np.random.randn":  {'d0': 1, 'd1': 2, ...}}
-                "np.random.random": {'size': 3},
-                "np.random.random_sample": {'size': 3},
-                "np.random.ranf": {'size': 3},
-                "np.random.rayleigh": {'scale': 1., 'size': 3},
-                "np.random.sample": {'size': 3},
-                "np.random.seed": {'seed': 4},
-                # NOTE: The NumPy impl of shuffle "takes no keyword arguments".
-                # "np.random.shuffle"
-                "np.random.standard_cauchy": {'size': 3},
-                "np.random.standard_exponential": {'size': 3},
-                "np.random.standard_gamma": {'shape': 2., 'size': 3},
-                "np.random.standard_normal": {'size': 3},
-                "np.random.standard_t": {'df': 2., 'size': 3},
-                "np.random.triangular": {'left': 1., 'mode': 2., 'right': 3.,
-                                         'size': 3},
-                "np.random.uniform": {'low': 1., 'high': 2., 'size': 3},
-                "np.random.vonmises": {'mu': 1., 'kappa': 2., 'size': 3},
-                "np.random.wald": {'mean': 1., 'scale': 2., 'size': 3},
-                "np.random.weibull": {'a': 1., 'size': 3},
-                "np.random.zipf": {'a': 2., 'size': 3},}
-
-        for fn, args in data.items():
+        
+        for fn, args in self.API_CALL_TESTS.items():
             argstr = ', '.join([f'{k}={v}' for k, v in args.items()])
             template = dedent(f"""
                 def foo():
@@ -1914,6 +1926,39 @@ class TestNumPyRandomAPI(TestCase):
             func = l['foo']
             func()
             njit(func).compile(())
+
+    def test_call_distributions_with_empty_size(self):
+        # Check that the distributions can be called with size=() as per the
+        # NumPy API, see issue numba#8975.
+        for fn, args in self.API_CALL_TESTS.items():
+            if 'size' not in args:
+                continue
+            
+            args['size'] = ()
+            argstr = ', '.join([f'{k}={v}' for k, v in args.items()])
+            template = dedent(f"""
+                def foo():
+                    return {fn}({argstr})
+                """)
+            l = {}
+            exec(template, {'np': np}, l)
+
+            # Store result obtained by calling the np and nb functions.
+            # We are not interested by the values, they were tested above
+            # but we want to ensure that the function compiles, and that 
+            # the shapes and types are the same between numpy and numba.
+            func = l['foo']
+            np_val = func()
+
+            nb_func = njit(func).compile(())
+            nb_val = nb_func()
+
+            if isinstance(nb_val, np.ndarray):
+                self.assertEqual(nb_val.shape, np_val.shape)
+            else:
+                self.assertIsInstance(nb_val, np_val.__class__)
+
+
 
 
 if __name__ == "__main__":

@@ -56,8 +56,8 @@ class TestHelperFuncs(TestCase):
             numba_func(rng)
         self.assertIn(
             'Argument loc is not one of the expected type(s): '
-            + '[<class \'numba.core.types.scalars.Float\'>, '
-            + '<class \'numba.core.types.scalars.Integer\'>, '
+            + '[<class \'numba.core.types.old_scalars.Float\'>, '
+            + '<class \'numba.core.types.old_scalars.Integer\'>, '
             + '<class \'int\'>, <class \'float\'>]',
             str(raises.exception)
         )
@@ -186,8 +186,8 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
 
         # Check if the end state of both BitGenerators is same
         # after drawing the distributions
-        numba_gen_state = numba_rng_instance.__getstate__()['state']
-        numpy_gen_state = numpy_rng_instance.__getstate__()['state']
+        numba_gen_state = numba_rng_instance.bit_generator.state['state']
+        numpy_gen_state = numpy_rng_instance.bit_generator.state['state']
 
         for _state_key in numpy_gen_state:
             self.assertPreciseEqual(numba_gen_state[_state_key],

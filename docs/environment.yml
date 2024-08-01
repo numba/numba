@@ -6,7 +6,7 @@ channels:
   - numba/label/dev
 dependencies:
   - python=3.9
-  - llvmlite=0.42
+  - llvmlite=0.44
   - numpy
   - numpydoc
   - setuptools
@@ -14,3 +14,4 @@ dependencies:
   - docutils==0.16
   # The following is needed to fix RTD.
   - conda
+  - gxx_linux-64

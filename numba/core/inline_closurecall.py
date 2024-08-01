@@ -2,7 +2,8 @@ import types as pytypes  # avoid confusion with numba.types
 import copy
 import ctypes
 import numba.core.analysis
-from numba.core import types, typing, errors, ir, rewrites, config, ir_utils
+from numba.core import (types, typing, errors, ir, rewrites, config, ir_utils,
+                        cgutils)
 from numba.parfors.parfor import internal_prange
 from numba.core.ir_utils import (
     next_label,
@@ -29,6 +30,13 @@ from numba.core.analysis import (
     compute_cfg_from_blocks,
     compute_use_defs,
     compute_live_variables)
+from numba.core.imputils import impl_ret_untracked
+from numba.core.extending import intrinsic
+from numba.core.typing import signature
+from numba.cpython.listobj import ListIterInstance
+from numba.cpython.rangeobj import range_impl_map
+from numba.np.arrayobj import make_array
+
 from numba.core import postproc
 from numba.np.unsafe.ndarray import empty_inferred as unsafe_empty_inferred
 import numpy as np
@@ -961,6 +969,66 @@ def _find_iter_range(func_ir, range_iter_var, swapped):
         raise GuardException
 
 
+@intrinsic
+def length_of_iterator(typingctx, val):
+    """
+    An implementation of len(iter) for internal use.
+    Primary use is for array comprehensions (see inline_closurecall).
+    """
+    if isinstance(val, types.RangeIteratorType):
+        val_type = val.yield_type
+
+        def codegen(context, builder, sig, args):
+            (value,) = args
+            iter_type = range_impl_map[val_type][1]
+            iterobj = cgutils.create_struct_proxy(iter_type)(context, builder,
+                                                             value)
+            int_type = iterobj.count.type
+            return impl_ret_untracked(context, builder, int_type,
+                                      builder.load(iterobj.count))
+        return signature(val_type, val), codegen
+    elif isinstance(val, types.ListIter):
+        def codegen(context, builder, sig, args):
+            (value,) = args
+            intp_t = context.get_value_type(types.intp)
+            iterobj = ListIterInstance(context, builder, sig.args[0], value)
+            return impl_ret_untracked(context, builder, intp_t, iterobj.size)
+        return signature(types.intp, val), codegen
+    elif isinstance(val, types.ArrayIterator):
+        def codegen(context, builder, sig, args):
+            (iterty,) = sig.args
+            (value,) = args
+            intp_t = context.get_value_type(types.intp)
+            iterobj = context.make_helper(builder, iterty, value=value)
+            arrayty = iterty.array_type
+            ary = make_array(arrayty)(context, builder, value=iterobj.array)
+            shape = cgutils.unpack_tuple(builder, ary.shape)
+            # array iterates along the outer dimension
+            return impl_ret_untracked(context, builder, intp_t, shape[0])
+        return signature(types.intp, val), codegen
+    elif isinstance(val, types.UniTupleIter):
+        def codegen(context, builder, sig, args):
+            (iterty,) = sig.args
+            tuplety = iterty.container
+            intp_t = context.get_value_type(types.intp)
+            count_const = intp_t(tuplety.count)
+            return impl_ret_untracked(context, builder, intp_t, count_const)
+
+        return signature(types.intp, val), codegen
+    elif isinstance(val, types.ListTypeIteratorType):
+        def codegen(context, builder, sig, args):
+            (value,) = args
+            intp_t = context.get_value_type(types.intp)
+            from numba.typed.listobject import ListIterInstance
+            iterobj = ListIterInstance(context, builder, sig.args[0], value)
+            return impl_ret_untracked(context, builder, intp_t, iterobj.size)
+        return signature(types.intp, val), codegen
+    else:
+        msg = ('Unsupported iterator found in array comprehension, try '
+               'preallocating the array and filling manually.')
+        raise errors.TypingError(msg)
+
+
 def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
                       typed=False):
     """Look for array(list) call in the exit block of a given loop, and turn
@@ -1128,7 +1196,6 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
         # this doesn't work in objmode as it's effectively untyped
         if typed:
             len_func_var = scope.redefine("len_func", loc)
-            from numba.cpython.rangeobj import length_of_iterator
             stmts.append(_new_definition(func_ir, len_func_var,
                                          ir.Global('length_of_iterator',
                                                    length_of_iterator,

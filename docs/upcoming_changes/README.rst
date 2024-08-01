@@ -7,7 +7,7 @@ small **ReST**-formatted text that will be added to the next what's new page.
 
 Make sure to use full sentences with correct case and punctuation, and please
 try to use Sphinx intersphinx using backticks. The fragment should have a
-header line and an underline using ``======`` followed by description of
+header line and an underline using ``------`` followed by description of
 your user-facing changes as they should appear in the release notes.
 
 Each file should be named like ``<PULL REQUEST>.<TYPE>.rst``, where

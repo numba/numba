@@ -3803,12 +3803,22 @@ def get_reduction_init(nodes):
     # there could be multiple extra assignments after the reduce node
     # See: test_reduction_var_reuse
     acc_expr = list(filter(lambda x: isinstance(x.value, ir.Expr), nodes))[-1].value
-    require(isinstance(acc_expr, ir.Expr) and acc_expr.op=='inplace_binop')
-    if acc_expr.fn == operator.iadd or acc_expr.fn == operator.isub:
-        return 0, acc_expr.fn
-    if (  acc_expr.fn == operator.imul
-       or acc_expr.fn == operator.itruediv ):
-        return 1, acc_expr.fn
+    require(isinstance(acc_expr, ir.Expr) and acc_expr.op in ['inplace_binop', 'binop'])
+    acc_expr_fn = acc_expr.fn
+    if acc_expr.op == 'binop':
+        if acc_expr_fn == operator.add:
+            acc_expr_fn = operator.iadd
+        elif acc_expr_fn == operator.sub:
+            acc_expr_fn = operator.isub
+        elif acc_expr_fn == operator.mul:
+            acc_expr_fn = operator.imul
+        elif acc_expr_fn == operator.truediv:
+            acc_expr_fn = operator.itruediv
+    if acc_expr_fn == operator.iadd or acc_expr_fn == operator.isub:
+        return 0, acc_expr_fn
+    if (  acc_expr_fn == operator.imul
+       or acc_expr_fn == operator.itruediv ):
+        return 1, acc_expr_fn
     return None, None
 
 def supported_reduction(x, func_ir):
@@ -3848,17 +3858,30 @@ def get_reduce_nodes(reduction_node, nodes, func_ir):
     reduce_nodes = None
     defs = {}
 
-    def lookup(var, varonly=True, start=None):
-        val = defs.get(var.name, None)
-        if isinstance(val, ir.Var):
+    def cyclic_lookup(var, varonly=True, start=None):
+        """Lookup definition of ``var``.
+        Returns ``None`` if variable definition forms a cycle.
+        """
+        lookedup_var = defs.get(var.name, None)
+        if isinstance(lookedup_var, ir.Var):
             if start is None:
-                start = val
-            elif start == var:
+                start = lookedup_var
+            elif start == lookedup_var:
                 # cycle detected
                 return None
-            return lookup(val, start=start)
+            return cyclic_lookup(lookedup_var, start=start)
         else:
-            return var if (varonly or val is None) else val
+            return var if (varonly or lookedup_var is None) else lookedup_var
+
+    def noncyclic_lookup(*args, **kwargs):
+        """Similar to cyclic_lookup but raise AssertionError if a cycle is
+        detected.
+        """
+        res = cyclic_lookup(*args, **kwargs)
+        if res is None:
+            raise AssertionError("unexpected cycle in lookup()")
+        return res
+
     name = reduction_node.name
     unversioned_name = reduction_node.unversioned_name
     for i, stmt in enumerate(nodes):
@@ -3866,9 +3889,10 @@ def get_reduce_nodes(reduction_node, nodes, func_ir):
         rhs = stmt.value
         defs[lhs.name] = rhs
         if isinstance(rhs, ir.Var) and rhs.name in defs:
-            rhs = lookup(rhs)
+            rhs = cyclic_lookup(rhs)
         if isinstance(rhs, ir.Expr):
-            in_vars = set(lookup(v, True).name for v in rhs.list_vars())
+            in_vars = set(noncyclic_lookup(v, True).name
+                          for v in rhs.list_vars())
             if name in in_vars:
                 # reductions like sum have an assignment afterwards
                 # e.g. $2 = a + $1; a = $2
@@ -3923,7 +3947,8 @@ def get_reduce_nodes(reduction_node, nodes, func_ir):
                 if not supported_reduction(rhs, func_ir):
                     raise ValueError(("Use of reduction variable " + unversioned_name +
                                       " in an unsupported reduction function."))
-                args = [ (x.name, lookup(x, True)) for x in get_expr_args(rhs) ]
+                args = [(x.name, noncyclic_lookup(x, True))
+                        for x in get_expr_args(rhs) ]
                 non_red_args = [ x for (x, y) in args if y.name != name ]
                 assert len(non_red_args) == 1
                 args = [ (x, y) for (x, y) in args if x != y.name ]

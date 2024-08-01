@@ -93,6 +93,8 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
         self._llvm_strs = None
         # Maps CC -> PTX string
         self._ptx_cache = {}
+        # Maps CC -> LTO-IR
+        self._ltoir_cache = {}
         # Maps CC -> cubin
         self._cubin_cache = {}
         # Maps CC -> linker info output for cubin
@@ -115,14 +117,15 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
     def get_llvm_str(self):
         return "\n\n".join(self.llvm_strs)
 
-    def get_asm_str(self, cc=None):
-        return self._join_ptxes(self._get_ptxes(cc=cc))
+    def _ensure_cc(self, cc):
+        if cc is not None:
+            return cc
 
-    def _get_ptxes(self, cc=None):
-        if not cc:
-            ctx = devices.get_context()
-            device = ctx.device
-            cc = device.compute_capability
+        device = devices.get_context().device
+        return device.compute_capability
+
+    def get_asm_str(self, cc=None):
+        cc = self._ensure_cc(cc)
 
         ptxes = self._ptx_cache.get(cc, None)
         if ptxes:
@@ -134,30 +137,42 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
 
         irs = self.llvm_strs
 
-        ptxes = [nvvm.llvm_to_ptx(irs, **options)]
+        ptx = nvvm.compile_ir(irs, **options)
 
         # Sometimes the result from NVVM contains trailing whitespace and
         # nulls, which we strip so that the assembly dump looks a little
         # tidier.
-        ptxes = [x.decode().strip('\x00').strip() for x in ptxes]
+        ptx = ptx.decode().strip('\x00').strip()
 
         if config.DUMP_ASSEMBLY:
             print(("ASSEMBLY %s" % self._name).center(80, '-'))
-            print(self._join_ptxes(ptxes))
+            print(ptx)
             print('=' * 80)
 
-        self._ptx_cache[cc] = ptxes
+        self._ptx_cache[cc] = ptx
 
-        return ptxes
+        return ptx
 
-    def _join_ptxes(self, ptxes):
-        return "\n\n".join(ptxes)
+    def get_ltoir(self, cc=None):
+        cc = self._ensure_cc(cc)
+
+        ltoir = self._ltoir_cache.get(cc, None)
+        if ltoir is not None:
+            return ltoir
+
+        arch = nvvm.get_arch_option(*cc)
+        options = self._nvvm_options.copy()
+        options['arch'] = arch
+        options['gen-lto'] = None
+
+        irs = self.llvm_strs
+        ltoir = nvvm.compile_ir(irs, **options)
+        self._ltoir_cache[cc] = ltoir
+
+        return ltoir
 
     def get_cubin(self, cc=None):
-        if cc is None:
-            ctx = devices.get_context()
-            device = ctx.device
-            cc = device.compute_capability
+        cc = self._ensure_cc(cc)
 
         cubin = self._cubin_cache.get(cc, None)
         if cubin:
@@ -165,9 +180,13 @@ class CUDACodeLibrary(serialize.ReduceMixin, CodeLibrary):
 
         linker = driver.Linker.new(max_registers=self._max_registers, cc=cc)
 
-        ptxes = self._get_ptxes(cc=cc)
-        for ptx in ptxes:
+        if linker.lto:
+            ltoir = self.get_ltoir(cc=cc)
+            linker.add_ltoir(ltoir)
+        else:
+            ptx = self.get_asm_str(cc=cc)
             linker.add_ptx(ptx.encode())
+
         for path in self._linking_files:
             linker.add_file_guess_ext(path)
         if self.needs_cudadevrt:
