@@ -1,5 +1,5 @@
 Added initial implementation for a new type system.
-===================================================
+---------------------------------------------------
 
 This adds a new type system that will allow Numba to
 differentiate between Python and NumPy scalars.
@@ -11,5 +11,3 @@ This has been achieved as follows:
   Switching it to `0` (off) will activate new type system.
 - Within the new type system, Python and NumPy scalars will be treated
   and returned separately as different entities through JIT compiled functions. 
-- Additionally basic binary operations such as addition/subtraction can be
-  performed with the newly added types.
