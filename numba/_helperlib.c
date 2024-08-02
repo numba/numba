@@ -19,7 +19,7 @@
 #else
     #include <stdint.h>
     #define _complex_float_t complex float
-    #define _complex_float_ctor(r, i) (r + I * i)
+    #define _complex_float_ctor(r, i) (r + _Complex_I * i)
     #define _complex_double_t complex double
 #endif
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
