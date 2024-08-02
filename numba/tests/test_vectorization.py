@@ -3,15 +3,8 @@ import numpy as np
 from numba import types
 import unittest
 from numba import njit
-from numba.core import config
 from numba.tests.support import TestCase
-
-_DEBUG = False
-if _DEBUG:
-    from llvmlite import binding as llvm
-    # Prints debug info from the LLVMs vectorizer
-    llvm.set_option("", "--debug-only=loop-vectorize")
-
+from numba.experimental.remarks import remarks
 
 _skylake_env = {
     "NUMBA_CPU_NAME": "skylake-avx512",
@@ -24,12 +17,6 @@ class TestVectorization(TestCase):
     """
     Tests to assert that code which should vectorize does indeed vectorize
     """
-    def gen_ir(self, func, args_tuple, fastmath=False):
-        self.assertEqual(config.CPU_NAME, "skylake-avx512")
-        self.assertEqual(config.CPU_FEATURES, "")
-
-        jitted = njit(args_tuple, fastmath=fastmath)(func)
-        return jitted.inspect_llvm(args_tuple)
 
     @TestCase.run_test_in_subprocess(envvars=_skylake_env)
     def test_nditer_loop(self):
@@ -40,9 +27,19 @@ class TestVectorization(TestCase):
                 acc += v.item()
             return acc
 
-        llvm_ir = self.gen_ir(do_sum, (types.float64[::1],), fastmath=True)
-        self.assertIn("vector.body", llvm_ir)
-        self.assertIn("llvm.loop.isvectorized", llvm_ir)
+        with remarks.RemarksInterface() as remarks_interface:
+            njit((types.float64[::1],), fastmath=True)(do_sum)
+
+        remarks_interface.generate_remarks(collect_passed_remarks=True)
+
+        loop_vectorize_remarks = remarks_interface.get_remarks("loop-vectorize",
+                                                               "Passed")
+        assert len(loop_vectorize_remarks) == 1
+        loop_vectorize_remark = loop_vectorize_remarks[0]
+
+        assert isinstance(loop_vectorize_remark, remarks.Passed)
+        assert loop_vectorize_remark.message == \
+            'vectorized loop (vectorization width: 4, interleaved count: 1)'
 
     # SLP is off by default due to miscompilations, see #8705. Put this into a
     # subprocess to isolate any potential issues.
@@ -60,8 +57,18 @@ class TestVectorization(TestCase):
             A[3] = a2 * (a2 + b2)
 
         ty = types.float64
-        llvm_ir = self.gen_ir(foo, ((ty,) * 4 + (ty[::1],)), fastmath=True)
-        self.assertIn("2 x double", llvm_ir)
+        with remarks.RemarksInterface() as remarks_interface:
+            njit(((ty,) * 4 + (ty[::1],)), fastmath=True)(foo)
+
+        remarks_interface.generate_remarks(collect_passed_remarks=True)
+        slp_vect_remarks = remarks_interface.get_remarks("slp-vectorizer",
+                                                         "Passed")
+
+        assert len(slp_vect_remarks) == 1
+        slp_vect_remark = slp_vect_remarks[0]
+        assert isinstance(slp_vect_remark, remarks.Passed)
+        assert slp_vect_remark.message == \
+            'Stores SLP vectorized with cost -4 and with tree size 6'
 
     @TestCase.run_test_in_subprocess(envvars=_skylake_env)
     def test_instcombine_effect(self):
@@ -77,10 +84,19 @@ class TestVectorization(TestCase):
                 acc += np.sqrt(item)
             return acc
 
-        llvm_ir = self.gen_ir(sum_sqrt_list, (types.ListType(types.float64),),
-                              fastmath=True)
-        self.assertIn("vector.body", llvm_ir)
-        self.assertIn("llvm.loop.isvectorized", llvm_ir)
+        with remarks.RemarksInterface() as remarks_interface:
+            njit((types.float64[::1],), fastmath=True)(sum_sqrt_list)
+
+        remarks_interface.generate_remarks(collect_passed_remarks=True)
+
+        loop_vectorize_remarks = remarks_interface.get_remarks("loop-vectorize",
+                                                               "Passed")
+        assert len(loop_vectorize_remarks) == 1
+        loop_vectorize_remark = loop_vectorize_remarks[0]
+
+        assert isinstance(loop_vectorize_remark, remarks.Passed)
+        assert loop_vectorize_remark.message == \
+            'vectorized loop (vectorization width: 4, interleaved count: 4)'
 
 
 if __name__ == '__main__':

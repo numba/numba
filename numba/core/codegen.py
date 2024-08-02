@@ -18,7 +18,7 @@ from numba.core.compiler_lock import require_global_compiler_lock
 from numba.core.errors import NumbaInvalidConfigWarning
 from numba.misc.inspection import disassemble_elf_to_cfg
 from numba.misc.llvm_pass_timings import PassTimingsCollection
-
+from numba.core.targetconfig import TargetConfig
 
 _x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',
                       'i886', 'i986'])
@@ -672,14 +672,29 @@ class CPUCodeLibrary(CodeLibrary):
         with self._recorded_timings.record(cheap_name):
             # A cheaper optimisation pass is run first to try and get as many
             # refops into the same function as possible via inlining
-            self._codegen._mpm_cheap.run(self._final_module)
+            if config.LLVM_REMARKS:
+                res_cheap, yml_string_cheap = self._codegen._mpm_cheap.run_with_remarks(self._final_module)
+            else:
+                res_cheap = self._codegen._mpm_cheap.run(self._final_module)
         # Refop pruning is then run on the heavily inlined function
         if not config.LLVM_REFPRUNE_PASS:
             self._final_module = remove_redundant_nrt_refct(self._final_module)
         full_name = "Module passes (full optimization)"
         with self._recorded_timings.record(full_name):
             # The full optimisation suite is then run on the refop pruned IR
-            self._codegen._mpm_full.run(self._final_module)
+            if config.LLVM_REMARKS:
+                res_full, yml_string_full = self._codegen._mpm_full.run_with_remarks(self._final_module)
+            else:
+                res_full = self._codegen._mpm_full.run(self._final_module)
+
+        if config.LLVM_REMARKS:
+            if config.LLVM_REMARKS_FILE:
+                with open(config.LLVM_REMARKS_FILE, "a") as f:
+                    f.write(yml_string_cheap)
+                    f.write(yml_string_full)
+            else:
+                print(yml_string_cheap)
+                print(yml_string_full)
 
     def _get_module_for_linking(self):
         """
