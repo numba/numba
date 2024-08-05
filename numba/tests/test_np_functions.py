@@ -6276,7 +6276,7 @@ class TestRegistryImports(TestCase):
         result, error = run_in_subprocess(code)
         # Assert that the bytestring "OK" was printed to stdout
         self.assertEqual(b"OK", result.strip())
-        self.assertEqual(b"", error.strip())
+        self.assertEqual(b"", error.strip(), msg=f"--ERROR--\n{error}\n")
 
 
 if __name__ == '__main__':
