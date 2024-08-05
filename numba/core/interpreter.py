@@ -2989,7 +2989,6 @@ class Interpreter(object):
     elif PYVERSION < (3, 13):
         pass
 
-
     def op_COMPARE_OP(self, inst, lhs, rhs, res):
         if PYVERSION in ((3, 13),):
             op = dis.cmp_op[inst.arg >> 5]

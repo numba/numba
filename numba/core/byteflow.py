@@ -11,7 +11,7 @@ from numba.core.utils import UniqueDict, PYVERSION, ALL_BINOPS_TO_OPERATORS
 from numba.core.controlflow import NEW_BLOCKERS, CFGraph
 from numba.core.ir import Loc
 from numba.core.errors import UnsupportedBytecodeError
-from numba.core.bytecode import ByteCodeInst
+
 
 _logger = logging.getLogger(__name__)
 # logging.basicConfig(level=logging.DEBUG)
@@ -361,7 +361,8 @@ class TraceRunner(object):
             fn(state, inst)
         else:
             msg = "Use of unsupported opcode (%s) found" % inst.opname
-            raise UnsupportedBytecodeError(msg, loc=self.get_debug_loc(inst.lineno))
+            raise UnsupportedBytecodeError(msg,
+                                           loc=self.get_debug_loc(inst.lineno))
 
     def _adjust_except_stack(self, state):
         """
@@ -430,7 +431,8 @@ class TraceRunner(object):
         """
         if inst.arg != 0:
             msg = "format spec in f-strings not supported yet"
-            raise UnsupportedBytecodeError(msg, loc=self.get_debug_loc(inst.lineno))
+            raise UnsupportedBytecodeError(msg,
+                                           loc=self.get_debug_loc(inst.lineno))
         value = state.pop()
         strvar = state.make_temp()
         res = state.make_temp()
@@ -457,7 +459,6 @@ class TraceRunner(object):
     def op_POP_TOP(self, state, inst):
         state.pop()
 
-
     if PYVERSION in ((3, 13),):
         def op_TO_BOOL(self, state, inst):
             res = state.make_temp()
@@ -467,7 +468,6 @@ class TraceRunner(object):
 
     elif PYVERSION < (3, 13):
         pass
-
 
     if PYVERSION in ((3, 13),):
         def op_LOAD_GLOBAL(self, state, inst):
@@ -509,7 +509,7 @@ class TraceRunner(object):
 
     def op_LOAD_CONST(self, state, inst):
         # append const index for interpreter to read the const value
-        res = state.make_temp(f"const") + f".{inst.arg}"
+        res = state.make_temp("const") + f".{inst.arg}"
         state.push(res)
         state.append(inst, res=res)
 
@@ -539,7 +539,7 @@ class TraceRunner(object):
                 # Handle this like a LOAD_DEREF
                 # Assume MAKE_CELL and COPY_FREE_VARS has correctly setup the
                 # states.
-                # According to https://github.com/python/cpython/blob/9ac606080a0074cdf7589d9b7c9413a73e0ddf37/Objects/codeobject.c#L730C9-L759
+                # According to https://github.com/python/cpython/blob/9ac606080a0074cdf7589d9b7c9413a73e0ddf37/Objects/codeobject.c#L730C9-L759 # noqa E501
                 # localsplus is locals + cells + freevars
                 bc = state._bytecode
                 num_varnames = len(bc.co_varnames)
@@ -1053,7 +1053,8 @@ class TraceRunner(object):
         if inst.arg != 0:
             msg = ('Unsupported use of a bytecode related to try..finally'
                    ' or a with-context')
-            raise UnsupportedBytecodeError(msg, loc=self.get_debug_loc(inst.lineno))
+            raise UnsupportedBytecodeError(msg,
+                                           loc=self.get_debug_loc(inst.lineno))
 
     def op_CALL_FINALLY(self, state, inst):
         pass
@@ -1270,7 +1271,8 @@ class TraceRunner(object):
                 args = [null_or_firstarg, *args]
 
             res = state.make_temp()
-            state.append(inst, func=callable, args=args, kw_names=kw_names, res=res)
+            state.append(inst, func=callable, args=args, kw_names=kw_names,
+                         res=res)
             state.push(res)
 
     else:
@@ -1289,7 +1291,8 @@ class TraceRunner(object):
             func = state.pop()
 
             res = state.make_temp()
-            state.append(inst, func=func, vararg=vararg, varkwarg=varkwarg, res=res)
+            state.append(inst, func=func, vararg=vararg, varkwarg=varkwarg,
+                         res=res)
             state.push(res)
 
     elif PYVERSION < (3, 13):
@@ -1314,7 +1317,8 @@ class TraceRunner(object):
                 raise NotImplementedError(PYVERSION)
 
             res = state.make_temp()
-            state.append(inst, func=func, vararg=vararg, varkwarg=varkwarg, res=res)
+            state.append(inst, func=func, vararg=vararg, varkwarg=varkwarg,
+                         res=res)
             state.push(res)
     else:
         raise NotImplementedError(PYVERSION)

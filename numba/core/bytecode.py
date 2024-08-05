@@ -536,8 +536,8 @@ class ByteCodePy312(ByteCodePy311):
 
                 if PYVERSION == (3, 13):
                     # Check end of pattern, two instructions.
-                    # Check for the corresponding END_FOR, exception table end is
-                    # non-inclusive, so subtract one.
+                    # Check for the corresponding END_FOR, exception table end
+                    # is non-inclusive, so subtract one.
                     index = self.ordered_offsets.index(entry.end)
                     curr_inst = self.table[self.ordered_offsets[index - 2]]
                     if not curr_inst.opname == "END_FOR":
@@ -553,8 +553,8 @@ class ByteCodePy312(ByteCodePy311):
 
                     assert PYVERSION < (3, 13)
                     # Check end of pattern, two instructions.
-                    # Check for the corresponding END_FOR, exception table end is
-                    # non-inclusive, so subtract one.
+                    # Check for the corresponding END_FOR, exception table end
+                    # is non-inclusive, so subtract one.
                     index = self.ordered_offsets.index(entry.end)
                     curr_inst = self.table[self.ordered_offsets[index - 1]]
                     if not curr_inst.opname == "END_FOR":
