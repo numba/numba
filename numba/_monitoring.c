@@ -51,9 +51,7 @@ static inline int msb(uint8_t bits) {
     return MOST_SIG_BIT[bits];
 }
 
-typedef PyObject Dispatcher;
-
-static int invoke_monitoring(PyThreadState * tstate, int event, Dispatcher *self, PyObject* retval)
+static int invoke_monitoring(PyThreadState * tstate, int event, PyObject *self, PyObject* retval)
 {
     // This will invoke monitoring tools (if present) for the event `event`.
     //
@@ -272,28 +270,28 @@ static int invoke_monitoring(PyThreadState * tstate, int event, Dispatcher *self
 }
 
 /* invoke monitoring for PY_START if it is set */
-int static inline invoke_monitoring_PY_START(PyThreadState * tstate, Dispatcher *self) {
+int static inline invoke_monitoring_PY_START(PyThreadState * tstate, PyObject *self) {
     return invoke_monitoring(tstate, PY_MONITORING_EVENT_PY_START, self, NULL);
 }
 
 /* invoke monitoring for PY_RETURN if it is set */
-int static inline invoke_monitoring_PY_RETURN(PyThreadState * tstate, Dispatcher *self, PyObject * retval) {
+int static inline invoke_monitoring_PY_RETURN(PyThreadState * tstate, PyObject *self, PyObject * retval) {
     return invoke_monitoring(tstate, PY_MONITORING_EVENT_PY_RETURN, self, retval);
 }
 
 /* invoke monitoring for RAISE if it is set */
-int static inline invoke_monitoring_RAISE(PyThreadState * tstate, Dispatcher *self, PyObject * exception) {
+int static inline invoke_monitoring_RAISE(PyThreadState * tstate, PyObject *self, PyObject * exception) {
     return invoke_monitoring(tstate, PY_MONITORING_EVENT_RAISE, self, exception);
 }
 
 /* invoke monitoring for PY_UNWIND if it is set */
-int static inline invoke_monitoring_PY_UNWIND(PyThreadState * tstate, Dispatcher *self, PyObject * exception) {
+int static inline invoke_monitoring_PY_UNWIND(PyThreadState * tstate, PyObject *self, PyObject * exception) {
     return invoke_monitoring(tstate, PY_MONITORING_EVENT_PY_UNWIND, self, exception);
 }
 
 /* A custom, fast, inlinable version of PyCFunction_Call() */
 PyObject *
-call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyObject *locals)
+call_cfunc(PyObject *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyObject *locals)
 {
     PyCFunctionWithKeywords fn = NULL;
     PyThreadState *tstate = NULL;
