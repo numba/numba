@@ -192,7 +192,7 @@ class PythonAPI(object):
         if config.USE_LEGACY_TYPE_SYSTEM:
             self.py_ssize_t = self.context.get_value_type(types.intp)
         else:
-            self.py_ssize_t = self.context.get_value_type(types.py_intp)
+            self.py_ssize_t = self.context.get_value_type(types.c_intp)
         self.cstring = ir.PointerType(ir.IntType(8))
         self.gil_state = ir.IntType(_helperlib.py_gil_state_size * 8)
         self.py_buffer_t = ir.ArrayType(ir.IntType(8), _helperlib.py_buffer_size)
