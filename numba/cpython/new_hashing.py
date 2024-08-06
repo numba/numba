@@ -26,8 +26,8 @@ _py310_or_later = utils.PYVERSION >= (3, 10)
 # This is Py_hash_t, which is a Py_ssize_t, which has sizeof(size_t):
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Include/pyport.h#L91-L96    # noqa: E501
 _hash_width = sys.hash_info.width
-_Py_hash_t = getattr(types, 'c_int%s' % _hash_width)
-_Py_uhash_t = getattr(types, 'c_uint%s' % _hash_width)
+_Py_hash_t = getattr(types, 'py_int')
+_Py_uhash_t = getattr(types, 'py_int')
 
 # Constants from CPython source, obtained by various means:
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Include/pyhash.h    # noqa: E501

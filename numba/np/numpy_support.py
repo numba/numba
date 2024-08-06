@@ -153,7 +153,7 @@ def as_dtype(nbtype):
     nbtype = types.unliteral(nbtype)
     if isinstance(nbtype, (types.Complex, types.Integer, types.Float)):
         return np.dtype(str(nbtype))
-    if nbtype is types.bool_:
+    if isinstance(nbtype, (types.Boolean)):
         return np.dtype('?')
     if isinstance(nbtype, (types.NPDatetime, types.NPTimedelta)):
         letter = _as_dtype_letters[type(nbtype)]

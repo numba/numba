@@ -145,7 +145,7 @@ def choose_result_int(*inputs):
     if any('np' in tp.name for tp in inputs):
         return types.NumPyInteger.from_bitwidth(bitwidth, signed)
 
-    return types.PythonInteger.from_bitwidth(bitwidth, signed)
+    return types.py_int
 
 all_ints = (
     sorted(set((types.py_int, types.py_int))) +
@@ -287,11 +287,8 @@ class BitwiseShiftOperation(ConcreteTemplate):
     # The implementation will always cast the operands to the width of the
     # result type, which is the widest between the LHS type and (u)intp.
     cases = [signature(max(op, types.py_int), op, op2)
-             for op in sorted(types.np_signed_domain)
-             for op2 in [types.np_uint64, types.np_int64]]
-    cases += [signature(max(op, types.np_uintp), op, op2)
-              for op in sorted(types.np_unsigned_domain)
-              for op2 in [types.np_uint64, types.np_int64]]
+             for op in types.py_signed_domain
+             for op2 in types.py_signed_domain]
     unsafe_casting = False
 
 
@@ -407,6 +404,9 @@ class UnaryNot(ConcreteTemplate):
 
 
 class OrderedCmpOp(ConcreteTemplate):
+    cases = [signature(types.py_bool, types.py_bool, types.py_bool)]
+    cases += [signature(types.py_bool, op, op) for op in sorted(types.py_signed_domain)]
+    cases += [signature(types.py_bool, op, op) for op in sorted(types.py_real_domain)]
     cases = [signature(types.np_bool_, types.np_bool_, types.np_bool_)]
     cases += [signature(types.np_bool_, op, op) for op in sorted(types.np_signed_domain)]
     cases += [signature(types.np_bool_, op, op) for op in sorted(types.np_unsigned_domain)]
@@ -415,6 +415,7 @@ class OrderedCmpOp(ConcreteTemplate):
 
 class UnorderedCmpOp(ConcreteTemplate):
     cases = OrderedCmpOp.cases + [
+        signature(types.py_bool, op, op) for op in sorted(types.py_complex_domain)] + [
         signature(types.np_bool_, op, op) for op in sorted(types.np_complex_domain)]
 
 
