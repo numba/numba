@@ -697,12 +697,14 @@ class PythonBooleanModel(DataModel):
     def from_return(self, builder, value):
         return self.from_data(builder, value)
 
+
 @register_default(types.PythonInteger)
 @register_default(types.PythonIntegerLiteral)
 class PythonIntegerModel(PrimitiveModel):
     def __init__(self, dmm, fe_type):
         be_type = ir.IntType(fe_type.bitwidth)
         super(PythonIntegerModel, self).__init__(dmm, fe_type, be_type)
+
 
 @register_default(types.PythonFloat)
 class PythonFloatModel(PrimitiveModel):
@@ -780,6 +782,7 @@ class NumPyIntegerModel(PrimitiveModel):
         be_type = ir.IntType(fe_type.bitwidth)
         super(NumPyIntegerModel, self).__init__(dmm, fe_type, be_type)
 
+
 @register_default(types.NumPyFloat)
 class NumPyFloatModel(PrimitiveModel):
     def __init__(self, dmm, fe_type):
@@ -790,6 +793,7 @@ class NumPyFloatModel(PrimitiveModel):
         else:
             raise NotImplementedError(fe_type)
         super(NumPyFloatModel, self).__init__(dmm, fe_type, be_type)
+
 
 @register_default(types.NumPyComplex)
 class NumPyComplexModel(ComplexModel):
@@ -823,7 +827,6 @@ class UnionModel(StructModel):
             ('payload', types.Tuple.from_types(fe_type.types)),
         ]
         super(UnionModel, self).__init__(dmm, fe_type, members)
-
 
 
 @register_default(types.Pair)

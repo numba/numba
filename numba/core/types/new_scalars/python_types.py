@@ -22,11 +22,6 @@ class PythonInteger(Integer):
         self.bitwidth = bitwidth
         self.signed = signed
 
-    @classmethod
-    def from_bitwidth(cls, bitwidth, signed=True):
-        name = ('py_int%d' if signed else 'py_uint%d') % bitwidth
-        return cls(name)
-
     def cast_python_value(self, value):
         return int(value)
 

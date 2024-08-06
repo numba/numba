@@ -77,22 +77,18 @@ def unbox_integer(typ, obj, c):
         c.pyapi.decref(longobj)
         c.builder.store(c.builder.trunc(llval, ll_type), val)
     return NativeValue(c.builder.load(val),
-                        is_error=c.pyapi.c_api_error())
+                       is_error=c.pyapi.c_api_error())
 
 
 @box(types.PythonInteger)
 def box_py_integer(typ, val, c):
-    if typ.signed:
-        ival = c.builder.sext(val, c.pyapi.longlong)
-        return c.pyapi.long_from_longlong(ival)
-    else:
-        ullval = c.builder.zext(val, c.pyapi.ulonglong)
-        return c.pyapi.long_from_ulonglong(ullval)
+    ival = c.builder.sext(val, c.pyapi.longlong)
+    return c.pyapi.long_from_longlong(ival)
 
 
 @box(types.NumPyInteger)
 def box_np_integer(typ, val, c):
-    return box_np_scalars(typ, val, c, box_py_integer, types.py_intp)
+    return box_np_scalars(typ, val, c, box_py_integer, types.py_int)
 
 
 @box(types.PythonFloat)
@@ -104,7 +100,7 @@ def box_py_float(typ, val, c):
 def box_np_float(typ, val, c):
     if typ.bitwidth <= 32:
         val = c.builder.fpext(val, c.pyapi.double)
-    return box_np_scalars(typ, val, c, box_py_float, types.py_float64)
+    return box_np_scalars(typ, val, c, box_py_float, types.py_float)
 
 
 @unbox(types.PythonFloat)
@@ -124,7 +120,7 @@ def unbox_float(typ, obj, c):
 @box(types.PythonComplex)
 def box_py_complex(typ, val, c):
     cval = c.context.make_complex(c.builder, typ, value=val)
-    assert typ == types.py_complex128
+    assert typ == types.py_complex
     freal, fimag = cval.real, cval.imag
     return c.pyapi.complex_from_doubles(freal, fimag)
 
@@ -132,7 +128,7 @@ def box_py_complex(typ, val, c):
 @unbox(types.PythonComplex)
 @unbox(types.NumPyComplex)
 def unbox_py_complex(typ, obj, c):
-    c128 = c.context.make_complex(c.builder, types.py_complex128)
+    c128 = c.context.make_complex(c.builder, types.py_complex)
     ok = c.pyapi.complex_adaptor(obj, c128._getpointer())
     failed = cgutils.is_false(c.builder, ok)
 
@@ -144,9 +140,9 @@ def unbox_py_complex(typ, obj, c):
         # Downcast to complex64 if necessary
         cplx = c.context.make_complex(c.builder, typ)
         cplx.real = c.context.cast(c.builder, c128.real,
-                                   types.py_float64, types.np_float32)
+                                   types.py_float, types.np_float32)
         cplx.imag = c.context.cast(c.builder, c128.imag,
-                                   types.py_float64, types.np_float32)
+                                   types.py_float, types.np_float32)
     else:
         cplx = c128
 
@@ -157,7 +153,6 @@ def unbox_py_complex(typ, obj, c):
 def box_np_complex(typ, val, c):
     cval = c.context.make_complex(c.builder, typ, value=val)
     if typ == types.np_complex64:
-        # TODO: Type System Changes, this branch misbehaves
         freal = c.builder.fpext(cval.real, c.pyapi.double)
         fimag = c.builder.fpext(cval.imag, c.pyapi.double)
     else:
