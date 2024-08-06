@@ -1,0 +1,5 @@
+add `emit_excinfo_store_with_md` for all `excinfo`-related `store` instructions
+-------------------------------------------------------------------------------
+
+This bug is introduced between numba upgraded to llvm14 (#8535) and
+added the dynamic exception info feature (#8134).
