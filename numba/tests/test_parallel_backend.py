@@ -17,9 +17,10 @@ import unittest
 
 import numpy as np
 
-from numba import jit, vectorize, guvectorize, set_num_threads
+from numba import jit, vectorize, guvectorize, set_num_threads, int64
 from numba.tests.support import (temp_directory, override_config, TestCase, tag,
                                  skip_parfors_unsupported, linux_only)
+from numba.experimental.jitclass import jitclass
 
 import queue as t_queue
 from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
@@ -91,6 +92,14 @@ def gufunc_foo(a, b, out):
     out[0] = a + b
 
 
+class JitClass:
+    def __init__(self, x):
+        self.x = x
+
+    def foo(self, a, b):
+        return np.ones(a) * b + self.x
+
+
 class runnable(object):
     def __init__(self, **options):
         self._options = options
@@ -149,6 +158,21 @@ class guvectorize_runner(runnable):
         a = b = np.random.random(10).astype(np.float32)
         expected = ufunc_foo(a, b)
         got = cfunc(a, b)
+        np.testing.assert_allclose(expected, got)
+
+
+class class_runner(runnable):
+    def __call__(self):
+        a = 4
+        b = 10
+        x = 3
+        python_instance = JitClass(x)
+        compiled_class = jitclass([("x", int64)], **self._options)(
+            JitClass
+        )
+        compiled_instance = compiled_class(x)
+        expected = python_instance.foo(a, b)
+        got = compiled_instance.foo(a, b)
         np.testing.assert_allclose(expected, got)
 
 
@@ -241,6 +265,8 @@ class TestParallelBackendBase(TestCase):
             jit_runner(nopython=True, parallel=True, cache=True),
             linalg_runner(nopython=True, parallel=True),
             linalg_runner(nopython=True, parallel=True, cache=True),
+            class_runner(parallel=True),
+            class_runner(parallel=True, cache=True),
         ]
         all_impls.extend(parfor_impls)
 

@@ -1,5 +1,6 @@
 import ctypes
 import itertools
+import os
 import pickle
 import random
 import typing as pt
@@ -8,17 +9,20 @@ import unittest
 from collections import OrderedDict
 
 import numpy as np
-from numba import (boolean, deferred_type, float32, float64, int16, int32,
-                   njit, optional, typeof)
+from numba import (
+    boolean, deferred_type, float32, float64, int16, int32, int64,
+    njit, optional, typeof
+)
 from numba.core import errors, types
 from numba.core.dispatcher import Dispatcher
 from numba.core.errors import LoweringError, TypingError
 from numba.core.runtime.nrt import MemInfo
-from numba.experimental import jitclass
+from numba.experimental import jitclass, jitmethod
 from numba.experimental.jitclass import _box
 from numba.experimental.jitclass.base import JitClassType
 from numba.tests.support import MemoryLeakMixin, TestCase, skip_if_typeguard
 from numba.tests.support import skip_unless_scipy
+from numba.tests.test_gil import TestGILRelease
 
 
 class TestClass1(object):
@@ -1175,6 +1179,52 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         thisModule = __name__
         classModule = TestModname.__module__
         self.assertEqual(thisModule, classModule)
+
+
+PyThread_get_thread_ident = ctypes.pythonapi.PyThread_get_thread_ident
+PyThread_get_thread_ident.restype = ctypes.c_long
+PyThread_get_thread_ident.argtypes = []
+if os.name == 'nt':
+    sleep = ctypes.windll.kernel32.Sleep
+    sleep.argtypes = [ctypes.c_uint]
+    sleep.restype = None
+    sleep_factor = 1  # milliseconds
+else:
+    sleep = ctypes.CDLL(ctypes.util.find_library("c")).usleep
+    sleep.argtypes = [ctypes.c_uint]
+    sleep.restype = ctypes.c_int
+    sleep_factor = 1000  # microseconds
+
+
+class TestJitclassGilRelease(TestGILRelease):
+
+    def test_gil_held(self):
+        # basically a clone of 'f' from test_gil.py
+        @jitclass([("x", int64)])
+        class TestGil(object):
+            def __init__(self, x):
+                self.x = x
+
+            def f(self, a, indices):
+                for idx in indices:
+                    sleep(10 * sleep_factor)
+                    a[idx] = self.x + PyThread_get_thread_ident()
+        self.check_gil_held(lambda a, i: TestGil(42).f(a, i))
+
+    def test_methods_can_release_gil(self):
+        # basically a clone of 'f' from test_gil.py
+        @jitclass([("x", int64)])
+        class TestGil(object):
+            def __init__(self, x):
+                self.x = x
+
+            @jitmethod(nogil=True)
+            def f(self, a, indices):
+                for idx in indices:
+                    sleep(10 * sleep_factor)
+                    a[idx] = self.x + PyThread_get_thread_ident()
+
+        self.check_gil_released(lambda a, i: TestGil(42).f(a, i))
 
 
 class TestJitClassOverloads(MemoryLeakMixin, TestCase):

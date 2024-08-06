@@ -1,0 +1,9 @@
+Greater control over compilation of ``jitclass`` members
+--------------------------------------------------------
+
+Previously, all methods on a ``jitclass`` were compiled using ``jit`` with only
+``nopython=True`` passed as a keyword argument. Now, with this PR, the 
+``jitclass`` decorator accepts the same keyword arguments as ``njit`` to control
+compilation of the class's methods. In addition, a new ``jitmethod`` decorator
+has been added to allow some methods to use different keyword arguments than the
+surrounding ``jitclass``.
