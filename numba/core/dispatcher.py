@@ -933,6 +933,23 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         """
         Recompile all signatures afresh.
         """
+        sigs, old_can_compile = self._flush()
+        try:
+            for sig in sigs:
+                self.compile(sig)
+        finally:
+            self._can_compile = old_can_compile
+
+    def override(self):
+        """
+        Flush to allow override of existing sigs
+        """
+        return self._flush()
+
+    def _flush(self):
+        """
+        flush overloads from memory and cache from disk
+        """
         sigs = list(self.overloads)
         old_can_compile = self._can_compile
         # Ensure the old overloads are disposed of,
@@ -941,11 +958,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         self._reset_overloads()
         self._cache.flush()
         self._can_compile = True
-        try:
-            for sig in sigs:
-                self.compile(sig)
-        finally:
-            self._can_compile = old_can_compile
+        return sigs, old_can_compile
 
     @property
     def stats(self):

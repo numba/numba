@@ -141,6 +141,9 @@ class BaseContext(object):
         self._globals = utils.UniqueDict()
         self.tm = rules.default_type_manager
         self.callstack = CallStack()
+        # add comments
+        self.callers = defaultdict(set)
+        self.disp_map = defaultdict(list)
 
         # Initialize
         self.init()
@@ -493,7 +496,7 @@ class BaseContext(object):
                 if newty is None:
                     raise TypeError("cannot augment %s with %s"
                                     % (existing, gty))
-                self._remove_global(gv)
+                self._remove_global(gv, existing, newty)
                 self._insert_global(gv, newty)
 
     def _lookup_global(self, gv):
@@ -525,18 +528,63 @@ class BaseContext(object):
             pass
         self._globals[gv] = gty
 
-    def _remove_global(self, gv):
+    def _remove_global(self, gv, oldty=None, newty=None):
         """
         Remove the registered type for global value *gv*.
         """
+        self._override_global(gv, oldty, newty)
         try:
             gv = weakref.ref(gv)
         except TypeError:
             pass
         del self._globals[gv]
 
+    def _override_global(self, gv, oldty, newty):
+        fnty = types.Function
+        if not isinstance(oldty, fnty) or not isinstance(newty, fnty):
+            return
+
+        oldtmpl = oldty.templates[0]
+        newtmpl = newty.templates[0]
+        if not newtmpl.override:
+            return
+
+        processed_disps = set()
+
+        def override_dispatcher(disp):
+            py_func = disp.py_func
+            old_key = py_func.__module__ + "." + py_func.__qualname__
+
+            for caller in self.callers[old_key]:
+                if caller not in self.disp_map:
+                    continue
+                for disp_weakref in self.disp_map[caller]:
+                    new_disp = disp_weakref()
+                    if new_disp in processed_disps:
+                        continue
+                    new_disp.override()
+                    processed_disps.add(new_disp)
+                    override_dispatcher(new_disp)
+
+        for _, impl_cache in oldtmpl._impl_cache.items():
+            disp, _ = impl_cache
+            override_dispatcher(disp)
+
     def insert_global(self, gv, gty):
         self._insert_global(gv, gty)
+        # also populate the disp_map
+        if isinstance(gty, types.Dispatcher):
+            self.insert_disp_map(gv)
+
+    def insert_disp_map(self, disp):
+        try:
+            py_func = disp.py_func
+            key = py_func.__module__ + "." + py_func.__qualname__
+            disp = weakref.ref(disp)
+            self.disp_map[key].append(disp)
+        except (AttributeError, TypeError):
+            # py_func is defined via exec() and has no __module__
+            pass
 
     def insert_attributes(self, at):
         key = at.key

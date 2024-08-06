@@ -60,7 +60,7 @@ _overload_default_jit_options = {'no_cpython_wrapper': True,
 
 
 def overload(func, jit_options={}, strict=True, inline='never',
-             prefer_literal=False, **kwargs):
+             prefer_literal=False, override=False, **kwargs):
     """
     A decorator marking the decorated function as typing and implementing
     *func* in nopython mode.
@@ -128,10 +128,15 @@ def overload(func, jit_options={}, strict=True, inline='never',
 
     def decorate(overload_func):
         template = make_overload_template(func, overload_func, opts, strict,
-                                          inline, prefer_literal, **kwargs)
+                                          inline, prefer_literal=prefer_literal,
+                                          override=override, **kwargs)
         infer(template)
         if callable(func):
             infer_global(func, types.Function(template))
+        if override:
+            # can CUDA target reach here? I think no.
+            from numba.core.registry import cpu_target
+            cpu_target.typing_context.refresh()
         return overload_func
 
     return decorate

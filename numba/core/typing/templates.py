@@ -262,6 +262,7 @@ class FunctionTemplate(ABC):
     # non-literals.
     # subclass overide-able
     prefer_literal = False
+    override = False
     # metadata
     metadata = {}
 
@@ -702,15 +703,27 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         """
         flags = targetconfig.ConfigStack.top_or_none()
         cache_key = self.context, tuple(args), tuple(kws.items()), flags
+        cache_val = self._impl_cache.get(cache_key, None)
+        if cache_val:
+            # find a cached one
+            disp, args = cache_val
+        else:
+            # no luck, then compile a new dispatcher
+            disp, args = self._build_impl(cache_key, args, kws)
+
         try:
-            impl, args = self._impl_cache[cache_key]
-            return impl, args
-        except KeyError:
-            # pass and try outside the scope so as to not have KeyError with a
-            # nested addition error in the case the _build_impl fails
+            py_func = disp.py_func
+            key = py_func.__module__ + "." + py_func.__qualname__
+            cs = self.context.callstack
+            if cs._stack:
+                caller_id = cs._stack[-1].func_id
+                val = caller_id.modname + "." + caller_id.func_qualname
+                self.context.callers[key].add(val)
+        except (AttributeError, TypeError):
+            # some dispatcher doesn't have py_func?
             pass
-        impl, args = self._build_impl(cache_key, args, kws)
-        return impl, args
+
+        return disp, args
 
     def _get_jit_decorator(self):
         """Gets a jit decorator suitable for the current target"""
@@ -877,7 +890,8 @@ class _OverloadFunctionTemplate(AbstractTemplate):
 
 
 def make_overload_template(func, overload_func, jit_options, strict,
-                           inline, prefer_literal=False, **kwargs):
+                           inline, prefer_literal=False,
+                           override=False, **kwargs):
     """
     Make a template class for function *func* overloaded by *overload_func*.
     Compiler options are passed as a dictionary to *jit_options*.
@@ -889,7 +903,7 @@ def make_overload_template(func, overload_func, jit_options, strict,
                _impl_cache={}, _compiled_overloads={}, _jit_options=jit_options,
                _strict=strict, _inline=staticmethod(InlineOptions(inline)),
                _inline_overloads={}, prefer_literal=prefer_literal,
-               metadata=kwargs)
+               override=override, metadata=kwargs)
     return type(base)(name, (base,), dct)
 
 

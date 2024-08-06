@@ -1665,6 +1665,15 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
         else:
             self.lock_type(target.name, lit or typ, loc=inst.loc)
         self.assumed_immutables.add(inst)
+        # populate callers
+        try:
+            py_func = typ.key().py_func
+            caller_id = self.context.callstack._stack[-1].func_id
+            key = py_func.__module__ + '.' + py_func.__name__
+            val = caller_id.modname + '.' + caller_id.func_qualname
+            self.context.callers[key].add(val)
+        except (AttributeError, TypeError):
+            pass
 
     def typeof_expr(self, inst, target, expr):
         if expr.op == 'call':
