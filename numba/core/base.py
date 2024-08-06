@@ -1089,7 +1089,7 @@ class BaseContext(object):
         llvoidptr = self.get_value_type(types.voidptr)
         addr = self.get_constant(types.uintp, intaddr).inttoptr(llvoidptr)
         # Use a unique name by embedding the address value
-        symname = 'numba.dynamic.globals.{:x}'.format(intaddr)
+        symname = 'numba_dynamic_globals_{:x}'.format(intaddr)
         gv = cgutils.add_global_variable(mod, llvoidptr, symname)
         # Use linkonce linkage to allow merging with other GV of the same name.
         # And, avoid optimization from assuming its value.
