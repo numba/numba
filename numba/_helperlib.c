@@ -24,7 +24,7 @@
     #elif defined(_Complex_I)
         #define _complex_float_ctor(r, i) (r + _Complex_I * i)
     #else
-        #error "Lack _Imaginery_I and _Complex_I"
+        #error "Lack _Imaginary_I and _Complex_I"
     #endif 
     #define _complex_double_t complex double
 #endif
