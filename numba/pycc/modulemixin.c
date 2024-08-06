@@ -23,6 +23,12 @@
 #include "../core/runtime/nrt.h"
 #endif
 
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION >= 12)
+    #define Py_BUILD_CORE 1
+    #include "internal/pycore_pyhash.h"
+    #undef Py_BUILD_CORE
+#endif
+
 /* Defines hashsecret variables (see issue #6386) */
 int64_t _numba_hashsecret_siphash_k0;
 int64_t _numba_hashsecret_siphash_k1;

@@ -768,7 +768,7 @@ class TestOperators(TestCase):
         # error message depends on Python version.
         if utils.PYVERSION in ((3, 9),):
             msg = "can't mod complex numbers"
-        elif utils.PYVERSION in ((3, 10), (3, 11), (3, 12)):
+        elif utils.PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
             msg = "unsupported operand type(s) for %"
         else:
             raise NotImplementedError(utils.PYVERSION)

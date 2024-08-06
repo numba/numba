@@ -578,7 +578,12 @@ class UnsupportedError(NumbaError):
     """
     Numba does not have an implementation for this functionality.
     """
-    pass
+
+
+class UnsupportedBytecodeError(UnsupportedError):
+    """Unsupported bytecode is non-recoverable
+    """
+    panic = True
 
 
 class UnsupportedRewriteError(UnsupportedError):

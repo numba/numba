@@ -7,6 +7,12 @@
 
 #include <string.h>
 
+
+// if python version is 3.13
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 13)
+    #include "pythoncapi_compat.h"
+    #define _Py_IsFinalizing Py_IsFinalizing
+#endif
 /* NOTE: EnvironmentObject and ClosureObject must be kept in sync with
  * the definitions in numba/targets/base.py (EnvBody and ClosureBody).
  */
@@ -146,7 +152,7 @@ static PyTypeObject EnvironmentType = {
 /* WARNING: Do not remove this, only modify it! It is a version guard to
  * act as a reminder to update this struct on Python version update! */
 #if (PY_MAJOR_VERSION == 3)
-#if ! ((PY_MINOR_VERSION == 9) || (PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11) || (PY_MINOR_VERSION == 12))
+#if ! (NB_SUPPORTED_PYTHON_MINOR)
 #error "Python minor version is not supported."
 #endif
 #else
@@ -265,7 +271,7 @@ static PyTypeObject ClosureType = {
 /* WARNING: Do not remove this, only modify it! It is a version guard to
  * act as a reminder to update this struct on Python version update! */
 #if (PY_MAJOR_VERSION == 3)
-#if ! ((PY_MINOR_VERSION == 9) || (PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11) || (PY_MINOR_VERSION == 12))
+#if ! (NB_SUPPORTED_PYTHON_MINOR)
 #error "Python minor version is not supported."
 #endif
 #else
@@ -485,7 +491,7 @@ static PyTypeObject GeneratorType = {
 /* WARNING: Do not remove this, only modify it! It is a version guard to
  * act as a reminder to update this struct on Python version update! */
 #if (PY_MAJOR_VERSION == 3)
-#if ! ((PY_MINOR_VERSION == 9) || (PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11) || (PY_MINOR_VERSION == 12))
+#if ! (NB_SUPPORTED_PYTHON_MINOR)
 #error "Python minor version is not supported."
 #endif
 #else

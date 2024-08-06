@@ -229,7 +229,7 @@ static PyTypeObject MemInfoType = {
 /* WARNING: Do not remove this, only modify it! It is a version guard to
  * act as a reminder to update this struct on Python version update! */
 #if (PY_MAJOR_VERSION == 3)
-#if ! ((PY_MINOR_VERSION == 9) || (PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11) || (PY_MINOR_VERSION == 12))
+#if ! (NB_SUPPORTED_PYTHON_MINOR)
 #error "Python minor version is not supported."
 #endif
 #else
