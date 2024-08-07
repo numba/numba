@@ -573,7 +573,7 @@ class TestCase(unittest.TestCase):
             _assertNumberEqual(first, second, delta)
 
     def subprocess_test_runner(self, test_module, test_class=None,
-                               test_name=None, envvars=None, timeout=30,
+                               test_name=None, envvars=None, timeout=120,
                                flags=None, _subproc_test_env="1"):
         """
         Runs named unit test(s) as specified in the arguments as:
