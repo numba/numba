@@ -573,7 +573,7 @@ class TestCase(unittest.TestCase):
             _assertNumberEqual(first, second, delta)
 
     def subprocess_test_runner(self, test_module, test_class=None,
-                               test_name=None, envvars=None, timeout=60,
+                               test_name=None, envvars=None, timeout=30,
                                flags=None, _subproc_test_env="1"):
         """
         Runs named unit test(s) as specified in the arguments as:
@@ -616,9 +616,14 @@ class TestCase(unittest.TestCase):
             pass   # ignored
         envvars = pytypes.MappingProxyType({} if envvars is None else envvars)
         env_copy.update(envvars)
-        status = subprocess.run(cmd, stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE, timeout=timeout,
-                                env=env_copy, universal_newlines=True)
+        try:
+            status = subprocess.run(cmd, stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT, timeout=timeout,
+                                    env=env_copy, universal_newlines=True)
+        except subprocess.TimeoutExpired as e:
+            print(f"STDOUT\n{e.stdout.decode()}\nEND")
+            raise
+
         streams = (f'\ncaptured stdout: {status.stdout}\n'
                    f'captured stderr: {status.stderr}')
         self.assertEqual(status.returncode, 0, streams)

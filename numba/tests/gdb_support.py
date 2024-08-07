@@ -66,7 +66,7 @@ class GdbMIDriver(object):
         cmd += ['--args', self._python, self._file_name]
         self._captured = pexpect.spawn(' '.join(cmd))
         if self._debug:
-            self._captured.logfile = sys.stdout.buffer
+            self._captured.logfile = sys.stderr.buffer
 
     def supports_python(self):
         """Returns True if the underlying gdb implementation has python support
