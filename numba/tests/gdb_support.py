@@ -51,7 +51,7 @@ class GdbMIDriver(object):
             raise RuntimeError(msg)
         self._gdb_binary = config.GDB_BINARY
         self._python = sys.executable
-        self._debug = debug
+        self._debug = debug or True
         self._file_name = file_name
         self._timeout = timeout
         self._init_cmds = init_cmds
