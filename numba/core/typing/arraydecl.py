@@ -46,7 +46,7 @@ def get_array_index_type(ary, idx):
     # contiguous groups.
     in_subspace = False
     num_subspaces = 0
-    array_indices = 0
+    array_indices = []
 
     # Walk indices
     for ty in idx:
@@ -86,14 +86,9 @@ def get_array_index_type(ary, idx):
                 in_subspace = True
         elif (isinstance(ty, types.Array)
               and isinstance(ty.dtype, (types.Integer, types.Boolean))):
-            if ty.ndim > 1:
-                # Advanced indexing limitation # 1
-                raise NumbaTypeError(
-                    "Multi-dimensional indices are not supported.")
-            array_indices += 1
-            # The condition for activating advanced indexing is simply
-            # having at least one array with size > 1.
+            array_indices.append(ty.ndim)
             advanced = True
+            ndim -= 1
             if not in_subspace:
                 num_subspaces += 1
                 in_subspace = True
@@ -106,18 +101,7 @@ def get_array_index_type(ary, idx):
         (right_indices if ellipsis_met else left_indices).append(ty)
 
     if advanced:
-        if array_indices > 1:
-            # Advanced indexing limitation # 2
-            msg = "Using more than one non-scalar array index is unsupported."
-            raise NumbaTypeError(msg)
-
-        if num_subspaces > 1:
-            # Advanced indexing limitation # 3
-            msg = ("Using more than one indexing subspace is unsupported."
-                   " An indexing subspace is a group of one or more"
-                   " consecutive indices comprising integer or array types.")
-            raise NumbaTypeError(msg)
-
+        ndim += max(array_indices)
     # Only Numpy arrays support advanced indexing
     if advanced and not isinstance(ary, types.Array):
         return
