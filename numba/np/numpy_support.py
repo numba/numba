@@ -69,14 +69,14 @@ sizeof_unicode_char = np.dtype('U1').itemsize
 def _from_str_dtype(dtype):
     m = re_typestr.match(dtype.str)
     if not m:
-        raise NotImplementedError(dtype)
+        raise errors.NumbaNotImplementedError(dtype)
     groups = m.groups()
     typecode = groups[0]
     if typecode == 'U':
         # unicode
         if dtype.byteorder not in '=|':
-            raise NotImplementedError("Does not support non-native "
-                                      "byteorder")
+            msg = "Does not support non-native byteorder"
+            raise errors.NumbaNotImplementedError(msg)
         count = dtype.itemsize // sizeof_unicode_char
         assert count == int(groups[1]), "Unicode char size mismatch"
         return types.UnicodeCharSeq(count)
@@ -88,13 +88,13 @@ def _from_str_dtype(dtype):
         return types.CharSeq(count)
 
     else:
-        raise NotImplementedError(dtype)
+        raise errors.NumbaNotImplementedError(dtype)
 
 
 def _from_datetime_dtype(dtype):
     m = re_datetimestr.match(dtype.str)
     if not m:
-        raise NotImplementedError(dtype)
+        raise errors.NumbaNotImplementedError(dtype)
     groups = m.groups()
     typecode = groups[0]
     unit = groups[2] or ''
@@ -103,13 +103,13 @@ def _from_datetime_dtype(dtype):
     elif typecode == 'M':
         return types.NPDatetime(unit)
     else:
-        raise NotImplementedError(dtype)
+        raise errors.NumbaNotImplementedError(dtype)
 
 
 def from_dtype(dtype):
     """
     Return a Numba Type instance corresponding to the given Numpy *dtype*.
-    NotImplementedError is raised on unsupported Numpy dtypes.
+    NumbaNotImplementedError is raised on unsupported Numpy dtypes.
     """
     if type(dtype) is type and issubclass(dtype, np.generic):
         dtype = np.dtype(dtype)
@@ -148,7 +148,7 @@ _as_dtype_letters = {
 def as_dtype(nbtype):
     """
     Return a numpy dtype instance corresponding to the given Numba type.
-    NotImplementedError is if no correspondence is known.
+    NumbaNotImplementedError is if no correspondence is known.
     """
     nbtype = types.unliteral(nbtype)
     if isinstance(nbtype, (types.Complex, types.Integer, types.Float)):
@@ -232,9 +232,10 @@ def map_arrayscalar_type(val):
     else:
         try:
             dtype = np.dtype(type(val))
-        except TypeError:
-            raise NotImplementedError("no corresponding numpy dtype "
-                                      "for %r" % type(val))
+        except (errors.NumbaNotImplementedError, TypeError):
+            msg = f"no corresponding numpy dtype for {type(val)}"
+            raise errors.NumbaNotImplementedError(msg)
+
     return from_dtype(dtype)
 
 
