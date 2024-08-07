@@ -22,6 +22,7 @@ from numba.cuda import initialize
 from .errors import KernelRuntimeError
 
 from .decorators import jit, declare_device
+from .codegen import PTXCode
 from .api import *
 from .api import _auto_device
 from .args import In, Out, InOut
