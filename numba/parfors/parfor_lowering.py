@@ -930,15 +930,22 @@ def find_setitems_block(setitems, itemsset, block, typemap):
             # used in a call then consider it unanalyzable and so
             # unavailable for hoisting.
             rhs = inst.value
+            def add_to_itemset(item):
+                assert isinstance(item, ir.Var), rhs
+                if getattr(typemap[item.name], "mutable", False):
+                    itemsset.add(item.name)
+
             if isinstance(rhs, ir.Expr):
-                if rhs.op in ["build_tuple", "build_list", "build_set", "build_map"]:
+                if rhs.op in ["build_tuple", "build_list", "build_set"]:
                     for item in rhs.items:
-                        if getattr(typemap[item.name], "mutable", False):
-                            itemsset.add(item.name)
+                        add_to_itemset(item)
+                elif rhs.op == "build_map":
+                    for pair in rhs.items:
+                        for item in pair:
+                            add_to_itemset(item)
                 elif rhs.op == "call":
                     for item in list(rhs.args) + [x[1] for x in rhs.kws]:
-                        if getattr(typemap[item.name], "mutable", False):
-                            itemsset.add(item.name)
+                        add_to_itemset(item)
 
 def find_setitems_body(setitems, itemsset, loop_body, typemap):
     """
