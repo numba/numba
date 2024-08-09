@@ -810,7 +810,7 @@ class SliceAttribute(AttributeTemplate):
             raise errors.NumbaTypeError(
                 "'%s' object cannot be interpreted as an integer" % typ
             )
-        return signature(types.UniTuple(types.py_int, 3), types.np_intp)
+        return signature(types.UniTuple(types.py_int, 3), types.py_int)
 
 
 #-------------------------------------------------------------------------------
@@ -979,9 +979,6 @@ class Int(AbstractTemplate):
             raise errors.NumbaAssertionError('kws not supported')
 
         [arg] = args
-
-        if isinstance(arg, types.NPDatetime) and arg.unit != 'ns':
-            raise errors.NumbaTypeError(f"Only datetime64[ns] can be converted, but got datetime64[{arg.unit}]")
 
         if isinstance(arg, (types.Integer, types.Float,
                             types.Boolean, types.NPDatetime,

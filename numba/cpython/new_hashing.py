@@ -238,7 +238,7 @@ def int_hash(val):
 
     # Find a suitable type to hold a "big" value, i.e. iinfo(ty).min/max
     # this is to ensure e.g. int32.min is handled ok as it's abs() is its value
-    _BIG = types.c_int64 if getattr(val, 'signed', False) else types.np_uint64
+    _BIG = types.c_int64 if getattr(val, 'signed', False) else types.c_uint64
 
     # this is a bit involved due to the CPython repr of ints
     def impl(val):

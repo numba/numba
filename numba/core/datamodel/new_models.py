@@ -723,16 +723,10 @@ class FloatModel(PrimitiveModel):
         super(FloatModel, self).__init__(dmm, fe_type, be_type)
 
 
-# This is required to check isinstance(x, ComplexModel)
-# within Numba internals
-class ComplexModel(StructModel): # type: ignore
-    pass
-
-
 @register_default(types.PythonComplex)
 @register_default(types.NumPyComplex)
 @register_default(types.MachineComplex)
-class ComplexModel(ComplexModel):
+class ComplexModel(StructModel):
     _element_type = NotImplemented
 
     def __init__(self, dmm, fe_type):

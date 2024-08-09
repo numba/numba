@@ -85,7 +85,7 @@ Literal.ctor_map[np.integer] = NumPyIntegerLiteral
 
 class NumPyBoolean(Boolean):
     def cast_python_value(self, value):
-        return bool(value)
+        return np.bool_(value)
 
 
 class NumPyBooleanLiteral(BooleanLiteral, NumPyBoolean):
