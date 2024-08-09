@@ -20,6 +20,7 @@ from contextlib import contextmanager, ExitStack
 
 def box_np_scalars(typ, val, c, py_boxing_func, py_type):
     py_scalar = py_boxing_func(py_type, val, c)
+    np_scalar = cgutils.alloca_once_value(c.builder, c.pyapi.borrow_none())
     with cgutils.if_likely(c.builder, cgutils.is_not_null(c.builder, py_scalar)):
         numpy_name = c.context.insert_const_string(c.builder.module, 'numpy')
         numpy_module = c.pyapi.import_module_noblock(numpy_name)
@@ -28,10 +29,10 @@ def box_np_scalars(typ, val, c, py_boxing_func, py_type):
             np_scalar_constructor = c.pyapi.object_getattr_string(numpy_module, type_str)
             c.pyapi.decref(numpy_module)
             with cgutils.if_likely(c.builder, cgutils.is_not_null(c.builder, np_scalar_constructor)):
-                np_scalar = c.pyapi.call_function_objargs(np_scalar_constructor, (py_scalar,))
+                c.builder.store(c.pyapi.call_function_objargs(np_scalar_constructor, (py_scalar,)), np_scalar)
                 c.pyapi.decref(np_scalar_constructor)
         c.pyapi.decref(py_scalar)
-    return np_scalar
+    return c.builder.load(np_scalar)
 
 
 @box(types.PythonBoolean)
@@ -165,10 +166,10 @@ def box_np_complex(typ, val, c):
         type_str = typ.name.split('np_')[1]
         np_scalar_constructor = c.pyapi.object_getattr_string(numpy_module, type_str)
         with cgutils.if_likely(c.builder, cgutils.is_not_null(c.builder, np_scalar_constructor)):
-            np_scalar = c.pyapi.call_function_objargs(np_scalar_constructor, (py_scalar,))
+            c.builder.store(c.pyapi.call_function_objargs(np_scalar_constructor, (py_scalar,)), np_scalar)
             c.pyapi.decref(np_scalar_constructor)
         c.pyapi.decref(py_scalar)
-    return np_scalar
+    return c.builder.load(np_scalar)
 
 
 @box(types.NoneType)
