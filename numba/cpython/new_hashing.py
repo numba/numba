@@ -26,15 +26,15 @@ _py310_or_later = utils.PYVERSION >= (3, 10)
 # This is Py_hash_t, which is a Py_ssize_t, which has sizeof(size_t):
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Include/pyport.h#L91-L96    # noqa: E501
 _hash_width = sys.hash_info.width
-_Py_hash_t = getattr(types, 'c_int%s' % _hash_width)
-_Py_uhash_t = getattr(types, 'c_uint%s' % _hash_width)
+_Py_hash_t = getattr(types, 'py_int')
+_Py_uhash_t = getattr(types, 'py_int')
 
 # Constants from CPython source, obtained by various means:
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Include/pyhash.h    # noqa: E501
 _PyHASH_INF = sys.hash_info.inf
 _PyHASH_NAN = sys.hash_info.nan
 _PyHASH_MODULUS = _Py_uhash_t(sys.hash_info.modulus)
-_PyHASH_BITS = 31 if types.py_intp.bitwidth == 32 else 61  # mersenne primes
+_PyHASH_BITS = 31 if types.py_int.bitwidth == 32 else 61  # mersenne primes
 _PyHASH_MULTIPLIER = 0xf4243  # 1000003UL
 _PyHASH_IMAG = _PyHASH_MULTIPLIER
 _PyLong_SHIFT = sys.int_info.bits_per_digit
@@ -156,7 +156,7 @@ def _fpext(tyctx, val):
     def impl(cgctx, builder, signature, args):
         val = args[0]
         return builder.fpext(val, ir.DoubleType())
-    sig = types.float64(types.float32)
+    sig = types.c_float64(types.c_float32)
     return sig, impl
 
 
@@ -207,7 +207,7 @@ def _long_impl(val):
 
     # mask to select low _PyLong_SHIFT bits
     _tmp_shift = 32 - _PyLong_SHIFT
-    mask_shift = (~types.uint32(0x0)) >> _tmp_shift
+    mask_shift = (~types.c_uint32(0x0)) >> _tmp_shift
 
     # a 64bit wide max means Numba only needs 3 x 30 bit values max,
     # or 5 x 15 bit values max on 32bit platforms
@@ -222,7 +222,7 @@ def _long_impl(val):
         p4 = x >> p3
         x = p2 | p4
         # the shift and mask splits out the `ob_digit` parts of a Long repr
-        x += types.uint32((val >> idx * _PyLong_SHIFT) & mask_shift)
+        x += types.c_uint32((val >> idx * _PyLong_SHIFT) & mask_shift)
         if x >= _PyHASH_MODULUS:
             x -= _PyHASH_MODULUS
     return _Py_hash_t(x)
@@ -234,11 +234,11 @@ def _long_impl(val):
 def int_hash(val):
 
     _HASH_I64_MIN = -2 if sys.maxsize <= 2 ** 32 else -4
-    _SIGNED_MIN = types.int64(-0x8000000000000000)
+    _SIGNED_MIN = types.c_int64(-0x8000000000000000)
 
     # Find a suitable type to hold a "big" value, i.e. iinfo(ty).min/max
     # this is to ensure e.g. int32.min is handled ok as it's abs() is its value
-    _BIG = types.int64 if getattr(val, 'signed', False) else types.np_uint64
+    _BIG = types.c_int64 if getattr(val, 'signed', False) else types.c_uint64
 
     # this is a bit involved due to the CPython repr of ints
     def impl(val):

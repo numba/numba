@@ -222,8 +222,11 @@ def mk_range_block(typemap, start, stop, step, calltypes, scope, loc):
     range_call_assign = ir.Assign(range_call, range_call_var, loc)
     # iter_var = getiter(range_call_var)
     iter_call = ir.Expr.getiter(range_call_var, loc)
-    calltypes[iter_call] = signature(types.range_iter64_type,
-                                     types.range_state64_type)
+    if config.USE_LEGACY_TYPE_SYSTEM:
+        calltype_sig = signature(types.range_iter64_type, types.range_state64_type)
+    else:
+        calltype_sig = signature(types.range_iter_type, types.range_state_type)
+    calltypes[iter_call] = calltype_sig
     iter_var = ir.Var(scope, mk_unique_var("$iter_var"), loc)
     typemap[iter_var.name] = types.iterators.RangeIteratorType(types.intp)
     iter_call_assign = ir.Assign(iter_call, iter_var, loc)
@@ -295,11 +298,15 @@ def mk_loop_header(typemap, phi_var, calltypes, scope, loc):
     typemap[iternext_var.name] = types.containers.Pair(
         types.intp, types.boolean)
     iternext_call = ir.Expr.iternext(phi_var, loc)
+    if config.USE_LEGACY_TYPE_SYSTEM:
+        range_iter_type = types.range_iter64_type
+    else:
+        range_iter_type = types.range_iter_type
     calltypes[iternext_call] = signature(
         types.containers.Pair(
             types.intp,
             types.boolean),
-        types.range_iter64_type)
+        range_iter_type)
     iternext_assign = ir.Assign(iternext_call, iternext_var, loc)
     # pair_first_var = pair_first(iternext_var)
     pair_first_var = ir.Var(scope, mk_unique_var("$pair_first_var"), loc)

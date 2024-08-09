@@ -105,15 +105,15 @@ if config.USE_LEGACY_TYPE_SYSTEM: # type: ignore
     c_int8 = np_int8 = int8
     c_int16 = np_int16 = int16
     c_int32 = np_int32 = int32
-    c_int64 = py_int64 = np_int64 = int64
-    c_intp = py_intp = np_intp = intp
+    c_int64 = np_int64 = int64
+    c_intp = py_int = np_intp = intp
 
     c_float16 = np_float16 = float16
     c_float32 = np_float32 = float32
-    c_float64 = py_float64 = np_float64 = float64
+    c_float64 = py_float = np_float64 = float64
 
     np_complex64 = complex64
-    py_complex128 = np_complex128 = complex128
+    py_complex = np_complex128 = complex128
 
     # Domain Aliases
     py_signed_domain = np_signed_domain = signed_domain
@@ -252,24 +252,22 @@ else:
     ### Python Datatypes ###
     # Python Integers
     py_bool = PythonBoolean('py_bool')
-    py_int64 = PythonInteger('py_int64')
-
-    py_intp = py_int64
+    py_int = PythonInteger('py_int')
 
     # Python Float
-    py_float64 = PythonFloat('py_float64')
+    py_float = PythonFloat('py_float')
 
     # Python Complex
-    py_complex128 = PythonComplex('py_complex128', py_float64)
+    py_complex = PythonComplex('py_complex', py_float)
 
-    py_signed_domain = frozenset([py_int64])
+    py_signed_domain = frozenset([py_int])
     py_integer_domain = py_signed_domain
-    py_real_domain = frozenset([py_float64])
-    py_complex_domain = frozenset([py_complex128])
+    py_real_domain = frozenset([py_float])
+    py_complex_domain = frozenset([py_complex])
     py_number_domain = py_real_domain | py_integer_domain | py_complex_domain
 
-    range_iter64_type = RangeIteratorType(py_int64)
-    range_state64_type = RangeType(py_int64)
+    range_iter_type = RangeIteratorType(py_int)
+    range_state_type = RangeType(py_int)
 
     ### NumPy Datatypes ###
     # Numpy Integers
@@ -303,7 +301,7 @@ else:
     np_number_domain = np_real_domain | np_integer_domain | np_complex_domain
 
     # NumPy globals
-    np_double = np_float_ = np_float64
+    np_double = np_float64
     _make_signed = lambda x: globals()["np_int%d" % (np.dtype(x).itemsize * 8)]
     _make_unsigned = lambda x: globals()["np_uint%d" % (np.dtype(x).itemsize * 8)]
 
@@ -321,8 +319,30 @@ else:
     np_ulonglong = _make_unsigned(np.longlong)
 
     all_str = '''
-    py_int64
-    py_intp
+    c_bool
+    c_byte
+    c_int8
+    c_int16
+    c_int32
+    c_int64
+    c_uint8
+    c_uint16
+    c_uint32
+    c_uint64
+    c_intp
+    c_uintp
+    c_float16
+    c_float32
+    c_float64
+    c_complex64
+    c_complex128
+    py_bool
+    py_int
+    py_float
+    py_complex
+    np_bool_
+    np_bool
+    np_byte
     np_int8
     np_int16
     np_int32
@@ -333,7 +353,32 @@ else:
     np_uint64
     np_intp
     np_uintp
+    np_float16
+    np_float32
+    np_float64
+    np_complex64
+    np_complex128
+    np_double
+    np_char
+    np_uchar
+    np_short
+    np_ushort
+    np_int_
+    np_uint
+    np_intc
+    np_uintc
+    np_long_
+    np_ulong
+    np_longlong
+    np_ulonglong
+    ffi_forced_object
+    ffi
+    none
+    optional
+    deferred_type
+    void
     '''
+
 
 __all__ = all_str.split()
 if numpy_version >= (2, 0) and config.USE_LEGACY_TYPE_SYSTEM:
