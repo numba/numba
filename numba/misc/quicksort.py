@@ -29,7 +29,7 @@ def make_quicksort_impl(wrap, lt=None, is_argsort=False, is_list=False, is_np_ar
     if config.USE_LEGACY_TYPE_SYSTEM:
         intp = types.intp
     else:
-        intp = types.py_intp
+        intp = types.py_int
     zero = intp(0)
 
     # Two subroutines to make the core algorithm generic wrt. argsort

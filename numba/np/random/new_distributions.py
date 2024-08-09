@@ -18,7 +18,6 @@ from numba.np.random._constants import (wi_double, ki_double,
                                         INT64_MAX, ziggurat_nor_inv_r)
 from numba.np.random.generator_core import (next_double, next_float,
                                             next_uint32, next_uint64)
-from numba.core import types
 # All of the following implementations are direct translations from:
 # https://github.com/numpy/numpy/blob/7cfef93c77599bd387ecc6a15d186c5a46024dac/numpy/random/src/distributions/distributions.c
 
@@ -30,7 +29,7 @@ def np_log1p(x):
 
 @register_jitable
 def np_log1pf(x):
-    return np.log1p(types.np_float32(x))
+    return np.log1p(np.float32(x))
 
 
 @register_jitable
@@ -79,24 +78,24 @@ def random_standard_normal_f(bitgen):
         idx = r & 0xff
         sign = (r >> 8) & 0x1
         rabs = (r >> 9) & 0x0007fffff
-        x = types.np_float32(types.np_float32(rabs) * wi_float[idx])
+        x = np.float32(np.float32(rabs) * wi_float[idx])
         if (sign & 0x1):
             x = -x
         if (rabs < ki_float[idx]):
             return x
         if (idx == 0):
             while 1:
-                xx = types.np_float32(-ziggurat_nor_inv_r_f *
+                xx = np.float32(-ziggurat_nor_inv_r_f *
                              np_log1pf(-next_float(bitgen)))
-                yy = types.np_float32(-np_log1pf(-next_float(bitgen)))
-                if (types.np_float32(yy + yy) > types.np_float32(xx * xx)):
+                yy = np.float32(-np_log1pf(-next_float(bitgen)))
+                if (np.float32(yy + yy) > np.float32(xx * xx)):
                     if ((rabs >> 8) & 0x1):
-                        return -types.np_float32(ziggurat_nor_r_f + xx)
+                        return -np.float32(ziggurat_nor_r_f + xx)
                     else:
-                        return types.np_float32(ziggurat_nor_r_f + xx)
+                        return np.float32(ziggurat_nor_r_f + xx)
         else:
             if (((fi_float[idx - 1] - fi_float[idx]) * next_float(bitgen) +
-                 fi_float[idx]) < types.np_float32(np.exp(-types.np_float32(0.5) * x * x))):
+                 fi_float[idx]) < np.float32(np.exp(-np.float32(0.5) * x * x))):
                 return x
 
 
@@ -125,15 +124,15 @@ def random_standard_exponential_f(bitgen):
         ri >>= 1
         idx = ri & 0xFF
         ri >>= 8
-        x = types.np_float32(types.np_float32(ri) * we_float[idx])
+        x = np.float32(np.float32(ri) * we_float[idx])
         if (ri < ke_float[idx]):
             return x
         else:
             if (idx == 0):
-                return types.np_float32(ziggurat_exp_r_f -
-                               types.np_float32(np_log1pf(-next_float(bitgen))))
+                return np.float32(ziggurat_exp_r_f -
+                               np.float32(np_log1pf(-next_float(bitgen))))
             elif ((fe_float[idx - 1] - fe_float[idx]) * next_float(bitgen) +
-                  fe_float[idx] < types.np_float32(np.exp(types.np_float32(-x)))):
+                  fe_float[idx] < np.float32(np.exp(np.float32(-x)))):
                 return x
 
 
@@ -144,7 +143,7 @@ def random_standard_exponential_inv(bitgen):
 
 @register_jitable
 def random_standard_exponential_inv_f(bitgen):
-    return -np.log(types.np_float32(1.0) - next_float(bitgen))
+    return -np.log(np.float32(1.0) - next_float(bitgen))
 
 
 @register_jitable
@@ -187,44 +186,44 @@ def random_standard_gamma(bitgen, shape):
 
 @register_jitable
 def random_standard_gamma_f(bitgen, shape):
-    f32_one = types.np_float32(1.0)
-    shape = types.np_float32(shape)
+    f32_one = np.float32(1.0)
+    shape = np.float32(shape)
     if (shape == f32_one):
         return random_standard_exponential_f(bitgen)
-    elif (shape == types.np_float32(0.0)):
-        return types.np_float32(0.0)
+    elif (shape == np.float32(0.0)):
+        return np.float32(0.0)
     elif (shape < f32_one):
         while 1:
             U = next_float(bitgen)
             V = random_standard_exponential_f(bitgen)
             if (U <= f32_one - shape):
-                X = types.np_float32(pow(U, types.np_float32(f32_one / shape)))
+                X = np.float32(pow(U, np.float32(f32_one / shape)))
                 if (X <= V):
                     return X
             else:
-                Y = types.np_float32(-np.log(types.np_float32((f32_one - U) / shape)))
-                X = types.np_float32(pow(f32_one - shape + types.np_float32(shape * Y),
-                            types.np_float32(f32_one / shape)))
+                Y = np.float32(-np.log(np.float32((f32_one - U) / shape)))
+                X = np.float32(pow(f32_one - shape + np.float32(shape * Y),
+                            np.float32(f32_one / shape)))
                 if (X <= (V + Y)):
                     return X
     else:
-        b = shape - f32_one / types.np_float32(3.0)
-        c = types.np_float32(f32_one / types.np_float32(np.sqrt(types.np_float32(9.0) * b)))
+        b = shape - f32_one / np.float32(3.0)
+        c = np.float32(f32_one / np.float32(np.sqrt(np.float32(9.0) * b)))
         while 1:
             while 1:
-                X = types.np_float32(random_standard_normal_f(bitgen))
-                V = types.np_float32(f32_one + c * X)
-                if (V > types.np_float32(0.0)):
+                X = np.float32(random_standard_normal_f(bitgen))
+                V = np.float32(f32_one + c * X)
+                if (V > np.float32(0.0)):
                     break
 
-            V = types.np_float32(V * V * V)
+            V = np.float32(V * V * V)
             U = next_float(bitgen)
-            if (U < f32_one - types.np_float32(0.0331) * (X * X) * (X * X)):
-                return types.np_float32(b * V)
+            if (U < f32_one - np.float32(0.0331) * (X * X) * (X * X)):
+                return np.float32(b * V)
 
-            if (np.log(U) < types.np_float32(0.5) * X * X + b *
+            if (np.log(U) < np.float32(0.5) * X * X + b *
                     (f32_one - V + np.log(V))):
-                return types.np_float32(b * V)
+                return np.float32(b * V)
 
 
 @register_jitable
@@ -235,8 +234,8 @@ def random_normal(bitgen, loc, scale):
 
 @register_jitable
 def random_normal_f(bitgen, loc, scale):
-    scaled_normal = types.np_float32(scale * random_standard_normal_f(bitgen))
-    return types.np_float32(loc + scaled_normal)
+    scaled_normal = np.float32(scale * random_standard_normal_f(bitgen))
+    return np.float32(loc + scaled_normal)
 
 
 @register_jitable
@@ -257,7 +256,7 @@ def random_gamma(bitgen, shape, scale):
 
 @register_jitable
 def random_gamma_f(bitgen, shape, scale):
-    return types.np_float32(scale * random_standard_gamma_f(bitgen, shape))
+    return np.float32(scale * random_standard_gamma_f(bitgen, shape))
 
 
 @register_jitable
@@ -548,7 +547,7 @@ def random_logseries(bitgen, p):
         U = next_double(bitgen)
         q = -np.expm1(r * U)
         if (V <= q * q):
-            result = types.np_int64(np.floor(1 + np.log(V) / np.log(q)))
+            result = np.int64(np.floor(1 + np.log(V) / np.log(q)))
             if result < 1 or V == 0.0:
                 continue
             else:

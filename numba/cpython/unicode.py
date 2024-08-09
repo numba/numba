@@ -74,7 +74,7 @@ _MAX_UNICODE = 0x10ffff
 if config.USE_LEGACY_TYPE_SYSTEM:
     _BLOOM_WIDTH = types.intp.bitwidth
 else:
-    _BLOOM_WIDTH = types.py_intp.bitwidth
+    _BLOOM_WIDTH = types.py_int.bitwidth
 
 # DATA MODEL
 

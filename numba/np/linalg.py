@@ -831,7 +831,7 @@ def dot_3(left, right, out):
 if config.USE_LEGACY_TYPE_SYSTEM:
     fatal_error_func = types.ExternalFunction("numba_fatal_error", types.intc())
 else:
-    fatal_error_func = types.ExternalFunction("numba_fatal_error", types.np_intc())
+    fatal_error_func = types.ExternalFunction("numba_fatal_error", types.c_intp())
 
 
 @register_jitable

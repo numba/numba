@@ -145,16 +145,16 @@ else:
 
     @typeof_impl.register(float)
     def _typeof_float(val, c):
-        return types.py_float64
+        return types.py_float
 
     @typeof_impl.register(complex)
     def _typeof_complex(val, c):
-        return types.py_complex128
+        return types.py_complex
 
     @typeof_impl.register(int)
     def _typeof_int(val, c):
         # As in _typeof.c
-        typ = types.py_intp
+        typ = types.py_int
         return typ
 
 

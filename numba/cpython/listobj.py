@@ -942,7 +942,7 @@ def list_extend(context, builder, sig, args):
 if config.USE_LEGACY_TYPE_SYSTEM:
     intp_max = types.intp.maxval
 else:
-    intp_max = types.py_intp.maxval
+    intp_max = types.py_int.maxval
 
 
 @overload_method(types.List, "index")
@@ -1184,7 +1184,7 @@ def literal_list_banned_reverse(lst):
 if config.USE_LEGACY_TYPE_SYSTEM:
     _index_end = types.intp.maxval
 else:
-    _index_end = types.py_intp.maxval
+    _index_end = types.py_int.maxval
 
 @overload_method(types.LiteralList, 'index')
 def literal_list_index(lst, x, start=0, end=_index_end):

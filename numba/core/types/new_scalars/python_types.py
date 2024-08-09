@@ -6,7 +6,7 @@ from numba.core.types.abstract import Literal
 from numba.core.types.new_scalars.scalars \
     import (Integer, IntegerLiteral, Boolean,
             BooleanLiteral, Float, Complex,
-            parse_integer_bitwidth, parse_integer_signed)
+            parse_integer_signed)
 from functools import total_ordering
 from numba.core.typeconv import Conversion
 
@@ -16,16 +16,11 @@ class PythonInteger(Integer):
     def __init__(self, name, bitwidth=None, signed=None):
         super(PythonInteger, self).__init__(name)
         if bitwidth is None:
-            bitwidth = parse_integer_bitwidth(name)
+            bitwidth = 64
         if signed is None:
             signed = parse_integer_signed(name)
         self.bitwidth = bitwidth
         self.signed = signed
-
-    @classmethod
-    def from_bitwidth(cls, bitwidth, signed=True):
-        name = ('py_int%d' if signed else 'py_uint%d') % bitwidth
-        return cls(name)
 
     def cast_python_value(self, value):
         return int(value)
@@ -104,7 +99,7 @@ class PythonFloat(Float):
         super(PythonFloat, self).__init__(*args, **kws)
         # Determine bitwidth
         assert self.name.startswith('py_float')
-        bitwidth = int(self.name[8:])
+        bitwidth = 64
         self.bitwidth = bitwidth
 
     def cast_python_value(self, value):
@@ -123,7 +118,7 @@ class PythonComplex(Complex):
         self.underlying_float = underlying_float
         # Determine bitwidth
         assert self.name.startswith('py_complex')
-        bitwidth = int(self.name[10:])
+        bitwidth = 128
         self.bitwidth = bitwidth
 
     def cast_python_value(self, value):

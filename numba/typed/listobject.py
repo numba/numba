@@ -49,7 +49,7 @@ if config.USE_LEGACY_TYPE_SYSTEM:
 
     index_types = types.integer_domain
 else:
-    INDEXTY = types.py_intp
+    INDEXTY = types.py_int
 
     index_types = types.py_integer_domain
 

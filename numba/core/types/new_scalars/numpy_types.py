@@ -30,7 +30,11 @@ class NumPyInteger(Integer):
         return cls(name)
 
     def cast_python_value(self, value):
-        return getattr(np, self.name)(value)
+        sign_char = "" if self.signed else "u"
+        return getattr(
+            np,
+            sign_char + "int" + str(self.bitwidth)
+        )(value)
 
     def __lt__(self, other):
         if self.__class__ is not other.__class__:
@@ -81,14 +85,14 @@ Literal.ctor_map[np.integer] = NumPyIntegerLiteral
 
 class NumPyBoolean(Boolean):
     def cast_python_value(self, value):
-        return bool(value)
+        return np.bool_(value)
 
 
 class NumPyBooleanLiteral(BooleanLiteral, NumPyBoolean):
 
     def __init__(self, value):
         self._literal_init(value)
-        name = 'Literal[bool]({})'.format(value)
+        name = 'Literal[np.bool_]({})'.format(value)
         NumPyBoolean.__init__(self,
                               name=name)
 
@@ -111,7 +115,7 @@ class NumPyFloat(Float):
         self.bitwidth = bitwidth
 
     def cast_python_value(self, value):
-        return np.float_(value)
+        return getattr(np, "float" + str(self.bitwidth))(value)
 
     def __lt__(self, other):
         if self.__class__ is not other.__class__:
@@ -130,7 +134,7 @@ class NumPyComplex(Complex):
         self.bitwidth = bitwidth
 
     def cast_python_value(self, value):
-        return np.complex_(value)
+        return getattr(np, "complex" + str(self.bitwidth))(value)
 
     def __lt__(self, other):
         if self.__class__ is not other.__class__:
