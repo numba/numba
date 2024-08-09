@@ -178,8 +178,6 @@ class TestDebugInfoEmission(TestCase):
                       DICompileUnit)
         self.assertIn('producer: "clang (Numba)"', DICompileUnit)
 
-    # FIXME: To be fixed after #9670
-    @unittest.expectedFailure
     def test_DILocation(self):
         """ Tests that DILocation information is reasonable.
         """
