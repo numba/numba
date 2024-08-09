@@ -10,7 +10,7 @@ from enum import IntEnum
 import llvmlite.ir
 import numpy as np
 
-from numba.core import types, cgutils
+from numba.core import types, cgutils, config
 from numba.core.imputils import (impl_ret_untracked)
 
 from numba.core.extending import overload, intrinsic, register_jitable
@@ -23,7 +23,10 @@ typerecord = namedtuple('typerecord',
 
 # The Py_UCS4 type from CPython:
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/unicodeobject.h#L112    # noqa: E501
-_Py_UCS4 = types.uint32
+if config.USE_LEGACY_TYPE_SYSTEM:
+    _Py_UCS4 = types.uint32
+else:
+    _Py_UCS4 = types.c_uint32
 
 # ------------------------------------------------------------------------------
 # Start code related to/from CPython's unicodectype impl
