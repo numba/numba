@@ -434,7 +434,7 @@ class List(MutableSequence, pt.Generic[T]):
         try:
             get_ipython
             preview = ', '.join(buf[:1000])
-            suffix = '...' if len(buf) > 1000 else ''
+            suffix = ', ...' if len(buf) > 1000 else ''
             return '[{0}{1}]'.format(preview, suffix)
         except (NameError, IndexError):
             return '[{0}]'.format(', '.join(buf))
