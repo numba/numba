@@ -682,6 +682,9 @@ class Cache(_Cache):
         the bytecode for the function and, if the function has a __closure__,
         a hash of the cell_contents.
         """
+        sig = list(sig)
+        sig = ["function" if e.name[:28] == "type(CPUDispatcher(<function" else e for e in sig]
+        sig = tuple(sig)
         codebytes = self._py_func.__code__.co_code
         if self._py_func.__closure__ is not None:
             cvars = tuple([x.cell_contents for x in self._py_func.__closure__])
