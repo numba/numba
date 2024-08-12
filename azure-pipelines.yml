@@ -3,7 +3,7 @@ trigger:
 
 variables:
   # Change the following along with adding new TEST_START_INDEX.
-  TEST_COUNT: 18
+  TEST_COUNT: 8
 
 jobs:
 # Mac and Linux use the same template with different matrixes
@@ -29,11 +29,46 @@ jobs:
     name: Linux
     vmImage: ubuntu-20.04
     matrix:
-      py313_np126:
+      py313_np126_0:
         PYTHON: '3.13'
         NUMPY: '1.26.3'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 0
+      py313_np126_1:
+        PYTHON: '3.13'
+        NUMPY: '1.26.3'
+        CONDA_ENV: azure_ci
+        TEST_START_INDEX: 1
+      py313_np126_2:
+        PYTHON: '3.13'
+        NUMPY: '1.26.3'
+        CONDA_ENV: azure_ci
+        TEST_START_INDEX: 2
+      py313_np126_3:
+        PYTHON: '3.13'
+        NUMPY: '1.26.3'
+        CONDA_ENV: azure_ci
+        TEST_START_INDEX: 3
+      py313_np126_4:
+        PYTHON: '3.13'
+        NUMPY: '1.26.3'
+        CONDA_ENV: azure_ci
+        TEST_START_INDEX: 4
+      py313_np126_5:
+        PYTHON: '3.13'
+        NUMPY: '1.26.3'
+        CONDA_ENV: azure_ci
+        TEST_START_INDEX: 5
+      py313_np126_6:
+        PYTHON: '3.13'
+        NUMPY: '1.26.3'
+        CONDA_ENV: azure_ci
+        TEST_START_INDEX: 6
+      py313_np126_7:
+        PYTHON: '3.13'
+        NUMPY: '1.26.3'
+        CONDA_ENV: azure_ci
+        TEST_START_INDEX: 7
       # py39_np122_tbb:
       #   PYTHON: '3.9'
       #   NUMPY: '1.22'
