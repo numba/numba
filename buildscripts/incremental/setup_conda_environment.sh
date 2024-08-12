@@ -21,7 +21,6 @@ if [ "${USE_C3I_TEST_CHANNEL}" == "yes" ]; then
     EXTRA_CHANNELS="${EXTRA_CHANNELS} -c c3i_test"
 fi
 
-
 # Deactivate any environment
 source deactivate
 # Display root environment (for debugging)
@@ -34,7 +33,13 @@ conda list
 # NOTE: gitpython is needed for CI testing to do the test slicing
 # NOTE: pyyaml is used to ensure that the Azure CI config is valid
 
-conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml
+
+if [ $PYTHON == "3.13" ]; then
+    conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} -c ad-testing/label/py313 python=$PYTHON pip gitpython
+else
+    conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml
+fi
+
 
 # Activate first
 set +v
@@ -51,9 +56,11 @@ if [ "${VANILLA_INSTALL}" != "yes" ]; then
     # ipykernel is used for testing ipython behaviours.
     if [ $PYTHON \< "3.12" ]; then
         $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipykernel scipy pygments pexpect
-    else
+    elif [ $PYTHON \< "3.13" ]; then
         # At the time of writing `ipykernel` was not available for Python 3.12
         $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython scipy pygments pexpect
+    else
+        $PIP_INSTALL --pre numpy==$NUMPY
     fi
 fi
 
@@ -74,7 +81,11 @@ elif  [[ $(uname) == Darwin ]]; then
 fi
 
 # Install latest correct build
-$CONDA_INSTALL -c numba/label/dev llvmlite=0.44
+if [ $PYTHON == "3.13" ]; then
+    $CONDA_INSTALL -c sklam/label/py313 llvmlite=0.44
+else
+    $CONDA_INSTALL -c numba/label/dev llvmlite=0.44
+fi
 
 # Install dependencies for building the documentation
 if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx docutils sphinx_rtd_theme pygments numpydoc; fi
@@ -93,5 +104,5 @@ if [ "$TEST_RVSDG" == "yes" ]; then $PIP_INSTALL numba-rvsdg; fi
 # environment dump for debug
 # echo "DEBUG ENV:"
 # echo "-------------------------------------------------------------------------"
-# conda env export
+conda env export
 # echo "-------------------------------------------------------------------------"
