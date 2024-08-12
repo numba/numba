@@ -56,7 +56,7 @@ class TestDunderMethods(TestCase):
         np.float16(1.1),
         np.float32(3.2),
         np.float64(5.5),
-        # np.complex64((20+5j)),
+        np.complex64((20 + 5j)),
         np.complex128((4 + 3j))
     ]
 

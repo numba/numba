@@ -225,7 +225,7 @@ class _EnvReloader(object):
 
         # Type casting rules selection
         USE_LEGACY_TYPE_SYSTEM = _readenv(
-            "NUMBA_USE_LEGACY_TYPE_SYSTEM", int, 1
+            "NUMBA_USE_LEGACY_TYPE_SYSTEM", int, 0
         )
 
         # developer mode produces full tracebacks, disables help instructions

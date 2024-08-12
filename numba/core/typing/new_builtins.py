@@ -67,26 +67,6 @@ class Slice(ConcreteTemplate):
         signature(types.slice3_type, types.none, types.py_int, types.none),
         signature(types.slice3_type, types.none, types.none, types.py_int),
         signature(types.slice3_type, types.none, types.none, types.none),
-
-        # Python + NumPy Types
-        signature(types.slice2_type, types.py_intp, types.np_intp),
-        signature(types.slice2_type, types.np_intp, types.py_intp),
-
-        signature(types.slice3_type, types.py_intp, types.np_intp, types.np_intp),
-        signature(types.slice3_type, types.np_intp, types.py_intp, types.np_intp),
-        signature(types.slice3_type, types.np_intp, types.np_intp, types.py_intp),
-        signature(types.slice3_type, types.py_intp, types.py_intp, types.np_intp),
-        signature(types.slice3_type, types.py_intp, types.np_intp, types.py_intp),
-        signature(types.slice3_type, types.np_intp, types.py_intp, types.py_intp),
-
-        signature(types.slice3_type, types.none, types.py_intp, types.np_intp),
-        signature(types.slice3_type, types.none, types.np_intp, types.py_intp),
-        
-        signature(types.slice3_type, types.py_intp, types.none, types.np_intp),
-        signature(types.slice3_type, types.np_intp, types.none, types.py_intp),
-        
-        signature(types.slice3_type, types.py_intp, types.np_intp, types.none),
-        signature(types.slice3_type, types.np_intp, types.py_intp, types.none),
     ]
 
 
@@ -165,25 +145,11 @@ def choose_result_int(arg_1, other):
         signed = arg_1.signed or other.signed
         return types.NumPyInteger.from_bitwidth(bitwidth, signed)
     
-    return types.py_int64
-
     return types.py_int
 
-all_ints = (
-    sorted(set((types.py_int, types.py_int))) +
-    sorted(set((types.np_int32, types.np_int64))) +
-    sorted(set((types.np_uint32, types.np_uint64)))
-    )
-integer_binop_cases = tuple(
-    signature(choose_result_int(op1, op2), op1, op2)
-    for op1, op2 in itertools.product(all_ints, all_ints)
-    )
 
 class BinOp(ConcreteTemplate):
     cases = []
-
-    # Python + NumPy cases
-    cases += get_mixture_result_types(2, py_ints + np_ints, choose_result_int)
  
     # Python cases
     cases += [signature(op, op, op) for op in sorted(types.py_real_domain)]
@@ -222,18 +188,35 @@ def ol_is_not_NotImplemented(a, b, /):
         return ol_is_not_NotImplemented
 
 
+def bool_add_bool(x, y):
+    return NotImplemented
+
+
+def int_add_int(x, y):
+    return NotImplemented
+
+
+def float_add_float(x, y):
+    return NotImplemented
+
+
+def complex_add_complex(x, y):
+    return NotImplemented
+
+
 @intrinsic
-def bool_add_bool(tyctx, boolxty, boolyty):
+def intrin_bool_add_bool(tyctx, boolxty, boolyty):
     assert boolxty == boolyty
-    sig = types.py_intp(boolxty, boolyty)
+    sig = types.py_int(boolxty, boolyty)
     def codegen(cgctx, builder, sig, llargs):
         new_args = [cgctx.cast(builder, v, t, sig.return_type) for v, t in zip(llargs, sig.args)]
         return builder.add(*new_args)
 
     return sig, codegen
 
+
 @intrinsic
-def int_add_int(tyctx, intxty, intyty):
+def intrin_int_add_int(tyctx, intxty, intyty):
     assert  intxty == intyty
     sig = intxty(intxty, intxty)
     def codegen(cgctx, builder, sig, llargs):
@@ -241,17 +224,18 @@ def int_add_int(tyctx, intxty, intyty):
 
     return sig, codegen
 
+
 @intrinsic
-def float_add_float(tyctx, floatxty, floatyty):
-    assert  floatxty == floatyty
+def intrin_float_add_float(tyctx, floatxty, floatyty):
+    assert floatxty == floatyty, f"{floatxty} != {floatyty}"
     sig = floatxty(floatxty, floatyty)
     def codegen(cgctx, builder, sig, llargs):
         return builder.fadd(*llargs)
-
     return sig, codegen
 
+
 @intrinsic
-def complex_add_complex(tyctx, compxty, compyty):
+def intrin_complex_add_complex(tyctx, compxty, compyty):
     assert  compxty == compyty
     sig = compxty(compxty, compyty)
     def codegen(context, builder, sig, args):
@@ -267,22 +251,57 @@ def complex_add_complex(tyctx, compxty, compyty):
 
     return sig, codegen
 
+
+@overload(bool_add_bool)
+def ol_bool_add_bool(x, y):
+    if x == y:
+        def impl(x, y):
+            return intrin_bool_add_bool(x, y)
+        return impl
+
+
+@overload(int_add_int)
+def ol_int_add_int(x, y):
+    if x == y:
+        def impl(x, y):
+            return intrin_int_add_int(x, y)
+        return impl
+
+
+@overload(float_add_float)
+def ol_float_add_float(x, y):
+    if x == y:
+        def impl(x, y):
+            return intrin_float_add_float(x, y)
+        return impl
+
+
+@overload(complex_add_complex)
+def ol_complex_add_complex(x, y):
+    if x == y:
+        def impl(x, y):
+            return intrin_complex_add_complex(x, y)
+        return impl
+
+
 @overload_method(types.PythonBoolean, "__bool__")
 def py_bool__bool__(self):
     def impl(self):
         return self
     return impl
 
+
 @overload_method(types.PythonBoolean, "__int__")
 def py_bool__int__(self):
     def impl(self):
-        return types.py_int64(self)
+        return types.py_int(self)
     return impl
+
 
 @overload_method(types.PythonBoolean, "__float__")
 def py_bool__float__(self):
     def impl(self):
-        return types.py_float64(self)
+        return types.py_float(self)
     return impl
 
 
@@ -292,16 +311,18 @@ def py_int__bool__(self):
         return types.py_bool(self)
     return impl
 
+
 @overload_method(types.PythonInteger, "__int__")
 def py_int__int__(self):
     def impl(self):
         return self
     return impl
 
+
 @overload_method(types.PythonInteger, "__float__")
 def py_int__float__(self):
     def impl(self):
-        return types.py_float64(self)
+        return types.py_float(self)
     return impl
 
 
@@ -311,11 +332,13 @@ def py_float__bool__(self):
         return types.py_bool(self)
     return impl
 
+
 @overload_method(types.PythonFloat, "__int__")
 def py_float__int__(self):
     def impl(self):
-        return types.py_int64(self)
+        return types.py_int(self)
     return impl
+
 
 @overload_method(types.PythonFloat, "__float__")
 def py_float__float__(self):
@@ -335,7 +358,7 @@ def py_complex__complex__(self):
 def np_float64__complex__(self):
     if self.bitwidth == 64:
         def impl(self):
-            return types.py_float64(self)
+            return types.py_float(self)
     else:
         def impl(self):
             return NotImplemented
@@ -346,7 +369,7 @@ def np_float64__complex__(self):
 def np_float64__complex__(self):
     if self.bitwidth == 64:
         def impl(self):
-            return types.py_complex128(self)
+            return types.py_complex(self)
     else:
         def impl(self):
             return NotImplemented
@@ -357,7 +380,7 @@ def np_float64__complex__(self):
 def np_float64__complex__(self):
     if self.bitwidth == 128:
         def impl(self):
-            return types.py_complex128(self)
+            return types.py_complex(self)
     else:
         def impl(self):
             return NotImplemented
@@ -633,8 +656,6 @@ class BinOpMul(BinOp):
 @infer_global(operator.mod)
 class BinOpMod(ConcreteTemplate):
     cases = []
-    # Python + NumPy cases
-    cases += get_mixture_result_types(2, py_ints + np_ints, choose_result_int)
 
     # Python cases
     cases += [signature(op, op, op) for op in sorted(types.py_real_domain)]
@@ -647,9 +668,6 @@ class BinOpMod(ConcreteTemplate):
 class BinOpMod(ConcreteTemplate):
     cases = []
 
-    # Python + NumPy cases
-    cases += get_mixture_result_types(2, py_ints + np_ints, choose_result_int)
-
     # Python cases
     cases += [signature(op, op, op) for op in sorted(types.py_real_domain)]
 
@@ -661,9 +679,6 @@ class BinOpMod(ConcreteTemplate):
 class BinOpTrueDiv(ConcreteTemplate):
     # TODO: Choose floats here
     cases = []
-
-    # Python + NumPy cases
-    cases += get_mixture_result_types(2, py_ints + np_ints, choose_result_int)
 
     # Python cases
     cases += [signature(op, op, op) for op in sorted(types.py_real_domain)]
@@ -679,9 +694,6 @@ class BinOpTrueDiv(ConcreteTemplate):
     # TODO: Choose floats here
     cases = []
 
-    # Python + NumPy cases
-    cases += get_mixture_result_types(2, py_ints + np_ints, choose_result_int)
-
     # Python cases
     cases += [signature(op, op, op) for op in sorted(types.py_real_domain)]
     cases += [signature(op, op, op) for op in sorted(types.py_complex_domain)]
@@ -695,9 +707,6 @@ class BinOpTrueDiv(ConcreteTemplate):
 class BinOpFloorDiv(ConcreteTemplate):
     cases = []
 
-    # Python + NumPy cases
-    cases += get_mixture_result_types(2, py_ints + np_ints, choose_result_int)
-
     # Python cases
     cases += [signature(op, op, op) for op in sorted(types.py_real_domain)]
 
@@ -708,8 +717,6 @@ class BinOpFloorDiv(ConcreteTemplate):
 @infer_global(operator.ifloordiv)
 class BinOpFloorDiv(ConcreteTemplate):
     cases = []
-    # Python + NumPy cases
-    cases += get_mixture_result_types(2, py_ints + np_ints, choose_result_int)
 
     # Python cases
     cases += [signature(op, op, op) for op in sorted(types.py_real_domain)]
@@ -721,15 +728,13 @@ class BinOpFloorDiv(ConcreteTemplate):
 @infer_global(divmod)
 class DivMod(ConcreteTemplate):
     # This probably needs a mixture
-    _tys = {types.py_int64, types.py_float64} | types.np_number_domain | types.np_real_domain
+    _tys = {types.py_int, types.py_float} | types.np_number_domain | types.np_real_domain
     cases = [signature(types.UniTuple(ty, 2), ty, ty) for ty in _tys]
 
 
 @infer_global(operator.pow)
 class BinOpPower(ConcreteTemplate):
     cases = []
-    # Python + NumPy cases
-    cases += get_mixture_result_types(2, py_ints + np_ints, choose_result_int)
 
     # Python cases
     cases += [signature(op, op, op) for op in sorted(types.py_real_domain)]
@@ -743,8 +748,6 @@ class BinOpPower(ConcreteTemplate):
 @infer_global(operator.ipow)
 class BinOpPower(ConcreteTemplate):
     cases = []
-    # Python + NumPy cases
-    cases += get_mixture_result_types(2, py_ints + np_ints, choose_result_int)
 
     # Python cases
     cases += [signature(op, op, op) for op in sorted(types.py_real_domain)]
@@ -798,8 +801,6 @@ class BitwiseRightShift(BitwiseShiftOperation):
 
 class BitwiseLogicOperation(BinOp):
     cases = []
-    # Python + NumPy cases
-    cases += get_mixture_result_types(2, py_ints + np_ints, choose_result_int)
 
     # Python cases
     cases += [signature(types.py_bool, types.py_bool, types.py_bool)]

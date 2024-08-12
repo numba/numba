@@ -743,7 +743,7 @@ def real_divmod_func_body(context, builder, vx, wx):
     div_istrue = builder.fcmp_ordered('!=', div, ZERO)
 
     with builder.if_then(div_istrue):
-        realtype = types.py_float64
+        realtype = types.py_float
         floorfn = context.get_function(math.floor,
                                        typing.signature(realtype, realtype))
         floordiv = floorfn(builder, [div])
@@ -1339,7 +1339,7 @@ def any_to_boolean(context, builder, fromty, toty, val):
 def boolean_to_any(context, builder, fromty, toty, val):
     # Casting from boolean to anything first casts to int32
     asint = builder.zext(val, ir.IntType(64))
-    return context.cast(builder, asint, types.py_int64, toty)
+    return context.cast(builder, asint, types.py_int, toty)
 
 @lower_cast(types.IntegerLiteral, types.Boolean)
 @lower_cast(types.BooleanLiteral, types.Boolean)

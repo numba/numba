@@ -157,7 +157,7 @@ def unary_math_extern(fn, f32extern, f64extern, int_restype=False):
         func_name = {
             types.np_float32: f32extern,
             types.np_float64: f64extern,
-            types.py_float64: f64extern
+            types.py_float: f64extern
             }[input_type]
         fnty = llvmlite.ir.FunctionType(lty, [lty])
         fn = cgutils.insert_pure_function(builder.module, fnty, name=func_name)
@@ -356,7 +356,7 @@ def hypot_float_impl(context, builder, sig, args):
     # Windows has alternate names for hypot/hypotf, see
     # https://msdn.microsoft.com/fr-fr/library/a9yb3dbt%28v=vs.80%29.aspx
     fname = {
-        types.py_float64: "_hypot" if sys.platform == 'win32' else "hypot",
+        types.py_float: "_hypot" if sys.platform == 'win32' else "hypot",
 
         types.np_float32: "_hypotf" if sys.platform == 'win32' else "hypotf",
         types.np_float64: "_hypot" if sys.platform == 'win32' else "hypot",
