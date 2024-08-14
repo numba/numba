@@ -1071,5 +1071,90 @@ class TestCFuncCache(BaseCacheTest):
         self.run_in_separate_process()
 
 
+class TestCacheOverrides(BaseCacheTest):
+    here = os.path.dirname(__file__)
+    usecases_file = os.path.join(here, "cache_overrides.py")
+    modname = "cache_overrides"
+
+    def check_module(self, mod):
+        mod.self_test()
+
+    def check_cache_hits(self, func, n):
+        hits = func.stats.cache_hits
+        self.assertEqual(sum(hits.values()), n, hits)
+
+    def test_with_no_override(self):
+        self.check_pycache(0)
+        with override_config("CACHE_OVERRIDE", ""):
+            mod = self.import_module()
+        self.check_pycache(2)  # 1 cached cfunc (index + data)
+
+        self.check_module(mod)
+
+        self.check_pycache(6)  # 1 jit, 1 njit, 1 cfunc (index + data each)
+        self.check_cache_hits(mod.add_jit_cached, 0)
+        self.check_cache_hits(mod.add_jit_notcached, 0)
+        self.check_cache_hits(mod.add_njit_cached, 0)
+        self.check_cache_hits(mod.add_njit_notcached, 0)
+        self.assertEqual(mod.add_cfunc_cached.cache_hits, 0)
+        self.assertEqual(mod.add_cfunc_notcached.cache_hits, 0)
+
+        # Reload module to hit the cache
+        with override_config("CACHE_OVERRIDE", ""):
+            mod = self.import_module()
+        self.check_module(mod)
+        self.check_pycache(6)
+        self.check_cache_hits(mod.add_jit_cached, 1)
+        self.check_cache_hits(mod.add_jit_notcached, 0)
+        self.check_cache_hits(mod.add_njit_cached, 1)
+        self.check_cache_hits(mod.add_njit_notcached, 0)
+        self.assertEqual(mod.add_cfunc_cached.cache_hits, 1)
+        self.assertEqual(mod.add_cfunc_notcached.cache_hits, 0)
+
+    def test_with_override_always(self):
+        self.check_pycache(0)
+        with override_config("CACHE_OVERRIDE", "always"):
+            mod = self.import_module()
+        self.check_pycache(4)  # 2 cached cfunc (index + data)
+
+        self.check_module(mod)
+
+        self.check_pycache(12)  # 2 jit, 2 njit, 2 cfunc (index + data each)
+        self.check_cache_hits(mod.add_jit_cached, 0)
+        self.check_cache_hits(mod.add_jit_notcached, 0)
+        self.check_cache_hits(mod.add_njit_cached, 0)
+        self.check_cache_hits(mod.add_njit_notcached, 0)
+        self.assertEqual(mod.add_cfunc_cached.cache_hits, 0)
+        self.assertEqual(mod.add_cfunc_notcached.cache_hits, 0)
+
+        # Reload module to hit the cache
+        with override_config("CACHE_OVERRIDE", "always"):
+            mod = self.import_module()
+        self.check_module(mod)
+        self.check_pycache(12)
+        self.check_cache_hits(mod.add_jit_cached, 1)
+        self.check_cache_hits(mod.add_jit_notcached, 1)
+        self.check_cache_hits(mod.add_njit_cached, 1)
+        self.check_cache_hits(mod.add_njit_notcached, 1)
+        self.assertEqual(mod.add_cfunc_cached.cache_hits, 1)
+        self.assertEqual(mod.add_cfunc_notcached.cache_hits, 1)
+
+    def test_with_override_never(self):
+        self.check_pycache(0)
+        with override_config("CACHE_OVERRIDE", "never"):
+            mod = self.import_module()
+        self.check_pycache(0)
+
+        self.check_module(mod)
+
+        self.check_pycache(0)
+        self.check_cache_hits(mod.add_jit_cached, 0)
+        self.check_cache_hits(mod.add_jit_notcached, 0)
+        self.check_cache_hits(mod.add_njit_cached, 0)
+        self.check_cache_hits(mod.add_njit_notcached, 0)
+        self.assertEqual(mod.add_cfunc_cached.cache_hits, 0)
+        self.assertEqual(mod.add_cfunc_notcached.cache_hits, 0)
+
+
 if __name__ == '__main__':
     unittest.main()
