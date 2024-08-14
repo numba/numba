@@ -33,8 +33,7 @@ def _inlining_threshold(optlevel, sizelevel=0):
     return 225
 
 
-def create_pass_manager_builder(opt=2, loop_vectorize=False,
-                                slp_vectorize=False):
+def create_pass_manager_builder(opt=2, loop_vectorize=False, slp_vectorize=False):
     """
     Create an LLVM pass manager with the desired optimisation level and options.
     """

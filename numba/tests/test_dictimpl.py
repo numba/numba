@@ -22,6 +22,7 @@ class Dict(object):
     """A wrapper around the C-API to provide a minimal dictionary object for
     testing.
     """
+
     def __init__(self, tc, keysize, valsize):
         """
         Parameters
@@ -85,7 +86,10 @@ class Dict(object):
     def dict_new_minsize(self, key_size, val_size):
         dp = ctypes.c_void_p()
         status = self.tc.numba_dict_new_sized(
-            ctypes.byref(dp), 0, key_size, val_size,
+            ctypes.byref(dp),
+            0,
+            key_size,
+            val_size,
         )
         self.tc.assertEqual(status, 0)
         return dp
@@ -96,7 +100,10 @@ class Dict(object):
     def dict_insert(self, key_bytes, val_bytes):
         hashval = hash(key_bytes)
         status = self.tc.numba_dict_insert_ez(
-            self.dp, key_bytes, hashval, val_bytes,
+            self.dp,
+            key_bytes,
+            hashval,
+            val_bytes,
         )
         self.tc.assertGreaterEqual(status, 0)
 
@@ -104,7 +111,10 @@ class Dict(object):
         hashval = hash(key_bytes)
         oldval_bytes = ctypes.create_string_buffer(self.valsize)
         ix = self.tc.numba_dict_lookup(
-            self.dp, key_bytes, hashval, oldval_bytes,
+            self.dp,
+            key_bytes,
+            hashval,
+            oldval_bytes,
         )
         self.tc.assertGreaterEqual(ix, DKIX_EMPTY)
         return ix, oldval_bytes.value
@@ -124,9 +134,9 @@ class Dict(object):
         status = self.tc.numba_dict_popitem(self.dp, key_bytes, val_bytes)
         if status != 0:
             if status == -4:
-                raise KeyError('popitem(): dictionary is empty')
+                raise KeyError("popitem(): dictionary is empty")
             else:
-                self.tc._fail('Unknown')
+                self.tc._fail("Unknown")
         return key_bytes.value, val_bytes.value
 
     def dict_iter(self, itptr):
@@ -136,10 +146,12 @@ class Dict(object):
         bk = ctypes.c_void_p(0)
         bv = ctypes.c_void_p(0)
         status = self.tc.numba_dict_iter_next(
-            itptr, ctypes.byref(bk), ctypes.byref(bv),
+            itptr,
+            ctypes.byref(bk),
+            ctypes.byref(bv),
         )
         if status == -2:
-            raise ValueError('dictionary mutated')
+            raise ValueError("dictionary mutated")
         elif status == -3:
             return
         else:
@@ -148,8 +160,8 @@ class Dict(object):
             # Check the alignment of the key-value in the entries.
             # We know we are getting the pointers to data in the entries.
 
-            self.tc.assertEqual(bk.value % ALIGN, 0, msg='key not aligned')
-            self.tc.assertEqual(bv.value % ALIGN, 0, msg='val not aligned')
+            self.tc.assertEqual(bk.value % ALIGN, 0, msg="key not aligned")
+            self.tc.assertEqual(bv.value % ALIGN, 0, msg="val not aligned")
 
             key = (ctypes.c_char * self.keysize).from_address(bk.value)
             val = (ctypes.c_char * self.valsize).from_address(bv.value)
@@ -162,6 +174,7 @@ class DictIter(object):
     Only the `.items()` is needed.  `.keys` and `.values` can be trivially
     implemented on the `.items` iterator.
     """
+
     def __init__(self, parent):
         self.parent = parent
         itsize = self.parent.tc.numba_dict_iter_sizeof()
@@ -180,12 +193,13 @@ class DictIter(object):
             k, v = out
             return k.decode(), v.decode()
 
-    next = __next__    # needed for py2 only
+    next = __next__  # needed for py2 only
 
 
 class Parametrized(tuple):
     """supporting type for TestDictImpl.test_parametrized_types
     needs to be global to be cacheable"""
+
     def __init__(self, tup):
         assert all(isinstance(v, str) for v in tup)
 
@@ -195,7 +209,7 @@ class ParametrizedType(types.Type):
     BUT type name is the same for all n"""
 
     def __init__(self, value):
-        super(ParametrizedType, self).__init__('ParametrizedType')
+        super(ParametrizedType, self).__init__("ParametrizedType")
         self.dtype = types.unicode_type
         self.n = len(value)
 
@@ -209,8 +223,7 @@ class ParametrizedType(types.Type):
 
 class TestDictImpl(TestCase):
     def setUp(self):
-        """Bind to the c_helper library and provide the ctypes wrapper.
-        """
+        """Bind to the c_helper library and provide the ctypes wrapper."""
         dict_t = ctypes.c_void_p
         iter_t = ctypes.c_void_p
         hash_t = ctypes.c_ssize_t
@@ -221,7 +234,7 @@ class TestDictImpl(TestCase):
 
         # numba_test_dict()
         self.numba_test_dict = wrap(
-            'test_dict',
+            "test_dict",
             ctypes.c_int,
         )
         # numba_dict_new_sized(
@@ -231,24 +244,24 @@ class TestDictImpl(TestCase):
         #    Py_ssize_t val_size
         # )
         self.numba_dict_new_sized = wrap(
-            'dict_new_sized',
+            "dict_new_sized",
             ctypes.c_int,
             [
                 ctypes.POINTER(dict_t),  # out
-                ctypes.c_ssize_t,        # n_keys
-                ctypes.c_ssize_t,        # key_size
-                ctypes.c_ssize_t,        # val_size
+                ctypes.c_ssize_t,  # n_keys
+                ctypes.c_ssize_t,  # key_size
+                ctypes.c_ssize_t,  # val_size
             ],
         )
         # numba_dict_free(NB_Dict *d)
         self.numba_dict_free = wrap(
-            'dict_free',
+            "dict_free",
             None,
             [dict_t],
         )
         # numba_dict_length(NB_Dict *d)
         self.numba_dict_length = wrap(
-            'dict_length',
+            "dict_length",
             ctypes.c_ssize_t,
             [dict_t],
         )
@@ -259,13 +272,13 @@ class TestDictImpl(TestCase):
         #     const char *val_bytes,
         #     )
         self.numba_dict_insert_ez = wrap(
-            'dict_insert_ez',
+            "dict_insert_ez",
             ctypes.c_int,
             [
-                dict_t,             # d
-                ctypes.c_char_p,    # key_bytes
-                hash_t,             # hash
-                ctypes.c_char_p,    # val_bytes
+                dict_t,  # d
+                ctypes.c_char_p,  # key_bytes
+                hash_t,  # hash
+                ctypes.c_char_p,  # val_bytes
             ],
         )
         # numba_dict_lookup(
@@ -275,13 +288,13 @@ class TestDictImpl(TestCase):
         #       char *oldval_bytes
         # )
         self.numba_dict_lookup = wrap(
-            'dict_lookup',
+            "dict_lookup",
             ctypes.c_ssize_t,
             [
-                dict_t,             # d
-                ctypes.c_char_p,    # key_bytes
-                hash_t,             # hash
-                ctypes.c_char_p,    # oldval_bytes
+                dict_t,  # d
+                ctypes.c_char_p,  # key_bytes
+                hash_t,  # hash
+                ctypes.c_char_p,  # oldval_bytes
             ],
         )
         # numba_dict_delitem(
@@ -290,12 +303,12 @@ class TestDictImpl(TestCase):
         #     Py_ssize_t ix
         # )
         self.numba_dict_delitem = wrap(
-            'dict_delitem',
+            "dict_delitem",
             ctypes.c_int,
             [
-                dict_t,             # d
-                hash_t,             # hash
-                ctypes.c_ssize_t,   # ix
+                dict_t,  # d
+                hash_t,  # hash
+                ctypes.c_ssize_t,  # ix
             ],
         )
         # numba_dict_popitem(
@@ -304,17 +317,17 @@ class TestDictImpl(TestCase):
         #   char *val_bytes
         # )
         self.numba_dict_popitem = wrap(
-            'dict_popitem',
+            "dict_popitem",
             ctypes.c_int,
             [
-                dict_t,             # d
-                ctypes.c_char_p,    # key_bytes
-                ctypes.c_char_p,    # val_bytes
+                dict_t,  # d
+                ctypes.c_char_p,  # key_bytes
+                ctypes.c_char_p,  # val_bytes
             ],
         )
         # numba_dict_iter_sizeof()
         self.numba_dict_iter_sizeof = wrap(
-            'dict_iter_sizeof',
+            "dict_iter_sizeof",
             ctypes.c_size_t,
         )
         # numba_dict_iter(
@@ -322,7 +335,7 @@ class TestDictImpl(TestCase):
         #     NB_Dict     *d
         # )
         self.numba_dict_iter = wrap(
-            'dict_iter',
+            "dict_iter",
             None,
             [
                 iter_t,
@@ -335,12 +348,12 @@ class TestDictImpl(TestCase):
         #     const char **val_ptr
         # )
         self.numba_dict_iter_next = wrap(
-            'dict_iter_next',
+            "dict_iter_next",
             ctypes.c_int,
             [
-                iter_t,                             # it
-                ctypes.POINTER(ctypes.c_void_p),    # key_ptr
-                ctypes.POINTER(ctypes.c_void_p),    # val_ptr
+                iter_t,  # it
+                ctypes.POINTER(ctypes.c_void_p),  # key_ptr
+                ctypes.POINTER(ctypes.c_void_p),  # val_ptr
             ],
         )
 
@@ -353,31 +366,31 @@ class TestDictImpl(TestCase):
         # Tests insertion and lookup for a small dict.
         d = Dict(self, 4, 8)
         self.assertEqual(len(d), 0)
-        self.assertIsNone(d.get('abcd'))
+        self.assertIsNone(d.get("abcd"))
 
         # First key
-        d['abcd'] = 'beefcafe'
+        d["abcd"] = "beefcafe"
         self.assertEqual(len(d), 1)
-        self.assertIsNotNone(d.get('abcd'))
-        self.assertEqual(d['abcd'], 'beefcafe')
+        self.assertIsNotNone(d.get("abcd"))
+        self.assertEqual(d["abcd"], "beefcafe")
 
         # Duplicated key replaces
-        d['abcd'] = 'cafe0000'
+        d["abcd"] = "cafe0000"
         self.assertEqual(len(d), 1)
-        self.assertEqual(d['abcd'], 'cafe0000')
+        self.assertEqual(d["abcd"], "cafe0000")
 
         # Second key
-        d['abce'] = 'cafe0001'
+        d["abce"] = "cafe0001"
         self.assertEqual(len(d), 2)
-        self.assertEqual(d['abcd'], 'cafe0000')
-        self.assertEqual(d['abce'], 'cafe0001')
+        self.assertEqual(d["abcd"], "cafe0000")
+        self.assertEqual(d["abce"], "cafe0001")
 
         # Third key
-        d['abcf'] = 'cafe0002'
+        d["abcf"] = "cafe0002"
         self.assertEqual(len(d), 3)
-        self.assertEqual(d['abcd'], 'cafe0000')
-        self.assertEqual(d['abce'], 'cafe0001')
-        self.assertEqual(d['abcf'], 'cafe0002')
+        self.assertEqual(d["abcd"], "cafe0000")
+        self.assertEqual(d["abce"], "cafe0001")
+        self.assertEqual(d["abcf"], "cafe0002")
 
     def check_insertion_many(self, nmax):
         # Helper to test insertion/lookup/resize
@@ -421,41 +434,41 @@ class TestDictImpl(TestCase):
         # Test deletion
         d = Dict(self, 4, 8)
         self.assertEqual(len(d), 0)
-        self.assertIsNone(d.get('abcd'))
+        self.assertIsNone(d.get("abcd"))
 
-        d['abcd'] = 'cafe0000'
-        d['abce'] = 'cafe0001'
-        d['abcf'] = 'cafe0002'
+        d["abcd"] = "cafe0000"
+        d["abce"] = "cafe0001"
+        d["abcf"] = "cafe0002"
 
         self.assertEqual(len(d), 3)
-        self.assertEqual(d['abcd'], 'cafe0000')
-        self.assertEqual(d['abce'], 'cafe0001')
-        self.assertEqual(d['abcf'], 'cafe0002')
+        self.assertEqual(d["abcd"], "cafe0000")
+        self.assertEqual(d["abce"], "cafe0001")
+        self.assertEqual(d["abcf"], "cafe0002")
         self.assertEqual(len(d), 3)
 
         # Delete first item
-        del d['abcd']
-        self.assertIsNone(d.get('abcd'))
-        self.assertEqual(d['abce'], 'cafe0001')
-        self.assertEqual(d['abcf'], 'cafe0002')
+        del d["abcd"]
+        self.assertIsNone(d.get("abcd"))
+        self.assertEqual(d["abce"], "cafe0001")
+        self.assertEqual(d["abcf"], "cafe0002")
         self.assertEqual(len(d), 2)
 
         # Delete first item again
         with self.assertRaises(KeyError):
-            del d['abcd']
+            del d["abcd"]
 
         # Delete third
-        del d['abcf']
-        self.assertIsNone(d.get('abcd'))
-        self.assertEqual(d['abce'], 'cafe0001')
-        self.assertIsNone(d.get('abcf'))
+        del d["abcf"]
+        self.assertIsNone(d.get("abcd"))
+        self.assertEqual(d["abce"], "cafe0001")
+        self.assertIsNone(d.get("abcf"))
         self.assertEqual(len(d), 1)
 
         # Delete second
-        del d['abce']
-        self.assertIsNone(d.get('abcd'))
-        self.assertIsNone(d.get('abce'))
-        self.assertIsNone(d.get('abcf'))
+        del d["abce"]
+        self.assertIsNone(d.get("abcd"))
+        self.assertIsNone(d.get("abce"))
+        self.assertIsNone(d.get("abcf"))
         self.assertEqual(len(d), 0)
 
     def check_delete_randomly(self, nmax, ndrop, nrefill, seed=0):
@@ -560,7 +573,7 @@ class TestDictImpl(TestCase):
         with self.assertRaises(KeyError) as raises:
             d.popitem()
         self.assertIn(
-            'popitem(): dictionary is empty',
+            "popitem(): dictionary is empty",
             str(raises.exception),
         )
 
@@ -629,7 +642,7 @@ class TestDictImpl(TestCase):
             def objmode_vs_cache_vs_parametrized_impl(v):
                 # typed.List shows same behaviour after fix for #6397
                 d = typed.Dict.empty(types.unicode_type, typ)
-                d['data'] = v
+                d["data"] = v
 
             return objmode_vs_cache_vs_parametrized_impl
 
@@ -643,7 +656,7 @@ class TestDictImpl(TestCase):
             dict_vs_cache_vs_parametrized(x)
             dict_vs_cache_vs_parametrized(y)
 
-        x, y = Parametrized(('a', 'b')), Parametrized(('a',))
+        x, y = Parametrized(("a", "b")), Parametrized(("a",))
         set_parametrized_data(x, y)
 
         # reset dispatchers and targetctx to force re-load from cache as if a

@@ -7,8 +7,11 @@ import numpy as np
 
 from numba import njit, vectorize
 from numba.tests.support import MemoryLeakMixin, TestCase
-from numba.core.errors import (TypingError, NumbaNotImplementedError,
-                               NumbaExperimentalFeatureWarning)
+from numba.core.errors import (
+    TypingError,
+    NumbaNotImplementedError,
+    NumbaExperimentalFeatureWarning,
+)
 import unittest
 from numba.np.ufunc import dufunc
 from numba.np.numpy_support import from_dtype
@@ -47,11 +50,11 @@ class TestDUFunc(MemoryLeakMixin, unittest.TestCase):
         with self.assertRaises(ValueError):
             duadd._frozen = False
         with self.assertRaises(TypeError):
-            duadd(np.linspace(0,1,10), np.linspace(1,2,10))
+            duadd(np.linspace(0, 1, 10), np.linspace(1, 2, 10))
 
     def test_scalar(self):
         duadd = self.nopython_dufunc(pyuadd)
-        self.assertEqual(pyuadd(1,2), duadd(1,2))
+        self.assertEqual(pyuadd(1, 2), duadd(1, 2))
 
     def test_npm_call(self):
         duadd = self.nopython_dufunc(pyuadd)
@@ -59,19 +62,20 @@ class TestDUFunc(MemoryLeakMixin, unittest.TestCase):
         @njit
         def npmadd(a0, a1, o0):
             duadd(a0, a1, o0)
-        X = np.linspace(0,1.9,20)
+
+        X = np.linspace(0, 1.9, 20)
         X0 = X[:10]
         X1 = X[10:]
         out0 = np.zeros(10)
         npmadd(X0, X1, out0)
         np.testing.assert_array_equal(X0 + X1, out0)
-        Y0 = X0.reshape((2,5))
-        Y1 = X1.reshape((2,5))
-        out1 = np.zeros((2,5))
+        Y0 = X0.reshape((2, 5))
+        Y1 = X1.reshape((2, 5))
+        out1 = np.zeros((2, 5))
         npmadd(Y0, Y1, out1)
         np.testing.assert_array_equal(Y0 + Y1, out1)
         Y2 = X1[:5]
-        out2 = np.zeros((2,5))
+        out2 = np.zeros((2, 5))
         npmadd(Y0, Y2, out2)
         np.testing.assert_array_equal(Y0 + Y2, out2)
 
@@ -81,20 +85,21 @@ class TestDUFunc(MemoryLeakMixin, unittest.TestCase):
         @njit
         def npmadd(a0, a1):
             return duadd(a0, a1)
-        X = np.linspace(0,1.9,20)
+
+        X = np.linspace(0, 1.9, 20)
         X0 = X[:10]
         X1 = X[10:]
         out0 = npmadd(X0, X1)
         np.testing.assert_array_equal(X0 + X1, out0)
-        Y0 = X0.reshape((2,5))
-        Y1 = X1.reshape((2,5))
+        Y0 = X0.reshape((2, 5))
+        Y1 = X1.reshape((2, 5))
         out1 = npmadd(Y0, Y1)
         np.testing.assert_array_equal(Y0 + Y1, out1)
         Y2 = X1[:5]
         out2 = npmadd(Y0, Y2)
         np.testing.assert_array_equal(Y0 + Y2, out2)
-        out3 = npmadd(1.,2.)
-        self.assertEqual(out3, 3.)
+        out3 = npmadd(1.0, 2.0)
+        self.assertEqual(out3, 3.0)
 
     def test_ufunc_props(self):
         duadd = self.nopython_dufunc(pyuadd)
@@ -113,27 +118,28 @@ class TestDUFunc(MemoryLeakMixin, unittest.TestCase):
         duadd = self.nopython_dufunc(pyuadd)
         duadd(1, 2)  # initialize types attribute
 
-        attributes = {'nin': duadd.nin,
-                      'nout': duadd.nout,
-                      'nargs': duadd.nargs,
-                      #'ntypes': duadd.ntypes,
-                      #'types': duadd.types,
-                      'identity': duadd.identity,
-                      'signature': duadd.signature}
+        attributes = {
+            "nin": duadd.nin,
+            "nout": duadd.nout,
+            "nargs": duadd.nargs,
+            #'ntypes': duadd.ntypes,
+            #'types': duadd.types,
+            "identity": duadd.identity,
+            "signature": duadd.signature,
+        }
 
         def get_attr_fn(attr):
-            fn = f'''
+            fn = f"""
                 def impl():
                     return duadd.{attr}
-            '''
+            """
             l = {}
-            exec(textwrap.dedent(fn), {'duadd': duadd}, l)
-            return l['impl']
+            exec(textwrap.dedent(fn), {"duadd": duadd}, l)
+            return l["impl"]
 
         for attr, val in attributes.items():
             cfunc = njit(get_attr_fn(attr))
-            self.assertEqual(val, cfunc(),
-                             f'Attribute differs from original: {attr}')
+            self.assertEqual(val, cfunc(), f"Attribute differs from original: {attr}")
 
         # We don't expose [n]types attributes as they are dynamic attributes
         # and can change as the user calls the ufunc
@@ -160,6 +166,7 @@ class TestDUFuncAt(TestCase):
         @njit
         def fn(*args):
             return vec.at(*args)
+
         return fn
 
     def test_numpy_ufunc_at_basic(self):
@@ -181,7 +188,7 @@ class TestDUFuncAt(TestCase):
         self._compare_output(add_at, np.add, a, [2, 5, 2], 1)
 
         # missing second operand
-        err_msg = 'second operand needed for ufunc'
+        err_msg = "second operand needed for ufunc"
         with self.assertRaisesRegex(TypingError, err_msg):
             add_at(a.copy(), [2, 5, 3], None)
 
@@ -191,7 +198,7 @@ class TestDUFuncAt(TestCase):
         self._compare_output(add_at, np.add, a.copy(), [2, 5, 2], b)
 
         # extraneous second operand
-        err_msg = 'second operand provided when ufunc is unary'
+        err_msg = "second operand provided when ufunc is unary"
         with self.assertRaisesRegex(TypingError, err_msg):
             negative_jit_2(a.copy(), [2, 5, 3], [1, 2, 3])
 
@@ -199,7 +206,7 @@ class TestDUFuncAt(TestCase):
             add_at(a.copy(), [2, 5, 3], [[1, 2], 1])
 
     def test_ufunc_at_inner_loop(self):
-        typecodes = np.typecodes['Complex']
+        typecodes = np.typecodes["Complex"]
         ufuncs = (np.add, np.subtract, np.multiply)
         for typecode in typecodes:
 
@@ -210,8 +217,9 @@ class TestDUFuncAt(TestCase):
 
             for ufunc in ufuncs:
                 a = np.ones(10, dtype=typecode)
-                indx = np.concatenate([np.ones(6, dtype=np.intp),
-                                       np.full(18, 4, dtype=np.intp)])
+                indx = np.concatenate(
+                    [np.ones(6, dtype=np.intp), np.full(18, 4, dtype=np.intp)]
+                )
                 value = a.dtype.type(1j)
                 ufunc_at = self._generate_jit(ufunc)
                 ufunc_at(a, indx, value)
@@ -229,8 +237,7 @@ class TestDUFuncAt(TestCase):
         # with subspaces
         arr = np.zeros(5, dtype=int)
         add_at = self._generate_jit(np.add)
-        self._compare_output(add_at, np.add, arr, slice(None),
-                             np.ones(5, dtype=int))
+        self._compare_output(add_at, np.add, arr, slice(None), np.ones(5, dtype=int))
 
     def test_ufunc_at_negative(self):
         arr = np.ones(5, dtype=np.int32)
@@ -261,7 +268,7 @@ class TestDUFuncAt(TestCase):
         assert arr[0] == len(values)
 
     def test_ufunc_at_scalar_value_fastpath(self):
-        values = (np.ones(1), np.ones(()), np.float64(1.), 1.)
+        values = (np.ones(1), np.ones(()), np.float64(1.0), 1.0)
         for value in values:
             arr = np.zeros(1000)
             # index must be cast, which may be buffered in chunks:
@@ -275,85 +282,78 @@ class TestDUFuncAt(TestCase):
         b = np.array([[100, 100, 100], [200, 200, 200], [300, 300, 300]])
         add_at = self._generate_jit(np.add)
         add_at(a, (slice(None), np.asarray([1, 2, 1])), b)
-        self.assertPreciseEqual(a, np.array(
-            [[0, 201, 102], [3, 404, 205], [6, 607, 308]]))
+        self.assertPreciseEqual(
+            a, np.array([[0, 201, 102], [3, 404, 205], [6, 607, 308]])
+        )
 
         a = np.arange(27).reshape(3, 3, 3)
         b = np.array([100, 200, 300])
         add_at(a, (slice(None), slice(None), np.asarray([1, 2, 1])), b)
-        self.assertPreciseEqual(a, np.array(
-                                [[[0, 401, 202],
-                                  [3, 404, 205],
-                                  [6, 407, 208]],
-
-                                 [[9, 410, 211],
-                                  [12, 413, 214],
-                                  [15, 416, 217]],
-
-                                 [[18, 419, 220],
-                                  [21, 422, 223],
-                                  [24, 425, 226]]]))
+        self.assertPreciseEqual(
+            a,
+            np.array(
+                [
+                    [[0, 401, 202], [3, 404, 205], [6, 407, 208]],
+                    [[9, 410, 211], [12, 413, 214], [15, 416, 217]],
+                    [[18, 419, 220], [21, 422, 223], [24, 425, 226]],
+                ]
+            ),
+        )
 
         a = np.arange(9).reshape(3, 3)
         b = np.array([[100, 100, 100], [200, 200, 200], [300, 300, 300]])
         add_at(a, (np.asarray([1, 2, 1]), slice(None)), b)
-        self.assertPreciseEqual(a, np.asarray(
-            [[0, 1, 2], [403, 404, 405], [206, 207, 208]]))
+        self.assertPreciseEqual(
+            a, np.asarray([[0, 1, 2], [403, 404, 405], [206, 207, 208]])
+        )
 
         a = np.arange(27).reshape(3, 3, 3)
         b = np.array([100, 200, 300])
         add_at(a, (slice(None), np.asarray([1, 2, 1]), slice(None)), b)
-        self.assertPreciseEqual(a, np.asarray(
-                                [[[0,  1,  2],
-                                  [203, 404, 605],
-                                  [106, 207, 308]],
-
-                                 [[9,  10, 11],
-                                  [212, 413, 614],
-                                  [115, 216, 317]],
-
-                                 [[18, 19, 20],
-                                  [221, 422, 623],
-                                  [124, 225, 326]]]))
+        self.assertPreciseEqual(
+            a,
+            np.asarray(
+                [
+                    [[0, 1, 2], [203, 404, 605], [106, 207, 308]],
+                    [[9, 10, 11], [212, 413, 614], [115, 216, 317]],
+                    [[18, 19, 20], [221, 422, 623], [124, 225, 326]],
+                ]
+            ),
+        )
 
         a = np.arange(9).reshape(3, 3)
         b = np.array([100, 200, 300])
         add_at(a, (0, np.asarray([1, 2, 1])), b)
-        self.assertPreciseEqual(a, np.asarray(
-            [[0, 401, 202], [3, 4, 5], [6, 7, 8]]))
+        self.assertPreciseEqual(a, np.asarray([[0, 401, 202], [3, 4, 5], [6, 7, 8]]))
 
         a = np.arange(27).reshape(3, 3, 3)
         b = np.array([100, 200, 300])
         add_at(a, (np.asarray([1, 2, 1]), 0, slice(None)), b)
-        self.assertPreciseEqual(a, np.asarray(
-                                [[[0,  1,  2],
-                                  [3,  4,  5],
-                                  [6,  7,  8]],
-
-                                 [[209, 410, 611],
-                                  [12,  13, 14],
-                                  [15,  16, 17]],
-
-                                 [[118, 219, 320],
-                                  [21,  22, 23],
-                                  [24,  25, 26]]]))
+        self.assertPreciseEqual(
+            a,
+            np.asarray(
+                [
+                    [[0, 1, 2], [3, 4, 5], [6, 7, 8]],
+                    [[209, 410, 611], [12, 13, 14], [15, 16, 17]],
+                    [[118, 219, 320], [21, 22, 23], [24, 25, 26]],
+                ]
+            ),
+        )
 
         a = np.arange(27).reshape(3, 3, 3)
         b = np.array([100, 200, 300])
         add_at = self._generate_jit(np.add)
         add_at(a, (slice(None), slice(None), slice(None)), b)
-        self.assertPreciseEqual(a, np.asarray(
-                                [[[100, 201, 302],
-                                  [103, 204, 305],
-                                  [106, 207, 308]],
-
-                                 [[109, 210, 311],
-                                  [112, 213, 314],
-                                  [115, 216, 317]],
-
-                                 [[118, 219, 320],
-                                  [121, 222, 323],
-                                  [124, 225, 326]]]))
+        self.assertPreciseEqual(
+            a,
+            np.asarray(
+                [
+                    [[100, 201, 302], [103, 204, 305], [106, 207, 308]],
+                    [[109, 210, 311], [112, 213, 314], [115, 216, 317]],
+                    [[118, 219, 320], [121, 222, 323], [124, 225, 326]],
+                ]
+            ),
+        )
 
     def test_ufunc_at_0D(self):
         a = np.array(0)
@@ -391,11 +391,12 @@ class TestDUFuncAt(TestCase):
 
     def test_ufunc_at_boolean2(self):
         # Test unary operator
-        a = np.arange(10, dtype='u4')
+        a = np.arange(10, dtype="u4")
         invert_at = self._generate_jit(np.invert)
         invert_at(a, [2, 5, 2])
-        self.assertPreciseEqual(a, np.array([0, 1, 2, 3, 4, 5 ^ 0xffffffff, 6,
-                                             7, 8, 9], dtype=np.uint32))
+        self.assertPreciseEqual(
+            a, np.array([0, 1, 2, 3, 4, 5 ^ 0xFFFFFFFF, 6, 7, 8, 9], dtype=np.uint32)
+        )
 
     def test_ufunc_at_advanced(self):
         # Test empty subspace
@@ -408,19 +409,19 @@ class TestDUFuncAt(TestCase):
     @unittest.expectedFailure
     def test_ufunc_at_advanced_2(self):
         # Test with swapped byte order
-        index = np.array([1, 2, 1], np.dtype('i').newbyteorder())
-        values = np.array([1, 2, 3, 4], np.dtype('f').newbyteorder())
+        index = np.array([1, 2, 1], np.dtype("i").newbyteorder())
+        values = np.array([1, 2, 3, 4], np.dtype("f").newbyteorder())
         add_at = self._generate_jit(np.add)
         add_at(values, index, 3)
         self.assertPreciseEqual(values, [1, 8, 6, 4])
 
     def test_ufunc_at_advanced_3(self):
         # Test exception thrown
-        values = np.array(['a', 1], dtype=object)
+        values = np.array(["a", 1], dtype=object)
         add_at = self._generate_jit(np.add)
         with self.assertRaises(TypingError):
             add_at(values, [0, 1], 1)
-        self.assertPreciseEqual(values, np.array(['a', 1], dtype=object))
+        self.assertPreciseEqual(values, np.array(["a", 1], dtype=object))
 
     def test_ufunc_at_advanced_4(self):
         # Test multiple output ufuncs raise error, NumPy gh-5665
@@ -437,12 +438,12 @@ class TestDUFuncAt(TestCase):
         self.assertPreciseEqual(a, np.array([1, 2, 3]))
 
     def test_ufunc_at_negative_indexes(self):
-        dtypes = np.typecodes['AllInteger'] + np.typecodes['Float']
+        dtypes = np.typecodes["AllInteger"] + np.typecodes["Float"]
         ufuncs = (np.add, np.subtract, np.divide, np.minimum, np.maximum)
 
         for dtype in dtypes:
 
-            if dtype in ('e',):  # skip float16 as we don't have an impl. for it
+            if dtype in ("e",):  # skip float16 as we don't have an impl. for it
                 continue
 
             try:
@@ -471,7 +472,7 @@ class TestDUFuncAt(TestCase):
         b = np.ones((1, 2, 2))
         # matmul is a gufunc, thus, this will fail atm
         matmul_at = self._generate_jit(np.matmul)
-        err_msg = 'does not support ufunc with non-trivial signature'
+        err_msg = "does not support ufunc with non-trivial signature"
         with self.assertRaisesRegex(TypingError, err_msg):
             matmul_at(a, [0], b)
 
@@ -497,7 +498,7 @@ class TestDUFuncAt(TestCase):
         add_at = self._generate_jit(np.add)
 
         # NumPy raises ValueError('array is not broadcastable to correct shape')
-        msg = 'operands could not be broadcast together with remapped shapes'
+        msg = "operands could not be broadcast together with remapped shapes"
         with self.assertRaisesRegex(ValueError, msg):
             add_at(arr, [0, 1], [1, 2, 3])
 
@@ -520,12 +521,12 @@ class TestDUFuncAt(TestCase):
         add_at = self._generate_jit(np.add)
 
         with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always', NumbaExperimentalFeatureWarning)
+            warnings.simplefilter("always", NumbaExperimentalFeatureWarning)
 
             add_at(arr, [0, 3], 10)
 
         self.assertGreater(len(w), 0)
-        self.assertIn('ufunc.at feature is experimental', str(w[0].message))
+        self.assertIn("ufunc.at feature is experimental", str(w[0].message))
 
 
 class TestDUFuncReduceNumPyTests(TestCase):
@@ -541,6 +542,7 @@ class TestDUFuncReduceNumPyTests(TestCase):
         @njit
         def fn(array, axis=0, initial=None):
             return vec.reduce(array, axis=axis, initial=initial)
+
         return fn
 
     @unittest.expectedFailure
@@ -556,10 +558,11 @@ class TestDUFuncReduceNumPyTests(TestCase):
             # We don't use self.assertPreciseEqual as the dtype differs
             # between the value from the reduction and the hardcoded output
             np.testing.assert_equal(a, b)
+
         # test taken from:
         # https://github.com/numpy/numpy/blob/51ee17b6bd4ccec60a5483ee8bff94ad0c0e8585/numpy/_core/tests/test_ufunc.py#L1591  # noqa: E501
 
-        minimum_reduce = self._generate_jit(np.minimum, identity='reorderable')
+        minimum_reduce = self._generate_jit(np.minimum, identity="reorderable")
 
         # np.minimum.reduce is an identityless reduction
 
@@ -570,12 +573,11 @@ class TestDUFuncReduceNumPyTests(TestCase):
         compare_output(minimum_reduce(a, axis=(0, 1)), [0, 1, 1, 1])
         compare_output(minimum_reduce(a, axis=(0, 2)), [0, 1, 1])
         compare_output(minimum_reduce(a, axis=(1, 2)), [1, 0])
-        compare_output(minimum_reduce(a, axis=0),
-                       [[0, 1, 1, 1], [1, 1, 1, 1], [1, 1, 1, 1]])
-        compare_output(minimum_reduce(a, axis=1),
-                       [[1, 1, 1, 1], [0, 1, 1, 1]])
-        compare_output(minimum_reduce(a, axis=2),
-                       [[1, 1, 1], [0, 1, 1]])
+        compare_output(
+            minimum_reduce(a, axis=0), [[0, 1, 1, 1], [1, 1, 1, 1], [1, 1, 1, 1]]
+        )
+        compare_output(minimum_reduce(a, axis=1), [[1, 1, 1, 1], [0, 1, 1, 1]])
+        compare_output(minimum_reduce(a, axis=2), [[1, 1, 1], [0, 1, 1]])
         compare_output(minimum_reduce(a, axis=()), a)
 
         a[...] = 1
@@ -584,12 +586,11 @@ class TestDUFuncReduceNumPyTests(TestCase):
         compare_output(minimum_reduce(a, axis=(0, 1)), [0, 1, 1, 1])
         compare_output(minimum_reduce(a, axis=(0, 2)), [1, 0, 1])
         compare_output(minimum_reduce(a, axis=(1, 2)), [0, 1])
-        compare_output(minimum_reduce(a, axis=0),
-                       [[1, 1, 1, 1], [0, 1, 1, 1], [1, 1, 1, 1]])
-        compare_output(minimum_reduce(a, axis=1),
-                       [[0, 1, 1, 1], [1, 1, 1, 1]])
-        compare_output(minimum_reduce(a, axis=2),
-                       [[1, 0, 1], [1, 1, 1]])
+        compare_output(
+            minimum_reduce(a, axis=0), [[1, 1, 1, 1], [0, 1, 1, 1], [1, 1, 1, 1]]
+        )
+        compare_output(minimum_reduce(a, axis=1), [[0, 1, 1, 1], [1, 1, 1, 1]])
+        compare_output(minimum_reduce(a, axis=2), [[1, 0, 1], [1, 1, 1]])
         compare_output(minimum_reduce(a, axis=()), a)
 
         a[...] = 1
@@ -598,34 +599,33 @@ class TestDUFuncReduceNumPyTests(TestCase):
         compare_output(minimum_reduce(a, axis=(0, 1)), [1, 0, 1, 1])
         compare_output(minimum_reduce(a, axis=(0, 2)), [0, 1, 1])
         compare_output(minimum_reduce(a, axis=(1, 2)), [0, 1])
-        compare_output(minimum_reduce(a, axis=0),
-                       [[1, 0, 1, 1], [1, 1, 1, 1], [1, 1, 1, 1]])
-        compare_output(minimum_reduce(a, axis=1),
-                       [[1, 0, 1, 1], [1, 1, 1, 1]])
-        compare_output(minimum_reduce(a, axis=2),
-                       [[0, 1, 1], [1, 1, 1]])
+        compare_output(
+            minimum_reduce(a, axis=0), [[1, 0, 1, 1], [1, 1, 1, 1], [1, 1, 1, 1]]
+        )
+        compare_output(minimum_reduce(a, axis=1), [[1, 0, 1, 1], [1, 1, 1, 1]])
+        compare_output(minimum_reduce(a, axis=2), [[0, 1, 1], [1, 1, 1]])
         compare_output(minimum_reduce(a, axis=()), a)
 
     def test_numpy_identityless_reduction_corder(self):
-        a = np.empty((2, 3, 4), order='C')
+        a = np.empty((2, 3, 4), order="C")
         self.check_identityless_reduction(a)
 
     def test_numpy_identityless_reduction_forder(self):
-        a = np.empty((2, 3, 4), order='F')
+        a = np.empty((2, 3, 4), order="F")
         self.check_identityless_reduction(a)
 
     def test_numpy_identityless_reduction_otherorder(self):
-        a = np.empty((2, 4, 3), order='C').swapaxes(1, 2)
+        a = np.empty((2, 4, 3), order="C").swapaxes(1, 2)
         self.check_identityless_reduction(a)
 
     def test_numpy_identityless_reduction_noncontig(self):
-        a = np.empty((3, 5, 4), order='C').swapaxes(1, 2)
+        a = np.empty((3, 5, 4), order="C").swapaxes(1, 2)
         a = a[1:, 1:, 1:]
         self.check_identityless_reduction(a)
 
     def test_numpy_identityless_reduction_noncontig_unaligned(self):
-        a = np.empty((3 * 4 * 5 * 8 + 1,), dtype='i1')
-        a = a[1:].view(dtype='f8')
+        a = np.empty((3 * 4 * 5 * 8 + 1,), dtype="i1")
+        a = a[1:].view(dtype="f8")
         a.shape = (3, 4, 5)
         a = a[1:, 1:, 1:]
         self.check_identityless_reduction(a)
@@ -641,10 +641,8 @@ class TestDUFuncReduceNumPyTests(TestCase):
         self.assertPreciseEqual(max_reduce(np.asarray([]), initial=0), 0.0)
 
         # For cases like reduction of an empty array over the reals.
-        self.assertPreciseEqual(min_reduce(np.asarray([]), initial=np.inf),
-                                np.inf)
-        self.assertPreciseEqual(max_reduce(np.asarray([]), initial=-np.inf),
-                                -np.inf)
+        self.assertPreciseEqual(min_reduce(np.asarray([]), initial=np.inf), np.inf)
+        self.assertPreciseEqual(max_reduce(np.asarray([]), initial=-np.inf), -np.inf)
 
         # Random tests
         self.assertPreciseEqual(min_reduce(np.asarray([5]), initial=4), 4)
@@ -654,7 +652,7 @@ class TestDUFuncReduceNumPyTests(TestCase):
 
         # Check initial=None raises ValueError for both types of ufunc
         # reductions
-        msg = 'zero-size array to reduction operation'
+        msg = "zero-size array to reduction operation"
         for func in (add_reduce, min_reduce):
             with self.assertRaisesRegex(ValueError, msg):
                 func(np.asarray([]), initial=None)
@@ -670,7 +668,7 @@ class TestDUFuncReduceNumPyTests(TestCase):
         self.assertPreciseEqual(got.shape, (0,))
 
         # Not OK, the reduction itself is empty and we have no identity
-        msg = 'zero-size array to reduction operation'
+        msg = "zero-size array to reduction operation"
         with self.assertRaisesRegex(ValueError, msg):
             true_divide_reduce(arr, axis=0)
 
@@ -728,8 +726,9 @@ class TestDUFuncReduceNumPyTests(TestCase):
             expect(func, np.zeros((n // 2, m, n // 2)), axis=1)
             expect(func, np.zeros((n, m // 2, m // 2)), axis=(1, 2))
             expect(func, np.zeros((m // 2, n, m // 2)), axis=(0, 2))
-            expect(func, np.zeros((m // 3, m // 3, m // 3,
-                                   n // 2, n // 2)), axis=(0, 1, 2))
+            expect(
+                func, np.zeros((m // 3, m // 3, m // 3, n // 2, n // 2)), axis=(0, 1, 2)
+            )
             # Check what happens if the inner (resp. outer) dimensions are a
             # mix of zero and non-zero:
             expect(func, np.zeros((10, m, n)), axis=(0, 1))
@@ -739,7 +738,7 @@ class TestDUFuncReduceNumPyTests(TestCase):
             expect(func, np.zeros((10, n, m)), axis=2)
 
         # np.maximum is just an arbitrary ufunc with no reduction identity
-        maximum_reduce = self._generate_jit(np.maximum, identity='reorderable')
+        maximum_reduce = self._generate_jit(np.maximum, identity="reorderable")
         self.assertEqual(np.maximum.identity, None)
         t(ok, maximum_reduce, 30, 30)
         t(ok, maximum_reduce, 0, 30)
@@ -764,10 +763,7 @@ class TestDUFuncReduce(TestCase):
 
         @njit
         def foo(a, axis, dtype, initial):
-            return ufunc.reduce(a,
-                                axis=axis,
-                                dtype=dtype,
-                                initial=initial)
+            return ufunc.reduce(a, axis=axis, dtype=dtype, initial=initial)
 
         inputs = [
             np.arange(5),
@@ -797,8 +793,10 @@ class TestDUFuncReduce(TestCase):
                 got = foo(array, axis)
                 self.assertPreciseEqual(expected, got)
 
-        exc_msg = (f"reduction operation '{ufunc.__name__}' is not "
-                   "reorderable, so at most one axis may be specified")
+        exc_msg = (
+            f"reduction operation '{ufunc.__name__}' is not "
+            "reorderable, so at most one axis may be specified"
+        )
         inputs = [
             np.arange(40, dtype=dtype).reshape(5, 4, 2),
             np.arange(10, dtype=dtype),
@@ -813,43 +811,43 @@ class TestDUFuncReduce(TestCase):
                 _check(array, axis)
 
     def test_add_reduce(self):
-        duadd = vectorize('int64(int64, int64)', identity=0)(pyuadd)
+        duadd = vectorize("int64(int64, int64)", identity=0)(pyuadd)
         self._check_reduce(duadd)
         self._check_reduce_axis(duadd, dtype=np.int64)
 
     def test_mul_reduce(self):
-        dumul = vectorize('int64(int64, int64)', identity=1)(pymult)
+        dumul = vectorize("int64(int64, int64)", identity=1)(pymult)
         self._check_reduce(dumul)
 
     def test_non_associative_reduce(self):
-        dusub = vectorize('int64(int64, int64)', identity=None)(pysub)
-        dudiv = vectorize('int64(int64, int64)', identity=None)(pydiv)
+        dusub = vectorize("int64(int64, int64)", identity=None)(pysub)
+        dudiv = vectorize("int64(int64, int64)", identity=None)(pydiv)
         self._check_reduce(dusub)
         self._check_reduce_axis(dusub, dtype=np.int64)
         self._check_reduce(dudiv)
         self._check_reduce_axis(dudiv, dtype=np.int64)
 
     def test_reduce_dtype(self):
-        duadd = vectorize('float64(float64, int64)', identity=0)(pyuadd)
+        duadd = vectorize("float64(float64, int64)", identity=0)(pyuadd)
         self._check_reduce(duadd, dtype=np.float64)
 
     def test_min_reduce(self):
-        dumin = vectorize('int64(int64, int64)', identity='reorderable')(pymin)
+        dumin = vectorize("int64(int64, int64)", identity="reorderable")(pymin)
         self._check_reduce(dumin, initial=10)
         self._check_reduce_axis(dumin, dtype=np.int64)
 
     def test_add_reduce_initial(self):
         # Initial should be used as a start
-        duadd = vectorize('int64(int64, int64)', identity=0)(pyuadd)
+        duadd = vectorize("int64(int64, int64)", identity=0)(pyuadd)
         self._check_reduce(duadd, dtype=np.int64, initial=100)
 
     def test_add_reduce_no_initial_or_identity(self):
         # don't provide an initial or identity value
-        duadd = vectorize('int64(int64, int64)')(pyuadd)
+        duadd = vectorize("int64(int64, int64)")(pyuadd)
         self._check_reduce(duadd, dtype=np.int64)
 
     def test_invalid_input(self):
-        duadd = vectorize('float64(float64, int64)', identity=0)(pyuadd)
+        duadd = vectorize("float64(float64, int64)", identity=0)(pyuadd)
 
         @njit
         def foo(a):
@@ -857,10 +855,10 @@ class TestDUFuncReduce(TestCase):
 
         exc_msg = 'The first argument "array" must be array-like'
         with self.assertRaisesRegex(TypingError, exc_msg):
-            foo('a')
+            foo("a")
 
     def test_dufunc_negative_axis(self):
-        duadd = vectorize('int64(int64, int64)', identity=0)(pyuadd)
+        duadd = vectorize("int64(int64, int64)", identity=0)(pyuadd)
 
         @njit
         def foo(a, axis):
@@ -874,7 +872,7 @@ class TestDUFuncReduce(TestCase):
             self.assertPreciseEqual(expected, got)
 
     def test_dufunc_invalid_axis(self):
-        duadd = vectorize('int64(int64, int64)', identity=0)(pyuadd)
+        duadd = vectorize("int64(int64, int64)", identity=0)(pyuadd)
 
         @njit
         def foo(a, axis):
@@ -887,7 +885,11 @@ class TestDUFuncReduce(TestCase):
             with self.assertRaisesRegex(ValueError, msg):
                 foo(a, axis)
 
-        cases = (-4, 3, (0, -4),)
+        cases = (
+            -4,
+            3,
+            (0, -4),
+        )
         for axis in cases:
             with self.assertRaisesRegex(ValueError, "Invalid axis"):
                 foo(a, axis)

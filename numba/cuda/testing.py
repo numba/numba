@@ -11,7 +11,7 @@ from pathlib import Path
 import unittest
 
 numba_cuda_dir = Path(__file__).parent
-test_data_dir = numba_cuda_dir / 'tests' / 'data'
+test_data_dir = numba_cuda_dir / "tests" / "data"
 
 
 class CUDATestCase(SerialMixin, TestCase):
@@ -55,6 +55,7 @@ class ContextResettingTestCase(CUDATestCase):
     def tearDown(self):
         super().tearDown()
         from numba.cuda.cudadrv.devices import reset
+
         reset()
 
 
@@ -89,42 +90,41 @@ def skip_unless_conda_cudatoolkit(reason):
 
 def skip_if_external_memmgr(reason):
     """Skip test if an EMM Plugin is in use"""
-    return unittest.skipIf(config.CUDA_MEMORY_MANAGER != 'default', reason)
+    return unittest.skipIf(config.CUDA_MEMORY_MANAGER != "default", reason)
 
 
 def skip_under_cuda_memcheck(reason):
-    return unittest.skipIf(os.environ.get('CUDA_MEMCHECK') is not None, reason)
+    return unittest.skipIf(os.environ.get("CUDA_MEMCHECK") is not None, reason)
 
 
 def skip_without_nvdisasm(reason):
-    nvdisasm_path = shutil.which('nvdisasm')
+    nvdisasm_path = shutil.which("nvdisasm")
     return unittest.skipIf(nvdisasm_path is None, reason)
 
 
 def skip_with_nvdisasm(reason):
-    nvdisasm_path = shutil.which('nvdisasm')
+    nvdisasm_path = shutil.which("nvdisasm")
     return unittest.skipIf(nvdisasm_path is not None, reason)
 
 
 def skip_on_arm(reason):
     cpu = platform.processor()
-    is_arm = cpu.startswith('arm') or cpu.startswith('aarch')
+    is_arm = cpu.startswith("arm") or cpu.startswith("aarch")
     return unittest.skipIf(is_arm, reason)
 
 
 def skip_if_cuda_includes_missing(fn):
     # Skip when cuda.h is not available - generally this should indicate
     # whether the CUDA includes are available or not
-    cuda_h = os.path.join(config.CUDA_INCLUDE_PATH, 'cuda.h')
-    cuda_h_file = (os.path.exists(cuda_h) and os.path.isfile(cuda_h))
-    reason = 'CUDA include dir not available on this system'
+    cuda_h = os.path.join(config.CUDA_INCLUDE_PATH, "cuda.h")
+    cuda_h_file = os.path.exists(cuda_h) and os.path.isfile(cuda_h)
+    reason = "CUDA include dir not available on this system"
     return unittest.skipUnless(cuda_h_file, reason)(fn)
 
 
 def skip_if_mvc_enabled(reason):
     """Skip a test if Minor Version Compatibility is enabled"""
-    return unittest.skipIf(config.CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY,
-                           reason)
+    return unittest.skipIf(config.CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY, reason)
 
 
 def skip_if_mvc_libraries_unavailable(fn):
@@ -132,12 +132,14 @@ def skip_if_mvc_libraries_unavailable(fn):
     try:
         import cubinlinker  # noqa: F401
         import ptxcompiler  # noqa: F401
+
         libs_available = True
     except ImportError:
         pass
 
-    return unittest.skipUnless(libs_available,
-                               "Requires cubinlinker and ptxcompiler")(fn)
+    return unittest.skipUnless(libs_available, "Requires cubinlinker and ptxcompiler")(
+        fn
+    )
 
 
 def cc_X_or_above(major, minor):
@@ -179,7 +181,7 @@ def cudadevrt_missing():
     if config.ENABLE_CUDASIM:
         return False
     try:
-        path = libs.get_cudalib('cudadevrt', static=True)
+        path = libs.get_cudalib("cudadevrt", static=True)
         libs.check_static_lib(path)
     except FileNotFoundError:
         return True
@@ -187,7 +189,7 @@ def cudadevrt_missing():
 
 
 def skip_if_cudadevrt_missing(fn):
-    return unittest.skipIf(cudadevrt_missing(), 'cudadevrt missing')(fn)
+    return unittest.skipIf(cudadevrt_missing(), "cudadevrt missing")(fn)
 
 
 class ForeignArray(object):

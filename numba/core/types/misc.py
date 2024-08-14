@@ -1,6 +1,5 @@
 from numba.core.types.abstract import Callable, Literal, Type, Hashable
-from numba.core.types.common import (Dummy, IterableType, Opaque,
-                                     SimpleIteratorType)
+from numba.core.types.common import Dummy, IterableType, Opaque, SimpleIteratorType
 from numba.core.typeconv import Conversion
 from numba.core.errors import TypingError, LiteralTypingError
 from numba.core.ir import UndefinedType
@@ -64,14 +63,13 @@ def unliteral(lit_type):
     """
     Get base type from Literal type.
     """
-    if hasattr(lit_type, '__unliteral__'):
+    if hasattr(lit_type, "__unliteral__"):
         return lit_type.__unliteral__()
-    return getattr(lit_type, 'literal_type', lit_type)
+    return getattr(lit_type, "literal_type", lit_type)
 
 
 def literal(value):
-    """Returns a Literal instance or raise LiteralTypingError
-    """
+    """Returns a Literal instance or raise LiteralTypingError"""
     ty = type(value)
     if isinstance(value, Literal):
         msg = "the function does not accept a Literal type; got {} ({})"
@@ -85,8 +83,7 @@ def literal(value):
 
 
 def maybe_literal(value):
-    """Get a Literal type for the value or None.
-    """
+    """Get a Literal type for the value or None."""
     try:
         return literal(value)
     except LiteralTypingError:
@@ -145,6 +142,7 @@ class MemInfoPointer(Type):
     Pointer to a Numba "meminfo" (i.e. the information for a managed
     piece of memory).
     """
+
     mutable = True
 
     def __init__(self, dtype):
@@ -167,6 +165,7 @@ class CPointer(Type):
         addrspace : int
             The address space pointee belongs to.
     """
+
     mutable = True
 
     def __init__(self, dtype, addrspace=None):
@@ -305,6 +304,7 @@ class ExceptionClass(Callable, Phantom):
 
     def get_call_signatures(self):
         from numba.core import typing
+
         return_type = ExceptionInstance(self.exc_class)
         return [typing.signature(return_type)], False
 
@@ -349,7 +349,7 @@ class SliceType(Type):
 class SliceLiteral(Literal, SliceType):
     def __init__(self, value):
         self._literal_init(value)
-        name = 'Literal[slice]({})'.format(value)
+        name = "Literal[slice]({})".format(value)
         members = 2 if value.step is None else 3
         SliceType.__init__(self, name=name, members=members)
 
@@ -367,6 +367,7 @@ class ClassInstanceType(Type):
     The type of a jitted class *instance*.  It will be the return-type
     of the constructor of the class.
     """
+
     mutable = True
     name_prefix = "instance"
 
@@ -419,12 +420,20 @@ class ClassType(Callable, Opaque):
     The type of the jitted class (not instance).  When the type of a class
     is called, its constructor is invoked.
     """
+
     mutable = True
     name_prefix = "jitclass"
     instance_type_class = ClassInstanceType
 
-    def __init__(self, class_def, ctor_template_cls, struct, jit_methods,
-                 jit_props, jit_static_methods):
+    def __init__(
+        self,
+        class_def,
+        ctor_template_cls,
+        struct,
+        jit_methods,
+        jit_props,
+        jit_static_methods,
+    ):
         self.class_name = class_def.__name__
         self.class_doc = class_def.__doc__
         self._ctor_template_class = ctor_template_cls
@@ -432,9 +441,10 @@ class ClassType(Callable, Opaque):
         self.jit_props = jit_props
         self.jit_static_methods = jit_static_methods
         self.struct = struct
-        fielddesc = ','.join("{0}:{1}".format(k, v) for k, v in struct.items())
-        name = "{0}.{1}#{2:x}<{3}>".format(self.name_prefix, self.class_name,
-                                           id(self), fielddesc)
+        fielddesc = ",".join("{0}:{1}".format(k, v) for k, v in struct.items())
+        name = "{0}.{1}#{2:x}<{3}>".format(
+            self.name_prefix, self.class_name, id(self), fielddesc
+        )
         super(ClassType, self).__init__(name)
 
     def get_call_type(self, context, args, kws):

@@ -1,8 +1,16 @@
 from .. import types, utils, errors
 import operator
-from .templates import (AttributeTemplate, ConcreteTemplate, AbstractTemplate,
-                        infer_global, infer, infer_getattr,
-                        signature, bound_function, make_callable_template)
+from .templates import (
+    AttributeTemplate,
+    ConcreteTemplate,
+    AbstractTemplate,
+    infer_global,
+    infer,
+    infer_getattr,
+    signature,
+    bound_function,
+    make_callable_template,
+)
 from .builtins import normalize_1d_index
 
 
@@ -14,6 +22,7 @@ class InContainer(AbstractTemplate):
         cont, item = args
         if isinstance(cont, types.Container):
             return signature(types.boolean, cont, cont.dtype)
+
 
 @infer_global(len)
 class ContainerLen(AbstractTemplate):
@@ -51,6 +60,7 @@ class GetItemSequence(AbstractTemplate):
             elif isinstance(idx, types.Integer):
                 return signature(seq.dtype, seq, idx)
 
+
 @infer_global(operator.setitem)
 class SetItemSequence(AbstractTemplate):
     def generic(self, args, kws):
@@ -62,7 +72,9 @@ class SetItemSequence(AbstractTemplate):
             elif isinstance(idx, types.Integer):
                 if not self.context.can_convert(value, seq.dtype):
                     msg = "invalid setitem with value of {} to element of {}"
-                    raise errors.TypingError(msg.format(types.unliteral(value), seq.dtype))
+                    raise errors.TypingError(
+                        msg.format(types.unliteral(value), seq.dtype)
+                    )
                 return signature(types.none, seq, idx, seq.dtype)
 
 
@@ -77,6 +89,7 @@ class DelItemSequence(AbstractTemplate):
 
 # --------------------------------------------------------------------------
 # named tuples
+
 
 @infer_getattr
 class NamedTupleAttribute(AttributeTemplate):

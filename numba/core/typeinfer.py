@@ -12,7 +12,6 @@ Constraint propagation is precise and does not regret (no backtracing).
 Constraints push types forward following the dataflow.
 """
 
-
 import logging
 import operator
 import contextlib
@@ -23,9 +22,16 @@ from functools import reduce
 
 from numba.core import types, utils, typing, ir, config
 from numba.core.typing.templates import Signature
-from numba.core.errors import (TypingError, UntypedAttributeError,
-                               new_error_context, termcolor, UnsupportedError,
-                               ForceLiteralArg, CompilerError, NumbaValueError)
+from numba.core.errors import (
+    TypingError,
+    UntypedAttributeError,
+    new_error_context,
+    termcolor,
+    UnsupportedError,
+    ForceLiteralArg,
+    CompilerError,
+    NumbaValueError,
+)
 from numba.core.funcdesc import qualifying_prefix
 from numba.core.typeconv import Conversion
 
@@ -62,19 +68,19 @@ class TypeVar(object):
         if self.locked:
             if tp != self.type:
                 if self.context.can_convert(tp, self.type) is None:
-                    msg = ("No conversion from %s to %s for '%s', "
-                           "defined at %s")
-                    raise TypingError(msg % (tp, self.type, self.var,
-                                             self.define_loc),
-                                      loc=loc)
+                    msg = "No conversion from %s to %s for '%s', " "defined at %s"
+                    raise TypingError(
+                        msg % (tp, self.type, self.var, self.define_loc), loc=loc
+                    )
         else:
             if self.type is not None:
                 unified = self.context.unify_pairs(self.type, tp)
                 if unified is None:
                     msg = "Cannot unify %s and %s for '%s', defined at %s"
-                    raise TypingError(msg % (self.type, tp, self.var,
-                                             self.define_loc),
-                                      loc=self.define_loc)
+                    raise TypingError(
+                        msg % (self.type, tp, self.var, self.define_loc),
+                        loc=self.define_loc,
+                    )
             else:
                 # First time definition
                 unified = tp
@@ -88,18 +94,21 @@ class TypeVar(object):
         assert isinstance(tp, types.Type), type(tp)
 
         if self.locked:
-            msg = ("Invalid reassignment of a type-variable detected, type "
-                   "variables are locked according to the user provided "
-                   "function signature or from an ir.Const node. This is a "
-                   "bug! Type={}. {}").format(tp, self.type)
+            msg = (
+                "Invalid reassignment of a type-variable detected, type "
+                "variables are locked according to the user provided "
+                "function signature or from an ir.Const node. This is a "
+                "bug! Type={}. {}"
+            ).format(tp, self.type)
             raise CompilerError(msg, loc)
 
         # If there is already a type, ensure we can convert it to the
         # locked type.
-        if (self.type is not None and
-                self.context.can_convert(self.type, tp) is None):
-            raise TypingError("No conversion from %s to %s for "
-                              "'%s'" % (tp, self.type, self.var), loc=loc)
+        if self.type is not None and self.context.can_convert(self.type, tp) is None:
+            raise TypingError(
+                "No conversion from %s to %s for " "'%s'" % (tp, self.type, self.var),
+                loc=loc,
+            )
 
         self.type = tp
         self.locked = True
@@ -114,7 +123,7 @@ class TypeVar(object):
         return self.type
 
     def __repr__(self):
-        return '%s := %s' % (self.var, self.type or "<undecided>")
+        return "%s := %s" % (self.var, self.type or "<undecided>")
 
     @property
     def defined(self):
@@ -154,8 +163,9 @@ class ConstraintNetwork(object):
         errors = []
         for constraint in self.constraints:
             loc = constraint.loc
-            with typeinfer.warnings.catch_warnings(filename=loc.filename,
-                                                   lineno=loc.line):
+            with typeinfer.warnings.catch_warnings(
+                filename=loc.filename, lineno=loc.line
+            ):
                 try:
                     constraint(typeinfer)
                 except ForceLiteralArg as e:
@@ -163,15 +173,18 @@ class ConstraintNetwork(object):
                 except TypingError as e:
                     _logger.debug("captured error", exc_info=e)
                     new_exc = TypingError(
-                        str(e), loc=constraint.loc,
+                        str(e),
+                        loc=constraint.loc,
                         highlighting=False,
                     )
                     errors.append(utils.chain_exception(new_exc, e))
                 except Exception as e:
                     if utils.use_old_style_errors():
                         _logger.debug("captured error", exc_info=e)
-                        msg = ("Internal error at {con}.\n{err}\n"
-                               "Enable logging at debug level for details.")
+                        msg = (
+                            "Internal error at {con}.\n{err}\n"
+                            "Enable logging at debug level for details."
+                        )
                         new_exc = TypingError(
                             msg.format(con=constraint, err=str(e)),
                             loc=constraint.loc,
@@ -181,8 +194,10 @@ class ConstraintNetwork(object):
                     elif utils.use_new_style_errors():
                         raise e
                     else:
-                        msg = ("Unknown CAPTURED_ERRORS style: "
-                               f"'{config.CAPTURED_ERRORS}'.")
+                        msg = (
+                            "Unknown CAPTURED_ERRORS style: "
+                            f"'{config.CAPTURED_ERRORS}'."
+                        )
                         assert 0, msg
 
         return errors
@@ -199,8 +214,7 @@ class Propagate(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        with new_error_context("typing of assignment at {0}", self.loc,
-                               loc=self.loc):
+        with new_error_context("typing of assignment at {0}", self.loc, loc=self.loc):
             typeinfer.copy_type(self.src, self.dst, loc=self.loc)
             # If `dst` is refined, notify us
             typeinfer.refine_map[self.dst] = self
@@ -208,8 +222,7 @@ class Propagate(object):
     def refine(self, typeinfer, target_type):
         # Do not back-propagate to locked variables (e.g. constants)
         assert target_type.is_precise()
-        typeinfer.add_type(self.src, target_type, unless_locked=True,
-                           loc=self.loc)
+        typeinfer.add_type(self.src, target_type, unless_locked=True, loc=self.loc)
 
 
 class ArgConstraint(object):
@@ -231,7 +244,7 @@ class ArgConstraint(object):
                     ty.value,
                 )
             if not ty.is_precise():
-                raise TypingError('non-precise type {}'.format(ty))
+                raise TypingError("non-precise type {}".format(ty))
             typeinfer.add_type(self.dst, ty, loc=self.loc)
 
 
@@ -263,21 +276,20 @@ class _BuildContainerConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        with new_error_context("typing of {0} at {1}",
-                               self.container_type, self.loc):
+        with new_error_context("typing of {0} at {1}", self.container_type, self.loc):
             typevars = typeinfer.typevars
             tsets = [typevars[i.name].get() for i in self.items]
             if not tsets:
-                typeinfer.add_type(self.target,
-                                   self.container_type(types.undefined),
-                                   loc=self.loc)
+                typeinfer.add_type(
+                    self.target, self.container_type(types.undefined), loc=self.loc
+                )
             else:
                 for typs in itertools.product(*tsets):
                     unified = typeinfer.context.unify_types(*typs)
                     if unified is not None:
-                        typeinfer.add_type(self.target,
-                                           self.container_type(unified),
-                                           loc=self.loc)
+                        typeinfer.add_type(
+                            self.target, self.container_type(unified), loc=self.loc
+                        )
 
 
 class BuildListConstraint(_BuildContainerConstraint):
@@ -288,14 +300,13 @@ class BuildListConstraint(_BuildContainerConstraint):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        with new_error_context("typing of {0} at {1}",
-                               types.List, self.loc):
+        with new_error_context("typing of {0} at {1}", types.List, self.loc):
             typevars = typeinfer.typevars
             tsets = [typevars[i.name].get() for i in self.items]
             if not tsets:
-                typeinfer.add_type(self.target,
-                                   types.List(types.undefined),
-                                   loc=self.loc)
+                typeinfer.add_type(
+                    self.target, types.List(types.undefined), loc=self.loc
+                )
             else:
                 for typs in itertools.product(*tsets):
                     unified = typeinfer.context.unify_types(*typs)
@@ -305,14 +316,15 @@ class BuildListConstraint(_BuildContainerConstraint):
                         iv = None
                         if all(islit):
                             iv = [x.literal_value for x in typs]
-                        typeinfer.add_type(self.target,
-                                           types.List(unified,
-                                                      initial_value=iv),
-                                           loc=self.loc)
+                        typeinfer.add_type(
+                            self.target,
+                            types.List(unified, initial_value=iv),
+                            loc=self.loc,
+                        )
                     else:
-                        typeinfer.add_type(self.target,
-                                           types.LiteralList(typs),
-                                           loc=self.loc)
+                        typeinfer.add_type(
+                            self.target, types.LiteralList(typs), loc=self.loc
+                        )
 
 
 class BuildSetConstraint(_BuildContainerConstraint):
@@ -334,15 +346,19 @@ class BuildMapConstraint(object):
             typevars = typeinfer.typevars
 
             # figure out what sort of dict is being dealt with
-            tsets = [(typevars[k.name].getone(), typevars[v.name].getone())
-                     for k, v in self.items]
+            tsets = [
+                (typevars[k.name].getone(), typevars[v.name].getone())
+                for k, v in self.items
+            ]
 
             if not tsets:
-                typeinfer.add_type(self.target,
-                                   types.DictType(types.undefined,
-                                                  types.undefined,
-                                                  self.special_value),
-                                   loc=self.loc)
+                typeinfer.add_type(
+                    self.target,
+                    types.DictType(
+                        types.undefined, types.undefined, self.special_value
+                    ),
+                    loc=self.loc,
+                )
             else:
                 # all the info is known about the dict, if its
                 # str keys -> random heterogeneous values treat as literalstrkey
@@ -359,6 +375,7 @@ class BuildMapConstraint(object):
                 def check(other):
                     conv = typeinfer.context.can_convert(other, vt0)
                     return conv is not None and conv < Conversion.unsafe
+
                 homogeneous = all([check(types.unliteral(x)) for x in vtys])
 
                 # Special cases:
@@ -368,24 +385,23 @@ class BuildMapConstraint(object):
                 # a LiteralStrKeyDict, same goes for LiteralList.
                 if len(vtys) == 1:
                     valty = vtys[0]
-                    if isinstance(valty, (types.LiteralStrKeyDict,
-                                          types.List,
-                                          types.LiteralList)):
+                    if isinstance(
+                        valty, (types.LiteralStrKeyDict, types.List, types.LiteralList)
+                    ):
                         homogeneous = False
 
                 if strkey and not homogeneous:
                     resolved_dict = {x: y for x, y in zip(ktys, vtys)}
-                    ty = types.LiteralStrKeyDict(resolved_dict,
-                                                 self.value_indexes)
+                    ty = types.LiteralStrKeyDict(resolved_dict, self.value_indexes)
                     typeinfer.add_type(self.target, ty, loc=self.loc)
                 else:
                     init_value = self.special_value if literalvty else None
                     key_type, value_type = tsets[0]
-                    typeinfer.add_type(self.target,
-                                       types.DictType(key_type,
-                                                      value_type,
-                                                      init_value),
-                                       loc=self.loc)
+                    typeinfer.add_type(
+                        self.target,
+                        types.DictType(key_type, value_type, init_value),
+                        loc=self.loc,
+                    )
 
 
 class ExhaustIterConstraint(object):
@@ -407,18 +423,20 @@ class ExhaustIterConstraint(object):
                         typeinfer.add_type(self.target, tp, loc=self.loc)
                         break
                     else:
-                        msg = (f"wrong tuple length for {self.iterator.name}: ",
-                               f"expected {self.count}, got {len(tp)}")
+                        msg = (
+                            f"wrong tuple length for {self.iterator.name}: ",
+                            f"expected {self.count}, got {len(tp)}",
+                        )
                         raise NumbaValueError(msg)
                 elif isinstance(tp, types.IterableType):
-                    tup = types.UniTuple(dtype=tp.iterator_type.yield_type,
-                                         count=self.count)
+                    tup = types.UniTuple(
+                        dtype=tp.iterator_type.yield_type, count=self.count
+                    )
                     assert tup.is_precise()
                     typeinfer.add_type(self.target, tup, loc=self.loc)
                     break
                 else:
-                    raise TypingError("failed to unpack {}".format(tp),
-                                      loc=self.loc)
+                    raise TypingError("failed to unpack {}".format(tp), loc=self.loc)
 
 
 class PairFirstConstraint(object):
@@ -434,8 +452,10 @@ class PairFirstConstraint(object):
                 if not isinstance(tp, types.Pair):
                     # XXX is this an error?
                     continue
-                assert (isinstance(tp.first_type, types.UndefinedFunctionType)
-                        or tp.first_type.is_precise())
+                assert (
+                    isinstance(tp.first_type, types.UndefinedFunctionType)
+                    or tp.first_type.is_precise()
+                )
                 typeinfer.add_type(self.target, tp.first_type, loc=self.loc)
 
 
@@ -462,9 +482,9 @@ class StaticGetItemConstraint(object):
         self.value = value
         self.index = index
         if index_var is not None:
-            self.fallback = IntrinsicCallConstraint(target, operator.getitem,
-                                                    (value, index_var), {},
-                                                    None, loc)
+            self.fallback = IntrinsicCallConstraint(
+                target, operator.getitem, (value, index_var), {}, None, loc
+            )
         else:
             self.fallback = None
         self.loc = loc
@@ -474,7 +494,8 @@ class StaticGetItemConstraint(object):
             typevars = typeinfer.typevars
             for ty in typevars[self.value.name].get():
                 sig = typeinfer.context.resolve_static_getitem(
-                    value=ty, index=self.index,
+                    value=ty,
+                    index=self.index,
                 )
 
                 if sig is not None:
@@ -553,8 +574,7 @@ def fold_arg_vars(typevars, args, vararg, kws):
 
 
 def _is_array_not_precise(arrty):
-    """Check type is array and it is not precise
-    """
+    """Check type is array and it is not precise"""
     return isinstance(arrty, types.Array) and not arrty.is_precise()
 
 
@@ -562,6 +582,7 @@ class CallConstraint(object):
     """Constraint for calling functions.
     Perform case analysis foreach combinations of argument types.
     """
+
     signature = None
 
     def __init__(self, target, func, args, kws, vararg, loc):
@@ -576,8 +597,7 @@ class CallConstraint(object):
         msg = "typing of call at {0}\n".format(self.loc)
         with new_error_context(msg):
             typevars = typeinfer.typevars
-            with new_error_context(
-                    "resolving caller type: {}".format(self.func)):
+            with new_error_context("resolving caller type: {}".format(self.func)):
                 fnty = typevars[self.func].getone()
             with new_error_context("resolving callee type: {0}", fnty):
                 self.resolve(typeinfer, typevars, fnty)
@@ -606,9 +626,11 @@ class CallConstraint(object):
             sig = typeinfer.resolve_call(fnty, pos_args, kw_args)
         except ForceLiteralArg as e:
             # Adjust for bound methods
-            folding_args = ((fnty.this,) + tuple(self.args)
-                            if isinstance(fnty, types.BoundFunction)
-                            else self.args)
+            folding_args = (
+                (fnty.this,) + tuple(self.args)
+                if isinstance(fnty, types.BoundFunction)
+                else self.args
+            )
             folded = e.fold_arguments(folding_args, self.kws)
             requested = set()
             unsatisfied = set()
@@ -629,24 +651,29 @@ class CallConstraint(object):
             headtemp = "Invalid use of {0} with parameters ({1})"
             args = [str(a) for a in pos_args]
             args += ["%s=%s" % (k, v) for k, v in sorted(kw_args.items())]
-            head = headtemp.format(fnty, ', '.join(map(str, args)))
+            head = headtemp.format(fnty, ", ".join(map(str, args)))
             desc = context.explain_function_type(fnty)
-            msg = '\n'.join([head, desc])
+            msg = "\n".join([head, desc])
             raise TypingError(msg)
 
         typeinfer.add_type(self.target, sig.return_type, loc=self.loc)
 
         # If the function is a bound function and its receiver type
         # was refined, propagate it.
-        if (isinstance(fnty, types.BoundFunction)
-                and sig.recvr is not None
-                and sig.recvr != fnty.this):
+        if (
+            isinstance(fnty, types.BoundFunction)
+            and sig.recvr is not None
+            and sig.recvr != fnty.this
+        ):
             refined_this = context.unify_pairs(sig.recvr, fnty.this)
-            if (refined_this is None and
-                    fnty.this.is_precise() and
-                    sig.recvr.is_precise()):
+            if (
+                refined_this is None
+                and fnty.this.is_precise()
+                and sig.recvr.is_precise()
+            ):
                 msg = "Cannot refine type {} to {}".format(
-                    sig.recvr, fnty.this,
+                    sig.recvr,
+                    fnty.this,
                 )
                 raise TypingError(msg, loc=self.loc)
             if refined_this is not None and refined_this.is_precise():
@@ -670,16 +697,15 @@ class CallConstraint(object):
         self._add_refine_map(typeinfer, typevars, sig)
 
     def _add_refine_map(self, typeinfer, typevars, sig):
-        """Add this expression to the refine_map base on the type of target_type
-        """
+        """Add this expression to the refine_map base on the type of target_type"""
         target_type = typevars[self.target].getone()
         # Array
-        if (isinstance(target_type, types.Array)
-                and isinstance(sig.return_type.dtype, types.Undefined)):
+        if isinstance(target_type, types.Array) and isinstance(
+            sig.return_type.dtype, types.Undefined
+        ):
             typeinfer.refine_map[self.target] = self
         # DictType
-        if (isinstance(target_type, types.DictType) and
-                not target_type.is_precise()):
+        if isinstance(target_type, types.DictType) and not target_type.is_precise():
             typeinfer.refine_map[self.target] = self
 
     def refine(self, typeinfer, updated_type):
@@ -693,7 +719,7 @@ class CallConstraint(object):
                 newtype = aryty.copy(dtype=updated_type.dtype)
                 typeinfer.add_type(self.args[0].name, newtype, loc=self.loc)
         else:
-            m = 'no type refinement implemented for function {} updating to {}'
+            m = "no type refinement implemented for function {} updating to {}"
             raise TypingError(m.format(self.func, updated_type))
 
     def get_call_signature(self):
@@ -724,8 +750,7 @@ class GetAttrConstraint(object):
             for ty in valtys:
                 attrty = typeinfer.context.resolve_getattr(ty, self.attr)
                 if attrty is None:
-                    raise UntypedAttributeError(ty, self.attr,
-                                                loc=self.inst.loc)
+                    raise UntypedAttributeError(ty, self.attr, loc=self.inst.loc)
                 else:
                     assert attrty.is_precise()
                     typeinfer.add_type(self.target, attrty, loc=self.loc)
@@ -742,7 +767,8 @@ class GetAttrConstraint(object):
 
     def __repr__(self):
         return 'resolving type of attribute "{attr}" of "{value}"'.format(
-            value=self.value, attr=self.attr)
+            value=self.value, attr=self.attr
+        )
 
 
 class SetItemRefinement(object):
@@ -751,8 +777,7 @@ class SetItemRefinement(object):
     """
 
     def _refine_target_type(self, typeinfer, targetty, idxty, valty, sig):
-        """Refine the target-type given the known index type and value type.
-        """
+        """Refine the target-type given the known index type and value type."""
         # For array setitem, refine imprecise array dtype
         if _is_array_not_precise(targetty):
             typeinfer.add_type(self.target.name, sig.args[0], loc=self.loc)
@@ -761,12 +786,14 @@ class SetItemRefinement(object):
             if not targetty.is_precise():
                 refined = targetty.refine(idxty, valty)
                 typeinfer.add_type(
-                    self.target.name, refined,
+                    self.target.name,
+                    refined,
                     loc=self.loc,
                 )
             elif isinstance(targetty, types.LiteralStrKeyDict):
                 typeinfer.add_type(
-                    self.target.name, types.DictType(idxty, valty),
+                    self.target.name,
+                    types.DictType(idxty, valty),
                     loc=self.loc,
                 )
 
@@ -781,8 +808,10 @@ class SetItemConstraint(SetItemRefinement):
     def __call__(self, typeinfer):
         with new_error_context("typing of setitem at {0}", self.loc):
             typevars = typeinfer.typevars
-            if not all(typevars[var.name].defined
-                       for var in (self.target, self.index, self.value)):
+            if not all(
+                typevars[var.name].defined
+                for var in (self.target, self.index, self.value)
+            ):
                 return
             targetty = typevars[self.target.name].getone()
             idxty = typevars[self.index.name].getone()
@@ -790,8 +819,10 @@ class SetItemConstraint(SetItemRefinement):
 
             sig = typeinfer.context.resolve_setitem(targetty, idxty, valty)
             if sig is None:
-                raise TypingError("Cannot resolve setitem: %s[%s] = %s" %
-                                  (targetty, idxty, valty), loc=self.loc)
+                raise TypingError(
+                    "Cannot resolve setitem: %s[%s] = %s" % (targetty, idxty, valty),
+                    loc=self.loc,
+                )
 
             self.signature = sig
             self._refine_target_type(typeinfer, targetty, idxty, valty, sig)
@@ -811,20 +842,24 @@ class StaticSetItemConstraint(SetItemRefinement):
     def __call__(self, typeinfer):
         with new_error_context("typing of staticsetitem at {0}", self.loc):
             typevars = typeinfer.typevars
-            if not all(typevars[var.name].defined
-                       for var in (self.target, self.index_var, self.value)):
+            if not all(
+                typevars[var.name].defined
+                for var in (self.target, self.index_var, self.value)
+            ):
                 return
             targetty = typevars[self.target.name].getone()
             idxty = typevars[self.index_var.name].getone()
             valty = typevars[self.value.name].getone()
 
-            sig = typeinfer.context.resolve_static_setitem(targetty,
-                                                           self.index, valty)
+            sig = typeinfer.context.resolve_static_setitem(targetty, self.index, valty)
             if sig is None:
                 sig = typeinfer.context.resolve_setitem(targetty, idxty, valty)
             if sig is None:
-                raise TypingError("Cannot resolve setitem: %s[%r] = %s" %
-                                  (targetty, self.index, valty), loc=self.loc)
+                raise TypingError(
+                    "Cannot resolve setitem: %s[%r] = %s"
+                    % (targetty, self.index, valty),
+                    loc=self.loc,
+                )
             self.signature = sig
             self._refine_target_type(typeinfer, targetty, idxty, valty, sig)
 
@@ -841,16 +876,16 @@ class DelItemConstraint(object):
     def __call__(self, typeinfer):
         with new_error_context("typing of delitem at {0}", self.loc):
             typevars = typeinfer.typevars
-            if not all(typevars[var.name].defined
-                       for var in (self.target, self.index)):
+            if not all(typevars[var.name].defined for var in (self.target, self.index)):
                 return
             targetty = typevars[self.target.name].getone()
             idxty = typevars[self.index.name].getone()
 
             sig = typeinfer.context.resolve_delitem(targetty, idxty)
             if sig is None:
-                raise TypingError("Cannot resolve delitem: %s[%s]" %
-                                  (targetty, idxty), loc=self.loc)
+                raise TypingError(
+                    "Cannot resolve delitem: %s[%s]" % (targetty, idxty), loc=self.loc
+                )
             self.signature = sig
 
     def get_call_signature(self):
@@ -865,20 +900,21 @@ class SetAttrConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        with new_error_context("typing of set attribute {0!r} at {1}",
-                               self.attr, self.loc):
+        with new_error_context(
+            "typing of set attribute {0!r} at {1}", self.attr, self.loc
+        ):
             typevars = typeinfer.typevars
-            if not all(typevars[var.name].defined
-                       for var in (self.target, self.value)):
+            if not all(typevars[var.name].defined for var in (self.target, self.value)):
                 return
             targetty = typevars[self.target.name].getone()
             valty = typevars[self.value.name].getone()
-            sig = typeinfer.context.resolve_setattr(targetty, self.attr,
-                                                    valty)
+            sig = typeinfer.context.resolve_setattr(targetty, self.attr, valty)
             if sig is None:
-                raise TypingError("Cannot resolve setattr: (%s).%s = %s" %
-                                  (targetty, self.attr, valty),
-                                  loc=self.loc)
+                raise TypingError(
+                    "Cannot resolve setattr: (%s).%s = %s"
+                    % (targetty, self.attr, valty),
+                    loc=self.loc,
+                )
             self.signature = sig
 
     def get_call_signature(self):
@@ -1028,13 +1064,11 @@ class TypeInferer(object):
         self.arg_names[index] = name
 
     def seed_type(self, name, typ):
-        """All arguments should be seeded.
-        """
+        """All arguments should be seeded."""
         self.lock_type(name, typ, loc=None)
 
     def seed_return(self, typ):
-        """Seeding of return value is optional.
-        """
+        """Seeding of return value is optional."""
         for var in self._get_return_vars():
             self.lock_type(var.name, typ, loc=None)
 
@@ -1085,8 +1119,7 @@ class TypeInferer(object):
             self.debug.propagate_finished()
         if errors:
             if raise_errors:
-                force_lit_args = [e for e in errors
-                                  if isinstance(e, ForceLiteralArg)]
+                force_lit_args = [e for e in errors if isinstance(e, ForceLiteralArg)]
                 if not force_lit_args:
                     raise errors[0]
                 else:
@@ -1138,14 +1171,13 @@ class TypeInferer(object):
                     if not exhaustive:
                         break
                     try:  # simple assignment
-                        hasattr(offender.value, 'name')
+                        hasattr(offender.value, "name")
                         offender_value = offender.value.name
                     except (AttributeError, KeyError):
                         break
                     orig_offender = offender
-                    if offender_value.startswith('$'):
-                        offender = find_offender(offender_value,
-                                                 exhaustive=exhaustive)
+                    if offender_value.startswith("$"):
+                        offender = find_offender(offender_value, exhaustive=exhaustive)
                         if offender is None:
                             offender = orig_offender
                     break
@@ -1164,19 +1196,19 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
 """
             if offender is not None:
                 # This block deals with imprecise lists
-                if hasattr(offender, 'value'):
-                    if hasattr(offender.value, 'op'):
+                if hasattr(offender, "value"):
+                    if hasattr(offender.value, "op"):
                         # might be `foo = []`
-                        if offender.value.op == 'build_list':
+                        if offender.value.op == "build_list":
                             return list_msg
                         # or might be `foo = list()`
-                        elif offender.value.op == 'call':
+                        elif offender.value.op == "call":
                             try:  # assignment involving a call
                                 call_name = offender.value.func.name
                                 # find the offender based on the call name
                                 offender = find_offender(call_name)
                                 if isinstance(offender.value, ir.Global):
-                                    if offender.value.name == 'list':
+                                    if offender.value.name == "list":
                                         return list_msg
                             except (AttributeError, KeyError):
                                 pass
@@ -1187,10 +1219,12 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
             if not tv.defined:
                 if raise_errors:
                     offender = find_offender(name)
-                    val = getattr(offender, 'value', 'unknown operation')
-                    loc = getattr(offender, 'loc', ir.unknown_loc)
-                    msg = ("Type of variable '%s' cannot be determined, "
-                           "operation: %s, location: %s")
+                    val = getattr(offender, "value", "unknown operation")
+                    loc = getattr(offender, "loc", ir.unknown_loc)
+                    msg = (
+                        "Type of variable '%s' cannot be determined, "
+                        "operation: %s, location: %s"
+                    )
                     raise TypingError(msg % (var, val, loc), loc)
                 else:
                     typdict[var] = types.unknown
@@ -1202,10 +1236,12 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
 
             if not tp.is_precise():
                 offender = find_offender(name, exhaustive=True)
-                msg = ("Cannot infer the type of variable '%s'%s, "
-                       "have imprecise type: %s. %s")
-                istmp = " (temporary variable)" if var.startswith('$') else ""
-                loc = getattr(offender, 'loc', ir.unknown_loc)
+                msg = (
+                    "Cannot infer the type of variable '%s'%s, "
+                    "have imprecise type: %s. %s"
+                )
+                istmp = " (temporary variable)" if var.startswith("$") else ""
+                loc = getattr(offender, "loc", ir.unknown_loc)
                 # is this an untyped list? try and provide help
                 extra_msg = diagnose_imprecision(offender)
                 if raise_errors:
@@ -1236,7 +1272,8 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
                 retty = None
         else:
             typdict = utils.UniqueDict(
-                typdict, **{v.name: retty for v in self._get_return_vars()})
+                typdict, **{v.name: retty for v in self._get_return_vars()}
+            )
 
         try:
             fntys = self.get_function_types(typdict)
@@ -1249,8 +1286,7 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
                 fntys = None
 
         if self.generator_info:
-            retty = self.get_generator_type(typdict, retty,
-                                            raise_errors=raise_errors)
+            retty = self.get_generator_type(typdict, retty, raise_errors=raise_errors)
 
         def check_undef_var_in_calls():
             # Check for undefined variables in the call arguments.
@@ -1284,8 +1320,7 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
 
         yield_types = None
         try:
-            yield_types = [typdict[y.inst.value.name]
-                           for y in gi.get_yield_points()]
+            yield_types = [typdict[y.inst.value.name] for y in gi.get_yield_points()]
         except KeyError:
             msg = "Cannot type generator: yield type cannot be found"
             if raise_errors:
@@ -1298,35 +1333,43 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
 
         if not yield_types or all(yield_types) == types.unknown:
             # unknown yield, probably partial type inference, escape
-            return types.Generator(self.func_id.func, types.unknown, arg_types,
-                                   state_types, has_finalizer=True)
+            return types.Generator(
+                self.func_id.func,
+                types.unknown,
+                arg_types,
+                state_types,
+                has_finalizer=True,
+            )
 
         yield_type = self.context.unify_types(*yield_types)
         if yield_type is None or isinstance(yield_type, types.Optional):
             msg = "Cannot type generator: cannot unify yielded types %s"
             yp_highlights = []
             for y in gi.get_yield_points():
-                msg = (_termcolor.errmsg("Yield of: IR '%s', type '%s', "
-                                         "location: %s"))
-                yp_highlights.append(msg % (str(y.inst),
-                                            typdict[y.inst.value.name],
-                                            y.inst.loc.strformat()))
+                msg = _termcolor.errmsg("Yield of: IR '%s', type '%s', " "location: %s")
+                yp_highlights.append(
+                    msg
+                    % (str(y.inst), typdict[y.inst.value.name], y.inst.loc.strformat())
+                )
 
             explain_ty = set()
             for ty in yield_types:
                 if isinstance(ty, types.Optional):
                     explain_ty.add(ty.type)
-                    explain_ty.add(types.NoneType('none'))
+                    explain_ty.add(types.NoneType("none"))
                 else:
                     explain_ty.add(ty)
             if raise_errors:
-                raise TypingError("Can't unify yield type from the "
-                                  "following types: %s"
-                                  % ", ".join(sorted(map(str, explain_ty))) +
-                                  "\n\n" + "\n".join(yp_highlights))
+                raise TypingError(
+                    "Can't unify yield type from the "
+                    "following types: %s" % ", ".join(sorted(map(str, explain_ty)))
+                    + "\n\n"
+                    + "\n".join(yp_highlights)
+                )
 
-        return types.Generator(self.func_id.func, yield_type, arg_types,
-                               state_types, has_finalizer=True)
+        return types.Generator(
+            self.func_id.func, yield_type, arg_types, state_types, has_finalizer=True
+        )
 
     def get_function_types(self, typemap):
         """
@@ -1346,6 +1389,7 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
                 # instance (that is imprecise).
                 return unified
             if unified is None or not unified.is_precise():
+
                 def check_type(atype):
                     lst = []
                     for k, v in self.typevars.items():
@@ -1366,9 +1410,8 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
 
                     interped = ""
                     for name, offender in returns.items():
-                        loc = getattr(offender, 'loc', ir.unknown_loc)
-                        msg = ("Return of: IR name '%s', type '%s', "
-                               "location: %s")
+                        loc = getattr(offender, "loc", ir.unknown_loc)
+                        msg = "Return of: IR name '%s', type '%s', " "location: %s"
                         interped = msg % (name, atype, loc.strformat())
                     return interped
 
@@ -1376,10 +1419,12 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
                 for xtype in rettypes:
                     problem_str.append(_termcolor.errmsg(check_type(xtype)))
 
-                raise TypingError("Can't unify return type from the "
-                                  "following types: %s"
-                                  % ", ".join(sorted(map(str, rettypes))) +
-                                  "\n" + "\n".join(problem_str))
+                raise TypingError(
+                    "Can't unify return type from the "
+                    "following types: %s" % ", ".join(sorted(map(str, rettypes)))
+                    + "\n"
+                    + "\n".join(problem_str)
+                )
             return unified
         else:
             # Function without a successful return path
@@ -1423,7 +1468,7 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
         elif isinstance(inst, (ir.StaticRaise, ir.StaticTryRaise)):
             pass
         elif isinstance(inst, ir.PopBlock):
-            pass # It's a marker statement
+            pass  # It's a marker statement
         elif type(inst) in typeinfer_extensions:
             # let external calls handle stmt if type matches
             f = typeinfer_extensions[type(inst)]
@@ -1433,40 +1478,46 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
             raise UnsupportedError(msg, loc=inst.loc)
 
     def typeof_setitem(self, inst):
-        constraint = SetItemConstraint(target=inst.target, index=inst.index,
-                                       value=inst.value, loc=inst.loc)
+        constraint = SetItemConstraint(
+            target=inst.target, index=inst.index, value=inst.value, loc=inst.loc
+        )
         self.constraints.append(constraint)
         self.calls.append((inst, constraint))
 
     def typeof_storemap(self, inst):
-        constraint = SetItemConstraint(target=inst.dct, index=inst.key,
-                                       value=inst.value, loc=inst.loc)
+        constraint = SetItemConstraint(
+            target=inst.dct, index=inst.key, value=inst.value, loc=inst.loc
+        )
         self.constraints.append(constraint)
         self.calls.append((inst, constraint))
 
     def typeof_static_setitem(self, inst):
-        constraint = StaticSetItemConstraint(target=inst.target,
-                                             index=inst.index,
-                                             index_var=inst.index_var,
-                                             value=inst.value, loc=inst.loc)
+        constraint = StaticSetItemConstraint(
+            target=inst.target,
+            index=inst.index,
+            index_var=inst.index_var,
+            value=inst.value,
+            loc=inst.loc,
+        )
         self.constraints.append(constraint)
         self.calls.append((inst, constraint))
 
     def typeof_delitem(self, inst):
-        constraint = DelItemConstraint(target=inst.target, index=inst.index,
-                                       loc=inst.loc)
+        constraint = DelItemConstraint(
+            target=inst.target, index=inst.index, loc=inst.loc
+        )
         self.constraints.append(constraint)
         self.calls.append((inst, constraint))
 
     def typeof_setattr(self, inst):
-        constraint = SetAttrConstraint(target=inst.target, attr=inst.attr,
-                                       value=inst.value, loc=inst.loc)
+        constraint = SetAttrConstraint(
+            target=inst.target, attr=inst.attr, value=inst.value, loc=inst.loc
+        )
         self.constraints.append(constraint)
         self.calls.append((inst, constraint))
 
     def typeof_print(self, inst):
-        constraint = PrintConstraint(args=inst.args, vararg=inst.vararg,
-                                     loc=inst.loc)
+        constraint = PrintConstraint(args=inst.args, vararg=inst.vararg, loc=inst.loc)
         self.constraints.append(constraint)
         self.calls.append((inst, constraint))
 
@@ -1475,8 +1526,9 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
         if isinstance(value, ir.Const):
             self.typeof_const(inst, inst.target, value.value)
         elif isinstance(value, ir.Var):
-            self.constraints.append(Propagate(dst=inst.target.name,
-                                              src=value.name, loc=inst.loc))
+            self.constraints.append(
+                Propagate(dst=inst.target.name, src=value.name, loc=inst.loc)
+            )
         elif isinstance(value, (ir.Global, ir.FreeVar)):
             self.typeof_global(inst, inst.target, value)
         elif isinstance(value, ir.Arg):
@@ -1486,8 +1538,10 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
         elif isinstance(value, ir.Yield):
             self.typeof_yield(inst, inst.target, value)
         else:
-            msg = ("Unsupported assignment encountered: %s %s" %
-                   (type(value), str(value)))
+            msg = "Unsupported assignment encountered: %s %s" % (
+                type(value),
+                str(value),
+            )
             raise UnsupportedError(msg, loc=inst.loc)
 
     def resolve_value_type(self, inst, val):
@@ -1503,9 +1557,9 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
 
     def typeof_arg(self, inst, target, arg):
         src_name = self._mangle_arg_name(arg.name)
-        self.constraints.append(ArgConstraint(dst=target.name,
-                                              src=src_name,
-                                              loc=inst.loc))
+        self.constraints.append(
+            ArgConstraint(dst=target.name, src=src_name, loc=inst.loc)
+        )
 
     def typeof_const(self, inst, target, const):
         ty = self.resolve_value_type(inst, const)
@@ -1523,18 +1577,17 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
         """
         Ensure that builtins are not modified.
         """
-        if gvar.name == 'range' and gvar.value is not range:
+        if gvar.name == "range" and gvar.value is not range:
             bad = True
-        elif gvar.name == 'slice' and gvar.value is not slice:
+        elif gvar.name == "slice" and gvar.value is not slice:
             bad = True
-        elif gvar.name == 'len' and gvar.value is not len:
+        elif gvar.name == "len" and gvar.value is not len:
             bad = True
         else:
             bad = False
 
         if bad:
-            raise TypingError("Modified builtin '%s'" % gvar.name,
-                              loc=inst.loc)
+            raise TypingError("Modified builtin '%s'" % gvar.name, loc=inst.loc)
 
     def resolve_call(self, fnty, pos_args, kw_args):
         """
@@ -1551,8 +1604,9 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
 
             # If the signature is not being compiled
             if frame is None:
-                sig = self.context.resolve_function_type(fnty.dispatcher_type,
-                                                         pos_args, kw_args)
+                sig = self.context.resolve_function_type(
+                    fnty.dispatcher_type, pos_args, kw_args
+                )
                 fndesc = disp.overloads[args].fndesc
                 qual = qualifying_prefix(fndesc.modname, fndesc.qualname)
                 fnty.add_overloads(args, qual, fndesc.uid)
@@ -1580,8 +1634,10 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
         try:
             typ = self.resolve_value_type(inst, gvar.value)
         except TypingError as e:
-            if (gvar.name == self.func_id.func_name
-                    and gvar.name in _temporary_dispatcher_map):
+            if (
+                gvar.name == self.func_id.func_name
+                and gvar.name in _temporary_dispatcher_map
+            ):
                 # Self-recursion case where the dispatcher is not (yet?) known
                 # as a global variable
                 typ = types.Dispatcher(_temporary_dispatcher_map[gvar.name])
@@ -1591,10 +1647,12 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
                 nm = gvar.name
                 # check if the problem is actually a name error
                 func_glbls = self.func_id.func.__globals__
-                if (nm not in func_glbls.keys() and
-                        nm not in special.__all__ and
-                        nm not in __builtins__.keys() and
-                        nm not in self.func_id.code.co_freevars):
+                if (
+                    nm not in func_glbls.keys()
+                    and nm not in special.__all__
+                    and nm not in __builtins__.keys()
+                    and nm not in self.func_id.code.co_freevars
+                ):
                     errstr = "NameError: name '%s' is not defined"
                     msg = _termcolor.errmsg(errstr % nm)
                     e.patch_message(msg)
@@ -1607,9 +1665,10 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
                 # to the error message asking if it's been imported.
 
                 if nm in special.__all__:
-                    tmp = ("\n'%s' looks like a Numba internal function, has "
-                           "it been imported (i.e. 'from numba import %s')?\n" %
-                           (nm, nm))
+                    tmp = (
+                        "\n'%s' looks like a Numba internal function, has "
+                        "it been imported (i.e. 'from numba import %s')?\n" % (nm, nm)
+                    )
                     msg += _termcolor.errmsg(tmp)
                 e.patch_message(msg % e)
                 raise
@@ -1622,8 +1681,8 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
                 typ = types.RecursiveCall(typ)
             else:
                 raise NotImplementedError(
-                    "call to %s: unsupported recursion"
-                    % typ.dispatcher)
+                    "call to %s: unsupported recursion" % typ.dispatcher
+                )
 
         if isinstance(typ, types.Array):
             # Global array in nopython mode is constant
@@ -1648,6 +1707,7 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
                         item = mark_array_ro(item)
                     newtup.append(item)
                 return types.BaseTuple.from_types(newtup)
+
             typ = mark_array_ro(typ)
 
         self.sentry_modified_builtin(inst, gvar)
@@ -1667,89 +1727,104 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
         self.assumed_immutables.add(inst)
 
     def typeof_expr(self, inst, target, expr):
-        if expr.op == 'call':
+        if expr.op == "call":
             self.typeof_call(inst, target, expr)
-        elif expr.op in ('getiter', 'iternext'):
+        elif expr.op in ("getiter", "iternext"):
             self.typeof_intrinsic_call(inst, target, expr.op, expr.value)
-        elif expr.op == 'exhaust_iter':
-            constraint = ExhaustIterConstraint(target.name, count=expr.count,
-                                               iterator=expr.value,
-                                               loc=expr.loc)
+        elif expr.op == "exhaust_iter":
+            constraint = ExhaustIterConstraint(
+                target.name, count=expr.count, iterator=expr.value, loc=expr.loc
+            )
             self.constraints.append(constraint)
-        elif expr.op == 'pair_first':
-            constraint = PairFirstConstraint(target.name, pair=expr.value,
-                                             loc=expr.loc)
+        elif expr.op == "pair_first":
+            constraint = PairFirstConstraint(target.name, pair=expr.value, loc=expr.loc)
             self.constraints.append(constraint)
-        elif expr.op == 'pair_second':
-            constraint = PairSecondConstraint(target.name, pair=expr.value,
-                                              loc=expr.loc)
+        elif expr.op == "pair_second":
+            constraint = PairSecondConstraint(
+                target.name, pair=expr.value, loc=expr.loc
+            )
             self.constraints.append(constraint)
-        elif expr.op == 'binop':
-            self.typeof_intrinsic_call(inst, target, expr.fn, expr.lhs,
-                                       expr.rhs)
-        elif expr.op == 'inplace_binop':
-            self.typeof_intrinsic_call(inst, target, expr.fn,
-                                       expr.lhs, expr.rhs)
-        elif expr.op == 'unary':
+        elif expr.op == "binop":
+            self.typeof_intrinsic_call(inst, target, expr.fn, expr.lhs, expr.rhs)
+        elif expr.op == "inplace_binop":
+            self.typeof_intrinsic_call(inst, target, expr.fn, expr.lhs, expr.rhs)
+        elif expr.op == "unary":
             self.typeof_intrinsic_call(inst, target, expr.fn, expr.value)
-        elif expr.op == 'static_getitem':
-            constraint = StaticGetItemConstraint(target.name, value=expr.value,
-                                                 index=expr.index,
-                                                 index_var=expr.index_var,
-                                                 loc=expr.loc)
+        elif expr.op == "static_getitem":
+            constraint = StaticGetItemConstraint(
+                target.name,
+                value=expr.value,
+                index=expr.index,
+                index_var=expr.index_var,
+                loc=expr.loc,
+            )
             self.constraints.append(constraint)
             self.calls.append((inst.value, constraint))
-        elif expr.op == 'getitem':
-            self.typeof_intrinsic_call(inst, target, operator.getitem,
-                                       expr.value, expr.index,)
-        elif expr.op == 'typed_getitem':
-            constraint = TypedGetItemConstraint(target.name, value=expr.value,
-                                                dtype=expr.dtype,
-                                                index=expr.index,
-                                                loc=expr.loc)
+        elif expr.op == "getitem":
+            self.typeof_intrinsic_call(
+                inst,
+                target,
+                operator.getitem,
+                expr.value,
+                expr.index,
+            )
+        elif expr.op == "typed_getitem":
+            constraint = TypedGetItemConstraint(
+                target.name,
+                value=expr.value,
+                dtype=expr.dtype,
+                index=expr.index,
+                loc=expr.loc,
+            )
             self.constraints.append(constraint)
             self.calls.append((inst.value, constraint))
 
-        elif expr.op == 'getattr':
-            constraint = GetAttrConstraint(target.name, attr=expr.attr,
-                                           value=expr.value, loc=inst.loc,
-                                           inst=inst)
+        elif expr.op == "getattr":
+            constraint = GetAttrConstraint(
+                target.name, attr=expr.attr, value=expr.value, loc=inst.loc, inst=inst
+            )
             self.constraints.append(constraint)
-        elif expr.op == 'build_tuple':
-            constraint = BuildTupleConstraint(target.name, items=expr.items,
-                                              loc=inst.loc)
+        elif expr.op == "build_tuple":
+            constraint = BuildTupleConstraint(
+                target.name, items=expr.items, loc=inst.loc
+            )
             self.constraints.append(constraint)
-        elif expr.op == 'build_list':
-            constraint = BuildListConstraint(target.name, items=expr.items,
-                                             loc=inst.loc)
+        elif expr.op == "build_list":
+            constraint = BuildListConstraint(
+                target.name, items=expr.items, loc=inst.loc
+            )
             self.constraints.append(constraint)
-        elif expr.op == 'build_set':
-            constraint = BuildSetConstraint(target.name, items=expr.items,
-                                            loc=inst.loc)
+        elif expr.op == "build_set":
+            constraint = BuildSetConstraint(target.name, items=expr.items, loc=inst.loc)
             self.constraints.append(constraint)
-        elif expr.op == 'build_map':
+        elif expr.op == "build_map":
             constraint = BuildMapConstraint(
                 target.name,
                 items=expr.items,
                 special_value=expr.literal_value,
                 value_indexes=expr.value_indexes,
-                loc=inst.loc)
+                loc=inst.loc,
+            )
             self.constraints.append(constraint)
-        elif expr.op == 'cast':
-            self.constraints.append(Propagate(dst=target.name,
-                                              src=expr.value.name,
-                                              loc=inst.loc))
-        elif expr.op == 'phi':
+        elif expr.op == "cast":
+            self.constraints.append(
+                Propagate(dst=target.name, src=expr.value.name, loc=inst.loc)
+            )
+        elif expr.op == "phi":
             for iv in expr.incoming_values:
                 if iv is not ir.UNDEFINED:
-                    self.constraints.append(Propagate(dst=target.name,
-                                                      src=iv.name,
-                                                      loc=inst.loc))
-        elif expr.op == 'make_function':
-            self.lock_type(target.name, types.MakeFunctionLiteral(expr),
-                           loc=inst.loc, literal_value=expr)
+                    self.constraints.append(
+                        Propagate(dst=target.name, src=iv.name, loc=inst.loc)
+                    )
+        elif expr.op == "make_function":
+            self.lock_type(
+                target.name,
+                types.MakeFunctionLiteral(expr),
+                loc=inst.loc,
+                literal_value=expr,
+            )
 
-        elif expr.op == 'undef':
+        elif expr.op == "undef":
             self.add_type(target.name, types._undef_var, loc=inst.loc)
 
         else:
@@ -1757,14 +1832,16 @@ https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-unt
             raise UnsupportedError(msg, loc=inst.loc)
 
     def typeof_call(self, inst, target, call):
-        constraint = CallConstraint(target.name, call.func.name, call.args,
-                                    call.kws, call.vararg, loc=inst.loc)
+        constraint = CallConstraint(
+            target.name, call.func.name, call.args, call.kws, call.vararg, loc=inst.loc
+        )
         self.constraints.append(constraint)
         self.calls.append((inst.value, constraint))
 
     def typeof_intrinsic_call(self, inst, target, func, *args):
-        constraint = IntrinsicCallConstraint(target.name, func, args,
-                                             kws=(), vararg=None, loc=inst.loc)
+        constraint = IntrinsicCallConstraint(
+            target.name, func, args, kws=(), vararg=None, loc=inst.loc
+        )
         self.constraints.append(constraint)
         self.calls.append((inst.value, constraint))
 
@@ -1787,11 +1864,11 @@ class TypeInferDebug(object):
         self.typeinfer = typeinfer
 
     def _dump_state(self):
-        print('---- type variables ----')
+        print("---- type variables ----")
         pprint([v for k, v in sorted(self.typeinfer.typevars.items())])
 
     def propagate_started(self):
-        print("propagate".center(80, '-'))
+        print("propagate".center(80, "-"))
 
     def propagate_finished(self):
         self._dump_state()

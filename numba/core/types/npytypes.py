@@ -12,10 +12,12 @@ from .misc import UnicodeType
 from .containers import Bytes
 import numpy as np
 
+
 class CharSeq(Type):
     """
     A fixed-length 8-bit character sequence.
     """
+
     mutable = True
 
     def __init__(self, count):
@@ -36,6 +38,7 @@ class UnicodeCharSeq(Type):
     """
     A fixed-length unicode character sequence.
     """
+
     mutable = True
 
     def __init__(self, count):
@@ -63,8 +66,8 @@ class UnicodeCharSeq(Type):
 
 
 _RecordField = collections.namedtuple(
-    '_RecordField',
-    'type,offset,alignment,title',
+    "_RecordField",
+    "type,offset,alignment,title",
 )
 
 
@@ -79,6 +82,7 @@ class Record(Type):
     *size* is an int; the record size
     *aligned* is a boolean; whether the record is ABI aligned.
     """
+
     mutable = True
 
     @classmethod
@@ -109,9 +113,16 @@ class Record(Type):
             misaligned = offset % align
             if misaligned:
                 offset += align - misaligned
-            fields.append((k, {
-                'type': ty, 'offset': offset, 'alignment': align,
-            }))
+            fields.append(
+                (
+                    k,
+                    {
+                        "type": ty,
+                        "offset": offset,
+                        "alignment": align,
+                    },
+                )
+            )
             offset += size
         # Adjust sizeof structure
         abi_size = ctx.get_abi_sizeof(ir.LiteralStructType(lltypes))
@@ -129,13 +140,13 @@ class Record(Type):
         for k, infos in fields:
             extra = ""
             if infos.alignment is not None:
-                extra += ';alignment={}'.format(infos.alignment)
+                extra += ";alignment={}".format(infos.alignment)
             elif infos.title is not None:
-                extra += ';title={}'.format(infos.title)
+                extra += ";title={}".format(infos.title)
             descbuf.append(fmt.format(k, infos.type, infos.offset, extra))
 
-        desc = ','.join(descbuf)
-        name = 'Record({};{};{})'.format(desc, self.size, self.aligned)
+        desc = ",".join(descbuf)
+        name = "Record({};{};{})".format(desc, self.size, self.aligned)
         super(Record, self).__init__(name)
 
         self.bitwidth = self.dtype.itemsize * 8
@@ -153,12 +164,12 @@ class Record(Type):
              }]
         """
         res = []
-        for name, infos in sorted(fields, key=lambda x: (x[1]['offset'], x[0])):
+        for name, infos in sorted(fields, key=lambda x: (x[1]["offset"], x[0])):
             fd = _RecordField(
-                type=infos['type'],
-                offset=infos['offset'],
-                alignment=infos.get('alignment'),
-                title=infos.get('title'),
+                type=infos["type"],
+                offset=infos["offset"],
+                alignment=infos.get("alignment"),
+                title=infos.get("title"),
             )
             res.append((name, fd))
         return res
@@ -174,18 +185,15 @@ class Record(Type):
         return self.__class__.__name__, (self._code,)
 
     def __len__(self):
-        """Returns the number of fields
-        """
+        """Returns the number of fields"""
         return len(self.fields)
 
     def offset(self, key):
-        """Get the byte offset of a field from the start of the structure.
-        """
+        """Get the byte offset of a field from the start of the structure."""
         return self.fields[key].offset
 
     def typeof(self, key):
-        """Get the type of a field.
-        """
+        """Get the type of a field."""
         return self.fields[key].type
 
     def alignof(self, key):
@@ -196,19 +204,16 @@ class Record(Type):
         return self.fields[key].alignment
 
     def has_titles(self):
-        """Returns True the record uses titles.
-        """
+        """Returns True the record uses titles."""
         return any(fd.title is not None for fd in self.fields.values())
 
     def is_title(self, key):
-        """Returns True if the field named *key* is a title.
-        """
+        """Returns True if the field named *key* is a title."""
         return self.fields[key].title == key
 
     @property
     def members(self):
-        """An ordered list of (name, type) for the fields.
-        """
+        """An ordered list of (name, type) for the fields."""
         ordered = sorted(self.fields.items(), key=lambda x: x[1].offset)
         return [(k, v.type) for k, v in ordered]
 
@@ -229,27 +234,30 @@ class Record(Type):
         if isinstance(other, Record):
             if len(other.fields) > len(self.fields):
                 return
-            for other_fd, self_fd in zip(other.fields.items(),
-                                         self.fields.items()):
+            for other_fd, self_fd in zip(other.fields.items(), self.fields.items()):
                 if not other_fd == self_fd:
                     return
-            warnings.warn(f"{self} has been considered a subtype of {other} "
-                          f" This is an experimental feature.",
-                          category=NumbaExperimentalFeatureWarning)
+            warnings.warn(
+                f"{self} has been considered a subtype of {other} "
+                f" This is an experimental feature.",
+                category=NumbaExperimentalFeatureWarning,
+            )
             return Conversion.safe
 
     def __repr__(self):
-        fields = [f"('{f_name}', " +
-                  f"{{'type': {repr(f_info.type)}, " +
-                  f"'offset': {f_info.offset}, " +
-                  f"'alignment': {f_info.alignment}, " +
-                  f"'title': {f_info.title}, " +
-                  f"}}" +
-                  ")"
-                  for f_name, f_info in self.fields.items()
-                  ]
+        fields = [
+            f"('{f_name}', "
+            + f"{{'type': {repr(f_info.type)}, "
+            + f"'offset': {f_info.offset}, "
+            + f"'alignment': {f_info.alignment}, "
+            + f"'title': {f_info.title}, "
+            + f"}}"
+            + ")"
+            for f_name, f_info in self.fields.items()
+        ]
         fields = "[" + ", ".join(fields) + "]"
         return f"Record({fields}, {self.size}, {self.aligned})"
+
 
 class DType(DTypeSpec, Opaque):
     """
@@ -303,6 +311,7 @@ class NumpyNdEnumerateType(SimpleIteratorType):
 
     def __init__(self, arrty):
         from . import Tuple, UniTuple, intp
+
         self.array_type = arrty
         yield_type = Tuple((UniTuple(intp, arrty.ndim), arrty.dtype))
         name = "ndenumerate({arrayty})".format(arrayty=arrty)
@@ -328,10 +337,11 @@ class NumpyNdIterType(IteratorType):
         # broadcast.
         self.arrays = tuple(arrays)
         self.layout = self._compute_layout(self.arrays)
-        self.dtypes = tuple(getattr(a, 'dtype', a) for a in self.arrays)
-        self.ndim = max(getattr(a, 'ndim', 0) for a in self.arrays)
+        self.dtypes = tuple(getattr(a, "dtype", a) for a in self.arrays)
+        self.ndim = max(getattr(a, "ndim", 0) for a in self.arrays)
         name = "nditer(ndim={ndim}, layout={layout}, inputs={arrays})".format(
-            ndim=self.ndim, layout=self.layout, arrays=self.arrays)
+            ndim=self.ndim, layout=self.layout, arrays=self.arrays
+        )
         super(NumpyNdIterType, self).__init__(name)
 
     @classmethod
@@ -340,12 +350,12 @@ class NumpyNdIterType(IteratorType):
         for a in arrays:
             if not isinstance(a, Array):
                 continue
-            if a.layout in 'CF' and a.ndim == 1:
-                c['C'] += 1
-                c['F'] += 1
+            if a.layout in "CF" and a.ndim == 1:
+                c["C"] += 1
+                c["F"] += 1
             elif a.ndim >= 1:
                 c[a.layout] += 1
-        return 'F' if c['F'] > c['C'] else 'C'
+        return "F" if c["F"] > c["C"] else "C"
 
     @property
     def key(self):
@@ -356,11 +366,12 @@ class NumpyNdIterType(IteratorType):
         """
         The views yielded by the iterator.
         """
-        return [Array(dtype, 0, 'C') for dtype in self.dtypes]
+        return [Array(dtype, 0, "C") for dtype in self.dtypes]
 
     @property
     def yield_type(self):
         from . import BaseTuple
+
         views = self.views
         if len(views) > 1:
             return BaseTuple.from_types(views)
@@ -379,18 +390,18 @@ class NumpyNdIterType(IteratorType):
         d = collections.OrderedDict()
         layout = self.layout
         ndim = self.ndim
-        assert layout in 'CF'
+        assert layout in "CF"
         for i, a in enumerate(self.arrays):
             if not isinstance(a, Array):
-                indexer = ('scalar', 0, 0)
+                indexer = ("scalar", 0, 0)
             elif a.ndim == 0:
-                indexer = ('0d', 0, 0)
+                indexer = ("0d", 0, 0)
             else:
-                if a.layout == layout or (a.ndim == 1 and a.layout in 'CF'):
-                    kind = 'flat'
+                if a.layout == layout or (a.ndim == 1 and a.layout in "CF"):
+                    kind = "flat"
                 else:
-                    kind = 'indexed'
-                if layout == 'C':
+                    kind = "indexed"
+                if layout == "C":
                     # If iterating in C order, broadcasting is done on the outer indices
                     indexer = (kind, ndim - a.ndim, ndim)
                 else:
@@ -407,9 +418,9 @@ class NumpyNdIterType(IteratorType):
         iterator more efficient.
         """
         for kind, start_dim, end_dim, _ in self.indexers:
-            if kind in ('0d', 'scalar'):
+            if kind in ("0d", "scalar"):
                 pass
-            elif kind == 'flat':
+            elif kind == "flat":
                 if (start_dim, end_dim) != (0, self.ndim):
                     # Broadcast flat iteration needs shaped indexing
                     # to know when to restart iteration.
@@ -426,6 +437,7 @@ class NumpyNdIndexType(SimpleIteratorType):
 
     def __init__(self, ndim):
         from . import UniTuple, intp
+
         self.ndim = ndim
         yield_type = UniTuple(intp, self.ndim)
         name = "ndindex(ndim={ndim})".format(ndim=ndim)
@@ -441,12 +453,10 @@ class Array(Buffer):
     Type class for Numpy arrays.
     """
 
-    def __init__(self, dtype, ndim, layout, readonly=False, name=None,
-                 aligned=True):
+    def __init__(self, dtype, ndim, layout, readonly=False, name=None, aligned=True):
         if readonly:
             self.mutable = False
-        if (not aligned or
-            (isinstance(dtype, Record) and not dtype.aligned)):
+        if not aligned or (isinstance(dtype, Record) and not dtype.aligned):
             self.aligned = False
         if isinstance(dtype, NestedArray):
             ndim += dtype.ndim
@@ -462,9 +472,13 @@ class Array(Buffer):
 
     @property
     def mangling_args(self):
-        args = [self.dtype, self.ndim, self.layout,
-                'mutable' if self.mutable else 'readonly',
-                'aligned' if self.aligned else 'unaligned']
+        args = [
+            self.dtype,
+            self.ndim,
+            self.layout,
+            "mutable" if self.mutable else "readonly",
+            "aligned" if self.aligned else "unaligned",
+        ]
         return self.__class__.__name__, args
 
     def copy(self, dtype=None, ndim=None, layout=None, readonly=None):
@@ -476,8 +490,13 @@ class Array(Buffer):
             layout = self.layout
         if readonly is None:
             readonly = not self.mutable
-        return Array(dtype=dtype, ndim=ndim, layout=layout, readonly=readonly,
-                     aligned=self.aligned)
+        return Array(
+            dtype=dtype,
+            ndim=ndim,
+            layout=layout,
+            readonly=readonly,
+            aligned=self.aligned,
+        )
 
     @property
     def key(self):
@@ -494,21 +513,31 @@ class Array(Buffer):
                 if self.layout == other.layout:
                     layout = self.layout
                 else:
-                    layout = 'A'
+                    layout = "A"
                 readonly = not (self.mutable and other.mutable)
                 aligned = self.aligned and other.aligned
-                return Array(dtype=self.dtype, ndim=self.ndim, layout=layout,
-                             readonly=readonly, aligned=aligned)
+                return Array(
+                    dtype=self.dtype,
+                    ndim=self.ndim,
+                    layout=layout,
+                    readonly=readonly,
+                    aligned=aligned,
+                )
 
     def can_convert_to(self, typingctx, other):
         """
         Convert this Array to the *other*.
         """
-        if (isinstance(other, Array) and other.ndim == self.ndim
-            and other.dtype == self.dtype):
-            if (other.layout in ('A', self.layout)
+        if (
+            isinstance(other, Array)
+            and other.ndim == self.ndim
+            and other.dtype == self.dtype
+        ):
+            if (
+                other.layout in ("A", self.layout)
                 and (self.mutable or not other.mutable)
-                and (self.aligned or not other.aligned)):
+                and (self.aligned or not other.aligned)
+            ):
                 return Conversion.safe
 
     def is_precise(self):
@@ -516,20 +545,21 @@ class Array(Buffer):
 
     @property
     def box_type(self):
-        """Returns the Python type to box to.
-        """
+        """Returns the Python type to box to."""
         return np.ndarray
 
     def __repr__(self):
         return (
             f"Array({repr(self.dtype)}, {self.ndim}, '{self.layout}', "
             f"{not self.mutable}, aligned={self.aligned})"
-                )
+        )
+
 
 class ArrayCTypes(Type):
     """
     This is the type for `np.ndarray.ctypes`.
     """
+
     def __init__(self, arytype):
         # This depends on the ndim for the shape and strides attributes,
         # even though they are not implemented, yet.
@@ -553,6 +583,7 @@ class ArrayCTypes(Type):
         pointer.
         """
         from . import CPointer, voidptr
+
         # XXX what about readonly
         if isinstance(other, CPointer) and other.dtype == self.dtype:
             return Conversion.safe
@@ -564,6 +595,7 @@ class ArrayFlags(Type):
     """
     This is the type for `np.ndarray.flags`.
     """
+
     def __init__(self, arytype):
         self.array_type = arytype
         name = "ArrayFlags({0})".format(self.array_type)
@@ -583,15 +615,14 @@ class NestedArray(Array):
 
     def __init__(self, dtype, shape):
         if isinstance(dtype, NestedArray):
-            tmp = Array(dtype.dtype, dtype.ndim, 'C')
+            tmp = Array(dtype.dtype, dtype.ndim, "C")
             shape += dtype.shape
             dtype = tmp.dtype
-        assert dtype.bitwidth % 8 == 0, \
-            "Dtype bitwidth must be a multiple of bytes"
+        assert dtype.bitwidth % 8 == 0, "Dtype bitwidth must be a multiple of bytes"
         self._shape = shape
         name = "nestedarray(%s, %s)" % (dtype, shape)
         ndim = len(shape)
-        super(NestedArray, self).__init__(dtype, ndim, 'C', name=name)
+        super(NestedArray, self).__init__(dtype, ndim, "C", name=name)
 
     @property
     def shape(self):
@@ -613,8 +644,8 @@ class NestedArray(Array):
         stride = self.size
         strides = []
         for i in reversed(self._shape):
-             strides.append(stride)
-             stride *= i
+            strides.append(stride)
+            stride *= i
         return tuple(reversed(strides))
 
     @property
@@ -628,18 +659,20 @@ class NestedArray(Array):
 class NumPyRandomBitGeneratorType(Type):
     def __init__(self, *args, **kwargs):
         super(NumPyRandomBitGeneratorType, self).__init__(*args, **kwargs)
-        self.name = 'NumPyRandomBitGeneratorType'
+        self.name = "NumPyRandomBitGeneratorType"
 
 
 class NumPyRandomGeneratorType(Type):
     def __init__(self, *args, **kwargs):
         super(NumPyRandomGeneratorType, self).__init__(*args, **kwargs)
-        self.name = 'NumPyRandomGeneratorType'
+        self.name = "NumPyRandomGeneratorType"
 
 
 class PolynomialType(Type):
     def __init__(self, coef, domain=None, window=None, n_args=1):
-        super(PolynomialType, self).__init__(name=f'PolynomialType({coef}, {domain}, {domain}, {n_args})')
+        super(PolynomialType, self).__init__(
+            name=f"PolynomialType({coef}, {domain}, {domain}, {n_args})"
+        )
         self.coef = coef
         self.domain = domain
         self.window = window

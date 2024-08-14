@@ -1,8 +1,7 @@
 from numba import cuda
 from numpy import array as np_array
 from numba.cuda import deviceufunc
-from numba.cuda.deviceufunc import (UFuncMechanism, GeneralizedUFunc,
-                                    GUFuncCallSteps)
+from numba.cuda.deviceufunc import UFuncMechanism, GeneralizedUFunc, GUFuncCallSteps
 
 
 class CUDAUFuncDispatcher(object):
@@ -28,8 +27,7 @@ class CUDAUFuncDispatcher(object):
         return CUDAUFuncMechanism.call(self.functions, args, kws)
 
     def reduce(self, arg, stream=0):
-        assert len(list(self.functions.keys())[0]) == 2, "must be a binary " \
-                                                         "ufunc"
+        assert len(list(self.functions.keys())[0]) == 2, "must be a binary " "ufunc"
         assert arg.ndim == 1, "must use 1d array"
 
         n = arg.shape[0]
@@ -82,12 +80,12 @@ class CUDAUFuncDispatcher(object):
 
 class _CUDAGUFuncCallSteps(GUFuncCallSteps):
     __slots__ = [
-        '_stream',
+        "_stream",
     ]
 
     def __init__(self, nin, nout, args, kwargs):
         super().__init__(nin, nout, args, kwargs)
-        self._stream = kwargs.get('stream', 0)
+        self._stream = kwargs.get("stream", 0)
 
     def is_device_array(self, obj):
         return cuda.is_cuda_array(obj)
@@ -126,25 +124,24 @@ class CUDAGeneralizedUFunc(GeneralizedUFunc):
         return _CUDAGUFuncCallSteps
 
     def _broadcast_scalar_input(self, ary, shape):
-        return cuda.cudadrv.devicearray.DeviceNDArray(shape=shape,
-                                                      strides=(0,),
-                                                      dtype=ary.dtype,
-                                                      gpu_data=ary.gpu_data)
+        return cuda.cudadrv.devicearray.DeviceNDArray(
+            shape=shape, strides=(0,), dtype=ary.dtype, gpu_data=ary.gpu_data
+        )
 
     def _broadcast_add_axis(self, ary, newshape):
         newax = len(newshape) - len(ary.shape)
         # Add 0 strides for missing dimension
         newstrides = (0,) * newax + ary.strides
-        return cuda.cudadrv.devicearray.DeviceNDArray(shape=newshape,
-                                                      strides=newstrides,
-                                                      dtype=ary.dtype,
-                                                      gpu_data=ary.gpu_data)
+        return cuda.cudadrv.devicearray.DeviceNDArray(
+            shape=newshape, strides=newstrides, dtype=ary.dtype, gpu_data=ary.gpu_data
+        )
 
 
 class CUDAUFuncMechanism(UFuncMechanism):
     """
     Provide CUDA specialization
     """
+
     DEFAULT_STREAM = 0
 
     def launch(self, func, count, stream, args):
@@ -173,9 +170,11 @@ class CUDAUFuncMechanism(UFuncMechanism):
         return cuda.device_array(shape=shape, dtype=dtype, stream=stream)
 
     def broadcast_device(self, ary, shape):
-        ax_differs = [ax for ax in range(len(shape))
-                      if ax >= ary.ndim
-                      or ary.shape[ax] != shape[ax]]
+        ax_differs = [
+            ax
+            for ax in range(len(shape))
+            if ax >= ary.ndim or ary.shape[ax] != shape[ax]
+        ]
 
         missingdim = len(shape) - len(ary.shape)
         strides = [0] * missingdim + list(ary.strides)
@@ -183,18 +182,17 @@ class CUDAUFuncMechanism(UFuncMechanism):
         for ax in ax_differs:
             strides[ax] = 0
 
-        return cuda.cudadrv.devicearray.DeviceNDArray(shape=shape,
-                                                      strides=strides,
-                                                      dtype=ary.dtype,
-                                                      gpu_data=ary.gpu_data)
+        return cuda.cudadrv.devicearray.DeviceNDArray(
+            shape=shape, strides=strides, dtype=ary.dtype, gpu_data=ary.gpu_data
+        )
 
 
-vectorizer_stager_source = '''
+vectorizer_stager_source = """
 def __vectorized_{name}({args}, __out__):
     __tid__ = __cuda__.grid(1)
     if __tid__ < __out__.shape[0]:
         __out__[__tid__] = __core__({argitems})
-'''
+"""
 
 
 class CUDAVectorize(deviceufunc.DeviceVectorize):
@@ -204,8 +202,7 @@ class CUDAVectorize(deviceufunc.DeviceVectorize):
 
     def _get_globals(self, corefn):
         glbl = self.pyfunc.__globals__.copy()
-        glbl.update({'__cuda__': cuda,
-                     '__core__': corefn})
+        glbl.update({"__cuda__": cuda, "__core__": corefn})
         return glbl
 
     def _compile_kernel(self, fnobj, sig):
@@ -222,20 +219,20 @@ class CUDAVectorize(deviceufunc.DeviceVectorize):
 # ------------------------------------------------------------------------------
 # Generalized CUDA ufuncs
 
-_gufunc_stager_source = '''
+_gufunc_stager_source = """
 def __gufunc_{name}({args}):
     __tid__ = __cuda__.grid(1)
     if __tid__ < {checkedarg}:
         __core__({argitems})
-'''
+"""
 
 
 class CUDAGUFuncVectorize(deviceufunc.DeviceGUFuncVectorize):
     def build_ufunc(self):
         engine = deviceufunc.GUFuncEngine(self.inputsig, self.outputsig)
-        return CUDAGeneralizedUFunc(kernelmap=self.kernelmap,
-                                    engine=engine,
-                                    pyfunc=self.pyfunc)
+        return CUDAGeneralizedUFunc(
+            kernelmap=self.kernelmap, engine=engine, pyfunc=self.pyfunc
+        )
 
     def _compile_kernel(self, fnobj, sig):
         return cuda.jit(sig)(fnobj)
@@ -247,6 +244,5 @@ class CUDAGUFuncVectorize(deviceufunc.DeviceGUFuncVectorize):
     def _get_globals(self, sig):
         corefn = cuda.jit(sig, device=True)(self.pyfunc)
         glbls = self.py_func.__globals__.copy()
-        glbls.update({'__cuda__': cuda,
-                      '__core__': corefn})
+        glbls.update({"__cuda__": cuda, "__core__": corefn})
         return glbls

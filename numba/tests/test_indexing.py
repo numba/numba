@@ -11,13 +11,14 @@ from numba.core.typing import arraydecl
 from numba.core.types import intp, ellipsis, slice2_type, slice3_type
 
 
-enable_pyobj_flags = {'forceobj': True}
+enable_pyobj_flags = {"forceobj": True}
 
-Noflags = {'nopython': True}
+Noflags = {"nopython": True}
 
 
 def slicing_1d_usecase(a, start, stop, step):
     return a[start:stop:step]
+
 
 def slicing_1d_usecase2(a, start, stop, step):
     b = a[start:stop:step]
@@ -26,12 +27,14 @@ def slicing_1d_usecase2(a, start, stop, step):
         total += b[i] * (i + 1)
     return total
 
+
 def slicing_1d_usecase3(a, start, stop):
     b = a[start:stop]
     total = 0
     for i in range(b.shape[0]):
         total += b[i] * (i + 1)
     return total
+
 
 def slicing_1d_usecase4(a):
     b = a[:]
@@ -40,12 +43,14 @@ def slicing_1d_usecase4(a):
         total += b[i] * (i + 1)
     return total
 
+
 def slicing_1d_usecase5(a, start):
     b = a[start:]
     total = 0
     for i in range(b.shape[0]):
         total += b[i] * (i + 1)
     return total
+
 
 def slicing_1d_usecase6(a, stop):
     b = a[:stop]
@@ -54,6 +59,7 @@ def slicing_1d_usecase6(a, stop):
         total += b[i] * (i + 1)
     return total
 
+
 def slicing_1d_usecase7(a, start):
     # Omitted stop with negative step (issue #1690)
     b = a[start::-2]
@@ -61,6 +67,7 @@ def slicing_1d_usecase7(a, start):
     for i in range(b.shape[0]):
         total += b[i] * (i + 1)
     return total
+
 
 def slicing_1d_usecase8(a, start):
     # Omitted start with negative step
@@ -75,9 +82,11 @@ def slicing_2d_usecase(a, start1, stop1, step1, start2, stop2, step2):
     # The index is a homogeneous tuple of slices
     return a[start1:stop1:step1, start2:stop2:step2]
 
+
 def slicing_2d_usecase3(a, start1, stop1, step1, index):
     # The index is a heterogeneous tuple
     return a[start1:stop1:step1, index]
+
 
 def slicing_3d_usecase(a, index0, start1, index2):
     b = a[index0, start1:, index2]
@@ -86,12 +95,14 @@ def slicing_3d_usecase(a, index0, start1, index2):
         total += b[i] * (i + 1)
     return total
 
+
 def slicing_3d_usecase2(a, index0, stop1, index2):
     b = a[index0, :stop1, index2]
     total = 0
     for i in range(b.shape[0]):
         total += b[i] * (i + 1)
     return total
+
 
 def partial_1d_usecase(a, index):
     b = a[index]
@@ -100,26 +111,34 @@ def partial_1d_usecase(a, index):
         total += b[i] * (i + 1)
     return total
 
+
 def integer_indexing_1d_usecase(a, i):
     return a[i]
 
+
 def integer_indexing_2d_usecase(a, i1, i2):
-    return a[i1,i2]
+    return a[i1, i2]
+
 
 def integer_indexing_2d_usecase2(a, i1, i2):
     return a[i1][i2]
 
+
 def ellipsis_usecase1(a, i, j):
     return a[i:j, ...]
+
 
 def ellipsis_usecase2(a, i, j):
     return a[..., i:j]
 
+
 def ellipsis_usecase3(a, i, j):
     return a[i, ..., j]
 
+
 def none_index_usecase(a):
     return a[None]
+
 
 def empty_tuple_usecase(a):
     return a[()]
@@ -139,14 +158,16 @@ def slicing_1d_usecase_set(a, b, start, stop, step):
     a[start:stop:step] = b
     return a
 
+
 def slicing_1d_usecase_add(a, b, start, stop):
     # NOTE: uses the ROT_FOUR opcode on Python 2, only on the [start:stop]
     # with inplace operator form.
     a[start:stop] += b
     return a
 
+
 def slicing_2d_usecase_set(a, b, start, stop, step, start2, stop2, step2):
-    a[start:stop:step,start2:stop2:step2] = b
+    a[start:stop:step, start2:stop2:step2] = b
     return a
 
 
@@ -158,20 +179,21 @@ class TestGetItem(TestCase):
 
     def test_1d_slicing(self, flags=enable_pyobj_flags):
         pyfunc = slicing_1d_usecase
-        arraytype = types.Array(types.int32, 1, 'C')
+        arraytype = types.Array(types.int32, 1, "C")
         argtys = (arraytype, types.int32, types.int32, types.int32)
         cfunc = jit(argtys, **flags)(pyfunc)
 
-        a = np.arange(10, dtype='i4')
-        for indices in [(0, 10, 1),
-                        (2, 3, 1),
-                        (10, 0, 1),
-                        (0, 10, -1),
-                        (0, 10, 2),
-                        (9, 0, -1),
-                        (-5, -2, 1),
-                        (0, -1, 1),
-                        ]:
+        a = np.arange(10, dtype="i4")
+        for indices in [
+            (0, 10, 1),
+            (2, 3, 1),
+            (10, 0, 1),
+            (0, 10, -1),
+            (0, 10, 2),
+            (9, 0, -1),
+            (-5, -2, 1),
+            (0, -1, 1),
+        ]:
             expected = pyfunc(a, *indices)
             self.assertPreciseEqual(cfunc(a, *indices), expected)
 
@@ -180,36 +202,27 @@ class TestGetItem(TestCase):
 
     def test_1d_slicing2(self, flags=enable_pyobj_flags):
         pyfunc = slicing_1d_usecase2
-        arraytype = types.Array(types.int32, 1, 'C')
+        arraytype = types.Array(types.int32, 1, "C")
         argtys = (arraytype, types.int32, types.int32, types.int32)
         cfunc = jit(argtys, **flags)(pyfunc)
 
-        a = np.arange(10, dtype='i4')
+        a = np.arange(10, dtype="i4")
 
-        args = [(0, 10, 1),
-                (2, 3, 1),
-                (10, 0, 1),
-                (0, 10, -1),
-                (0, 10, 2)]
+        args = [(0, 10, 1), (2, 3, 1), (10, 0, 1), (0, 10, -1), (0, 10, 2)]
 
         for arg in args:
             self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
 
-
         # Any
-        arraytype = types.Array(types.int32, 1, 'A')
+        arraytype = types.Array(types.int32, 1, "A")
         argtys = (arraytype, types.int32, types.int32, types.int32)
         cfunc = jit(argtys, **flags)(pyfunc)
 
-        a = np.arange(20, dtype='i4')[::2]
-        self.assertFalse(a.flags['C_CONTIGUOUS'])
-        self.assertFalse(a.flags['F_CONTIGUOUS'])
+        a = np.arange(20, dtype="i4")[::2]
+        self.assertFalse(a.flags["C_CONTIGUOUS"])
+        self.assertFalse(a.flags["F_CONTIGUOUS"])
 
-        args = [(0, 10, 1),
-                (2, 3, 1),
-                (10, 0, 1),
-                (0, 10, -1),
-                (0, 10, 2)]
+        args = [(0, 10, 1), (2, 3, 1), (10, 0, 1), (0, 10, -1), (0, 10, 2)]
 
         for arg in args:
             self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
@@ -219,30 +232,25 @@ class TestGetItem(TestCase):
 
     def test_1d_slicing3(self, flags=enable_pyobj_flags):
         pyfunc = slicing_1d_usecase3
-        arraytype = types.Array(types.int32, 1, 'C')
+        arraytype = types.Array(types.int32, 1, "C")
         argtys = (arraytype, types.int32, types.int32)
         cfunc = jit(argtys, **flags)(pyfunc)
 
-        a = np.arange(10, dtype='i4')
+        a = np.arange(10, dtype="i4")
 
-        args = [(3, 10),
-                (2, 3),
-                (10, 0),
-                (0, 10),
-                (5, 10)]
+        args = [(3, 10), (2, 3), (10, 0), (0, 10), (5, 10)]
 
         for arg in args:
             self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
 
-
         # Any
-        arraytype = types.Array(types.int32, 1, 'A')
+        arraytype = types.Array(types.int32, 1, "A")
         argtys = (arraytype, types.int32, types.int32)
         cfunc = jit(argtys, **flags)(pyfunc)
 
-        a = np.arange(20, dtype='i4')[::2]
-        self.assertFalse(a.flags['C_CONTIGUOUS'])
-        self.assertFalse(a.flags['F_CONTIGUOUS'])
+        a = np.arange(20, dtype="i4")[::2]
+        self.assertFalse(a.flags["C_CONTIGUOUS"])
+        self.assertFalse(a.flags["F_CONTIGUOUS"])
 
         for arg in args:
             self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
@@ -252,21 +260,21 @@ class TestGetItem(TestCase):
 
     def test_1d_slicing4(self, flags=enable_pyobj_flags):
         pyfunc = slicing_1d_usecase4
-        arraytype = types.Array(types.int32, 1, 'C')
+        arraytype = types.Array(types.int32, 1, "C")
         argtys = (arraytype,)
         cfunc = jit(argtys, **flags)(pyfunc)
 
-        a = np.arange(10, dtype='i4')
+        a = np.arange(10, dtype="i4")
         self.assertEqual(pyfunc(a), cfunc(a))
 
         # Any
-        arraytype = types.Array(types.int32, 1, 'A')
+        arraytype = types.Array(types.int32, 1, "A")
         argtys = (arraytype,)
         cfunc = jit(argtys, **flags)(pyfunc)
 
-        a = np.arange(20, dtype='i4')[::2]
-        self.assertFalse(a.flags['C_CONTIGUOUS'])
-        self.assertFalse(a.flags['F_CONTIGUOUS'])
+        a = np.arange(20, dtype="i4")[::2]
+        self.assertFalse(a.flags["C_CONTIGUOUS"])
+        self.assertFalse(a.flags["F_CONTIGUOUS"])
         self.assertEqual(pyfunc(a), cfunc(a))
 
     def test_1d_slicing4_npm(self):
@@ -275,22 +283,22 @@ class TestGetItem(TestCase):
     def check_1d_slicing_with_arg(self, pyfunc, flags):
         args = list(range(-9, 10))
 
-        arraytype = types.Array(types.int32, 1, 'C')
+        arraytype = types.Array(types.int32, 1, "C")
         argtys = (arraytype, types.int32)
         cfunc = jit(argtys, **flags)(pyfunc)
 
-        a = np.arange(10, dtype='i4')
+        a = np.arange(10, dtype="i4")
         for arg in args:
             self.assertEqual(pyfunc(a, arg), cfunc(a, arg))
 
         # Any
-        arraytype = types.Array(types.int32, 1, 'A')
+        arraytype = types.Array(types.int32, 1, "A")
         argtys = (arraytype, types.int32)
         cfunc = jit(argtys, **flags)(pyfunc)
 
-        a = np.arange(20, dtype='i4')[::2]
-        self.assertFalse(a.flags['C_CONTIGUOUS'])
-        self.assertFalse(a.flags['F_CONTIGUOUS'])
+        a = np.arange(20, dtype="i4")[::2]
+        self.assertFalse(a.flags["C_CONTIGUOUS"])
+        self.assertFalse(a.flags["F_CONTIGUOUS"])
         for arg in args:
             self.assertEqual(pyfunc(a, arg), cfunc(a, arg))
 
@@ -327,15 +335,15 @@ class TestGetItem(TestCase):
         arr_2d[a:b:c]
         """
         pyfunc = slicing_1d_usecase
-        arraytype = types.Array(types.int32, 2, 'C')
+        arraytype = types.Array(types.int32, 2, "C")
         argtys = (arraytype, types.int32, types.int32, types.int32)
         cfunc = jit(argtys, **flags)(pyfunc)
 
-        a = np.arange(100, dtype='i4').reshape(10, 10)
-        for args in [(0, 10, 1), (2, 3, 1), (10, 0, 1),
-                     (0, 10, -1), (0, 10, 2)]:
-            self.assertPreciseEqual(pyfunc(a, *args), cfunc(a, *args),
-                                    msg="for args %s" % (args,))
+        a = np.arange(100, dtype="i4").reshape(10, 10)
+        for args in [(0, 10, 1), (2, 3, 1), (10, 0, 1), (0, 10, -1), (0, 10, 2)]:
+            self.assertPreciseEqual(
+                pyfunc(a, *args), cfunc(a, *args), msg="for args %s" % (args,)
+            )
 
     def test_2d_slicing_npm(self):
         self.test_2d_slicing(flags=Noflags)
@@ -346,36 +354,50 @@ class TestGetItem(TestCase):
         """
         # C layout
         pyfunc = slicing_2d_usecase
-        arraytype = types.Array(types.int32, 2, 'C')
-        argtys = (arraytype, types.int32, types.int32, types.int32,
-                  types.int32, types.int32, types.int32)
+        arraytype = types.Array(types.int32, 2, "C")
+        argtys = (
+            arraytype,
+            types.int32,
+            types.int32,
+            types.int32,
+            types.int32,
+            types.int32,
+            types.int32,
+        )
         cfunc = jit(argtys, **flags)(pyfunc)
 
-        a = np.arange(100, dtype='i4').reshape(10, 10)
+        a = np.arange(100, dtype="i4").reshape(10, 10)
 
-        indices = [(0, 10, 1),
-                   (2, 3, 1),
-                   (10, 0, 1),
-                   (0, 10, -1),
-                   (0, 10, 2),
-                   (10, 0, -1),
-                   (9, 0, -2),
-                   (-5, -2, 1),
-                   (0, -1, 1),
-                   ]
-        args = [tup1 + tup2
-                for (tup1, tup2) in itertools.product(indices, indices)]
+        indices = [
+            (0, 10, 1),
+            (2, 3, 1),
+            (10, 0, 1),
+            (0, 10, -1),
+            (0, 10, 2),
+            (10, 0, -1),
+            (9, 0, -2),
+            (-5, -2, 1),
+            (0, -1, 1),
+        ]
+        args = [tup1 + tup2 for (tup1, tup2) in itertools.product(indices, indices)]
         for arg in args:
             expected = pyfunc(a, *arg)
             self.assertPreciseEqual(cfunc(a, *arg), expected)
 
         # Any layout
-        arraytype = types.Array(types.int32, 2, 'A')
-        argtys = (arraytype, types.int32, types.int32, types.int32,
-                  types.int32, types.int32, types.int32)
+        arraytype = types.Array(types.int32, 2, "A")
+        argtys = (
+            arraytype,
+            types.int32,
+            types.int32,
+            types.int32,
+            types.int32,
+            types.int32,
+            types.int32,
+        )
         cfunc = jit(argtys, **flags)(pyfunc)
 
-        a = np.arange(400, dtype='i4').reshape(20, 20)[::2, ::2]
+        a = np.arange(400, dtype="i4").reshape(20, 20)[::2, ::2]
 
         for arg in args:
             expected = pyfunc(a, *arg)
@@ -390,12 +412,11 @@ class TestGetItem(TestCase):
         """
         # C layout
         pyfunc = slicing_2d_usecase3
-        arraytype = types.Array(types.int32, 2, 'C')
-        argtys = (arraytype, types.int32, types.int32, types.int32,
-                  types.int32)
+        arraytype = types.Array(types.int32, 2, "C")
+        argtys = (arraytype, types.int32, types.int32, types.int32, types.int32)
         cfunc = jit(argtys, **flags)(pyfunc)
 
-        a = np.arange(100, dtype='i4').reshape(10, 10)
+        a = np.arange(100, dtype="i4").reshape(10, 10)
 
         args = [
             (0, 10, 1, 0),
@@ -410,12 +431,11 @@ class TestGetItem(TestCase):
             self.assertPreciseEqual(cfunc(a, *arg), expected)
 
         # Any layout
-        arraytype = types.Array(types.int32, 2, 'A')
-        argtys = (arraytype, types.int32, types.int32, types.int32,
-                  types.int32)
+        arraytype = types.Array(types.int32, 2, "A")
+        argtys = (arraytype, types.int32, types.int32, types.int32, types.int32)
         cfunc = jit(argtys, **flags)(pyfunc)
 
-        a = np.arange(400, dtype='i4').reshape(20, 20)[::2, ::2]
+        a = np.arange(400, dtype="i4").reshape(20, 20)[::2, ::2]
 
         for arg in args:
             expected = pyfunc(a, *arg)
@@ -427,11 +447,11 @@ class TestGetItem(TestCase):
     def test_3d_slicing(self, flags=enable_pyobj_flags):
         # C layout
         pyfunc = slicing_3d_usecase
-        arraytype = types.Array(types.int32, 3, 'C')
+        arraytype = types.Array(types.int32, 3, "C")
         argtys = (arraytype, types.int32, types.int32, types.int32)
         cfunc = jit(argtys, **flags)(pyfunc)
 
-        a = np.arange(1000, dtype='i4').reshape(10, 10, 10)
+        a = np.arange(1000, dtype="i4").reshape(10, 10, 10)
 
         args = [
             (0, 9, 1),
@@ -444,11 +464,11 @@ class TestGetItem(TestCase):
             self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
 
         # Any layout
-        arraytype = types.Array(types.int32, 3, 'A')
+        arraytype = types.Array(types.int32, 3, "A")
         argtys = (arraytype, types.int32, types.int32, types.int32)
         cfunc = jit(argtys, **flags)(pyfunc)
 
-        a = np.arange(2000, dtype='i4')[::2].reshape(10, 10, 10)
+        a = np.arange(2000, dtype="i4")[::2].reshape(10, 10, 10)
 
         for arg in args:
             self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
@@ -459,11 +479,11 @@ class TestGetItem(TestCase):
     def test_3d_slicing2(self, flags=enable_pyobj_flags):
         # C layout
         pyfunc = slicing_3d_usecase2
-        arraytype = types.Array(types.int32, 3, 'C')
+        arraytype = types.Array(types.int32, 3, "C")
         argtys = (arraytype, types.int32, types.int32, types.int32)
         cfunc = jit(argtys, **flags)(pyfunc)
 
-        a = np.arange(1000, dtype='i4').reshape(10, 10, 10)
+        a = np.arange(1000, dtype="i4").reshape(10, 10, 10)
 
         args = [
             (0, 9, 1),
@@ -476,11 +496,11 @@ class TestGetItem(TestCase):
             self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
 
         # Any layout
-        arraytype = types.Array(types.int32, 3, 'A')
+        arraytype = types.Array(types.int32, 3, "A")
         argtys = (arraytype, types.int32, types.int32, types.int32)
         cfunc = jit(argtys, **flags)(pyfunc)
 
-        a = np.arange(2000, dtype='i4')[::2].reshape(10, 10, 10)
+        a = np.arange(2000, dtype="i4")[::2].reshape(10, 10, 10)
 
         for arg in args:
             self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
@@ -491,30 +511,30 @@ class TestGetItem(TestCase):
     def test_1d_integer_indexing(self, flags=enable_pyobj_flags):
         # C layout
         pyfunc = integer_indexing_1d_usecase
-        arraytype = types.Array(types.int32, 1, 'C')
+        arraytype = types.Array(types.int32, 1, "C")
         argtys = (arraytype, types.int32)
         cfunc = jit(argtys, **flags)(pyfunc)
 
-        a = np.arange(10, dtype='i4')
+        a = np.arange(10, dtype="i4")
         self.assertEqual(pyfunc(a, 0), cfunc(a, 0))
         self.assertEqual(pyfunc(a, 9), cfunc(a, 9))
         self.assertEqual(pyfunc(a, -1), cfunc(a, -1))
 
         # Any layout
-        arraytype = types.Array(types.int32, 1, 'A')
+        arraytype = types.Array(types.int32, 1, "A")
         argtys = (arraytype, types.int32)
         cfunc = jit(argtys, **flags)(pyfunc)
 
-        a = np.arange(10, dtype='i4')[::2]
-        self.assertFalse(a.flags['C_CONTIGUOUS'])
-        self.assertFalse(a.flags['F_CONTIGUOUS'])
+        a = np.arange(10, dtype="i4")[::2]
+        self.assertFalse(a.flags["C_CONTIGUOUS"])
+        self.assertFalse(a.flags["F_CONTIGUOUS"])
         self.assertEqual(pyfunc(a, 0), cfunc(a, 0))
         self.assertEqual(pyfunc(a, 2), cfunc(a, 2))
         self.assertEqual(pyfunc(a, -1), cfunc(a, -1))
 
         # Using a 0-d array as integer index
-        arraytype = types.Array(types.int32, 1, 'C')
-        indextype = types.Array(types.int16, 0, 'C')
+        arraytype = types.Array(types.int32, 1, "C")
+        indextype = types.Array(types.int16, 0, "C")
         argtys = (arraytype, indextype)
         cfunc = jit(argtys, **flags)(pyfunc)
 
@@ -530,30 +550,31 @@ class TestGetItem(TestCase):
     def test_integer_indexing_1d_for_2d(self, flags=enable_pyobj_flags):
         # Test partial (1d) indexing of a 2d array
         pyfunc = integer_indexing_1d_usecase
-        arraytype = types.Array(types.int32, 2, 'C')
+        arraytype = types.Array(types.int32, 2, "C")
         argtys = (arraytype, types.int32)
         cfunc = jit(argtys, **flags)(pyfunc)
 
-        a = np.arange(100, dtype='i4').reshape(10, 10)
+        a = np.arange(100, dtype="i4").reshape(10, 10)
         self.assertPreciseEqual(pyfunc(a, 0), cfunc(a, 0))
         self.assertPreciseEqual(pyfunc(a, 9), cfunc(a, 9))
         self.assertPreciseEqual(pyfunc(a, -1), cfunc(a, -1))
 
-        arraytype = types.Array(types.int32, 2, 'A')
+        arraytype = types.Array(types.int32, 2, "A")
         argtys = (arraytype, types.int32)
         cfunc = jit(argtys, **flags)(pyfunc)
 
-        a = np.arange(20, dtype='i4').reshape(5, 4)[::2]
+        a = np.arange(20, dtype="i4").reshape(5, 4)[::2]
         self.assertPreciseEqual(pyfunc(a, 0), cfunc(a, 0))
 
     def test_integer_indexing_1d_for_2d_npm(self):
         self.test_integer_indexing_1d_for_2d(flags=Noflags)
 
-    def test_2d_integer_indexing(self, flags=enable_pyobj_flags,
-                                 pyfunc=integer_indexing_2d_usecase):
+    def test_2d_integer_indexing(
+        self, flags=enable_pyobj_flags, pyfunc=integer_indexing_2d_usecase
+    ):
         # C layout
-        a = np.arange(100, dtype='i4').reshape(10, 10)
-        arraytype = types.Array(types.int32, 2, 'C')
+        a = np.arange(100, dtype="i4").reshape(10, 10)
+        arraytype = types.Array(types.int32, 2, "C")
         argtys = (arraytype, types.int32, types.int32)
         cfunc = jit(argtys, **flags)(pyfunc)
 
@@ -562,11 +583,11 @@ class TestGetItem(TestCase):
         self.assertEqual(pyfunc(a, -2, -1), cfunc(a, -2, -1))
 
         # Any layout
-        a = np.arange(100, dtype='i4').reshape(10, 10)[::2, ::2]
-        self.assertFalse(a.flags['C_CONTIGUOUS'])
-        self.assertFalse(a.flags['F_CONTIGUOUS'])
+        a = np.arange(100, dtype="i4").reshape(10, 10)[::2, ::2]
+        self.assertFalse(a.flags["C_CONTIGUOUS"])
+        self.assertFalse(a.flags["F_CONTIGUOUS"])
 
-        arraytype = types.Array(types.int32, 2, 'A')
+        arraytype = types.Array(types.int32, 2, "A")
         argtys = (arraytype, types.int32, types.int32)
         cfunc = jit(argtys, **flags)(pyfunc)
 
@@ -575,9 +596,9 @@ class TestGetItem(TestCase):
         self.assertEqual(pyfunc(a, -2, -1), cfunc(a, -2, -1))
 
         # With 0-d arrays as integer indices
-        a = np.arange(100, dtype='i4').reshape(10, 10)
-        arraytype = types.Array(types.int32, 2, 'C')
-        indextype = types.Array(types.int32, 0, 'C')
+        a = np.arange(100, dtype="i4").reshape(10, 10)
+        arraytype = types.Array(types.int32, 2, "C")
+        indextype = types.Array(types.int32, 0, "C")
         argtys = (arraytype, indextype, indextype)
         cfunc = jit(argtys, **flags)(pyfunc)
 
@@ -591,25 +612,28 @@ class TestGetItem(TestCase):
 
     def test_2d_integer_indexing2(self):
         self.test_2d_integer_indexing(pyfunc=integer_indexing_2d_usecase2)
-        self.test_2d_integer_indexing(flags=Noflags,
-                                      pyfunc=integer_indexing_2d_usecase2)
+        self.test_2d_integer_indexing(
+            flags=Noflags, pyfunc=integer_indexing_2d_usecase2
+        )
 
     def test_2d_integer_indexing_via_call(self):
         @njit
         def index1(X, i0):
             return X[i0]
+
         @njit
         def index2(X, i0, i1):
             return index1(X[i0], i1)
+
         a = np.arange(10).reshape(2, 5)
         self.assertEqual(index2(a, 0, 0), a[0][0])
         self.assertEqual(index2(a, 1, 1), a[1][1])
         self.assertEqual(index2(a, -1, -1), a[-1][-1])
 
     def test_2d_float_indexing(self, flags=enable_pyobj_flags):
-        a = np.arange(100, dtype='i4').reshape(10, 10)
+        a = np.arange(100, dtype="i4").reshape(10, 10)
         pyfunc = integer_indexing_2d_usecase
-        arraytype = types.Array(types.int32, 2, 'C')
+        arraytype = types.Array(types.int32, 2, "C")
         argtys = (arraytype, types.float32, types.int32)
         cfunc = jit(argtys, **flags)(pyfunc)
 
@@ -628,16 +652,16 @@ class TestGetItem(TestCase):
             self.assertEqual(pyfunc(arr, n), cfunc(arr, n))
             self.assertEqual(pyfunc(arr, -1), cfunc(arr, -1))
 
-        a = np.arange(12, dtype='i4').reshape((4, 3))
-        arraytype = types.Array(types.int32, 2, 'C')
+        a = np.arange(12, dtype="i4").reshape((4, 3))
+        arraytype = types.Array(types.int32, 2, "C")
         check(a, arraytype)
 
-        a = np.arange(12, dtype='i4').reshape((3, 4)).T
-        arraytype = types.Array(types.int32, 2, 'F')
+        a = np.arange(12, dtype="i4").reshape((3, 4)).T
+        arraytype = types.Array(types.int32, 2, "F")
         check(a, arraytype)
 
-        a = np.arange(12, dtype='i4').reshape((3, 4))[::2]
-        arraytype = types.Array(types.int32, 2, 'A')
+        a = np.arange(12, dtype="i4").reshape((3, 4))[::2]
+        arraytype = types.Array(types.int32, 2, "A")
         check(a, arraytype)
 
     def check_ellipsis(self, pyfunc, flags):
@@ -652,8 +676,8 @@ class TestGetItem(TestCase):
                 x = cfunc(a, i, j)
                 np.testing.assert_equal(pyfunc(a, i, j), cfunc(a, i, j))
 
-        run(np.arange(16, dtype='i4').reshape(4, 4))
-        run(np.arange(27, dtype='i4').reshape(3, 3, 3))
+        run(np.arange(16, dtype="i4").reshape(4, 4))
+        run(np.arange(27, dtype="i4").reshape(3, 3, 3))
 
     def test_ellipsis1(self, flags=enable_pyobj_flags):
         self.check_ellipsis(ellipsis_usecase1, flags)
@@ -708,12 +732,12 @@ class TestGetItem(TestCase):
 
     def test_none_index(self, flags=enable_pyobj_flags):
         pyfunc = none_index_usecase
-        arraytype = types.Array(types.int32, 2, 'C')
+        arraytype = types.Array(types.int32, 2, "C")
         # TODO should be enable to handle this in NoPython mode
         argtys = (arraytype,)
         cfunc = jit(argtys, **flags)(pyfunc)
 
-        a = np.arange(100, dtype='i4').reshape(10, 10)
+        a = np.arange(100, dtype="i4").reshape(10, 10)
         self.assertPreciseEqual(pyfunc(a), cfunc(a))
 
     def test_none_index_npm(self):
@@ -722,11 +746,11 @@ class TestGetItem(TestCase):
 
     def test_empty_tuple_indexing(self, flags=enable_pyobj_flags):
         pyfunc = empty_tuple_usecase
-        arraytype = types.Array(types.int32, 0, 'C')
+        arraytype = types.Array(types.int32, 0, "C")
         argtys = (arraytype,)
         cfunc = jit(argtys, **flags)(pyfunc)
 
-        a = np.arange(1, dtype='i4').reshape(())
+        a = np.arange(1, dtype="i4").reshape(())
         self.assertPreciseEqual(pyfunc(a), cfunc(a))
 
     def test_empty_tuple_indexing_npm(self):
@@ -740,7 +764,7 @@ class TestSetItem(TestCase):
     """
 
     def test_conversion_setitem(self, flags=enable_pyobj_flags):
-        """ this used to work, and was used in one of the tutorials """
+        """this used to work, and was used in one of the tutorials"""
         from numba import jit
 
         def pyfunc(array):
@@ -749,7 +773,7 @@ class TestSetItem(TestCase):
 
         cfunc = jit("void(i8[:])", **flags)(pyfunc)
 
-        udt = np.arange(100, dtype='i1')
+        udt = np.arange(100, dtype="i1")
         control = udt.copy()
         pyfunc(control)
         cfunc(udt)
@@ -762,17 +786,18 @@ class TestSetItem(TestCase):
         pyfunc = slicing_1d_usecase_set
         # Note heterogeneous types for the source and destination arrays
         # (int16[:] -> int32[:])
-        dest_type = types.Array(types.int32, 1, 'C')
-        src_type = types.Array(types.int16, 1, 'A')
+        dest_type = types.Array(types.int32, 1, "C")
+        src_type = types.Array(types.int16, 1, "A")
         argtys = (dest_type, src_type, types.int32, types.int32, types.int32)
         cfunc = jit(argtys, **flags)(pyfunc)
 
         N = 10
-        arg = np.arange(N, dtype='i2') + 40
-        bounds = [0, 2, N - 2, N, N + 1, N + 3,
-                  -2, -N + 2, -N, -N - 1, -N - 3]
+        arg = np.arange(N, dtype="i2") + 40
+        bounds = [0, 2, N - 2, N, N + 1, N + 3, -2, -N + 2, -N, -N - 1, -N - 3]
+
         def make_dest():
-            return np.zeros_like(arg, dtype='i4')
+            return np.zeros_like(arg, dtype="i4")
+
         for start, stop in itertools.product(bounds, bounds):
             for step in (1, 2, -1, -2):
                 args = start, stop, step
@@ -790,7 +815,7 @@ class TestSetItem(TestCase):
         Generic sequence to 1d slice assignment
         """
         pyfunc = slicing_1d_usecase_set
-        dest_type = types.Array(types.int32, 1, 'C')
+        dest_type = types.Array(types.int32, 1, "C")
         argtys = (dest_type, seqty, types.int32, types.int32, types.int32)
         # This emulates the use of `compile_result`. The args that are passed
         # into this checking function are not as advertised in argtys and
@@ -814,31 +839,30 @@ class TestSetItem(TestCase):
         Tuple to 1d slice assignment
         """
         self.check_1d_slicing_set_sequence(
-            flags, types.UniTuple(types.int16, 2), (8, -42))
+            flags, types.UniTuple(types.int16, 2), (8, -42)
+        )
 
     def test_1d_slicing_set_list(self, flags=enable_pyobj_flags):
         """
         List to 1d slice assignment
         """
-        self.check_1d_slicing_set_sequence(
-            flags, types.List(types.int16), [8, -42])
+        self.check_1d_slicing_set_sequence(flags, types.List(types.int16), [8, -42])
 
     def test_1d_slicing_broadcast(self, flags=enable_pyobj_flags):
         """
         scalar to 1d slice assignment
         """
         pyfunc = slicing_1d_usecase_set
-        arraytype = types.Array(types.int32, 1, 'C')
+        arraytype = types.Array(types.int32, 1, "C")
         # Note heterogeneous types for the source scalar and the destination
         # array (int16 -> int32[:])
         argtys = (arraytype, types.int16, types.int32, types.int32, types.int32)
         cfunc = jit(argtys, **flags)(pyfunc)
 
         N = 10
-        arg = np.arange(N, dtype='i4')
+        arg = np.arange(N, dtype="i4")
         val = 42
-        bounds = [0, 2, N - 2, N, N + 1, N + 3,
-                  -2, -N + 2, -N, -N - 1, -N - 3]
+        bounds = [0, 2, N - 2, N, N + 1, N + 3, -2, -N + 2, -N, -N - 1, -N - 3]
         for start, stop in itertools.product(bounds, bounds):
             for step in (1, 2, -1, -2):
                 args = val, start, stop, step
@@ -848,11 +872,11 @@ class TestSetItem(TestCase):
 
     def test_1d_slicing_add(self, flags=enable_pyobj_flags):
         pyfunc = slicing_1d_usecase_add
-        arraytype = types.Array(types.int32, 1, 'C')
+        arraytype = types.Array(types.int32, 1, "C")
         argtys = (arraytype, arraytype, types.int32, types.int32)
         cfunc = jit(argtys, **flags)(pyfunc)
 
-        arg = np.arange(10, dtype='i4')
+        arg = np.arange(10, dtype="i4")
         for test in ((0, 10), (2, 5)):
             pyleft = pyfunc(np.zeros_like(arg), arg[slice(*test)], *test)
             cleft = cfunc(np.zeros_like(arg), arg[slice(*test)], *test)
@@ -878,12 +902,20 @@ class TestSetItem(TestCase):
         2d to 2d slice assignment
         """
         pyfunc = slicing_2d_usecase_set
-        arraytype = types.Array(types.int32, 2, 'A')
-        argtys = (arraytype, arraytype, types.int32, types.int32, types.int32,
-                  types.int32, types.int32, types.int32)
+        arraytype = types.Array(types.int32, 2, "A")
+        argtys = (
+            arraytype,
+            arraytype,
+            types.int32,
+            types.int32,
+            types.int32,
+            types.int32,
+            types.int32,
+            types.int32,
+        )
         cfunc = jit(argtys, **flags)(pyfunc)
 
-        arg = np.arange(10*10, dtype='i4').reshape(10,10)
+        arg = np.arange(10 * 10, dtype="i4").reshape(10, 10)
         tests = [
             (0, 10, 1, 0, 10, 1),
             (2, 3, 1, 2, 3, 1),
@@ -892,8 +924,12 @@ class TestSetItem(TestCase):
             (0, 10, 2, 0, 10, 2),
         ]
         for test in tests:
-            pyleft = pyfunc(np.zeros_like(arg), arg[slice(*test[0:3]), slice(*test[3:6])], *test)
-            cleft = cfunc(np.zeros_like(arg), arg[slice(*test[0:3]), slice(*test[3:6])], *test)
+            pyleft = pyfunc(
+                np.zeros_like(arg), arg[slice(*test[0:3]), slice(*test[3:6])], *test
+            )
+            cleft = cfunc(
+                np.zeros_like(arg), arg[slice(*test[0:3]), slice(*test[3:6])], *test
+            )
             self.assertPreciseEqual(cleft, pyleft)
 
     def test_2d_slicing_broadcast(self, flags=enable_pyobj_flags):
@@ -901,14 +937,22 @@ class TestSetItem(TestCase):
         scalar to 2d slice assignment
         """
         pyfunc = slicing_2d_usecase_set
-        arraytype = types.Array(types.int32, 2, 'C')
+        arraytype = types.Array(types.int32, 2, "C")
         # Note heterogeneous types for the source scalar and the destination
         # array (int16 -> int32[:])
-        argtys = (arraytype, types.int16, types.int32, types.int32, types.int32,
-                  types.int32, types.int32, types.int32)
+        argtys = (
+            arraytype,
+            types.int16,
+            types.int32,
+            types.int32,
+            types.int32,
+            types.int32,
+            types.int32,
+            types.int32,
+        )
         cfunc = jit(argtys, **flags)(pyfunc)
 
-        arg = np.arange(10*10, dtype='i4').reshape(10,10)
+        arg = np.arange(10 * 10, dtype="i4").reshape(10, 10)
         val = 42
         tests = [
             (0, 10, 1, 0, 10, 1),
@@ -981,17 +1025,17 @@ class TestSetItem(TestCase):
         with self.assertRaises(ValueError) as raises:
             setitem_broadcast_usecase(dst, src)
         errmsg = str(raises.exception)
-        self.assertEqual('cannot broadcast source array for assignment',
-                         errmsg)
+        self.assertEqual("cannot broadcast source array for assignment", errmsg)
         # 3D -> 2D
         dst = np.arange(5).reshape(1, 5)
         src = np.arange(10).reshape(1, 2, 5)
         with self.assertRaises(ValueError) as raises:
             setitem_broadcast_usecase(dst, src)
         errmsg = str(raises.exception)
-        self.assertEqual(('cannot assign slice of shape (2, 5) from input of' +
-                         ' shape (1, 5)'),
-                         errmsg)
+        self.assertEqual(
+            ("cannot assign slice of shape (2, 5) from input of" + " shape (1, 5)"),
+            errmsg,
+        )
         # lower to higher
         # 1D -> 2D
         dst = np.arange(10).reshape(2, 5)
@@ -999,9 +1043,10 @@ class TestSetItem(TestCase):
         with self.assertRaises(ValueError) as raises:
             setitem_broadcast_usecase(dst, src)
         errmsg = str(raises.exception)
-        self.assertEqual(('cannot assign slice of shape (2, 4) from input of' +
-                        ' shape (2, 5)'),
-                        errmsg)
+        self.assertEqual(
+            ("cannot assign slice of shape (2, 4) from input of" + " shape (2, 5)"),
+            errmsg,
+        )
 
     def test_slicing_1d_broadcast(self):
         # 1D -> 2D sliced (1)
@@ -1025,8 +1070,7 @@ class TestSetItem(TestCase):
         arr.flags.writeable = False
         with self.assertRaises((TypeError, errors.TypingError)) as raises:
             setitem_usecase(arr, 1, 42)
-        self.assertIn("Cannot modify readonly array of type:",
-                      str(raises.exception))
+        self.assertIn("Cannot modify readonly array of type:", str(raises.exception))
 
 
 class TestTyping(TestCase):
@@ -1042,15 +1086,14 @@ class TestTyping(TestCase):
 
         func = arraydecl.get_array_index_type
 
-        cty = types.Array(types.float64, 3, 'C')
-        fty = types.Array(types.float64, 3, 'F')
-        aty = types.Array(types.float64, 3, 'A')
+        cty = types.Array(types.float64, 3, "C")
+        fty = types.Array(types.float64, 3, "F")
+        aty = types.Array(types.float64, 3, "A")
 
         indices = [
             # Tuples of (indexing arguments, keeps "C" layout, keeps "F" layout)
             ((), True, True),
             ((ellipsis,), True, True),
-
             # Indexing from the left => can sometimes keep "C" layout
             ((intp,), True, False),
             ((slice2_type,), True, False),
@@ -1060,53 +1103,176 @@ class TestTyping(TestCase):
             # Strided slices = > "A" layout
             ((intp, slice3_type), False, False),
             ((slice3_type,), False, False),
-
             # Indexing from the right => can sometimes keep "F" layout
-            ((ellipsis, intp,), False, True),
-            ((ellipsis, slice2_type,), False, True),
-            ((ellipsis, intp, slice2_type,), False, False),
-            ((ellipsis, slice2_type, intp,), False, True),
-            ((ellipsis, slice2_type, slice2_type,), False, False),
+            (
+                (
+                    ellipsis,
+                    intp,
+                ),
+                False,
+                True,
+            ),
+            (
+                (
+                    ellipsis,
+                    slice2_type,
+                ),
+                False,
+                True,
+            ),
+            (
+                (
+                    ellipsis,
+                    intp,
+                    slice2_type,
+                ),
+                False,
+                False,
+            ),
+            (
+                (
+                    ellipsis,
+                    slice2_type,
+                    intp,
+                ),
+                False,
+                True,
+            ),
+            (
+                (
+                    ellipsis,
+                    slice2_type,
+                    slice2_type,
+                ),
+                False,
+                False,
+            ),
             # Strided slices = > "A" layout
-            ((ellipsis, slice3_type,), False, False),
-            ((ellipsis, slice3_type, intp,), False, False),
-
+            (
+                (
+                    ellipsis,
+                    slice3_type,
+                ),
+                False,
+                False,
+            ),
+            (
+                (
+                    ellipsis,
+                    slice3_type,
+                    intp,
+                ),
+                False,
+                False,
+            ),
             # Indexing from both sides => only if all dimensions are indexed
-            ((intp, ellipsis, intp,), False, False),
-            ((slice2_type, ellipsis, slice2_type,), False, False),
-            ((intp, intp, slice2_type,), True, False),
-            ((intp, ellipsis, intp, slice2_type,), True, False),
-            ((slice2_type, intp, intp,), False, True),
-            ((slice2_type, intp, ellipsis, intp,), False, True),
-            ((intp, slice2_type, intp,), False, False),
+            (
+                (
+                    intp,
+                    ellipsis,
+                    intp,
+                ),
+                False,
+                False,
+            ),
+            (
+                (
+                    slice2_type,
+                    ellipsis,
+                    slice2_type,
+                ),
+                False,
+                False,
+            ),
+            (
+                (
+                    intp,
+                    intp,
+                    slice2_type,
+                ),
+                True,
+                False,
+            ),
+            (
+                (
+                    intp,
+                    ellipsis,
+                    intp,
+                    slice2_type,
+                ),
+                True,
+                False,
+            ),
+            (
+                (
+                    slice2_type,
+                    intp,
+                    intp,
+                ),
+                False,
+                True,
+            ),
+            (
+                (
+                    slice2_type,
+                    intp,
+                    ellipsis,
+                    intp,
+                ),
+                False,
+                True,
+            ),
+            (
+                (
+                    intp,
+                    slice2_type,
+                    intp,
+                ),
+                False,
+                False,
+            ),
             # Strided slices = > "A" layout
-            ((slice3_type, intp, intp,), False, False),
-            ((intp, intp, slice3_type,), False, False),
-            ]
+            (
+                (
+                    slice3_type,
+                    intp,
+                    intp,
+                ),
+                False,
+                False,
+            ),
+            (
+                (
+                    intp,
+                    intp,
+                    slice3_type,
+                ),
+                False,
+                False,
+            ),
+        ]
 
         for index_tuple, keep_c, _ in indices:
             index = types.Tuple(index_tuple)
             r = func(cty, index)
             self.assertEqual(tuple(r.index), index_tuple)
-            self.assertEqual(r.result.layout, 'C' if keep_c else 'A',
-                             index_tuple)
+            self.assertEqual(r.result.layout, "C" if keep_c else "A", index_tuple)
             self.assertFalse(r.advanced)
 
         for index_tuple, _, keep_f in indices:
             index = types.Tuple(index_tuple)
             r = func(fty, index)
             self.assertEqual(tuple(r.index), index_tuple)
-            self.assertEqual(r.result.layout, 'F' if keep_f else 'A',
-                             index_tuple)
+            self.assertEqual(r.result.layout, "F" if keep_f else "A", index_tuple)
             self.assertFalse(r.advanced)
 
         for index_tuple, _, _ in indices:
             index = types.Tuple(index_tuple)
             r = func(aty, index)
             self.assertEqual(tuple(r.index), index_tuple)
-            self.assertEqual(r.result.layout, 'A')
+            self.assertEqual(r.result.layout, "A")
             self.assertFalse(r.advanced)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

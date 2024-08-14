@@ -33,5 +33,5 @@ class TestCudaSlicing(CUDATestCase):
         arr[:] = cuda.to_device(a)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -21,17 +21,23 @@ from llvmlite import ir
 import llvmlite.binding as llvm
 from numba.core.unsafe.nrt import NRT_get_api
 
-from numba.tests.support import (EnableNRTStatsMixin, TestCase, temp_directory,
-                                 import_dynamic, skip_if_32bit,
-                                 skip_unless_cffi, run_in_subprocess)
+from numba.tests.support import (
+    EnableNRTStatsMixin,
+    TestCase,
+    temp_directory,
+    import_dynamic,
+    skip_if_32bit,
+    skip_unless_cffi,
+    run_in_subprocess,
+)
 from numba.core.registry import cpu_target
 import unittest
 
 
-linux_only = unittest.skipIf(not sys.platform.startswith('linux'),
-                             'linux only test')
-x86_only = unittest.skipIf(platform.machine() not in ('i386', 'x86_64'),
-                           'x86 only test')
+linux_only = unittest.skipIf(not sys.platform.startswith("linux"), "linux only test")
+x86_only = unittest.skipIf(
+    platform.machine() not in ("i386", "x86_64"), "x86 only test"
+)
 
 
 class Dummy(object):
@@ -49,13 +55,15 @@ class TestNrtMemInfoNotInitialized(unittest.TestCase):
     Unit test for checking the use of the NRT fails if the
     initialization sequence has not been run.
     """
+
     _numba_parallel_test_ = False
 
     def test_init_fail(self):
-        methods = {'library': (),
-                   'meminfo_new': ((), ()),
-                   'meminfo_alloc': ((),),
-                   }
+        methods = {
+            "library": (),
+            "meminfo_new": ((), ()),
+            "meminfo_alloc": ((),),
+        }
 
         for meth, args in methods.items():
             try:
@@ -85,7 +93,7 @@ class TestNrtMemInfo(unittest.TestCase):
     def test_meminfo_refct_1(self):
         d = Dummy()
         self.assertEqual(Dummy.alive, 1)
-        addr = 0xdeadcafe  # some made up location
+        addr = 0xDEADCAFE  # some made up location
 
         mi = rtsys.meminfo_new(addr, d)
         self.assertEqual(mi.refcount, 1)
@@ -102,7 +110,7 @@ class TestNrtMemInfo(unittest.TestCase):
     def test_meminfo_refct_2(self):
         d = Dummy()
         self.assertEqual(Dummy.alive, 1)
-        addr = 0xdeadcafe  # some made up location
+        addr = 0xDEADCAFE  # some made up location
 
         mi = rtsys.meminfo_new(addr, d)
         self.assertEqual(mi.refcount, 1)
@@ -121,7 +129,7 @@ class TestNrtMemInfo(unittest.TestCase):
     def test_fake_memoryview(self):
         d = Dummy()
         self.assertEqual(Dummy.alive, 1)
-        addr = 0xdeadcafe  # some made up location
+        addr = 0xDEADCAFE  # some made up location
 
         mi = rtsys.meminfo_new(addr, d)
         self.assertEqual(mi.refcount, 1)
@@ -150,7 +158,7 @@ class TestNrtMemInfo(unittest.TestCase):
         c_arr = cast(c_void_p(mi.data), POINTER(c_uint32 * 10))
         # Check 0xCB-filling
         for i in range(10):
-            self.assertEqual(c_arr.contents[i], 0xcbcbcbcb)
+            self.assertEqual(c_arr.contents[i], 0xCBCBCBCB)
 
         # Init array with ctypes
         for i in range(10):
@@ -163,8 +171,9 @@ class TestNrtMemInfo(unittest.TestCase):
         self.assertEqual(mview.itemsize, 1)
         self.assertEqual(mview.ndim, 1)
         del mi
-        arr = np.ndarray(dtype=dtype, shape=mview.nbytes // dtype.itemsize,
-                         buffer=mview)
+        arr = np.ndarray(
+            dtype=dtype, shape=mview.nbytes // dtype.itemsize, buffer=mview
+        )
         del mview
         # Modify array with NumPy
         np.testing.assert_equal(np.arange(arr.size) + 1, arr)
@@ -192,14 +201,13 @@ class TestNrtMemInfo(unittest.TestCase):
         c_arr = cast(c_void_p(addr), POINTER(c_uint32 * 10))
         # Check 0xCB-filling
         for i in range(10):
-            self.assertEqual(c_arr.contents[i], 0xcbcbcbcb)
+            self.assertEqual(c_arr.contents[i], 0xCBCBCBCB)
 
         # Init array with ctypes
         for i in range(10):
             c_arr.contents[i] = i + 1
 
-        arr = np.ndarray(dtype=dtype, shape=bytesize // dtype.itemsize,
-                         buffer=mi)
+        arr = np.ndarray(dtype=dtype, shape=bytesize // dtype.itemsize, buffer=mi)
         self.assertEqual(mi.refcount, 1)
         del mi
         # Modify array with NumPy
@@ -224,8 +232,9 @@ class TestNrtMemInfo(unittest.TestCase):
         for pred in (True, False):
             with self.assertRaises(MemoryError) as raises:
                 rtsys.meminfo_alloc(size, safe=pred)
-            self.assertIn(f"Requested allocation of {size} bytes failed.",
-                          str(raises.exception))
+            self.assertIn(
+                f"Requested allocation of {size} bytes failed.", str(raises.exception)
+            )
 
     def test_allocate_negative_size(self):
         # Checks that attempting to allocate negative number of bytes fails
@@ -255,7 +264,7 @@ class TestTracemalloc(unittest.TestCase):
             res = func()
             after = tracemalloc.take_snapshot()
             del res
-            return after.compare_to(before, 'lineno')
+            return after.compare_to(before, "lineno")
         finally:
             tracemalloc.stop()
 
@@ -286,10 +295,15 @@ class TestTracemalloc(unittest.TestCase):
         stat = diff[0]
         # There is a slight overhead, so the allocated size won't exactly be N
         self.assertGreaterEqual(stat.size, N)
-        self.assertLess(stat.size, N * 1.015,
-                        msg=("Unexpected allocation overhead encountered. "
-                             "May be due to difference in CPython "
-                             "builds or running under coverage"))
+        self.assertLess(
+            stat.size,
+            N * 1.015,
+            msg=(
+                "Unexpected allocation overhead encountered. "
+                "May be due to difference in CPython "
+                "builds or running under coverage"
+            ),
+        )
         frame = stat.traceback[0]
         self.assertEqual(os.path.basename(frame.filename), "test_nrt.py")
         self.assertEqual(frame.lineno, alloc_lineno)
@@ -307,11 +321,12 @@ class TestNRTIssue(TestCase):
         """
         GitHub Issue #1244 https://github.com/numba/numba/issues/1244
         """
+
         @njit
         def calculate_2D_vector_mag(vector):
             x, y = vector
 
-            return math.sqrt(x ** 2 + y ** 2)
+            return math.sqrt(x**2 + y**2)
 
         @njit
         def normalize_2D_vector(vector):
@@ -354,8 +369,9 @@ class TestNRTIssue(TestCase):
 
         # Note the return type isn't the same as the tuple type above:
         # the first element is a complex rather than a float.
-        cfunc = njit((types.Tuple((types.complex128,
-                                   types.Array(types.int32, 1, 'C') )))())(f)
+        cfunc = njit(
+            (types.Tuple((types.complex128, types.Array(types.int32, 1, "C"))))()
+        )(f)
         z, arr = cfunc()
         self.assertPreciseEqual(z, 0j)
         self.assertPreciseEqual(arr, np.zeros(1, dtype=np.int32))
@@ -421,7 +437,7 @@ class TestNRTIssue(TestCase):
 
 class TestRefCtPruning(unittest.TestCase):
 
-    sample_llvm_ir = '''
+    sample_llvm_ir = """
 define i32 @"MyFunction"(i8** noalias nocapture %retptr, { i8*, i32 }** noalias nocapture %excinfo, i8* noalias nocapture readnone %env, double %arg.vt.0, double %arg.vt.1, double %arg.vt.2, double %arg.vt.3, double %arg.bounds.0, double %arg.bounds.1, double %arg.bounds.2, double %arg.bounds.3, i8* %arg.xs.0, i8* nocapture readnone %arg.xs.1, i64 %arg.xs.2, i64 %arg.xs.3, double* nocapture readonly %arg.xs.4, i64 %arg.xs.5.0, i64 %arg.xs.6.0, i8* %arg.ys.0, i8* nocapture readnone %arg.ys.1, i64 %arg.ys.2, i64 %arg.ys.3, double* nocapture readonly %arg.ys.4, i64 %arg.ys.5.0, i64 %arg.ys.6.0, i8* %arg.aggs_and_cols.0.0, i8* nocapture readnone %arg.aggs_and_cols.0.1, i64 %arg.aggs_and_cols.0.2, i64 %arg.aggs_and_cols.0.3, i32* nocapture %arg.aggs_and_cols.0.4, i64 %arg.aggs_and_cols.0.5.0, i64 %arg.aggs_and_cols.0.5.1, i64 %arg.aggs_and_cols.0.6.0, i64 %arg.aggs_and_cols.0.6.1) local_unnamed_addr {
 entry:
 tail call void @NRT_incref(i8* %arg.xs.0)
@@ -491,19 +507,19 @@ B40.backedge:                                     ; preds = %B108.endif.endif.en
 %.294 = icmp sgt i64 %lsr.iv.next, 1
 br i1 %.294, label %B42, label %B160
 }
-    ''' # noqa
+    """  # noqa
 
     def test_refct_pruning_op_recognize(self):
         input_ir = self.sample_llvm_ir
         input_lines = list(input_ir.splitlines())
-        before_increfs = [ln for ln in input_lines if 'NRT_incref' in ln]
-        before_decrefs = [ln for ln in input_lines if 'NRT_decref' in ln]
+        before_increfs = [ln for ln in input_lines if "NRT_incref" in ln]
+        before_decrefs = [ln for ln in input_lines if "NRT_decref" in ln]
 
         # prune
         output_ir = nrtopt._remove_redundant_nrt_refct(input_ir)
         output_lines = list(output_ir.splitlines())
-        after_increfs = [ln for ln in output_lines if 'NRT_incref' in ln]
-        after_decrefs = [ln for ln in output_lines if 'NRT_decref' in ln]
+        after_increfs = [ln for ln in output_lines if "NRT_incref" in ln]
+        after_decrefs = [ln for ln in output_lines if "NRT_decref" in ln]
 
         # check
         self.assertNotEqual(before_increfs, after_increfs)
@@ -515,18 +531,19 @@ br i1 %.294, label %B42, label %B160
         # the symm difference == or-combined
         combined = pruned_increfs | pruned_decrefs
         self.assertEqual(combined, pruned_increfs ^ pruned_decrefs)
-        pruned_lines = '\n'.join(combined)
+        pruned_lines = "\n".join(combined)
 
         # all GONE lines are pruned
         for i in [1, 2, 3, 4, 5]:
-            gone = '; GONE {}'.format(i)
+            gone = "; GONE {}".format(i)
             self.assertIn(gone, pruned_lines)
         # no other lines
         self.assertEqual(len(list(pruned_lines.splitlines())), len(combined))
 
     @unittest.skip("Pass removed as it was buggy. Re-enable when fixed.")
     def test_refct_pruning_with_branches(self):
-        '''testcase from #2350'''
+        """testcase from #2350"""
+
         @njit
         def _append_non_na(x, y, agg, field):
             if not np.isnan(field):
@@ -558,7 +575,7 @@ br i1 %.294, label %B42, label %B160
 
         # Test there are no reference count operations
         llvmir = str(extend.inspect_llvm(extend.signatures[0]))
-        refops = list(re.finditer(r'(NRT_incref|NRT_decref)\([^\)]+\)', llvmir))
+        refops = list(re.finditer(r"(NRT_incref|NRT_decref)\([^\)]+\)", llvmir))
         self.assertEqual(len(refops), 0)
 
     @linux_only
@@ -575,27 +592,32 @@ br i1 %.294, label %B42, label %B160
         def bar(tyctx, x, y):
             def codegen(cgctx, builder, sig, args):
                 (arg_0, arg_1) = args
-                fty = ir.FunctionType(ir.IntType(32), [ir.IntType(32),
-                                                       ir.IntType(32)])
-                mul = builder.asm(fty, "mov $2, $0; imul $1, $0", "=&r,r,r",
-                                  (arg_0, arg_1), name="asm_mul",
-                                  side_effect=False)
+                fty = ir.FunctionType(ir.IntType(32), [ir.IntType(32), ir.IntType(32)])
+                mul = builder.asm(
+                    fty,
+                    "mov $2, $0; imul $1, $0",
+                    "=&r,r,r",
+                    (arg_0, arg_1),
+                    name="asm_mul",
+                    side_effect=False,
+                )
                 return impl_ret_untracked(cgctx, builder, sig.return_type, mul)
+
             return signature(types.int32, types.int32, types.int32), codegen
 
-        @njit(['int32(int32)'])
+        @njit(["int32(int32)"])
         def foo(x):
             x += 1
             z = bar(x, 2)
             return z
 
-        self.assertEqual(foo(10), 22) # expect (10 + 1) * 2 = 22
+        self.assertEqual(foo(10), 22)  # expect (10 + 1) * 2 = 22
 
 
 @skip_unless_cffi
 class TestNrtExternalCFFI(EnableNRTStatsMixin, TestCase):
-    """Testing the use of externally compiled C code that use NRT
-    """
+    """Testing the use of externally compiled C code that use NRT"""
+
     def setUp(self):
         # initialize the NRT (in case the tests are run in isolation)
         cpu_target.target_context
@@ -621,7 +643,7 @@ class TestNrtExternalCFFI(EnableNRTStatsMixin, TestCase):
         from cffi import FFI
 
         ffi = FFI()
-        nrt_get_api = ffi.cast("void* (*)()", _nrt_python.c_helpers['get_api'])
+        nrt_get_api = ffi.cast("void* (*)()", _nrt_python.c_helpers["get_api"])
         table = nrt_get_api()
         return table
 
@@ -658,13 +680,13 @@ extern int status;
         table = self.get_nrt_api_table()
         out = mod.lib.test_nrt_api(table)
         # status is now 0xa110c
-        self.assertEqual(mod.lib.status, 0xa110c)
+        self.assertEqual(mod.lib.status, 0xA110C)
         mi_addr = int(ffi.cast("size_t", out))
         mi = nrt.MemInfo(mi_addr)
         self.assertEqual(mi.refcount, 1)
-        del mi   # force deallocation on mi
+        del mi  # force deallocation on mi
         # status is now 0xdead
-        self.assertEqual(mod.lib.status, 0xdead)
+        self.assertEqual(mod.lib.status, 0xDEAD)
 
     def test_allocate(self):
         name = "{}_test_allocate".format(self.__class__.__name__)
@@ -696,7 +718,7 @@ NRT_MemInfo* test_nrt_api(NRT_api_functions *nrt, size_t n) {
 
         buffer = ffi.buffer(ffi.cast("char [{}]".format(numbytes), mi.data))
         arr = np.ndarray(shape=(3,), dtype=np.intp, buffer=buffer)
-        np.testing.assert_equal(arr, [0xded, 0xabc, 0xdef])
+        np.testing.assert_equal(arr, [0xDED, 0xABC, 0xDEF])
 
     def test_get_api(self):
         from cffi import FFI
@@ -706,7 +728,7 @@ NRT_MemInfo* test_nrt_api(NRT_api_functions *nrt, size_t n) {
             return NRT_get_api()
 
         ffi = FFI()
-        expect = int(ffi.cast('size_t', self.get_nrt_api_table()))
+        expect = int(ffi.cast("size_t", self.get_nrt_api_table()))
         got = test_nrt_api()
         self.assertEqual(expect, got)
 
@@ -755,7 +777,7 @@ class TestNrtStatistics(TestCase):
         """
         # Check env var explicitly being set works
         env = os.environ.copy()
-        env['NUMBA_NRT_STATS'] = "1"
+        env["NUMBA_NRT_STATS"] = "1"
         run_in_subprocess(src, env=env)
 
     def check_env_var_off(self, env):
@@ -780,14 +802,14 @@ class TestNrtStatistics(TestCase):
     def test_stats_env_var_explicit_off(self):
         # Checks that explicitly turning the stats off via the env var works.
         env = os.environ.copy()
-        env['NUMBA_NRT_STATS'] = "0"
+        env["NUMBA_NRT_STATS"] = "0"
         self.check_env_var_off(env)
 
     def test_stats_env_var_default_off(self):
         # Checks that the env var not being set is the same as "off", i.e.
         # default for Numba is off.
         env = os.environ.copy()
-        env.pop('NUMBA_NRT_STATS', None)
+        env.pop("NUMBA_NRT_STATS", None)
         self.check_env_var_off(env)
 
     def test_stats_status_toggle(self):
@@ -841,9 +863,9 @@ class TestNrtStatistics(TestCase):
     def test_nrt_explicit_stats_query_raises_exception_when_disabled(self):
         # Checks the various memsys_get_stats functions raise if queried when
         # the stats counters are disabled.
-        method_variations = ('alloc', 'free', 'mi_alloc', 'mi_free')
+        method_variations = ("alloc", "free", "mi_alloc", "mi_free")
         for meth in method_variations:
-            stats_func = getattr(_nrt_python, f'memsys_get_stats_{meth}')
+            stats_func = getattr(_nrt_python, f"memsys_get_stats_{meth}")
             with self.subTest(stats_func=stats_func):
                 # Turn stats off
                 _nrt_python.memsys_disable_stats()
@@ -853,5 +875,5 @@ class TestNrtStatistics(TestCase):
                 self.assertIn("NRT stats are disabled.", str(raises.exception))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

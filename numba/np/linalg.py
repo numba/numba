@@ -2,7 +2,6 @@
 Implementation of linear algebra operations.
 """
 
-
 import contextlib
 import warnings
 
@@ -11,13 +10,16 @@ from llvmlite import ir
 import numpy as np
 import operator
 
-from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
-                                    impl_ret_new_ref, impl_ret_untracked)
+from numba.core.imputils import (
+    lower_builtin,
+    impl_ret_borrowed,
+    impl_ret_new_ref,
+    impl_ret_untracked,
+)
 from numba.core.typing import signature
 from numba.core.extending import intrinsic, overload, register_jitable
 from numba.core import types, cgutils, config
-from numba.core.errors import TypingError, NumbaTypeError, \
-    NumbaPerformanceWarning
+from numba.core.errors import TypingError, NumbaTypeError, NumbaPerformanceWarning
 from .arrayobj import make_array, _empty_nd_impl, array_copy
 from numba.np import numpy_support as np_support
 
@@ -39,20 +41,20 @@ if config.USE_LEGACY_TYPE_SYSTEM:
 
     # BLAS kinds as letters
     _blas_kinds = {
-        types.float32: 's',
-        types.float64: 'd',
-        types.complex64: 'c',
-        types.complex128: 'z',
+        types.float32: "s",
+        types.float64: "d",
+        types.complex64: "c",
+        types.complex128: "z",
     }
 else:
     F_INT_nbtype = types.np_int32
 
     # BLAS kinds as letters
     _blas_kinds = {
-        types.np_float32: 's',
-        types.np_float64: 'd',
-        types.np_complex64: 'c',
-        types.np_complex128: 'z',
+        types.np_float32: "s",
+        types.np_float64: "d",
+        types.np_complex64: "c",
+        types.np_complex128: "z",
     }
 
 
@@ -94,31 +96,33 @@ class _BLAS:
     @classmethod
     def numba_xxnrm2(cls, dtype):
         rtype = getattr(dtype, "underlying_float", dtype)
-        sig = types.intc(types.char,             # kind
-                         types.intp,             # n
-                         types.CPointer(dtype),  # x
-                         types.intp,             # incx
-                         types.CPointer(rtype))  # returned
+        sig = types.intc(
+            types.char,  # kind
+            types.intp,  # n
+            types.CPointer(dtype),  # x
+            types.intp,  # incx
+            types.CPointer(rtype),
+        )  # returned
 
         return types.ExternalFunction("numba_xxnrm2", sig)
 
     @classmethod
     def numba_xxgemm(cls, dtype):
         sig = types.intc(
-            types.char,             # kind
-            types.char,             # transa
-            types.char,             # transb
-            types.intp,             # m
-            types.intp,             # n
-            types.intp,             # k
+            types.char,  # kind
+            types.char,  # transa
+            types.char,  # transb
+            types.intp,  # m
+            types.intp,  # n
+            types.intp,  # k
             types.CPointer(dtype),  # alpha
             types.CPointer(dtype),  # a
-            types.intp,             # lda
+            types.intp,  # lda
             types.CPointer(dtype),  # b
-            types.intp,             # ldb
+            types.intp,  # ldb
             types.CPointer(dtype),  # beta
             types.CPointer(dtype),  # c
-            types.intp              # ldc
+            types.intp,  # ldc
         )
         return types.ExternalFunction("numba_xxgemm", sig)
 
@@ -134,96 +138,102 @@ class _LAPACK:
 
     @classmethod
     def numba_xxgetrf(cls, dtype):
-        sig = types.intc(types.char,                   # kind
-                         types.intp,                   # m
-                         types.intp,                   # n
-                         types.CPointer(dtype),        # a
-                         types.intp,                   # lda
-                         types.CPointer(F_INT_nbtype)  # ipiv
-                         )
+        sig = types.intc(
+            types.char,  # kind
+            types.intp,  # m
+            types.intp,  # n
+            types.CPointer(dtype),  # a
+            types.intp,  # lda
+            types.CPointer(F_INT_nbtype),  # ipiv
+        )
         return types.ExternalFunction("numba_xxgetrf", sig)
 
     @classmethod
     def numba_ez_xxgetri(cls, dtype):
-        sig = types.intc(types.char,                   # kind
-                         types.intp,                   # n
-                         types.CPointer(dtype),        # a
-                         types.intp,                   # lda
-                         types.CPointer(F_INT_nbtype)  # ipiv
-                         )
+        sig = types.intc(
+            types.char,  # kind
+            types.intp,  # n
+            types.CPointer(dtype),  # a
+            types.intp,  # lda
+            types.CPointer(F_INT_nbtype),  # ipiv
+        )
         return types.ExternalFunction("numba_ez_xxgetri", sig)
 
     @classmethod
     def numba_ez_rgeev(cls, dtype):
-        sig = types.intc(types.char,             # kind
-                         types.char,             # jobvl
-                         types.char,             # jobvr
-                         types.intp,             # n
-                         types.CPointer(dtype),  # a
-                         types.intp,             # lda
-                         types.CPointer(dtype),  # wr
-                         types.CPointer(dtype),  # wi
-                         types.CPointer(dtype),  # vl
-                         types.intp,             # ldvl
-                         types.CPointer(dtype),  # vr
-                         types.intp              # ldvr
-                         )
+        sig = types.intc(
+            types.char,  # kind
+            types.char,  # jobvl
+            types.char,  # jobvr
+            types.intp,  # n
+            types.CPointer(dtype),  # a
+            types.intp,  # lda
+            types.CPointer(dtype),  # wr
+            types.CPointer(dtype),  # wi
+            types.CPointer(dtype),  # vl
+            types.intp,  # ldvl
+            types.CPointer(dtype),  # vr
+            types.intp,  # ldvr
+        )
         return types.ExternalFunction("numba_ez_rgeev", sig)
 
     @classmethod
     def numba_ez_cgeev(cls, dtype):
-        sig = types.intc(types.char,             # kind
-                         types.char,             # jobvl
-                         types.char,             # jobvr
-                         types.intp,             # n
-                         types.CPointer(dtype),  # a
-                         types.intp,             # lda
-                         types.CPointer(dtype),  # w
-                         types.CPointer(dtype),  # vl
-                         types.intp,             # ldvl
-                         types.CPointer(dtype),  # vr
-                         types.intp              # ldvr
-                         )
+        sig = types.intc(
+            types.char,  # kind
+            types.char,  # jobvl
+            types.char,  # jobvr
+            types.intp,  # n
+            types.CPointer(dtype),  # a
+            types.intp,  # lda
+            types.CPointer(dtype),  # w
+            types.CPointer(dtype),  # vl
+            types.intp,  # ldvl
+            types.CPointer(dtype),  # vr
+            types.intp,  # ldvr
+        )
         return types.ExternalFunction("numba_ez_cgeev", sig)
 
     @classmethod
     def numba_ez_xxxevd(cls, dtype):
         wtype = getattr(dtype, "underlying_float", dtype)
-        sig = types.intc(types.char,             # kind
-                         types.char,             # jobz
-                         types.char,             # uplo
-                         types.intp,             # n
-                         types.CPointer(dtype),  # a
-                         types.intp,             # lda
-                         types.CPointer(wtype),  # w
-                         )
+        sig = types.intc(
+            types.char,  # kind
+            types.char,  # jobz
+            types.char,  # uplo
+            types.intp,  # n
+            types.CPointer(dtype),  # a
+            types.intp,  # lda
+            types.CPointer(wtype),  # w
+        )
         return types.ExternalFunction("numba_ez_xxxevd", sig)
 
     @classmethod
     def numba_xxpotrf(cls, dtype):
-        sig = types.intc(types.char,             # kind
-                         types.char,             # uplo
-                         types.intp,             # n
-                         types.CPointer(dtype),  # a
-                         types.intp              # lda
-                         )
+        sig = types.intc(
+            types.char,  # kind
+            types.char,  # uplo
+            types.intp,  # n
+            types.CPointer(dtype),  # a
+            types.intp,  # lda
+        )
         return types.ExternalFunction("numba_xxpotrf", sig)
 
     @classmethod
     def numba_ez_gesdd(cls, dtype):
         stype = getattr(dtype, "underlying_float", dtype)
         sig = types.intc(
-            types.char,             # kind
-            types.char,             # jobz
-            types.intp,             # m
-            types.intp,             # n
+            types.char,  # kind
+            types.char,  # jobz
+            types.intp,  # m
+            types.intp,  # n
             types.CPointer(dtype),  # a
-            types.intp,             # lda
+            types.intp,  # lda
             types.CPointer(stype),  # s
             types.CPointer(dtype),  # u
-            types.intp,             # ldu
+            types.intp,  # ldu
             types.CPointer(dtype),  # vt
-            types.intp              # ldvt
+            types.intp,  # ldvt
         )
 
         return types.ExternalFunction("numba_ez_gesdd", sig)
@@ -231,11 +241,11 @@ class _LAPACK:
     @classmethod
     def numba_ez_geqrf(cls, dtype):
         sig = types.intc(
-            types.char,             # kind
-            types.intp,             # m
-            types.intp,             # n
+            types.char,  # kind
+            types.intp,  # m
+            types.intp,  # n
             types.CPointer(dtype),  # a
-            types.intp,             # lda
+            types.intp,  # lda
             types.CPointer(dtype),  # tau
         )
         return types.ExternalFunction("numba_ez_geqrf", sig)
@@ -243,12 +253,12 @@ class _LAPACK:
     @classmethod
     def numba_ez_xxgqr(cls, dtype):
         sig = types.intc(
-            types.char,             # kind
-            types.intp,             # m
-            types.intp,             # n
-            types.intp,             # k
+            types.char,  # kind
+            types.intp,  # m
+            types.intp,  # n
+            types.intp,  # k
             types.CPointer(dtype),  # a
-            types.intp,             # lda
+            types.intp,  # lda
             types.CPointer(dtype),  # tau
         )
         return types.ExternalFunction("numba_ez_xxgqr", sig)
@@ -257,31 +267,31 @@ class _LAPACK:
     def numba_ez_gelsd(cls, dtype):
         rtype = getattr(dtype, "underlying_float", dtype)
         sig = types.intc(
-            types.char,                 # kind
-            types.intp,                 # m
-            types.intp,                 # n
-            types.intp,                 # nrhs
-            types.CPointer(dtype),      # a
-            types.intp,                 # lda
-            types.CPointer(dtype),      # b
-            types.intp,                 # ldb
-            types.CPointer(rtype),      # S
-            types.float64,              # rcond
-            types.CPointer(types.intc)  # rank
+            types.char,  # kind
+            types.intp,  # m
+            types.intp,  # n
+            types.intp,  # nrhs
+            types.CPointer(dtype),  # a
+            types.intp,  # lda
+            types.CPointer(dtype),  # b
+            types.intp,  # ldb
+            types.CPointer(rtype),  # S
+            types.float64,  # rcond
+            types.CPointer(types.intc),  # rank
         )
         return types.ExternalFunction("numba_ez_gelsd", sig)
 
     @classmethod
     def numba_xgesv(cls, dtype):
         sig = types.intc(
-            types.char,                    # kind
-            types.intp,                    # n
-            types.intp,                    # nhrs
-            types.CPointer(dtype),         # a
-            types.intp,                    # lda
+            types.char,  # kind
+            types.intp,  # n
+            types.intp,  # nhrs
+            types.CPointer(dtype),  # a
+            types.intp,  # lda
             types.CPointer(F_INT_nbtype),  # ipiv
-            types.CPointer(dtype),         # b
-            types.intp                     # ldb
+            types.CPointer(dtype),  # b
+            types.intp,  # ldb
         )
         return types.ExternalFunction("numba_xgesv", sig)
 
@@ -297,10 +307,10 @@ def make_contiguous(context, builder, sig, args):
     newargs = []
     copies = []
     for ty, val in zip(sig.args, args):
-        if not isinstance(ty, types.Array) or ty.layout in 'CF':
+        if not isinstance(ty, types.Array) or ty.layout in "CF":
             newty, newval = ty, val
         else:
-            newty = ty.copy(layout='C')
+            newty = ty.copy(layout="C")
             copysig = signature(newty, ty)
             newval = array_copy(context, builder, copysig, (val,))
             copies.append((newty, newval))
@@ -321,8 +331,7 @@ def check_c_int(context, builder, n):
         if n > _maxint:
             raise OverflowError("array size too large to fit in C int")
 
-    context.compile_internal(builder, impl,
-                             signature(types.none, types.intp), (n,))
+    context.compile_internal(builder, impl, signature(types.none, types.intp), (n,))
 
 
 def check_blas_return(context, builder, res):
@@ -349,46 +358,67 @@ def check_lapack_return(context, builder, res):
         pyapi.fatal_error("LAPACK wrapper returned with an error")
 
 
-def call_xxdot(context, builder, conjugate, dtype,
-               n, a_data, b_data, out_data):
+def call_xxdot(context, builder, conjugate, dtype, n, a_data, b_data, out_data):
     """
     Call the BLAS vector * vector product function for the given arguments.
     """
-    fnty = ir.FunctionType(ir.IntType(32),
-                           [ll_char, ll_char, intp_t,    # kind, conjugate, n
-                            ll_void_p, ll_void_p, ll_void_p,  # a, b, out
-                            ])
+    fnty = ir.FunctionType(
+        ir.IntType(32),
+        [
+            ll_char,
+            ll_char,
+            intp_t,  # kind, conjugate, n
+            ll_void_p,
+            ll_void_p,
+            ll_void_p,  # a, b, out
+        ],
+    )
     fn = cgutils.get_or_insert_function(builder.module, fnty, "numba_xxdot")
 
     kind = get_blas_kind(dtype)
     kind_val = ir.Constant(ll_char, ord(kind))
     conjugate = ir.Constant(ll_char, int(conjugate))
 
-    res = builder.call(fn, (kind_val, conjugate, n,
-                            builder.bitcast(a_data, ll_void_p),
-                            builder.bitcast(b_data, ll_void_p),
-                            builder.bitcast(out_data, ll_void_p)))
+    res = builder.call(
+        fn,
+        (
+            kind_val,
+            conjugate,
+            n,
+            builder.bitcast(a_data, ll_void_p),
+            builder.bitcast(b_data, ll_void_p),
+            builder.bitcast(out_data, ll_void_p),
+        ),
+    )
     check_blas_return(context, builder, res)
 
 
-def call_xxgemv(context, builder, do_trans,
-                m_type, m_shapes, m_data, v_data, out_data):
+def call_xxgemv(context, builder, do_trans, m_type, m_shapes, m_data, v_data, out_data):
     """
     Call the BLAS matrix * vector product function for the given arguments.
     """
-    fnty = ir.FunctionType(ir.IntType(32),
-                           [ll_char, ll_char,                 # kind, trans
-                            intp_t, intp_t,                   # m, n
-                            ll_void_p, ll_void_p, intp_t,     # alpha, a, lda
-                            ll_void_p, ll_void_p, ll_void_p,  # x, beta, y
-                            ])
+    fnty = ir.FunctionType(
+        ir.IntType(32),
+        [
+            ll_char,
+            ll_char,  # kind, trans
+            intp_t,
+            intp_t,  # m, n
+            ll_void_p,
+            ll_void_p,
+            intp_t,  # alpha, a, lda
+            ll_void_p,
+            ll_void_p,
+            ll_void_p,  # x, beta, y
+        ],
+    )
     fn = cgutils.get_or_insert_function(builder.module, fnty, "numba_xxgemv")
 
     dtype = m_type.dtype
     alpha = make_constant_slot(context, builder, dtype, 1.0)
     beta = make_constant_slot(context, builder, dtype, 0.0)
 
-    if m_type.layout == 'F':
+    if m_type.layout == "F":
         m, n = m_shapes
         lda = m_shapes[0]
     else:
@@ -397,32 +427,61 @@ def call_xxgemv(context, builder, do_trans,
 
     kind = get_blas_kind(dtype)
     kind_val = ir.Constant(ll_char, ord(kind))
-    trans = ir.Constant(ll_char, ord('t') if do_trans else ord('n'))
+    trans = ir.Constant(ll_char, ord("t") if do_trans else ord("n"))
 
-    res = builder.call(fn, (kind_val, trans, m, n,
-                            builder.bitcast(alpha, ll_void_p),
-                            builder.bitcast(m_data, ll_void_p), lda,
-                            builder.bitcast(v_data, ll_void_p),
-                            builder.bitcast(beta, ll_void_p),
-                            builder.bitcast(out_data, ll_void_p)))
+    res = builder.call(
+        fn,
+        (
+            kind_val,
+            trans,
+            m,
+            n,
+            builder.bitcast(alpha, ll_void_p),
+            builder.bitcast(m_data, ll_void_p),
+            lda,
+            builder.bitcast(v_data, ll_void_p),
+            builder.bitcast(beta, ll_void_p),
+            builder.bitcast(out_data, ll_void_p),
+        ),
+    )
     check_blas_return(context, builder, res)
 
 
-def call_xxgemm(context, builder,
-                x_type, x_shapes, x_data,
-                y_type, y_shapes, y_data,
-                out_type, out_shapes, out_data):
+def call_xxgemm(
+    context,
+    builder,
+    x_type,
+    x_shapes,
+    x_data,
+    y_type,
+    y_shapes,
+    y_data,
+    out_type,
+    out_shapes,
+    out_data,
+):
     """
     Call the BLAS matrix * matrix product function for the given arguments.
     """
-    fnty = ir.FunctionType(ir.IntType(32),
-                           [ll_char,                       # kind
-                            ll_char, ll_char,              # transa, transb
-                            intp_t, intp_t, intp_t,        # m, n, k
-                            ll_void_p, ll_void_p, intp_t,  # alpha, a, lda
-                            ll_void_p, intp_t, ll_void_p,  # b, ldb, beta
-                            ll_void_p, intp_t,             # c, ldc
-                            ])
+    fnty = ir.FunctionType(
+        ir.IntType(32),
+        [
+            ll_char,  # kind
+            ll_char,
+            ll_char,  # transa, transb
+            intp_t,
+            intp_t,
+            intp_t,  # m, n, k
+            ll_void_p,
+            ll_void_p,
+            intp_t,  # alpha, a, lda
+            ll_void_p,
+            intp_t,
+            ll_void_p,  # b, ldb, beta
+            ll_void_p,
+            intp_t,  # c, ldc
+        ],
+    )
     fn = cgutils.get_or_insert_function(builder.module, fnty, "numba_xxgemm")
 
     m, k = x_shapes
@@ -431,15 +490,15 @@ def call_xxgemm(context, builder,
     alpha = make_constant_slot(context, builder, dtype, 1.0)
     beta = make_constant_slot(context, builder, dtype, 0.0)
 
-    trans = ir.Constant(ll_char, ord('t'))
-    notrans = ir.Constant(ll_char, ord('n'))
+    trans = ir.Constant(ll_char, ord("t"))
+    notrans = ir.Constant(ll_char, ord("n"))
 
     def get_array_param(ty, shapes, data):
         return (
             # Transpose if layout different from result's
             notrans if ty.layout == out_type.layout else trans,
             # Size of the inner dimension in physical array order
-            shapes[1] if ty.layout == 'C' else shapes[0],
+            shapes[1] if ty.layout == "C" else shapes[0],
             # The data pointer, unit-less
             builder.bitcast(data, ll_void_p),
         )
@@ -451,10 +510,25 @@ def call_xxgemm(context, builder,
     kind = get_blas_kind(dtype)
     kind_val = ir.Constant(ll_char, ord(kind))
 
-    res = builder.call(fn, (kind_val, transa, transb, n, m, k,
-                            builder.bitcast(alpha, ll_void_p), data_a, lda,
-                            data_b, ldb, builder.bitcast(beta, ll_void_p),
-                            data_c, ldc))
+    res = builder.call(
+        fn,
+        (
+            kind_val,
+            transa,
+            transb,
+            n,
+            m,
+            k,
+            builder.bitcast(alpha, ll_void_p),
+            data_a,
+            lda,
+            data_b,
+            ldb,
+            builder.bitcast(beta, ll_void_p),
+            data_c,
+            ldc,
+        ),
+    )
     check_blas_return(context, builder, res)
 
 
@@ -462,6 +536,7 @@ def dot_2_mm(context, builder, sig, args):
     """
     np.dot(matrix, matrix)
     """
+
     def dot_impl(a, b):
         m, k = a.shape
         _k, n = b.shape
@@ -478,12 +553,13 @@ def dot_2_vm(context, builder, sig, args):
     """
     np.dot(vector, matrix)
     """
+
     def dot_impl(a, b):
-        m, = a.shape
+        (m,) = a.shape
         _m, n = b.shape
         if m == 0:
-            return np.zeros((n, ), a.dtype)
-        out = np.empty((n, ), a.dtype)
+            return np.zeros((n,), a.dtype)
+        out = np.empty((n,), a.dtype)
         return np.dot(a, b, out)
 
     res = context.compile_internal(builder, dot_impl, sig, args)
@@ -494,12 +570,13 @@ def dot_2_mv(context, builder, sig, args):
     """
     np.dot(matrix, vector)
     """
+
     def dot_impl(a, b):
         m, n = a.shape
-        _n, = b.shape
+        (_n,) = b.shape
         if n == 0:
-            return np.zeros((m, ), a.dtype)
-        out = np.empty((m, ), a.dtype)
+            return np.zeros((m,), a.dtype)
+        out = np.empty((m,), a.dtype)
         return np.dot(a, b, out)
 
     res = context.compile_internal(builder, dot_impl, sig, args)
@@ -515,17 +592,19 @@ def dot_2_vv(context, builder, sig, args, conjugate=False):
     dtype = sig.return_type
     a = make_array(aty)(context, builder, args[0])
     b = make_array(bty)(context, builder, args[1])
-    n, = cgutils.unpack_tuple(builder, a.shape)
+    (n,) = cgutils.unpack_tuple(builder, a.shape)
 
     def check_args(a, b):
-        m, = a.shape
-        n, = b.shape
+        (m,) = a.shape
+        (n,) = b.shape
         if m != n:
-            raise ValueError("incompatible array sizes for np.dot(a, b) "
-                             "(vector * vector)")
+            raise ValueError(
+                "incompatible array sizes for np.dot(a, b) " "(vector * vector)"
+            )
 
-    context.compile_internal(builder, check_args,
-                             signature(types.none, *sig.args), args)
+    context.compile_internal(
+        builder, check_args, signature(types.none, *sig.args), args
+    )
     check_c_int(context, builder, n)
 
     out = cgutils.alloca_once(builder, context.get_value_type(dtype))
@@ -538,7 +617,7 @@ def dot_2(left, right):
     """
     np.dot(a, b)
     """
-    return dot_2_impl('np.dot()', left, right)
+    return dot_2_impl("np.dot()", left, right)
 
 
 @overload(operator.matmul)
@@ -551,6 +630,7 @@ def matmul_2(left, right):
 
 def dot_2_impl(name, left, right):
     if isinstance(left, types.Array) and isinstance(right, types.Array):
+
         @intrinsic
         def _impl(typingcontext, left, right):
             ndims = (left.ndim, right.ndim)
@@ -568,27 +648,32 @@ def dot_2_impl(name, left, right):
                     elif ndims == (1, 1):
                         return dot_2_vv(context, builder, sig, args)
                     else:
-                        raise AssertionError('unreachable')
+                        raise AssertionError("unreachable")
 
             if left.dtype != right.dtype:
-                raise TypingError(
-                    "%s arguments must all have the same dtype" % name)
+                raise TypingError("%s arguments must all have the same dtype" % name)
 
             if ndims == (2, 2):
-                return_type = types.Array(left.dtype, 2, 'C')
+                return_type = types.Array(left.dtype, 2, "C")
             elif ndims == (2, 1) or ndims == (1, 2):
-                return_type = types.Array(left.dtype, 1, 'C')
+                return_type = types.Array(left.dtype, 1, "C")
             elif ndims == (1, 1):
                 return_type = left.dtype
             else:
-                raise TypingError(("%s: inputs must have compatible "
-                                   "dimensions") % name)
+                raise TypingError(
+                    ("%s: inputs must have compatible " "dimensions") % name
+                )
             return signature(return_type, left, right), _dot2_codegen
 
-        if left.layout not in 'CF' or right.layout not in 'CF':
+        if left.layout not in "CF" or right.layout not in "CF":
             warnings.warn(
-                "%s is faster on contiguous arrays, called on %s" % (
-                    name, (left, right),), NumbaPerformanceWarning)
+                "%s is faster on contiguous arrays, called on %s"
+                % (
+                    name,
+                    (left, right),
+                ),
+                NumbaPerformanceWarning,
+            )
 
         return lambda left, right: _impl(left, right)
 
@@ -599,51 +684,56 @@ def vdot(left, right):
     np.vdot(a, b)
     """
     if isinstance(left, types.Array) and isinstance(right, types.Array):
+
         @intrinsic
         def _impl(typingcontext, left, right):
             def codegen(context, builder, sig, args):
                 ensure_blas()
 
-                with make_contiguous(context, builder, sig, args) as\
-                        (sig, args):
+                with make_contiguous(context, builder, sig, args) as (sig, args):
                     return dot_2_vv(context, builder, sig, args, conjugate=True)
 
             if left.ndim != 1 or right.ndim != 1:
                 raise TypingError("np.vdot() only supported on 1-D arrays")
 
             if left.dtype != right.dtype:
-                raise TypingError(
-                    "np.vdot() arguments must all have the same dtype")
+                raise TypingError("np.vdot() arguments must all have the same dtype")
             return signature(left.dtype, left, right), codegen
 
-        if left.layout not in 'CF' or right.layout not in 'CF':
+        if left.layout not in "CF" or right.layout not in "CF":
             warnings.warn(
                 "np.vdot() is faster on contiguous arrays, called on %s"
-                % ((left, right),), NumbaPerformanceWarning)
+                % ((left, right),),
+                NumbaPerformanceWarning,
+            )
 
         return lambda left, right: _impl(left, right)
 
 
 def dot_3_vm_check_args(a, b, out):
-    m, = a.shape
+    (m,) = a.shape
     _m, n = b.shape
     if m != _m:
-        raise ValueError("incompatible array sizes for "
-                         "np.dot(a, b) (vector * matrix)")
+        raise ValueError(
+            "incompatible array sizes for " "np.dot(a, b) (vector * matrix)"
+        )
     if out.shape != (n,):
-        raise ValueError("incompatible output array size for "
-                         "np.dot(a, b, out) (vector * matrix)")
+        raise ValueError(
+            "incompatible output array size for " "np.dot(a, b, out) (vector * matrix)"
+        )
 
 
 def dot_3_mv_check_args(a, b, out):
     m, _n = a.shape
-    n, = b.shape
+    (n,) = b.shape
     if n != _n:
-        raise ValueError("incompatible array sizes for np.dot(a, b) "
-                         "(matrix * vector)")
+        raise ValueError(
+            "incompatible array sizes for np.dot(a, b) " "(matrix * vector)"
+        )
     if out.shape != (m,):
-        raise ValueError("incompatible output array size for "
-                         "np.dot(a, b, out) (matrix * vector)")
+        raise ValueError(
+            "incompatible output array size for " "np.dot(a, b, out) (matrix * vector)"
+        )
 
 
 def dot_3_vm(context, builder, sig, args):
@@ -668,7 +758,7 @@ def dot_3_vm(context, builder, sig, args):
         m_shapes = y_shapes
         v_shape = x_shapes[0]
         lda = m_shapes[1]
-        do_trans = yty.layout == 'F'
+        do_trans = yty.layout == "F"
         m_data, v_data = y.data, x.data
         check_args = dot_3_vm_check_args
     else:
@@ -678,29 +768,29 @@ def dot_3_vm(context, builder, sig, args):
         m_shapes = x_shapes
         v_shape = y_shapes[0]
         lda = m_shapes[0]
-        do_trans = xty.layout == 'C'
+        do_trans = xty.layout == "C"
         m_data, v_data = x.data, y.data
         check_args = dot_3_mv_check_args
 
-    context.compile_internal(builder, check_args,
-                             signature(types.none, *sig.args), args)
+    context.compile_internal(
+        builder, check_args, signature(types.none, *sig.args), args
+    )
     for val in m_shapes:
         check_c_int(context, builder, val)
 
     zero = context.get_constant(types.intp, 0)
-    both_empty = builder.icmp_signed('==', v_shape, zero)
-    matrix_empty = builder.icmp_signed('==', lda, zero)
+    both_empty = builder.icmp_signed("==", v_shape, zero)
+    matrix_empty = builder.icmp_signed("==", lda, zero)
     is_empty = builder.or_(both_empty, matrix_empty)
     with builder.if_else(is_empty, likely=False) as (empty, nonempty):
         with empty:
-            cgutils.memset(builder, out.data,
-                           builder.mul(out.itemsize, out.nitems), 0)
+            cgutils.memset(builder, out.data, builder.mul(out.itemsize, out.nitems), 0)
         with nonempty:
-            call_xxgemv(context, builder, do_trans, mty, m_shapes, m_data,
-                        v_data, out.data)
+            call_xxgemv(
+                context, builder, do_trans, mty, m_shapes, m_data, v_data, out.data
+            )
 
-    return impl_ret_borrowed(context, builder, sig.return_type,
-                             out._getvalue())
+    return impl_ret_borrowed(context, builder, sig.return_type, out._getvalue())
 
 
 def dot_3_mm(context, builder, sig, args):
@@ -721,20 +811,24 @@ def dot_3_mm(context, builder, sig, args):
     _k, n = y_shapes
 
     # The only case Numpy supports
-    assert outty.layout == 'C'
+    assert outty.layout == "C"
 
     def check_args(a, b, out):
         m, k = a.shape
         _k, n = b.shape
         if k != _k:
-            raise ValueError("incompatible array sizes for np.dot(a, b) "
-                             "(matrix * matrix)")
+            raise ValueError(
+                "incompatible array sizes for np.dot(a, b) " "(matrix * matrix)"
+            )
         if out.shape != (m, n):
-            raise ValueError("incompatible output array size for "
-                             "np.dot(a, b, out) (matrix * matrix)")
+            raise ValueError(
+                "incompatible output array size for "
+                "np.dot(a, b, out) (matrix * matrix)"
+            )
 
-    context.compile_internal(builder, check_args,
-                             signature(types.none, *sig.args), args)
+    context.compile_internal(
+        builder, check_args, signature(types.none, *sig.args), args
+    )
 
     check_c_int(context, builder, m)
     check_c_int(context, builder, k)
@@ -746,50 +840,81 @@ def dot_3_mm(context, builder, sig, args):
 
     # If eliminated dimension is zero, set all entries to zero and return
     zero = context.get_constant(types.intp, 0)
-    both_empty = builder.icmp_signed('==', k, zero)
-    x_empty = builder.icmp_signed('==', m, zero)
-    y_empty = builder.icmp_signed('==', n, zero)
+    both_empty = builder.icmp_signed("==", k, zero)
+    x_empty = builder.icmp_signed("==", m, zero)
+    y_empty = builder.icmp_signed("==", n, zero)
     is_empty = builder.or_(both_empty, builder.or_(x_empty, y_empty))
     with builder.if_else(is_empty, likely=False) as (empty, nonempty):
         with empty:
-            cgutils.memset(builder, out.data,
-                           builder.mul(out.itemsize, out.nitems), 0)
+            cgutils.memset(builder, out.data, builder.mul(out.itemsize, out.nitems), 0)
         with nonempty:
             # Check if any of the operands is really a 1-d vector represented
             # as a (1, k) or (k, 1) 2-d array.  In those cases, it is pessimal
             # to call the generic matrix * matrix product BLAS function.
             one = context.get_constant(types.intp, 1)
-            is_left_vec = builder.icmp_signed('==', m, one)
-            is_right_vec = builder.icmp_signed('==', n, one)
+            is_left_vec = builder.icmp_signed("==", m, one)
+            is_right_vec = builder.icmp_signed("==", n, one)
 
             with builder.if_else(is_right_vec) as (r_vec, r_mat):
                 with r_vec:
                     with builder.if_else(is_left_vec) as (v_v, m_v):
                         with v_v:
                             # V * V
-                            call_xxdot(context, builder, False, dtype,
-                                       k, x_data, y_data, out_data)
+                            call_xxdot(
+                                context,
+                                builder,
+                                False,
+                                dtype,
+                                k,
+                                x_data,
+                                y_data,
+                                out_data,
+                            )
                         with m_v:
                             # M * V
                             do_trans = xty.layout == outty.layout
-                            call_xxgemv(context, builder, do_trans,
-                                        xty, x_shapes, x_data, y_data, out_data)
+                            call_xxgemv(
+                                context,
+                                builder,
+                                do_trans,
+                                xty,
+                                x_shapes,
+                                x_data,
+                                y_data,
+                                out_data,
+                            )
                 with r_mat:
                     with builder.if_else(is_left_vec) as (v_m, m_m):
                         with v_m:
                             # V * M
                             do_trans = yty.layout != outty.layout
-                            call_xxgemv(context, builder, do_trans,
-                                        yty, y_shapes, y_data, x_data, out_data)
+                            call_xxgemv(
+                                context,
+                                builder,
+                                do_trans,
+                                yty,
+                                y_shapes,
+                                y_data,
+                                x_data,
+                                out_data,
+                            )
                         with m_m:
                             # M * M
-                            call_xxgemm(context, builder,
-                                        xty, x_shapes, x_data,
-                                        yty, y_shapes, y_data,
-                                        outty, out_shapes, out_data)
+                            call_xxgemm(
+                                context,
+                                builder,
+                                xty,
+                                x_shapes,
+                                x_data,
+                                yty,
+                                y_shapes,
+                                y_data,
+                                outty,
+                                out_shapes,
+                                out_data,
+                            )
 
-    return impl_ret_borrowed(context, builder, sig.return_type,
-                             out._getvalue())
+    return impl_ret_borrowed(context, builder, sig.return_type, out._getvalue())
 
 
 @overload(np.dot)
@@ -797,33 +922,41 @@ def dot_3(left, right, out):
     """
     np.dot(a, b, out)
     """
-    if (isinstance(left, types.Array) and isinstance(right, types.Array) and
-            isinstance(out, types.Array)):
+    if (
+        isinstance(left, types.Array)
+        and isinstance(right, types.Array)
+        and isinstance(out, types.Array)
+    ):
+
         @intrinsic
         def _impl(typingcontext, left, right, out):
             def codegen(context, builder, sig, args):
                 ensure_blas()
 
-                with make_contiguous(context, builder, sig, args) as (sig,
-                                                                      args):
+                with make_contiguous(context, builder, sig, args) as (sig, args):
                     ndims = set(x.ndim for x in sig.args[:2])
                     if ndims == {2}:
                         return dot_3_mm(context, builder, sig, args)
                     elif ndims == {1, 2}:
                         return dot_3_vm(context, builder, sig, args)
                     else:
-                        raise AssertionError('unreachable')
+                        raise AssertionError("unreachable")
+
             if left.dtype != right.dtype or left.dtype != out.dtype:
-                raise TypingError(
-                    "np.dot() arguments must all have the same dtype")
+                raise TypingError("np.dot() arguments must all have the same dtype")
 
             return signature(out, left, right, out), codegen
 
-        if left.layout not in 'CF' or right.layout not in 'CF' or out.layout\
-            not in 'CF':
+        if (
+            left.layout not in "CF"
+            or right.layout not in "CF"
+            or out.layout not in "CF"
+        ):
             warnings.warn(
                 "np.vdot() is faster on contiguous arrays, called on %s"
-                % ((left, right),), NumbaPerformanceWarning)
+                % ((left, right),),
+                NumbaPerformanceWarning,
+            )
 
         return lambda left, right, out: _impl(left, right, out)
 
@@ -838,8 +971,7 @@ else:
 def _check_finite_matrix(a):
     for v in np.nditer(a):
         if not np.isfinite(v.item()):
-            raise np.linalg.LinAlgError(
-                "Array must not contain infs or NaNs.")
+            raise np.linalg.LinAlgError("Array must not contain infs or NaNs.")
 
 
 def _check_linalg_matrix(a, func_name, la_prefix=True):
@@ -858,8 +990,7 @@ def _check_linalg_matrix(a, func_name, la_prefix=True):
         msg = "%s.%s() only supported on 2-D arrays." % interp
         raise TypingError(msg, highlighting=False)
     if not isinstance(a.dtype, (types.Float, types.Complex)):
-        msg = "%s.%s() only supported on "\
-            "float and complex arrays." % interp
+        msg = "%s.%s() only supported on " "float and complex arrays." % interp
         raise TypingError(msg, highlighting=False)
 
 
@@ -867,7 +998,10 @@ def _check_homogeneous_types(func_name, *types):
     t0 = types[0].dtype
     for t in types[1:]:
         if t.dtype != t0:
-            msg = "np.linalg.%s() only supports inputs that have homogeneous dtypes." % func_name
+            msg = (
+                "np.linalg.%s() only supports inputs that have homogeneous dtypes."
+                % func_name
+            )
             raise TypingError(msg, highlighting=False)
 
 
@@ -879,8 +1013,9 @@ def _copy_to_fortran_order():
 def ol_copy_to_fortran_order(a):
     # This function copies the array 'a' into a new array with fortran order.
     # This exists because the copy routines don't take order flags yet.
-    F_layout = a.layout == 'F'
-    A_layout = a.layout == 'A'
+    F_layout = a.layout == "F"
+    A_layout = a.layout == "A"
+
     def impl(a):
         if F_layout:
             # it's F ordered at compile time, just copy
@@ -900,6 +1035,7 @@ def ol_copy_to_fortran_order(a):
             # it's C ordered at compile time, asfortranarray it.
             acpy = np.asfortranarray(a)
         return acpy
+
     return impl
 
 
@@ -908,10 +1044,10 @@ def _inv_err_handler(r):
     if r != 0:
         if r < 0:
             fatal_error_func()
-            assert 0   # unreachable
+            assert 0  # unreachable
         if r > 0:
-            raise np.linalg.LinAlgError(
-                "Matrix is singular to machine precision.")
+            raise np.linalg.LinAlgError("Matrix is singular to machine precision.")
+
 
 @register_jitable
 def _dummy_liveness_func(a):
@@ -964,7 +1100,7 @@ def _handle_err_maybe_convergence_problem(r):
     if r != 0:
         if r < 0:
             fatal_error_func()
-            assert 0   # unreachable
+            assert 0  # unreachable
         if r > 0:
             raise ValueError("Internal algorithm failed to converge.")
 
@@ -977,14 +1113,13 @@ def _check_linalg_1_or_2d_matrix(a, func_name, la_prefix=True):
     interp = (prefix, func_name)
     # checks that a matrix is 1 or 2D
     if not isinstance(a, types.Array):
-        raise TypingError("%s.%s() only supported for array types "
-                          % interp)
+        raise TypingError("%s.%s() only supported for array types " % interp)
     if not a.ndim <= 2:
-        raise TypingError("%s.%s() only supported on 1 and 2-D arrays "
-                          % interp)
+        raise TypingError("%s.%s() only supported on 1 and 2-D arrays " % interp)
     if not isinstance(a.dtype, (types.Float, types.Complex)):
-        raise TypingError("%s.%s() only supported on "
-                          "float and complex arrays." % interp)
+        raise TypingError(
+            "%s.%s() only supported on " "float and complex arrays." % interp
+        )
 
 
 @overload(np.linalg.cholesky)
@@ -996,8 +1131,8 @@ def cho_impl(a):
     numba_xxpotrf = _LAPACK().numba_xxpotrf(a.dtype)
 
     kind = ord(get_blas_kind(a.dtype, "cholesky"))
-    UP = ord('U')
-    LO = ord('L')
+    UP = ord("U")
+    LO = ord("L")
 
     def cho_impl(a):
         n = a.shape[-1]
@@ -1020,16 +1155,16 @@ def cho_impl(a):
         if r != 0:
             if r < 0:
                 fatal_error_func()
-                assert 0   # unreachable
+                assert 0  # unreachable
             if r > 0:
-                raise np.linalg.LinAlgError(
-                    "Matrix is not positive definite.")
+                raise np.linalg.LinAlgError("Matrix is not positive definite.")
         # Zero out upper triangle, in F order
         for col in range(n):
             out[:col, col] = 0
         return out
 
     return cho_impl
+
 
 @overload(np.linalg.eig)
 def eig_impl(a):
@@ -1042,8 +1177,8 @@ def eig_impl(a):
 
     kind = ord(get_blas_kind(a.dtype, "eig"))
 
-    JOBVL = ord('N')
-    JOBVR = ord('V')
+    JOBVL = ord("N")
+    JOBVR = ord("V")
 
     def real_eig_impl(a):
         """
@@ -1068,18 +1203,20 @@ def eig_impl(a):
         if n == 0:
             return (wr, vr.T)
 
-        r = numba_ez_rgeev(kind,
-                            JOBVL,
-                            JOBVR,
-                            n,
-                            acpy.ctypes,
-                            n,
-                            wr.ctypes,
-                            wi.ctypes,
-                            vl.ctypes,
-                            ldvl,
-                            vr.ctypes,
-                            ldvr)
+        r = numba_ez_rgeev(
+            kind,
+            JOBVL,
+            JOBVR,
+            n,
+            acpy.ctypes,
+            n,
+            wr.ctypes,
+            wi.ctypes,
+            vl.ctypes,
+            ldvl,
+            vr.ctypes,
+            ldvr,
+        )
         _handle_err_maybe_convergence_problem(r)
 
         # By design numba does not support dynamic return types, however,
@@ -1093,8 +1230,7 @@ def eig_impl(a):
         # the case of a runtime decision based domain change relative to
         # the input type, if it is required numba raises as below.
         if np.any(wi):
-            raise ValueError(
-                "eig() argument must not cause a domain change.")
+            raise ValueError("eig() argument must not cause a domain change.")
 
         # put these in to help with liveness analysis,
         # `.ctypes` doesn't keep the vars alive
@@ -1123,17 +1259,19 @@ def eig_impl(a):
         if n == 0:
             return (w, vr.T)
 
-        r = numba_ez_cgeev(kind,
-                            JOBVL,
-                            JOBVR,
-                            n,
-                            acpy.ctypes,
-                            n,
-                            w.ctypes,
-                            vl.ctypes,
-                            ldvl,
-                            vr.ctypes,
-                            ldvr)
+        r = numba_ez_cgeev(
+            kind,
+            JOBVL,
+            JOBVR,
+            n,
+            acpy.ctypes,
+            n,
+            w.ctypes,
+            vl.ctypes,
+            ldvl,
+            vr.ctypes,
+            ldvr,
+        )
         _handle_err_maybe_convergence_problem(r)
 
         # put these in to help with liveness analysis,
@@ -1146,6 +1284,7 @@ def eig_impl(a):
     else:
         return real_eig_impl
 
+
 @overload(np.linalg.eigvals)
 def eigvals_impl(a):
     ensure_lapack()
@@ -1157,8 +1296,8 @@ def eigvals_impl(a):
 
     kind = ord(get_blas_kind(a.dtype, "eigvals"))
 
-    JOBVL = ord('N')
-    JOBVR = ord('N')
+    JOBVL = ord("N")
+    JOBVR = ord("N")
 
     def real_eigvals_impl(a):
         """
@@ -1186,18 +1325,20 @@ def eigvals_impl(a):
         vl = np.empty((1), dtype=a.dtype)
         vr = np.empty((1), dtype=a.dtype)
 
-        r = numba_ez_rgeev(kind,
-                            JOBVL,
-                            JOBVR,
-                            n,
-                            acpy.ctypes,
-                            n,
-                            wr.ctypes,
-                            wi.ctypes,
-                            vl.ctypes,
-                            ldvl,
-                            vr.ctypes,
-                            ldvr)
+        r = numba_ez_rgeev(
+            kind,
+            JOBVL,
+            JOBVR,
+            n,
+            acpy.ctypes,
+            n,
+            wr.ctypes,
+            wi.ctypes,
+            vl.ctypes,
+            ldvl,
+            vr.ctypes,
+            ldvr,
+        )
         _handle_err_maybe_convergence_problem(r)
 
         # By design numba does not support dynamic return types, however,
@@ -1211,8 +1352,7 @@ def eigvals_impl(a):
         # the case of a runtime decision based domain change relative to
         # the input type, if it is required numba raises as below.
         if np.any(wi):
-            raise ValueError(
-                "eigvals() argument must not cause a domain change.")
+            raise ValueError("eigvals() argument must not cause a domain change.")
 
         # put these in to help with liveness analysis,
         # `.ctypes` doesn't keep the vars alive
@@ -1242,17 +1382,19 @@ def eigvals_impl(a):
         vl = np.empty((1), dtype=a.dtype)
         vr = np.empty((1), dtype=a.dtype)
 
-        r = numba_ez_cgeev(kind,
-                            JOBVL,
-                            JOBVR,
-                            n,
-                            acpy.ctypes,
-                            n,
-                            w.ctypes,
-                            vl.ctypes,
-                            ldvl,
-                            vr.ctypes,
-                            ldvr)
+        r = numba_ez_cgeev(
+            kind,
+            JOBVL,
+            JOBVR,
+            n,
+            acpy.ctypes,
+            n,
+            w.ctypes,
+            vl.ctypes,
+            ldvl,
+            vr.ctypes,
+            ldvr,
+        )
         _handle_err_maybe_convergence_problem(r)
 
         # put these in to help with liveness analysis,
@@ -1264,6 +1406,7 @@ def eigvals_impl(a):
         return cmplx_eigvals_impl
     else:
         return real_eigvals_impl
+
 
 @overload(np.linalg.eigh)
 def eigh_impl(a):
@@ -1279,8 +1422,8 @@ def eigh_impl(a):
 
     kind = ord(get_blas_kind(a.dtype, "eigh"))
 
-    JOBZ = ord('V')
-    UPLO = ord('L')
+    JOBZ = ord("V")
+    UPLO = ord("L")
 
     def eigh_impl(a):
         n = a.shape[-1]
@@ -1298,14 +1441,15 @@ def eigh_impl(a):
         if n == 0:
             return (w, acpy)
 
-        r = numba_ez_xxxevd(kind,  # kind
-                            JOBZ,  # jobz
-                            UPLO,  # uplo
-                            n,  # n
-                            acpy.ctypes,  # a
-                            n,  # lda
-                            w.ctypes  # w
-                            )
+        r = numba_ez_xxxevd(
+            kind,  # kind
+            JOBZ,  # jobz
+            UPLO,  # uplo
+            n,  # n
+            acpy.ctypes,  # a
+            n,  # lda
+            w.ctypes,  # w
+        )
         _handle_err_maybe_convergence_problem(r)
 
         # help liveness analysis
@@ -1313,6 +1457,7 @@ def eigh_impl(a):
         return (w, acpy)
 
     return eigh_impl
+
 
 @overload(np.linalg.eigvalsh)
 def eigvalsh_impl(a):
@@ -1328,8 +1473,8 @@ def eigvalsh_impl(a):
 
     kind = ord(get_blas_kind(a.dtype, "eigvalsh"))
 
-    JOBZ = ord('N')
-    UPLO = ord('L')
+    JOBZ = ord("N")
+    UPLO = ord("L")
 
     def eigvalsh_impl(a):
         n = a.shape[-1]
@@ -1347,14 +1492,15 @@ def eigvalsh_impl(a):
         if n == 0:
             return w
 
-        r = numba_ez_xxxevd(kind,  # kind
-                            JOBZ,  # jobz
-                            UPLO,  # uplo
-                            n,  # n
-                            acpy.ctypes,  # a
-                            n,  # lda
-                            w.ctypes  # w
-                            )
+        r = numba_ez_xxxevd(
+            kind,  # kind
+            JOBZ,  # jobz
+            UPLO,  # uplo
+            n,  # n
+            acpy.ctypes,  # a
+            n,  # lda
+            w.ctypes,  # w
+        )
         _handle_err_maybe_convergence_problem(r)
 
         # help liveness analysis
@@ -1362,6 +1508,7 @@ def eigvalsh_impl(a):
         return w
 
     return eigvalsh_impl
+
 
 @overload(np.linalg.svd)
 def svd_impl(a, full_matrices=1):
@@ -1377,8 +1524,8 @@ def svd_impl(a, full_matrices=1):
 
     kind = ord(get_blas_kind(a.dtype, "svd"))
 
-    JOBZ_A = ord('A')
-    JOBZ_S = ord('S')
+    JOBZ_A = ord("A")
+    JOBZ_S = ord("S")
 
     def svd_impl(a, full_matrices=1):
         n = a.shape[-1]
@@ -1418,7 +1565,7 @@ def svd_impl(a, full_matrices=1):
             u.ctypes,  # u
             ldu,  # ldu
             vt.ctypes,  # vt
-            ldvt          # ldvt
+            ldvt,  # ldvt
         )
         _handle_err_maybe_convergence_problem(r)
 
@@ -1464,16 +1611,11 @@ def qr_impl(a):
         tau = np.empty((minmn), dtype=a.dtype)
 
         ret = numba_ez_geqrf(
-            kind,  # kind
-            m,  # m
-            n,  # n
-            q.ctypes,  # a
-            m,  # lda
-            tau.ctypes  # tau
+            kind, m, n, q.ctypes, m, tau.ctypes  # kind  # m  # n  # a  # lda  # tau
         )
         if ret < 0:
             fatal_error_func()
-            assert 0   # unreachable
+            assert 0  # unreachable
 
         # pull out R, this is transposed because of Fortran
         r = np.zeros((n, minmn), dtype=a.dtype).T
@@ -1495,7 +1637,7 @@ def qr_impl(a):
             minmn,  # k
             q.ctypes,  # a
             m,  # lda
-            tau.ctypes  # tau
+            tau.ctypes,  # tau
         )
         _handle_err_maybe_convergence_problem(ret)
 
@@ -1510,6 +1652,7 @@ def qr_impl(a):
 # and np.linalg.solve. These functions have "system" in their name
 # as a differentiator.
 
+
 def _system_copy_in_b(bcpy, b, nrhs):
     """
     Correctly copy 'b' into the 'bcpy' scratch space.
@@ -1520,12 +1663,16 @@ def _system_copy_in_b(bcpy, b, nrhs):
 @overload(_system_copy_in_b)
 def _system_copy_in_b_impl(bcpy, b, nrhs):
     if b.ndim == 1:
+
         def oneD_impl(bcpy, b, nrhs):
-            bcpy[:b.shape[-1], 0] = b
+            bcpy[: b.shape[-1], 0] = b
+
         return oneD_impl
     else:
+
         def twoD_impl(bcpy, b, nrhs):
-            bcpy[:b.shape[-2], :nrhs] = b
+            bcpy[: b.shape[-2], :nrhs] = b
+
         return twoD_impl
 
 
@@ -1539,12 +1686,16 @@ def _system_compute_nrhs(b):
 @overload(_system_compute_nrhs)
 def _system_compute_nrhs_impl(b):
     if b.ndim == 1:
+
         def oneD_impl(b):
             return 1
+
         return oneD_impl
     else:
+
         def twoD_impl(b):
             return b.shape[-1]
+
         return twoD_impl
 
 
@@ -1559,20 +1710,26 @@ def _system_check_dimensionally_valid(a, b):
 def _system_check_dimensionally_valid_impl(a, b):
     ndim = b.ndim
     if ndim == 1:
+
         def oneD_impl(a, b):
             am = a.shape[-2]
             bm = b.shape[-1]
             if am != bm:
                 raise np.linalg.LinAlgError(
-                    "Incompatible array sizes, system is not dimensionally valid.")
+                    "Incompatible array sizes, system is not dimensionally valid."
+                )
+
         return oneD_impl
     else:
+
         def twoD_impl(a, b):
             am = a.shape[-2]
             bm = b.shape[-2]
             if am != bm:
                 raise np.linalg.LinAlgError(
-                    "Incompatible array sizes, system is not dimensionally valid.")
+                    "Incompatible array sizes, system is not dimensionally valid."
+                )
+
         return twoD_impl
 
 
@@ -1587,21 +1744,25 @@ def _system_check_non_empty(a, b):
 def _system_check_non_empty_impl(a, b):
     ndim = b.ndim
     if ndim == 1:
+
         def oneD_impl(a, b):
             am = a.shape[-2]
             an = a.shape[-1]
             bm = b.shape[-1]
             if am == 0 or bm == 0 or an == 0:
-                raise np.linalg.LinAlgError('Arrays cannot be empty')
+                raise np.linalg.LinAlgError("Arrays cannot be empty")
+
         return oneD_impl
     else:
+
         def twoD_impl(a, b):
             am = a.shape[-2]
             an = a.shape[-1]
             bm = b.shape[-2]
             bn = b.shape[-1]
             if am == 0 or bm == 0 or an == 0 or bn == 0:
-                raise np.linalg.LinAlgError('Arrays cannot be empty')
+                raise np.linalg.LinAlgError("Arrays cannot be empty")
+
         return twoD_impl
 
 
@@ -1620,32 +1781,40 @@ def _lstsq_residual_impl(b, n, nrhs):
 
     if ndim == 1:
         if isinstance(dtype, (types.Complex)):
+
             def cmplx_impl(b, n, nrhs):
                 res = np.empty((1,), dtype=real_dtype)
-                res[0] = np.sum(np.abs(b[n:, 0])**2)
+                res[0] = np.sum(np.abs(b[n:, 0]) ** 2)
                 return res
+
             return cmplx_impl
         else:
+
             def real_impl(b, n, nrhs):
                 res = np.empty((1,), dtype=real_dtype)
-                res[0] = np.sum(b[n:, 0]**2)
+                res[0] = np.sum(b[n:, 0] ** 2)
                 return res
+
             return real_impl
     else:
         assert ndim == 2
         if isinstance(dtype, (types.Complex)):
+
             def cmplx_impl(b, n, nrhs):
                 res = np.empty((nrhs), dtype=real_dtype)
                 for k in range(nrhs):
-                    res[k] = np.sum(np.abs(b[n:, k])**2)
+                    res[k] = np.sum(np.abs(b[n:, k]) ** 2)
                 return res
+
             return cmplx_impl
         else:
+
             def real_impl(b, n, nrhs):
                 res = np.empty((nrhs), dtype=real_dtype)
                 for k in range(nrhs):
-                    res[k] = np.sum(b[n:, k]**2)
+                    res[k] = np.sum(b[n:, k] ** 2)
                 return res
+
             return real_impl
 
 
@@ -1660,12 +1829,16 @@ def _lstsq_solution(b, bcpy, n):
 @overload(_lstsq_solution)
 def _lstsq_solution_impl(b, bcpy, n):
     if b.ndim == 1:
+
         def oneD_impl(b, bcpy, n):
             return bcpy.T.ravel()[:n]
+
         return oneD_impl
     else:
+
         def twoD_impl(b, bcpy, n):
             return bcpy[:n, :].copy()
+
         return twoD_impl
 
 
@@ -1739,7 +1912,7 @@ def lstsq_impl(a, b, rcond=-1.0):
             maxmn,  # ldb
             s.ctypes,  # s
             rcond,  # rcond
-            rank_ptr.ctypes  # rank
+            rank_ptr.ctypes,  # rank
         )
         _handle_err_maybe_convergence_problem(r)
 
@@ -1775,12 +1948,16 @@ def _solve_compute_return(b, bcpy):
 @overload(_solve_compute_return)
 def _solve_compute_return_impl(b, bcpy):
     if b.ndim == 1:
+
         def oneD_impl(b, bcpy):
             return bcpy.T.ravel()
+
         return oneD_impl
     else:
+
         def twoD_impl(b, bcpy):
             return bcpy
+
         return twoD_impl
 
 
@@ -1827,14 +2004,14 @@ def solve_impl(a, b):
         ipiv = np.empty(n, dtype=F_INT_nptype)
 
         r = numba_xgesv(
-            kind,        # kind
-            n,           # n
-            nrhs,        # nhrs
+            kind,  # kind
+            n,  # n
+            nrhs,  # nhrs
             acpy.ctypes,  # a
-            n,           # lda
+            n,  # lda
             ipiv.ctypes,  # ipiv
             bcpy.ctypes,  # b
-            n            # ldb
+            n,  # ldb
         )
         _inv_err_handler(r)
 
@@ -1846,7 +2023,7 @@ def solve_impl(a, b):
 
 
 @overload(np.linalg.pinv)
-def pinv_impl(a, rcond=1.e-15):
+def pinv_impl(a, rcond=1.0e-15):
     ensure_lapack()
 
     _check_linalg_matrix(a, "pinv")
@@ -1860,18 +2037,18 @@ def pinv_impl(a, rcond=1.e-15):
     numba_xxgemm = _BLAS().numba_xxgemm(a.dtype)
 
     kind = ord(get_blas_kind(a.dtype, "pinv"))
-    JOB = ord('S')
+    JOB = ord("S")
 
     # need conjugate transposes
-    TRANSA = ord('C')
-    TRANSB = ord('C')
+    TRANSA = ord("C")
+    TRANSB = ord("C")
 
     # scalar constants
     dt = np_support.as_dtype(a.dtype)
-    zero = np.array([0.], dtype=dt)
-    one = np.array([1.], dtype=dt)
+    zero = np.array([0.0], dtype=dt)
+    one = np.array([1.0], dtype=dt)
 
-    def pinv_impl(a, rcond=1.e-15):
+    def pinv_impl(a, rcond=1.0e-15):
 
         # The idea is to build the pseudo-inverse via inverting the singular
         # value decomposition of a matrix `A`. Mathematically, this is roughly
@@ -1927,17 +2104,17 @@ def pinv_impl(a, rcond=1.e-15):
         vt = np.empty((n, minmn), dtype=a.dtype)
 
         r = numba_ez_gesdd(
-            kind,         # kind
-            JOB,          # job
-            m,            # m
-            n,            # n
+            kind,  # kind
+            JOB,  # job
+            m,  # m
+            n,  # n
             acpy.ctypes,  # a
-            m,            # lda
-            s.ctypes,     # s
-            u.ctypes,     # u
-            m,            # ldu
-            vt.ctypes,    # vt
-            minmn         # ldvt
+            m,  # lda
+            s.ctypes,  # s
+            u.ctypes,  # u
+            m,  # ldu
+            vt.ctypes,  # vt
+            minmn,  # ldvt
         )
         _handle_err_maybe_convergence_problem(r)
 
@@ -1954,7 +2131,7 @@ def pinv_impl(a, rcond=1.e-15):
         cut_idx = 0
         for k in range(minmn):
             if s[k] > cut_at:
-                s[k] = 1. / s[k]
+                s[k] = 1.0 / s[k]
                 cut_idx = k
         cut_idx += 1
 
@@ -1980,30 +2157,29 @@ def pinv_impl(a, rcond=1.e-15):
 
         r = numba_xxgemm(
             kind,
-            TRANSA,       # TRANSA
-            TRANSB,       # TRANSB
-            n,            # M
-            m,            # N
-            cut_idx,      # K
-            one.ctypes,   # ALPHA
-            vt.ctypes,    # A
-            minmn,        # LDA
-            u.ctypes,     # B
-            m,            # LDB
+            TRANSA,  # TRANSA
+            TRANSB,  # TRANSB
+            n,  # M
+            m,  # N
+            cut_idx,  # K
+            one.ctypes,  # ALPHA
+            vt.ctypes,  # A
+            minmn,  # LDA
+            u.ctypes,  # B
+            m,  # LDB
             zero.ctypes,  # BETA
             acpy.ctypes,  # C
-            n             # LDC
+            n,  # LDC
         )
 
         # help liveness analysis
-        #acpy.size
-        #vt.size
-        #u.size
-        #s.size
-        #one.size
-        #zero.size
-        _dummy_liveness_func([acpy.size, vt.size, u.size, s.size, one.size,
-            zero.size])
+        # acpy.size
+        # vt.size
+        # u.size
+        # s.size
+        # one.size
+        # zero.size
+        _dummy_liveness_func([acpy.size, vt.size, u.size, s.size, one.size, zero.size])
         return acpy.T.ravel().reshape(a.shape).T
 
     return pinv_impl
@@ -2018,30 +2194,34 @@ def _get_slogdet_diag_walker(a):
     such that the log(value) stays in the real domain.
     """
     if isinstance(a.dtype, types.Complex):
+
         @register_jitable
         def cmplx_diag_walker(n, a, sgn):
             # walk diagonal
-            csgn = sgn + 0.j
-            acc = 0.
+            csgn = sgn + 0.0j
+            acc = 0.0
             for k in range(n):
                 absel = np.abs(a[k, k])
                 csgn = csgn * (a[k, k] / absel)
                 acc = acc + np.log(absel)
             return (csgn, acc)
+
         return cmplx_diag_walker
     else:
+
         @register_jitable
         def real_diag_walker(n, a, sgn):
             # walk diagonal
-            acc = 0.
+            acc = 0.0
             for k in range(n):
                 v = a[k, k]
-                if v < 0.:
+                if v < 0.0:
                     sgn = -sgn
                     v = -v
                 acc = acc + np.log(v)
             # sgn is a float dtype
-            return (sgn + 0., acc)
+            return (sgn + 0.0, acc)
+
         return real_diag_walker
 
 
@@ -2079,7 +2259,7 @@ def slogdet_impl(a):
 
         if r > 0:
             # factorisation failed, return same defaults as np
-            return (0., -np.inf)
+            return (0.0, -np.inf)
         _inv_err_handler(r)  # catch input-to-lapack problem
 
         # The following, prior to the call to diag_walker, is present
@@ -2135,7 +2315,7 @@ def _compute_singular_values_impl(a):
     kind = ord(get_blas_kind(a.dtype, "svd"))
 
     # Flag for "only compute `S`" to give to xgesdd
-    JOBZ_N = ord('N')
+    JOBZ_N = ord("N")
 
     nb_ret_type = getattr(a.dtype, "underlying_float", a.dtype)
     np_ret_type = np_support.as_dtype(nb_ret_type)
@@ -2157,7 +2337,7 @@ def _compute_singular_values_impl(a):
         n = a.shape[-1]
         m = a.shape[-2]
         if m == 0 or n == 0:
-            raise np.linalg.LinAlgError('Arrays cannot be empty')
+            raise np.linalg.LinAlgError("Arrays cannot be empty")
         _check_finite_matrix(a)
 
         ldu = m
@@ -2175,17 +2355,17 @@ def _compute_singular_values_impl(a):
         s = np.empty(minmn, dtype=np_ret_type)
 
         r = numba_ez_gesdd(
-            kind,        # kind
-            JOBZ_N,      # jobz
-            m,           # m
-            n,           # n
+            kind,  # kind
+            JOBZ_N,  # jobz
+            m,  # m
+            n,  # n
             acpy.ctypes,  # a
-            m,           # lda
-            s.ctypes,    # s
-            u.ctypes,    # u
-            ldu,         # ldu
-            vt.ctypes,   # vt
-            ldvt         # ldvt
+            m,  # lda
+            s.ctypes,  # s
+            u.ctypes,  # u
+            ldu,  # ldu
+            vt.ctypes,  # vt
+            ldvt,  # ldvt
         )
         _handle_err_maybe_convergence_problem(r)
 
@@ -2220,19 +2400,15 @@ def _oneD_norm_2_impl(a):
         ret = np.empty((1,), dtype=np_ret_type)
         jmp = int(a.strides[0] / a.itemsize)
         r = xxnrm2(
-            kind,      # kind
-            n,         # n
-            a.ctypes,  # x
-            jmp,       # incx
-            ret.ctypes  # result
+            kind, n, a.ctypes, jmp, ret.ctypes  # kind  # n  # x  # incx  # result
         )
         if r < 0:
             fatal_error_func()
-            assert 0   # unreachable
+            assert 0  # unreachable
 
         # help liveness analysis
-        #ret.size
-        #a.size
+        # ret.size
+        # a.size
         _dummy_liveness_func([ret.size, a.size])
         return ret[0]
 
@@ -2268,9 +2444,12 @@ def _get_norm_impl(x, ord_flag):
 
         # handle "ord" being "None", must be done separately
         if ord_flag in (None, types.none):
+
             def oneD_impl(x, ord=None):
                 return _oneD_norm_2(x)
+
         else:
+
             def oneD_impl(x, ord=None):
                 n = len(x)
 
@@ -2311,8 +2490,8 @@ def _get_norm_impl(x, ord_flag):
                     # sum(x != 0)
                     ret = 0.0
                     for k in range(n):
-                        if x[k] != 0.:
-                            ret += 1.
+                        if x[k] != 0.0:
+                            ret += 1.0
                     return ret
 
                 elif ord == 1:
@@ -2326,8 +2505,9 @@ def _get_norm_impl(x, ord_flag):
                     # sum(abs(x)**ord)**(1./ord)
                     ret = 0.0
                     for k in range(n):
-                        ret += abs(x[k])**ord
-                    return ret**(1. / ord)
+                        ret += abs(x[k]) ** ord
+                    return ret ** (1.0 / ord)
+
         return oneD_impl
 
     elif x.ndim == 2:
@@ -2337,16 +2517,21 @@ def _get_norm_impl(x, ord_flag):
         if ord_flag in (None, types.none):
             # Force `x` to be C-order, so that we can take a contiguous
             # 1D view.
-            if x.layout == 'C':
+            if x.layout == "C":
+
                 @register_jitable
                 def array_prepare(x):
                     return x
-            elif x.layout == 'F':
+
+            elif x.layout == "F":
+
                 @register_jitable
                 def array_prepare(x):
                     # Legal since L2(x) == L2(x.T)
                     return x.T
+
             else:
+
                 @register_jitable
                 def array_prepare(x):
                     return x.copy()
@@ -2360,6 +2545,7 @@ def _get_norm_impl(x, ord_flag):
                     return 0.0
                 x_c = array_prepare(x)
                 return _oneD_norm_2(x_c.reshape(n))
+
         else:
             # max value for this dtype
             max_val = np.finfo(np_ret_type.type).max
@@ -2378,9 +2564,9 @@ def _get_norm_impl(x, ord_flag):
                 if ord == np.inf:
                     # max of sum of abs across rows
                     # max(sum(abs(x)), axis=1)
-                    global_max = 0.
+                    global_max = 0.0
                     for ii in range(m):
-                        tmp = 0.
+                        tmp = 0.0
                         for jj in range(n):
                             tmp += abs(x[ii, jj])
                         if tmp > global_max:
@@ -2392,7 +2578,7 @@ def _get_norm_impl(x, ord_flag):
                     # min(sum(abs(x)), axis=1)
                     global_min = max_val
                     for ii in range(m):
-                        tmp = 0.
+                        tmp = 0.0
                         for jj in range(n):
                             tmp += abs(x[ii, jj])
                         if tmp < global_min:
@@ -2401,9 +2587,9 @@ def _get_norm_impl(x, ord_flag):
                 elif ord == 1:
                     # max of sum of abs across cols
                     # max(sum(abs(x)), axis=0)
-                    global_max = 0.
+                    global_max = 0.0
                     for ii in range(n):
-                        tmp = 0.
+                        tmp = 0.0
                         for jj in range(m):
                             tmp += abs(x[jj, ii])
                         if tmp > global_max:
@@ -2415,7 +2601,7 @@ def _get_norm_impl(x, ord_flag):
                     # min(sum(abs(x)), axis=0)
                     global_min = max_val
                     for ii in range(n):
-                        tmp = 0.
+                        tmp = 0.0
                         for jj in range(m):
                             tmp += abs(x[jj, ii])
                         if tmp < global_min:
@@ -2433,6 +2619,7 @@ def _get_norm_impl(x, ord_flag):
                 else:
                     # replicate numpy error
                     raise ValueError("Invalid norm order for matrices.")
+
         return twoD_impl
     else:
         assert 0  # unreachable
@@ -2489,6 +2676,7 @@ def cond_impl(x, p=None):
             return np.inf
         else:
             return r
+
     return impl
 
 
@@ -2536,11 +2724,14 @@ def matrix_rank_impl(A, tol=None):
                 l = max(r, c)
                 t = s[0] * l * eps_val
                 return _get_rank_from_singular_values(s, t)
+
             return _2d_tol_none_impl
         else:
+
             def _2d_tol_not_none_impl(A, tol=None):
                 s = _compute_singular_values(A)
                 return _get_rank_from_singular_values(s, tol)
+
             return _2d_tol_not_none_impl
 
     def _get_matrix_rank_impl(A, tol):
@@ -2560,9 +2751,10 @@ def matrix_rank_impl(A, tol=None):
             # The code below replicates the numpy behaviour.
             def _1d_matrix_rank_impl(A, tol=None):
                 for k in range(len(A)):
-                    if A[k] != 0.:
+                    if A[k] != 0.0:
                         return 1
                 return 0
+
             return _1d_matrix_rank_impl
         elif ndim == 2:
             return _2d_matrix_rank_impl(A, tol)
@@ -2581,7 +2773,7 @@ def matrix_power_impl(a, n):
     _check_linalg_matrix(a, "matrix_power")
     np_dtype = np_support.as_dtype(a.dtype)
 
-    nt = getattr(n, 'dtype', n)
+    nt = getattr(n, "dtype", n)
     if not isinstance(nt, types.Integer):
         raise NumbaTypeError("Exponent must be an integer.")
 
@@ -2593,12 +2785,12 @@ def matrix_power_impl(a, n):
             # the copy required by eye(a.shape[0]).asdtype()
             A = np.zeros(a.shape, dtype=np_dtype)
             for k in range(a.shape[0]):
-                A[k, k] = 1.
+                A[k, k] = 1.0
             return A
 
         am, an = a.shape[-1], a.shape[-2]
         if am != an:
-            raise ValueError('input must be a square array')
+            raise ValueError("input must be a square array")
 
         # empty, return a copy
         if am == 0:
@@ -2650,6 +2842,7 @@ def matrix_power_impl(a, n):
 
     return matrix_power_impl
 
+
 # This is documented under linalg despite not being in the module
 
 
@@ -2690,25 +2883,26 @@ def _check_scalar_or_lt_2d_mat(a, func_name, la_prefix=True):
     # checks that a matrix is 1 or 2D
     if isinstance(a, types.Array):
         if not a.ndim <= 2:
-            raise TypingError("%s.%s() only supported on 1 and 2-D arrays "
-                              % interp, highlighting=False)
+            raise TypingError(
+                "%s.%s() only supported on 1 and 2-D arrays " % interp,
+                highlighting=False,
+            )
 
 
 @register_jitable
 def outer_impl_none(a, b, out):
     aa = np.asarray(a)
     bb = np.asarray(b)
-    return np.multiply(aa.ravel().reshape((aa.size, 1)),
-                        bb.ravel().reshape((1, bb.size)))
+    return np.multiply(
+        aa.ravel().reshape((aa.size, 1)), bb.ravel().reshape((1, bb.size))
+    )
 
 
 @register_jitable
 def outer_impl_arr(a, b, out):
     aa = np.asarray(a)
     bb = np.asarray(b)
-    np.multiply(aa.ravel().reshape((aa.size, 1)),
-                bb.ravel().reshape((1, bb.size)),
-                out)
+    np.multiply(aa.ravel().reshape((aa.size, 1)), bb.ravel().reshape((1, bb.size)), out)
     return out
 
 
@@ -2736,29 +2930,37 @@ def outer_impl(a, b, out=None):
 def _kron_normaliser_impl(x):
     # makes x into a 2d array
     if isinstance(x, types.Array):
-        if x.layout not in ('C', 'F'):
-            raise TypingError("np.linalg.kron only supports 'C' or 'F' layout "
-                              "input arrays. Received an input of "
-                              "layout '{}'.".format(x.layout))
+        if x.layout not in ("C", "F"):
+            raise TypingError(
+                "np.linalg.kron only supports 'C' or 'F' layout "
+                "input arrays. Received an input of "
+                "layout '{}'.".format(x.layout)
+            )
         elif x.ndim == 2:
+
             @register_jitable
             def nrm_shape(x):
                 xn = x.shape[-1]
                 xm = x.shape[-2]
                 return x.reshape(xm, xn)
+
             return nrm_shape
         else:
+
             @register_jitable
             def nrm_shape(x):
                 xn = x.shape[-1]
                 return x.reshape(1, xn)
+
             return nrm_shape
     else:  # assume its a scalar
+
         @register_jitable
         def nrm_shape(x):
             a = np.empty((1, 1), type(x))
             a[0] = x
             return a
+
         return nrm_shape
 
 
@@ -2769,30 +2971,40 @@ def _kron_return(a, b):
     b_is_arr = isinstance(b, types.Array)
     if a_is_arr and b_is_arr:
         if a.ndim == 2 or b.ndim == 2:
+
             @register_jitable
             def ret(a, b, c):
                 return c
+
             return ret
         else:
+
             @register_jitable
             def ret(a, b, c):
                 return c.reshape(c.size)
+
             return ret
     else:  # at least one of (a, b) is a scalar
         if a_is_arr:
+
             @register_jitable
             def ret(a, b, c):
                 return c.reshape(a.shape)
+
             return ret
         elif b_is_arr:
+
             @register_jitable
             def ret(a, b, c):
                 return c.reshape(b.shape)
+
             return ret
         else:  # both scalars
+
             @register_jitable
             def ret(a, b, c):
                 return c[0]
+
             return ret
 
 
@@ -2808,7 +3020,7 @@ def kron_impl(a, b):
 
     # this is fine because the ufunc for the Hadamard product
     # will reject differing dtypes in a and b.
-    dt = getattr(a, 'dtype', a)
+    dt = getattr(a, "dtype", a)
 
     def kron_impl(a, b):
 
@@ -2846,7 +3058,7 @@ def kron_impl(a, b):
                     # multiplied by the current row of B into
                     # a slice of a row of C
                     cjmp = j * bn
-                    C[irjmp, cjmp:cjmp + bn] = aa[i, j] * slc
+                    C[irjmp, cjmp : cjmp + bn] = aa[i, j] * slc
 
         return ret_c(a, b, C)
 

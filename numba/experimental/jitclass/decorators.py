@@ -58,9 +58,7 @@ def jitclass(cls_or_spec=None, spec=None):
     ``JitClassType``).
     """
 
-    if (cls_or_spec is not None and
-        spec is None and
-            not isinstance(cls_or_spec, type)):
+    if cls_or_spec is not None and spec is None and not isinstance(cls_or_spec, type):
         # Used like
         # @jitclass([("x", intp)])
         # class Foo:
@@ -72,10 +70,12 @@ def jitclass(cls_or_spec=None, spec=None):
         if config.DISABLE_JIT:
             return cls
         else:
-            from numba.experimental.jitclass.base import (register_class_type,
-                                                          ClassBuilder)
-            cls_jitted = register_class_type(cls, spec, types.ClassType,
-                                             ClassBuilder)
+            from numba.experimental.jitclass.base import (
+                register_class_type,
+                ClassBuilder,
+            )
+
+            cls_jitted = register_class_type(cls, spec, types.ClassType, ClassBuilder)
 
             # Preserve the module name of the original class
             cls_jitted.__module__ = cls.__module__

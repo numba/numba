@@ -3,8 +3,8 @@ from numba.core import types
 
 
 class UfuncLowererBase:
-    '''Callable class responsible for lowering calls to a specific gufunc.
-    '''
+    """Callable class responsible for lowering calls to a specific gufunc."""
+
     def __init__(self, ufunc, make_kernel_fn, make_ufunc_kernel_fn):
         self.ufunc = ufunc
         self.make_ufunc_kernel_fn = make_ufunc_kernel_fn
@@ -12,8 +12,9 @@ class UfuncLowererBase:
         self.libs = []
 
     def __call__(self, context, builder, sig, args):
-        return self.make_ufunc_kernel_fn(context, builder, sig, args,
-                                         self.ufunc, self.kernel)
+        return self.make_ufunc_kernel_fn(
+            context, builder, sig, args, self.ufunc, self.kernel
+        )
 
 
 class UfuncBase:
@@ -90,7 +91,8 @@ class UfuncBase:
         sig0 = (_any,) * self.ufunc.nin + (_arr,) * self.ufunc.nout
         sig1 = (_any,) * self.ufunc.nin
         targetctx.insert_func_defn(
-            [(self._lower_me, self, sig) for sig in (sig0, sig1)])
+            [(self._lower_me, self, sig) for sig in (sig0, sig1)]
+        )
 
     def find_ewise_function(self, ewise_types):
         """
@@ -106,7 +108,7 @@ class UfuncBase:
             loop = numpy_support.ufunc_find_matching_loop(self, ewise_types)
             if loop is None:
                 return None, None
-            ewise_types = tuple(loop.inputs + loop.outputs)[:len(ewise_types)]
+            ewise_types = tuple(loop.inputs + loop.outputs)[: len(ewise_types)]
         for sig, cres in self._dispatcher.overloads.items():
             if self.match_signature(ewise_types, sig):
                 return sig, cres

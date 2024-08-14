@@ -95,5 +95,5 @@ class TestIterators(CUDATestCase):
         self._test_twoarg_function(zipper_enumerator)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

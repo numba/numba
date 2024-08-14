@@ -20,8 +20,7 @@ from numba.core.errors import (
 from numba.core.cpu_options import InlineOptions
 
 # info store for inliner callback functions e.g. cost model
-_inline_info = namedtuple('inline_info',
-                          'func_ir typemap calltypes signature')
+_inline_info = namedtuple("inline_info", "func_ir typemap calltypes signature")
 
 
 class Signature(object):
@@ -32,7 +31,7 @@ class Signature(object):
 
     # XXX Perhaps the signature should be a BoundArguments, instead
     # of separate args and pysig...
-    __slots__ = '_return_type', '_args', '_recvr', '_pysig'
+    __slots__ = "_return_type", "_args", "_recvr", "_pysig"
 
     def __init__(self, return_type, args, recvr, pysig=None):
         if isinstance(args, list):
@@ -62,10 +61,12 @@ class Signature(object):
         """Copy and replace the given attributes provided as keyword arguments.
         Returns an updated copy.
         """
-        curstate = dict(return_type=self.return_type,
-                        args=self.args,
-                        recvr=self.recvr,
-                        pysig=self.pysig)
+        curstate = dict(
+            return_type=self.return_type,
+            args=self.args,
+            recvr=self.recvr,
+            pysig=self.pysig,
+        )
         curstate.update(kwargs)
         return Signature(**curstate)
 
@@ -86,10 +87,12 @@ class Signature(object):
 
     def __eq__(self, other):
         if isinstance(other, Signature):
-            return (self.args == other.args and
-                    self.return_type == other.return_type and
-                    self.recvr == other.recvr and
-                    self.pysig == other.pysig)
+            return (
+                self.args == other.args
+                and self.return_type == other.return_type
+                and self.recvr == other.recvr
+                and self.pysig == other.pysig
+            )
 
     def __ne__(self, other):
         return not (self == other)
@@ -111,8 +114,7 @@ class Signature(object):
         """
         if self.recvr is not None:
             return self
-        sig = signature(self.return_type, *self.args[1:],
-                        recvr=self.args[0])
+        sig = signature(self.return_type, *self.args[1:], recvr=self.args[0])
 
         # Adjust the python signature
         params = list(self.pysig.parameters.values())[1:]
@@ -140,18 +142,19 @@ class Signature(object):
         return types.FunctionType(self)
 
     def __unliteral__(self):
-        return signature(types.unliteral(self.return_type),
-                         *map(types.unliteral, self.args))
+        return signature(
+            types.unliteral(self.return_type), *map(types.unliteral, self.args)
+        )
 
-    def dump(self, tab=''):
+    def dump(self, tab=""):
         c = self.as_type()._code
-        print(f'{tab}DUMP {type(self).__name__} [type code: {c}]')
-        print(f'{tab}  Argument types:')
+        print(f"{tab}DUMP {type(self).__name__} [type code: {c}]")
+        print(f"{tab}  Argument types:")
         for a in self.args:
-            a.dump(tab=tab + '  | ')
-        print(f'{tab}  Return type:')
-        self.return_type.dump(tab=tab + '  | ')
-        print(f'{tab}END DUMP')
+            a.dump(tab=tab + "  | ")
+        print(f"{tab}  Return type:")
+        self.return_type.dump(tab=tab + "  | ")
+        print(f"{tab}END DUMP")
 
     def is_precise(self):
         for atype in self.args:
@@ -170,6 +173,7 @@ def make_callable_template(key, typer, recvr=None):
     """
     Create a callable template with the given key and typer function.
     """
+
     def generic(self):
         return typer
 
@@ -180,13 +184,12 @@ def make_callable_template(key, typer, recvr=None):
 
 
 def signature(return_type, *args, **kws):
-    recvr = kws.pop('recvr', None)
+    recvr = kws.pop("recvr", None)
     assert not kws
     return Signature(return_type, args, recvr=recvr)
 
 
-def fold_arguments(pysig, args, kws, normal_handler, default_handler,
-                   stararg_handler):
+def fold_arguments(pysig, args, kws, normal_handler, default_handler, stararg_handler):
     """
     Given the signature *pysig*, explicit *args* and *kws*, resolve
     omitted arguments and keyword arguments. A tuple of positional
@@ -208,7 +211,7 @@ def fold_arguments(pysig, args, kws, normal_handler, default_handler,
             kwonly.append(name)
 
     if kwonly:
-        bind_args = args[:-len(kwonly)]
+        bind_args = args[: -len(kwonly)]
     else:
         bind_args = args
     bind_kws = kws.copy()
@@ -228,9 +231,9 @@ def fold_arguments(pysig, args, kws, normal_handler, default_handler,
                 argval = ba.arguments[name]
                 # NOTE: avoid wrapping the tuple type for stararg in another
                 #       tuple.
-                if (len(argval) == 1 and
-                        isinstance(argval[0], (types.StarArgTuple,
-                                               types.StarArgUniTuple))):
+                if len(argval) == 1 and isinstance(
+                    argval[0], (types.StarArgTuple, types.StarArgUniTuple)
+                ):
                     argval = tuple(argval[0])
             else:
                 argval = ()
@@ -245,8 +248,7 @@ def fold_arguments(pysig, args, kws, normal_handler, default_handler,
             assert default is not param.empty
             ba.arguments[name] = default_handler(i, param, default)
     # Collect args in the right order
-    args = tuple(ba.arguments[param.name]
-                 for param in pysig.parameters.values())
+    args = tuple(ba.arguments[param.name] for param in pysig.parameters.values())
     return args
 
 
@@ -270,11 +272,10 @@ class FunctionTemplate(ABC):
 
     def _select(self, cases, args, kws):
         options = {
-            'unsafe_casting': self.unsafe_casting,
-            'exact_match_required': self.exact_match_required,
+            "unsafe_casting": self.unsafe_casting,
+            "exact_match_required": self.exact_match_required,
         }
-        selected = self.context.resolve_overload(self.key, cases, args, kws,
-                                                 **options)
+        selected = self.context.resolve_overload(self.key, cases, args, kws, **options)
         return selected
 
     def get_impl_key(self, sig):
@@ -304,7 +305,7 @@ class FunctionTemplate(ABC):
         """
         try:
             code, firstlineno = inspect.getsourcelines(impl)
-        except OSError: # missing source, probably a string
+        except OSError:  # missing source, probably a string
             code = "None available (built from string?)"
             firstlineno = 0
         path = inspect.getsourcefile(impl)
@@ -358,6 +359,7 @@ class AbstractTemplate(FunctionTemplate):
 
         # Unpack optional type if no matching signature
         if not sig and any(isinstance(x, types.Optional) for x in args):
+
             def unpack_opt(x):
                 if isinstance(x, types.Optional):
                     return x.type
@@ -377,12 +379,12 @@ class AbstractTemplate(FunctionTemplate):
         code, firstlineno, path = self.get_source_code_info(impl)
         sig = str(utils.pysignature(impl))
         info = {
-            'kind': "overload",
-            'name': getattr(impl, '__qualname__', impl.__name__),
-            'sig': sig,
-            'filename': utils.safe_relpath(path, start=basepath),
-            'lines': (firstlineno, firstlineno + len(code) - 1),
-            'docstring': impl.__doc__
+            "kind": "overload",
+            "name": getattr(impl, "__qualname__", impl.__name__),
+            "sig": sig,
+            "filename": utils.safe_relpath(path, start=basepath),
+            "lines": (firstlineno, firstlineno + len(code) - 1),
+            "docstring": impl.__doc__,
         }
         return info
 
@@ -396,6 +398,7 @@ class CallableTemplate(FunctionTemplate):
     does not have to match the input types. It is compared against the
     input types afterwards.
     """
+
     recvr = None
 
     def apply(self, args, kws):
@@ -415,6 +418,7 @@ class CallableTemplate(FunctionTemplate):
         # Unpack optional type if no matching signature
         if sig is None:
             if any(isinstance(x, types.Optional) for x in args):
+
                 def unpack_opt(x):
                     if isinstance(x, types.Optional):
                         return x.type
@@ -439,8 +443,9 @@ class CallableTemplate(FunctionTemplate):
         if not isinstance(sig, Signature):
             # If not a signature, `sig` is assumed to be the return type
             if not isinstance(sig, types.Type):
-                raise TypeError("invalid return type for callable template: "
-                                "got %r" % (sig,))
+                raise TypeError(
+                    "invalid return type for callable template: " "got %r" % (sig,)
+                )
             sig = signature(sig, *bound.args)
         if self.recvr is not None:
             sig = sig.replace(recvr=self.recvr)
@@ -448,7 +453,7 @@ class CallableTemplate(FunctionTemplate):
         # as lowering expects an exact match between formal signature
         # and actual args.
         if len(bound.args) < len(pysig.parameters):
-            parameters = list(pysig.parameters.values())[:len(bound.args)]
+            parameters = list(pysig.parameters.values())[: len(bound.args)]
             pysig = pysig.replace(parameters=parameters)
         sig = sig.replace(pysig=pysig)
         cases = [sig]
@@ -460,13 +465,16 @@ class CallableTemplate(FunctionTemplate):
         code, firstlineno, path = self.get_source_code_info(impl)
         sig = str(utils.pysignature(impl))
         info = {
-            'kind': "overload",
-            'name': getattr(self.key, '__name__',
-                            getattr(impl, '__qualname__', impl.__name__),),
-            'sig': sig,
-            'filename': utils.safe_relpath(path, start=basepath),
-            'lines': (firstlineno, firstlineno + len(code) - 1),
-            'docstring': impl.__doc__
+            "kind": "overload",
+            "name": getattr(
+                self.key,
+                "__name__",
+                getattr(impl, "__qualname__", impl.__name__),
+            ),
+            "sig": sig,
+            "filename": utils.safe_relpath(path, start=basepath),
+            "lines": (firstlineno, firstlineno + len(code) - 1),
+            "docstring": impl.__doc__,
         }
         return info
 
@@ -478,12 +486,13 @@ class ConcreteTemplate(FunctionTemplate):
     """
 
     def apply(self, args, kws):
-        cases = getattr(self, 'cases')
+        cases = getattr(self, "cases")
         return self._select(cases, args, kws)
 
     def get_template_info(self):
         import operator
-        name = getattr(self.key, '__name__', "unknown")
+
+        name = getattr(self.key, "__name__", "unknown")
         op_func = getattr(operator, name, None)
 
         kind = "Type restricted function"
@@ -491,12 +500,12 @@ class ConcreteTemplate(FunctionTemplate):
             if self.key is op_func:
                 kind = "operator overload"
         info = {
-            'kind': kind,
-            'name': name,
-            'sig': "unknown",
-            'filename': "unknown",
-            'lines': ("unknown", "unknown"),
-            'docstring': "unknown"
+            "kind": kind,
+            "name": name,
+            "sig": "unknown",
+            "filename": "unknown",
+            "lines": ("unknown", "unknown"),
+            "docstring": "unknown",
         }
         return info
 
@@ -541,8 +550,10 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                     if x.kind == utils.pyParameter.VAR_POSITIONAL:
                         pos_arg = x
                     elif x.kind == utils.pyParameter.VAR_KEYWORD:
-                        msg = ("The use of VAR_KEYWORD (e.g. **kwargs) is "
-                               "unsupported. (offending argument name is '%s')")
+                        msg = (
+                            "The use of VAR_KEYWORD (e.g. **kwargs) is "
+                            "unsupported. (offending argument name is '%s')"
+                        )
                         raise InternalError(msg % x)
                 else:
                     kws.append(x)
@@ -551,8 +562,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         ty_args, ty_kws, ty_pos = get_args_kwargs(typing_sig)
         im_args, im_kws, im_pos = get_args_kwargs(impl_sig)
 
-        sig_fmt = ("Typing signature:         %s\n"
-                   "Implementation signature: %s")
+        sig_fmt = "Typing signature:         %s\n" "Implementation signature: %s"
         sig_str = sig_fmt % (typing_sig, impl_sig)
 
         err_prefix = "Typing and implementation arguments differ in "
@@ -562,18 +572,20 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         if ty_pos:
             if not im_pos:
                 # case 5. described above
-                msg = ("VAR_POSITIONAL (e.g. *args) argument kind (offending "
-                       "argument name is '%s') found in the typing function "
-                       "signature, but is not in the implementing function "
-                       "signature.\n%s") % (ty_pos, sig_str)
+                msg = (
+                    "VAR_POSITIONAL (e.g. *args) argument kind (offending "
+                    "argument name is '%s') found in the typing function "
+                    "signature, but is not in the implementing function "
+                    "signature.\n%s"
+                ) % (ty_pos, sig_str)
                 raise InternalError(msg)
         else:
             if im_pos:
                 # no *args in typing but there's a *args in the implementation
                 # this is case 4. described above
-                b = im_args[:im_args.index(im_pos)]
+                b = im_args[: im_args.index(im_pos)]
                 try:
-                    a = ty_args[:ty_args.index(b[-1]) + 1]
+                    a = ty_args[: ty_args.index(b[-1]) + 1]
                 except ValueError:
                     # there's no b[-1] arg name in the ty_args, something is
                     # very wrong, we can't work out a diff (*args consumes
@@ -623,21 +635,35 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             # a signature
             from numba.core import typed_passes, compiler
             from numba.core.inline_closurecall import InlineWorker
+
             fcomp = disp._compiler
             flags = compiler.Flags()
 
             # Updating these causes problems?!
-            #fcomp.targetdescr.options.parse_as_flags(flags,
+            # fcomp.targetdescr.options.parse_as_flags(flags,
             #                                         fcomp.targetoptions)
-            #flags = fcomp._customize_flags(flags)
+            # flags = fcomp._customize_flags(flags)
 
             # spoof a compiler pipline like the one that will be in use
             tyctx = fcomp.targetdescr.typing_context
             tgctx = fcomp.targetdescr.target_context
-            compiler_inst = fcomp.pipeline_class(tyctx, tgctx, None, None, None,
-                                                 flags, None, )
-            inline_worker = InlineWorker(tyctx, tgctx, fcomp.locals,
-                                         compiler_inst, flags, None,)
+            compiler_inst = fcomp.pipeline_class(
+                tyctx,
+                tgctx,
+                None,
+                None,
+                None,
+                flags,
+                None,
+            )
+            inline_worker = InlineWorker(
+                tyctx,
+                tgctx,
+                fcomp.locals,
+                compiler_inst,
+                flags,
+                None,
+            )
 
             # If the inlinee contains something to trigger literal arg dispatch
             # then the pipeline call will unconditionally fail due to a raised
@@ -653,27 +679,23 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                 disp_type.dispatcher.py_func, enable_ssa=True
             )
 
-            (
-                typemap,
-                return_type,
-                calltypes,
-                _
-            ) = typed_passes.type_inference_stage(
-                self.context, tgctx, ir, folded_args, None)
+            (typemap, return_type, calltypes, _) = typed_passes.type_inference_stage(
+                self.context, tgctx, ir, folded_args, None
+            )
             ir = PreLowerStripPhis()._strip_phi_nodes(ir)
             ir._definitions = numba.core.ir_utils.build_definitions(ir.blocks)
 
             sig = Signature(return_type, folded_args, None)
             # this stores a load of info for the cost model function if supplied
             # it by default is None
-            self._inline_overloads[sig.args] = {'folded_args': folded_args}
+            self._inline_overloads[sig.args] = {"folded_args": folded_args}
             # this stores the compiled overloads, if there's no compiled
             # overload available i.e. function is always inlined, the key still
             # needs to exist for type resolution
 
             # NOTE: If lowering is failing on a `_EmptyImplementationEntry`,
             #       the inliner has failed to inline this entry correctly.
-            impl_init = _EmptyImplementationEntry('always inlined')
+            impl_init = _EmptyImplementationEntry("always inlined")
             self._compiled_overloads[sig.args] = impl_init
             if not self._inline.is_always_inline:
                 # this branch is here because a user has supplied a function to
@@ -685,11 +707,13 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                 # store the inliner information, it's used later in the cost
                 # model function call
             iinfo = _inline_info(ir, typemap, calltypes, sig)
-            self._inline_overloads[sig.args] = {'folded_args': folded_args,
-                                                'iinfo': iinfo}
+            self._inline_overloads[sig.args] = {
+                "folded_args": folded_args,
+                "iinfo": iinfo,
+            }
         else:
             sig = disp_type.get_call_type(self.context, new_args, kws)
-            if sig is None: # can't resolve for this target
+            if sig is None:  # can't resolve for this target
                 return None
             self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
         return sig
@@ -715,11 +739,13 @@ class _OverloadFunctionTemplate(AbstractTemplate):
     def _get_jit_decorator(self):
         """Gets a jit decorator suitable for the current target"""
 
-        from numba.core.target_extension import (target_registry,
-                                                 get_local_target,
-                                                 jit_registry)
+        from numba.core.target_extension import (
+            target_registry,
+            get_local_target,
+            jit_registry,
+        )
 
-        jitter_str = self.metadata.get('target', 'generic')
+        jitter_str = self.metadata.get("target", "generic")
         jitter = jit_registry.get(jitter_str, None)
 
         if jitter is None:
@@ -727,8 +753,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             # registered for the string and report if not.
             target_class = target_registry.get(jitter_str, None)
             if target_class is None:
-                msg = ("Unknown target '{}', has it been ",
-                       "registered?")
+                msg = ("Unknown target '{}', has it been ", "registered?")
                 raise ValueError(msg.format(jitter_str))
 
             target_hw = get_local_target(self.context)
@@ -794,15 +819,17 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             sig, pyfunc = ovf_result
             args = sig.args
             kws = {}
-            cache_key = None            # don't cache
+            cache_key = None  # don't cache
         else:
             # Regular case
             pyfunc = ovf_result
 
         # Check type of pyfunc
         if not isinstance(pyfunc, FunctionType):
-            msg = ("Implementation function returned by `@overload` "
-                   "has an unexpected type.  Got {}")
+            msg = (
+                "Implementation function returned by `@overload` "
+                "has an unexpected type.  Got {}"
+            )
             raise AssertionError(msg.format(pyfunc))
 
         # check that the typing and impl sigs match up
@@ -851,12 +878,12 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         code, firstlineno, path = cls.get_source_code_info(impl)
         sig = str(utils.pysignature(impl))
         info = {
-            'kind': "overload",
-            'name': getattr(impl, '__qualname__', impl.__name__),
-            'sig': sig,
-            'filename': utils.safe_relpath(path, start=basepath),
-            'lines': (firstlineno, firstlineno + len(code) - 1),
-            'docstring': impl.__doc__
+            "kind": "overload",
+            "name": getattr(impl, "__qualname__", impl.__name__),
+            "sig": sig,
+            "filename": utils.safe_relpath(path, start=basepath),
+            "lines": (firstlineno, firstlineno + len(code) - 1),
+            "docstring": impl.__doc__,
         }
         return info
 
@@ -866,30 +893,38 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         code, firstlineno, path = self.get_source_code_info(impl)
         sig = str(utils.pysignature(impl))
         info = {
-            'kind': "overload",
-            'name': getattr(impl, '__qualname__', impl.__name__),
-            'sig': sig,
-            'filename': utils.safe_relpath(path, start=basepath),
-            'lines': (firstlineno, firstlineno + len(code) - 1),
-            'docstring': impl.__doc__
+            "kind": "overload",
+            "name": getattr(impl, "__qualname__", impl.__name__),
+            "sig": sig,
+            "filename": utils.safe_relpath(path, start=basepath),
+            "lines": (firstlineno, firstlineno + len(code) - 1),
+            "docstring": impl.__doc__,
         }
         return info
 
 
-def make_overload_template(func, overload_func, jit_options, strict,
-                           inline, prefer_literal=False, **kwargs):
+def make_overload_template(
+    func, overload_func, jit_options, strict, inline, prefer_literal=False, **kwargs
+):
     """
     Make a template class for function *func* overloaded by *overload_func*.
     Compiler options are passed as a dictionary to *jit_options*.
     """
-    func_name = getattr(func, '__name__', str(func))
+    func_name = getattr(func, "__name__", str(func))
     name = "OverloadTemplate_%s" % (func_name,)
     base = _OverloadFunctionTemplate
-    dct = dict(key=func, _overload_func=staticmethod(overload_func),
-               _impl_cache={}, _compiled_overloads={}, _jit_options=jit_options,
-               _strict=strict, _inline=staticmethod(InlineOptions(inline)),
-               _inline_overloads={}, prefer_literal=prefer_literal,
-               metadata=kwargs)
+    dct = dict(
+        key=func,
+        _overload_func=staticmethod(overload_func),
+        _impl_cache={},
+        _compiled_overloads={},
+        _jit_options=jit_options,
+        _strict=strict,
+        _inline=staticmethod(InlineOptions(inline)),
+        _inline_overloads={},
+        prefer_literal=prefer_literal,
+        metadata=kwargs,
+    )
     return type(base)(name, (base,), dct)
 
 
@@ -907,9 +942,12 @@ class _TemplateTargetHelperMixin(object):
         -------
         reg : a registry suitable for the current target.
         """
-        from numba.core.target_extension import (_get_local_target_checked,
-                                                 dispatcher_registry)
-        hwstr = self.metadata.get('target', 'generic')
+        from numba.core.target_extension import (
+            _get_local_target_checked,
+            dispatcher_registry,
+        )
+
+        hwstr = self.metadata.get("target", "generic")
         target_hw = _get_local_target_checked(self.context, hwstr, reason)
         # Get registry for the current hardware
         disp = dispatcher_registry[target_hw]
@@ -955,7 +993,7 @@ class _IntrinsicTemplate(_TemplateTargetHelperMixin, AbstractTemplate):
         """
         Type the intrinsic by the arguments.
         """
-        lower_builtin = self._get_target_registry('intrinsic').lower
+        lower_builtin = self._get_target_registry("intrinsic").lower
         cache_key = self.context, args, tuple(kws.items())
         try:
             return self._impl_cache[cache_key]
@@ -988,18 +1026,17 @@ class _IntrinsicTemplate(_TemplateTargetHelperMixin, AbstractTemplate):
         code, firstlineno, path = self.get_source_code_info(impl)
         sig = str(utils.pysignature(impl))
         info = {
-            'kind': "intrinsic",
-            'name': getattr(impl, '__qualname__', impl.__name__),
-            'sig': sig,
-            'filename': utils.safe_relpath(path, start=basepath),
-            'lines': (firstlineno, firstlineno + len(code) - 1),
-            'docstring': impl.__doc__
+            "kind": "intrinsic",
+            "name": getattr(impl, "__qualname__", impl.__name__),
+            "sig": sig,
+            "filename": utils.safe_relpath(path, start=basepath),
+            "lines": (firstlineno, firstlineno + len(code) - 1),
+            "docstring": impl.__doc__,
         }
         return info
 
 
-def make_intrinsic_template(handle, defn, name, *, prefer_literal=False,
-                            kwargs=None):
+def make_intrinsic_template(handle, defn, name, *, prefer_literal=False, kwargs=None):
     """
     Make a template class for a intrinsic handle *handle* defined by the
     function *defn*.  The *name* is used for naming the new template class.
@@ -1007,9 +1044,14 @@ def make_intrinsic_template(handle, defn, name, *, prefer_literal=False,
     kwargs = MappingProxyType({} if kwargs is None else kwargs)
     base = _IntrinsicTemplate
     name = "_IntrinsicTemplate_%s" % (name)
-    dct = dict(key=handle, _definition_func=staticmethod(defn),
-               _impl_cache={}, _overload_cache={},
-               prefer_literal=prefer_literal, metadata=kwargs)
+    dct = dict(
+        key=handle,
+        _definition_func=staticmethod(defn),
+        _impl_cache={},
+        _overload_cache={},
+        prefer_literal=prefer_literal,
+        metadata=kwargs,
+    )
     return type(base)(name, (base,), dct)
 
 
@@ -1041,6 +1083,7 @@ class _OverloadAttributeTemplate(_TemplateTargetHelperMixin, AttributeTemplate):
     """
     A base class of templates for @overload_attribute functions.
     """
+
     is_method = False
 
     def __init__(self, context):
@@ -1052,7 +1095,7 @@ class _OverloadAttributeTemplate(_TemplateTargetHelperMixin, AttributeTemplate):
         cls = type(self)
         attr = cls._attr
 
-        lower_getattr = self._get_target_registry('attribute').lower_getattr
+        lower_getattr = self._get_target_registry("attribute").lower_getattr
 
         @lower_getattr(cls.key, attr)
         def getattr_impl(context, builder, typ, value):
@@ -1087,6 +1130,7 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
     """
     A base class of templates for @overload_method functions.
     """
+
     is_method = True
 
     def _init_once(self):
@@ -1095,7 +1139,7 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
         """
         attr = self._attr
 
-        registry = self._get_target_registry('method')
+        registry = self._get_target_registry("method")
 
         @registry.lower((self.key, attr), self.key, types.VarArg(types.Any))
         def method_impl(context, builder, sig, args):
@@ -1105,7 +1149,7 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
             sig = self._get_signature(typing_context, fnty, sig.args, {})
             call = context.get_function(fnty, sig)
             # Link dependent library
-            context.add_linking_libs(getattr(call, 'libs', ()))
+            context.add_linking_libs(getattr(call, "libs", ()))
             return call(builder, args)
 
     def _resolve(self, typ, attr):
@@ -1142,12 +1186,12 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
                 code, firstlineno, path = self.get_source_code_info(impl)
                 sig = str(utils.pysignature(impl))
                 info = {
-                    'kind': "overload_method",
-                    'name': getattr(impl, '__qualname__', impl.__name__),
-                    'sig': sig,
-                    'filename': utils.safe_relpath(path, start=basepath),
-                    'lines': (firstlineno, firstlineno + len(code) - 1),
-                    'docstring': impl.__doc__
+                    "kind": "overload_method",
+                    "name": getattr(impl, "__qualname__", impl.__name__),
+                    "sig": sig,
+                    "filename": utils.safe_relpath(path, start=basepath),
+                    "lines": (firstlineno, firstlineno + len(code) - 1),
+                    "docstring": impl.__doc__,
                 }
 
                 return info
@@ -1155,10 +1199,15 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
         return types.BoundFunction(MethodTemplate, typ)
 
 
-def make_overload_attribute_template(typ, attr, overload_func, inline='never',
-                                     prefer_literal=False,
-                                     base=_OverloadAttributeTemplate,
-                                     **kwargs):
+def make_overload_attribute_template(
+    typ,
+    attr,
+    overload_func,
+    inline="never",
+    prefer_literal=False,
+    base=_OverloadAttributeTemplate,
+    **kwargs,
+):
     """
     Make a template class for attribute *attr* of *typ* overloaded by
     *overload_func*.
@@ -1166,26 +1215,34 @@ def make_overload_attribute_template(typ, attr, overload_func, inline='never',
     assert isinstance(typ, types.Type) or issubclass(typ, types.Type)
     name = "OverloadAttributeTemplate_%s_%s" % (typ, attr)
     # Note the implementation cache is subclass-specific
-    dct = dict(key=typ, _attr=attr, _impl_cache={},
-               _inline=staticmethod(InlineOptions(inline)),
-               _inline_overloads={},
-               _overload_func=staticmethod(overload_func),
-               prefer_literal=prefer_literal,
-               metadata=kwargs,
-               )
+    dct = dict(
+        key=typ,
+        _attr=attr,
+        _impl_cache={},
+        _inline=staticmethod(InlineOptions(inline)),
+        _inline_overloads={},
+        _overload_func=staticmethod(overload_func),
+        prefer_literal=prefer_literal,
+        metadata=kwargs,
+    )
     obj = type(base)(name, (base,), dct)
     return obj
 
 
-def make_overload_method_template(typ, attr, overload_func, inline,
-                                  prefer_literal=False, **kwargs):
+def make_overload_method_template(
+    typ, attr, overload_func, inline, prefer_literal=False, **kwargs
+):
     """
     Make a template class for method *attr* of *typ* overloaded by
     *overload_func*.
     """
     return make_overload_attribute_template(
-        typ, attr, overload_func, inline=inline,
-        base=_OverloadMethodTemplate, prefer_literal=prefer_literal,
+        typ,
+        attr,
+        overload_func,
+        inline=inline,
+        base=_OverloadMethodTemplate,
+        prefer_literal=prefer_literal,
         **kwargs,
     )
 
@@ -1207,6 +1264,7 @@ def bound_function(template_key):
     *template_key* (e.g. "complex.conjugate" above) will be used by the
     target to look up the method's implementation, as a regular function.
     """
+
     def wrapper(method_resolver):
         @functools.wraps(method_resolver)
         def attribute_resolver(self, ty):
@@ -1220,11 +1278,14 @@ def bound_function(template_key):
                     return sig
 
             return types.BoundFunction(MethodTemplate, ty)
+
         return attribute_resolver
+
     return wrapper
 
 
 # -----------------------------
+
 
 class Registry(object):
     """
@@ -1264,9 +1325,11 @@ class Registry(object):
             assert not kwargs
             self.globals.append((val, typ))
         else:
+
             def decorate(cls, typing_key):
                 class Template(cls):
                     key = typing_key
+
                 if callable(val):
                     typ = types.Function(Template)
                 else:
@@ -1276,18 +1339,21 @@ class Registry(object):
 
             # register_global(val, typing_key=None)(<template class>)
             assert val is not None
-            typing_key = kwargs.pop('typing_key', val)
+            typing_key = kwargs.pop("typing_key", val)
             assert not kwargs
             if typing_key is val:
                 # Check the value is globally reachable, as it is going
                 # to be used as the key.
                 mod = sys.modules[val.__module__]
                 if getattr(mod, val.__name__) is not val:
-                    raise ValueError("%r is not globally reachable as '%s.%s'"
-                                     % (mod, val.__module__, val.__name__))
+                    raise ValueError(
+                        "%r is not globally reachable as '%s.%s'"
+                        % (mod, val.__module__, val.__name__)
+                    )
 
             def decorator(cls):
                 return decorate(cls, typing_key)
+
             return decorator
 
 
@@ -1309,7 +1375,8 @@ class BaseRegistryLoader(object):
     def __init__(self, registry):
         self._registrations = dict(
             (name, utils.stream_list(getattr(registry, name)))
-            for name in self.registry_items)
+            for name in self.registry_items
+        )
 
     def new_registrations(self, name):
         for item in next(self._registrations[name]):
@@ -1320,7 +1387,8 @@ class RegistryLoader(BaseRegistryLoader):
     """
     An incremental loader for a typing registry.
     """
-    registry_items = ('functions', 'attributes', 'globals')
+
+    registry_items = ("functions", "attributes", "globals")
 
 
 builtin_registry = Registry()

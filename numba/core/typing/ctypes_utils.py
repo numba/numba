@@ -2,7 +2,6 @@
 Support for typing ctypes function pointers.
 """
 
-
 import ctypes
 import sys
 
@@ -14,40 +13,32 @@ from .typeof import typeof_impl
 if config.USE_LEGACY_TYPE_SYSTEM:
     _FROM_CTYPES = {
         ctypes.c_bool: types.boolean,
-
-        ctypes.c_int8:  types.int8,
+        ctypes.c_int8: types.int8,
         ctypes.c_int16: types.int16,
         ctypes.c_int32: types.int32,
         ctypes.c_int64: types.int64,
-
         ctypes.c_uint8: types.uint8,
         ctypes.c_uint16: types.uint16,
         ctypes.c_uint32: types.uint32,
         ctypes.c_uint64: types.uint64,
-
         ctypes.c_float: types.float32,
         ctypes.c_double: types.float64,
-
         ctypes.c_void_p: types.voidptr,
         ctypes.py_object: types.ffi_forced_object,
     }
 else:
     _FROM_CTYPES = {
         ctypes.c_bool: types.c_bool,
-
-        ctypes.c_int8:  types.c_int8,
+        ctypes.c_int8: types.c_int8,
         ctypes.c_int16: types.c_int16,
         ctypes.c_int32: types.c_int32,
         ctypes.c_int64: types.c_int64,
-
         ctypes.c_uint8: types.c_uint8,
         ctypes.c_uint16: types.c_uint16,
         ctypes.c_uint32: types.c_uint32,
         ctypes.c_uint64: types.c_uint64,
-
         ctypes.c_float: types.c_float32,
         ctypes.c_double: types.c_float64,
-
         ctypes.c_void_p: types.voidptr,
         ctypes.py_object: types.ffi_forced_object,
     }
@@ -98,8 +89,7 @@ def to_ctypes(ty):
 
     ctypeobj = _convert_internal(ty)
     if ctypeobj is None:
-        raise TypeError("Cannot convert Numba type '%s' to ctypes type"
-                        % (ty,))
+        raise TypeError("Cannot convert Numba type '%s' to ctypes type" % (ty,))
     return ctypeobj
 
 
@@ -111,7 +101,7 @@ def is_ctypes_funcptr(obj):
         return False
     else:
         # Does it define argtypes and restype
-        return hasattr(obj, 'argtypes') and hasattr(obj, 'restype')
+        return hasattr(obj, "argtypes") and hasattr(obj, "restype")
 
 
 def get_pointer(ctypes_func):
@@ -127,23 +117,22 @@ def make_function_type(cfnptr):
     Return a Numba type for the given ctypes function pointer.
     """
     if cfnptr.argtypes is None:
-        raise TypeError("ctypes function %r doesn't define its argument types; "
-                        "consider setting the `argtypes` attribute"
-                        % (cfnptr.__name__,))
-    cargs = [from_ctypes(a)
-             for a in cfnptr.argtypes]
+        raise TypeError(
+            "ctypes function %r doesn't define its argument types; "
+            "consider setting the `argtypes` attribute" % (cfnptr.__name__,)
+        )
+    cargs = [from_ctypes(a) for a in cfnptr.argtypes]
     cret = from_ctypes(cfnptr.restype)
     # void* return type is a int/long on 32 bit platforms and an int on 64 bit
     # platforms, explicit conversion to a int64 should match.
     if cret == types.voidptr:
         cret = types.uintp
-    if sys.platform == 'win32' and not cfnptr._flags_ & ctypes._FUNCFLAG_CDECL:
+    if sys.platform == "win32" and not cfnptr._flags_ & ctypes._FUNCFLAG_CDECL:
         # 'stdcall' calling convention under Windows
-        cconv = 'x86_stdcallcc'
+        cconv = "x86_stdcallcc"
     else:
         # Default C calling convention
         cconv = None
 
     sig = templates.signature(cret, *cargs)
-    return types.ExternalFunctionPointer(sig, cconv=cconv,
-                                         get_pointer=get_pointer)
+    return types.ExternalFunctionPointer(sig, cconv=cconv, get_pointer=get_pointer)

@@ -10,17 +10,29 @@ from numba.core.compiler_lock import global_compiler_lock
 from numba.core.caching import make_library_cache, NullCache
 
 
-_wrapper_info = namedtuple('_wrapper_info', ['library', 'env', 'name'])
+_wrapper_info = namedtuple("_wrapper_info", ["library", "env", "name"])
 
 
-def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
-                           offsets, store_offset, signature, pyapi, env):
+def _build_ufunc_loop_body(
+    load,
+    store,
+    context,
+    func,
+    builder,
+    arrays,
+    out,
+    offsets,
+    store_offset,
+    signature,
+    pyapi,
+    env,
+):
     elems = load()
 
     # Compute
-    status, retval = context.call_conv.call_function(builder, func,
-                                                     signature.return_type,
-                                                     signature.args, elems)
+    status, retval = context.call_conv.call_function(
+        builder, func, signature.return_type, signature.args, elems
+    )
 
     # Store
     with builder.if_else(status.is_ok, likely=True) as (if_ok, if_error):
@@ -35,15 +47,25 @@ def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
     for off, ary in zip(offsets, arrays):
         builder.store(builder.add(builder.load(off), ary.step), off)
 
-    builder.store(builder.add(builder.load(store_offset), out.step),
-                  store_offset)
+    builder.store(builder.add(builder.load(store_offset), out.step), store_offset)
 
     return status.code
 
 
-def _build_ufunc_loop_body_objmode(load, store, context, func, builder,
-                                   arrays, out, offsets, store_offset,
-                                   signature, env, pyapi):
+def _build_ufunc_loop_body_objmode(
+    load,
+    store,
+    context,
+    func,
+    builder,
+    arrays,
+    out,
+    offsets,
+    store_offset,
+    signature,
+    env,
+    pyapi,
+):
     elems = load()
 
     # Compute
@@ -52,9 +74,9 @@ def _build_ufunc_loop_body_objmode(load, store, context, func, builder,
     # the ufunc's execution.  We restore it unless the ufunc raised
     # a new error.
     with pyapi.err_push(keep_new=True):
-        status, retval = context.call_conv.call_function(builder, func,
-                                                         types.pyobject,
-                                                         _objargs, elems)
+        status, retval = context.call_conv.call_function(
+            builder, func, types.pyobject, _objargs, elems
+        )
         # Release owned reference to arguments
         for elem in elems:
             pyapi.decref(elem)
@@ -67,39 +89,65 @@ def _build_ufunc_loop_body_objmode(load, store, context, func, builder,
     for off, ary in zip(offsets, arrays):
         builder.store(builder.add(builder.load(off), ary.step), off)
 
-    builder.store(builder.add(builder.load(store_offset), out.step),
-                  store_offset)
+    builder.store(builder.add(builder.load(store_offset), out.step), store_offset)
 
     return status.code
 
 
-def build_slow_loop_body(context, func, builder, arrays, out, offsets,
-                         store_offset, signature, pyapi, env):
+def build_slow_loop_body(
+    context, func, builder, arrays, out, offsets, store_offset, signature, pyapi, env
+):
     def load():
-        elems = [ary.load_direct(builder.load(off))
-                 for off, ary in zip(offsets, arrays)]
+        elems = [
+            ary.load_direct(builder.load(off)) for off, ary in zip(offsets, arrays)
+        ]
         return elems
 
     def store(retval):
         out.store_direct(retval, builder.load(store_offset))
 
-    return _build_ufunc_loop_body(load, store, context, func, builder, arrays,
-                                  out, offsets, store_offset, signature, pyapi,
-                                  env=env)
+    return _build_ufunc_loop_body(
+        load,
+        store,
+        context,
+        func,
+        builder,
+        arrays,
+        out,
+        offsets,
+        store_offset,
+        signature,
+        pyapi,
+        env=env,
+    )
 
 
-def build_obj_loop_body(context, func, builder, arrays, out, offsets,
-                        store_offset, signature, pyapi, envptr, env):
+def build_obj_loop_body(
+    context,
+    func,
+    builder,
+    arrays,
+    out,
+    offsets,
+    store_offset,
+    signature,
+    pyapi,
+    envptr,
+    env,
+):
     env_body = context.get_env_body(builder, envptr)
     env_manager = pyapi.get_env_manager(env, env_body, envptr)
 
     def load():
         # Load
-        elems = [ary.load_direct(builder.load(off))
-                 for off, ary in zip(offsets, arrays)]
+        elems = [
+            ary.load_direct(builder.load(off)) for off, ary in zip(offsets, arrays)
+        ]
         # Box
-        elems = [pyapi.from_native_value(t, v, env_manager)
-                 for v, t in zip(elems, signature.args)]
+        elems = [
+            pyapi.from_native_value(t, v, env_manager)
+            for v, t in zip(elems, signature.args)
+        ]
         return elems
 
     def store(retval):
@@ -115,24 +163,56 @@ def build_obj_loop_body(context, func, builder, arrays, out, offsets,
             # Release owned reference
             pyapi.decref(retval)
 
-    return _build_ufunc_loop_body_objmode(load, store, context, func, builder,
-                                          arrays, out, offsets, store_offset,
-                                          signature, envptr, pyapi)
+    return _build_ufunc_loop_body_objmode(
+        load,
+        store,
+        context,
+        func,
+        builder,
+        arrays,
+        out,
+        offsets,
+        store_offset,
+        signature,
+        envptr,
+        pyapi,
+    )
 
 
-def build_fast_loop_body(context, func, builder, arrays, out, offsets,
-                         store_offset, signature, ind, pyapi, env):
+def build_fast_loop_body(
+    context,
+    func,
+    builder,
+    arrays,
+    out,
+    offsets,
+    store_offset,
+    signature,
+    ind,
+    pyapi,
+    env,
+):
     def load():
-        elems = [ary.load_aligned(ind)
-                 for ary in arrays]
+        elems = [ary.load_aligned(ind) for ary in arrays]
         return elems
 
     def store(retval):
         out.store_aligned(retval, ind)
 
-    return _build_ufunc_loop_body(load, store, context, func, builder, arrays,
-                                  out, offsets, store_offset, signature, pyapi,
-                                  env=env)
+    return _build_ufunc_loop_body(
+        load,
+        store,
+        context,
+        func,
+        builder,
+        arrays,
+        out,
+        offsets,
+        store_offset,
+        signature,
+        pyapi,
+        env=env,
+    )
 
 
 def build_ufunc_wrapper(library, context, fname, signature, objmode, cres):
@@ -150,17 +230,20 @@ def build_ufunc_wrapper(library, context, fname, signature, objmode, cres):
     intp_t = context.get_value_type(types.intp)
     intp_ptr_t = ir.PointerType(intp_t)
 
-    fnty = ir.FunctionType(ir.VoidType(), [byte_ptr_ptr_t, intp_ptr_t,
-                                           intp_ptr_t, byte_ptr_t])
+    fnty = ir.FunctionType(
+        ir.VoidType(), [byte_ptr_ptr_t, intp_ptr_t, intp_ptr_t, byte_ptr_t]
+    )
 
-    wrapperlib = context.codegen().create_library('ufunc_wrapper')
-    wrapper_module = wrapperlib.create_ir_module('')
+    wrapperlib = context.codegen().create_library("ufunc_wrapper")
+    wrapper_module = wrapperlib.create_ir_module("")
     if objmode:
         func_type = context.call_conv.get_function_type(
-            types.pyobject, [types.pyobject] * len(signature.args))
+            types.pyobject, [types.pyobject] * len(signature.args)
+        )
     else:
         func_type = context.call_conv.get_function_type(
-            signature.return_type, signature.args)
+            signature.return_type, signature.args
+        )
 
     func = ir.Function(wrapper_module, func_type, name=fname)
     func.attributes.add("alwaysinline")
@@ -188,8 +271,9 @@ def build_ufunc_wrapper(library, context, fname, signature, objmode, cres):
         arrays.append(UArrayArg(context, builder, arg_args, arg_steps, i, typ))
 
     # Prepare output
-    out = UArrayArg(context, builder, arg_args, arg_steps, len(arrays),
-                    signature.return_type)
+    out = UArrayArg(
+        context, builder, arg_args, arg_steps, len(arrays), signature.return_type
+    )
 
     # Setup indices
     offsets = []
@@ -212,8 +296,17 @@ def build_ufunc_wrapper(library, context, fname, signature, objmode, cres):
         gil = pyapi.gil_ensure()
         with cgutils.for_range(builder, loopcount, intp=intp_t):
             build_obj_loop_body(
-                context, func, builder, arrays, out, offsets,
-                store_offset, signature, pyapi, envptr, env,
+                context,
+                func,
+                builder,
+                arrays,
+                out,
+                offsets,
+                store_offset,
+                signature,
+                pyapi,
+                envptr,
+                env,
             )
         pyapi.gil_release(gil)
         builder.ret_void()
@@ -223,8 +316,16 @@ def build_ufunc_wrapper(library, context, fname, signature, objmode, cres):
             with is_unit_strided:
                 with cgutils.for_range(builder, loopcount, intp=intp_t) as loop:
                     build_fast_loop_body(
-                        context, func, builder, arrays, out, offsets,
-                        store_offset, signature, loop.index, pyapi,
+                        context,
+                        func,
+                        builder,
+                        arrays,
+                        out,
+                        offsets,
+                        store_offset,
+                        signature,
+                        loop.index,
+                        pyapi,
                         env=envptr,
                     )
 
@@ -232,8 +333,15 @@ def build_ufunc_wrapper(library, context, fname, signature, objmode, cres):
                 # General loop
                 with cgutils.for_range(builder, loopcount, intp=intp_t):
                     build_slow_loop_body(
-                        context, func, builder, arrays, out, offsets,
-                        store_offset, signature, pyapi,
+                        context,
+                        func,
+                        builder,
+                        arrays,
+                        out,
+                        offsets,
+                        store_offset,
+                        signature,
+                        pyapi,
                         env=envptr,
                     )
 
@@ -254,14 +362,12 @@ class UArrayArg(object):
         offset = self.context.get_constant(types.intp, i)
         offseted_args = self.builder.load(builder.gep(args, [offset]))
         data_type = context.get_data_type(fe_type)
-        self.dataptr = self.builder.bitcast(offseted_args,
-                                            data_type.as_pointer())
+        self.dataptr = self.builder.bitcast(offseted_args, data_type.as_pointer())
         sizeof = self.context.get_abi_sizeof(data_type)
         self.abisize = self.context.get_constant(types.intp, sizeof)
         offseted_step = self.builder.gep(steps, [offset])
         self.step = self.builder.load(offseted_step)
-        self.is_unit_strided = builder.icmp_unsigned('==',
-                                                     self.abisize, self.step)
+        self.is_unit_strided = builder.icmp_unsigned("==", self.abisize, self.step)
         self.builder = builder
 
     def load_direct(self, byteoffset):
@@ -287,7 +393,7 @@ class UArrayArg(object):
         self.context.pack_value(self.builder, self.fe_type, value, ptr)
 
 
-GufWrapperCache = make_library_cache('guf')
+GufWrapperCache = make_library_cache("guf")
 
 
 class _GufuncWrapper(object):
@@ -303,8 +409,7 @@ class _GufuncWrapper(object):
         self.sin = sin
         self.sout = sout
         self.is_objectmode = self.signature.return_type == types.pyobject
-        self.cache = (GufWrapperCache(py_func=self.py_func)
-                      if cache else NullCache())
+        self.cache = GufWrapperCache(py_func=self.py_func) if cache else NullCache()
         self.is_parfors = bool(is_parfors)
 
     @property
@@ -338,8 +443,9 @@ class _GufuncWrapper(object):
         intp_t = self.context.get_value_type(types.intp)
         intp_ptr_t = ir.PointerType(intp_t)
 
-        fnty = ir.FunctionType(ir.VoidType(), [byte_ptr_ptr_t, intp_ptr_t,
-                                               intp_ptr_t, byte_ptr_t])
+        fnty = ir.FunctionType(
+            ir.VoidType(), [byte_ptr_ptr_t, intp_ptr_t, intp_ptr_t, byte_ptr_t]
+        )
         return fnty
 
     def _build_wrapper(self, library, name):
@@ -352,9 +458,10 @@ class _GufuncWrapper(object):
         intp_t = self.context.get_value_type(types.intp)
         fnty = self._wrapper_function_type()
 
-        wrapper_module = library.create_ir_module('_gufunc_wrapper')
-        func_type = self.call_conv.get_function_type(self.fndesc.restype,
-                                                     self.fndesc.argtypes)
+        wrapper_module = library.create_ir_module("_gufunc_wrapper")
+        func_type = self.call_conv.get_function_type(
+            self.fndesc.restype, self.fndesc.argtypes
+        )
         fname = self.fndesc.llvm_func_name
         func = ir.Function(wrapper_module, func_type, name=fname)
 
@@ -362,7 +469,7 @@ class _GufuncWrapper(object):
         wrapper = ir.Function(wrapper_module, fnty, name)
         # The use of weak_odr linkage avoids the function being dropped due
         # to the order in which the wrappers and the user function are linked.
-        wrapper.linkage = 'weak_odr'
+        wrapper.linkage = "weak_odr"
         arg_args, arg_dims, arg_steps, arg_data = wrapper.args
         arg_args.name = "args"
         arg_dims.name = "dims"
@@ -387,22 +494,29 @@ class _GufuncWrapper(object):
 
         sym_dim = {}
         for s, i in sym_map.items():
-            sym_dim[s] = builder.load(builder.gep(arg_dims,
-                                                  [self.context.get_constant(
-                                                      types.intp,
-                                                      i + 1)]))
+            sym_dim[s] = builder.load(
+                builder.gep(arg_dims, [self.context.get_constant(types.intp, i + 1)])
+            )
 
         # Prepare inputs
         arrays = []
         step_offset = len(self.sin) + len(self.sout)
-        for i, (typ, sym) in enumerate(zip(self.signature.args,
-                                           self.sin + self.sout)):
-            ary = GUArrayArg(self.context, builder, arg_args,
-                             arg_steps, i, step_offset, typ, sym, sym_dim)
+        for i, (typ, sym) in enumerate(zip(self.signature.args, self.sin + self.sout)):
+            ary = GUArrayArg(
+                self.context,
+                builder,
+                arg_args,
+                arg_steps,
+                i,
+                step_offset,
+                typ,
+                sym,
+                sym_dim,
+            )
             step_offset += len(sym)
             arrays.append(ary)
 
-        bbreturn = builder.append_basic_block('.return')
+        bbreturn = builder.append_basic_block(".return")
 
         # Prologue
         self.gen_prologue(builder, pyapi)
@@ -437,7 +551,8 @@ class _GufuncWrapper(object):
         else:
             # Use cache and compiler in a critical section
             wrapperlib = self.cache.load_overload(
-                self.cres.signature, self.cres.target_context,
+                self.cres.signature,
+                self.cres.target_context,
             )
             if wrapperlib is None:
                 # Create library and enable caching
@@ -455,13 +570,15 @@ class _GufuncWrapper(object):
         wrapper_name = "__gufunc__." + self.fndesc.mangled_name
         wrapperlib = self._compile_wrapper(wrapper_name)
         return _wrapper_info(
-            library=wrapperlib, env=self.env, name=wrapper_name,
+            library=wrapperlib,
+            env=self.env,
+            name=wrapper_name,
         )
 
     def gen_loop_body(self, builder, pyapi, func, args):
         status, retval = self.call_conv.call_function(
-            builder, func, self.signature.return_type, self.signature.args,
-            args)
+            builder, func, self.signature.return_type, self.signature.args, args
+        )
 
         with builder.if_then(status.is_error, likely=False):
             gil = pyapi.gil_ensure()
@@ -471,18 +588,17 @@ class _GufuncWrapper(object):
         return status.code, status.is_error
 
     def gen_prologue(self, builder, pyapi):
-        pass        # Do nothing
+        pass  # Do nothing
 
     def gen_epilogue(self, builder, pyapi):
-        pass        # Do nothing
+        pass  # Do nothing
 
 
 class _GufuncObjectWrapper(_GufuncWrapper):
     def gen_loop_body(self, builder, pyapi, func, args):
-        innercall, error = _prepare_call_to_object_mode(self.context,
-                                                        builder, pyapi, func,
-                                                        self.signature,
-                                                        args)
+        innercall, error = _prepare_call_to_object_mode(
+            self.context, builder, pyapi, func, self.signature, args
+        )
         return innercall, error
 
     def gen_prologue(self, builder, pyapi):
@@ -496,19 +612,25 @@ class _GufuncObjectWrapper(_GufuncWrapper):
 
 def build_gufunc_wrapper(py_func, cres, sin, sout, cache, is_parfors):
     signature = cres.signature
-    wrapcls = (_GufuncObjectWrapper
-               if signature.return_type == types.pyobject
-               else _GufuncWrapper)
+    wrapcls = (
+        _GufuncObjectWrapper
+        if signature.return_type == types.pyobject
+        else _GufuncWrapper
+    )
     return wrapcls(
-        py_func, cres, sin, sout, cache, is_parfors=is_parfors,
+        py_func,
+        cres,
+        sin,
+        sout,
+        cache,
+        is_parfors=is_parfors,
     ).build()
 
 
-def _prepare_call_to_object_mode(context, builder, pyapi, func,
-                                 signature, args):
+def _prepare_call_to_object_mode(context, builder, pyapi, func, signature, args):
     mod = builder.module
 
-    bb_core_return = builder.append_basic_block('ufunc.core.return')
+    bb_core_return = builder.append_basic_block("ufunc.core.return")
 
     # Call to
     # PyObject* ndarray_new(int nd,
@@ -523,15 +645,14 @@ def _prepare_call_to_object_mode(context, builder, pyapi, func,
     ll_intp_ptr = ir.PointerType(ll_intp)
     ll_voidptr = context.get_value_type(types.voidptr)
     ll_pyobj = context.get_value_type(types.pyobject)
-    fnty = ir.FunctionType(ll_pyobj, [ll_int, ll_intp_ptr,
-                                      ll_intp_ptr, ll_voidptr,
-                                      ll_int, ll_int])
+    fnty = ir.FunctionType(
+        ll_pyobj, [ll_int, ll_intp_ptr, ll_intp_ptr, ll_voidptr, ll_int, ll_int]
+    )
 
-    fn_array_new = cgutils.get_or_insert_function(mod, fnty,
-                                                  "numba_ndarray_new")
+    fn_array_new = cgutils.get_or_insert_function(mod, fnty, "numba_ndarray_new")
 
     # Convert each llarray into pyobject
-    error_pointer = cgutils.alloca_once(builder, ir.IntType(1), name='error')
+    error_pointer = cgutils.alloca_once(builder, ir.IntType(1), name="error")
     builder.store(cgutils.true_bit, error_pointer)
 
     # The PyObject* arguments to the kernel function
@@ -553,9 +674,8 @@ def _prepare_call_to_object_mode(context, builder, pyapi, func,
 
             # Extract members of the llarray
             nd = Constant(ll_int, argty.ndim)
-            dims = builder.gep(array._get_ptr_by_name('shape'), [zero, zero])
-            strides = builder.gep(array._get_ptr_by_name('strides'),
-                                  [zero, zero])
+            dims = builder.gep(array._get_ptr_by_name("shape"), [zero, zero])
+            strides = builder.gep(array._get_ptr_by_name("strides"), [zero, zero])
             data = builder.bitcast(array.data, ll_voidptr)
             dtype = np.dtype(str(argty.dtype))
 
@@ -564,8 +684,9 @@ def _prepare_call_to_object_mode(context, builder, pyapi, func,
             itemsize = Constant(ll_int, dtype.itemsize)
 
             # Call helper to reconstruct PyArray objects
-            obj = builder.call(fn_array_new, [nd, dims, strides, data,
-                                              type_num, itemsize])
+            obj = builder.call(
+                fn_array_new, [nd, dims, strides, data, type_num, itemsize]
+            )
         else:
             # Other argument types => use generic boxing
             obj = pyapi.from_native_value(argty, arg)
@@ -581,8 +702,8 @@ def _prepare_call_to_object_mode(context, builder, pyapi, func,
     object_sig = [types.pyobject] * len(object_args)
 
     status, retval = context.call_conv.call_function(
-        builder, func, types.pyobject, object_sig,
-        object_args)
+        builder, func, types.pyobject, object_sig, object_args
+    )
     builder.store(status.is_error, error_pointer)
 
     # Release returned object
@@ -601,16 +722,16 @@ def _prepare_call_to_object_mode(context, builder, pyapi, func,
 
 
 class GUArrayArg(object):
-    def __init__(self, context, builder, args, steps, i, step_offset,
-                 typ, syms, sym_dim):
+    def __init__(
+        self, context, builder, args, steps, i, step_offset, typ, syms, sym_dim
+    ):
 
         self.context = context
         self.builder = builder
 
         offset = context.get_constant(types.intp, i)
 
-        data = builder.load(builder.gep(args, [offset], name="data.ptr"),
-                            name="data")
+        data = builder.load(builder.gep(args, [offset], name="data.ptr"), name="data")
         self.data = data
 
         core_step_ptr = builder.gep(steps, [offset], name="core.step.ptr")
@@ -628,41 +749,47 @@ class GUArrayArg(object):
                     # In the future, we may deprecate this exception.
                     pass
                 else:
-                    raise TypeError("type and shape signature mismatch for arg "
-                                    "#{0}".format(i + 1))
+                    raise TypeError(
+                        "type and shape signature mismatch for arg "
+                        "#{0}".format(i + 1)
+                    )
 
             ndim = typ.ndim
             shape = [sym_dim[s] for s in syms]
             strides = []
 
             for j in range(ndim):
-                stepptr = builder.gep(steps,
-                                      [context.get_constant(types.intp,
-                                                            step_offset + j)],
-                                      name="step.ptr")
+                stepptr = builder.gep(
+                    steps,
+                    [context.get_constant(types.intp, step_offset + j)],
+                    name="step.ptr",
+                )
                 step = builder.load(stepptr)
                 strides.append(step)
 
-            ldcls = (_ArrayAsScalarArgLoader
-                     if as_scalar
-                     else _ArrayArgLoader)
+            ldcls = _ArrayAsScalarArgLoader if as_scalar else _ArrayArgLoader
 
-            self._loader = ldcls(dtype=typ.dtype,
-                                 ndim=ndim,
-                                 core_step=core_step,
-                                 as_scalar=as_scalar,
-                                 shape=shape,
-                                 strides=strides)
+            self._loader = ldcls(
+                dtype=typ.dtype,
+                ndim=ndim,
+                core_step=core_step,
+                as_scalar=as_scalar,
+                shape=shape,
+                strides=strides,
+            )
         else:
             # If typ is not an array
             if syms:
-                raise TypeError("scalar type {0} given for non scalar "
-                                "argument #{1}".format(typ, i + 1))
+                raise TypeError(
+                    "scalar type {0} given for non scalar "
+                    "argument #{1}".format(typ, i + 1)
+                )
             self._loader = _ScalarArgLoader(dtype=typ, stride=core_step)
 
     def get_array_at_offset(self, ind):
-        return self._loader.load(context=self.context, builder=self.builder,
-                                 data=self.data, ind=ind)
+        return self._loader.load(
+            context=self.context, builder=self.builder, data=self.data, ind=ind
+        )
 
 
 class _ScalarArgLoader(object):
@@ -680,8 +807,7 @@ class _ScalarArgLoader(object):
     def load(self, context, builder, data, ind):
         # Load at base + ind * stride
         data = builder.gep(data, [builder.mul(ind, self.stride)])
-        dptr = builder.bitcast(data,
-                               context.get_data_type(self.dtype).as_pointer())
+        dptr = builder.bitcast(data, context.get_data_type(self.dtype).as_pointer())
         return builder.load(dptr)
 
 
@@ -703,22 +829,21 @@ class _ArrayArgLoader(object):
         arycls = context.make_array(arytyp)
 
         array = arycls(context, builder)
-        offseted_data = cgutils.pointer_add(builder,
-                                            data,
-                                            builder.mul(self.core_step,
-                                                        ind))
+        offseted_data = cgutils.pointer_add(
+            builder, data, builder.mul(self.core_step, ind)
+        )
 
         shape, strides = self._shape_and_strides(context, builder)
 
         itemsize = context.get_abi_sizeof(context.get_data_type(self.dtype))
-        context.populate_array(array,
-                               data=builder.bitcast(offseted_data,
-                                                    array.data.type),
-                               shape=shape,
-                               strides=strides,
-                               itemsize=context.get_constant(types.intp,
-                                                             itemsize),
-                               meminfo=None)
+        context.populate_array(
+            array,
+            data=builder.bitcast(offseted_data, array.data.type),
+            shape=shape,
+            strides=strides,
+            itemsize=context.get_constant(types.intp, itemsize),
+            meminfo=None,
+        )
 
         return array._getvalue()
 

@@ -16,7 +16,7 @@ timings_raw1 = """
    0.0000 (  9.9%)   0.0000 (  9.9%)   0.0000 (  9.9%)   0.0000 (  9.9%)  A2
    0.0001 (100.0%)   0.0001 (100.0%)   0.0001 (100.0%)   0.0001 (100.0%)  Total
 
-"""    # noqa: E501
+"""  # noqa: E501
 
 timings_raw2 = """
 ===-------------------------------------------------------------------------===
@@ -29,7 +29,7 @@ timings_raw2 = """
    0.0000 (  9.9%)        -----        0.0000 (  9.9%)   0.0000 (  9.9%)  A2
    0.0001 (100.0%)        -----        0.0001 (100.0%)   0.0001 (100.0%)  Total
 
-"""    # noqa: E501
+"""  # noqa: E501
 
 
 class TestLLVMPassTimings(TestCase):
@@ -42,11 +42,11 @@ class TestLLVMPassTimings(TestCase):
                 c += i
             return c
 
-        with override_config('LLVM_PASS_TIMINGS', True):
+        with override_config("LLVM_PASS_TIMINGS", True):
             foo(10)
 
         md = foo.get_metadata(foo.signatures[0])
-        timings = md['llvm_pass_timings']
+        timings = md["llvm_pass_timings"]
         # Check: timing is of correct type
         self.assertIsInstance(timings, lpt.PassTimingsCollection)
         # Check: basic for __str__
@@ -70,11 +70,11 @@ class TestLLVMPassTimings(TestCase):
                     c += j
             return c
 
-        with override_config('LLVM_PASS_TIMINGS', True):
+        with override_config("LLVM_PASS_TIMINGS", True):
             foo(10)
 
         md = foo.get_metadata(foo.signatures[0])
-        timings_collection = md['llvm_pass_timings']
+        timings_collection = md["llvm_pass_timings"]
         # Check: get_total_time()
         self.assertIsInstance(timings_collection.get_total_time(), float)
         # Check: summary()
@@ -107,11 +107,11 @@ class TestLLVMPassTimingsDisabled(TestCase):
                 c += i
             return c
 
-        with override_config('LLVM_PASS_TIMINGS', False):
+        with override_config("LLVM_PASS_TIMINGS", False):
             foo(10)
 
         md = foo.get_metadata(foo.signatures[0])
-        timings = md['llvm_pass_timings']
+        timings = md["llvm_pass_timings"]
         # Check that the right message is returned
         self.assertEqual(timings.summary(), "No pass timings were recorded")
         # Check that None is returned

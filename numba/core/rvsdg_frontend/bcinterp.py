@@ -5,6 +5,7 @@ Key APIs:
 - function `run_frontend()`
 - function `rvsdg_to_ir()`
 """
+
 import dis
 from contextlib import contextmanager
 import builtins
@@ -124,8 +125,7 @@ class RVSDG2IR(RegionVisitor[_Data]):
 
     def initialize(self) -> _Data:
         label = self._get_temp_label()
-        with self.set_block(label, ir.Block(scope=self.local_scope,
-                                            loc=self.loc)):
+        with self.set_block(label, ir.Block(scope=self.local_scope, loc=self.loc)):
             data: _Data = {}
             for i, k in enumerate(self.func_id.arg_names):  # type: ignore
                 val = ir.Arg(index=i, name=k, loc=self.loc)
@@ -136,9 +136,7 @@ class RVSDG2IR(RegionVisitor[_Data]):
         if self.last_block_label is not None:
             last_block = self.blocks[self.last_block_label]
             if not last_block.is_terminated:
-                last_block.append(
-                    ir.StaticRaise(AssertionError, (), loc=self.loc)
-                )
+                last_block.append(ir.StaticRaise(AssertionError, (), loc=self.loc))
 
     def visit_block(self, block: BasicBlock, data: _Data) -> _Data:
         if isinstance(block, DDGBlock):
@@ -167,9 +165,7 @@ class RVSDG2IR(RegionVisitor[_Data]):
                     elif op.opname in {"stack.export", "stack.incoming"}:
                         [arg] = op.inputs
                         [res] = op.outputs
-                        self.vsmap[res] = self.store(
-                            self.vsmap[arg], f"${res.name}"
-                        )
+                        self.vsmap[res] = self.store(self.vsmap[arg], f"${res.name}")
                     else:
                         raise NotImplementedError(op.opname, op)
                 if len(block._jump_targets) > 1:
@@ -398,10 +394,9 @@ class RVSDG2IR(RegionVisitor[_Data]):
 
         # handle outgoing values from the branches
         names: set[str] = reduce(
-            operator.or_, map(set, data_for_branches))  # type: ignore
-        for blk, branch_data in zip(
-            branch_blocks, data_for_branches, strict=True
-        ):
+            operator.or_, map(set, data_for_branches)
+        )  # type: ignore
+        for blk, branch_data in zip(branch_blocks, data_for_branches, strict=True):
             for k in names:
                 # Set undefined variable to None
                 # (It should be a "zeroinitializer" but ir.Expr.null doesn't
@@ -677,7 +672,7 @@ class RVSDG2IR(RegionVisitor[_Data]):
         self._binop(bc.argrepr, op)
 
     def op_IS_OP(self, op: Op, bc: dis.Instruction):
-        opname = 'is not' if bc.argval == 1 else 'is'
+        opname = "is not" if bc.argval == 1 else "is"
         self._binop(opname, op)
 
     def op_UNARY_NOT(self, op: Op, bc: dis.Instruction):
@@ -707,9 +702,7 @@ class RVSDG2IR(RegionVisitor[_Data]):
     def op_BUILD_TUPLE(self, op: Op, bc: dis.Instruction):
         items = op.inputs
         [out] = op.outputs
-        expr = ir.Expr.build_tuple(
-            items=[self.vsmap[it] for it in items], loc=self.loc
-        )
+        expr = ir.Expr.build_tuple(items=[self.vsmap[it] for it in items], loc=self.loc)
         self.store_vsmap(expr, out)
 
     def op_BUILD_SLICE(self, op: Op, bc: dis.Instruction):
@@ -743,9 +736,7 @@ class RVSDG2IR(RegionVisitor[_Data]):
         pred = self.store(isvalid, "$foriter.isvalid")
 
         not_fn = ir.Const(operator.not_, loc=self.loc)
-        res = ir.Expr.call(
-            self.store(not_fn, "$not"), (pred,), (), loc=self.loc
-        )
+        res = ir.Expr.call(self.store(not_fn, "$not"), (pred,), (), loc=self.loc)
         self.branch_predicate = self.store(res, "$for_iter")
 
     def _jump_if_not(self, pred):
@@ -813,9 +804,7 @@ class RVSDG2IR(RegionVisitor[_Data]):
         assert self.current_block.is_terminated
 
 
-def rvsdg_to_ir(
-    func_id: bytecode.FunctionIdentity, rvsdg: SCFG
-) -> ir.FunctionIR:
+def rvsdg_to_ir(func_id: bytecode.FunctionIdentity, rvsdg: SCFG) -> ir.FunctionIR:
     rvsdg2ir = RVSDG2IR(func_id)
     data = rvsdg2ir.initialize()
     rvsdg2ir.visit_graph(rvsdg, data)

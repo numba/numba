@@ -43,9 +43,7 @@ if __name__ == "__main__":
     ghrepo = Github(github_token).get_repo(target_ghrepo)
     repo = Repo(".")
     all_commits = [x for x in repo.iter_commits(f"{beginning}..HEAD")]
-    merge_commits = [
-        x for x in all_commits if "Merge pull request" in x.message
-    ]
+    merge_commits = [x for x in all_commits if "Merge pull request" in x.message]
     prmatch = re.compile(f"^Merge pull request #([0-9]+) from.*")
     prs = {}
     authors = set()
@@ -70,13 +68,11 @@ if __name__ == "__main__":
     oldchangelog = basepath / "CHANGE_LOG"
     newchangelogs = (basepath / "docs" / "source" / "release").glob("*.rst")
     for path in [oldchangelog, *newchangelogs]:
-        print('Checking', path)
+        print("Checking", path)
         with open(path) as fin:
             # Use regex to find all PR numbers in the file and remove them
             pr_re = re.compile(r"\#(\d+)")
-            prs_in_changelog = [
-                match.group(1) for match in pr_re.finditer(fin.read())
-            ]
+            prs_in_changelog = [match.group(1) for match in pr_re.finditer(fin.read())]
             to_remove = {pr for pr in prs if pr in prs_in_changelog}
             for pr in to_remove:
                 print(f"Removing {pr} as already in CHANGELOG")

@@ -2,6 +2,7 @@
 This module contains utils for manipulating target configurations such as
 compiler flags.
 """
+
 import re
 import zlib
 import base64
@@ -11,8 +12,8 @@ from numba.core import utils
 
 
 class Option:
-    """An option to be used in ``TargetConfig``.
-    """
+    """An option to be used in ``TargetConfig``."""
+
     __slots__ = "_type", "_default", "_doc"
 
     def __init__(self, type, *, default, doc):
@@ -54,10 +55,10 @@ class ConfigStack:
     It stores the stack in a thread-local class attribute. All instances in the
     same thread will see the same stack.
     """
+
     @classmethod
     def top_or_none(cls):
-        """Get the TOS or return None if no config is set.
-        """
+        """Get the TOS or return None if no config is set."""
         self = cls()
         if self:
             flags = self.top()
@@ -89,6 +90,7 @@ class _MetaTargetConfig(type):
     as class members will be parsed and corresponding getters, setters, and
     delters will be inserted.
     """
+
     def __init__(cls, name, bases, dct):
         """Invoked when subclass is created.
 
@@ -152,6 +154,7 @@ class TargetConfig(metaclass=_MetaTargetConfig):
     >>> tc.a_bool_option = True  # invokes the setter
     >>> print(tc.an_int_option)  # print the default
     """
+
     __slots__ = ["_values"]
 
     # Used for compression in mangling.
@@ -195,13 +198,11 @@ class TargetConfig(metaclass=_MetaTargetConfig):
             return NotImplemented
 
     def values(self):
-        """Returns a dict of all the values
-        """
+        """Returns a dict of all the values"""
         return {k: getattr(self, k) for k in self.options}
 
     def is_set(self, name):
-        """Is the option set?
-        """
+        """Is the option set?"""
         self._guard_option(name)
         return name in self._values
 
@@ -236,8 +237,7 @@ class TargetConfig(metaclass=_MetaTargetConfig):
                 setattr(self, name, default)
 
     def copy(self):
-        """Clone this instance.
-        """
+        """Clone this instance."""
         return type(self)(self)
 
     def summary(self) -> str:
@@ -286,28 +286,29 @@ class TargetConfig(metaclass=_MetaTargetConfig):
         for k, opt in cls.options.items():
             buf.append(k)
             buf.append(str(opt.default))
-        return ''.join(buf).encode()
+        return "".join(buf).encode()
 
     def get_mangle_string(self) -> str:
-        """Return a string suitable for symbol mangling.
-        """
+        """Return a string suitable for symbol mangling."""
         zdict = self._make_compression_dictionary()
 
-        comp = zlib.compressobj(zdict=zdict, level=zlib.Z_BEST_COMPRESSION,
-                                **self._ZLIB_CONFIG)
+        comp = zlib.compressobj(
+            zdict=zdict, level=zlib.Z_BEST_COMPRESSION, **self._ZLIB_CONFIG
+        )
         # The mangled string is a compressed and base64 encoded version of the
         # summary
         buf = [comp.compress(self.summary().encode())]
         buf.append(comp.flush())
-        return base64.b64encode(b''.join(buf)).decode()
+        return base64.b64encode(b"".join(buf)).decode()
 
     @classmethod
     def demangle(cls, mangled: str) -> str:
-        """Returns the demangled result from ``.get_mangle_string()``
-        """
+        """Returns the demangled result from ``.get_mangle_string()``"""
+
         # unescape _XX sequence
         def repl(x):
-            return chr(int('0x' + x.group(0)[1:], 16))
+            return chr(int("0x" + x.group(0)[1:], 16))
+
         unescaped = re.sub(r"_[a-zA-Z0-9][a-zA-Z0-9]", repl, mangled)
         # decode base64
         raw = base64.b64decode(unescaped)
@@ -319,4 +320,4 @@ class TargetConfig(metaclass=_MetaTargetConfig):
             buf.append(dc.decompress(raw))
             raw = dc.unconsumed_tail
         buf.append(dc.flush())
-        return b''.join(buf).decode()
+        return b"".join(buf).decode()

@@ -17,7 +17,7 @@ if config.PYVERSION < (3, 9):
 else:
     from importlib import metadata as importlib_metadata
 
-_TEST_TIMEOUT = _RUNNER_TIMEOUT - 60.
+_TEST_TIMEOUT = _RUNNER_TIMEOUT - 60.0
 
 
 class _DummyClass(object):
@@ -25,7 +25,7 @@ class _DummyClass(object):
         self.value = value
 
     def __repr__(self):
-        return '_DummyClass(%f, %f)' % self.value
+        return "_DummyClass(%f, %f)" % self.value
 
 
 class TestEntrypoints(TestCase):
@@ -37,20 +37,22 @@ class TestEntrypoints(TestCase):
         # loosely based on Pandas test from:
         #   https://github.com/pandas-dev/pandas/pull/27488
 
-        mod = mock.Mock(__name__='_test_numba_extension')
+        mod = mock.Mock(__name__="_test_numba_extension")
 
         try:
             # will remove this module at the end of the test
             sys.modules[mod.__name__] = mod
 
             my_entrypoint = importlib_metadata.EntryPoint(
-                'init', '_test_numba_extension:init_func', 'numba_extensions',
+                "init",
+                "_test_numba_extension:init_func",
+                "numba_extensions",
             )
 
             with mock.patch.object(
                 importlib_metadata,
-                'entry_points',
-                return_value={'numba_extensions': (my_entrypoint,)},
+                "entry_points",
+                return_value={"numba_extensions": (my_entrypoint,)},
             ):
 
                 from numba.core import entrypoints
@@ -75,26 +77,27 @@ class TestEntrypoints(TestCase):
         # loosely based on Pandas test from:
         #   https://github.com/pandas-dev/pandas/pull/27488
 
-        mod = mock.Mock(__name__='_test_numba_bad_extension')
-        mod.configure_mock(**{'init_func.side_effect': ValueError('broken')})
+        mod = mock.Mock(__name__="_test_numba_bad_extension")
+        mod.configure_mock(**{"init_func.side_effect": ValueError("broken")})
 
         try:
             # will remove this module at the end of the test
             sys.modules[mod.__name__] = mod
 
             my_entrypoint = importlib_metadata.EntryPoint(
-                'init',
-                '_test_numba_bad_extension:init_func',
-                'numba_extensions',
+                "init",
+                "_test_numba_bad_extension:init_func",
+                "numba_extensions",
             )
 
             with mock.patch.object(
                 importlib_metadata,
-                'entry_points',
-                return_value={'numba_extensions': (my_entrypoint,)},
+                "entry_points",
+                return_value={"numba_extensions": (my_entrypoint,)},
             ):
 
                 from numba.core import entrypoints
+
                 # Allow reinitialization
                 entrypoints._already_initialized = False
 
@@ -116,10 +119,11 @@ class TestEntrypoints(TestCase):
             if mod.__name__ in sys.modules:
                 del sys.modules[mod.__name__]
 
-    _EP_MAGIC_TOKEN = 'RUN_ENTRY'
+    _EP_MAGIC_TOKEN = "RUN_ENTRY"
 
-    @unittest.skipIf(os.environ.get('_EP_MAGIC_TOKEN', None) != _EP_MAGIC_TOKEN,
-                     "needs token")
+    @unittest.skipIf(
+        os.environ.get("_EP_MAGIC_TOKEN", None) != _EP_MAGIC_TOKEN, "needs token"
+    )
     def test_entrypoint_handles_type_extensions(self):
         # loosely based on Pandas test from:
         #   https://github.com/pandas-dev/pandas/pull/27488
@@ -131,7 +135,7 @@ class TestEntrypoints(TestCase):
             # of how to handle the global "_DummyClass".
             class DummyType(numba.types.Type):
                 def __init__(self):
-                    super(DummyType, self).__init__(name='DummyType')
+                    super(DummyType, self).__init__(name="DummyType")
 
             @numba.extending.typeof_impl.register(_DummyClass)
             def typer_DummyClass(val, c):
@@ -141,7 +145,8 @@ class TestEntrypoints(TestCase):
             class DummyModel(numba.extending.models.StructModel):
                 def __init__(self, dmm, fe_type):
                     members = [
-                        ('value', numba.types.float64), ]
+                        ("value", numba.types.float64),
+                    ]
                     super(DummyModel, self).__init__(dmm, fe_type, members)
 
             @numba.extending.unbox(DummyType)
@@ -153,8 +158,9 @@ class TestEntrypoints(TestCase):
                 c.pyapi.decref(value_obj)
                 err_flag = c.pyapi.err_occurred()
                 is_error = numba.core.cgutils.is_not_null(c.builder, err_flag)
-                return numba.extending.NativeValue(dummy_struct._getvalue(),
-                                                   is_error=is_error)
+                return numba.extending.NativeValue(
+                    dummy_struct._getvalue(), is_error=is_error
+                )
 
             @numba.extending.box(DummyType)
             def box_dummy(typ, val, c):
@@ -176,16 +182,17 @@ class TestEntrypoints(TestCase):
             sys.modules[mod.__name__] = mod
 
             my_entrypoint = importlib_metadata.EntryPoint(
-                'init',
-                '_test_numba_init_sequence:init_func',
-                'numba_extensions',
+                "init",
+                "_test_numba_init_sequence:init_func",
+                "numba_extensions",
             )
 
             with mock.patch.object(
                 importlib_metadata,
-                'entry_points',
-                return_value={'numba_extensions': (my_entrypoint,)},
+                "entry_points",
+                return_value={"numba_extensions": (my_entrypoint,)},
             ):
+
                 @njit
                 def foo(x):
                     return x
@@ -198,10 +205,9 @@ class TestEntrypoints(TestCase):
                 del sys.modules[mod.__name__]
 
     def run_cmd(self, cmdline, env):
-        popen = subprocess.Popen(cmdline,
-                                 stdout=subprocess.PIPE,
-                                 stderr=subprocess.PIPE,
-                                 env=env)
+        popen = subprocess.Popen(
+            cmdline, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env
+        )
         # finish in _TEST_TIMEOUT seconds or kill it
         timeout = threading.Timer(_TEST_TIMEOUT, popen.kill)
         try:
@@ -209,8 +215,9 @@ class TestEntrypoints(TestCase):
             out, err = popen.communicate()
             if popen.returncode != 0:
                 raise AssertionError(
-                    "process failed with code %s: stderr follows\n%s\n" %
-                    (popen.returncode, err.decode()))
+                    "process failed with code %s: stderr follows\n%s\n"
+                    % (popen.returncode, err.decode())
+                )
             return out.decode(), err.decode()
         finally:
             timeout.cancel()
@@ -218,11 +225,11 @@ class TestEntrypoints(TestCase):
 
     def test_entrypoint_extension_sequence(self):
         env_copy = os.environ.copy()
-        env_copy['_EP_MAGIC_TOKEN'] = str(self._EP_MAGIC_TOKEN)
+        env_copy["_EP_MAGIC_TOKEN"] = str(self._EP_MAGIC_TOKEN)
         themod = self.__module__
         thecls = type(self).__name__
-        methname = 'test_entrypoint_handles_type_extensions'
-        injected_method = '%s.%s.%s' % (themod, thecls, methname)
+        methname = "test_entrypoint_handles_type_extensions"
+        injected_method = "%s.%s.%s" % (themod, thecls, methname)
         cmdline = [sys.executable, "-m", "numba.runtests", injected_method]
         out, err = self.run_cmd(cmdline, env_copy)
         _DEBUG = False

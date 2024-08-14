@@ -16,7 +16,7 @@ a1 = np.arange(12)
 a2 = a1[::2]
 a3 = a1.reshape((3, 4)).T
 
-dt = np.dtype([('x', np.int8), ('y', 'S3')])
+dt = np.dtype([("x", np.int8), ("y", "S3")])
 
 a4 = np.arange(32, dtype=np.int8).view(dt)
 a5 = a4[::-2]
@@ -25,7 +25,11 @@ a5 = a4[::-2]
 a6 = np.frombuffer(b"XXXX_array_contents_XXXX", dtype=np.float32)
 
 
-myarray = np.array([1, ])
+myarray = np.array(
+    [
+        1,
+    ]
+)
 
 
 def getitem0(i):
@@ -65,7 +69,7 @@ def write_to_global_array():
 
 
 def bytes_as_const_array():
-    return np.frombuffer(b'foo', dtype=np.uint8)
+    return np.frombuffer(b"foo", dtype=np.uint8)
 
 
 class TestConstantArray(TestCase):
@@ -105,7 +109,7 @@ class TestConstantArray(TestCase):
         cfunc = jit(sig, nopython=True)(getitem6)
         ir = cfunc.inspect_llvm(sig)
         for line in ir.splitlines():
-            if 'XXXX_array_contents_XXXX' in line:
+            if "XXXX_array_contents_XXXX" in line:
                 self.assertIn("constant [24 x i8]", line)  # sanity check
                 # Should be the ABI-required alignment for float32
                 # on most platforms...
@@ -116,13 +120,17 @@ class TestConstantArray(TestCase):
 
     def test_arrayscalar_const(self):
         pyfunc = use_arrayscalar_const
-        cfunc = njit((),)(pyfunc)
+        cfunc = njit(
+            (),
+        )(pyfunc)
         self.assertEqual(pyfunc(), cfunc())
 
     def test_write_to_global_array(self):
         pyfunc = write_to_global_array
         with self.assertRaises(TypingError):
-            njit((),)(pyfunc)
+            njit(
+                (),
+            )(pyfunc)
 
     def test_issue_1850(self):
         """
@@ -134,17 +142,20 @@ class TestConstantArray(TestCase):
         def pyfunc():
             return constarr[0]
 
-        cfunc = njit((),)(pyfunc)
+        cfunc = njit(
+            (),
+        )(pyfunc)
         out = cfunc()
         self.assertEqual(out, 86)
 
-    @TestCase.run_test_in_subprocess # isolate MCJIT use
+    @TestCase.run_test_in_subprocess  # isolate MCJIT use
     def test_too_big_to_freeze(self):
         """
         Test issue https://github.com/numba/numba/issues/2188 where freezing
         a constant array into the code that's prohibitively long and consumes
         too much RAM.
         """
+
         def test(biggie):
             expect = np.copy(biggie)
             self.assertEqual(typeof(biggie), typeof(expect))
@@ -152,10 +163,19 @@ class TestConstantArray(TestCase):
             def pyfunc():
                 return biggie
 
-            cfunc = njit((),)(pyfunc)
+            cfunc = njit(
+                (),
+            )(pyfunc)
             # Check that the array is not frozen into the LLVM IR.
             # LLVM size must be less than the array size.
-            self.assertLess(len(cfunc.inspect_llvm((),)), biggie.nbytes)
+            self.assertLess(
+                len(
+                    cfunc.inspect_llvm(
+                        (),
+                    )
+                ),
+                biggie.nbytes,
+            )
             # Run and test result
             out = cfunc()
             self.assertIs(biggie, out)
@@ -167,12 +187,12 @@ class TestConstantArray(TestCase):
             np.testing.assert_equal(expect, out)
             self.assertEqual(typeof(expect), typeof(out))
 
-        nelem = 10**7   # 10 million items
+        nelem = 10**7  # 10 million items
 
         c_array = np.arange(nelem).reshape(nelem)
         f_array = np.asfortranarray(np.random.random((2, nelem // 2)))
-        self.assertEqual(typeof(c_array).layout, 'C')
-        self.assertEqual(typeof(f_array).layout, 'F')
+        self.assertEqual(typeof(c_array).layout, "C")
+        self.assertEqual(typeof(f_array).layout, "F")
         # Test C contig
         test(c_array)
         # Test F contig
@@ -182,9 +202,11 @@ class TestConstantArray(TestCase):
 class TestConstantBytes(TestCase):
     def test_constant_bytes(self):
         pyfunc = bytes_as_const_array
-        cfunc = njit((),)(pyfunc)
+        cfunc = njit(
+            (),
+        )(pyfunc)
         np.testing.assert_array_equal(pyfunc(), cfunc())
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

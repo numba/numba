@@ -2,7 +2,6 @@
 Implementation of operations involving polynomials.
 """
 
-
 import numpy as np
 from numpy.polynomial import polynomial as poly
 from numpy.polynomial import polyutils as pu
@@ -18,7 +17,7 @@ def roots_impl(p):
 
     # cast int vectors to float cf. numpy, this is a bit dicey as
     # the roots could be complex which will fail anyway
-    ty = getattr(p, 'dtype', p)
+    ty = getattr(p, "dtype", p)
     if isinstance(ty, types.Integer):
         cast_t = np.float64
     else:
@@ -39,7 +38,7 @@ def roots_impl(p):
         tz = len(p) - non_zero[-1] - 1
 
         # pull out the coeffs selecting between possible zero pads
-        p = p[int(non_zero[0]):int(non_zero[-1]) + 1]
+        p = p[int(non_zero[0]) : int(non_zero[-1]) + 1]
 
         n = len(p)
         if n > 1:
@@ -72,7 +71,7 @@ def polyutils_trimseq(seq):
         raise errors.TypingError(msg % (seq))
 
     if np.ndim(seq) > 1:
-        msg = 'Coefficient array is not 1-d'
+        msg = "Coefficient array is not 1-d"
         raise errors.NumbaValueError(msg)
 
     def impl(seq):
@@ -82,7 +81,7 @@ def polyutils_trimseq(seq):
             for i in range(len(seq) - 1, -1, -1):
                 if seq[i] != 0:
                     break
-            return seq[:i + 1]
+            return seq[: i + 1]
 
     return impl
 
@@ -125,13 +124,11 @@ def polyutils_as_series(alist, trim=True):
                 arrays.append(np.atleast_1d(np.asarray(item)).astype(res_dtype))
 
         elif list_input:
-            arrays = [np.atleast_1d(np.asarray(a)).astype(res_dtype)
-                      for a in alist]
+            arrays = [np.atleast_1d(np.asarray(a)).astype(res_dtype) for a in alist]
 
         else:
             alist_arr = np.asarray(alist)
-            arrays = [np.atleast_1d(np.asarray(a)).astype(res_dtype)
-                      for a in alist_arr]
+            arrays = [np.atleast_1d(np.asarray(a)).astype(res_dtype) for a in alist_arr]
 
         if min([a.size for a in arrays]) == 0:
             raise ValueError("Coefficient array is empty")
@@ -169,15 +166,15 @@ def _poly_result_dtype(*args):
         elif isinstance(item, types.Array):
             s1 = [item.dtype]
         else:
-            msg = 'Input dtype must be scalar'
+            msg = "Input dtype must be scalar"
             raise errors.TypingError(msg)
 
         try:
             l = [as_dtype(t) for t in s1]
             l.append(res_dtype)
-            res_dtype = (np.result_type(*l))
+            res_dtype = np.result_type(*l)
         except errors.NumbaNotImplementedError:
-            msg = 'Input dtype must be scalar.'
+            msg = "Input dtype must be scalar."
             raise errors.TypingError(msg)
 
     return from_dtype(res_dtype)
@@ -312,12 +309,13 @@ def poly_polyint(c, m=1):
     res_dtype = as_dtype(_poly_result_dtype(c))
 
     if not np.issubdtype(res_dtype, np.number):
-        msg = f'Input dtype must be scalar. Found {res_dtype} instead'
+        msg = f"Input dtype must be scalar. Found {res_dtype} instead"
         raise errors.TypingError(msg)
 
-    is1D = ((np.ndim(c) == 1) or
-            (isinstance(c, (types.List, types.BaseTuple))
-             and isinstance(c.dtype, types.Number)))
+    is1D = (np.ndim(c) == 1) or (
+        isinstance(c, (types.List, types.BaseTuple))
+        and isinstance(c.dtype, types.Number)
+    )
 
     def impl(c, m=1):
         c = np.asarray(c).astype(res_dtype)
@@ -370,6 +368,6 @@ def numpy_polydiv(c1, c2):
                 arr1[i:j] -= arr2 * arr1[j]
                 i -= 1
                 j -= 1
-            return arr1[j + 1:] / scl, pu.trimseq(arr1[:j + 1])
+            return arr1[j + 1 :] / scl, pu.trimseq(arr1[: j + 1])
 
     return impl

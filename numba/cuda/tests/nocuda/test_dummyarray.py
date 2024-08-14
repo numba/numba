@@ -9,7 +9,7 @@ from numba.cuda.testing import skip_on_cudasim
 class TestSlicing(unittest.TestCase):
 
     def assertSameContig(self, arr, nparr):
-        attrs = 'C_CONTIGUOUS', 'F_CONTIGUOUS'
+        attrs = "C_CONTIGUOUS", "F_CONTIGUOUS"
         for attr in attrs:
             if arr.flags[attr] != nparr.flags[attr]:
                 if arr.size == 0 and nparr.size == 0:
@@ -17,15 +17,16 @@ class TestSlicing(unittest.TestCase):
                     # some are not
                     pass
                 else:
-                    self.fail("contiguous flag mismatch:\ngot=%s\nexpect=%s" %
-                              (arr.flags, nparr.flags))
+                    self.fail(
+                        "contiguous flag mismatch:\ngot=%s\nexpect=%s"
+                        % (arr.flags, nparr.flags)
+                    )
 
     #### 1D
 
     def test_slice0_1d(self):
         nparr = np.empty(4)
-        arr = Array.from_desc(0, nparr.shape, nparr.strides,
-                              nparr.dtype.itemsize)
+        arr = Array.from_desc(0, nparr.shape, nparr.strides, nparr.dtype.itemsize)
         self.assertSameContig(arr, nparr)
         xx = -2, -1, 0, 1, 2
         for x in xx:
@@ -37,8 +38,7 @@ class TestSlicing(unittest.TestCase):
 
     def test_slice1_1d(self):
         nparr = np.empty(4)
-        arr = Array.from_desc(0, nparr.shape, nparr.strides,
-                              nparr.dtype.itemsize)
+        arr = Array.from_desc(0, nparr.shape, nparr.strides, nparr.dtype.itemsize)
         xx = -2, -1, 0, 1, 2
         for x in xx:
             expect = nparr[:x]
@@ -49,8 +49,7 @@ class TestSlicing(unittest.TestCase):
 
     def test_slice2_1d(self):
         nparr = np.empty(4)
-        arr = Array.from_desc(0, nparr.shape, nparr.strides,
-                              nparr.dtype.itemsize)
+        arr = Array.from_desc(0, nparr.shape, nparr.strides, nparr.dtype.itemsize)
         xx = -2, -1, 0, 1, 2
         for x, y in itertools.product(xx, xx):
             expect = nparr[x:y]
@@ -63,8 +62,7 @@ class TestSlicing(unittest.TestCase):
 
     def test_slice0_2d(self):
         nparr = np.empty((4, 5))
-        arr = Array.from_desc(0, nparr.shape, nparr.strides,
-                              nparr.dtype.itemsize)
+        arr = Array.from_desc(0, nparr.shape, nparr.strides, nparr.dtype.itemsize)
         xx = -2, 0, 1, 2
         for x in xx:
             expect = nparr[x:]
@@ -82,8 +80,7 @@ class TestSlicing(unittest.TestCase):
 
     def test_slice1_2d(self):
         nparr = np.empty((4, 5))
-        arr = Array.from_desc(0, nparr.shape, nparr.strides,
-                              nparr.dtype.itemsize)
+        arr = Array.from_desc(0, nparr.shape, nparr.strides, nparr.dtype.itemsize)
         xx = -2, 0, 2
         for x in xx:
             expect = nparr[:x]
@@ -101,8 +98,7 @@ class TestSlicing(unittest.TestCase):
 
     def test_slice2_2d(self):
         nparr = np.empty((4, 5))
-        arr = Array.from_desc(0, nparr.shape, nparr.strides,
-                              nparr.dtype.itemsize)
+        arr = Array.from_desc(0, nparr.shape, nparr.strides, nparr.dtype.itemsize)
         xx = -2, 0, 2
         for s, t, u, v in itertools.product(xx, xx, xx, xx):
             expect = nparr[s:t, u:v]
@@ -122,8 +118,7 @@ class TestSlicing(unittest.TestCase):
 
     def test_strided_1d(self):
         nparr = np.empty(4)
-        arr = Array.from_desc(0, nparr.shape, nparr.strides,
-                              nparr.dtype.itemsize)
+        arr = Array.from_desc(0, nparr.shape, nparr.strides, nparr.dtype.itemsize)
         xx = -2, -1, 1, 2
         for x in xx:
             expect = nparr[::x]
@@ -134,8 +129,7 @@ class TestSlicing(unittest.TestCase):
 
     def test_strided_2d(self):
         nparr = np.empty((4, 5))
-        arr = Array.from_desc(0, nparr.shape, nparr.strides,
-                              nparr.dtype.itemsize)
+        arr = Array.from_desc(0, nparr.shape, nparr.strides, nparr.dtype.itemsize)
         xx = -2, -1, 1, 2
         for a, b in itertools.product(xx, xx):
             expect = nparr[::a, ::b]
@@ -146,8 +140,7 @@ class TestSlicing(unittest.TestCase):
 
     def test_strided_3d(self):
         nparr = np.empty((4, 5, 6))
-        arr = Array.from_desc(0, nparr.shape, nparr.strides,
-                              nparr.dtype.itemsize)
+        arr = Array.from_desc(0, nparr.shape, nparr.strides, nparr.dtype.itemsize)
         xx = -2, -1, 1, 2
         for a, b, c in itertools.product(xx, xx, xx):
             expect = nparr[::a, ::b, ::c]
@@ -160,16 +153,15 @@ class TestSlicing(unittest.TestCase):
         z = np.empty((1, 2, 3))
         z = np.transpose(z, axes=(2, 0, 1))
         arr = Array.from_desc(0, z.shape, z.strides, z.itemsize)
-        self.assertEqual(z.flags['C_CONTIGUOUS'], arr.flags['C_CONTIGUOUS'])
-        self.assertEqual(z.flags['F_CONTIGUOUS'], arr.flags['F_CONTIGUOUS'])
+        self.assertEqual(z.flags["C_CONTIGUOUS"], arr.flags["C_CONTIGUOUS"])
+        self.assertEqual(z.flags["F_CONTIGUOUS"], arr.flags["F_CONTIGUOUS"])
 
 
 @skip_on_cudasim("Tests internals of the CUDA driver device array")
 class TestReshape(unittest.TestCase):
     def test_reshape_2d2d(self):
         nparr = np.empty((4, 5))
-        arr = Array.from_desc(0, nparr.shape, nparr.strides,
-                              nparr.dtype.itemsize)
+        arr = Array.from_desc(0, nparr.shape, nparr.strides, nparr.dtype.itemsize)
         expect = nparr.reshape(5, 4)
         got = arr.reshape(5, 4)[0]
         self.assertEqual(got.shape, expect.shape)
@@ -177,8 +169,7 @@ class TestReshape(unittest.TestCase):
 
     def test_reshape_2d1d(self):
         nparr = np.empty((4, 5))
-        arr = Array.from_desc(0, nparr.shape, nparr.strides,
-                              nparr.dtype.itemsize)
+        arr = Array.from_desc(0, nparr.shape, nparr.strides, nparr.dtype.itemsize)
         expect = nparr.reshape(5 * 4)
         got = arr.reshape(5 * 4)[0]
         self.assertEqual(got.shape, expect.shape)
@@ -186,8 +177,7 @@ class TestReshape(unittest.TestCase):
 
     def test_reshape_3d3d(self):
         nparr = np.empty((3, 4, 5))
-        arr = Array.from_desc(0, nparr.shape, nparr.strides,
-                              nparr.dtype.itemsize)
+        arr = Array.from_desc(0, nparr.shape, nparr.strides, nparr.dtype.itemsize)
         expect = nparr.reshape(5, 3, 4)
         got = arr.reshape(5, 3, 4)[0]
         self.assertEqual(got.shape, expect.shape)
@@ -195,8 +185,7 @@ class TestReshape(unittest.TestCase):
 
     def test_reshape_3d2d(self):
         nparr = np.empty((3, 4, 5))
-        arr = Array.from_desc(0, nparr.shape, nparr.strides,
-                              nparr.dtype.itemsize)
+        arr = Array.from_desc(0, nparr.shape, nparr.strides, nparr.dtype.itemsize)
         expect = nparr.reshape(3 * 4, 5)
         got = arr.reshape(3 * 4, 5)[0]
         self.assertEqual(got.shape, expect.shape)
@@ -204,8 +193,7 @@ class TestReshape(unittest.TestCase):
 
     def test_reshape_3d1d(self):
         nparr = np.empty((3, 4, 5))
-        arr = Array.from_desc(0, nparr.shape, nparr.strides,
-                              nparr.dtype.itemsize)
+        arr = Array.from_desc(0, nparr.shape, nparr.strides, nparr.dtype.itemsize)
         expect = nparr.reshape(3 * 4 * 5)
         got = arr.reshape(3 * 4 * 5)[0]
         self.assertEqual(got.shape, expect.shape)
@@ -213,8 +201,7 @@ class TestReshape(unittest.TestCase):
 
     def test_reshape_infer2d2d(self):
         nparr = np.empty((4, 5))
-        arr = Array.from_desc(0, nparr.shape, nparr.strides,
-                              nparr.dtype.itemsize)
+        arr = Array.from_desc(0, nparr.shape, nparr.strides, nparr.dtype.itemsize)
         expect = nparr.reshape(-1, 4)
         got = arr.reshape(-1, 4)[0]
         self.assertEqual(got.shape, expect.shape)
@@ -222,8 +209,7 @@ class TestReshape(unittest.TestCase):
 
     def test_reshape_infer2d1d(self):
         nparr = np.empty((4, 5))
-        arr = Array.from_desc(0, nparr.shape, nparr.strides,
-                              nparr.dtype.itemsize)
+        arr = Array.from_desc(0, nparr.shape, nparr.strides, nparr.dtype.itemsize)
         expect = nparr.reshape(-1)
         got = arr.reshape(-1)[0]
         self.assertEqual(got.shape, expect.shape)
@@ -231,8 +217,7 @@ class TestReshape(unittest.TestCase):
 
     def test_reshape_infer3d3d(self):
         nparr = np.empty((3, 4, 5))
-        arr = Array.from_desc(0, nparr.shape, nparr.strides,
-                              nparr.dtype.itemsize)
+        arr = Array.from_desc(0, nparr.shape, nparr.strides, nparr.dtype.itemsize)
         expect = nparr.reshape(5, -1, 4)
         got = arr.reshape(5, -1, 4)[0]
         self.assertEqual(got.shape, expect.shape)
@@ -240,8 +225,7 @@ class TestReshape(unittest.TestCase):
 
     def test_reshape_infer3d2d(self):
         nparr = np.empty((3, 4, 5))
-        arr = Array.from_desc(0, nparr.shape, nparr.strides,
-                              nparr.dtype.itemsize)
+        arr = Array.from_desc(0, nparr.shape, nparr.strides, nparr.dtype.itemsize)
         expect = nparr.reshape(3, -1)
         got = arr.reshape(3, -1)[0]
         self.assertEqual(got.shape, expect.shape)
@@ -249,8 +233,7 @@ class TestReshape(unittest.TestCase):
 
     def test_reshape_infer3d1d(self):
         nparr = np.empty((3, 4, 5))
-        arr = Array.from_desc(0, nparr.shape, nparr.strides,
-                              nparr.dtype.itemsize)
+        arr = Array.from_desc(0, nparr.shape, nparr.strides, nparr.dtype.itemsize)
         expect = nparr.reshape(-1)
         got = arr.reshape(-1)[0]
         self.assertEqual(got.shape, expect.shape)
@@ -258,23 +241,20 @@ class TestReshape(unittest.TestCase):
 
     def test_reshape_infer_two_unknowns(self):
         nparr = np.empty((3, 4, 5))
-        arr = Array.from_desc(0, nparr.shape, nparr.strides,
-                              nparr.dtype.itemsize)
+        arr = Array.from_desc(0, nparr.shape, nparr.strides, nparr.dtype.itemsize)
 
         with self.assertRaises(ValueError) as raises:
             arr.reshape(-1, -1, 3)
-        self.assertIn('can only specify one unknown dimension',
-                      str(raises.exception))
+        self.assertIn("can only specify one unknown dimension", str(raises.exception))
 
     def test_reshape_infer_invalid_shape(self):
         nparr = np.empty((3, 4, 5))
-        arr = Array.from_desc(0, nparr.shape, nparr.strides,
-                              nparr.dtype.itemsize)
+        arr = Array.from_desc(0, nparr.shape, nparr.strides, nparr.dtype.itemsize)
 
         with self.assertRaises(ValueError) as raises:
             arr.reshape(-1, 7)
 
-        expected_message = 'cannot infer valid shape for unknown dimension'
+        expected_message = "cannot infer valid shape for unknown dimension"
         self.assertIn(expected_message, str(raises.exception))
 
 
@@ -282,13 +262,12 @@ class TestReshape(unittest.TestCase):
 class TestSqueeze(unittest.TestCase):
     def test_squeeze(self):
         nparr = np.empty((1, 2, 1, 4, 1, 3))
-        arr = Array.from_desc(
-            0, nparr.shape, nparr.strides, nparr.dtype.itemsize
-        )
+        arr = Array.from_desc(0, nparr.shape, nparr.strides, nparr.dtype.itemsize)
 
         def _assert_equal_shape_strides(arr1, arr2):
             self.assertEqual(arr1.shape, arr2.shape)
             self.assertEqual(arr1.strides, arr2.strides)
+
         _assert_equal_shape_strides(arr, nparr)
         _assert_equal_shape_strides(arr.squeeze()[0], nparr.squeeze())
         for axis in (0, 2, 4, (0, 2), (0, 4), (2, 4), (0, 2, 4)):
@@ -298,9 +277,7 @@ class TestSqueeze(unittest.TestCase):
 
     def test_squeeze_invalid_axis(self):
         nparr = np.empty((1, 2, 1, 4, 1, 3))
-        arr = Array.from_desc(
-            0, nparr.shape, nparr.strides, nparr.dtype.itemsize
-        )
+        arr = Array.from_desc(0, nparr.shape, nparr.strides, nparr.dtype.itemsize)
         with self.assertRaises(ValueError):
             arr.squeeze(axis=1)
         with self.assertRaises(ValueError):
@@ -311,29 +288,25 @@ class TestSqueeze(unittest.TestCase):
 class TestExtent(unittest.TestCase):
     def test_extent_1d(self):
         nparr = np.empty(4)
-        arr = Array.from_desc(0, nparr.shape, nparr.strides,
-                              nparr.dtype.itemsize)
+        arr = Array.from_desc(0, nparr.shape, nparr.strides, nparr.dtype.itemsize)
         s, e = arr.extent
         self.assertEqual(e - s, nparr.size * nparr.dtype.itemsize)
 
     def test_extent_2d(self):
         nparr = np.empty((4, 5))
-        arr = Array.from_desc(0, nparr.shape, nparr.strides,
-                              nparr.dtype.itemsize)
+        arr = Array.from_desc(0, nparr.shape, nparr.strides, nparr.dtype.itemsize)
         s, e = arr.extent
         self.assertEqual(e - s, nparr.size * nparr.dtype.itemsize)
 
     def test_extent_iter_1d(self):
         nparr = np.empty(4)
-        arr = Array.from_desc(0, nparr.shape, nparr.strides,
-                              nparr.dtype.itemsize)
+        arr = Array.from_desc(0, nparr.shape, nparr.strides, nparr.dtype.itemsize)
         [ext] = list(arr.iter_contiguous_extent())
         self.assertEqual(ext, arr.extent)
 
     def test_extent_iter_2d(self):
         nparr = np.empty((4, 5))
-        arr = Array.from_desc(0, nparr.shape, nparr.strides,
-                              nparr.dtype.itemsize)
+        arr = Array.from_desc(0, nparr.shape, nparr.strides, nparr.dtype.itemsize)
         [ext] = list(arr.iter_contiguous_extent())
         self.assertEqual(ext, arr.extent)
 
@@ -346,8 +319,7 @@ class TestIterate(unittest.TestCase):
         # for #4201
         N = 5
         nparr = np.empty(N)
-        arr = Array.from_desc(0, nparr.shape, nparr.strides,
-                              nparr.dtype.itemsize)
+        arr = Array.from_desc(0, nparr.shape, nparr.strides, nparr.dtype.itemsize)
 
         x = 0  # just a placeholder
         # this loop should not raise AssertionError
@@ -355,5 +327,5 @@ class TestIterate(unittest.TestCase):
             x = val  # noqa: F841
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

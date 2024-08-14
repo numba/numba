@@ -13,7 +13,7 @@ def _gpu_reduce_factory(fn, nbtype):
     from numba import cuda
 
     reduce_op = cuda.jit(device=True)(fn)
-    inner_sm_size = _WARPSIZE + 1   # plus one to avoid SM collision
+    inner_sm_size = _WARPSIZE + 1  # plus one to avoid SM collision
     max_blocksize = _NUMWARPS * _WARPSIZE
 
     @cuda.jit(device=True)
@@ -86,8 +86,9 @@ def _gpu_reduce_factory(fn, nbtype):
         # warning: this is assuming 4 warps.
         # assert numwarps == 4
         if tid < 2:
-            sm_partials[tid, 0] = reduce_op(sm_partials[tid, 0],
-                                            sm_partials[tid + 2, 0])
+            sm_partials[tid, 0] = reduce_op(
+                sm_partials[tid, 0], sm_partials[tid + 2, 0]
+            )
             cuda.syncwarp()
         if tid == 0:
             partials[blkid] = reduce_op(sm_partials[0, 0], sm_partials[1, 0])
@@ -148,8 +149,7 @@ def _gpu_reduce_factory(fn, nbtype):
         """
         tid = cuda.threadIdx.x
 
-        sm_partials = cuda.shared.array((_NUMWARPS, inner_sm_size),
-                                        dtype=nbtype)
+        sm_partials = cuda.shared.array((_NUMWARPS, inner_sm_size), dtype=nbtype)
         if cuda.blockDim.x == max_blocksize:
             device_reduce_full_block(arr, partials, sm_partials)
         else:
@@ -238,17 +238,15 @@ class Reduce(object):
 
         if size_full:
             # kernel for the fully populated threadblocks
-            kernel[full_blockct, blocksize, stream](arr[:size_full],
-                                                    partials[:full_blockct],
-                                                    init,
-                                                    True)
+            kernel[full_blockct, blocksize, stream](
+                arr[:size_full], partials[:full_blockct], init, True
+            )
 
         if size_partial:
             # kernel for partially populated threadblocks
-            kernel[1, size_partial, stream](arr[size_full:],
-                                            partials[full_blockct:],
-                                            init,
-                                            not full_blockct)
+            kernel[1, size_partial, stream](
+                arr[size_full:], partials[full_blockct:], init, not full_blockct
+            )
 
         if partials.size > 1:
             # finish up

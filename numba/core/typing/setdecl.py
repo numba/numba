@@ -1,9 +1,17 @@
 import operator
 
 from numba.core import types
-from .templates import (ConcreteTemplate, AbstractTemplate, AttributeTemplate,
-                        CallableTemplate,  Registry, signature, bound_function,
-                        make_callable_template)
+from .templates import (
+    ConcreteTemplate,
+    AbstractTemplate,
+    AttributeTemplate,
+    CallableTemplate,
+    Registry,
+    signature,
+    bound_function,
+    make_callable_template,
+)
+
 # Ensure set is typed as a collection as well
 from numba.core.typing import collections
 
@@ -21,7 +29,7 @@ class SetBuiltin(AbstractTemplate):
         assert not kws
         if args:
             # set(iterable)
-            iterable, = args
+            (iterable,) = args
             if isinstance(iterable, types.IterableType):
                 dtype = iterable.iterator_type.yield_type
                 if isinstance(dtype, types.Hashable):
@@ -37,7 +45,7 @@ class SetAttribute(AttributeTemplate):
 
     @bound_function("set.add")
     def resolve_add(self, set, args, kws):
-        item, = args
+        (item,) = args
         assert not kws
         unified = self.context.unify_pairs(set.dtype, item)
         if unified is not None:
@@ -47,7 +55,7 @@ class SetAttribute(AttributeTemplate):
 
     @bound_function("set.update")
     def resolve_update(self, set, args, kws):
-        iterable, = args
+        (iterable,) = args
         assert not kws
         if not isinstance(iterable, types.IterableType):
             return
@@ -61,7 +69,7 @@ class SetAttribute(AttributeTemplate):
 
     def _resolve_operator(self, set, args, kws):
         assert not kws
-        iterable, = args
+        (iterable,) = args
         # Set arguments only supported for now
         # (note we can mix non-reflected and reflected arguments)
         if isinstance(iterable, types.Set) and iterable.dtype == set.dtype:
@@ -69,7 +77,7 @@ class SetAttribute(AttributeTemplate):
 
     def _resolve_comparator(self, set, args, kws):
         assert not kws
-        arg, = args
+        (arg,) = args
         if arg == set:
             return signature(types.boolean, arg)
 
@@ -80,8 +88,7 @@ class SetOperator(AbstractTemplate):
         if len(args) != 2:
             return
         a, b = args
-        if (isinstance(a, types.Set) and isinstance(b, types.Set)
-            and a.dtype == b.dtype):
+        if isinstance(a, types.Set) and isinstance(b, types.Set) and a.dtype == b.dtype:
             return signature(a, *args)
 
 
@@ -96,12 +103,14 @@ class SetComparison(AbstractTemplate):
 
 
 for op_key in (operator.add, operator.invert):
+
     @infer_global(op_key)
     class ConcreteSetOperator(SetOperator):
         key = op_key
 
 
 for op_key in (operator.iadd,):
+
     @infer_global(op_key)
     class ConcreteInplaceSetOperator(SetOperator):
         key = op_key

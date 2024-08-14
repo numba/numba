@@ -8,8 +8,12 @@ from numba import typeof
 from numba.core import utils, types, typing, ir, compiler, cpu, cgutils
 from numba.core.compiler import Compiler, Flags
 from numba.core.registry import cpu_target
-from numba.tests.support import (MemoryLeakMixin, TestCase, temp_directory,
-                                 create_temp_module)
+from numba.tests.support import (
+    MemoryLeakMixin,
+    TestCase,
+    temp_directory,
+    create_temp_module,
+)
 from numba.extending import (
     overload,
     models,
@@ -17,7 +21,7 @@ from numba.extending import (
     register_model,
     make_attribute_wrapper,
     type_callable,
-    typeof_impl
+    typeof_impl,
 )
 import operator
 import textwrap
@@ -29,44 +33,56 @@ class Namespace(dict):
     def __getattr__(s, k):
         return s[k] if k in s else super(Namespace, s).__getattr__(k)
 
+
 def axy(a, x, y):
     return a * x + y
+
 
 def ax2(a, x, y):
     return a * x + y
 
+
 def pos_root(As, Bs, Cs):
-    return (-Bs + (((Bs ** 2.) - (4. * As * Cs)) ** 0.5)) / (2. * As)
+    return (-Bs + (((Bs**2.0) - (4.0 * As * Cs)) ** 0.5)) / (2.0 * As)
+
 
 def neg_root_common_subexpr(As, Bs, Cs):
-    _2As = 2. * As
-    _4AsCs = 2. * _2As * Cs
-    _Bs2_4AsCs = (Bs ** 2. - _4AsCs)
-    return (-Bs - (_Bs2_4AsCs ** 0.5)) / _2As
+    _2As = 2.0 * As
+    _4AsCs = 2.0 * _2As * Cs
+    _Bs2_4AsCs = Bs**2.0 - _4AsCs
+    return (-Bs - (_Bs2_4AsCs**0.5)) / _2As
+
 
 def neg_root_complex_subexpr(As, Bs, Cs):
-    _2As = 2. * As
-    _4AsCs = 2. * _2As * Cs
-    _Bs2_4AsCs = (Bs ** 2. - _4AsCs) + 0j # Force into the complex domain.
-    return (-Bs - (_Bs2_4AsCs ** 0.5)) / _2As
+    _2As = 2.0 * As
+    _4AsCs = 2.0 * _2As * Cs
+    _Bs2_4AsCs = (Bs**2.0 - _4AsCs) + 0j  # Force into the complex domain.
+    return (-Bs - (_Bs2_4AsCs**0.5)) / _2As
+
 
 vaxy = vectorize(axy)
 
+
 def call_stuff(a0, a1):
-    return np.cos(vaxy(a0, np.sin(a1) - 1., 1.))
+    return np.cos(vaxy(a0, np.sin(a1) - 1.0, 1.0))
+
 
 def are_roots_imaginary(As, Bs, Cs):
-    return (Bs ** 2 - 4 * As * Cs) < 0
+    return (Bs**2 - 4 * As * Cs) < 0
+
 
 def div_add(As, Bs, Cs):
     return As / Bs + Cs
 
+
 def cube(As):
-    return As ** 3
+    return As**3
+
 
 def explicit_output(a, b, out):
     np.cos(a, out)
     return np.add(out, b, out)
+
 
 def variable_name_reuse(a, b, c, d):
     u = a + b
@@ -82,16 +98,23 @@ def distance_matrix(vectors):
 
     for i in range(n_vectors):
         for j in range(i, n_vectors):
-            result[i,j] = result[j,i] = np.sum(
-                (vectors[i] - vectors[j]) ** 2) ** 0.5
+            result[i, j] = result[j, i] = np.sum((vectors[i] - vectors[j]) ** 2) ** 0.5
 
     return result
 
 
 class RewritesTester(Compiler):
     @classmethod
-    def mk_pipeline(cls, args, return_type=None, flags=None, locals={},
-                    library=None, typing_context=None, target_context=None):
+    def mk_pipeline(
+        cls,
+        args,
+        return_type=None,
+        flags=None,
+        locals={},
+        library=None,
+        typing_context=None,
+        target_context=None,
+    ):
         if not flags:
             flags = Flags()
         flags.nrt = True
@@ -99,12 +122,14 @@ class RewritesTester(Compiler):
             typing_context = cpu_target.typing_context
         if target_context is None:
             target_context = cpu_target.target_context
-        return cls(typing_context, target_context, library, args, return_type,
-                   flags, locals)
+        return cls(
+            typing_context, target_context, library, args, return_type, flags, locals
+        )
 
     @classmethod
-    def mk_no_rw_pipeline(cls, args, return_type=None, flags=None, locals={},
-                          library=None, **kws):
+    def mk_no_rw_pipeline(
+        cls, args, return_type=None, flags=None, locals={}, library=None, **kws
+    ):
         if not flags:
             flags = Flags()
         flags.no_rewrites = True
@@ -128,17 +153,18 @@ class TestArrayExpressions(MemoryLeakMixin, TestCase):
         return control_pipeline, control_cfunc, test_pipeline, test_cfunc
 
     def test_simple_expr(self):
-        '''
+        """
         Using a simple array expression, verify that rewriting is taking
         place, and is fusing loops.
-        '''
-        A = np.linspace(0,1,10)
-        X = np.linspace(2,1,10)
-        Y = np.linspace(1,2,10)
+        """
+        A = np.linspace(0, 1, 10)
+        X = np.linspace(2, 1, 10)
+        Y = np.linspace(1, 2, 10)
         arg_tys = [typeof(arg) for arg in (A, X, Y)]
 
-        control_pipeline, nb_axy_0, test_pipeline, nb_axy_1 = \
-            self._compile_function(axy, arg_tys)
+        control_pipeline, nb_axy_0, test_pipeline, nb_axy_1 = self._compile_function(
+            axy, arg_tys
+        )
 
         control_pipeline2 = RewritesTester.mk_no_rw_pipeline(arg_tys)
         cres_2 = control_pipeline2.compile_extra(ax2)
@@ -163,13 +189,13 @@ class TestArrayExpressions(MemoryLeakMixin, TestCase):
         for instr in block:
             if isinstance(instr, ir.Assign):
                 if isinstance(instr.value, ir.Expr):
-                    if instr.value.op == 'arrayexpr':
+                    if instr.value.op == "arrayexpr":
                         yield instr
 
     def _array_expr_to_set(self, expr, out=None):
-        '''
+        """
         Convert an array expression tree into a set of operators.
-        '''
+        """
         if out is None:
             out = set()
         if not isinstance(expr, tuple):
@@ -186,9 +212,9 @@ class TestArrayExpressions(MemoryLeakMixin, TestCase):
 
     def _test_root_function(self, fn=pos_root):
         A = np.random.random(10)
-        B = np.random.random(10) + 1. # Increase likelihood of real
-                                      # root (could add 2 to force all
-                                      # roots to be real).
+        B = np.random.random(10) + 1.0  # Increase likelihood of real
+        # root (could add 2 to force all
+        # roots to be real).
         C = np.random.random(10)
         arg_tys = [typeof(arg) for arg in (A, B, C)]
 
@@ -220,7 +246,7 @@ class TestArrayExpressions(MemoryLeakMixin, TestCase):
         test_cres = test_pipeline.compile_extra(fn)
         nb_fn_1 = test_cres.entry_point
 
-        expected = A ** 3
+        expected = A**3
         self.assertPreciseEqual(expected, nb_fn_0(A))
         self.assertPreciseEqual(expected, nb_fn_1(A))
 
@@ -235,8 +261,9 @@ class TestArrayExpressions(MemoryLeakMixin, TestCase):
         B = A + 1
         arg_tys = (typeof(A),) * 3
 
-        control_pipeline, control_cfunc, test_pipeline, test_cfunc = \
+        control_pipeline, control_cfunc, test_pipeline, test_cfunc = (
             self._compile_function(fn, arg_tys)
+        )
 
         def run_func(fn):
             out = np.zeros_like(A)
@@ -295,25 +322,29 @@ class TestArrayExpressions(MemoryLeakMixin, TestCase):
         scalar optimizations such as rewriting `x ** 2`.
         """
         ns = self._test_cube_function()
-        self._assert_total_rewrite(ns.control_pipeline.state.func_ir.blocks,
-                                   ns.test_pipeline.state.func_ir.blocks,
-                                   trivial=True)
+        self._assert_total_rewrite(
+            ns.control_pipeline.state.func_ir.blocks,
+            ns.test_pipeline.state.func_ir.blocks,
+            trivial=True,
+        )
 
     def test_complicated_expr(self):
-        '''
+        """
         Using the polynomial root function, ensure the full expression is
         being put in the same kernel with no remnants of intermediate
         array expressions.
-        '''
+        """
         ns = self._test_root_function()
-        self._assert_total_rewrite(ns.control_pipeline.state.func_ir.blocks,
-                                   ns.test_pipeline.state.func_ir.blocks)
+        self._assert_total_rewrite(
+            ns.control_pipeline.state.func_ir.blocks,
+            ns.test_pipeline.state.func_ir.blocks,
+        )
 
     def test_common_subexpressions(self, fn=neg_root_common_subexpr):
-        '''
+        """
         Attempt to verify that rewriting will incorporate user common
         subexpressions properly.
-        '''
+        """
         ns = self._test_root_function(fn)
         ir0 = ns.control_pipeline.state.func_ir.blocks
         ir1 = ns.test_pipeline.state.func_ir.blocks
@@ -328,22 +359,25 @@ class TestArrayExpressions(MemoryLeakMixin, TestCase):
         self.assertGreater(len(array_expr_instrs), 1)
         # Now check that we haven't duplicated any subexpressions in
         # the rewritten code.
-        array_sets = list(self._array_expr_to_set(instr.value.expr)[1]
-                          for instr in array_expr_instrs)
+        array_sets = list(
+            self._array_expr_to_set(instr.value.expr)[1] for instr in array_expr_instrs
+        )
         for expr_set_0, expr_set_1 in zip(array_sets[:-1], array_sets[1:]):
             intersections = expr_set_0.intersection(expr_set_1)
             if intersections:
-                self.fail("Common subexpressions detected in array "
-                          "expressions ({0})".format(intersections))
+                self.fail(
+                    "Common subexpressions detected in array "
+                    "expressions ({0})".format(intersections)
+                )
 
     def test_complex_subexpression(self):
         return self.test_common_subexpressions(neg_root_complex_subexpr)
 
     def test_ufunc_and_dufunc_calls(self):
-        '''
+        """
         Verify that ufunc and DUFunc calls are being properly included in
         array expressions.
-        '''
+        """
         A = np.random.random(10)
         B = np.random.random(10)
         arg_tys = [typeof(arg) for arg in (A, B)]
@@ -352,14 +386,16 @@ class TestArrayExpressions(MemoryLeakMixin, TestCase):
         control_pipeline = RewritesTester.mk_no_rw_pipeline(
             arg_tys,
             typing_context=vaxy_descr.typing_context,
-            target_context=vaxy_descr.target_context)
+            target_context=vaxy_descr.target_context,
+        )
         cres_0 = control_pipeline.compile_extra(call_stuff)
         nb_call_stuff_0 = cres_0.entry_point
 
         test_pipeline = RewritesTester.mk_pipeline(
             arg_tys,
             typing_context=vaxy_descr.typing_context,
-            target_context=vaxy_descr.target_context)
+            target_context=vaxy_descr.target_context,
+        )
         cres_1 = test_pipeline.compile_extra(call_stuff)
         nb_call_stuff_1 = cres_1.entry_point
 
@@ -369,24 +405,29 @@ class TestArrayExpressions(MemoryLeakMixin, TestCase):
         np.testing.assert_array_almost_equal(expected, control)
         np.testing.assert_array_almost_equal(expected, actual)
 
-        self._assert_total_rewrite(control_pipeline.state.func_ir.blocks,
-                                   test_pipeline.state.func_ir.blocks)
+        self._assert_total_rewrite(
+            control_pipeline.state.func_ir.blocks, test_pipeline.state.func_ir.blocks
+        )
 
     def test_cmp_op(self):
-        '''
+        """
         Verify that comparison operators are supported by the rewriter.
-        '''
+        """
         ns = self._test_root_function(are_roots_imaginary)
-        self._assert_total_rewrite(ns.control_pipeline.state.func_ir.blocks,
-                                   ns.test_pipeline.state.func_ir.blocks)
+        self._assert_total_rewrite(
+            ns.control_pipeline.state.func_ir.blocks,
+            ns.test_pipeline.state.func_ir.blocks,
+        )
 
     def test_explicit_output(self):
         """
         Check that ufunc calls with explicit outputs are not rewritten.
         """
         ns = self._test_explicit_output_function(explicit_output)
-        self._assert_no_rewrite(ns.control_pipeline.state.func_ir.blocks,
-                                ns.test_pipeline.state.func_ir.blocks)
+        self._assert_no_rewrite(
+            ns.control_pipeline.state.func_ir.blocks,
+            ns.test_pipeline.state.func_ir.blocks,
+        )
 
 
 class TestRewriteIssues(MemoryLeakMixin, TestCase):
@@ -402,7 +443,7 @@ class TestRewriteIssues(MemoryLeakMixin, TestCase):
         @jit(nopython=True)
         def bar(arr):
             c = foo(arr)
-            d = foo(arr)   # two calls to trigger rewrite
+            d = foo(arr)  # two calls to trigger rewrite
             return c, d
 
         arr = np.arange(10)
@@ -412,7 +453,7 @@ class TestRewriteIssues(MemoryLeakMixin, TestCase):
 
     def test_issue_1264(self):
         n = 100
-        x = np.random.uniform(size=n*3).reshape((n,3))
+        x = np.random.uniform(size=n * 3).reshape((n, 3))
         expected = distance_matrix(x)
         actual = njit(distance_matrix)(x)
         np.testing.assert_array_almost_equal(expected, actual)
@@ -438,6 +479,7 @@ class TestRewriteIssues(MemoryLeakMixin, TestCase):
         """
         Typing of unary array expression (np.negate) can be incorrect.
         """
+
         @njit
         def foo(a, b):
             return b - a + -a
@@ -454,6 +496,7 @@ class TestRewriteIssues(MemoryLeakMixin, TestCase):
         Typing of bitwise boolean array expression can be incorrect
         (issue #1813).
         """
+
         @njit
         def foo(a, b):
             return ~(a & (~b))
@@ -488,7 +531,7 @@ class TestRewriteIssues(MemoryLeakMixin, TestCase):
             arr = np.ones(x)
 
             for _ in range(2):
-                val =  arr * arr
+                val = arr * arr
                 arr = arr.copy()
             return arr
 
@@ -505,7 +548,7 @@ class TestSemantics(MemoryLeakMixin, unittest.TestCase):
         pyfunc = div_add
         cfunc = njit(pyfunc)
 
-        a = np.float64([0.0, 1.0, float('inf')])
+        a = np.float64([0.0, 1.0, float("inf")])
         b = np.float64([0.0, 0.0, 1.0])
         c = np.ones_like(a)
 
@@ -515,7 +558,7 @@ class TestSemantics(MemoryLeakMixin, unittest.TestCase):
 
 
 class TestOptionals(MemoryLeakMixin, unittest.TestCase):
-    """ Tests the arrival and correct lowering of Optional types at a arrayexpr
+    """Tests the arrival and correct lowering of Optional types at a arrayexpr
     derived ufunc, see #3972"""
 
     def test_optional_scalar_type(self):
@@ -559,7 +602,7 @@ class TestOptionals(MemoryLeakMixin, unittest.TestCase):
                 z = y
             return arr_expr(x, z)
 
-        args = (np.arange(5), np.arange(5.))
+        args = (np.arange(5), np.arange(5.0))
 
         # check result
         res = do_call(*args)
@@ -623,7 +666,7 @@ class TestOptionalsExceptions(MemoryLeakMixin, unittest.TestCase):
                 z = y
             return arr_expr(x, z)
 
-        args = (np.arange(5), np.arange(1., 5.))
+        args = (np.arange(5), np.arange(1.0, 5.0))
 
         # check result
         with self.assertRaises(TypeError) as raises:
@@ -642,16 +685,18 @@ class TestOptionalsExceptions(MemoryLeakMixin, unittest.TestCase):
 
 
 class TestExternalTypes(MemoryLeakMixin, unittest.TestCase):
-    """ Tests RewriteArrayExprs with external (user defined) types,
+    """Tests RewriteArrayExprs with external (user defined) types,
     see #5157"""
 
-    source_lines = textwrap.dedent("""
+    source_lines = textwrap.dedent(
+        """
         from numba.core import types
 
         class FooType(types.Type):
             def __init__(self):
                 super(FooType, self).__init__(name='Foo')
-        """)
+        """
+    )
 
     def make_foo_type(self, FooType):
         class Foo(object):
@@ -696,6 +741,7 @@ class TestExternalTypes(MemoryLeakMixin, unittest.TestCase):
             @overload(operator.add)
             def overload_foo_add(lhs, rhs):
                 if isinstance(lhs, FooType) and isinstance(rhs, types.Array):
+
                     def imp(lhs, rhs):
                         return np.array([lhs.value, rhs[0]])
 
@@ -706,6 +752,7 @@ class TestExternalTypes(MemoryLeakMixin, unittest.TestCase):
             @overload(operator.add)
             def overload_foo_add(lhs, rhs):
                 if isinstance(lhs, FooType) and isinstance(rhs, FooType):
+
                     def imp(lhs, rhs):
                         return np.array([lhs.value, rhs.value])
 
@@ -716,6 +763,7 @@ class TestExternalTypes(MemoryLeakMixin, unittest.TestCase):
             @overload(operator.neg)
             def overload_foo_neg(x):
                 if isinstance(x, FooType):
+
                     def imp(x):
                         return np.array([-x.value])
 

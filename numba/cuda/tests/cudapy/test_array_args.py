@@ -8,11 +8,11 @@ from numba.cuda.testing import unittest, CUDATestCase
 class TestCudaArrayArg(CUDATestCase):
     def test_array_ary(self):
 
-        @cuda.jit('double(double[:],int64)', device=True, inline=True)
+        @cuda.jit("double(double[:],int64)", device=True, inline=True)
         def device_function(a, c):
             return a[c]
 
-        @cuda.jit('void(double[:],double[:])')
+        @cuda.jit("void(double[:],double[:])")
         def kernel(x, y):
             i = cuda.grid(1)
             y[i] = device_function(x, i)
@@ -63,7 +63,7 @@ class TestCudaArrayArg(CUDATestCase):
             r[0] = x.x
             r[1] = x.y
 
-        Point = namedtuple('Point', ('x', 'y'))
+        Point = namedtuple("Point", ("x", "y"))
         x = Point(1, 2)
         r = np.zeros(len(x), dtype=np.int64)
         f[1, 1](r, x)
@@ -78,7 +78,7 @@ class TestCudaArrayArg(CUDATestCase):
             r1[1] = x.y
             r2[0] = x.r
 
-        Point = namedtuple('Point', ('x', 'y', 'r'))
+        Point = namedtuple("Point", ("x", "y", "r"))
         x = Point(1, 2, 2.236)
         r1 = np.zeros(2, dtype=np.int64)
         r2 = np.zeros(1, dtype=np.float64)
@@ -197,5 +197,5 @@ class TestCudaArrayArg(CUDATestCase):
         self.assertEqual(r[4], 3)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

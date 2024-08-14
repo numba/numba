@@ -9,6 +9,7 @@ import traceback
 # YAML needed to use file based Numba config
 try:
     import yaml
+
     _HAVE_YAML = True
 except ImportError:
     _HAVE_YAML = False
@@ -17,15 +18,15 @@ except ImportError:
 import llvmlite.binding as ll
 
 
-IS_WIN32 = sys.platform.startswith('win32')
-IS_OSX = sys.platform.startswith('darwin')
+IS_WIN32 = sys.platform.startswith("win32")
+IS_OSX = sys.platform.startswith("darwin")
 MACHINE_BITS = tuple.__itemsize__ * 8
 IS_32BITS = MACHINE_BITS == 32
 # Python version in (major, minor) tuple
 PYVERSION = sys.version_info[:2]
 
 # this is the name of the user supplied configuration file
-_config_fname = '.numba_config.yaml'
+_config_fname = ".numba_config.yaml"
 
 
 def _parse_cc(text):
@@ -35,11 +36,13 @@ def _parse_cc(text):
     if not text:
         return None
     else:
-        m = re.match(r'(\d+)\.(\d+)', text)
+        m = re.match(r"(\d+)\.(\d+)", text)
         if not m:
-            raise ValueError("Compute capability must be specified as a "
-                             "string of \"major.minor\" where major "
-                             "and minor are decimals")
+            raise ValueError(
+                "Compute capability must be specified as a "
+                'string of "major.minor" where major '
+                "and minor are decimals"
+            )
         grp = m.groups()
         return int(grp[0]), int(grp[1])
 
@@ -51,20 +54,24 @@ def _os_supports_avx():
     This is necessary because the user may be running a very old Linux
     kernel (e.g. CentOS 5) on a recent CPU.
     """
-    if (not sys.platform.startswith('linux')
-            or platform.machine() not in ('i386', 'i586', 'i686', 'x86_64')):
+    if not sys.platform.startswith("linux") or platform.machine() not in (
+        "i386",
+        "i586",
+        "i686",
+        "x86_64",
+    ):
         return True
     # Executing the CPUID instruction may report AVX available even though
     # the kernel doesn't support it, so parse /proc/cpuinfo instead.
     try:
-        f = open('/proc/cpuinfo', 'r')
+        f = open("/proc/cpuinfo", "r")
     except OSError:
         # If /proc isn't available, assume yes
         return True
     with f:
         for line in f:
-            head, _, body = line.partition(':')
-            if head.strip() == 'flags' and 'avx' in body.split():
+            head, _, body = line.partition(":")
+            if head.strip() == "flags" and "avx" in body.split():
                 return True
         else:
             return False
@@ -73,7 +80,7 @@ def _os_supports_avx():
 _old_style_deprecation_msg = (
     "NUMBA_CAPTURED_ERRORS=old_style is deprecated. "
     "It will be removed in the next release. See details at "
-    "https://numba.readthedocs.io/en/latest/reference/deprecation.html#deprecation-of-old-style-numba-captured-errors" # noqa: E501
+    "https://numba.readthedocs.io/en/latest/reference/deprecation.html#deprecation-of-old-style-numba-captured-errors"  # noqa: E501
 )
 
 
@@ -83,16 +90,14 @@ def _validate_captured_errors_style(style_str):
     from numba.core.errors import NumbaDeprecationWarning
 
     rendered_style = str(style_str)
-    if rendered_style not in ('new_style', 'old_style', 'default'):
-        msg = ("Invalid style in NUMBA_CAPTURED_ERRORS: "
-               f"{rendered_style}")
+    if rendered_style not in ("new_style", "old_style", "default"):
+        msg = "Invalid style in NUMBA_CAPTURED_ERRORS: " f"{rendered_style}"
         raise ValueError(msg)
     else:
-        if rendered_style == 'default':
-            rendered_style = 'new_style'
-        elif rendered_style == 'old_style':
-            warnings.warn(_old_style_deprecation_msg,
-                          NumbaDeprecationWarning)
+        if rendered_style == "default":
+            rendered_style = "new_style"
+        elif rendered_style == "old_style":
+            warnings.warn(_old_style_deprecation_msg, NumbaDeprecationWarning)
         return rendered_style
 
 
@@ -107,11 +112,11 @@ class _OptLevel(int):
     def __new__(cls, *args, **kwargs):
         assert len(args) == 1
         (value,) = args
-        _int_value = 3 if value == 'max' else int(value)
+        _int_value = 3 if value == "max" else int(value)
         # the int ctor is always called with an appropriate integer value
         new = super().__new__(cls, _int_value, **kwargs)
         # raw value is max or int
-        new._raw_value = value if value == 'max' else _int_value
+        new._raw_value = value if value == "max" else _int_value
         return new
 
     @property
@@ -130,10 +135,12 @@ class _OptLevel(int):
 
 def _process_opt_level(opt_level):
 
-    if opt_level not in ('0', '1', '2', '3', 'max'):
-        msg = ("Environment variable `NUMBA_OPT` is set to an unsupported "
-               f"value '{opt_level}', supported values are 0, 1, 2, 3, and "
-               "'max'")
+    if opt_level not in ("0", "1", "2", "3", "max"):
+        msg = (
+            "Environment variable `NUMBA_OPT` is set to an unsupported "
+            f"value '{opt_level}', supported values are 0, 1, 2, 3, and "
+            "'max'"
+        )
         raise ValueError(msg)
     else:
         return _OptLevel(opt_level)
@@ -154,21 +161,23 @@ class _EnvReloader(object):
         # first check if there's a .numba_config.yaml and use values from that
         if os.path.exists(_config_fname) and os.path.isfile(_config_fname):
             if not _HAVE_YAML:
-                msg = ("A Numba config file is found but YAML parsing "
-                       "capabilities appear to be missing. "
-                       "To use this feature please install `pyyaml`. e.g. "
-                       "`conda install pyyaml`.")
+                msg = (
+                    "A Numba config file is found but YAML parsing "
+                    "capabilities appear to be missing. "
+                    "To use this feature please install `pyyaml`. e.g. "
+                    "`conda install pyyaml`."
+                )
                 warnings.warn(msg)
             else:
-                with open(_config_fname, 'rt') as f:
+                with open(_config_fname, "rt") as f:
                     y_conf = yaml.safe_load(f)
                 if y_conf is not None:
                     for k, v in y_conf.items():
-                        new_environ['NUMBA_' + k.upper()] = v
+                        new_environ["NUMBA_" + k.upper()] = v
 
         # clobber file based config with any locally defined env vars
         for name, value in os.environ.items():
-            if name.startswith('NUMBA_'):
+            if name.startswith("NUMBA_"):
                 new_environ[name] = value
         # We update the config variables if at least one NUMBA environment
         # variable was modified.  This lets the user modify values
@@ -188,19 +197,23 @@ class _EnvReloader(object):
             try:
                 import cuda  # noqa: F401
             except ImportError as ie:
-                msg = ("CUDA Python bindings requested (the environment "
-                       "variable NUMBA_CUDA_USE_NVIDIA_BINDING is set), "
-                       f"but they are not importable: {ie.msg}.")
+                msg = (
+                    "CUDA Python bindings requested (the environment "
+                    "variable NUMBA_CUDA_USE_NVIDIA_BINDING is set), "
+                    f"but they are not importable: {ie.msg}."
+                )
                 warnings.warn(msg)
 
                 CUDA_USE_NVIDIA_BINDING = False
 
             if CUDA_PER_THREAD_DEFAULT_STREAM:  # noqa: F821
-                warnings.warn("PTDS support is handled by CUDA Python when "
-                              "using the NVIDIA binding. Please set the "
-                              "environment variable "
-                              "CUDA_PYTHON_CUDA_PER_THREAD_DEFAULT_STREAM to 1 "
-                              "instead.")
+                warnings.warn(
+                    "PTDS support is handled by CUDA Python when "
+                    "using the NVIDIA binding. Please set the "
+                    "environment variable "
+                    "CUDA_PYTHON_CUDA_PER_THREAD_DEFAULT_STREAM to 1 "
+                    "instead."
+                )
 
     def process_environ(self, environ):
         def _readenv(name, ctor, default):
@@ -210,11 +223,13 @@ class _EnvReloader(object):
             try:
                 return ctor(value)
             except Exception:
-                warnings.warn(f"Environment variable '{name}' is defined but "
-                              f"its associated value '{value}' could not be "
-                              "parsed.\nThe parse failed with exception:\n"
-                              f"{traceback.format_exc()}",
-                              RuntimeWarning)
+                warnings.warn(
+                    f"Environment variable '{name}' is defined but "
+                    f"its associated value '{value}' could not be "
+                    "parsed.\nThe parse failed with exception:\n"
+                    f"{traceback.format_exc()}",
+                    RuntimeWarning,
+                )
                 return default
 
         def optional_str(x):
@@ -224,9 +239,7 @@ class _EnvReloader(object):
         USE_RVSDG_FRONTEND = _readenv("NUMBA_USE_RVSDG_FRONTEND", int, 0)
 
         # Type casting rules selection
-        USE_LEGACY_TYPE_SYSTEM = _readenv(
-            "NUMBA_USE_LEGACY_TYPE_SYSTEM", int, 1
-        )
+        USE_LEGACY_TYPE_SYSTEM = _readenv("NUMBA_USE_LEGACY_TYPE_SYSTEM", int, 1)
 
         # developer mode produces full tracebacks, disables help instructions
         DEVELOPER_MODE = _readenv("NUMBA_DEVELOPER_MODE", int, 0)
@@ -234,11 +247,11 @@ class _EnvReloader(object):
         # disable performance warnings, will switch of the generation of
         # warnings of the class NumbaPerformanceWarning
         DISABLE_PERFORMANCE_WARNINGS = _readenv(
-            "NUMBA_DISABLE_PERFORMANCE_WARNINGS", int, 0)
+            "NUMBA_DISABLE_PERFORMANCE_WARNINGS", int, 0
+        )
 
         # Flag to enable full exception reporting
-        FULL_TRACEBACKS = _readenv(
-            "NUMBA_FULL_TRACEBACKS", int, DEVELOPER_MODE)
+        FULL_TRACEBACKS = _readenv("NUMBA_FULL_TRACEBACKS", int, DEVELOPER_MODE)
 
         # Show help text when an error occurs
         SHOW_HELP = _readenv("NUMBA_SHOW_HELP", int, 0)
@@ -256,17 +269,19 @@ class _EnvReloader(object):
         # because static controlflow analysis cannot find a definition
         # in one or more of the incoming paths.
         ALWAYS_WARN_UNINIT_VAR = _readenv(
-            "NUMBA_ALWAYS_WARN_UNINIT_VAR", int, 0,
+            "NUMBA_ALWAYS_WARN_UNINIT_VAR",
+            int,
+            0,
         )
 
         # Whether to warn about kernel launches where the grid size will
         # under utilize the GPU due to low occupancy. On by default.
         CUDA_LOW_OCCUPANCY_WARNINGS = _readenv(
-            "NUMBA_CUDA_LOW_OCCUPANCY_WARNINGS", int, 1)
+            "NUMBA_CUDA_LOW_OCCUPANCY_WARNINGS", int, 1
+        )
 
         # Whether to use the official CUDA Python API Bindings
-        CUDA_USE_NVIDIA_BINDING = _readenv(
-            "NUMBA_CUDA_USE_NVIDIA_BINDING", int, 0)
+        CUDA_USE_NVIDIA_BINDING = _readenv("NUMBA_CUDA_USE_NVIDIA_BINDING", int, 0)
 
         # Debug flag to control compiler debug print
         DEBUG = _readenv("NUMBA_DEBUG", int, 0)
@@ -302,8 +317,7 @@ class _EnvReloader(object):
 
         # Maximum tuple size that parfors will unpack and pass to
         # internal gufunc.
-        PARFOR_MAX_TUPLE_SIZE = _readenv("NUMBA_PARFOR_MAX_TUPLE_SIZE",
-                                         int, 100)
+        PARFOR_MAX_TUPLE_SIZE = _readenv("NUMBA_PARFOR_MAX_TUPLE_SIZE", int, 100)
 
         # Enable logging of cache operation
         DEBUG_CACHE = _readenv("NUMBA_DEBUG_CACHE", int, DEBUG)
@@ -325,9 +339,11 @@ class _EnvReloader(object):
         # and CPU feature as the host information.
         # Note: this overrides "host" option for AOT compilation.
         CPU_NAME = _readenv("NUMBA_CPU_NAME", optional_str, None)
-        CPU_FEATURES = _readenv("NUMBA_CPU_FEATURES", optional_str,
-                                ("" if str(CPU_NAME).lower() == 'generic'
-                                 else None))
+        CPU_FEATURES = _readenv(
+            "NUMBA_CPU_FEATURES",
+            optional_str,
+            ("" if str(CPU_NAME).lower() == "generic" else None),
+        )
         # Optimization level
         OPT = _readenv("NUMBA_OPT", _process_opt_level, _OptLevel(3))
 
@@ -338,19 +354,16 @@ class _EnvReloader(object):
         DUMP_CFG = _readenv("NUMBA_DUMP_CFG", int, DEBUG_FRONTEND)
 
         # Force dump of Numba IR
-        DUMP_IR = _readenv("NUMBA_DUMP_IR", int,
-                           DEBUG_FRONTEND)
+        DUMP_IR = _readenv("NUMBA_DUMP_IR", int, DEBUG_FRONTEND)
 
         # Force dump of Numba IR in SSA form
-        DUMP_SSA = _readenv("NUMBA_DUMP_SSA", int,
-                            DEBUG_FRONTEND or DEBUG_TYPEINFER)
+        DUMP_SSA = _readenv("NUMBA_DUMP_SSA", int, DEBUG_FRONTEND or DEBUG_TYPEINFER)
 
         # print debug info of analysis and optimization on array operations
         DEBUG_ARRAY_OPT = _readenv("NUMBA_DEBUG_ARRAY_OPT", int, 0)
 
         # insert debug stmts to print information at runtime
-        DEBUG_ARRAY_OPT_RUNTIME = _readenv(
-            "NUMBA_DEBUG_ARRAY_OPT_RUNTIME", int, 0)
+        DEBUG_ARRAY_OPT_RUNTIME = _readenv("NUMBA_DEBUG_ARRAY_OPT_RUNTIME", int, 0)
 
         # print stats about parallel for-loops
         DEBUG_ARRAY_OPT_STATS = _readenv("NUMBA_DEBUG_ARRAY_OPT_STATS", int, 0)
@@ -406,21 +419,19 @@ class _EnvReloader(object):
                 # http://llvm.org/bugs/buglist.cgi?quicksearch=avx).
                 # For now we'd rather disable it, since it can pessimize code
                 cpu_name = CPU_NAME or ll.get_host_cpu_name()
-                disabled_cpus = {'corei7-avx', 'core-avx-i',
-                                 'sandybridge', 'ivybridge'}
+                disabled_cpus = {"corei7-avx", "core-avx-i", "sandybridge", "ivybridge"}
                 # Disable known baseline CPU names that virtual machines may
                 # incorrectly report as having AVX support.
                 # This can cause problems with the SVML-pass's use of AVX512.
                 # See https://github.com/numba/numba/issues/9582
-                disabled_cpus |= {'nocona'}
+                disabled_cpus |= {"nocona"}
                 return cpu_name not in disabled_cpus
 
         ENABLE_AVX = _readenv("NUMBA_ENABLE_AVX", int, avx_default)
 
         # if set and SVML is available, it will be disabled
         # By default, it's disabled on 32-bit platforms.
-        DISABLE_INTEL_SVML = _readenv(
-            "NUMBA_DISABLE_INTEL_SVML", int, IS_32BITS)
+        DISABLE_INTEL_SVML = _readenv("NUMBA_DISABLE_INTEL_SVML", int, IS_32BITS)
 
         # Disable jit for debugging
         DISABLE_JIT = _readenv("NUMBA_DISABLE_JIT", int, 0)
@@ -429,13 +440,13 @@ class _EnvReloader(object):
         THREADING_LAYER_PRIORITY = _readenv(
             "NUMBA_THREADING_LAYER_PRIORITY",
             lambda string: string.split(),
-            ['tbb', 'omp', 'workqueue'],
+            ["tbb", "omp", "workqueue"],
         )
-        THREADING_LAYER = _readenv("NUMBA_THREADING_LAYER", str, 'default')
+        THREADING_LAYER = _readenv("NUMBA_THREADING_LAYER", str, "default")
 
-        CAPTURED_ERRORS = _readenv("NUMBA_CAPTURED_ERRORS",
-                                   _validate_captured_errors_style,
-                                   'new_style')
+        CAPTURED_ERRORS = _readenv(
+            "NUMBA_CAPTURED_ERRORS", _validate_captured_errors_style, "new_style"
+        )
 
         # CUDA Configs
 
@@ -443,18 +454,17 @@ class _EnvReloader(object):
         # is used as a parameter, forcing a copy to and from the device.
         # On by default.
         CUDA_WARN_ON_IMPLICIT_COPY = _readenv(
-            "NUMBA_CUDA_WARN_ON_IMPLICIT_COPY", int, 1)
+            "NUMBA_CUDA_WARN_ON_IMPLICIT_COPY", int, 1
+        )
 
         # Force CUDA compute capability to a specific version
         FORCE_CUDA_CC = _readenv("NUMBA_FORCE_CUDA_CC", _parse_cc, None)
 
         # The default compute capability to target when compiling to PTX.
-        CUDA_DEFAULT_PTX_CC = _readenv("NUMBA_CUDA_DEFAULT_PTX_CC", _parse_cc,
-                                       (5, 0))
+        CUDA_DEFAULT_PTX_CC = _readenv("NUMBA_CUDA_DEFAULT_PTX_CC", _parse_cc, (5, 0))
 
         # Disable CUDA support
-        DISABLE_CUDA = _readenv("NUMBA_DISABLE_CUDA",
-                                int, int(MACHINE_BITS == 32))
+        DISABLE_CUDA = _readenv("NUMBA_DISABLE_CUDA", int, int(MACHINE_BITS == 32))
 
         # Enable CUDA simulator
         ENABLE_CUDASIM = _readenv("NUMBA_ENABLE_CUDASIM", int, 0)
@@ -464,24 +474,23 @@ class _EnvReloader(object):
         # Defaults to CRITICAL if not set or invalid.
         # Note: This setting only applies when logging is not configured.
         #       Any existing logging configuration is preserved.
-        CUDA_LOG_LEVEL = _readenv("NUMBA_CUDA_LOG_LEVEL", str, '')
+        CUDA_LOG_LEVEL = _readenv("NUMBA_CUDA_LOG_LEVEL", str, "")
 
         # Include argument values in the CUDA Driver API logs
         CUDA_LOG_API_ARGS = _readenv("NUMBA_CUDA_LOG_API_ARGS", int, 0)
 
         # Maximum number of pending CUDA deallocations (default: 10)
-        CUDA_DEALLOCS_COUNT = _readenv("NUMBA_CUDA_MAX_PENDING_DEALLOCS_COUNT",
-                                       int, 10)
+        CUDA_DEALLOCS_COUNT = _readenv("NUMBA_CUDA_MAX_PENDING_DEALLOCS_COUNT", int, 10)
 
         # Maximum ratio of pending CUDA deallocations to capacity (default: 0.2)
-        CUDA_DEALLOCS_RATIO = _readenv("NUMBA_CUDA_MAX_PENDING_DEALLOCS_RATIO",
-                                       float, 0.2)
+        CUDA_DEALLOCS_RATIO = _readenv(
+            "NUMBA_CUDA_MAX_PENDING_DEALLOCS_RATIO", float, 0.2
+        )
 
-        CUDA_ARRAY_INTERFACE_SYNC = _readenv("NUMBA_CUDA_ARRAY_INTERFACE_SYNC",
-                                             int, 1)
+        CUDA_ARRAY_INTERFACE_SYNC = _readenv("NUMBA_CUDA_ARRAY_INTERFACE_SYNC", int, 1)
 
         # Path of the directory that the CUDA driver libraries are located
-        CUDA_DRIVER = _readenv("NUMBA_CUDA_DRIVER", str, '')
+        CUDA_DRIVER = _readenv("NUMBA_CUDA_DRIVER", str, "")
 
         # Buffer size for logs produced by CUDA driver operations (e.g.
         # linking)
@@ -492,23 +501,27 @@ class _EnvReloader(object):
 
         # Whether the default stream is the per-thread default stream
         CUDA_PER_THREAD_DEFAULT_STREAM = _readenv(
-            "NUMBA_CUDA_PER_THREAD_DEFAULT_STREAM", int, 0)
+            "NUMBA_CUDA_PER_THREAD_DEFAULT_STREAM", int, 0
+        )
 
         CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY = _readenv(
-            "NUMBA_CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY", int, 0)
+            "NUMBA_CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY", int, 0
+        )
 
         # Location of the CUDA include files
         if IS_WIN32:
-            cuda_path = os.environ.get('CUDA_PATH')
+            cuda_path = os.environ.get("CUDA_PATH")
             if cuda_path:
                 default_cuda_include_path = os.path.join(cuda_path, "include")
             else:
                 default_cuda_include_path = "cuda_include_not_found"
         else:
-            default_cuda_include_path = os.path.join(os.sep, 'usr', 'local',
-                                                     'cuda', 'include')
-        CUDA_INCLUDE_PATH = _readenv("NUMBA_CUDA_INCLUDE_PATH", str,
-                                     default_cuda_include_path)
+            default_cuda_include_path = os.path.join(
+                os.sep, "usr", "local", "cuda", "include"
+            )
+        CUDA_INCLUDE_PATH = _readenv(
+            "NUMBA_CUDA_INCLUDE_PATH", str, default_cuda_include_path
+        )
 
         # Threading settings
 
@@ -530,19 +543,24 @@ class _EnvReloader(object):
         NUMBA_DEFAULT_NUM_THREADS = num_threads_default()
 
         # Numba thread pool size (defaults to number of CPUs on the system).
-        _NUMBA_NUM_THREADS = _readenv("NUMBA_NUM_THREADS", int,
-                                      NUMBA_DEFAULT_NUM_THREADS)
-        if ('NUMBA_NUM_THREADS' in globals()
-                and globals()['NUMBA_NUM_THREADS'] != _NUMBA_NUM_THREADS):
+        _NUMBA_NUM_THREADS = _readenv(
+            "NUMBA_NUM_THREADS", int, NUMBA_DEFAULT_NUM_THREADS
+        )
+        if (
+            "NUMBA_NUM_THREADS" in globals()
+            and globals()["NUMBA_NUM_THREADS"] != _NUMBA_NUM_THREADS
+        ):
 
             from numba.np.ufunc import parallel
+
             if parallel._is_initialized:
-                raise RuntimeError("Cannot set NUMBA_NUM_THREADS to a "
-                                   "different value once the threads have been "
-                                   "launched (currently have %s, "
-                                   "trying to set %s)" %
-                                   (_NUMBA_NUM_THREADS,
-                                    globals()['NUMBA_NUM_THREADS']))
+                raise RuntimeError(
+                    "Cannot set NUMBA_NUM_THREADS to a "
+                    "different value once the threads have been "
+                    "launched (currently have %s, "
+                    "trying to set %s)"
+                    % (_NUMBA_NUM_THREADS, globals()["NUMBA_NUM_THREADS"])
+                )
 
         NUMBA_NUM_THREADS = _NUMBA_NUM_THREADS
         del _NUMBA_NUM_THREADS
@@ -550,11 +568,12 @@ class _EnvReloader(object):
         # Profiling support
 
         # Indicates if a profiler detected. Only VTune can be detected for now
-        RUNNING_UNDER_PROFILER = 'VS_PROFILER' in os.environ
+        RUNNING_UNDER_PROFILER = "VS_PROFILER" in os.environ
 
         # Enables jit events in LLVM to support profiling of dynamic code
         ENABLE_PROFILING = _readenv(
-            "NUMBA_ENABLE_PROFILING", int, int(RUNNING_UNDER_PROFILER))
+            "NUMBA_ENABLE_PROFILING", int, int(RUNNING_UNDER_PROFILER)
+        )
 
         # Debug Info
 
@@ -562,26 +581,27 @@ class _EnvReloader(object):
         DEBUGINFO_DEFAULT = _readenv("NUMBA_DEBUGINFO", int, ENABLE_PROFILING)
         CUDA_DEBUGINFO_DEFAULT = _readenv("NUMBA_CUDA_DEBUGINFO", int, 0)
 
-        EXTEND_VARIABLE_LIFETIMES = _readenv("NUMBA_EXTEND_VARIABLE_LIFETIMES",
-                                             int, 0)
+        EXTEND_VARIABLE_LIFETIMES = _readenv("NUMBA_EXTEND_VARIABLE_LIFETIMES", int, 0)
 
         # gdb binary location
         def which_gdb(path_or_bin):
             gdb = shutil.which(path_or_bin)
             return gdb if gdb is not None else path_or_bin
 
-        GDB_BINARY = _readenv("NUMBA_GDB_BINARY", which_gdb, 'gdb')
+        GDB_BINARY = _readenv("NUMBA_GDB_BINARY", which_gdb, "gdb")
 
         # CUDA Memory management
-        CUDA_MEMORY_MANAGER = _readenv("NUMBA_CUDA_MEMORY_MANAGER", str,
-                                       'default')
+        CUDA_MEMORY_MANAGER = _readenv("NUMBA_CUDA_MEMORY_MANAGER", str, "default")
 
         # Experimental refprune pass
         LLVM_REFPRUNE_PASS = _readenv(
-            "NUMBA_LLVM_REFPRUNE_PASS", int, 1,
+            "NUMBA_LLVM_REFPRUNE_PASS",
+            int,
+            1,
         )
         LLVM_REFPRUNE_FLAGS = _readenv(
-            "NUMBA_LLVM_REFPRUNE_FLAGS", str,
+            "NUMBA_LLVM_REFPRUNE_FLAGS",
+            str,
             "all" if LLVM_REFPRUNE_PASS else "",
         )
 
@@ -594,7 +614,9 @@ class _EnvReloader(object):
 
         # LLVM_PASS_TIMINGS enables LLVM recording of pass timings.
         LLVM_PASS_TIMINGS = _readenv(
-            "NUMBA_LLVM_PASS_TIMINGS", int, 0,
+            "NUMBA_LLVM_PASS_TIMINGS",
+            int,
+            0,
         )
 
         # Inject the configuration values into the module globals

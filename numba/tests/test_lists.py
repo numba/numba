@@ -14,11 +14,12 @@ from numba.experimental import jitclass
 from numba.core.extending import overload
 
 
-Point = namedtuple('Point', ('a', 'b'))
+Point = namedtuple("Point", ("a", "b"))
 
 
 def noop(x):
     pass
+
 
 def unbox_usecase(x):
     """
@@ -29,6 +30,7 @@ def unbox_usecase(x):
         res += v
     return res
 
+
 def unbox_usecase2(x):
     """
     Expect a list of tuples
@@ -37,6 +39,7 @@ def unbox_usecase2(x):
     for v in x:
         res += len(v)
     return res
+
 
 def unbox_usecase3(x):
     """
@@ -47,6 +50,7 @@ def unbox_usecase3(x):
     for v in b:
         res += v
     return res
+
 
 def unbox_usecase4(x):
     """
@@ -62,23 +66,30 @@ def unbox_usecase4(x):
 def create_list(x, y, z):
     return [x, y, z]
 
+
 def create_nested_list(x, y, z, a, b, c):
     return [[x, y, z], [a, b, c]]
+
 
 def list_comprehension1():
     return sum([x**2 for x in range(10)])
 
+
 def list_comprehension2():
     return sum([x for x in range(10) if x % 2 == 0])
+
 
 def list_comprehension3():
     return sum([math.pow(x, 2) for x in range(10)])
 
+
 def list_comprehension4():
     return sum([x * y for x in range(10) for y in range(10)])
 
+
 def list_comprehension5():
     return [x * 2 for x in range(10)]
+
 
 def list_comprehension6():
     return [[x for x in range(y)] for y in range(3)]
@@ -87,16 +98,19 @@ def list_comprehension6():
 def list_constructor(n):
     return list(range(n))
 
+
 def list_constructor_empty():
     # cannot be typed, list is empty and no typing information is present to
     # infer a type
     return list()
+
 
 def list_constructor_empty_but_typeable(n):
     # can be typed, list is empty but later append has typing info that allows
     # for inference
     y = list()
     return y.append(n)
+
 
 def list_append(n):
     l = []
@@ -105,12 +119,14 @@ def list_append(n):
         l.append(i)
     return l
 
+
 def list_append_heterogeneous(n):
     l = []
     l.append(42.0)
     for i in range(n):
         l.append(i)
     return l
+
 
 def list_extend(n):
     l = []
@@ -119,6 +135,7 @@ def list_extend(n):
     l.extend(l[:-1])
     l.extend(range(n, 0, -1))
     return l
+
 
 def list_extend_heterogeneous(n):
     l = []
@@ -129,6 +146,7 @@ def list_extend_heterogeneous(n):
     l.extend([123.0])
     return l
 
+
 def list_pop0(n):
     l = list(range(n))
     res = 0
@@ -136,14 +154,17 @@ def list_pop0(n):
         res += len(l) * l.pop()
     return res
 
+
 def list_pop1(n, i):
     l = list(range(n))
     x = l.pop(i)
     return x, l
 
+
 def list_len(n):
     l = list(range(n))
     return len(l)
+
 
 def list_getitem(n):
     l = list(range(n))
@@ -155,6 +176,7 @@ def list_getitem(n):
     for i in range(-len(l), 0):
         res -= i * l[i]
     return res
+
 
 def list_setitem(n):
     l = list(range(n))
@@ -169,13 +191,16 @@ def list_setitem(n):
         res += l[i]
     return res
 
+
 def list_getslice2(n, start, stop):
     l = list(range(n))
     return l[start:stop]
 
+
 def list_getslice3(n, start, stop, step):
     l = list(range(n))
     return l[start:stop:step]
+
 
 def list_setslice2(n, n_source, start, stop):
     # Generic setslice with size change
@@ -183,6 +208,7 @@ def list_setslice2(n, n_source, start, stop):
     v = list(range(100, 100 + n_source))
     l[start:stop] = v
     return l
+
 
 def list_setslice3(n, start, stop, step):
     l = list(range(n))
@@ -192,15 +218,18 @@ def list_setslice3(n, start, stop, step):
     l[start:stop:step] = v
     return l
 
+
 def list_setslice3_arbitrary(n, n_src, start, stop, step):
     l = list(range(n))
     l[start:stop:step] = list(range(100, 100 + n_src))
     return l
 
+
 def list_delslice0(n):
     l = list(range(n))
     del l[:]
     return l
+
 
 def list_delslice1(n, start, stop):
     l = list(range(n))
@@ -208,21 +237,25 @@ def list_delslice1(n, start, stop):
     del l[:stop]
     return l
 
+
 def list_delslice2(n, start, stop):
     l = list(range(n))
     del l[start:stop]
     return l
+
 
 def list_clear(n):
     l = list(range(n))
     l.clear()
     return l
 
+
 def list_copy(n):
     l = list(range(n))
     ll = l.copy()
     l.append(42)
     return l, ll
+
 
 def list_iteration(n):
     l = list(range(n))
@@ -231,33 +264,47 @@ def list_iteration(n):
         res += i * v
     return res
 
+
 def list_contains(n):
     l = list(range(n))
-    return (0 in l, 1 in l, n - 1 in l, n in l,
-            0 not in l, 1 not in l, n - 1 not in l, n not in l,
-            )
+    return (
+        0 in l,
+        1 in l,
+        n - 1 in l,
+        n in l,
+        0 not in l,
+        1 not in l,
+        n - 1 not in l,
+        n not in l,
+    )
+
 
 def list_index1(n, v):
     l = list(range(n, 0, -1))
     return l.index(v)
 
+
 def list_index2(n, v, start):
     l = list(range(n, 0, -1))
     return l.index(v, start)
 
+
 def list_index3(n, v, start, stop):
     l = list(range(n, 0, -1))
     return l.index(v, start, stop)
+
 
 def list_remove(n, v):
     l = list(range(n - 1, -1, -1))
     l.remove(v)
     return l
 
+
 def list_insert(n, pos, v):
     l = list(range(0, n))
     l.insert(pos, v)
     return l
+
 
 def list_count(n, v):
     l = []
@@ -265,17 +312,20 @@ def list_count(n, v):
         l.append(x & 3)
     return l.count(v)
 
+
 def list_reverse(n):
     l = list(range(n))
     l.reverse()
     return l
 
+
 def list_add(m, n):
     a = list(range(0, m))
     b = list(range(100, 100 + n))
     res = a + b
-    res.append(42)   # check result is a copy
+    res.append(42)  # check result is a copy
     return a, b, res
+
 
 def list_add_heterogeneous():
     a = [1]
@@ -287,11 +337,13 @@ def list_add_heterogeneous():
     b.append(4.0)
     return a, b, c, d
 
+
 def list_add_inplace(m, n):
     a = list(range(0, m))
     b = list(range(100, 100 + n))
     a += b
     return a, b
+
 
 def list_add_inplace_heterogeneous():
     a = [1]
@@ -300,46 +352,58 @@ def list_add_inplace_heterogeneous():
     b += a
     return a, b
 
+
 def list_mul(n, v):
     a = list(range(n))
     return a * v
 
+
 def list_mul2(n, v):
     a = list(range(n))
     return v * a
+
 
 def list_mul_inplace(n, v):
     a = list(range(n))
     a *= v
     return a
 
+
 def list_bool(n):
     a = list(range(n))
     return bool(a), (True if a else False)
 
+
 def eq_usecase(a, b):
     return list(a) == list(b)
+
 
 def ne_usecase(a, b):
     return list(a) != list(b)
 
+
 def gt_usecase(a, b):
     return list(a) > list(b)
+
 
 def ge_usecase(a, b):
     return list(a) >= list(b)
 
+
 def lt_usecase(a, b):
     return list(a) < list(b)
 
+
 def le_usecase(a, b):
     return list(a) <= list(b)
+
 
 def identity_usecase(n):
     a = list(range(n))
     b = a
     c = a[:]
     return (a is b), (a is not b), (a is c), (a is not c)
+
 
 def bool_list_usecase():
     # Exercise getitem, setitem, iteration with bool values (issue #1373)
@@ -350,26 +414,30 @@ def bool_list_usecase():
         x = x ^ v
     return l, x
 
+
 def reflect_simple(l, ll):
     x = l.pop()
     y = l.pop()
-    l[0] = 42.
+    l[0] = 42.0
     l.extend(ll)
     return l, x, y
+
 
 def reflect_conditional(l, ll):
     # `l` may or may not actually reflect a Python list
     if ll[0]:
-        l = [11., 22., 33., 44.]
+        l = [11.0, 22.0, 33.0, 44.0]
     x = l.pop()
     y = l.pop()
-    l[0] = 42.
+    l[0] = 42.0
     l.extend(ll)
     return l, x, y
+
 
 def reflect_exception(l):
     l.append(42)
     raise ZeroDivisionError
+
 
 def reflect_dual(l, ll):
     l.append(ll.pop())
@@ -385,8 +453,16 @@ class TestLists(MemoryLeakMixin, TestCase):
 
     def test_create_nested_list(self):
         pyfunc = create_nested_list
-        cfunc = njit((types.int32, types.int32, types.int32,
-                      types.int32, types.int32, types.int32))(pyfunc)
+        cfunc = njit(
+            (
+                types.int32,
+                types.int32,
+                types.int32,
+                types.int32,
+                types.int32,
+                types.int32,
+            )
+        )(pyfunc)
         self.assertEqual(cfunc(1, 2, 3, 4, 5, 6), pyfunc(1, 2, 3, 4, 5, 6))
 
     def check_unary_with_size(self, pyfunc, precise=True):
@@ -411,7 +487,7 @@ class TestLists(MemoryLeakMixin, TestCase):
         self.assertIn("For Numba to be able to compile a list", errmsg)
 
     def test_constructor_empty_but_typeable(self):
-        args = [np.int32(1), 10., 1 + 3j, [7], [17., 14.], np.array([10])]
+        args = [np.int32(1), 10.0, 1 + 3j, [7], [17.0, 14.0], np.array([10])]
         pyfunc = list_constructor_empty_but_typeable
         for arg in args:
             cfunc = jit(nopython=True)(pyfunc)
@@ -592,14 +668,14 @@ class TestLists(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
         msg = 'arg "start" must be an Integer.'
         with self.assertRaisesRegex(errors.TypingError, msg):
-            cfunc(10, 0, 'invalid', 5)
+            cfunc(10, 0, "invalid", 5)
 
     def test_index_exception2(self):
         pyfunc = list_index3
         cfunc = jit(nopython=True)(pyfunc)
         msg = 'arg "stop" must be an Integer.'
         with self.assertRaisesRegex(errors.TypingError, msg):
-            cfunc(10, 0, 0, 'invalid')
+            cfunc(10, 0, 0, "invalid")
 
     def test_remove(self):
         pyfunc = list_remove
@@ -670,8 +746,9 @@ class TestLists(MemoryLeakMixin, TestCase):
     def test_mul_inplace(self):
         self.check_mul(list_mul_inplace)
 
-    @unittest.skipUnless(sys.maxsize >= 2**32,
-                         "need a 64-bit system to test for MemoryError")
+    @unittest.skipUnless(
+        sys.maxsize >= 2**32, "need a 64-bit system to test for MemoryError"
+    )
     def test_mul_error(self):
         self.disable_leak_check()
         pyfunc = list_mul
@@ -679,11 +756,15 @@ class TestLists(MemoryLeakMixin, TestCase):
         # Fail in malloc()
         with self.assertRaises(MemoryError):
             cfunc(1, 2**58)
-        if sys.platform.startswith('darwin'):
-            libc = ct.CDLL('libc.dylib')
-            libc.printf("###Please ignore the above error message i.e. \
+        if sys.platform.startswith("darwin"):
+            libc = ct.CDLL("libc.dylib")
+            libc.printf(
+                "###Please ignore the above error message i.e. \
 can't allocate region. It is in fact the purpose of this test to \
-request more memory than can be provided###\n".encode("UTF-8"))
+request more memory than can be provided###\n".encode(
+                    "UTF-8"
+                )
+            )
         # Overflow size computation when multiplying by item size
         with self.assertRaises(MemoryError):
             cfunc(1, 2**62)
@@ -710,8 +791,9 @@ request more memory than can be provided###\n".encode("UTF-8"))
 
     def _test_compare(self, pyfunc):
         def eq(args):
-            self.assertIs(cfunc(*args), pyfunc(*args),
-                          "mismatch for arguments %s" % (args,))
+            self.assertIs(
+                cfunc(*args), pyfunc(*args), "mismatch for arguments %s" % (args,)
+            )
 
         cfunc = jit(nopython=True)(pyfunc)
         eq(((1, 2), (1, 2)))
@@ -765,10 +847,12 @@ class TestUnboxing(MemoryLeakMixin, TestCase):
 
     def check_unary(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
+
         def check(arg):
             expected = pyfunc(arg)
             got = cfunc(arg)
             self.assertPreciseEqual(got, expected)
+
         return check
 
     def test_numbers(self):
@@ -813,10 +897,10 @@ class TestUnboxing(MemoryLeakMixin, TestCase):
         lst = [(1,), (2, 3)]
         with self.assertRaises(TypeError) as raises:
             cfunc(lst)
-        msg = ("can't unbox heterogeneous list: "
-                "UniTuple({0} x 1) != UniTuple({0} x 2)")
+        msg = (
+            "can't unbox heterogeneous list: " "UniTuple({0} x 1) != UniTuple({0} x 2)"
+        )
         self.assertEqual(str(raises.exception), msg.format(types.intp))
-
 
 
 class TestListReflection(MemoryLeakMixin, TestCase):
@@ -826,9 +910,10 @@ class TestListReflection(MemoryLeakMixin, TestCase):
 
     def check_reflection(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
-        samples = [([1., 2., 3., 4.], [0.]),
-                   ([1., 2., 3., 4.], [5., 6., 7., 8., 9.]),
-                   ]
+        samples = [
+            ([1.0, 2.0, 3.0, 4.0], [0.0]),
+            ([1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0, 9.0]),
+        ]
         for dest, src in samples:
             expected = list(dest)
             got = list(dest)
@@ -904,13 +989,12 @@ class TestListManagedElements(ManagedListTestCase):
         pyfunc(expect)
         got = list(con)
         cfunc(got)
-        self.assert_list_element_precise_equal(
-            expect=expect, got=got
-            )
+        self.assert_list_element_precise_equal(expect=expect, got=got)
 
     def test_reflect_passthru(self):
         def pyfunc(con):
             pass
+
         self._check_element_equal(pyfunc)
 
     def test_reflect_appended(self):
@@ -932,8 +1016,7 @@ class TestListManagedElements(ManagedListTestCase):
         self._check_element_equal(pyfunc)
 
     def test_reflect_insert(self):
-        """make sure list.insert() doesn't crash for refcounted objects (see #7553)
-        """
+        """make sure list.insert() doesn't crash for refcounted objects (see #7553)"""
 
         def pyfunc(con):
             con.insert(1, np.arange(4).astype(np.intp))
@@ -944,16 +1027,18 @@ class TestListManagedElements(ManagedListTestCase):
         def pyfunc():
             con = []
             for i in range(300):
-                con.append(np.arange(i, ).astype(np.intp))
+                con.append(
+                    np.arange(
+                        i,
+                    ).astype(np.intp)
+                )
             return con
 
         cfunc = jit(nopython=True)(pyfunc)
         expect = pyfunc()
         got = cfunc()
 
-        self.assert_list_element_precise_equal(
-            expect=expect, got=got
-            )
+        self.assert_list_element_precise_equal(expect=expect, got=got)
 
     def test_append_noret(self):
         # This test make sure local dtor works
@@ -984,9 +1069,7 @@ class TestListManagedElements(ManagedListTestCase):
         expect = pyfunc()
         got = cfunc()
 
-        self.assert_list_element_precise_equal(
-            expect=expect, got=got
-            )
+        self.assert_list_element_precise_equal(expect=expect, got=got)
 
     def test_get_slice(self):
         def pyfunc():
@@ -999,9 +1082,7 @@ class TestListManagedElements(ManagedListTestCase):
         expect = pyfunc()
         got = cfunc()
 
-        self.assert_list_element_precise_equal(
-            expect=expect, got=got
-            )
+        self.assert_list_element_precise_equal(expect=expect, got=got)
 
     def test_set_slice(self):
         def pyfunc():
@@ -1015,9 +1096,7 @@ class TestListManagedElements(ManagedListTestCase):
         expect = pyfunc()
         got = cfunc()
 
-        self.assert_list_element_precise_equal(
-            expect=expect, got=got
-            )
+        self.assert_list_element_precise_equal(expect=expect, got=got)
 
     def test_pop(self):
         def pyfunc():
@@ -1032,9 +1111,7 @@ class TestListManagedElements(ManagedListTestCase):
         expect = pyfunc()
         got = cfunc()
 
-        self.assert_list_element_precise_equal(
-            expect=expect, got=got
-            )
+        self.assert_list_element_precise_equal(expect=expect, got=got)
 
     def test_pop_loc(self):
         def pyfunc():
@@ -1049,9 +1126,7 @@ class TestListManagedElements(ManagedListTestCase):
         expect = pyfunc()
         got = cfunc()
 
-        self.assert_list_element_precise_equal(
-            expect=expect, got=got
-            )
+        self.assert_list_element_precise_equal(expect=expect, got=got)
 
     def test_del_range(self):
         def pyfunc():
@@ -1065,9 +1140,7 @@ class TestListManagedElements(ManagedListTestCase):
         expect = pyfunc()
         got = cfunc()
 
-        self.assert_list_element_precise_equal(
-            expect=expect, got=got
-            )
+        self.assert_list_element_precise_equal(expect=expect, got=got)
 
     def test_list_of_list(self):
         def pyfunc():
@@ -1083,13 +1156,12 @@ class TestListManagedElements(ManagedListTestCase):
         self.assertEqual(expect, got)
 
 
-
 def expect_reflection_failure(fn):
     def wrapped(self, *args, **kwargs):
         self.disable_leak_check()
         with self.assertRaises(TypeError) as raises:
             fn(self, *args, **kwargs)
-        expect_msg = 'cannot reflect element of reflected container'
+        expect_msg = "cannot reflect element of reflected container"
         self.assertIn(expect_msg, str(raises.exception))
 
     return wrapped
@@ -1099,6 +1171,7 @@ class TestListOfList(ManagedListTestCase):
 
     def compile_and_test(self, pyfunc, *args):
         from copy import deepcopy
+
         expect_args = deepcopy(args)
         expect = pyfunc(*expect_args)
 
@@ -1106,13 +1179,9 @@ class TestListOfList(ManagedListTestCase):
         cfunc = jit(nopython=True)(pyfunc)
         got = cfunc(*njit_args)
 
-        self.assert_list_element_precise_equal(
-            expect=expect, got=got
-            )
+        self.assert_list_element_precise_equal(expect=expect, got=got)
         # Check reflection
-        self.assert_list_element_precise_equal(
-            expect=expect_args, got=njit_args
-            )
+        self.assert_list_element_precise_equal(expect=expect_args, got=njit_args)
 
     def test_returning_list_of_list(self):
         def pyfunc():
@@ -1127,11 +1196,10 @@ class TestListOfList(ManagedListTestCase):
             return x[1]
 
         cfunc = jit(nopython=True)(pyfunc)
-        l2 = [[np.zeros(i) for i in range(5)],
-              [np.ones(i)+1j for i in range(5)]]
+        l2 = [[np.zeros(i) for i in range(5)], [np.ones(i) + 1j for i in range(5)]]
         l3 = [[np.zeros(i) for i in range(5)], [(1,)]]
         l4 = [[1], [{1}]]
-        l5 = [[1], [{'a': 1}]]
+        l5 = [[1], [{"a": 1}]]
 
         # TODO: this triggers a reflection error.
         # Remove this line when nested reflection is supported
@@ -1142,33 +1210,33 @@ class TestListOfList(ManagedListTestCase):
             cfunc(l2)
 
         self.assertIn(
-            ("reflected list(array(float64, 1d, C)) != "
-             "reflected list(array(complex128, 1d, C))"),
-            str(raises.exception)
-            )
+            (
+                "reflected list(array(float64, 1d, C)) != "
+                "reflected list(array(complex128, 1d, C))"
+            ),
+            str(raises.exception),
+        )
 
         with self.assertRaises(TypeError) as raises:
             cfunc(l3)
 
         self.assertIn(
-            ("reflected list(array(float64, 1d, C)) != "
-             "reflected list((int64 x 1))"),
-            str(raises.exception)
-            )
+            ("reflected list(array(float64, 1d, C)) != " "reflected list((int64 x 1))"),
+            str(raises.exception),
+        )
 
         with self.assertRaises(TypeError) as raises:
             cfunc(l4)
         self.assertIn(
             "reflected list(int64) != reflected list(reflected set(int64))",
-            str(raises.exception)
-            )
+            str(raises.exception),
+        )
 
         with self.assertRaises(ValueError) as raises:
             cfunc(l5)
         self.assertIn(
-            "Cannot type list element of <class 'dict'>",
-            str(raises.exception)
-            )
+            "Cannot type list element of <class 'dict'>", str(raises.exception)
+        )
 
     @expect_reflection_failure
     def test_list_of_list_reflected(self):
@@ -1201,7 +1269,7 @@ class TestListOfList(ManagedListTestCase):
         def bar(x):
             return x.pop()
 
-        r = [[np.zeros(0)], [np.zeros(10)*1j]]
+        r = [[np.zeros(0)], [np.zeros(10) * 1j]]
         # TODO: this triggers a reflection error.
         # Remove this line when nested reflection is supported
         self.compile_and_test(bar, r)
@@ -1209,10 +1277,12 @@ class TestListOfList(ManagedListTestCase):
         with self.assertRaises(TypeError) as raises:
             self.compile_and_test(bar, r)
         self.assertIn(
-            ("reflected list(array(float64, 1d, C)) != "
-             "reflected list(array(complex128, 1d, C))"),
+            (
+                "reflected list(array(float64, 1d, C)) != "
+                "reflected list(array(complex128, 1d, C))"
+            ),
             str(raises.exception),
-            )
+        )
 
     def test_c02(self):
         def bar(x):
@@ -1226,7 +1296,7 @@ class TestListOfList(ManagedListTestCase):
         self.assertIn(
             "Invalid use of BoundFunction(list.append",
             str(raises.exception),
-            )
+        )
 
     def test_c03(self):
         def bar(x):
@@ -1242,7 +1312,7 @@ class TestListOfList(ManagedListTestCase):
             "invalid setitem with value of {} to element of {}".format(
                 typeof(1),
                 typeof(r[0]),
-                ),
+            ),
             str(raises.exception),
         )
 
@@ -1259,9 +1329,9 @@ class TestListOfList(ManagedListTestCase):
             "invalid setitem with value of {} to element of {}".format(
                 typeof(10),
                 typeof(r[0][0]),
-                ),
+            ),
             str(raises.exception),
-            )
+        )
 
     @expect_reflection_failure
     def test_c05(self):
@@ -1365,15 +1435,15 @@ class Container(object):
 class TestListAndJitClasses(ManagedListTestCase):
     def make_jitclass_element(self):
         spec = [
-            ('many', types.float64[:]),
-            ('scalar', types.float64),
+            ("many", types.float64[:]),
+            ("scalar", types.float64),
         ]
         JCItem = jitclass(spec)(Item)
         return JCItem
 
     def make_jitclass_container(self):
         spec = {
-            'data': types.List(dtype=types.List(types.float64[::1])),
+            "data": types.List(dtype=types.List(types.float64[::1])),
         }
         JCContainer = jitclass(spec)(Container)
         return JCContainer
@@ -1395,8 +1465,7 @@ class TestListAndJitClasses(ManagedListTestCase):
 
         cfunc = jit(nopython=True)(pyfunc)
 
-        arg = [JCItem(many=np.random.random(n + 1), scalar=n * 1.2)
-               for n in range(5)]
+        arg = [JCItem(many=np.random.random(n + 1), scalar=n * 1.2) for n in range(5)]
 
         expect_arg = list(arg)
         got_arg = list(arg)
@@ -1422,8 +1491,7 @@ class TestListInitialValues(MemoryLeakMixin, TestCase):
     """Tests that lists carry their initial value if present"""
 
     def test_homogeneous_and_literal(self):
-        def bar(l):
-            ...
+        def bar(l): ...
 
         @overload(bar)
         def ol_bar(l):
@@ -1431,7 +1499,7 @@ class TestListInitialValues(MemoryLeakMixin, TestCase):
                 return lambda l: literally(l)
             self.assertTrue(isinstance(l, types.List))
             self.assertEqual(l.initial_value, [1, 2, 3])
-            self.assertEqual(hasattr(l, 'literal_value'), False)
+            self.assertEqual(hasattr(l, "literal_value"), False)
             return lambda l: l
 
         @njit
@@ -1443,14 +1511,13 @@ class TestListInitialValues(MemoryLeakMixin, TestCase):
         foo()
 
     def test_heterogeneous_but_castable_to_homogeneous(self):
-        def bar(l):
-            ...
+        def bar(l): ...
 
         @overload(bar)
         def ol_bar(l):
             self.assertTrue(isinstance(l, types.List))
             self.assertEqual(l.initial_value, None)
-            self.assertEqual(hasattr(l, 'literal_value'), False)
+            self.assertEqual(hasattr(l, "literal_value"), False)
             return lambda l: l
 
         @njit
@@ -1465,8 +1532,7 @@ class TestListInitialValues(MemoryLeakMixin, TestCase):
         foo()
 
     def test_mutation_not_carried(self):
-        def bar(d):
-            ...
+        def bar(d): ...
 
         @overload(bar)
         def ol_bar(d):
@@ -1494,6 +1560,7 @@ class TestListInitialValues(MemoryLeakMixin, TestCase):
             pass
 
         for fn, iv in (nop, None), (literally, [1, 2, 3]):
+
             @njit
             def baz(x):
                 pass
@@ -1506,6 +1573,7 @@ class TestListInitialValues(MemoryLeakMixin, TestCase):
                 def impl(z):
                     fn(z)
                     baz(z)
+
                 return impl
 
             @njit
@@ -1543,7 +1611,7 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
     def test_basic_compile(self):
         @njit
         def foo():
-            l = [1, 'a']
+            l = [1, "a"]
 
         foo()
 
@@ -1558,21 +1626,22 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
             lv = x.literal_value
             self.assertTrue(isinstance(lv, list))
             self.assertEqual(lv[0], types.literal(1))
-            self.assertEqual(lv[1], types.literal('a'))
-            self.assertEqual(lv[2], types.Array(types.float64, 1, 'C'))
-            self.assertEqual(lv[3], types.List(types.intp, reflected=False,
-                                               initial_value=[1, 2, 3]))
+            self.assertEqual(lv[1], types.literal("a"))
+            self.assertEqual(lv[2], types.Array(types.float64, 1, "C"))
+            self.assertEqual(
+                lv[3], types.List(types.intp, reflected=False, initial_value=[1, 2, 3])
+            )
             self.assertTrue(isinstance(lv[4], types.LiteralList))
-            self.assertEqual(lv[4].literal_value[0], types.literal('cat'))
+            self.assertEqual(lv[4].literal_value[0], types.literal("cat"))
             self.assertEqual(lv[4].literal_value[1], types.literal(10))
             return lambda x: x
 
         @njit
         def foo():
             otherhomogeneouslist = [1, 2, 3]
-            otherheterogeneouslist = ['cat', 10]
+            otherheterogeneouslist = ["cat", 10]
             zeros = np.zeros(5)
-            l = [1, 'a', zeros, otherhomogeneouslist, otherheterogeneouslist]
+            l = [1, "a", zeros, otherhomogeneouslist, otherheterogeneouslist]
             bar(l)
 
         foo()
@@ -1586,43 +1655,50 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
         def ol_bar(x):
             self.assertTrue(isinstance(x, types.LiteralStrKeyDict))
             dlv = x.literal_value
-            inner_literal = {types.literal('g'): types.literal('h'),
-                             types.literal('i'):
-                                 types.Array(types.float64, 1, 'C')}
+            inner_literal = {
+                types.literal("g"): types.literal("h"),
+                types.literal("i"): types.Array(types.float64, 1, "C"),
+            }
             inner_dict = types.LiteralStrKeyDict(inner_literal)
-            outer_literal = {types.literal('a'):
-                            types.LiteralList([types.literal(1),
-                                               types.literal('a'),
-                                               types.DictType(
-                                                   types.unicode_type,
-                                                   types.intp,
-                                                   initial_value={'f': 1}),
-                                               inner_dict]),
-                        types.literal('b'): types.literal(2),
-                        types.literal('c'): types.List(types.complex128,
-                                                       reflected=False)}
+            outer_literal = {
+                types.literal("a"): types.LiteralList(
+                    [
+                        types.literal(1),
+                        types.literal("a"),
+                        types.DictType(
+                            types.unicode_type, types.intp, initial_value={"f": 1}
+                        ),
+                        inner_dict,
+                    ]
+                ),
+                types.literal("b"): types.literal(2),
+                types.literal("c"): types.List(types.complex128, reflected=False),
+            }
+
             def check_same(a, b):
-                if (isinstance(a, types.LiteralList) and
-                    isinstance(b, types.LiteralList)):
+                if isinstance(a, types.LiteralList) and isinstance(
+                    b, types.LiteralList
+                ):
                     for i, j in zip(a.literal_value, b.literal_value):
                         check_same(a.literal_value, b.literal_value)
-                elif (isinstance(a, list) and
-                     isinstance(b, list)):
+                elif isinstance(a, list) and isinstance(b, list):
                     for i, j in zip(a, b):
                         check_same(i, j)
-                elif (isinstance(a, types.LiteralStrKeyDict) and
-                      isinstance(b, types.LiteralStrKeyDict)):
-                    for (ki, vi), (kj, vj) in zip(a.literal_value.items(),
-                                                  b.literal_value.items()):
+                elif isinstance(a, types.LiteralStrKeyDict) and isinstance(
+                    b, types.LiteralStrKeyDict
+                ):
+                    for (ki, vi), (kj, vj) in zip(
+                        a.literal_value.items(), b.literal_value.items()
+                    ):
                         check_same(ki, kj)
                         check_same(vi, vj)
-                elif (isinstance(a, dict) and
-                      isinstance(b, dict)):
+                elif isinstance(a, dict) and isinstance(b, dict):
                     for (ki, vi), (kj, vj) in zip(a.items(), b.items()):
                         check_same(ki, kj)
                         check_same(vi, vj)
                 else:
                     self.assertEqual(a, b)
+
             check_same(dlv, outer_literal)
             return lambda x: x
 
@@ -1631,8 +1707,11 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
             # this stretches what's possible with LiteralStrKeyDict and
             # LiteralList, it's nested and contains typed.Dict and np arrays
             # as well as more constant type things.
-            l = {'a': [1, 'a', {'f': 1}, {'g': 'h', 'i': np.zeros(5)}], 'b': 2,
-                 'c': [1j, 2j, 3j]}
+            l = {
+                "a": [1, "a", {"f": 1}, {"g": "h", "i": np.zeros(5)}],
+                "b": 2,
+                "c": [1j, 2j, 3j],
+            }
             bar(l)
 
         foo()
@@ -1640,47 +1719,57 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
     def test_mutation_failure(self):
 
         def staticsetitem():
-            l = ['a', 1]
-            l[0] = 'b'
+            l = ["a", 1]
+            l[0] = "b"
 
         def delitem():
-            l = ['a', 1]
+            l = ["a", 1]
             del l[0]
 
         def append():
-            l = ['a', 1]
+            l = ["a", 1]
             l.append(2j)
 
         def extend():
-            l = ['a', 1]
+            l = ["a", 1]
             l.extend([2j, 3j])
 
         def insert():
-            l = ['a', 1]
+            l = ["a", 1]
             l.insert(0, 2j)
 
         def remove():
-            l = ['a', 1]
-            l.remove('a')
+            l = ["a", 1]
+            l.remove("a")
 
         def pop():
-            l = ['a', 1]
+            l = ["a", 1]
             l.pop()
 
         def clear():
-            l = ['a', 1]
+            l = ["a", 1]
             l.clear()
 
         def sort():
-            l = ['a', 1]
+            l = ["a", 1]
             l.sort()
 
         def reverse():
-            l = ['a', 1]
+            l = ["a", 1]
             l.reverse()
 
-        illegals = (staticsetitem, delitem, append, extend, insert, remove, pop,
-                    clear, sort, reverse)
+        illegals = (
+            staticsetitem,
+            delitem,
+            append,
+            extend,
+            insert,
+            remove,
+            pop,
+            clear,
+            sort,
+            reverse,
+        )
 
         for test in illegals:
             with self.subTest(test.__name__):
@@ -1692,9 +1781,9 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
     def test_count(self):
         @njit
         def foo():
-            l = ['a', 1, 'a', 2, 'a', 3, 'b', 4, 'b', 5, 'c']
+            l = ["a", 1, "a", 2, "a", 3, "b", 4, "b", 5, "c"]
             r = []
-            for x in 'abc':
+            for x in "abc":
                 r.append(l.count(x))
             return r
 
@@ -1703,7 +1792,7 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
     def test_len(self):
         @njit
         def foo():
-            l = ['a', 1, 'a', 2, 'a', 3, 'b', 4, 'b', 5, 'c']
+            l = ["a", 1, "a", 2, "a", 3, "b", 4, "b", 5, "c"]
             return len(l)
 
         self.assertEqual(foo.py_func(), foo())
@@ -1711,9 +1800,9 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
     def test_contains(self):
         @njit
         def foo():
-            l = ['a', 1, 'a', 2, 'a', 3, 'b', 4, 'b', 5, 'c']
+            l = ["a", 1, "a", 2, "a", 3, "b", 4, "b", 5, "c"]
             r = []
-            for x in literal_unroll(('a', 'd', 2, 6)):
+            for x in literal_unroll(("a", "d", 2, 6)):
                 r.append(x in l)
             return r
 
@@ -1723,7 +1812,7 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
 
         @njit
         def foo(x):
-            l = ['a', 1]
+            l = ["a", 1]
             return l[x]
 
         with self.assertRaises(errors.TypingError) as raises:
@@ -1735,7 +1824,7 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
 
         @njit
         def foo():
-            l = ['a', 1]
+            l = ["a", 1]
             return l[0], l[1]
 
         self.assertEqual(foo.py_func(), foo())
@@ -1745,7 +1834,7 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
         # any kind as required by returning a (static) slice of a LiteralList
         @njit
         def foo():
-            l = ['a', 'b', 1]
+            l = ["a", "b", 1]
             return l[:2]
 
         with self.assertRaises(errors.TypingError) as raises:
@@ -1757,8 +1846,8 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
 
         @njit
         def foo(x):
-            l = ['a', 1]
-            l[x] = 'b'
+            l = ["a", 1]
+            l[x] = "b"
 
         with self.assertRaises(errors.TypingError) as raises:
             foo(0)
@@ -1770,9 +1859,9 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
         @njit
         def foo(x):
             if x + 1 > 3:
-                l = ['a', 1]
+                l = ["a", 1]
             else:
-                l = ['b', 2]
+                l = ["b", 2]
             return l[0]
 
         for x in (-100, 100):
@@ -1783,10 +1872,10 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
         @njit
         def foo(x):
             if x + 1 > 3:
-                l = ['a', 1, 2j]
+                l = ["a", 1, 2j]
             else:
-                l = ['b', 2]
-            return l[0], l[1], l[0], l[1] # defeat py310 inliner
+                l = ["b", 2]
+            return l[0], l[1], l[0], l[1]  # defeat py310 inliner
 
         with self.assertRaises(errors.TypingError) as raises:
             foo(100)
@@ -1796,8 +1885,8 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
     def test_index(self):
         @njit
         def foo():
-            l = ['a', 1]
-            l.index('a')
+            l = ["a", 1]
+            l.index("a")
 
         with self.assertRaises(errors.TypingError) as raises:
             foo()
@@ -1807,7 +1896,7 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
     def test_copy(self):
         @njit
         def foo():
-            l = ['a', 1].copy()
+            l = ["a", 1].copy()
             return l[0], l[1]
 
         self.assertEqual(foo(), foo.py_func())
@@ -1826,11 +1915,11 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
 
         @njit
         def foo():
-            l = ['a', 1]
+            l = ["a", 1]
             bar(l)
 
         foo()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -10,12 +10,12 @@ class DocsJitclassUsageTest(TestCase):
     def test_ex_jitclass(self):
         # magictoken.ex_jitclass.begin
         import numpy as np
-        from numba import int32, float32    # import the types
+        from numba import int32, float32  # import the types
         from numba.experimental import jitclass
 
         spec = [
-            ('value', int32),               # a simple scalar field
-            ('array', float32[:]),          # an array field
+            ("value", int32),  # a simple scalar field
+            ("array", float32[:]),  # an array field
         ]
 
         @jitclass(spec)
@@ -45,10 +45,8 @@ class DocsJitclassUsageTest(TestCase):
         self.assertPreciseEqual(mybag.value, n)
         np.testing.assert_allclose(mybag.array, np.zeros(n, dtype=np.float32))
         self.assertPreciseEqual(mybag.size, n)
-        np.testing.assert_allclose(mybag.increment(3),
-                                   3 * np.ones(n, dtype=np.float32))
-        np.testing.assert_allclose(mybag.increment(6),
-                                   9 * np.ones(n, dtype=np.float32))
+        np.testing.assert_allclose(mybag.increment(3), 3 * np.ones(n, dtype=np.float32))
+        np.testing.assert_allclose(mybag.increment(6), 9 * np.ones(n, dtype=np.float32))
         self.assertPreciseEqual(mybag.add(1, 1), 2)
         self.assertPreciseEqual(Bag.add(1, 2), 3)
 
@@ -83,7 +81,7 @@ class DocsJitclassUsageTest(TestCase):
                 idx = self.counter.get() % len(self.items)
                 return self.items[idx]
 
-        items = NumbaList([3.14, 2.718, 0.123, -4.])
+        items = NumbaList([3.14, 2.718, 0.123, -4.0])
         loop_itr = ListLoopIterator(items)
         # magictoken.ex_jitclass_type_hints.end
 
@@ -93,5 +91,5 @@ class DocsJitclassUsageTest(TestCase):
             self.assertEqual(loop_itr.counter.value, idx + 1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -12,7 +12,7 @@ class CudaSupportError(ImportError):
 
 class NvvmError(Exception):
     def __str__(self):
-        return '\n'.join(map(str, self.args))
+        return "\n".join(map(str, self.args))
 
 
 class NvvmSupportError(ImportError):
@@ -25,7 +25,7 @@ class NvvmWarning(Warning):
 
 class NvrtcError(Exception):
     def __str__(self):
-        return '\n'.join(map(str, self.args))
+        return "\n".join(map(str, self.args))
 
 
 class NvrtcCompilationError(NvrtcError):

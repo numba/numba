@@ -25,7 +25,7 @@ from numba.core.errors import NumbaPerformanceWarning
 from warnings import warn
 
 try:
-    lru_cache = getattr(functools, 'lru_cache')(None)
+    lru_cache = getattr(functools, "lru_cache")(None)
 except AttributeError:
     # Python 3.1 or lower
     def lru_cache(func):
@@ -34,7 +34,7 @@ except AttributeError:
 
 def is_cuda_ndarray(obj):
     "Check if an object is a CUDA ndarray"
-    return getattr(obj, '__cuda_ndarray__', False)
+    return getattr(obj, "__cuda_ndarray__", False)
 
 
 def verify_cuda_ndarray_interface(obj):
@@ -45,25 +45,25 @@ def verify_cuda_ndarray_interface(obj):
         if not hasattr(obj, attr):
             raise AttributeError(attr)
         if not isinstance(getattr(obj, attr), typ):
-            raise AttributeError('%s must be of type %s' % (attr, typ))
+            raise AttributeError("%s must be of type %s" % (attr, typ))
 
-    requires_attr('shape', tuple)
-    requires_attr('strides', tuple)
-    requires_attr('dtype', np.dtype)
-    requires_attr('size', int)
+    requires_attr("shape", tuple)
+    requires_attr("strides", tuple)
+    requires_attr("dtype", np.dtype)
+    requires_attr("size", int)
 
 
 def require_cuda_ndarray(obj):
     "Raises ValueError is is_cuda_ndarray(obj) evaluates False"
     if not is_cuda_ndarray(obj):
-        raise ValueError('require an cuda ndarray object')
+        raise ValueError("require an cuda ndarray object")
 
 
 class DeviceNDArrayBase(_devicearray.DeviceArray):
-    """A on GPU NDArray representation
-    """
+    """A on GPU NDArray representation"""
+
     __cuda_memory__ = True
-    __cuda_ndarray__ = True     # There must be gpu_data attribute
+    __cuda_ndarray__ = True  # There must be gpu_data attribute
 
     def __init__(self, shape, strides, dtype, stream=0, gpu_data=None):
         """
@@ -88,9 +88,8 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
         dtype = np.dtype(dtype)
         self.ndim = len(shape)
         if len(strides) != self.ndim:
-            raise ValueError('strides not match ndim')
-        self._dummy = dummyarray.Array.from_desc(0, shape, strides,
-                                                 dtype.itemsize)
+            raise ValueError("strides not match ndim")
+        self._dummy = dummyarray.Array.from_desc(0, shape, strides, dtype.itemsize)
         self.shape = tuple(shape)
         self.strides = tuple(strides)
         self.dtype = dtype
@@ -99,7 +98,8 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
         if self.size > 0:
             if gpu_data is None:
                 self.alloc_size = _driver.memory_size_from_info(
-                    self.shape, self.strides, self.dtype.itemsize)
+                    self.shape, self.strides, self.dtype.itemsize
+                )
                 gpu_data = devices.get_context().memalloc(self.alloc_size)
             else:
                 self.alloc_size = _driver.device_memory_size(gpu_data)
@@ -109,8 +109,9 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
                 null = _driver.binding.CUdeviceptr(0)
             else:
                 null = c_void_p(0)
-            gpu_data = _driver.MemoryPointer(context=devices.get_context(),
-                                             pointer=null, size=0)
+            gpu_data = _driver.MemoryPointer(
+                context=devices.get_context(), pointer=null, size=0
+            )
             self.alloc_size = 0
 
         self.gpu_data = gpu_data
@@ -130,12 +131,12 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
                 ptr = 0
 
         return {
-            'shape': tuple(self.shape),
-            'strides': None if is_contiguous(self) else tuple(self.strides),
-            'data': (ptr, False),
-            'typestr': self.dtype.str,
-            'stream': int(self.stream) if self.stream != 0 else None,
-            'version': 3,
+            "shape": tuple(self.shape),
+            "strides": None if is_contiguous(self) else tuple(self.strides),
+            "data": (ptr, False),
+            "typestr": self.dtype.str,
+            "stream": int(self.stream) if self.stream != 0 else None,
+            "version": 3,
         }
 
     def bind(self, stream=0):
@@ -160,6 +161,7 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
             raise ValueError("invalid axes list %r" % (axes,))
         else:
             from numba.cuda.kernels.transpose import transpose
+
             return transpose(self)
 
     def _default_stream(self, stream):
@@ -186,20 +188,19 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
         # layouts.
 
         broadcast = 0 in self.strides
-        if self.flags['C_CONTIGUOUS'] and not broadcast:
-            layout = 'C'
-        elif self.flags['F_CONTIGUOUS'] and not broadcast:
-            layout = 'F'
+        if self.flags["C_CONTIGUOUS"] and not broadcast:
+            layout = "C"
+        elif self.flags["F_CONTIGUOUS"] and not broadcast:
+            layout = "F"
         else:
-            layout = 'A'
+            layout = "A"
 
         dtype = numpy_support.from_dtype(self.dtype)
         return types.Array(dtype, self.ndim, layout)
 
     @property
     def device_ctypes_pointer(self):
-        """Returns the ctypes pointer to the GPU data buffer
-        """
+        """Returns the ctypes pointer to the GPU data buffer"""
         if self.gpu_data is None:
             if _driver.USE_NV_BINDING:
                 return _driver.binding.CUdeviceptr(0)
@@ -232,13 +233,16 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
             # (i.e., in order to materialize a writable strided view)
             ary_core = np.array(
                 ary_core,
-                order='C' if self_core.flags['C_CONTIGUOUS'] else 'F',
+                order="C" if self_core.flags["C_CONTIGUOUS"] else "F",
                 subok=True,
-                copy=(not ary_core.flags['WRITEABLE'])
-                if numpy_version < (2, 0) else None)
+                copy=(
+                    (not ary_core.flags["WRITEABLE"])
+                    if numpy_version < (2, 0)
+                    else None
+                ),
+            )
             check_array_compatibility(self_core, ary_core)
-            _driver.host_to_device(self, ary_core, self.alloc_size,
-                                   stream=stream)
+            _driver.host_to_device(self, ary_core, self.alloc_size, stream=stream)
 
     @devices.require_context
     def copy_to_host(self, ary=None, stream=0):
@@ -264,7 +268,7 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
             result_array = d_arr.copy_to_host()
         """
         if any(s < 0 for s in self.strides):
-            msg = 'D->H copy not implemented for negative strides: {}'
+            msg = "D->H copy not implemented for negative strides: {}"
             raise NotImplementedError(msg.format(self.strides))
         assert self.alloc_size >= 0, "Negative memory size"
         stream = self._default_stream(stream)
@@ -275,16 +279,18 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
             hostary = ary
 
         if self.alloc_size != 0:
-            _driver.device_to_host(hostary, self, self.alloc_size,
-                                   stream=stream)
+            _driver.device_to_host(hostary, self, self.alloc_size, stream=stream)
 
         if ary is None:
             if self.size == 0:
-                hostary = np.ndarray(shape=self.shape, dtype=self.dtype,
-                                     buffer=hostary)
+                hostary = np.ndarray(shape=self.shape, dtype=self.dtype, buffer=hostary)
             else:
-                hostary = np.ndarray(shape=self.shape, dtype=self.dtype,
-                                     strides=self.strides, buffer=hostary)
+                hostary = np.ndarray(
+                    shape=self.shape,
+                    dtype=self.dtype,
+                    strides=self.strides,
+                    buffer=hostary,
+                )
         return hostary
 
     def split(self, section, stream=0):
@@ -305,12 +311,12 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
             end = min(begin + section, self.size)
             shape = (end - begin,)
             gpu_data = self.gpu_data.view(begin * itemsize, end * itemsize)
-            yield DeviceNDArray(shape, strides, dtype=self.dtype, stream=stream,
-                                gpu_data=gpu_data)
+            yield DeviceNDArray(
+                shape, strides, dtype=self.dtype, stream=stream, gpu_data=gpu_data
+            )
 
     def as_cuda_arg(self):
-        """Returns a device memory object that is used as the argument.
-        """
+        """Returns a device memory object that is used as the argument."""
         return self.gpu_data
 
     def get_ipc_handle(self):
@@ -367,10 +373,7 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
                     " the array must be C-contiguous"
                 )
 
-            shape[-1], rem = divmod(
-                shape[-1] * self.dtype.itemsize,
-                dtype.itemsize
-            )
+            shape[-1], rem = divmod(shape[-1] * self.dtype.itemsize, dtype.itemsize)
 
             if rem != 0:
                 raise ValueError(
@@ -398,14 +401,14 @@ class DeviceNDArrayBase(_devicearray.DeviceArray):
 
 
 class DeviceRecord(DeviceNDArrayBase):
-    '''
+    """
     An on-GPU record type
-    '''
+    """
+
     def __init__(self, dtype, stream=0, gpu_data=None):
         shape = ()
         strides = ()
-        super(DeviceRecord, self).__init__(shape, strides, dtype, stream,
-                                           gpu_data)
+        super(DeviceRecord, self).__init__(shape, strides, dtype, stream, gpu_data)
 
     @property
     def flags(self):
@@ -415,7 +418,7 @@ class DeviceRecord(DeviceNDArrayBase):
         with an existing `numpy.ndarray` (as the C- and F- contiguous flags
         aren't writeable).
         """
-        return dict(self._dummy.flags) # defensive copy
+        return dict(self._dummy.flags)  # defensive copy
 
     @property
     def _numba_type_(self):
@@ -431,8 +434,7 @@ class DeviceRecord(DeviceNDArrayBase):
 
     @devices.require_context
     def getitem(self, item, stream=0):
-        """Do `__getitem__(item)` with CUDA stream
-        """
+        """Do `__getitem__(item)` with CUDA stream"""
         return self._do_getitem(item, stream)
 
     def _do_getitem(self, item, stream=0):
@@ -442,22 +444,24 @@ class DeviceRecord(DeviceNDArrayBase):
 
         if typ.shape == ():
             if typ.names is not None:
-                return DeviceRecord(dtype=typ, stream=stream,
-                                    gpu_data=newdata)
+                return DeviceRecord(dtype=typ, stream=stream, gpu_data=newdata)
             else:
                 hostary = np.empty(1, dtype=typ)
-                _driver.device_to_host(dst=hostary, src=newdata,
-                                       size=typ.itemsize,
-                                       stream=stream)
+                _driver.device_to_host(
+                    dst=hostary, src=newdata, size=typ.itemsize, stream=stream
+                )
             return hostary[0]
         else:
-            shape, strides, dtype = \
-                prepare_shape_strides_dtype(typ.shape,
-                                            None,
-                                            typ.subdtype[0], 'C')
-            return DeviceNDArray(shape=shape, strides=strides,
-                                 dtype=dtype, gpu_data=newdata,
-                                 stream=stream)
+            shape, strides, dtype = prepare_shape_strides_dtype(
+                typ.shape, None, typ.subdtype[0], "C"
+            )
+            return DeviceNDArray(
+                shape=shape,
+                strides=strides,
+                dtype=dtype,
+                gpu_data=newdata,
+                stream=stream,
+            )
 
     @devices.require_context
     def __setitem__(self, key, value):
@@ -465,8 +469,7 @@ class DeviceRecord(DeviceNDArrayBase):
 
     @devices.require_context
     def setitem(self, key, value, stream=0):
-        """Do `__setitem__(key, value)` with CUDA stream
-        """
+        """Do `__setitem__(key, value)` with CUDA stream"""
         return self._do_setitem(key, value, stream=stream)
 
     def _do_setitem(self, key, value, stream=0):
@@ -515,6 +518,7 @@ def _assign_kernel(ndim):
         @cuda.jit
         def kernel(lhs, rhs):
             lhs[()] = rhs[()]
+
         return kernel
 
     @cuda.jit
@@ -531,9 +535,7 @@ def _assign_kernel(ndim):
 
         # [0, :] is the to-index (into `lhs`)
         # [1, :] is the from-index (into `rhs`)
-        idx = cuda.local.array(
-            shape=(2, ndim),
-            dtype=types.int64)
+        idx = cuda.local.array(shape=(2, ndim), dtype=types.int64)
 
         for i in range(ndim - 1, -1, -1):
             idx[0, i] = location % lhs.shape[i]
@@ -541,17 +543,19 @@ def _assign_kernel(ndim):
             location //= lhs.shape[i]
 
         lhs[to_fixed_tuple(idx[0], ndim)] = rhs[to_fixed_tuple(idx[1], ndim)]
+
     return kernel
 
 
 class DeviceNDArray(DeviceNDArrayBase):
-    '''
+    """
     An on-GPU array type
-    '''
+    """
+
     def is_f_contiguous(self):
-        '''
+        """
         Return true if the array is Fortran-contiguous.
-        '''
+        """
         return self._dummy.is_f_contig
 
     @property
@@ -562,12 +566,12 @@ class DeviceNDArray(DeviceNDArrayBase):
         with an existing `numpy.ndarray` (as the C- and F- contiguous flags
         aren't writeable).
         """
-        return dict(self._dummy.flags) # defensive copy
+        return dict(self._dummy.flags)  # defensive copy
 
     def is_c_contiguous(self):
-        '''
+        """
         Return true if the array is C-contiguous.
-        '''
+        """
         return self._dummy.is_c_contig
 
     def __array__(self, dtype=None):
@@ -595,31 +599,43 @@ class DeviceNDArray(DeviceNDArrayBase):
         cls = type(self)
         if newshape == self.shape:
             # nothing to do
-            return cls(shape=self.shape, strides=self.strides,
-                       dtype=self.dtype, gpu_data=self.gpu_data)
+            return cls(
+                shape=self.shape,
+                strides=self.strides,
+                dtype=self.dtype,
+                gpu_data=self.gpu_data,
+            )
 
         newarr, extents = self._dummy.reshape(*newshape, **kws)
 
         if extents == [self._dummy.extent]:
-            return cls(shape=newarr.shape, strides=newarr.strides,
-                       dtype=self.dtype, gpu_data=self.gpu_data)
+            return cls(
+                shape=newarr.shape,
+                strides=newarr.strides,
+                dtype=self.dtype,
+                gpu_data=self.gpu_data,
+            )
         else:
             raise NotImplementedError("operation requires copying")
 
-    def ravel(self, order='C', stream=0):
-        '''
+    def ravel(self, order="C", stream=0):
+        """
         Flattens a contiguous array without changing its contents, similar to
         :meth:`numpy.ndarray.ravel`. If the array is not contiguous, raises an
         exception.
-        '''
+        """
         stream = self._default_stream(stream)
         cls = type(self)
         newarr, extents = self._dummy.ravel(order=order)
 
         if extents == [self._dummy.extent]:
-            return cls(shape=newarr.shape, strides=newarr.strides,
-                       dtype=self.dtype, gpu_data=self.gpu_data,
-                       stream=stream)
+            return cls(
+                shape=newarr.shape,
+                strides=newarr.strides,
+                dtype=self.dtype,
+                gpu_data=self.gpu_data,
+                stream=stream,
+            )
 
         else:
             raise NotImplementedError("operation requires copying")
@@ -630,8 +646,7 @@ class DeviceNDArray(DeviceNDArrayBase):
 
     @devices.require_context
     def getitem(self, item, stream=0):
-        """Do `__getitem__(item)` with CUDA stream
-        """
+        """Do `__getitem__(item)` with CUDA stream"""
         return self._do_getitem(item, stream)
 
     def _do_getitem(self, item, stream=0):
@@ -646,22 +661,36 @@ class DeviceNDArray(DeviceNDArrayBase):
             if not arr.is_array:
                 # Check for structured array type (record)
                 if self.dtype.names is not None:
-                    return DeviceRecord(dtype=self.dtype, stream=stream,
-                                        gpu_data=newdata)
+                    return DeviceRecord(
+                        dtype=self.dtype, stream=stream, gpu_data=newdata
+                    )
                 else:
                     # Element indexing
                     hostary = np.empty(1, dtype=self.dtype)
-                    _driver.device_to_host(dst=hostary, src=newdata,
-                                           size=self._dummy.itemsize,
-                                           stream=stream)
+                    _driver.device_to_host(
+                        dst=hostary,
+                        src=newdata,
+                        size=self._dummy.itemsize,
+                        stream=stream,
+                    )
                 return hostary[0]
             else:
-                return cls(shape=arr.shape, strides=arr.strides,
-                           dtype=self.dtype, gpu_data=newdata, stream=stream)
+                return cls(
+                    shape=arr.shape,
+                    strides=arr.strides,
+                    dtype=self.dtype,
+                    gpu_data=newdata,
+                    stream=stream,
+                )
         else:
             newdata = self.gpu_data.view(*arr.extent)
-            return cls(shape=arr.shape, strides=arr.strides,
-                       dtype=self.dtype, gpu_data=newdata, stream=stream)
+            return cls(
+                shape=arr.shape,
+                strides=arr.strides,
+                dtype=self.dtype,
+                gpu_data=newdata,
+                stream=stream,
+            )
 
     @devices.require_context
     def __setitem__(self, key, value):
@@ -669,8 +698,7 @@ class DeviceNDArray(DeviceNDArrayBase):
 
     @devices.require_context
     def setitem(self, key, value, stream=0):
-        """Do `__setitem__(key, value)` with CUDA stream
-        """
+        """Do `__setitem__(key, value)` with CUDA stream"""
         return self._do_setitem(key, value, stream=stream)
 
     def _do_setitem(self, key, value, stream=0):
@@ -703,23 +731,26 @@ class DeviceNDArray(DeviceNDArrayBase):
             strides=strides,
             dtype=self.dtype,
             gpu_data=newdata,
-            stream=stream)
+            stream=stream,
+        )
 
         # (2) prepare RHS
 
         rhs, _ = auto_device(value, stream=stream, user_explicit=True)
         if rhs.ndim > lhs.ndim:
-            raise ValueError("Can't assign %s-D array to %s-D self" % (
-                rhs.ndim,
-                lhs.ndim))
+            raise ValueError(
+                "Can't assign %s-D array to %s-D self" % (rhs.ndim, lhs.ndim)
+            )
         rhs_shape = np.ones(lhs.ndim, dtype=np.int64)
         # negative indices would not work if rhs.ndim == 0
-        rhs_shape[lhs.ndim - rhs.ndim:] = rhs.shape
+        rhs_shape[lhs.ndim - rhs.ndim :] = rhs.shape
         rhs = rhs.reshape(*rhs_shape)
         for i, (l, r) in enumerate(zip(lhs.shape, rhs.shape)):
             if r != 1 and l != r:
-                raise ValueError("Can't copy sequence with size %d to array "
-                                 "axis %d with dimension %d" % ( r, i, l))
+                raise ValueError(
+                    "Can't copy sequence with size %d to array "
+                    "axis %d with dimension %d" % (r, i, l)
+                )
 
         # (3) do the copy
 
@@ -748,6 +779,7 @@ class IpcArrayHandle(object):
             some_code(ipc_array)
         # ipc_array is dead at this point
     """
+
     def __init__(self, ipc_handle, array_desc):
         self._array_desc = array_desc
         self._ipc_handle = ipc_handle
@@ -795,8 +827,9 @@ class ManagedNDArray(DeviceNDArrayBase, np.ndarray):
 
 def from_array_like(ary, stream=0, gpu_data=None):
     "Create a DeviceNDArray object that is like ary."
-    return DeviceNDArray(ary.shape, ary.strides, ary.dtype, stream=stream,
-                         gpu_data=gpu_data)
+    return DeviceNDArray(
+        ary.shape, ary.strides, ary.dtype, stream=stream, gpu_data=gpu_data
+    )
 
 
 def from_record_like(rec, stream=0, gpu_data=None):
@@ -838,15 +871,17 @@ def is_contiguous(ary):
     return True
 
 
-errmsg_contiguous_buffer = ("Array contains non-contiguous buffer and cannot "
-                            "be transferred as a single memory region. Please "
-                            "ensure contiguous buffer with numpy "
-                            ".ascontiguousarray()")
+errmsg_contiguous_buffer = (
+    "Array contains non-contiguous buffer and cannot "
+    "be transferred as a single memory region. Please "
+    "ensure contiguous buffer with numpy "
+    ".ascontiguousarray()"
+)
 
 
 def sentry_contiguous(ary):
     core = array_core(ary)
-    if not core.flags['C_CONTIGUOUS'] and not core.flags['F_CONTIGUOUS']:
+    if not core.flags["C_CONTIGUOUS"] and not core.flags["F_CONTIGUOUS"]:
         raise ValueError(errmsg_contiguous_buffer)
 
 
@@ -858,7 +893,7 @@ def auto_device(obj, stream=0, copy=True, user_explicit=False):
     """
     if _driver.is_device_memory(obj):
         return obj, False
-    elif hasattr(obj, '__cuda_array_interface__'):
+    elif hasattr(obj, "__cuda_array_interface__"):
         return numba.cuda.as_cuda_array(obj), False
     else:
         if isinstance(obj, np.void):
@@ -870,20 +905,19 @@ def auto_device(obj, stream=0, copy=True, user_explicit=False):
             # into this function (with no overhead -- copies -- for `obj`s
             # that are already `ndarray`s.
             obj = np.array(
-                obj,
-                copy=False if numpy_version < (2, 0) else None,
-                subok=True)
+                obj, copy=False if numpy_version < (2, 0) else None, subok=True
+            )
             sentry_contiguous(obj)
             devobj = from_array_like(obj, stream=stream)
         if copy:
             if config.CUDA_WARN_ON_IMPLICIT_COPY:
-                if (
-                    not user_explicit and
-                    (not isinstance(obj, DeviceNDArray)
-                     and isinstance(obj, np.ndarray))
+                if not user_explicit and (
+                    not isinstance(obj, DeviceNDArray) and isinstance(obj, np.ndarray)
                 ):
-                    msg = ("Host array used in CUDA kernel will incur "
-                           "copy overhead to/from device.")
+                    msg = (
+                        "Host array used in CUDA kernel will incur "
+                        "copy overhead to/from device."
+                    )
                     warn(NumbaPerformanceWarning(msg))
             devobj.copy_to_device(obj, stream=stream)
         return devobj, True
@@ -892,13 +926,12 @@ def auto_device(obj, stream=0, copy=True, user_explicit=False):
 def check_array_compatibility(ary1, ary2):
     ary1sq, ary2sq = ary1.squeeze(), ary2.squeeze()
     if ary1.dtype != ary2.dtype:
-        raise TypeError('incompatible dtype: %s vs. %s' %
-                        (ary1.dtype, ary2.dtype))
+        raise TypeError("incompatible dtype: %s vs. %s" % (ary1.dtype, ary2.dtype))
     if ary1sq.shape != ary2sq.shape:
-        raise ValueError('incompatible shape: %s vs. %s' %
-                         (ary1.shape, ary2.shape))
+        raise ValueError("incompatible shape: %s vs. %s" % (ary1.shape, ary2.shape))
     # We check strides only if the size is nonzero, because strides are
     # irrelevant (and can differ) for zero-length copies.
     if ary1.size and ary1sq.strides != ary2sq.strides:
-        raise ValueError('incompatible strides: %s vs. %s' %
-                         (ary1.strides, ary2.strides))
+        raise ValueError(
+            "incompatible strides: %s vs. %s" % (ary1.strides, ary2.strides)
+        )

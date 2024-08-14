@@ -15,16 +15,20 @@ import unittest
 def slice_passing(sl):
     return sl.start, sl.stop, sl.step
 
+
 def slice_constructor(*args):
     sl = slice(*args)
     return sl.start, sl.stop, sl.step
+
 
 def slice_construct_and_use(args, l):
     sl = slice(*args)
     return l[sl]
 
+
 def slice_indices(s, *indargs):
     return s.indices(*indargs)
+
 
 class TestSlices(MemoryLeakMixin, TestCase):
 
@@ -32,6 +36,7 @@ class TestSlices(MemoryLeakMixin, TestCase):
         """
         Check passing a slice object to a Numba function.
         """
+
         # NOTE this also checks slice attributes
         def check(a, b, c, d, e, f):
             sl = slice(a, b, c)
@@ -46,18 +51,18 @@ class TestSlices(MemoryLeakMixin, TestCase):
         start_cases = [(None, 0), (42, 42), (-1, -1)]
         stop_cases = [(None, maxposint), (9, 9), (-11, -11)]
         step_cases = [(None, 1), (12, 12)]
-        for (a, d), (b, e), (c, f) in itertools.product(start_cases,
-                                                        stop_cases,
-                                                        step_cases):
+        for (a, d), (b, e), (c, f) in itertools.product(
+            start_cases, stop_cases, step_cases
+        ):
             check(a, b, c, d, e, f)
 
         # Negative steps
         start_cases = [(None, maxposint), (42, 42), (-1, -1)]
         stop_cases = [(None, maxnegint), (9, 9), (-11, -11)]
         step_cases = [(-1, -1), (-12, -12)]
-        for (a, d), (b, e), (c, f) in itertools.product(start_cases,
-                                                        stop_cases,
-                                                        step_cases):
+        for (a, d), (b, e), (c, f) in itertools.product(
+            start_cases, stop_cases, step_cases
+        ):
             check(a, b, c, d, e, f)
 
         # Some member is neither integer nor None
@@ -100,9 +105,7 @@ class TestSlices(MemoryLeakMixin, TestCase):
         Test that slice constructor behaves same in python and compiled code.
         """
         options = (None, -1, 0, 1)
-        arg_cases = chain.from_iterable(
-            product(options, repeat=n) for n in range(5)
-        )
+        arg_cases = chain.from_iterable(product(options, repeat=n) for n in range(5))
         array = np.arange(10)
 
         cfunc = jit(nopython=True)(slice_construct_and_use)
@@ -117,26 +120,20 @@ class TestSlices(MemoryLeakMixin, TestCase):
                 n_args = len(args)
                 self.assertRegex(
                     str(py_type_e),
-                    r"slice expected at (most|least) (3|1) arguments?, got {}"
-                    .format(n_args)
+                    r"slice expected at (most|least) (3|1) arguments?, got {}".format(
+                        n_args
+                    ),
                 )
                 with self.assertRaises(TypingError) as numba_e:
                     cfunc(args, array)
+                self.assertIn(_header_lead, str(numba_e.exception))
                 self.assertIn(
-                    _header_lead,
-                    str(numba_e.exception)
-                )
-                self.assertIn(
-                    ", ".join(str(typeof(arg)) for arg in args),
-                    str(numba_e.exception)
+                    ", ".join(str(typeof(arg)) for arg in args), str(numba_e.exception)
                 )
             except Exception as py_e:
                 with self.assertRaises(type(py_e)) as numba_e:
                     cfunc(args, array)
-                self.assertIn(
-                    str(py_e),
-                    str(numba_e.exception)
-                )
+                self.assertIn(str(py_e), str(numba_e.exception))
             else:
                 self.assertPreciseEqual(expected, cfunc(args, array))
 
@@ -147,8 +144,8 @@ class TestSlices(MemoryLeakMixin, TestCase):
             product(
                 chain(range(-5, 5), (None,)),
                 chain(range(-5, 5), (None,)),
-                chain(range(-5, 5), (None,))
-            )
+                chain(range(-5, 5), (None,)),
+            ),
         )
         lengths = range(-2, 3)
 
@@ -160,10 +157,7 @@ class TestSlices(MemoryLeakMixin, TestCase):
             except Exception as py_e:
                 with self.assertRaises(type(py_e)) as numba_e:
                     cfunc(s, l)
-                self.assertIn(
-                    str(py_e),
-                    str(numba_e.exception)
-                )
+                self.assertIn(str(py_e), str(numba_e.exception))
             else:
                 self.assertPreciseEqual(expected, cfunc(s, l))
 
@@ -174,15 +168,14 @@ class TestSlices(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as e:
             cslice_indices(slice(None), 1, 2, 3)
         self.assertIn(
-             "indices() takes exactly one argument (3 given)",
-             str(e.exception)
+            "indices() takes exactly one argument (3 given)", str(e.exception)
         )
 
         with self.assertRaises(TypingError) as e:
             cslice_indices(slice(None, None, 0), 1.2)
         self.assertIn(
             "'%s' object cannot be interpreted as an integer" % typeof(1.2),
-            str(e.exception)
+            str(e.exception),
         )
 
     def test_slice_from_constant(self):
@@ -222,16 +215,16 @@ class TestSlices(MemoryLeakMixin, TestCase):
             slice(1, None, 1),
             slice(None, None, 1),
             slice(None),
-            slice(None, None, None)
+            slice(None, None, None),
         )
         for sl in slices:
             self.assertEqual(sl, f(sl))
-
 
     def test_literal_slice_freevar(self):
         # Tests passing a literal slice as a freevar
         # in a closure.
         z = slice(1, 2, 3)
+
         @njit
         def foo():
             return z
@@ -248,12 +241,9 @@ class TestSlices(MemoryLeakMixin, TestCase):
 
         maxval = int(2**63)
         with self.assertRaises(ValueError) as e:
-            foo(slice(None, None, -maxval-1))
-        self.assertIn(
-            "Int value is too large",
-            str(e.exception)
-        )
+            foo(slice(None, None, -maxval - 1))
+        self.assertIn("Int value is too large", str(e.exception))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

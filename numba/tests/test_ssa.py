@@ -1,6 +1,7 @@
 """
 Tests for SSA reconstruction
 """
+
 import sys
 import copy
 import logging
@@ -113,8 +114,7 @@ class TestSSA(SSABaseTest):
             with self.assertWarns(errors.NumbaWarning) as warns:
                 # n=1 so we won't actually run the branch with the uninitialized
                 self.check_func(foo, 1)
-            self.assertIn("Detected uninitialized variable c",
-                          str(warns.warning))
+            self.assertIn("Detected uninitialized variable c", str(warns.warning))
         else:
             self.check_func(foo, 1)
 
@@ -122,9 +122,9 @@ class TestSSA(SSABaseTest):
             foo.py_func(0)
 
     def test_undefined_var(self):
-        with override_config('ALWAYS_WARN_UNINIT_VAR', 0):
+        with override_config("ALWAYS_WARN_UNINIT_VAR", 0):
             self.check_undefined_var(should_warn=False)
-        with override_config('ALWAYS_WARN_UNINIT_VAR', 1):
+        with override_config("ALWAYS_WARN_UNINIT_VAR", 1):
             self.check_undefined_var(should_warn=True)
 
     def test_phi_propagation(self):
@@ -165,7 +165,7 @@ class TestSSA(SSABaseTest):
             else:
                 if arg2:
                     if arg4:
-                        var5 = arg4         # noqa: F841
+                        var5 = arg4  # noqa: F841
                         return
                     else:
                         var6 = var4
@@ -178,7 +178,7 @@ class TestSSA(SSABaseTest):
                                 var1 = var6
                                 return
                             else:
-                                var7 = arg2     # noqa: F841
+                                var7 = arg2  # noqa: F841
                                 return arg2
                             return
                         else:
@@ -194,8 +194,8 @@ class TestSSA(SSABaseTest):
                         var8 = var1
                         return
                     return var8
-                var9 = var3         # noqa: F841
-                var10 = arg5        # noqa: F841
+                var9 = var3  # noqa: F841
+                var10 = arg5  # noqa: F841
                 return var1
 
         # The argument values is not critical for re-creating the bug
@@ -221,7 +221,9 @@ class TestReportedSSAIssues(SSABaseTest):
             for i in range(s, 1):
                 pass
 
-        self.check_func(foo, )
+        self.check_func(
+            foo,
+        )
 
     def test_issue3094(self):
 
@@ -247,15 +249,14 @@ class TestReportedSSAIssues(SSABaseTest):
             for i in range(1):
                 arr = arr.reshape(3 * 2)
                 arr = arr.reshape(3, 2)
-            return (arr)
+            return arr
 
-        np.testing.assert_allclose(foo(np.zeros((3, 2))),
-                                   foo.py_func(np.zeros((3, 2))))
+        np.testing.assert_allclose(foo(np.zeros((3, 2))), foo.py_func(np.zeros((3, 2))))
 
     def test_issue3976(self):
 
         def overload_this(a):
-            return 'dummy'
+            return "dummy"
 
         @njit
         def foo(a):
@@ -263,7 +264,7 @@ class TestReportedSSAIssues(SSABaseTest):
                 s = 5
                 s = overload_this(s)
             else:
-                s = 'b'
+                s = "b"
 
             return s
 
@@ -285,7 +286,7 @@ class TestReportedSSAIssues(SSABaseTest):
                 y = i
             return x, y
 
-        self.check_func(foo, (1, 2), ('A', 'B'))
+        self.check_func(foo, (1, 2), ("A", "B"))
 
     def test_issue5219(self):
 
@@ -302,13 +303,14 @@ class TestReportedSSAIssues(SSABaseTest):
                 if b_is_tuple is True:
                     b = b[0]
                 return b
+
             return impl
 
         @njit
         def test_tuple(a, b):
             overload_this(a, b)
 
-        self.check_func(test_tuple, 1, (2, ))
+        self.check_func(test_tuple, 1, (2,))
 
     def test_issue5223(self):
 
@@ -372,8 +374,7 @@ class TestReportedSSAIssues(SSABaseTest):
                 pm.finalize()
                 return [pm]
 
-        @jit("(intp, intp, intp)", looplift=False,
-             pipeline_class=CustomPipeline)
+        @jit("(intp, intp, intp)", looplift=False, pipeline_class=CustomPipeline)
         def foo(x, v, n):
             for i in range(n):
                 if i == n:
@@ -393,7 +394,7 @@ class TestReportedSSAIssues(SSABaseTest):
         # have a dominance definition.
         data = (np.ones(2), np.ones(2))
         A = np.ones(1)
-        B = np.ones((1,1))
+        B = np.ones((1, 1))
 
         def foo(m, n, data):
             if len(data) == 1:
@@ -454,7 +455,9 @@ class TestReportedSSAIssues(SSABaseTest):
 
         from numba.core.compiler import CompilerBase, DefaultPassBuilder
         from numba.core.untyped_passes import (
-            ReconstructSSA, FunctionPass, register_pass,
+            ReconstructSSA,
+            FunctionPass,
+            register_pass,
         )
 
         phi_counter = []
@@ -471,7 +474,7 @@ class TestReportedSSAIssues(SSABaseTest):
             def run_pass(self, state):
                 ct = 0
                 for blk in state.func_ir.blocks.values():
-                    ct += len(list(blk.find_exprs('phi')))
+                    ct += len(list(blk.find_exprs("phi")))
                 phi_counter.append(ct)
                 return True
 
@@ -484,12 +487,12 @@ class TestReportedSSAIssues(SSABaseTest):
 
         @njit(pipeline_class=CustomPipeline)
         def while_for(n, max_iter=1):
-            a = np.empty((n,n))
+            a = np.empty((n, n))
             i = 0
             while i <= max_iter:
                 for j in range(len(a)):
                     for k in range(len(a)):
-                        a[j,k] = j + k
+                        a[j, k] = j + k
                 i += 1
             return a
 
@@ -534,7 +537,8 @@ class TestReportedSSAIssues(SSABaseTest):
 
             def define_pipelines(self):
                 pipeline = DefaultPassBuilder.define_nopython_pipeline(
-                    self.state, "ssa_check_custom_pipeline")
+                    self.state, "ssa_check_custom_pipeline"
+                )
 
                 pipeline._finalized = False
                 pipeline.add_pass_after(SSACheck, ReconstructSSA)
@@ -592,7 +596,8 @@ class TestSROAIssues(MemoryLeakMixin, TestCase):
         class CustomCompiler(CompilerBase):
             def define_pipelines(self):
                 pm = DefaultPassBuilder.define_nopython_pipeline(
-                    self.state, "custom_pipeline",
+                    self.state,
+                    "custom_pipeline",
                 )
                 pm._finalized = False
                 # Insert the cloning pass after SSA
@@ -614,18 +619,18 @@ class TestSROAIssues(MemoryLeakMixin, TestCase):
         self.assertEqual(len(cloned), 1)
         self.assertEqual(cloned[0].target.name, "foobar")
         # Verify in the Numba IR that the expected statement is cloned
-        nir = udt.overloads[udt.signatures[0]].metadata['preserved_ir']
-        self.assertEqual(len(nir.blocks), 1,
-                         "only one block")
+        nir = udt.overloads[udt.signatures[0]].metadata["preserved_ir"]
+        self.assertEqual(len(nir.blocks), 1, "only one block")
         [blk] = nir.blocks.values()
         assigns = blk.find_insts(ir.Assign)
-        foobar_assigns = [stmt for stmt in assigns
-                          if stmt.target.name == "foobar"]
+        foobar_assigns = [stmt for stmt in assigns if stmt.target.name == "foobar"]
         self.assertEqual(
-            len(foobar_assigns), 2,
+            len(foobar_assigns),
+            2,
             "expected two assignment statements into 'foobar'",
         )
         self.assertEqual(
-            foobar_assigns[0], foobar_assigns[1],
+            foobar_assigns[0],
+            foobar_assigns[1],
             "expected the two assignment statements to be the same",
         )

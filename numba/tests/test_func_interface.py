@@ -6,11 +6,11 @@ class TestFuncInterface(unittest.TestCase):
     def test_jit_function_docstring(self):
 
         def add(x, y):
-            '''Return sum of two numbers'''
+            """Return sum of two numbers"""
             return x + y
 
         c_add = jit(add)
-        self.assertEqual(c_add.__doc__, 'Return sum of two numbers')
+        self.assertEqual(c_add.__doc__, "Return sum of two numbers")
 
     def test_jit_function_name(self):
 
@@ -18,7 +18,7 @@ class TestFuncInterface(unittest.TestCase):
             return x + y
 
         c_add = jit(add)
-        self.assertEqual(c_add.__name__, 'add')
+        self.assertEqual(c_add.__name__, "add")
 
     def test_jit_function_module(self):
 
@@ -39,5 +39,5 @@ class TestFuncInterface(unittest.TestCase):
         self.assertEqual(c_add.func_code, add.__code__)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

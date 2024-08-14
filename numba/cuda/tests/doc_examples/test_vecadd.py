@@ -26,6 +26,7 @@ class TestVecAdd(CUDATestCase):
         # ex_vecadd.import.begin
         import numpy as np
         from numba import cuda
+
         # ex_vecadd.import.end
 
         # ex_vecadd.kernel.begin
@@ -37,6 +38,7 @@ class TestVecAdd(CUDATestCase):
 
             if tid < size:
                 c[tid] = a[tid] + b[tid]
+
         # ex_vecadd.kernel.end
 
         # Seed RNG for test repeatability
@@ -63,10 +65,7 @@ class TestVecAdd(CUDATestCase):
         print(c.copy_to_host())
         # ex_vecadd.launch.end
 
-        np.testing.assert_equal(
-            c.copy_to_host(),
-            a.copy_to_host() + b.copy_to_host()
-        )
+        np.testing.assert_equal(c.copy_to_host(), a.copy_to_host() + b.copy_to_host())
 
 
 if __name__ == "__main__":

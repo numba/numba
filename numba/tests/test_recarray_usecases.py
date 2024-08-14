@@ -64,7 +64,7 @@ def usecase5(x, N):
 class TestRecordUsecase(TestCase):
 
     def setUp(self):
-        fields = [('f1', '<f8'), ('s1', '|S3'), ('f2', '<f8')]
+        fields = [("f1", "<f8"), ("s1", "|S3"), ("f2", "<f8")]
         self.unaligned_dtype = np.dtype(fields)
         self.aligned_dtype = np.dtype(fields, align=True)
 
@@ -72,9 +72,9 @@ class TestRecordUsecase(TestCase):
         pyfunc = usecase1
 
         # This is an unaligned dtype
-        mystruct_dt = np.dtype([('p', np.float64),
-                           ('row', np.float64),
-                           ('col', np.float64)])
+        mystruct_dt = np.dtype(
+            [("p", np.float64), ("row", np.float64), ("col", np.float64)]
+        )
         mystruct = numpy_support.from_dtype(mystruct_dt)
 
         cfunc = njit((mystruct[:], mystruct[:]))(pyfunc)
@@ -107,7 +107,7 @@ class TestRecordUsecase(TestCase):
         a = np.recarray(N, dtype=dtype)
         a.f1 = np.arange(N)
         a.f2 = np.arange(2, N + 2)
-        a.s1 = np.array(['abc'] * a.shape[0], dtype='|S3')
+        a.s1 = np.array(["abc"] * a.shape[0], dtype="|S3")
         return a
 
     def _test_usecase2to5(self, pyfunc, dtype):
@@ -142,5 +142,5 @@ class TestRecordUsecase(TestCase):
         self._test_usecase2to5(usecase5, self.aligned_dtype)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

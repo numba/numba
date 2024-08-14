@@ -6,8 +6,8 @@ from numba.core import types
 from numba.tests.support import TestCase, MemoryLeakMixin
 from numba.core.datamodel.testing import test_factory
 
-forceobj_flags = {'nopython': False, 'forceobj': True}
-nopython_flags = {'nopython': True}
+forceobj_flags = {"nopython": False, "forceobj": True}
+nopython_flags = {"nopython": True}
 
 
 def make_consumer(gen_func):
@@ -199,8 +199,9 @@ class TestGenerators(MemoryLeakMixin, TestCase):
     def test_gen5(self):
         with self.assertTypingError() as raises:
             jit((), **nopython_flags)(gen5)
-        self.assertIn("Cannot type generator: it does not yield any value",
-                      str(raises.exception))
+        self.assertIn(
+            "Cannot type generator: it does not yield any value", str(raises.exception)
+        )
 
     def test_gen5_objmode(self):
         cgen = jit((), **forceobj_flags)(gen5)()
@@ -224,7 +225,7 @@ class TestGenerators(MemoryLeakMixin, TestCase):
 
     def check_gen7(self, **kwargs):
         pyfunc = gen7
-        cr = jit((types.Array(types.float64, 1, 'C'),), **kwargs)(pyfunc)
+        cr = jit((types.Array(types.float64, 1, "C"),), **kwargs)(pyfunc)
         arr = np.linspace(1, 10, 7)
         pygen = pyfunc(arr.copy())
         cgen = cr(arr)
@@ -241,8 +242,7 @@ class TestGenerators(MemoryLeakMixin, TestCase):
         cfunc = jit(**jit_args)(pyfunc)
 
         def check(*args, **kwargs):
-            self.check_generator(pyfunc(*args, **kwargs),
-                                 cfunc(*args, **kwargs))
+            self.check_generator(pyfunc(*args, **kwargs), cfunc(*args, **kwargs))
 
         check(2, 3)
         check(4)
@@ -326,8 +326,7 @@ class TestGenerators(MemoryLeakMixin, TestCase):
         with self.assertTypingError() as raises:
             jit((), **nopython_flags)(pyfunc)
 
-        msg = ("Can't unify yield type from the following types: complex128, "
-               "none")
+        msg = "Can't unify yield type from the following types: complex128, " "none"
         self.assertIn(msg, str(raises.exception))
 
     def test_optional_expansion_type_unification_error(self):
@@ -335,8 +334,10 @@ class TestGenerators(MemoryLeakMixin, TestCase):
         with self.assertTypingError() as raises:
             jit((), **nopython_flags)(pyfunc)
 
-        msg = ("Can't unify yield type from the following types: complex128, "
-               "int%s, none")
+        msg = (
+            "Can't unify yield type from the following types: complex128, "
+            "int%s, none"
+        )
         self.assertIn(msg % types.intp.bitwidth, str(raises.exception))
 
     def test_changing_tuple_type(self):
@@ -629,7 +630,7 @@ class TestGeneratorWithNRT(MemoryLeakMixin, TestCase):
         """
         Incorrect return data model
         """
-        magic = 0xdeadbeef
+        magic = 0xDEADBEEF
 
         @njit
         def generator():
@@ -651,11 +652,14 @@ class TestGeneratorWithNRT(MemoryLeakMixin, TestCase):
 
 
 class TestGeneratorModel(test_factory()):
-    fe_type = types.Generator(gen_func=None, yield_type=types.int32,
-                              arg_types=[types.int64, types.float32],
-                              state_types=[types.intp, types.intp[::1]],
-                              has_finalizer=False)
+    fe_type = types.Generator(
+        gen_func=None,
+        yield_type=types.int32,
+        arg_types=[types.int64, types.float32],
+        state_types=[types.intp, types.intp[::1]],
+        has_finalizer=False,
+    )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

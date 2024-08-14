@@ -17,13 +17,14 @@ class TestFreeVar(CUDATestCase):
         @cuda.jit("(float32[::1], intp)")
         def foo(A, i):
             "Dummy function"
-            sdata = cuda.shared.array(size,   # size is freevar
-                                      dtype=nbtype)  # nbtype is freevar
+            sdata = cuda.shared.array(
+                size, dtype=nbtype  # size is freevar
+            )  # nbtype is freevar
             A[i] = sdata[i]
 
         A = np.arange(2, dtype="float32")
         foo[1, 1](A, 0)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

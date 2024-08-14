@@ -8,12 +8,20 @@ from numba import njit, typed, objmode, prange
 from numba.core.utils import PYVERSION
 from numba.core import ir_utils, ir
 from numba.core.errors import (
-    UnsupportedError, CompilerError, NumbaPerformanceWarning, TypingError,
+    UnsupportedError,
+    CompilerError,
+    NumbaPerformanceWarning,
+    TypingError,
 )
 from numba.tests.support import (
-    TestCase, unittest, captured_stdout, MemoryLeakMixin,
-    skip_parfors_unsupported, skip_unless_scipy, expected_failure_py311,
-    expected_failure_py312
+    TestCase,
+    unittest,
+    captured_stdout,
+    MemoryLeakMixin,
+    skip_parfors_unsupported,
+    skip_unless_scipy,
+    expected_failure_py311,
+    expected_failure_py312,
 )
 
 
@@ -24,11 +32,12 @@ class MyError(Exception):
 class TestTryBareExcept(TestCase):
     """Test the following pattern:
 
-        try:
-            <body>
-        except:
-            <handling>
+    try:
+        <body>
+    except:
+        <handling>
     """
+
     def test_try_inner_raise(self):
         @njit
         def inner(x):
@@ -40,7 +49,7 @@ class TestTryBareExcept(TestCase):
             try:
                 inner(x)
                 return "not raised"
-            except:             # noqa: E722
+            except:  # noqa: E722
                 return "caught"
 
         self.assertEqual(udt(False), "not raised")
@@ -59,7 +68,7 @@ class TestTryBareExcept(TestCase):
             try:
                 inner(x)
                 res = "not raised"
-            except:             # noqa: E722
+            except:  # noqa: E722
                 res = "caught"
             if x == 0:
                 inner(2)
@@ -98,11 +107,11 @@ class TestTryBareExcept(TestCase):
                     print("A")
                     inner(x)
                     print("B")
-                except:         # noqa: E722
+                except:  # noqa: E722
                     print("C")
                     inner(y)
                     print("D")
-            except:             # noqa: E722
+            except:  # noqa: E722
                 print("E")
                 inner(z)
                 print("F")
@@ -144,7 +153,7 @@ class TestTryBareExcept(TestCase):
                     print(i)
                     if i == x:
                         inner(i)
-            except:             # noqa: E722
+            except:  # noqa: E722
                 print("B")
             return i
 
@@ -183,7 +192,7 @@ class TestTryBareExcept(TestCase):
                 if x:
                     raise MyError("my_error")
                 print("B")
-            except:             # noqa: E722
+            except:  # noqa: E722
                 print("C")
                 return 321
             return 123
@@ -214,7 +223,7 @@ class TestTryBareExcept(TestCase):
             if x > 0:
                 try:
                     foo(x - 1)
-                except:   # noqa: E722
+                except:  # noqa: E722
                     print("CAUGHT")
                     return 12
             if x == 1:
@@ -224,7 +233,12 @@ class TestTryBareExcept(TestCase):
             res = foo(10)
 
         self.assertIsNone(res)
-        self.assertEqual(stdout.getvalue().split(), ["CAUGHT",],)
+        self.assertEqual(
+            stdout.getvalue().split(),
+            [
+                "CAUGHT",
+            ],
+        )
 
     def test_yield(self):
         @njit
@@ -232,7 +246,7 @@ class TestTryBareExcept(TestCase):
             if x > 0:
                 try:
                     yield 7
-                    raise ValueError("exception")   # never hit
+                    raise ValueError("exception")  # never hit
                 except Exception:
                     print("CAUGHT")
 
@@ -255,12 +269,18 @@ class TestTryBareExcept(TestCase):
                 except:  # noqa: E722
                     print("CAUGHT")
                     return 12
+
             bar()
 
         with captured_stdout() as stdout:
             foo(10)
 
-        self.assertEqual(stdout.getvalue().split(), ["CAUGHT",],)
+        self.assertEqual(
+            stdout.getvalue().split(),
+            [
+                "CAUGHT",
+            ],
+        )
 
     def test_closure3(self):
         @njit
@@ -271,13 +291,20 @@ class TestTryBareExcept(TestCase):
                 except:  # noqa: E722
                     print("CAUGHT")
                     return z
+
             return [x for x in map(bar, [1, 2, 3])]
 
         with captured_stdout() as stdout:
             res = foo(10)
 
         self.assertEqual(res, [1, 2, 3])
-        self.assertEqual(stdout.getvalue().split(), ["CAUGHT",] * 3,)
+        self.assertEqual(
+            stdout.getvalue().split(),
+            [
+                "CAUGHT",
+            ]
+            * 3,
+        )
 
     def test_closure4(self):
         @njit
@@ -317,7 +344,12 @@ class TestTryBareExcept(TestCase):
         with captured_stdout() as stdout:
             foo()
 
-        self.assertEqual(stdout.getvalue().split(), ["CAUGHT",])
+        self.assertEqual(
+            stdout.getvalue().split(),
+            [
+                "CAUGHT",
+            ],
+        )
 
     def test_for_loop(self):
         @njit
@@ -349,7 +381,11 @@ class TestTryBareExcept(TestCase):
 
         self.assertEqual(
             stdout.getvalue().split(),
-            ["CAUGHT",] * 4 + ["CAUGHT%s" % i for i in range(1, 4)],
+            [
+                "CAUGHT",
+            ]
+            * 4
+            + ["CAUGHT%s" % i for i in range(1, 4)],
         )
 
     def test_try_pass(self):
@@ -357,7 +393,7 @@ class TestTryBareExcept(TestCase):
         def foo(x):
             try:
                 pass
-            except:     # noqa: E722
+            except:  # noqa: E722
                 pass
             return x
 
@@ -369,7 +405,7 @@ class TestTryBareExcept(TestCase):
         def udt():
             try:
                 raise ValueError("ERROR")
-            except:    # noqa: E722
+            except:  # noqa: E722
                 raise
 
         with self.assertRaises(UnsupportedError) as raises:
@@ -462,8 +498,7 @@ class TestTryExceptCaught(TestCase):
         with self.assertRaises(UnsupportedError) as raises:
             udt(True)
         self.assertIn(
-            "Exception object cannot be stored into variable (e)",
-            str(raises.exception)
+            "Exception object cannot be stored into variable (e)", str(raises.exception)
         )
 
     def test_try_except_reraise(self):
@@ -507,11 +542,11 @@ class TestTryExceptCaught(TestCase):
             try:
                 1 / y
             except Exception:
-                return 0xdead
+                return 0xDEAD
             else:
                 return 1 / y
 
-        self.assertEqual(udt(0), 0xdead)
+        self.assertEqual(udt(0), 0xDEAD)
         self.assertEqual(udt(2), 0.5)
 
 
@@ -526,85 +561,88 @@ class TestTryExceptNested(TestCase):
         with captured_stdout() as stdout:
             cfunc(*args, **kwargs)
         got = stdout.getvalue()
-        self.assertEqual(
-            expect, got,
-            msg="args={} kwargs={}".format(args, kwargs)
-        )
+        self.assertEqual(expect, got, msg="args={} kwargs={}".format(args, kwargs))
 
     def test_try_except_else(self):
         @njit
         def udt(x, y, z, p):
-            print('A')
+            print("A")
             if x:
-                print('B')
+                print("B")
                 try:
-                    print('C')
+                    print("C")
                     if y:
-                        print('D')
+                        print("D")
                         raise MyError("y")
-                    print('E')
-                except Exception: # noqa: F722
-                    print('F')
+                    print("E")
+                except Exception:  # noqa: F722
+                    print("F")
                     try:
-                        print('H')
+                        print("H")
                         try:
-                            print('I')
+                            print("I")
                             if z:
-                                print('J')
-                                raise MyError('z')
-                            print('K')
+                                print("J")
+                                raise MyError("z")
+                            print("K")
                         except Exception:
-                            print('L')
+                            print("L")
                         else:
-                            print('M')
+                            print("M")
                     except Exception:
-                        print('N')
+                        print("N")
                     else:
-                        print('O')
-                    print('P')
+                        print("O")
+                    print("P")
                 else:
-                    print('G')
-                print('Q')
-            print('R')
+                    print("G")
+                print("Q")
+            print("R")
 
         cases = list(product([True, False], repeat=4))
         self.assertTrue(cases)
         for x, y, z, p in cases:
             self.check_compare(
-                udt, udt.py_func,
-                x=x, y=y, z=z, p=p,
+                udt,
+                udt.py_func,
+                x=x,
+                y=y,
+                z=z,
+                p=p,
             )
 
     def test_try_except_finally(self):
         @njit
         def udt(p, q):
             try:
-                print('A')
+                print("A")
                 if p:
-                    print('B')
+                    print("B")
                     raise MyError
-                print('C')
-            except:             # noqa: E722
-                print('D')
+                print("C")
+            except:  # noqa: E722
+                print("D")
             finally:
                 try:
-                    print('E')
+                    print("E")
                     if q:
-                        print('F')
+                        print("F")
                         raise MyError
                 except Exception:
-                    print('G')
+                    print("G")
                 else:
-                    print('H')
+                    print("H")
                 finally:
-                    print('I')
+                    print("I")
 
         cases = list(product([True, False], repeat=2))
         self.assertTrue(cases)
         for p, q in cases:
             self.check_compare(
-                udt, udt.py_func,
-                p=p, q=q,
+                udt,
+                udt.py_func,
+                p=p,
+                q=q,
             )
 
 
@@ -640,7 +678,7 @@ class TestTryExceptRefct(MemoryLeakMixin, TestCase):
         @njit
         def udt(n, raise_at):
             lst = typed.List()
-            lst.append(0xbe11)
+            lst.append(0xBE11)
             try:
                 appender(lst, n, raise_at)
             except Exception:
@@ -649,9 +687,9 @@ class TestTryExceptRefct(MemoryLeakMixin, TestCase):
                 return lst
 
         out = udt(10, raise_at=5)
-        self.assertEqual(list(out), [0xbe11] + list(range(5)))
+        self.assertEqual(list(out), [0xBE11] + list(range(5)))
         out = udt(10, raise_at=10)
-        self.assertEqual(list(out), [0xbe11] + list(range(10)))
+        self.assertEqual(list(out), [0xBE11] + list(range(10)))
 
     def test_incompatible_refinement(self):
         @njit
@@ -661,7 +699,7 @@ class TestTryExceptRefct(MemoryLeakMixin, TestCase):
                 print("A")
                 lst.append(0)
                 print("B")
-                lst.append("fda") # invalid type will cause typing error
+                lst.append("fda")  # invalid type will cause typing error
                 print("C")
                 return lst
             except Exception:
@@ -671,7 +709,7 @@ class TestTryExceptRefct(MemoryLeakMixin, TestCase):
             udt()
         self.assertRegex(
             str(raises.exception),
-            r"Cannot refine type|cannot safely cast unicode_type to int(32|64)"
+            r"Cannot refine type|cannot safely cast unicode_type to int(32|64)",
         )
 
 
@@ -703,8 +741,10 @@ class TestTryExceptOtherControlFlow(TestCase):
 
         with self.assertRaises(CompilerError) as raises:
             udt()
-        msg = ("unsupported control flow: with-context contains branches "
-               "(i.e. break/return/raise) that can leave the block ")
+        msg = (
+            "unsupported control flow: with-context contains branches "
+            "(i.e. break/return/raise) that can leave the block "
+        )
         self.assertIn(
             msg,
             str(raises.exception),
@@ -721,7 +761,7 @@ class TestTryExceptOtherControlFlow(TestCase):
             x = np.arange(5)
             y = np.zeros_like(x)
             try:
-                with objmode(y='intp[:]'):  # annotate return type
+                with objmode(y="intp[:]"):  # annotate return type
                     # this region is executed by object-mode.
                     y += bar(x)
             except Exception:
@@ -730,8 +770,10 @@ class TestTryExceptOtherControlFlow(TestCase):
 
         with self.assertRaises(CompilerError) as raises:
             test_objmode()
-        msg = ("unsupported control flow: with-context contains branches "
-               "(i.e. break/return/raise) that can leave the block ")
+        msg = (
+            "unsupported control flow: with-context contains branches "
+            "(i.e. break/return/raise) that can leave the block "
+        )
         self.assertIn(
             msg,
             str(raises.exception),
@@ -748,8 +790,9 @@ class TestTryExceptOtherControlFlow(TestCase):
                 raise Exception
             except Exception:
                 raise ValueError("ERROR")
+
         for inst in dis.get_instructions(pyfunc):
-            if inst.opname == 'RERAISE':
+            if inst.opname == "RERAISE":
                 break
         else:
             self.fail("expected RERAISE opcode not found")
@@ -794,7 +837,7 @@ class TestTryExceptParfors(TestCase):
                 for i in prange(n):
                     c += 1
             except Exception:
-                return 0xdead
+                return 0xDEAD
             else:
                 return c
 
@@ -803,11 +846,12 @@ class TestTryExceptParfors(TestCase):
         self.assertEqual(njit(parallel=False)(udt)(*args), expect)
         # Parfors transformation didn't happen
         with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always', NumbaPerformanceWarning)
+            warnings.simplefilter("always", NumbaPerformanceWarning)
             self.assertEqual(njit(parallel=True)(udt)(*args), expect)
         self.assertEqual(len(w), 1)
-        self.assertIn("no transformation for parallel execution was possible",
-                      str(w[0]))
+        self.assertIn(
+            "no transformation for parallel execution was possible", str(w[0])
+        )
 
     def test_try_in_prange_map(self):
         def udt(arr, x):
@@ -844,5 +888,5 @@ class TestTryExceptParfors(TestCase):
         self.assertPreciseEqual(njit(parallel=True)(udt)(*args), expect)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

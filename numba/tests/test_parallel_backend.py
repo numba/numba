@@ -18,15 +18,21 @@ import unittest
 import numpy as np
 
 from numba import jit, vectorize, guvectorize, set_num_threads
-from numba.tests.support import (temp_directory, override_config, TestCase, tag,
-                                 skip_parfors_unsupported, linux_only)
+from numba.tests.support import (
+    temp_directory,
+    override_config,
+    TestCase,
+    tag,
+    skip_parfors_unsupported,
+    linux_only,
+)
 
 import queue as t_queue
 from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
 from numba.core import config
 
 
-_TEST_TIMEOUT = _RUNNER_TIMEOUT - 60.
+_TEST_TIMEOUT = _RUNNER_TIMEOUT - 60.0
 
 
 # Check which backends are available
@@ -34,20 +40,24 @@ _TEST_TIMEOUT = _RUNNER_TIMEOUT - 60.
 try:
     # Check it's a compatible TBB before loading it
     from numba.np.ufunc.parallel import _check_tbb_version_compatible
+
     _check_tbb_version_compatible()
-    from numba.np.ufunc import tbbpool    # noqa: F401
+    from numba.np.ufunc import tbbpool  # noqa: F401
+
     _HAVE_TBB_POOL = True
 except ImportError:
     _HAVE_TBB_POOL = False
 
 try:
     from numba.np.ufunc import omppool
+
     _HAVE_OMP_POOL = True
 except ImportError:
     _HAVE_OMP_POOL = False
 
 try:
-    import scipy.linalg.cython_lapack    # noqa: F401
+    import scipy.linalg.cython_lapack  # noqa: F401
+
     _HAVE_LAPACK = True
 except ImportError:
     _HAVE_LAPACK = False
@@ -59,9 +69,9 @@ skip_no_tbb = unittest.skipUnless(_HAVE_TBB_POOL, "TBB threadpool required")
 _gnuomp = _HAVE_OMP_POOL and omppool.openmp_vendor == "GNU"
 skip_unless_gnu_omp = unittest.skipUnless(_gnuomp, "GNU OpenMP only tests")
 
-_windows = sys.platform.startswith('win')
-_osx = sys.platform.startswith('darwin')
-_32bit = sys.maxsize <= 2 ** 32
+_windows = sys.platform.startswith("win")
+_osx = sys.platform.startswith("darwin")
+_32bit = sys.maxsize <= 2**32
 _parfors_unsupported = _32bit
 
 _HAVE_OS_FORK = not _windows
@@ -69,15 +79,19 @@ _HAVE_OS_FORK = not _windows
 
 # some functions to jit
 
+
 def foo(n, v):
     return np.ones(n) + v
 
 
 if _HAVE_LAPACK:
+
     def linalg(n, v):
         x = np.dot(np.ones((n, n)), np.ones((n, n)))
         return x + np.arange(n) + v
+
 else:
+
     def linalg(n, v):
         # no way to trigger MKL without the lapack bindings.
         return np.arange(n) + v
@@ -134,7 +148,7 @@ class linalg_runner(runnable):
 class vectorize_runner(runnable):
 
     def __call__(self):
-        cfunc = vectorize(['(f4, f4)'], **self._options)(ufunc_foo)
+        cfunc = vectorize(["(f4, f4)"], **self._options)(ufunc_foo)
         a = b = np.random.random(10).astype(np.float32)
         expected = ufunc_foo(a, b)
         got = cfunc(a, b)
@@ -144,8 +158,8 @@ class vectorize_runner(runnable):
 class guvectorize_runner(runnable):
 
     def __call__(self):
-        sig = ['(f4, f4, f4[:])']
-        cfunc = guvectorize(sig, '(),()->()', **self._options)(gufunc_foo)
+        sig = ["(f4, f4, f4[:])"]
+        cfunc = guvectorize(sig, "(),()->()", **self._options)(gufunc_foo)
         a = b = np.random.random(10).astype(np.float32)
         expected = ufunc_foo(a, b)
         got = cfunc(a, b)
@@ -153,7 +167,7 @@ class guvectorize_runner(runnable):
 
 
 def chooser(fnlist, **kwargs):
-    q = kwargs.get('queue')
+    q = kwargs.get("queue")
     try:
         faulthandler.enable()
         for _ in range(int(len(fnlist) * 1.5)):
@@ -166,9 +180,10 @@ def chooser(fnlist, **kwargs):
 def compile_factory(parallel_class, queue_impl):
     def run_compile(fnlist):
         q = queue_impl()
-        kws = {'queue': q}
-        ths = [parallel_class(target=chooser, args=(fnlist,), kwargs=kws)
-               for i in range(4)]
+        kws = {"queue": q}
+        ths = [
+            parallel_class(target=chooser, args=(fnlist,), kwargs=kws) for i in range(4)
+        ]
         for th in ths:
             th.start()
         for th in ths:
@@ -178,7 +193,8 @@ def compile_factory(parallel_class, queue_impl):
             while not q.empty():
                 errors.append(q.get(False))
             _msg = "Error(s) occurred in delegated runner:\n%s"
-            raise RuntimeError(_msg % '\n'.join([repr(x) for x in errors]))
+            raise RuntimeError(_msg % "\n".join([repr(x) for x in errors]))
+
     return run_compile
 
 
@@ -197,7 +213,7 @@ class _proc_class_impl(object):
 
 
 def _get_mp_classes(method):
-    if method == 'default':
+    if method == "default":
         method = None
     ctx = multiprocessing.get_context(method)
     proc = _proc_class_impl(method)
@@ -206,14 +222,14 @@ def _get_mp_classes(method):
 
 
 thread_impl = compile_factory(_thread_class, t_queue.Queue)
-spawn_proc_impl = compile_factory(*_get_mp_classes('spawn'))
+spawn_proc_impl = compile_factory(*_get_mp_classes("spawn"))
 if not _windows:
-    fork_proc_impl = compile_factory(*_get_mp_classes('fork'))
-    forkserver_proc_impl = compile_factory(*_get_mp_classes('forkserver'))
+    fork_proc_impl = compile_factory(*_get_mp_classes("fork"))
+    forkserver_proc_impl = compile_factory(*_get_mp_classes("forkserver"))
 
 # this is duplication as Py27, linux uses fork, windows uses spawn, it however
 # is kept like this so that when tests fail it's less confusing!
-default_proc_impl = compile_factory(*_get_mp_classes('default'))
+default_proc_impl = compile_factory(*_get_mp_classes("default"))
 
 
 class TestParallelBackendBase(TestCase):
@@ -228,11 +244,11 @@ class TestParallelBackendBase(TestCase):
         linalg_runner(nopython=True),
         linalg_runner(nopython=True, nogil=True),
         vectorize_runner(nopython=True),
-        vectorize_runner(nopython=True, target='parallel'),
-        vectorize_runner(nopython=True, target='parallel', cache=True),
+        vectorize_runner(nopython=True, target="parallel"),
+        vectorize_runner(nopython=True, target="parallel", cache=True),
         guvectorize_runner(nopython=True),
-        guvectorize_runner(nopython=True, target='parallel'),
-        guvectorize_runner(nopython=True, target='parallel', cache=True),
+        guvectorize_runner(nopython=True, target="parallel"),
+        guvectorize_runner(nopython=True, target="parallel", cache=True),
     ]
 
     if not _parfors_unsupported:
@@ -255,42 +271,42 @@ class TestParallelBackendBase(TestCase):
         for mask in masks:
             mask_impls.append(mask_runner(impl, mask))
 
-    parallelism = ['threading', 'random']
-    parallelism.append('multiprocessing_spawn')
+    parallelism = ["threading", "random"]
+    parallelism.append("multiprocessing_spawn")
     if _HAVE_OS_FORK:
-        parallelism.append('multiprocessing_fork')
-        parallelism.append('multiprocessing_forkserver')
+        parallelism.append("multiprocessing_fork")
+        parallelism.append("multiprocessing_forkserver")
 
     runners = {
-        'concurrent_jit': [
+        "concurrent_jit": [
             jit_runner(nopython=True, parallel=(not _parfors_unsupported)),
         ],
-        'concurrent_vectorize': [
-            vectorize_runner(nopython=True, target='parallel'),
+        "concurrent_vectorize": [
+            vectorize_runner(nopython=True, target="parallel"),
         ],
-        'concurrent_guvectorize': [
-            guvectorize_runner(nopython=True, target='parallel'),
+        "concurrent_guvectorize": [
+            guvectorize_runner(nopython=True, target="parallel"),
         ],
-        'concurrent_mix_use': all_impls,
-        'concurrent_mix_use_masks': mask_impls,
+        "concurrent_mix_use": all_impls,
+        "concurrent_mix_use_masks": mask_impls,
     }
 
-    safe_backends = {'omp', 'tbb'}
+    safe_backends = {"omp", "tbb"}
 
-    def run_compile(self, fnlist, parallelism='threading'):
+    def run_compile(self, fnlist, parallelism="threading"):
         self._cache_dir = temp_directory(self.__class__.__name__)
-        with override_config('CACHE_DIR', self._cache_dir):
-            if parallelism == 'threading':
+        with override_config("CACHE_DIR", self._cache_dir):
+            if parallelism == "threading":
                 thread_impl(fnlist)
-            elif parallelism == 'multiprocessing_fork':
+            elif parallelism == "multiprocessing_fork":
                 fork_proc_impl(fnlist)
-            elif parallelism == 'multiprocessing_forkserver':
+            elif parallelism == "multiprocessing_forkserver":
                 forkserver_proc_impl(fnlist)
-            elif parallelism == 'multiprocessing_spawn':
+            elif parallelism == "multiprocessing_spawn":
                 spawn_proc_impl(fnlist)
-            elif parallelism == 'multiprocessing_default':
+            elif parallelism == "multiprocessing_default":
                 default_proc_impl(fnlist)
-            elif parallelism == 'random':
+            elif parallelism == "random":
                 ps = [thread_impl, spawn_proc_impl]
                 if _HAVE_OS_FORK:
                     ps.append(fork_proc_impl)
@@ -300,16 +316,15 @@ class TestParallelBackendBase(TestCase):
                 for impl in ps:
                     impl(fnlist)
             else:
-                raise ValueError(
-                    'Unknown parallelism supplied %s' % parallelism)
+                raise ValueError("Unknown parallelism supplied %s" % parallelism)
 
 
-_specific_backends = config.THREADING_LAYER in ('omp', 'tbb', 'workqueue')
+_specific_backends = config.THREADING_LAYER in ("omp", "tbb", "workqueue")
 
 
 @unittest.skipUnless(_specific_backends, "Threading layer not explicit")
 class TestParallelBackend(TestParallelBackendBase):
-    """ These are like the numba.tests.test_threadsafety tests but designed
+    """These are like the numba.tests.test_threadsafety tests but designed
     instead to torture the parallel backend.
     If a suitable backend is supplied via NUMBA_THREADING_LAYER these tests
     can be run directly. This test class cannot be run using the multiprocessing
@@ -324,18 +339,20 @@ class TestParallelBackend(TestParallelBackendBase):
     def generate(cls):
         for p in cls.parallelism:
             for name, impl in cls.runners.items():
-                methname = "test_" + p + '_' + name
+                methname = "test_" + p + "_" + name
 
                 def methgen(impl, p):
                     def test_method(self):
                         selfproc = multiprocessing.current_process()
                         # daemonized processes cannot have children
                         if selfproc.daemon:
-                            _msg = 'daemonized processes cannot have children'
+                            _msg = "daemonized processes cannot have children"
                             self.skipTest(_msg)
                         else:
                             self.run_compile(impl, parallelism=p)
+
                     return test_method
+
                 fn = methgen(impl, p)
                 fn.__name__ = methname
                 setattr(cls, methname, fn)
@@ -345,15 +362,16 @@ TestParallelBackend.generate()
 
 
 class TestInSubprocess(object):
-    backends = {'tbb': skip_no_tbb,
-                'omp': skip_no_omp,
-                'workqueue': unittest.skipIf(False, '')}
+    backends = {
+        "tbb": skip_no_tbb,
+        "omp": skip_no_omp,
+        "workqueue": unittest.skipIf(False, ""),
+    }
 
     def run_cmd(self, cmdline, env):
-        popen = subprocess.Popen(cmdline,
-                                 stdout=subprocess.PIPE,
-                                 stderr=subprocess.PIPE,
-                                 env=env)
+        popen = subprocess.Popen(
+            cmdline, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env
+        )
         # finish in _TEST_TIMEOUT seconds or kill it
         timeout = threading.Timer(_TEST_TIMEOUT, popen.kill)
         try:
@@ -361,8 +379,9 @@ class TestInSubprocess(object):
             out, err = popen.communicate()
             if popen.returncode != 0:
                 raise AssertionError(
-                    "process failed with code %s: stderr follows\n%s\n" %
-                    (popen.returncode, err.decode()))
+                    "process failed with code %s: stderr follows\n%s\n"
+                    % (popen.returncode, err.decode())
+                )
             return out.decode(), err.decode()
         finally:
             timeout.cancel()
@@ -370,7 +389,7 @@ class TestInSubprocess(object):
 
     def run_test_in_separate_process(self, test, threading_layer):
         env_copy = os.environ.copy()
-        env_copy['NUMBA_THREADING_LAYER'] = str(threading_layer)
+        env_copy["NUMBA_THREADING_LAYER"] = str(threading_layer)
         cmdline = [sys.executable, "-m", "numba.runtests", test]
         return self.run_cmd(cmdline, env_copy)
 
@@ -384,14 +403,15 @@ class TestSpecificBackend(TestInSubprocess, TestParallelBackendBase):
     isolated manner such that if they hang/crash/have issues, it doesn't kill
     the test suite.
     """
+
     _DEBUG = False
 
     @classmethod
     def _inject(cls, p, name, backend, backend_guard):
         themod = cls.__module__
         thecls = TestParallelBackend.__name__
-        methname = "test_" + p + '_' + name
-        injected_method = '%s.%s.%s' % (themod, thecls, methname)
+        methname = "test_" + p + "_" + name
+        injected_method = "%s.%s.%s" % (themod, thecls, methname)
 
         def test_template(self):
             o, e = self.run_test_in_separate_process(injected_method, backend)
@@ -402,13 +422,13 @@ class TestSpecificBackend(TestInSubprocess, TestParallelBackendBase):
             m = re.search(r"\.\.\. skipped '(.*?)'", e)
             if m is not None:
                 self.skipTest(m.group(1))
-            self.assertIn('OK', e)
-            self.assertTrue('FAIL' not in e)
-            self.assertTrue('ERROR' not in e)
+            self.assertIn("OK", e)
+            self.assertTrue("FAIL" not in e)
+            self.assertTrue("ERROR" not in e)
+
         injected_test = "test_%s_%s_%s" % (p, name, backend)
         # Mark as long_running
-        setattr(cls, injected_test,
-                tag('long_running')(backend_guard(test_template)))
+        setattr(cls, injected_test, tag("long_running")(backend_guard(test_template)))
 
     @classmethod
     def generate(cls):
@@ -418,14 +438,15 @@ class TestSpecificBackend(TestInSubprocess, TestParallelBackendBase):
                     # handle known problem cases...
 
                     # GNU OpenMP is not fork safe
-                    if (p in ('multiprocessing_fork', 'random') and
-                        backend == 'omp' and
-                            sys.platform.startswith('linux')):
+                    if (
+                        p in ("multiprocessing_fork", "random")
+                        and backend == "omp"
+                        and sys.platform.startswith("linux")
+                    ):
                         continue
 
                     # workqueue is not thread safe
-                    if (p in ('threading', 'random') and
-                            backend == 'workqueue'):
+                    if p in ("threading", "random") and backend == "workqueue":
                         continue
 
                     cls._inject(p, name, backend, backend_guard)
@@ -438,6 +459,7 @@ class ThreadLayerTestHelper(TestCase):
     """
     Helper class for running an isolated piece of code based on a template
     """
+
     # sys path injection and separate usecase module to make sure everything
     # is importable by children of multiprocessing
     _here = "%r" % os.path.dirname(__file__)
@@ -464,16 +486,17 @@ class ThreadLayerTestHelper(TestCase):
 
     if __name__ == "__main__":
         the_test()
-    """ % {'here': _here}
+    """ % {
+        "here": _here
+    }
 
     def run_cmd(self, cmdline, env=None):
         if env is None:
             env = os.environ.copy()
-            env['NUMBA_THREADING_LAYER'] = str("omp")
-        popen = subprocess.Popen(cmdline,
-                                 stdout=subprocess.PIPE,
-                                 stderr=subprocess.PIPE,
-                                 env=env)
+            env["NUMBA_THREADING_LAYER"] = str("omp")
+        popen = subprocess.Popen(
+            cmdline, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env
+        )
         # finish in _TEST_TIMEOUT seconds or kill it
         timeout = threading.Timer(_TEST_TIMEOUT, popen.kill)
         try:
@@ -481,8 +504,9 @@ class ThreadLayerTestHelper(TestCase):
             out, err = popen.communicate()
             if popen.returncode != 0:
                 raise AssertionError(
-                    "process failed with code %s: stderr follows\n%s\n" %
-                    (popen.returncode, err.decode()))
+                    "process failed with code %s: stderr follows\n%s\n"
+                    % (popen.returncode, err.decode())
+                )
         finally:
             timeout.cancel()
         return out.decode(), err.decode()
@@ -493,11 +517,14 @@ class TestThreadingLayerSelection(ThreadLayerTestHelper):
     """
     Checks that numba.threading_layer() reports correctly.
     """
+
     _DEBUG = False
 
-    backends = {'tbb': skip_no_tbb,
-                'omp': skip_no_omp,
-                'workqueue': unittest.skipIf(False, '')}
+    backends = {
+        "tbb": skip_no_tbb,
+        "omp": skip_no_omp,
+        "workqueue": unittest.skipIf(False, ""),
+    }
 
     @classmethod
     def _inject(cls, backend, backend_guard):
@@ -510,15 +537,15 @@ class TestThreadingLayerSelection(ThreadLayerTestHelper):
                 assert numba.threading_layer() == '%s'
             """
             runme = self.template % (body % backend)
-            cmdline = [sys.executable, '-c', runme]
+            cmdline = [sys.executable, "-c", runme]
             env = os.environ.copy()
-            env['NUMBA_THREADING_LAYER'] = str(backend)
+            env["NUMBA_THREADING_LAYER"] = str(backend)
             out, err = self.run_cmd(cmdline, env=env)
             if self._DEBUG:
                 print(out, err)
+
         injected_test = "test_threading_layer_selector_%s" % backend
-        setattr(cls, injected_test,
-                tag("important")(backend_guard(test_template)))
+        setattr(cls, injected_test, tag("important")(backend_guard(test_template)))
 
     @classmethod
     def generate(cls):
@@ -533,11 +560,10 @@ TestThreadingLayerSelection.generate()
 class TestThreadingLayerPriority(ThreadLayerTestHelper):
 
     def each_env_var(self, env_var: str):
-        """Test setting priority via env var NUMBA_THREADING_LAYER_PRIORITY.
-        """
+        """Test setting priority via env var NUMBA_THREADING_LAYER_PRIORITY."""
         env = os.environ.copy()
-        env['NUMBA_THREADING_LAYER'] = 'default'
-        env['NUMBA_THREADING_LAYER_PRIORITY'] = env_var
+        env["NUMBA_THREADING_LAYER"] = "default"
+        env["NUMBA_THREADING_LAYER_PRIORITY"] = env_var
 
         code = f"""
                 import numba
@@ -560,7 +586,7 @@ class TestThreadingLayerPriority(ThreadLayerTestHelper):
                 """
         cmd = [
             sys.executable,
-            '-c',
+            "-c",
             textwrap.dedent(code),
         ]
         self.run_cmd(cmd, env=env)
@@ -568,21 +594,18 @@ class TestThreadingLayerPriority(ThreadLayerTestHelper):
     @skip_no_omp
     @skip_no_tbb
     def test_valid_env_var(self):
-        default = ['tbb', 'omp', 'workqueue']
+        default = ["tbb", "omp", "workqueue"]
         for p in itertools.permutations(default):
-            env_var = ' '.join(p)
+            env_var = " ".join(p)
             self.each_env_var(env_var)
 
     @skip_no_omp
     @skip_no_tbb
     def test_invalid_env_var(self):
-        env_var = 'tbb omp workqueue notvalidhere'
+        env_var = "tbb omp workqueue notvalidhere"
         with self.assertRaises(AssertionError) as raises:
             self.each_env_var(env_var)
-        for msg in (
-            "THREADING_LAYER_PRIORITY invalid:",
-            "It must be a permutation of"
-        ):
+        for msg in ("THREADING_LAYER_PRIORITY invalid:", "It must be a permutation of"):
             self.assertIn(f"{msg}", str(raises.exception))
 
     @skip_no_omp
@@ -605,6 +628,7 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
     """
     Checks fixes for the issues with threading backends implementation
     """
+
     _DEBUG = False
 
     @skip_no_omp
@@ -624,10 +648,10 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
             foo(*([x]*8))
             assert threading_layer() == "omp", "omp not found"
         """
-        cmdline = [sys.executable, '-c', runme]
+        cmdline = [sys.executable, "-c", runme]
         env = os.environ.copy()
-        env['NUMBA_THREADING_LAYER'] = "omp"
-        env['OMP_STACKSIZE'] = "100K"
+        env["NUMBA_THREADING_LAYER"] = "omp"
+        env["OMP_STACKSIZE"] = "100K"
         self.run_cmd(cmdline, env=env)
 
     @skip_no_tbb
@@ -649,10 +673,10 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
             foo(100)
             assert threading_layer() == "tbb", "tbb not found"
         """
-        cmdline = [sys.executable, '-c', runme]
+        cmdline = [sys.executable, "-c", runme]
         env = os.environ.copy()
-        env['NUMBA_THREADING_LAYER'] = "tbb"
-        env['NUMBA_NUM_THREADS'] = "1"
+        env["NUMBA_THREADING_LAYER"] = "tbb"
+        env["NUMBA_NUM_THREADS"] = "1"
         self.run_cmd(cmdline, env=env)
 
     def test_workqueue_aborts_on_nested_parallelism(self):
@@ -678,10 +702,10 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
 
             main()
         """
-        cmdline = [sys.executable, '-c', runme]
+        cmdline = [sys.executable, "-c", runme]
         env = os.environ.copy()
-        env['NUMBA_THREADING_LAYER'] = "workqueue"
-        env['NUMBA_NUM_THREADS'] = "4"
+        env["NUMBA_THREADING_LAYER"] = "workqueue"
+        env["NUMBA_NUM_THREADS"] = "4"
 
         try:
             out, err = self.run_cmd(cmdline, env=env)
@@ -692,8 +716,10 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
             self.assertIn("failed with code", e_msg)
             # raised a SIGABRT, but the value is platform specific so just check
             # the error message
-            expected = ("Numba workqueue threading layer is terminating: "
-                        "Concurrent access has been detected.")
+            expected = (
+                "Numba workqueue threading layer is terminating: "
+                "Concurrent access has been detected."
+            )
             self.assertIn(expected, e_msg)
 
     @unittest.skipUnless(_HAVE_OS_FORK, "Test needs fork(2)")
@@ -730,10 +756,10 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
 
                 assert threading_layer() == "workqueue"
         """
-        cmdline = [sys.executable, '-c', runme]
+        cmdline = [sys.executable, "-c", runme]
         env = os.environ.copy()
-        env['NUMBA_THREADING_LAYER'] = "workqueue"
-        env['NUMBA_NUM_THREADS'] = "4"
+        env["NUMBA_THREADING_LAYER"] = "workqueue"
+        env["NUMBA_NUM_THREADS"] = "4"
 
         self.run_cmd(cmdline, env=env)
 
@@ -745,6 +771,7 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
     """
     Checks Numba's behaviour in various situations involving GNU OpenMP and fork
     """
+
     _DEBUG = False
 
     def test_check_threading_layer_is_gnu(self):
@@ -752,7 +779,7 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
             from numba.np.ufunc import omppool
             assert omppool.openmp_vendor == 'GNU'
             """
-        cmdline = [sys.executable, '-c', runme]
+        cmdline = [sys.executable, "-c", runme]
         out, err = self.run_cmd(cmdline)
 
     def test_par_parent_os_fork_par_child(self):
@@ -771,7 +798,7 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
                 os.wait()
         """
         runme = self.template % body
-        cmdline = [sys.executable, '-c', runme]
+        cmdline = [sys.executable, "-c", runme]
         try:
             out, err = self.run_cmd(cmdline)
         except AssertionError as e:
@@ -805,7 +832,7 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
             assert "Caught SIGTERM" in str(err)
         """
         runme = self.template % body
-        cmdline = [sys.executable, '-c', runme]
+        cmdline = [sys.executable, "-c", runme]
         out, err = self.run_cmd(cmdline)
         if self._DEBUG:
             print(out, err)
@@ -840,7 +867,7 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
             assert "Caught SIGTERM" in str(err)
         """
         runme = self.template % body
-        cmdline = [sys.executable, '-c', runme]
+        cmdline = [sys.executable, "-c", runme]
         out, err = self.run_cmd(cmdline)
         if self._DEBUG:
             print(out, err)
@@ -884,7 +911,7 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
             Z = busy_func(X, Y, q)
         """
         runme = self.template % body
-        cmdline = [sys.executable, '-c', runme]
+        cmdline = [sys.executable, "-c", runme]
         out, err = self.run_cmd(cmdline)
         if self._DEBUG:
             print(out, err)
@@ -925,7 +952,7 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
                 raise RuntimeError("Queue was not empty")
         """
         runme = self.template % body
-        cmdline = [sys.executable, '-c', runme]
+        cmdline = [sys.executable, "-c", runme]
         out, err = self.run_cmd(cmdline)
         if self._DEBUG:
             print(out, err)
@@ -966,7 +993,7 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
                 raise RuntimeError("Queue was not empty")
         """
         runme = self.template % body
-        cmdline = [sys.executable, '-c', runme]
+        cmdline = [sys.executable, "-c", runme]
         out, err = self.run_cmd(cmdline)
         if self._DEBUG:
             print(out, err)
@@ -978,7 +1005,7 @@ class TestTBBSpecificIssues(ThreadLayerTestHelper):
 
     _DEBUG = False
 
-    @linux_only # os.fork required.
+    @linux_only  # os.fork required.
     def test_fork_from_non_main_thread(self):
         # See issue #5973 and PR #6208 for original context.
         # See issue #6963 for context on the following comments:
@@ -1059,7 +1086,7 @@ class TestTBBSpecificIssues(ThreadLayerTestHelper):
                 t.join()
         """
 
-        cmdline = [sys.executable, '-c', runme]
+        cmdline = [sys.executable, "-c", runme]
         out, err = self.run_cmd(cmdline)
         # assert error message printed on stderr
         msg_head = "Attempted to fork from a non-main thread, the TBB library"
@@ -1069,13 +1096,13 @@ class TestTBBSpecificIssues(ThreadLayerTestHelper):
             print("OUT:", out)
             print("ERR:", err)
 
-    @linux_only # fork required.
+    @linux_only  # fork required.
     def test_lifetime_of_task_scheduler_handle(self):
 
-        self.skip_if_no_external_compiler() # external compiler needed
+        self.skip_if_no_external_compiler()  # external compiler needed
 
         # See PR #7280 for context.
-        BROKEN_COMPILERS = 'SKIP: COMPILATION FAILED'
+        BROKEN_COMPILERS = "SKIP: COMPILATION FAILED"
         runme = """if 1:
             import ctypes
             import sys
@@ -1151,11 +1178,13 @@ class TestTBBSpecificIssues(ThreadLayerTestHelper):
             p.start()
             p.join(10)
             print("SUCCESS")
-            """.replace('BROKEN_COMPILERS', BROKEN_COMPILERS)
+            """.replace(
+            "BROKEN_COMPILERS", BROKEN_COMPILERS
+        )
 
-        cmdline = [sys.executable, '-c', runme]
+        cmdline = [sys.executable, "-c", runme]
         env = os.environ.copy()
-        env['NUMBA_THREADING_LAYER'] = 'tbb'
+        env["NUMBA_THREADING_LAYER"] = "tbb"
         out, err = self.run_cmd(cmdline, env=env)
 
         if BROKEN_COMPILERS in out:
@@ -1174,9 +1203,11 @@ class TestInitSafetyIssues(TestCase):
     _DEBUG = False
 
     def run_cmd(self, cmdline):
-        popen = subprocess.Popen(cmdline,
-                                 stdout=subprocess.PIPE,
-                                 stderr=subprocess.PIPE,)
+        popen = subprocess.Popen(
+            cmdline,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
         # finish in _TEST_TIMEOUT seconds or kill it
         timeout = threading.Timer(_TEST_TIMEOUT, popen.kill)
         try:
@@ -1184,19 +1215,21 @@ class TestInitSafetyIssues(TestCase):
             out, err = popen.communicate()
             if popen.returncode != 0:
                 raise AssertionError(
-                    "process failed with code %s: stderr follows\n%s\n" %
-                    (popen.returncode, err.decode()))
+                    "process failed with code %s: stderr follows\n%s\n"
+                    % (popen.returncode, err.decode())
+                )
         finally:
             timeout.cancel()
         return out.decode(), err.decode()
 
-    @linux_only # only linux can leak semaphores
+    @linux_only  # only linux can leak semaphores
     def test_orphaned_semaphore(self):
         # sys path injection and separate usecase module to make sure everything
         # is importable by children of multiprocessing
 
-        test_file = os.path.join(os.path.dirname(__file__),
-                                 "orphaned_semaphore_usecase.py")
+        test_file = os.path.join(
+            os.path.dirname(__file__), "orphaned_semaphore_usecase.py"
+        )
         cmdline = [sys.executable, test_file]
         out, err = self.run_cmd(cmdline)
 
@@ -1211,16 +1244,18 @@ class TestInitSafetyIssues(TestCase):
         # checks based on https://github.com/numba/numba/pull/5724
         # looking for "lazy" process lock initialisation so as to avoid setting
         # a multiprocessing context as part of import.
-        for meth in ('fork', 'spawn', 'forkserver'):
+        for meth in ("fork", "spawn", "forkserver"):
             # if a context is available on the host check it can be set as the
             # start method in a separate process
             try:
                 multiprocessing.get_context(meth)
             except ValueError:
                 continue
-            cmd = ("import numba; import multiprocessing;"
-                   "multiprocessing.set_start_method('{}');"
-                   "print(multiprocessing.get_context().get_start_method())")
+            cmd = (
+                "import numba; import multiprocessing;"
+                "multiprocessing.set_start_method('{}');"
+                "print(multiprocessing.get_context().get_start_method())"
+            )
             cmdline = [sys.executable, "-c", cmd.format(meth)]
             out, err = self.run_cmd(cmdline)
             if self._DEBUG:
@@ -1238,9 +1273,9 @@ class TestOpenMPVendors(TestCase):
         Checks the OpenMP vendor strings are correct
         """
         expected = dict()
-        expected['win32'] = "MS"
-        expected['darwin'] = "Intel"
-        expected['linux'] = "GNU"
+        expected["win32"] = "MS"
+        expected["darwin"] = "Intel"
+        expected["linux"] = "GNU"
 
         # only check OS that are supported, custom toolchains may well work as
         # may other OS
@@ -1249,5 +1284,5 @@ class TestOpenMPVendors(TestCase):
                 self.assertEqual(expected[k], omppool.openmp_vendor)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -84,7 +84,7 @@ class TestPrint(CUDATestCase):
     def test_cuhello(self):
         output, _ = self.run_code(cuhello_usecase)
         actual = [line.strip() for line in output.splitlines()]
-        expected = ['-42'] * 6 + ['%d 999' % i for i in range(6)]
+        expected = ["-42"] * 6 + ["%d 999" % i for i in range(6)]
         # The output of GPU threads is intermingled, but each print()
         # call is still atomic
         self.assertEqual(sorted(actual), expected)
@@ -102,10 +102,10 @@ class TestPrint(CUDATestCase):
     def test_string(self):
         output, _ = self.run_code(printstring_usecase)
         lines = [line.strip() for line in output.splitlines(True)]
-        expected = ['%d hop! 999' % i for i in range(3)]
+        expected = ["%d hop! 999" % i for i in range(3)]
         self.assertEqual(sorted(lines), expected)
 
-    @skip_on_cudasim('cudasim can print unlimited output')
+    @skip_on_cudasim("cudasim can print unlimited output")
     def test_too_many_args(self):
         # Tests that we emit the format string and warn when there are more
         # than 32 arguments, in common with CUDA C/C++ printf - this is due to
@@ -115,14 +115,16 @@ class TestPrint(CUDATestCase):
         output, errors = self.run_code(print_too_many_usecase)
 
         # Check that the format string was printed instead of formatted garbage
-        expected_fmt_string = ' '.join(['%lld' for _ in range(33)])
+        expected_fmt_string = " ".join(["%lld" for _ in range(33)])
         self.assertIn(expected_fmt_string, output)
 
         # Check for the expected warning about formatting more than 32 items
-        warn_msg = ('CUDA print() cannot print more than 32 items. The raw '
-                    'format string will be emitted by the kernel instead.')
+        warn_msg = (
+            "CUDA print() cannot print more than 32 items. The raw "
+            "format string will be emitted by the kernel instead."
+        )
         self.assertIn(warn_msg, errors)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -32,8 +32,7 @@ def typeof(val, purpose=Purpose.argument):
     c = _TypeofContext(purpose)
     ty = typeof_impl(val, c)
     if ty is None:
-        msg = _termcolor.errmsg(
-            f"Cannot determine Numba type of {type(val)}")
+        msg = _termcolor.errmsg(f"Cannot determine Numba type of {type(val)}")
         raise ValueError(msg)
     return ty
 
@@ -54,6 +53,7 @@ def typeof_impl(val, c):
     # cffi is handled here as it does not expose a public base class
     # for exported functions or CompiledFFI instances.
     from numba.core.typing import cffi_utils
+
     if cffi_utils.SUPPORTED:
         if cffi_utils.is_cffi_func(val):
             return cffi_utils.make_function_type(val)
@@ -65,6 +65,7 @@ def typeof_impl(val, c):
 
 def _typeof_buffer(val, c):
     from numba.core.typing import bufproto
+
     try:
         m = memoryview(val)
     except TypeError:
@@ -76,13 +77,13 @@ def _typeof_buffer(val, c):
         return
     type_class = bufproto.get_type_class(type(val))
     layout = bufproto.infer_layout(m)
-    return type_class(dtype, m.ndim, layout=layout,
-                      readonly=m.readonly)
+    return type_class(dtype, m.ndim, layout=layout, readonly=m.readonly)
 
 
 @typeof_impl.register(ctypes._CFuncPtr)
 def _typeof_ctypes_function(val, c):
     from .ctypes_utils import is_ctypes_funcptr, make_function_type
+
     if is_ctypes_funcptr(val):
         return make_function_type(val)
 
@@ -104,15 +105,18 @@ def _typeof_type(val, c):
         return types.TypeRef(val)
 
     from numba.typed import Dict
+
     if issubclass(val, Dict):
         return types.TypeRef(types.DictType)
 
     from numba.typed import List
+
     if issubclass(val, List):
         return types.TypeRef(types.ListType)
 
 
 if config.USE_LEGACY_TYPE_SYSTEM:
+
     @typeof_impl.register(bool)
     def _typeof_bool(val, c):
         return types.boolean
@@ -138,7 +142,9 @@ if config.USE_LEGACY_TYPE_SYSTEM:
         else:
             raise ValueError("Int value is too large: %s" % val)
         return typ
+
 else:
+
     @typeof_impl.register(bool)
     def _typeof_bool(val, c):
         return types.py_bool
@@ -200,8 +206,7 @@ def _typeof_list(val, c):
         raise ValueError("Cannot type empty list")
     ty = typeof_impl(val[0], c)
     if ty is None:
-        raise ValueError(
-            f"Cannot type list element type {type(val[0])}")
+        raise ValueError(f"Cannot type list element type {type(val[0])}")
     return types.List(ty, reflected=True)
 
 
@@ -212,8 +217,7 @@ def _typeof_set(val, c):
     item = next(iter(val))
     ty = typeof_impl(item, c)
     if ty is None:
-        raise ValueError(
-            f"Cannot type set element type {type(item)}")
+        raise ValueError(f"Cannot type set element type {type(item)}")
     return types.Set(ty, reflected=True)
 
 
@@ -237,9 +241,10 @@ def _typeof_enum_class(val, c):
         raise ValueError("Cannot type enum with no members")
     dtypes = {typeof_impl(mem.value, c) for mem in members}
     if len(dtypes) > 1:
-        raise ValueError("Cannot type heterogeneous enum: "
-                         "got value types %s"
-                         % ", ".join(sorted(str(ty) for ty in dtypes)))
+        raise ValueError(
+            "Cannot type heterogeneous enum: "
+            "got value types %s" % ", ".join(sorted(str(ty) for ty in dtypes))
+        )
     if issubclass(val, enum.IntEnum):
         typecls = types.IntEnumClass
     else:

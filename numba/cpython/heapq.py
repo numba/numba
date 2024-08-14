@@ -105,18 +105,17 @@ def _heapreplace_max(heap, item):
 
 def assert_heap_type(heap):
     if not isinstance(heap, (types.List, types.ListType)):
-        raise TypingError('heap argument must be a list')
+        raise TypingError("heap argument must be a list")
 
     dt = heap.dtype
     if isinstance(dt, types.Complex):
-        msg = ("'<' not supported between instances "
-               "of 'complex' and 'complex'")
+        msg = "'<' not supported between instances " "of 'complex' and 'complex'"
         raise TypingError(msg)
 
 
 def assert_item_type_consistent_with_heap_type(heap, item):
     if not heap.dtype == item:
-        raise TypingError('heap type must be the same as item type')
+        raise TypingError("heap type must be the same as item type")
 
 
 @overload(hq.heapify)

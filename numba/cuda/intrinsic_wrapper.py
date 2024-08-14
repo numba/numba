@@ -45,7 +45,7 @@ def shfl_sync(mask, value, src_lane):
     from src_lane. If this is outside the warp, then the
     given value is returned.
     """
-    return numba.cuda.shfl_sync_intrinsic(mask, 0, value, src_lane, 0x1f)[0]
+    return numba.cuda.shfl_sync_intrinsic(mask, 0, value, src_lane, 0x1F)[0]
 
 
 @jit(device=True)
@@ -65,7 +65,7 @@ def shfl_down_sync(mask, value, delta):
     from (laneid + delta). If this is outside the warp, then the
     given value is returned.
     """
-    return numba.cuda.shfl_sync_intrinsic(mask, 2, value, delta, 0x1f)[0]
+    return numba.cuda.shfl_sync_intrinsic(mask, 2, value, delta, 0x1F)[0]
 
 
 @jit(device=True)
@@ -74,4 +74,4 @@ def shfl_xor_sync(mask, value, lane_mask):
     Shuffles value across the masked warp and returns the value
     from (laneid ^ lane_mask).
     """
-    return numba.cuda.shfl_sync_intrinsic(mask, 3, value, lane_mask, 0x1f)[0]
+    return numba.cuda.shfl_sync_intrinsic(mask, 3, value, lane_mask, 0x1F)[0]

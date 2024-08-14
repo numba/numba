@@ -4,6 +4,7 @@ Implement code coverage support.
 Currently contains logic to extend ``coverage`` with lines covered by the
 compiler.
 """
+
 from typing import Optional, Sequence, Callable, no_type_check
 from collections import defaultdict
 from abc import ABC, abstractmethod
@@ -23,8 +24,7 @@ else:
 
 @no_type_check
 def get_active_coverage():
-    """Get active coverage instance or return None if not found.
-    """
+    """Get active coverage instance or return None if not found."""
     cov = None
     if coverage_available:
         cov = coverage.Coverage.current()
@@ -38,8 +38,9 @@ def get_registered_loc_notify() -> Sequence["NotifyLocBase"]:
     """
     Returns a list of the registered NotifyLocBase instances.
     """
-    return list(filter(lambda x: x is not None,
-                       (factory() for factory in _the_registry)))
+    return list(
+        filter(lambda x: x is not None, (factory() for factory in _the_registry))
+    )
 
 
 @cache
@@ -61,8 +62,8 @@ def _get_coverage_data():
 
 
 class NotifyLocBase(ABC):
-    """Interface for notifying visiting of a ``numba.core.ir.Loc``.
-    """
+    """Interface for notifying visiting of a ``numba.core.ir.Loc``."""
+
     @abstractmethod
     def notify(self, loc: ir.Loc) -> None:
         pass
@@ -79,6 +80,7 @@ class NotifyCompilerCoverage(NotifyLocBase):
     The compiled lines are under the "numba_compiled" context in the coverage
     data.
     """
+
     def __init__(self):
         self._arcs_data = defaultdict(set)
 

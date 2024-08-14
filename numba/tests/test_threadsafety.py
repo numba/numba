@@ -2,6 +2,7 @@
 Test threadsafety for compiler.
 These tests will cause segfault if fail.
 """
+
 import threading
 import random
 
@@ -26,7 +27,6 @@ def gufunc_foo(a, b, out):
     out[0] = a + b
 
 
-
 class TestThreadSafety(unittest.TestCase):
 
     def run_jit(self, **options):
@@ -34,18 +34,19 @@ class TestThreadSafety(unittest.TestCase):
             cfunc = jit(**options)(foo)
 
             return cfunc(4, 10)
+
         return runner
 
     def run_compile(self, fnlist):
         self._cache_dir = temp_directory(self.__class__.__name__)
-        with override_config('CACHE_DIR', self._cache_dir):
+        with override_config("CACHE_DIR", self._cache_dir):
+
             def chooser():
                 for _ in range(10):
                     fn = random.choice(fnlist)
                     fn()
 
-            ths = [threading.Thread(target=chooser)
-                   for i in range(4)]
+            ths = [threading.Thread(target=chooser) for i in range(4)]
             for th in ths:
                 th.start()
             for th in ths:
@@ -59,9 +60,10 @@ class TestThreadSafety(unittest.TestCase):
 
     def run_vectorize(self, **options):
         def runner():
-            cfunc = vectorize(['(f4, f4)'], **options)(ufunc_foo)
+            cfunc = vectorize(["(f4, f4)"], **options)(ufunc_foo)
             a = b = np.random.random(10).astype(np.float32)
             return cfunc(a, b)
+
         return runner
 
     def test_concurrent_vectorize(self):
@@ -72,10 +74,11 @@ class TestThreadSafety(unittest.TestCase):
 
     def run_guvectorize(self, **options):
         def runner():
-            sig = ['(f4, f4, f4[:])']
-            cfunc = guvectorize(sig, '(),()->()', **options)(gufunc_foo)
+            sig = ["(f4, f4, f4[:])"]
+            cfunc = guvectorize(sig, "(),()->()", **options)(gufunc_foo)
             a = b = np.random.random(10).astype(np.float32)
             return cfunc(a, b)
+
         return runner
 
     def test_concurrent_guvectorize(self):
@@ -85,13 +88,17 @@ class TestThreadSafety(unittest.TestCase):
         self.run_compile([self.run_guvectorize(nopython=True, cache=True)])
 
     def test_concurrent_mix_use(self):
-        self.run_compile([self.run_jit(nopython=True, cache=True),
-                          self.run_jit(nopython=True),
-                          self.run_vectorize(nopython=True, cache=True),
-                          self.run_vectorize(nopython=True),
-                          self.run_guvectorize(nopython=True, cache=True),
-                          self.run_guvectorize(nopython=True)])
+        self.run_compile(
+            [
+                self.run_jit(nopython=True, cache=True),
+                self.run_jit(nopython=True),
+                self.run_vectorize(nopython=True, cache=True),
+                self.run_vectorize(nopython=True),
+                self.run_guvectorize(nopython=True, cache=True),
+                self.run_guvectorize(nopython=True),
+            ]
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

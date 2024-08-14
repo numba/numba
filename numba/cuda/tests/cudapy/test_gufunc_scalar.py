@@ -3,13 +3,14 @@
 See Numpy documentation for detail about gufunc:
     http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
 """
+
 import numpy as np
 from numba import guvectorize, cuda
 from numba.cuda.testing import skip_on_cudasim, CUDATestCase
 import unittest
 
 
-@skip_on_cudasim('ufunc API unsupported in the simulator')
+@skip_on_cudasim("ufunc API unsupported in the simulator")
 class TestGUFuncScalar(CUDATestCase):
     def test_gufunc_scalar_output(self):
         #    function type:
@@ -20,9 +21,9 @@ class TestGUFuncScalar(CUDATestCase):
         #    signature: (n)->()
         #        - the function takes an array of n-element and output a scalar.
 
-        @guvectorize(['void(int32[:], int32[:])'], '(n)->()', target='cuda')
+        @guvectorize(["void(int32[:], int32[:])"], "(n)->()", target="cuda")
         def sum_row(inp, out):
-            tmp = 0.
+            tmp = 0.0
             for i in range(inp.shape[0]):
                 tmp += inp[i]
             out[0] = tmp
@@ -38,15 +39,14 @@ class TestGUFuncScalar(CUDATestCase):
         out1 = np.empty(100, dtype=inp.dtype)
         out2 = np.empty(100, dtype=inp.dtype)
 
-        dev_inp = cuda.to_device(
-            inp)                 # alloc and copy input data
-        dev_out1 = cuda.to_device(out1, copy=False)   # alloc only
+        dev_inp = cuda.to_device(inp)  # alloc and copy input data
+        dev_out1 = cuda.to_device(out1, copy=False)  # alloc only
 
-        sum_row(dev_inp, out=dev_out1)                # invoke the gufunc
-        dev_out2 = sum_row(dev_inp)                   # invoke the gufunc
+        sum_row(dev_inp, out=dev_out1)  # invoke the gufunc
+        dev_out2 = sum_row(dev_inp)  # invoke the gufunc
 
-        dev_out1.copy_to_host(out1)                 # retrieve the result
-        dev_out2.copy_to_host(out2)                 # retrieve the result
+        dev_out1.copy_to_host(out1)  # retrieve the result
+        dev_out2.copy_to_host(out2)  # retrieve the result
 
         # verify result
         for i in range(inp.shape[0]):
@@ -55,7 +55,7 @@ class TestGUFuncScalar(CUDATestCase):
 
     def test_gufunc_scalar_output_bug(self):
         # Issue 2812: Error due to using input argument types as output argument
-        @guvectorize(['void(int32, int32[:])'], '()->()', target='cuda')
+        @guvectorize(["void(int32, int32[:])"], "()->()", target="cuda")
         def twice(inp, out):
             out[0] = inp * 2
 
@@ -64,8 +64,11 @@ class TestGUFuncScalar(CUDATestCase):
         self.assertPreciseEqual(twice(arg), arg * 2)
 
     def test_gufunc_scalar_input_saxpy(self):
-        @guvectorize(['void(float32, float32[:], float32[:], float32[:])'],
-                     '(),(t),(t)->(t)', target='cuda')
+        @guvectorize(
+            ["void(float32, float32[:], float32[:], float32[:])"],
+            "(),(t),(t)->(t)",
+            target="cuda",
+        )
         def saxpy(a, x, y, out):
             for i in range(out.shape[0]):
                 out[i] = a * x[i] + y[i]
@@ -99,8 +102,7 @@ class TestGUFuncScalar(CUDATestCase):
                 self.assertTrue(exp == out[j, i], (exp, out[j, i]))
 
     def test_gufunc_scalar_cast(self):
-        @guvectorize(['void(int32, int32[:], int32[:])'], '(),(t)->(t)',
-                     target='cuda')
+        @guvectorize(["void(int32, int32[:], int32[:])"], "(),(t)->(t)", target="cuda")
         def foo(a, b, out):
             for i in range(b.size):
                 out[i] = a * b[i]
@@ -121,8 +123,7 @@ class TestGUFuncScalar(CUDATestCase):
 
     def test_gufunc_old_style_scalar_as_array(self):
         # Example from issue #2579
-        @guvectorize(['void(int32[:],int32[:],int32[:])'], '(n),()->(n)',
-                     target='cuda')
+        @guvectorize(["void(int32[:],int32[:],int32[:])"], "(n),()->(n)", target="cuda")
         def gufunc(x, y, res):
             for i in range(x.shape[0]):
                 res[i] = x[i] + y[0]
@@ -155,5 +156,5 @@ class TestGUFuncScalar(CUDATestCase):
         np.testing.assert_almost_equal(expected, res)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

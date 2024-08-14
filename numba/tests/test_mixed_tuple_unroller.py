@@ -1,23 +1,41 @@
 from collections import namedtuple
 import numpy as np
 
-from numba.tests.support import (TestCase, MemoryLeakMixin,
-                                 skip_parfors_unsupported, captured_stdout)
+from numba.tests.support import (
+    TestCase,
+    MemoryLeakMixin,
+    skip_parfors_unsupported,
+    captured_stdout,
+)
 from numba import njit, typed, literal_unroll, prange
 from numba.core import types, errors, ir
 from numba.testing import unittest
 from numba.core.extending import overload
-from numba.core.compiler_machinery import (PassManager, register_pass,
-                                           FunctionPass, AnalysisPass)
+from numba.core.compiler_machinery import (
+    PassManager,
+    register_pass,
+    FunctionPass,
+    AnalysisPass,
+)
 from numba.core.compiler import CompilerBase
-from numba.core.untyped_passes import (FixupArgs, TranslateByteCode,
-                                       IRProcessing, InlineClosureLikes,
-                                       SimplifyCFG, IterLoopCanonicalization,
-                                       LiteralUnroll, PreserveIR)
-from numba.core.typed_passes import (NopythonTypeInference, IRLegalization,
-                                     NoPythonBackend, PartialTypeInference,
-                                     NativeLowering)
-from numba.core.ir_utils import (compute_cfg_from_blocks, flatten_labels)
+from numba.core.untyped_passes import (
+    FixupArgs,
+    TranslateByteCode,
+    IRProcessing,
+    InlineClosureLikes,
+    SimplifyCFG,
+    IterLoopCanonicalization,
+    LiteralUnroll,
+    PreserveIR,
+)
+from numba.core.typed_passes import (
+    NopythonTypeInference,
+    IRLegalization,
+    NoPythonBackend,
+    PartialTypeInference,
+    NativeLowering,
+)
+from numba.core.ir_utils import compute_cfg_from_blocks, flatten_labels
 from numba.core.types.functions import _header_lead
 
 _X_GLOBAL = (10, 11)
@@ -39,26 +57,26 @@ class TestLiteralTupleInterpretation(MemoryLeakMixin, TestCase):
             return x[1]
 
         self.assertEqual(foo(), foo.py_func())
-        self.check(foo, 'x')
+        self.check(foo, "x")
 
     def test_heterogeneous_literal(self):
         @njit
         def foo():
-            x = (1, 2, 3, 'a')
+            x = (1, 2, 3, "a")
             return x[3]
 
         self.assertEqual(foo(), foo.py_func())
-        self.check(foo, 'x')
+        self.check(foo, "x")
 
     def test_non_literal(self):
         @njit
         def foo():
-            x = (1, 2, 3, 'a', 1j)
+            x = (1, 2, 3, "a", 1j)
             return x[4]
 
         self.assertEqual(foo(), foo.py_func())
         with self.assertRaises(AssertionError) as e:
-            self.check(foo, 'x')
+            self.check(foo, "x")
 
         self.assertIn("non literal", str(e.exception))
 
@@ -88,8 +106,9 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
                 # untyped
                 pm.add_pass(TranslateByteCode, "analyzing bytecode")
                 pm.add_pass(IRProcessing, "processing IR")
-                pm.add_pass(InlineClosureLikes,
-                            "inline calls to locally defined closures")
+                pm.add_pass(
+                    InlineClosureLikes, "inline calls to locally defined closures"
+                )
                 if use_partial_typing:
                     pm.add_pass(PartialTypeInference, "do partial typing")
                 if use_canonicaliser:
@@ -116,6 +135,7 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
                 pm.finalize()
 
                 return [pm]
+
         return NewCompiler
 
     # generate variants
@@ -124,7 +144,7 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
     TypedLoopCanonicalisingCompiler = get_pipeline(True, True)
 
     def test_simple_loop_in_depth(self):
-        """ This heavily checks a simple loop transform """
+        """This heavily checks a simple loop transform"""
 
         def get_info(pipeline):
             @njit(pipeline_class=pipeline)
@@ -137,13 +157,13 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
             x = (1, 2, 3)
             self.assertEqual(foo(x), foo.py_func(x))
             cres = foo.overloads[foo.signatures[0]]
-            func_ir = cres.metadata['preserved_ir']
+            func_ir = cres.metadata["preserved_ir"]
             return func_ir, cres.fndesc
 
-        ignore_loops_ir, ignore_loops_fndesc = \
-            get_info(self.LoopIgnoringCompiler)
-        canonicalise_loops_ir, canonicalise_loops_fndesc = \
-            get_info(self.LoopCanonicalisingCompiler)
+        ignore_loops_ir, ignore_loops_fndesc = get_info(self.LoopIgnoringCompiler)
+        canonicalise_loops_ir, canonicalise_loops_fndesc = get_info(
+            self.LoopCanonicalisingCompiler
+        )
 
         # check CFG is the same
         def compare_cfg(a, b):
@@ -157,12 +177,15 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
         # len(tuple arg)
         # range(of the len() above)
         # getitem(tuple arg, index)
-        self.assertEqual(len(ignore_loops_fndesc.calltypes) + 3,
-                         len(canonicalise_loops_fndesc.calltypes))
+        self.assertEqual(
+            len(ignore_loops_fndesc.calltypes) + 3,
+            len(canonicalise_loops_fndesc.calltypes),
+        )
 
         def find_getX(fd, op):
-            return [x for x in fd.calltypes.keys()
-                    if isinstance(x, ir.Expr) and x.op == op]
+            return [
+                x for x in fd.calltypes.keys() if isinstance(x, ir.Expr) and x.op == op
+            ]
 
         il_getiters = find_getX(ignore_loops_fndesc, "getiter")
         self.assertEqual(len(il_getiters), 1)  # tuple iterator
@@ -182,9 +205,10 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
         self.assertTrue(isinstance(range_inst, types.RangeType))
 
     def test_transform_scope(self):
-        """ This checks the transform, when there's no typemap, will happily
+        """This checks the transform, when there's no typemap, will happily
         transform a loop on something that's not tuple-like
         """
+
         def get_info(pipeline):
             @njit(pipeline_class=pipeline)
             def foo():
@@ -195,13 +219,13 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
 
             self.assertEqual(foo(), foo.py_func())
             cres = foo.overloads[foo.signatures[0]]
-            func_ir = cres.metadata['preserved_ir']
+            func_ir = cres.metadata["preserved_ir"]
             return func_ir, cres.fndesc
 
-        ignore_loops_ir, ignore_loops_fndesc = \
-            get_info(self.LoopIgnoringCompiler)
-        canonicalise_loops_ir, canonicalise_loops_fndesc = \
-            get_info(self.LoopCanonicalisingCompiler)
+        ignore_loops_ir, ignore_loops_fndesc = get_info(self.LoopIgnoringCompiler)
+        canonicalise_loops_ir, canonicalise_loops_fndesc = get_info(
+            self.LoopCanonicalisingCompiler
+        )
 
         # check CFG is the same
         def compare_cfg(a, b):
@@ -215,12 +239,15 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
         # len(literal list)
         # range(of the len() above)
         # getitem(literal list arg, index)
-        self.assertEqual(len(ignore_loops_fndesc.calltypes) + 3,
-                         len(canonicalise_loops_fndesc.calltypes))
+        self.assertEqual(
+            len(ignore_loops_fndesc.calltypes) + 3,
+            len(canonicalise_loops_fndesc.calltypes),
+        )
 
         def find_getX(fd, op):
-            return [x for x in fd.calltypes.keys()
-                    if isinstance(x, ir.Expr) and x.op == op]
+            return [
+                x for x in fd.calltypes.keys() if isinstance(x, ir.Expr) and x.op == op
+            ]
 
         il_getiters = find_getX(ignore_loops_fndesc, "getiter")
         self.assertEqual(len(il_getiters), 1)  # list iterator
@@ -241,7 +268,7 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
 
     @unittest.skip("Waiting for pass to be enabled for all tuples")
     def test_influence_of_typed_transform(self):
-        """ This heavily checks a typed transformation only impacts tuple
+        """This heavily checks a typed transformation only impacts tuple
         induced loops"""
 
         def get_info(pipeline):
@@ -257,13 +284,13 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
             x = (1, 2, 3)
             self.assertEqual(foo(x), foo.py_func(x))
             cres = foo.overloads[foo.signatures[0]]
-            func_ir = cres.metadata['func_ir']
+            func_ir = cres.metadata["func_ir"]
             return func_ir, cres.fndesc
 
-        ignore_loops_ir, ignore_loops_fndesc = \
-            get_info(self.LoopIgnoringCompiler)
-        canonicalise_loops_ir, canonicalise_loops_fndesc = \
-            get_info(self.TypedLoopCanonicalisingCompiler)
+        ignore_loops_ir, ignore_loops_fndesc = get_info(self.LoopIgnoringCompiler)
+        canonicalise_loops_ir, canonicalise_loops_fndesc = get_info(
+            self.TypedLoopCanonicalisingCompiler
+        )
 
         # check CFG is the same
         def compare_cfg(a, b):
@@ -277,12 +304,15 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
         # len(tuple arg)
         # range(of the len() above)
         # getitem(tuple arg, index)
-        self.assertEqual(len(ignore_loops_fndesc.calltypes) + 3,
-                         len(canonicalise_loops_fndesc.calltypes))
+        self.assertEqual(
+            len(ignore_loops_fndesc.calltypes) + 3,
+            len(canonicalise_loops_fndesc.calltypes),
+        )
 
         def find_getX(fd, op):
-            return [x for x in fd.calltypes.keys()
-                    if isinstance(x, ir.Expr) and x.op == op]
+            return [
+                x for x in fd.calltypes.keys() if isinstance(x, ir.Expr) and x.op == op
+            ]
 
         il_getiters = find_getX(ignore_loops_fndesc, "getiter")
         self.assertEqual(len(il_getiters), 3)  # 1 * tuple + 2 * loop range
@@ -303,7 +333,7 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
             self.assertTrue(isinstance(range_inst, types.RangeType))
 
     def test_influence_of_typed_transform_literal_unroll(self):
-        """ This heavily checks a typed transformation only impacts loops with
+        """This heavily checks a typed transformation only impacts loops with
         literal_unroll marker"""
 
         def get_info(pipeline):
@@ -319,13 +349,13 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
             x = (1, 2, 3)
             self.assertEqual(foo(x), foo.py_func(x))
             cres = foo.overloads[foo.signatures[0]]
-            func_ir = cres.metadata['preserved_ir']
+            func_ir = cres.metadata["preserved_ir"]
             return func_ir, cres.fndesc
 
-        ignore_loops_ir, ignore_loops_fndesc = \
-            get_info(self.LoopIgnoringCompiler)
-        canonicalise_loops_ir, canonicalise_loops_fndesc = \
-            get_info(self.TypedLoopCanonicalisingCompiler)
+        ignore_loops_ir, ignore_loops_fndesc = get_info(self.LoopIgnoringCompiler)
+        canonicalise_loops_ir, canonicalise_loops_fndesc = get_info(
+            self.TypedLoopCanonicalisingCompiler
+        )
 
         # check CFG is the same
         def compare_cfg(a, b):
@@ -339,12 +369,15 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
         # len(tuple arg)
         # range(of the len() above)
         # getitem(tuple arg, index)
-        self.assertEqual(len(ignore_loops_fndesc.calltypes) + 3,
-                         len(canonicalise_loops_fndesc.calltypes))
+        self.assertEqual(
+            len(ignore_loops_fndesc.calltypes) + 3,
+            len(canonicalise_loops_fndesc.calltypes),
+        )
 
         def find_getX(fd, op):
-            return [x for x in fd.calltypes.keys()
-                    if isinstance(x, ir.Expr) and x.op == op]
+            return [
+                x for x in fd.calltypes.keys() if isinstance(x, ir.Expr) and x.op == op
+            ]
 
         il_getiters = find_getX(ignore_loops_fndesc, "getiter")
         self.assertEqual(len(il_getiters), 3)  # 1 * tuple + 2 * loop range
@@ -366,7 +399,7 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
 
     @unittest.skip("Waiting for pass to be enabled for all tuples")
     def test_lots_of_loops(self):
-        """ This heavily checks a simple loop transform """
+        """This heavily checks a simple loop transform"""
 
         def get_info(pipeline):
             @njit(pipeline_class=pipeline)
@@ -388,13 +421,13 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
             x = (1, 2, 3)
             self.assertEqual(foo(x), foo.py_func(x))
             cres = foo.overloads[foo.signatures[0]]
-            func_ir = cres.metadata['preserved_ir']
+            func_ir = cres.metadata["preserved_ir"]
             return func_ir, cres.fndesc
 
-        ignore_loops_ir, ignore_loops_fndesc = \
-            get_info(self.LoopIgnoringCompiler)
-        canonicalise_loops_ir, canonicalise_loops_fndesc = \
-            get_info(self.LoopCanonicalisingCompiler)
+        ignore_loops_ir, ignore_loops_fndesc = get_info(self.LoopIgnoringCompiler)
+        canonicalise_loops_ir, canonicalise_loops_fndesc = get_info(
+            self.LoopCanonicalisingCompiler
+        )
 
         # check CFG is the same
         def compare_cfg(a, b):
@@ -408,11 +441,13 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
         # len(tuple arg)
         # range(of the len() above)
         # getitem(tuple arg, index)
-        self.assertEqual(len(ignore_loops_fndesc.calltypes) + 3 * 3,
-                         len(canonicalise_loops_fndesc.calltypes))
+        self.assertEqual(
+            len(ignore_loops_fndesc.calltypes) + 3 * 3,
+            len(canonicalise_loops_fndesc.calltypes),
+        )
 
     def test_inlined_loops(self):
-        """ Checks a loop appearing from a closure """
+        """Checks a loop appearing from a closure"""
 
         def get_info(pipeline):
             @njit(pipeline_class=pipeline)
@@ -433,13 +468,13 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
             x = (1, 2, 3)
             self.assertEqual(foo(x), foo.py_func(x))
             cres = foo.overloads[foo.signatures[0]]
-            func_ir = cres.metadata['preserved_ir']
+            func_ir = cres.metadata["preserved_ir"]
             return func_ir, cres.fndesc
 
-        ignore_loops_ir, ignore_loops_fndesc = \
-            get_info(self.LoopIgnoringCompiler)
-        canonicalise_loops_ir, canonicalise_loops_fndesc = \
-            get_info(self.LoopCanonicalisingCompiler)
+        ignore_loops_ir, ignore_loops_fndesc = get_info(self.LoopIgnoringCompiler)
+        canonicalise_loops_ir, canonicalise_loops_fndesc = get_info(
+            self.LoopCanonicalisingCompiler
+        )
 
         # check CFG is the same
         def compare_cfg(a, b):
@@ -454,8 +489,10 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
         # len(tuple arg)
         # range(of the len() above)
         # getitem(tuple arg, index)
-        self.assertEqual(len(ignore_loops_fndesc.calltypes) + 5,
-                         len(canonicalise_loops_fndesc.calltypes))
+        self.assertEqual(
+            len(ignore_loops_fndesc.calltypes) + 5,
+            len(canonicalise_loops_fndesc.calltypes),
+        )
 
 
 class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
@@ -504,7 +541,7 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
         @njit
         def foo(idx, z):
             x = (12, 12.7, 3j, 4, z, 2 * z)
-            y = ('foo', z, 2 * z)
+            y = ("foo", z, 2 * z)
             acc = 0
             for a in literal_unroll(x):
                 acc += a
@@ -540,11 +577,11 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
         def foo(tup1, tup2):
             acc = 0
             for a in literal_unroll(tup1):
-                if a == 'a':
+                if a == "a":
                     acc += tup2[0].sum()
-                elif a == 'b':
+                elif a == "b":
                     acc += tup2[1].sum()
-                elif a == 'c':
+                elif a == "c":
                     acc += tup2[2].sum()
                 elif a == 12:
                     acc += tup2[3].sum()
@@ -555,9 +592,20 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
             return acc
 
         n = 10
-        tup1 = ('a', 'b', 'c', 12, 3j,)
-        tup2 = (np.ones((n,)), np.ones((n, n)), np.ones((n, n, n)),
-                np.ones((n, n, n, n)), np.ones((n, n, n, n, n)))
+        tup1 = (
+            "a",
+            "b",
+            "c",
+            12,
+            3j,
+        )
+        tup2 = (
+            np.ones((n,)),
+            np.ones((n, n)),
+            np.ones((n, n, n)),
+            np.ones((n, n, n, n)),
+            np.ones((n, n, n, n, n)),
+        )
         self.assertEqual(foo(tup1, tup2), foo.py_func(tup1, tup2))
 
     @unittest.skip("needs more clever branch prune")
@@ -569,13 +617,13 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
             acc = 0
             str_buf = typed.List.empty_list(types.unicode_type)
             for a in literal_unroll(tup):
-                if a == 'a':
+                if a == "a":
                     str_buf.append(a)
                 else:
                     acc += a
             return acc
 
-        tup = ('a', 12)
+        tup = ("a", 12)
         self.assertEqual(foo(tup), foo.py_func(tup))
 
     def test_07(self):
@@ -588,8 +636,14 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
             return acc
 
         n = 10
-        tup = (np.ones((n,)), np.ones((n, n)), "ABCDEFGHJI", (1, 2, 3),
-               (1, 'foo', 2, 'bar'), {3, 4, 5, 6, 7})
+        tup = (
+            np.ones((n,)),
+            np.ones((n, n)),
+            "ABCDEFGHJI",
+            (1, 2, 3),
+            (1, "foo", 2, "bar"),
+            {3, 4, 5, 6, 7},
+        )
         self.assertEqual(foo(tup), foo.py_func(tup))
 
     def test_08(self):
@@ -599,20 +653,21 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
         def foo(tup1, tup2):
             acc = 0
             for a in literal_unroll(tup1):
-                if a == 'a':
+                if a == "a":
                     acc += tup2[0]()
-                elif a == 'b':
+                elif a == "b":
                     acc += tup2[1]()
-                elif a == 'c':
+                elif a == "c":
                     acc += tup2[2]()
             return acc
 
         def gen(x):
             def impl():
                 return x
+
             return njit(impl)
 
-        tup1 = ('a', 'b', 'c', 12, 3j, ('f',))
+        tup1 = ("a", "b", "c", 12, 3j, ("f",))
         tup2 = (gen(1), gen(2), gen(3))
         self.assertEqual(foo(tup1, tup2), foo.py_func(tup1, tup2))
 
@@ -624,11 +679,11 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
             acc = 0
             idx = 0
             for a in literal_unroll(tup1):
-                if a == 'a':
+                if a == "a":
                     acc += tup2[idx]
-                elif a == 'b':
+                elif a == "b":
                     acc += tup2[idx]
-                elif a == 'c':
+                elif a == "c":
                     acc += tup2[idx]
                 idx += 1
             return idx, acc
@@ -645,7 +700,7 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
         def func3():
             return 3
 
-        tup1 = ('a', 'b', 'c')
+        tup1 = ("a", "b", "c")
         tup2 = (1j, 1, 2)
 
         with self.assertRaises(errors.TypingError) as raises:
@@ -663,35 +718,43 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
                 return 2
             elif value == "banana":
                 return 3
-            elif value == 0xca11ab1e:
-                return 0x5ca1ab1e + value
+            elif value == 0xCA11AB1E:
+                return 0x5CA1AB1E + value
 
-        @overload(dt, inline='always')
+        @overload(dt, inline="always")
         def ol_dt(li):
             if isinstance(li, types.StringLiteral):
                 value = li.literal_value
                 if value == "apple":
+
                     def impl(li):
                         return 1
+
                 elif value == "orange":
+
                     def impl(li):
                         return 2
+
                 elif value == "banana":
+
                     def impl(li):
                         return 3
+
                 return impl
             elif isinstance(li, types.IntegerLiteral):
                 value = li.literal_value
-                if value == 0xca11ab1e:
+                if value == 0xCA11AB1E:
+
                     def impl(li):
                         # close over the dispatcher :)
-                        return 0x5ca1ab1e + value
+                        return 0x5CA1AB1E + value
+
                     return impl
 
         @njit
         def foo():
             acc = 0
-            for t in literal_unroll(('apple', 'orange', 'banana', 3390155550)):
+            for t in literal_unroll(("apple", "orange", "banana", 3390155550)):
                 acc += dt(t)
             return acc
 
@@ -702,7 +765,7 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
         @njit
         def foo():
             x = []
-            z = ('apple', 'orange', 'banana')
+            z = ("apple", "orange", "banana")
             for i in range(len(literal_unroll(z))):
                 t = z[i]
                 if t == "apple":
@@ -720,7 +783,7 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
         @njit
         def foo():
             x = typed.List()
-            z = ('apple', 'orange', 'banana')
+            z = ("apple", "orange", "banana")
             for i in range(len(literal_unroll(z))):
                 t = z[i]
                 if t == "apple":
@@ -785,8 +848,7 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
         with self.assertRaises(errors.UnsupportedError) as raises:
             foo(2, k)
 
-        self.assertIn("Nesting of literal_unroll is unsupported",
-                      str(raises.exception))
+        self.assertIn("Nesting of literal_unroll is unsupported", str(raises.exception))
 
     def test_14(self):
         # unituple unroll can return derivative of the induction var
@@ -812,8 +874,14 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
             return a
 
         n = 5
-        tup = (np.ones((n,)), np.ones((n, n)), "ABCDEFGHJI", (1, 2, 3),
-               (1, 'foo', 2, 'bar'), {3, 4, 5, 6, 7})
+        tup = (
+            np.ones((n,)),
+            np.ones((n, n)),
+            "ABCDEFGHJI",
+            (1, 2, 3),
+            (1, "foo", 2, "bar"),
+            {3, 4, 5, 6, 7},
+        )
 
         with self.assertRaises(errors.TypingError) as raises:
             foo(tup)
@@ -833,22 +901,30 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
             elif value == 4000:
                 return "d"
 
-        @overload(dt, inline='always')
+        @overload(dt, inline="always")
         def ol_dt(li):
             if isinstance(li, types.IntegerLiteral):
                 value = li.literal_value
                 if value == 1000:
+
                     def impl(li):
                         return "a"
+
                 elif value == 2000:
+
                     def impl(li):
                         return "b"
+
                 elif value == 3000:
+
                     def impl(li):
                         return "c"
+
                 elif value == 4000:
+
                     def impl(li):
                         return "d"
+
                 return impl
 
         @njit
@@ -873,36 +949,46 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
                 return "c"
             elif value == 4000:
                 return "d"
-            elif value == 'f':
+            elif value == "f":
                 return "EFF"
 
-        @overload(dt, inline='always')
+        @overload(dt, inline="always")
         def ol_dt(li):
             if isinstance(li, types.IntegerLiteral):
                 value = li.literal_value
                 if value == 1000:
+
                     def impl(li):
                         return "a"
+
                 elif value == 2000:
+
                     def impl(li):
                         return "b"
+
                 elif value == 3000:
+
                     def impl(li):
                         return "c"
+
                 elif value == 4000:
+
                     def impl(li):
                         return "d"
+
                 return impl
             elif isinstance(li, types.StringLiteral):
                 value = li.literal_value
-                if value == 'f':
+                if value == "f":
+
                     def impl(li):
                         return "EFF"
+
                     return impl
 
         @njit
         def foo():
-            x = (1000, 2000, 3000, 'f')
+            x = (1000, 2000, 3000, "f")
             acc = ""
             for a in literal_unroll(x[1:]):
                 acc += dt(a)
@@ -967,6 +1053,7 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
                 for j in literal_unroll(b):
                     acc += j
                 return acc
+
             outer_acc = 0
             for x in (1, 2, 3, 4):
                 outer_acc += bar() + x
@@ -997,7 +1084,7 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
 
         @njit
         def foo(z):
-            a = (12, 12.7, 3j, 4, z, 2 * z, 'a')
+            a = (12, 12.7, 3j, 4, z, 2 * z, "a")
             b = (23, 23.9, 6j, 8)
 
             def bar():
@@ -1005,6 +1092,7 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
                 for j in literal_unroll(b):
                     acc += j
                 return acc
+
             acc = 0
             # this loop is induced in `x` but `x` is not used, there is a nest
             # here by virtue of inlining
@@ -1019,8 +1107,7 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
         with self.assertRaises(errors.UnsupportedError) as raises:
             foo(k)
 
-        self.assertIn("Nesting of literal_unroll is unsupported",
-                      str(raises.exception))
+        self.assertIn("Nesting of literal_unroll is unsupported", str(raises.exception))
 
     def test_23(self):
         # unroll from closure that ends up banned as it leads to nesting
@@ -1033,6 +1120,7 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
                 for j in literal_unroll(b):
                     acc += j
                 return acc
+
             outer_acc = 0
             # this drives an inlined literal_unroll loop but also has access to
             # the induction variable, this is a nested literal_unroll so is
@@ -1048,8 +1136,7 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
         with self.assertRaises(errors.UnsupportedError) as raises:
             foo(k)
 
-        self.assertIn("Nesting of literal_unroll is unsupported",
-                      str(raises.exception))
+        self.assertIn("Nesting of literal_unroll is unsupported", str(raises.exception))
 
     def test_24(self):
         # unroll something unsupported
@@ -1168,6 +1255,7 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
                 for x in literal_unroll(a):
                     acc += x + const
                 return acc, t
+
             return [x for x in map(bar, (1, 2))]
 
         self.assertEqual(foo(), foo.py_func())
@@ -1186,6 +1274,7 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
                 for x in literal_unroll(a):
                     acc += x + const
                 return acc, t
+
             return [x for x in map(bar, (1, 2j))]
 
         with self.assertRaises(errors.TypingError) as raises:
@@ -1203,7 +1292,16 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
 
         @njit
         def foo():
-            return [x for x in gen((1, 2.3, 4j,))]
+            return [
+                x
+                for x in gen(
+                    (
+                        1,
+                        2.3,
+                        4j,
+                    )
+                )
+            ]
 
         self.assertEqual(foo(), foo.py_func())
 
@@ -1221,7 +1319,19 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
                 def gen(a):
                     for x in literal_unroll(a):
                         yield x
-                return [next(x) for x in cons(gen, (1, 2.3, 4j,))]
+
+                return [
+                    next(x)
+                    for x in cons(
+                        gen,
+                        (
+                            1,
+                            2.3,
+                            4j,
+                        ),
+                    )
+                ]
+
             return foo
 
         cfunc = get(consumer)
@@ -1250,8 +1360,7 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
             foo()
 
         self.assertIn("Invalid use of", str(raises.exception))
-        self.assertIn("found multiple definitions of variable",
-                      str(raises.exception))
+        self.assertIn("found multiple definitions of variable", str(raises.exception))
 
 
 class TestConstListUnroll(MemoryLeakMixin, TestCase):
@@ -1294,7 +1403,7 @@ class TestConstListUnroll(MemoryLeakMixin, TestCase):
         @njit
         def foo():
             x = [12, 12.7, 3j, 4]
-            y = ['foo', 8]
+            y = ["foo", 8]
             acc = 0
             for a in literal_unroll(x):
                 acc += a
@@ -1313,7 +1422,7 @@ class TestConstListUnroll(MemoryLeakMixin, TestCase):
         @njit
         def foo():
             x = [12, 12.7, 3j, 4]
-            y = ('foo', 8)
+            y = ("foo", 8)
             acc = 0
             for a in literal_unroll(x):
                 acc += a
@@ -1339,8 +1448,13 @@ class TestConstListUnroll(MemoryLeakMixin, TestCase):
 
         n = 10
         tup1 = [np.zeros(10), np.zeros(10)]
-        tup2 = (np.ones((n,)), np.ones((n, n)), np.ones((n, n, n)),
-                np.ones((n, n, n, n)), np.ones((n, n, n, n, n)))
+        tup2 = (
+            np.ones((n,)),
+            np.ones((n, n)),
+            np.ones((n, n, n)),
+            np.ones((n, n, n, n)),
+            np.ones((n, n, n, n, n)),
+        )
 
         with self.assertRaises(errors.UnsupportedError) as raises:
             foo(tup1, tup2)
@@ -1353,8 +1467,14 @@ class TestConstListUnroll(MemoryLeakMixin, TestCase):
         @njit
         def foo():
             n = 10
-            tup = [np.ones((n,)), np.ones((n, n)), "ABCDEFGHJI", (1, 2, 3),
-                   (1, 'foo', 2, 'bar'), {3, 4, 5, 6, 7}]
+            tup = [
+                np.ones((n,)),
+                np.ones((n, n)),
+                "ABCDEFGHJI",
+                (1, 2, 3),
+                (1, "foo", 2, "bar"),
+                {3, 4, 5, 6, 7},
+            ]
             acc = 0
             for a in literal_unroll(tup):
                 acc += len(a)
@@ -1363,8 +1483,7 @@ class TestConstListUnroll(MemoryLeakMixin, TestCase):
         with self.assertRaises(errors.UnsupportedError) as raises:
             foo()
 
-        self.assertIn("Found non-constant value at position 0",
-                      str(raises.exception))
+        self.assertIn("Found non-constant value at position 0", str(raises.exception))
 
     def test_7(self):
         # dispatch on literals triggering @overload resolution
@@ -1376,35 +1495,43 @@ class TestConstListUnroll(MemoryLeakMixin, TestCase):
                 return 2
             elif value == "banana":
                 return 3
-            elif value == 0xca11ab1e:
-                return 0x5ca1ab1e + value
+            elif value == 0xCA11AB1E:
+                return 0x5CA1AB1E + value
 
-        @overload(dt, inline='always')
+        @overload(dt, inline="always")
         def ol_dt(li):
             if isinstance(li, types.StringLiteral):
                 value = li.literal_value
                 if value == "apple":
+
                     def impl(li):
                         return 1
+
                 elif value == "orange":
+
                     def impl(li):
                         return 2
+
                 elif value == "banana":
+
                     def impl(li):
                         return 3
+
                 return impl
             elif isinstance(li, types.IntegerLiteral):
                 value = li.literal_value
-                if value == 0xca11ab1e:
+                if value == 0xCA11AB1E:
+
                     def impl(li):
                         # close over the dispatcher :)
-                        return 0x5ca1ab1e + value
+                        return 0x5CA1AB1E + value
+
                     return impl
 
         @njit
         def foo():
             acc = 0
-            for t in literal_unroll(['apple', 'orange', 'banana', 3390155550]):
+            for t in literal_unroll(["apple", "orange", "banana", 3390155550]):
                 acc += dt(t)
             return acc
 
@@ -1415,7 +1542,7 @@ class TestConstListUnroll(MemoryLeakMixin, TestCase):
         @njit
         def foo():
             x = []
-            z = ['apple', 'orange', 'banana']
+            z = ["apple", "orange", "banana"]
             for i in range(len(literal_unroll(z))):
                 t = z[i]
                 if t == "apple":
@@ -1481,8 +1608,7 @@ class TestConstListUnroll(MemoryLeakMixin, TestCase):
         with self.assertRaises(errors.UnsupportedError) as raises:
             foo(2, k)
 
-        self.assertIn("Nesting of literal_unroll is unsupported",
-                      str(raises.exception))
+        self.assertIn("Nesting of literal_unroll is unsupported", str(raises.exception))
 
     def test_11(self):
         # homogeneous const list unroll can return derivative of the induction
@@ -1503,7 +1629,7 @@ class TestConstListUnroll(MemoryLeakMixin, TestCase):
         @njit
         def foo():
             acc = 0
-            x = [1, 2, 'a']
+            x = [1, 2, "a"]
             for a in literal_unroll(x):
                 acc += bool(a)
             return a
@@ -1544,8 +1670,7 @@ class TestConstListUnroll(MemoryLeakMixin, TestCase):
         with self.assertRaises(errors.TypingError) as raises:
             foo()
 
-        self.assertIn("Unknown attribute 'append' of type Tuple",
-                      str(raises.exception))
+        self.assertIn("Unknown attribute 'append' of type Tuple", str(raises.exception))
 
 
 class TestMore(TestCase):
@@ -1578,9 +1703,11 @@ class TestMore(TestCase):
         with self.assertRaises(errors.UnsupportedError) as raises:
             foo(10)
         self.assertIn(
-            ("Found non-constant value at position 1 in a list argument to "
-             "literal_unroll"),
-            str(raises.exception)
+            (
+                "Found non-constant value at position 1 in a list argument to "
+                "literal_unroll"
+            ),
+            str(raises.exception),
         )
 
     @unittest.skip("numba.literally not supported yet")
@@ -1610,7 +1737,7 @@ class TestMore(TestCase):
 
     @unittest.skip("inlining of foo doesn't have const prop so y isn't const")
     def test_inlined_unroll_list(self):
-        @njit(inline='always')
+        @njit(inline="always")
         def foo(y):
             x = [10, y]
             r = 0
@@ -1664,10 +1791,10 @@ class TestMore(TestCase):
 
         @njit
         def foo():
-            x = ((10, 1.2), (1j, 3.))
+            x = ((10, 1.2), (1j, 3.0))
             out = 0
             for i in literal_unroll(x):
-                for j in (i):
+                for j in i:
                     out += j
             return out
 
@@ -1698,11 +1825,11 @@ class TestMore(TestCase):
         lines = stdout.getvalue().splitlines()
         self.assertEqual(
             lines,
-            ['a 1', 'b 2', '3 c', '4 d'],
+            ["a 1", "b 2", "3 c", "4 d"],
         )
 
     def test_unroll_named_tuple(self):
-        ABC = namedtuple('ABC', ['a', 'b', 'c'])
+        ABC = namedtuple("ABC", ["a", "b", "c"])
 
         @njit
         def foo():
@@ -1715,7 +1842,7 @@ class TestMore(TestCase):
         self.assertEqual(foo(), foo.py_func())
 
     def test_unroll_named_tuple_arg(self):
-        ABC = namedtuple('ABC', ['a', 'b', 'c'])
+        ABC = namedtuple("ABC", ["a", "b", "c"])
 
         @njit
         def foo(x):
@@ -1729,7 +1856,7 @@ class TestMore(TestCase):
         self.assertEqual(foo(abc), foo.py_func(abc))
 
     def test_unroll_named_unituple(self):
-        ABC = namedtuple('ABC', ['a', 'b', 'c'])
+        ABC = namedtuple("ABC", ["a", "b", "c"])
 
         @njit
         def foo():
@@ -1742,7 +1869,7 @@ class TestMore(TestCase):
         self.assertEqual(foo(), foo.py_func())
 
     def test_unroll_named_unituple_arg(self):
-        ABC = namedtuple('ABC', ['a', 'b', 'c'])
+        ABC = namedtuple("ABC", ["a", "b", "c"])
 
         @njit
         def foo(x):
@@ -1805,7 +1932,7 @@ class TestMore(TestCase):
             i = 0
             acc = 0
             normal_list = [a for a in cont]
-            heter_tuple = ('a', 25, 0.23, None)
+            heter_tuple = ("a", 25, 0.23, None)
             for item in literal_unroll(heter_tuple):
                 acc += normal_list[i]
                 i += 1
@@ -1824,7 +1951,7 @@ class TestMore(TestCase):
         lines = stdout.getvalue().splitlines()
         self.assertEqual(
             lines,
-            ['a', '25', '0.23', 'None'],
+            ["a", "25", "0.23", "None"],
         )
 
     def test_unroller_as_freevar(self):
@@ -1843,7 +1970,7 @@ class TestMore(TestCase):
     def test_unroll_with_non_conformant_loops_present(self):
         # See issue #8311
 
-        @njit('(Tuple((int64, float64)),)')
+        @njit("(Tuple((int64, float64)),)")
         def foo(tup):
             for t in literal_unroll(tup):
                 pass
@@ -1868,8 +1995,7 @@ class TestMore(TestCase):
 
     def test_literal_unroll_legalize_var_names02(self):
         # See issue #8939
-        test = np.array([(1, 2), (2, 3)],
-                        dtype=[("a1[0]", "f8"), ("a2[1]", "f8")])
+        test = np.array([(1, 2), (2, 3)], dtype=[("a1[0]", "f8"), ("a2[1]", "f8")])
         fields = tuple(test.dtype.fields.keys())
 
         @njit
@@ -1883,8 +2009,9 @@ class TestMore(TestCase):
 
 
 def capture(real_pass):
-    """ Returns a compiler pass that captures the mutation state reported
+    """Returns a compiler pass that captures the mutation state reported
     by the pass used in the argument"""
+
     @register_pass(mutates_CFG=False, analysis_only=True)
     class ResultCapturer(AnalysisPass):
         _name = "capture_%s" % real_pass._name
@@ -1895,7 +2022,7 @@ def capture(real_pass):
 
         def run_pass(self, state):
             result = real_pass().run_pass(state)
-            mutation_results = state.metadata.setdefault('mutation_results', {})
+            mutation_results = state.metadata.setdefault("mutation_results", {})
             mutation_results[real_pass] = result
             return result
 
@@ -1903,7 +2030,7 @@ def capture(real_pass):
 
 
 class CapturingCompiler(CompilerBase):
-    """ Simple pipeline that wraps passes with the ResultCapturer pass"""
+    """Simple pipeline that wraps passes with the ResultCapturer pass"""
 
     def define_pipelines(self):
         pm = PassManager("Capturing Compiler")
@@ -1920,8 +2047,7 @@ class CapturingCompiler(CompilerBase):
         add_pass(NopythonTypeInference, "nopython frontend")
 
         # legalise
-        add_pass(IRLegalization,
-                 "ensure IR is legal prior to lowering")
+        add_pass(IRLegalization, "ensure IR is legal prior to lowering")
 
         # lower
         add_pass(NativeLowering, "native lowering")
@@ -1942,7 +2068,7 @@ class TestLiteralUnrollPassTriggering(TestCase):
 
         foo()
         cres = foo.overloads[foo.signatures[0]]
-        self.assertFalse(cres.metadata['mutation_results'][LiteralUnroll])
+        self.assertFalse(cres.metadata["mutation_results"][LiteralUnroll])
 
     def test_literal_unroll_is_invoked(self):
         @njit(pipeline_class=CapturingCompiler)
@@ -1954,7 +2080,7 @@ class TestLiteralUnrollPassTriggering(TestCase):
 
         foo()
         cres = foo.overloads[foo.signatures[0]]
-        self.assertTrue(cres.metadata['mutation_results'][LiteralUnroll])
+        self.assertTrue(cres.metadata["mutation_results"][LiteralUnroll])
 
     def test_literal_unroll_is_invoked_via_alias(self):
         alias = literal_unroll
@@ -1968,7 +2094,7 @@ class TestLiteralUnrollPassTriggering(TestCase):
 
         foo()
         cres = foo.overloads[foo.signatures[0]]
-        self.assertTrue(cres.metadata['mutation_results'][LiteralUnroll])
+        self.assertTrue(cres.metadata["mutation_results"][LiteralUnroll])
 
     def test_literal_unroll_assess_empty_function(self):
         @njit(pipeline_class=CapturingCompiler)
@@ -1977,37 +2103,37 @@ class TestLiteralUnrollPassTriggering(TestCase):
 
         foo()
         cres = foo.overloads[foo.signatures[0]]
-        self.assertFalse(cres.metadata['mutation_results'][LiteralUnroll])
+        self.assertFalse(cres.metadata["mutation_results"][LiteralUnroll])
 
     def test_literal_unroll_not_in_globals(self):
         f = """def foo():\n\tpass"""
         l = {}
         exec(f, {}, l)
-        foo = njit(pipeline_class=CapturingCompiler)(l['foo'])
+        foo = njit(pipeline_class=CapturingCompiler)(l["foo"])
         foo()
         cres = foo.overloads[foo.signatures[0]]
-        self.assertFalse(cres.metadata['mutation_results'][LiteralUnroll])
+        self.assertFalse(cres.metadata["mutation_results"][LiteralUnroll])
 
     def test_literal_unroll_globals_and_locals(self):
         f = """def foo():\n\tfor x in literal_unroll((1,)):\n\t\tpass"""
         l = {}
         exec(f, {}, l)
-        foo = njit(pipeline_class=CapturingCompiler)(l['foo'])
+        foo = njit(pipeline_class=CapturingCompiler)(l["foo"])
         with self.assertRaises(errors.TypingError) as raises:
             foo()
-        self.assertIn("Untyped global name 'literal_unroll'",
-                      str(raises.exception))
+        self.assertIn("Untyped global name 'literal_unroll'", str(raises.exception))
 
         # same as above but now add literal_unroll to globals
         l = {}
-        exec(f, {'literal_unroll': literal_unroll}, l)
-        foo = njit(pipeline_class=CapturingCompiler)(l['foo'])
+        exec(f, {"literal_unroll": literal_unroll}, l)
+        foo = njit(pipeline_class=CapturingCompiler)(l["foo"])
         foo()
         cres = foo.overloads[foo.signatures[0]]
-        self.assertTrue(cres.metadata['mutation_results'][LiteralUnroll])
+        self.assertTrue(cres.metadata["mutation_results"][LiteralUnroll])
 
         # same as above, but now with import
         from textwrap import dedent
+
         f = """
             def gen():
                 from numba import literal_unroll
@@ -2019,13 +2145,14 @@ class TestLiteralUnrollPassTriggering(TestCase):
             """
         l = {}
         exec(dedent(f), {}, l)
-        foo = njit(pipeline_class=CapturingCompiler)(l['bar'])
+        foo = njit(pipeline_class=CapturingCompiler)(l["bar"])
         foo()
         cres = foo.overloads[foo.signatures[0]]
-        self.assertTrue(cres.metadata['mutation_results'][LiteralUnroll])
+        self.assertTrue(cres.metadata["mutation_results"][LiteralUnroll])
 
         # same as above, but now with import as something else
         from textwrap import dedent
+
         f = """
             def gen():
                 from numba import literal_unroll as something_else
@@ -2037,11 +2164,11 @@ class TestLiteralUnrollPassTriggering(TestCase):
             """
         l = {}
         exec(dedent(f), {}, l)
-        foo = njit(pipeline_class=CapturingCompiler)(l['bar'])
+        foo = njit(pipeline_class=CapturingCompiler)(l["bar"])
         foo()
         cres = foo.overloads[foo.signatures[0]]
-        self.assertTrue(cres.metadata['mutation_results'][LiteralUnroll])
+        self.assertTrue(cres.metadata["mutation_results"][LiteralUnroll])
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -72,12 +72,12 @@ class UFuncMechanism(object):
     """
     Prepare ufunc arguments for vectorize.
     """
+
     DEFAULT_STREAM = None
     SUPPORT_DEVICE_SLICING = False
 
     def __init__(self, typemap, args):
-        """Never used directly by user. Invoke by UFuncMechanism.call().
-        """
+        """Never used directly by user. Invoke by UFuncMechanism.call()."""
         self.typemap = typemap
         self.args = args
         nargs = len(self.args)
@@ -105,7 +105,7 @@ class UFuncMechanism(object):
         """
         for i, ary in enumerate(self.arrays):
             if ary is not None:
-                dtype = getattr(ary, 'dtype')
+                dtype = getattr(ary, "dtype")
                 if dtype is None:
                     dtype = np.asarray(ary).dtype
                 self.argtypes[i] = dtype
@@ -120,8 +120,7 @@ class UFuncMechanism(object):
             # Try resolve scalar arguments
             for formaltys in self.typemap:
                 match_map = []
-                for i, (formal, actual) in enumerate(zip(formaltys,
-                                                         self.argtypes)):
+                for i, (formal, actual) in enumerate(zip(formaltys, self.argtypes)):
                     if actual is None:
                         actual = np.asarray(self.args[i]).dtype
 
@@ -134,21 +133,26 @@ class UFuncMechanism(object):
         if not matches:
             matches = []
             for formaltys in self.typemap:
-                all_matches = all(actual is None or formal == actual
-                                  for formal, actual in
-                                  zip(formaltys, self.argtypes))
+                all_matches = all(
+                    actual is None or formal == actual
+                    for formal, actual in zip(formaltys, self.argtypes)
+                )
                 if all_matches:
                     matches.append(formaltys)
 
         if not matches:
-            raise TypeError("No matching version.  GPU ufunc requires array "
-                            "arguments to have the exact types.  This behaves "
-                            "like regular ufunc with casting='no'.")
+            raise TypeError(
+                "No matching version.  GPU ufunc requires array "
+                "arguments to have the exact types.  This behaves "
+                "like regular ufunc with casting='no'."
+            )
 
         if len(matches) > 1:
-            raise TypeError("Failed to resolve ufunc due to ambiguous "
-                            "signature. Too many untyped scalars. "
-                            "Use numpy dtype object to type tag.")
+            raise TypeError(
+                "Failed to resolve ufunc due to ambiguous "
+                "signature. Too many untyped scalars. "
+                "Use numpy dtype object to type tag."
+            )
 
         # Try scalar arguments
         self.argtypes = matches[0]
@@ -163,8 +167,7 @@ class UFuncMechanism(object):
         return self.arrays
 
     def _broadcast(self, arys):
-        """Perform numpy ufunc broadcasting
-        """
+        """Perform numpy ufunc broadcasting"""
         shapelist = [a.shape for a in arys]
         shape = _multi_broadcast(*shapelist)
 
@@ -177,9 +180,11 @@ class UFuncMechanism(object):
                     arys[i] = self.broadcast_device(ary, shape)
 
                 else:
-                    ax_differs = [ax for ax in range(len(shape))
-                                  if ax >= ary.ndim
-                                  or ary.shape[ax] != shape[ax]]
+                    ax_differs = [
+                        ax
+                        for ax in range(len(shape))
+                        if ax >= ary.ndim or ary.shape[ax] != shape[ax]
+                    ]
 
                     missingdim = len(shape) - len(ary.shape)
                     strides = [0] * missingdim + list(ary.strides)
@@ -187,9 +192,9 @@ class UFuncMechanism(object):
                     for ax in ax_differs:
                         strides[ax] = 0
 
-                    strided = np.lib.stride_tricks.as_strided(ary,
-                                                              shape=shape,
-                                                              strides=strides)
+                    strided = np.lib.stride_tricks.as_strided(
+                        ary, shape=shape, strides=strides
+                    )
 
                     arys[i] = self.force_array_layout(strided)
 
@@ -206,8 +211,7 @@ class UFuncMechanism(object):
         return self._broadcast(arys)
 
     def get_function(self):
-        """Returns (result_dtype, function)
-        """
+        """Returns (result_dtype, function)"""
         return self.typemap[self.argtypes]
 
     def is_device_array(self, obj):
@@ -240,14 +244,13 @@ class UFuncMechanism(object):
 
     @classmethod
     def call(cls, typemap, args, kws):
-        """Perform the entire ufunc call mechanism.
-        """
+        """Perform the entire ufunc call mechanism."""
         # Handle keywords
-        stream = kws.pop('stream', cls.DEFAULT_STREAM)
-        out = kws.pop('out', None)
+        stream = kws.pop("stream", cls.DEFAULT_STREAM)
+        out = kws.pop("out", None)
 
         if kws:
-            warnings.warn("unrecognized keywords: %s" % ', '.join(kws))
+            warnings.warn("unrecognized keywords: %s" % ", ".join(kws))
 
         # Begin call resolution
         cr = cls(typemap, args)
@@ -364,9 +367,10 @@ class DeviceVectorize(_BaseUFuncBuilder):
         if cache:
             raise TypeError("caching is not supported")
         for opt in targetoptions:
-            if opt == 'nopython':
-                warnings.warn("nopython kwarg for cuda target is redundant",
-                              RuntimeWarning)
+            if opt == "nopython":
+                warnings.warn(
+                    "nopython kwarg for cuda target is redundant", RuntimeWarning
+                )
             else:
                 fmt = "Unrecognized options. "
                 fmt += "cuda vectorize target does not support option: '%s'"
@@ -386,14 +390,15 @@ class DeviceVectorize(_BaseUFuncBuilder):
         devfnsig = signature(return_type, *args)
 
         funcname = self.pyfunc.__name__
-        kernelsource = self._get_kernel_source(self._kernel_template,
-                                               devfnsig, funcname)
+        kernelsource = self._get_kernel_source(
+            self._kernel_template, devfnsig, funcname
+        )
         corefn, return_type = self._compile_core(devfnsig)
         glbl = self._get_globals(corefn)
         sig = signature(types.void, *([a[:] for a in args] + [return_type[:]]))
         exec(kernelsource, glbl)
 
-        stager = glbl['__vectorized_%s' % funcname]
+        stager = glbl["__vectorized_%s" % funcname]
         kernel = self._compile_kernel(stager, sig)
 
         argdtypes = tuple(to_dtype(t) for t in devfnsig.args)
@@ -404,10 +409,12 @@ class DeviceVectorize(_BaseUFuncBuilder):
         raise NotImplementedError
 
     def _get_kernel_source(self, template, sig, funcname):
-        args = ['a%d' % i for i in range(len(sig.args))]
-        fmts = dict(name=funcname,
-                    args=', '.join(args),
-                    argitems=', '.join('%s[__tid__]' % i for i in args))
+        args = ["a%d" % i for i in range(len(sig.args))]
+        fmts = dict(
+            name=funcname,
+            args=", ".join(args),
+            argitems=", ".join("%s[__tid__]" % i for i in args),
+        )
         return template.format(**fmts)
 
     def _compile_core(self, sig):
@@ -421,19 +428,20 @@ class DeviceVectorize(_BaseUFuncBuilder):
 
 
 class DeviceGUFuncVectorize(_BaseUFuncBuilder):
-    def __init__(self, func, sig, identity=None, cache=False, targetoptions={},
-                 writable_args=()):
+    def __init__(
+        self, func, sig, identity=None, cache=False, targetoptions={}, writable_args=()
+    ):
         if cache:
             raise TypeError("caching is not supported")
         if writable_args:
             raise TypeError("writable_args are not supported")
 
         # Allow nopython flag to be set.
-        if not targetoptions.pop('nopython', True):
+        if not targetoptions.pop("nopython", True):
             raise TypeError("nopython flag must be True")
         # Are there any more target options?
         if targetoptions:
-            opts = ', '.join([repr(k) for k in targetoptions.keys()])
+            opts = ", ".join([repr(k) for k in targetoptions.keys()])
             fmt = "The following target options are not supported: {0}"
             raise TypeError(fmt.format(opts))
 
@@ -458,18 +466,21 @@ class DeviceGUFuncVectorize(_BaseUFuncBuilder):
         # specify the return type (where the "Python None" is the return type)
         valid_return_type = return_type in (types.none, None)
         if not valid_return_type:
-            raise TypeError('guvectorized functions cannot return values: '
-                            f'signature {sig} specifies {return_type} return '
-                            'type')
+            raise TypeError(
+                "guvectorized functions cannot return values: "
+                f"signature {sig} specifies {return_type} return "
+                "type"
+            )
 
         funcname = self.py_func.__name__
-        src = expand_gufunc_template(self._kernel_template, indims,
-                                     outdims, funcname, args)
+        src = expand_gufunc_template(
+            self._kernel_template, indims, outdims, funcname, args
+        )
 
         glbls = self._get_globals(sig)
 
         exec(src, glbls)
-        fnobj = glbls['__gufunc_{name}'.format(name=funcname)]
+        fnobj = glbls["__gufunc_{name}".format(name=funcname)]
 
         outertys = list(_determine_gufunc_outer_types(args, indims + outdims))
         kernel = self._compile_kernel(fnobj, sig=tuple(outertys))
@@ -495,49 +506,56 @@ def _determine_gufunc_outer_types(argtys, dims):
         else:
             if nd > 0:
                 raise ValueError("gufunc signature mismatch: ndim>0 for scalar")
-            yield types.Array(dtype=at, ndim=1, layout='A')
+            yield types.Array(dtype=at, ndim=1, layout="A")
 
 
 def expand_gufunc_template(template, indims, outdims, funcname, argtypes):
-    """Expand gufunc source template
-    """
+    """Expand gufunc source template"""
     argdims = indims + outdims
     argnames = ["arg{0}".format(i) for i in range(len(argdims))]
-    checkedarg = "min({0})".format(', '.join(["{0}.shape[0]".format(a)
-                                              for a in argnames]))
-    inputs = [_gen_src_for_indexing(aref, adims, atype)
-              for aref, adims, atype in zip(argnames, indims, argtypes)]
-    outputs = [_gen_src_for_indexing(aref, adims, atype)
-               for aref, adims, atype in zip(argnames[len(indims):], outdims,
-                                             argtypes[len(indims):])]
+    checkedarg = "min({0})".format(
+        ", ".join(["{0}.shape[0]".format(a) for a in argnames])
+    )
+    inputs = [
+        _gen_src_for_indexing(aref, adims, atype)
+        for aref, adims, atype in zip(argnames, indims, argtypes)
+    ]
+    outputs = [
+        _gen_src_for_indexing(aref, adims, atype)
+        for aref, adims, atype in zip(
+            argnames[len(indims) :], outdims, argtypes[len(indims) :]
+        )
+    ]
     argitems = inputs + outputs
-    src = template.format(name=funcname, args=', '.join(argnames),
-                          checkedarg=checkedarg,
-                          argitems=', '.join(argitems))
+    src = template.format(
+        name=funcname,
+        args=", ".join(argnames),
+        checkedarg=checkedarg,
+        argitems=", ".join(argitems),
+    )
     return src
 
 
 def _gen_src_for_indexing(aref, adims, atype):
-    return "{aref}[{sliced}]".format(aref=aref,
-                                     sliced=_gen_src_index(adims, atype))
+    return "{aref}[{sliced}]".format(aref=aref, sliced=_gen_src_index(adims, atype))
 
 
 def _gen_src_index(adims, atype):
     if adims > 0:
-        return ','.join(['__tid__'] + [':'] * adims)
+        return ",".join(["__tid__"] + [":"] * adims)
     elif isinstance(atype, types.Array) and atype.ndim - 1 == adims:
         # Special case for 0-nd in shape-signature but
         # 1d array in type signature.
         # Slice it so that the result has the same dimension.
-        return '__tid__:(__tid__ + 1)'
+        return "__tid__:(__tid__ + 1)"
     else:
-        return '__tid__'
+        return "__tid__"
 
 
 class GUFuncEngine(object):
-    '''Determine how to broadcast and execute a gufunc
+    """Determine how to broadcast and execute a gufunc
     base on input shape and signature
-    '''
+    """
 
     @classmethod
     def from_signature(cls, signature):
@@ -553,7 +571,7 @@ class GUFuncEngine(object):
 
     def schedule(self, ishapes):
         if len(ishapes) != self.nin:
-            raise TypeError('invalid number of input argument')
+            raise TypeError("invalid number of input argument")
 
         # associate symbol values for input signature
         symbolmap = {}
@@ -626,7 +644,7 @@ class GUFuncSchedule(object):
     def __str__(self):
         import pprint
 
-        attrs = 'ishapes', 'oshapes', 'loopdims', 'loopn', 'pinned'
+        attrs = "ishapes", "oshapes", "loopdims", "loopn", "pinned"
         values = [(k, getattr(self, k)) for k in attrs]
         return pprint.pformat(dict(values))
 
@@ -635,13 +653,13 @@ class GeneralizedUFunc(object):
     def __init__(self, kernelmap, engine):
         self.kernelmap = kernelmap
         self.engine = engine
-        self.max_blocksize = 2 ** 30
+        self.max_blocksize = 2**30
 
     def __call__(self, *args, **kws):
-        callsteps = self._call_steps(self.engine.nin, self.engine.nout,
-                                     args, kws)
+        callsteps = self._call_steps(self.engine.nin, self.engine.nout, args, kws)
         indtypes, schedule, outdtypes, kernel = self._schedule(
-            callsteps.inputs, callsteps.outputs)
+            callsteps.inputs, callsteps.outputs
+        )
         callsteps.adjust_input_types(indtypes)
 
         outputs = callsteps.prepare_outputs(schedule, outdtypes)
@@ -671,7 +689,7 @@ class GeneralizedUFunc(object):
         # check output
         for sched_shape, out in zip(schedule.output_shapes, outs):
             if out is not None and sched_shape != out.shape:
-                raise ValueError('output shape mismatch')
+                raise ValueError("output shape mismatch")
 
         return indtypes, schedule, outdtypes, kernel
 
@@ -683,8 +701,9 @@ class GeneralizedUFunc(object):
         Note: Ordering is guaranteed by `kernelmap` being a OrderedDict
         """
         for sig in self.kernelmap.keys():
-            if all(np.can_cast(actual, desired)
-                   for actual, desired in zip(sig, idtypes)):
+            if all(
+                np.can_cast(actual, desired) for actual, desired in zip(sig, idtypes)
+            ):
                 return sig
         else:
             raise TypeError("no matching signature")
@@ -716,8 +735,9 @@ class GeneralizedUFunc(object):
 
         # Creating new dimension
         elif len(ary.shape) < len(newshape):
-            assert newshape[-len(ary.shape):] == ary.shape, \
-                "cannot add dim and reshape at the same time"
+            assert (
+                newshape[-len(ary.shape) :] == ary.shape
+            ), "cannot add dim and reshape at the same time"
             return self._broadcast_add_axis(ary, newshape)
 
         # Collapsing dimension
@@ -744,9 +764,9 @@ class GUFuncCallSteps(metaclass=ABCMeta):
 
     # The base class uses these slots; subclasses may provide additional slots.
     __slots__ = [
-        'outputs',
-        'inputs',
-        '_copy_result_to_host',
+        "outputs",
+        "inputs",
+        "_copy_result_to_host",
     ]
 
     @abstractmethod
@@ -782,21 +802,25 @@ class GUFuncCallSteps(metaclass=ABCMeta):
         """
 
     def __init__(self, nin, nout, args, kwargs):
-        outputs = kwargs.get('out')
+        outputs = kwargs.get("out")
 
         # Ensure the user has passed a correct number of arguments
         if outputs is None and len(args) not in (nin, (nin + nout)):
+
             def pos_argn(n):
                 return f'{n} positional argument{"s" * (n != 1)}'
 
-            msg = (f'This gufunc accepts {pos_argn(nin)} (when providing '
-                   f'input only) or {pos_argn(nin + nout)} (when providing '
-                   f'input and output). Got {pos_argn(len(args))}.')
+            msg = (
+                f"This gufunc accepts {pos_argn(nin)} (when providing "
+                f"input only) or {pos_argn(nin + nout)} (when providing "
+                f"input and output). Got {pos_argn(len(args))}."
+            )
             raise TypeError(msg)
 
         if outputs is not None and len(args) > nin:
-            raise ValueError("cannot specify argument 'out' as both positional "
-                             "and keyword")
+            raise ValueError(
+                "cannot specify argument 'out' as both positional " "and keyword"
+            )
         else:
             # If the user did not pass outputs either in the out kwarg or as
             # positional arguments, then we need to generate an initial list of
@@ -819,8 +843,7 @@ class GUFuncCallSteps(metaclass=ABCMeta):
 
         # - If any of the arguments are device arrays, we leave the output on
         #   the device.
-        self._copy_result_to_host = (all_host_arrays and
-                                     all_user_outputs_are_host)
+        self._copy_result_to_host = all_host_arrays and all_user_outputs_are_host
 
         # Normalize arguments - ensure they are either device- or host-side
         # arrays (as opposed to lists, tuples, etc).
@@ -850,9 +873,11 @@ class GUFuncCallSteps(metaclass=ABCMeta):
         """
         for i, (ity, val) in enumerate(zip(indtypes, self.inputs)):
             if ity != val.dtype:
-                if not hasattr(val, 'astype'):
-                    msg = ("compatible signature is possible by casting but "
-                           "{0} does not support .astype()").format(type(val))
+                if not hasattr(val, "astype"):
+                    msg = (
+                        "compatible signature is possible by casting but "
+                        "{0} does not support .astype()"
+                    ).format(type(val))
                     raise TypeError(msg)
                 # Cast types
                 self.inputs[i] = val.astype(ity)
@@ -866,8 +891,9 @@ class GUFuncCallSteps(metaclass=ABCMeta):
         device; other outputs are allocated as necessary.
         """
         outputs = []
-        for shape, dtype, output in zip(schedule.output_shapes, outdtypes,
-                                        self.outputs):
+        for shape, dtype, output in zip(
+            schedule.output_shapes, outdtypes, self.outputs
+        ):
             if output is None or self._copy_result_to_host:
                 output = self.allocate_device_array(shape, dtype)
             outputs.append(output)
@@ -878,6 +904,7 @@ class GUFuncCallSteps(metaclass=ABCMeta):
         """
         Returns a list of input parameters that all reside on the target device.
         """
+
         def ensure_device(parameter):
             if self.is_device_array(parameter):
                 convert = self.as_device_array
@@ -897,8 +924,10 @@ class GUFuncCallSteps(metaclass=ABCMeta):
         jarring, it is consistent with the behavior of GUFuncs in general.
         """
         if self._copy_result_to_host:
-            outputs = [self.to_host(output, self_output)
-                       for output, self_output in zip(outputs, self.outputs)]
+            outputs = [
+                self.to_host(output, self_output)
+                for output, self_output in zip(outputs, self.outputs)
+            ]
         elif self.outputs[0] is not None:
             outputs = self.outputs
 

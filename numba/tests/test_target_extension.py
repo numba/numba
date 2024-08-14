@@ -12,8 +12,12 @@ import operator
 from functools import cached_property
 import numpy as np
 from numba import njit, types
-from numba.extending import (overload, overload_attribute,
-                             overload_classmethod, intrinsic)
+from numba.extending import (
+    overload,
+    overload_attribute,
+    overload_classmethod,
+    intrinsic,
+)
 from numba.core.target_extension import (
     JitDecorator,
     target_registry,
@@ -48,8 +52,7 @@ from numba.core.typed_passes import PreLowerStripPhis
 # target hierarchy as a type of GPU.
 
 
-class DPU(GPU):
-    ...
+class DPU(GPU): ...
 
 
 # register the dpu target hierarchy token in the target registry, this
@@ -159,13 +162,12 @@ class DPUContext(BaseContext):
         return cpu.EnvBody(self, builder, ref=body_ptr, cast_ref=True)
 
     def get_env_manager(self, builder):
-        envgv = self.declare_env_global(
-            builder.module, self.get_env_name(self.fndesc)
-        )
+        envgv = self.declare_env_global(builder.module, self.get_env_name(self.fndesc))
         envarg = builder.load(envgv)
         pyapi = self.get_python_api(builder)
         pyapi.emit_environment_sentry(
-            envarg, debug_msg=self.fndesc.env_name,
+            envarg,
+            debug_msg=self.fndesc.env_name,
         )
         env_body = self.get_env_body(builder, envarg)
         return pyapi.get_env_manager(self.environment, env_body, envarg)
@@ -193,9 +195,7 @@ class DPUContext(BaseContext):
     ):
         wrapper_module = self.create_module("wrapper")
         fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
-        wrapper_callee = llir.Function(
-            wrapper_module, fnty, fndesc.llvm_func_name
-        )
+        wrapper_callee = llir.Function(wrapper_module, fnty, fndesc.llvm_func_name)
         builder = PyCallWrapper(
             self,
             wrapper_module,
@@ -226,9 +226,7 @@ class DPUContext(BaseContext):
             an execution environment (from _dynfunc)
         """
         # Code generation
-        fnptr = library.get_pointer_to_function(
-            fndesc.llvm_cpython_wrapper_name
-        )
+        fnptr = library.get_pointer_to_function(fndesc.llvm_cpython_wrapper_name)
 
         # Note: we avoid reusing the original docstring to avoid encoding
         # issues on Python 2, see issue #1908
@@ -284,7 +282,7 @@ class DPUDispatcher(Dispatcher):
     targetdescr = dpu_target
 
     def compile(self, sig):
-        with target_override('dpu'):
+        with target_override("dpu"):
             return super().compile(sig)
 
 
@@ -353,7 +351,9 @@ def constant_dummy(context, builder, ty, pyval):
 @dpu_function_registry.lower_cast(types.IntegerLiteral, types.Integer)
 def literal_int_to_number(context, builder, fromty, toty, val):
     lit = context.get_constant_generic(
-        builder, fromty.literal_type, fromty.literal_value,
+        builder,
+        fromty.literal_type,
+        fromty.literal_value,
     )
     return context.cast(builder, lit, fromty.literal_type, toty)
 
@@ -494,7 +494,7 @@ class TestTargetHierarchySelection(TestCase):
             pass
 
         # only create a cuda specialisation
-        @overload(my_func, target='cuda')
+        @overload(my_func, target="cuda")
         def ol_my_func_cuda(x):
             return lambda x: None
 
@@ -508,10 +508,12 @@ class TestTargetHierarchySelection(TestCase):
         with self.assertRaises(accept) as raises:
             dpu_foo()
 
-        msgs = ["Function resolution cannot find any matches for function",
-                "test_no_specialisation_found.<locals>.my_func",
-                "for the current target:",
-                "'numba.tests.test_target_extension.DPU'"]
+        msgs = [
+            "Function resolution cannot find any matches for function",
+            "test_no_specialisation_found.<locals>.my_func",
+            "for the current target:",
+            "'numba.tests.test_target_extension.DPU'",
+        ]
 
         for msg in msgs:
             self.assertIn(msg, str(raises.exception))
@@ -519,7 +521,8 @@ class TestTargetHierarchySelection(TestCase):
     def test_invalid_target_jit(self):
 
         with self.assertRaises(errors.NonexistentTargetError) as raises:
-            @njit(_target='invalid_silicon')
+
+            @njit(_target="invalid_silicon")
             def foo():
                 pass
 
@@ -536,9 +539,10 @@ class TestTargetHierarchySelection(TestCase):
         # This is a typing error at present as it fails during typing when the
         # overloads are walked.
         with self.assertRaises(errors.NonexistentTargetError) as raises:
-            @overload(bar, target='invalid_silicon')
+
+            @overload(bar, target="invalid_silicon")
             def ol_bar():
-                return lambda : None
+                return lambda: None
 
             @njit
             def foo():
@@ -606,9 +610,11 @@ class TestTargetHierarchySelection(TestCase):
         with self.assertRaises(accept) as raises:
             cpu_foo_dpu()
 
-        msgs = ["Function resolution cannot find any matches for function",
-                "intrinsic intrin_math_dpu",
-                "for the current target",]
+        msgs = [
+            "Function resolution cannot find any matches for function",
+            "intrinsic intrin_math_dpu",
+            "for the current target",
+        ]
         for msg in msgs:
             self.assertIn(msg, str(raises.exception))
 
@@ -635,9 +641,11 @@ class TestTargetHierarchySelection(TestCase):
         with self.assertRaises(accept) as raises:
             dpu_foo_cpu()
 
-        msgs = ["Function resolution cannot find any matches for function",
-                "intrinsic intrin_math_cpu",
-                "for the current target",]
+        msgs = [
+            "Function resolution cannot find any matches for function",
+            "intrinsic intrin_math_cpu",
+            "for the current target",
+        ]
         for msg in msgs:
             self.assertIn(msg, str(raises.exception))
 
@@ -657,64 +665,74 @@ class TestTargetHierarchySelection(TestCase):
                 # Unsigned upcast
                 return builder.zext(val, context.get_value_type(toty))
 
-        @intrinsic(target='dpu')
+        @intrinsic(target="dpu")
         def intrin_alloc(typingctx, allocsize, align):
-            """Intrinsic to call into the allocator for Array
-            """
+            """Intrinsic to call into the allocator for Array"""
+
             def codegen(context, builder, signature, args):
                 [allocsize, align] = args
 
                 # XXX: error are being eaten.
                 #      example: replace the next line with `align_u32 = align`
-                align_u32 = cast_integer(context, builder, align,
-                                         signature.args[1], types.uint32)
-                meminfo = context.nrt.meminfo_alloc_aligned(builder, allocsize,
-                                                            align_u32)
+                align_u32 = cast_integer(
+                    context, builder, align, signature.args[1], types.uint32
+                )
+                meminfo = context.nrt.meminfo_alloc_aligned(
+                    builder, allocsize, align_u32
+                )
                 return meminfo
 
             from numba.core.typing import signature
+
             mip = types.MemInfoPointer(types.voidptr)  # return untyped pointer
             sig = signature(mip, allocsize, align)
             return sig, codegen
 
-        @overload_classmethod(types.Array, '_allocate', target='dpu',
-                              jit_options={'nopython':True})
+        @overload_classmethod(
+            types.Array, "_allocate", target="dpu", jit_options={"nopython": True}
+        )
         def _ol_arr_allocate_dpu(cls, allocsize, align):
             def impl(cls, allocsize, align):
                 return intrin_alloc(allocsize, align)
+
             return impl
 
-        @overload(np.empty, target='dpu', jit_options={'nopython':True})
+        @overload(np.empty, target="dpu", jit_options={"nopython": True})
         def ol_empty_impl(n):
             def impl(n):
                 return types.Array._allocate(n, 7)
+
             return impl
 
         def buffer_func():
             pass
 
-        @overload(buffer_func, target='dpu', jit_options={'nopython':True})
+        @overload(buffer_func, target="dpu", jit_options={"nopython": True})
         def ol_buffer_func_impl():
             def impl():
                 return np.empty(10)
+
             return impl
 
         from numba.core.target_extension import target_override
 
         # XXX: this should probably go inside the dispatcher
-        with target_override('dpu'):
+        with target_override("dpu"):
+
             @djit(nopython=True)
             def foo():
                 return buffer_func()
+
             r = foo()
         from numba.core.runtime import nrt
+
         self.assertIsInstance(r, nrt.MemInfo)
 
     def test_overload_attribute_target(self):
         MyDummy, MyDummyType = self.make_dummy_type()
         mydummy_type = typeof(MyDummy())
 
-        @overload_attribute(MyDummyType, 'dpu_only', target='dpu')
+        @overload_attribute(MyDummyType, "dpu_only", target="dpu")
         def ov_dummy_dpu_attr(obj):
             def imp(obj):
                 return 42
@@ -723,8 +741,8 @@ class TestTargetHierarchySelection(TestCase):
 
         # Ensure that we cannot use the DPU target-specific attribute on the
         # CPU, and that an appropriate typing error is raised
-        with self.assertRaisesRegex(errors.TypingError,
-                                    "Unknown attribute 'dpu_only'"):
+        with self.assertRaisesRegex(errors.TypingError, "Unknown attribute 'dpu_only'"):
+
             @njit(types.int64(mydummy_type))
             def illegal_target_attr_use(x):
                 return x.dpu_only
@@ -739,11 +757,11 @@ class TestTargetHierarchySelection(TestCase):
 
 class TestTargetOffload(TestCase):
     """In this use case the CPU compilation pipeline is extended with a new
-     compilation pass that runs just prior to lowering. The pass looks for
-     function calls and when it finds one it sees if there's a DPU function
-     available that is a valid overload for the function call. If there is one
-     then it swaps the CPU implementation out for a DPU implementation. This
-     producing an "offload" effect.
+    compilation pass that runs just prior to lowering. The pass looks for
+    function calls and when it finds one it sees if there's a DPU function
+    available that is a valid overload for the function call. If there is one
+    then it swaps the CPU implementation out for a DPU implementation. This
+    producing an "offload" effect.
     """
 
     def test_basic_offload(self):
@@ -816,9 +834,7 @@ class TestTargetOffload(TestCase):
                             # This is a necessary hack at present so as to
                             # generate code into the same library. I.e. the DPU
                             # target is going to do code gen into the CPUs lib.
-                            hw_ctx._codelib_stack = (
-                                state.targetctx._codelib_stack
-                            )
+                            hw_ctx._codelib_stack = state.targetctx._codelib_stack
 
                             # All is good, so switch IR node for one targeting
                             # this target. Should generate this, but for now

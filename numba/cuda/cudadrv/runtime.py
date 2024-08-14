@@ -21,6 +21,7 @@ class CudaRuntimeAPIError(CudaRuntimeError):
     """
     Raised when there is an error accessing a C API from the CUDA Runtime.
     """
+
     def __init__(self, code, msg):
         self.code = code
         self.msg = msg
@@ -44,11 +45,13 @@ class Runtime:
         _logger = make_logger()
 
         if config.DISABLE_CUDA:
-            msg = ("CUDA is disabled due to setting NUMBA_DISABLE_CUDA=1 "
-                   "in the environment, or because CUDA is unsupported on "
-                   "32-bit systems.")
+            msg = (
+                "CUDA is disabled due to setting NUMBA_DISABLE_CUDA=1 "
+                "in the environment, or because CUDA is unsupported on "
+                "32-bit systems."
+            )
             raise CudaSupportError(msg)
-        self.lib = open_cudalib('cudart')
+        self.lib = open_cudalib("cudart")
 
         self.is_initialized = True
 
@@ -76,9 +79,10 @@ class Runtime:
     def _wrap_api_call(self, fname, libfn):
         @functools.wraps(libfn)
         def safe_cuda_api_call(*args):
-            _logger.debug('call runtime api: %s', libfn.__name__)
+            _logger.debug("call runtime api: %s", libfn.__name__)
             retcode = libfn(*args)
             self._check_error(fname, retcode)
+
         return safe_cuda_api_call
 
     def _check_error(self, fname, retcode):
@@ -125,11 +129,10 @@ class Runtime:
     def supported_versions(self):
         """A tuple of all supported CUDA toolkit versions. Versions are given in
         the form ``(major_version, minor_version)``."""
-        if sys.platform not in ('linux', 'win32') or config.MACHINE_BITS != 64:
+        if sys.platform not in ("linux", "win32") or config.MACHINE_BITS != 64:
             # Only 64-bit Linux and Windows are supported
             return ()
-        return ((11, 0), (11, 1), (11, 2), (11, 3), (11, 4), (11, 5), (11, 6),
-                (11, 7))
+        return ((11, 0), (11, 1), (11, 2), (11, 3), (11, 4), (11, 5), (11, 6), (11, 7))
 
 
 runtime = Runtime()

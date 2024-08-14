@@ -30,4 +30,4 @@ class CUDATarget(TargetDescriptor):
         return self._targetctx
 
 
-cuda_target = CUDATarget('cuda')
+cuda_target = CUDATarget("cuda")

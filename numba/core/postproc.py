@@ -32,6 +32,7 @@ class VariableLifetime(object):
     """
     For lazily building information of variable lifetime
     """
+
     def __init__(self, blocks):
         self._blocks = blocks
 
@@ -45,14 +46,15 @@ class VariableLifetime(object):
 
     @cached_property
     def livemap(self):
-        return analysis.compute_live_map(self.cfg, self._blocks,
-                                         self.usedefs.usemap,
-                                         self.usedefs.defmap)
+        return analysis.compute_live_map(
+            self.cfg, self._blocks, self.usedefs.usemap, self.usedefs.defmap
+        )
 
     @cached_property
     def deadmaps(self):
-        return analysis.compute_dead_maps(self.cfg, self._blocks, self.livemap,
-                                          self.usedefs.defmap)
+        return analysis.compute_dead_maps(
+            self.cfg, self._blocks, self.livemap, self.usedefs.defmap
+        )
 
 
 # other packages that define new nodes add calls for inserting dels
@@ -80,9 +82,9 @@ class PostProcessor(object):
         vlt = VariableLifetime(self.func_ir.blocks)
         self.func_ir.variable_lifetime = vlt
 
-        bev = analysis.compute_live_variables(vlt.cfg, self.func_ir.blocks,
-                                              vlt.usedefs.defmap,
-                                              vlt.deadmaps.combined)
+        bev = analysis.compute_live_variables(
+            vlt.cfg, self.func_ir.blocks, vlt.usedefs.defmap, vlt.deadmaps.combined
+        )
         for offset, ir_block in self.func_ir.blocks.items():
             self.func_ir.block_entry_vars[ir_block] = bev[offset]
 
@@ -102,7 +104,7 @@ class PostProcessor(object):
         Fill `index` for the Yield instruction and create YieldPoints.
         """
         dct = self.func_ir.generator_info.yield_points
-        assert not dct, 'rerunning _populate_generator_info'
+        assert not dct, "rerunning _populate_generator_info"
         for block in self.func_ir.blocks.values():
             for inst in block.body:
                 if isinstance(inst, ir.Assign):
@@ -173,11 +175,15 @@ class PostProcessor(object):
         branch and return) are deleted by the successors or the caller.
         """
         vlt = self.func_ir.variable_lifetime
-        self._patch_var_dels(vlt.deadmaps.internal, vlt.deadmaps.escaping,
-                             extend_lifetimes=extend_lifetimes)
+        self._patch_var_dels(
+            vlt.deadmaps.internal,
+            vlt.deadmaps.escaping,
+            extend_lifetimes=extend_lifetimes,
+        )
 
-    def _patch_var_dels(self, internal_dead_map, escaping_dead_map,
-                        extend_lifetimes=False):
+    def _patch_var_dels(
+        self, internal_dead_map, escaping_dead_map, extend_lifetimes=False
+    ):
         """
         Insert delete in each block
         """

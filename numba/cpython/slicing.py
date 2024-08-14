@@ -6,10 +6,16 @@ from itertools import zip_longest
 
 from llvmlite import ir
 from numba.core import cgutils, types, typing, utils
-from numba.core.imputils import (impl_ret_borrowed, impl_ret_new_ref,
-                                 impl_ret_untracked, iternext_impl,
-                                 lower_builtin, lower_cast, lower_constant,
-                                 lower_getattr)
+from numba.core.imputils import (
+    impl_ret_borrowed,
+    impl_ret_new_ref,
+    impl_ret_untracked,
+    iternext_impl,
+    lower_builtin,
+    lower_cast,
+    lower_constant,
+    lower_getattr,
+)
 
 
 def fix_index(builder, idx, size):
@@ -17,7 +23,7 @@ def fix_index(builder, idx, size):
     Fix negative index by adding *size* to it.  Positive
     indices are left untouched.
     """
-    is_negative = builder.icmp_signed('<', idx, ir.Constant(size.type, 0))
+    is_negative = builder.icmp_signed("<", idx, ir.Constant(size.type, 0))
     wrapped_index = builder.add(idx, size)
     return builder.select(is_negative, wrapped_index, idx)
 
@@ -37,25 +43,28 @@ def fix_slice(builder, slice, size):
         # Store value
         setattr(slice, bound_name, bound)
         # Still negative? => clamp to lower_repl
-        underflow = builder.icmp_signed('<', bound, zero)
+        underflow = builder.icmp_signed("<", bound, zero)
         with builder.if_then(underflow, likely=False):
             setattr(slice, bound_name, lower_repl)
         # Greater than size? => clamp to upper_repl
-        overflow = builder.icmp_signed('>=', bound, size)
+        overflow = builder.icmp_signed(">=", bound, size)
         with builder.if_then(overflow, likely=False):
             setattr(slice, bound_name, upper_repl)
 
-    with builder.if_else(cgutils.is_neg_int(builder, slice.step)) as (if_neg_step, if_pos_step):
+    with builder.if_else(cgutils.is_neg_int(builder, slice.step)) as (
+        if_neg_step,
+        if_pos_step,
+    ):
         with if_pos_step:
             # < 0 => 0; >= size => size
-            fix_bound('start', zero, size)
-            fix_bound('stop', zero, size)
+            fix_bound("start", zero, size)
+            fix_bound("stop", zero, size)
         with if_neg_step:
             # < 0 => -1; >= size => size - 1
             lower = minus_one
             upper = builder.add(size, minus_one)
-            fix_bound('start', lower, upper)
-            fix_bound('stop', lower, upper)
+            fix_bound("start", lower, upper)
+            fix_bound("stop", lower, upper)
 
 
 def get_slice_length(builder, slicestruct):
@@ -90,13 +99,15 @@ def get_slice_length(builder, slicestruct):
     # Nominal case
     pos_dividend = builder.sub(delta, one)
     neg_dividend = builder.add(delta, one)
-    dividend  = builder.select(is_step_negative, neg_dividend, pos_dividend)
+    dividend = builder.select(is_step_negative, neg_dividend, pos_dividend)
     nominal_length = builder.add(one, builder.sdiv(dividend, step))
 
     # Catch zero length
-    is_zero_length = builder.select(is_step_negative,
-                                    builder.icmp_signed('>=', delta, zero),
-                                    builder.icmp_signed('<=', delta, zero))
+    is_zero_length = builder.select(
+        is_step_negative,
+        builder.icmp_signed(">=", delta, zero),
+        builder.icmp_signed("<=", delta, zero),
+    )
 
     # Clamp to 0 if is_zero_length
     return builder.select(is_zero_length, zero, nominal_length)
@@ -112,11 +123,9 @@ def get_slice_bounds(builder, slicestruct):
     one = start.type(1)
     # This is a bit pessimal, e.g. it will return [1, 5) instead
     # of [1, 4) for `1:5:2`
-    is_step_negative = builder.icmp_signed('<', slicestruct.step, zero)
-    lower = builder.select(is_step_negative,
-                           builder.add(stop, one), start)
-    upper = builder.select(is_step_negative,
-                           builder.add(start, one), stop)
+    is_step_negative = builder.icmp_signed("<", slicestruct.step, zero)
+    lower = builder.select(is_step_negative, builder.add(stop, one), start)
+    upper = builder.select(is_step_negative, builder.add(start, one), stop)
     return lower, upper
 
 
@@ -126,13 +135,18 @@ def fix_stride(builder, slice, stride):
     """
     return builder.mul(slice.step, stride)
 
+
 def guard_invalid_slice(context, builder, typ, slicestruct):
     """
     Guard against *slicestruct* having a zero step (and raise ValueError).
     """
     if typ.has_step:
-        cgutils.guard_null(context, builder, slicestruct.step,
-                           (ValueError, "slice step cannot be zero"))
+        cgutils.guard_null(
+            context,
+            builder,
+            slicestruct.step,
+            (ValueError, "slice step cannot be zero"),
+        )
 
 
 def get_defaults(context):
@@ -142,11 +156,12 @@ def get_defaults(context):
      stop for positive step, stop for negative step, step)
     """
     maxint = (1 << (context.address_size - 1)) - 1
-    return (0, maxint, maxint, - maxint - 1, 1)
+    return (0, maxint, maxint, -maxint - 1, 1)
 
 
-#---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # The slice structure
+
 
 @lower_builtin(slice, types.VarArg(types.Any))
 def slice_constructor_impl(context, builder, sig, args):
@@ -177,12 +192,13 @@ def slice_constructor_impl(context, builder, sig, args):
             return val
 
     step = get_arg_value(2, default_step)
-    is_step_negative = builder.icmp_signed('<', step,
-                                           context.get_constant(types.intp, 0))
-    default_stop = builder.select(is_step_negative,
-                                  default_stop_neg, default_stop_pos)
-    default_start = builder.select(is_step_negative,
-                                   default_start_neg, default_start_pos)
+    is_step_negative = builder.icmp_signed(
+        "<", step, context.get_constant(types.intp, 0)
+    )
+    default_stop = builder.select(is_step_negative, default_stop_neg, default_stop_pos)
+    default_start = builder.select(
+        is_step_negative, default_start_neg, default_start_pos
+    )
     stop = get_arg_value(1, default_stop)
     start = get_arg_value(0, default_start)
 
@@ -201,10 +217,12 @@ def slice_start_impl(context, builder, typ, value):
     sli = context.make_helper(builder, typ, value)
     return sli.start
 
+
 @lower_getattr(types.SliceType, "stop")
 def slice_stop_impl(context, builder, typ, value):
     sli = context.make_helper(builder, typ, value)
     return sli.stop
+
 
 @lower_getattr(types.SliceType, "step")
 def slice_step_impl(context, builder, typ, value):
@@ -222,22 +240,16 @@ def slice_indices(context, builder, sig, args):
 
     with builder.if_then(cgutils.is_neg_int(builder, length), likely=False):
         context.call_conv.return_user_exc(
-            builder, ValueError,
-            ("length should not be negative",)
+            builder, ValueError, ("length should not be negative",)
         )
     with builder.if_then(cgutils.is_scalar_zero(builder, sli.step), likely=False):
         context.call_conv.return_user_exc(
-            builder, ValueError,
-            ("slice step cannot be zero",)
+            builder, ValueError, ("slice step cannot be zero",)
         )
 
     fix_slice(builder, sli, length)
 
-    return context.make_tuple(
-        builder,
-        sig.return_type,
-        (sli.start, sli.stop, sli.step)
-    )
+    return context.make_tuple(builder, sig.return_type, (sli.start, sli.stop, sli.step))
 
 
 def make_slice_from_constant(context, builder, ty, pyval):
@@ -298,5 +310,8 @@ def constant_slice(context, builder, ty, pyval):
 @lower_cast(types.misc.SliceLiteral, types.SliceType)
 def cast_from_literal(context, builder, fromty, toty, val):
     return make_slice_from_constant(
-        context, builder, toty, fromty.literal_value,
+        context,
+        builder,
+        toty,
+        fromty.literal_value,
     )

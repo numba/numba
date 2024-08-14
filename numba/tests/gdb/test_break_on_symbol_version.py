@@ -38,8 +38,10 @@ class Test(TestCase):
         driver.check_hit_breakpoint(number=1)
         driver.assert_regex_output(r'^.*foo\[abi:v2\].*line="11"')
         driver.stack_list_arguments(2)
-        expect = ('[frame={level="0",args=[{name="x",type="Literal[int](10)",'
-                  'value="10"}]}]')
+        expect = (
+            '[frame={level="0",args=[{name="x",type="Literal[int](10)",'
+            'value="10"}]}]'
+        )
         driver.assert_output(expect)
         # Now break on any foo
         driver.set_breakpoint(symbol="foo")
@@ -47,19 +49,23 @@ class Test(TestCase):
         driver.check_hit_breakpoint(number=2)
         driver.assert_regex_output(r'^.*foo\[abi:v3\].*line="11"')
         driver.stack_list_arguments(2)
-        expect = ('[frame={level="0",args=[{name="x",type="Literal[int](20)",'
-                  'value="20"}]}]')
+        expect = (
+            '[frame={level="0",args=[{name="x",type="Literal[int](20)",'
+            'value="20"}]}]'
+        )
         driver.assert_output(expect)
         # and again, hit the third foo
         driver.cont()
         driver.check_hit_breakpoint(number=2)
         driver.assert_regex_output(r'^.*foo\[abi:v4\].*line="11"')
         driver.stack_list_arguments(2)
-        expect = ('[frame={level="0",args=[{name="x",type="Literal[int](30)",'
-                  'value="30"}]}]')
+        expect = (
+            '[frame={level="0",args=[{name="x",type="Literal[int](30)",'
+            'value="30"}]}]'
+        )
         driver.assert_output(expect)
         driver.quit()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

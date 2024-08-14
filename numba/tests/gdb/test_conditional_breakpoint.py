@@ -25,14 +25,15 @@ class Test(TestCase):
         call_foo(10)
 
         driver = GdbMIDriver(__file__)
-        driver.set_breakpoint(line=15, condition='x == 4')
+        driver.set_breakpoint(line=15, condition="x == 4")
         driver.run()
         driver.check_hit_breakpoint(1)
         driver.stack_list_arguments(1)
-        expect = ('[frame={level="0",args=[{name="x",value="4"},'
-                  '{name="y",value="10"}]}]')
+        expect = (
+            '[frame={level="0",args=[{name="x",value="4"},' '{name="y",value="10"}]}]'
+        )
         driver.assert_output(expect)
-        driver.set_breakpoint(line=22, condition='i == 8')
+        driver.set_breakpoint(line=22, condition="i == 8")
         driver.cont()
         driver.check_hit_breakpoint(2)
         driver.stack_list_variables(1)
@@ -41,5 +42,5 @@ class Test(TestCase):
         driver.quit()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

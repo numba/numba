@@ -26,6 +26,7 @@ class TestReduction(CUDATestCase):
         import numpy as np
         from numba import cuda
         from numba.types import int32
+
         # ex_reduction.import.end
 
         # ex_reduction.allocate.begin
@@ -61,11 +62,12 @@ class TestReduction(CUDATestCase):
                 # After the loop, the zeroth  element contains the sum
                 if tid == 0:
                     data[tid] = shr[tid]
+
         # ex_reduction.kernel.end
 
         # ex_reduction.launch.begin
         array_sum[1, nelem](a)
-        print(a[0])                  # 523776
+        print(a[0])  # 523776
         print(sum(np.arange(1024)))  # 523776
         # ex_reduction.launch.end
 

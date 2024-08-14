@@ -3,8 +3,11 @@ import unittest
 from contextlib import contextmanager
 
 from numba import jit, vectorize, guvectorize
-from numba.core.errors import (NumbaDeprecationWarning,
-                               NumbaPendingDeprecationWarning, NumbaWarning)
+from numba.core.errors import (
+    NumbaDeprecationWarning,
+    NumbaPendingDeprecationWarning,
+    NumbaWarning,
+)
 from numba.tests.support import TestCase, needs_setuptools
 
 
@@ -23,8 +26,7 @@ class TestDeprecation(TestCase):
         self.assertEqual(warnings[0].category, category)
         self.assertIn(expected_str, str(warnings[0].message))
         if check_rtd:
-            self.assertIn("https://numba.readthedocs.io",
-                          str(warnings[0].message))
+            self.assertIn("https://numba.readthedocs.io", str(warnings[0].message))
 
     @TestCase.run_test_in_subprocess
     def test_explicit_false_nopython_kwarg(self):
@@ -48,7 +50,7 @@ class TestDeprecation(TestCase):
 
         with _catch_numba_deprecation_warnings() as w:
             # This compiles via nopython mode directly
-            @vectorize('float64(float64)')
+            @vectorize("float64(float64)")
             def foo(a):
                 return a + 1
 
@@ -61,7 +63,7 @@ class TestDeprecation(TestCase):
 
         with _catch_numba_deprecation_warnings() as w:
             # This compiles via nopython mode directly
-            @vectorize('float64(float64)', nopython=False)
+            @vectorize("float64(float64)", nopython=False)
             def foo(a):
                 return a + 1
 
@@ -74,7 +76,7 @@ class TestDeprecation(TestCase):
 
         with _catch_numba_deprecation_warnings() as w:
             # Compiles via objmode directly with no warnings raised
-            @vectorize('float64(float64)', forceobj=True)
+            @vectorize("float64(float64)", forceobj=True)
             def foo(a):
                 object()
                 return a + 1
@@ -88,7 +90,7 @@ class TestDeprecation(TestCase):
 
         with _catch_numba_deprecation_warnings() as w:
             # Compiles via objmode directly with no warnings raised
-            @vectorize('float64(float64)', forceobj=True, nopython=False)
+            @vectorize("float64(float64)", forceobj=True, nopython=False)
             def foo(a):
                 object()
                 return a + 1
@@ -102,7 +104,8 @@ class TestDeprecation(TestCase):
         # raise warnings about nopython kwarg, the parallel target doesn't
         # support objmode so nopython=True is implicit.
         with _catch_numba_deprecation_warnings() as w:
-            @vectorize('float64(float64)', target='parallel')
+
+            @vectorize("float64(float64)", target="parallel")
             def foo(x):
                 return x + 1
 
@@ -113,7 +116,8 @@ class TestDeprecation(TestCase):
         # Checks that use of @vectorize with the parallel target and
         # nopython=True doesn't raise warnings about nopython kwarg.
         with _catch_numba_deprecation_warnings() as w:
-            @vectorize('float64(float64)', target='parallel', nopython=True)
+
+            @vectorize("float64(float64)", target="parallel", nopython=True)
             def foo(x):
                 return x + 1
 
@@ -124,7 +128,8 @@ class TestDeprecation(TestCase):
         # Checks that use of @vectorize with the parallel target and
         # nopython=False raises a warning about the nopython kwarg being False.
         with _catch_numba_deprecation_warnings() as w:
-            @vectorize('float64(float64)', target='parallel', nopython=False)
+
+            @vectorize("float64(float64)", target="parallel", nopython=False)
             def foo(x):
                 return x + 1
 
@@ -140,7 +145,8 @@ class TestDeprecation(TestCase):
 
         # First check that the @vectorize call doesn't raise anything
         with _catch_numba_deprecation_warnings() as w:
-            @vectorize('float64(float64)', forceobj=True)
+
+            @vectorize("float64(float64)", forceobj=True)
             def foo(x):
                 return bar(x + 1)
 
@@ -155,7 +161,7 @@ class TestDeprecation(TestCase):
         # does not warn on compilation.
         with _catch_numba_deprecation_warnings() as w:
 
-            @guvectorize('void(float64[::1], float64[::1])', '(n)->(n)')
+            @guvectorize("void(float64[::1], float64[::1])", "(n)->(n)")
             def bar(a, b):
                 a += 1
 
@@ -167,8 +173,7 @@ class TestDeprecation(TestCase):
         # not warn.
         with _catch_numba_deprecation_warnings() as w:
 
-            @guvectorize('void(float64[::1], float64[::1])', '(n)->(n)',
-                         forceobj=True)
+            @guvectorize("void(float64[::1], float64[::1])", "(n)->(n)", forceobj=True)
             def bar(a, b):
                 object()
                 a += 1
@@ -181,8 +186,9 @@ class TestDeprecation(TestCase):
         # nopython mode compilation does not warn.
         with _catch_numba_deprecation_warnings() as w:
 
-            @guvectorize('void(float64[::1], float64[::1])', '(n)->(n)',
-                         target='parallel')
+            @guvectorize(
+                "void(float64[::1], float64[::1])", "(n)->(n)", target="parallel"
+            )
             def bar(a, b):
                 a += 1
 
@@ -196,8 +202,12 @@ class TestDeprecation(TestCase):
 
             # This compiles somewhat surprisingly for the parallel target using
             # object mode?!
-            @guvectorize('void(float64[::1], float64[::1])', '(n)->(n)',
-                         target='parallel', forceobj=True)
+            @guvectorize(
+                "void(float64[::1], float64[::1])",
+                "(n)->(n)",
+                target="parallel",
+                forceobj=True,
+            )
             def bar(a, b):
                 object()
                 a += 1
@@ -214,20 +224,24 @@ class TestDeprecation(TestCase):
             return a.add(1)
 
         for f in [foo_list, foo_set]:
-            container = f.__name__.strip('foo_')
-            inp = eval(container)([10, ])
+            container = f.__name__.strip("foo_")
+            inp = eval(container)(
+                [
+                    10,
+                ]
+            )
             with warnings.catch_warnings(record=True) as w:
                 warnings.simplefilter("ignore", category=NumbaWarning)
-                warnings.simplefilter("always",
-                                      category=NumbaPendingDeprecationWarning)
+                warnings.simplefilter("always", category=NumbaPendingDeprecationWarning)
                 jit(nopython=True)(f)(inp)
                 self.assertEqual(len(w), 1)
                 self.assertEqual(w[0].category, NumbaPendingDeprecationWarning)
                 warn_msg = str(w[0].message)
-                msg = ("Encountered the use of a type that is scheduled for "
-                       "deprecation")
+                msg = (
+                    "Encountered the use of a type that is scheduled for " "deprecation"
+                )
                 self.assertIn(msg, warn_msg)
-                msg = ("\'reflected %s\' found for argument" % container)
+                msg = "'reflected %s' found for argument" % container
                 self.assertIn(msg, warn_msg)
                 self.assertIn("https://numba.readthedocs.io", warn_msg)
 
@@ -237,11 +251,10 @@ class TestDeprecation(TestCase):
         # checks import of module warns
 
         with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always",
-                                  category=NumbaPendingDeprecationWarning)
-            import numba.pycc # noqa: F401
+            warnings.simplefilter("always", category=NumbaPendingDeprecationWarning)
+            import numba.pycc  # noqa: F401
 
-            expected_str = ("The 'pycc' module is pending deprecation.")
+            expected_str = "The 'pycc' module is pending deprecation."
             self.check_warning(w, expected_str, NumbaPendingDeprecationWarning)
 
     @needs_setuptools
@@ -250,13 +263,12 @@ class TestDeprecation(TestCase):
         # check the most commonly used functionality (CC) warns
 
         with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always",
-                                  category=NumbaPendingDeprecationWarning)
-            from numba.pycc import CC # noqa: F401
+            warnings.simplefilter("always", category=NumbaPendingDeprecationWarning)
+            from numba.pycc import CC  # noqa: F401
 
-            expected_str = ("The 'pycc' module is pending deprecation.")
+            expected_str = "The 'pycc' module is pending deprecation."
             self.check_warning(w, expected_str, NumbaPendingDeprecationWarning)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

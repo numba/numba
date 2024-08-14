@@ -8,7 +8,7 @@ from numba.tests.support import TestCase
 class TestAlignment(TestCase):
 
     def test_record_alignment(self):
-        rec_dtype = np.dtype([('a', 'int32'), ('b', 'float64')], align=True)
+        rec_dtype = np.dtype([("a", "int32"), ("b", "float64")], align=True)
         rec = from_dtype(rec_dtype)
 
         @njit((rec[:],))
@@ -26,7 +26,7 @@ class TestAlignment(TestCase):
         np.testing.assert_equal(a_recarray.a, a_recarray.b)
 
     def test_record_misaligned(self):
-        rec_dtype = np.dtype([('a', 'int32'), ('b', 'float64')])
+        rec_dtype = np.dtype([("a", "int32"), ("b", "float64")])
         rec = from_dtype(rec_dtype)
 
         # Unlike the CUDA target, this will not generate an error
@@ -36,5 +36,5 @@ class TestAlignment(TestCase):
                 a[i].a = a[i].b
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

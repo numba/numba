@@ -41,19 +41,19 @@ class AsNumbaTypeRegistry:
 
         if getattr(py_type, "__origin__", None) is py_typing.Union:
             if len(py_type.__args__) != 2:
-                raise errors.TypingError(
-                    "Cannot type Union of more than two types")
+                raise errors.TypingError("Cannot type Union of more than two types")
 
             (arg_1_py, arg_2_py) = py_type.__args__
 
-            if arg_2_py is type(None): # noqa: E721
+            if arg_2_py is type(None):  # noqa: E721
                 return types.Optional(self.infer(arg_1_py))
-            elif arg_1_py is type(None): # noqa: E721
+            elif arg_1_py is type(None):  # noqa: E721
                 return types.Optional(self.infer(arg_2_py))
             else:
                 raise errors.TypingError(
                     "Cannot type Union that is not an Optional "
-                    f"(neither type type {arg_2_py} is not NoneType")
+                    f"(neither type type {arg_2_py} is not NoneType"
+                )
 
         if getattr(py_type, "__origin__", None) is list:
             (element_py,) = py_type.__args__

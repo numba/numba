@@ -4,7 +4,7 @@ from numba import cuda
 from numba.cuda.testing import skip_on_cudasim
 
 
-@skip_on_cudasim('CUDA Profiler unsupported in the simulator')
+@skip_on_cudasim("CUDA Profiler unsupported in the simulator")
 class TestProfiler(ContextResettingTestCase):
     def test_profiling(self):
         with cuda.profiling():
@@ -16,5 +16,5 @@ class TestProfiler(ContextResettingTestCase):
             del a
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

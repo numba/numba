@@ -8,9 +8,7 @@ from numba.core.utils import PYVERSION
 
 # List of bytecodes creating a new block in the control flow graph
 # (in addition to explicit jump labels).
-NEW_BLOCKERS = frozenset([
-    'SETUP_LOOP', 'FOR_ITER', 'SETUP_WITH', 'BEFORE_WITH'
-])
+NEW_BLOCKERS = frozenset(["SETUP_LOOP", "FOR_ITER", "SETUP_WITH", "BEFORE_WITH"])
 
 
 class CFBlock(object):
@@ -27,17 +25,14 @@ class CFBlock(object):
         self.terminating = False
 
     def __repr__(self):
-        args = (self.offset,
-                sorted(self.outgoing_jumps),
-                sorted(self.incoming_jumps))
+        args = (self.offset, sorted(self.outgoing_jumps), sorted(self.incoming_jumps))
         return "block(offset:%d, outgoing: %s, incoming: %s)" % args
 
     def __iter__(self):
         return iter(self.body)
 
 
-class Loop(collections.namedtuple("Loop",
-                                  ("entries", "exits", "header", "body"))):
+class Loop(collections.namedtuple("Loop", ("entries", "exits", "header", "body"))):
     """
     A control flow loop, as detected by a CFGraph object.
     """
@@ -108,11 +103,13 @@ class CFGraph(object):
         are not possible).
         """
         if src not in self._nodes:
-            raise ValueError("Cannot add edge as src node %s not in nodes %s" %
-                             (src, self._nodes))
+            raise ValueError(
+                "Cannot add edge as src node %s not in nodes %s" % (src, self._nodes)
+            )
         if dest not in self._nodes:
-            raise ValueError("Cannot add edge as dest node %s not in nodes %s" %
-                             (dest, self._nodes))
+            raise ValueError(
+                "Cannot add edge as dest node %s not in nodes %s" % (dest, self._nodes)
+            )
         self._add_edge(src, dest, data)
 
     def successors(self, src):
@@ -320,6 +317,7 @@ class CFGraph(object):
         Dump extensive debug information.
         """
         import pprint
+
         file = file or sys.stdout
         if 1:
             print("CFG adjacency lists:", file=file)
@@ -463,8 +461,8 @@ class CFGraph(object):
         preds_table = self._preds
 
         order = self._find_postorder()
-        idx = {e: i for i, e in enumerate(order)} # index of each node
-        idom = {entry : entry}
+        idx = {e: i for i, e in enumerate(order)}  # index of each node
+        idom = {entry: entry}
         order.pop()
         order.reverse()
 
@@ -472,9 +470,9 @@ class CFGraph(object):
         while changed:
             changed = False
             for u in order:
-                new_idom = functools.reduce(intersect,
-                                            (v for v in preds_table[u]
-                                             if v in idom))
+                new_idom = functools.reduce(
+                    intersect, (v for v in preds_table[u] if v in idom)
+                )
                 if u not in idom or idom[u] != new_idom:
                     idom[u] = new_idom
                     changed = True
@@ -524,8 +522,9 @@ class CFGraph(object):
             succs_table = self._succs
 
         if not entries:
-            raise RuntimeError("no entry points: dominator algorithm "
-                               "cannot be seeded")
+            raise RuntimeError(
+                "no entry points: dominator algorithm " "cannot be seeded"
+            )
 
         doms = {}
         for e in entries:
@@ -544,8 +543,7 @@ class CFGraph(object):
             new_doms = set([n])
             preds = preds_table[n]
             if preds:
-                new_doms |= functools.reduce(set.intersection,
-                                             [doms[p] for p in preds])
+                new_doms |= functools.reduce(set.intersection, [doms[p] for p in preds])
             if new_doms != doms[n]:
                 assert len(new_doms) < len(doms[n])
                 doms[n] = new_doms
@@ -585,7 +583,7 @@ class CFGraph(object):
         if stats is not None:
             if not isinstance(stats, dict):
                 raise TypeError(f"*stats* must be a dict; got {type(stats)}")
-            stats.setdefault('iteration_count', 0)
+            stats.setdefault("iteration_count", 0)
 
         # Uses a simple DFS to find back-edges.
         # The new algorithm is faster than the the previous dominator based
@@ -628,7 +626,7 @@ class CFGraph(object):
                 checked.add(tos)
 
         if stats is not None:
-            stats['iteration_count'] += iter_ct
+            stats["iteration_count"] += iter_ct
         return back_edges
 
     def _find_topo_order(self):
@@ -707,16 +705,18 @@ class CFGraph(object):
         return in_loops
 
     def _dump_adj_lists(self, file):
-        adj_lists = dict((src, sorted(list(dests)))
-                         for src, dests in self._succs.items())
+        adj_lists = dict(
+            (src, sorted(list(dests))) for src, dests in self._succs.items()
+        )
         import pprint
+
         pprint.pprint(adj_lists, stream=file)
 
     def __eq__(self, other):
         if not isinstance(other, CFGraph):
             return NotImplemented
 
-        for x in ['_nodes', '_edge_data', '_entry_point', '_preds', '_succs']:
+        for x in ["_nodes", "_edge_data", "_entry_point", "_preds", "_succs"]:
             this = getattr(self, x, None)
             that = getattr(other, x, None)
             if this != that:
@@ -744,6 +744,7 @@ class ControlFlowAnalysis(object):
         The set of block that is common to all possible code path.
 
     """
+
     def __init__(self, bytecode):
         self.bytecode = bytecode
         self.blocks = {}
@@ -824,8 +825,7 @@ class ControlFlowAnalysis(object):
                 self.blocks[out].incoming_jumps[b.offset] = pops
 
         # Find liveblocks
-        self.liveblocks = dict((i, self.blocks[i])
-                               for i in self.graph.nodes())
+        self.liveblocks = dict((i, self.blocks[i]) for i in self.graph.nodes())
 
         for lastblk in reversed(self.blockseq):
             if lastblk in self.liveblocks:
@@ -884,9 +884,11 @@ class ControlFlowAnalysis(object):
         if current_inst.opname == "SETUP_WITH":
             next_op = self.bytecode[current_inst.next].opname
             if next_op != "POP_TOP":
-                msg = ("The 'with (context manager) as "
-                       "(variable):' construct is not "
-                       "supported.")
+                msg = (
+                    "The 'with (context manager) as "
+                    "(variable):' construct is not "
+                    "supported."
+                )
                 raise UnsupportedError(msg)
 
     def op_SETUP_LOOP(self, inst):
@@ -954,10 +956,12 @@ class ControlFlowAnalysis(object):
         self._curblock.terminating = True
         self._force_new_block = True
 
-    if PYVERSION in ((3, 12), ):
+    if PYVERSION in ((3, 12),):
+
         def op_RETURN_CONST(self, inst):
             self._curblock.terminating = True
             self._force_new_block = True
+
     elif PYVERSION in ((3, 9), (3, 10), (3, 11)):
         pass
     else:

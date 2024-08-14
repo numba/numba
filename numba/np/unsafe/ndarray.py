@@ -2,6 +2,7 @@
 This file provides internal compiler utilities that support certain special
 operations with numpy.
 """
+
 from numba.core import types, typing
 from numba.core.cgutils import unpack_tuple
 from numba.core.extending import intrinsic
@@ -33,7 +34,7 @@ def empty_inferred(typingctx, shape):
 
     # make function signature
     nd = len(shape)
-    array_ty = types.Array(ndim=nd, layout='C', dtype=types.undefined)
+    array_ty = types.Array(ndim=nd, layout="C", dtype=types.undefined)
     sig = array_ty(shape)
     return sig, codegen
 
@@ -49,7 +50,7 @@ def to_fixed_tuple(typingctx, array, length):
       If *length* is longer than *array.size*, the behavior is undefined.
     """
     if not isinstance(length, types.IntegerLiteral):
-        raise RequireLiteralValue('*length* argument must be a constant')
+        raise RequireLiteralValue("*length* argument must be a constant")
 
     if array.ndim != 1:
         raise TypingError("Not supported on array.ndim={}".format(array.ndim))

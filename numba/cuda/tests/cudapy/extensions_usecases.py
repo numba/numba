@@ -23,7 +23,7 @@ if not config.ENABLE_CUDASIM:
         register_model,
         make_attribute_wrapper,
         typeof_impl,
-        type_callable
+        type_callable,
     )
     from numba.cuda.cudaimpl import lower
     from numba.core import cgutils
@@ -38,21 +38,20 @@ if not config.ENABLE_CUDASIM:
             members = [("x", int32), ("y", int32)]
             super().__init__(dmm, fe_type, members)
 
-    make_attribute_wrapper(TestStructModelType, 'x', 'x')
-    make_attribute_wrapper(TestStructModelType, 'y', 'y')
+    make_attribute_wrapper(TestStructModelType, "x", "x")
+    make_attribute_wrapper(TestStructModelType, "y", "y")
 
     @type_callable(TestStruct)
     def type_test_struct(context):
         def typer(x, y):
             if isinstance(x, types.Integer) and isinstance(y, types.Integer):
                 return test_struct_model_type
+
         return typer
 
     @lower(TestStruct, types.Integer, types.Integer)
     def lower_test_type_ctor(context, builder, sig, args):
-        obj = cgutils.create_struct_proxy(
-            test_struct_model_type
-        )(context, builder)
+        obj = cgutils.create_struct_proxy(test_struct_model_type)(context, builder)
         obj.x = args[0]
         obj.y = args[1]
         return obj._getvalue()

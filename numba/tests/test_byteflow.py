@@ -1,6 +1,7 @@
 """
 Test byteflow.py specific issues
 """
+
 import unittest
 
 from numba.tests.support import TestCase
@@ -74,7 +75,7 @@ class TestByteFlowIssues(TestCase):
             for i in range(0):
                 if i > 0:
                     pass
-                a = None # noqa: F841
+                a = None  # noqa: F841
 
         run_frontend(udt)
 
@@ -84,11 +85,11 @@ class TestByteFlowIssues(TestCase):
             for k in range(0):
                 if 1 == 1:
                     ...
-                if 'a' == 'a':
+                if "a" == "a":
                     ...
 
         run_frontend(udt)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

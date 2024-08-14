@@ -133,14 +133,16 @@ class TestCudaSync(CUDATestCase):
         self._test_useless(useless_syncwarp)
 
     @skip_on_cudasim("syncwarp not implemented on cudasim")
-    @unittest.skipUnless(_safe_cc_check((7, 0)),
-                         "Partial masks require CC 7.0 or greater")
+    @unittest.skipUnless(
+        _safe_cc_check((7, 0)), "Partial masks require CC 7.0 or greater"
+    )
     def test_useless_syncwarp_with_mask(self):
         self._test_useless(useless_syncwarp_with_mask)
 
     @skip_on_cudasim("syncwarp not implemented on cudasim")
-    @unittest.skipUnless(_safe_cc_check((7, 0)),
-                         "Partial masks require CC 7.0 or greater")
+    @unittest.skipUnless(
+        _safe_cc_check((7, 0)), "Partial masks require CC 7.0 or greater"
+    )
     def test_coop_syncwarp(self):
         # coop_syncwarp computes the sum of all integers from 0 to 31 (496)
         # using a single warp
@@ -267,5 +269,5 @@ class TestCudaSync(CUDATestCase):
         self._test_syncthreads_or(np.int64)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

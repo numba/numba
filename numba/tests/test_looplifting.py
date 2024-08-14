@@ -18,8 +18,8 @@ pyobject_looplift_flags.enable_pyobject_looplift = True
 def compile_isolated(pyfunc, argtypes, **kwargs):
     from numba.core.registry import cpu_target
 
-    kwargs.setdefault('return_type', None)
-    kwargs.setdefault('locals', {})
+    kwargs.setdefault("return_type", None)
+    kwargs.setdefault("locals", {})
     return compile_extra(
         cpu_target.typing_context,
         cpu_target.target_context,
@@ -57,6 +57,7 @@ def lift3(x):
         c += a[i] * x
     return c
 
+
 def lift4(x):
     # Output two variables from the loop
     _ = object()
@@ -68,6 +69,7 @@ def lift4(x):
         d += c
     return c + d
 
+
 def lift5(x):
     _ = object()
     a = np.arange(4)
@@ -76,6 +78,7 @@ def lift5(x):
         if i > 2:
             break
     return a
+
 
 def lift_gen1(x):
     # Outer needs object mode because of np.empty()
@@ -86,12 +89,14 @@ def lift_gen1(x):
         a[i] = x
     yield np.sum(a)
 
+
 def lift_issue2561():
-    np.empty(1)   # This forces objectmode because no nrt
+    np.empty(1)  # This forces objectmode because no nrt
     for i in range(10):
         for j in range(10):
             return 1
     return 2
+
 
 def reject1(x):
     a = np.arange(4)
@@ -108,6 +113,7 @@ def reject_gen1(x):
         # Inner is a generator => cannot loop-lift
         yield a[i]
 
+
 def reject_gen2(x):
     _ = object()
     a = np.arange(3)
@@ -117,8 +123,9 @@ def reject_gen2(x):
         for j in range(i):
             # Inner is nopython-compliant, but the current algorithm isn't
             # able to separate it.
-            res = res ** 2
+            res = res**2
         yield res
+
 
 def reject_npm1(x):
     a = np.empty(3, dtype=np.int32)
@@ -138,8 +145,11 @@ class TestLoopLifting(MemoryLeakMixin, TestCase):
         cres = compile_extra(
             cpu_target.typing_context,
             cpu_target.target_context,
-            pyfunc, argtypes,
-            return_type=None, flags=looplift_flags, locals={},
+            pyfunc,
+            argtypes,
+            return_type=None,
+            flags=looplift_flags,
+            locals={},
         )
         # One lifted loop
         self.assertEqual(len(cres.lifted), 1)
@@ -178,8 +188,7 @@ class TestLoopLifting(MemoryLeakMixin, TestCase):
         """
         Check that pyfunc can't loop-lift.
         """
-        cres = compile_isolated(pyfunc, argtypes,
-                                flags=looplift_flags)
+        cres = compile_isolated(pyfunc, argtypes, flags=looplift_flags)
         self.assertFalse(cres.lifted)
         expected = pyfunc(*args)
         got = cres.entry_point(*args)
@@ -190,8 +199,7 @@ class TestLoopLifting(MemoryLeakMixin, TestCase):
         """
         Check that pyfunc (a generator function) can't loop-lift.
         """
-        cres = compile_isolated(pyfunc, argtypes,
-                                flags=looplift_flags)
+        cres = compile_isolated(pyfunc, argtypes, flags=looplift_flags)
         self.assertFalse(cres.lifted)
         expected = list(pyfunc(*args))
         got = list(cres.entry_point(*args))
@@ -320,8 +328,8 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
                     a[i] = a[i] + 1.0
 
         for u in (0, 1):
-            nb_a = np.arange(10, dtype='int32')
-            np_a = np.arange(10, dtype='int32')
+            nb_a = np.arange(10, dtype="int32")
+            np_a = np.arange(10, dtype="int32")
             forloop_with_if(u, nb_a)
             forloop_with_if.py_func(u, np_a)
             self.assertPreciseEqual(nb_a, np_a)
@@ -329,7 +337,7 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
     def test_issue_812(self):
         from numba import jit
 
-        @jit('f8[:](f8[:])', forceobj=True)
+        @jit("f8[:](f8[:])", forceobj=True)
         def test(x):
             res = np.zeros(len(x))
             ind = 0
@@ -345,7 +353,7 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
                 res[ii] = 0
             return res
 
-        x = np.array([1., 4, 2, -3, 5, 2, 10, 5, 2, 6])
+        x = np.array([1.0, 4, 2, -3, 5, 2, 10, 5, 2, 6])
         np.testing.assert_equal(test.py_func(x), test(x))
 
     def test_issue_2368(self):
@@ -435,7 +443,7 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
 
         @jit(forceobj=True)
         def test(arg):
-            if type(arg) == np.ndarray: # force object mode
+            if type(arg) == np.ndarray:  # force object mode
                 if arg.ndim == 1:
                     result = 0.0
                     j = 0
@@ -453,13 +461,14 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
 
     def test_conditionally_defined_in_loop(self):
         from numba import jit
+
         @jit(forceobj=True)
         def test():
             x = 5
             y = 0
             for i in range(2):
                 if i > 0:
-                   x = 6
+                    x = 6
                 y += x
             return y, x
 
@@ -493,7 +502,7 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
             return x
 
         def foo(x):
-            h = 0.
+            h = 0.0
             for k in range(x):
                 h = h + k
             h = h - bar(x)
@@ -515,7 +524,7 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
             c = 1
             for k in range(A.size):
                 object()  # to force objectmode and looplifting
-                c = c * A[::-1][k]   # the slice that is failing in static_getitem
+                c = c * A[::-1][k]  # the slice that is failing in static_getitem
             return c
 
         cfoo = jit(forceobj=True)(foo)
@@ -533,7 +542,6 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
         # Ensure that is really a new overload for the lifted loop
         self.assertEqual(len(lifted.signatures), 2)
 
-
     def test_lift_objectmode_issue_4223(self):
         from numba import jit
 
@@ -541,20 +549,20 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
         def foo(a, b, c, d, x0, y0, n):
             xs, ys = np.zeros(n), np.zeros(n)
             xs[0], ys[0] = x0, y0
-            for i in np.arange(n-1):
-                xs[i+1] = np.sin(a * ys[i]) + c * np.cos(a * xs[i])
-                ys[i+1] = np.sin(b * xs[i]) + d * np.cos(b * ys[i])
-            object() # ensure object mode
+            for i in np.arange(n - 1):
+                xs[i + 1] = np.sin(a * ys[i]) + c * np.cos(a * xs[i])
+                ys[i + 1] = np.sin(b * xs[i]) + d * np.cos(b * ys[i])
+            object()  # ensure object mode
             return xs, ys
 
         kwargs = dict(a=1.7, b=1.7, c=0.6, d=1.2, x0=0, y0=0, n=200)
         got = foo(**kwargs)
         expected = foo.py_func(**kwargs)
         self.assertPreciseEqual(got[0], expected[0])
-        self .assertPreciseEqual(got[1], expected[1])
+        self.assertPreciseEqual(got[1], expected[1])
         [lifted] = foo.overloads[foo.signatures[0]].lifted
         self.assertEqual(len(lifted.nopython_signatures), 1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

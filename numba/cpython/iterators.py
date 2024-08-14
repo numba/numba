@@ -4,23 +4,30 @@ Implementation of various iterable and iterator types.
 
 from numba.core import types, cgutils
 from numba.core.imputils import (
-    lower_builtin, iternext_impl, call_iternext, call_getiter,
-    impl_ret_borrowed, impl_ret_new_ref, RefType)
+    lower_builtin,
+    iternext_impl,
+    call_iternext,
+    call_getiter,
+    impl_ret_borrowed,
+    impl_ret_new_ref,
+    RefType,
+)
 
 
-
-@lower_builtin('getiter', types.IteratorType)
+@lower_builtin("getiter", types.IteratorType)
 def iterator_getiter(context, builder, sig, args):
     [it] = args
     return impl_ret_borrowed(context, builder, sig.return_type, it)
 
-#-------------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------------
 # builtin `enumerate` implementation
+
 
 @lower_builtin(enumerate, types.IterableType)
 @lower_builtin(enumerate, types.IterableType, types.Integer)
 def make_enumerate_object(context, builder, sig, args):
-    assert len(args) == 1 or len(args) == 2 # enumerate(it) or enumerate(it, start)
+    assert len(args) == 1 or len(args) == 2  # enumerate(it) or enumerate(it, start)
     srcty = sig.args[0]
 
     if len(args) == 1:
@@ -43,7 +50,8 @@ def make_enumerate_object(context, builder, sig, args):
     res = enum._getvalue()
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-@lower_builtin('iternext', types.EnumerateType)
+
+@lower_builtin("iternext", types.EnumerateType)
 @iternext_impl(RefType.NEW)
 def iternext_enumerate(context, builder, sig, args, result):
     [enumty] = sig.args
@@ -61,12 +69,12 @@ def iternext_enumerate(context, builder, sig, args, result):
 
     with builder.if_then(is_valid):
         srcval = srcres.yielded_value()
-        result.yield_(context.make_tuple(builder, enumty.yield_type,
-                                         [count, srcval]))
+        result.yield_(context.make_tuple(builder, enumty.yield_type, [count, srcval]))
 
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # builtin `zip` implementation
+
 
 @lower_builtin(zip, types.VarArg(types.Any))
 def make_zip_object(context, builder, sig, args):
@@ -82,7 +90,8 @@ def make_zip_object(context, builder, sig, args):
     res = zipobj._getvalue()
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-@lower_builtin('iternext', types.ZipType)
+
+@lower_builtin("iternext", types.ZipType)
 @iternext_impl(RefType.NEW)
 def iternext_zip(context, builder, sig, args, result):
     [zip_type] = sig.args
@@ -95,8 +104,9 @@ def iternext_zip(context, builder, sig, args, result):
         result.set_exhausted()
         return
 
-    p_ret_tup = cgutils.alloca_once(builder,
-                                    context.get_value_type(zip_type.yield_type))
+    p_ret_tup = cgutils.alloca_once(
+        builder, context.get_value_type(zip_type.yield_type)
+    )
     p_is_valid = cgutils.alloca_once_value(builder, value=cgutils.true_bit)
 
     for i, (iterobj, srcty) in enumerate(zip(zipobj, zip_type.source_types)):
@@ -117,24 +127,25 @@ def iternext_zip(context, builder, sig, args, result):
         result.yield_(builder.load(p_ret_tup))
 
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # generator implementation
 
-@lower_builtin('iternext', types.Generator)
+
+@lower_builtin("iternext", types.Generator)
 @iternext_impl(RefType.BORROWED)
 def iternext_zip(context, builder, sig, args, result):
-    genty, = sig.args
-    gen, = args
+    (genty,) = sig.args
+    (gen,) = args
     impl = context.get_generator_impl(genty)
     status, retval = impl(context, builder, sig, args)
-    context.add_linking_libs(getattr(impl, 'libs', ()))
+    context.add_linking_libs(getattr(impl, "libs", ()))
 
     with cgutils.if_likely(builder, status.is_ok):
         result.set_valid(True)
         result.yield_(retval)
     with cgutils.if_unlikely(builder, status.is_stop_iteration):
         result.set_exhausted()
-    with cgutils.if_unlikely(builder,
-                             builder.and_(status.is_error,
-                                          builder.not_(status.is_stop_iteration))):
+    with cgutils.if_unlikely(
+        builder, builder.and_(status.is_error, builder.not_(status.is_stop_iteration))
+    ):
         context.call_conv.return_status_propagate(builder, status)

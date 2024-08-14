@@ -2,7 +2,7 @@ from numba.core import errors, ir, types
 from numba.core.rewrites import register_rewrite, Rewrite
 
 
-@register_rewrite('before-inference')
+@register_rewrite("before-inference")
 class RewriteConstGetitems(Rewrite):
     """
     Rewrite IR expressions of the kind `getitem(value=arr, index=$constXX)`
@@ -15,8 +15,8 @@ class RewriteConstGetitems(Rewrite):
         self.block = block
         # Detect all getitem expressions and find which ones can be
         # rewritten
-        for expr in block.find_exprs(op='getitem'):
-            if expr.op == 'getitem':
+        for expr in block.find_exprs(op="getitem"):
+            if expr.op == "getitem":
                 try:
                     const = func_ir.infer_constant(expr.index)
                 except errors.ConstantInferenceError:
@@ -36,17 +36,18 @@ class RewriteConstGetitems(Rewrite):
                 expr = inst.value
                 if expr in self.getitems:
                     const = self.getitems[expr]
-                    new_expr = ir.Expr.static_getitem(value=expr.value,
-                                                      index=const,
-                                                      index_var=expr.index,
-                                                      loc=expr.loc)
-                    inst = ir.Assign(value=new_expr, target=inst.target,
-                                     loc=inst.loc)
+                    new_expr = ir.Expr.static_getitem(
+                        value=expr.value,
+                        index=const,
+                        index_var=expr.index,
+                        loc=expr.loc,
+                    )
+                    inst = ir.Assign(value=new_expr, target=inst.target, loc=inst.loc)
             new_block.append(inst)
         return new_block
 
 
-@register_rewrite('after-inference')
+@register_rewrite("after-inference")
 class RewriteStringLiteralGetitems(Rewrite):
     """
     Rewrite IR expressions of the kind `getitem(value=arr, index=$XX)`
@@ -62,8 +63,8 @@ class RewriteStringLiteralGetitems(Rewrite):
         self.getitems = getitems = {}
         self.block = block
         self.calltypes = calltypes
-        for expr in block.find_exprs(op='getitem'):
-            if expr.op == 'getitem':
+        for expr in block.find_exprs(op="getitem"):
+            if expr.op == "getitem":
                 index_ty = typemap[expr.index.name]
                 if isinstance(index_ty, types.StringLiteral):
                     getitems[expr] = (expr.index, index_ty.literal_value)
@@ -81,18 +82,19 @@ class RewriteStringLiteralGetitems(Rewrite):
                 expr = inst.value
                 if expr in self.getitems:
                     const, lit_val = self.getitems[expr]
-                    new_expr = ir.Expr.static_getitem(value=expr.value,
-                                                      index=lit_val,
-                                                      index_var=expr.index,
-                                                      loc=expr.loc)
+                    new_expr = ir.Expr.static_getitem(
+                        value=expr.value,
+                        index=lit_val,
+                        index_var=expr.index,
+                        loc=expr.loc,
+                    )
                     self.calltypes[new_expr] = self.calltypes[expr]
-                    inst = ir.Assign(value=new_expr, target=inst.target,
-                                     loc=inst.loc)
+                    inst = ir.Assign(value=new_expr, target=inst.target, loc=inst.loc)
             new_block.append(inst)
         return new_block
 
 
-@register_rewrite('after-inference')
+@register_rewrite("after-inference")
 class RewriteStringLiteralSetitems(Rewrite):
     """
     Rewrite IR expressions of the kind `setitem(value=arr, index=$XX, value=)`
@@ -125,18 +127,20 @@ class RewriteStringLiteralSetitems(Rewrite):
             if isinstance(inst, ir.SetItem):
                 if inst in self.setitems:
                     const, lit_val = self.setitems[inst]
-                    new_inst = ir.StaticSetItem(target=inst.target,
-                                                index=lit_val,
-                                                index_var=inst.index,
-                                                value=inst.value,
-                                                loc=inst.loc)
+                    new_inst = ir.StaticSetItem(
+                        target=inst.target,
+                        index=lit_val,
+                        index_var=inst.index,
+                        value=inst.value,
+                        loc=inst.loc,
+                    )
                     self.calltypes[new_inst] = self.calltypes[inst]
                     inst = new_inst
             new_block.append(inst)
         return new_block
 
 
-@register_rewrite('before-inference')
+@register_rewrite("before-inference")
 class RewriteConstSetitems(Rewrite):
     """
     Rewrite IR statements of the kind `setitem(target=arr, index=$constXX, ...)`
@@ -167,8 +171,9 @@ class RewriteConstSetitems(Rewrite):
         for inst in self.block.body:
             if inst in self.setitems:
                 const = self.setitems[inst]
-                new_inst = ir.StaticSetItem(inst.target, const,
-                                            inst.index, inst.value, inst.loc)
+                new_inst = ir.StaticSetItem(
+                    inst.target, const, inst.index, inst.value, inst.loc
+                )
                 new_block.append(new_inst)
             else:
                 new_block.append(inst)

@@ -3,11 +3,14 @@ import numpy as np
 from io import StringIO
 from numba import cuda, float32, float64, int32, intp
 from numba.cuda.testing import unittest, CUDATestCase
-from numba.cuda.testing import (skip_on_cudasim, skip_with_nvdisasm,
-                                skip_without_nvdisasm)
+from numba.cuda.testing import (
+    skip_on_cudasim,
+    skip_with_nvdisasm,
+    skip_without_nvdisasm,
+)
 
 
-@skip_on_cudasim('Simulator does not generate code to be inspected')
+@skip_on_cudasim("Simulator does not generate code to be inspected")
 class TestInspect(CUDATestCase):
     @property
     def cc(self):
@@ -33,7 +36,7 @@ class TestInspect(CUDATestCase):
         self.assertIn("foo", llvm)
 
         # Kernel in LLVM
-        self.assertIn('cuda.kernel.wrapper', llvm)
+        self.assertIn("cuda.kernel.wrapper", llvm)
 
         # Wrapped device function body in LLVM
         self.assertIn("define linkonce_odr i32", llvm)
@@ -63,7 +66,10 @@ class TestInspect(CUDATestCase):
 
         # Signature in LLVM dict
         llvmirs = foo.inspect_llvm()
-        self.assertEqual(2, len(llvmirs), )
+        self.assertEqual(
+            2,
+            len(llvmirs),
+        )
         self.assertIn((intp, intp), llvmirs)
         self.assertIn((float64, float64), llvmirs)
 
@@ -72,8 +78,8 @@ class TestInspect(CUDATestCase):
         self.assertIn("foo", llvmirs[float64, float64])
 
         # Kernels in LLVM
-        self.assertIn('cuda.kernel.wrapper', llvmirs[intp, intp])
-        self.assertIn('cuda.kernel.wrapper', llvmirs[float64, float64])
+        self.assertIn("cuda.kernel.wrapper", llvmirs[intp, intp])
+        self.assertIn("cuda.kernel.wrapper", llvmirs[float64, float64])
 
         # Wrapped device function bodies in LLVM
         self.assertIn("define linkonce_odr i32", llvmirs[intp, intp])
@@ -82,7 +88,10 @@ class TestInspect(CUDATestCase):
         asmdict = foo.inspect_asm()
 
         # Signature in assembly dict
-        self.assertEqual(2, len(asmdict), )
+        self.assertEqual(
+            2,
+            len(asmdict),
+        )
         self.assertIn((intp, intp), asmdict)
         self.assertIn((float64, float64), asmdict)
 
@@ -94,7 +103,7 @@ class TestInspect(CUDATestCase):
         # Ensure function appears in output
         seen_function = False
         for line in sass.split():
-            if '.text' in line and name in line:
+            if ".text" in line and name in line:
                 seen_function = True
         self.assertTrue(seen_function)
 
@@ -102,11 +111,11 @@ class TestInspect(CUDATestCase):
 
         # Some instructions common to all supported architectures that should
         # appear in the output
-        self.assertIn('S2R', sass)   # Special register to register
-        self.assertIn('BRA', sass)   # Branch
-        self.assertIn('EXIT', sass)  # Exit program
+        self.assertIn("S2R", sass)  # Special register to register
+        self.assertIn("BRA", sass)  # Branch
+        self.assertIn("EXIT", sass)  # Exit program
 
-    @skip_without_nvdisasm('nvdisasm needed for inspect_sass()')
+    @skip_without_nvdisasm("nvdisasm needed for inspect_sass()")
     def test_inspect_sass_eager(self):
         sig = (float32[::1], int32[::1])
 
@@ -116,9 +125,9 @@ class TestInspect(CUDATestCase):
             if i < len(x):
                 x[i] += y[i]
 
-        self._test_inspect_sass(add, 'add', add.inspect_sass(sig))
+        self._test_inspect_sass(add, "add", add.inspect_sass(sig))
 
-    @skip_without_nvdisasm('nvdisasm needed for inspect_sass()')
+    @skip_without_nvdisasm("nvdisasm needed for inspect_sass()")
     def test_inspect_sass_lazy(self):
         @cuda.jit(lineinfo=True)
         def add(x, y):
@@ -131,10 +140,11 @@ class TestInspect(CUDATestCase):
         add[1, 10](x, y)
 
         signature = (int32[::1], float32[::1])
-        self._test_inspect_sass(add, 'add', add.inspect_sass(signature))
+        self._test_inspect_sass(add, "add", add.inspect_sass(signature))
 
-    @skip_with_nvdisasm('Missing nvdisasm exception only generated when it is '
-                        'not present')
+    @skip_with_nvdisasm(
+        "Missing nvdisasm exception only generated when it is " "not present"
+    )
     def test_inspect_sass_nvdisasm_missing(self):
         @cuda.jit((float32[::1],))
         def f(x):
@@ -143,9 +153,9 @@ class TestInspect(CUDATestCase):
         with self.assertRaises(RuntimeError) as raises:
             f.inspect_sass()
 
-        self.assertIn('nvdisasm has not been found', str(raises.exception))
+        self.assertIn("nvdisasm has not been found", str(raises.exception))
 
-    @skip_without_nvdisasm('nvdisasm needed for inspect_sass_cfg()')
+    @skip_without_nvdisasm("nvdisasm needed for inspect_sass_cfg()")
     def test_inspect_sass_cfg(self):
         sig = (float32[::1], int32[::1])
 
@@ -156,10 +166,9 @@ class TestInspect(CUDATestCase):
                 x[i] += y[i]
 
         self.assertRegex(
-            add.inspect_sass_cfg(signature=sig),
-            r'digraph\s*\w\s*{(.|\n)*\n}'
+            add.inspect_sass_cfg(signature=sig), r"digraph\s*\w\s*{(.|\n)*\n}"
         )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,7 @@
 """
 Compiler-side implementation of the Numba  typed-list.
 """
+
 import operator
 from enum import IntEnum
 
@@ -28,10 +29,14 @@ from numba.core.types import (
 from numba.core.imputils import impl_ret_borrowed, RefType
 from numba.core.errors import TypingError
 from numba.core import typing
-from numba.typed.typedobjectutils import (_as_bytes, _cast, _nonoptional,
-                                          _get_incref_decref,
-                                          _container_get_data,
-                                          _container_get_meminfo,)
+from numba.typed.typedobjectutils import (
+    _as_bytes,
+    _cast,
+    _nonoptional,
+    _get_incref_decref,
+    _container_get_data,
+    _container_get_meminfo,
+)
 from numba.cpython import listobj
 
 ll_list_type = cgutils.voidptr_t
@@ -60,8 +65,8 @@ DEFAULT_ALLOCATED = 0
 class ListModel(models.StructModel):
     def __init__(self, dmm, fe_type):
         members = [
-            ('meminfo', _meminfo_listptr),
-            ('data', types.voidptr),   # ptr to the C list
+            ("meminfo", _meminfo_listptr),
+            ("data", types.voidptr),  # ptr to the C list
         ]
         super(ListModel, self).__init__(dmm, fe_type, members)
 
@@ -71,17 +76,17 @@ class ListModel(models.StructModel):
 class ListIterModel(models.StructModel):
     def __init__(self, dmm, fe_type):
         members = [
-            ('size', types.intp), # the size of the iteration space
-            ('parent', fe_type.parent), # the parent list
-            ('index', types.EphemeralPointer(types.intp)), # current index
+            ("size", types.intp),  # the size of the iteration space
+            ("parent", fe_type.parent),  # the parent list
+            ("index", types.EphemeralPointer(types.intp)),  # current index
         ]
         super(ListIterModel, self).__init__(dmm, fe_type, members)
 
 
 class ListStatus(IntEnum):
-    """Status code for other list operations.
-    """
-    LIST_OK = 0,
+    """Status code for other list operations."""
+
+    LIST_OK = (0,)
     LIST_ERR_INDEX = -1
     LIST_ERR_NO_MEMORY = -2
     LIST_ERR_MUTATED = -3
@@ -100,24 +105,23 @@ class ErrorHandler(object):
 
     def __call__(self, builder, status, msg):
         ok_status = status.type(int(ListStatus.LIST_OK))
-        with builder.if_then(builder.icmp_signed('!=', status, ok_status),
-                             likely=True):
-            self.context.call_conv.return_user_exc(
-                builder, RuntimeError, (msg,))
+        with builder.if_then(builder.icmp_signed("!=", status, ok_status), likely=True):
+            self.context.call_conv.return_user_exc(builder, RuntimeError, (msg,))
 
 
 def _check_for_none_typed(lst, method):
     if isinstance(lst.dtype, NoneType):
-        raise TypingError("method support for List[None] is limited, "
-                          "not supported: '{}'.".format(method))
+        raise TypingError(
+            "method support for List[None] is limited, "
+            "not supported: '{}'.".format(method)
+        )
 
 
 @intrinsic
 def _as_meminfo(typingctx, lstobj):
-    """Returns the MemInfoPointer of a list.
-    """
+    """Returns the MemInfoPointer of a list."""
     if not isinstance(lstobj, types.ListType):
-        raise TypingError('expected *lstobj* to be a ListType')
+        raise TypingError("expected *lstobj* to be a ListType")
 
     def codegen(context, builder, sig, args):
         [tl] = sig.args
@@ -135,13 +139,12 @@ def _as_meminfo(typingctx, lstobj):
 
 @intrinsic
 def _from_meminfo(typingctx, mi, listtyperef):
-    """Recreate a list from a MemInfoPointer
-    """
+    """Recreate a list from a MemInfoPointer"""
     if mi != _meminfo_listptr:
-        raise TypingError('expected a MemInfoPointer for list.')
+        raise TypingError("expected a MemInfoPointer for list.")
     listtype = listtyperef.instance_type
     if not isinstance(listtype, ListType):
-        raise TypingError('expected a {}'.format(ListType))
+        raise TypingError("expected a {}".format(ListType))
 
     def codegen(context, builder, sig, args):
         [tmi, tdref] = sig.args
@@ -169,19 +172,19 @@ def _from_meminfo(typingctx, mi, listtyperef):
 
 
 def _list_codegen_set_method_table(context, builder, lp, itemty):
-    vtablety = ir.LiteralStructType([
-        ll_voidptr_type,  # item incref
-        ll_voidptr_type,  # item decref
-    ])
+    vtablety = ir.LiteralStructType(
+        [
+            ll_voidptr_type,  # item incref
+            ll_voidptr_type,  # item decref
+        ]
+    )
     setmethod_fnty = ir.FunctionType(
-        ir.VoidType(),
-        [ll_list_type, vtablety.as_pointer()]
+        ir.VoidType(), [ll_list_type, vtablety.as_pointer()]
     )
 
     setmethod_fn = cgutils.get_or_insert_function(
-        builder.module,
-        setmethod_fnty,
-        'numba_list_set_method_table')
+        builder.module, setmethod_fnty, "numba_list_set_method_table"
+    )
     vtable = cgutils.alloca_once(builder, vtablety, zfill=True)
 
     # install item incref/decref
@@ -207,14 +210,12 @@ def _list_codegen_set_method_table(context, builder, lp, itemty):
 
 @intrinsic
 def _list_set_method_table(typingctx, lp, itemty):
-    """Wrap numba_list_set_method_table
-    """
+    """Wrap numba_list_set_method_table"""
     resty = types.void
     sig = resty(lp, itemty)
 
     def codegen(context, builder, sig, args):
-        _list_codegen_set_method_table(
-            context, builder, args[0], itemty.instance_type)
+        _list_codegen_set_method_table(context, builder, args[0], itemty.instance_type)
 
     return sig, codegen
 
@@ -225,37 +226,34 @@ def list_is(context, builder, sig, args):
     b_meminfo = _container_get_meminfo(context, builder, sig.args[1], args[1])
     ma = builder.ptrtoint(a_meminfo, cgutils.intp_t)
     mb = builder.ptrtoint(b_meminfo, cgutils.intp_t)
-    return builder.icmp_signed('==', ma, mb)
+    return builder.icmp_signed("==", ma, mb)
 
 
 def _call_list_free(context, builder, ptr):
-    """Call numba_list_free(ptr)
-    """
+    """Call numba_list_free(ptr)"""
     fnty = ir.FunctionType(
         ir.VoidType(),
         [ll_list_type],
     )
-    free = cgutils.get_or_insert_function(builder.module, fnty,
-                                          'numba_list_free')
+    free = cgutils.get_or_insert_function(builder.module, fnty, "numba_list_free")
     builder.call(free, [ptr])
 
 
 # FIXME: this needs a careful review
 def _imp_dtor(context, module):
-    """Define the dtor for list
-    """
+    """Define the dtor for list"""
     llvoidptr = context.get_value_type(types.voidptr)
     llsize = context.get_value_type(types.uintp)
     fnty = ir.FunctionType(
         ir.VoidType(),
         [llvoidptr, llsize, llvoidptr],
     )
-    fname = '_numba_list_dtor'
+    fname = "_numba_list_dtor"
     fn = cgutils.get_or_insert_function(module, fnty, fname)
 
     if fn.is_declaration:
         # Set linkage
-        fn.linkage = 'linkonce_odr'
+        fn.linkage = "linkonce_odr"
         # Define
         builder = ir.IRBuilder(fn.append_basic_block())
         lp = builder.bitcast(fn.args[0], ll_list_type.as_pointer())
@@ -328,7 +326,7 @@ def _list_new_codegen(context, builder, itemty, new_size, error_handler):
         ll_status,
         [ll_list_type.as_pointer(), ll_ssize_t, ll_ssize_t],
     )
-    fn = cgutils.get_or_insert_function(builder.module, fnty, 'numba_list_new')
+    fn = cgutils.get_or_insert_function(builder.module, fnty, "numba_list_new")
     # Determine sizeof item types
     ll_item = context.get_data_type(itemty)
     sz_item = context.get_abi_sizeof(ll_item)
@@ -366,12 +364,13 @@ def _list_new(typingctx, itemty, allocated):
 
     def codegen(context, builder, sig, args):
         error_handler = ErrorHandler(context)
-        return _list_new_codegen(context,
-                                 builder,
-                                 itemty.instance_type,
-                                 args[1],
-                                 error_handler,
-                                 )
+        return _list_new_codegen(
+            context,
+            builder,
+            itemty.instance_type,
+            args[1],
+            error_handler,
+        )
 
     return sig, codegen
 
@@ -406,9 +405,9 @@ def impl_new_list(item, allocated=DEFAULT_ALLOCATED):
 
 @overload(len)
 def impl_len(l):
-    """len(list)
-    """
+    """len(list)"""
     if isinstance(l, types.ListType):
+
         def impl(l):
             return _list_length(l)
 
@@ -430,13 +429,18 @@ def _list_length(typingctx, l):
             ll_ssize_t,
             [ll_list_type],
         )
-        fname = 'numba_list_size_address'
+        fname = "numba_list_size_address"
         fn = cgutils.get_or_insert_function(builder.module, fnty, fname)
-        fn.attributes.add('alwaysinline')
-        fn.attributes.add('readonly')
-        fn.attributes.add('nounwind')
+        fn.attributes.add("alwaysinline")
+        fn.attributes.add("readonly")
+        fn.attributes.add("nounwind")
         lp = _container_get_data(context, builder, tl, l)
-        len_addr = builder.call(fn, [lp,],)
+        len_addr = builder.call(
+            fn,
+            [
+                lp,
+            ],
+        )
         ptr = builder.inttoptr(len_addr, cgutils.intp_t.as_pointer())
         return builder.load(ptr)
 
@@ -445,9 +449,9 @@ def _list_length(typingctx, l):
 
 @overload_method(types.ListType, "_allocated")
 def impl_allocated(l):
-    """list._allocated()
-    """
+    """list._allocated()"""
     if isinstance(l, types.ListType):
+
         def impl(l):
             return _list_allocated(l)
 
@@ -468,8 +472,9 @@ def _list_allocated(typingctx, l):
             ll_ssize_t,
             [ll_list_type],
         )
-        fn = cgutils.get_or_insert_function(builder.module, fnty,
-                                            'numba_list_allocated')
+        fn = cgutils.get_or_insert_function(
+            builder.module, fnty, "numba_list_allocated"
+        )
         [l] = args
         [tl] = sig.args
         lp = _container_get_data(context, builder, tl, l)
@@ -483,6 +488,7 @@ def _list_allocated(typingctx, l):
 def impl_is_mutable(l):
     """list._is_mutable()"""
     if isinstance(l, types.ListType):
+
         def impl(l):
             return bool(_list_is_mutable(l))
 
@@ -503,8 +509,9 @@ def _list_is_mutable(typingctx, l):
             ll_status,
             [ll_list_type],
         )
-        fn = cgutils.get_or_insert_function(builder.module, fnty,
-                                            'numba_list_is_mutable')
+        fn = cgutils.get_or_insert_function(
+            builder.module, fnty, "numba_list_is_mutable"
+        )
         [l] = args
         [tl] = sig.args
         lp = _container_get_data(context, builder, tl, l)
@@ -518,6 +525,7 @@ def _list_is_mutable(typingctx, l):
 def impl_make_mutable(l):
     """list._make_mutable()"""
     if isinstance(l, types.ListType):
+
         def impl(l):
             _list_set_is_mutable(l, 1)
 
@@ -528,6 +536,7 @@ def impl_make_mutable(l):
 def impl_make_immutable(l):
     """list._make_immutable()"""
     if isinstance(l, types.ListType):
+
         def impl(l):
             _list_set_is_mutable(l, 0)
 
@@ -548,8 +557,9 @@ def _list_set_is_mutable(typingctx, l, is_mutable):
             ir.VoidType(),
             [ll_list_type, cgutils.intp_t],
         )
-        fn = cgutils.get_or_insert_function(builder.module, fnty,
-                                            'numba_list_set_is_mutable')
+        fn = cgutils.get_or_insert_function(
+            builder.module, fnty, "numba_list_set_is_mutable"
+        )
         [l, i] = args
         [tl, ti] = sig.args
         lp = _container_get_data(context, builder, tl, l)
@@ -560,8 +570,7 @@ def _list_set_is_mutable(typingctx, l, is_mutable):
 
 @intrinsic
 def _list_append(typingctx, l, item):
-    """Wrap numba_list_append
-    """
+    """Wrap numba_list_append"""
     resty = types.int32
     sig = resty(l, l.item_type)
 
@@ -572,8 +581,7 @@ def _list_append(typingctx, l, item):
         )
         [l, item] = args
         [tl, titem] = sig.args
-        fn = cgutils.get_or_insert_function(builder.module, fnty,
-                                            'numba_list_append')
+        fn = cgutils.get_or_insert_function(builder.module, fnty, "numba_list_append")
 
         dm_item = context.data_model_manager[titem]
 
@@ -594,7 +602,7 @@ def _list_append(typingctx, l, item):
     return sig, codegen
 
 
-@overload_method(types.ListType, 'append')
+@overload_method(types.ListType, "append")
 def impl_append(l, item):
     if not isinstance(l, types.ListType):
         return
@@ -607,11 +615,11 @@ def impl_append(l, item):
         if status == ListStatus.LIST_OK:
             return
         elif status == ListStatus.LIST_ERR_IMMUTABLE:
-            raise ValueError('list is immutable')
+            raise ValueError("list is immutable")
         elif status == ListStatus.LIST_ERR_NO_MEMORY:
-            raise MemoryError('Unable to allocate memory to append item')
+            raise MemoryError("Unable to allocate memory to append item")
         else:
-            raise RuntimeError('list.append failed unexpectedly')
+            raise RuntimeError("list.append failed unexpectedly")
 
     if l.is_precise():
         # Handle the precise case.
@@ -633,10 +641,8 @@ def fix_index(tyctx, list_ty, index_ty):
     def codegen(context, builder, sig, args):
         [list_ty, index_ty] = sig.args
         [ll_list, ll_idx] = args
-        is_negative = builder.icmp_signed('<', ll_idx,
-                                          ir.Constant(ll_idx.type, 0))
-        fast_len_sig, length_fn = _list_length._defn(context.typing_context,
-                                                     list_ty)
+        is_negative = builder.icmp_signed("<", ll_idx, ir.Constant(ll_idx.type, 0))
+        fast_len_sig, length_fn = _list_length._defn(context.typing_context, list_ty)
         length = length_fn(context, builder, fast_len_sig, (ll_list,))
         # length is an intp
         # index can be any sort of int
@@ -645,11 +651,12 @@ def fix_index(tyctx, list_ty, index_ty):
         # itself if the types are the same, so there's no need to handle the
         # "equal widths" case separately. This sexts/truncs the index to the
         # length type such that `add` works for the wraparound case.
-        st = 'sext' if ll_idx.type.width < length.type.width else 'trunc'
+        st = "sext" if ll_idx.type.width < length.type.width else "trunc"
         op = getattr(builder, st)
         fixedup_idx = op(ll_idx, length.type)
         wrapped_index = builder.add(fixedup_idx, length)
         return builder.select(is_negative, wrapped_index, fixedup_idx)
+
     return sig, codegen
 
 
@@ -680,10 +687,10 @@ def handle_slice(l, s):
         return range(0)
     ll, sa, so, se = len(l), s.start, s.stop, s.step
     if se > 0:
-        start = max(ll + sa,  0) if s.start < 0 else min(ll, sa)
+        start = max(ll + sa, 0) if s.start < 0 else min(ll, sa)
         stop = max(ll + so, 0) if so < 0 else min(ll, so)
     elif se < 0:
-        start = max(ll + sa,  -1) if s.start < 0 else min(ll - 1, sa)
+        start = max(ll + sa, -1) if s.start < 0 else min(ll - 1, sa)
         stop = max(ll + so, -1) if so < 0 else min(ll, so)
     else:
         # should be caught earlier, but isn't, so we raise here
@@ -710,17 +717,19 @@ def _gen_getitem(borrowed):
                 ll_voidptr_type,
                 [ll_list_type],
             )
-            fname = 'numba_list_base_ptr'
+            fname = "numba_list_base_ptr"
             fn = cgutils.get_or_insert_function(builder.module, fnty, fname)
-            fn.attributes.add('alwaysinline')
-            fn.attributes.add('nounwind')
-            fn.attributes.add('readonly')
+            fn.attributes.add("alwaysinline")
+            fn.attributes.add("nounwind")
+            fn.attributes.add("readonly")
 
             lp = _container_get_data(context, builder, tl, l)
 
             base_ptr = builder.call(
                 fn,
-                [lp,],
+                [
+                    lp,
+                ],
             )
 
             llty = context.get_data_type(tl.item_type)
@@ -742,14 +751,14 @@ def _gen_getitem(borrowed):
                 if is_none:
                     loaded = item
                 else:
-                    loaded = context.make_optional_value(builder, tl.item_type,
-                                                         item)
+                    loaded = context.make_optional_value(builder, tl.item_type, item)
                 builder.store(loaded, pout)
 
                 out = builder.load(pout)
             return context.make_tuple(builder, resty, [ll_status(0), out])
 
         return sig, codegen
+
     return impl
 
 
@@ -768,6 +777,7 @@ def impl_getitem(l, index):
 
     if index in index_types:
         if IS_NOT_NONE:
+
             def integer_non_none_impl(l, index):
                 castedindex = _cast(index, indexty)
                 handledindex = handle_index(l, castedindex)
@@ -776,14 +786,18 @@ def impl_getitem(l, index):
                     return _nonoptional(item)
                 else:
                     raise AssertionError("internal list error during getitem")
+
             return integer_non_none_impl
         else:
+
             def integer_none_impl(l, index):
                 index = handle_index(l, index)
                 return None
+
             return integer_none_impl
 
     elif isinstance(index, types.SliceType):
+
         def slice_impl(l, index):
             newl = new_list(itemty)
             for i in handle_slice(l, index):
@@ -798,8 +812,7 @@ def impl_getitem(l, index):
 
 @intrinsic
 def _list_setitem(typingctx, l, index, item):
-    """Wrap numba_list_setitem
-    """
+    """Wrap numba_list_setitem"""
     resty = types.int32
     sig = resty(l, index, item)
 
@@ -810,8 +823,7 @@ def _list_setitem(typingctx, l, index, item):
         )
         [l, index, item] = args
         [tl, tindex, titem] = sig.args
-        fn = cgutils.get_or_insert_function(builder.module, fnty,
-                                            'numba_list_setitem')
+        fn = cgutils.get_or_insert_function(builder.module, fnty, "numba_list_setitem")
 
         dm_item = context.data_model_manager[titem]
         data_item = dm_item.as_data(builder, item)
@@ -840,6 +852,7 @@ def impl_setitem(l, index, item):
     itemty = l.item_type
 
     if index in index_types:
+
         def impl_integer(l, index, item):
             index = handle_index(l, index)
             castedindex = _cast(index, indexty)
@@ -856,8 +869,10 @@ def impl_setitem(l, index, item):
 
     elif isinstance(index, types.SliceType):
         if not isinstance(item, types.IterableType):
-            raise TypingError("can only assign an iterable when using a slice "
-                              "with assignment/setitem")
+            raise TypingError(
+                "can only assign an iterable when using a slice "
+                "with assignment/setitem"
+            )
 
         def impl_slice(l, index, item):
             if not l._is_mutable():
@@ -875,30 +890,33 @@ def impl_setitem(l, index, item):
                 # replace and insert
                 if len(item) > len(slice_range):
                     # do the replaces we can
-                    for i, j in zip(slice_range, item[:len(slice_range)]):
+                    for i, j in zip(slice_range, item[: len(slice_range)]):
                         l[i] = j
                     # insert the remaining ones
-                    insert_range = range(slice_range.stop,
-                                         slice_range.stop +
-                                         len(item) - len(slice_range))
-                    for i, k in zip(insert_range, item[len(slice_range):]):
+                    insert_range = range(
+                        slice_range.stop,
+                        slice_range.stop + len(item) - len(slice_range),
+                    )
+                    for i, k in zip(insert_range, item[len(slice_range) :]):
                         # FIXME: This may be slow.  Each insert can incur a
                         # memory copy of one or more items.
                         l.insert(i, k)
                 # replace and delete
                 if len(item) < len(slice_range):
                     # do the replaces we can
-                    replace_range = range(slice_range.start,
-                                          slice_range.start + len(item))
-                    for i,j in zip(replace_range, item):
+                    replace_range = range(
+                        slice_range.start, slice_range.start + len(item)
+                    )
+                    for i, j in zip(replace_range, item):
                         l[i] = j
                     # delete remaining ones
-                    del l[slice_range.start + len(item):slice_range.stop]
+                    del l[slice_range.start + len(item) : slice_range.stop]
             # Extended slices
             else:
                 if len(slice_range) != len(item):
-                    raise ValueError("length mismatch for extended slice "
-                                     "and sequence")
+                    raise ValueError(
+                        "length mismatch for extended slice " "and sequence"
+                    )
                 # extended slice can only replace
                 for i, j in zip(slice_range, item):
                     l[i] = j
@@ -909,19 +927,22 @@ def impl_setitem(l, index, item):
         raise TypingError("list indices must be integers or slices")
 
 
-@overload_method(types.ListType, 'pop')
+@overload_method(types.ListType, "pop")
 def impl_pop(l, index=-1):
     if not isinstance(l, types.ListType):
         return
 
-    _check_for_none_typed(l, 'pop')
+    _check_for_none_typed(l, "pop")
 
     indexty = INDEXTY
 
     # FIXME: this type check works, but it isn't clear why and if it optimal
-    if (isinstance(index, int)
-            or index in index_types
-            or isinstance(index, types.Omitted)):
+    if (
+        isinstance(index, int)
+        or index in index_types
+        or isinstance(index, types.Omitted)
+    ):
+
         def impl(l, index=-1):
             if len(l) == 0:
                 raise IndexError("pop from empty list")
@@ -929,6 +950,7 @@ def impl_pop(l, index=-1):
             item = l[cindex]
             del l[cindex]
             return item
+
         return impl
 
     else:
@@ -947,8 +969,7 @@ def _list_delitem(typingctx, l, index):
         )
         [tl, tindex] = sig.args
         [l, index] = args
-        fn = cgutils.get_or_insert_function(builder.module, fnty,
-                                            'numba_list_delitem')
+        fn = cgutils.get_or_insert_function(builder.module, fnty, "numba_list_delitem")
 
         lp = _container_get_data(context, builder, tl, l)
         status = builder.call(fn, [lp, index])
@@ -959,8 +980,7 @@ def _list_delitem(typingctx, l, index):
 
 @intrinsic
 def _list_delete_slice(typingctx, l, start, stop, step):
-    """Wrap numba_list_delete_slice
-    """
+    """Wrap numba_list_delete_slice"""
     resty = types.int32
     sig = resty(l, start, stop, step)
 
@@ -971,8 +991,9 @@ def _list_delete_slice(typingctx, l, start, stop, step):
         )
         [l, start, stop, step] = args
         [tl, tstart, tstop, tstep] = sig.args
-        fn = cgutils.get_or_insert_function(builder.module, fnty,
-                                            'numba_list_delete_slice')
+        fn = cgutils.get_or_insert_function(
+            builder.module, fnty, "numba_list_delete_slice"
+        )
 
         lp = _container_get_data(context, builder, tl, l)
         status = builder.call(
@@ -994,9 +1015,10 @@ def impl_delitem(l, index):
     if not isinstance(l, types.ListType):
         return
 
-    _check_for_none_typed(l, 'delitem')
+    _check_for_none_typed(l, "delitem")
 
     if index in index_types:
+
         def integer_impl(l, index):
             cindex = _cast(handle_index(l, index), INDEXTY)
             status = _list_delitem(l, cindex)
@@ -1006,18 +1028,19 @@ def impl_delitem(l, index):
                 raise ValueError("list is immutable")
             else:
                 raise AssertionError("internal list error during delitem")
+
         return integer_impl
 
     elif isinstance(index, types.SliceType):
+
         def slice_impl(l, index):
             slice_range = handle_slice(l, index)
             status = _list_delete_slice(
-                l,
-                slice_range.start,
-                slice_range.stop,
-                slice_range.step)
+                l, slice_range.start, slice_range.stop, slice_range.step
+            )
             if status == ListStatus.LIST_ERR_MUTATED:
                 raise ValueError("list is immutable")
+
         return slice_impl
 
     else:
@@ -1039,15 +1062,16 @@ def impl_contains(l, item):
                 return True
         else:
             return False
+
     return impl
 
 
-@overload_method(types.ListType, 'count')
+@overload_method(types.ListType, "count")
 def impl_count(l, item):
     if not isinstance(l, types.ListType):
         return
 
-    _check_for_none_typed(l, 'count')
+    _check_for_none_typed(l, "count")
 
     itemty = l.item_type
 
@@ -1062,17 +1086,18 @@ def impl_count(l, item):
     return impl
 
 
-@overload_method(types.ListType, 'extend')
+@overload_method(types.ListType, "extend")
 def impl_extend(l, iterable):
     if not isinstance(l, types.ListType):
         return
     if not isinstance(iterable, types.IterableType):
         raise TypingError("extend argument must be iterable")
 
-    _check_for_none_typed(l, 'extend')
+    _check_for_none_typed(l, "extend")
 
     def select_impl():
         if isinstance(iterable, types.ListType):
+
             def impl(l, iterable):
                 if not l._is_mutable():
                     raise ValueError("list is immutable")
@@ -1084,6 +1109,7 @@ def impl_extend(l, iterable):
 
             return impl
         else:
+
             def impl(l, iterable):
                 for i in iterable:
                     l.append(i)
@@ -1105,25 +1131,28 @@ def impl_extend(l, iterable):
         elif isinstance(iterable, types.UnicodeType):
             ty = iterable
         else:
-            raise TypingError("unable to extend list, iterable is missing "
-                              "either *dtype*, *item_type* or *yield_type*.")
+            raise TypingError(
+                "unable to extend list, iterable is missing "
+                "either *dtype*, *item_type* or *yield_type*."
+            )
         l = l.refine(ty)
         # Create the signature that we wanted this impl to have
         sig = typing.signature(types.void, l, iterable)
         return sig, select_impl()
 
 
-@overload_method(types.ListType, 'insert')
+@overload_method(types.ListType, "insert")
 def impl_insert(l, index, item):
     if not isinstance(l, types.ListType):
         return
 
-    _check_for_none_typed(l, 'insert')
+    _check_for_none_typed(l, "insert")
     # insert can refine
     if isinstance(item, NoneType):
         raise TypingError("method support for List[None] is limited")
 
     if index in index_types:
+
         def impl(l, index, item):
             # If the index is larger than the size of the list or if the list is
             # empty, just append.
@@ -1139,7 +1168,7 @@ def impl_insert(l, index, item):
                 l.append(l[0])
                 # reverse iterate over the list and shift all elements
                 i = len(l) - 1
-                while (i > index):
+                while i > index:
                     l[i] = l[i - 1]
                     i -= 1
                 # finally, insert the item
@@ -1160,12 +1189,12 @@ def impl_insert(l, index, item):
         raise TypingError("list insert indices must be integers")
 
 
-@overload_method(types.ListType, 'remove')
+@overload_method(types.ListType, "remove")
 def impl_remove(l, item):
     if not isinstance(l, types.ListType):
         return
 
-    _check_for_none_typed(l, 'remove')
+    _check_for_none_typed(l, "remove")
 
     itemty = l.item_type
 
@@ -1181,7 +1210,7 @@ def impl_remove(l, item):
     return impl
 
 
-@overload_method(types.ListType, 'clear')
+@overload_method(types.ListType, "clear")
 def impl_clear(l):
     if not isinstance(l, types.ListType):
         return
@@ -1193,12 +1222,12 @@ def impl_clear(l):
     return impl
 
 
-@overload_method(types.ListType, 'reverse')
+@overload_method(types.ListType, "reverse")
 def impl_reverse(l):
     if not isinstance(l, types.ListType):
         return
 
-    _check_for_none_typed(l, 'reverse')
+    _check_for_none_typed(l, "reverse")
 
     def impl(l):
         if not l._is_mutable():
@@ -1213,14 +1242,15 @@ def impl_reverse(l):
     return impl
 
 
-@overload_method(types.ListType, 'copy')
+@overload_method(types.ListType, "copy")
 def impl_copy(l):
 
-    _check_for_none_typed(l, 'copy')
+    _check_for_none_typed(l, "copy")
 
     itemty = l.item_type
 
     if isinstance(l, types.ListType):
+
         def impl(l):
             newl = new_list(itemty, len(l))
             for i in l:
@@ -1230,21 +1260,23 @@ def impl_copy(l):
         return impl
 
 
-@overload_method(types.ListType, 'index')
+@overload_method(types.ListType, "index")
 def impl_index(l, item, start=None, end=None):
     if not isinstance(l, types.ListType):
         return
 
-    _check_for_none_typed(l, 'index')
+    _check_for_none_typed(l, "index")
 
     itemty = l.item_type
 
     def check_arg(arg, name):
-        if not (arg is None
-                or arg in index_types
-                or isinstance(arg, (types.Omitted, types.NoneType))):
-            raise TypingError("{} argument for index must be an integer"
-                              .format(name))
+        if not (
+            arg is None
+            or arg in index_types
+            or isinstance(arg, (types.Omitted, types.NoneType))
+        ):
+            raise TypingError("{} argument for index must be an integer".format(name))
+
     check_arg(start, "start")
     check_arg(end, "end")
 
@@ -1298,6 +1330,7 @@ def ol_list_sort(lst, key=None, reverse=False):
             for i in tmp:
                 ordered.append(lst[i])
             lst[:] = ordered
+
     return impl
 
 
@@ -1311,17 +1344,18 @@ def ol_getitem_unchecked(lst, index):
         castedindex = _cast(index, types.intp)
         _, item = _list_getitem(lst, castedindex)
         return _nonoptional(item)
+
     return impl
 
 
-@overload_attribute(types.ListType, '__hash__')
+@overload_attribute(types.ListType, "__hash__")
 def ol_list_hash(lst):
     if not isinstance(lst, types.ListType):
         return
     return lambda lst: None
 
 
-@overload_attribute(types.ListType, '_dtype')
+@overload_attribute(types.ListType, "_dtype")
 def impl_dtype(l):
     if not isinstance(l, types.ListType):
         return
@@ -1343,14 +1377,17 @@ def _equals_helper(this, other, OP):
     other_is_none = isinstance(other.dtype, types.NoneType)
 
     if this_is_none or other_is_none:
+
         def impl_some_none(this, other):
             def equals(this, other):
                 # Equal if both none-typed and have equal length
-                return bool(this_is_none == other_is_none
-                            and len(this) == len(other))
+                return bool(this_is_none == other_is_none and len(this) == len(other))
+
             return OP(equals(this, other))
+
         return impl_some_none
     else:
+
         def impl_not_none(this, other):
             def equals(this, other):
                 if len(this) != len(other):
@@ -1360,7 +1397,9 @@ def _equals_helper(this, other, OP):
                         return False
                 else:
                     return True
+
             return OP(equals(this, other))
+
         return impl_not_none
 
 
@@ -1378,9 +1417,9 @@ def impl_not_equals(this, other):
 def compare_not_none(this, other):
     """Oldschool (python 2.x) cmp.
 
-       if this < other return -1
-       if this = other return 0
-       if this > other return 1
+    if this < other return -1
+    if this = other return 0
+    if this > other return 1
     """
     if len(this) != len(other):
         return -1 if len(this) < len(other) else 1
@@ -1396,13 +1435,13 @@ def compare_not_none(this, other):
 def compare_some_none(this, other, this_is_none, other_is_none):
     """Oldschool (python 2.x) cmp for None typed lists.
 
-       if this < other return -1
-       if this = other return 0
-       if this > other return 1
+    if this < other return -1
+    if this = other return 0
+    if this > other return 1
     """
     if len(this) != len(other):
         return -1 if len(this) < len(other) else 1
-    if this_is_none and other_is_none: # both none
+    if this_is_none and other_is_none:  # both none
         return 0
     # to get here there is precisely one none, and if the first is none, by
     # induction, the second cannot be
@@ -1419,18 +1458,23 @@ def compare_helper(this, other, accepted):
     other_is_none = isinstance(other.dtype, types.NoneType)
 
     if this_is_none or other_is_none:
+
         def impl(this, other):
-            return compare_some_none(
-                this, other, this_is_none, other_is_none) in accepted
+            return (
+                compare_some_none(this, other, this_is_none, other_is_none) in accepted
+            )
+
     else:
+
         def impl(this, other):
             return compare_not_none(this, other) in accepted
+
     return impl
 
 
 @overload(operator.lt)
 def impl_less_than(this, other):
-    return compare_helper(this, other, (-1, ))
+    return compare_helper(this, other, (-1,))
 
 
 @overload(operator.le)
@@ -1463,8 +1507,9 @@ class ListIterInstance(object):
         index = context.get_constant(types.intp, 0)
         self._iter.index = cgutils.alloca_once_value(builder, index)
         self._iter.parent = list_val
-        self._iter.size = cls._size_of_list(context, builder, self._list_ty,
-                                            self._iter.parent)
+        self._iter.size = cls._size_of_list(
+            context, builder, self._list_ty, self._iter.parent
+        )
         return self
 
     @classmethod
@@ -1493,8 +1538,7 @@ class ListIterInstance(object):
         ty = self._list_ty
         sig, fn = _list_getitem_borrowed._defn(tyctx, ty, types.intp)
 
-        statnitem = fn(self._context, self._builder, sig, (self._iter.parent,
-                                                           index))
+        statnitem = fn(self._context, self._builder, sig, (self._iter.parent, index))
         _, item = cgutils.unpack_tuple(self._builder, statnitem)
         retty = sig.return_type[1]
         if isinstance(self._list_ty.dtype, types.NoneType):
@@ -1513,30 +1557,30 @@ class ListIterInstance(object):
         self._builder.store(value, self._iter.index)
 
 
-@lower_builtin('getiter', types.ListType)
+@lower_builtin("getiter", types.ListType)
 def getiter_list(context, builder, sig, args):
-    inst = ListIterInstance.from_list(context, builder, sig.return_type,
-                                      args[0])
+    inst = ListIterInstance.from_list(context, builder, sig.return_type, args[0])
     return impl_ret_borrowed(context, builder, sig.return_type, inst.value)
 
 
-@lower_builtin('iternext', types.ListTypeIteratorType)
+@lower_builtin("iternext", types.ListTypeIteratorType)
 @iternext_impl(RefType.BORROWED)
 def iternext_listiter(context, builder, sig, args, result):
     inst = ListIterInstance(context, builder, sig.args[0], args[0])
     index = inst.index
 
-    nitems = inst.size # this is current size
-    init_size = inst._iter.size # this is initial size
+    nitems = inst.size  # this is current size
+    init_size = inst._iter.size  # this is initial size
 
     # if the current count is different to the initial count, bail, list is
     # being mutated whilst iterated.
-    is_mutated = builder.icmp_signed('!=', init_size, nitems)
+    is_mutated = builder.icmp_signed("!=", init_size, nitems)
     with builder.if_then(is_mutated, likely=False):
         context.call_conv.return_user_exc(
-            builder, RuntimeError, ("list was mutated during iteration",))
+            builder, RuntimeError, ("list was mutated during iteration",)
+        )
 
-    is_valid = builder.icmp_signed('<', index, nitems)
+    is_valid = builder.icmp_signed("<", index, nitems)
     result.set_valid(is_valid)
     with builder.if_then(is_valid):
         result.yield_(inst.getitem(index))

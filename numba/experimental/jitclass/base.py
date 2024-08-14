@@ -26,10 +26,10 @@ class InstanceModel(models.StructModel):
         # NRT MemInfo.  Since we handle nested NRT MemInfo ourselves,
         # we will replace provide MemInfoPointer with an opaque type
         # so that it does not raise exception for nested meminfo.
-        dtype = types.Opaque('Opaque.' + str(cls_data_ty))
+        dtype = types.Opaque("Opaque." + str(cls_data_ty))
         members = [
-            ('meminfo', types.MemInfoPointer(dtype)),
-            ('data', types.CPointer(cls_data_ty)),
+            ("meminfo", types.MemInfoPointer(dtype)),
+            ("data", types.CPointer(cls_data_ty)),
         ]
         super(InstanceModel, self).__init__(dmm, fe_typ, members)
 
@@ -51,7 +51,7 @@ def _mangle_attr(name):
     Mangle attributes.
     The resulting name does not startswith an underscore '_'.
     """
-    return 'm_' + name
+    return "m_" + name
 
 
 ##############################################################################
@@ -83,13 +83,14 @@ class JitClassType(type):
     """
     The type of any jitclass.
     """
+
     def __new__(cls, name, bases, dct):
         if len(bases) != 1:
             raise TypeError("must have exactly one base class")
         [base] = bases
         if isinstance(base, JitClassType):
             raise TypeError("cannot subclass from a jitclass")
-        assert 'class_type' in dct, 'missing "class_type" attr'
+        assert "class_type" in dct, 'missing "class_type" attr'
         outcls = type.__new__(cls, name, bases, dct)
         outcls._set_init()
         return outcls
@@ -99,16 +100,16 @@ class JitClassType(type):
         Generate a wrapper for calling the constructor from pure Python.
         Note the wrapper will only accept positional arguments.
         """
-        init = cls.class_type.instance_type.methods['__init__']
+        init = cls.class_type.instance_type.methods["__init__"]
         init_sig = utils.pysignature(init)
         # get postitional and keyword arguments
         # offset by one to exclude the `self` arg
         args = _getargs(init_sig)[1:]
         cls._ctor_sig = init_sig
-        ctor_source = _ctor_template.format(args=', '.join(args))
+        ctor_source = _ctor_template.format(args=", ".join(args))
         glbls = {"__numba_cls_": cls}
         exec(ctor_source, glbls)
-        ctor = glbls['ctor']
+        ctor = glbls["ctor"]
         cls._ctor = njit(ctor)
 
     def __instancecheck__(cls, instance):
@@ -127,13 +128,13 @@ class JitClassType(type):
 ##############################################################################
 # Registration utils
 
+
 def _validate_spec(spec):
     for k, v in spec.items():
         if not isinstance(k, str):
             raise TypeError("spec keys should be strings, got %r" % (k,))
         if not isinstance(v, types.Type):
-            raise TypeError("spec values should be Numba type instances, got %r"
-                            % (v,))
+            raise TypeError("spec values should be Numba type instances, got %r" % (v,))
 
 
 def _fix_up_private_attr(clsname, spec):
@@ -142,8 +143,8 @@ def _fix_up_private_attr(clsname, spec):
     """
     out = OrderedDict()
     for k, v in spec.items():
-        if k.startswith('__') and not k.endswith('__'):
-            k = '_' + clsname + k
+        if k.startswith("__") and not k.endswith("__"):
+            k = "_" + clsname + k
         out[k] = v
     return out
 
@@ -203,13 +204,13 @@ def register_class_type(cls, spec, class_ctor, builder):
     # Check for name shadowing
     shadowed = (set(methods) | set(props) | set(static_methods)) & set(spec)
     if shadowed:
-        raise NameError("name shadowing: {0}".format(', '.join(shadowed)))
+        raise NameError("name shadowing: {0}".format(", ".join(shadowed)))
 
-    docstring = others.pop('__doc__', "")
+    docstring = others.pop("__doc__", "")
     _drop_ignored_attrs(others)
     if others:
         msg = "class members are not yet supported: {0}"
-        members = ', '.join(others.keys())
+        members = ", ".join(others.keys())
         raise TypeError(msg.format(members))
 
     for k, v in props.items():
@@ -222,22 +223,17 @@ def register_class_type(cls, spec, class_ctor, builder):
     for k, v in props.items():
         dct = {}
         if v.fget:
-            dct['get'] = njit(v.fget)
+            dct["get"] = njit(v.fget)
         if v.fset:
-            dct['set'] = njit(v.fset)
+            dct["set"] = njit(v.fset)
         jit_props[k] = dct
 
-    jit_static_methods = {
-        k: njit(v.__func__) for k, v in static_methods.items()}
+    jit_static_methods = {k: njit(v.__func__) for k, v in static_methods.items()}
 
     # Instantiate class type
     class_type = class_ctor(
-        cls,
-        ConstructorTemplate,
-        spec,
-        jit_methods,
-        jit_props,
-        jit_static_methods)
+        cls, ConstructorTemplate, spec, jit_methods, jit_props, jit_static_methods
+    )
 
     jit_class_dct = dict(class_type=class_type, __doc__=docstring)
     jit_class_dct.update(jit_static_methods)
@@ -263,14 +259,15 @@ class ConstructorTemplate(templates.AbstractTemplate):
     def generic(self, args, kws):
         # Redirect resolution to __init__
         instance_type = self.key.instance_type
-        ctor = instance_type.jit_methods['__init__']
+        ctor = instance_type.jit_methods["__init__"]
         boundargs = (instance_type.get_reference_type(),) + args
         disp_type = types.Dispatcher(ctor)
         sig = disp_type.get_call_type(self.context, boundargs, kws)
 
         if not isinstance(sig.return_type, types.NoneType):
             raise errors.NumbaTypeError(
-                f"__init__() should return None, not '{sig.return_type}'")
+                f"__init__() should return None, not '{sig.return_type}'"
+            )
 
         # Actual constructor returns an instance value (not None)
         out = templates.signature(instance_type, *sig.args[1:])
@@ -279,25 +276,22 @@ class ConstructorTemplate(templates.AbstractTemplate):
 
 def _drop_ignored_attrs(dct):
     # ignore anything defined by object
-    drop = set(['__weakref__',
-                '__module__',
-                '__dict__'])
+    drop = set(["__weakref__", "__module__", "__dict__"])
 
-    if '__annotations__' in dct:
-        drop.add('__annotations__')
+    if "__annotations__" in dct:
+        drop.add("__annotations__")
 
     for k, v in dct.items():
-        if isinstance(v, (pytypes.BuiltinFunctionType,
-                          pytypes.BuiltinMethodType)):
+        if isinstance(v, (pytypes.BuiltinFunctionType, pytypes.BuiltinMethodType)):
             drop.add(k)
-        elif getattr(v, '__objclass__', None) is object:
+        elif getattr(v, "__objclass__", None) is object:
             drop.add(k)
 
     # If a class defines __eq__ but not __hash__, __hash__ is implicitly set to
     # None. This is a class member, and class members are not presently
     # supported.
-    if '__hash__' in dct and dct['__hash__'] is None:
-        drop.add('__hash__')
+    if "__hash__" in dct and dct["__hash__"] is None:
+        drop.add("__hash__")
 
     for k in drop:
         del dct[k]
@@ -308,7 +302,8 @@ class ClassBuilder(object):
     A jitclass builder for a mutable jitclass.  This will register
     typing and implementation hooks to the given typing and target contexts.
     """
-    class_impl_registry = imputils.Registry('jitclass builder')
+
+    class_impl_registry = imputils.Registry("jitclass builder")
     implemented_methods = set()
 
     def __init__(self, class_type, typingctx, targetctx):
@@ -321,8 +316,7 @@ class ClassBuilder(object):
         Register to the frontend and backend.
         """
         # Register generic implementations for all jitclasses
-        self._register_methods(self.class_impl_registry,
-                               self.class_type.instance_type)
+        self._register_methods(self.class_impl_registry, self.class_type.instance_type)
         # NOTE other registrations are done at the top-level
         # (see ctor_impl and attr_impl below)
         self.targetctx.install_registry(self.class_impl_registry)
@@ -334,8 +328,9 @@ class ClassBuilder(object):
         of imp() below we retrieve the actual method to run from the type of
         the receiver argument (i.e. self).
         """
-        to_register = list(instance_type.jit_methods) + \
-            list(instance_type.jit_static_methods)
+        to_register = list(instance_type.jit_methods) + list(
+            instance_type.jit_static_methods
+        )
         for meth in to_register:
 
             # There's no way to retrieve the particular method name
@@ -364,8 +359,8 @@ class ClassBuilder(object):
                 call = context.get_function(disp_type, sig)
                 out = call(builder, args)
                 _add_linking_libs(context, call)
-                return imputils.impl_ret_new_ref(context, builder,
-                                                 sig.return_type, out)
+                return imputils.impl_ret_new_ref(context, builder, sig.return_type, out)
+
             return imp
 
         def _getsetitem_gen(getset):
@@ -376,8 +371,10 @@ class ClassBuilder(object):
             class GetSetItem(templates.AbstractTemplate):
                 def generic(self, args, kws):
                     instance = args[0]
-                    if isinstance(instance, types.ClassInstanceType) and \
-                            _dunder_meth in instance.jit_methods:
+                    if (
+                        isinstance(instance, types.ClassInstanceType)
+                        and _dunder_meth in instance.jit_methods
+                    ):
                         meth = instance.jit_methods[_dunder_meth]
                         disp_type = types.Dispatcher(meth)
                         sig = disp_type.get_call_type(self.context, args, kws)
@@ -385,20 +382,24 @@ class ClassBuilder(object):
 
             # lower both {g,s}etitem and __{g,s}etitem__ to catch the calls
             # from python and numba
-            imputils.lower_builtin((types.ClassInstanceType, _dunder_meth),
-                                   types.ClassInstanceType,
-                                   types.VarArg(types.Any))(get_imp())
-            imputils.lower_builtin(op,
-                                   types.ClassInstanceType,
-                                   types.VarArg(types.Any))(get_imp())
+            imputils.lower_builtin(
+                (types.ClassInstanceType, _dunder_meth),
+                types.ClassInstanceType,
+                types.VarArg(types.Any),
+            )(get_imp())
+            imputils.lower_builtin(
+                op, types.ClassInstanceType, types.VarArg(types.Any)
+            )(get_imp())
 
-        dunder_stripped = attr.strip('_')
+        dunder_stripped = attr.strip("_")
         if dunder_stripped in ("getitem", "setitem"):
             _getsetitem_gen(dunder_stripped)
         else:
-            registry.lower((types.ClassInstanceType, attr),
-                           types.ClassInstanceType,
-                           types.VarArg(types.Any))(get_imp())
+            registry.lower(
+                (types.ClassInstanceType, attr),
+                types.ClassInstanceType,
+                types.VarArg(types.Any),
+            )(get_imp())
 
 
 @templates.infer_getattr
@@ -448,7 +449,7 @@ class ClassAttribute(templates.AttributeTemplate):
         elif attr in instance.jit_props:
             # It's a jitted property => typeinfer its getter
             impdct = instance.jit_props[attr]
-            getter = impdct['get']
+            getter = impdct["get"]
             disp_type = types.Dispatcher(getter)
             sig = disp_type.get_call_type(self.context, (instance,), {})
             return sig.return_type
@@ -463,14 +464,13 @@ def get_attr_impl(context, builder, typ, value, attr):
         # It's a struct field
         inst = context.make_helper(builder, typ, value=value)
         data_pointer = inst.data
-        data = context.make_data_helper(builder, typ.get_data_type(),
-                                        ref=data_pointer)
-        return imputils.impl_ret_borrowed(context, builder,
-                                          typ.struct[attr],
-                                          getattr(data, _mangle_attr(attr)))
+        data = context.make_data_helper(builder, typ.get_data_type(), ref=data_pointer)
+        return imputils.impl_ret_borrowed(
+            context, builder, typ.struct[attr], getattr(data, _mangle_attr(attr))
+        )
     elif attr in typ.jit_props:
         # It's a jitted property
-        getter = typ.jit_props[attr]['get']
+        getter = typ.jit_props[attr]["get"]
         sig = templates.signature(None, typ)
         dispatcher = types.Dispatcher(getter)
         sig = dispatcher.get_call_type(context.typing_context, [typ], {})
@@ -479,7 +479,7 @@ def get_attr_impl(context, builder, typ, value, attr):
         _add_linking_libs(context, call)
         return imputils.impl_ret_new_ref(context, builder, sig.return_type, out)
 
-    raise NotImplementedError('attribute {0!r} not implemented'.format(attr))
+    raise NotImplementedError("attribute {0!r} not implemented".format(attr))
 
 
 @ClassBuilder.class_impl_registry.lower_setattr_generic(types.ClassInstanceType)
@@ -494,8 +494,7 @@ def set_attr_impl(context, builder, sig, args, attr):
         # It's a struct member
         inst = context.make_helper(builder, typ, value=target)
         data_ptr = inst.data
-        data = context.make_data_helper(builder, typ.get_data_type(),
-                                        ref=data_ptr)
+        data = context.make_data_helper(builder, typ.get_data_type(), ref=data_ptr)
 
         # Get old value
         attr_type = typ.struct[attr]
@@ -510,23 +509,20 @@ def set_attr_impl(context, builder, sig, args, attr):
 
     elif attr in typ.jit_props:
         # It's a jitted property
-        setter = typ.jit_props[attr]['set']
+        setter = typ.jit_props[attr]["set"]
         disp_type = types.Dispatcher(setter)
-        sig = disp_type.get_call_type(context.typing_context,
-                                      (typ, valty), {})
+        sig = disp_type.get_call_type(context.typing_context, (typ, valty), {})
         call = context.get_function(disp_type, sig)
         call(builder, (target, val))
         _add_linking_libs(context, call)
     else:
-        raise NotImplementedError(
-            'attribute {0!r} not implemented'.format(attr))
+        raise NotImplementedError("attribute {0!r} not implemented".format(attr))
 
 
 def imp_dtor(context, module, instance_type):
     llvoidptr = context.get_value_type(types.voidptr)
     llsize = context.get_value_type(types.uintp)
-    dtor_ftype = llvmir.FunctionType(llvmir.VoidType(),
-                                     [llvoidptr, llsize, llvoidptr])
+    dtor_ftype = llvmir.FunctionType(llvmir.VoidType(), [llvoidptr, llsize, llvoidptr])
 
     fname = "_Dtor.{0}".format(instance_type.name)
     dtor_fn = cgutils.get_or_insert_function(module, dtor_ftype, fname)
@@ -547,8 +543,7 @@ def imp_dtor(context, module, instance_type):
     return dtor_fn
 
 
-@ClassBuilder.class_impl_registry.lower(types.ClassType,
-                                        types.VarArg(types.Any))
+@ClassBuilder.class_impl_registry.lower(types.ClassType, types.VarArg(types.Any))
 def ctor_impl(context, builder, sig, args):
     """
     Generic constructor (__new__) for jitclasses.
@@ -564,12 +559,10 @@ def ctor_impl(context, builder, sig, args):
         imp_dtor(context, builder.module, inst_typ),
     )
     data_pointer = context.nrt.meminfo_data(builder, meminfo)
-    data_pointer = builder.bitcast(data_pointer,
-                                   alloc_type.as_pointer())
+    data_pointer = builder.bitcast(data_pointer, alloc_type.as_pointer())
 
     # Nullify all data
-    builder.store(cgutils.get_null_value(alloc_type),
-                  data_pointer)
+    builder.store(cgutils.get_null_value(alloc_type), data_pointer)
 
     inst_struct = context.make_helper(builder, inst_typ)
     inst_struct.meminfo = meminfo
@@ -579,7 +572,7 @@ def ctor_impl(context, builder, sig, args):
     # TODO: extract the following into a common util
     init_sig = (sig.return_type,) + sig.args
 
-    init = inst_typ.jit_methods['__init__']
+    init = inst_typ.jit_methods["__init__"]
     disp_type = types.Dispatcher(init)
     call = context.get_function(disp_type, types.void(*init_sig))
     _add_linking_libs(context, call)

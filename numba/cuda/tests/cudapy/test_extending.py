@@ -8,12 +8,13 @@ class Interval:
     """
     A half-open interval on the real number line.
     """
+
     def __init__(self, lo, hi):
         self.lo = lo
         self.hi = hi
 
     def __repr__(self):
-        return 'Interval(%f, %f)' % (self.lo, self.hi)
+        return "Interval(%f, %f)" % (self.lo, self.hi)
 
     @property
     def width(self):
@@ -32,16 +33,21 @@ def sum_intervals(i, j):
 
 if not config.ENABLE_CUDASIM:
     from numba.core import cgutils
-    from numba.core.extending import (lower_builtin, make_attribute_wrapper,
-                                      models, register_model, type_callable,
-                                      typeof_impl)
+    from numba.core.extending import (
+        lower_builtin,
+        make_attribute_wrapper,
+        models,
+        register_model,
+        type_callable,
+        typeof_impl,
+    )
     from numba.core.typing.templates import AttributeTemplate
     from numba.cuda.cudadecl import registry as cuda_registry
     from numba.cuda.cudaimpl import lower_attr as cuda_lower_attr
 
     class IntervalType(types.Type):
         def __init__(self):
-            super().__init__(name='Interval')
+            super().__init__(name="Interval")
 
     interval_type = IntervalType()
 
@@ -54,19 +60,20 @@ if not config.ENABLE_CUDASIM:
         def typer(lo, hi):
             if isinstance(lo, types.Float) and isinstance(hi, types.Float):
                 return interval_type
+
         return typer
 
     @register_model(IntervalType)
     class IntervalModel(models.StructModel):
         def __init__(self, dmm, fe_type):
             members = [
-                ('lo', types.float64),
-                ('hi', types.float64),
+                ("lo", types.float64),
+                ("hi", types.float64),
             ]
             models.StructModel.__init__(self, dmm, fe_type, members)
 
-    make_attribute_wrapper(IntervalType, 'lo', 'lo')
-    make_attribute_wrapper(IntervalType, 'hi', 'hi')
+    make_attribute_wrapper(IntervalType, "lo", "lo")
+    make_attribute_wrapper(IntervalType, "hi", "hi")
 
     @lower_builtin(Interval, types.Float, types.Float)
     def impl_interval(context, builder, sig, args):
@@ -84,14 +91,14 @@ if not config.ENABLE_CUDASIM:
         def resolve_width(self, mod):
             return types.float64
 
-    @cuda_lower_attr(IntervalType, 'width')
+    @cuda_lower_attr(IntervalType, "width")
     def cuda_Interval_width(context, builder, sig, arg):
         lo = builder.extract_value(arg, 0)
         hi = builder.extract_value(arg, 1)
         return builder.fsub(hi, lo)
 
 
-@skip_on_cudasim('Extensions not supported in the simulator')
+@skip_on_cudasim("Extensions not supported in the simulator")
 class TestExtending(CUDATestCase):
     def test_attributes(self):
         @cuda.jit
@@ -151,5 +158,5 @@ class TestExtending(CUDATestCase):
         np.testing.assert_allclose(r, expected)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

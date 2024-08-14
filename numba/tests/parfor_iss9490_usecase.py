@@ -44,7 +44,7 @@ def stable_fit(X, y, threshold=3):
             beta_sub = np.linalg.solve(np.dot(X_.T, X_), np.dot(X_.T, y_))
             resid_sub = np.dot(X_, beta_sub) - y_
             # Check for stability
-            rmse = np.sqrt(np.mean(resid_sub ** 2))
+            rmse = np.sqrt(np.mean(resid_sub**2))
             first = np.fabs(resid_sub[0]) / rmse < threshold
             last = np.fabs(resid_sub[-1]) / rmse < threshold
             slope = np.fabs(beta_sub[1]) / rmse < threshold

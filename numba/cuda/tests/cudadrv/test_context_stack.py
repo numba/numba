@@ -36,7 +36,7 @@ class TestContextAPI(CUDATestCase):
         try:
             mem = cuda.current_context().get_memory_info()
         except NotImplementedError:
-            self.skipTest('EMM Plugin does not implement get_memory_info()')
+            self.skipTest("EMM Plugin does not implement get_memory_info()")
 
         self.assertIsInstance(mem.free, numbers.Number)
         self.assertEqual(mem.free, mem[0])
@@ -47,7 +47,7 @@ class TestContextAPI(CUDATestCase):
         self.assertLessEqual(mem.free, mem.total)
 
     @unittest.skipIf(len(cuda.gpus) < 2, "need more than 1 gpus")
-    @skip_on_cudasim('CUDA HW required')
+    @skip_on_cudasim("CUDA HW required")
     def test_forbidden_context_switch(self):
         # Cannot switch context inside a `cuda.require_context`
         @cuda.require_context
@@ -72,7 +72,7 @@ class TestContextAPI(CUDATestCase):
         self.assertEqual(int(devid), 1)
 
 
-@skip_on_cudasim('CUDA HW required')
+@skip_on_cudasim("CUDA HW required")
 class Test3rdPartyContext(CUDATestCase):
     def tearDown(self):
         super().tearDown()
@@ -118,8 +118,7 @@ class Test3rdPartyContext(CUDATestCase):
             cuda.current_context()
         except RuntimeError as e:
             # Expecting an error about non-primary CUDA context
-            self.assertIn("Numba cannot operate on non-primary CUDA context ",
-                          str(e))
+            self.assertIn("Numba cannot operate on non-primary CUDA context ", str(e))
         else:
             self.fail("No RuntimeError raised")
         finally:
@@ -141,5 +140,5 @@ class Test3rdPartyContext(CUDATestCase):
         self.test_attached_primary(do)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

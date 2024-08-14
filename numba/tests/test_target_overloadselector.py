@@ -49,10 +49,8 @@ class TestOverloadSelector(unittest.TestCase):
         self.assertTrue(os._match(formal=types.Boolean, actual=types.Boolean))
         # test subclass
         self.assertTrue(issubclass(types.Sequence, types.Container))
-        self.assertTrue(os._match(formal=types.Container,
-                                  actual=types.Sequence))
-        self.assertFalse(os._match(formal=types.Sequence,
-                                   actual=types.Container))
+        self.assertTrue(os._match(formal=types.Container, actual=types.Sequence))
+        self.assertFalse(os._match(formal=types.Sequence, actual=types.Container))
         # test any
         self.assertTrue(os._match(formal=types.Any, actual=types.Any))
         self.assertTrue(os._match(formal=types.Any, actual=types.Container))
@@ -75,7 +73,7 @@ class TestOverloadSelector(unittest.TestCase):
         os.append(4, (types.Boolean, types.Any))
         with self.assertRaises(NumbaTypeError) as raises:
             os.find((types.boolean, types.boolean))
-        self.assertIn('2 ambiguous signatures', str(raises.exception))
+        self.assertIn("2 ambiguous signatures", str(raises.exception))
         # disambiguous
         os.append(5, (types.boolean, types.boolean))
         self.assertEqual(os.find((types.boolean, types.boolean)), 5)
@@ -83,10 +81,22 @@ class TestOverloadSelector(unittest.TestCase):
     def test_subclass_specialization(self):
         os = OverloadSelector()
         self.assertTrue(issubclass(types.Sequence, types.Container))
-        os.append(1, (types.Container, types.Container,))
+        os.append(
+            1,
+            (
+                types.Container,
+                types.Container,
+            ),
+        )
         lstty = types.List(types.boolean)
         self.assertEqual(os.find((lstty, lstty)), 1)
-        os.append(2, (types.Container, types.Sequence,))
+        os.append(
+            2,
+            (
+                types.Container,
+                types.Sequence,
+            ),
+        )
         self.assertEqual(os.find((lstty, lstty)), 2)
 
     def test_cache(self):
@@ -116,7 +126,7 @@ class TestAmbiguousOverloads(unittest.TestCase):
         return os
 
     def test_ambiguous_casts(self):
-        os = self.create_overload_selector(kind='casts')
+        os = self.create_overload_selector(kind="casts")
         all_types = set(t for sig, impl in os.versions for t in sig)
         # ensure there are no ambiguous cast overloads
         # note: using permutations to avoid testing cast to the same type
@@ -124,12 +134,12 @@ class TestAmbiguousOverloads(unittest.TestCase):
             try:
                 os.find(sig)
             except NumbaNotImplementedError:
-                pass   # ignore not implemented cast
+                pass  # ignore not implemented cast
 
     def test_ambiguous_functions(self):
         loader = RegistryLoader(builtin_registry)
         selectors = defaultdict(OverloadSelector)
-        for impl, fn, sig in loader.new_registrations('functions'):
+        for impl, fn, sig in loader.new_registrations("functions"):
             os = selectors[fn]
             os.append(impl, sig)
 
@@ -140,9 +150,8 @@ class TestAmbiguousOverloads(unittest.TestCase):
                 try:
                     os.find(sig)
                 except NumbaNotImplementedError:
-                    pass   # ignore not implemented cast
+                    pass  # ignore not implemented cast
 
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

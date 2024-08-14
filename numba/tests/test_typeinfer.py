@@ -54,7 +54,7 @@ class TestArgRetCasting(unittest.TestCase):
         def foo(x):
             return x
 
-        args = (types.Array(i32, 1, 'C'),)
+        args = (types.Array(i32, 1, "C"),)
         return_type = f32
         try:
             njit(return_type(*args))(foo)
@@ -74,7 +74,7 @@ class TestArgRetCasting(unittest.TestCase):
         cres = cfunc.overloads[args]
         typemap = cres.type_annotation.typemap
         # Argument "iters" must be uint32
-        self.assertEqual(typemap['iters'], u32)
+        self.assertEqual(typemap["iters"], u32)
 
 
 class TestUnify(unittest.TestCase):
@@ -83,50 +83,42 @@ class TestUnify(unittest.TestCase):
     """
 
     int_unify = {
-        ('uint8', 'uint8'): 'uint8',
-        ('int8', 'int8'): 'int8',
-        ('uint16', 'uint16'): 'uint16',
-        ('int16', 'int16'): 'int16',
-        ('uint32', 'uint32'): 'uint32',
-        ('int32', 'int32'): 'int32',
-        ('uint64', 'uint64'): 'uint64',
-        ('int64', 'int64'): 'int64',
-
-        ('int8', 'uint8'): 'int16',
-        ('int8', 'uint16'): 'int32',
-        ('int8', 'uint32'): 'int64',
-
-        ('uint8', 'int32'): 'int32',
-        ('uint8', 'uint64'): 'uint64',
-
-        ('int16', 'int8'): 'int16',
-        ('int16', 'uint8'): 'int16',
-        ('int16', 'uint16'): 'int32',
-        ('int16', 'uint32'): 'int64',
-        ('int16', 'int64'): 'int64',
-        ('int16', 'uint64'): 'float64',
-
-        ('uint16', 'uint8'): 'uint16',
-        ('uint16', 'uint32'): 'uint32',
-        ('uint16', 'int32'): 'int32',
-        ('uint16', 'uint64'): 'uint64',
-
-        ('int32', 'int8'): 'int32',
-        ('int32', 'int16'): 'int32',
-        ('int32', 'uint32'): 'int64',
-        ('int32', 'int64'): 'int64',
-
-        ('uint32', 'uint8'): 'uint32',
-        ('uint32', 'int64'): 'int64',
-        ('uint32', 'uint64'): 'uint64',
-
-        ('int64', 'int8'): 'int64',
-        ('int64', 'uint8'): 'int64',
-        ('int64', 'uint16'): 'int64',
-
-        ('uint64', 'int8'): 'float64',
-        ('uint64', 'int32'): 'float64',
-        ('uint64', 'int64'): 'float64',
+        ("uint8", "uint8"): "uint8",
+        ("int8", "int8"): "int8",
+        ("uint16", "uint16"): "uint16",
+        ("int16", "int16"): "int16",
+        ("uint32", "uint32"): "uint32",
+        ("int32", "int32"): "int32",
+        ("uint64", "uint64"): "uint64",
+        ("int64", "int64"): "int64",
+        ("int8", "uint8"): "int16",
+        ("int8", "uint16"): "int32",
+        ("int8", "uint32"): "int64",
+        ("uint8", "int32"): "int32",
+        ("uint8", "uint64"): "uint64",
+        ("int16", "int8"): "int16",
+        ("int16", "uint8"): "int16",
+        ("int16", "uint16"): "int32",
+        ("int16", "uint32"): "int64",
+        ("int16", "int64"): "int64",
+        ("int16", "uint64"): "float64",
+        ("uint16", "uint8"): "uint16",
+        ("uint16", "uint32"): "uint32",
+        ("uint16", "int32"): "int32",
+        ("uint16", "uint64"): "uint64",
+        ("int32", "int8"): "int32",
+        ("int32", "int16"): "int32",
+        ("int32", "uint32"): "int64",
+        ("int32", "int64"): "int64",
+        ("uint32", "uint8"): "uint32",
+        ("uint32", "int64"): "int64",
+        ("uint32", "uint64"): "uint64",
+        ("int64", "int8"): "int64",
+        ("int64", "uint8"): "int64",
+        ("int64", "uint16"): "int64",
+        ("uint64", "int8"): "float64",
+        ("uint64", "int32"): "float64",
+        ("uint64", "int64"): "float64",
     }
 
     def assert_unify(self, aty, bty, expected):
@@ -134,19 +126,20 @@ class TestUnify(unittest.TestCase):
         template = "{0}, {1} -> {2} != {3}"
         for unify_func in ctx.unify_types, ctx.unify_pairs:
             unified = unify_func(aty, bty)
-            self.assertEqual(unified, expected,
-                             msg=template.format(aty, bty, unified, expected))
+            self.assertEqual(
+                unified, expected, msg=template.format(aty, bty, unified, expected)
+            )
             unified = unify_func(bty, aty)
-            self.assertEqual(unified, expected,
-                             msg=template.format(bty, aty, unified, expected))
+            self.assertEqual(
+                unified, expected, msg=template.format(bty, aty, unified, expected)
+            )
 
     def assert_unify_failure(self, aty, bty):
         self.assert_unify(aty, bty, None)
 
     def test_integer(self):
         ctx = typing.Context()
-        for aty, bty in itertools.product(types.integer_domain,
-                                          types.integer_domain):
+        for aty, bty in itertools.product(types.integer_domain, types.integer_domain):
             key = (str(aty), str(bty))
             try:
                 expected = self.int_unify[key]
@@ -169,8 +162,7 @@ class TestUnify(unittest.TestCase):
         """
         ctx = typing.Context()
         for tys in itertools.combinations(types.number_domain, n):
-            res = [ctx.unify_types(*comb)
-                   for comb in itertools.permutations(tys)]
+            res = [ctx.unify_types(*comb) for comb in itertools.permutations(tys)]
             first_result = res[0]
             # Sanity check
             self.assertIsInstance(first_result, types.Number)
@@ -191,8 +183,10 @@ class TestUnify(unittest.TestCase):
             # First unify without none, to provide the control value
             tys = list(tys)
             expected = types.Optional(ctx.unify_types(*tys))
-            results = [ctx.unify_types(*comb)
-                       for comb in itertools.permutations(tys  + [types.none])]
+            results = [
+                ctx.unify_types(*comb)
+                for comb in itertools.permutations(tys + [types.none])
+            ]
             # All results must be equal
             for res in results:
                 self.assertEqual(res, expected)
@@ -245,8 +239,7 @@ class TestUnify(unittest.TestCase):
         # Tuples of tuples
         aty = types.UniTuple(types.Tuple((u32, f32)), 2)
         bty = types.UniTuple(types.Tuple((i16, f32)), 2)
-        self.assert_unify(aty, bty,
-                          types.UniTuple(types.Tuple((i64, f32)), 2))
+        self.assert_unify(aty, bty, types.UniTuple(types.Tuple((i64, f32)), 2))
         # Failures
         aty = types.UniTuple(i32, 1)
         bty = types.UniTuple(types.slice3_type, 1)
@@ -269,12 +262,14 @@ class TestUnify(unittest.TestCase):
         # Unify to tuple of optionals
         aty = types.Tuple((types.none, i32))
         bty = types.Tuple((i16, types.none))
-        self.assert_unify(aty, bty, types.Tuple((types.Optional(i16),
-                                                 types.Optional(i32))))
+        self.assert_unify(
+            aty, bty, types.Tuple((types.Optional(i16), types.Optional(i32)))
+        )
         aty = types.Tuple((types.Optional(i32), i64))
         bty = types.Tuple((i16, types.Optional(i8)))
-        self.assert_unify(aty, bty, types.Tuple((types.Optional(i32),
-                                                 types.Optional(i64))))
+        self.assert_unify(
+            aty, bty, types.Tuple((types.Optional(i32), types.Optional(i64)))
+        )
 
     def test_arrays(self):
         aty = types.Array(i32, 3, "C")
@@ -288,8 +283,7 @@ class TestUnify(unittest.TestCase):
         self.assert_unify(aty, bty, bty)
         aty = types.Array(i32, 3, "A")
         bty = types.Array(i32, 3, "C", readonly=True)
-        self.assert_unify(aty, bty,
-                          types.Array(i32, 3, "A", readonly=True))
+        self.assert_unify(aty, bty, types.Array(i32, 3, "A", readonly=True))
         # Failures
         aty = types.Array(i32, 2, "C")
         bty = types.Array(i32, 3, "C")
@@ -430,7 +424,7 @@ class TestTypeConversion(CompatibilityTestMixin, unittest.TestCase):
         aty = types.Array(i32, 2, "C")
         bty = types.Optional(aty.copy(layout="A"))
         self.assert_can_convert(aty, bty, Conversion.safe)  # C -> A
-        self.assert_cannot_convert(bty, aty)                # A -> C
+        self.assert_cannot_convert(bty, aty)  # A -> C
         aty = types.Array(i32, 2, "C")
         bty = types.Optional(aty.copy(layout="F"))
         self.assert_cannot_convert(aty, bty)
@@ -489,13 +483,15 @@ class TestResolveOverload(unittest.TestCase):
         ctx = typing.Context()
         cases = [i16(i16, i16), i32(i32, i32)]
         with self.assertRaises(TypeError) as raises:
-            ctx.resolve_overload("foo", cases, (i8, i8), {},
-                                 allow_ambiguous=False)
-        self.assertEqual(str(raises.exception).splitlines(),
-                         ["Ambiguous overloading for foo (int8, int8):",
-                          "(int16, int16) -> int16",
-                          "(int32, int32) -> int32",
-                          ])
+            ctx.resolve_overload("foo", cases, (i8, i8), {}, allow_ambiguous=False)
+        self.assertEqual(
+            str(raises.exception).splitlines(),
+            [
+                "Ambiguous overloading for foo (int8, int8):",
+                "(int16, int16) -> int16",
+                "(int32, int32) -> int32",
+            ],
+        )
 
 
 class TestUnifyUseCases(unittest.TestCase):
@@ -511,7 +507,7 @@ class TestUnifyUseCases(unittest.TestCase):
                 res += a[i]
             return res
 
-        argtys = (types.Array(c128, 1, 'C'),)
+        argtys = (types.Array(c128, 1, "C"),)
         cfunc = njit(argtys)(pyfunc)
         return (pyfunc, cfunc)
 
@@ -526,19 +522,24 @@ class TestUnifyUseCases(unittest.TestCase):
         """
         env = os.environ.copy()
         for seedval in (1, 2, 1024):
-            env['PYTHONHASHSEED'] = str(seedval)
+            env["PYTHONHASHSEED"] = str(seedval)
             subproc = subprocess.Popen(
-                [sys.executable, '-c',
-                 'import numba.tests.test_typeinfer as test_mod\n' +
-                 'test_mod.TestUnifyUseCases._actually_test_complex_unify()'],
-                env=env)
+                [
+                    sys.executable,
+                    "-c",
+                    "import numba.tests.test_typeinfer as test_mod\n"
+                    + "test_mod.TestUnifyUseCases._actually_test_complex_unify()",
+                ],
+                env=env,
+            )
             subproc.wait()
-            self.assertEqual(subproc.returncode, 0, 'Child process failed.')
+            self.assertEqual(subproc.returncode, 0, "Child process failed.")
 
     def test_int_tuple_unify(self):
         """
         Test issue #493
         """
+
         def foo(an_int32, an_int64):
             a = an_int32, an_int32
             while True:  # infinite loop
@@ -610,6 +611,7 @@ def list_unify_usecase1(n):
         res += x.pop()
     return res
 
+
 def list_unify_usecase2(n):
     res = []
     for i in range(n):
@@ -620,6 +622,7 @@ def list_unify_usecase2(n):
     res.append((123j, 42))
     return res
 
+
 def range_unify_usecase(v):
     if v:
         r = range(np.int32(3))
@@ -627,6 +630,7 @@ def range_unify_usecase(v):
         r = range(np.int64(5))
     for x in r:
         return x
+
 
 def issue_1394(a):
     if a:
@@ -694,6 +698,7 @@ class TestMiscIssues(TestCase):
 
         Typer does not propagate return type to all return variables
         """
+
         @jit(nopython=True)
         def confuse_typer(x):
             if x == x:
@@ -791,7 +796,9 @@ class TestMiscIssues(TestCase):
 
         with self.assertRaises(errors.TypingError) as raises:
             foo()
-        self.assertIn("undefined variable used in call argument #4", str(raises.exception))
+        self.assertIn(
+            "undefined variable used in call argument #4", str(raises.exception)
+        )
 
     @skip_unless_load_fast_and_clear
     def test_load_fast_and_clear_variant_4(self):
@@ -803,6 +810,7 @@ class TestMiscIssues(TestCase):
                 x = a
             [x for x in (1,)]
             return x
+
         self.assertEqual(foo(123), 123)
         self.assertEqual(foo(0), 0)
 
@@ -817,20 +825,30 @@ class TestFoldArguments(unittest.TestCase):
         pysig = utils.pysignature(func)
         names = list(pysig.parameters)
 
-        with self.subTest(kind='dict'):
+        with self.subTest(kind="dict"):
             folded_dict = typing.fold_arguments(
-                pysig, args, kws, make_tuple, unused_handler, unused_handler,
+                pysig,
+                args,
+                kws,
+                make_tuple,
+                unused_handler,
+                unused_handler,
             )
             # correct ordering
             for i, (j, k) in enumerate(zip(folded_dict, names)):
                 (got_index, got_param, got_name) = j
                 self.assertEqual(got_index, i)
-                self.assertEqual(got_name, f'arg.{k}')
+                self.assertEqual(got_name, f"arg.{k}")
 
         kws = list(kws.items())
-        with self.subTest(kind='list'):
+        with self.subTest(kind="list"):
             folded_list = typing.fold_arguments(
-                pysig, args, kws, make_tuple, unused_handler, unused_handler,
+                pysig,
+                args,
+                kws,
+                make_tuple,
+                unused_handler,
+                unused_handler,
             )
             self.assertEqual(folded_list, folded_dict)
 
@@ -838,8 +856,8 @@ class TestFoldArguments(unittest.TestCase):
         cases = [
             dict(
                 func=lambda a, b, c, d: None,
-                args=['arg.a', 'arg.b'],
-                kws=dict(c='arg.c', d='arg.d')
+                args=["arg.a", "arg.b"],
+                kws=dict(c="arg.c", d="arg.d"),
             ),
             dict(
                 func=lambda: None,
@@ -848,13 +866,13 @@ class TestFoldArguments(unittest.TestCase):
             ),
             dict(
                 func=lambda a: None,
-                args=['arg.a'],
+                args=["arg.a"],
                 kws={},
             ),
             dict(
                 func=lambda a: None,
                 args=[],
-                kws=dict(a='arg.a'),
+                kws=dict(a="arg.a"),
             ),
         ]
         for case in cases:
@@ -917,6 +935,7 @@ class TestPartialTypingErrors(unittest.TestCase):
     """
     Make sure partial typing stores type errors in compiler state properly
     """
+
     def test_partial_typing_error(self):
         # example with type unification error
         def impl(flag):
@@ -928,9 +947,11 @@ class TestPartialTypingErrors(unittest.TestCase):
 
         typing_errs = get_func_typing_errs(impl, (types.bool_,))
         self.assertTrue(isinstance(typing_errs, list) and len(typing_errs) == 1)
-        self.assertTrue(isinstance(typing_errs[0], errors.TypingError) and
-                        "Cannot unify" in typing_errs[0].msg)
+        self.assertTrue(
+            isinstance(typing_errs[0], errors.TypingError)
+            and "Cannot unify" in typing_errs[0].msg
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

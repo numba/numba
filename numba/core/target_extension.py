@@ -1,13 +1,12 @@
 from abc import ABC, abstractmethod
 from numba.core.registry import DelayedRegistry, CPUDispatcher
 from numba.core.decorators import jit
-from numba.core.errors import (InternalTargetMismatchError,
-                               NonexistentTargetError)
+from numba.core.errors import InternalTargetMismatchError, NonexistentTargetError
 from threading import local as tls
 
 
 _active_context = tls()
-_active_context_default = 'cpu'
+_active_context_default = "cpu"
 
 
 class _TargetRegistry(DelayedRegistry):
@@ -17,8 +16,9 @@ class _TargetRegistry(DelayedRegistry):
             return super().__getitem__(item)
         except KeyError:
             msg = "No target is registered against '{}', known targets:\n{}"
-            known = '\n'.join([f"{k: <{10}} -> {v}"
-                               for k, v in target_registry.items()])
+            known = "\n".join(
+                [f"{k: <{10}} -> {v}" for k, v in target_registry.items()]
+            )
             raise NonexistentTargetError(msg.format(item, known)) from None
 
 
@@ -31,10 +31,10 @@ jit_registry = DelayedRegistry()
 
 class target_override(object):
     """Context manager to temporarily override the current target with that
-       prescribed."""
+    prescribed."""
+
     def __init__(self, name):
-        self._orig_target = getattr(_active_context, 'target',
-                                    _active_context_default)
+        self._orig_target = getattr(_active_context, "target", _active_context_default)
         self.target = name
 
     def __enter__(self):
@@ -45,9 +45,8 @@ class target_override(object):
 
 
 def current_target():
-    """Returns the current target
-    """
-    return getattr(_active_context, 'target', _active_context_default)
+    """Returns the current target"""
+    return getattr(_active_context, "target", _active_context_default)
 
 
 def get_local_target(context):
@@ -61,8 +60,7 @@ def get_local_target(context):
     else:
         target = target_registry.get(current_target(), None)
     if target is None:
-        msg = ("The target found is not registered."
-               "Given target was {}.")
+        msg = "The target found is not registered." "Given target was {}."
         raise ValueError(msg.format(target))
     else:
         return target
@@ -116,7 +114,7 @@ class JitDecorator(ABC):
 
 
 class Target(ABC):
-    """ Implements a target """
+    """Implements a target"""
 
     @classmethod
     def inherits_from(cls, other):
@@ -131,8 +129,7 @@ class Generic(Target):
 
 
 class CPU(Generic):
-    """Mark the target as CPU.
-    """
+    """Mark the target as CPU."""
 
 
 class GPU(Generic):
@@ -142,28 +139,26 @@ class GPU(Generic):
 
 
 class CUDA(GPU):
-    """Mark the target as CUDA.
-    """
+    """Mark the target as CUDA."""
 
 
 class NPyUfunc(Target):
-    """Mark the target as a ufunc
-    """
+    """Mark the target as a ufunc"""
 
 
-target_registry['generic'] = Generic
-target_registry['CPU'] = CPU
-target_registry['cpu'] = CPU
-target_registry['GPU'] = GPU
-target_registry['gpu'] = GPU
-target_registry['CUDA'] = CUDA
-target_registry['cuda'] = CUDA
-target_registry['npyufunc'] = NPyUfunc
+target_registry["generic"] = Generic
+target_registry["CPU"] = CPU
+target_registry["cpu"] = CPU
+target_registry["GPU"] = GPU
+target_registry["gpu"] = GPU
+target_registry["CUDA"] = CUDA
+target_registry["cuda"] = CUDA
+target_registry["npyufunc"] = NPyUfunc
 
 dispatcher_registry = DelayedRegistry(key_type=Target)
 
 
 # Register the cpu target token with its dispatcher and jit
-cpu_target = target_registry['cpu']
+cpu_target = target_registry["cpu"]
 dispatcher_registry[cpu_target] = CPUDispatcher
 jit_registry[cpu_target] = jit

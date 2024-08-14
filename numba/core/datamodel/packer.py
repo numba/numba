@@ -3,13 +3,13 @@ from collections import deque
 from numba.core import types, cgutils
 
 
-
 class DataPacker(object):
     """
     A helper to pack a number of typed arguments into a data structure.
     Omitted arguments (i.e. values with the type `Omitted`) are automatically
     skipped.
     """
+
     # XXX should DataPacker be a model for a dedicated type?
 
     def __init__(self, dmm, fe_types):
@@ -28,8 +28,7 @@ class DataPacker(object):
         """
         Return the given values packed as a data structure.
         """
-        elems = [self._models[i].as_data(builder, values[i])
-                 for i in self._pack_map]
+        elems = [self._models[i].as_data(builder, values[i]) for i in self._pack_map]
         return cgutils.make_anonymous_struct(builder, elems)
 
     def _do_load(self, builder, ptr, formal_list=None):
@@ -85,36 +84,33 @@ class ArgPacker(object):
         self._be_args = list(_flatten(argtys))
 
     def as_arguments(self, builder, values):
-        """Flatten all argument values
-        """
+        """Flatten all argument values"""
         if len(values) != self._nargs:
-            raise TypeError("invalid number of args: expected %d, got %d"
-                            % (self._nargs, len(values)))
+            raise TypeError(
+                "invalid number of args: expected %d, got %d"
+                % (self._nargs, len(values))
+            )
 
         if not values:
             return ()
 
-        args = [dm.as_argument(builder, val)
-                for dm, val in zip(self._dm_args, values)
-                ]
+        args = [dm.as_argument(builder, val) for dm, val in zip(self._dm_args, values)]
 
         args = tuple(_flatten(args))
         return args
 
     def from_arguments(self, builder, args):
-        """Unflatten all argument values
-        """
+        """Unflatten all argument values"""
 
         valtree = self._unflattener.unflatten(args)
-        values = [dm.from_argument(builder, val)
-                  for dm, val in zip(self._dm_args, valtree)
-                  ]
+        values = [
+            dm.from_argument(builder, val) for dm, val in zip(self._dm_args, valtree)
+        ]
 
         return values
 
     def assign_names(self, args, names):
-        """Assign names for each flattened argument values.
-        """
+        """Assign names for each flattened argument values."""
 
         valtree = self._unflattener.unflatten(args)
         for aval, aname in zip(valtree, names):
@@ -125,9 +121,9 @@ class ArgPacker(object):
             for pos, aval in enumerate(val_or_nested):
                 self._assign_names(aval, name, depth=depth + (pos,))
         else:
-            postfix = '.'.join(map(str, depth))
+            postfix = ".".join(map(str, depth))
             parts = [name, postfix]
-            val_or_nested.name = '.'.join(filter(bool, parts))
+            val_or_nested.name = ".".join(filter(bool, parts))
 
     @property
     def argument_types(self):
@@ -141,6 +137,7 @@ def _flatten(iterable):
     """
     Flatten nested iterable of (tuple, list).
     """
+
     def rec(iterable):
         for i in iterable:
             if isinstance(i, (tuple, list)):
@@ -148,6 +145,7 @@ def _flatten(iterable):
                     yield j
             else:
                 yield i
+
     return rec(iterable)
 
 
@@ -155,6 +153,7 @@ _PUSH_LIST = 1
 _APPEND_NEXT_VALUE = 2
 _APPEND_EMPTY_TUPLE = 3
 _POP = 4
+
 
 class _Unflattener(object):
     """
@@ -172,6 +171,7 @@ class _Unflattener(object):
         (an iterable of nested sequences).
         """
         code = []
+
         def rec(iterable):
             for i in iterable:
                 if isinstance(i, (tuple, list)):
@@ -188,8 +188,7 @@ class _Unflattener(object):
         return code
 
     def unflatten(self, flatiter):
-        """Rebuild a nested tuple structure.
-        """
+        """Rebuild a nested tuple structure."""
         vals = deque(flatiter)
 
         res = []

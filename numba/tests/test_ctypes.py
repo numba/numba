@@ -24,8 +24,7 @@ class TestCTypesTypes(TestCase):
 
         check(c_void_p, types.voidptr)
         check(POINTER(c_float), types.CPointer(types.float32))
-        check(POINTER(POINTER(c_float)),
-              types.CPointer(types.CPointer(types.float32)))
+        check(POINTER(POINTER(c_float)), types.CPointer(types.CPointer(types.float32)))
 
         check(None, types.void)
 
@@ -33,6 +32,7 @@ class TestCTypesTypes(TestCase):
         """
         Test converting a ctypes type to a Numba type.
         """
+
         def check(cty, ty):
             got = ctypes_utils.from_ctypes(cty)
             self.assertEqual(got, ty)
@@ -48,6 +48,7 @@ class TestCTypesTypes(TestCase):
         """
         Test converting a Numba type to a ctypes type.
         """
+
         def check(cty, ty):
             got = ctypes_utils.to_ctypes(ty)
             self.assertEqual(got, cty)
@@ -57,8 +58,9 @@ class TestCTypesTypes(TestCase):
         # An unsupported type
         with self.assertRaises(TypeError) as raises:
             ctypes_utils.to_ctypes(types.ellipsis)
-        self.assertIn("Cannot convert Numba type '...' to ctypes type",
-                      str(raises.exception))
+        self.assertIn(
+            "Cannot convert Numba type '...' to ctypes type", str(raises.exception)
+        )
 
 
 class TestCTypesUseCases(MemoryLeakMixin, TestCase):
@@ -99,11 +101,12 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
     def test_function_pointer(self):
         pyfunc = use_func_pointer
         cfunc = jit(nopython=True)(pyfunc)
-        for (fa, fb, x) in [
+        for fa, fb, x in [
             (c_sin, c_cos, 1.0),
             (c_sin, c_cos, -1.0),
             (c_cos, c_sin, 1.0),
-            (c_cos, c_sin, -1.0)]:
+            (c_cos, c_sin, -1.0),
+        ]:
             expected = pyfunc(fa, fb, x)
             got = cfunc(fa, fb, x)
             self.assertEqual(got, expected)
@@ -113,14 +116,16 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
     def test_untyped_function(self):
         with self.assertRaises(TypeError) as raises:
             njit((types.double,))(use_c_untyped)
-        self.assertIn("ctypes function '_numba_test_exp' doesn't define its argument types",
-                      str(raises.exception))
+        self.assertIn(
+            "ctypes function '_numba_test_exp' doesn't define its argument types",
+            str(raises.exception),
+        )
 
     def test_python_call_back(self):
-        mydct = {'what': 1232121}
+        mydct = {"what": 1232121}
 
         def call_me_maybe(arr):
-            return mydct[arr[0].decode('ascii')]
+            return mydct[arr[0].decode("ascii")]
 
         # Create a callback into the python interpreter
         py_call_back = CFUNCTYPE(c_int, py_object)(call_me_maybe)
@@ -130,7 +135,7 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
             return what
 
         cfunc = jit(nopython=True, nogil=True)(pyfunc)
-        arr = np.array(["what"], dtype='S10')
+        arr = np.array(["what"], dtype="S10")
         self.assertEqual(pyfunc(arr), cfunc(arr))
 
     def test_python_call_back_threaded(self):
@@ -142,7 +147,7 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
 
         cfunc = jit(nopython=True, nogil=True)(pyfunc)
 
-        arr = np.array(["what"], dtype='S10')
+        arr = np.array(["what"], dtype="S10")
         repeat = 1000
 
         expected = pyfunc(arr, repeat)
@@ -157,8 +162,9 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
         def run(func, arr, repeat):
             outputs.append(func(arr, repeat))
 
-        threads = [threading.Thread(target=run, args=(cfunc, arr, repeat))
-                   for _ in range(10)]
+        threads = [
+            threading.Thread(target=run, args=(cfunc, arr, repeat)) for _ in range(10)
+        ]
 
         # Start threads
         for th in threads:
@@ -177,6 +183,7 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
         Test the ".ctypes.data" attribute of an array can be passed
         as a "void *" parameter.
         """
+
         def pyfunc(arr):
             return c_take_array_ptr(arr.ctypes.data)
 
@@ -193,7 +200,7 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
 
         arr = np.linspace(0, 10, 5)
-        expected = arr ** 2.0
+        expected = arr**2.0
         got = cfunc(arr)
         self.assertPreciseEqual(expected, got)
         return cfunc
@@ -216,8 +223,10 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
         with self.assertRaises(errors.TypingError) as raises:
             cfunc(np.float32([0.0]))
 
-        self.assertIn("No implementation of function ExternalFunctionPointer",
-                      str(raises.exception))
+        self.assertIn(
+            "No implementation of function ExternalFunctionPointer",
+            str(raises.exception),
+        )
 
     def test_storing_voidptr_to_int_array(self):
         # Make C callback that returns a void*
@@ -225,7 +234,7 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
 
         @cproto
         def get_voidstar():
-            return 0xdeadbeef
+            return 0xDEADBEEF
 
         # Make python functions that use the C callback
         def pyfunc(a):
@@ -245,11 +254,10 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
         ret_expect = pyfunc(arr_expect)
 
         # Check
-        self.assertEqual(ret_expect, 0xdeadbeef)
+        self.assertEqual(ret_expect, 0xDEADBEEF)
         self.assertPreciseEqual(ret_got, ret_expect)
         self.assertPreciseEqual(arr_got, arr_expect)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
-

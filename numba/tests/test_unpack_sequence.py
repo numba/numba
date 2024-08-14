@@ -8,8 +8,8 @@ from numba.tests.support import TestCase, MemoryLeakMixin
 from numba.tests.support import no_pyobj_flags as nullary_no_pyobj_flags
 from numba.tests.support import force_pyobj_flags as nullary_force_pyobj_flags
 
-force_pyobj_flags = {'forceobj': True}
-no_pyobj_flags = {'nopython': True}
+force_pyobj_flags = {"forceobj": True}
+no_pyobj_flags = {"nopython": True}
 
 
 def unpack_list(l):
@@ -117,15 +117,17 @@ class TestUnpack(MemoryLeakMixin, TestCase):
 
     def test_unpack_shape(self):
         pyfunc = unpack_shape
-        cfunc = jit((types.Array(dtype=types.int32, ndim=3, layout='C'),),
-                    forceobj=True)(pyfunc)
+        cfunc = jit(
+            (types.Array(dtype=types.int32, ndim=3, layout="C"),), forceobj=True
+        )(pyfunc)
         a = np.zeros(shape=(1, 2, 3)).astype(np.int32)
         self.assertPreciseEqual(cfunc(a), pyfunc(a))
 
     def test_unpack_shape_npm(self):
         pyfunc = unpack_shape
-        cfunc = njit((types.Array(dtype=types.int32, ndim=3, layout='C'),),
-                     )(pyfunc)
+        cfunc = njit(
+            (types.Array(dtype=types.int32, ndim=3, layout="C"),),
+        )(pyfunc)
         a = np.zeros(shape=(1, 2, 3)).astype(np.int32)
         self.assertPreciseEqual(cfunc(a), pyfunc(a))
 
@@ -162,8 +164,7 @@ class TestUnpack(MemoryLeakMixin, TestCase):
     def test_chained_unpack_assign_npm(self):
         self.test_chained_unpack_assign(flags=no_pyobj_flags)
 
-    def check_unpack_error(self, pyfunc, flags=force_pyobj_flags,
-                           exc=ValueError):
+    def check_unpack_error(self, pyfunc, flags=force_pyobj_flags, exc=ValueError):
         with self.assertRaises(exc):
             cfunc = jit((), **flags)(pyfunc)
             cfunc()
@@ -173,20 +174,24 @@ class TestUnpack(MemoryLeakMixin, TestCase):
         self.check_unpack_error(unpack_heterogeneous_tuple_too_small)
 
     def test_unpack_tuple_too_small_npm(self):
-        self.check_unpack_error(unpack_tuple_too_small, no_pyobj_flags,
-                                errors.TypingError)
-        self.check_unpack_error(unpack_heterogeneous_tuple_too_small,
-                                no_pyobj_flags, errors.TypingError)
+        self.check_unpack_error(
+            unpack_tuple_too_small, no_pyobj_flags, errors.TypingError
+        )
+        self.check_unpack_error(
+            unpack_heterogeneous_tuple_too_small, no_pyobj_flags, errors.TypingError
+        )
 
     def test_unpack_tuple_too_large(self):
         self.check_unpack_error(unpack_tuple_too_large)
         self.check_unpack_error(unpack_heterogeneous_tuple_too_large)
 
     def test_unpack_tuple_too_large_npm(self):
-        self.check_unpack_error(unpack_tuple_too_large, no_pyobj_flags,
-                                errors.TypingError)
-        self.check_unpack_error(unpack_heterogeneous_tuple_too_large,
-                                no_pyobj_flags, errors.TypingError)
+        self.check_unpack_error(
+            unpack_tuple_too_large, no_pyobj_flags, errors.TypingError
+        )
+        self.check_unpack_error(
+            unpack_heterogeneous_tuple_too_large, no_pyobj_flags, errors.TypingError
+        )
 
     def test_unpack_range_too_small(self):
         self.check_unpack_error(unpack_range_too_small)
@@ -220,7 +225,9 @@ class TestUnpack(MemoryLeakMixin, TestCase):
 
     def test_unpack_nrt(self):
         pyfunc = unpack_nrt
-        cfunc = njit((),)(pyfunc)
+        cfunc = njit(
+            (),
+        )(pyfunc)
         self.assertPreciseEqual(cfunc(), pyfunc())
 
     def test_invalid_unpack(self):
@@ -230,5 +237,5 @@ class TestUnpack(MemoryLeakMixin, TestCase):
         self.assertIn("failed to unpack int32", str(raises.exception))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

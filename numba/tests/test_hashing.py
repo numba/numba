@@ -16,8 +16,7 @@ import numpy as np
 from numba import jit, config, typed, typeof
 from numba.core import types, utils
 import unittest
-from numba.tests.support import (TestCase, skip_unless_py10_or_later,
-                                 run_in_subprocess)
+from numba.tests.support import TestCase, skip_unless_py10_or_later, run_in_subprocess
 
 from numba.cpython.unicode import compile_time_get_string_data
 from numba.cpython import hashing
@@ -70,7 +69,7 @@ class TestHashingSetup(TestCase):
             else:
                 raise RuntimeError("Expected warning not found")
         """
-        subprocess.check_call([sys.executable, '-c', dedent(work)])
+        subprocess.check_call([sys.executable, "-c", dedent(work)])
 
 
 class TestHashAlgs(TestCase):
@@ -83,13 +82,13 @@ class TestHashAlgs(TestCase):
 
     # 32bit little, 64bit little, 32bit big, 64bit big
     known_hashes = {
-        'djba33x': [ # only used for small strings
+        "djba33x": [  # only used for small strings
             # seed 0, 'abc'
-            [193485960, 193485960,  193485960, 193485960],
+            [193485960, 193485960, 193485960, 193485960],
             # seed 42, 'abc'
             [-678966196, 573763426263223372, -820489388, -4282905804826039665],
-            ],
-        'siphash13': [
+        ],
+        "siphash13": [
             # NOTE: PyUCS2 layout depends on endianness
             # seed 0, 'abc'
             [69611762, -4594863902769663758, 69611762, -4594863902769663758],
@@ -102,7 +101,7 @@ class TestHashAlgs(TestCase):
             # seed 42, 'äú∑ℇ'
             [-585999602, -2845126246016066802, -817336969, -2219421378907968137],
         ],
-        'siphash24': [
+        "siphash24": [
             # NOTE: PyUCS2 layout depends on endianness
             # seed 0, 'abc'
             [1198583518, 4596069200710135518, 1198583518, 4596069200710135518],
@@ -123,31 +122,35 @@ class TestHashAlgs(TestCase):
         else:
             algorithm = sys.hash_info.algorithm
         IS_64BIT = not config.IS_32BITS
-        if sys.byteorder == 'little':
+        if sys.byteorder == "little":
             platform = 1 if IS_64BIT else 0
         else:
-            assert(sys.byteorder == 'big')
+            assert sys.byteorder == "big"
             platform = 3 if IS_64BIT else 2
         return self.known_hashes[algorithm][position][platform]
 
     def get_hash_command(self, repr_):
-        return 'print(hash(eval(%a)))' % repr_
+        return "print(hash(eval(%a)))" % repr_
 
     def get_hash(self, repr_, seed=None):
         env = os.environ.copy()
         if seed is not None:
-            env['PYTHONHASHSEED'] = str(seed)
+            env["PYTHONHASHSEED"] = str(seed)
         else:
-            env.pop('PYTHONHASHSEED', None)
-        out, _ = run_in_subprocess(code=self.get_hash_command(repr_),
-                                   env=env)
+            env.pop("PYTHONHASHSEED", None)
+        out, _ = run_in_subprocess(code=self.get_hash_command(repr_), env=env)
         stdout = out.decode().strip()
         return int(stdout)
 
     def test_against_cpython_gold(self):
 
-        args = (('abc', 0, 0), ('abc', 42, 1), ('abcdefghijk', 42, 2),
-                ('äú∑ℇ', 0, 3), ('äú∑ℇ', 42, 4),)
+        args = (
+            ("abc", 0, 0),
+            ("abc", 42, 1),
+            ("abcdefghijk", 42, 2),
+            ("äú∑ℇ", 0, 3),
+            ("äú∑ℇ", 42, 4),
+        )
 
         for input_str, seed, position in args:
             with self.subTest(input_str=input_str, seed=seed):
@@ -189,10 +192,10 @@ class BaseTest(TestCase):
     def float_samples(self, typ):
         info = np.finfo(typ)
 
-        for start in (0, 10, info.max ** 0.5, info.max / 1000.0):
+        for start in (0, 10, info.max**0.5, info.max / 1000.0):
             n = 100
             min_step = max(info.tiny, start * info.resolution)
-            for step in (1.2, min_step ** 0.5, min_step):
+            for step in (1.2, min_step**0.5, min_step):
                 if step < min_step:
                     continue
                 a = np.linspace(start, start + n * step, n)
@@ -202,12 +205,19 @@ class BaseTest(TestCase):
                 yield a + a.mean()
 
         # Infs, nans, zeros, magic -1
-        a = [0.0, 0.5, -0.0, -1.0, float('inf'), -float('inf'),]
+        a = [
+            0.0,
+            0.5,
+            -0.0,
+            -1.0,
+            float("inf"),
+            -float("inf"),
+        ]
 
         # Python 3.10 has a hash for nan based on the pointer to the PyObject
         # containing the nan, skip this input and use explicit test instead.
         if utils.PYVERSION < (3, 10):
-            a.append(float('nan'))
+            a.append(float("nan"))
 
         yield typ(a)
 
@@ -215,8 +225,8 @@ class BaseTest(TestCase):
         for real in self.float_samples(float_ty):
             for imag in self.float_samples(float_ty):
                 # Ensure equal sizes
-                real = real[:len(imag)]
-                imag = imag[:len(real)]
+                real = real[: len(imag)]
+                imag = imag[: len(real)]
                 a = real + typ(1j) * imag
                 # Python 3.10 has a hash for nan based on the pointer to the
                 # PyObject containing the nan, skip input that ends up as nan
@@ -273,8 +283,16 @@ class TestNumberHashing(BaseTest):
     def test_ints(self):
         minmax = []
 
-        for ty in [np.int8, np.uint8, np.int16, np.uint16,
-                   np.int32, np.uint32, np.int64, np.uint64]:
+        for ty in [
+            np.int8,
+            np.uint8,
+            np.int16,
+            np.uint16,
+            np.int32,
+            np.uint32,
+            np.int64,
+            np.uint64,
+        ]:
             for a in self.int_samples(ty):
                 self.check_hash_values(a)
             info = np.iinfo(ty)
@@ -282,7 +300,7 @@ class TestNumberHashing(BaseTest):
             # check hash(0) = 0
             self.check_hash_values([ty(-1)])
             self.check_hash_values([ty(0)])
-            signed = 'uint' not in str(ty)
+            signed = "uint" not in str(ty)
             # check bit shifting patterns from min through to max
             sz = ty().itemsize
             for x in [info.min, info.max]:
@@ -291,7 +309,7 @@ class TestNumberHashing(BaseTest):
                 # numpy type from that to avoid numpy type rules
                 y = x
                 for i in range(shifts):
-                    twiddle1 = 0xaaaaaaaaaaaaaaaa
+                    twiddle1 = 0xAAAAAAAAAAAAAAAA
                     twiddle2 = 0x5555555555555555
                     vals = [y]
                     for tw in [twiddle1, twiddle2]:
@@ -312,18 +330,18 @@ class TestNumberHashing(BaseTest):
 
         # these straddle the branch between returning the int as the hash and
         # doing the PyLong hash alg
-        self.check_hash_values([np.int64(0x1ffffffffffffffe)])
-        self.check_hash_values([np.int64(0x1fffffffffffffff)])
-        self.check_hash_values([np.uint64(0x1ffffffffffffffe)])
-        self.check_hash_values([np.uint64(0x1fffffffffffffff)])
+        self.check_hash_values([np.int64(0x1FFFFFFFFFFFFFFE)])
+        self.check_hash_values([np.int64(0x1FFFFFFFFFFFFFFF)])
+        self.check_hash_values([np.uint64(0x1FFFFFFFFFFFFFFE)])
+        self.check_hash_values([np.uint64(0x1FFFFFFFFFFFFFFF)])
 
         # check some values near sys int mins
-        self.check_hash_values([np.int64(-0x7fffffffffffffff)])
-        self.check_hash_values([np.int64(-0x7ffffffffffffff6)])
-        self.check_hash_values([np.int64(-0x7fffffffffffff9c)])
-        self.check_hash_values([np.int32(-0x7fffffff)])
-        self.check_hash_values([np.int32(-0x7ffffff6)])
-        self.check_hash_values([np.int32(-0x7fffff9c)])
+        self.check_hash_values([np.int64(-0x7FFFFFFFFFFFFFFF)])
+        self.check_hash_values([np.int64(-0x7FFFFFFFFFFFFFF6)])
+        self.check_hash_values([np.int64(-0x7FFFFFFFFFFFFF9C)])
+        self.check_hash_values([np.int32(-0x7FFFFFFF)])
+        self.check_hash_values([np.int32(-0x7FFFFFF6)])
+        self.check_hash_values([np.int32(-0x7FFFFF9C)])
 
     @skip_unless_py10_or_later
     def test_py310_nan_hash(self):
@@ -334,7 +352,7 @@ class TestNumberHashing(BaseTest):
 
         # Run 10 hashes, make sure that the "uniqueness" is sufficient that
         # there's more than one hash value. Not much more can be done!
-        x = [float('nan') for i in range(10)]
+        x = [float("nan") for i in range(10)]
         out = set([self.cfunc(z) for z in x])
         self.assertGreater(len(out), 1)
 
@@ -374,19 +392,21 @@ class TestTupleHashing(BaseTest):
             Split i's bits into 2 integers.
             """
             i = typ(i)
-            return (i & typ(0x5555555555555555),
-                    i & typ(0xaaaaaaaaaaaaaaaa),
-                    )
+            return (
+                i & typ(0x5555555555555555),
+                i & typ(0xAAAAAAAAAAAAAAAA),
+            )
 
         def split3(i):
             """
             Split i's bits into 3 integers.
             """
             i = typ(i)
-            return (i & typ(0x2492492492492492),
-                    i & typ(0x4924924924924924),
-                    i & typ(0x9249249249249249),
-                    )
+            return (
+                i & typ(0x2492492492492492),
+                i & typ(0x4924924924924924),
+                i & typ(0x9249249249249249),
+            )
 
         self.check_tuples(self.int_samples(), split2)
         self.check_tuples(self.int_samples(), split3)
@@ -394,15 +414,16 @@ class TestTupleHashing(BaseTest):
         # Check exact. Sample values from:
         # https://github.com/python/cpython/blob/b738237d6792acba85b1f6e6c8993a812c7fd815/Lib/test/test_tuple.py#L80-L93
         # Untypable empty tuples are replaced with (7,).
-        self.check_hash_values([(7,), (0,), (0, 0), (0.5,),
-                                (0.5, (7,), (-2, 3, (4, 6)))])
+        self.check_hash_values(
+            [(7,), (0,), (0, 0), (0.5,), (0.5, (7,), (-2, 3, (4, 6)))]
+        )
 
     def test_heterogeneous_tuples(self):
         modulo = 2**63
 
         def split(i):
             a = i & 0x5555555555555555
-            b = (i & 0xaaaaaaaa) ^ ((i >> 32) & 0xaaaaaaaa)
+            b = (i & 0xAAAAAAAA) ^ ((i >> 32) & 0xAAAAAAAA)
             return np.int64(a), np.float64(b * 0.0001)
 
         self.check_tuples(self.int_samples(), split)
@@ -461,6 +482,7 @@ class TestUnicodeHashing(BaseTest):
         def fn():
             x = "abcdefghijklmnopqrstuvwxyz"
             return x
+
         val = fn()
         tmp = hash("abcdefghijklmnopqrstuvwxyz")
         self.assertEqual(tmp, (compile_time_get_string_data(val)[-1]))
@@ -483,8 +505,8 @@ class TestUnicodeHashing(BaseTest):
         compute_hash = False
         expected = impl(compute_hash)
         got = jitted(compute_hash)
-        a = (compile_time_get_string_data(expected))
-        b = (compile_time_get_string_data(got))
+        a = compile_time_get_string_data(expected)
+        b = compile_time_get_string_data(got)
         self.assertEqual(a[:-1], b[:-1])
         self.assertTrue(a[-1] != b[-1])
 
@@ -493,8 +515,8 @@ class TestUnicodeHashing(BaseTest):
         compute_hash = True
         expected = impl(compute_hash)
         got = jitted(compute_hash)
-        a = (compile_time_get_string_data(expected))
-        b = (compile_time_get_string_data(got))
+        a = compile_time_get_string_data(expected)
+        b = compile_time_get_string_data(got)
         self.assertEqual(a, b)
 
 
@@ -503,9 +525,11 @@ class TestUnhashable(TestCase):
     # runtime.
 
     def test_hash_unhashable(self):
-        unhashables = (typed.Dict().empty(types.int64, types.int64),
-                       typed.List().empty_list(types.int64),
-                       np.ones(4))
+        unhashables = (
+            typed.Dict().empty(types.int64, types.int64),
+            typed.List().empty_list(types.int64),
+            np.ones(4),
+        )
         cfunc = jit(nopython=True)(hash_usecase)
         for ty in unhashables:
             with self.assertRaises(TypeError) as raises:
@@ -526,7 +550,7 @@ class TestUnhashable(TestCase):
         with self.assertRaises(TypeError) as raises:
             foo()
 
-        expected = ("No __hash__ is defined for object ")
+        expected = "No __hash__ is defined for object "
         self.assertIn(expected, str(raises.exception))
 
 

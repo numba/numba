@@ -3,12 +3,12 @@ import numba
 from numba.core import ir
 
 
-@njit(inline='never')
+@njit(inline="never")
 def never_inline():
     return 100
 
 
-@njit(inline='always')
+@njit(inline="always")
 def always_inline():
     return 200
 

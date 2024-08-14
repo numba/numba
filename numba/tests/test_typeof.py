@@ -1,6 +1,7 @@
 """
 Tests for the typeof() machinery.
 """
+
 import array
 from collections import namedtuple
 import enum
@@ -23,20 +24,17 @@ from numba.tests.enum_usecases import *
 from numba.np import numpy_support
 
 
-recordtype = np.dtype([('a', np.float64),
-                       ('b', np.int32),
-                       ('c', np.complex64),
-                       ('d', (np.str_, 5))])
+recordtype = np.dtype(
+    [("a", np.float64), ("b", np.int32), ("c", np.complex64), ("d", (np.str_, 5))]
+)
 
-recordtype2 = np.dtype([('e', np.int8),
-                        ('f', np.float64)])
+recordtype2 = np.dtype([("e", np.int8), ("f", np.float64)])
 
-recordtype3 = np.dtype([('e', np.int8),
-                        ('f', np.float64)], align=True)
+recordtype3 = np.dtype([("e", np.int8), ("f", np.float64)], align=True)
 
-Point = namedtuple('Point', ('x', 'y'))
+Point = namedtuple("Point", ("x", "y"))
 
-Rect = namedtuple('Rect', ('width', 'height'))
+Rect = namedtuple("Rect", ("width", "height"))
 
 
 class Custom(object):
@@ -66,7 +64,7 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         self.assertEqual(typeof(2**40), types.int64)
         self.assertEqual(typeof(2**63), types.uint64)
         self.assertEqual(typeof(2**63 - 1), types.int64)
-        self.assertEqual(typeof(-2**63), types.int64)
+        self.assertEqual(typeof(-(2**63)), types.int64)
 
     def test_datetime_values(self):
         """
@@ -84,6 +82,7 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         """
         Test special.typeof() with ndarray values.
         """
+
         def check(arr, ndim, layout, mutable, aligned):
             ty = typeof(arr)
             self.assertIsInstance(ty, types.Array)
@@ -93,30 +92,32 @@ class TestTypeof(ValueTypingTestBase, TestCase):
             self.assertEqual(ty.aligned, aligned)
 
         a1 = np.arange(10)
-        check(a1, 1, 'C', True, True)
+        check(a1, 1, "C", True, True)
         a2 = np.arange(10).reshape(2, 5)
-        check(a2, 2, 'C', True, True)
-        check(a2.T, 2, 'F', True, True)
+        check(a2, 2, "C", True, True)
+        check(a2.T, 2, "F", True, True)
         a3 = (np.arange(60))[::2].reshape((2, 5, 3))
-        check(a3, 3, 'A', True, True)
+        check(a3, 3, "A", True, True)
         a4 = np.arange(1).reshape(())
-        check(a4, 0, 'C', True, True)
+        check(a4, 0, "C", True, True)
         a4.flags.writeable = False
-        check(a4, 0, 'C', False, True)
+        check(a4, 0, "C", False, True)
 
         # Unsupported dtype
         a5 = a1.astype(a1.dtype.newbyteorder())
         with self.assertRaises(NumbaValueError) as raises:
             typeof(a5)
-        self.assertIn("Unsupported array dtype: %s" % (a5.dtype,),
-                      str(raises.exception))
+        self.assertIn(
+            "Unsupported array dtype: %s" % (a5.dtype,), str(raises.exception)
+        )
 
         # Unsupported array type (masked array)
         with self.assertRaises(NumbaTypeError) as raises:
             masked_arr = np.ma.MaskedArray([1])
             typeof(masked_arr)
-        self.assertIn(f"Unsupported array type: numpy.ma.MaskedArray",
-                      str(raises.exception))
+        self.assertIn(
+            f"Unsupported array type: numpy.ma.MaskedArray", str(raises.exception)
+        )
 
     def test_structured_arrays(self):
         def check(arr, dtype, ndim, layout, aligned):
@@ -127,7 +128,7 @@ class TestTypeof(ValueTypingTestBase, TestCase):
             self.assertEqual(ty.layout, layout)
             self.assertEqual(ty.aligned, aligned)
 
-        dtype = np.dtype([('m', np.int32), ('n', 'S5')])
+        dtype = np.dtype([("m", np.int32), ("n", "S5")])
         rec_ty = numpy_support.from_struct_dtype(dtype)
 
         arr = np.empty(4, dtype=dtype)
@@ -135,7 +136,7 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         arr = np.recarray(4, dtype=dtype)
         check(arr, rec_ty, 1, "C", False)
 
-        dtype = np.dtype([('m', np.int32), ('n', 'S5')], align=True)
+        dtype = np.dtype([("m", np.int32), ("n", "S5")], align=True)
         rec_ty = numpy_support.from_struct_dtype(dtype)
 
         arr = np.empty(4, dtype=dtype)
@@ -149,10 +150,9 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         self.assertEqual(ty, types.Bytes(types.uint8, 1, "C"))
         self.assertFalse(ty.mutable)
         ty = typeof(memoryview(b))
-        self.assertEqual(ty, types.MemoryView(types.uint8, 1, "C",
-                                                readonly=True))
+        self.assertEqual(ty, types.MemoryView(types.uint8, 1, "C", readonly=True))
         self.assertFalse(ty.mutable)
-        ty = typeof(array.array('i', [0, 1, 2]))
+        ty = typeof(array.array("i", [0, 1, 2]))
         self.assertEqual(ty, types.PyArray(types.int32, 1, "C"))
         self.assertTrue(ty.mutable)
 
@@ -185,10 +185,10 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         v = (1, 2)
         self.assertEqual(typeof(v), types.UniTuple(types.intp, 2))
         v = (1, (2.0, 3))
-        self.assertEqual(typeof(v),
-                         types.Tuple((types.intp,
-                                      types.Tuple((types.float64, types.intp))))
-                         )
+        self.assertEqual(
+            typeof(v),
+            types.Tuple((types.intp, types.Tuple((types.float64, types.intp)))),
+        )
 
     def test_lists(self):
         v = [1.0] * 100
@@ -210,15 +210,14 @@ class TestTypeof(ValueTypingTestBase, TestCase):
     def test_namedtuple(self):
         v = Point(1, 2)
         tp_point = typeof(v)
-        self.assertEqual(tp_point,
-                         types.NamedUniTuple(types.intp, 2, Point))
+        self.assertEqual(tp_point, types.NamedUniTuple(types.intp, 2, Point))
         v = Point(1, 2.0)
-        self.assertEqual(typeof(v),
-                         types.NamedTuple([types.intp, types.float64], Point))
+        self.assertEqual(
+            typeof(v), types.NamedTuple([types.intp, types.float64], Point)
+        )
         w = Rect(3, 4)
         tp_rect = typeof(w)
-        self.assertEqual(tp_rect,
-                         types.NamedUniTuple(types.intp, 2, Rect))
+        self.assertEqual(tp_rect, types.NamedUniTuple(types.intp, 2, Rect))
         self.assertNotEqual(tp_rect, tp_point)
         self.assertNotEqual(tp_rect, types.UniTuple(tp_rect.dtype, tp_rect.count))
 
@@ -236,8 +235,10 @@ class TestTypeof(ValueTypingTestBase, TestCase):
 
         with self.assertRaises(ValueError) as raises:
             typeof(HeterogeneousEnum.red)
-        self.assertEqual(str(raises.exception),
-                         "Cannot type heterogeneous enum: got value types complex128, float64")
+        self.assertEqual(
+            str(raises.exception),
+            "Cannot type heterogeneous enum: got value types complex128, float64",
+        )
 
     def test_enum_class(self):
         tp_color = typeof(Color)
@@ -248,20 +249,21 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         tp_shape = typeof(Shape)
         self.assertEqual(tp_shape, types.IntEnumClass(Shape, types.intp))
         tp_error = typeof(RequestError)
-        self.assertEqual(tp_error,
-                         types.IntEnumClass(RequestError, types.intp))
+        self.assertEqual(tp_error, types.IntEnumClass(RequestError, types.intp))
         self.assertNotEqual(tp_error, tp_shape)
 
         with self.assertRaises(ValueError) as raises:
             typeof(HeterogeneousEnum)
-        self.assertEqual(str(raises.exception),
-                         "Cannot type heterogeneous enum: got value types complex128, float64")
+        self.assertEqual(
+            str(raises.exception),
+            "Cannot type heterogeneous enum: got value types complex128, float64",
+        )
 
     def test_dtype(self):
-        dtype = np.dtype('int64')
+        dtype = np.dtype("int64")
         self.assertEqual(typeof(dtype), types.DType(types.int64))
 
-        dtype = np.dtype([('m', np.int32), ('n', 'S5')])
+        dtype = np.dtype([("m", np.int32), ("n", "S5")])
         rec_ty = numpy_support.from_struct_dtype(dtype)
         self.assertEqual(typeof(dtype), types.DType(rec_ty))
 
@@ -278,12 +280,12 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         self.assertEqual(ty_cos.sig.args, (types.float64,))
         self.assertEqual(ty_cos.sig.return_type, types.float64)
         self.assertEqual(ty_cos, ty_sin)
-        self.assertNotEqual(ty_cos.get_pointer(c_cos),
-                            ty_sin.get_pointer(c_sin))
+        self.assertNotEqual(ty_cos.get_pointer(c_cos), ty_sin.get_pointer(c_sin))
 
     @skip_unless_cffi
     def test_cffi(self):
         from numba.tests import cffi_usecases as mod
+
         mod.init()
         ty_cffi_cos = typeof(mod.cffi_cos)
         ty_cffi_sin = typeof(mod.cffi_sin)
@@ -295,10 +297,12 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         self.assertEqual(ty_cffi_cos, ty_cffi_sin)
         ty_ctypes_cos = typeof(c_cos)
         self.assertNotEqual(ty_cffi_cos, ty_ctypes_cos)
-        self.assertNotEqual(ty_cffi_cos.get_pointer(mod.cffi_cos),
-                            ty_cffi_sin.get_pointer(mod.cffi_sin))
-        self.assertEqual(ty_cffi_cos.get_pointer(mod.cffi_cos),
-                         ty_ctypes_cos.get_pointer(c_cos))
+        self.assertNotEqual(
+            ty_cffi_cos.get_pointer(mod.cffi_cos), ty_cffi_sin.get_pointer(mod.cffi_sin)
+        )
+        self.assertEqual(
+            ty_cffi_cos.get_pointer(mod.cffi_cos), ty_ctypes_cos.get_pointer(c_cos)
+        )
 
     def test_custom(self):
         ty = typeof(Custom())
@@ -358,8 +362,16 @@ class TestFingerprint(TestCase):
             self.assertEqual(compute_fingerprint(v), s)
         # Different int widths resolve to different fingerprints
         distinct = set()
-        for tp in ('int8', 'int16', 'int32', 'int64',
-                   'uint8', 'uint16', 'uint32', 'uint64'):
+        for tp in (
+            "int8",
+            "int16",
+            "int32",
+            "int64",
+            "uint8",
+            "uint16",
+            "uint32",
+            "uint64",
+        ):
             tp = getattr(np, tp)
             distinct.add(compute_fingerprint(tp()))
         self.assertEqual(len(distinct), 8, distinct)
@@ -371,7 +383,7 @@ class TestFingerprint(TestCase):
 
     def test_complex(self):
         s = compute_fingerprint(1j)
-        self.assertEqual(s, compute_fingerprint(1+0j))
+        self.assertEqual(s, compute_fingerprint(1 + 0j))
         s = compute_fingerprint(np.complex64())
         self.assertEqual(compute_fingerprint(np.complex64(2.0)), s)
         self.assertNotEqual(compute_fingerprint(np.complex128()), s)
@@ -387,20 +399,18 @@ class TestFingerprint(TestCase):
             compute_fingerprint(RequestError.not_found)
 
     def test_records(self):
-        d1 = np.dtype([('m', np.int32), ('n', np.int64)])
-        d2 = np.dtype([('m', np.int32), ('n', np.int16)])
+        d1 = np.dtype([("m", np.int32), ("n", np.int64)])
+        d2 = np.dtype([("m", np.int32), ("n", np.int16)])
         v1 = np.empty(1, dtype=d1)[0]
         v2 = np.empty(1, dtype=d2)[0]
-        self.assertNotEqual(compute_fingerprint(v1),
-                            compute_fingerprint(v2))
+        self.assertNotEqual(compute_fingerprint(v1), compute_fingerprint(v2))
 
     def test_datetime(self):
-        a = np.datetime64(1, 'Y')
-        b = np.datetime64(2, 'Y')
-        c = np.datetime64(2, 's')
-        d = np.timedelta64(2, 's')
-        self.assertEqual(compute_fingerprint(a),
-                         compute_fingerprint(b))
+        a = np.datetime64(1, "Y")
+        b = np.datetime64(2, "Y")
+        c = np.datetime64(2, "s")
+        d = np.timedelta64(2, "s")
+        self.assertEqual(compute_fingerprint(a), compute_fingerprint(b))
         distinct = set(compute_fingerprint(x) for x in (a, c, d))
         self.assertEqual(len(distinct), 3, distinct)
 
@@ -446,24 +456,23 @@ class TestFingerprint(TestCase):
         # its constructor; check that the fingerprint remains efficient
         a = np.recarray(1, dtype=recordtype)
         b = np.recarray(1, dtype=recordtype)
-        self.assertEqual(compute_fingerprint(a),
-                         compute_fingerprint(b))
+        self.assertEqual(compute_fingerprint(a), compute_fingerprint(b))
 
     def test_buffers(self):
         distinct = DistinctChecker()
 
-        s = compute_fingerprint(b'')
-        self.assertEqual(compute_fingerprint(b'xx'), s)
+        s = compute_fingerprint(b"")
+        self.assertEqual(compute_fingerprint(b"xx"), s)
         distinct.add(s)
         distinct.add(compute_fingerprint(bytearray()))
-        distinct.add(compute_fingerprint(memoryview(b'')))
+        distinct.add(compute_fingerprint(memoryview(b"")))
         m_uint8_1d = compute_fingerprint(memoryview(bytearray()))
         distinct.add(m_uint8_1d)
 
-        arr = array.array('B', [42])
+        arr = array.array("B", [42])
         distinct.add(compute_fingerprint(arr))
         self.assertEqual(compute_fingerprint(memoryview(arr)), m_uint8_1d)
-        for array_code in 'bi':
+        for array_code in "bi":
             arr = array.array(array_code, [0, 1, 2])
             distinct.add(compute_fingerprint(arr))
             distinct.add(compute_fingerprint(memoryview(arr)))
@@ -488,11 +497,11 @@ class TestFingerprint(TestCase):
     def test_dtype(self):
         distinct = DistinctChecker()
 
-        s = compute_fingerprint(np.dtype('int64'))
-        self.assertEqual(compute_fingerprint(np.dtype('int64')), s)
+        s = compute_fingerprint(np.dtype("int64"))
+        self.assertEqual(compute_fingerprint(np.dtype("int64")), s)
         distinct.add(s)
 
-        for descr in ('int32', 'm8[s]', 'm8[W]', 'M8[s]'):
+        for descr in ("int32", "m8[s]", "m8[W]", "M8[s]"):
             distinct.add(np.dtype(descr))
 
         distinct.add(recordtype)
@@ -502,8 +511,7 @@ class TestFingerprint(TestCase):
         # its constructor; check that the fingerprint remains efficient
         a = np.recarray(1, dtype=recordtype)
         b = np.recarray(1, dtype=recordtype)
-        self.assertEqual(compute_fingerprint(a.dtype),
-                         compute_fingerprint(b.dtype))
+        self.assertEqual(compute_fingerprint(a.dtype), compute_fingerprint(b.dtype))
 
     def test_tuples(self):
         distinct = DistinctChecker()
@@ -571,5 +579,5 @@ class TestFingerprint(TestCase):
         s = compute_fingerprint(t)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

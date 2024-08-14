@@ -8,6 +8,7 @@ import numpy as np
 
 # Dummy function definitions to overload
 
+
 def generic_func_1():
     pass
 
@@ -79,113 +80,128 @@ CUDA_TARGET_OL_CALLS_TARGET_OL = 43
 
 # Overload implementations
 
-@overload(generic_func_1, target='generic')
+
+@overload(generic_func_1, target="generic")
 def ol_generic_func_1(x):
     def impl(x):
         x[0] *= GENERIC_FUNCTION_1
+
     return impl
 
 
-@overload(cuda_func_1, target='cuda')
+@overload(cuda_func_1, target="cuda")
 def ol_cuda_func_1(x):
     def impl(x):
         x[0] *= CUDA_FUNCTION_1
+
     return impl
 
 
-@overload(generic_func_2, target='generic')
+@overload(generic_func_2, target="generic")
 def ol_generic_func_2(x):
     def impl(x):
         x[0] *= GENERIC_FUNCTION_2
+
     return impl
 
 
-@overload(cuda_func_2, target='cuda')
+@overload(cuda_func_2, target="cuda")
 def ol_cuda_func(x):
     def impl(x):
         x[0] *= CUDA_FUNCTION_2
+
     return impl
 
 
-@overload(generic_calls_generic, target='generic')
+@overload(generic_calls_generic, target="generic")
 def ol_generic_calls_generic(x):
     def impl(x):
         x[0] *= GENERIC_CALLS_GENERIC
         generic_func_1(x)
+
     return impl
 
 
-@overload(generic_calls_cuda, target='generic')
+@overload(generic_calls_cuda, target="generic")
 def ol_generic_calls_cuda(x):
     def impl(x):
         x[0] *= GENERIC_CALLS_CUDA
         cuda_func_1(x)
+
     return impl
 
 
-@overload(cuda_calls_generic, target='cuda')
+@overload(cuda_calls_generic, target="cuda")
 def ol_cuda_calls_generic(x):
     def impl(x):
         x[0] *= CUDA_CALLS_GENERIC
         generic_func_1(x)
+
     return impl
 
 
-@overload(cuda_calls_cuda, target='cuda')
+@overload(cuda_calls_cuda, target="cuda")
 def ol_cuda_calls_cuda(x):
     def impl(x):
         x[0] *= CUDA_CALLS_CUDA
         cuda_func_1(x)
+
     return impl
 
 
-@overload(target_overloaded, target='generic')
+@overload(target_overloaded, target="generic")
 def ol_target_overloaded_generic(x):
     def impl(x):
         x[0] *= GENERIC_TARGET_OL
+
     return impl
 
 
-@overload(target_overloaded, target='cuda')
+@overload(target_overloaded, target="cuda")
 def ol_target_overloaded_cuda(x):
     def impl(x):
         x[0] *= CUDA_TARGET_OL
+
     return impl
 
 
-@overload(generic_calls_target_overloaded, target='generic')
+@overload(generic_calls_target_overloaded, target="generic")
 def ol_generic_calls_target_overloaded(x):
     def impl(x):
         x[0] *= GENERIC_CALLS_TARGET_OL
         target_overloaded(x)
+
     return impl
 
 
-@overload(cuda_calls_target_overloaded, target='cuda')
+@overload(cuda_calls_target_overloaded, target="cuda")
 def ol_cuda_calls_target_overloaded(x):
     def impl(x):
         x[0] *= CUDA_CALLS_TARGET_OL
         target_overloaded(x)
+
     return impl
 
 
-@overload(target_overloaded_calls_target_overloaded, target='generic')
+@overload(target_overloaded_calls_target_overloaded, target="generic")
 def ol_generic_calls_target_overloaded_generic(x):
     def impl(x):
         x[0] *= GENERIC_TARGET_OL_CALLS_TARGET_OL
         target_overloaded(x)
+
     return impl
 
 
-@overload(target_overloaded_calls_target_overloaded, target='cuda')
+@overload(target_overloaded_calls_target_overloaded, target="cuda")
 def ol_generic_calls_target_overloaded_cuda(x):
     def impl(x):
         x[0] *= CUDA_TARGET_OL_CALLS_TARGET_OL
         target_overloaded(x)
+
     return impl
 
 
-@skip_on_cudasim('Overloading not supported in cudasim')
+@skip_on_cudasim("Overloading not supported in cudasim")
 class TestOverload(CUDATestCase):
     def check_overload(self, kernel, expected):
         x = np.ones(1, dtype=np.int32)
@@ -300,7 +316,7 @@ class TestOverload(CUDATestCase):
         MyDummy, MyDummyType = self.make_dummy_type()
         mydummy_type = typeof(MyDummy())
 
-        @overload_attribute(MyDummyType, 'cuda_only', target='cuda')
+        @overload_attribute(MyDummyType, "cuda_only", target="cuda")
         def ov_dummy_cuda_attr(obj):
             def imp(obj):
                 return 42
@@ -309,8 +325,8 @@ class TestOverload(CUDATestCase):
 
         # Ensure that we cannot use the CUDA target-specific attribute on the
         # CPU, and that an appropriate typing error is raised
-        with self.assertRaisesRegex(TypingError,
-                                    "Unknown attribute 'cuda_only'"):
+        with self.assertRaisesRegex(TypingError, "Unknown attribute 'cuda_only'"):
+
             @njit(types.int64(mydummy_type))
             def illegal_target_attr_use(x):
                 return x.cuda_only
@@ -323,5 +339,5 @@ class TestOverload(CUDATestCase):
             res[0] = dummy.cuda_only
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

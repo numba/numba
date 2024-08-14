@@ -60,9 +60,7 @@ class TestMiscCoverageSupport(TestCase):
         self.assertIn(("NOTIFY", loc.with_lineno(offset)), MyNotify.records)
 
         # `    return 321` line is not compiled
-        self.assertNotIn(
-            ("NOTIFY", loc.with_lineno(offset + 1)), MyNotify.records
-        )
+        self.assertNotIn(("NOTIFY", loc.with_lineno(offset + 1)), MyNotify.records)
 
         # `    return 123` line is compiled
         self.assertIn(("NOTIFY", loc.with_lineno(offset + 2)), MyNotify.records)

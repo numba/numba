@@ -57,6 +57,7 @@ class ValueState:
 
     For most compiler passes, Value and State can be treated as the same.
     """
+
     parent: Optional["Op"]
     """Optional. The parent Op that output this ValueState.
     """
@@ -85,6 +86,7 @@ class Op:
     An Op has inputs and outputs ports that are ValueStates.
     An Op can optionally have a bytecode instruction associated with it.
     """
+
     opname: str
     """Operation name.
     """
@@ -150,32 +152,20 @@ class DDGProtocol(Protocol):
 
 @dataclass(frozen=True)
 class DDGRegion(RegionBlock):
-    incoming_states: MutableSortedSet[str] = field(
-        default_factory=MutableSortedSet
-    )
-    outgoing_states: MutableSortedSet[str] = field(
-        default_factory=MutableSortedSet
-    )
+    incoming_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
+    outgoing_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
 
 
 @dataclass(frozen=True)
 class DDGBranch(SyntheticBranch):
-    incoming_states: MutableSortedSet[str] = field(
-        default_factory=MutableSortedSet
-    )
-    outgoing_states: MutableSortedSet[str] = field(
-        default_factory=MutableSortedSet
-    )
+    incoming_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
+    outgoing_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
 
 
 @dataclass(frozen=True)
 class DDGControlVariable(SyntheticAssignment):
-    incoming_states: MutableSortedSet[str] = field(
-        default_factory=MutableSortedSet
-    )
-    outgoing_states: MutableSortedSet[str] = field(
-        default_factory=MutableSortedSet
-    )
+    incoming_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
+    outgoing_states: MutableSortedSet[str] = field(default_factory=MutableSortedSet)
 
 
 @dataclass(frozen=True)
@@ -184,9 +174,7 @@ class DDGBlock(BasicBlock):
     out_effect: ValueState | None = None
     in_stackvars: list[ValueState] = field(default_factory=list)
     out_stackvars: list[ValueState] = field(default_factory=list)
-    in_vars: MutableSortedMap[str, ValueState] = field(
-        default_factory=MutableSortedMap
-    )
+    in_vars: MutableSortedMap[str, ValueState] = field(default_factory=MutableSortedMap)
     out_vars: MutableSortedMap[str, ValueState] = field(
         default_factory=MutableSortedMap
     )
@@ -230,9 +218,7 @@ class DDGBlock(BasicBlock):
         for k, vs in self.out_vars.items():
             ports.append(k)
 
-            builder.graph.add_edge(
-                vs.short_identity(), outgoing_nodename, dst_port=k
-            )
+            builder.graph.add_edge(vs.short_identity(), outgoing_nodename, dst_port=k)
 
         outgoing_node = builder.node_maker.make_node(
             kind="ports",
@@ -396,9 +382,7 @@ def _canonicalize_scfg_switch(scfg: SCFG):
                 switch_labels = {label, taillabel, *brlabels}
                 subregion_graph = {k: scfg[k] for k in switch_labels}
                 scfg.remove_blocks(switch_labels)
-                subregion_scfg = SCFG(
-                    graph=subregion_graph, name_gen=scfg.name_gen
-                )
+                subregion_scfg = SCFG(graph=subregion_graph, name_gen=scfg.name_gen)
 
                 todos -= switch_labels
 
@@ -470,9 +454,7 @@ class CanonicalizeLoop(RegionTransformer[None]):
         new_tail_bb = replace(
             tail_bb,
             backedges=(new_label,),
-            _jump_targets=tuple(
-                [repl.get(x, x) for x in tail_bb._jump_targets]
-            ),
+            _jump_targets=tuple([repl.get(x, x) for x in tail_bb._jump_targets]),
         )
         tail_parent.subregion.graph[tail_bb.name] = new_tail_bb
 
@@ -558,10 +540,7 @@ def _scfg_add_conditional_pop_stack(bcmap, scfg: SCFG):
         return replace(
             blk,
             _jump_targets=tuple(
-                [
-                    repl if i == idx else jt
-                    for i, jt in enumerate(blk._jump_targets)
-                ]
+                [repl if i == idx else jt for i, jt in enumerate(blk._jump_targets)]
             ),
         )
 
@@ -696,9 +675,7 @@ class PropagateVars(RegionVisitor[_pvData]):
 
         exiting = region.exiting
 
-        data_at_tail = self.visit_linear(
-            region.subregion[exiting], data_after_branches
-        )
+        data_at_tail = self.visit_linear(region.subregion[exiting], data_after_branches)
 
         self.debug_print("data_at_head", data_at_head)
         self.debug_print("data_for_branches", data_for_branches)
@@ -779,9 +756,7 @@ class PropagateStack(RegionVisitor[_psData]):
 
         exiting = region.exiting
 
-        data_at_tail = self.visit_linear(
-            region.subregion[exiting], data_after_branches
-        )
+        data_at_tail = self.visit_linear(region.subregion[exiting], data_after_branches)
 
         self.debug_print("data_at_head", data_at_head)
         self.debug_print("data_for_branches", data_for_branches)
@@ -846,9 +821,7 @@ def convert_scfg_to_dataflow(scfg, bcmap, argnames: tuple[str, ...]) -> SCFG:
             rvsdg.add_block(ddg)
         elif isinstance(block, RegionBlock):
             # Inside-out
-            subregion = convert_scfg_to_dataflow(
-                block.subregion, bcmap, argnames
-            )
+            subregion = convert_scfg_to_dataflow(block.subregion, bcmap, argnames)
             rvsdg.add_block(
                 _upgrade_dataclass(block, DDGRegion, dict(subregion=subregion))
             )

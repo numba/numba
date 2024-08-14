@@ -11,25 +11,32 @@ class TestGetitemOnTypes(TestCase):
 
         def gen(numba_type, index):
             def foo():
-                ty = numba_type[index] # a static_getitem
+                ty = numba_type[index]  # a static_getitem
                 return typed.List.empty_list(ty)
+
             return foo
 
         # test a few types
-        tys = (types.bool_, types.float64, types.uint8, types.complex128,)
+        tys = (
+            types.bool_,
+            types.float64,
+            types.uint8,
+            types.complex128,
+        )
 
         # and a few indexes of increasing complexity
-        contig = slice(None, None, 1) # unit stride
+        contig = slice(None, None, 1)  # unit stride
         noncontig = slice(None, None, None)
-        indexes = (contig, # 1d contig -> C order
-                   noncontig, # 1d non-contig -> A order
-                   (noncontig, contig), # 2d C order
-                   (contig, noncontig), # 2d F order
-                   (noncontig, noncontig), # 2d A order
-                   (noncontig, noncontig, contig), # 3d C order
-                   (contig, noncontig, noncontig), # 3d F order
-                   (noncontig, noncontig, noncontig), # 3d A order
-                   )
+        indexes = (
+            contig,  # 1d contig -> C order
+            noncontig,  # 1d non-contig -> A order
+            (noncontig, contig),  # 2d C order
+            (contig, noncontig),  # 2d F order
+            (noncontig, noncontig),  # 2d A order
+            (noncontig, noncontig, contig),  # 3d C order
+            (contig, noncontig, noncontig),  # 3d F order
+            (noncontig, noncontig, noncontig),  # 3d A order
+        )
 
         for ty, idx in product(tys, indexes):
             compilable = njit(gen(ty, idx))
@@ -49,14 +56,14 @@ class TestGetitemOnTypes(TestCase):
 
         @njit
         def foo1():
-            ty = types.float32[::1, :] # 2d F order
+            ty = types.float32[::1, :]  # 2d F order
             return typed.List.empty_list(ty)
 
         self.assertEqual(foo1()._dtype, types.float32[::1, :])
 
         @njit
         def foo2():
-            ty = types.complex64[:, :, :] # 3d A order
+            ty = types.complex64[:, :, :]  # 3d A order
             return typed.List.empty_list(ty)
 
         self.assertEqual(foo2()._dtype, types.complex64[:, :, :])
@@ -70,14 +77,14 @@ class TestGetitemOnTypes(TestCase):
         # check the same fails in compilation as it's not supported
         # it'll fall back to a generic getitem
         with self.assertRaises(errors.TypingError) as raises:
+
             @njit
             def foo():
                 types.void[:]
 
             foo()
 
-        msg = ("No implementation",
-               "getitem(typeref[none], slice<a:b>)")
+        msg = ("No implementation", "getitem(typeref[none], slice<a:b>)")
 
         excstr = str(raises.exception)
         for m in msg:
@@ -89,19 +96,19 @@ class TestGetitemOnTypes(TestCase):
 
         # check using a non-static arg to the getitem raises
         with self.assertRaises(errors.TypingError) as raises:
+
             @njit
             def foo(not_static):
                 types.float64[not_static]
 
             foo(slice(None, None, 1))
 
-        msg = ("No implementation",
-               "getitem(class(float64), slice<a:b>)")
+        msg = ("No implementation", "getitem(class(float64), slice<a:b>)")
 
         excstr = str(raises.exception)
         for m in msg:
             self.assertIn(m, excstr)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

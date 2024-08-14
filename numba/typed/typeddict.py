@@ -1,6 +1,7 @@
 """
 Python wrapper that connects CPython interpreter to the numba dictobject.
 """
+
 from collections.abc import MutableMapping, Iterable, Mapping
 from numba.core.types import DictType
 from numba.core.imputils import numba_typeref_ctor
@@ -20,8 +21,7 @@ from numba.core.typing import signature
 
 @njit
 def _make_dict(keyty, valty, n_keys=0):
-    return dictobject._as_meminfo(dictobject.new_dict(keyty, valty,
-                                                      n_keys=n_keys))
+    return dictobject._as_meminfo(dictobject.new_dict(keyty, valty, n_keys=n_keys))
 
 
 @njit
@@ -126,35 +126,39 @@ class Dict(MutableMapping):
             # https://github.com/python/cpython/blob/f215d7cac9a6f9b51ba864e4252686dee4e45d64/Objects/dictobject.c#L2693-L2695
             _len = len(args)
             if _len > 1:
-                raise errors.TypingError("Dict expect at most 1 argument, "
-                                         f"got {_len}")
+                raise errors.TypingError(
+                    "Dict expect at most 1 argument, " f"got {_len}"
+                )
 
             # check if argument is iterable
             arg = args[0]
             if not isinstance(arg, Iterable):
-                msg = (f"'{type(arg)}' object is not iterable. Supported type "
-                       "constructor are Dict() and Dict(iterable)")
+                msg = (
+                    f"'{type(arg)}' object is not iterable. Supported type "
+                    "constructor are Dict() and Dict(iterable)"
+                )
                 raise errors.TypingError(msg)
             elif isinstance(arg, Mapping):
                 raise errors.TypingError("dict(mapping) is not supported")
 
             for idx, item in enumerate(arg):
                 if len(item) != 2:
-                    msg = (f"dictionary update sequence element #{idx} has "
-                           f"length {len(item)}; 2 is required")
+                    msg = (
+                        f"dictionary update sequence element #{idx} has "
+                        f"length {len(item)}; 2 is required"
+                    )
                     raise ValueError(msg)
                 k, v = item
                 self.__setitem__(k, v)
 
     def _parse_arg(self, dcttype, meminfo=None, n_keys=0):
         if not isinstance(dcttype, DictType):
-            raise TypeError('*dcttype* must be a DictType')
+            raise TypeError("*dcttype* must be a DictType")
 
         if meminfo is not None:
             opaque = meminfo
         else:
-            opaque = _make_dict(dcttype.key_type, dcttype.value_type,
-                                n_keys=n_keys)
+            opaque = _make_dict(dcttype.key_type, dcttype.value_type, n_keys=n_keys)
         return dcttype, opaque
 
     @property
@@ -165,8 +169,7 @@ class Dict(MutableMapping):
 
     @property
     def _typed(self):
-        """Returns True if the dictionary is typed.
-        """
+        """Returns True if the dictionary is typed."""
         return self._dict_type is not None
 
     def _initialise_dict(self, key, value):
@@ -211,7 +214,7 @@ class Dict(MutableMapping):
         buf = []
         for k, v in self.items():
             buf.append("{}: {}".format(k, v))
-        return '{{{0}}}'.format(', '.join(buf))
+        return "{{{0}}}".format(", ".join(buf))
 
     def __repr__(self):
         body = str(self)
@@ -231,14 +234,14 @@ class Dict(MutableMapping):
 
     def popitem(self):
         if len(self) == 0:
-            raise KeyError('dictionary is empty')
+            raise KeyError("dictionary is empty")
         return _popitem(self)
 
     def copy(self):
         return _copy(self)
 
 
-@overload_classmethod(types.DictType, 'empty')
+@overload_classmethod(types.DictType, "empty")
 def typeddict_empty(cls, key_type, value_type, n_keys=0):
     if cls.instance_type is not DictType:
         return
@@ -264,10 +267,11 @@ def box_dicttype(typ, val, c):
     )
 
     modname = c.context.insert_const_string(
-        c.builder.module, 'numba.typed.typeddict',
+        c.builder.module,
+        "numba.typed.typeddict",
     )
     typeddict_mod = c.pyapi.import_module_noblock(modname)
-    fmp_fn = c.pyapi.object_getattr_string(typeddict_mod, '_from_meminfo_ptr')
+    fmp_fn = c.pyapi.object_getattr_string(typeddict_mod, "_from_meminfo_ptr")
 
     dicttype_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ))
 
@@ -275,7 +279,8 @@ def box_dicttype(typ, val, c):
     builder.store(cgutils.get_null_value(c.pyapi.pyobj), result_var)
     with builder.if_then(cgutils.is_not_null(builder, dicttype_obj)):
         res = c.pyapi.call_function_objargs(
-            fmp_fn, (boxed_meminfo, dicttype_obj),
+            fmp_fn,
+            (boxed_meminfo, dicttype_obj),
         )
         c.pyapi.decref(fmp_fn)
         c.pyapi.decref(typeddict_mod)
@@ -295,7 +300,7 @@ def unbox_dicttype(typ, val, c):
 
     with c.builder.if_else(same_type) as (then, orelse):
         with then:
-            miptr = c.pyapi.object_getattr_string(val, '_opaque')
+            miptr = c.pyapi.object_getattr_string(val, "_opaque")
 
             mip_type = types.MemInfoPointer(types.voidptr)
             native = c.unbox(mip_type, miptr)
@@ -322,7 +327,8 @@ def unbox_dicttype(typ, val, c):
             c.pyapi.err_format(
                 "PyExc_TypeError",
                 "can't unbox a %S as a %S",
-                valtype, dict_type,
+                valtype,
+                dict_type,
             )
             bb_else = c.builder.basic_block
 
@@ -349,6 +355,7 @@ def typeddict_call(context):
     Defines typing logic for ``Dict()`` and ``Dict(iterable)``.
     Produces Dict[undefined, undefined] or Dict[key, value]
     """
+
     def typer(arg=None):
         if arg is None:
             return types.DictType(types.undefined, types.undefined)
@@ -365,6 +372,7 @@ def typeddict_call(context):
             elif isinstance(dtype, types.Tuple):
                 key, value = dtype.key
                 return types.DictType(key, value)
+
     return typer
 
 
@@ -402,6 +410,7 @@ def impl_numba_typeref_ctor(cls, *args):
 
     if args:
         if isinstance(args[0], types.IterableType):
+
             def impl(cls, *args):
                 # Instantiate an empty dict and populate it with values from
                 # the iterable.
@@ -409,7 +418,9 @@ def impl_numba_typeref_ctor(cls, *args):
                 for k, v in args[0]:
                     d[k] = v
                 return d
+
     else:
+
         def impl(cls, *args):
             # Simply call .empty() with the key/value types from *cls*
             return Dict.empty(key_type, value_type)

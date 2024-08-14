@@ -16,11 +16,13 @@ def sinc(x):
     else:
         return math.sin(x * pi) / (pi * x)
 
+
 def scaled_sinc(x, scale):
     if x == 0.0:
         return scale
     else:
         return scale * (math.sin(x * pi) / (pi * x))
+
 
 def vector_add(a, b):
     return a + b
@@ -30,9 +32,9 @@ class BaseVectorizeDecor(object):
     target = None
     wrapper = None
     funcs = {
-        'func1': sinc,
-        'func2': scaled_sinc,
-        'func3': vector_add,
+        "func1": sinc,
+        "func2": scaled_sinc,
+        "func3": vector_add,
     }
 
     @classmethod
@@ -46,20 +48,20 @@ class BaseVectorizeDecor(object):
         np.testing.assert_allclose(result, gold, **kwargs)
 
     def test_1(self):
-        sig = ['float64(float64)', 'float32(float32)']
-        func = self.funcs['func1']
+        sig = ["float64(float64)", "float32(float32)"]
+        func = self.funcs["func1"]
         A = np.arange(100, dtype=np.float64)
         self._run_and_compare(func, sig, A)
 
     def test_2(self):
         sig = [float64(float64), float32(float32)]
-        func = self.funcs['func1']
+        func = self.funcs["func1"]
         A = np.arange(100, dtype=np.float64)
         self._run_and_compare(func, sig, A)
 
     def test_3(self):
-        sig = ['float64(float64, uint32)']
-        func = self.funcs['func2']
+        sig = ["float64(float64, uint32)"]
+        func = self.funcs["func2"]
         A = np.arange(100, dtype=np.float64)
         scale = np.uint32(3)
         self._run_and_compare(func, sig, A, scale, atol=1e-8)
@@ -71,7 +73,7 @@ class BaseVectorizeDecor(object):
             float32(float32, float32),
             float64(float64, float64),
         ]
-        func = self.funcs['func3']
+        func = self.funcs["func3"]
         A = np.arange(100, dtype=np.float64)
         self._run_and_compare(func, sig, A, A)
         A = A.astype(np.float32)
@@ -83,16 +85,16 @@ class BaseVectorizeDecor(object):
 
 
 class TestCPUVectorizeDecor(unittest.TestCase, BaseVectorizeDecor):
-    target = 'cpu'
+    target = "cpu"
 
 
 class TestParallelVectorizeDecor(unittest.TestCase, BaseVectorizeDecor):
     _numba_parallel_test_ = False
-    target = 'parallel'
+    target = "parallel"
 
 
 class TestCPUVectorizeJitted(unittest.TestCase, BaseVectorizeDecor):
-    target = 'cpu'
+    target = "cpu"
     wrapper = jit(nopython=True)
 
 
@@ -100,6 +102,7 @@ class BaseVectorizeNopythonArg(unittest.TestCase, CheckWarningsMixin):
     """
     Test passing the nopython argument to the vectorize decorator.
     """
+
     def _test_target_nopython(self, target, warnings, with_sig=True):
         a = np.array([2.0], dtype=np.float32)
         b = np.array([3.0], dtype=np.float32)
@@ -109,21 +112,23 @@ class BaseVectorizeNopythonArg(unittest.TestCase, CheckWarningsMixin):
             f = vectorize(*args, target=target, nopython=True)(vector_add)
             f(a, b)
 
+
 class TestVectorizeNopythonArg(BaseVectorizeNopythonArg):
     def test_target_cpu_nopython(self):
-        self._test_target_nopython('cpu', [])
+        self._test_target_nopython("cpu", [])
 
     def test_target_cpu_nopython_no_sig(self):
-        self._test_target_nopython('cpu', [], False)
+        self._test_target_nopython("cpu", [], False)
 
     def test_target_parallel_nopython(self):
-        self._test_target_nopython('parallel', [])
+        self._test_target_nopython("parallel", [])
 
 
 class BaseVectorizeUnrecognizedArg(unittest.TestCase, CheckWarningsMixin):
     """
     Test passing an unrecognized argument to the vectorize decorator.
     """
+
     def _test_target_unrecognized_arg(self, target, with_sig=True):
         a = np.array([2.0], dtype=np.float32)
         b = np.array([3.0], dtype=np.float32)
@@ -134,18 +139,17 @@ class BaseVectorizeUnrecognizedArg(unittest.TestCase, CheckWarningsMixin):
             f(a, b)
         self.assertIn("Unrecognized options", str(raises.exception))
 
+
 class TestVectorizeUnrecognizedArg(BaseVectorizeUnrecognizedArg):
     def test_target_cpu_unrecognized_arg(self):
-        self._test_target_unrecognized_arg('cpu')
+        self._test_target_unrecognized_arg("cpu")
 
     def test_target_cpu_unrecognized_arg_no_sig(self):
-        self._test_target_unrecognized_arg('cpu', False)
+        self._test_target_unrecognized_arg("cpu", False)
 
     def test_target_parallel_unrecognized_arg(self):
-        self._test_target_unrecognized_arg('parallel')
+        self._test_target_unrecognized_arg("parallel")
 
 
-
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

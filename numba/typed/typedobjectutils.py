@@ -14,19 +14,19 @@ from numba.core.errors import TypingError, NumbaTypeSafetyWarning
 
 
 def _as_bytes(builder, ptr):
-    """Helper to do (void*)ptr
-    """
+    """Helper to do (void*)ptr"""
     return builder.bitcast(ptr, cgutils.voidptr_t)
 
 
 @intrinsic
 def _cast(typingctx, val, typ):
-    """Cast *val* to *typ*
-    """
+    """Cast *val* to *typ*"""
+
     def codegen(context, builder, signature, args):
         [val, typ] = args
         context.nrt.incref(builder, signature.return_type, val)
         return val
+
     # Using implicit casting in argument types
     casted = typ.instance_type
     _sentry_safe_cast(val, casted)
@@ -35,16 +35,14 @@ def _cast(typingctx, val, typ):
 
 
 def _sentry_safe_cast(fromty, toty):
-    """Check and raise TypingError if *fromty* cannot be safely cast to *toty*
-    """
+    """Check and raise TypingError if *fromty* cannot be safely cast to *toty*"""
     tyctxt = cpu_target.typing_context
     fromty, toty = map(types.unliteral, (fromty, toty))
     by = tyctxt.can_convert(fromty, toty)
 
     def warn():
-        m = 'unsafe cast from {} to {}. Precision may be lost.'
-        warnings.warn(m.format(fromty, toty),
-                      category=NumbaTypeSafetyWarning)
+        m = "unsafe cast from {} to {}. Precision may be lost."
+        warnings.warn(m.format(fromty, toty), category=NumbaTypeSafetyWarning)
 
     isint = lambda x: isinstance(x, types.Integer)
     isflt = lambda x: isinstance(x, types.Float)
@@ -65,19 +63,18 @@ def _sentry_safe_cast(fromty, toty):
             # Accept if complex to complex
             warn()
         elif isdict(fromty) and isdict(toty):
-            pass # it's complaining about initial values being different
+            pass  # it's complaining about initial values being different
         elif not isinstance(toty, types.Number):
             # Non-numbers
             warn()
         else:
             # Make it a hard error for numeric type that changes domain.
-            m = 'cannot safely cast {} to {}. Please cast explicitly.'
+            m = "cannot safely cast {} to {}. Please cast explicitly."
             raise TypingError(m.format(fromty, toty))
 
 
 def _sentry_safe_cast_default(default, valty):
-    """Similar to _sentry_safe_cast but handle default value.
-    """
+    """Similar to _sentry_safe_cast but handle default value."""
     # Handle default values
     # TODO: simplify default values; too many possible way to spell None
     if default is None:
@@ -89,10 +86,9 @@ def _sentry_safe_cast_default(default, valty):
 
 @intrinsic
 def _nonoptional(typingctx, val):
-    """Typing trick to cast Optional[T] to T
-    """
+    """Typing trick to cast Optional[T] to T"""
     if not isinstance(val, types.Optional):
-        raise TypeError('expected an optional')
+        raise TypeError("expected an optional")
 
     def codegen(context, builder, sig, args):
         context.nrt.incref(builder, sig.return_type, args[0])
@@ -104,16 +100,14 @@ def _nonoptional(typingctx, val):
 
 
 def _container_get_data(context, builder, container_ty, c):
-    """Helper to get the C list pointer in a numba containers.
-    """
+    """Helper to get the C list pointer in a numba containers."""
     ctor = cgutils.create_struct_proxy(container_ty)
     conatainer_struct = ctor(context, builder, value=c)
     return conatainer_struct.data
 
 
 def _container_get_meminfo(context, builder, container_ty, c):
-    """Helper to get the meminfo for a container
-    """
+    """Helper to get the meminfo for a container"""
     ctor = cgutils.create_struct_proxy(container_ty)
     conatainer_struct = ctor(context, builder, value=c)
     return conatainer_struct.meminfo
@@ -126,22 +120,32 @@ def _get_incref_decref(context, module, datamodel, container_element_type):
     data_ptr_ty = datamodel.get_data_type().as_pointer()
     refct_fnty = ir.FunctionType(ir.VoidType(), [data_ptr_ty])
     incref_fn = cgutils.get_or_insert_function(
-        module, refct_fnty, '.numba_{}.{}_incref'.format(
-            context.fndesc.mangled_name, container_element_type),)
+        module,
+        refct_fnty,
+        ".numba_{}.{}_incref".format(
+            context.fndesc.mangled_name, container_element_type
+        ),
+    )
 
     builder = ir.IRBuilder(incref_fn.append_basic_block())
     context.nrt.incref(
-        builder, fe_type,
+        builder,
+        fe_type,
         datamodel.load_from_data_pointer(builder, incref_fn.args[0]),
     )
     builder.ret_void()
 
     decref_fn = cgutils.get_or_insert_function(
-        module, refct_fnty, name='.numba_{}.{}_decref'.format(
-            context.fndesc.mangled_name, container_element_type),)
+        module,
+        refct_fnty,
+        name=".numba_{}.{}_decref".format(
+            context.fndesc.mangled_name, container_element_type
+        ),
+    )
     builder = ir.IRBuilder(decref_fn.append_basic_block())
     context.nrt.decref(
-        builder, fe_type,
+        builder,
+        fe_type,
         datamodel.load_from_data_pointer(builder, decref_fn.args[0]),
     )
     builder.ret_void()
@@ -155,8 +159,7 @@ def _get_equal(context, module, datamodel, container_element_type):
     fe_type = datamodel.fe_type
     data_ptr_ty = datamodel.get_data_type().as_pointer()
 
-    wrapfnty = context.call_conv.get_function_type(types.int32,
-                                                   [fe_type, fe_type])
+    wrapfnty = context.call_conv.get_function_type(types.int32, [fe_type, fe_type])
     argtypes = [fe_type, fe_type]
 
     def build_wrapper(fn):
@@ -173,20 +176,32 @@ def _get_equal(context, module, datamodel, container_element_type):
         context.call_conv.return_value(builder, intres)
 
     wrapfn = cgutils.get_or_insert_function(
-        module, wrapfnty, name='.numba_{}.{}_equal.wrap'.format(
-            context.fndesc.mangled_name, container_element_type))
+        module,
+        wrapfnty,
+        name=".numba_{}.{}_equal.wrap".format(
+            context.fndesc.mangled_name, container_element_type
+        ),
+    )
     build_wrapper(wrapfn)
 
     equal_fnty = ir.FunctionType(ir.IntType(32), [data_ptr_ty, data_ptr_ty])
     equal_fn = cgutils.get_or_insert_function(
-        module, equal_fnty, name='.numba_{}.{}_equal'.format(
-            context.fndesc.mangled_name, container_element_type),)
+        module,
+        equal_fnty,
+        name=".numba_{}.{}_equal".format(
+            context.fndesc.mangled_name, container_element_type
+        ),
+    )
     builder = ir.IRBuilder(equal_fn.append_basic_block())
     lhs = datamodel.load_from_data_pointer(builder, equal_fn.args[0])
     rhs = datamodel.load_from_data_pointer(builder, equal_fn.args[1])
 
     status, retval = context.call_conv.call_function(
-        builder, wrapfn, types.int32, argtypes, [lhs, rhs],
+        builder,
+        wrapfn,
+        types.int32,
+        argtypes,
+        [lhs, rhs],
     )
     with builder.if_then(status.is_ok, likely=True):
         with builder.if_then(status.is_none):

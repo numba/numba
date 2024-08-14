@@ -1,7 +1,11 @@
 from math import sqrt
 from numba import cuda, float32, int16, int32, int64, uint32, void
-from numba.cuda import (compile, compile_for_current_device, compile_ptx,
-                        compile_ptx_for_current_device)
+from numba.cuda import (
+    compile,
+    compile_for_current_device,
+    compile_ptx,
+    compile_ptx_for_current_device,
+)
 from numba.cuda.cudadrv import runtime
 from numba.cuda.testing import skip_on_cudasim, unittest, CUDATestCase
 
@@ -12,7 +16,7 @@ def f_module(x, y):
     return x + y
 
 
-@skip_on_cudasim('Compilation unsupported in the simulator')
+@skip_on_cudasim("Compilation unsupported in the simulator")
 class TestCompile(unittest.TestCase):
     def test_global_kernel(self):
         def f(r, x, y):
@@ -24,11 +28,11 @@ class TestCompile(unittest.TestCase):
         ptx, resty = compile_ptx(f, args)
 
         # Kernels should not have a func_retval parameter
-        self.assertNotIn('func_retval', ptx)
+        self.assertNotIn("func_retval", ptx)
         # .visible .func is used to denote a device function
-        self.assertNotIn('.visible .func', ptx)
+        self.assertNotIn(".visible .func", ptx)
         # .visible .entry would denote the presence of a global function
-        self.assertIn('.visible .entry', ptx)
+        self.assertIn(".visible .entry", ptx)
         # Return type for kernels should always be void
         self.assertEqual(resty, void)
 
@@ -41,11 +45,11 @@ class TestCompile(unittest.TestCase):
 
         # Device functions take a func_retval parameter for storing the
         # returned value in by reference
-        self.assertIn('func_retval', ptx)
+        self.assertIn("func_retval", ptx)
         # .visible .func is used to denote a device function
-        self.assertIn('.visible .func', ptx)
+        self.assertIn(".visible .func", ptx)
         # .visible .entry would denote the presence of a global function
-        self.assertNotIn('.visible .entry', ptx)
+        self.assertNotIn(".visible .entry", ptx)
         # Inferred return type as expected?
         self.assertEqual(resty, float32)
 
@@ -71,21 +75,21 @@ class TestCompile(unittest.TestCase):
 
         # Without fastmath, fma contraction is enabled by default, but ftz and
         # approximate div / sqrt is not.
-        self.assertIn('fma.rn.f32', ptx)
-        self.assertIn('div.rn.f32', ptx)
-        self.assertIn('sqrt.rn.f32', ptx)
+        self.assertIn("fma.rn.f32", ptx)
+        self.assertIn("div.rn.f32", ptx)
+        self.assertIn("sqrt.rn.f32", ptx)
 
         ptx, resty = compile_ptx(f, args, device=True, fastmath=True)
 
         # With fastmath, ftz and approximate div / sqrt are enabled
-        self.assertIn('fma.rn.ftz.f32', ptx)
-        self.assertIn('div.approx.ftz.f32', ptx)
-        self.assertIn('sqrt.approx.ftz.f32', ptx)
+        self.assertIn("fma.rn.ftz.f32", ptx)
+        self.assertIn("div.approx.ftz.f32", ptx)
+        self.assertIn("sqrt.approx.ftz.f32", ptx)
 
     def check_debug_info(self, ptx):
         # A debug_info section should exist in the PTX. Whitespace varies
         # between CUDA toolkit versions.
-        self.assertRegex(ptx, '\\.section\\s+\\.debug_info')
+        self.assertRegex(ptx, "\\.section\\s+\\.debug_info")
         # A .file directive should be produced and include the name of the
         # source. The path and whitespace may vary, so we accept anything
         # ending in the filename of this module.
@@ -136,23 +140,23 @@ class TestCompile(unittest.TestCase):
         def f(x, y):
             return x[0] + y[0]
 
-        with self.assertRaisesRegex(TypeError, 'must have void return type'):
+        with self.assertRaisesRegex(TypeError, "must have void return type"):
             compile_ptx(f, (uint32[::1], uint32[::1]))
 
     def test_c_abi_disallowed_for_kernel(self):
         def f(x, y):
             return x + y
 
-        with self.assertRaisesRegex(NotImplementedError,
-                                    "The C ABI is not supported for kernels"):
+        with self.assertRaisesRegex(
+            NotImplementedError, "The C ABI is not supported for kernels"
+        ):
             compile_ptx(f, (int32, int32), abi="c")
 
     def test_unsupported_abi(self):
         def f(x, y):
             return x + y
 
-        with self.assertRaisesRegex(NotImplementedError,
-                                    "Unsupported ABI: fastcall"):
+        with self.assertRaisesRegex(NotImplementedError, "Unsupported ABI: fastcall"):
             compile_ptx(f, (int32, int32), abi="fastcall")
 
     def test_c_abi_device_function(self):
@@ -166,8 +170,9 @@ class TestCompile(unittest.TestCase):
         # The function name should match the Python function name (not the
         # qualname, which includes additional info), and its return value
         # should be 32 bits
-        self.assertRegex(ptx, r"\.visible\s+\.func\s+\(\.param\s+\.b32\s+"
-                              r"func_retval0\)\s+f\(")
+        self.assertRegex(
+            ptx, r"\.visible\s+\.func\s+\(\.param\s+\.b32\s+" r"func_retval0\)\s+f\("
+        )
 
         # If we compile for 64-bit integers, the return type should be 64 bits
         # wide
@@ -175,44 +180,52 @@ class TestCompile(unittest.TestCase):
         self.assertRegex(ptx, r"\.visible\s+\.func\s+\(\.param\s+\.b64")
 
     def test_c_abi_device_function_module_scope(self):
-        ptx, resty = compile_ptx(f_module, int32(int32, int32), device=True,
-                                 abi="c")
+        ptx, resty = compile_ptx(f_module, int32(int32, int32), device=True, abi="c")
 
         # The function name should match the Python function name, and its
         # return value should be 32 bits
-        self.assertRegex(ptx, r"\.visible\s+\.func\s+\(\.param\s+\.b32\s+"
-                              r"func_retval0\)\s+f_module\(")
+        self.assertRegex(
+            ptx,
+            r"\.visible\s+\.func\s+\(\.param\s+\.b32\s+" r"func_retval0\)\s+f_module\(",
+        )
 
     def test_c_abi_with_abi_name(self):
-        abi_info = {'abi_name': '_Z4funcii'}
-        ptx, resty = compile_ptx(f_module, int32(int32, int32), device=True,
-                                 abi="c", abi_info=abi_info)
+        abi_info = {"abi_name": "_Z4funcii"}
+        ptx, resty = compile_ptx(
+            f_module, int32(int32, int32), device=True, abi="c", abi_info=abi_info
+        )
 
         # The function name should match the one given in the ABI info, and its
         # return value should be 32 bits
-        self.assertRegex(ptx, r"\.visible\s+\.func\s+\(\.param\s+\.b32\s+"
-                              r"func_retval0\)\s+_Z4funcii\(")
+        self.assertRegex(
+            ptx,
+            r"\.visible\s+\.func\s+\(\.param\s+\.b32\s+"
+            r"func_retval0\)\s+_Z4funcii\(",
+        )
 
     def test_compile_defaults_to_c_abi(self):
         ptx, resty = compile(f_module, int32(int32, int32), device=True)
 
         # The function name should match the Python function name, and its
         # return value should be 32 bits
-        self.assertRegex(ptx, r"\.visible\s+\.func\s+\(\.param\s+\.b32\s+"
-                              r"func_retval0\)\s+f_module\(")
+        self.assertRegex(
+            ptx,
+            r"\.visible\s+\.func\s+\(\.param\s+\.b32\s+" r"func_retval0\)\s+f_module\(",
+        )
 
     def test_compile_to_ltoir(self):
         if runtime.get_version() < (11, 5):
             self.skipTest("-gen-lto unavailable in this toolkit version")
 
-        ltoir, resty = compile(f_module, int32(int32, int32), device=True,
-                               output="ltoir")
+        ltoir, resty = compile(
+            f_module, int32(int32, int32), device=True, output="ltoir"
+        )
 
         # There are no tools to interpret the LTOIR output, but we can check
         # that we appear to have obtained an LTOIR file. This magic number is
         # not documented, but is expected to remain consistent.
         LTOIR_MAGIC = 0x7F4E43ED
-        header = int.from_bytes(ltoir[:4], byteorder='little')
+        header = int.from_bytes(ltoir[:4], byteorder="little")
         self.assertEqual(header, LTOIR_MAGIC)
         self.assertEqual(resty, int32)
 
@@ -220,11 +233,10 @@ class TestCompile(unittest.TestCase):
         illegal_output = "illegal"
         msg = f"Unsupported output type: {illegal_output}"
         with self.assertRaisesRegex(NotImplementedError, msg):
-            compile(f_module, int32(int32, int32), device=True,
-                    output=illegal_output)
+            compile(f_module, int32(int32, int32), device=True, output=illegal_output)
 
 
-@skip_on_cudasim('Compilation unsupported in the simulator')
+@skip_on_cudasim("Compilation unsupported in the simulator")
 class TestCompileForCurrentDevice(CUDATestCase):
     def _check_ptx_for_current_device(self, compile_function):
         def add(x, y):
@@ -237,7 +249,7 @@ class TestCompileForCurrentDevice(CUDATestCase):
         # closest compute capability supported by the current toolkit.
         device_cc = cuda.get_current_device().compute_capability
         cc = cuda.cudadrv.nvvm.find_closest_arch(device_cc)
-        target = f'.target sm_{cc[0]}{cc[1]}'
+        target = f".target sm_{cc[0]}{cc[1]}"
         self.assertIn(target, ptx)
 
     def test_compile_ptx_for_current_device(self):
@@ -247,10 +259,10 @@ class TestCompileForCurrentDevice(CUDATestCase):
         self._check_ptx_for_current_device(compile_for_current_device)
 
 
-@skip_on_cudasim('Compilation unsupported in the simulator')
+@skip_on_cudasim("Compilation unsupported in the simulator")
 class TestCompileOnlyTests(unittest.TestCase):
-    '''For tests where we can only check correctness by examining the compiler
-    output rather than observing the effects of execution.'''
+    """For tests where we can only check correctness by examining the compiler
+    output rather than observing the effects of execution."""
 
     def test_nanosleep(self):
         def use_nanosleep(x):
@@ -262,15 +274,17 @@ class TestCompileOnlyTests(unittest.TestCase):
         ptx, resty = compile_ptx(use_nanosleep, (uint32,), cc=(7, 0))
 
         nanosleep_count = 0
-        for line in ptx.split('\n'):
-            if 'nanosleep.u32' in line:
+        for line in ptx.split("\n"):
+            if "nanosleep.u32" in line:
                 nanosleep_count += 1
 
         expected = 2
-        self.assertEqual(expected, nanosleep_count,
-                         (f'Got {nanosleep_count} nanosleep instructions, '
-                          f'expected {expected}'))
+        self.assertEqual(
+            expected,
+            nanosleep_count,
+            (f"Got {nanosleep_count} nanosleep instructions, " f"expected {expected}"),
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

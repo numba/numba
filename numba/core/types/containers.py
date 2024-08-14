@@ -126,8 +126,7 @@ class MemoryView(Buffer):
 
 
 def is_homogeneous(*tys):
-    """Are the types homogeneous?
-    """
+    """Are the types homogeneous?"""
     if tys:
         first, tys = tys[0], tys[1:]
         return not any(t != first for t in tys)
@@ -192,9 +191,7 @@ class BaseAnonymousTuple(BaseTuple):
         if len(self) == 0:
             return Conversion.safe
         if isinstance(other, BaseTuple):
-            kinds = [
-                typingctx.can_convert(ta, tb) for ta, tb in zip(self, other)
-            ]
+            kinds = [typingctx.can_convert(ta, tb) for ta, tb in zip(self, other)]
             if any(kind is None for kind in kinds):
                 return
             return max(kinds)
@@ -233,7 +230,11 @@ class UniTuple(BaseAnonymousTuple, _HomogeneousTuple, Sequence):
     def __init__(self, dtype, count):
         self.dtype = dtype
         self.count = count
-        name = "%s(%s x %d)" % (self.__class__.__name__, dtype, count,)
+        name = "%s(%s x %d)" % (
+            self.__class__.__name__,
+            dtype,
+            count,
+        )
         super(UniTuple, self).__init__(name)
 
     @property
@@ -337,9 +338,7 @@ class Tuple(BaseAnonymousTuple, _HeterogeneousTuple):
         """
         # Other is UniTuple or Tuple
         if isinstance(other, BaseTuple) and len(self) == len(other):
-            unified = [
-                typingctx.unify_pairs(ta, tb) for ta, tb in zip(self, other)
-            ]
+            unified = [typingctx.unify_pairs(ta, tb) for ta, tb in zip(self, other)]
 
             if all(t is not None for t in unified):
                 return Tuple(unified)
@@ -359,8 +358,7 @@ class _StarArgTupleMixin:
 
 
 class StarArgTuple(_StarArgTupleMixin, Tuple):
-    """To distinguish from Tuple() used as argument to a `*args`.
-    """
+    """To distinguish from Tuple() used as argument to a `*args`."""
 
     def __new__(cls, types):
         _HeterogeneousTuple.is_types_iterable(types)
@@ -372,8 +370,7 @@ class StarArgTuple(_StarArgTupleMixin, Tuple):
 
 
 class StarArgUniTuple(_StarArgTupleMixin, UniTuple):
-    """To distinguish from UniTuple() used as argument to a `*args`.
-    """
+    """To distinguish from UniTuple() used as argument to a `*args`."""
 
 
 class BaseNamedTuple(BaseTuple):
@@ -470,16 +467,14 @@ class List(MutableSequence, InitialValue):
         return self.dtype
 
     def __unliteral__(self):
-        return List(self.dtype, reflected=self.reflected,
-                    initial_value=None)
+        return List(self.dtype, reflected=self.reflected, initial_value=None)
 
     def __repr__(self):
         return f"List({self.dtype}, {self.reflected})"
 
 
 class LiteralList(Literal, ConstSized, Hashable):
-    """A heterogeneous immutable list (basically a tuple with list semantics).
-    """
+    """A heterogeneous immutable list (basically a tuple with list semantics)."""
 
     mutable = False
 
@@ -622,8 +617,7 @@ class SetEntry(Type):
 
 
 class ListType(IterableType):
-    """List type
-    """
+    """List type"""
 
     mutable = True
 
@@ -636,7 +630,10 @@ class ListType(IterableType):
         # FIXME: _sentry_forbidden_types(itemty)
         self.item_type = itemty
         self.dtype = itemty
-        name = "{}[{}]".format(self.__class__.__name__, itemty,)
+        name = "{}[{}]".format(
+            self.__class__.__name__,
+            itemty,
+        )
         super(ListType, self).__init__(name)
 
     @property
@@ -652,8 +649,7 @@ class ListType(IterableType):
 
     @classmethod
     def refine(cls, itemty):
-        """Refine to a precise list type
-        """
+        """Refine to a precise list type"""
         res = cls(itemty)
         assert res.is_precise()
         return res
@@ -672,8 +668,7 @@ class ListType(IterableType):
 
 
 class ListTypeIterableType(SimpleIterableType):
-    """List iterable type
-    """
+    """List iterable type"""
 
     def __init__(self, parent):
         assert isinstance(parent, ListType)
@@ -702,8 +697,7 @@ def _sentry_forbidden_types(key, value):
 
 
 class DictType(IterableType, InitialValue):
-    """Dictionary type
-    """
+    """Dictionary type"""
 
     def __init__(self, keyty, valty, initial_value=None):
         assert not isinstance(keyty, TypeRef)
@@ -740,8 +734,7 @@ class DictType(IterableType, InitialValue):
 
     @classmethod
     def refine(cls, keyty, valty):
-        """Refine to a precise dictionary type
-        """
+        """Refine to a precise dictionary type"""
         res = cls(keyty, valty)
         assert res.is_precise()
         return res
@@ -764,8 +757,7 @@ class DictType(IterableType, InitialValue):
                     oiv_none = oiv is None
                     if not siv_none and not oiv_none:
                         if siv == oiv:
-                            return DictType(self.key_type, other.value_type,
-                                            siv)
+                            return DictType(self.key_type, other.value_type, siv)
                     return DictType(self.key_type, other.value_type)
 
     @property
@@ -848,8 +840,7 @@ class LiteralStrKeyDict(Literal, ConstSized, Hashable):
 
 
 class DictItemsIterableType(SimpleIterableType):
-    """Dictionary iterable type for .items()
-    """
+    """Dictionary iterable type for .items()"""
 
     def __init__(self, parent):
         assert isinstance(parent, DictType)
@@ -862,8 +853,7 @@ class DictItemsIterableType(SimpleIterableType):
 
 
 class DictKeysIterableType(SimpleIterableType):
-    """Dictionary iterable type for .keys()
-    """
+    """Dictionary iterable type for .keys()"""
 
     def __init__(self, parent):
         assert isinstance(parent, DictType)
@@ -876,8 +866,7 @@ class DictKeysIterableType(SimpleIterableType):
 
 
 class DictValuesIterableType(SimpleIterableType):
-    """Dictionary iterable type for .values()
-    """
+    """Dictionary iterable type for .values()"""
 
     def __init__(self, parent):
         assert isinstance(parent, DictType)
@@ -894,15 +883,12 @@ class DictIteratorType(SimpleIteratorType):
         self.parent = iterable.parent
         self.iterable = iterable
         yield_type = iterable.yield_type
-        name = "iter[{}->{}],{}".format(
-            iterable.parent, yield_type, iterable.name
-        )
+        name = "iter[{}->{}],{}".format(iterable.parent, yield_type, iterable.name)
         super(DictIteratorType, self).__init__(name, yield_type)
 
 
 class StructRef(Type):
-    """A mutable struct.
-    """
+    """A mutable struct."""
 
     def __init__(self, fields):
         """
@@ -925,8 +911,7 @@ class StructRef(Type):
             return name, typ
 
         fields = tuple(map(check_field_pair, fields))
-        self._fields = tuple(map(check_field_pair,
-                                 self.preprocess_fields(fields)))
+        self._fields = tuple(map(check_field_pair, self.preprocess_fields(fields)))
         self._typename = self.__class__.__qualname__
         name = f"numba.{self._typename}{self._fields}"
         super().__init__(name=name)
@@ -956,13 +941,13 @@ class StructRef(Type):
         See also: `ClassInstanceType.get_data_type`
         """
         return StructRefPayload(
-            typename=self.__class__.__name__, fields=self._fields,
+            typename=self.__class__.__name__,
+            fields=self._fields,
         )
 
 
 class StructRefPayload(Type):
-    """The type of the payload of a mutable struct.
-    """
+    """The type of the payload of a mutable struct."""
 
     mutable = True
 

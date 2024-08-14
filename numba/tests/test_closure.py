@@ -17,7 +17,7 @@ class TestClosure(TestCase):
         def add_Y(x):
             return x + Y
 
-        c_add_Y = jit('i4(i4)', **jitargs)(add_Y)
+        c_add_Y = jit("i4(i4)", **jitargs)(add_Y)
         self.assertEqual(c_add_Y(1), 11)
 
         # Like globals in Numba, the value of the closure is captured
@@ -37,12 +37,12 @@ class TestClosure(TestCase):
         def add_Y(x):
             return x + Y
 
-        c_add_Y = jit('i4(i4)', **jitargs)(add_Y)
+        c_add_Y = jit("i4(i4)", **jitargs)(add_Y)
         self.assertEqual(c_add_Y(1), 11)
 
         # Redo the jit
         Y = 12
-        c_add_Y_2 = jit('i4(i4)', **jitargs)(add_Y)
+        c_add_Y_2 = jit("i4(i4)", **jitargs)(add_Y)
         self.assertEqual(c_add_Y_2(1), 13)
         Y = 13  # should not affect function
         self.assertEqual(c_add_Y_2(1), 13)
@@ -62,7 +62,7 @@ class TestClosure(TestCase):
         def add_Y_mult_Z(x):
             return (x + Y) * Z
 
-        c_add_Y_mult_Z = jit('i4(i4)', **jitargs)(add_Y_mult_Z)
+        c_add_Y_mult_Z = jit("i4(i4)", **jitargs)(add_Y_mult_Z)
         self.assertEqual(c_add_Y_mult_Z(1), 22)
 
     def test_jit_multiple_closure_variables(self):
@@ -75,13 +75,13 @@ class TestClosure(TestCase):
         def mult_10(a):
             return a * 10
 
-        c_mult_10 = jit('intp(intp)', **jitargs)(mult_10)
+        c_mult_10 = jit("intp(intp)", **jitargs)(mult_10)
         c_mult_10.disable_compile()
 
         def do_math(x):
             return c_mult_10(x + 4)
 
-        c_do_math = jit('intp(intp)', **jitargs)(do_math)
+        c_do_math = jit("intp(intp)", **jitargs)(do_math)
         c_do_math.disable_compile()
 
         with self.assertRefCount(c_do_math, c_mult_10):
@@ -157,8 +157,8 @@ class TestInlinedClosure(TestCase):
         ns = {}
         exec(code.strip(), ns)
 
-        cfunc = njit(ns['outer'])
-        self.assertEqual(cfunc(10), ns['outer'](10))
+        cfunc = njit(ns["outer"])
+        self.assertEqual(cfunc(10), ns["outer"](10))
 
     def test_inner_function_nested(self):
 
@@ -180,7 +180,7 @@ class TestInlinedClosure(TestCase):
         self.assertEqual(cfunc(10), outer(10))
 
     def test_bulk_use_cases(self):
-        """ Tests the large number of use cases defined below """
+        """Tests the large number of use cases defined below"""
 
         # jitted function used in some tests
         @njit
@@ -190,30 +190,35 @@ class TestInlinedClosure(TestCase):
             return fib3(n - 1) + fib3(n - 2)
 
         def outer1(x):
-            """ Test calling recursive function from inner """
+            """Test calling recursive function from inner"""
+
             def inner(x):
                 return fib3(x)
+
             return inner(x)
 
         def outer2(x):
-            """ Test calling recursive function from closure """
+            """Test calling recursive function from closure"""
             z = x + 1
 
             def inner(x):
                 return x + fib3(z)
+
             return inner(x)
 
         def outer3(x):
-            """ Test recursive inner """
+            """Test recursive inner"""
+
             def inner(x):
                 if x < 2:
                     return 10
                 else:
                     inner(x - 1)
+
             return inner(x)
 
         def outer4(x):
-            """ Test recursive closure """
+            """Test recursive closure"""
             y = x + 1
 
             def inner(x):
@@ -221,10 +226,11 @@ class TestInlinedClosure(TestCase):
                     return 10
                 else:
                     inner(x - 1)
+
             return inner(x)
 
         def outer5(x):
-            """ Test nested closure """
+            """Test nested closure"""
             y = x + 1
 
             def inner1(x):
@@ -238,42 +244,45 @@ class TestInlinedClosure(TestCase):
             return inner1(x)
 
         def outer6(x):
-            """ Test closure with list comprehension in body """
+            """Test closure with list comprehension in body"""
             y = x + 1
 
             def inner1(x):
                 z = y + x + 2
                 return [t for t in range(z)]
+
             return inner1(x)
 
         _OUTER_SCOPE_VAR = 9
 
         def outer7(x):
-            """ Test use of outer scope var, no closure """
+            """Test use of outer scope var, no closure"""
             z = x + 1
             return x + z + _OUTER_SCOPE_VAR
 
         _OUTER_SCOPE_VAR = 9
 
         def outer8(x):
-            """ Test use of outer scope var, with closure """
+            """Test use of outer scope var, with closure"""
             z = x + 1
 
             def inner(x):
                 return x + z + _OUTER_SCOPE_VAR
+
             return inner(x)
 
         def outer9(x):
-            """ Test closure assignment"""
+            """Test closure assignment"""
             z = x + 1
 
             def inner(x):
                 return x + z
+
             f = inner
             return f(x)
 
         def outer10(x):
-            """ Test two inner, one calls other """
+            """Test two inner, one calls other"""
             z = x + 1
 
             def inner(x):
@@ -285,44 +294,48 @@ class TestInlinedClosure(TestCase):
             return inner2(x)
 
         def outer11(x):
-            """ return the closure """
+            """return the closure"""
             z = x + 1
 
             def inner(x):
                 return x + z
+
             return inner
 
         def outer12(x):
-            """ closure with kwarg"""
+            """closure with kwarg"""
             z = x + 1
 
             def inner(x, kw=7):
                 return x + z + kw
+
             return inner(x)
 
         def outer13(x, kw=7):
-            """ outer with kwarg no closure"""
+            """outer with kwarg no closure"""
             z = x + 1 + kw
             return z
 
         def outer14(x, kw=7):
-            """ outer with kwarg used in closure"""
+            """outer with kwarg used in closure"""
             z = x + 1
 
             def inner(x):
                 return x + z + kw
+
             return inner(x)
 
         def outer15(x, kw=7):
-            """ outer with kwarg as arg to closure"""
+            """outer with kwarg as arg to closure"""
             z = x + 1
 
             def inner(x, kw):
                 return x + z + kw
+
             return inner(x, kw)
 
         def outer16(x):
-            """ closure is generator, consumed locally """
+            """closure is generator, consumed locally"""
             z = x + 1
 
             def inner(x):
@@ -331,7 +344,7 @@ class TestInlinedClosure(TestCase):
             return list(inner(x))
 
         def outer17(x):
-            """ closure is generator, returned """
+            """closure is generator, returned"""
             z = x + 1
 
             def inner(x):
@@ -340,7 +353,7 @@ class TestInlinedClosure(TestCase):
             return inner(x)
 
         def outer18(x):
-            """ closure is generator, consumed in loop """
+            """closure is generator, consumed in loop"""
             z = x + 1
 
             def inner(x):
@@ -352,7 +365,7 @@ class TestInlinedClosure(TestCase):
             return t
 
         def outer19(x):
-            """ closure as arg to another closure """
+            """closure as arg to another closure"""
             z1 = x + 1
             z2 = x + 2
 
@@ -365,32 +378,50 @@ class TestInlinedClosure(TestCase):
             return inner2(inner, x)
 
         def outer20(x):
-            """ Test calling numpy in closure """
+            """Test calling numpy in closure"""
             z = x + 1
 
             def inner(x):
                 return x + numpy.cos(z)
+
             return inner(x)
 
         def outer21(x):
-            """ Test calling numpy import as in closure """
+            """Test calling numpy import as in closure"""
             z = x + 1
 
             def inner(x):
                 return x + np.cos(z)
+
             return inner(x)
 
         def outer22():
             """Test to ensure that unsupported *args raises correctly"""
+
             def bar(a, b):
                 pass
+
             x = 1, 2
             bar(*x)
 
         # functions to test that are expected to pass
-        f = [outer1, outer2, outer5, outer6, outer7, outer8,
-             outer9, outer10, outer12, outer13, outer14,
-             outer15, outer19, outer20, outer21]
+        f = [
+            outer1,
+            outer2,
+            outer5,
+            outer6,
+            outer7,
+            outer8,
+            outer9,
+            outer10,
+            outer12,
+            outer13,
+            outer14,
+            outer15,
+            outer19,
+            outer20,
+            outer21,
+        ]
         for ref in f:
             cfunc = njit(ref)
             var = 10
@@ -449,6 +480,7 @@ class TestInlinedClosure(TestCase):
                 x = 5
                 y = 10
                 return x + y + z
+
             return bar(a), bar(b)
 
         self.assertEqual(foo(10, 20), (25, 35))
@@ -458,7 +490,7 @@ class TestInlinedClosure(TestCase):
         # The LHS of the assignment will have a name like:
         # closure__locals__bar_v2_x
         # Ensure that this is the case!
-        func_ir = foo.overloads[foo.signatures[0]].metadata['preserved_ir']
+        func_ir = foo.overloads[foo.signatures[0]].metadata["preserved_ir"]
         store = []
         for blk in func_ir.blocks.values():
             for stmt in blk.body:
@@ -470,7 +502,7 @@ class TestInlinedClosure(TestCase):
         self.assertEqual(len(store), 2)
         for i in store:
             name = i.target.name
-            regex = r'closure__locals__bar_v[0-9]+.x'
+            regex = r"closure__locals__bar_v[0-9]+.x"
             self.assertRegex(name, regex)
 
     def test_issue9222(self):
@@ -481,6 +513,7 @@ class TestInlinedClosure(TestCase):
         def foo():
             def bar(x, y=1.1):
                 return x + y
+
             return bar
 
         @njit
@@ -503,5 +536,5 @@ class TestInlinedClosure(TestCase):
         _inner()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -2,7 +2,6 @@
 Tests for numba.core.codegen.
 """
 
-
 import warnings
 import base64
 import ctypes
@@ -36,7 +35,7 @@ asm_sum_inner = """
       %.3 = add i32 %.1, %.2
       ret i32 %.3
     }
-"""    # noqa: E501
+"""  # noqa: E501
 
 asm_sum_outer = """
     declare i32 @"__main__.ising_element_update$1.array(int8,_2d,_C).int64.int64"(i32 %.1, i32 %.2)
@@ -45,7 +44,7 @@ asm_sum_outer = """
       %.3 = call i32 @"__main__.ising_element_update$1.array(int8,_2d,_C).int64.int64"(i32 %.1, i32 %.2)
       ret i32 %.3
     }
-"""    # noqa: E501
+"""  # noqa: E501
 
 
 ctypes_sum_ty = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_int, ctypes.c_int)
@@ -58,19 +57,19 @@ class JITCPUCodegenTestCase(TestCase):
 
     def setUp(self):
         global_compiler_lock.acquire()
-        self.codegen = JITCPUCodegen('test_codegen')
+        self.codegen = JITCPUCodegen("test_codegen")
 
     def tearDown(self):
         del self.codegen
         global_compiler_lock.release()
 
     def compile_module(self, asm, linking_asm=None):
-        library = self.codegen.create_library('compiled_module')
+        library = self.codegen.create_library("compiled_module")
         ll_module = ll.parse_assembly(asm)
         ll_module.verify()
         library.add_llvm_module(ll_module)
         if linking_asm:
-            linking_library = self.codegen.create_library('linking_module')
+            linking_library = self.codegen.create_library("linking_module")
             ll_module = ll.parse_assembly(linking_asm)
             ll_module.verify()
             linking_library.add_llvm_module(ll_module)
@@ -79,7 +78,7 @@ class JITCPUCodegenTestCase(TestCase):
 
     @classmethod
     def _check_unserialize_sum(cls, state):
-        codegen = JITCPUCodegen('other_codegen')
+        codegen = JITCPUCodegen("other_codegen")
         library = codegen.unserialize_library(state)
         ptr = library.get_pointer_to_function("sum")
         assert ptr, ptr
@@ -108,7 +107,7 @@ class JITCPUCodegenTestCase(TestCase):
     def test_magic_tuple(self):
         tup = self.codegen.magic_tuple()
         pickle.dumps(tup)
-        cg2 = JITCPUCodegen('xxx')
+        cg2 = JITCPUCodegen("xxx")
         self.assertEqual(cg2.magic_tuple(), tup)
 
     # Serialization tests.
@@ -126,8 +125,10 @@ class JITCPUCodegenTestCase(TestCase):
 
             state = pickle.loads(base64.b64decode(sys.argv[1]))
             %(test_class)s._check_unserialize_sum(state)
-            """ % dict(test_class=self.__class__.__name__)
-        subprocess.check_call([sys.executable, '-c', code, arg.decode()])
+            """ % dict(
+            test_class=self.__class__.__name__
+        )
+        subprocess.check_call([sys.executable, "-c", code, arg.decode()])
 
     def test_serialize_unserialize_bitcode(self):
         library = self.compile_module(asm_sum_outer, asm_sum_inner)
@@ -152,8 +153,7 @@ class JITCPUCodegenTestCase(TestCase):
         self._check_unserialize_other_process(state)
 
     def test_cache_disabled_inspection(self):
-        """
-        """
+        """ """
         library = self.compile_module(asm_sum_outer, asm_sum_inner)
         library.enable_object_caching()
         state = library.serialize_using_object_code()
@@ -162,11 +162,11 @@ class JITCPUCodegenTestCase(TestCase):
         with warnings.catch_warnings(record=True) as w:
             old_llvm = library.get_llvm_str()
             old_asm = library.get_asm_str()
-            library.get_function_cfg('sum')
+            library.get_function_cfg("sum")
         self.assertEqual(len(w), 0)
 
         # unserialize
-        codegen = JITCPUCodegen('other_codegen')
+        codegen = JITCPUCodegen("other_codegen")
         library = codegen.unserialize_library(state)
 
         # the inspection methods would warn and give incorrect result
@@ -185,7 +185,7 @@ class JITCPUCodegenTestCase(TestCase):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             with self.assertRaises(NameError) as raises:
-                library.get_function_cfg('sum')
+                library.get_function_cfg("sum")
         self.assertEqual(len(w), 1)
         self.assertIn("Inspection disabled", str(w[0].message))
         self.assertIn("sum", str(raises.exception))
@@ -249,9 +249,9 @@ class TestWrappers(TestCase):
             matched = attr_site.match(l)
             if matched:
                 meta_data = matched.groups()[0]
-                lmeta = meta_data.strip().split(' ')
+                lmeta = meta_data.strip().split(" ")
                 for x in lmeta:
-                    if 'noinline' in x:
+                    if "noinline" in x:
                         break
                 else:
                     continue
@@ -260,5 +260,5 @@ class TestWrappers(TestCase):
             return self.fail("Metadata did not match 'noinline'")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

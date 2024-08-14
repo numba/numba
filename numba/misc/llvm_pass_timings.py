@@ -12,20 +12,17 @@ import llvmlite.binding as llvm
 
 
 class RecordLLVMPassTimings:
-    """A helper context manager to track LLVM pass timings.
-    """
+    """A helper context manager to track LLVM pass timings."""
 
     __slots__ = ["_data"]
 
     def __enter__(self):
-        """Enables the pass timing in LLVM.
-        """
+        """Enables the pass timing in LLVM."""
         llvm.set_time_passes(True)
         return self
 
     def __exit__(self, exc_val, exc_type, exc_tb):
-        """Reset timings and save report internally.
-        """
+        """Reset timings and save report internally."""
         self._data = llvm.report_and_reset_timings()
         llvm.set_time_passes(False)
         return
@@ -85,9 +82,7 @@ def _adjust_timings(records):
         return adjust
 
     # Make adjustment functions for each field
-    adj_fns = [
-        make_adjuster(x) for x in ["user", "system", "user_system", "wall"]
-    ]
+    adj_fns = [make_adjuster(x) for x in ["user", "system", "user_system", "wall"]]
 
     # Extract dictionaries from the namedtuples
     dicts = map(lambda x: x._asdict(), records)
@@ -208,7 +203,7 @@ class ProcessedPassTimings:
             lines = raw_data.splitlines()
             colheader = r"[a-zA-Z+ ]+"
             # Take at least one column header.
-            multicolheaders = fr"(?:\s*-+{colheader}-+)+"
+            multicolheaders = rf"(?:\s*-+{colheader}-+)+"
 
             line_iter = iter(lines)
             # find column headers
@@ -228,7 +223,7 @@ class ProcessedPassTimings:
                     headers = [header_map[k.strip()] for k in raw_headers]
                     break
 
-            assert headers[-1] == 'pass_name'
+            assert headers[-1] == "pass_name"
             # compute the list of available attributes from the column headers
             attrs = []
             n = r"\s*((?:[0-9]+\.)?[0-9]+)"
@@ -244,7 +239,7 @@ class ProcessedPassTimings:
             # put default value 0.0 to all missing attributes
             missing = {}
             for k in PassTimingRecord._fields:
-                if k not in attrs and k != 'pass_name':
+                if k not in attrs and k != "pass_name":
                     missing[k] = 0.0
             # parse timings
             pat += r"\s*(.*)"
@@ -252,23 +247,24 @@ class ProcessedPassTimings:
                 m = re.match(pat, ln)
                 if m is not None:
                     raw_data = list(m.groups())
-                    data = {k: float(v) if v is not None else 0.0
-                            for k, v in zip(attrs, raw_data)}
+                    data = {
+                        k: float(v) if v is not None else 0.0
+                        for k, v in zip(attrs, raw_data)
+                    }
                     data.update(missing)
                     pass_name = raw_data[-1]
                     rec = PassTimingRecord(
-                        pass_name=pass_name, **data,
+                        pass_name=pass_name,
+                        **data,
                     )
                     yield rec
                     if rec.pass_name == "Total":
                         # "Total" means the report has ended
                         break
             # Check that we have reach the end of the report
-            remaining = '\n'.join(line_iter)
+            remaining = "\n".join(line_iter)
             if remaining:
-                raise ValueError(
-                    f"unexpected text after parser finished:\n{remaining}"
-                )
+                raise ValueError(f"unexpected text after parser finished:\n{remaining}")
 
         # Parse raw data
         records = list(parse(self._raw_data))
@@ -347,14 +343,13 @@ class PassTimingsCollection(Sequence):
         -------
         res: List[ProcessedPassTimings]
         """
-        return sorted(self._records,
-                      key=lambda x: x.timings.get_total_time(),
-                      reverse=True)
+        return sorted(
+            self._records, key=lambda x: x.timings.get_total_time(), reverse=True
+        )
 
     @property
     def is_empty(self):
-        """
-        """
+        """ """
         return not self._records
 
     def summary(self, topn=5):
@@ -401,8 +396,7 @@ class PassTimingsCollection(Sequence):
         return self._records[i]
 
     def __len__(self):
-        """Length of this collection.
-        """
+        """Length of this collection."""
         return len(self._records)
 
     def __str__(self):

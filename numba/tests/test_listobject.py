@@ -18,13 +18,17 @@ from numba import int32
 from numba.extending import register_jitable
 from numba.core import types
 from numba.core.errors import TypingError
-from numba.tests.support import (TestCase, MemoryLeakMixin, override_config,
-                                 forbid_codegen)
+from numba.tests.support import (
+    TestCase,
+    MemoryLeakMixin,
+    override_config,
+    forbid_codegen,
+)
 from numba.typed import listobject, List
 
 
 class TestCreateAppendLength(MemoryLeakMixin, TestCase):
-    """Test list creation, append and len. """
+    """Test list creation, append and len."""
 
     def test_list_create(self):
         @njit
@@ -38,14 +42,14 @@ class TestCreateAppendLength(MemoryLeakMixin, TestCase):
             self.assertEqual(foo(i), i)
 
     def test_list_create_no_jit(self):
-        with override_config('DISABLE_JIT', True):
+        with override_config("DISABLE_JIT", True):
             with forbid_codegen():
                 l = listobject.new_list(int32)
                 self.assertEqual(type(l), list)
 
     def test_nonempty_list_create_no_jit(self):
         # See Issue #6001: https://github.com/numba/numba/issues/6001
-        with override_config('DISABLE_JIT', True):
+        with override_config("DISABLE_JIT", True):
             with forbid_codegen():
                 l = List([1, 2, 3])
                 self.assertEqual(type(l), list)
@@ -82,6 +86,7 @@ class TestAllocation(MemoryLeakMixin, TestCase):
         def foo_posarg(n):
             l = listobject.new_list(int32, n)
             return l._allocated()
+
         for i in range(16):
             self.assertEqual(foo_posarg(i), i)
 
@@ -129,7 +134,7 @@ class TestToFromMeminfo(MemoryLeakMixin, TestCase):
 
 
 class TestGetitem(MemoryLeakMixin, TestCase):
-    """Test list getitem. """
+    """Test list getitem."""
 
     def test_list_getitem_singleton(self):
         @njit
@@ -157,7 +162,7 @@ class TestGetitem(MemoryLeakMixin, TestCase):
                 l.append(j)
             return l[i]
 
-        for i,j in ((0, 10), (9, 19), (4, 14), (-5, 15), (-1, 19), (-10, 10)):
+        for i, j in ((0, 10), (9, 19), (4, 14), (-5, 15), (-1, 19), (-10, 10)):
             self.assertEqual(foo(i), j)
 
     def test_list_getitem_empty_index_error(self):
@@ -219,8 +224,7 @@ class TestGetitem(MemoryLeakMixin, TestCase):
             return l[i]
 
         # try all signed integers and make sure they are cast
-        for t in (types.signed_domain
-                  ):
+        for t in types.signed_domain:
             self.assertEqual(foo((t(0))), 0)
 
     def test_list_getitem_different_sized_uint_index(self):
@@ -229,6 +233,7 @@ class TestGetitem(MemoryLeakMixin, TestCase):
         # direct index is tested via -1/0.
 
         for ty in types.unsigned_domain:
+
             @njit
             def foo():
                 l = listobject.new_list(int32)
@@ -243,6 +248,7 @@ class TestGetitem(MemoryLeakMixin, TestCase):
         # direct index is tested via -1/0.
 
         for ty in types.signed_domain:
+
             @njit
             def foo():
                 l = listobject.new_list(int32)
@@ -253,7 +259,7 @@ class TestGetitem(MemoryLeakMixin, TestCase):
 
 
 class TestGetitemSlice(MemoryLeakMixin, TestCase):
-    """Test list getitem when indexing with slices. """
+    """Test list getitem when indexing with slices."""
 
     def test_list_getitem_empty_slice_defaults(self):
         @njit
@@ -283,7 +289,7 @@ class TestGetitemSlice(MemoryLeakMixin, TestCase):
             n = l[:]
             return n[i]
 
-        for i,j in ((0, 10), (9, 19), (4, 14), (-5, 15), (-1, 19), (-10, 10)):
+        for i, j in ((0, 10), (9, 19), (4, 14), (-5, 15), (-1, 19), (-10, 10)):
             self.assertEqual(foo(i), j)
 
     def test_list_getitem_multiple_slice_pos_start(self):
@@ -496,7 +502,7 @@ class TestGetitemSlice(MemoryLeakMixin, TestCase):
 
 
 class TestSetitem(MemoryLeakMixin, TestCase):
-    """Test list setitem. """
+    """Test list setitem."""
 
     def test_list_setitem_singleton(self):
         @njit
@@ -545,7 +551,7 @@ class TestSetitem(MemoryLeakMixin, TestCase):
             l[i] = n
             return l[i]
 
-        for i,n in zip(range(0,10), range(20,30)):
+        for i, n in zip(range(0, 10), range(20, 30)):
             self.assertEqual(foo(i, n), n)
 
     def test_list_setitem_multiple_index_error(self):
@@ -595,8 +601,7 @@ class TestSetitem(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as raises:
             foo()
         self.assertIn(
-            "can only assign an iterable when using a slice "
-            "with assignment/setitem",
+            "can only assign an iterable when using a slice " "with assignment/setitem",
             str(raises.exception),
         )
 
@@ -610,13 +615,12 @@ class TestSetitem(MemoryLeakMixin, TestCase):
             return l[i]
 
         # try all signed integers and make sure they are cast
-        for t in (types.signed_domain
-                  ):
+        for t in types.signed_domain:
             self.assertEqual(foo((t(0))), 1)
 
 
 class TestPop(MemoryLeakMixin, TestCase):
-    """Test list pop. """
+    """Test list pop."""
 
     def test_list_pop_singleton(self):
         @njit
@@ -670,8 +674,7 @@ class TestPop(MemoryLeakMixin, TestCase):
             return l.pop(i)
 
         # try all signed integers and make sure they are cast
-        for t in (types.signed_domain
-                  ):
+        for t in types.signed_domain:
             self.assertEqual(foo((t(0))), 0)
 
     def test_list_pop_empty_index_error_no_index(self):
@@ -762,8 +765,7 @@ class TestPop(MemoryLeakMixin, TestCase):
 
 
 class TestListObjectDelitem(MemoryLeakMixin, TestCase):
-    """Test list delitem.
-    """
+    """Test list delitem."""
 
     def test_list_singleton_delitem_index(self):
 
@@ -773,6 +775,7 @@ class TestListObjectDelitem(MemoryLeakMixin, TestCase):
             l.append(0)
             del l[0]
             return len(l)
+
         self.assertEqual(foo(), 0)
 
     def test_list_singleton_delitem_slice_defaults(self):
@@ -783,6 +786,7 @@ class TestListObjectDelitem(MemoryLeakMixin, TestCase):
             l.append(0)
             del l[:]
             return len(l)
+
         self.assertEqual(foo(), 0)
 
     def test_list_singleton_delitem_slice_start(self):
@@ -793,6 +797,7 @@ class TestListObjectDelitem(MemoryLeakMixin, TestCase):
             l.append(0)
             del l[0:]
             return len(l)
+
         self.assertEqual(foo(), 0)
 
     def test_list_singleton_delitem_slice_stop(self):
@@ -803,6 +808,7 @@ class TestListObjectDelitem(MemoryLeakMixin, TestCase):
             l.append(0)
             del l[:1]
             return len(l)
+
         self.assertEqual(foo(), 0)
 
     def test_list_singleton_delitem_slice_start_stop(self):
@@ -813,6 +819,7 @@ class TestListObjectDelitem(MemoryLeakMixin, TestCase):
             l.append(0)
             del l[0:1]
             return len(l)
+
         self.assertEqual(foo(), 0)
 
     def test_list_singleton_delitem_slice_start_step(self):
@@ -823,6 +830,7 @@ class TestListObjectDelitem(MemoryLeakMixin, TestCase):
             l.append(0)
             del l[0::1]
             return len(l)
+
         self.assertEqual(foo(), 0)
 
     def test_list_singleton_delitem_slice_start_stop_step(self):
@@ -833,6 +841,7 @@ class TestListObjectDelitem(MemoryLeakMixin, TestCase):
             l.append(0)
             del l[0:1:1]
             return len(l)
+
         self.assertEqual(foo(), 0)
 
     def test_list_multiple_delitem(self):
@@ -844,6 +853,7 @@ class TestListObjectDelitem(MemoryLeakMixin, TestCase):
                 l.append(j)
             del l[0]
             return len(l), l[0], l[1]
+
         self.assertEqual(foo(), (2, 11, 12))
 
     def test_list_multiple_delitem_slice(self):
@@ -855,6 +865,7 @@ class TestListObjectDelitem(MemoryLeakMixin, TestCase):
                 l.append(j)
             del l[:]
             return len(l)
+
         self.assertEqual(foo(), 0)
 
     def test_list_multiple_delitem_off_by_one(self):
@@ -871,11 +882,12 @@ class TestListObjectDelitem(MemoryLeakMixin, TestCase):
             # should be a no-op
             del l[-9:-20]
             return k == l
+
         self.assertTrue(foo())
 
 
 class TestContains(MemoryLeakMixin, TestCase):
-    """Test list contains. """
+    """Test list contains."""
 
     def test_list_contains_empty(self):
         @njit
@@ -912,7 +924,7 @@ class TestContains(MemoryLeakMixin, TestCase):
 
 
 class TestCount(MemoryLeakMixin, TestCase):
-    """Test list count. """
+    """Test list count."""
 
     def test_list_count_empty(self):
         @njit
@@ -947,7 +959,7 @@ class TestCount(MemoryLeakMixin, TestCase):
 
 
 class TestExtend(MemoryLeakMixin, TestCase):
-    """Test list extend. """
+    """Test list extend."""
 
     def test_list_extend_empty(self):
         @njit
@@ -957,8 +969,8 @@ class TestExtend(MemoryLeakMixin, TestCase):
             return len(l)
 
         self.assertEqual(foo((1,)), 1)
-        self.assertEqual(foo((1,2)), 2)
-        self.assertEqual(foo((1,2,3)), 3)
+        self.assertEqual(foo((1, 2)), 2)
+        self.assertEqual(foo((1, 2, 3)), 3)
 
     def test_list_extend_typing_error_non_iterable(self):
         self.disable_leak_check()
@@ -977,7 +989,7 @@ class TestExtend(MemoryLeakMixin, TestCase):
 
 
 class TestInsert(MemoryLeakMixin, TestCase):
-    """Test list insert. """
+    """Test list insert."""
 
     def test_list_insert_empty(self):
         @njit
@@ -1058,7 +1070,7 @@ class TestInsert(MemoryLeakMixin, TestCase):
 
 
 class TestRemove(MemoryLeakMixin, TestCase):
-    """Test list remove. """
+    """Test list remove."""
 
     def test_list_remove_empty(self):
         self.disable_leak_check()
@@ -1120,7 +1132,7 @@ class TestRemove(MemoryLeakMixin, TestCase):
 
 
 class TestClear(MemoryLeakMixin, TestCase):
-    """Test list clear. """
+    """Test list clear."""
 
     def test_list_clear_empty(self):
         @njit
@@ -1149,11 +1161,12 @@ class TestClear(MemoryLeakMixin, TestCase):
                 l.append(0)
             l.clear()
             return len(l)
+
         self.assertEqual(foo(), 0)
 
 
 class TestReverse(MemoryLeakMixin, TestCase):
-    """Test list reverse. """
+    """Test list reverse."""
 
     def test_list_reverse_empty(self):
         @njit
@@ -1182,11 +1195,12 @@ class TestReverse(MemoryLeakMixin, TestCase):
                 l.append(j)
             l.reverse()
             return len(l), l[0], l[1], l[2]
+
         self.assertEqual(foo(), (3, 12, 11, 10))
 
 
 class TestCopy(MemoryLeakMixin, TestCase):
-    """Test list copy. """
+    """Test list copy."""
 
     def test_list_copy_empty(self):
         @njit
@@ -1238,7 +1252,7 @@ class TestIndex(MemoryLeakMixin, TestCase):
                 l.append(j)
             return l.index(i)
 
-        for i,v in zip(range(10), range(10,20)):
+        for i, v in zip(range(10), range(10, 20)):
             self.assertEqual(foo(v), i)
 
     def test_index_duplicate(self):
@@ -1306,7 +1320,7 @@ class TestIndex(MemoryLeakMixin, TestCase):
             return l.index(10, start)
 
         self.assertEqual(foo(0), 0)
-        for i in range(1,10):
+        for i in range(1, 10):
             with self.assertRaises(ValueError) as raises:
                 foo(i)
             self.assertIn(
@@ -1325,7 +1339,7 @@ class TestIndex(MemoryLeakMixin, TestCase):
             return l.index(19, 0, end)
 
         self.assertEqual(foo(10), 9)
-        for i in range(0,9):
+        for i in range(0, 9):
             with self.assertRaises(ValueError) as raises:
                 foo(i)
             self.assertIn(
@@ -1367,7 +1381,7 @@ class TestIndex(MemoryLeakMixin, TestCase):
 
 
 class TestEqualNotEqual(MemoryLeakMixin, TestCase):
-    """Test list equal and not equal. """
+    """Test list equal and not equal."""
 
     def test_list_empty_equal(self):
         @njit
@@ -1437,7 +1451,7 @@ class TestEqualNotEqual(MemoryLeakMixin, TestCase):
 
 
 class TestIter(MemoryLeakMixin, TestCase):
-    """Test list iter. """
+    """Test list iter."""
 
     def test_list_iter(self):
         @njit
@@ -1452,10 +1466,7 @@ class TestIter(MemoryLeakMixin, TestCase):
 
         items = (1, 2, 3, 4)
 
-        self.assertEqual(
-            foo(items),
-            sum(items)
-        )
+        self.assertEqual(foo(items), sum(items))
 
     def test_list_iter_self_mutation(self):
         self.disable_leak_check()
@@ -1470,26 +1481,26 @@ class TestIter(MemoryLeakMixin, TestCase):
         with self.assertRaises(RuntimeError) as raises:
             foo()
         self.assertIn(
-            'list was mutated during iteration'.format(**locals()),
+            "list was mutated during iteration".format(**locals()),
             str(raises.exception),
         )
 
 
 class TestStringItem(MemoryLeakMixin, TestCase):
-    """Test list can take strings as items. """
+    """Test list can take strings as items."""
 
     def test_string_item(self):
         @njit
         def foo():
             l = listobject.new_list(types.unicode_type)
-            l.append('a')
-            l.append('b')
-            l.append('c')
-            l.append('d')
+            l.append("a")
+            l.append("b")
+            l.append("c")
+            l.append("d")
             return l[0], l[1], l[2], l[3]
 
         items = foo()
-        self.assertEqual(['a', 'b', 'c', 'd'], list(items))
+        self.assertEqual(["a", "b", "c", "d"], list(items))
 
 
 class TestItemCasting(TestCase):
@@ -1506,7 +1517,7 @@ class TestItemCasting(TestCase):
         with self.assertRaises(TypingError) as raises:
             TestItemCasting.foo(fromty, toty)
         self.assertIn(
-            'cannot safely cast {fromty} to {toty}'.format(**locals()),
+            "cannot safely cast {fromty} to {toty}".format(**locals()),
             str(raises.exception),
         )
 
@@ -1538,7 +1549,7 @@ class TestItemCasting(TestCase):
         with self.assertRaises(TypingError) as raises:
             foo()
         self.assertIn(
-            'cannot safely cast unicode_type to int32',
+            "cannot safely cast unicode_type to int32",
             str(raises.exception),
         )
 
@@ -1552,7 +1563,7 @@ class TestItemCasting(TestCase):
         with self.assertRaises(TypingError) as raises:
             foo()
         self.assertIn(
-            'Cannot cast int32 to unicode_type',
+            "Cannot cast int32 to unicode_type",
             str(raises.exception),
         )
 
@@ -1571,6 +1582,7 @@ class TestImmutable(MemoryLeakMixin, TestCase):
         def foo():
             l = make_test_list()
             return l._is_mutable()
+
         self.assertTrue(foo())
 
     def test_make_immutable_is_immutable(self):
@@ -1579,6 +1591,7 @@ class TestImmutable(MemoryLeakMixin, TestCase):
             l = make_test_list()
             l._make_immutable()
             return l._is_mutable()
+
         self.assertFalse(foo())
 
     def test_length_still_works_when_immutable(self):
@@ -1586,7 +1599,8 @@ class TestImmutable(MemoryLeakMixin, TestCase):
         def foo():
             l = make_test_list()
             l._make_immutable()
-            return len(l),l._is_mutable()
+            return len(l), l._is_mutable()
+
         length, mutable = foo()
         self.assertEqual(length, 1)
         self.assertFalse(mutable)
@@ -1597,6 +1611,7 @@ class TestImmutable(MemoryLeakMixin, TestCase):
             l = make_test_list()
             l._make_immutable()
             return l[0], l._is_mutable()
+
         test_item, mutable = foo()
         self.assertEqual(test_item, 1)
         self.assertFalse(mutable)
@@ -1609,20 +1624,23 @@ class TestImmutable(MemoryLeakMixin, TestCase):
             l = make_test_list()
             l._make_immutable()
             l.append(int32(1))
+
         with self.assertRaises(ValueError) as raises:
             foo()
         self.assertIn(
-            'list is immutable',
+            "list is immutable",
             str(raises.exception),
         )
 
     def test_mutation_fails(self):
-        """ Test that any attempt to mutate an immutable typed list fails. """
+        """Test that any attempt to mutate an immutable typed list fails."""
         self.disable_leak_check()
 
         def generate_function(line):
             context = {}
-            exec(dedent("""
+            exec(
+                dedent(
+                    """
                 from numba.typed import listobject
                 from numba import int32
                 def bar():
@@ -1631,18 +1649,25 @@ class TestImmutable(MemoryLeakMixin, TestCase):
                     lst._make_immutable()
                     zero = int32(0)
                     {}
-                """.format(line)), context)
+                """.format(
+                        line
+                    )
+                ),
+                context,
+            )
             return njit(context["bar"])
-        for line in ("lst.append(zero)",
-                     "lst[0] = zero",
-                     "lst.pop()",
-                     "del lst[0]",
-                     "lst.extend((zero,))",
-                     "lst.insert(0, zero)",
-                     "lst.clear()",
-                     "lst.reverse()",
-                     "lst.sort()",
-                     ):
+
+        for line in (
+            "lst.append(zero)",
+            "lst[0] = zero",
+            "lst.pop()",
+            "del lst[0]",
+            "lst.extend((zero,))",
+            "lst.insert(0, zero)",
+            "lst.clear()",
+            "lst.reverse()",
+            "lst.sort()",
+        ):
             foo = generate_function(line)
             with self.assertRaises(ValueError) as raises:
                 foo()

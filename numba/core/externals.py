@@ -12,8 +12,7 @@ from numba import _helperlib
 
 
 def _add_missing_symbol(symbol, addr):
-    """Add missing symbol into LLVM internal symtab
-    """
+    """Add missing symbol into LLVM internal symtab"""
     if not ll.address_of_symbol(symbol):
         ll.add_symbol(symbol, addr)
 
@@ -24,6 +23,7 @@ def _get_msvcrt_symbol(symbol):
     and return the raw pointer value as an integer.
     """
     from ctypes import cdll, cast, c_void_p
+
     f = getattr(cdll.msvcrt, symbol)
     return cast(f, c_void_p).value
 
@@ -40,7 +40,7 @@ def compile_multi3(context):
 
     i64 = ir.IntType(64)
     i128 = ir.IntType(128)
-    lower_mask = ir.Constant(i64, 0xffffffff)
+    lower_mask = ir.Constant(i64, 0xFFFFFFFF)
     _32 = ir.Constant(i64, 32)
     _64 = ir.Constant(i128, 64)
 
@@ -65,8 +65,7 @@ def compile_multi3(context):
     # rl &= 0xffffffff
     rl = builder.and_(rl, lower_mask)
     # t += (al >> 32) * (bl & 0xffffffff)
-    t = builder.add(t, builder.mul(builder.lshr(al, _32),
-                                   builder.and_(bl, lower_mask)))
+    t = builder.add(t, builder.mul(builder.lshr(al, _32), builder.and_(bl, lower_mask)))
     # rl += t << 32
     rl = builder.add(rl, builder.shl(t, _32))
     # rh = t >> 32
@@ -76,15 +75,13 @@ def compile_multi3(context):
     # rl &= 0xffffffff
     rl = builder.and_(rl, lower_mask)
     # t += (bl >> 32) * (al & 0xffffffff)
-    t = builder.add(t, builder.mul(builder.lshr(bl, _32),
-                                   builder.and_(al, lower_mask)))
+    t = builder.add(t, builder.mul(builder.lshr(bl, _32), builder.and_(al, lower_mask)))
     # rl += t << 32
     rl = builder.add(rl, builder.shl(t, _32))
     # rh += t >> 32
     rh = builder.add(rh, builder.lshr(t, _32))
     # rh += (al >> 32) * (bl >> 32)
-    rh = builder.add(rh, builder.mul(builder.lshr(al, _32),
-                                     builder.lshr(bl, _32)))
+    rh = builder.add(rh, builder.mul(builder.lshr(al, _32), builder.lshr(bl, _32)))
 
     # rh += (bh * al) + (bl * ah)
     rh = builder.add(rh, builder.mul(bh, al))
@@ -125,14 +122,14 @@ class _ExternalMathFunctions(_Installer):
         is32bit = utils.MACHINE_BITS == 32
         c_helpers = _helperlib.c_helpers
 
-        if sys.platform.startswith('win32') and is32bit:
+        if sys.platform.startswith("win32") and is32bit:
             # For Windows XP _ftol2 is not defined, we will just use
             # _ftol as a replacement.
             # On Windows 7, this is not necessary but will work anyway.
             ftol = _get_msvcrt_symbol("_ftol")
             _add_missing_symbol("_ftol2", ftol)
 
-        elif sys.platform.startswith('linux') and is32bit:
+        elif sys.platform.startswith("linux") and is32bit:
             _add_missing_symbol("__fixunsdfdi", c_helpers["fptoui"])
             _add_missing_symbol("__fixunssfdi", c_helpers["fptouif"])
 

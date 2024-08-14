@@ -16,6 +16,7 @@ class TestUfuncBuilding(TestCase):
 
     def test_basic_ufunc(self):
         from numba.tests.npyufunc.ufuncbuilding_usecases import add
+
         ufb = UFuncBuilder(add)
         cres = ufb.add("int32(int32, int32)")
         self.assertFalse(cres.objectmode)
@@ -28,7 +29,7 @@ class TestUfuncBuilding(TestCase):
             self.assertPreciseEqual(a + a, b)
             self.assertEqual(b.dtype, a.dtype)
 
-        a = np.arange(12, dtype='int32')
+        a = np.arange(12, dtype="int32")
         check(a)
         # Non-contiguous dimension
         a = a[::2]
@@ -42,6 +43,7 @@ class TestUfuncBuilding(TestCase):
 
     def test_ufunc_struct(self):
         from numba.tests.npyufunc.ufuncbuilding_usecases import add
+
         ufb = UFuncBuilder(add)
         cres = ufb.add("complex64(complex64, complex64)")
         self.assertFalse(cres.objectmode)
@@ -52,7 +54,7 @@ class TestUfuncBuilding(TestCase):
             self.assertPreciseEqual(a + a, b)
             self.assertEqual(b.dtype, a.dtype)
 
-        a = np.arange(12, dtype='complex64') + 1j
+        a = np.arange(12, dtype="complex64") + 1j
         check(a)
         # Non-contiguous dimension
         a = a[::2]
@@ -62,12 +64,13 @@ class TestUfuncBuilding(TestCase):
 
     def test_ufunc_forceobj(self):
         from numba.tests.npyufunc.ufuncbuilding_usecases import add
-        ufb = UFuncBuilder(add, targetoptions={'forceobj': True})
+
+        ufb = UFuncBuilder(add, targetoptions={"forceobj": True})
         cres = ufb.add("int32(int32, int32)")
         self.assertTrue(cres.objectmode)
         ufunc = ufb.build_ufunc()
 
-        a = np.arange(10, dtype='int32')
+        a = np.arange(10, dtype="int32")
         b = ufunc(a, a)
         self.assertPreciseEqual(a + a, b)
 
@@ -76,8 +79,8 @@ class TestUfuncBuilding(TestCase):
         Check nested call to an implicitly-typed ufunc.
         """
         from numba.tests.npyufunc.ufuncbuilding_usecases import outer
-        builder = UFuncBuilder(outer,
-                               targetoptions={'nopython': True})
+
+        builder = UFuncBuilder(outer, targetoptions={"nopython": True})
         builder.add("(int64, int64)")
         ufunc = builder.build_ufunc()
         self.assertEqual(ufunc(-1, 3), 2)
@@ -87,8 +90,8 @@ class TestUfuncBuilding(TestCase):
         Check nested call to an explicitly-typed ufunc.
         """
         from numba.tests.npyufunc.ufuncbuilding_usecases import outer_explicit
-        builder = UFuncBuilder(outer_explicit,
-                               targetoptions={'nopython': True})
+
+        builder = UFuncBuilder(outer_explicit, targetoptions={"nopython": True})
         builder.add("(int64, int64)")
         ufunc = builder.build_ufunc()
         self.assertEqual(ufunc(-1, 3), 2)
@@ -108,6 +111,7 @@ class TestGUfuncBuilding(TestCase):
 
     def test_basic_gufunc(self):
         from numba.tests.npyufunc.ufuncbuilding_usecases import guadd
+
         gufb = GUFuncBuilder(guadd, "(x, y),(x, y)->(x, y)")
         cres = gufb.add("void(int32[:,:], int32[:,:], int32[:,:])")
         self.assertFalse(cres.objectmode)
@@ -117,7 +121,7 @@ class TestGUfuncBuilding(TestCase):
         b = ufunc(a, a)
 
         self.assertPreciseEqual(a + a, b)
-        self.assertEqual(b.dtype, np.dtype('int32'))
+        self.assertEqual(b.dtype, np.dtype("int32"))
 
         # Metadata
         self.assertEqual(ufunc.__name__, "guadd")
@@ -125,6 +129,7 @@ class TestGUfuncBuilding(TestCase):
 
     def test_gufunc_struct(self):
         from numba.tests.npyufunc.ufuncbuilding_usecases import guadd
+
         gufb = GUFuncBuilder(guadd, "(x, y),(x, y)->(x, y)")
         cres = gufb.add("void(complex64[:,:], complex64[:,:], complex64[:,:])")
         self.assertFalse(cres.objectmode)
@@ -137,10 +142,11 @@ class TestGUfuncBuilding(TestCase):
 
     def test_gufunc_struct_forceobj(self):
         from numba.tests.npyufunc.ufuncbuilding_usecases import guadd
-        gufb = GUFuncBuilder(guadd, "(x, y),(x, y)->(x, y)",
-                             targetoptions=dict(forceobj=True))
-        cres = gufb.add("void(complex64[:,:], complex64[:,:], complex64[:,"
-                        ":])")
+
+        gufb = GUFuncBuilder(
+            guadd, "(x, y),(x, y)->(x, y)", targetoptions=dict(forceobj=True)
+        )
+        cres = gufb.add("void(complex64[:,:], complex64[:,:], complex64[:," ":])")
         self.assertTrue(cres.objectmode)
         ufunc = gufb.build_ufunc()
 
@@ -166,47 +172,52 @@ class TestVectorizeDecor(TestCase):
 
     def test_vectorize(self):
         from numba.tests.npyufunc.ufuncbuilding_usecases import add
-        ufunc = vectorize(['int32(int32, int32)'])(add)
-        a = np.arange(10, dtype='int32')
+
+        ufunc = vectorize(["int32(int32, int32)"])(add)
+        a = np.arange(10, dtype="int32")
         b = ufunc(a, a)
         self.assertPreciseEqual(a + a, b)
 
     def test_vectorize_objmode(self):
         from numba.tests.npyufunc.ufuncbuilding_usecases import add
-        ufunc = vectorize(['int32(int32, int32)'], forceobj=True)(add)
-        a = np.arange(10, dtype='int32')
+
+        ufunc = vectorize(["int32(int32, int32)"], forceobj=True)(add)
+        a = np.arange(10, dtype="int32")
         b = ufunc(a, a)
         self.assertPreciseEqual(a + a, b)
 
     def test_vectorize_bool_return(self):
         from numba.tests.npyufunc.ufuncbuilding_usecases import equals
-        ufunc = vectorize(['bool_(int32, int32)'])(equals)
-        a = np.arange(10, dtype='int32')
-        r = ufunc(a,a)
+
+        ufunc = vectorize(["bool_(int32, int32)"])(equals)
+        a = np.arange(10, dtype="int32")
+        r = ufunc(a, a)
         self.assertPreciseEqual(r, np.ones(r.shape, dtype=np.bool_))
 
     def test_vectorize_identity(self):
         from numba.tests.npyufunc.ufuncbuilding_usecases import add
-        sig = 'int32(int32, int32)'
+
+        sig = "int32(int32, int32)"
         for identity in self._supported_identities:
             ufunc = vectorize([sig], identity=identity)(add)
-            expected = None if identity == 'reorderable' else identity
+            expected = None if identity == "reorderable" else identity
             self.assertEqual(ufunc.identity, expected)
         # Default value is None
         ufunc = vectorize([sig])(add)
         self.assertIs(ufunc.identity, None)
         # Invalid values
         with self.assertRaises(ValueError):
-            vectorize([sig], identity='none')(add)
+            vectorize([sig], identity="none")(add)
         with self.assertRaises(ValueError):
             vectorize([sig], identity=2)(add)
 
     def test_vectorize_no_args(self):
         from numba.tests.npyufunc.ufuncbuilding_usecases import add
-        a = np.linspace(0,1,10)
-        b = np.linspace(1,2,10)
+
+        a = np.linspace(0, 1, 10)
+        b = np.linspace(1, 2, 10)
         ufunc = vectorize(add)
-        self.assertPreciseEqual(ufunc(a,b), a + b)
+        self.assertPreciseEqual(ufunc(a, b), a + b)
         ufunc2 = vectorize(add)
         c = np.empty(10)
         ufunc2(a, b, c)
@@ -214,17 +225,19 @@ class TestVectorizeDecor(TestCase):
 
     def test_vectorize_only_kws(self):
         from numba.tests.npyufunc.ufuncbuilding_usecases import mul
-        a = np.linspace(0,1,10)
-        b = np.linspace(1,2,10)
+
+        a = np.linspace(0, 1, 10)
+        b = np.linspace(1, 2, 10)
         ufunc = vectorize(identity=PyUFunc_One, nopython=True)(mul)
-        self.assertPreciseEqual(ufunc(a,b), a * b)
+        self.assertPreciseEqual(ufunc(a, b), a * b)
 
     def test_vectorize_output_kwarg(self):
         """
         Passing the output array as a keyword argument (issue #1867).
         """
+
         def check(ufunc):
-            a = np.arange(10, 16, dtype='int32')
+            a = np.arange(10, 16, dtype="int32")
             out = np.zeros_like(a)
             got = ufunc(a, a, out=out)
             self.assertIs(got, out)
@@ -234,7 +247,8 @@ class TestVectorizeDecor(TestCase):
 
         # With explicit sigs
         from numba.tests.npyufunc.ufuncbuilding_usecases import add
-        ufunc = vectorize(['int32(int32, int32)'], nopython=True)(add)
+
+        ufunc = vectorize(["int32(int32, int32)"], nopython=True)(add)
         check(ufunc)
         # With implicit sig
         ufunc = vectorize(nopython=True)(add)
@@ -243,26 +257,34 @@ class TestVectorizeDecor(TestCase):
 
     def test_guvectorize(self):
         from numba.tests.npyufunc.ufuncbuilding_usecases import guadd
-        ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
-                            "(x,y),(x,y)->(x,y)")(guadd)
-        a = np.arange(10, dtype='int32').reshape(2, 5)
+
+        ufunc = guvectorize(
+            ["(int32[:,:], int32[:,:], int32[:,:])"], "(x,y),(x,y)->(x,y)"
+        )(guadd)
+        a = np.arange(10, dtype="int32").reshape(2, 5)
         b = ufunc(a, a)
         self.assertPreciseEqual(a + a, b)
 
     def test_guvectorize_no_output(self):
         from numba.tests.npyufunc.ufuncbuilding_usecases import guadd
-        ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
-                            "(x,y),(x,y),(x,y)")(guadd)
-        a = np.arange(10, dtype='int32').reshape(2, 5)
+
+        ufunc = guvectorize(
+            ["(int32[:,:], int32[:,:], int32[:,:])"], "(x,y),(x,y),(x,y)"
+        )(guadd)
+        a = np.arange(10, dtype="int32").reshape(2, 5)
         out = np.zeros_like(a)
         ufunc(a, a, out)
         self.assertPreciseEqual(a + a, out)
 
     def test_guvectorize_objectmode(self):
         from numba.tests.npyufunc.ufuncbuilding_usecases import guadd_obj
-        ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
-                            "(x,y),(x,y)->(x,y)", forceobj=True)(guadd_obj)
-        a = np.arange(10, dtype='int32').reshape(2, 5)
+
+        ufunc = guvectorize(
+            ["(int32[:,:], int32[:,:], int32[:,:])"],
+            "(x,y),(x,y)->(x,y)",
+            forceobj=True,
+        )(guadd_obj)
+        a = np.arange(10, dtype="int32").reshape(2, 5)
         b = ufunc(a, a)
         self.assertPreciseEqual(a + a, b)
 
@@ -271,40 +293,47 @@ class TestVectorizeDecor(TestCase):
         Test passing of scalars to object mode gufuncs.
         """
         from numba.tests.npyufunc.ufuncbuilding_usecases import guadd_scalar_obj
-        ufunc = guvectorize(['(int32[:,:], int32, int32[:,:])'],
-                            "(x,y),()->(x,y)", forceobj=True)(guadd_scalar_obj)
-        a = np.arange(10, dtype='int32').reshape(2, 5)
+
+        ufunc = guvectorize(
+            ["(int32[:,:], int32, int32[:,:])"], "(x,y),()->(x,y)", forceobj=True
+        )(guadd_scalar_obj)
+        a = np.arange(10, dtype="int32").reshape(2, 5)
         b = ufunc(a, 3)
         self.assertPreciseEqual(a + 3, b)
 
     def test_guvectorize_error_in_objectmode(self):
-        from numba.tests.npyufunc.ufuncbuilding_usecases import guerror, \
-            MyException
-        ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
-                            "(x,y),(x,y)->(x,y)", forceobj=True)(guerror)
-        a = np.arange(10, dtype='int32').reshape(2, 5)
+        from numba.tests.npyufunc.ufuncbuilding_usecases import guerror, MyException
+
+        ufunc = guvectorize(
+            ["(int32[:,:], int32[:,:], int32[:,:])"],
+            "(x,y),(x,y)->(x,y)",
+            forceobj=True,
+        )(guerror)
+        a = np.arange(10, dtype="int32").reshape(2, 5)
         with self.assertRaises(MyException):
             ufunc(a, a)
 
     def test_guvectorize_identity(self):
         from numba.tests.npyufunc.ufuncbuilding_usecases import add, guadd
-        args = (['(int32[:,:], int32[:,:], int32[:,:])'], "(x,y),(x,y)->(x,y)")
+
+        args = (["(int32[:,:], int32[:,:], int32[:,:])"], "(x,y),(x,y)->(x,y)")
         for identity in self._supported_identities:
             ufunc = guvectorize(*args, identity=identity)(guadd)
-            expected = None if identity == 'reorderable' else identity
+            expected = None if identity == "reorderable" else identity
             self.assertEqual(ufunc.identity, expected)
         # Default value is None
         ufunc = guvectorize(*args)(guadd)
         self.assertIs(ufunc.identity, None)
         # Invalid values
         with self.assertRaises(ValueError):
-            guvectorize(*args, identity='none')(add)
+            guvectorize(*args, identity="none")(add)
         with self.assertRaises(ValueError):
             guvectorize(*args, identity=2)(add)
 
     def test_guvectorize_invalid_layout(self):
         from numba.tests.npyufunc.ufuncbuilding_usecases import guadd
-        sigs = ['(int32[:,:], int32[:,:], int32[:,:])']
+
+        sigs = ["(int32[:,:], int32[:,:], int32[:,:])"]
         # Syntax error
         with self.assertRaises(ValueError) as raises:
             guvectorize(sigs, ")-:")(guadd)
@@ -312,8 +341,7 @@ class TestVectorizeDecor(TestCase):
         # Output shape can't be inferred from inputs
         with self.assertRaises(NameError) as raises:
             guvectorize(sigs, "(x,y),(x,y)->(x,z,v)")(guadd)
-        self.assertEqual(str(raises.exception),
-                         "undefined output symbols: v,z")
+        self.assertEqual(str(raises.exception), "undefined output symbols: v,z")
         # Arrow but no outputs
         with self.assertRaises(ValueError) as raises:
             guvectorize(sigs, "(x,y),(x,y),(x,y)->")(guadd)
@@ -322,6 +350,7 @@ class TestVectorizeDecor(TestCase):
 
 class NEP13Array:
     """https://numpy.org/neps/nep-0013-ufunc-overrides.html"""
+
     def __init__(self, array):
         self.array = array
 
@@ -379,7 +408,7 @@ class TestNEP13WithoutSignature(TestCase):
         # note: no signatures specified
         @vectorize(nopython=True)
         def new_ufunc(hundreds, tens, ones):
-            return 100*hundreds + 10*tens + ones
+            return 100 * hundreds + 10 * tens + ones
 
         # give it integers
         a = np.array([1, 2, 3], dtype=np.int64)
@@ -467,5 +496,5 @@ class TestVectorizeDecorJitDisabled(TestVectorizeDecor):
         config.DISABLE_JIT = self.old_disable_jit
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

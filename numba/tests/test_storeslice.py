@@ -14,7 +14,7 @@ def usecase(obs, nPoints):
     center = nPoints // 2
     obs[0:center] = np.arange(center)
     obs[center] = 321
-    obs[(center + 1):] = np.arange(nPoints - center - 1)
+    obs[(center + 1) :] = np.arange(nPoints - center - 1)
 
 
 class TestStoreSlice(TestCase):
@@ -32,22 +32,22 @@ class TestStoreSlice(TestCase):
 
     def test_array_slice_setitem(self):
         n = 10
-        argtys = (types.int64[:], types.int64, types.int64, types.int64,
-                  types.int64)
+        argtys = (types.int64[:], types.int64, types.int64, types.int64, types.int64)
         cfunc = njit(argtys)(setitem_slice)
         a = np.arange(n, dtype=np.int64)
         # tuple is (start, stop, step, scalar)
-        tests = ((2, 6, 1, 7),
-                 (2, 6, -1, 7),
-                 (-2, len(a), 2, 77),
-                 (-2, 2 * len(a), 2, 77),
-                 (-2, -6, 3, 88),
-                 (-2, -6, -3, 9999),
-                 (-6, -2, 4, 88),
-                 (-6, -2, -4, 88),
-                 (16, 20, 2, 88),
-                 (16, 20, -2, 88),
-                 )
+        tests = (
+            (2, 6, 1, 7),
+            (2, 6, -1, 7),
+            (-2, len(a), 2, 77),
+            (-2, 2 * len(a), 2, 77),
+            (-2, -6, 3, 88),
+            (-2, -6, -3, 9999),
+            (-6, -2, 4, 88),
+            (-6, -2, -4, 88),
+            (16, 20, 2, 88),
+            (16, 20, -2, 88),
+        )
 
         for start, stop, step, scalar in tests:
             a = np.arange(n, dtype=np.int64)
@@ -63,6 +63,5 @@ class TestStoreSlice(TestCase):
         self.assertEqual(str(cm.exception), "slice step cannot be zero")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
-

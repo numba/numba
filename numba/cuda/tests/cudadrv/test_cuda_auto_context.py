@@ -17,5 +17,5 @@ class TestCudaAutoContext(CUDATestCase):
         self.assertTrue(np.allclose(A, newA))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

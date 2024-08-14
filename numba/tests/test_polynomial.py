@@ -6,8 +6,12 @@ from numpy.polynomial import polynomial as poly
 from numpy.polynomial import polyutils as pu
 
 from numba import jit, njit
-from numba.tests.support import (TestCase, needs_lapack,
-                                 EnableNRTStatsMixin, MemoryLeakMixin)
+from numba.tests.support import (
+    TestCase,
+    needs_lapack,
+    EnableNRTStatsMixin,
+    MemoryLeakMixin,
+)
 from numba.core.errors import TypingError
 
 
@@ -15,16 +19,16 @@ def roots_fn(p):
     return np.roots(p)
 
 
-def polyadd(c1,c2):
-    return poly.polyadd(c1,c2)
+def polyadd(c1, c2):
+    return poly.polyadd(c1, c2)
 
 
-def polysub(c1,c2):
-    return poly.polysub(c1,c2)
+def polysub(c1, c2):
+    return poly.polysub(c1, c2)
 
 
-def polymul(c1,c2):
-    return poly.polymul(c1,c2)
+def polymul(c1, c2):
+    return poly.polymul(c1, c2)
 
 
 def trimseq(seq):
@@ -121,7 +125,7 @@ class TestPoly1D(TestPolynomialBase):
                 expected,
                 got,
                 rtol=10 * resolution,
-                atol=100 * resolution  # zeros tend to be fuzzy
+                atol=100 * resolution,  # zeros tend to be fuzzy
             )
 
             # Ensure proper resource management
@@ -137,12 +141,11 @@ class TestPoly1D(TestPolynomialBase):
             np.array([1, 6, 11, 6]),
             np.array([0, 0, 0, 1, 3, 2]),
             np.array([1, 1, 0, 0, 0]),
-            np.array([0, 0, 1, 0, 0, 0])
+            np.array([0, 0, 1, 0, 0, 0]),
         )
 
         # test loop real space
-        for v, dtype in \
-                product(r_vectors, [np.int32, np.int64] + list(self.dtypes)):
+        for v, dtype in product(r_vectors, [np.int32, np.int64] + list(self.dtypes)):
             a = v.astype(dtype)
             check(a)
 
@@ -153,7 +156,7 @@ class TestPoly1D(TestPolynomialBase):
             np.array([1, 6 + 1j, 11, 6]),
             np.array([0, 0, 0, 1 + 1j, 3, 2]),
             np.array([1 + 1j, 1, 0, 0, 0]),
-            np.array([0, 0, 1 + 1j, 0, 0, 0])
+            np.array([0, 0, 1 + 1j, 0, 0, 0]),
         )
 
         # test loop complex space
@@ -162,10 +165,10 @@ class TestPoly1D(TestPolynomialBase):
             check(a)
 
         # check input with dimension > 1 raises
-        self.assert_1d_input(cfunc, (np.arange(4.).reshape(2, 2),))
+        self.assert_1d_input(cfunc, (np.arange(4.0).reshape(2, 2),))
 
         # check real input with complex roots raises
-        x = np.array([7., 2., 0., 1.])
+        x = np.array([7.0, 2.0, 0.0, 1.0])
         self.assert_no_domain_change("eigvals", cfunc, (x,))
         # but works fine if type conv to complex first
         cfunc(x.astype(np.complex128))
@@ -195,18 +198,17 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as raises:
             cfunc("abc")
-        self.assertIn('The argument "seq" must be array-like',
-                      str(raises.exception))
+        self.assertIn('The argument "seq" must be array-like', str(raises.exception))
 
         with self.assertRaises(TypingError) as e:
             cfunc(np.arange(10).reshape(5, 2))
-        self.assertIn('Coefficient array is not 1-d',
-                      str(e.exception))
+        self.assertIn("Coefficient array is not 1-d", str(e.exception))
 
         with self.assertRaises(TypingError) as e:
             cfunc((1, 2, 3, 0))
-        self.assertIn('Unsupported type UniTuple(int64, 4) for argument "seq"',
-                      str(e.exception))
+        self.assertIn(
+            'Unsupported type UniTuple(int64, 4) for argument "seq"', str(e.exception)
+        )
 
     def test_pu_as_series_basic(self):
         pyfunc1 = polyasseries1
@@ -216,17 +218,19 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
 
         def inputs():
             yield np.arange(4)
-            yield np.arange(6).reshape((2,3))
+            yield np.arange(6).reshape((2, 3))
             yield (1, np.arange(3), np.arange(2, dtype=np.float32))
             yield ([1, 2, 3, 4, 0], [1, 2, 3])
             yield ((0, 0, 1e-3, 0, 1e-5, 0, 0), (1, 2, 3, 4, 5, 6, 7))
             yield ((0, 0, 1e-3, 0, 1e-5, 0, 0), (1j, 2, 3j, 4j, 5, 6j, 7))
-            yield (2, [1.1, 0.])
-            yield ([1, 2, 3, 0], )
-            yield ((1, 2, 3, 0), )
-            yield (np.array([1, 2, 3, 0]), )
+            yield (2, [1.1, 0.0])
+            yield ([1, 2, 3, 0],)
+            yield ((1, 2, 3, 0),)
+            yield (np.array([1, 2, 3, 0]),)
             yield [np.array([1, 2, 3, 0]), np.array([1, 2, 3, 0])]
-            yield [np.array([1,2,3]), ]
+            yield [
+                np.array([1, 2, 3]),
+            ]
 
         for input in inputs():
             self.assertPreciseEqual(pyfunc1(input), cfunc1(input))
@@ -241,44 +245,39 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as raises:
             cfunc1("abc")
-        self.assertIn('The argument "alist" must be array-like',
-                      str(raises.exception))
+        self.assertIn('The argument "alist" must be array-like', str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
             cfunc2("abc", True)
-        self.assertIn('The argument "alist" must be array-like',
-                      str(raises.exception))
+        self.assertIn('The argument "alist" must be array-like', str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
             cfunc2(np.arange(4), "abc")
-        self.assertIn('The argument "trim" must be boolean',
-                      str(raises.exception))
+        self.assertIn('The argument "trim" must be boolean', str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
-            cfunc1(([1, 2, 3], np.arange(16).reshape(4,4)))
-        self.assertIn('Coefficient array is not 1-d',
-                      str(raises.exception))
+            cfunc1(([1, 2, 3], np.arange(16).reshape(4, 4)))
+        self.assertIn("Coefficient array is not 1-d", str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
             cfunc1(np.arange(8).reshape((2, 2, 2)))
-        self.assertIn('Coefficient array is not 1-d',
-                      str(raises.exception))
+        self.assertIn("Coefficient array is not 1-d", str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
-            cfunc1([np.array([[1,2,3],[1,2,3]]), ])
-        self.assertIn('Coefficient array is not 1-d',
-                      str(raises.exception))
+            cfunc1(
+                [
+                    np.array([[1, 2, 3], [1, 2, 3]]),
+                ]
+            )
+        self.assertIn("Coefficient array is not 1-d", str(raises.exception))
 
         with self.assertRaises(ValueError) as raises:
             cfunc1(np.array([[]], dtype=np.float64))
-        self.assertIn('Coefficient array is empty',
-                      str(raises.exception))
+        self.assertIn("Coefficient array is empty", str(raises.exception))
 
         with self.assertRaises(ValueError) as raises:
-            cfunc1(([1, 2, 3], np.array([], dtype=np.float64),
-                    np.array([1,2,1])))
-        self.assertIn('Coefficient array is empty',
-                      str(raises.exception))
+            cfunc1(([1, 2, 3], np.array([], dtype=np.float64), np.array([1, 2, 1])))
+        self.assertIn("Coefficient array is empty", str(raises.exception))
 
     def _test_polyarithm_basic(self, pyfunc, ignore_sign_on_zero=False):
         # test suite containing tests for polyadd, polysub, polymul, polydiv
@@ -306,8 +305,9 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
             yield (1, 1e-3, 3), (1, 2, 3)
 
         for p1, p2 in inputs():
-            self.assertPreciseEqual(pyfunc(p1,p2), cfunc(p1,p2),
-                                    ignore_sign_on_zero=ignore_sign_on_zero)
+            self.assertPreciseEqual(
+                pyfunc(p1, p2), cfunc(p1, p2), ignore_sign_on_zero=ignore_sign_on_zero
+            )
 
     def _test_polyarithm_exception(self, pyfunc):
         # test suite containing tests for polyadd, polysub, polymul, polydiv
@@ -316,24 +316,20 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
         self.disable_leak_check()
 
         with self.assertRaises(TypingError) as raises:
-            cfunc("abc", np.array([1,2,3]))
-        self.assertIn('The argument "c1" must be array-like',
-                      str(raises.exception))
+            cfunc("abc", np.array([1, 2, 3]))
+        self.assertIn('The argument "c1" must be array-like', str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
-            cfunc(np.array([1,2,3]), "abc")
-        self.assertIn('The argument "c2" must be array-like',
-                      str(raises.exception))
+            cfunc(np.array([1, 2, 3]), "abc")
+        self.assertIn('The argument "c2" must be array-like', str(raises.exception))
 
         with self.assertRaises(TypingError) as e:
             cfunc(np.arange(10).reshape(5, 2), np.array([1, 2, 3]))
-        self.assertIn('Coefficient array is not 1-d',
-                      str(e.exception))
+        self.assertIn("Coefficient array is not 1-d", str(e.exception))
 
         with self.assertRaises(TypingError) as e:
             cfunc(np.array([1, 2, 3]), np.arange(10).reshape(5, 2))
-        self.assertIn('Coefficient array is not 1-d',
-                      str(e.exception))
+        self.assertIn("Coefficient array is not 1-d", str(e.exception))
 
     def test_polyadd_basic(self):
         self._test_polyarithm_basic(polyadd)
@@ -370,7 +366,7 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
                     cj = [0] * j + [1, 2]
                     tgt = poly.polyadd(ci, cj)
                     yield tgt, ci
-            yield np.array([1,0,0,0,0,0,-1]), np.array([1,0,0,-1])
+            yield np.array([1, 0, 0, 0, 0, 0, -1]), np.array([1, 0, 0, -1])
 
         for c1, c2 in inputs():
             self.assertPreciseEqual(pyfunc(c1, c2), cfunc(c1, c2))
@@ -395,8 +391,8 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
             # Based on https://github.com/numpy/numpy/blob/160c16f055d4d2fce072004e286d8075b31955cd/numpy/polynomial/tests/test_polynomial.py#L137-L157 # noqa: E501
             # check empty input
             yield np.array([], dtype=np.float64), [1]
-            yield 1, [1,2,3]
-            yield np.arange(4).reshape(2,2), [1,2,3]
+            yield 1, [1, 2, 3]
+            yield np.arange(4).reshape(2, 2), [1, 2, 3]
             # check normal input
             for i in range(5):
                 yield np.linspace(-1, 1), [0] * i + [1]
@@ -409,8 +405,8 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
                 yield x, [1, 0]
                 yield x, [1, 0, 0]
             # Check that behaviour corresponds to tensor = False
-            yield np.array([1, 2]), np.arange(4).reshape(2,2)
-            yield [1, 2], np.arange(4).reshape(2,2)
+            yield np.array([1, 2]), np.arange(4).reshape(2, 2)
+            yield [1, 2], np.arange(4).reshape(2, 2)
 
         for x, c in inputs():
             self.assertPreciseEqual(pyfunc2(x, c), cfunc2(x, c))
@@ -427,48 +423,42 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as raises:
             cfunc2(3, "abc")
-        self.assertIn('The argument "c" must be array-like',
-                      str(raises.exception))
+        self.assertIn('The argument "c" must be array-like', str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
             cfunc2("abc", 3)
-        self.assertIn('The argument "x" must be array-like',
-                      str(raises.exception))
+        self.assertIn('The argument "x" must be array-like', str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
             cfunc2("abc", "def")
-        self.assertIn('The argument "x" must be array-like',
-                      str(raises.exception))
+        self.assertIn('The argument "x" must be array-like', str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
             cfunc3T(3, "abc")
-        self.assertIn('The argument "c" must be array-like',
-                      str(raises.exception))
+        self.assertIn('The argument "c" must be array-like', str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
             cfunc3T("abc", 3)
-        self.assertIn('The argument "x" must be array-like',
-                      str(raises.exception))
+        self.assertIn('The argument "x" must be array-like', str(raises.exception))
 
         @njit
         def polyval3(x, c, tensor):
             res = poly.polyval(x, c, tensor)
             return res
+
         with self.assertRaises(TypingError) as raises:
             polyval3(3, 3, "abc")
-        self.assertIn('The argument "tensor" must be boolean',
-                      str(raises.exception))
+        self.assertIn('The argument "tensor" must be boolean', str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
             cfunc3F("abc", "def")
-        self.assertIn('The argument "x" must be array-like',
-                      str(raises.exception))
+        self.assertIn('The argument "x" must be array-like', str(raises.exception))
 
     def test_poly_polyint_basic(self):
         pyfunc = polyint
         cfunc = njit(polyint)
         # basic
-        self.assertPreciseEqual(pyfunc([1,2,3]), cfunc([1,2,3]))
+        self.assertPreciseEqual(pyfunc([1, 2, 3]), cfunc([1, 2, 3]))
         # Based on https://github.com/numpy/numpy/blob/160c16f055d4d2fce072004e286d8075b31955cd/numpy/polynomial/tests/test_polynomial.py#L314-L381 # noqa: E501
         # test integration of zero polynomial
         for i in range(2, 5):
@@ -486,9 +476,9 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
                 self.assertPreciseEqual(pyfunc(pol, m=j), cfunc(pol, m=j))
 
         # test multidimensional arrays
-        c2 = np.array([[0,1], [0,2]])
+        c2 = np.array([[0, 1], [0, 2]])
         self.assertPreciseEqual(pyfunc(c2), cfunc(c2))
-        c3 = np.arange(8).reshape((2,2,2))
+        c3 = np.arange(8).reshape((2, 2, 2))
         self.assertPreciseEqual(pyfunc(c3), cfunc(c3))
 
     def test_poly_polyint_exception(self):
@@ -498,23 +488,19 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as raises:
             cfunc("abc")
-        self.assertIn('The argument "c" must be array-like',
-                      str(raises.exception))
+        self.assertIn('The argument "c" must be array-like', str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
-            cfunc(np.array([1,2,3]), "abc")
-        self.assertIn('The argument "m" must be an integer',
-                      str(raises.exception))
+            cfunc(np.array([1, 2, 3]), "abc")
+        self.assertIn('The argument "m" must be an integer', str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
-            cfunc(['a', 'b', 'c'], 1)
-        self.assertIn('Input dtype must be scalar.',
-                      str(raises.exception))
+            cfunc(["a", "b", "c"], 1)
+        self.assertIn("Input dtype must be scalar.", str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
-            cfunc(('a', 'b', 'c'), 1)
-        self.assertIn('Input dtype must be scalar.',
-                      str(raises.exception))
+            cfunc(("a", "b", "c"), 1)
+        self.assertIn("Input dtype must be scalar.", str(raises.exception))
 
     #
     # tests for Polynomial class
@@ -525,15 +511,17 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
         def pyfunc3(c, dom, win):
             p = poly.Polynomial(c, dom, win)
             return p
+
         cfunc3 = njit(pyfunc3)
 
         def pyfunc1(c):
             p = poly.Polynomial(c)
             return p
+
         cfunc1 = njit(pyfunc1)
-        list1 = (np.array([0, 1]), np.array([0., 1.]))
-        list2 = (np.array([0, 1]), np.array([0., 1.]))
-        list3 = (np.array([0, 1]), np.array([0., 1.]))
+        list1 = (np.array([0, 1]), np.array([0.0, 1.0]))
+        list2 = (np.array([0, 1]), np.array([0.0, 1.0]))
+        list3 = (np.array([0, 1]), np.array([0.0, 1.0]))
         for c in list1:
             for dom in list2:
                 for win in list3:
@@ -553,6 +541,7 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
         def pyfunc3(c, dom, win):
             p = poly.Polynomial(c, dom, win)
             return p
+
         cfunc3 = njit(pyfunc3)
 
         self.disable_leak_check()
@@ -563,15 +552,12 @@ class TestPolynomial(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(ValueError) as raises:
             cfunc3(input2, input3, input2)
-        self.assertIn("Domain has wrong number of elements.",
-                      str(raises.exception))
+        self.assertIn("Domain has wrong number of elements.", str(raises.exception))
 
         with self.assertRaises(ValueError) as raises:
             cfunc3(input2, input2, input3)
-        self.assertIn("Window has wrong number of elements.",
-                      str(raises.exception))
+        self.assertIn("Window has wrong number of elements.", str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
             cfunc3(input2D, input2, input2)
-        self.assertIn("Coefficient array is not 1-d",
-                      str(raises.exception))
+        self.assertIn("Coefficient array is not 1-d", str(raises.exception))

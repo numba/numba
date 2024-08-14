@@ -12,19 +12,19 @@ class _BaseVectorize(object):
 
     @classmethod
     def get_identity(cls, kwargs):
-        return kwargs.pop('identity', None)
+        return kwargs.pop("identity", None)
 
     @classmethod
     def get_cache(cls, kwargs):
-        return kwargs.pop('cache', False)
+        return kwargs.pop("cache", False)
 
     @classmethod
     def get_writable_args(cls, kwargs):
-        return kwargs.pop('writable_args', ())
+        return kwargs.pop("writable_args", ())
 
     @classmethod
     def get_target_implementation(cls, kwargs):
-        target = kwargs.pop('target', 'cpu')
+        target = kwargs.pop("target", "cpu")
         try:
             return cls.target_registry[target]
         except KeyError:
@@ -32,8 +32,12 @@ class _BaseVectorize(object):
 
 
 class Vectorize(_BaseVectorize):
-    target_registry = DelayedRegistry({'cpu': dufunc.DUFunc,
-                                       'parallel': ParallelUFuncBuilder,})
+    target_registry = DelayedRegistry(
+        {
+            "cpu": dufunc.DUFunc,
+            "parallel": ParallelUFuncBuilder,
+        }
+    )
 
     def __new__(cls, func, **kws):
         identity = cls.get_identity(kws)
@@ -43,8 +47,12 @@ class Vectorize(_BaseVectorize):
 
 
 class GUVectorize(_BaseVectorize):
-    target_registry = DelayedRegistry({'cpu': gufunc.GUFunc,
-                                       'parallel': ParallelGUFuncBuilder,})
+    target_registry = DelayedRegistry(
+        {
+            "cpu": gufunc.GUFunc,
+            "parallel": ParallelGUFuncBuilder,
+        }
+    )
 
     def __new__(cls, func, signature, **kws):
         identity = cls.get_identity(kws)
@@ -52,13 +60,25 @@ class GUVectorize(_BaseVectorize):
         imp = cls.get_target_implementation(kws)
         writable_args = cls.get_writable_args(kws)
         if imp is gufunc.GUFunc:
-            is_dyn = kws.pop('is_dynamic', False)
-            return imp(func, signature, identity=identity, cache=cache,
-                       is_dynamic=is_dyn, targetoptions=kws,
-                       writable_args=writable_args)
+            is_dyn = kws.pop("is_dynamic", False)
+            return imp(
+                func,
+                signature,
+                identity=identity,
+                cache=cache,
+                is_dynamic=is_dyn,
+                targetoptions=kws,
+                writable_args=writable_args,
+            )
         else:
-            return imp(func, signature, identity=identity, cache=cache,
-                       targetoptions=kws, writable_args=writable_args)
+            return imp(
+                func,
+                signature,
+                identity=identity,
+                cache=cache,
+                targetoptions=kws,
+                writable_args=writable_args,
+            )
 
 
 def vectorize(ftylist_or_function=(), **kws):
@@ -186,12 +206,12 @@ def guvectorize(*args, **kwargs):
     if len(args) == 1:
         ftylist = []
         signature = args[0]
-        kwargs.setdefault('is_dynamic', True)
+        kwargs.setdefault("is_dynamic", True)
     elif len(args) == 2:
         ftylist = args[0]
         signature = args[1]
     else:
-        raise TypeError('guvectorize() takes one or two positional arguments')
+        raise TypeError("guvectorize() takes one or two positional arguments")
 
     if isinstance(ftylist, str):
         # Common user mistake

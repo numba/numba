@@ -2,7 +2,6 @@
 API that are reported to numba.cuda
 """
 
-
 import contextlib
 import os
 
@@ -28,35 +27,35 @@ def from_cuda_array_interface(desc, owner=None, sync=True):
     If ``sync`` is ``True``, then the imported stream (if present) will be
     synchronized.
     """
-    version = desc.get('version')
+    version = desc.get("version")
     # Mask introduced in version 1
     if 1 <= version:
-        mask = desc.get('mask')
+        mask = desc.get("mask")
         # Would ideally be better to detect if the mask is all valid
         if mask is not None:
-            raise NotImplementedError('Masked arrays are not supported')
+            raise NotImplementedError("Masked arrays are not supported")
 
-    shape = desc['shape']
-    strides = desc.get('strides')
-    dtype = np.dtype(desc['typestr'])
+    shape = desc["shape"]
+    strides = desc.get("strides")
+    dtype = np.dtype(desc["typestr"])
 
     shape, strides, dtype = prepare_shape_strides_dtype(
-        shape, strides, dtype, order='C')
+        shape, strides, dtype, order="C"
+    )
     size = driver.memory_size_from_info(shape, strides, dtype.itemsize)
 
-    devptr = driver.get_devptr_for_active_ctx(desc['data'][0])
-    data = driver.MemoryPointer(
-        current_context(), devptr, size=size, owner=owner)
-    stream_ptr = desc.get('stream', None)
+    devptr = driver.get_devptr_for_active_ctx(desc["data"][0])
+    data = driver.MemoryPointer(current_context(), devptr, size=size, owner=owner)
+    stream_ptr = desc.get("stream", None)
     if stream_ptr is not None:
         stream = external_stream(stream_ptr)
         if sync and config.CUDA_ARRAY_INTERFACE_SYNC:
             stream.synchronize()
     else:
-        stream = 0 # No "Numba default stream", not the CUDA default stream
-    da = devicearray.DeviceNDArray(shape=shape, strides=strides,
-                                   dtype=dtype, gpu_data=data,
-                                   stream=stream)
+        stream = 0  # No "Numba default stream", not the CUDA default stream
+    da = devicearray.DeviceNDArray(
+        shape=shape, strides=strides, dtype=dtype, gpu_data=data, stream=stream
+    )
     return da
 
 
@@ -73,8 +72,9 @@ def as_cuda_array(obj, sync=True):
     if not is_cuda_array(obj):
         raise TypeError("*obj* doesn't implement the cuda array interface.")
     else:
-        return from_cuda_array_interface(obj.__cuda_array_interface__,
-                                         owner=obj, sync=sync)
+        return from_cuda_array_interface(
+            obj.__cuda_array_interface__, owner=obj, sync=sync
+        )
 
 
 def is_cuda_array(obj):
@@ -82,7 +82,7 @@ def is_cuda_array(obj):
 
     Does not verify the validity of the interface.
     """
-    return hasattr(obj, '__cuda_array_interface__')
+    return hasattr(obj, "__cuda_array_interface__")
 
 
 def is_float16_supported():
@@ -125,8 +125,9 @@ def to_device(obj, stream=0, copy=True, to=None):
         hary = d_ary.copy_to_host(stream=stream)
     """
     if to is None:
-        to, new = devicearray.auto_device(obj, stream=stream, copy=copy,
-                                          user_explicit=True)
+        to, new = devicearray.auto_device(
+            obj, stream=stream, copy=copy, user_explicit=True
+        )
         return to
     if copy:
         to.copy_to_device(obj, stream=stream)
@@ -134,20 +135,21 @@ def to_device(obj, stream=0, copy=True, to=None):
 
 
 @require_context
-def device_array(shape, dtype=np.float64, strides=None, order='C', stream=0):
+def device_array(shape, dtype=np.float64, strides=None, order="C", stream=0):
     """device_array(shape, dtype=np.float64, strides=None, order='C', stream=0)
 
     Allocate an empty device ndarray. Similar to :meth:`numpy.empty`.
     """
-    shape, strides, dtype = prepare_shape_strides_dtype(shape, strides, dtype,
-                                                        order)
-    return devicearray.DeviceNDArray(shape=shape, strides=strides, dtype=dtype,
-                                     stream=stream)
+    shape, strides, dtype = prepare_shape_strides_dtype(shape, strides, dtype, order)
+    return devicearray.DeviceNDArray(
+        shape=shape, strides=strides, dtype=dtype, stream=stream
+    )
 
 
 @require_context
-def managed_array(shape, dtype=np.float64, strides=None, order='C', stream=0,
-                  attach_global=True):
+def managed_array(
+    shape, dtype=np.float64, strides=None, order="C", stream=0, attach_global=True
+):
     """managed_array(shape, dtype=np.float64, strides=None, order='C', stream=0,
                      attach_global=True)
 
@@ -163,37 +165,36 @@ def managed_array(shape, dtype=np.float64, strides=None, order='C', stream=0,
                           *host*, and memory is only accessible by devices
                           with Compute Capability 6.0 and later.
     """
-    shape, strides, dtype = prepare_shape_strides_dtype(shape, strides, dtype,
-                                                        order)
+    shape, strides, dtype = prepare_shape_strides_dtype(shape, strides, dtype, order)
     bytesize = driver.memory_size_from_info(shape, strides, dtype.itemsize)
-    buffer = current_context().memallocmanaged(bytesize,
-                                               attach_global=attach_global)
-    npary = np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order,
-                       buffer=buffer)
+    buffer = current_context().memallocmanaged(bytesize, attach_global=attach_global)
+    npary = np.ndarray(
+        shape=shape, strides=strides, dtype=dtype, order=order, buffer=buffer
+    )
     managedview = np.ndarray.view(npary, type=devicearray.ManagedNDArray)
     managedview.device_setup(buffer, stream=stream)
     return managedview
 
 
 @require_context
-def pinned_array(shape, dtype=np.float64, strides=None, order='C'):
+def pinned_array(shape, dtype=np.float64, strides=None, order="C"):
     """pinned_array(shape, dtype=np.float64, strides=None, order='C')
 
     Allocate an :class:`ndarray <numpy.ndarray>` with a buffer that is pinned
     (pagelocked).  Similar to :func:`np.empty() <numpy.empty>`.
     """
-    shape, strides, dtype = prepare_shape_strides_dtype(shape, strides, dtype,
-                                                        order)
-    bytesize = driver.memory_size_from_info(shape, strides,
-                                            dtype.itemsize)
+    shape, strides, dtype = prepare_shape_strides_dtype(shape, strides, dtype, order)
+    bytesize = driver.memory_size_from_info(shape, strides, dtype.itemsize)
     buffer = current_context().memhostalloc(bytesize)
-    return np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order,
-                      buffer=buffer)
+    return np.ndarray(
+        shape=shape, strides=strides, dtype=dtype, order=order, buffer=buffer
+    )
 
 
 @require_context
-def mapped_array(shape, dtype=np.float64, strides=None, order='C', stream=0,
-                 portable=False, wc=False):
+def mapped_array(
+    shape, dtype=np.float64, strides=None, order="C", stream=0, portable=False, wc=False
+):
     """mapped_array(shape, dtype=np.float64, strides=None, order='C', stream=0,
                     portable=False, wc=False)
 
@@ -206,12 +207,12 @@ def mapped_array(shape, dtype=np.float64, strides=None, order='C', stream=0,
         to write by the host and to read by the device, but slower to
         write by the host and slower to write by the device.
     """
-    shape, strides, dtype = prepare_shape_strides_dtype(shape, strides, dtype,
-                                                        order)
+    shape, strides, dtype = prepare_shape_strides_dtype(shape, strides, dtype, order)
     bytesize = driver.memory_size_from_info(shape, strides, dtype.itemsize)
     buffer = current_context().memhostalloc(bytesize, mapped=True)
-    npary = np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order,
-                       buffer=buffer)
+    npary = np.ndarray(
+        shape=shape, strides=strides, dtype=dtype, order=order, buffer=buffer
+    )
     mappedview = np.ndarray.view(npary, type=devicearray.MappedNDArray)
     mappedview.device_setup(buffer, stream=stream)
     return mappedview
@@ -242,8 +243,9 @@ def open_ipc_array(handle, shape, dtype, strides=None, offset=0):
         driver_handle = driver.drvapi.cu_ipc_mem_handle(*handle)
     # use *IpcHandle* to open the IPC memory
     ipchandle = driver.IpcHandle(None, driver_handle, size, offset=offset)
-    yield ipchandle.open_array(current_context(), shape=shape,
-                               strides=strides, dtype=dtype)
+    yield ipchandle.open_array(
+        current_context(), shape=shape, strides=strides, dtype=dtype
+    )
     ipchandle.close()
 
 
@@ -259,7 +261,7 @@ def _contiguous_strides_like_array(ary):
     """
     # Don't recompute strides if the default strides will be sufficient to
     # create a contiguous array.
-    if ary.flags['C_CONTIGUOUS'] or ary.flags['F_CONTIGUOUS'] or ary.ndim <= 1:
+    if ary.flags["C_CONTIGUOUS"] or ary.flags["F_CONTIGUOUS"] or ary.ndim <= 1:
         return None
 
     # Otherwise, we need to compute new strides using an algorithm adapted from
@@ -269,7 +271,7 @@ def _contiguous_strides_like_array(ary):
 
     # Stride permutation. E.g. a stride array (4, -2, 12) becomes
     # [(1, -2), (0, 4), (2, 12)]
-    strideperm = [ x for x in enumerate(ary.strides) ]
+    strideperm = [x for x in enumerate(ary.strides)]
     strideperm.sort(key=lambda x: x[1])
 
     # Compute new strides using permutation
@@ -282,10 +284,10 @@ def _contiguous_strides_like_array(ary):
 
 
 def _order_like_array(ary):
-    if ary.flags['F_CONTIGUOUS'] and not ary.flags['C_CONTIGUOUS']:
-        return 'F'
+    if ary.flags["F_CONTIGUOUS"] and not ary.flags["C_CONTIGUOUS"]:
+        return "F"
     else:
-        return 'C'
+        return "C"
 
 
 def device_array_like(ary, stream=0):
@@ -295,8 +297,9 @@ def device_array_like(ary, stream=0):
     """
     strides = _contiguous_strides_like_array(ary)
     order = _order_like_array(ary)
-    return device_array(shape=ary.shape, dtype=ary.dtype, strides=strides,
-                        order=order, stream=stream)
+    return device_array(
+        shape=ary.shape, dtype=ary.dtype, strides=strides, order=order, stream=stream
+    )
 
 
 def mapped_array_like(ary, stream=0, portable=False, wc=False):
@@ -306,8 +309,15 @@ def mapped_array_like(ary, stream=0, portable=False, wc=False):
     """
     strides = _contiguous_strides_like_array(ary)
     order = _order_like_array(ary)
-    return mapped_array(shape=ary.shape, dtype=ary.dtype, strides=strides,
-                        order=order, stream=stream, portable=portable, wc=wc)
+    return mapped_array(
+        shape=ary.shape,
+        dtype=ary.dtype,
+        strides=strides,
+        order=order,
+        stream=stream,
+        portable=portable,
+        wc=wc,
+    )
 
 
 def pinned_array_like(ary):
@@ -317,8 +327,7 @@ def pinned_array_like(ary):
     """
     strides = _contiguous_strides_like_array(ary)
     order = _order_like_array(ary)
-    return pinned_array(shape=ary.shape, dtype=ary.dtype, strides=strides,
-                        order=order)
+    return pinned_array(shape=ary.shape, dtype=ary.dtype, strides=strides, order=order)
 
 
 # Stream helper
@@ -372,13 +381,12 @@ def external_stream(ptr):
 @require_context
 @contextlib.contextmanager
 def pinned(*arylist):
-    """A context manager for temporary pinning a sequence of host ndarrays.
-    """
+    """A context manager for temporary pinning a sequence of host ndarrays."""
     pmlist = []
     for ary in arylist:
-        pm = current_context().mempin(ary, driver.host_pointer(ary),
-                                      driver.host_memory_size(ary),
-                                      mapped=False)
+        pm = current_context().mempin(
+            ary, driver.host_pointer(ary), driver.host_memory_size(ary), mapped=False
+        )
         pmlist.append(pm)
     yield
 
@@ -386,16 +394,15 @@ def pinned(*arylist):
 @require_context
 @contextlib.contextmanager
 def mapped(*arylist, **kws):
-    """A context manager for temporarily mapping a sequence of host ndarrays.
-    """
-    assert not kws or 'stream' in kws, "Only accept 'stream' as keyword."
-    stream = kws.get('stream', 0)
+    """A context manager for temporarily mapping a sequence of host ndarrays."""
+    assert not kws or "stream" in kws, "Only accept 'stream' as keyword."
+    stream = kws.get("stream", 0)
     pmlist = []
     devarylist = []
     for ary in arylist:
-        pm = current_context().mempin(ary, driver.host_pointer(ary),
-                                      driver.host_memory_size(ary),
-                                      mapped=True)
+        pm = current_context().mempin(
+            ary, driver.host_pointer(ary), driver.host_memory_size(ary), mapped=True
+        )
         pmlist.append(pm)
         devary = devicearray.from_array_like(ary, gpu_data=pm, stream=stream)
         devarylist.append(devary)
@@ -425,6 +432,7 @@ event_elapsed_time = driver.event_elapsed_time
 
 
 # Device selection
+
 
 def select_device(device_id):
     """
@@ -467,7 +475,7 @@ def detect():
     Returns a boolean indicating whether any supported devices were detected.
     """
     devlist = list_devices()
-    print('Found %d CUDA devices' % len(devlist))
+    print("Found %d CUDA devices" % len(devlist))
     supported_count = 0
     for dev in devlist:
         attrs = []
@@ -475,29 +483,29 @@ def detect():
         kernel_timeout = dev.KERNEL_EXEC_TIMEOUT
         tcc = dev.TCC_DRIVER
         fp32_to_fp64_ratio = dev.SINGLE_TO_DOUBLE_PRECISION_PERF_RATIO
-        attrs += [('Compute Capability', '%d.%d' % cc)]
-        attrs += [('PCI Device ID', dev.PCI_DEVICE_ID)]
-        attrs += [('PCI Bus ID', dev.PCI_BUS_ID)]
-        attrs += [('UUID', dev.uuid)]
-        attrs += [('Watchdog', 'Enabled' if kernel_timeout else 'Disabled')]
+        attrs += [("Compute Capability", "%d.%d" % cc)]
+        attrs += [("PCI Device ID", dev.PCI_DEVICE_ID)]
+        attrs += [("PCI Bus ID", dev.PCI_BUS_ID)]
+        attrs += [("UUID", dev.uuid)]
+        attrs += [("Watchdog", "Enabled" if kernel_timeout else "Disabled")]
         if os.name == "nt":
-            attrs += [('Compute Mode', 'TCC' if tcc else 'WDDM')]
-        attrs += [('FP32/FP64 Performance Ratio', fp32_to_fp64_ratio)]
+            attrs += [("Compute Mode", "TCC" if tcc else "WDDM")]
+        attrs += [("FP32/FP64 Performance Ratio", fp32_to_fp64_ratio)]
         if cc < (3, 5):
-            support = '[NOT SUPPORTED: CC < 3.5]'
+            support = "[NOT SUPPORTED: CC < 3.5]"
         elif cc < (5, 0):
-            support = '[SUPPORTED (DEPRECATED)]'
+            support = "[SUPPORTED (DEPRECATED)]"
             supported_count += 1
         else:
-            support = '[SUPPORTED]'
+            support = "[SUPPORTED]"
             supported_count += 1
 
-        print('id %d    %20s %40s' % (dev.id, dev.name, support))
+        print("id %d    %20s %40s" % (dev.id, dev.name, support))
         for key, val in attrs:
-            print('%40s: %s' % (key, val))
+            print("%40s: %s" % (key, val))
 
-    print('Summary:')
-    print('\t%d/%d devices are supported' % (supported_count, len(devlist)))
+    print("Summary:")
+    print("\t%d/%d devices are supported" % (supported_count, len(devlist)))
     return supported_count > 0
 
 

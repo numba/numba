@@ -45,5 +45,5 @@ class TestCudaNonDet(CUDATestCase):
         np.testing.assert_array_almost_equal(dF.copy_to_host(), E)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

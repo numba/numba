@@ -7,7 +7,8 @@ class FastFloatBinOpVisitor(Visitor):
     A pass to add fastmath flag to float-binop instruction if they don't have
     any flags.
     """
-    float_binops = frozenset(['fadd', 'fsub', 'fmul', 'fdiv', 'frem', 'fcmp'])
+
+    float_binops = frozenset(["fadd", "fsub", "fmul", "fdiv", "frem", "fcmp"])
 
     def __init__(self, flags):
         self.flags = flags
@@ -41,4 +42,3 @@ def rewrite_module(mod, options):
     flags = options.flags
     FastFloatBinOpVisitor(flags).visit(mod)
     FastFloatCallVisitor(flags).visit(mod)
-

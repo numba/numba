@@ -2,7 +2,6 @@
 Implement transformation on Numba IR
 """
 
-
 from collections import namedtuple, defaultdict
 import logging
 import operator
@@ -20,6 +19,7 @@ def _extract_loop_lifting_candidates(cfg, blocks):
     """
     Returns a list of loops that are candidate for loop lifting
     """
+
     # check well-formed-ness of the loop
     def same_exit_point(loop):
         "all exits must point to the same location"
@@ -55,23 +55,26 @@ def _extract_loop_lifting_candidates(cfg, blocks):
         _logger.debug("no yield")
         return True
 
-    _logger.info('finding looplift candidates')
+    _logger.info("finding looplift candidates")
     # the check for cfg.entry_point in the loop.entries is to prevent a bad
     # rewrite where a prelude for a lifted loop would get written into block -1
     # if a loop entry were in block 0
     candidates = []
     for loop in find_top_level_loops(cfg):
         _logger.debug("top-level loop: %s", loop)
-        if (same_exit_point(loop) and one_entry(loop) and cannot_yield(loop) and
-            cfg.entry_point() not in loop.entries):
+        if (
+            same_exit_point(loop)
+            and one_entry(loop)
+            and cannot_yield(loop)
+            and cfg.entry_point() not in loop.entries
+        ):
             candidates.append(loop)
             _logger.debug("add candidate: %s", loop)
     return candidates
 
 
 def find_region_inout_vars(blocks, livemap, callfrom, returnto, body_block_ids):
-    """Find input and output variables to a block region.
-    """
+    """Find input and output variables to a block region."""
     inputs = livemap[callfrom]
     outputs = livemap[returnto]
 
@@ -97,8 +100,7 @@ def find_region_inout_vars(blocks, livemap, callfrom, returnto, body_block_ids):
     return inputs, outputs
 
 
-_loop_lift_info = namedtuple('loop_lift_info',
-                             'loop,inputs,outputs,callfrom,returnto')
+_loop_lift_info = namedtuple("loop_lift_info", "loop,inputs,outputs,callfrom,returnto")
 
 
 def _loop_lift_get_candidate_infos(cfg, blocks, livemap):
@@ -109,7 +111,7 @@ def _loop_lift_get_candidate_infos(cfg, blocks, livemap):
     loopinfos = []
     for loop in loops:
 
-        [callfrom] = loop.entries   # requirement checked earlier
+        [callfrom] = loop.entries  # requirement checked earlier
         an_exit = next(iter(loop.exits))  # anyone of the exit block
         if len(loop.exits) > 1:
             # has multiple exits
@@ -127,8 +129,13 @@ def _loop_lift_get_candidate_infos(cfg, blocks, livemap):
             body_block_ids=local_block_ids,
         )
 
-        lli = _loop_lift_info(loop=loop, inputs=inputs, outputs=outputs,
-                              callfrom=callfrom, returnto=returnto)
+        lli = _loop_lift_info(
+            loop=loop,
+            inputs=inputs,
+            outputs=outputs,
+            callfrom=callfrom,
+            returnto=returnto,
+        )
         loopinfos.append(lli)
 
     return loopinfos
@@ -173,8 +180,9 @@ def _loop_lift_prepare_loop_func(loopinfo, blocks):
     )
 
 
-def _loop_lift_modify_blocks(func_ir, loopinfo, blocks,
-                             typingctx, targetctx, flags, locals):
+def _loop_lift_modify_blocks(
+    func_ir, loopinfo, blocks, typingctx, targetctx, flags, locals
+):
     """
     Modify the block inplace to call to the lifted-loop.
     Returns a dictionary of blocks of the lifted-loop.
@@ -193,17 +201,22 @@ def _loop_lift_modify_blocks(func_ir, loopinfo, blocks,
     _loop_lift_prepare_loop_func(loopinfo, loopblocks)
 
     # Create a new IR for the lifted loop
-    lifted_ir = func_ir.derive(blocks=loopblocks,
-                               arg_names=tuple(loopinfo.inputs),
-                               arg_count=len(loopinfo.inputs),
-                               force_non_generator=True)
-    liftedloop = LiftedLoop(lifted_ir,
-                            typingctx, targetctx, flags, locals)
+    lifted_ir = func_ir.derive(
+        blocks=loopblocks,
+        arg_names=tuple(loopinfo.inputs),
+        arg_count=len(loopinfo.inputs),
+        force_non_generator=True,
+    )
+    liftedloop = LiftedLoop(lifted_ir, typingctx, targetctx, flags, locals)
 
     # modify for calling into liftedloop
-    callblock = _loop_lift_modify_call_block(liftedloop, blocks[loopinfo.callfrom],
-                                             loopinfo.inputs, loopinfo.outputs,
-                                             loopinfo.returnto)
+    callblock = _loop_lift_modify_call_block(
+        liftedloop,
+        blocks[loopinfo.callfrom],
+        loopinfo.inputs,
+        loopinfo.outputs,
+        loopinfo.returnto,
+    )
     # remove blocks
     for k in loopblockkeys:
         del blocks[k]
@@ -225,7 +238,7 @@ def _has_multiple_loop_exits(cfg, lpinfo):
 
     # Eliminate blocks that have other blocks as post-dominators.
     processed = set()
-    remain = set(exits) # create a copy to work on
+    remain = set(exits)  # create a copy to work on
     while remain:
         node = remain.pop()
         processed.add(node)
@@ -236,17 +249,14 @@ def _has_multiple_loop_exits(cfg, lpinfo):
 
 
 def _pre_looplift_transform(func_ir):
-    """Canonicalize loops for looplifting.
-    """
+    """Canonicalize loops for looplifting."""
     from numba.core.postproc import PostProcessor
 
     cfg = compute_cfg_from_blocks(func_ir.blocks)
     # For every loop that has multiple exits, combine the exits into one.
     for loop_info in cfg.loops().values():
         if _has_multiple_loop_exits(cfg, loop_info):
-            func_ir, _common_key = _fix_multi_exit_blocks(
-                func_ir, loop_info.exits
-            )
+            func_ir, _common_key = _fix_multi_exit_blocks(func_ir, loop_info.exits)
     # Reset and reprocess the func_ir
     func_ir._reset_analysis_variables()
     PostProcessor(func_ir).run()
@@ -263,15 +273,20 @@ def loop_lifting(func_ir, typingctx, targetctx, flags, locals):
     func_ir = _pre_looplift_transform(func_ir)
     blocks = func_ir.blocks.copy()
     cfg = compute_cfg_from_blocks(blocks)
-    loopinfos = _loop_lift_get_candidate_infos(cfg, blocks,
-                                               func_ir.variable_lifetime.livemap)
+    loopinfos = _loop_lift_get_candidate_infos(
+        cfg, blocks, func_ir.variable_lifetime.livemap
+    )
     loops = []
     if loopinfos:
-        _logger.debug('loop lifting this IR with %d candidates:\n%s',
-                      len(loopinfos), func_ir.dump_to_string())
+        _logger.debug(
+            "loop lifting this IR with %d candidates:\n%s",
+            len(loopinfos),
+            func_ir.dump_to_string(),
+        )
     for loopinfo in loopinfos:
-        lifted = _loop_lift_modify_blocks(func_ir, loopinfo, blocks,
-                                          typingctx, targetctx, flags, locals)
+        lifted = _loop_lift_modify_blocks(
+            func_ir, loopinfo, blocks, typingctx, targetctx, flags, locals
+        )
         loops.append(lifted)
 
     # Make main IR
@@ -310,13 +325,15 @@ def canonicalize_cfg_single_backedge(blocks):
 
     def replace_target(term, src, dst):
         def replace(target):
-            return (dst if target == src else target)
+            return dst if target == src else target
 
         if isinstance(term, ir.Branch):
-            return ir.Branch(cond=term.cond,
-                             truebr=replace(term.truebr),
-                             falsebr=replace(term.falsebr),
-                             loc=term.loc)
+            return ir.Branch(
+                cond=term.cond,
+                truebr=replace(term.truebr),
+                falsebr=replace(term.falsebr),
+                loc=term.loc,
+            )
         elif isinstance(term, ir.Jump):
             return ir.Jump(target=replace(term.target), loc=term.loc)
         else:
@@ -334,8 +351,7 @@ def canonicalize_cfg_single_backedge(blocks):
             if header in blk.terminator.get_targets():
                 newblk = blk.copy()
                 # rewrite backedge into jumps to new tail block
-                newblk.body[-1] = replace_target(blk.terminator, header,
-                                                 tailkey)
+                newblk.body[-1] = replace_target(blk.terminator, header, tailkey)
                 newblocks[blkkey] = newblk
         # create new tail block
         entryblk = newblocks[header]
@@ -397,7 +413,7 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
     # For each with-regions, mutate them according to
     # the kind of contextmanager
     sub_irs = []
-    for (blk_start, blk_end) in withs:
+    for blk_start, blk_end in withs:
         body_blocks = []
         for node in _cfg_nodes_in_region(cfg, blk_start, blk_end):
             body_blocks.append(node)
@@ -405,9 +421,9 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
         # Find the contextmanager
         cmkind, extra = _get_with_contextmanager(func_ir, blocks, blk_start)
         # Mutate the body and get new IR
-        sub = cmkind.mutate_with_body(func_ir, blocks, blk_start, blk_end,
-                                      body_blocks, dispatcher_factory,
-                                      extra)
+        sub = cmkind.mutate_with_body(
+            func_ir, blocks, blk_start, blk_end, body_blocks, dispatcher_factory, extra
+        )
         sub_irs.append(sub)
     if not sub_irs:
         # Unchanged
@@ -418,8 +434,7 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
 
 
 def _get_with_contextmanager(func_ir, blocks, blk_start):
-    """Get the global object used for the context manager
-    """
+    """Get the global object used for the context manager"""
     _illegal_cm_msg = "Illegal use of context-manager."
 
     def get_var_dfn(var):
@@ -434,10 +449,10 @@ def _get_with_contextmanager(func_ir, blocks, blk_start):
         """
         # If the contextmanager used as a Call
         dfn = func_ir.get_definition(var_ref)
-        if isinstance(dfn, ir.Expr) and dfn.op == 'call':
+        if isinstance(dfn, ir.Expr) and dfn.op == "call":
             args = [get_var_dfn(x) for x in dfn.args]
             kws = {k: get_var_dfn(v) for k, v in dfn.kws}
-            extra = {'args': args, 'kwargs': kws}
+            extra = {"args": args, "kwargs": kws}
             var_ref = dfn.func
         else:
             extra = None
@@ -449,7 +464,7 @@ def _get_with_contextmanager(func_ir, blocks, blk_start):
             raise errors.CompilerError(
                 "Undefined variable used as context manager",
                 loc=blocks[blk_start].loc,
-                )
+            )
 
         if ctxobj is None:
             raise errors.CompilerError(_illegal_cm_msg, loc=dfn.loc)
@@ -461,17 +476,17 @@ def _get_with_contextmanager(func_ir, blocks, blk_start):
         if isinstance(stmt, ir.EnterWith):
             var_ref = stmt.contextmanager
             ctxobj, extra = get_ctxmgr_obj(var_ref)
-            if not hasattr(ctxobj, 'mutate_with_body'):
+            if not hasattr(ctxobj, "mutate_with_body"):
                 raise errors.CompilerError(
                     "Unsupported context manager in use",
                     loc=blocks[blk_start].loc,
-                    )
+                )
             return ctxobj, extra
     # No contextmanager found?
     raise errors.CompilerError(
         "malformed with-context usage",
         loc=blocks[blk_start].loc,
-        )
+    )
 
 
 def _legalize_with_head(blk):
@@ -485,12 +500,12 @@ def _legalize_with_head(blk):
         raise errors.CompilerError(
             "with's head-block must have exactly 1 ENTER_WITH",
             loc=blk.loc,
-            )
+        )
     if counters.pop(ir.Jump, 0) != 1:
         raise errors.CompilerError(
             "with's head-block must have exactly 1 JUMP",
             loc=blk.loc,
-            )
+        )
     # Can have any number of del
     counters.pop(ir.Del, None)
     # There MUST NOT be any other statements
@@ -498,12 +513,11 @@ def _legalize_with_head(blk):
         raise errors.CompilerError(
             "illegal statements in with's head-block",
             loc=blk.loc,
-            )
+        )
 
 
 def _cfg_nodes_in_region(cfg, region_begin, region_end):
-    """Find the set of CFG nodes that are in the given region
-    """
+    """Find the set of CFG nodes that are in the given region"""
     region_nodes = set()
     stack = [region_begin]
     while stack:
@@ -512,9 +526,13 @@ def _cfg_nodes_in_region(cfg, region_begin, region_end):
         # a single block function will have a empty successor list
         if succlist:
             succs, _ = zip(*succlist)
-            nodes = set([node for node in succs
-                        if node not in region_nodes and
-                        node != region_end])
+            nodes = set(
+                [
+                    node
+                    for node in succs
+                    if node not in region_nodes and node != region_end
+                ]
+            )
             stack.extend(nodes)
             region_nodes |= nodes
 
@@ -526,6 +544,7 @@ def find_setupwiths(func_ir):
 
     Returns a list of ranges for the with-regions.
     """
+
     def find_ranges(blocks):
 
         cfg = compute_cfg_from_blocks(blocks)
@@ -554,10 +573,10 @@ def find_setupwiths(func_ir):
                 for stmt in blocks[block].body:
                     # raise detected before pop_block
                     if ir_utils.is_raise(stmt):
-                            raise errors.CompilerError(
-                                'unsupported control flow due to raise '
-                                'statements inside with block'
-                                )
+                        raise errors.CompilerError(
+                            "unsupported control flow due to raise "
+                            "statements inside with block"
+                        )
                     # if a pop_block, process it
                     if ir_utils.is_pop_block(stmt) and block in sus_pops:
                         # record the jump target of this block belonging to this setup
@@ -586,11 +605,10 @@ def find_setupwiths(func_ir):
     func_ir = consolidate_multi_exit_withs(with_ranges_dict, blocks, func_ir)
     # here we need to turn the withs back into a list of tuples so that the
     # rest of the code can cope
-    with_ranges_tuple = [(s, list(p)[0])
-             for (s, p) in with_ranges_dict.items()]
+    with_ranges_tuple = [(s, list(p)[0]) for (s, p) in with_ranges_dict.items()]
 
     # check for POP_BLOCKS with multiple outgoing edges and reject
-    for (_, p) in with_ranges_tuple:
+    for _, p in with_ranges_tuple:
         targets = blocks[p].terminator.get_targets()
         if len(targets) != 1:
             raise errors.CompilerError(
@@ -598,16 +616,19 @@ def find_setupwiths(func_ir):
                 "(i.e. break/return/raise) that can leave the block "
             )
     # now we check for returns inside with and reject them
-    for (_, p) in with_ranges_tuple:
+    for _, p in with_ranges_tuple:
         target_block = blocks[p]
-        if ir_utils.is_return(func_ir.blocks[
-                target_block.terminator.get_targets()[0]].terminator):
+        if ir_utils.is_return(
+            func_ir.blocks[target_block.terminator.get_targets()[0]].terminator
+        ):
             _rewrite_return(func_ir, p)
 
     # now we need to rewrite the tuple such that we have SETUP_WITH matching the
     # successor of the block that contains the POP_BLOCK.
-    with_ranges_tuple = [(s, func_ir.blocks[p].terminator.get_targets()[0])
-                         for (s, p) in with_ranges_tuple]
+    with_ranges_tuple = [
+        (s, func_ir.blocks[p].terminator.get_targets()[0])
+        for (s, p) in with_ranges_tuple
+    ]
 
     # finally we check for nested with statements and reject them
     with_ranges_tuple = _eliminate_nested_withs(with_ranges_tuple)
@@ -724,6 +745,7 @@ def _rewrite_return(func_ir, target_block_label):
 
 def _eliminate_nested_withs(with_ranges):
     known_ranges = []
+
     def within_known_range(start, end, known_ranges):
         for a, b in known_ranges:
             # FIXME: this should be a comparison in topological order, right
@@ -739,14 +761,16 @@ def _eliminate_nested_withs(with_ranges):
 
     return known_ranges
 
+
 def consolidate_multi_exit_withs(withs: dict, blocks, func_ir):
-    """Modify the FunctionIR to merge the exit blocks of with constructs.
-    """
+    """Modify the FunctionIR to merge the exit blocks of with constructs."""
     for k in withs:
-        vs : set = withs[k]
+        vs: set = withs[k]
         if len(vs) > 1:
             func_ir, common = _fix_multi_exit_blocks(
-                func_ir, vs, split_condition=ir_utils.is_pop_block,
+                func_ir,
+                vs,
+                split_condition=ir_utils.is_pop_block,
             )
             withs[k] = {common}
     return func_ir
@@ -843,9 +867,11 @@ def _fix_multi_exit_blocks(func_ir, exit_nodes, *, split_condition=None):
         blk.body = before
         loc = blk.loc
         blk.body.append(
-            ir.Assign(value=ir.Const(i, loc=loc),
-                      target=scope.get_or_define("$cp", loc=loc),
-                      loc=loc)
+            ir.Assign(
+                value=ir.Const(i, loc=loc),
+                target=scope.get_or_define("$cp", loc=loc),
+                loc=loc,
+            )
         )
         # Replace terminator with a jump to the common block
         assert not blk.is_terminated
@@ -872,22 +898,20 @@ def _fix_multi_exit_blocks(func_ir, exit_nodes, *, split_condition=None):
 
         # Do comparison to match control-point variable to the exit block
         switch_block.body.append(
-            ir.Assign(
-                value=ir.Const(i, loc=loc),
-                target=match_rhs,
-                loc=loc
-            ),
+            ir.Assign(value=ir.Const(i, loc=loc), target=match_rhs, loc=loc),
         )
 
         # Add assignment for the comparison
         switch_block.body.append(
             ir.Assign(
                 value=ir.Expr.binop(
-                    fn=operator.eq, lhs=scope.get("$cp"), rhs=match_rhs,
+                    fn=operator.eq,
+                    lhs=scope.get("$cp"),
+                    rhs=match_rhs,
                     loc=loc,
                 ),
                 target=match_expr,
-                loc=loc
+                loc=loc,
             ),
         )
 

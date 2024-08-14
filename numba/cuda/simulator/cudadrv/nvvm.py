@@ -1,7 +1,7 @@
-'''
+"""
 NVVM is not supported in the simulator, but stubs are provided to allow tests
 to import correctly.
-'''
+"""
 
 
 class NvvmSupportError(ImportError):
@@ -10,7 +10,7 @@ class NvvmSupportError(ImportError):
 
 class NVVM(object):
     def __init__(self):
-        raise NvvmSupportError('NVVM not supported in the simulator')
+        raise NvvmSupportError("NVVM not supported in the simulator")
 
 
 CompilationUnit = None

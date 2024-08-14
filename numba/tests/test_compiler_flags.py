@@ -94,22 +94,24 @@ class TestFlagMangling(TestCase):
     def test_demangling_from_mangled_symbols(self):
         """Test demangling of flags from mangled symbol"""
         # Use default mangler to mangle the string
-        fname = 'foo'
-        argtypes = types.int32,
+        fname = "foo"
+        argtypes = (types.int32,)
         flags = Flags()
         flags.nrt = True
         flags.inline = "always"
         name = default_mangler(
-            fname, argtypes, abi_tags=[flags.get_mangle_string()],
+            fname,
+            argtypes,
+            abi_tags=[flags.get_mangle_string()],
         )
         # Find the ABI-tag. Starts with "B"
         prefix = "_Z3fooB"
         # Find the length of the ABI-tag
-        m = re.match("[0-9]+", name[len(prefix):])
+        m = re.match("[0-9]+", name[len(prefix) :])
         size = m.group(0)
         # Extract the ABI tag
         base = len(prefix) + len(size)
-        abi_mangled = name[base:base + int(size)]
+        abi_mangled = name[base : base + int(size)]
         # Demangle and check
         demangled = Flags.demangle(abi_mangled)
         self.assertEqual(demangled, flags.summary())

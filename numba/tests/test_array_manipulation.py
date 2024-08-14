@@ -9,36 +9,40 @@ from numba.core.errors import TypingError
 from numba.core import types, errors
 from numba.tests.support import TestCase, MemoryLeakMixin
 
-enable_pyobj_flags = {'forceobj': True}
+enable_pyobj_flags = {"forceobj": True}
 
-no_pyobj_flags = {'_nrt': True, 'nopython': True}
+no_pyobj_flags = {"_nrt": True, "nopython": True}
 
 
 def from_generic(pyfuncs_to_use):
     """Decorator for generic check functions.
-        Iterates over 'pyfuncs_to_use', calling 'func' with the iterated
-        item as first argument. Example:
+    Iterates over 'pyfuncs_to_use', calling 'func' with the iterated
+    item as first argument. Example:
 
-        @from_generic(numpy_array_reshape, array_reshape)
-        def check_only_shape(pyfunc, arr, shape, expected_shape):
-            # Only check Numba result to avoid Numpy bugs
-            self.memory_leak_setup()
-            got = generic_run(pyfunc, arr, shape)
-            self.assertEqual(got.shape, expected_shape)
-            self.assertEqual(got.size, arr.size)
-            del got
-            self.memory_leak_teardown()
+    @from_generic(numpy_array_reshape, array_reshape)
+    def check_only_shape(pyfunc, arr, shape, expected_shape):
+        # Only check Numba result to avoid Numpy bugs
+        self.memory_leak_setup()
+        got = generic_run(pyfunc, arr, shape)
+        self.assertEqual(got.shape, expected_shape)
+        self.assertEqual(got.size, arr.size)
+        del got
+        self.memory_leak_teardown()
     """
+
     def decorator(func):
         def result(*args, **kwargs):
             return [func(pyfunc, *args, **kwargs) for pyfunc in pyfuncs_to_use]
+
         return result
+
     return decorator
 
 
 @njit
 def array_reshape(arr, newshape):
     return arr.reshape(newshape)
+
 
 @njit
 def numpy_array_reshape(arr, newshape):
@@ -155,7 +159,7 @@ def sliding_window_view(x, window_shape, axis=None):
 
 
 def bad_index(arr, arr2d):
-    x = arr.x,
+    x = (arr.x,)
     y = arr.y
     # note that `x` is a tuple, which causes a new axis to be created.
     arr2d[x, y] = 1.0
@@ -174,6 +178,7 @@ def numpy_fill_diagonal(arr, val, wrap=False):
 def numpy_shape(arr):
     return np.shape(arr)
 
+
 def numpy_size(arr):
     return np.size(arr)
 
@@ -185,6 +190,7 @@ def numpy_flatnonzero(a):
 def numpy_argwhere(a):
     return np.argwhere(a)
 
+
 def numpy_resize(a, new_shape):
     return np.resize(a, new_shape)
 
@@ -193,6 +199,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
     """
     Check shape-changing operations on arrays.
     """
+
     def test_array_reshape(self):
         pyfuncs_to_use = [array_reshape, numpy_array_reshape]
 
@@ -222,23 +229,21 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         def check_err_shape(pyfunc, arr, shape):
             with self.assertRaises(NotImplementedError) as raises:
                 generic_run(pyfunc, arr, shape)
-            self.assertEqual(str(raises.exception),
-                             "incompatible shape for array")
+            self.assertEqual(str(raises.exception), "incompatible shape for array")
 
         @from_generic(pyfuncs_to_use)
         def check_err_size(pyfunc, arr, shape):
             with self.assertRaises(ValueError) as raises:
                 generic_run(pyfunc, arr, shape)
-            self.assertEqual(str(raises.exception),
-                             "total size of new array must be unchanged")
+            self.assertEqual(
+                str(raises.exception), "total size of new array must be unchanged"
+            )
 
         @from_generic(pyfuncs_to_use)
         def check_err_multiple_negative(pyfunc, arr, shape):
             with self.assertRaises(ValueError) as raises:
                 generic_run(pyfunc, arr, shape)
-            self.assertEqual(str(raises.exception),
-                             "multiple negative shape values")
-
+            self.assertEqual(str(raises.exception), "multiple negative shape values")
 
         # C-contiguous
         arr = np.arange(24)
@@ -271,7 +276,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         check_err_shape(arr, (2, 12))
 
         # Test negative shape value
-        arr = np.arange(25).reshape(5,5)
+        arr = np.arange(25).reshape(5, 5)
         check(arr, -1)
         check(arr, (-1,))
         check(arr, (-1, 5))
@@ -305,45 +310,48 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         self.disable_leak_check()
 
     def test_array_transpose_axes(self):
-        pyfuncs_to_use = [numpy_transpose_array_axes_kwarg,
-                          numpy_transpose_array_axes_kwarg_copy,
-                          array_transpose_axes,
-                          array_transpose_axes_copy]
+        pyfuncs_to_use = [
+            numpy_transpose_array_axes_kwarg,
+            numpy_transpose_array_axes_kwarg_copy,
+            array_transpose_axes,
+            array_transpose_axes_copy,
+        ]
 
         @from_generic(pyfuncs_to_use)
         def check(pyfunc, arr, axes):
             expected = pyfunc.py_func(arr, axes)
             got = pyfunc(arr, axes)
             self.assertPreciseEqual(got, expected)
-            self.assertEqual(got.flags.f_contiguous,
-                             expected.flags.f_contiguous)
-            self.assertEqual(got.flags.c_contiguous,
-                             expected.flags.c_contiguous)
+            self.assertEqual(got.flags.f_contiguous, expected.flags.f_contiguous)
+            self.assertEqual(got.flags.c_contiguous, expected.flags.c_contiguous)
 
         @from_generic(pyfuncs_to_use)
         def check_err_axis_repeated(pyfunc, arr, axes):
             with self.assertRaises(ValueError) as raises:
                 pyfunc(arr, axes)
-            self.assertEqual(str(raises.exception),
-                             "repeated axis in transpose")
+            self.assertEqual(str(raises.exception), "repeated axis in transpose")
 
         @from_generic(pyfuncs_to_use)
         def check_err_axis_oob(pyfunc, arr, axes):
             with self.assertRaises(ValueError) as raises:
                 pyfunc(arr, axes)
-            self.assertEqual(str(raises.exception),
-                             "axis is out of bounds for array of given dimension")
+            self.assertEqual(
+                str(raises.exception),
+                "axis is out of bounds for array of given dimension",
+            )
 
         @from_generic(pyfuncs_to_use)
         def check_err_invalid_args(pyfunc, arr, axes):
             with self.assertRaises((TypeError, TypingError)):
                 pyfunc(arr, axes)
 
-        arrs = [np.arange(24),
-                np.arange(24).reshape(4, 6),
-                np.arange(24).reshape(2, 3, 4),
-                np.arange(24).reshape(1, 2, 3, 4),
-                np.arange(64).reshape(8, 4, 2)[::3,::2,:]]
+        arrs = [
+            np.arange(24),
+            np.arange(24).reshape(4, 6),
+            np.arange(24).reshape(2, 3, 4),
+            np.arange(24).reshape(1, 2, 3, 4),
+            np.arange(64).reshape(8, 4, 2)[::3, ::2, :],
+        ]
 
         for i in range(len(arrs)):
             # First check `None`, the default, which is to reverse dims
@@ -391,12 +399,12 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as e:
             jit(nopython=True)(numpy_transpose_array)((np.array([0, 1]),))
-        self.assertIn("np.transpose does not accept tuples",
-                        str(e.exception))
+        self.assertIn("np.transpose does not accept tuples", str(e.exception))
 
     def test_numpy_resize_basic(self):
         pyfunc = numpy_resize
         cfunc = njit(pyfunc)
+
         def inputs():
             # Taken from https://github.com/numpy/numpy/blob/f0b2fca91a1f5f50ff696895072f6fe9e69c1466/numpy/core/tests/test_numeric.py#L24-L64  noqa: E501
             yield np.array([[1, 2], [3, 4]]), (2, 4)
@@ -405,12 +413,12 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             yield np.array([[1, 2], [3, 4]]), (0,)
             yield np.array([[1, 2], [3, 4]]), (0, 2)
             yield np.array([[1, 2], [3, 4]]), (2, 0)
-            yield np.zeros(0, dtype = float), (2, 1)
+            yield np.zeros(0, dtype=float), (2, 1)
             # other
             yield np.array([[1, 2], [3, 4]]), (4,)
             yield np.array([[1, 2], [3, 4]]), 4
-            yield np.zeros((1, 3), dtype = int), (2, 1)
-            yield np.array([], dtype = float), (4, 2)
+            yield np.zeros((1, 3), dtype=int), (2, 1)
+            yield np.array([], dtype=float), (4, 2)
             yield [0, 1, 2, 3], (2, 3)
             yield 4, (2, 3)
 
@@ -425,24 +433,26 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as raises:
             cfunc("abc", (2, 3))
-        self.assertIn(('The argument "a" must be array-like'),
-                      str(raises.exception))
+        self.assertIn(('The argument "a" must be array-like'), str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
-            cfunc(np.array([[0,1],[2,3]]), "abc")
-        self.assertIn(('The argument "new_shape" must be an integer or '
-                       'a tuple of integers'),
-                      str(raises.exception))
+            cfunc(np.array([[0, 1], [2, 3]]), "abc")
+        self.assertIn(
+            ('The argument "new_shape" must be an integer or ' "a tuple of integers"),
+            str(raises.exception),
+        )
 
         with self.assertRaises(ValueError) as raises:
-            cfunc(np.array([[0,1],[2,3]]), (-2, 3))
-        self.assertIn(('All elements of `new_shape` must be non-negative'),
-                      str(raises.exception))
+            cfunc(np.array([[0, 1], [2, 3]]), (-2, 3))
+        self.assertIn(
+            ("All elements of `new_shape` must be non-negative"), str(raises.exception)
+        )
 
         with self.assertRaises(ValueError) as raises:
-            cfunc(np.array([[0,1],[2,3]]), -4)
-        self.assertIn(('All elements of `new_shape` must be non-negative'),
-                      str(raises.exception))
+            cfunc(np.array([[0, 1], [2, 3]]), -4)
+        self.assertIn(
+            ("All elements of `new_shape` must be non-negative"), str(raises.exception)
+        )
 
     def test_expand_dims(self):
         pyfunc = expand_dims
@@ -478,13 +488,12 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         arr = np.arange(5)
 
         with self.assertTypingError() as raises:
-            cfunc('hello', 3)
+            cfunc("hello", 3)
         self.assertIn('First argument "a" must be an array', str(raises.exception))
 
         with self.assertTypingError() as raises:
-            cfunc(arr, 'hello')
+            cfunc(arr, "hello")
         self.assertIn('Argument "axis" must be an integer', str(raises.exception))
-
 
     def check_atleast_nd(self, pyfunc, cfunc):
         def check_result(got, expected):
@@ -668,17 +677,16 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
                 "axis must be None, an integer or tuple of integer", arr1, 4, (3.1,)
             )
 
-
-    def test_flatten_array(self, flags=enable_pyobj_flags, layout='C'):
+    def test_flatten_array(self, flags=enable_pyobj_flags, layout="C"):
         a = np.arange(9).reshape(3, 3)
-        if layout == 'F':
+        if layout == "F":
             a = a.T
 
         pyfunc = flatten_array
         arraytype1 = typeof(a)
-        if layout == 'A':
+        if layout == "A":
             # Force A layout
-            arraytype1 = arraytype1.copy(layout='A')
+            arraytype1 = arraytype1.copy(layout="A")
 
         self.assertEqual(arraytype1.layout, layout)
         cfunc = jit((arraytype1,), **flags)(pyfunc)
@@ -689,8 +697,8 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
     def test_flatten_array_npm(self):
         self.test_flatten_array(flags=no_pyobj_flags)
-        self.test_flatten_array(flags=no_pyobj_flags, layout='F')
-        self.test_flatten_array(flags=no_pyobj_flags, layout='A')
+        self.test_flatten_array(flags=no_pyobj_flags, layout="F")
+        self.test_flatten_array(flags=no_pyobj_flags, layout="A")
 
     def test_ravel_array(self, flags=enable_pyobj_flags):
         def generic_check(pyfunc, a, assume_layout):
@@ -704,9 +712,9 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             # Check result matches
             np.testing.assert_equal(expected, got)
             # Check copying behavior
-            py_copied = (a.ctypes.data != expected.ctypes.data)
-            nb_copied = (a.ctypes.data != got.ctypes.data)
-            self.assertEqual(py_copied, assume_layout != 'C')
+            py_copied = a.ctypes.data != expected.ctypes.data
+            nb_copied = a.ctypes.data != got.ctypes.data
+            self.assertEqual(py_copied, assume_layout != "C")
             self.assertEqual(py_copied, nb_copied)
 
         check_method = partial(generic_check, ravel_array)
@@ -717,14 +725,14 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             check_function(*args, **kwargs)
 
         # Check 2D
-        check(np.arange(9).reshape(3, 3), assume_layout='C')
-        check(np.arange(9).reshape(3, 3, order='F'), assume_layout='F')
-        check(np.arange(18).reshape(3, 3, 2)[:, :, 0], assume_layout='A')
+        check(np.arange(9).reshape(3, 3), assume_layout="C")
+        check(np.arange(9).reshape(3, 3, order="F"), assume_layout="F")
+        check(np.arange(18).reshape(3, 3, 2)[:, :, 0], assume_layout="A")
 
         # Check 3D
-        check(np.arange(18).reshape(2, 3, 3), assume_layout='C')
-        check(np.arange(18).reshape(2, 3, 3, order='F'), assume_layout='F')
-        check(np.arange(36).reshape(2, 3, 3, 2)[:, :, :, 0], assume_layout='A')
+        check(np.arange(18).reshape(2, 3, 3), assume_layout="C")
+        check(np.arange(18).reshape(2, 3, 3, order="F"), assume_layout="F")
+        check(np.arange(36).reshape(2, 3, 3, 2)[:, :, :, 0], assume_layout="A")
 
     def test_ravel_array_size(self, flags=enable_pyobj_flags):
         a = np.arange(9).reshape(3, 3)
@@ -823,17 +831,15 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
     def test_bad_index_npm(self):
         with self.assertTypingError() as raises:
-            arraytype1 = from_dtype(np.dtype([('x', np.int32),
-                                              ('y', np.int32)]))
-            arraytype2 = types.Array(types.int32, 2, 'C')
+            arraytype1 = from_dtype(np.dtype([("x", np.int32), ("y", np.int32)]))
+            arraytype2 = types.Array(types.int32, 2, "C")
             njit((arraytype1, arraytype2))(bad_index)
-        self.assertIn('Unsupported array index type', str(raises.exception))
+        self.assertIn("Unsupported array index type", str(raises.exception))
 
     def test_bad_float_index_npm(self):
         with self.assertTypingError() as raises:
-            njit((types.Array(types.float64, 2, 'C'),))(bad_float_index)
-        self.assertIn('Unsupported array index type float64',
-                      str(raises.exception))
+            njit((types.Array(types.float64, 2, "C"),))(bad_float_index)
+        self.assertIn("Unsupported array index type float64", str(raises.exception))
 
     def test_fill_diagonal_basic(self):
         pyfunc = numpy_fill_diagonal
@@ -887,7 +893,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
                 if wrap is None:
                     params = {}
                 else:
-                    params = {'wrap': wrap}
+                    params = {"wrap": wrap}
 
                 pyfunc(a, val, **params)
                 cfunc(b, val, **params)
@@ -925,13 +931,17 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as raises:
             a = np.zeros((3, 3, 4))
             cfunc(a, val)
-            self.assertEqual("All dimensions of input must be of equal length", str(raises.exception))
+            self.assertEqual(
+                "All dimensions of input must be of equal length", str(raises.exception)
+            )
 
         # cases where val has incompatible type / value
         def _assert_raises(arr, val):
             with self.assertRaises(ValueError) as raises:
                 cfunc(arr, val)
-            self.assertEqual("Unable to safely conform val to a.dtype", str(raises.exception))
+            self.assertEqual(
+                "Unable to safely conform val to a.dtype", str(raises.exception)
+            )
 
         arr = np.zeros((3, 3), dtype=np.int32)
         val = np.nan
@@ -1008,7 +1018,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             got = cfunc(arr, shape)
             self.assertPreciseEqual(expected, got)
             # ensure that np.broadcast_to returned a read-only array
-            self.assertFalse(got.flags['WRITEABLE'])
+            self.assertFalse(got.flags["WRITEABLE"])
 
     def test_broadcast_to_raises(self):
         pyfunc = numpy_broadcast_to
@@ -1017,40 +1027,98 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         # Tests taken from
         # https://github.com/numpy/numpy/blob/75f852edf94a7293e7982ad516bee314d7187c2d/numpy/lib/tests/test_stride_tricks.py#L260-L276  # noqa: E501
         data = [
-            [np.zeros((0,)), (), TypingError,
-             'Cannot broadcast a non-scalar to a scalar array'],
-            [np.zeros((1,)), (), TypingError,
-             'Cannot broadcast a non-scalar to a scalar array'],
-            [np.zeros((3,)), (), TypingError,
-             'Cannot broadcast a non-scalar to a scalar array'],
-            [(), (), TypingError,
-             'Cannot broadcast a non-scalar to a scalar array'],
-            [(123,), (), TypingError,
-             'Cannot broadcast a non-scalar to a scalar array'],
-            [np.zeros((3,)), (1,), ValueError,
-             'operands could not be broadcast together with remapped shapes'],
-            [np.zeros((3,)), (2,), ValueError,
-             'operands could not be broadcast together with remapped shapes'],
-            [np.zeros((3,)), (4,), ValueError,
-             'operands could not be broadcast together with remapped shapes'],
-            [np.zeros((1, 2)), (2, 1), ValueError,
-             'operands could not be broadcast together with remapped shapes'],
-            [np.zeros((1, 1)), (1,), ValueError,
-             'input operand has more dimensions than allowed by the axis remapping'],
-            [np.zeros((2, 2)), (3,), ValueError,
-             'input operand has more dimensions than allowed by the axis remapping'],
-            [np.zeros((1,)), -1, ValueError,
-             'all elements of broadcast shape must be non-negative'],
-            [np.zeros((1,)), (-1,), ValueError,
-             'all elements of broadcast shape must be non-negative'],
-            [np.zeros((1, 2)), (-1, 2), ValueError,
-             'all elements of broadcast shape must be non-negative'],
-            [np.zeros((1, 2)), (1.1, 2.2), TypingError,
-             'The second argument "shape" must be a tuple of integers'],
-            ['hello', (3,), TypingError,
-             'The first argument "array" must be array-like'],
-            [3, (2, 'a'), TypingError,
-             'object cannot be interpreted as an integer'],
+            [
+                np.zeros((0,)),
+                (),
+                TypingError,
+                "Cannot broadcast a non-scalar to a scalar array",
+            ],
+            [
+                np.zeros((1,)),
+                (),
+                TypingError,
+                "Cannot broadcast a non-scalar to a scalar array",
+            ],
+            [
+                np.zeros((3,)),
+                (),
+                TypingError,
+                "Cannot broadcast a non-scalar to a scalar array",
+            ],
+            [(), (), TypingError, "Cannot broadcast a non-scalar to a scalar array"],
+            [
+                (123,),
+                (),
+                TypingError,
+                "Cannot broadcast a non-scalar to a scalar array",
+            ],
+            [
+                np.zeros((3,)),
+                (1,),
+                ValueError,
+                "operands could not be broadcast together with remapped shapes",
+            ],
+            [
+                np.zeros((3,)),
+                (2,),
+                ValueError,
+                "operands could not be broadcast together with remapped shapes",
+            ],
+            [
+                np.zeros((3,)),
+                (4,),
+                ValueError,
+                "operands could not be broadcast together with remapped shapes",
+            ],
+            [
+                np.zeros((1, 2)),
+                (2, 1),
+                ValueError,
+                "operands could not be broadcast together with remapped shapes",
+            ],
+            [
+                np.zeros((1, 1)),
+                (1,),
+                ValueError,
+                "input operand has more dimensions than allowed by the axis remapping",
+            ],
+            [
+                np.zeros((2, 2)),
+                (3,),
+                ValueError,
+                "input operand has more dimensions than allowed by the axis remapping",
+            ],
+            [
+                np.zeros((1,)),
+                -1,
+                ValueError,
+                "all elements of broadcast shape must be non-negative",
+            ],
+            [
+                np.zeros((1,)),
+                (-1,),
+                ValueError,
+                "all elements of broadcast shape must be non-negative",
+            ],
+            [
+                np.zeros((1, 2)),
+                (-1, 2),
+                ValueError,
+                "all elements of broadcast shape must be non-negative",
+            ],
+            [
+                np.zeros((1, 2)),
+                (1.1, 2.2),
+                TypingError,
+                'The second argument "shape" must be a tuple of integers',
+            ],
+            [
+                "hello",
+                (3,),
+                TypingError,
+                'The first argument "array" must be array-like',
+            ],
+            [3, (2, "a"), TypingError, "object cannot be interpreted as an integer"],
         ]
         self.disable_leak_check()
         for arr, target_shape, err, msg in data:
@@ -1061,7 +1129,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
     def test_broadcast_to_corner_cases(self):
         @njit
         def _broadcast_to_1():
-            return np.broadcast_to('a', (2, 3))
+            return np.broadcast_to("a", (2, 3))
 
         expected = _broadcast_to_1.py_func()
         got = _broadcast_to_1()
@@ -1114,7 +1182,9 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             [()],
             [(), ()],
             [(7,)],
-            [(1, 2),],
+            [
+                (1, 2),
+            ],
             [(1, 1)],
             [(1, 1), (3, 4)],
             [(6, 7), (5, 6, 1), (7,), (5, 1, 7)],
@@ -1165,8 +1235,10 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             with self.assertRaises(ValueError) as raises:
                 cfunc(*input_shape)
 
-            self.assertIn("shape mismatch: objects cannot be broadcast to a single shape",
-                          str(raises.exception))
+            self.assertIn(
+                "shape mismatch: objects cannot be broadcast to a single shape",
+                str(raises.exception),
+            )
 
     def test_broadcast_shapes_negative_dimension(self):
         pyfunc = numpy_broadcast_shapes
@@ -1185,11 +1257,11 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         self.disable_leak_check()
 
         inps = [
-            ((1, 2), ('hello',)),
+            ((1, 2), ("hello",)),
             (3.4,),
-            ('string',),
-            ((1.2, 'a')),
-            (1, ((1.2, 'a'))),
+            ("string",),
+            ((1.2, "a")),
+            (1, ((1.2, "a"))),
         ]
 
         for inp in inps:
@@ -1208,19 +1280,43 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             self.assertPreciseEqual(got, expected)
 
         # check arrays
-        for t in [(), (1,), (2, 3,), (4, 5, 6)]:
+        for t in [
+            (),
+            (1,),
+            (
+                2,
+                3,
+            ),
+            (4, 5, 6),
+        ]:
             arr = np.empty(t)
             check(arr)
 
         # check some types that go via asarray
-        for t in [1, False, [1,], [[1, 2,],[3, 4]], (1,), (1, 2, 3)]:
+        for t in [
+            1,
+            False,
+            [
+                1,
+            ],
+            [
+                [
+                    1,
+                    2,
+                ],
+                [3, 4],
+            ],
+            (1,),
+            (1, 2, 3),
+        ]:
             check(arr)
 
         with self.assertRaises(TypingError) as raises:
-            cfunc('a')
+            cfunc("a")
 
-        self.assertIn("The argument to np.shape must be array-like",
-                      str(raises.exception))
+        self.assertIn(
+            "The argument to np.shape must be array-like", str(raises.exception)
+        )
 
     def test_size(self):
         pyfunc = numpy_size
@@ -1232,7 +1328,15 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             self.assertPreciseEqual(got, expected)
 
         # check arrays
-        for t in [(), (1,), (2, 3,), (4, 5, 6)]:
+        for t in [
+            (),
+            (1,),
+            (
+                2,
+                3,
+            ),
+            (4, 5, 6),
+        ]:
             arr = np.empty(t)
             check(arr)
 
@@ -1241,10 +1345,11 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             check(t)
 
         with self.assertRaises(TypingError) as raises:
-            cfunc('a')
+            cfunc("a")
 
-        self.assertIn("The argument to np.size must be array-like",
-                      str(raises.exception))
+        self.assertIn(
+            "The argument to np.size must be array-like", str(raises.exception)
+        )
 
     def test_flatnonzero_basic(self):
         pyfunc = numpy_flatnonzero
@@ -1258,7 +1363,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             a[np.abs(a) > 0.2] = 0.0
             yield a
             yield a.reshape(5, 5, 4)
-            yield a.reshape(50, 2, order='F')
+            yield a.reshape(50, 2, order="F")
             yield a.reshape(25, 4)[1::2]
             yield a * 1j
 
@@ -1280,7 +1385,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             a = self.random.randn(100)
             yield a > 0.2
             yield a.reshape(5, 5, 4) > 0.5
-            yield a.reshape(50, 2, order='F') > 0.5
+            yield a.reshape(50, 2, order="F") > 0.5
             yield a.reshape(25, 4)[1::2] > 0.5
             yield a == a - 1
             yield a > -a
@@ -1305,9 +1410,8 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         yield 2 + 1j
         # the following are not array-like, but NumPy does not raise
         yield None
-        yield 'a_string'
-        yield ''
-
+        yield "a_string"
+        yield ""
 
     def test_flatnonzero_array_like(self):
         pyfunc = numpy_flatnonzero
@@ -1392,7 +1496,9 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         for input_shapes, expected_shape in data:
             self.broadcast_arrays_assert_correct_shape(input_shapes, expected_shape)
             # Reverse the input shapes since broadcasting should be symmetric.
-            self.broadcast_arrays_assert_correct_shape(input_shapes[::-1], expected_shape)
+            self.broadcast_arrays_assert_correct_shape(
+                input_shapes[::-1], expected_shape
+            )
 
     def test_broadcast_arrays_two_compatible_by_prepending_ones_input_shapes(self):
         # Tests taken from
@@ -1425,7 +1531,9 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         for input_shapes, expected_shape in data:
             self.broadcast_arrays_assert_correct_shape(input_shapes, expected_shape)
             # Reverse the input shapes since broadcasting should be symmetric.
-            self.broadcast_arrays_assert_correct_shape(input_shapes[::-1], expected_shape)
+            self.broadcast_arrays_assert_correct_shape(
+                input_shapes[::-1], expected_shape
+            )
 
     def test_broadcast_arrays_scalar_input(self):
         pyfunc = numpy_broadcast_arrays
@@ -1467,7 +1575,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             arr = np.arange(6).reshape((2, 3))
             b = True
             cfunc(arr, b)
-        self.assertIn('Mismatch of argument types', str(raises.exception))
+        self.assertIn("Mismatch of argument types", str(raises.exception))
 
     def test_broadcast_arrays_invalid_input(self):
         pyfunc = numpy_broadcast_arrays
@@ -1477,7 +1585,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as raises:
             arr = np.zeros(3, dtype=np.int64)
-            s = 'hello world'
+            s = "hello world"
             cfunc(arr, s)
         self.assertIn('Argument "1" must be array-like', str(raises.exception))
 
@@ -1500,8 +1608,10 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
                 with self.assertRaises(ValueError) as raises:
                     inarrays = [np.zeros(s) for s in shape]
                     cfunc(*inarrays)
-                self.assertIn("shape mismatch: objects cannot be broadcast to a single shape",
-                              str(raises.exception))
+                self.assertIn(
+                    "shape mismatch: objects cannot be broadcast to a single shape",
+                    str(raises.exception),
+                )
 
     def test_readonly_after_flatten(self):
         # Reproduces Issue #8370
@@ -1511,7 +1621,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             b = np.swapaxes(a, 0, 1)
             cc = b.flatten()
             d = np.reshape(cc, (-1, c))
-            d[y - 1:, :] = d[: 1 - y]
+            d[y - 1 :, :] = d[: 1 - y]
             return d
 
         pyfunc = unfold_flatten
@@ -1531,7 +1641,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             b = np.swapaxes(a, 0, 1)
             cc = b.ravel()
             d = np.reshape(cc, (-1, c))
-            d[y - 1:, :] = d[: 1 - y]
+            d[y - 1 :, :] = d[: 1 - y]
             return d
 
         pyfunc = unfold_ravel
@@ -1549,7 +1659,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         # if a copy took place... otherwise leave it as it is.
         self.disable_leak_check()
         a_c = np.arange(9).reshape((3, 3)).copy()
-        a_f = a_c.copy(order='F')
+        a_f = a_c.copy(order="F")
         a_c.flags.writeable = False
         a_f.flags.writeable = False
 
@@ -1563,13 +1673,12 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         ret_c = cfunc(a_c)
         ret_f = cfunc(a_f)
 
-        msg = 'No copy was performed, so the ' \
-              'resulting array must not be writeable'
+        msg = "No copy was performed, so the " "resulting array must not be writeable"
         self.assertTrue(not ret_c.flags.writeable, msg)
 
-        msg = 'A copy was performed, yet the resulting array is not modifiable'
+        msg = "A copy was performed, yet the resulting array is not modifiable"
         self.assertTrue(ret_f.flags.writeable, msg)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -13,8 +13,8 @@ from numba.core.errors import TypingError
 
 
 class TestTupleIntrinsic(TestCase):
-    """Tests for numba.unsafe.tuple
-    """
+    """Tests for numba.unsafe.tuple"""
+
     def test_tuple_setitem(self):
         @njit
         def foo(tup, idxs, vals):
@@ -58,8 +58,8 @@ class TestTupleIntrinsic(TestCase):
 
 
 class TestNdarrayIntrinsic(TestCase):
-    """Tests for numba.unsafe.ndarray
-    """
+    """Tests for numba.unsafe.ndarray"""
+
     def test_to_fixed_tuple(self):
         const = 3
 
@@ -86,8 +86,7 @@ class TestNdarrayIntrinsic(TestCase):
         # Check error with ndim!=1
         with self.assertRaises(TypingError) as raises:
             foo(np.random.random((1, 2)))
-        self.assertIn("Not supported on array.ndim=2",
-                      str(raises.exception))
+        self.assertIn("Not supported on array.ndim=2", str(raises.exception))
 
         # Check error with non-constant length
         @njit
@@ -127,14 +126,15 @@ class TestNdarrayIntrinsic(TestCase):
 
 
 class TestBytesIntrinsic(TestCase):
-    """Tests for numba.unsafe.bytes
-    """
+    """Tests for numba.unsafe.bytes"""
+
     def test_memcpy_region(self):
         @njit
         def foo(dst, dst_index, src, src_index, nbytes):
             # last arg is assume 1 byte alignment
-            memcpy_region(dst.ctypes.data, dst_index,
-                          src.ctypes.data, src_index, nbytes, 1)
+            memcpy_region(
+                dst.ctypes.data, dst_index, src.ctypes.data, src_index, nbytes, 1
+            )
 
         d = np.zeros(10, dtype=np.int8)
         s = np.arange(10, dtype=np.int8)
@@ -178,7 +178,7 @@ class TestZeroCounts(TestCase):
         for T in types.unsigned_domain:
             self.assertTrue(tz(T(0)) == lz(T(0)) == T.bitwidth)
             for i in range(T.bitwidth):
-                val = T(2 ** i)
+                val = T(2**i)
                 self.assertEqual(lz(val) + tz(val) + 1, T.bitwidth)
             for n in evens:
                 self.assertGreater(tz(T(n)), 0)
@@ -187,7 +187,7 @@ class TestZeroCounts(TestCase):
         for T in types.signed_domain:
             self.assertTrue(tz(T(0)) == lz(T(0)) == T.bitwidth)
             for i in range(T.bitwidth - 1):
-                val = T(2 ** i)
+                val = T(2**i)
                 self.assertEqual(lz(val) + tz(val) + 1, T.bitwidth)
                 self.assertEqual(lz(-val), 0)
                 self.assertEqual(tz(val), tz(-val))
@@ -208,8 +208,9 @@ class TestZeroCounts(TestCase):
             with self.assertRaises(TypingError) as e:
                 cfunc(typ(2))
             self.assertIn(
-                "{} is only defined for integers, but value passed was '{}'."
-                .format(func_name, typ),
+                "{} is only defined for integers, but value passed was '{}'.".format(
+                    func_name, typ
+                ),
                 str(e.exception),
             )
 
@@ -217,10 +218,7 @@ class TestZeroCounts(TestCase):
         def check(args, string):
             with self.assertRaises((TypingError, TypeError)) as e:
                 cfunc(*args)
-            self.assertIn(
-                "{}() ".format(func_name),
-                str(e.exception)
-            )
+            self.assertIn("{}() ".format(func_name), str(e.exception))
 
         check((1, 2), "takes 2 positional arguments but 3 were given")
         check((), "missing 1 required positional argument")

@@ -10,12 +10,12 @@ from numba.np.numpy_support import numpy_version
 
 
 class MatplotlibBlocker:
-    '''Blocks the import of matplotlib, so that doc examples that attempt to
-    plot the output don't result in plots popping up and blocking testing.'''
+    """Blocks the import of matplotlib, so that doc examples that attempt to
+    plot the output don't result in plots popping up and blocking testing."""
 
     def find_spec(self, fullname, path, target=None):
-        if fullname == 'matplotlib':
-            msg = 'Blocked import of matplotlib for test suite run'
+        if fullname == "matplotlib":
+            msg = "Blocked import of matplotlib for test suite run"
             raise ImportError(msg)
 
 
@@ -35,8 +35,10 @@ class DocsExamplesTest(TestCase):
         with captured_stdout():
             # magictoken.ex_mandelbrot.begin
             from timeit import default_timer as timer
+
             try:
                 from matplotlib.pylab import imshow, show
+
                 have_mpl = True
             except ImportError:
                 have_mpl = False
@@ -51,7 +53,7 @@ class DocsExamplesTest(TestCase):
                 set given a fixed number of iterations.
                 """
                 i = 0
-                c = complex(x,y)
+                c = complex(x, y)
                 z = 0.0j
                 for i in range(max_iters):
                     z = z * z + c
@@ -93,8 +95,7 @@ class DocsExamplesTest(TestCase):
 
             from numba import guvectorize
 
-            @guvectorize(['void(float64[:], intp[:], float64[:])'],
-                         '(n),()->(n)')
+            @guvectorize(["void(float64[:], intp[:], float64[:])"], "(n),()->(n)")
             def move_mean(a, window_arr, out):
                 window_width = window_arr[0]
                 asum = 0.0
@@ -131,8 +132,7 @@ class DocsExamplesTest(TestCase):
                 """
                 return np.exp(2.1 * a + 3.2 * b)
 
-            @jit('void(double[:], double[:], double[:])', nopython=True,
-                 nogil=True)
+            @jit("void(double[:], double[:], double[:])", nopython=True, nogil=True)
             def inner_func_nb(result, a, b):
                 """
                 Function under test.
@@ -151,19 +151,25 @@ class DocsExamplesTest(TestCase):
                 if correct is not None:
                     assert np.allclose(res, correct), (res, correct)
                 # time it
-                print('{:>5.0f} ms'.format(min(repeat(
-                    lambda: func(*args, **kwargs), number=5, repeat=2)) * 1000))
+                print(
+                    "{:>5.0f} ms".format(
+                        min(repeat(lambda: func(*args, **kwargs), number=5, repeat=2))
+                        * 1000
+                    )
+                )
                 return res
 
             def make_singlethread(inner_func):
                 """
                 Run the given function inside a single thread.
                 """
+
                 def func(*args):
                     length = len(args[0])
                     result = np.empty(length, dtype=np.float64)
                     inner_func(result, *args)
                     return result
+
                 return func
 
             def make_multithread(inner_func, numthreads):
@@ -171,22 +177,28 @@ class DocsExamplesTest(TestCase):
                 Run the given function inside *numthreads* threads, splitting
                 its arguments into equal-sized chunks.
                 """
+
                 def func_mt(*args):
                     length = len(args[0])
                     result = np.empty(length, dtype=np.float64)
                     args = (result,) + args
                     chunklen = (length + numthreads - 1) // numthreads
                     # Create argument tuples for each input chunk
-                    chunks = [[arg[i * chunklen:(i + 1) * chunklen] for arg in
-                               args] for i in range(numthreads)]
+                    chunks = [
+                        [arg[i * chunklen : (i + 1) * chunklen] for arg in args]
+                        for i in range(numthreads)
+                    ]
                     # Spawn one thread per chunk
-                    threads = [threading.Thread(target=inner_func, args=chunk)
-                               for chunk in chunks]
+                    threads = [
+                        threading.Thread(target=inner_func, args=chunk)
+                        for chunk in chunks
+                    ]
                     for thread in threads:
                         thread.start()
                     for thread in threads:
                         thread.join()
                     return result
+
                 return func_mt
 
             func_nb = make_singlethread(inner_func_nb)
@@ -208,6 +220,7 @@ class DocsExamplesTest(TestCase):
             @vectorize([float64(float64, float64)])
             def f(x, y):
                 return x + y
+
             # magictoken.ex_vectorize_one_signature.end
 
     def test_vectorize_multiple_signatures(self):
@@ -216,12 +229,17 @@ class DocsExamplesTest(TestCase):
             from numba import vectorize, int32, int64, float32, float64
             import numpy as np
 
-            @vectorize([int32(int32, int32),
-                        int64(int64, int64),
-                        float32(float32, float32),
-                        float64(float64, float64)])
+            @vectorize(
+                [
+                    int32(int32, int32),
+                    int64(int64, int64),
+                    float32(float32, float32),
+                    float64(float64, float64),
+                ]
+            )
             def f(x, y):
                 return x + y
+
             # magictoken.ex_vectorize_multiple_signatures.end
 
             # magictoken.ex_vectorize_return_call_one.begin
@@ -241,7 +259,7 @@ class DocsExamplesTest(TestCase):
             # magictoken.ex_vectorize_return_call_two.end
 
             self.assertIsInstance(result, np.ndarray)
-            correct = np.array([0., 0.4, 0.8, 1.2, 1.6, 2. ])
+            correct = np.array([0.0, 0.4, 0.8, 1.2, 1.6, 2.0])
             np.testing.assert_allclose(result, correct)
 
             # magictoken.ex_vectorize_return_call_three.begin
@@ -276,19 +294,11 @@ class DocsExamplesTest(TestCase):
             np.testing.assert_array_equal(result2, correct)
 
             self.assertIsInstance(result3, np.ndarray)
-            correct = np.array([
-                [0, 1, 2, 3],
-                [4, 6, 8, 10],
-                [12, 15, 18, 21]
-            ])
+            correct = np.array([[0, 1, 2, 3], [4, 6, 8, 10], [12, 15, 18, 21]])
             np.testing.assert_array_equal(result3, correct)
 
             self.assertIsInstance(result4, np.ndarray)
-            correct = np.array([
-                [0, 1, 3, 6],
-                [4, 9, 15, 22],
-                [8, 17, 27, 38]
-            ])
+            correct = np.array([[0, 1, 3, 6], [4, 9, 15, 22], [8, 17, 27, 38]])
             np.testing.assert_array_equal(result4, correct)
 
     def test_guvectorize(self):
@@ -297,10 +307,11 @@ class DocsExamplesTest(TestCase):
             from numba import guvectorize, int64
             import numpy as np
 
-            @guvectorize([(int64[:], int64, int64[:])], '(n),()->(n)')
+            @guvectorize([(int64[:], int64, int64[:])], "(n),()->(n)")
             def g(x, y, res):
                 for i in range(x.shape[0]):
                     res[i] = x[i] + y
+
             # magictoken.ex_guvectorize.end
 
             # magictoken.ex_guvectorize_call_one.begin
@@ -342,12 +353,13 @@ class DocsExamplesTest(TestCase):
             from numba import guvectorize, int64
             import numpy as np
 
-            @guvectorize([(int64[:], int64, int64[:])], '(n),()->()')
+            @guvectorize([(int64[:], int64, int64[:])], "(n),()->()")
             def g(x, y, res):
                 acc = 0
                 for i in range(x.shape[0]):
                     acc += x[i] + y
                 res[0] = acc
+
             # magictoken.ex_guvectorize_scalar_return.end
 
             # magictoken.ex_guvectorize_scalar_return_call.begin
@@ -366,7 +378,7 @@ class DocsExamplesTest(TestCase):
 
             from numba import jit, guvectorize
 
-            @guvectorize('(n)->(n)')
+            @guvectorize("(n)->(n)")
             def copy(x, res):
                 for i in range(x.shape[0]):
                     res[i] = x[i]
@@ -374,10 +386,11 @@ class DocsExamplesTest(TestCase):
             @jit(nopython=True)
             def jit_fn(x, res):
                 copy(x, res)
+
             # magictoken.gufunc_jit.end
 
             # magictoken.gufunc_jit_call.begin
-            x = np.arange(5, dtype='i4')
+            x = np.arange(5, dtype="i4")
             res = np.zeros_like(x)
             jit_fn(x, res)
             # At this point, res == np.array([0, 1, 2, 3, 4], 'i4').
@@ -390,7 +403,7 @@ class DocsExamplesTest(TestCase):
             import numpy as np
             from numba import jit, guvectorize
 
-            @guvectorize('(n)->(n)')
+            @guvectorize("(n)->(n)")
             def copy(x, res):
                 for i in range(x.shape[0]):
                     res[i] = x[i]
@@ -404,8 +417,9 @@ class DocsExamplesTest(TestCase):
             with self.assertRaises(ValueError) as raises:
                 jit_fn(x, res)
             # magictoken.gufunc_jit_fail.end
-            self.assertIn('Loop and array shapes are incompatible',
-                          str(raises.exception))
+            self.assertIn(
+                "Loop and array shapes are incompatible", str(raises.exception)
+            )
 
     def test_guvectorize_overwrite(self):
         with captured_stdout():
@@ -413,10 +427,11 @@ class DocsExamplesTest(TestCase):
             from numba import guvectorize, float64
             import numpy as np
 
-            @guvectorize([(float64[:], float64[:])], '()->()')
+            @guvectorize([(float64[:], float64[:])], "()->()")
             def init_values(invals, outvals):
                 invals[0] = 6.5
                 outvals[0] = 4.2
+
             # magictoken.ex_guvectorize_overwrite.end
 
             # magictoken.ex_guvectorize_overwrite_call_one.begin
@@ -432,17 +447,11 @@ class DocsExamplesTest(TestCase):
             # magictoken.ex_guvectorize_overwrite_call_one.end
 
             self.assertIsInstance(invals, np.ndarray)
-            correct = np.array([
-                [6.5, 6.5, 6.5],
-                [6.5, 6.5, 6.5],
-                [6.5, 6.5, 6.5]])
+            correct = np.array([[6.5, 6.5, 6.5], [6.5, 6.5, 6.5], [6.5, 6.5, 6.5]])
             np.testing.assert_array_equal(invals, correct)
 
             self.assertIsInstance(outvals, np.ndarray)
-            correct = np.array([
-                [4.2, 4.2, 4.2],
-                [4.2, 4.2, 4.2],
-                [4.2, 4.2, 4.2]])
+            correct = np.array([[4.2, 4.2, 4.2], [4.2, 4.2, 4.2], [4.2, 4.2, 4.2]])
             np.testing.assert_array_equal(outvals, correct)
 
             # magictoken.ex_guvectorize_overwrite_call_two.begin
@@ -461,24 +470,18 @@ class DocsExamplesTest(TestCase):
             # magictoken.ex_guvectorize_overwrite_call_two.end
 
             self.assertIsInstance(invals, np.ndarray)
-            correct = np.array([
-                [0., 0., 0.],
-                [0., 0., 0.],
-                [0., 0., 0.]], dtype=np.float32)
+            correct = np.array(
+                [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]], dtype=np.float32
+            )
             np.testing.assert_array_equal(invals, correct)
 
             self.assertIsInstance(outvals, np.ndarray)
-            correct = np.array([
-                [4.2, 4.2, 4.2],
-                [4.2, 4.2, 4.2],
-                [4.2, 4.2, 4.2]])
+            correct = np.array([[4.2, 4.2, 4.2], [4.2, 4.2, 4.2], [4.2, 4.2, 4.2]])
             np.testing.assert_array_equal(outvals, correct)
 
             # magictoken.ex_guvectorize_overwrite_call_three.begin
             @guvectorize(
-                [(float64[:], float64[:])],
-                '()->()',
-                writable_args=('invals',)
+                [(float64[:], float64[:])], "()->()", writable_args=("invals",)
             )
             def init_values(invals, outvals):
                 invals[0] = 6.5
@@ -499,17 +502,11 @@ class DocsExamplesTest(TestCase):
             # magictoken.ex_guvectorize_overwrite_call_three.end
 
             self.assertIsInstance(invals, np.ndarray)
-            correct = np.array([
-                [6.5, 6.5, 6.5],
-                [6.5, 6.5, 6.5],
-                [6.5, 6.5, 6.5]])
+            correct = np.array([[6.5, 6.5, 6.5], [6.5, 6.5, 6.5], [6.5, 6.5, 6.5]])
             np.testing.assert_array_equal(invals, correct)
 
             self.assertIsInstance(outvals, np.ndarray)
-            correct = np.array([
-                [4.2, 4.2, 4.2],
-                [4.2, 4.2, 4.2],
-                [4.2, 4.2, 4.2]])
+            correct = np.array([[4.2, 4.2, 4.2], [4.2, 4.2, 4.2], [4.2, 4.2, 4.2]])
             np.testing.assert_array_equal(outvals, correct)
 
     def test_vectorize_dynamic(self):
@@ -520,10 +517,11 @@ class DocsExamplesTest(TestCase):
             @vectorize
             def f(x, y):
                 return x * y
+
             # magictoken.ex_vectorize_dynamic.end
 
             # magictoken.ex_vectorize_dynamic_call_one.begin
-            result = f(3,4)
+            result = f(3, 4)
             # result == 12
 
             print(f.types)
@@ -533,15 +531,15 @@ class DocsExamplesTest(TestCase):
             self.assertEqual(result, 12)
             if IS_WIN32:
                 if numpy_version < (2, 0):
-                    correct = ['ll->q']
+                    correct = ["ll->q"]
                 else:
-                    correct = ['qq->q']
+                    correct = ["qq->q"]
             else:
-                correct = ['ll->l']
+                correct = ["ll->l"]
             self.assertEqual(f.types, correct)
 
             # magictoken.ex_vectorize_dynamic_call_two.begin
-            result = f(1.,2.)
+            result = f(1.0, 2.0)
             # result == 2.0
 
             print(f.types)
@@ -551,15 +549,15 @@ class DocsExamplesTest(TestCase):
             self.assertEqual(result, 2.0)
             if IS_WIN32:
                 if numpy_version < (2, 0):
-                    correct = ['ll->q', 'dd->d']
+                    correct = ["ll->q", "dd->d"]
                 else:
-                    correct = ['qq->q', 'dd->d']
+                    correct = ["qq->q", "dd->d"]
             else:
-                correct = ['ll->l', 'dd->d']
+                correct = ["ll->l", "dd->d"]
             self.assertEqual(f.types, correct)
 
             # magictoken.ex_vectorize_dynamic_call_three.begin
-            result = f(1,2.)
+            result = f(1, 2.0)
             # result == 2.0
 
             print(f.types)
@@ -569,11 +567,11 @@ class DocsExamplesTest(TestCase):
             self.assertEqual(result, 2.0)
             if IS_WIN32:
                 if numpy_version < (2, 0):
-                    correct = ['ll->q', 'dd->d']
+                    correct = ["ll->q", "dd->d"]
                 else:
-                    correct = ['qq->q', 'dd->d']
+                    correct = ["qq->q", "dd->d"]
             else:
-                correct = ['ll->l', 'dd->d']
+                correct = ["ll->l", "dd->d"]
             self.assertEqual(f.types, correct)
 
             # magictoken.ex_vectorize_dynamic_call_four.begin
@@ -581,17 +579,17 @@ class DocsExamplesTest(TestCase):
             def g(a, b):
                 return a / b
 
-            print(g(2.,3.))
+            print(g(2.0, 3.0))
             # 0.66666666666666663
 
-            print(g(2,3))
+            print(g(2, 3))
             # 0.66666666666666663
 
             print(g.types)
             # ['dd->d']
             # magictoken.ex_vectorize_dynamic_call_four.end
 
-            correct = ['dd->d']
+            correct = ["dd->d"]
             self.assertEqual(g.types, correct)
 
     def test_guvectorize_dynamic(self):
@@ -600,10 +598,11 @@ class DocsExamplesTest(TestCase):
             from numba import guvectorize
             import numpy as np
 
-            @guvectorize('(n),()->(n)')
+            @guvectorize("(n),()->(n)")
             def g(x, y, res):
                 for i in range(x.shape[0]):
                     res[i] = x[i] + y
+
             # magictoken.ex_guvectorize_dynamic.end
 
             # magictoken.ex_guvectorize_dynamic_call_one.begin
@@ -619,9 +618,9 @@ class DocsExamplesTest(TestCase):
             correct = np.array([10, 11, 12, 13, 14])
             np.testing.assert_array_equal(res, correct)
             if IS_WIN32:
-                correct = ['qq->q']
+                correct = ["qq->q"]
             else:
-                correct = ['ll->l']
+                correct = ["ll->l"]
             self.assertEqual(g.types, correct)
 
             # magictoken.ex_guvectorize_dynamic_call_two.begin
@@ -633,14 +632,14 @@ class DocsExamplesTest(TestCase):
             # magictoken.ex_guvectorize_dynamic_call_two.end
 
             # magictoken.ex_guvectorize_dynamic_call_three.begin
-            print(g.types) # shorthand for g.ufunc.types
+            print(g.types)  # shorthand for g.ufunc.types
             # ['ll->l', 'dd->d']
             # magictoken.ex_guvectorize_dynamic_call_three.end
 
             if IS_WIN32:
-                correct = ['qq->q', 'dd->d']
+                correct = ["qq->q", "dd->d"]
             else:
-                correct = ['ll->l', 'dd->d']
+                correct = ["ll->l", "dd->d"]
             self.assertEqual(g.types, correct)
 
             # magictoken.ex_guvectorize_dynamic_call_four.begin
@@ -656,5 +655,5 @@ class DocsExamplesTest(TestCase):
             np.testing.assert_array_equal(res, correct)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

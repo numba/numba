@@ -3,12 +3,17 @@ import tempfile
 from textwrap import dedent
 import unittest
 from unittest import mock
-from numba.tests.support import (TestCase, temp_directory, override_env_config,
-                                 run_in_subprocess)
+from numba.tests.support import (
+    TestCase,
+    temp_directory,
+    override_env_config,
+    run_in_subprocess,
+)
 from numba.core import config
 
 try:
     import yaml
+
     _HAVE_YAML = True
 except ImportError:
     _HAVE_YAML = False
@@ -25,7 +30,7 @@ class TestConfig(TestCase):
 
     def setUp(self):
         # use support.temp_directory, it can do the clean up
-        self.tmppath = temp_directory('config_tmp')
+        self.tmppath = temp_directory("config_tmp")
         self.maxDiff = 2500
         super(TestConfig, self).setUp()
 
@@ -41,7 +46,7 @@ class TestConfig(TestCase):
         Injects a mock configuration at 'location'
         """
         tmpcfg = os.path.join(location, config._config_fname)
-        with open(tmpcfg, 'wt') as f:
+        with open(tmpcfg, "wt") as f:
             yaml.dump(cfg, f, default_flow_style=False)
 
     def get_settings(self):
@@ -71,7 +76,7 @@ class TestConfig(TestCase):
         os.chdir(launch_dir)
         # use override to ensure that the config is zero'd out with respect
         # to any existing settings
-        with override_env_config('_', '_'):
+        with override_env_config("_", "_"):
             original = self.get_settings()
 
         # inject new config into a file in the mock launch location
@@ -80,7 +85,7 @@ class TestConfig(TestCase):
         try:
             # override something but don't change the value, this is to refresh
             # the config and make sure the injected config file is read
-            with override_env_config('_', '_'):
+            with override_env_config("_", "_"):
                 current = self.get_settings()
         finally:
             # switch back to original dir with no new config
@@ -90,12 +95,12 @@ class TestConfig(TestCase):
     def test_config(self):
         # ensure a non empty settings file does impact config and that the
         # case of the key makes no difference
-        key = 'COLOR_SCHEME'
+        key = "COLOR_SCHEME"
         for case in [str.upper, str.lower]:
-            orig, curr = self.create_config_effect({case(key): 'light_bg'})
+            orig, curr = self.create_config_effect({case(key): "light_bg"})
             self.assertTrue(orig != curr)
             self.assertTrue(orig[key] != curr[key])
-            self.assertEqual(curr[key], 'light_bg')
+            self.assertEqual(curr[key], "light_bg")
             # check that just the color scheme is the cause of difference
             orig.pop(key)
             curr.pop(key)
@@ -109,59 +114,67 @@ class TestConfig(TestCase):
     def test_illegal_error_style_handling(self):
         # ensure that illegal error styles are ignored
         new_env = os.environ.copy()
-        new_env['NUMBA_CAPTURED_ERRORS'] = 'not_a_known_style'
+        new_env["NUMBA_CAPTURED_ERRORS"] = "not_a_known_style"
         source_compiled = "the source compiled"
-        code = ("from numba import njit\n@njit\ndef foo():\n\t"
-                f"print('{source_compiled}')\nfoo()")
+        code = (
+            "from numba import njit\n@njit\ndef foo():\n\t"
+            f"print('{source_compiled}')\nfoo()"
+        )
         out, err = run_in_subprocess(dedent(code), env=new_env)
-        expected = ("Environment variable \'NUMBA_CAPTURED_ERRORS\' is defined "
-                    "but its associated value \'not_a_known_style\' could not "
-                    "be parsed.")
-        err_msg = err.decode('utf-8')
+        expected = (
+            "Environment variable 'NUMBA_CAPTURED_ERRORS' is defined "
+            "but its associated value 'not_a_known_style' could not "
+            "be parsed."
+        )
+        err_msg = err.decode("utf-8")
         self.assertIn(expected, err_msg)
-        ex_expected = ("Invalid style in NUMBA_CAPTURED_ERRORS: "
-                       "not_a_known_style")
+        ex_expected = "Invalid style in NUMBA_CAPTURED_ERRORS: " "not_a_known_style"
         self.assertIn(ex_expected, err_msg)
-        self.assertIn(source_compiled, out.decode('utf-8'))
+        self.assertIn(source_compiled, out.decode("utf-8"))
 
     def test_default_error_style_handling(self):
         # ensure that the default is new_style
         new_env = os.environ.copy()
-        new_env['NUMBA_CAPTURED_ERRORS'] = 'default'
-        code = ("from numba.core import config\n"
-                "print('---->', config.CAPTURED_ERRORS)\n"
-                "assert config.CAPTURED_ERRORS == 'new_style'")
+        new_env["NUMBA_CAPTURED_ERRORS"] = "default"
+        code = (
+            "from numba.core import config\n"
+            "print('---->', config.CAPTURED_ERRORS)\n"
+            "assert config.CAPTURED_ERRORS == 'new_style'"
+        )
         out, err = run_in_subprocess(dedent(code), env=new_env)
-        err_msg = err.decode('utf-8')
-        out_msg = out.decode('utf-8')
+        err_msg = err.decode("utf-8")
+        out_msg = out.decode("utf-8")
         ex_expected = "----> new_style"
         self.assertIn(ex_expected, out_msg, msg=err_msg)
 
-    @unittest.skipUnless(config.ENABLE_AVX,
-                         "test expects NUMBA_ENABLE_AVX==True")
+    @unittest.skipUnless(config.ENABLE_AVX, "test expects NUMBA_ENABLE_AVX==True")
     def test_nocona_disables_avx(self):
         # test with nocona
         new_env = os.environ.copy()
-        new_env.pop('NUMBA_ENABLE_AVX', None)  # clear NUMBA_ENABLE_AVX
+        new_env.pop("NUMBA_ENABLE_AVX", None)  # clear NUMBA_ENABLE_AVX
 
-        new_env['NUMBA_CPU_NAME'] = 'nocona'
-        code = ("from numba.core import config\n"
-                "print('---->', bool(config.ENABLE_AVX))\n"
-                "assert not config.ENABLE_AVX")
+        new_env["NUMBA_CPU_NAME"] = "nocona"
+        code = (
+            "from numba.core import config\n"
+            "print('---->', bool(config.ENABLE_AVX))\n"
+            "assert not config.ENABLE_AVX"
+        )
         out, err = run_in_subprocess(dedent(code), env=new_env)
-        err_msg = err.decode('utf-8')
-        out_msg = out.decode('utf-8')
+        err_msg = err.decode("utf-8")
+        out_msg = out.decode("utf-8")
         ex_expected = "----> False"
         self.assertIn(ex_expected, out_msg, msg=err_msg)
 
         # test with skylake-avx512
-        new_env['NUMBA_CPU_NAME'] = 'skylake-avx512'
-        code = ("from numba.core import config\n"
-                "print('---->', bool(config.ENABLE_AVX))\n"
-                "assert config.ENABLE_AVX")
+        new_env["NUMBA_CPU_NAME"] = "skylake-avx512"
+        code = (
+            "from numba.core import config\n"
+            "print('---->', bool(config.ENABLE_AVX))\n"
+            "assert config.ENABLE_AVX"
+        )
         out, err = run_in_subprocess(dedent(code), env=new_env)
-        err_msg = err.decode('utf-8')
-        out_msg = out.decode('utf-8')
+        err_msg = err.decode("utf-8")
+        out_msg = out.decode("utf-8")
         ex_expected = "----> True"
         self.assertIn(ex_expected, out_msg, msg=err_msg)
 
@@ -185,65 +198,77 @@ class TestNumbaOptLevel(TestCase):
         # message to abort further stages compilation once the check is
         # complete.
         from numba.core.codegen import CPUCodegen
+
         side_effect_message = "expected side effect"
 
         def side_effect(*args, **kwargs):
             self.assertEqual(kwargs, expected)
             raise RuntimeError(side_effect_message)
 
-        with mock.patch.object(CPUCodegen, '_module_pass_manager',
-                               side_effect=side_effect):
+        with mock.patch.object(
+            CPUCodegen, "_module_pass_manager", side_effect=side_effect
+        ):
             with self.assertRaises(RuntimeError) as raises:
-                njit(lambda : ...)()
+                njit(lambda: ...)()
 
             self.assertIn(side_effect_message, str(raises.exception))
 
-    @TestCase.run_test_in_subprocess(envvars={'NUMBA_OPT': 'max'})
+    @TestCase.run_test_in_subprocess(envvars={"NUMBA_OPT": "max"})
     def test_opt_max(self):
         # NUMBA_OPT='max' should set opt to 3 and enable loop_vectorize
-        expected = {'loop_vectorize': True,
-                    'slp_vectorize': False,
-                    'opt': 3,
-                    'cost': 'cheap'}
-        self.check(expected, 3, 'max')
+        expected = {
+            "loop_vectorize": True,
+            "slp_vectorize": False,
+            "opt": 3,
+            "cost": "cheap",
+        }
+        self.check(expected, 3, "max")
 
-    @TestCase.run_test_in_subprocess(envvars={'NUMBA_OPT': '3'})
+    @TestCase.run_test_in_subprocess(envvars={"NUMBA_OPT": "3"})
     def test_opt_3(self):
         # NUMBA_OPT='3' should not impact opt or loop_vectorize
-        expected = {'loop_vectorize': False,
-                    'slp_vectorize': False,
-                    'opt': 0,
-                    'cost': 'cheap'}
+        expected = {
+            "loop_vectorize": False,
+            "slp_vectorize": False,
+            "opt": 0,
+            "cost": "cheap",
+        }
         self.check(expected, 3, 3)
 
-    @TestCase.run_test_in_subprocess(envvars={'NUMBA_OPT': '0'})
+    @TestCase.run_test_in_subprocess(envvars={"NUMBA_OPT": "0"})
     def test_opt_0(self):
         # NUMBA_OPT='0' should not impact opt or loop_vectorize
-        expected = {'loop_vectorize': False,
-                    'slp_vectorize': False,
-                    'opt': 0,
-                    'cost': 'cheap'}
+        expected = {
+            "loop_vectorize": False,
+            "slp_vectorize": False,
+            "opt": 0,
+            "cost": "cheap",
+        }
         self.check(expected, 0, 0)
 
     @TestCase.run_test_in_subprocess()
     def test_opt_default(self):
         # NUMBA_OPT is not set, the default should not impact opt or
         # loop_vectorize
-        expected = {'loop_vectorize': False,
-                    'slp_vectorize': False,
-                    'opt': 0,
-                    'cost': 'cheap'}
+        expected = {
+            "loop_vectorize": False,
+            "slp_vectorize": False,
+            "opt": 0,
+            "cost": "cheap",
+        }
         self.check(expected, 3, 3)
 
-    @TestCase.run_test_in_subprocess(envvars={'NUMBA_OPT': 'invalid'})
+    @TestCase.run_test_in_subprocess(envvars={"NUMBA_OPT": "invalid"})
     def test_opt_invalid(self):
         # NUMBA_OPT='invalid' should just proceed as default case
-        expected = {'loop_vectorize': False,
-                    'slp_vectorize': False,
-                    'opt': 0,
-                    'cost': 'cheap'}
+        expected = {
+            "loop_vectorize": False,
+            "slp_vectorize": False,
+            "opt": 0,
+            "cost": "cheap",
+        }
         self.check(expected, 3, 3)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

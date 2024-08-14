@@ -2,7 +2,6 @@
 Implementation of compiled C callbacks (@cfunc).
 """
 
-
 import ctypes
 from functools import cached_property
 
@@ -34,22 +33,22 @@ class CFunc(object):
     """
     A compiled C callback, as created by the @cfunc decorator.
     """
+
     _targetdescr = registry.cpu_target
 
-    def __init__(self, pyfunc, sig, locals, options,
-                 pipeline_class=compiler.Compiler):
+    def __init__(self, pyfunc, sig, locals, options, pipeline_class=compiler.Compiler):
         args, return_type = sig
         if return_type is None:
             raise TypeError("C callback needs an explicit return type")
         self.__name__ = pyfunc.__name__
-        self.__qualname__ = getattr(pyfunc, '__qualname__', self.__name__)
+        self.__qualname__ = getattr(pyfunc, "__qualname__", self.__name__)
         self.__wrapped__ = pyfunc
 
         self._pyfunc = pyfunc
         self._sig = signature(return_type, *args)
-        self._compiler = _CFuncCompiler(pyfunc, self._targetdescr,
-                                        options, locals,
-                                        pipeline_class=pipeline_class)
+        self._compiler = _CFuncCompiler(
+            pyfunc, self._targetdescr, options, locals, pipeline_class=pipeline_class
+        )
 
         self._wrapper_name = None
         self._wrapper_address = None
@@ -62,8 +61,7 @@ class CFunc(object):
     @global_compiler_lock
     def compile(self):
         # Try to load from cache
-        cres = self._cache.load_overload(self._sig,
-                                         self._targetdescr.target_context)
+        cres = self._cache.load_overload(self._sig, self._targetdescr.target_context)
         if cres is None:
             cres = self._compile_uncached()
             self._cache.save_overload(self._sig, cres)
@@ -73,7 +71,8 @@ class CFunc(object):
         self._library = cres.library
         self._wrapper_name = cres.fndesc.llvm_cfunc_wrapper_name
         self._wrapper_address = self._library.get_pointer_to_function(
-            self._wrapper_name)
+            self._wrapper_name
+        )
 
     def _compile_uncached(self):
         sig = self._sig
@@ -103,6 +102,7 @@ class CFunc(object):
         A cffi function pointer representing the C callback.
         """
         import cffi
+
         ffi = cffi.FFI()
         # cffi compares types by name, so using precise types would risk
         # spurious mismatches (such as "int32_t" vs. "int").

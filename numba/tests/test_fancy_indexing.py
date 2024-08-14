@@ -13,22 +13,25 @@ from numba.tests.support import MemoryLeakMixin, TestCase
 def getitem_usecase(a, b):
     return a[b]
 
+
 def setitem_usecase(a, idx, b):
     a[idx] = b
+
 
 def np_take(A, indices):
     return np.take(A, indices)
 
+
 def np_take_kws(A, indices, axis):
     return np.take(A, indices, axis=axis)
+
 
 class TestFancyIndexing(MemoryLeakMixin, TestCase):
 
     def generate_advanced_indices(self, N, many=True):
         choices = [np.int16([0, N - 1, -2])]
         if many:
-            choices += [np.uint16([0, 1, N - 1]),
-                        np.bool_([0, 1, 1, 0])]
+            choices += [np.uint16([0, 1, N - 1]), np.bool_([0, 1, 1, 0])]
         return choices
 
     def generate_basic_index_tuples(self, N, maxdim, many=True):
@@ -40,16 +43,16 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         # See "Combining advanced and basic indexing"
         # in http://docs.scipy.org/doc/numpy/reference/arrays.indexing.html
         if many:
-            choices = [slice(None, None, None),
-                       slice(1, N - 1, None),
-                       slice(0, None, 2),
-                       slice(N - 1, None, -2),
-                       slice(-N + 1, -1, None),
-                       slice(-1, -N, -2),
-                       ]
+            choices = [
+                slice(None, None, None),
+                slice(1, N - 1, None),
+                slice(0, None, 2),
+                slice(N - 1, None, -2),
+                slice(-N + 1, -1, None),
+                slice(-1, -N, -2),
+            ]
         else:
-            choices = [slice(0, N - 1, None),
-                       slice(-1, -N, -2)]
+            choices = [slice(0, N - 1, None), slice(-1, -N, -2)]
         for ndim in range(maxdim + 1):
             for tup in itertools.product(choices, repeat=ndim):
                 yield tup
@@ -102,7 +105,7 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         # Test many variations of advanced indexing with a tuple index
         N = 4
         ndim = 3
-        arr = np.arange(N ** ndim).reshape((N,) * ndim).astype(np.int32)
+        arr = np.arange(N**ndim).reshape((N,) * ndim).astype(np.int32)
         indices = self.generate_advanced_index_tuples(N, ndim)
 
         self.check_getitem_indices(arr, indices)
@@ -111,9 +114,8 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         # Same, but also insert an ellipsis at a random point
         N = 4
         ndim = 3
-        arr = np.arange(N ** ndim).reshape((N,) * ndim).astype(np.int32)
-        indices = self.generate_advanced_index_tuples_with_ellipsis(N, ndim,
-                                                                    many=False)
+        arr = np.arange(N**ndim).reshape((N,) * ndim).astype(np.int32)
+        indices = self.generate_advanced_index_tuples_with_ellipsis(N, ndim, many=False)
 
         self.check_getitem_indices(arr, indices)
 
@@ -131,7 +133,7 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         # Test advanced indexing with a single array index
         N = 4
         ndim = 3
-        arr = np.arange(N ** ndim).reshape((N,) * ndim).astype(np.int32)
+        arr = np.arange(N**ndim).reshape((N,) * ndim).astype(np.int32)
         indices = self.generate_advanced_indices(N)
         self.check_getitem_indices(arr, indices)
 
@@ -155,7 +157,7 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         # Test many variations of advanced indexing with a tuple index
         N = 4
         ndim = 3
-        arr = np.arange(N ** ndim).reshape((N,) * ndim).astype(np.int32)
+        arr = np.arange(N**ndim).reshape((N,) * ndim).astype(np.int32)
         indices = self.generate_advanced_index_tuples(N, ndim)
         self.check_setitem_indices(arr, indices)
 
@@ -163,9 +165,8 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         # Same, but also insert an ellipsis at a random point
         N = 4
         ndim = 3
-        arr = np.arange(N ** ndim).reshape((N,) * ndim).astype(np.int32)
-        indices = self.generate_advanced_index_tuples_with_ellipsis(N, ndim,
-                                                                    many=False)
+        arr = np.arange(N**ndim).reshape((N,) * ndim).astype(np.int32)
+        indices = self.generate_advanced_index_tuples_with_ellipsis(N, ndim, many=False)
 
         self.check_setitem_indices(arr, indices)
 
@@ -173,7 +174,7 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         # Test advanced indexing with a single array index
         N = 4
         ndim = 3
-        arr = np.arange(N ** ndim).reshape((N,) * ndim).astype(np.int32) + 10
+        arr = np.arange(N**ndim).reshape((N,) * ndim).astype(np.int32) + 10
         indices = self.generate_advanced_indices(N)
         self.check_setitem_indices(arr, indices)
 
@@ -187,11 +188,13 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
             (np.zeros(2), np.array(2)),
             (np.zeros(3, dtype=np.int64), np.array(3, dtype=np.int64)),
             (np.zeros(3, dtype=np.float64), np.array(1, dtype=np.int64)),
-            (np.zeros(5, dtype='<U3'), np.array('abc')),
-            (np.zeros((3,), dtype='<U3'), np.array('a')),
-            (np.array(['abc','def','ghi'], dtype='<U3'),
-             np.array('WXYZ', dtype='<U4')),
-            (np.zeros(3, dtype=complex), np.array(2+3j, dtype=complex)),
+            (np.zeros(5, dtype="<U3"), np.array("abc")),
+            (np.zeros((3,), dtype="<U3"), np.array("a")),
+            (
+                np.array(["abc", "def", "ghi"], dtype="<U3"),
+                np.array("WXYZ", dtype="<U4"),
+            ),
+            (np.zeros(3, dtype=complex), np.array(2 + 3j, dtype=complex)),
         ]
 
         for x1, v in inps:
@@ -209,7 +212,7 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
             expected = pyfunc(arr, ind)
             got = cfunc(arr, ind)
             self.assertPreciseEqual(expected, got)
-            if hasattr(expected, 'order'):
+            if hasattr(expected, "order"):
                 self.assertEqual(expected.order == got.order)
 
         # need to check:
@@ -237,32 +240,36 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         a = np.array([1, 2, 3, 4, 5])
         check(a, indices)
 
-        #check illegal access raises
+        # check illegal access raises
         szA = A.size
-        illegal_indices = [szA, -szA - 1, np.array(szA), np.array(-szA - 1),
-                           [szA], [-szA - 1]]
+        illegal_indices = [
+            szA,
+            -szA - 1,
+            np.array(szA),
+            np.array(-szA - 1),
+            [szA],
+            [-szA - 1],
+        ]
         for x in illegal_indices:
             with self.assertRaises(IndexError):
-                cfunc(A, x) # oob raises
+                cfunc(A, x)  # oob raises
 
         # check float indexing raises
         with self.assertRaises(TypingError):
             cfunc(A, [1.7])
 
-        #exceptions leak refs
+        # exceptions leak refs
         self.disable_leak_check()
 
     def test_np_take_axis(self):
         pyfunc = np_take_kws
         cfunc = jit(nopython=True)(pyfunc)
 
-        nt = collections.namedtuple('inputs', ['arrays', 'indices', 'axis'])
+        nt = collections.namedtuple("inputs", ["arrays", "indices", "axis"])
 
         triples = (
             nt(
-                arrays=(
-                    np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]]),
-                ),
+                arrays=(np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]]),),
                 indices=(
                     np.array([0, 2, 1]),
                     np.array([1, 2, 1, 2, 1]),
@@ -278,21 +285,13 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
                     np.arange(5),
                     np.array([123]),
                 ),
-                indices=(
-                    0,
-                    (0,),
-                    np.asarray([0])
-                ),
-                axis=(0,)
+                indices=(0, (0,), np.asarray([0])),
+                axis=(0,),
             ),
             nt(
-                arrays=(
-                    np.ones((10, 1, 11, 1, 12, 1, 13)),
-                ),
-                indices=(
-                    0,
-                ),
-                axis=(1, 3, 5)
+                arrays=(np.ones((10, 1, 11, 1, 12, 1, 13)),),
+                indices=(0,),
+                axis=(1, 3, 5),
             ),
         )
 
@@ -304,11 +303,10 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
                         got = cfunc(array, indice, axis=ax)
                         self.assertPreciseEqual(expected, got)
 
-
     def test_np_take_axis_exception(self):
         cfunc = jit(nopython=True)(np_take_kws)
         arr = np.arange(9).reshape(3, 3)
-        msg = 'axis 2 is out of bounds for array of dimension 2'
+        msg = "axis 2 is out of bounds for array of dimension 2"
         indices = np.array([0, 1, 2])
         with self.assertRaisesRegex(ValueError, msg):
             cfunc(arr, indices, axis=2)
@@ -367,22 +365,16 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
     indexing_cases = [
         # Slices + Integers
         (slice(4, 5), 3, np.array([0, 1, 3, 4, 2]), 1),
-        (3, np.array([0,1,3,4,2]), slice(None), slice(4)),
-
+        (3, np.array([0, 1, 3, 4, 2]), slice(None), slice(4)),
         # Ellipsis + Integers
-        (Ellipsis, 1, np.array([0,1,3,4,2])),
-        (np.array([0,1,3,4,2]), 3, Ellipsis),
-
+        (Ellipsis, 1, np.array([0, 1, 3, 4, 2])),
+        (np.array([0, 1, 3, 4, 2]), 3, Ellipsis),
         # Ellipsis + Slices + Integers
-        (Ellipsis, 1, np.array([0,1,3,4,2]), 3, slice(1,5)),
-        (np.array([0,1,3,4,2]), 3, Ellipsis, slice(1,5)),
-
+        (Ellipsis, 1, np.array([0, 1, 3, 4, 2]), 3, slice(1, 5)),
+        (np.array([0, 1, 3, 4, 2]), 3, Ellipsis, slice(1, 5)),
         # Boolean Arrays + Integers
-        (slice(4, 5), 3,
-         np.array([True, False, True, False, True, False, False]),
-         1),
-        (3, np.array([True, False, True, False, True, False]),
-         slice(None), slice(4)),
+        (slice(4, 5), 3, np.array([True, False, True, False, True, False, False]), 1),
+        (3, np.array([True, False, True, False, True, False]), slice(None), slice(4)),
     ]
 
     def setUp(self):
@@ -391,14 +383,15 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
 
     def generate_random_indices(self):
         N = min(self.shape)
-        slice_choices = [slice(None, None, None),
+        slice_choices = [
+            slice(None, None, None),
             slice(1, N - 1, None),
             slice(0, None, 2),
             slice(N - 1, None, -2),
             slice(-N + 1, -1, None),
             slice(-1, -N, -2),
             slice(0, N - 1, None),
-            slice(-1, -N, -2)
+            slice(-1, -N, -2),
         ]
         integer_choices = list(np.arange(N))
 
@@ -406,7 +399,7 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
 
         # Generate K random slice cases. The value of K is arbitrary, the intent is
         # to create plenty of variation.
-        K = 20 
+        K = 20
         for _ in range(K):
             array_idx = self.rng.integers(0, 5, size=15)
             # Randomly select 4 slices from our list
@@ -415,7 +408,7 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
             _array_idx = self.rng.choice(4)
             curr_idx[_array_idx] = array_idx
             indices.append(tuple(curr_idx))
-        # Generate K random integer cases 
+        # Generate K random integer cases
         for _ in range(K):
             array_idx = self.rng.integers(0, 5, size=15)
             # Randomly select 4 integers from our list
@@ -446,8 +439,7 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
             _array_idx = self.rng.choice(4)
             bool_arr_shape = self.shape[_array_idx]
             curr_idx[_array_idx] = np.array(
-                self.rng.choice(2, size=bool_arr_shape),
-                dtype=bool
+                self.rng.choice(2, size=bool_arr_shape), dtype=bool
             )
             indices.append(tuple(curr_idx))
 
@@ -521,27 +513,30 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
     def test_unsupported_condition_exceptions(self):
         err_idx_cases = [
             # Cases with multi-dimensional indexing array
-            ('Multi-dimensional indices are not supported.',
-             (0, 3, np.array([[1, 2], [2, 3]]))),
+            (
+                "Multi-dimensional indices are not supported.",
+                (0, 3, np.array([[1, 2], [2, 3]])),
+            ),
             # Cases with more than one indexing array
-            ('Using more than one non-scalar array index is unsupported.',
-             (0, 3, np.array([1, 2]), np.array([1, 2]))),
+            (
+                "Using more than one non-scalar array index is unsupported.",
+                (0, 3, np.array([1, 2]), np.array([1, 2])),
+            ),
             # Cases with more than one indexing subspace
             # (The subspaces here are separated by slice(None))
-            ("Using more than one indexing subspace is unsupported." + \
-             " An indexing subspace is a group of one or more consecutive" + \
-             " indices comprising integer or array types.",
-             (0, np.array([1, 2]), slice(None), 3, 4))
+            (
+                "Using more than one indexing subspace is unsupported."
+                + " An indexing subspace is a group of one or more consecutive"
+                + " indices comprising integer or array types.",
+                (0, np.array([1, 2]), slice(None), 3, 4),
+            ),
         ]
-        
+
         for err, idx in err_idx_cases:
             with self.assertRaises(TypingError) as raises:
                 self.check_getitem_indices(self.shape, idx)
-            self.assertIn(
-                err,
-                str(raises.exception)
-            )
+            self.assertIn(err, str(raises.exception))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

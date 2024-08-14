@@ -44,9 +44,10 @@ class TestForAll(CUDATestCase):
         # negative element count.
         with self.assertRaises(ValueError) as raises:
             foo.forall(-1)
-        self.assertIn("Can't create ForAll with negative task count",
-                      str(raises.exception))
+        self.assertIn(
+            "Can't create ForAll with negative task count", str(raises.exception)
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -39,7 +39,7 @@ class TestEvent(TestCase):
 
         foo(1)
         md = foo.get_metadata(foo.signatures[0])
-        lock_duration = md['timers']['compiler_lock']
+        lock_duration = md["timers"]["compiler_lock"]
         self.assertIsInstance(lock_duration, float)
         self.assertGreater(lock_duration, 0)
 
@@ -50,7 +50,7 @@ class TestEvent(TestCase):
 
         foo(1)
         md = foo.get_metadata(foo.signatures[0])
-        lock_duration = md['timers']['llvm_lock']
+        lock_duration = md["timers"]["llvm_lock"]
         self.assertIsInstance(lock_duration, float)
         self.assertGreater(lock_duration, 0)
 
@@ -66,12 +66,12 @@ class TestEvent(TestCase):
         for _, event in recorder.buffer:
             # Check that all fields are there
             data = event.data
-            self.assertIsInstance(data['name'], str)
-            self.assertIsInstance(data['qualname'], str)
-            self.assertIsInstance(data['module'], str)
-            self.assertIsInstance(data['flags'], str)
-            self.assertIsInstance(data['args'], str)
-            self.assertIsInstance(data['return_type'], str)
+            self.assertIsInstance(data["name"], str)
+            self.assertIsInstance(data["qualname"], str)
+            self.assertIsInstance(data["module"], str)
+            self.assertIsInstance(data["flags"], str)
+            self.assertIsInstance(data["args"], str)
+            self.assertIsInstance(data["return_type"], str)
 
     def test_install_listener(self):
         ut = self
@@ -139,7 +139,7 @@ class TestEvent(TestCase):
     def test_lifted_dispatcher(self):
         @jit(forceobj=True)
         def foo():
-            object()   # to trigger loop-lifting
+            object()  # to trigger loop-lifting
             c = 0
             for i in range(10):
                 c += i
@@ -172,7 +172,7 @@ class TestEvent(TestCase):
         def bar(x):
             acc = 0
             for i in literal_unroll(a):
-                if i in {'1': x}:
+                if i in {"1": x}:
                     acc += 1
                 else:
                     acc += np.sqrt(x[0, 0])
@@ -182,35 +182,29 @@ class TestEvent(TestCase):
         def foo(x):
             return bar(np.zeros((x, x)))
 
-        with override_config('LLVM_PASS_TIMINGS', True):
+        with override_config("LLVM_PASS_TIMINGS", True):
             foo(1)
 
         def get_timers(fn, prop):
             md = fn.get_metadata(fn.signatures[0])
             return md[prop]
 
-        foo_timers = get_timers(foo, 'timers')
-        bar_timers = get_timers(bar, 'timers')
-        foo_llvm_timer = get_timers(foo, 'llvm_pass_timings')
-        bar_llvm_timer = get_timers(bar, 'llvm_pass_timings')
+        foo_timers = get_timers(foo, "timers")
+        bar_timers = get_timers(bar, "timers")
+        foo_llvm_timer = get_timers(foo, "llvm_pass_timings")
+        bar_llvm_timer = get_timers(bar, "llvm_pass_timings")
 
         # Check: time spent in bar() must be longer than in foo()
-        self.assertLess(bar_timers['llvm_lock'],
-                        foo_timers['llvm_lock'])
-        self.assertLess(bar_timers['compiler_lock'],
-                        foo_timers['compiler_lock'])
+        self.assertLess(bar_timers["llvm_lock"], foo_timers["llvm_lock"])
+        self.assertLess(bar_timers["compiler_lock"], foo_timers["compiler_lock"])
 
         # Check: time spent in LLVM itself must be less than in the LLVM lock
-        self.assertLess(foo_llvm_timer.get_total_time(),
-                        foo_timers['llvm_lock'])
-        self.assertLess(bar_llvm_timer.get_total_time(),
-                        bar_timers['llvm_lock'])
+        self.assertLess(foo_llvm_timer.get_total_time(), foo_timers["llvm_lock"])
+        self.assertLess(bar_llvm_timer.get_total_time(), bar_timers["llvm_lock"])
 
         # Check: time spent in LLVM lock must be less than in compiler
-        self.assertLess(foo_timers['llvm_lock'],
-                        foo_timers['compiler_lock'])
-        self.assertLess(bar_timers['llvm_lock'],
-                        bar_timers['compiler_lock'])
+        self.assertLess(foo_timers["llvm_lock"], foo_timers["compiler_lock"])
+        self.assertLess(bar_timers["llvm_lock"], bar_timers["compiler_lock"])
 
 
 if __name__ == "__main__":

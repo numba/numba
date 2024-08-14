@@ -1,7 +1,8 @@
-'''
+"""
 The Device Array API is not implemented in the simulator. This module provides
 stubs to allow tests to import correctly.
-'''
+"""
+
 from contextlib import contextmanager
 from numba.np.numpy_support import numpy_version
 
@@ -12,37 +13,39 @@ DeviceRecord = None
 from_record_like = None
 
 
-errmsg_contiguous_buffer = ("Array contains non-contiguous buffer and cannot "
-                            "be transferred as a single memory region. Please "
-                            "ensure contiguous buffer with numpy "
-                            ".ascontiguousarray()")
+errmsg_contiguous_buffer = (
+    "Array contains non-contiguous buffer and cannot "
+    "be transferred as a single memory region. Please "
+    "ensure contiguous buffer with numpy "
+    ".ascontiguousarray()"
+)
 
 
 class FakeShape(tuple):
-    '''
+    """
     The FakeShape class is used to provide a shape which does not allow negative
     indexing, similar to the shape in CUDA Python. (Numpy shape arrays allow
     negative indexing)
-    '''
+    """
 
     def __getitem__(self, k):
         if isinstance(k, int) and k < 0:
-            raise IndexError('tuple index out of range')
+            raise IndexError("tuple index out of range")
         return super(FakeShape, self).__getitem__(k)
 
 
 class FakeWithinKernelCUDAArray(object):
-    '''
+    """
     Created to emulate the behavior of arrays within kernels, where either
     array.item or array['item'] is valid (that is, give all structured
     arrays `numpy.recarray`-like semantics). This behaviour does not follow
     the semantics of Python and NumPy with non-jitted code, and will be
     deprecated and removed.
-    '''
+    """
 
     def __init__(self, item):
         assert isinstance(item, FakeCUDAArray)
-        self.__dict__['_item'] = item
+        self.__dict__["_item"] = item
 
     def __wrap_if_fake(self, item):
         if isinstance(item, FakeCUDAArray):
@@ -84,18 +87,18 @@ class FakeWithinKernelCUDAArray(object):
 
             return obj
 
-        out = kwargs.get('out')
+        out = kwargs.get("out")
         if out:
-            kwargs['out'] = tuple(convert_fakes(o) for o in out)
+            kwargs["out"] = tuple(convert_fakes(o) for o in out)
         args = tuple(convert_fakes(a) for a in args)
         return call(*args, **kwargs)
 
 
 class FakeCUDAArray(object):
-    '''
+    """
     Implements the interface of a DeviceArray/DeviceRecord, but mostly just
     wraps a NumPy array.
-    '''
+    """
 
     __cuda_ndarray__ = True  # There must be gpu_data attribute
 
@@ -149,13 +152,13 @@ class FakeCUDAArray(object):
         return ary
 
     def copy_to_device(self, ary, stream=0):
-        '''
+        """
         Copy from the provided array into this array.
 
         This may be less forgiving than the CUDA Python implementation, which
         will copy data up to the length of the smallest of the two arrays,
         whereas this expects the size of the arrays to be equal.
-        '''
+        """
         sentry_contiguous(self)
         self_core, ary_core = array_core(self), array_core(ary)
         if isinstance(ary, FakeCUDAArray):
@@ -164,9 +167,10 @@ class FakeCUDAArray(object):
         else:
             ary_core = np.array(
                 ary_core,
-                order='C' if self_core.flags['C_CONTIGUOUS'] else 'F',
+                order="C" if self_core.flags["C_CONTIGUOUS"] else "F",
                 subok=True,
-                copy=False if numpy_version < (2, 0) else None)
+                copy=False if numpy_version < (2, 0) else None,
+            )
             check_array_compatibility(self_core, ary_core)
         np.copyto(self_core._ary, ary_core)
 
@@ -237,7 +241,7 @@ class FakeCUDAArray(object):
         return FakeCUDAArray(self._ary % other)
 
     def __pow__(self, other):
-        return FakeCUDAArray(self._ary ** other)
+        return FakeCUDAArray(self._ary**other)
 
     def split(self, section, stream=0):
         return [
@@ -282,30 +286,27 @@ def is_contiguous(ary):
 
 def sentry_contiguous(ary):
     core = array_core(ary)
-    if not core.flags['C_CONTIGUOUS'] and not core.flags['F_CONTIGUOUS']:
+    if not core.flags["C_CONTIGUOUS"] and not core.flags["F_CONTIGUOUS"]:
         raise ValueError(errmsg_contiguous_buffer)
 
 
 def check_array_compatibility(ary1, ary2):
     ary1sq, ary2sq = ary1.squeeze(), ary2.squeeze()
     if ary1.dtype != ary2.dtype:
-        raise TypeError('incompatible dtype: %s vs. %s' %
-                        (ary1.dtype, ary2.dtype))
+        raise TypeError("incompatible dtype: %s vs. %s" % (ary1.dtype, ary2.dtype))
     if ary1sq.shape != ary2sq.shape:
-        raise ValueError('incompatible shape: %s vs. %s' %
-                         (ary1.shape, ary2.shape))
+        raise ValueError("incompatible shape: %s vs. %s" % (ary1.shape, ary2.shape))
     if ary1sq.strides != ary2sq.strides:
-        raise ValueError('incompatible strides: %s vs. %s' %
-                         (ary1.strides, ary2.strides))
+        raise ValueError(
+            "incompatible strides: %s vs. %s" % (ary1.strides, ary2.strides)
+        )
 
 
 def to_device(ary, stream=0, copy=True, to=None):
-    ary = np.array(ary,
-                   copy=False if numpy_version < (2, 0) else None,
-                   subok=True)
+    ary = np.array(ary, copy=False if numpy_version < (2, 0) else None, subok=True)
     sentry_contiguous(ary)
     if to is None:
-        buffer_dtype = np.int64 if ary.dtype.char in 'Mm' else ary.dtype
+        buffer_dtype = np.int64 if ary.dtype.char in "Mm" else ary.dtype
         return FakeCUDAArray(
             np.ndarray(
                 buffer=np.copy(array_core(ary)).view(buffer_dtype),
@@ -324,22 +325,22 @@ def pinned(arg):
 
 
 def mapped_array(*args, **kwargs):
-    for unused_arg in ('portable', 'wc'):
+    for unused_arg in ("portable", "wc"):
         if unused_arg in kwargs:
             kwargs.pop(unused_arg)
     return device_array(*args, **kwargs)
 
 
-def pinned_array(shape, dtype=np.float64, strides=None, order='C'):
+def pinned_array(shape, dtype=np.float64, strides=None, order="C"):
     return np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order)
 
 
-def managed_array(shape, dtype=np.float64, strides=None, order='C'):
+def managed_array(shape, dtype=np.float64, strides=None, order="C"):
     return np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order)
 
 
 def device_array(*args, **kwargs):
-    stream = kwargs.pop('stream') if 'stream' in kwargs else 0
+    stream = kwargs.pop("stream") if "stream" in kwargs else 0
     return FakeCUDAArray(np.ndarray(*args, **kwargs), stream=stream)
 
 
@@ -350,7 +351,7 @@ def _contiguous_strides_like_array(ary):
     """
     # Don't recompute strides if the default strides will be sufficient to
     # create a contiguous array.
-    if ary.flags['C_CONTIGUOUS'] or ary.flags['F_CONTIGUOUS'] or ary.ndim <= 1:
+    if ary.flags["C_CONTIGUOUS"] or ary.flags["F_CONTIGUOUS"] or ary.ndim <= 1:
         return None
 
     # Otherwise, we need to compute new strides using an algorithm adapted from
@@ -360,7 +361,7 @@ def _contiguous_strides_like_array(ary):
 
     # Stride permutation. E.g. a stride array (4, -2, 12) becomes
     # [(1, -2), (0, 4), (2, 12)]
-    strideperm = [ x for x in enumerate(ary.strides) ]
+    strideperm = [x for x in enumerate(ary.strides)]
     strideperm.sort(key=lambda x: x[1])
 
     # Compute new strides using permutation
@@ -373,24 +374,22 @@ def _contiguous_strides_like_array(ary):
 
 
 def _order_like_array(ary):
-    if ary.flags['F_CONTIGUOUS'] and not ary.flags['C_CONTIGUOUS']:
-        return 'F'
+    if ary.flags["F_CONTIGUOUS"] and not ary.flags["C_CONTIGUOUS"]:
+        return "F"
     else:
-        return 'C'
+        return "C"
 
 
 def device_array_like(ary, stream=0):
     strides = _contiguous_strides_like_array(ary)
     order = _order_like_array(ary)
-    return device_array(shape=ary.shape, dtype=ary.dtype, strides=strides,
-                        order=order)
+    return device_array(shape=ary.shape, dtype=ary.dtype, strides=strides, order=order)
 
 
 def pinned_array_like(ary):
     strides = _contiguous_strides_like_array(ary)
     order = _order_like_array(ary)
-    return pinned_array(shape=ary.shape, dtype=ary.dtype, strides=strides,
-                        order=order)
+    return pinned_array(shape=ary.shape, dtype=ary.dtype, strides=strides, order=order)
 
 
 def auto_device(ary, stream=0, copy=True):
@@ -398,16 +397,13 @@ def auto_device(ary, stream=0, copy=True):
         return ary, False
 
     if not isinstance(ary, np.void):
-        ary = np.array(
-            ary,
-            copy=False if numpy_version < (2, 0) else None,
-            subok=True)
+        ary = np.array(ary, copy=False if numpy_version < (2, 0) else None, subok=True)
     return to_device(ary, stream, copy), True
 
 
 def is_cuda_ndarray(obj):
     "Check if an object is a CUDA ndarray"
-    return getattr(obj, '__cuda_ndarray__', False)
+    return getattr(obj, "__cuda_ndarray__", False)
 
 
 def verify_cuda_ndarray_interface(obj):
@@ -418,15 +414,15 @@ def verify_cuda_ndarray_interface(obj):
         if not hasattr(obj, attr):
             raise AttributeError(attr)
         if not isinstance(getattr(obj, attr), typ):
-            raise AttributeError('%s must be of type %s' % (attr, typ))
+            raise AttributeError("%s must be of type %s" % (attr, typ))
 
-    requires_attr('shape', tuple)
-    requires_attr('strides', tuple)
-    requires_attr('dtype', np.dtype)
-    requires_attr('size', int)
+    requires_attr("shape", tuple)
+    requires_attr("strides", tuple)
+    requires_attr("dtype", np.dtype)
+    requires_attr("size", int)
 
 
 def require_cuda_ndarray(obj):
     "Raises ValueError is is_cuda_ndarray(obj) evaluates False"
     if not is_cuda_ndarray(obj):
-        raise ValueError('require an cuda ndarray object')
+        raise ValueError("require an cuda ndarray object")

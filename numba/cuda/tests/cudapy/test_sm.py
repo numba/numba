@@ -8,8 +8,7 @@ from numba.np import numpy_support as nps
 
 from .extensions_usecases import test_struct_model_type, TestStruct
 
-recordwith2darray = np.dtype([('i', np.int32),
-                              ('j', np.float32, (3, 2))])
+recordwith2darray = np.dtype([("i", np.int32), ("j", np.float32, (3, 2))])
 
 
 class TestSharedMemoryIssue(CUDATestCase):
@@ -71,8 +70,7 @@ class TestSharedMemoryIssue(CUDATestCase):
 
         @cuda.jit
         def costs_func(d_block_costs):
-            s_features = cuda.shared.array((examples_per_block, num_weights),
-                                           float64)
+            s_features = cuda.shared.array((examples_per_block, num_weights), float64)
             s_initialcost = cuda.shared.array(7, float64)  # Bug
 
             threadIdx = cuda.threadIdx.x
@@ -364,7 +362,7 @@ class TestSharedMemory(CUDATestCase):
         def sm_slice_copy(x, y, chunksize):
             dynsmem = cuda.shared.array(0, dtype=dt)
             sm1 = dynsmem[0:chunksize]
-            sm2 = dynsmem[chunksize:chunksize * 2]
+            sm2 = dynsmem[chunksize : chunksize * 2]
 
             tx = cuda.threadIdx.x
             bx = cuda.blockIdx.x
@@ -396,14 +394,16 @@ class TestSharedMemory(CUDATestCase):
         rgx = ".*Cannot infer the type of variable 'arr'.*"
 
         def unsupported_type():
-            arr = cuda.shared.array(10, dtype=np.dtype('O')) # noqa: F841
+            arr = cuda.shared.array(10, dtype=np.dtype("O"))  # noqa: F841
+
         with self.assertRaisesRegex(TypingError, rgx):
             cuda.jit(void())(unsupported_type)
 
         rgx = ".*Invalid NumPy dtype specified: 'int33'.*"
 
         def invalid_string_type():
-            arr = cuda.shared.array(10, dtype='int33') # noqa: F841
+            arr = cuda.shared.array(10, dtype="int33")  # noqa: F841
+
         with self.assertRaisesRegex(TypingError, rgx):
             cuda.jit(void())(invalid_string_type)
 
@@ -440,5 +440,5 @@ class TestSharedMemory(CUDATestCase):
             self.assertEqual(y, (nthreads - i - 1) * 2)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

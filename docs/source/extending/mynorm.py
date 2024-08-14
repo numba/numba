@@ -28,12 +28,13 @@ def jit_norm(a, ord=None):
         raise TypingError("Only integer and floating point types accepted")
     # Reject ndarrays with unsupported dimensionality
     if not (0 <= a.ndim <= 2):
-        raise TypingError('3D and beyond are not allowed')
+        raise TypingError("3D and beyond are not allowed")
     # Implementation for scalars/0d-arrays
     elif a.ndim == 0:
         return a.item()
     # Implementation for vectors
     elif a.ndim == 1:
+
         def _oneD_norm_x(a, ord=None):
             if ord == 2 or ord is None:
                 return _oneD_norm_2(a)
@@ -46,16 +47,20 @@ def jit_norm(a, ord=None):
             elif ord == 1:
                 return np.sum(np.abs(a))
             else:
-                return np.sum(np.abs(a)**ord)**(1. / ord)
+                return np.sum(np.abs(a) ** ord) ** (1.0 / ord)
+
         return _oneD_norm_x
     # Implementation for matrices
     elif a.ndim == 2:
+
         def _two_D_norm_2(a, ord=None):
             return _oneD_norm_2(a.ravel())
+
         return _two_D_norm_2
 
 
 if __name__ == "__main__":
+
     @njit
     def use(a, ord=None):
         # simple test function to check that the overload works

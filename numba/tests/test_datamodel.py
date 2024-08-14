@@ -84,15 +84,15 @@ class TestTupleEmpty(test_factory()):
 
 
 class Test1DArrayOfInt32(test_factory()):
-    fe_type = types.Array(types.int32, 1, 'C')
+    fe_type = types.Array(types.int32, 1, "C")
 
 
 class Test2DArrayOfComplex128(test_factory()):
-    fe_type = types.Array(types.complex128, 2, 'C')
+    fe_type = types.Array(types.complex128, 2, "C")
 
 
 class Test0DArrayOfInt32(test_factory()):
-    fe_type = types.Array(types.int32, 0, 'C')
+    fe_type = types.Array(types.int32, 0, "C")
 
 
 class TestArgInfo(unittest.TestCase):
@@ -111,8 +111,7 @@ class TestArgInfo(unittest.TestCase):
         builder = ir.IRBuilder()
         builder.position_at_end(function.append_basic_block())
 
-        args = [ir.Constant(dmm.lookup(t).get_value_type(), None)
-                for t in fe_args]
+        args = [ir.Constant(dmm.lookup(t).get_value_type(), None) for t in fe_args]
 
         # Roundtrip
         values = fi.as_arguments(builder, args)
@@ -135,27 +134,23 @@ class TestArgInfo(unittest.TestCase):
         ll.parse_assembly(str(module))
 
     def test_int32_array_complex(self):
-        fe_args = [types.int32,
-                   types.Array(types.int32, 1, 'C'),
-                   types.complex64]
+        fe_args = [types.int32, types.Array(types.int32, 1, "C"), types.complex64]
         self._test_as_arguments(fe_args)
 
     def test_two_arrays(self):
-        fe_args = [types.Array(types.int32, 1, 'C')] * 2
+        fe_args = [types.Array(types.int32, 1, "C")] * 2
         self._test_as_arguments(fe_args)
 
     def test_two_0d_arrays(self):
-        fe_args = [types.Array(types.int32, 0, 'C')] * 2
+        fe_args = [types.Array(types.int32, 0, "C")] * 2
         self._test_as_arguments(fe_args)
 
     def test_tuples(self):
-        fe_args = [types.UniTuple(types.int32, 2),
-                   types.UniTuple(types.int32, 3)]
+        fe_args = [types.UniTuple(types.int32, 2), types.UniTuple(types.int32, 3)]
         self._test_as_arguments(fe_args)
         # Tuple of struct-likes
-        arrty = types.Array(types.int32, 1, 'C')
-        fe_args = [types.UniTuple(arrty, 2),
-                   types.UniTuple(arrty, 3)]
+        arrty = types.Array(types.int32, 1, "C")
+        fe_args = [types.UniTuple(arrty, 2), types.UniTuple(arrty, 3)]
         self._test_as_arguments(fe_args)
         # Nested tuple
         fe_args = [types.UniTuple(types.UniTuple(types.int32, 2), 3)]
@@ -163,15 +158,11 @@ class TestArgInfo(unittest.TestCase):
 
     def test_empty_tuples(self):
         # Empty tuple
-        fe_args = [types.UniTuple(types.int16, 0),
-                   types.Tuple(()),
-                   types.int32]
+        fe_args = [types.UniTuple(types.int16, 0), types.Tuple(()), types.int32]
         self._test_as_arguments(fe_args)
 
     def test_nested_empty_tuples(self):
-        fe_args = [types.int32,
-                   types.UniTuple(types.Tuple(()), 2),
-                   types.int64]
+        fe_args = [types.int32, types.UniTuple(types.Tuple(()), 2), types.int64]
         self._test_as_arguments(fe_args)
 
 
@@ -253,5 +244,5 @@ class TestDMMChaining(unittest.TestCase):
             inter_dmm.lookup(types.float32)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

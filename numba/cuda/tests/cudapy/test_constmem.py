@@ -5,30 +5,26 @@ from numba.cuda.testing import unittest, CUDATestCase
 from numba.core.config import ENABLE_CUDASIM
 
 CONST_EMPTY = np.array([])
-CONST1D = np.arange(10, dtype=np.float64) / 2.
-CONST2D = np.asfortranarray(
-    np.arange(100, dtype=np.int32).reshape(10, 10))
-CONST3D = ((np.arange(5 * 5 * 5, dtype=np.complex64).reshape(5, 5, 5) + 1j) /
-           2j)
+CONST1D = np.arange(10, dtype=np.float64) / 2.0
+CONST2D = np.asfortranarray(np.arange(100, dtype=np.int32).reshape(10, 10))
+CONST3D = (np.arange(5 * 5 * 5, dtype=np.complex64).reshape(5, 5, 5) + 1j) / 2j
 CONST3BYTES = np.arange(3, dtype=np.uint8)
 
-CONST_RECORD_EMPTY = np.array(
-    [],
-    dtype=[('x', float), ('y', int)])
-CONST_RECORD = np.array(
-    [(1.0, 2), (3.0, 4)],
-    dtype=[('x', float), ('y', int)])
+CONST_RECORD_EMPTY = np.array([], dtype=[("x", float), ("y", int)])
+CONST_RECORD = np.array([(1.0, 2), (3.0, 4)], dtype=[("x", float), ("y", int)])
 CONST_RECORD_ALIGN = np.array(
     [(1, 2, 3, 0xDEADBEEF, 8), (4, 5, 6, 0xBEEFDEAD, 10)],
     dtype=np.dtype(
         dtype=[
-            ('a', np.uint8),
-            ('b', np.uint8),
-            ('x', np.uint8),
-            ('y', np.uint32),
-            ('z', np.uint8),
+            ("a", np.uint8),
+            ("b", np.uint8),
+            ("x", np.uint8),
+            ("y", np.uint32),
+            ("z", np.uint8),
         ],
-        align=True))
+        align=True,
+    ),
+)
 
 
 def cuconstEmpty(A):
@@ -68,18 +64,18 @@ def cuconstRecEmpty(A):
 def cuconstRec(A, B):
     C = cuda.const.array_like(CONST_RECORD)
     i = cuda.grid(1)
-    A[i] = C[i]['x']
-    B[i] = C[i]['y']
+    A[i] = C[i]["x"]
+    B[i] = C[i]["y"]
 
 
 def cuconstRecAlign(A, B, C, D, E):
     Z = cuda.const.array_like(CONST_RECORD_ALIGN)
     i = cuda.grid(1)
-    A[i] = Z[i]['a']
-    B[i] = Z[i]['b']
-    C[i] = Z[i]['x']
-    D[i] = Z[i]['y']
-    E[i] = Z[i]['z']
+    A[i] = Z[i]["a"]
+    B[i] = Z[i]["b"]
+    C[i] = Z[i]["x"]
+    D[i] = Z[i]["y"]
+    E[i] = Z[i]["z"]
 
 
 def cuconstAlign(z):
@@ -99,50 +95,50 @@ class TestCudaConstantMemory(CUDATestCase):
 
         if not ENABLE_CUDASIM:
             self.assertIn(
-                'ld.const.f64',
+                "ld.const.f64",
                 jcuconst.inspect_asm(sig),
-                "as we're adding to it, load as a double")
+                "as we're adding to it, load as a double",
+            )
 
     def test_const_empty(self):
-        jcuconstEmpty = cuda.jit('void(int64[:])')(cuconstEmpty)
+        jcuconstEmpty = cuda.jit("void(int64[:])")(cuconstEmpty)
         A = np.full(1, fill_value=-1, dtype=np.int64)
         jcuconstEmpty[1, 1](A)
         self.assertTrue(np.all(A == 0))
 
     def test_const_align(self):
-        jcuconstAlign = cuda.jit('void(float64[:])')(cuconstAlign)
+        jcuconstAlign = cuda.jit("void(float64[:])")(cuconstAlign)
         A = np.full(3, fill_value=np.nan, dtype=float)
         jcuconstAlign[1, 3](A)
         self.assertTrue(np.all(A == (CONST3BYTES + CONST1D[:3])))
 
     def test_const_array_2d(self):
-        sig = (int32[:,:],)
+        sig = (int32[:, :],)
         jcuconst2d = cuda.jit(sig)(cuconst2d)
-        A = np.zeros_like(CONST2D, order='C')
+        A = np.zeros_like(CONST2D, order="C")
         jcuconst2d[(2, 2), (5, 5)](A)
         self.assertTrue(np.all(A == CONST2D))
 
         if not ENABLE_CUDASIM:
             self.assertIn(
-                'ld.const.u32',
-                jcuconst2d.inspect_asm(sig),
-                "load the ints as ints")
+                "ld.const.u32", jcuconst2d.inspect_asm(sig), "load the ints as ints"
+            )
 
     def test_const_array_3d(self):
-        sig = (complex64[:,:,:],)
+        sig = (complex64[:, :, :],)
         jcuconst3d = cuda.jit(sig)(cuconst3d)
-        A = np.zeros_like(CONST3D, order='F')
+        A = np.zeros_like(CONST3D, order="F")
         jcuconst3d[1, (5, 5, 5)](A)
         self.assertTrue(np.all(A == CONST3D))
 
         if not ENABLE_CUDASIM:
             asm = jcuconst3d.inspect_asm(sig)
-            complex_load = 'ld.const.v2.f32'
-            description = 'Load the complex as a vector of 2x f32'
+            complex_load = "ld.const.v2.f32"
+            description = "Load the complex as a vector of 2x f32"
             self.assertIn(complex_load, asm, description)
 
     def test_const_record_empty(self):
-        jcuconstRecEmpty = cuda.jit('void(int64[:])')(cuconstRecEmpty)
+        jcuconstRecEmpty = cuda.jit("void(int64[:])")(cuconstRecEmpty)
         A = np.full(1, fill_value=-1, dtype=np.int64)
         jcuconstRecEmpty[1, 1](A)
         self.assertTrue(np.all(A == 0))
@@ -153,8 +149,8 @@ class TestCudaConstantMemory(CUDATestCase):
         jcuconst = cuda.jit(cuconstRec).specialize(A, B)
 
         jcuconst[2, 1](A, B)
-        np.testing.assert_allclose(A, CONST_RECORD['x'])
-        np.testing.assert_allclose(B, CONST_RECORD['y'])
+        np.testing.assert_allclose(A, CONST_RECORD["x"])
+        np.testing.assert_allclose(B, CONST_RECORD["y"])
 
     def test_const_record_align(self):
         A = np.zeros(2, dtype=np.float64)
@@ -165,12 +161,12 @@ class TestCudaConstantMemory(CUDATestCase):
         jcuconst = cuda.jit(cuconstRecAlign).specialize(A, B, C, D, E)
 
         jcuconst[2, 1](A, B, C, D, E)
-        np.testing.assert_allclose(A, CONST_RECORD_ALIGN['a'])
-        np.testing.assert_allclose(B, CONST_RECORD_ALIGN['b'])
-        np.testing.assert_allclose(C, CONST_RECORD_ALIGN['x'])
-        np.testing.assert_allclose(D, CONST_RECORD_ALIGN['y'])
-        np.testing.assert_allclose(E, CONST_RECORD_ALIGN['z'])
+        np.testing.assert_allclose(A, CONST_RECORD_ALIGN["a"])
+        np.testing.assert_allclose(B, CONST_RECORD_ALIGN["b"])
+        np.testing.assert_allclose(C, CONST_RECORD_ALIGN["x"])
+        np.testing.assert_allclose(D, CONST_RECORD_ALIGN["y"])
+        np.testing.assert_allclose(E, CONST_RECORD_ALIGN["z"])
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

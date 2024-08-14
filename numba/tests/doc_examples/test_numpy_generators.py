@@ -34,5 +34,5 @@ class NumpyGeneratorUsageTest(unittest.TestCase):
             self.assertEqual(_np_res, _nb_res)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

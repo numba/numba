@@ -77,25 +77,13 @@ def record_read_2d_array(r, a):
 
 
 recordtype = np.dtype(
-    [
-        ('a', np.float64),
-        ('b', np.int32),
-        ('c', np.complex64),
-        ('d', (np.uint8, 5))
-    ],
-    align=True
+    [("a", np.float64), ("b", np.int32), ("c", np.complex64), ("d", (np.uint8, 5))],
+    align=True,
 )
 
-recordwitharray = np.dtype(
-    [
-        ('g', np.int32),
-        ('h', np.float32, 2)
-    ],
-    align=True
-)
+recordwitharray = np.dtype([("g", np.int32), ("h", np.float32, 2)], align=True)
 
-recordwith2darray = np.dtype([('i', np.int32),
-                              ('j', np.float32, (3, 2))])
+recordwith2darray = np.dtype([("i", np.int32), ("j", np.float32, (3, 2))])
 
 nested_array1_dtype = np.dtype([("array1", np.int16, (3,))], align=True)
 
@@ -104,12 +92,13 @@ nested_array2_dtype = np.dtype([("array2", np.int16, (3, 2))], align=True)
 
 # Functions used for "full array" tests
 
+
 def record_write_full_array(rec):
     rec.j[:, :] = np.ones((3, 2))
 
 
 def record_write_full_array_alt(rec):
-    rec['j'][:, :] = np.ones((3, 2))
+    rec["j"][:, :] = np.ones((3, 2))
 
 
 def recarray_set_record(ary, rec):
@@ -122,7 +111,7 @@ def recarray_write_array_of_nestedarray_broadcast(ary):
 
 
 def record_setitem_array(rec_source, rec_dest):
-    rec_dest['j'] = rec_source['j']
+    rec_dest["j"] = rec_source["j"]
 
 
 def recarray_write_array_of_nestedarray(ary):
@@ -135,7 +124,7 @@ def recarray_getitem_return(ary):
 
 
 def recarray_getitem_field_return(ary):
-    return ary['h']
+    return ary["h"]
 
 
 def recarray_getitem_field_return2(ary):
@@ -171,11 +160,11 @@ def record_read_2d_array01(ary):
 
 
 def assign_array_to_nested(dest, src):
-    dest['array1'] = src
+    dest["array1"] = src
 
 
 def assign_array_to_nested_2d(dest, src):
-    dest['array2'] = src
+    dest["array2"] = src
 
 
 class TestRecordDtype(CUDATestCase):
@@ -192,10 +181,10 @@ class TestRecordDtype(CUDATestCase):
         ary = self.sample1d
         for i in range(ary.size):
             x = i + 1
-            ary[i]['a'] = x / 2
-            ary[i]['b'] = x
-            ary[i]['c'] = x * 1j
-            ary[i]['d'] = "%d" % x
+            ary[i]["a"] = x / 2
+            ary[i]["b"] = x
+            ary[i]["c"] = x * 1j
+            ary[i]["d"] = "%d" % x
 
     def get_cfunc(self, pyfunc, argspec):
         return cuda.jit()(pyfunc)
@@ -221,7 +210,7 @@ class TestRecordDtype(CUDATestCase):
     def test_set_a(self):
         self._test_set_equal(set_a, 3.1415, types.float64)
         # Test again to check if coercion works
-        self._test_set_equal(set_a, 3., types.float32)
+        self._test_set_equal(set_a, 3.0, types.float32)
 
     def test_set_b(self):
         self._test_set_equal(set_b, 123, types.int32)
@@ -259,13 +248,13 @@ class TestRecordDtype(CUDATestCase):
         np.testing.assert_equal(rec[f], v)
 
     def test_rec_set_a(self):
-        self._test_rec_set(np.float64(1.5), record_set_a, 'a')
+        self._test_rec_set(np.float64(1.5), record_set_a, "a")
 
     def test_rec_set_b(self):
-        self._test_rec_set(np.int32(2), record_set_b, 'b')
+        self._test_rec_set(np.int32(2), record_set_b, "b")
 
     def test_rec_set_c(self):
-        self._test_rec_set(np.complex64(4.0 + 5.0j), record_set_c, 'c')
+        self._test_rec_set(np.complex64(4.0 + 5.0j), record_set_c, "c")
 
     def _test_rec_read(self, v, pyfunc, f):
         rec = self.sample1d.copy()[0]
@@ -277,81 +266,83 @@ class TestRecordDtype(CUDATestCase):
         np.testing.assert_equal(arr[0], v)
 
     def test_rec_read_a(self):
-        self._test_rec_read(np.float64(1.5), record_read_a, 'a')
+        self._test_rec_read(np.float64(1.5), record_read_a, "a")
 
     def test_rec_read_b(self):
-        self._test_rec_read(np.int32(2), record_read_b, 'b')
+        self._test_rec_read(np.int32(2), record_read_b, "b")
 
     def test_rec_read_c(self):
-        self._test_rec_read(np.complex64(4.0 + 5.0j), record_read_c, 'c')
+        self._test_rec_read(np.complex64(4.0 + 5.0j), record_read_c, "c")
 
     def test_record_write_1d_array(self):
-        '''
+        """
         Test writing to a 1D array within a structured type
-        '''
+        """
         rec = self.samplerec1darr.copy()
         nbrecord = numpy_support.from_dtype(recordwitharray)
         cfunc = self.get_cfunc(record_write_array, (nbrecord,))
 
         cfunc[1, 1](rec)
         expected = self.samplerec1darr.copy()
-        expected['g'] = 2
-        expected['h'][0] = 3.0
-        expected['h'][1] = 4.0
+        expected["g"] = 2
+        expected["h"][0] = 3.0
+        expected["h"][1] = 4.0
 
         np.testing.assert_equal(expected, rec)
 
     def test_record_write_2d_array(self):
-        '''
+        """
         Test writing to a 2D array within a structured type
-        '''
+        """
         rec = self.samplerec2darr.copy()
         nbrecord = numpy_support.from_dtype(recordwith2darray)
         cfunc = self.get_cfunc(record_write_2d_array, (nbrecord,))
         cfunc[1, 1](rec)
 
         expected = self.samplerec2darr.copy()
-        expected['i'] = 3
-        expected['j'][:] = np.asarray([5.0, 6.0, 7.0, 8.0, 9.0, 10.0],
-                                      np.float32).reshape(3, 2)
+        expected["i"] = 3
+        expected["j"][:] = np.asarray(
+            [5.0, 6.0, 7.0, 8.0, 9.0, 10.0], np.float32
+        ).reshape(3, 2)
         np.testing.assert_equal(expected, rec)
 
     def test_record_read_1d_array(self):
-        '''
+        """
         Test reading from a 1D array within a structured type
-        '''
+        """
         rec = self.samplerec1darr.copy()
-        rec['h'][0] = 4.0
-        rec['h'][1] = 5.0
+        rec["h"][0] = 4.0
+        rec["h"][1] = 5.0
 
         nbrecord = numpy_support.from_dtype(recordwitharray)
         cfunc = self.get_cfunc(record_read_array, (nbrecord,))
-        arr = np.zeros(2, dtype=rec['h'].dtype)
+        arr = np.zeros(2, dtype=rec["h"].dtype)
         cfunc[1, 1](rec, arr)
 
-        np.testing.assert_equal(rec['h'], arr)
+        np.testing.assert_equal(rec["h"], arr)
 
     def test_record_read_2d_array(self):
-        '''
+        """
         Test reading from a 2D array within a structured type
-        '''
+        """
         rec = self.samplerec2darr.copy()
-        rec['j'][:] = np.asarray([5.0, 6.0, 7.0, 8.0, 9.0, 10.0],
-                                 np.float32).reshape(3, 2)
+        rec["j"][:] = np.asarray([5.0, 6.0, 7.0, 8.0, 9.0, 10.0], np.float32).reshape(
+            3, 2
+        )
 
         nbrecord = numpy_support.from_dtype(recordwith2darray)
         cfunc = self.get_cfunc(record_read_2d_array, (nbrecord,))
-        arr = np.zeros((3,2), dtype=rec['j'].dtype)
+        arr = np.zeros((3, 2), dtype=rec["j"].dtype)
         cfunc[1, 1](rec, arr)
 
-        np.testing.assert_equal(rec['j'], arr)
+        np.testing.assert_equal(rec["j"], arr)
 
 
-@skip_on_cudasim('Structured array attr access not supported in simulator')
+@skip_on_cudasim("Structured array attr access not supported in simulator")
 class TestRecordDtypeWithStructArrays(TestRecordDtype):
-    '''
+    """
     Same as TestRecordDtype, but using structured arrays instead of recarrays.
-    '''
+    """
 
     def _createSampleArrays(self):
         self.sample1d = np.zeros(3, dtype=recordtype)
@@ -405,8 +396,9 @@ class TestNestedArrays(CUDATestCase):
     def test_record_read_2d_array(self):
         # Test reading from a 2D array within a structured type
         nbval = np.recarray(1, dtype=recordwith2darray)
-        nbval[0].j = np.asarray([1.5, 2.5, 3.5, 4.5, 5.5, 6.5],
-                                np.float32).reshape(3, 2)
+        nbval[0].j = np.asarray([1.5, 2.5, 3.5, 4.5, 5.5, 6.5], np.float32).reshape(
+            3, 2
+        )
         cfunc = self.get_cfunc(record_read_2d_array00, np.float32)
         res = cfunc(nbval[0])
         np.testing.assert_equal(res, nbval[0].j[0, 0])
@@ -422,12 +414,15 @@ class TestNestedArrays(CUDATestCase):
     def test_setitem(self):
         def gen():
             nbarr1 = np.recarray(1, dtype=recordwith2darray)
-            nbarr1[0] = np.array([(1, ((1, 2), (4, 5), (2, 3)))],
-                                 dtype=recordwith2darray)[0]
+            nbarr1[0] = np.array(
+                [(1, ((1, 2), (4, 5), (2, 3)))], dtype=recordwith2darray
+            )[0]
             nbarr2 = np.recarray(1, dtype=recordwith2darray)
-            nbarr2[0] = np.array([(10, ((10, 20), (40, 50), (20, 30)))],
-                                 dtype=recordwith2darray)[0]
+            nbarr2[0] = np.array(
+                [(10, ((10, 20), (40, 50), (20, 30)))], dtype=recordwith2darray
+            )[0]
             return nbarr1[0], nbarr2[0]
+
         pyfunc = record_setitem_array
         pyargs = gen()
         pyfunc(*pyargs)
@@ -453,7 +448,7 @@ class TestNestedArrays(CUDATestCase):
 
     # Writing to records / recarrays
 
-    @skip_on_cudasim('Structured array attr access not supported in simulator')
+    @skip_on_cudasim("Structured array attr access not supported in simulator")
     def test_set_record(self):
         # Test setting an entire record
         rec = np.ones(2, dtype=recordwith2darray).view(np.recarray)[0]
@@ -492,20 +487,18 @@ class TestNestedArrays(CUDATestCase):
         np.testing.assert_array_equal(expected, got)
 
     def test_issue_7693(self):
-        src_dtype = np.dtype([
-            ("user", np.float64),
-            ("array", np.int16, (3,))],
-            align=True)
+        src_dtype = np.dtype(
+            [("user", np.float64), ("array", np.int16, (3,))], align=True
+        )
 
-        dest_dtype = np.dtype([
-            ("user1", np.float64),
-            ("array1", np.int16, (3,))],
-            align=True)
+        dest_dtype = np.dtype(
+            [("user1", np.float64), ("array1", np.int16, (3,))], align=True
+        )
 
         @cuda.jit
         def copy(index, src, dest):
-            dest['user1'] = src[index]['user']
-            dest['array1'] = src[index]['array']
+            dest["user1"] = src[index]["user"]
+            dest["array1"] = src[index]["array"]
 
         source = np.zeros(2, dtype=src_dtype)
         got = np.zeros(2, dtype=dest_dtype)
@@ -528,10 +521,11 @@ class TestNestedArrays(CUDATestCase):
         # This test returning a record when passing an array and
         # return the first item when passing a record
         nbarr = np.recarray(2, dtype=recordwith2darray)
-        nbarr[0] = np.array([(1, ((1,2),(4,5),(2,3)))],
-                            dtype=recordwith2darray)[0]
-        for arg, retty in [(nbarr, recordwith2darray),
-                           (nbarr[0], (np.float32, (3, 2)))]:
+        nbarr[0] = np.array([(1, ((1, 2), (4, 5), (2, 3)))], dtype=recordwith2darray)[0]
+        for arg, retty in [
+            (nbarr, recordwith2darray),
+            (nbarr[0], (np.float32, (3, 2))),
+        ]:
             pyfunc = recarray_getitem_field_return2_2d
             arr_expected = pyfunc(arg)
             cfunc = self.get_cfunc(pyfunc, retty)
@@ -545,10 +539,12 @@ class TestNestedArrays(CUDATestCase):
         # This tests returning a array of nestedarrays when passing an array and
         # returning a nestedarray when passing a record
         nbarr = np.recarray(2, dtype=recordwitharray)
-        nbarr[0] = np.array([(1, (2,3))], dtype=recordwitharray)[0]
+        nbarr[0] = np.array([(1, (2, 3))], dtype=recordwitharray)[0]
         for arg, retty in [(nbarr, recordwitharray), (nbarr[0], np.float32)]:
-            for pyfunc in [recarray_getitem_field_return,
-                           recarray_getitem_field_return2]:
+            for pyfunc in [
+                recarray_getitem_field_return,
+                recarray_getitem_field_return2,
+            ]:
                 arr_expected = pyfunc(arg)
                 cfunc = self.get_cfunc(pyfunc, retty)
                 arr_res = cfunc(arg)
@@ -570,17 +566,17 @@ class TestNestedArrays(CUDATestCase):
     def test_return_array(self):
         # Test getitem record AND array within record and returning it
         nbval = np.recarray(2, dtype=recordwitharray)
-        nbval[0] = np.array([(1, (2,3))], dtype=recordwitharray)[0]
+        nbval[0] = np.array([(1, (2, 3))], dtype=recordwitharray)[0]
         pyfunc = record_read_array0
         arr_expected = pyfunc(nbval)
         cfunc = self.get_cfunc(pyfunc, np.float32)
         arr_res = cfunc(nbval)
         np.testing.assert_equal(arr_expected, arr_res)
 
-    @skip_on_cudasim('Will unexpectedly pass on cudasim')
+    @skip_on_cudasim("Will unexpectedly pass on cudasim")
     @unittest.expectedFailure
     def test_set_array(self):
-        #Test setting an entire array within one record
+        # Test setting an entire array within one record
         arr = np.zeros(2, dtype=recordwith2darray).view(np.recarray)
         rec = arr[0]
         nbarr = np.zeros(2, dtype=recordwith2darray).view(np.recarray)
@@ -597,8 +593,8 @@ class TestNestedArrays(CUDATestCase):
         arr = np.zeros(2, dtype=recordwith2darray).view(np.recarray)
         nbarr = np.zeros(2, dtype=recordwith2darray).view(np.recarray)
         for pyfunc in (
-                recarray_write_array_of_nestedarray_broadcast,
-                recarray_write_array_of_nestedarray,
+            recarray_write_array_of_nestedarray_broadcast,
+            recarray_write_array_of_nestedarray,
         ):
             arr_expected = pyfunc(arr)
             cfunc = self.get_cfunc(pyfunc, nbarr.dtype)
@@ -606,5 +602,5 @@ class TestNestedArrays(CUDATestCase):
             np.testing.assert_equal(arr_res, arr_expected)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

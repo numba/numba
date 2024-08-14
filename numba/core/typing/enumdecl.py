@@ -1,10 +1,15 @@
 """
 Typing for enums.
 """
+
 import operator
 from numba.core import types
-from numba.core.typing.templates import (AbstractTemplate, AttributeTemplate,
-                                         signature, Registry)
+from numba.core.typing.templates import (
+    AbstractTemplate,
+    AttributeTemplate,
+    signature,
+    Registry,
+)
 
 registry = Registry()
 infer = registry.register
@@ -38,8 +43,7 @@ class EnumClassStaticGetItem(AbstractTemplate):
 
     def generic(self, args, kws):
         enum, idx = args
-        if (isinstance(enum, types.EnumClass)
-                and idx in enum.instance_class.__members__):
+        if isinstance(enum, types.EnumClass) and idx in enum.instance_class.__members__:
             return signature(enum.member_type, *args)
 
 
@@ -47,16 +51,17 @@ class EnumCompare(AbstractTemplate):
 
     def generic(self, args, kws):
         [lhs, rhs] = args
-        if (isinstance(lhs, types.EnumMember)
-                and isinstance(rhs, types.EnumMember)
-                and lhs == rhs):
+        if (
+            isinstance(lhs, types.EnumMember)
+            and isinstance(rhs, types.EnumMember)
+            and lhs == rhs
+        ):
             return signature(types.boolean, lhs, rhs)
 
 
 @infer_global(operator.eq)
 class EnumEq(EnumCompare):
     pass
-
 
 
 @infer_global(operator.ne)

@@ -8,8 +8,8 @@ from numba.core.extending import intrinsic
 
 @intrinsic
 def exception_check(typingctx):
-    """An intrinsic to check if an exception is raised
-    """
+    """An intrinsic to check if an exception is raised"""
+
     def codegen(context, builder, signature, args):
         nrt = context.nrt
         return nrt.eh_check(builder)
@@ -20,8 +20,8 @@ def exception_check(typingctx):
 
 @intrinsic
 def mark_try_block(typingctx):
-    """An intrinsic to mark the start of a *try* block.
-    """
+    """An intrinsic to mark the start of a *try* block."""
+
     def codegen(context, builder, signature, args):
         nrt = context.nrt
         nrt.eh_try(builder)
@@ -33,8 +33,8 @@ def mark_try_block(typingctx):
 
 @intrinsic
 def end_try_block(typingctx):
-    """An intrinsic to mark the end of a *try* block.
-    """
+    """An intrinsic to mark the end of a *try* block."""
+
     def codegen(context, builder, signature, args):
         nrt = context.nrt
         nrt.eh_end_try(builder)

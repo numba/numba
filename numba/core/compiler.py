@@ -3,40 +3,63 @@ import copy
 import warnings
 from numba.core.tracing import event
 
-from numba.core import (utils, errors, interpreter, bytecode, postproc, config,
-                        callconv, cpu)
+from numba.core import (
+    utils,
+    errors,
+    interpreter,
+    bytecode,
+    postproc,
+    config,
+    callconv,
+    cpu,
+)
 from numba.parfors.parfor import ParforDiagnostics
 from numba.core.errors import CompilerError
 from numba.core.environment import lookup_environment
 
 from numba.core.compiler_machinery import PassManager
 
-from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode,
-                                       FixupArgs, IRProcessing, DeadBranchPrune,
-                                       RewriteSemanticConstants,
-                                       InlineClosureLikes, GenericRewrites,
-                                       WithLifting, InlineInlinables,
-                                       FindLiterallyCalls,
-                                       MakeFunctionToJitFunction,
-                                       CanonicalizeLoopExit,
-                                       CanonicalizeLoopEntry, LiteralUnroll,
-                                       ReconstructSSA, RewriteDynamicRaises,
-                                       LiteralPropagationSubPipelinePass,
-                                       RVSDGFrontend,
-                                       )
+from numba.core.untyped_passes import (
+    ExtractByteCode,
+    TranslateByteCode,
+    FixupArgs,
+    IRProcessing,
+    DeadBranchPrune,
+    RewriteSemanticConstants,
+    InlineClosureLikes,
+    GenericRewrites,
+    WithLifting,
+    InlineInlinables,
+    FindLiterallyCalls,
+    MakeFunctionToJitFunction,
+    CanonicalizeLoopExit,
+    CanonicalizeLoopEntry,
+    LiteralUnroll,
+    ReconstructSSA,
+    RewriteDynamicRaises,
+    LiteralPropagationSubPipelinePass,
+    RVSDGFrontend,
+)
 
-from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
-                                     NopythonRewrites, PreParforPass,
-                                     ParforPass, DumpParforDiagnostics,
-                                     IRLegalization, NoPythonBackend,
-                                     InlineOverloads, PreLowerStripPhis,
-                                     NativeLowering, NativeParforLowering,
-                                     NoPythonSupportedFeatureValidation,
-                                     ParforFusionPass, ParforPreLoweringPass
-                                     )
+from numba.core.typed_passes import (
+    NopythonTypeInference,
+    AnnotateTypes,
+    NopythonRewrites,
+    PreParforPass,
+    ParforPass,
+    DumpParforDiagnostics,
+    IRLegalization,
+    NoPythonBackend,
+    InlineOverloads,
+    PreLowerStripPhis,
+    NativeLowering,
+    NativeParforLowering,
+    NoPythonSupportedFeatureValidation,
+    ParforFusionPass,
+    ParforPreLoweringPass,
+)
 
-from numba.core.object_mode_passes import (ObjectModeFrontEnd,
-                                           ObjectModeBackEnd)
+from numba.core.object_mode_passes import ObjectModeFrontEnd, ObjectModeBackEnd
 from numba.core.targetconfig import TargetConfig, Option, ConfigStack
 
 
@@ -144,22 +167,25 @@ detail""",
     dbg_extend_lifetimes = Option(
         type=bool,
         default=False,
-        doc=("Extend variable lifetime for debugging. "
-             "This automatically turns on with debug=True."),
+        doc=(
+            "Extend variable lifetime for debugging. "
+            "This automatically turns on with debug=True."
+        ),
     )
 
     dbg_optnone = Option(
         type=bool,
         default=False,
-        doc=("Disable optimization for debug. "
-             "Equivalent to adding optnone attribute in the LLVM Function.")
+        doc=(
+            "Disable optimization for debug. "
+            "Equivalent to adding optnone attribute in the LLVM Function."
+        ),
     )
 
     dbg_directives_only = Option(
         type=bool,
         default=False,
-        doc=("Make debug emissions directives-only. "
-             "Used when generating lineinfo.")
+        doc=("Make debug emissions directives-only. " "Used when generating lineinfo."),
     )
 
 
@@ -167,24 +193,25 @@ DEFAULT_FLAGS = Flags()
 DEFAULT_FLAGS.nrt = True
 
 
-CR_FIELDS = ["typing_context",
-             "target_context",
-             "entry_point",
-             "typing_error",
-             "type_annotation",
-             "signature",
-             "objectmode",
-             "lifted",
-             "fndesc",
-             "library",
-             "call_helper",
-             "environment",
-             "metadata",
-             # List of functions to call to initialize on unserialization
-             # (i.e cache load).
-             "reload_init",
-             "referenced_envs",
-             ]
+CR_FIELDS = [
+    "typing_context",
+    "target_context",
+    "entry_point",
+    "typing_error",
+    "type_annotation",
+    "signature",
+    "objectmode",
+    "lifted",
+    "fndesc",
+    "library",
+    "call_helper",
+    "environment",
+    "metadata",
+    # List of functions to call to initialize on unserialization
+    # (i.e cache load).
+    "reload_init",
+    "referenced_envs",
+]
 
 
 class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
@@ -206,13 +233,20 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
         fndesc.typemap = fndesc.calltypes = None
         # Include all referenced environments
         referenced_envs = self._find_referenced_environments()
-        return (libdata, self.fndesc, self.environment, self.signature,
-                self.objectmode, self.lifted, typeann, self.reload_init,
-                tuple(referenced_envs))
+        return (
+            libdata,
+            self.fndesc,
+            self.environment,
+            self.signature,
+            self.objectmode,
+            self.lifted,
+            typeann,
+            self.reload_init,
+            tuple(referenced_envs),
+        )
 
     def _find_referenced_environments(self):
-        """Returns a list of referenced environments
-        """
+        """Returns a list of referenced environments"""
         mod = self.library._final_module
         # Find environments
         referenced_envs = []
@@ -226,9 +260,19 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
         return referenced_envs
 
     @classmethod
-    def _rebuild(cls, target_context, libdata, fndesc, env,
-                 signature, objectmode, lifted, typeann,
-                 reload_init, referenced_envs):
+    def _rebuild(
+        cls,
+        target_context,
+        libdata,
+        fndesc,
+        env,
+        signature,
+        objectmode,
+        lifted,
+        typeann,
+        reload_init,
+        referenced_envs,
+    ):
         if reload_init:
             # Re-run all
             for fn in reload_init:
@@ -236,22 +280,23 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
 
         library = target_context.codegen().unserialize_library(libdata)
         cfunc = target_context.get_executable(library, fndesc, env)
-        cr = cls(target_context=target_context,
-                 typing_context=target_context.typing_context,
-                 library=library,
-                 environment=env,
-                 entry_point=cfunc,
-                 fndesc=fndesc,
-                 type_annotation=typeann,
-                 signature=signature,
-                 objectmode=objectmode,
-                 lifted=lifted,
-                 typing_error=None,
-                 call_helper=None,
-                 metadata=None,  # Do not store, arbitrary & potentially large!
-                 reload_init=reload_init,
-                 referenced_envs=referenced_envs,
-                 )
+        cr = cls(
+            target_context=target_context,
+            typing_context=target_context.typing_context,
+            library=library,
+            environment=env,
+            entry_point=cfunc,
+            fndesc=fndesc,
+            type_annotation=typeann,
+            signature=signature,
+            objectmode=objectmode,
+            lifted=lifted,
+            typing_error=None,
+            call_helper=None,
+            metadata=None,  # Do not store, arbitrary & potentially large!
+            reload_init=reload_init,
+            referenced_envs=referenced_envs,
+        )
 
         # Load Environments
         for env in referenced_envs:
@@ -263,18 +308,21 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
     def codegen(self):
         return self.target_context.codegen()
 
-    def dump(self, tab=''):
-        print(f'{tab}DUMP {type(self).__name__} {self.entry_point}')
-        self.signature.dump(tab=tab + '  ')
-        print(f'{tab}END DUMP')
+    def dump(self, tab=""):
+        print(f"{tab}DUMP {type(self).__name__} {self.entry_point}")
+        self.signature.dump(tab=tab + "  ")
+        print(f"{tab}END DUMP")
 
 
-_LowerResult = namedtuple("_LowerResult", [
-    "fndesc",
-    "call_helper",
-    "cfunc",
-    "env",
-])
+_LowerResult = namedtuple(
+    "_LowerResult",
+    [
+        "fndesc",
+        "call_helper",
+        "cfunc",
+        "env",
+    ],
+)
 
 
 def sanitize_compile_result_entries(entries):
@@ -287,9 +335,9 @@ def sanitize_compile_result_entries(entries):
     for k in missing:
         entries[k] = None
     # Avoid keeping alive traceback variables
-    err = entries['typing_error']
+    err = entries["typing_error"]
     if err is not None:
-        entries['typing_error'] = err.with_traceback(None)
+        entries["typing_error"] = err.with_traceback(None)
     return entries
 
 
@@ -313,8 +361,10 @@ def run_frontend(func, inline_closures=False, emit_dels=False):
     func_ir = interp.interpret(bc)
     if inline_closures:
         from numba.core.inline_closurecall import InlineClosureCallPass
-        inline_pass = InlineClosureCallPass(func_ir, cpu.ParallelOptions(False),
-                                            {}, False)
+
+        inline_pass = InlineClosureCallPass(
+            func_ir, cpu.ParallelOptions(False), {}, False
+        )
         inline_pass.run()
     post_proc = postproc.PostProcessor(func_ir)
     post_proc.run(emit_dels)
@@ -325,7 +375,8 @@ class _CompileStatus(object):
     """
     Describes the state of compilation. Used like a C record.
     """
-    __slots__ = ['fail_reason', 'can_fallback']
+
+    __slots__ = ["fail_reason", "can_fallback"]
 
     def __init__(self, can_fallback):
         self.fail_reason = None
@@ -335,7 +386,7 @@ class _CompileStatus(object):
         vals = []
         for k in self.__slots__:
             vals.append("{k}={v}".format(k=k, v=getattr(self, k)))
-        return ', '.join(vals)
+        return ", ".join(vals)
 
 
 class _EarlyPipelineCompletion(Exception):
@@ -369,17 +420,17 @@ def _make_subtarget(targetctx, flags):
     """
     subtargetoptions = {}
     if flags.debuginfo:
-        subtargetoptions['enable_debuginfo'] = True
+        subtargetoptions["enable_debuginfo"] = True
     if flags.boundscheck:
-        subtargetoptions['enable_boundscheck'] = True
+        subtargetoptions["enable_boundscheck"] = True
     if flags.nrt:
-        subtargetoptions['enable_nrt'] = True
+        subtargetoptions["enable_nrt"] = True
     if flags.auto_parallel:
-        subtargetoptions['auto_parallel'] = flags.auto_parallel
+        subtargetoptions["auto_parallel"] = flags.auto_parallel
     if flags.fastmath:
-        subtargetoptions['fastmath'] = flags.fastmath
+        subtargetoptions["fastmath"] = flags.fastmath
     error_model = callconv.create_error_model(flags.error_model, targetctx)
-    subtargetoptions['error_model'] = error_model
+    subtargetoptions["error_model"] = error_model
 
     return targetctx.subtarget(**subtargetoptions)
 
@@ -389,8 +440,7 @@ class CompilerBase(object):
     Stores and manages states for the compiler
     """
 
-    def __init__(self, typingctx, targetctx, library, args, return_type, flags,
-                 locals):
+    def __init__(self, typingctx, targetctx, library, args, return_type, flags, locals):
         # Make sure the environment is reloaded
         config.reload_config()
         typingctx.refresh()
@@ -423,9 +473,8 @@ class CompilerBase(object):
 
         # parfor diagnostics info, add to metadata
         self.state.parfor_diagnostics = ParforDiagnostics()
-        self.state.metadata['parfor_diagnostics'] = \
-            self.state.parfor_diagnostics
-        self.state.metadata['parfors'] = {}
+        self.state.metadata["parfor_diagnostics"] = self.state.parfor_diagnostics
+        self.state.metadata["parfors"] = {}
 
         self.state.status = _CompileStatus(
             can_fallback=self.state.flags.enable_pyobject
@@ -450,8 +499,7 @@ class CompilerBase(object):
         return self._compile_ir()
 
     def define_pipelines(self):
-        """Child classes override this to customize the pipelines in use.
-        """
+        """Child classes override this to customize the pipelines in use."""
         raise NotImplementedError()
 
     def _compile_core(self):
@@ -462,12 +510,13 @@ class CompilerBase(object):
             pms = self.define_pipelines()
             for pm in pms:
                 pipeline_name = pm.pipeline_name
-                func_name = "%s.%s" % (self.state.func_id.modname,
-                                       self.state.func_id.func_qualname)
+                func_name = "%s.%s" % (
+                    self.state.func_id.modname,
+                    self.state.func_id.func_qualname,
+                )
 
                 event("Pipeline: %s for %s" % (pipeline_name, func_name))
-                self.state.metadata['pipeline_times'] = {pipeline_name:
-                                                         pm.exec_times}
+                self.state.metadata["pipeline_times"] = {pipeline_name: pm.exec_times}
                 is_final_pipeline = pm == pms[-1]
                 res = None
                 try:
@@ -478,8 +527,9 @@ class CompilerBase(object):
                     res = e.result
                     break
                 except Exception as e:
-                    if (utils.use_new_style_errors() and not
-                            isinstance(e, errors.NumbaError)):
+                    if utils.use_new_style_errors() and not isinstance(
+                        e, errors.NumbaError
+                    ):
                         raise e
 
                     self.state.status.fail_reason = e
@@ -516,16 +566,19 @@ class CompilerBase(object):
 
 
 class Compiler(CompilerBase):
-    """The default compiler
-    """
+    """The default compiler"""
 
     def define_pipelines(self):
         if self.state.flags.force_pyobject:
             # either object mode
-            return [DefaultPassBuilder.define_objectmode_pipeline(self.state),]
+            return [
+                DefaultPassBuilder.define_objectmode_pipeline(self.state),
+            ]
         else:
             # or nopython mode
-            return [DefaultPassBuilder.define_nopython_pipeline(self.state),]
+            return [
+                DefaultPassBuilder.define_nopython_pipeline(self.state),
+            ]
 
 
 class DefaultPassBuilder(object):
@@ -539,10 +592,10 @@ class DefaultPassBuilder(object):
       - untyped
       - nopython lowering
     """
+
     @staticmethod
-    def define_nopython_pipeline(state, name='nopython'):
-        """Returns an nopython mode pipeline based PassManager
-        """
+    def define_nopython_pipeline(state, name="nopython"):
+        """Returns an nopython mode pipeline based PassManager"""
         # compose pipeline from untyped, typed and lowering parts
         dpb = DefaultPassBuilder
         pm = PassManager(name)
@@ -559,13 +612,14 @@ class DefaultPassBuilder(object):
         return pm
 
     @staticmethod
-    def define_nopython_lowering_pipeline(state, name='nopython_lowering'):
+    def define_nopython_lowering_pipeline(state, name="nopython_lowering"):
         pm = PassManager(name)
         # legalise
-        pm.add_pass(NoPythonSupportedFeatureValidation,
-                    "ensure features that are in use are in a valid form")
-        pm.add_pass(IRLegalization,
-                    "ensure IR is legal prior to lowering")
+        pm.add_pass(
+            NoPythonSupportedFeatureValidation,
+            "ensure features that are in use are in a valid form",
+        )
+        pm.add_pass(IRLegalization, "ensure IR is legal prior to lowering")
         # Annotate only once legalized
         pm.add_pass(AnnotateTypes, "annotate types")
         # lower
@@ -580,13 +634,15 @@ class DefaultPassBuilder(object):
 
     @staticmethod
     def define_parfor_gufunc_nopython_lowering_pipeline(
-            state, name='parfor_gufunc_nopython_lowering'):
+        state, name="parfor_gufunc_nopython_lowering"
+    ):
         pm = PassManager(name)
         # legalise
-        pm.add_pass(NoPythonSupportedFeatureValidation,
-                    "ensure features that are in use are in a valid form")
-        pm.add_pass(IRLegalization,
-                    "ensure IR is legal prior to lowering")
+        pm.add_pass(
+            NoPythonSupportedFeatureValidation,
+            "ensure features that are in use are in a valid form",
+        )
+        pm.add_pass(IRLegalization, "ensure IR is legal prior to lowering")
         # Annotate only once legalized
         pm.add_pass(AnnotateTypes, "annotate types")
         # lower
@@ -635,7 +691,7 @@ class DefaultPassBuilder(object):
         return pm
 
     @staticmethod
-    def define_untyped_pipeline(state, name='untyped'):
+    def define_untyped_pipeline(state, name="untyped"):
         """Returns an untyped part of the nopython pipeline"""
         pm = PassManager(name)
         if config.USE_RVSDG_FRONTEND:
@@ -653,8 +709,7 @@ class DefaultPassBuilder(object):
 
         # inline closures early in case they are using nonlocal's
         # see issue #6585.
-        pm.add_pass(InlineClosureLikes,
-                    "inline calls to locally defined closures")
+        pm.add_pass(InlineClosureLikes, "inline calls to locally defined closures")
 
         # pre typing
         if not state.flags.no_rewrites:
@@ -665,8 +720,9 @@ class DefaultPassBuilder(object):
         pm.add_pass(RewriteDynamicRaises, "rewrite dynamic raises")
 
         # convert any remaining closures into functions
-        pm.add_pass(MakeFunctionToJitFunction,
-                    "convert make_function into JIT functions")
+        pm.add_pass(
+            MakeFunctionToJitFunction, "convert make_function into JIT functions"
+        )
         # inline functions that have been determined as inlinable and rerun
         # branch pruning, this needs to be run after closures are inlined as
         # the IR repr of a closure masks call sites if an inlinable is called
@@ -687,9 +743,8 @@ class DefaultPassBuilder(object):
         return pm
 
     @staticmethod
-    def define_objectmode_pipeline(state, name='object'):
-        """Returns an object-mode pipeline based PassManager
-        """
+    def define_objectmode_pipeline(state, name="object"):
+        """Returns an object-mode pipeline based PassManager"""
         pm = PassManager(name)
         if state.func_ir is None:
             pm.add_pass(TranslateByteCode, "analyzing bytecode")
@@ -705,11 +760,11 @@ class DefaultPassBuilder(object):
         pm.add_pass(CanonicalizeLoopExit, "canonicalize loop exit")
 
         pm.add_pass(ObjectModeFrontEnd, "object mode frontend")
-        pm.add_pass(InlineClosureLikes,
-                    "inline calls to locally defined closures")
+        pm.add_pass(InlineClosureLikes, "inline calls to locally defined closures")
         # convert any remaining closures into functions
-        pm.add_pass(MakeFunctionToJitFunction,
-                    "convert make_function into JIT functions")
+        pm.add_pass(
+            MakeFunctionToJitFunction, "convert make_function into JIT functions"
+        )
         pm.add_pass(IRLegalization, "ensure IR is legal prior to lowering")
         pm.add_pass(AnnotateTypes, "annotate types")
         pm.add_pass(ObjectModeBackEnd, "object mode backend")
@@ -717,8 +772,17 @@ class DefaultPassBuilder(object):
         return pm
 
 
-def compile_extra(typingctx, targetctx, func, args, return_type, flags,
-                  locals, library=None, pipeline_class=Compiler):
+def compile_extra(
+    typingctx,
+    targetctx,
+    func,
+    args,
+    return_type,
+    flags,
+    locals,
+    library=None,
+    pipeline_class=Compiler,
+):
     """Compiler entry point
 
     Parameter
@@ -741,14 +805,26 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
     pipeline_class : type like numba.compiler.CompilerBase
         compiler pipeline
     """
-    pipeline = pipeline_class(typingctx, targetctx, library,
-                              args, return_type, flags, locals)
+    pipeline = pipeline_class(
+        typingctx, targetctx, library, args, return_type, flags, locals
+    )
     return pipeline.compile_extra(func)
 
 
-def compile_ir(typingctx, targetctx, func_ir, args, return_type, flags,
-               locals, lifted=(), lifted_from=None, is_lifted_loop=False,
-               library=None, pipeline_class=Compiler):
+def compile_ir(
+    typingctx,
+    targetctx,
+    func_ir,
+    args,
+    return_type,
+    flags,
+    locals,
+    lifted=(),
+    lifted_from=None,
+    is_lifted_loop=False,
+    library=None,
+    pipeline_class=Compiler,
+):
     """
     Compile a function with the given IR.
 
@@ -775,10 +851,12 @@ def compile_ir(typingctx, targetctx, func_ir, args, return_type, flags,
         norw_flags.no_rewrites = True
 
         def compile_local(the_ir, the_flags):
-            pipeline = pipeline_class(typingctx, targetctx, library,
-                                      args, return_type, the_flags, locals)
-            return pipeline.compile_ir(func_ir=the_ir, lifted=lifted,
-                                       lifted_from=lifted_from)
+            pipeline = pipeline_class(
+                typingctx, targetctx, library, args, return_type, the_flags, locals
+            )
+            return pipeline.compile_ir(
+                func_ir=the_ir, lifted=lifted, lifted_from=lifted_from
+            )
 
         # compile with rewrites off, IR shouldn't be mutated irreparably
         norw_cres = compile_local(func_ir.copy(), norw_flags)
@@ -804,17 +882,19 @@ def compile_ir(typingctx, targetctx, func_ir, args, return_type, flags,
         return cres
 
     else:
-        pipeline = pipeline_class(typingctx, targetctx, library,
-                                  args, return_type, flags, locals)
-        return pipeline.compile_ir(func_ir=func_ir, lifted=lifted,
-                                   lifted_from=lifted_from)
+        pipeline = pipeline_class(
+            typingctx, targetctx, library, args, return_type, flags, locals
+        )
+        return pipeline.compile_ir(
+            func_ir=func_ir, lifted=lifted, lifted_from=lifted_from
+        )
 
 
-def compile_internal(typingctx, targetctx, library,
-                     func, args, return_type, flags, locals):
+def compile_internal(
+    typingctx, targetctx, library, func, args, return_type, flags, locals
+):
     """
     For internal use only.
     """
-    pipeline = Compiler(typingctx, targetctx, library,
-                        args, return_type, flags, locals)
+    pipeline = Compiler(typingctx, targetctx, library, args, return_type, flags, locals)
     return pipeline.compile_extra(func)

@@ -6,13 +6,15 @@ except ImportError as e:
     base_url = "https://numba.readthedocs.io/en/stable"
     dev_url = f"{base_url}/developer/contributing.html"
     user_url = f"{base_url}/user/faq.html#numba-could-not-be-imported"
-    dashes = '-' * 80
-    msg = (f"Numba could not be imported.\n{dashes}\nIf you are seeing this "
-           "message and are undertaking Numba development work, you may need "
-           "to rebuild Numba.\nPlease see the development set up guide:\n\n"
-           f"{dev_url}.\n\n{dashes}\nIf you are not working on Numba "
-           f"development, the original error was: '{str(e)}'.\nFor help, "
-           f"please visit:\n\n{user_url}\n")
+    dashes = "-" * 80
+    msg = (
+        f"Numba could not be imported.\n{dashes}\nIf you are seeing this "
+        "message and are undertaking Numba development work, you may need "
+        "to rebuild Numba.\nPlease see the development set up guide:\n\n"
+        f"{dev_url}.\n\n{dashes}\nIf you are not working on Numba "
+        f"development, the original error was: '{str(e)}'.\nFor help, "
+        f"please visit:\n\n{user_url}\n"
+    )
     raise ImportError(msg)
 
 from numba.core.typeconv import castgraph, Conversion
@@ -22,25 +24,28 @@ from numba.core import types
 class TypeManager(object):
 
     # The character codes used by the C/C++ API (_typeconv.cpp)
-    _conversion_codes = {Conversion.safe: ord("s"),
-                         Conversion.unsafe: ord("u"),
-                         Conversion.promote: ord("p"),}
+    _conversion_codes = {
+        Conversion.safe: ord("s"),
+        Conversion.unsafe: ord("u"),
+        Conversion.promote: ord("p"),
+    }
 
     def __init__(self):
         self._ptr = _typeconv.new_type_manager()
         self._types = set()
 
-    def select_overload(self, sig, overloads, allow_unsafe,
-                        exact_match_required):
+    def select_overload(self, sig, overloads, allow_unsafe, exact_match_required):
         sig = [t._code for t in sig]
         overloads = [[t._code for t in s] for s in overloads]
-        return _typeconv.select_overload(self._ptr, sig, overloads,
-                                         allow_unsafe, exact_match_required)
+        return _typeconv.select_overload(
+            self._ptr, sig, overloads, allow_unsafe, exact_match_required
+        )
 
     def check_compatible(self, fromty, toty):
         if not isinstance(toty, types.Type):
-            raise ValueError("Specified type '%s' (%s) is not a Numba type" %
-                             (toty, type(toty)))
+            raise ValueError(
+                "Specified type '%s' (%s) is not a Numba type" % (toty, type(toty))
+            )
         name = _typeconv.check_compatible(self._ptr, fromty._code, toty._code)
         conv = Conversion[name] if name is not None else None
         assert conv is not Conversion.nil
@@ -71,6 +76,7 @@ class TypeCastingRules(object):
     """
     A helper for establishing type casting rules.
     """
+
     def __init__(self, tm):
         self._tm = tm
         self._tg = castgraph.TypeGraph(self._cb_update)

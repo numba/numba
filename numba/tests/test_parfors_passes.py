@@ -3,6 +3,7 @@ Tests for sub-components of parfors.
 These tests are aimed to produce a good-enough coverage of parfor passes
 so that refactoring on these passes are easier with faster testing turnaround.
 """
+
 import unittest
 from functools import reduce
 
@@ -17,10 +18,10 @@ from numba.core import (
     inline_closurecall,
     compiler,
     cpu,
-    errors
+    errors,
 )
 from numba.core.registry import cpu_target
-from numba.tests.support import (TestCase, is_parfors_unsupported)
+from numba.tests.support import TestCase, is_parfors_unsupported
 
 
 class MyPipeline(object):
@@ -60,14 +61,14 @@ class BaseTest(TestCase):
 
         untyped_passes.ReconstructSSA().run_pass(tp.state)
 
-        (
-            tp.state.typemap,
-            tp.state.return_type,
-            tp.state.calltypes,
-            _
-        ) = typed_passes.type_inference_stage(
-            tp.state.typingctx, tp.state.targetctx, tp.state.func_ir,
-            tp.state.args, None
+        (tp.state.typemap, tp.state.return_type, tp.state.calltypes, _) = (
+            typed_passes.type_inference_stage(
+                tp.state.typingctx,
+                tp.state.targetctx,
+                tp.state.func_ir,
+                tp.state.args,
+                None,
+            )
         )
 
         typed_passes.PreLowerStripPhis().run_pass(tp.state)

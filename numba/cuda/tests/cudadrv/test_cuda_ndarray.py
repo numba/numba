@@ -56,10 +56,7 @@ class TestCudaNDArray(CUDATestCase):
     def test_stream_bind(self):
         stream = cuda.stream()
         with stream.auto_synchronize():
-            arr = cuda.device_array(
-                (3, 3),
-                dtype=np.float64,
-                stream=stream)
+            arr = cuda.device_array((3, 3), dtype=np.float64, stream=stream)
             self.assertEqual(arr.bind(stream).stream, stream)
             self.assertEqual(arr.stream, stream)
 
@@ -89,8 +86,8 @@ class TestCudaNDArray(CUDATestCase):
 
         self.assertTrue(np.all(array == 0))
 
-        right.copy_to_host(array[N // 2:])
-        left.copy_to_host(array[:N // 2])
+        right.copy_to_host(array[N // 2 :])
+        left.copy_to_host(array[: N // 2])
 
         self.assertTrue(np.all(array == original))
 
@@ -103,7 +100,7 @@ class TestCudaNDArray(CUDATestCase):
         gpumem.copy_to_host(array)
         np.testing.assert_array_equal(array, original * 2)
 
-    @skip_on_cudasim('This works in the simulator')
+    @skip_on_cudasim("This works in the simulator")
     def test_devicearray_transpose_wrongdim(self):
         gpumem = cuda.to_device(np.array(np.arange(12)).reshape(3, 4, 1))
 
@@ -111,14 +108,13 @@ class TestCudaNDArray(CUDATestCase):
             np.transpose(gpumem)
 
         self.assertEqual(
-            "transposing a non-2D DeviceNDArray isn't supported",
-            str(e.exception))
+            "transposing a non-2D DeviceNDArray isn't supported", str(e.exception)
+        )
 
     def test_devicearray_transpose_identity(self):
         # any-shape identities should work
         original = np.array(np.arange(24)).reshape(3, 4, 2)
-        array = np.transpose(cuda.to_device(original),
-                             axes=(0, 1, 2)).copy_to_host()
+        array = np.transpose(cuda.to_device(original), axes=(0, 1, 2)).copy_to_host()
         self.assertTrue(np.all(array == original))
 
     def test_devicearray_transpose_duplicatedaxis(self):
@@ -130,9 +126,10 @@ class TestCudaNDArray(CUDATestCase):
         self.assertIn(
             str(e.exception),
             container=[
-                'invalid axes list (0, 0)',  # GPU
-                'repeated axis in transpose',  # sim
-            ])
+                "invalid axes list (0, 0)",  # GPU
+                "repeated axis in transpose",  # sim
+            ],
+        )
 
     def test_devicearray_transpose_wrongaxis(self):
         gpumem = cuda.to_device(np.array(np.arange(12)).reshape(3, 4))
@@ -143,10 +140,11 @@ class TestCudaNDArray(CUDATestCase):
         self.assertIn(
             str(e.exception),
             container=[
-                'invalid axes list (0, 2)',  # GPU
-                'invalid axis for this array',
-                'axis 2 is out of bounds for array of dimension 2',  # sim
-            ])
+                "invalid axes list (0, 2)",  # GPU
+                "invalid axis for this array",
+                "axis 2 is out of bounds for array of dimension 2",  # sim
+            ],
+        )
 
     def test_devicearray_view_ok(self):
         original = np.array(np.arange(12), dtype="i2").reshape(3, 4)
@@ -154,8 +152,7 @@ class TestCudaNDArray(CUDATestCase):
         for dtype in ("i4", "u4", "i8", "f8"):
             with self.subTest(dtype=dtype):
                 np.testing.assert_array_equal(
-                    array.view(dtype).copy_to_host(),
-                    original.view(dtype)
+                    array.view(dtype).copy_to_host(), original.view(dtype)
                 )
 
     def test_devicearray_view_ok_not_c_contig(self):
@@ -163,8 +160,7 @@ class TestCudaNDArray(CUDATestCase):
         array = cuda.to_device(original)[:, ::2]
         original = original[:, ::2]
         np.testing.assert_array_equal(
-            array.view("u2").copy_to_host(),
-            original.view("u2")
+            array.view("u2").copy_to_host(), original.view("u2")
         )
 
     def test_devicearray_view_bad_not_c_contig(self):
@@ -174,12 +170,14 @@ class TestCudaNDArray(CUDATestCase):
             array.view("i4")
 
         msg = str(e.exception)
-        self.assertIn('To change to a dtype of a different size,', msg)
+        self.assertIn("To change to a dtype of a different size,", msg)
 
-        contiguous_pre_np123 = 'the array must be C-contiguous' in msg
-        contiguous_post_np123 = 'the last axis must be contiguous' in msg
-        self.assertTrue(contiguous_pre_np123 or contiguous_post_np123,
-                        'Expected message to mention contiguity')
+        contiguous_pre_np123 = "the array must be C-contiguous" in msg
+        contiguous_post_np123 = "the last axis must be contiguous" in msg
+        self.assertTrue(
+            contiguous_pre_np123 or contiguous_post_np123,
+            "Expected message to mention contiguity",
+        )
 
     def test_devicearray_view_bad_itemsize(self):
         original = np.array(np.arange(12), dtype="i2").reshape(4, 3)
@@ -190,7 +188,8 @@ class TestCudaNDArray(CUDATestCase):
             "When changing to a larger dtype,"
             " its size must be a divisor of the total size in bytes"
             " of the last axis of the array.",
-            str(e.exception))
+            str(e.exception),
+        )
 
     def test_devicearray_transpose_ok(self):
         original = np.array(np.arange(12)).reshape(3, 4)
@@ -205,7 +204,7 @@ class TestCudaNDArray(CUDATestCase):
     def test_devicearray_contiguous_slice(self):
         # memcpys are dumb ranges of bytes, so trying to
         # copy to a non-contiguous range shouldn't work!
-        a = np.arange(25).reshape(5, 5, order='F')
+        a = np.arange(25).reshape(5, 5, order="F")
         s = np.full(fill_value=5, shape=(5,))
 
         d = cuda.to_device(a)
@@ -215,9 +214,7 @@ class TestCudaNDArray(CUDATestCase):
         # (40-byte strides). This means we can't memcpy to it!
         with self.assertRaises(ValueError) as e:
             d[2].copy_to_device(s)
-        self.assertEqual(
-            devicearray.errmsg_contiguous_buffer,
-            str(e.exception))
+        self.assertEqual(devicearray.errmsg_contiguous_buffer, str(e.exception))
 
         # if d[2].copy_to_device(s), then this would pass:
         # self.assertTrue((a == d.copy_to_host()).all())
@@ -235,9 +232,9 @@ class TestCudaNDArray(CUDATestCase):
             (a_c, a_f),
             (a_c, a_c),
         ]:
-            msg = '%s => %s' % (
-                'C' if original.flags.c_contiguous else 'F',
-                'C' if copy.flags.c_contiguous else 'F',
+            msg = "%s => %s" % (
+                "C" if original.flags.c_contiguous else "F",
+                "C" if copy.flags.c_contiguous else "F",
             )
 
             d = cuda.to_device(original)
@@ -247,17 +244,17 @@ class TestCudaNDArray(CUDATestCase):
 
     def test_devicearray_contiguous_copy_host_3d(self):
         a_c = np.arange(5 * 5 * 5).reshape(5, 5, 5)
-        a_f = np.array(a_c, order='F')
+        a_f = np.array(a_c, order="F")
         self._test_devicearray_contiguous_host_copy(a_c, a_f)
 
     def test_devicearray_contiguous_copy_host_1d(self):
         a_c = np.arange(5)
-        a_f = np.array(a_c, order='F')
+        a_f = np.array(a_c, order="F")
         self._test_devicearray_contiguous_host_copy(a_c, a_f)
 
     def test_devicearray_contiguous_copy_device(self):
         a_c = np.arange(5 * 5 * 5).reshape(5, 5, 5)
-        a_f = np.array(a_c, order='F')
+        a_f = np.array(a_c, order="F")
         self.assertTrue(a_c.flags.c_contiguous)
         self.assertTrue(a_f.flags.f_contiguous)
 
@@ -267,7 +264,8 @@ class TestCudaNDArray(CUDATestCase):
             d.copy_to_device(cuda.to_device(a_f))
         self.assertEqual(
             "incompatible strides: {} vs. {}".format(a_c.strides, a_f.strides),
-            str(e.exception))
+            str(e.exception),
+        )
 
         d.copy_to_device(cuda.to_device(a_c))
         self.assertTrue(np.all(d.copy_to_host() == a_c))
@@ -278,7 +276,8 @@ class TestCudaNDArray(CUDATestCase):
             d.copy_to_device(cuda.to_device(a_c))
         self.assertEqual(
             "incompatible strides: {} vs. {}".format(a_f.strides, a_c.strides),
-            str(e.exception))
+            str(e.exception),
+        )
 
         d.copy_to_device(cuda.to_device(a_f))
         self.assertTrue(np.all(d.copy_to_host() == a_f))
@@ -287,8 +286,8 @@ class TestCudaNDArray(CUDATestCase):
         broadsize = 4
         coreshape = (2, 3)
         coresize = np.prod(coreshape)
-        core_c = np.arange(coresize).reshape(coreshape, order='C')
-        core_f = np.arange(coresize).reshape(coreshape, order='F')
+        core_c = np.arange(coresize).reshape(coreshape, order="C")
+        core_f = np.arange(coresize).reshape(coreshape, order="F")
         for dim in range(len(coreshape)):
             newindex = (slice(None),) * dim + (np.newaxis,)
             broadshape = coreshape[:dim] + (broadsize,) + coreshape[dim:]
@@ -317,11 +316,9 @@ class TestCudaNDArray(CUDATestCase):
 
         with self.assertRaises(ValueError) as e:
             d.copy_to_device(cuda.to_device(arr)[::2])
-        self.assertEqual(
-            devicearray.errmsg_contiguous_buffer,
-            str(e.exception))
+        self.assertEqual(devicearray.errmsg_contiguous_buffer, str(e.exception))
 
-    @skip_on_cudasim('DeviceNDArray class not present in simulator')
+    @skip_on_cudasim("DeviceNDArray class not present in simulator")
     def test_devicearray_relaxed_strides(self):
         # From the reproducer in Issue #6824.
 
@@ -333,86 +330,84 @@ class TestCudaNDArray(CUDATestCase):
 
         # Ensure we still believe the array to be contiguous because
         # strides checking is relaxed.
-        self.assertTrue(arr.flags['C_CONTIGUOUS'])
-        self.assertTrue(arr.flags['F_CONTIGUOUS'])
+        self.assertTrue(arr.flags["C_CONTIGUOUS"])
+        self.assertTrue(arr.flags["F_CONTIGUOUS"])
 
     def test_c_f_contiguity_matches_numpy(self):
         # From the reproducer in Issue #4943.
 
         shapes = ((1, 4), (4, 1))
-        orders = ('C', 'F')
+        orders = ("C", "F")
 
         for shape, order in itertools.product(shapes, orders):
             arr = np.ndarray(shape, order=order)
             d_arr = cuda.to_device(arr)
-            self.assertEqual(arr.flags['C_CONTIGUOUS'],
-                             d_arr.flags['C_CONTIGUOUS'])
-            self.assertEqual(arr.flags['F_CONTIGUOUS'],
-                             d_arr.flags['F_CONTIGUOUS'])
+            self.assertEqual(arr.flags["C_CONTIGUOUS"], d_arr.flags["C_CONTIGUOUS"])
+            self.assertEqual(arr.flags["F_CONTIGUOUS"], d_arr.flags["F_CONTIGUOUS"])
 
-    @skip_on_cudasim('Typing not done in the simulator')
+    @skip_on_cudasim("Typing not done in the simulator")
     def test_devicearray_typing_order_simple_c(self):
         # C-order 1D array
-        a = np.zeros(10, order='C')
+        a = np.zeros(10, order="C")
         d = cuda.to_device(a)
-        self.assertEqual(d._numba_type_.layout, 'C')
+        self.assertEqual(d._numba_type_.layout, "C")
 
-    @skip_on_cudasim('Typing not done in the simulator')
+    @skip_on_cudasim("Typing not done in the simulator")
     def test_devicearray_typing_order_simple_f(self):
         # F-order array that is also C layout.
-        a = np.zeros(10, order='F')
+        a = np.zeros(10, order="F")
         d = cuda.to_device(a)
-        self.assertEqual(d._numba_type_.layout, 'C')
+        self.assertEqual(d._numba_type_.layout, "C")
 
-    @skip_on_cudasim('Typing not done in the simulator')
+    @skip_on_cudasim("Typing not done in the simulator")
     def test_devicearray_typing_order_2d_c(self):
         # C-order 2D array
-        a = np.zeros((2, 10), order='C')
+        a = np.zeros((2, 10), order="C")
         d = cuda.to_device(a)
-        self.assertEqual(d._numba_type_.layout, 'C')
+        self.assertEqual(d._numba_type_.layout, "C")
 
-    @skip_on_cudasim('Typing not done in the simulator')
+    @skip_on_cudasim("Typing not done in the simulator")
     def test_devicearray_typing_order_2d_f(self):
         # F-order array that can only be F layout
-        a = np.zeros((2, 10), order='F')
+        a = np.zeros((2, 10), order="F")
         d = cuda.to_device(a)
-        self.assertEqual(d._numba_type_.layout, 'F')
+        self.assertEqual(d._numba_type_.layout, "F")
 
-    @skip_on_cudasim('Typing not done in the simulator')
+    @skip_on_cudasim("Typing not done in the simulator")
     def test_devicearray_typing_order_noncontig_slice_c(self):
         # Non-contiguous slice of C-order array
-        a = np.zeros((5, 5), order='C')
-        d = cuda.to_device(a)[:,2]
-        self.assertEqual(d._numba_type_.layout, 'A')
+        a = np.zeros((5, 5), order="C")
+        d = cuda.to_device(a)[:, 2]
+        self.assertEqual(d._numba_type_.layout, "A")
 
-    @skip_on_cudasim('Typing not done in the simulator')
+    @skip_on_cudasim("Typing not done in the simulator")
     def test_devicearray_typing_order_noncontig_slice_f(self):
         # Non-contiguous slice of F-order array
-        a = np.zeros((5, 5), order='F')
-        d = cuda.to_device(a)[2,:]
-        self.assertEqual(d._numba_type_.layout, 'A')
+        a = np.zeros((5, 5), order="F")
+        d = cuda.to_device(a)[2, :]
+        self.assertEqual(d._numba_type_.layout, "A")
 
-    @skip_on_cudasim('Typing not done in the simulator')
+    @skip_on_cudasim("Typing not done in the simulator")
     def test_devicearray_typing_order_contig_slice_c(self):
         # Contiguous slice of C-order array
-        a = np.zeros((5, 5), order='C')
-        d = cuda.to_device(a)[2,:]
-        self.assertEqual(d._numba_type_.layout, 'C')
+        a = np.zeros((5, 5), order="C")
+        d = cuda.to_device(a)[2, :]
+        self.assertEqual(d._numba_type_.layout, "C")
 
-    @skip_on_cudasim('Typing not done in the simulator')
+    @skip_on_cudasim("Typing not done in the simulator")
     def test_devicearray_typing_order_contig_slice_f(self):
         # Contiguous slice of F-order array - is both C- and F-contiguous, so
         # types as 'C' layout
-        a = np.zeros((5, 5), order='F')
-        d = cuda.to_device(a)[:,2]
-        self.assertEqual(d._numba_type_.layout, 'C')
+        a = np.zeros((5, 5), order="F")
+        d = cuda.to_device(a)[:, 2]
+        self.assertEqual(d._numba_type_.layout, "C")
 
-    @skip_on_cudasim('Typing not done in the simulator')
+    @skip_on_cudasim("Typing not done in the simulator")
     def test_devicearray_typing_order_broadcasted(self):
         # Broadcasted array, similar to that used for passing scalars to ufuncs
         a = np.broadcast_to(np.array([1]), (10,))
         d = cuda.to_device(a)
-        self.assertEqual(d._numba_type_.layout, 'A')
+        self.assertEqual(d._numba_type_.layout, "A")
 
     def test_bug6697(self):
         ary = np.arange(10, dtype=np.int16)
@@ -420,7 +415,7 @@ class TestCudaNDArray(CUDATestCase):
         got = np.asarray(dary)
         self.assertEqual(got.dtype, dary.dtype)
 
-    @skip_on_cudasim('DeviceNDArray class not present in simulator')
+    @skip_on_cudasim("DeviceNDArray class not present in simulator")
     def test_issue_8477(self):
         # Ensure that we can copy a zero-length device array to a zero-length
         # host array when the strides of the device and host arrays differ -
@@ -429,8 +424,7 @@ class TestCudaNDArray(CUDATestCase):
         # https://github.com/numba/numba/issues/8477.
 
         # Create a device array with shape (0,) and strides (8,)
-        dev_array = devicearray.DeviceNDArray(shape=(0,), strides=(8,),
-                                              dtype=np.int8)
+        dev_array = devicearray.DeviceNDArray(shape=(0,), strides=(8,), dtype=np.int8)
 
         # Create a host array with shape (0,) and strides (0,)
         host_array = np.ndarray(shape=(0,), strides=(0,), dtype=np.int8)
@@ -459,10 +453,13 @@ class TestCudaNDArray(CUDATestCase):
 class TestRecarray(CUDATestCase):
     def test_recarray(self):
         # From issue #4111
-        a = np.recarray((16,), dtype=[
-            ("value1", np.int64),
-            ("value2", np.float64),
-        ])
+        a = np.recarray(
+            (16,),
+            dtype=[
+                ("value1", np.int64),
+                ("value2", np.float64),
+            ],
+        )
         a.value1 = np.arange(a.size, dtype=np.int64)
         a.value2 = np.arange(a.size, dtype=np.float64) / 100
 
@@ -487,39 +484,39 @@ class TestCoreContiguous(CUDATestCase):
     def _test_against_array_core(self, view):
         self.assertEqual(
             devicearray.is_contiguous(view),
-            devicearray.array_core(view).flags['C_CONTIGUOUS']
+            devicearray.array_core(view).flags["C_CONTIGUOUS"],
         )
 
     def test_device_array_like_1d(self):
-        d_a = cuda.device_array(10, order='C')
+        d_a = cuda.device_array(10, order="C")
         self._test_against_array_core(d_a)
 
     def test_device_array_like_2d(self):
-        d_a = cuda.device_array((10, 12), order='C')
+        d_a = cuda.device_array((10, 12), order="C")
         self._test_against_array_core(d_a)
 
     def test_device_array_like_2d_transpose(self):
-        d_a = cuda.device_array((10, 12), order='C')
+        d_a = cuda.device_array((10, 12), order="C")
         self._test_against_array_core(d_a.T)
 
     def test_device_array_like_3d(self):
-        d_a = cuda.device_array((10, 12, 14), order='C')
+        d_a = cuda.device_array((10, 12, 14), order="C")
         self._test_against_array_core(d_a)
 
     def test_device_array_like_1d_f(self):
-        d_a = cuda.device_array(10, order='F')
+        d_a = cuda.device_array(10, order="F")
         self._test_against_array_core(d_a)
 
     def test_device_array_like_2d_f(self):
-        d_a = cuda.device_array((10, 12), order='F')
+        d_a = cuda.device_array((10, 12), order="F")
         self._test_against_array_core(d_a)
 
     def test_device_array_like_2d_f_transpose(self):
-        d_a = cuda.device_array((10, 12), order='F')
+        d_a = cuda.device_array((10, 12), order="F")
         self._test_against_array_core(d_a.T)
 
     def test_device_array_like_3d_f(self):
-        d_a = cuda.device_array((10, 12, 14), order='F')
+        d_a = cuda.device_array((10, 12, 14), order="F")
         self._test_against_array_core(d_a)
 
     def test_1d_view(self):
@@ -529,7 +526,7 @@ class TestCoreContiguous(CUDATestCase):
 
     def test_1d_view_f(self):
         shape = 10
-        view = np.zeros(shape, order='F')[::2]
+        view = np.zeros(shape, order="F")[::2]
         self._test_against_array_core(view)
 
     def test_2d_view(self):
@@ -539,9 +536,9 @@ class TestCoreContiguous(CUDATestCase):
 
     def test_2d_view_f(self):
         shape = (10, 12)
-        view = np.zeros(shape, order='F')[::2, ::2]
+        view = np.zeros(shape, order="F")[::2, ::2]
         self._test_against_array_core(view)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -16,7 +16,7 @@ class TestParallelEnvVariable(unittest.TestCase):
         """
         Tests the NUMBA_NUM_THREADS env variable behaves as expected.
         """
-        key = 'NUMBA_NUM_THREADS'
+        key = "NUMBA_NUM_THREADS"
         current = str(getattr(env, key, config.NUMBA_NUM_THREADS))
         threads = "3154"
         env[key] = threads
@@ -34,5 +34,6 @@ class TestParallelEnvVariable(unittest.TestCase):
             env[key] = current
             config.reload_config()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

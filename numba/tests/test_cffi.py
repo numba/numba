@@ -11,8 +11,8 @@ import numba.tests.cffi_usecases as mod
 import unittest
 
 
-enable_pyobj_flags = {'forceobj': True}
-no_pyobj_flags = {'nopython': True}
+enable_pyobj_flags = {"forceobj": True}
+no_pyobj_flags = {"nopython": True}
 
 
 @skip_unless_cffi
@@ -42,7 +42,9 @@ class TestCFFI(TestCase):
 
     def test_bool_function_ool(self):
         pyfunc = mod.use_cffi_boolean_true
-        cfunc = njit((),)(pyfunc)
+        cfunc = njit(
+            (),
+        )(pyfunc)
         self.assertEqual(pyfunc(), True)
         self.assertEqual(cfunc(), True)
 
@@ -65,7 +67,7 @@ class TestCFFI(TestCase):
     def test_function_pointer(self):
         pyfunc = mod.use_func_pointer
         cfunc = jit(nopython=True)(pyfunc)
-        for (fa, fb, x) in [
+        for fa, fb, x in [
             (mod.cffi_sin, mod.cffi_cos, 1.0),
             (mod.cffi_sin, mod.cffi_cos, -1.0),
             (mod.cffi_cos, mod.cffi_sin, 1.0),
@@ -77,7 +79,8 @@ class TestCFFI(TestCase):
             (mod.cffi_sin, mod.cffi_cos_ool, 1.0),
             (mod.cffi_sin, mod.cffi_cos_ool, -1.0),
             (mod.cffi_cos, mod.cffi_sin_ool, 1.0),
-            (mod.cffi_cos, mod.cffi_sin_ool, -1.0)]:
+            (mod.cffi_cos, mod.cffi_sin_ool, -1.0),
+        ]:
             expected = pyfunc(fa, fb, x)
             got = cfunc(fa, fb, x)
             self.assertEqual(got, expected)
@@ -131,19 +134,20 @@ class TestCFFI(TestCase):
         y = np.zeros_like(x)
         with self.assertRaises(errors.TypingError) as raises:
             cfunc(x, y)
-        self.assertIn("from_buffer() unsupported on non-contiguous buffers",
-                      str(raises.exception))
+        self.assertIn(
+            "from_buffer() unsupported on non-contiguous buffers", str(raises.exception)
+        )
 
     def test_from_buffer_numpy_multi_array(self):
-        c1 = np.array([1, 2], order='C', dtype=np.float32)
+        c1 = np.array([1, 2], order="C", dtype=np.float32)
         c1_zeros = np.zeros_like(c1)
-        c2 = np.array([[1, 2], [3, 4]], order='C', dtype=np.float32)
+        c2 = np.array([[1, 2], [3, 4]], order="C", dtype=np.float32)
         c2_zeros = np.zeros_like(c2)
-        f1 = np.array([1, 2], order='F', dtype=np.float32)
+        f1 = np.array([1, 2], order="F", dtype=np.float32)
         f1_zeros = np.zeros_like(f1)
-        f2 = np.array([[1, 2], [3, 4]], order='F', dtype=np.float32)
+        f2 = np.array([[1, 2], [3, 4]], order="F", dtype=np.float32)
         f2_zeros = np.zeros_like(f2)
-        f2_copy = f2.copy('K')
+        f2_copy = f2.copy("K")
         pyfunc = mod.vector_sin_float32
         cfunc = jit(nopython=True)(pyfunc)
         # No exception because of C layout and single dimension
@@ -159,8 +163,10 @@ class TestCFFI(TestCase):
         with self.assertRaises(errors.TypingError) as raises:
             cfunc(f2, f2_zeros)
         np.testing.assert_allclose(f2, f2_copy)
-        self.assertIn("from_buffer() only supports multidimensional arrays with C layout",
-                      str(raises.exception))
+        self.assertIn(
+            "from_buffer() only supports multidimensional arrays with C layout",
+            str(raises.exception),
+        )
 
     def test_indirect_multiple_use(self):
         """
@@ -185,5 +191,5 @@ class TestCFFI(TestCase):
         self.assertEqual(foo(x), my_sin(x) + my_sin(x + 1))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -23,8 +23,9 @@ class TestJITMethod(unittest.TestCase):
                 return a
 
         something = Something(3)
-        np.testing.assert_array_equal(something.method(5),
-            np.array([15, 15, 15, 15, 15], dtype=np.float32))
+        np.testing.assert_array_equal(
+            something.method(5), np.array([15, 15, 15, 15, 15], dtype=np.float32)
+        )
 
         # Check that loop lifting in nopython mode was successful
         [cres] = something.method.overloads.values()
@@ -47,9 +48,11 @@ class TestJITMethod(unittest.TestCase):
 
 class TestDisabledJIT(unittest.TestCase):
     def test_decorated_function(self):
-        with override_config('DISABLE_JIT', True):
+        with override_config("DISABLE_JIT", True):
+
             def method(x):
                 return x
+
             jitted = jit(method)
 
         self.assertEqual(jitted, method)
@@ -57,14 +60,17 @@ class TestDisabledJIT(unittest.TestCase):
         self.assertEqual(10, jitted(10))
 
     def test_decorated_function_with_kwargs(self):
-        with override_config('DISABLE_JIT', True):
+        with override_config("DISABLE_JIT", True):
+
             def method(x):
                 return x
+
             jitted = jit(nopython=True)(method)
 
         self.assertEqual(jitted, method)
         self.assertEqual(10, method(10))
         self.assertEqual(10, jitted(10))
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

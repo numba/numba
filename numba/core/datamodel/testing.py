@@ -9,6 +9,7 @@ class DataModelTester(unittest.TestCase):
     """
     Test the implementation of a DataModel for a frontend type.
     """
+
     fe_type = NotImplemented
 
     def setUp(self):
@@ -27,10 +28,12 @@ class DataModelTester(unittest.TestCase):
 
         undef_value = ir.Constant(self.datamodel.get_value_type(), None)
         args = self.datamodel.as_argument(builder, undef_value)
-        self.assertIsNot(args, NotImplemented, "as_argument returned "
-                                               "NotImplementedError")
+        self.assertIsNot(
+            args, NotImplemented, "as_argument returned " "NotImplementedError"
+        )
 
         if isinstance(args, (tuple, list)):
+
             def recur_tuplize(args, func=None):
                 for arg in args:
                     if isinstance(arg, (tuple, list)):
@@ -42,12 +45,10 @@ class DataModelTester(unittest.TestCase):
                             yield func(arg)
 
             argtypes = tuple(recur_tuplize(args, func=lambda x: x.type))
-            exptypes = tuple(recur_tuplize(
-                self.datamodel.get_argument_type()))
+            exptypes = tuple(recur_tuplize(self.datamodel.get_argument_type()))
             self.assertEqual(exptypes, argtypes)
         else:
-            self.assertEqual(args.type,
-                             self.datamodel.get_argument_type())
+            self.assertEqual(args.type, self.datamodel.get_argument_type())
 
         rev_value = self.datamodel.from_argument(builder, args)
         self.assertEqual(rev_value.type, self.datamodel.get_value_type())
@@ -70,8 +71,9 @@ class DataModelTester(unittest.TestCase):
 
         undef_value = ir.Constant(self.datamodel.get_value_type(), None)
         ret = self.datamodel.as_return(builder, undef_value)
-        self.assertIsNot(ret, NotImplemented, "as_return returned "
-                                              "NotImplementedError")
+        self.assertIsNot(
+            ret, NotImplemented, "as_return returned " "NotImplementedError"
+        )
 
         self.assertEqual(ret.type, self.datamodel.get_return_type())
 
@@ -86,8 +88,8 @@ class DataModelTester(unittest.TestCase):
 
 
 class SupportAsDataMixin(object):
-    """Test as_data() and from_data()
-    """
+    """Test as_data() and from_data()"""
+
     # XXX test load_from_data_pointer() as well
 
     def test_as_data(self):
@@ -98,14 +100,12 @@ class SupportAsDataMixin(object):
 
         undef_value = ir.Constant(self.datamodel.get_value_type(), None)
         data = self.datamodel.as_data(builder, undef_value)
-        self.assertIsNot(data, NotImplemented,
-                         "as_data returned NotImplemented")
+        self.assertIsNot(data, NotImplemented, "as_data returned NotImplemented")
 
         self.assertEqual(data.type, self.datamodel.get_data_type())
 
         rev_value = self.datamodel.from_data(builder, data)
-        self.assertEqual(rev_value.type,
-                         self.datamodel.get_value_type())
+        self.assertEqual(rev_value.type, self.datamodel.get_value_type())
 
         builder.ret_void()  # end function
 
@@ -115,8 +115,7 @@ class SupportAsDataMixin(object):
 
 
 class NotSupportAsDataMixin(object):
-    """Ensure as_data() and from_data() raise NotImplementedError.
-    """
+    """Ensure as_data() and from_data() raise NotImplementedError."""
 
     def test_as_data_not_supported(self):
         fnty = ir.FunctionType(ir.VoidType(), [])
@@ -131,19 +130,16 @@ class NotSupportAsDataMixin(object):
             rev_data = self.datamodel.from_data(builder, undef_value)
 
 
-class DataModelTester_SupportAsDataMixin(DataModelTester,
-                                         SupportAsDataMixin):
+class DataModelTester_SupportAsDataMixin(DataModelTester, SupportAsDataMixin):
     pass
 
 
-class DataModelTester_NotSupportAsDataMixin(DataModelTester,
-                                            NotSupportAsDataMixin):
+class DataModelTester_NotSupportAsDataMixin(DataModelTester, NotSupportAsDataMixin):
     pass
 
 
 def test_factory(support_as_data=True):
-    """A helper for returning a unittest TestCase for testing
-    """
+    """A helper for returning a unittest TestCase for testing"""
     if support_as_data:
         return DataModelTester_SupportAsDataMixin
     else:

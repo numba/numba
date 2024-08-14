@@ -20,12 +20,12 @@ class TestParUfuncIssues(unittest.TestCase):
         and with different time gap between each execution.
         """
 
-        @vectorize('float64(float64, float64)', target='parallel')
+        @vectorize("float64(float64, float64)", target="parallel")
         def fnv(a, b):
             return a + b
 
-        sleep_time = 1   # 1 second
-        while sleep_time > 0.00001:    # 10us
+        sleep_time = 1  # 1 second
+        while sleep_time > 0.00001:  # 10us
             time.sleep(sleep_time)
             a = b = np.arange(10**5)
             np.testing.assert_equal(a + b, fnv(a, b))
@@ -38,7 +38,7 @@ class TestParUfuncIssues(unittest.TestCase):
         """
         # make a ctypes callback that requires the GIL
         proto = ctypes.CFUNCTYPE(None, ctypes.c_int32)
-        characters = 'abcdefghij'
+        characters = "abcdefghij"
 
         def bar(x):
             print(characters[x])
@@ -46,10 +46,10 @@ class TestParUfuncIssues(unittest.TestCase):
         cbar = proto(bar)
 
         # our unit under test
-        @vectorize(['int32(int32)'], target='parallel', nopython=True)
+        @vectorize(["int32(int32)"], target="parallel", nopython=True)
         def foo(x):
             print(x % 10)  # this reacquires the GIL
-            cbar(x % 10)   # this reacquires the GIL
+            cbar(x % 10)  # this reacquires the GIL
             return x * 2
 
         # Numpy ufunc has a heuristic to determine whether to release the GIL
@@ -75,7 +75,6 @@ class TestParUfuncIssues(unittest.TestCase):
             np.testing.assert_equal(got, 2 * acopy)
 
 
-
 class TestParGUfuncIssues(unittest.TestCase):
 
     _numba_parallel_test_ = False
@@ -86,7 +85,7 @@ class TestParGUfuncIssues(unittest.TestCase):
         """
         # make a ctypes callback that requires the GIL
         proto = ctypes.CFUNCTYPE(None, ctypes.c_int32)
-        characters = 'abcdefghij'
+        characters = "abcdefghij"
 
         def bar(x):
             print(characters[x])
@@ -94,11 +93,10 @@ class TestParGUfuncIssues(unittest.TestCase):
         cbar = proto(bar)
 
         # our unit under test
-        @guvectorize(['(int32, int32[:])'], "()->()",
-                     target='parallel', nopython=True)
+        @guvectorize(["(int32, int32[:])"], "()->()", target="parallel", nopython=True)
         def foo(x, out):
             print(x % 10)  # this reacquires the GIL
-            cbar(x % 10)   # this reacquires the GIL
+            cbar(x % 10)  # this reacquires the GIL
             out[0] = x * 2
 
         # Numpy ufunc has a heuristic to determine whether to release the GIL
@@ -124,5 +122,5 @@ class TestParGUfuncIssues(unittest.TestCase):
             np.testing.assert_equal(got, 2 * acopy)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

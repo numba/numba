@@ -6,17 +6,20 @@ from numba.core import types, config
 
 
 QuicksortImplementation = collections.namedtuple(
-    'QuicksortImplementation',
-    (# The compile function itself
-     'compile',
-     # All subroutines exercised by test_sort
-     'partition', 'partition3', 'insertion_sort',
-     # The top-level function
-     'run_quicksort',
-     ))
+    "QuicksortImplementation",
+    (  # The compile function itself
+        "compile",
+        # All subroutines exercised by test_sort
+        "partition",
+        "partition3",
+        "insertion_sort",
+        # The top-level function
+        "run_quicksort",
+    ),
+)
 
 
-Partition = collections.namedtuple('Partition', ('start', 'stop'))
+Partition = collections.namedtuple("Partition", ("start", "stop"))
 
 # Under this size, switch to a simple insertion sort
 SMALL_QUICKSORT = 15
@@ -24,7 +27,9 @@ SMALL_QUICKSORT = 15
 MAX_STACK = 100
 
 
-def make_quicksort_impl(wrap, lt=None, is_argsort=False, is_list=False, is_np_array=False):
+def make_quicksort_impl(
+    wrap, lt=None, is_argsort=False, is_list=False, is_np_array=False
+):
 
     if config.USE_LEGACY_TYPE_SYSTEM:
         intp = types.intp
@@ -37,10 +42,13 @@ def make_quicksort_impl(wrap, lt=None, is_argsort=False, is_list=False, is_np_ar
     # slightly slower (~5%)
     if is_argsort:
         if is_list:
+
             @wrap
             def make_res(A):
                 return [x for x in range(len(A))]
+
         else:
+
             @wrap
             def make_res(A):
                 return np.arange(A.size)
@@ -50,6 +58,7 @@ def make_quicksort_impl(wrap, lt=None, is_argsort=False, is_list=False, is_np_ar
             return A[idx_or_val]
 
     else:
+
         @wrap
         def make_res(A):
             return A
@@ -200,6 +209,7 @@ def make_quicksort_impl(wrap, lt=None, is_argsort=False, is_list=False, is_np_ar
         return R
 
     if is_np_array:
+
         @wrap
         def run_quicksort(A):
             if A.ndim == 1:
@@ -208,7 +218,9 @@ def make_quicksort_impl(wrap, lt=None, is_argsort=False, is_list=False, is_np_ar
                 for idx in np.ndindex(A.shape[:-1]):
                     run_quicksort1(A[idx])
                 return A
+
     else:
+
         @wrap
         def run_quicksort(A):
             return run_quicksort1(A)
@@ -246,16 +258,16 @@ def make_quicksort_impl(wrap, lt=None, is_argsort=False, is_list=False, is_np_ar
 
             insertion_sort(A, low, high)
 
-
-    return QuicksortImplementation(wrap,
-                                   partition, partition3, insertion_sort,
-                                   run_quicksort)
+    return QuicksortImplementation(
+        wrap, partition, partition3, insertion_sort, run_quicksort
+    )
 
 
 def make_py_quicksort(*args, **kwargs):
     return make_quicksort_impl((lambda f: f), *args, **kwargs)
 
+
 def make_jit_quicksort(*args, **kwargs):
     from numba.core.extending import register_jitable
-    return make_quicksort_impl((lambda f: register_jitable(f)),
-                               *args, **kwargs)
+
+    return make_quicksort_impl((lambda f: register_jitable(f)), *args, **kwargs)

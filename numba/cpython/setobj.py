@@ -2,7 +2,6 @@
 Support for native homogeneous sets.
 """
 
-
 import collections
 import contextlib
 import math
@@ -11,10 +10,17 @@ from functools import cached_property
 
 from llvmlite import ir
 from numba.core import types, typing, cgutils
-from numba.core.imputils import (lower_builtin, lower_cast,
-                                    iternext_impl, impl_ret_borrowed,
-                                    impl_ret_new_ref, impl_ret_untracked,
-                                    for_iter, call_len, RefType)
+from numba.core.imputils import (
+    lower_builtin,
+    lower_cast,
+    iternext_impl,
+    impl_ret_borrowed,
+    impl_ret_new_ref,
+    impl_ret_untracked,
+    for_iter,
+    call_len,
+    RefType,
+)
 from numba.misc import quicksort
 from numba.cpython import slicing
 from numba.core.errors import NumbaValueError, TypingError
@@ -75,6 +81,7 @@ def get_hash_value(context, builder, typ, value):
 def _get_hash_value_intrinsic(typingctx, value):
     def impl(context, builder, typ, args):
         return get_hash_value(context, builder, value, args[0])
+
     fnty = typingctx.resolve_value_type(hash)
     sig = fnty.get_call_type(typingctx, (value,), {})
     return sig, impl
@@ -85,14 +92,16 @@ def is_hash_empty(context, builder, h):
     Whether the hash value denotes an empty entry.
     """
     empty = ir.Constant(h.type, EMPTY)
-    return builder.icmp_unsigned('==', h, empty)
+    return builder.icmp_unsigned("==", h, empty)
+
 
 def is_hash_deleted(context, builder, h):
     """
     Whether the hash value denotes a deleted entry.
     """
     deleted = ir.Constant(h.type, DELETED)
-    return builder.icmp_unsigned('==', h, deleted)
+    return builder.icmp_unsigned("==", h, deleted)
+
 
 def is_hash_used(context, builder, h):
     """
@@ -100,7 +109,7 @@ def is_hash_used(context, builder, h):
     """
     # Everything below DELETED is an used entry
     deleted = ir.Constant(h.type, DELETED)
-    return builder.icmp_unsigned('<', h, deleted)
+    return builder.icmp_unsigned("<", h, deleted)
 
 
 def check_all_set(*args):
@@ -111,7 +120,7 @@ def check_all_set(*args):
         raise TypingError(f"All Sets must be of the same type, got {args}")
 
 
-SetLoop = collections.namedtuple('SetLoop', ('index', 'entry', 'do_break'))
+SetLoop = collections.namedtuple("SetLoop", ("index", "entry", "do_break"))
 
 
 class _SetPayload(object):
@@ -122,7 +131,7 @@ class _SetPayload(object):
         self._builder = builder
         self._ty = set_type
         self._payload = payload
-        self._entries = payload._get_ptr_by_name('entries')
+        self._entries = payload._get_ptr_by_name("entries")
         self._ptr = ptr
 
     @property
@@ -185,9 +194,9 @@ class _SetPayload(object):
         Get entry number *idx*.
         """
         entry_ptr = cgutils.gep(self._builder, self._entries, idx)
-        entry = self._context.make_data_helper(self._builder,
-                                               types.SetEntry(self._ty),
-                                               ref=entry_ptr)
+        entry = self._context.make_data_helper(
+            self._builder, types.SetEntry(self._ty), ref=entry_ptr
+        )
         return entry
 
     def _lookup(self, item, h, for_insert=False):
@@ -218,8 +227,7 @@ class _SetPayload(object):
         # The perturbation value for probing
         perturb = cgutils.alloca_once_value(builder, h)
         # The index of the entry being considered: start with (hash & mask)
-        index = cgutils.alloca_once_value(builder,
-                                          builder.and_(h, mask))
+        index = cgutils.alloca_once_value(builder, builder.and_(h, mask))
         if for_insert:
             # The index of the first deleted entry in the lookup chain
             free_index_sentinel = mask.type(-1)  # highest unsigned index
@@ -237,7 +245,7 @@ class _SetPayload(object):
             entry = self.get_entry(i)
             entry_hash = entry.hash
 
-            with builder.if_then(builder.icmp_unsigned('==', h, entry_hash)):
+            with builder.if_then(builder.icmp_unsigned("==", h, entry_hash)):
                 # Hashes are equal, compare values
                 # (note this also ensures the entry is used)
                 eq = eqfn(builder, (item, entry.key))
@@ -251,8 +259,9 @@ class _SetPayload(object):
                 # Memorize the index of the first deleted entry
                 with builder.if_then(is_hash_deleted(context, builder, entry_hash)):
                     j = builder.load(free_index)
-                    j = builder.select(builder.icmp_unsigned('==', j, free_index_sentinel),
-                                       i, j)
+                    j = builder.select(
+                        builder.icmp_unsigned("==", j, free_index_sentinel), i, j
+                    )
                     builder.store(j, free_index)
 
         # First linear probing.  When the number of collisions is small,
@@ -292,8 +301,9 @@ class _SetPayload(object):
                 # lookup chain (issue #1913).
                 i = builder.load(index)
                 j = builder.load(free_index)
-                i = builder.select(builder.icmp_unsigned('==', j, free_index_sentinel),
-                                   i, j)
+                i = builder.select(
+                    builder.icmp_unsigned("==", j, free_index_sentinel), i, j
+                )
                 builder.store(i, index)
             builder.branch(bb_end)
 
@@ -302,7 +312,7 @@ class _SetPayload(object):
 
         builder.position_at_end(bb_end)
 
-        found = builder.phi(ir.IntType(1), 'found')
+        found = builder.phi(ir.IntType(1), "found")
         found.add_incoming(cgutils.true_bit, bb_found)
         found.add_incoming(cgutils.false_bit, bb_not_found)
 
@@ -324,8 +334,9 @@ class _SetPayload(object):
             entry = self.get_entry(range_loop.index)
             is_used = is_hash_used(context, builder, entry.hash)
             with builder.if_then(is_used):
-                loop = SetLoop(index=range_loop.index, entry=entry,
-                               do_break=range_loop.do_break)
+                loop = SetLoop(
+                    index=range_loop.index, entry=entry, do_break=range_loop.do_break
+                )
                 yield loop
 
     @contextlib.contextmanager
@@ -345,8 +356,8 @@ class _SetPayload(object):
         # Start walking the entries from the stored "search finger" and
         # break as soon as we find a used entry.
 
-        bb_body = builder.append_basic_block('next_entry_body')
-        bb_end = builder.append_basic_block('next_entry_end')
+        bb_body = builder.append_basic_block("next_entry_body")
+        bb_end = builder.append_basic_block("next_entry_end")
 
         index = cgutils.alloca_once_value(builder, self.finger)
         builder.branch(bb_body)
@@ -433,8 +444,7 @@ class SetInstance(object):
         one = ir.Constant(used.type, 1)
         used = payload.used = builder.add(used, one)
         # fill++ if entry wasn't a deleted one
-        with builder.if_then(is_hash_empty(context, builder, old_hash),
-                             likely=True):
+        with builder.if_then(is_hash_empty(context, builder, old_hash), likely=True):
             payload.fill = builder.add(payload.fill, one)
         # Grow table if necessary
         if do_resize:
@@ -461,8 +471,9 @@ class SetInstance(object):
             one = ir.Constant(used.type, 1)
             used = payload.used = builder.add(used, one)
             # fill++ if entry wasn't a deleted one
-            with builder.if_then(is_hash_empty(context, builder, old_hash),
-                                 likely=True):
+            with builder.if_then(
+                is_hash_empty(context, builder, old_hash), likely=True
+            ):
                 payload.fill = builder.add(payload.fill, one)
             # Grow table if necessary
             if do_resize:
@@ -515,8 +526,7 @@ class SetInstance(object):
         self._add_key(payload, item, h, do_resize)
 
     def _pyapi_get_hash_value(self, pyapi, context, builder, item):
-        """Python API compatible version of `get_hash_value()`.
-        """
+        """Python API compatible version of `get_hash_value()`."""
         argtypes = [self._ty.dtype]
         resty = types.intp
 
@@ -587,29 +597,34 @@ class SetInstance(object):
 
         other = type(self)(context, builder, self._ty, None)
 
-        no_deleted_entries = builder.icmp_unsigned('==', used, fill)
-        with builder.if_else(no_deleted_entries, likely=True) \
-            as (if_no_deleted, if_deleted):
+        no_deleted_entries = builder.icmp_unsigned("==", used, fill)
+        with builder.if_else(no_deleted_entries, likely=True) as (
+            if_no_deleted,
+            if_deleted,
+        ):
             with if_no_deleted:
                 # No deleted entries => raw copy the payload
                 ok = other._copy_payload(payload)
                 with builder.if_then(builder.not_(ok), likely=False):
-                    context.call_conv.return_user_exc(builder, MemoryError,
-                                                      ("cannot copy set",))
+                    context.call_conv.return_user_exc(
+                        builder, MemoryError, ("cannot copy set",)
+                    )
 
             with if_deleted:
                 # Deleted entries => re-insert entries one by one
                 nentries = self.choose_alloc_size(context, builder, used)
                 ok = other._allocate_payload(nentries)
                 with builder.if_then(builder.not_(ok), likely=False):
-                    context.call_conv.return_user_exc(builder, MemoryError,
-                                                      ("cannot copy set",))
+                    context.call_conv.return_user_exc(
+                        builder, MemoryError, ("cannot copy set",)
+                    )
 
                 other_payload = other.payload
                 with payload._iterate() as loop:
                     entry = loop.entry
-                    other._add_key(other_payload, entry.key, entry.hash,
-                                   do_resize=False)
+                    other._add_key(
+                        other_payload, entry.key, entry.hash, do_resize=False
+                    )
 
         return other
 
@@ -677,12 +692,12 @@ class SetInstance(object):
         payload = self.payload
         other_payload = other.payload
 
-        cmp_op = '<' if strict else '<='
+        cmp_op = "<" if strict else "<="
 
         res = cgutils.alloca_once_value(builder, cgutils.true_bit)
         with builder.if_else(
             builder.icmp_unsigned(cmp_op, payload.used, other_payload.used)
-            ) as (if_smaller, if_larger):
+        ) as (if_smaller, if_larger):
             with if_larger:
                 # self larger than other => self cannot possibly a subset
                 builder.store(cgutils.false_bit, res)
@@ -715,8 +730,8 @@ class SetInstance(object):
                     loop.do_break()
 
         with builder.if_else(
-            builder.icmp_unsigned('>', payload.used, other_payload.used)
-            ) as (if_larger, otherwise):
+            builder.icmp_unsigned(">", payload.used, other_payload.used)
+        ) as (if_larger, otherwise):
 
             with if_larger:
                 # len(self) > len(other)
@@ -736,8 +751,8 @@ class SetInstance(object):
 
         res = cgutils.alloca_once_value(builder, cgutils.true_bit)
         with builder.if_else(
-            builder.icmp_unsigned('==', payload.used, other_payload.used)
-            ) as (if_same_size, otherwise):
+            builder.icmp_unsigned("==", payload.used, other_payload.used)
+        ) as (if_same_size, otherwise):
             with if_same_size:
                 # same sizes => check whether each key of self is in other
                 with payload._iterate() as loop:
@@ -783,8 +798,9 @@ class SetInstance(object):
         """
         ok, self = cls.allocate_ex(context, builder, set_type, nitems)
         with builder.if_then(builder.not_(ok), likely=False):
-            context.call_conv.return_user_exc(builder, MemoryError,
-                                              ("cannot allocate set",))
+            context.call_conv.return_user_exc(
+                builder, MemoryError, ("cannot allocate set",)
+            )
         return self
 
     @classmethod
@@ -822,7 +838,7 @@ class SetInstance(object):
 
         with builder.goto_block(bb_body):
             size = builder.load(size_p)
-            is_large_enough = builder.icmp_unsigned('>=', size, min_entries)
+            is_large_enough = builder.icmp_unsigned(">=", size, min_entries)
             with builder.if_then(is_large_enough, likely=False):
                 builder.branch(bb_end)
             next_size = builder.shl(size, one)
@@ -849,7 +865,7 @@ class SetInstance(object):
         # Ensure number of entries >= 2 * used
         min_entries = builder.shl(nitems, one)
         size = builder.add(payload.mask, one)
-        need_resize = builder.icmp_unsigned('>=', min_entries, size)
+        need_resize = builder.icmp_unsigned(">=", min_entries, size)
 
         with builder.if_then(need_resize, likely=False):
             # Find out next suitable size
@@ -865,17 +881,22 @@ class SetInstance(object):
                 new_size = builder.load(new_size_p)
                 new_size = builder.shl(new_size, two)
                 builder.store(new_size, new_size_p)
-                is_too_small = builder.icmp_unsigned('>=', min_entries, new_size)
+                is_too_small = builder.icmp_unsigned(">=", min_entries, new_size)
                 builder.cbranch(is_too_small, bb_body, bb_end)
 
             builder.position_at_end(bb_end)
 
             new_size = builder.load(new_size_p)
             if DEBUG_ALLOCS:
-                context.printf(builder,
-                               "upsize to %zd items: current size = %zd, "
-                               "min entries = %zd, new size = %zd\n",
-                               nitems, size, min_entries, new_size)
+                context.printf(
+                    builder,
+                    "upsize to %zd items: current size = %zd, "
+                    "min entries = %zd, new size = %zd\n",
+                    nitems,
+                    size,
+                    min_entries,
+                    new_size,
+                )
             self._resize(payload, new_size, "cannot grow set")
 
     def downsize(self, nitems):
@@ -895,14 +916,16 @@ class SetInstance(object):
 
         # Ensure entries >= max(2 * used, MINSIZE)
         min_entries = builder.shl(nitems, one)
-        min_entries = builder.select(builder.icmp_unsigned('>=', min_entries, minsize),
-                                     min_entries, minsize)
+        min_entries = builder.select(
+            builder.icmp_unsigned(">=", min_entries, minsize), min_entries, minsize
+        )
         # Shrink only if size >= 4 * min_entries && size > MINSIZE
         max_size = builder.shl(min_entries, two)
         size = builder.add(payload.mask, one)
         need_resize = builder.and_(
-            builder.icmp_unsigned('<=', max_size, size),
-            builder.icmp_unsigned('<', minsize, size))
+            builder.icmp_unsigned("<=", max_size, size),
+            builder.icmp_unsigned("<", minsize, size),
+        )
 
         with builder.if_then(need_resize, likely=False):
             # Find out next suitable size
@@ -918,7 +941,7 @@ class SetInstance(object):
                 new_size = builder.load(new_size_p)
                 new_size = builder.lshr(new_size, one)
                 # Keep current size if new size would be < min_entries
-                is_too_small = builder.icmp_unsigned('>', min_entries, new_size)
+                is_too_small = builder.icmp_unsigned(">", min_entries, new_size)
                 with builder.if_then(is_too_small):
                     builder.branch(bb_end)
                 builder.store(new_size, new_size_p)
@@ -932,10 +955,15 @@ class SetInstance(object):
             # above were chosen carefully!
 
             if DEBUG_ALLOCS:
-                context.printf(builder,
-                               "downsize to %zd items: current size = %zd, "
-                               "min entries = %zd, new size = %zd\n",
-                               nitems, size, min_entries, new_size)
+                context.printf(
+                    builder,
+                    "downsize to %zd items: current size = %zd, "
+                    "min entries = %zd, new size = %zd\n",
+                    nitems,
+                    size,
+                    min_entries,
+                    new_size,
+                )
             self._resize(payload, new_size, "cannot shrink set")
 
     def _resize(self, payload, nentries, errmsg):
@@ -952,16 +980,16 @@ class SetInstance(object):
 
         ok = self._allocate_payload(nentries, realloc=True)
         with builder.if_then(builder.not_(ok), likely=False):
-            context.call_conv.return_user_exc(builder, MemoryError,
-                                              (errmsg,))
+            context.call_conv.return_user_exc(builder, MemoryError, (errmsg,))
 
         # Re-insert old entries
         # No incref since they already were the first time they were inserted
         payload = self.payload
         with old_payload._iterate() as loop:
             entry = loop.entry
-            self._add_key(payload, entry.key, entry.hash,
-                          do_resize=False, do_incref=False)
+            self._add_key(
+                payload, entry.key, entry.hash, do_resize=False, do_incref=False
+            )
 
         self._free_payload(old_payload.ptr)
 
@@ -985,8 +1013,9 @@ class SetInstance(object):
 
         ok = self._allocate_payload(nentries, realloc=True)
         with builder.if_then(builder.not_(ok), likely=False):
-            context.call_conv.return_user_exc(builder, MemoryError,
-                                              ("cannot reallocate set",))
+            context.call_conv.return_user_exc(
+                builder, MemoryError, ("cannot reallocate set",)
+            )
 
     def _allocate_payload(self, nentries, realloc=False):
         """
@@ -1011,28 +1040,31 @@ class SetInstance(object):
         payload_size -= entry_size
 
         # Total allocation size = <payload header size> + nentries * entry_size
-        allocsize, ovf = cgutils.muladd_with_overflow(builder, nentries,
-                                                      ir.Constant(intp_t, entry_size),
-                                                      ir.Constant(intp_t, payload_size))
+        allocsize, ovf = cgutils.muladd_with_overflow(
+            builder,
+            nentries,
+            ir.Constant(intp_t, entry_size),
+            ir.Constant(intp_t, payload_size),
+        )
         with builder.if_then(ovf, likely=False):
             builder.store(cgutils.false_bit, ok)
 
         with builder.if_then(builder.load(ok), likely=True):
             if realloc:
                 meminfo = self._set.meminfo
-                ptr = context.nrt.meminfo_varsize_alloc_unchecked(builder,
-                                                                  meminfo,
-                                                        size=allocsize)
+                ptr = context.nrt.meminfo_varsize_alloc_unchecked(
+                    builder, meminfo, size=allocsize
+                )
                 alloc_ok = cgutils.is_null(builder, ptr)
             else:
                 # create destructor to be called upon set destruction
                 dtor = self._imp_dtor(context, builder.module)
                 meminfo = context.nrt.meminfo_new_varsize_dtor_unchecked(
-                    builder, allocsize, builder.bitcast(dtor, cgutils.voidptr_t))
+                    builder, allocsize, builder.bitcast(dtor, cgutils.voidptr_t)
+                )
                 alloc_ok = cgutils.is_null(builder, meminfo)
 
-            with builder.if_else(alloc_ok,
-                                 likely=False) as (if_error, if_ok):
+            with builder.if_else(alloc_ok, likely=False) as (if_error, if_ok):
                 with if_error:
                     builder.store(cgutils.false_bit, ok)
                 with if_ok:
@@ -1049,9 +1081,13 @@ class SetInstance(object):
                     payload.mask = new_mask
 
                     if DEBUG_ALLOCS:
-                        context.printf(builder,
-                                       "allocated %zd bytes for set at %p: mask = %zd\n",
-                                       allocsize, payload.ptr, new_mask)
+                        context.printf(
+                            builder,
+                            "allocated %zd bytes for set at %p: mask = %zd\n",
+                            allocsize,
+                            payload.ptr,
+                            new_mask,
+                        )
 
         return builder.load(ok)
 
@@ -1086,15 +1122,17 @@ class SetInstance(object):
         # Total allocation size = <payload header size> + nentries * entry_size
         # (note there can't be any overflow since we're reusing an existing
         #  payload's parameters)
-        allocsize = builder.add(ir.Constant(intp_t, payload_size),
-                                builder.mul(ir.Constant(intp_t, entry_size),
-                                            nentries))
+        allocsize = builder.add(
+            ir.Constant(intp_t, payload_size),
+            builder.mul(ir.Constant(intp_t, entry_size), nentries),
+        )
 
         with builder.if_then(builder.load(ok), likely=True):
             # create destructor for new meminfo
             dtor = self._imp_dtor(context, builder.module)
             meminfo = context.nrt.meminfo_new_varsize_dtor_unchecked(
-                builder, allocsize, builder.bitcast(dtor, cgutils.voidptr_t))
+                builder, allocsize, builder.bitcast(dtor, cgutils.voidptr_t)
+            )
             alloc_ok = cgutils.is_null(builder, meminfo)
 
             with builder.if_else(alloc_ok, likely=False) as (if_error, if_ok):
@@ -1111,26 +1149,33 @@ class SetInstance(object):
                     # instead of using `_add_key` for every entry, since the
                     # size of the new set is the same, we can just copy the
                     # data directly without having to re-compute the hash
-                    cgutils.raw_memcpy(builder, payload.entries,
-                                       src_payload.entries, nentries,
-                                       entry_size)
+                    cgutils.raw_memcpy(
+                        builder,
+                        payload.entries,
+                        src_payload.entries,
+                        nentries,
+                        entry_size,
+                    )
                     # increment the refcounts to simulate `_add_key` for each
                     # element
                     with src_payload._iterate() as loop:
                         self.incref_value(loop.entry.key)
 
                     if DEBUG_ALLOCS:
-                        context.printf(builder,
-                                       "allocated %zd bytes for set at %p: mask = %zd\n",
-                                       allocsize, payload.ptr, mask)
+                        context.printf(
+                            builder,
+                            "allocated %zd bytes for set at %p: mask = %zd\n",
+                            allocsize,
+                            payload.ptr,
+                            mask,
+                        )
 
         return builder.load(ok)
 
     def _imp_dtor(self, context, module):
-        """Define the dtor for set
-        """
+        """Define the dtor for set"""
         llvoidptr = cgutils.voidptr_t
-        llsize_t= context.get_value_type(types.size_t)
+        llsize_t = context.get_value_type(types.size_t)
         # create a dtor function that takes (void* set, size_t size, void* dtor_info)
         fnty = ir.FunctionType(
             ir.VoidType(),
@@ -1143,7 +1188,7 @@ class SetInstance(object):
 
         if fn.is_declaration:
             # Set linkage
-            fn.linkage = 'linkonce_odr'
+            fn.linkage = "linkonce_odr"
             # Define
             builder = ir.IRBuilder(fn.append_basic_block())
             payload = _SetPayload(context, builder, self._ty, fn.args[0])
@@ -1155,13 +1200,11 @@ class SetInstance(object):
         return fn
 
     def incref_value(self, val):
-        """Incref an element value
-        """
+        """Incref an element value"""
         self._context.nrt.incref(self._builder, self._ty.dtype, val)
 
     def decref_value(self, val):
-        """Decref an element value
-        """
+        """Decref an element value"""
         self._context.nrt.decref(self._builder, self._ty.dtype, val)
 
 
@@ -1216,8 +1259,9 @@ class SetIterInstance(object):
             loop.do_break()
 
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # Constructors
+
 
 def build_set(context, builder, set_type, items):
     """
@@ -1247,11 +1291,12 @@ def set_empty_constructor(context, builder, sig, args):
     inst = SetInstance.allocate(context, builder, set_type)
     return impl_ret_new_ref(context, builder, set_type, inst.value)
 
+
 @lower_builtin(set, types.IterableType)
 def set_constructor(context, builder, sig, args):
     set_type = sig.return_type
-    items_type, = sig.args
-    items, = args
+    (items_type,) = sig.args
+    (items,) = args
 
     # If the argument has a len(), preallocate the set so as to
     # avoid resizes.
@@ -1268,35 +1313,40 @@ def set_constructor(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, set_type, inst.value)
 
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # Various operations
+
 
 @lower_builtin(len, types.Set)
 def set_len(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
     return inst.get_size()
 
+
 @lower_builtin(operator.contains, types.Set, types.Any)
 def in_set(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
     return inst.contains(args[1])
 
-@lower_builtin('getiter', types.Set)
+
+@lower_builtin("getiter", types.Set)
 def getiter_set(context, builder, sig, args):
     inst = SetIterInstance.from_set(context, builder, sig.return_type, args[0])
     return impl_ret_borrowed(context, builder, sig.return_type, inst.value)
 
-@lower_builtin('iternext', types.SetIter)
+
+@lower_builtin("iternext", types.SetIter)
 @iternext_impl(RefType.BORROWED)
 def iternext_listiter(context, builder, sig, args, result):
     inst = SetIterInstance(context, builder, sig.args[0], args[0])
     inst.iternext(result)
 
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # Methods
 
 # One-item-at-a-time operations
+
 
 @lower_builtin("set.add", types.Set, types.Any)
 def set_add(context, builder, sig, args):
@@ -1334,8 +1384,9 @@ def _set_pop(typingctx, s):
         inst = SetInstance(context, builder, sig.args[0], args[0])
         used = inst.payload.used
         with builder.if_then(cgutils.is_null(builder, used), likely=False):
-            context.call_conv.return_user_exc(builder, KeyError,
-                                            ("set.pop(): empty set",))
+            context.call_conv.return_user_exc(
+                builder, KeyError, ("set.pop(): empty set",)
+            )
 
         return inst.pop()
 
@@ -1356,8 +1407,9 @@ def _set_remove(typingctx, s, item):
         item = args[1]
         found = inst.discard(item)
         with builder.if_then(builder.not_(found), likely=False):
-            context.call_conv.return_user_exc(builder, KeyError,
-                                            ("set.remove(): key not in set",))
+            context.call_conv.return_user_exc(
+                builder, KeyError, ("set.remove(): key not in set",)
+            )
 
         return context.get_dummy_value()
 
@@ -1371,6 +1423,7 @@ def ol_set_remove(s, item):
 
 
 # Mutating set operations
+
 
 @intrinsic
 def _set_clear(typingctx, s):
@@ -1495,14 +1548,17 @@ def set_update(context, builder, sig, args):
 
     return context.get_dummy_value()
 
+
 def gen_operator_impl(op, impl):
     @intrinsic
     def _set_operator_intr(typingctx, a, b):
         sig = a(a, b)
+
         def codegen(context, builder, sig, args):
             assert sig.return_type == sig.args[0]
             impl(context, builder, sig, args)
             return impl_ret_borrowed(context, builder, sig.args[0], args[0])
+
         return sig, codegen
 
     @overload(op)
@@ -1516,11 +1572,12 @@ for op_, op_impl in [
     (operator.ior, set_update),
     (operator.isub, set_difference_update),
     (operator.ixor, set_symmetric_difference_update),
-    ]:
+]:
     gen_operator_impl(op_, op_impl)
 
 
 # Set operations creating a new set
+
 
 @overload(operator.sub)
 @overload_method(types.Set, "difference")
@@ -1533,6 +1590,7 @@ def impl_set_difference(a, b):
         return s
 
     return difference_impl
+
 
 @overload(operator.and_)
 @overload_method(types.Set, "intersection")
@@ -1551,6 +1609,7 @@ def set_intersection(a, b):
 
     return intersection_impl
 
+
 @overload(operator.xor)
 @overload_method(types.Set, "symmetric_difference")
 def set_symmetric_difference(a, b):
@@ -1567,6 +1626,7 @@ def set_symmetric_difference(a, b):
             return s
 
     return symmetric_difference_impl
+
 
 @overload(operator.or_)
 @overload_method(types.Set, "union")
@@ -1587,6 +1647,7 @@ def set_union(a, b):
 
 
 # Predicates
+
 
 @intrinsic
 def _set_isdisjoint(typingctx, a, b):
@@ -1620,6 +1681,7 @@ def _set_issubset(typingctx, a, b):
 
     return sig, codegen
 
+
 @overload(operator.le)
 @overload_method(types.Set, "issubset")
 def set_issubset(a, b):
@@ -1638,6 +1700,7 @@ def set_issuperset(a, b):
 
     return superset_impl
 
+
 @intrinsic
 def _set_eq(typingctx, a, b):
     sig = types.boolean(a, b)
@@ -1650,11 +1713,13 @@ def _set_eq(typingctx, a, b):
 
     return sig, codegen
 
+
 @overload(operator.eq)
 def set_eq(a, b):
     check_all_set(a, b)
 
     return lambda a, b: _set_eq(a, b)
+
 
 @overload(operator.ne)
 def set_ne(a, b):
@@ -1664,6 +1729,7 @@ def set_ne(a, b):
         return not a == b
 
     return ne_impl
+
 
 @intrinsic
 def _set_lt(typingctx, a, b):
@@ -1677,11 +1743,13 @@ def _set_lt(typingctx, a, b):
 
     return sig, codegen
 
+
 @overload(operator.lt)
 def set_lt(a, b):
     check_all_set(a, b)
 
     return lambda a, b: _set_lt(a, b)
+
 
 @overload(operator.gt)
 def set_gt(a, b):
@@ -1692,17 +1760,19 @@ def set_gt(a, b):
 
     return gt_impl
 
+
 @lower_builtin(operator.is_, types.Set, types.Set)
 def set_is(context, builder, sig, args):
     a = SetInstance(context, builder, sig.args[0], args[0])
     b = SetInstance(context, builder, sig.args[1], args[1])
     ma = builder.ptrtoint(a.meminfo, cgutils.intp_t)
     mb = builder.ptrtoint(b.meminfo, cgutils.intp_t)
-    return builder.icmp_signed('==', ma, mb)
+    return builder.icmp_signed("==", ma, mb)
 
 
 # -----------------------------------------------------------------------------
 # Implicit casting
+
 
 @lower_cast(types.Set, types.Set)
 def set_to_set(context, builder, fromty, toty, val):

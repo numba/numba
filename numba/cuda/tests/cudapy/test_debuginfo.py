@@ -8,7 +8,7 @@ import re
 import unittest
 
 
-@skip_on_cudasim('Simulator does not produce debug dumps')
+@skip_on_cudasim("Simulator does not produce debug dumps")
 class TestCudaDebugInfo(CUDATestCase):
     """
     These tests only checks the compiled PTX for debuginfo section
@@ -49,7 +49,7 @@ class TestCudaDebugInfo(CUDATestCase):
         self._check(foo, sig=(types.int32[:],), expect=True)
 
     def test_environment_override(self):
-        with override_config('CUDA_DEBUGINFO_DEFAULT', 1):
+        with override_config("CUDA_DEBUGINFO_DEFAULT", 1):
             # Using default value
             @cuda.jit(opt=False)
             def foo(x):
@@ -81,14 +81,15 @@ class TestCudaDebugInfo(CUDATestCase):
 
         llvm_ir = f.inspect_llvm(sig)
 
-        defines = [line for line in llvm_ir.splitlines()
-                   if 'define void @"_ZN6cudapy' in line]
+        defines = [
+            line for line in llvm_ir.splitlines() if 'define void @"_ZN6cudapy' in line
+        ]
 
         # Make sure we only found one definition
         self.assertEqual(len(defines), 1)
 
         wrapper_define = defines[0]
-        self.assertIn('!dbg', wrapper_define)
+        self.assertIn("!dbg", wrapper_define)
 
     def test_debug_function_calls_internal_impl(self):
         # Calling a function in a module generated from an implementation
@@ -146,15 +147,12 @@ class TestCudaDebugInfo(CUDATestCase):
         debug_opts = itertools.product(*[(True, False)] * 3)
 
         for kernel_debug, f1_debug, f2_debug in debug_opts:
-            with self.subTest(kernel_debug=kernel_debug,
-                              f1_debug=f1_debug,
-                              f2_debug=f2_debug):
-                self._test_chained_device_function(kernel_debug,
-                                                   f1_debug,
-                                                   f2_debug)
+            with self.subTest(
+                kernel_debug=kernel_debug, f1_debug=f1_debug, f2_debug=f2_debug
+            ):
+                self._test_chained_device_function(kernel_debug, f1_debug, f2_debug)
 
-    def _test_chained_device_function_two_calls(self, kernel_debug, f1_debug,
-                                                f2_debug):
+    def _test_chained_device_function_two_calls(self, kernel_debug, f1_debug, f2_debug):
 
         @cuda.jit(device=True, debug=f2_debug, opt=False)
         def f2(x):
@@ -180,12 +178,12 @@ class TestCudaDebugInfo(CUDATestCase):
         debug_opts = itertools.product(*[(True, False)] * 3)
 
         for kernel_debug, f1_debug, f2_debug in debug_opts:
-            with self.subTest(kernel_debug=kernel_debug,
-                              f1_debug=f1_debug,
-                              f2_debug=f2_debug):
-                self._test_chained_device_function_two_calls(kernel_debug,
-                                                             f1_debug,
-                                                             f2_debug)
+            with self.subTest(
+                kernel_debug=kernel_debug, f1_debug=f1_debug, f2_debug=f2_debug
+            ):
+                self._test_chained_device_function_two_calls(
+                    kernel_debug, f1_debug, f2_debug
+                )
 
     def test_chained_device_three_functions(self):
         # Like test_chained_device_function, but with enough functions (three)
@@ -217,5 +215,5 @@ class TestCudaDebugInfo(CUDATestCase):
         three_device_fns(kernel_debug=False, leaf_debug=False)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

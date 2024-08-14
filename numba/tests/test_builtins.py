@@ -11,20 +11,20 @@ import warnings
 
 from numba import jit, typeof, njit, typed
 from numba.core import errors, types, config
-from numba.tests.support import (TestCase, tag, ignore_internal_warnings,
-                                 MemoryLeakMixin)
+from numba.tests.support import TestCase, tag, ignore_internal_warnings, MemoryLeakMixin
 from numba.core.extending import overload_method, box
 
 
-forceobj_flags = {'forceobj': True}
+forceobj_flags = {"forceobj": True}
 
-no_pyobj_flags = {'nopython': True, '_nrt': False}
+no_pyobj_flags = {"nopython": True, "_nrt": False}
 
-nrt_no_pyobj_flags = {'nopython': True}
+nrt_no_pyobj_flags = {"nopython": True}
 
 
 def abs_usecase(x):
     return abs(x)
+
 
 def all_usecase(x, y):
     if x == None and y == None:
@@ -36,6 +36,7 @@ def all_usecase(x, y):
     else:
         return all([x, y])
 
+
 def any_usecase(x, y):
     if x == None and y == None:
         return any([])
@@ -46,79 +47,98 @@ def any_usecase(x, y):
     else:
         return any([x, y])
 
+
 def bool_usecase(x):
     return bool(x)
+
 
 def complex_usecase(x, y):
     return complex(x, y)
 
+
 def divmod_usecase(x, y):
     return divmod(x, y)
 
+
 def enumerate_usecase():
     result = 0
-    for i, j in enumerate((1., 2.5, 3.)):
+    for i, j in enumerate((1.0, 2.5, 3.0)):
         result += i * j
     return result
+
 
 def enumerate_start_usecase():
     result = 0
-    for i, j in enumerate((1., 2.5, 3.), 42):
+    for i, j in enumerate((1.0, 2.5, 3.0), 42):
         result += i * j
     return result
 
+
 def enumerate_invalid_start_usecase():
     result = 0
-    for i, j in enumerate((1., 2.5, 3.), 3.14159):
+    for i, j in enumerate((1.0, 2.5, 3.0), 3.14159):
         result += i * j
     return result
+
 
 def filter_usecase(x, filter_func):
     return filter(filter_func, x)
 
+
 def float_usecase(x):
     return float(x)
 
+
 def float_inf_usecase(x):
     d = {
-        0: float('inf'),
-        1: float('INF'),
-        2: float('-inf'),
-        3: float('-INF'),
-        4: float('\r\nINF\r       '),
-        5: float('       \r\n\t-INF'),
-        6: float('1234.45'),
-        7: float('\n-123.4\r'),
+        0: float("inf"),
+        1: float("INF"),
+        2: float("-inf"),
+        3: float("-INF"),
+        4: float("\r\nINF\r       "),
+        5: float("       \r\n\t-INF"),
+        6: float("1234.45"),
+        7: float("\n-123.4\r"),
     }
     return d.get(x)
+
 
 def format_usecase(x, y):
     return x.format(y)
 
+
 def globals_usecase():
     return globals()
 
+
 # NOTE: hash() is tested in test_hashing
+
 
 def hex_usecase(x):
     return hex(x)
 
+
 def str_usecase(x):
     return str(x)
 
+
 def int_usecase(x, base):
     return int(x, base=base)
+
 
 def iter_next_usecase(x):
     it = iter(x)
     return next(it), next(it)
 
+
 def locals_usecase(x):
     y = 5
-    return locals()['y']
+    return locals()["y"]
+
 
 def long_usecase(x, base):
     return long(x, base=base)
+
 
 def map_usecase(x, map_func):
     return map(map_func, x)
@@ -127,11 +147,14 @@ def map_usecase(x, map_func):
 def max_usecase1(x, y):
     return max(x, y)
 
+
 def max_usecase2(x, y):
     return max([x, y])
 
+
 def max_usecase3(x):
     return max(x)
+
 
 def max_usecase4():
     return max(())
@@ -140,38 +163,50 @@ def max_usecase4():
 def min_usecase1(x, y):
     return min(x, y)
 
+
 def min_usecase2(x, y):
     return min([x, y])
+
 
 def min_usecase3(x):
     return min(x)
 
+
 def min_usecase4():
     return min(())
+
 
 def oct_usecase(x):
     return oct(x)
 
+
 def reduce_usecase(reduce_func, x):
     return functools.reduce(reduce_func, x)
+
 
 def round_usecase1(x):
     return round(x)
 
+
 def round_usecase2(x, n):
     return round(x, n)
+
 
 def sum_usecase(x):
     return sum(x)
 
+
 def type_unary_usecase(a, b):
     return type(a)(b)
+
 
 def truth_usecase(p):
     return operator.truth(p)
 
+
 def unichr_usecase(x):
     return unichr(x)
+
 
 def zip_usecase():
     result = 0
@@ -179,15 +214,17 @@ def zip_usecase():
         result += i * j
     return result
 
+
 def zip_0_usecase():
     result = 0
     for i in zip():
         result += 1
     return result
 
+
 def zip_1_usecase():
     result = 0
-    for i, in zip((1, 2)):
+    for (i,) in zip((1, 2)):
         result += i
     return result
 
@@ -211,7 +248,7 @@ def zip_first_exhausted():
 
 
 def pow_op_usecase(x, y):
-    return x ** y
+    return x**y
 
 
 def pow_usecase(x, y):
@@ -230,76 +267,74 @@ def sum_kwarg_usecase(x, start=0):
 def isinstance_usecase(a):
     if isinstance(a, (int, float)):
         if isinstance(a, int):
-            return a + 1, 'int'
+            return a + 1, "int"
         if isinstance(a, float):
-            return a + 2.0, 'float'
+            return a + 2.0, "float"
     elif isinstance(a, str):
-        return a + ", world!", 'str'
+        return a + ", world!", "str"
     elif isinstance(a, complex):
-        return a.imag, 'complex'
+        return a.imag, "complex"
     elif isinstance(a, (tuple, list)):
         if isinstance(a, tuple):
-            return 'tuple'
+            return "tuple"
         else:
-            return 'list'
+            return "list"
     elif isinstance(a, set):
-        return 'set'
+        return "set"
     elif isinstance(a, bytes):
-        return 'bytes'
-    return 'no match'
+        return "bytes"
+    return "no match"
 
 
 def isinstance_dict():
     a = {1: 2, 3: 4}
-    b = {'a': 10, 'b': np.zeros(3)}
+    b = {"a": 10, "b": np.zeros(3)}
     if isinstance(a, dict) and isinstance(b, dict):
-        return 'dict'
+        return "dict"
     else:
-        return 'not dict'
+        return "not dict"
 
 
 def isinstance_usecase_numba_types(a):
     if isinstance(a, typed.List):
-        return 'typed list'
+        return "typed list"
     elif isinstance(a, (types.int32, types.int64)):
         if isinstance(a, types.int32):
-            return 'int32'
+            return "int32"
         else:
-            return 'int64'
+            return "int64"
     elif isinstance(a, (types.float32, types.float64)):
         if isinstance(a, types.float32):
-            return 'float32'
+            return "float32"
         elif isinstance(a, types.float64):
-            return 'float64'
+            return "float64"
     elif isinstance(a, typed.Dict):
-        return 'typed dict'
+        return "typed dict"
     else:
-        return 'no match'
+        return "no match"
 
 
 def isinstance_usecase_numba_types_2():
     # some types cannot be passed as argument to njit functions
-    a = b'hello'
+    a = b"hello"
     b = range(1, 2)
     c = dict()
     c[2] = 3
-    if isinstance(a, bytes) and \
-            isinstance(b, range) and \
-            isinstance(c, dict):
+    if isinstance(a, bytes) and isinstance(b, range) and isinstance(c, dict):
         return True
     return False
 
 
 def invalid_isinstance_usecase(x):
-    if isinstance(x, ('foo',)):
-        return 'true branch'
+    if isinstance(x, ("foo",)):
+        return "true branch"
     else:
-        return 'false branch'
+        return "false branch"
 
 
 def isinstance_usecase_invalid_type(x):
     # this should be a valid call when x := float
-    if isinstance(x, (float, 'not a type')):
+    if isinstance(x, (float, "not a type")):
         return True
     else:
         return False
@@ -309,7 +344,7 @@ def invalid_isinstance_usecase_phi_nopropagate(x):
     if x > 4:
         z = 10
     else:
-        z = 'a'
+        z = "a"
     if isinstance(z, int):
         return True
     else:
@@ -337,12 +372,16 @@ def invalid_isinstance_optional_usecase(x):
     else:
         return False
 
+
 def invalid_isinstance_unsupported_type_usecase():
-    ntpl = namedtuple('ntpl', ['a', 'b'])
+    ntpl = namedtuple("ntpl", ["a", "b"])
     inst = ntpl(1, 2)
+
     def impl(x):
         return isinstance(inst, ntpl)
+
     return impl
+
 
 class TestBuiltins(TestCase):
 
@@ -360,20 +399,24 @@ class TestBuiltins(TestCase):
 
         cfunc = jit((types.float32,), **flags)(pyfunc)
         for x in [-1.1, 0.0, 1.1]:
-            self.assertPreciseEqual(cfunc(x), pyfunc(x), prec='single')
+            self.assertPreciseEqual(cfunc(x), pyfunc(x), prec="single")
 
-        complex_values = [-1.1 + 0.5j, 0.0 + 0j, 1.1 + 3j,
-                          float('inf') + 1j * float('nan'),
-                          float('nan') - 1j * float('inf')]
+        complex_values = [
+            -1.1 + 0.5j,
+            0.0 + 0j,
+            1.1 + 3j,
+            float("inf") + 1j * float("nan"),
+            float("nan") - 1j * float("inf"),
+        ]
         cfunc = jit((types.complex64,), **flags)(pyfunc)
         for x in complex_values:
-            self.assertPreciseEqual(cfunc(x), pyfunc(x), prec='single')
+            self.assertPreciseEqual(cfunc(x), pyfunc(x), prec="single")
         cfunc = jit((types.complex128,), **flags)(pyfunc)
         for x in complex_values:
             self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
         for unsigned_type in types.unsigned_domain:
-            unsigned_values = [0, 10, 2, 2 ** unsigned_type.bitwidth - 1]
+            unsigned_values = [0, 10, 2, 2**unsigned_type.bitwidth - 1]
             cfunc = jit((unsigned_type,), **flags)(pyfunc)
             for x in unsigned_values:
                 self.assertPreciseEqual(cfunc(x), pyfunc(x))
@@ -384,7 +427,7 @@ class TestBuiltins(TestCase):
     def test_all(self, flags=forceobj_flags):
         pyfunc = all_usecase
 
-        cfunc = jit((types.int32,types.int32), **flags)(pyfunc)
+        cfunc = jit((types.int32, types.int32), **flags)(pyfunc)
         x_operands = [-1, 0, 1, None]
         y_operands = [-1, 0, 1, None]
         for x, y in itertools.product(x_operands, y_operands):
@@ -397,7 +440,7 @@ class TestBuiltins(TestCase):
     def test_any(self, flags=forceobj_flags):
         pyfunc = any_usecase
 
-        cfunc = jit((types.int32,types.int32), **flags)(pyfunc)
+        cfunc = jit((types.int32, types.int32), **flags)(pyfunc)
         x_operands = [-1, 0, 1, None]
         y_operands = [-1, 0, 1, None]
         for x, y in itertools.product(x_operands, y_operands):
@@ -414,10 +457,10 @@ class TestBuiltins(TestCase):
         for x in [-1, 0, 1]:
             self.assertPreciseEqual(cfunc(x), pyfunc(x))
         cfunc = jit((types.float64,), **flags)(pyfunc)
-        for x in [0.0, -0.0, 1.5, float('inf'), float('nan')]:
+        for x in [0.0, -0.0, 1.5, float("inf"), float("nan")]:
             self.assertPreciseEqual(cfunc(x), pyfunc(x))
         cfunc = jit((types.complex128,), **flags)(pyfunc)
-        for x in [complex(0, float('inf')), complex(0, float('nan'))]:
+        for x in [complex(0, float("inf")), complex(0, float("nan"))]:
             self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
     def test_bool_npm(self):
@@ -427,10 +470,10 @@ class TestBuiltins(TestCase):
         pyfunc = bool_usecase
 
         cfunc = jit((types.string,), **flags)(pyfunc)
-        for x in ['x', '']:
+        for x in ["x", ""]:
             self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
-        cfunc = jit((types.Dummy('list'),), **flags)(pyfunc)
+        cfunc = jit((types.Dummy("list"),), **flags)(pyfunc)
         for x in [[1], []]:
             self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
@@ -463,14 +506,18 @@ class TestBuiltins(TestCase):
                 x &= (1 << (bits - 1)) - 1
             return x
 
-        denominators = [1, 3, 7, 15, -1, -3, -7, -15, 2**63 - 1, -2**63]
+        denominators = [1, 3, 7, 15, -1, -3, -7, -15, 2**63 - 1, -(2**63)]
         numerators = denominators + [0]
-        for x, y, in itertools.product(numerators, denominators):
+        for (
+            x,
+            y,
+        ) in itertools.product(numerators, denominators):
             expected_quot, expected_rem = pyfunc(x, y)
             quot, rem = cfunc(x, y)
             f = truncate_result
-            self.assertPreciseEqual((f(quot), f(rem)),
-                                    (f(expected_quot), f(expected_rem)))
+            self.assertPreciseEqual(
+                (f(quot), f(rem)), (f(expected_quot), f(expected_rem))
+            )
 
         for x in numerators:
             with self.assertRaises(ZeroDivisionError):
@@ -484,10 +531,12 @@ class TestBuiltins(TestCase):
 
         cfunc = jit((types.float64, types.float64), **flags)(pyfunc)
 
-        denominators = [1., 3.5, 1e100, -2., -7.5, -1e101,
-                        np.inf, -np.inf, np.nan]
+        denominators = [1.0, 3.5, 1e100, -2.0, -7.5, -1e101, np.inf, -np.inf, np.nan]
         numerators = denominators + [-0.0, 0.0]
-        for x, y, in itertools.product(numerators, denominators):
+        for (
+            x,
+            y,
+        ) in itertools.product(numerators, denominators):
             expected_quot, expected_rem = pyfunc(x, y)
             quot, rem = cfunc(x, y)
             self.assertPreciseEqual((quot, rem), (expected_quot, expected_rem))
@@ -531,13 +580,14 @@ class TestBuiltins(TestCase):
 
     def test_filter(self, flags=forceobj_flags):
         pyfunc = filter_usecase
-        argtys = (types.Dummy('list'), types.Dummy('function_ptr'))
+        argtys = (types.Dummy("list"), types.Dummy("function_ptr"))
         cfunc = jit(argtys, **flags)(pyfunc)
 
         filter_func = lambda x: x % 2
         x = [0, 1, 2, 3, 4]
-        self.assertSequenceEqual(list(cfunc(x, filter_func)),
-                                 list(pyfunc(x, filter_func)))
+        self.assertSequenceEqual(
+            list(cfunc(x, filter_func)), list(pyfunc(x, filter_func))
+        )
 
     def test_filter_npm(self):
         with self.assertTypingError():
@@ -552,10 +602,10 @@ class TestBuiltins(TestCase):
 
         cfunc = jit((types.float32,), **flags)(pyfunc)
         for x in [-1.1, 0.0, 1.1]:
-            self.assertPreciseEqual(cfunc(x), pyfunc(x), prec='single')
+            self.assertPreciseEqual(cfunc(x), pyfunc(x), prec="single")
 
         cfunc = jit((types.string,), **flags)(pyfunc)
-        for x in ['-1.1', '0.0', '1.1', 'inf', '-inf', 'INF', '-INF']:
+        for x in ["-1.1", "0.0", "1.1", "inf", "-inf", "INF", "-INF"]:
             self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
     def test_float_npm(self):
@@ -571,19 +621,37 @@ class TestBuiltins(TestCase):
     def test_format(self, flags=forceobj_flags):
         pyfunc = format_usecase
 
-        cfunc = jit((types.string, types.int32,), **flags)(pyfunc)
-        x = '{0}'
+        cfunc = jit(
+            (
+                types.string,
+                types.int32,
+            ),
+            **flags,
+        )(pyfunc)
+        x = "{0}"
         for y in [-1, 0, 1]:
             self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
-        cfunc = jit((types.string, types.float32,), **flags)(pyfunc)
-        x = '{0}'
+        cfunc = jit(
+            (
+                types.string,
+                types.float32,
+            ),
+            **flags,
+        )(pyfunc)
+        x = "{0}"
         for y in [-1.1, 0.0, 1.1]:
             self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
-        cfunc = jit((types.string, types.string,), **flags)(pyfunc)
-        x = '{0}'
-        for y in ['a', 'b', 'c']:
+        cfunc = jit(
+            (
+                types.string,
+                types.string,
+            ),
+            **flags,
+        )(pyfunc)
+        x = "{0}"
+        for y in ["a", "b", "c"]:
             self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
     def test_format_npm(self):
@@ -634,12 +702,7 @@ class TestBuiltins(TestCase):
             1000,
         ]
 
-        large_inputs = [
-            123456789,
-            2222222,
-            1000000,
-            ~0x0
-        ]
+        large_inputs = [123456789, 2222222, 1000000, ~0x0]
 
         args = [*small_inputs, *large_inputs]
 
@@ -669,9 +732,15 @@ class TestBuiltins(TestCase):
     def test_int(self, flags=forceobj_flags):
         pyfunc = int_usecase
 
-        cfunc = jit((types.string, types.int32,), **flags)(pyfunc)
+        cfunc = jit(
+            (
+                types.string,
+                types.int32,
+            ),
+            **flags,
+        )(pyfunc)
 
-        x_operands = ['-1', '0', '1', '10']
+        x_operands = ["-1", "0", "1", "10"]
         y_operands = [2, 8, 10, 16]
         for x, y in itertools.product(x_operands, y_operands):
             self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
@@ -706,13 +775,12 @@ class TestBuiltins(TestCase):
 
     def test_map(self, flags=forceobj_flags):
         pyfunc = map_usecase
-        argtys = (types.Dummy('list'), types.Dummy('function_ptr'))
+        argtys = (types.Dummy("list"), types.Dummy("function_ptr"))
         cfunc = jit(argtys, **flags)(pyfunc)
 
         map_func = lambda x: x * 2
         x = [0, 1, 2, 3, 4]
-        self.assertSequenceEqual(list(cfunc(x, map_func)),
-                                 list(pyfunc(x, map_func)))
+        self.assertSequenceEqual(list(cfunc(x, map_func)), list(pyfunc(x, map_func)))
 
     def test_map_npm(self):
         with self.assertTypingError():
@@ -780,7 +848,7 @@ class TestBuiltins(TestCase):
         def check(argty):
             cfunc = jit((argty,), **flags)(pyfunc)
             # Check that the algorithm matches Python's with a non-total order
-            tup = (1.5, float('nan'), 2.5)
+            tup = (1.5, float("nan"), 2.5)
             for val in [tup, tup[::-1]]:
                 self.assertPreciseEqual(cfunc(val), pyfunc(val))
 
@@ -806,7 +874,13 @@ class TestBuiltins(TestCase):
         self.test_min_3(flags=no_pyobj_flags)
 
     def check_min_max_invalid_types(self, pyfunc, flags=forceobj_flags):
-        cfunc = jit((types.int32, types.Dummy('list'),), **flags)(pyfunc)
+        cfunc = jit(
+            (
+                types.int32,
+                types.Dummy("list"),
+            ),
+            **flags,
+        )(pyfunc)
         cfunc(1, [1])
 
     def test_max_1_invalid_types(self):
@@ -867,15 +941,15 @@ class TestBuiltins(TestCase):
     def check_min_max_empty_tuple(self, pyfunc, func_name):
         with self.assertTypingError() as raises:
             jit((), **no_pyobj_flags)(pyfunc)
-        self.assertIn("%s() argument is an empty tuple" % func_name,
-                      str(raises.exception))
+        self.assertIn(
+            "%s() argument is an empty tuple" % func_name, str(raises.exception)
+        )
 
     def test_max_empty_tuple(self):
         self.check_min_max_empty_tuple(max_usecase4, "max")
 
     def test_min_empty_tuple(self):
         self.check_min_max_empty_tuple(min_usecase4, "min")
-
 
     def test_oct(self, flags=forceobj_flags):
         pyfunc = oct_usecase
@@ -890,7 +964,7 @@ class TestBuiltins(TestCase):
 
     def test_reduce(self, flags=forceobj_flags):
         pyfunc = reduce_usecase
-        argtys = (types.Dummy('function_ptr'), types.Dummy('list'))
+        argtys = (types.Dummy("function_ptr"), types.Dummy("list"))
         cfunc = jit(argtys, **flags)(pyfunc)
 
         reduce_func = lambda x, y: x + y
@@ -898,7 +972,7 @@ class TestBuiltins(TestCase):
         x = range(10)
         self.assertPreciseEqual(cfunc(reduce_func, x), pyfunc(reduce_func, x))
 
-        x = [x + x/10.0 for x in range(10)]
+        x = [x + x / 10.0 for x in range(10)]
         self.assertPreciseEqual(cfunc(reduce_func, x), pyfunc(reduce_func, x))
 
         x = [complex(x, x) for x in range(10)]
@@ -925,16 +999,29 @@ class TestBuiltins(TestCase):
         pyfunc = round_usecase2
 
         for tp in (types.float64, types.float32):
-            prec = 'single' if tp is types.float32 else 'exact'
+            prec = "single" if tp is types.float32 else "exact"
             cfunc = jit((tp, types.int32), **flags)(pyfunc)
-            for x in [0.0, 0.1, 0.125, 0.25, 0.5, 0.75, 1.25,
-                      1.5, 1.75, 2.25, 2.5, 2.75, 12.5, 15.0, 22.5]:
+            for x in [
+                0.0,
+                0.1,
+                0.125,
+                0.25,
+                0.5,
+                0.75,
+                1.25,
+                1.5,
+                1.75,
+                2.25,
+                2.5,
+                2.75,
+                12.5,
+                15.0,
+                22.5,
+            ]:
                 for n in (-1, 0, 1, 2):
-                    self.assertPreciseEqual(cfunc(x, n), pyfunc(x, n),
-                                            prec=prec)
+                    self.assertPreciseEqual(cfunc(x, n), pyfunc(x, n), prec=prec)
                     expected = pyfunc(-x, n)
-                    self.assertPreciseEqual(cfunc(-x, n), pyfunc(-x, n),
-                                            prec=prec)
+                    self.assertPreciseEqual(cfunc(-x, n), pyfunc(-x, n), prec=prec)
 
     def test_round2_npm(self):
         self.test_round2(flags=no_pyobj_flags)
@@ -942,12 +1029,12 @@ class TestBuiltins(TestCase):
     def test_sum_objmode(self, flags=forceobj_flags):
         pyfunc = sum_usecase
 
-        cfunc = jit((types.Dummy('list'),), **flags)(pyfunc)
+        cfunc = jit((types.Dummy("list"),), **flags)(pyfunc)
 
         x = range(10)
         self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
-        x = [x + x/10.0 for x in range(10)]
+        x = [x + x / 10.0 for x in range(10)]
         self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
         x = [complex(x, x) for x in range(10)]
@@ -964,12 +1051,12 @@ class TestBuiltins(TestCase):
             ret = sum(tmp, start)
             return sum(tmp, start=start), ret
 
-        ntpl = namedtuple('ntpl', ['a', 'b'])
+        ntpl = namedtuple("ntpl", ["a", "b"])
 
         # check call with default kwarg, start=0
         def args():
             yield [*range(10)]
-            yield [x + x/10.0 for x in range(10)]
+            yield [x + x / 10.0 for x in range(10)]
             yield [x * 1j for x in range(10)]
             yield (1, 2, 3)
             yield (1, 2, 3j)
@@ -994,7 +1081,7 @@ class TestBuiltins(TestCase):
         # check call with changing default kwarg, start
         def args_kws():
             yield [*range(10)], 12
-            yield [x + x/10.0 for x in range(10)], 19j
+            yield [x + x / 10.0 for x in range(10)], 19j
             yield [x * 1j for x in range(10)], -2
             yield (1, 2, 3), 9
             yield (1, 2, 3j), -0
@@ -1008,14 +1095,16 @@ class TestBuiltins(TestCase):
             yield ntpl(100, 200j), 9
 
         for x, start in args_kws():
-            self.assertPreciseEqual(sum_kwarg(x, start=start),
-                                    sum_kwarg.py_func(x, start=start))
+            self.assertPreciseEqual(
+                sum_kwarg(x, start=start), sum_kwarg.py_func(x, start=start)
+            )
 
         # check call with range()
         for start in range(-3, 4):
             for sz in range(-3, 4):
-                self.assertPreciseEqual(sum_range(sz, start=start),
-                                        sum_range.py_func(sz, start=start))
+                self.assertPreciseEqual(
+                    sum_range(sz, start=start), sum_range.py_func(sz, start=start)
+                )
 
     def test_sum_exceptions(self):
         sum_default = njit(sum_usecase)
@@ -1025,25 +1114,25 @@ class TestBuiltins(TestCase):
         msg = "sum() can't sum {}"
 
         with self.assertRaises(errors.TypingError) as raises:
-            sum_kwarg((1, 2, 3), 'a')
+            sum_kwarg((1, 2, 3), "a")
 
-        self.assertIn(msg.format('strings'), str(raises.exception))
-
-        with self.assertRaises(errors.TypingError) as raises:
-            sum_kwarg((1, 2, 3), b'123')
-
-        self.assertIn(msg.format('bytes'), str(raises.exception))
+        self.assertIn(msg.format("strings"), str(raises.exception))
 
         with self.assertRaises(errors.TypingError) as raises:
-            sum_kwarg((1, 2, 3), bytearray(b'123'))
+            sum_kwarg((1, 2, 3), b"123")
 
-        self.assertIn(msg.format('bytearray'), str(raises.exception))
+        self.assertIn(msg.format("bytes"), str(raises.exception))
+
+        with self.assertRaises(errors.TypingError) as raises:
+            sum_kwarg((1, 2, 3), bytearray(b"123"))
+
+        self.assertIn(msg.format("bytearray"), str(raises.exception))
 
         # check invalid type has no impl
         with self.assertRaises(errors.TypingError) as raises:
-            sum_default('abcd')
+            sum_default("abcd")
 
-        self.assertIn('No implementation', str(raises.exception))
+        self.assertIn("No implementation", str(raises.exception))
 
     def test_truth(self):
         pyfunc = truth_usecase
@@ -1164,7 +1253,7 @@ class TestBuiltins(TestCase):
 class TestOperatorMixedTypes(TestCase):
 
     def test_eq_ne(self):
-        for opstr in ('eq', 'ne'):
+        for opstr in ("eq", "ne"):
             op = getattr(operator, opstr)
 
             @njit
@@ -1178,8 +1267,9 @@ class TestOperatorMixedTypes(TestCase):
                 self.assertPreciseEqual(func.py_func(x, y), func(x, y))
 
     def test_cmp(self):
-        for opstr in ('gt', 'lt', 'ge', 'le', 'eq', 'ne'):
+        for opstr in ("gt", "lt", "ge", "le", "eq", "ne"):
             op = getattr(operator, opstr)
+
             @njit
             def func(a, b):
                 return op(a, b)
@@ -1189,8 +1279,11 @@ class TestOperatorMixedTypes(TestCase):
             for x, y in itertools.product(things, things):
                 expected = func.py_func(x, y)
                 got = func(x, y)
-                message = ("%s %s %s does not match between Python and Numba"
-                           % (x, opstr, y))
+                message = "%s %s %s does not match between Python and Numba" % (
+                    x,
+                    opstr,
+                    y,
+                )
                 self.assertEqual(expected, got, message)
 
 
@@ -1200,15 +1293,15 @@ class TestIsinstanceBuiltin(TestCase):
         cfunc = jit(nopython=True)(pyfunc)
 
         inputs = (
-            3,              # int
-            5.0,            # float
-            "Hello",        # string
-            b'world',       # bytes
-            1j,             # complex
-            [1, 2, 3],      # list
-            (1, 3, 3, 3),   # UniTuple
-            set([1, 2]),    # set
-            (1, 'nba', 2),  # Heterogeneous Tuple
+            3,  # int
+            5.0,  # float
+            "Hello",  # string
+            b"world",  # bytes
+            1j,  # complex
+            [1, 2, 3],  # list
+            (1, 3, 3, 3),  # UniTuple
+            set([1, 2]),  # set
+            (1, "nba", 2),  # Heterogeneous Tuple
             # {'hello': 2},   # dict - doesn't work as input
             None,
         )
@@ -1236,13 +1329,13 @@ class TestIsinstanceBuiltin(TestCase):
         cfunc = jit(nopython=True)(pyfunc)
 
         inputs = (
-            (types.int32(1), 'int32'),
-            (types.int64(2), 'int64'),
-            (types.float32(3.0), 'float32'),
-            (types.float64(4.0), 'float64'),
-            (types.complex64(5j), 'no match'),
-            (typed.List([1, 2]), 'typed list'),
-            (typed.Dict.empty(types.int64, types.int64), 'typed dict')
+            (types.int32(1), "int32"),
+            (types.int64(2), "int64"),
+            (types.float32(3.0), "float32"),
+            (types.float64(4.0), "float64"),
+            (types.complex64(5j), "no match"),
+            (typed.List([1, 2]), "typed list"),
+            (typed.Dict.empty(types.int64, types.int64), "typed dict"),
         )
 
         for inpt, expected in inputs:
@@ -1262,7 +1355,7 @@ class TestIsinstanceBuiltin(TestCase):
         self.assertTrue(cfunc(3.4))
 
         # invalid type
-        msg = 'Cannot infer numba type of python type'
+        msg = "Cannot infer numba type of python type"
 
         with self.assertRaises(errors.TypingError) as raises:
             cfunc(100)
@@ -1271,16 +1364,25 @@ class TestIsinstanceBuiltin(TestCase):
 
     def test_isinstance_exceptions(self):
         fns = [
-            (invalid_isinstance_usecase,
-             'Cannot infer numba type of python type'),
-            (invalid_isinstance_usecase_phi_nopropagate,
-             ('isinstance() cannot determine the type of variable "z" due to a '
-             'branch.')),
-            (invalid_isinstance_optional_usecase,
-             ('isinstance() cannot determine the type of variable "z" due to a '
-             'branch.')),
-            (invalid_isinstance_unsupported_type_usecase(),
-             ('isinstance() does not support variables of type "ntpl(')),
+            (invalid_isinstance_usecase, "Cannot infer numba type of python type"),
+            (
+                invalid_isinstance_usecase_phi_nopropagate,
+                (
+                    'isinstance() cannot determine the type of variable "z" due to a '
+                    "branch."
+                ),
+            ),
+            (
+                invalid_isinstance_optional_usecase,
+                (
+                    'isinstance() cannot determine the type of variable "z" due to a '
+                    "branch."
+                ),
+            ),
+            (
+                invalid_isinstance_unsupported_type_usecase(),
+                ('isinstance() does not support variables of type "ntpl('),
+            ),
         ]
 
         for fn, msg in fns:
@@ -1296,15 +1398,45 @@ class TestIsinstanceBuiltin(TestCase):
         def gen_w_arg(clazz_type):
             def impl(x):
                 return isinstance(x, clazz_type)
+
             return impl
 
-        clazz_types = (int, float, complex, str, list, tuple, bytes, set, range,
-                       np.int8, np.float32,)
-        instances = (1, 2.3, 4j, '5', [6,], (7,), b'8', {9,}, None,
-                     (10, 11, 12), (13, 'a', 14j), np.array([15, 16, 17]),
-                     np.int8(18), np.float32(19),
-                     typed.Dict.empty(types.unicode_type, types.float64),
-                     typed.List.empty_list(types.complex128), np.ones(4))
+        clazz_types = (
+            int,
+            float,
+            complex,
+            str,
+            list,
+            tuple,
+            bytes,
+            set,
+            range,
+            np.int8,
+            np.float32,
+        )
+        instances = (
+            1,
+            2.3,
+            4j,
+            "5",
+            [
+                6,
+            ],
+            (7,),
+            b"8",
+            {
+                9,
+            },
+            None,
+            (10, 11, 12),
+            (13, "a", 14j),
+            np.array([15, 16, 17]),
+            np.int8(18),
+            np.float32(19),
+            typed.Dict.empty(types.unicode_type, types.float64),
+            typed.List.empty_list(types.complex128),
+            np.ones(4),
+        )
 
         for ct in clazz_types:
             fn = njit(gen_w_arg(ct))
@@ -1319,9 +1451,14 @@ class TestIsinstanceBuiltin(TestCase):
         def gen_w_arg(clazz_type):
             def impl():
                 return isinstance(1, clazz_type)
+
             return impl
 
-        clazz_types = (types.Integer, types.Float, types.Array,)
+        clazz_types = (
+            types.Integer,
+            types.Float,
+            types.Array,
+        )
 
         msg = "Numba type classes.*are not supported"
         for ct in clazz_types:
@@ -1356,7 +1493,7 @@ class TestIsinstanceBuiltin(TestCase):
         @njit
         def foo(x):
             if isinstance(x, str):
-                return x + 'some_string'
+                return x + "some_string"
             elif isinstance(x, complex):
                 return np.imag(x)
             elif isinstance(x, tuple):
@@ -1364,7 +1501,7 @@ class TestIsinstanceBuiltin(TestCase):
             else:
                 assert 0
 
-        for x in ('string', 1 + 2j, ('a', 3, 4j)):
+        for x in ("string", 1 + 2j, ("a", 3, 4j)):
             expected = foo.py_func(x)
             got = foo(x)
             self.assertEqual(got, expected)
@@ -1377,7 +1514,7 @@ class TestGetattrBuiltin(MemoryLeakMixin, TestCase):
 
         @njit
         def foo(x):
-            attr = getattr(x, '__hash__')
+            attr = getattr(x, "__hash__")
             return attr()
 
         for x in (1, 2.34, (5, 6, 7)):
@@ -1387,10 +1524,10 @@ class TestGetattrBuiltin(MemoryLeakMixin, TestCase):
 
         @njit
         def foo(x):
-            return getattr(x, 'ndim')
+            return getattr(x, "ndim")
 
         for x in range(3):
-            tmp = np.empty((1, ) * x)
+            tmp = np.empty((1,) * x)
             self.assertPreciseEqual(foo(tmp), foo.py_func(tmp))
 
     def test_getattr_module_obj(self):
@@ -1398,7 +1535,7 @@ class TestGetattrBuiltin(MemoryLeakMixin, TestCase):
 
         @njit
         def foo():
-            return getattr(np, 'pi')
+            return getattr(np, "pi")
 
         self.assertPreciseEqual(foo(), foo.py_func())
 
@@ -1407,7 +1544,7 @@ class TestGetattrBuiltin(MemoryLeakMixin, TestCase):
 
         @njit
         def foo():
-            return getattr(np, 'cos')(1)
+            return getattr(np, "cos")(1)
 
         with self.assertRaises(errors.TypingError) as raises:
             foo()
@@ -1417,7 +1554,7 @@ class TestGetattrBuiltin(MemoryLeakMixin, TestCase):
 
     def test_getattr_raises_attribute_error(self):
 
-        invalid_attr = '__not_a_valid_attr__'
+        invalid_attr = "__not_a_valid_attr__"
 
         @njit
         def foo(x):
@@ -1426,17 +1563,25 @@ class TestGetattrBuiltin(MemoryLeakMixin, TestCase):
         with self.assertRaises(AttributeError) as raises:
             foo(1.23)
 
-        self.assertIn(f"'float64' has no attribute '{invalid_attr}'",
-                      str(raises.exception))
+        self.assertIn(
+            f"'float64' has no attribute '{invalid_attr}'", str(raises.exception)
+        )
 
     def test_getattr_with_default(self):
         # Checks returning a default works
 
         @njit
         def foo(x, default):
-            return getattr(x, '__not_a_valid_attr__', default)
+            return getattr(x, "__not_a_valid_attr__", default)
 
-        for x, y in zip((1, 2.34, (5, 6, 7),), (None, 20, 'some_string')):
+        for x, y in zip(
+            (
+                1,
+                2.34,
+                (5, 6, 7),
+            ),
+            (None, 20, "some_string"),
+        ):
             self.assertPreciseEqual(foo(x, y), foo.py_func(x, y))
 
     def test_getattr_non_literal_str(self):
@@ -1446,7 +1591,7 @@ class TestGetattrBuiltin(MemoryLeakMixin, TestCase):
             return getattr(x, nonliteral_str)
 
         with self.assertRaises(errors.TypingError) as raises:
-            foo(1, '__hash__')
+            foo(1, "__hash__")
 
         msg = "argument 'name' must be a literal string"
         self.assertIn(msg, str(raises.exception))
@@ -1459,9 +1604,8 @@ class TestGetattrBuiltin(MemoryLeakMixin, TestCase):
 
         @njit
         def foo():
-            hash_func = getattr(np.ones(1), "__not_a_valid_attr__",
-                                default_hash)
-            return hash_func() # Optionals have no call support
+            hash_func = getattr(np.ones(1), "__not_a_valid_attr__", default_hash)
+            return hash_func()  # Optionals have no call support
 
         self.assertPreciseEqual(foo(), foo.py_func())
 
@@ -1473,11 +1617,18 @@ class TestHasattrBuiltin(MemoryLeakMixin, TestCase):
 
         @njit
         def foo(x):
-            return hasattr(x, '__hash__'), hasattr(x, '__not_a_valid_attr__')
+            return hasattr(x, "__hash__"), hasattr(x, "__not_a_valid_attr__")
 
         ty = types.int64
-        for x in (1, 2.34, (5, 6, 7), typed.Dict.empty(ty, ty),
-                  typed.List.empty_list(ty), np.ones(4), 'ABC'):
+        for x in (
+            1,
+            2.34,
+            (5, 6, 7),
+            typed.Dict.empty(ty, ty),
+            typed.List.empty_list(ty),
+            np.ones(4),
+            "ABC",
+        ):
             self.assertPreciseEqual(foo(x), foo.py_func(x))
 
     def test_hasattr_non_const_attr(self):
@@ -1497,8 +1648,9 @@ class TestHasattrBuiltin(MemoryLeakMixin, TestCase):
         with self.assertRaises(errors.NumbaTypeError) as raises:
             foo(6)
 
-        msg = ('hasattr() cannot determine the type of variable '
-               '"attr" due to a branch.')
+        msg = (
+            "hasattr() cannot determine the type of variable " '"attr" due to a branch.'
+        )
         self.assertIn(msg, str(raises.exception))
 
 
@@ -1530,18 +1682,20 @@ class TestStrAndReprBuiltin(MemoryLeakMixin, TestCase):
         Dummy, DummyType = self.make_dummy_type()
         dummy = Dummy()
         string_repr = "this is the dummy object str"
-        Dummy.__str__= lambda inst: string_repr
+        Dummy.__str__ = lambda inst: string_repr
 
         @overload_method(DummyType, "__str__")
         def ol_dummy_string(dummy):
             def impl(dummy):
                 return string_repr
+
             return impl
 
         @overload_method(DummyType, "__repr__")
         def ol_dummy_repr(dummy):
             def impl(dummy):
                 return "SHOULD NOT BE CALLED"
+
             return impl
 
         self.assertEqual(foo(dummy), foo.py_func(dummy))
@@ -1555,12 +1709,13 @@ class TestStrAndReprBuiltin(MemoryLeakMixin, TestCase):
         Dummy, DummyType = self.make_dummy_type()
         dummy = Dummy()
         string_repr = "this is the dummy object repr"
-        Dummy.__repr__= lambda inst: string_repr
+        Dummy.__repr__ = lambda inst: string_repr
 
         @overload_method(DummyType, "__repr__")
         def ol_dummy_repr(dummy):
             def impl(dummy):
                 return string_repr
+
             return impl
 
         self.assertEqual(foo(dummy), foo.py_func(dummy))
@@ -1581,7 +1736,7 @@ class TestStrAndReprBuiltin(MemoryLeakMixin, TestCase):
         Dummy, DummyType = self.make_dummy_type()
         dummy = Dummy()
         string_repr = f"<object type:{typeof(dummy)}>"
-        Dummy.__repr__= lambda inst: string_repr
+        Dummy.__repr__ = lambda inst: string_repr
 
         @box(DummyType)
         def box_dummy(typ, obj, c):
@@ -1595,6 +1750,5 @@ class TestStrAndReprBuiltin(MemoryLeakMixin, TestCase):
         self.assertEqual(foo(dummy), foo.py_func(dummy))
 
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

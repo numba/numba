@@ -4,29 +4,28 @@ For now, multiples-of-units (for example timedeltas expressed in tens
 of seconds) are not supported.
 """
 
-
 import numpy as np
 
 
 DATETIME_UNITS = {
-    'Y': 0,   # Years
-    'M': 1,   # Months
-    'W': 2,   # Weeks
+    "Y": 0,  # Years
+    "M": 1,  # Months
+    "W": 2,  # Weeks
     # Yes, there's a gap here
-    'D': 4,   # Days
-    'h': 5,   # Hours
-    'm': 6,   # Minutes
-    's': 7,   # Seconds
-    'ms': 8,  # Milliseconds
-    'us': 9,  # Microseconds
-    'ns': 10,  # Nanoseconds
-    'ps': 11,  # Picoseconds
-    'fs': 12,  # Femtoseconds
-    'as': 13,  # Attoseconds
-    '': 14,   # "generic", i.e. unit-less
+    "D": 4,  # Days
+    "h": 5,  # Hours
+    "m": 6,  # Minutes
+    "s": 7,  # Seconds
+    "ms": 8,  # Milliseconds
+    "us": 9,  # Microseconds
+    "ns": 10,  # Nanoseconds
+    "ps": 11,  # Picoseconds
+    "fs": 12,  # Femtoseconds
+    "as": 13,  # Attoseconds
+    "": 14,  # "generic", i.e. unit-less
 }
 
-NAT = np.timedelta64('nat').astype(np.int64)
+NAT = np.timedelta64("nat").astype(np.int64)
 
 # NOTE: numpy has several inconsistent functions for timedelta casting:
 # - can_cast_timedelta64_{metadata,units}() disallows "safe" casting
@@ -68,11 +67,11 @@ def can_cast_timedelta_units(src, dest):
 
 # Exact conversion factors from one unit to the immediately more precise one
 _factors = {
-    0: (1, 12),   # Years -> Months
-    2: (4, 7),    # Weeks -> Days
-    4: (5, 24),   # Days -> Hours
-    5: (6, 60),   # Hours -> Minutes
-    6: (7, 60),   # Minutes -> Seconds
+    0: (1, 12),  # Years -> Months
+    2: (4, 7),  # Weeks -> Days
+    4: (5, 24),  # Days -> Hours
+    5: (6, 60),  # Hours -> Minutes
+    6: (7, 60),  # Minutes -> Seconds
     7: (8, 1000),
     8: (9, 1000),
     9: (10, 1000),
@@ -113,8 +112,9 @@ def get_timedelta_conversion_factor(src_unit, dest_unit):
     Return an integer multiplier allowing to convert from timedeltas
     of *src_unit* to *dest_unit*.
     """
-    return _get_conversion_multiplier(DATETIME_UNITS[src_unit],
-                                      DATETIME_UNITS[dest_unit])
+    return _get_conversion_multiplier(
+        DATETIME_UNITS[src_unit], DATETIME_UNITS[dest_unit]
+    )
 
 
 def get_datetime_timedelta_conversion(datetime_unit, timedelta_unit):
@@ -131,8 +131,10 @@ def get_datetime_timedelta_conversion(datetime_unit, timedelta_unit):
         return datetime_unit, 1, 1
     if td_unit_code < 2 and dt_unit_code >= 2:
         # Cannot combine Y or M timedelta64 with a finer-grained datetime64
-        raise RuntimeError("cannot combine datetime64(%r) and timedelta64(%r)"
-                           % (datetime_unit, timedelta_unit))
+        raise RuntimeError(
+            "cannot combine datetime64(%r) and timedelta64(%r)"
+            % (datetime_unit, timedelta_unit)
+        )
     dt_factor, td_factor = 1, 1
 
     # If years or months, the datetime unit is first scaled to weeks or days,

@@ -29,5 +29,5 @@ class TestCudaPy2Div(CUDATestCase):
         self.assertTrue(np.all(y == yB))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

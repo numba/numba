@@ -20,6 +20,7 @@ from numba.tests.support import TestCase, captured_stderr
 def simple_usecase(x):
     return x
 
+
 def simple_usecase_caller(x):
     return simple_usecase(x)
 
@@ -44,9 +45,11 @@ def add_nocache_usecase(x, y):
 def inner(x, y):
     return x + y + Z
 
+
 @jit(cache=True, nopython=True)
 def outer(x, y):
     return inner(-y, x)
+
 
 @jit(cache=False, nopython=True)
 def outer_uncached(x, y):
@@ -66,9 +69,11 @@ def looplifted(n):
 def use_c_sin(x):
     return c_sin(x)
 
+
 @jit(cache=True, nopython=True)
 def use_c_sin_nest1(x):
     return use_c_sin(x)
+
 
 @jit(cache=True, nopython=True)
 def use_c_sin_nest2(x):
@@ -79,11 +84,14 @@ def use_c_sin_nest2(x):
 def ambiguous_function(x):
     return x + 2
 
+
 renamed_function1 = ambiguous_function
+
 
 @jit(cache=True, nopython=True)
 def ambiguous_function(x):
     return x + 6
+
 
 renamed_function2 = ambiguous_function
 
@@ -95,6 +103,7 @@ def make_closure(x):
 
     return closure
 
+
 closure1 = make_closure(3)
 closure2 = make_closure(5)
 closure3 = make_closure(7)
@@ -102,6 +111,7 @@ closure4 = make_closure(9)
 
 
 biggie = np.arange(10**6)
+
 
 @jit(cache=True, nopython=True)
 def use_big_array():
@@ -113,15 +123,16 @@ Z = 1
 # Exercise returning a record instance.  This used to hardcode the dtype
 # pointer's value in the bitcode.
 
-packed_record_type = np.dtype([('a', np.int8), ('b', np.float64)])
-aligned_record_type = np.dtype([('a', np.int8), ('b', np.float64)], align=True)
+packed_record_type = np.dtype([("a", np.int8), ("b", np.float64)])
+aligned_record_type = np.dtype([("a", np.int8), ("b", np.float64)], align=True)
 
 packed_arr = np.empty(2, dtype=packed_record_type)
 for i in range(packed_arr.size):
-    packed_arr[i]['a'] = i + 1
-    packed_arr[i]['b'] = i + 42.5
+    packed_arr[i]["a"] = i + 1
+    packed_arr[i]["b"] = i + 42.5
 
 aligned_arr = np.array(packed_arr, dtype=aligned_record_type)
+
 
 @jit(cache=True, nopython=True)
 def record_return(ary, i):

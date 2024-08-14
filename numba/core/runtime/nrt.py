@@ -94,7 +94,7 @@ class _Runtime(object):
             mi = _nrt.meminfo_alloc_safe(size)
         else:
             mi = _nrt.meminfo_alloc(size)
-        if mi == 0: # alloc failed or size was 0 and alloc returned NULL.
+        if mi == 0:  # alloc failed or size was 0 and alloc returned NULL.
             msg = f"Requested allocation of {size} bytes failed."
             raise MemoryError(msg)
         return MemInfo(mi)
@@ -105,10 +105,12 @@ class _Runtime(object):
         each memory operations.
         """
         # No init guard needed to access stats members
-        return _nrt_mstats(alloc=_nrt.memsys_get_stats_alloc(),
-                           free=_nrt.memsys_get_stats_free(),
-                           mi_alloc=_nrt.memsys_get_stats_mi_alloc(),
-                           mi_free=_nrt.memsys_get_stats_mi_free())
+        return _nrt_mstats(
+            alloc=_nrt.memsys_get_stats_alloc(),
+            free=_nrt.memsys_get_stats_free(),
+            mi_alloc=_nrt.memsys_get_stats_mi_alloc(),
+            mi_free=_nrt.memsys_get_stats_mi_free(),
+        )
 
 
 # Alias to _nrt_python._MemInfo

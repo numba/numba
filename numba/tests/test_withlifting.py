@@ -12,11 +12,17 @@ from numba.core.registry import cpu_target
 from numba.core.compiler import compile_ir, DEFAULT_FLAGS
 from numba import njit, typeof, objmode, types
 from numba.core.extending import overload
-from numba.tests.support import (MemoryLeak, TestCase, captured_stdout,
-                                 skip_unless_scipy, linux_only,
-                                 strace_supported, strace,
-                                 expected_failure_py311,
-                                 expected_failure_py312)
+from numba.tests.support import (
+    MemoryLeak,
+    TestCase,
+    captured_stdout,
+    skip_unless_scipy,
+    linux_only,
+    strace_supported,
+    strace,
+    expected_failure_py311,
+    expected_failure_py312,
+)
 from numba.core.utils import PYVERSION
 from numba.experimental import jitclass
 import unittest
@@ -197,7 +203,10 @@ class BaseTestWithLifting(TestCase):
     def check_extracted_with(self, func, expect_count, expected_stdout):
         the_ir = get_func_ir(func)
         new_ir, extracted = with_lifting(
-            the_ir, self.typingctx, self.targetctx, self.flags,
+            the_ir,
+            self.typingctx,
+            self.targetctx,
+            self.flags,
             locals={},
         )
         self.assertEqual(len(extracted), expect_count)
@@ -212,38 +221,35 @@ class BaseTestWithLifting(TestCase):
         typingctx = self.typingctx
         targetctx = self.targetctx
         flags = self.flags
-        return compile_ir(typingctx, targetctx, the_ir, args,
-                            return_type, flags, locals={})
+        return compile_ir(
+            typingctx, targetctx, the_ir, args, return_type, flags, locals={}
+        )
 
 
 class TestLiftByPass(BaseTestWithLifting):
 
     def test_lift1(self):
-        self.check_extracted_with(lift1, expect_count=1,
-                                  expected_stdout="A\nC\n")
+        self.check_extracted_with(lift1, expect_count=1, expected_stdout="A\nC\n")
 
     def test_lift2(self):
-        self.check_extracted_with(lift2, expect_count=2,
-                                  expected_stdout="A 1\nD 3\n")
+        self.check_extracted_with(lift2, expect_count=2, expected_stdout="A 1\nD 3\n")
 
     def test_lift3(self):
-        self.check_extracted_with(lift3, expect_count=1,
-                                  expected_stdout="A 1 100\nD 2 101\n")
+        self.check_extracted_with(
+            lift3, expect_count=1, expected_stdout="A 1 100\nD 2 101\n"
+        )
 
     def test_lift4(self):
-        self.check_extracted_with(lift4, expect_count=2,
-                                  expected_stdout="A 0\nE 11\n")
+        self.check_extracted_with(lift4, expect_count=2, expected_stdout="A 0\nE 11\n")
 
     def test_lift5(self):
-        self.check_extracted_with(lift5, expect_count=0,
-                                  expected_stdout="A\n")
+        self.check_extracted_with(lift5, expect_count=0, expected_stdout="A\n")
 
 
 class TestLiftCall(BaseTestWithLifting):
 
     def check_same_semantic(self, func):
-        """Ensure same semantic with non-jitted code
-        """
+        """Ensure same semantic with non-jitted code"""
         jitted = njit(func)
         with captured_stdout() as got:
             jitted()
@@ -254,35 +260,43 @@ class TestLiftCall(BaseTestWithLifting):
         self.assertEqual(got.getvalue(), expect.getvalue())
 
     def test_liftcall1(self):
-        self.check_extracted_with(liftcall1, expect_count=1,
-                                  expected_stdout="A 1\nB 2\n")
+        self.check_extracted_with(
+            liftcall1, expect_count=1, expected_stdout="A 1\nB 2\n"
+        )
         self.check_same_semantic(liftcall1)
 
     def test_liftcall2(self):
-        self.check_extracted_with(liftcall2, expect_count=2,
-                                  expected_stdout="A 1\nB 2\nC 12\n")
+        self.check_extracted_with(
+            liftcall2, expect_count=2, expected_stdout="A 1\nB 2\nC 12\n"
+        )
         self.check_same_semantic(liftcall2)
 
     def test_liftcall3(self):
-        self.check_extracted_with(liftcall3, expect_count=2,
-                                  expected_stdout="A 1\nB 2\nC 47\n")
+        self.check_extracted_with(
+            liftcall3, expect_count=2, expected_stdout="A 1\nB 2\nC 47\n"
+        )
         self.check_same_semantic(liftcall3)
 
     def test_liftcall4(self):
-        accept = (errors.TypingError, errors.NumbaRuntimeError,
-                  errors.NumbaValueError, errors.CompilerError)
+        accept = (
+            errors.TypingError,
+            errors.NumbaRuntimeError,
+            errors.NumbaValueError,
+            errors.CompilerError,
+        )
         with self.assertRaises(accept) as raises:
             njit(liftcall4)()
         # Known error.  We only support one context manager per function
         # for body that are lifted.
-        msg = ("compiler re-entrant to the same function signature")
+        msg = "compiler re-entrant to the same function signature"
         self.assertIn(msg, str(raises.exception))
 
     @expected_failure_py311
     @expected_failure_py312
     def test_liftcall5(self):
-        self.check_extracted_with(liftcall5, expect_count=1,
-                                  expected_stdout="0\n1\n2\n3\n4\n5\nA\n")
+        self.check_extracted_with(
+            liftcall5, expect_count=1, expected_stdout="0\n1\n2\n3\n4\n5\nA\n"
+        )
         self.check_same_semantic(liftcall5)
 
 
@@ -290,8 +304,8 @@ def expected_failure_for_list_arg(fn):
     def core(self, *args, **kwargs):
         with self.assertRaises(errors.TypingError) as raises:
             fn(self, *args, **kwargs)
-        self.assertIn('Does not support list type',
-                      str(raises.exception))
+        self.assertIn("Does not support list type", str(raises.exception))
+
     return core
 
 
@@ -299,8 +313,8 @@ def expected_failure_for_function_arg(fn):
     def core(self, *args, **kwargs):
         with self.assertRaises(errors.TypingError) as raises:
             fn(self, *args, **kwargs)
-        self.assertIn('Does not support function type',
-                      str(raises.exception))
+        self.assertIn("Does not support function type", str(raises.exception))
+
     return core
 
 
@@ -332,7 +346,7 @@ class TestLiftObj(MemoryLeak, TestCase):
 
     def test_lift_objmode_basic(self):
         def bar(ival):
-            print("ival =", {'ival': ival // 2})
+            print("ival =", {"ival": ival // 2})
 
         def foo(ival):
             ival += 1
@@ -351,7 +365,7 @@ class TestLiftObj(MemoryLeak, TestCase):
 
     def test_lift_objmode_array_in(self):
         def bar(arr):
-            print({'arr': arr // 2})
+            print({"arr": arr // 2})
             # arr is modified. the effect is visible outside.
             arr *= 2
 
@@ -371,8 +385,8 @@ class TestLiftObj(MemoryLeak, TestCase):
 
         def foo(x):
             with objmode_context():
-                y = 2 + x           # defined but unused outside
-                a = np.arange(y)    # defined but unused outside
+                y = 2 + x  # defined but unused outside
+                a = np.arange(y)  # defined but unused outside
                 bar(a)
             return x
 
@@ -483,11 +497,12 @@ class TestLiftObj(MemoryLeak, TestCase):
     @expected_failure_for_list_arg
     def test_case03_create_and_mutate(self):
         def foo(x):
-            with objmode_context(y='List(int64)'):
+            with objmode_context(y="List(int64)"):
                 y = [1, 2, 3]
             with objmode_context():
                 y[2] = 10
             return y
+
         self.assert_equal_return_and_stdout(foo, 1)
 
     def test_case04_bogus_variable_type_info(self):
@@ -505,7 +520,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         self.assertIn(
             "Invalid type annotation on non-outgoing variables",
             str(raises.exception),
-            )
+        )
 
     def test_case05_bogus_type_info(self):
         def foo(x):
@@ -513,7 +528,7 @@ class TestLiftObj(MemoryLeak, TestCase):
             # z is complex.
             # Note: for now, we will coerce for scalar and raise for array
             with objmode_context(z="float64[:]"):
-                z = x + 1.j
+                z = x + 1.0j
             return z
 
         x = np.array([1, 2, 3])
@@ -521,8 +536,10 @@ class TestLiftObj(MemoryLeak, TestCase):
         with self.assertRaises(TypeError) as raises:
             got = cfoo(x)
         self.assertIn(
-            ("can't unbox array from PyObject into native value."
-             "  The object maybe of a different type"),
+            (
+                "can't unbox array from PyObject into native value."
+                "  The object maybe of a different type"
+            ),
             str(raises.exception),
         )
 
@@ -531,25 +548,25 @@ class TestLiftObj(MemoryLeak, TestCase):
             # would nested ctx in the same scope ever make sense? Is this
             # pattern useful?
             with objmode_context():
-                #with npmmode_context(): not implemented yet
-                    with objmode_context():
-                        print(x)
+                # with npmmode_context(): not implemented yet
+                with objmode_context():
+                    print(x)
             return x
 
         with self.assertRaises(errors.TypingError) as raises:
             njit(foo)(123)
         # Check that an error occurred in with-lifting in objmode
-        pat = ("During: resolving callee type: "
-               r"type\(ObjModeLiftedWith\(<.*>\)\)")
+        pat = "During: resolving callee type: " r"type\(ObjModeLiftedWith\(<.*>\)\)"
         self.assertRegex(str(raises.exception), pat)
 
     def test_case07_mystery_key_error(self):
         # this raises a key error
         def foo(x):
             with objmode_context():
-                t = {'a': x}
+                t = {"a": x}
                 u = 3
             return x, t, u
+
         x = np.array([1, 2, 3])
         cfoo = njit(foo)
 
@@ -557,12 +574,12 @@ class TestLiftObj(MemoryLeak, TestCase):
             cfoo(x)
 
         exstr = str(raises.exception)
-        self.assertIn("Missing type annotation on outgoing variable(s): "
-                      "['t', 'u']",
-                      exstr)
-        self.assertIn("Example code: with objmode"
-                      "(t='<add_type_as_string_here>')",
-                      exstr)
+        self.assertIn(
+            "Missing type annotation on outgoing variable(s): " "['t', 'u']", exstr
+        )
+        self.assertIn(
+            "Example code: with objmode" "(t='<add_type_as_string_here>')", exstr
+        )
 
     def test_case08_raise_from_external(self):
         # this segfaults, expect its because the dict needs to raise as '2' is
@@ -575,7 +592,7 @@ class TestLiftObj(MemoryLeak, TestCase):
                     k = str(i)
                     v = x[i]
                     d[k] = v
-                    print(d['2'])
+                    print(d["2"])
             return x
 
         x = np.array([1, 2, 3])
@@ -595,8 +612,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         with self.assertRaises(errors.CompilerError) as raises:
             cfoo(x)
         self.assertIn(
-            ('unsupported control flow due to raise statements inside '
-             'with block'),
+            ("unsupported control flow due to raise statements inside " "with block"),
             str(raises.exception),
         )
 
@@ -604,7 +620,7 @@ class TestLiftObj(MemoryLeak, TestCase):
     def test_case10_mutate_across_contexts(self):
         # This shouldn't work due to using List as input.
         def foo(x):
-            with objmode_context(y='List(int64)'):
+            with objmode_context(y="List(int64)"):
                 y = [1, 2, 3]
             with objmode_context():
                 y[2] = 10
@@ -616,8 +632,8 @@ class TestLiftObj(MemoryLeak, TestCase):
     def test_case10_mutate_array_across_contexts(self):
         # Sub-case of case-10.
         def foo(x):
-            with objmode_context(y='int64[:]'):
-                y = np.asarray([1, 2, 3], dtype='int64')
+            with objmode_context(y="int64[:]"):
+                y = np.asarray([1, 2, 3], dtype="int64")
             with objmode_context():
                 # Note: `y` is not an output.
                 y[2] = 10
@@ -630,8 +646,10 @@ class TestLiftObj(MemoryLeak, TestCase):
         # should this work? no, global name 'bar' is not defined
         def foo(x):
             with objmode_context():
+
                 def bar(y):
                     return y + 1
+
             return x
 
         x = np.array([1, 2, 3])
@@ -651,8 +669,8 @@ class TestLiftObj(MemoryLeak, TestCase):
             return y + 1
 
         def foo(x):
-            with objmode_context(y='int64[:]'):
-                y = njit(bar)(x).astype('int64')
+            with objmode_context(y="int64[:]"):
+                y = njit(bar)(x).astype("int64")
             return x + y
 
         x = np.array([1, 2, 3])
@@ -660,7 +678,7 @@ class TestLiftObj(MemoryLeak, TestCase):
 
     def test_case14_return_direct_from_objmode_ctx(self):
         def foo(x):
-            with objmode_context(x='int64[:]'):
+            with objmode_context(x="int64[:]"):
                 x += 1
                 return x
 
@@ -675,10 +693,12 @@ class TestLiftObj(MemoryLeak, TestCase):
             j = 10
 
             def bar(x):
-                with objmode_context(x='int64[:]'):
+                with objmode_context(x="int64[:]"):
                     print(x)
                     return x + j
+
             return bar(x) + 2
+
         x = np.array([1, 2, 3])
         self.assert_equal_return_and_stdout(foo, x)
 
@@ -687,7 +707,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         from scipy import sparse as sp
 
         def foo(x):
-            with objmode_context(k='int64'):
+            with objmode_context(k="int64"):
                 print(x)
                 spx = sp.csr_matrix(x)
                 # the np.int64 call is pointless, works around:
@@ -695,6 +715,7 @@ class TestLiftObj(MemoryLeak, TestCase):
                 # which hit the SciPy 1.3 release.
                 k = np.int64(spx[0, 0])
             return k
+
         x = np.array([1, 2, 3])
         self.assert_equal_return_and_stdout(foo, x)
 
@@ -704,6 +725,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         def foo(x):
             with objmode_context():
                 dis.dis(foo)
+
         x = np.array([1, 2, 3])
         self.assert_equal_return_and_stdout(foo, x)
 
@@ -726,6 +748,7 @@ class TestLiftObj(MemoryLeak, TestCase):
                     return 7
             ret = foo(x - 1)
             return ret
+
         with self.assertRaises((errors.TypingError, errors.CompilerError)) as raises:
             cfoo = njit(foo)
             cfoo(np.array([1, 2, 3]))
@@ -766,7 +789,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         @njit
         def foo():
             x = np.arange(5)
-            with objmode(y='intp[:]'):  # annotate return type
+            with objmode(y="intp[:]"):  # annotate return type
                 # this region is executed by object-mode.
                 y = x + bar(x)
             return y
@@ -781,9 +804,10 @@ class TestLiftObj(MemoryLeak, TestCase):
         @overload(foo)
         def foo_overload(s):
             def impl(s):
-                with objmode(out='intp'):
+                with objmode(out="intp"):
                     out = s + 3
                 return out
+
             return impl
 
         @numba.njit
@@ -813,8 +837,10 @@ class TestLiftObj(MemoryLeak, TestCase):
 
         with self.assertRaisesRegex(
             errors.CompilerError,
-            ("Error handling objmode argument 'val'. "
-             r"Global 'gv_type2' is not defined.")
+            (
+                "Error handling objmode argument 'val'. "
+                r"Global 'gv_type2' is not defined."
+            ),
         ):
             global_var()
 
@@ -844,26 +870,31 @@ class TestLiftObj(MemoryLeak, TestCase):
             with objmode(val=types.THIS_DOES_NOT_EXIST):
                 val = 12.3
             return val
+
         with self.assertRaisesRegex(
             errors.CompilerError,
-            ("Error handling objmode argument 'val'. "
-             "Getattr cannot be resolved at compile-time"),
+            (
+                "Error handling objmode argument 'val'. "
+                "Getattr cannot be resolved at compile-time"
+            ),
         ):
             moderror()
 
     def test_objmode_gv_mod_attr_error_multiple(self):
         @njit
         def moderror():
-            with objmode(v1=types.intp, v2=types.THIS_DOES_NOT_EXIST,
-                         v3=types.float32):
+            with objmode(v1=types.intp, v2=types.THIS_DOES_NOT_EXIST, v3=types.float32):
                 v1 = 12.3
                 v2 = 12.3
                 v3 = 12.3
             return val
+
         with self.assertRaisesRegex(
             errors.CompilerError,
-            ("Error handling objmode argument 'v2'. "
-             "Getattr cannot be resolved at compile-time"),
+            (
+                "Error handling objmode argument 'v2'. "
+                "Getattr cannot be resolved at compile-time"
+            ),
         ):
             moderror()
 
@@ -874,10 +905,12 @@ class TestLiftObj(MemoryLeak, TestCase):
         @overload(foo)
         def foo_overload():
             shrubbery = types.float64[:]
+
             def impl():
                 with objmode(out=shrubbery):
                     out = np.arange(10).astype(np.float64)
                 return out
+
             return impl
 
         @njit
@@ -893,10 +926,12 @@ class TestLiftObj(MemoryLeak, TestCase):
         @overload(foo)
         def foo_overload():
             shrubbery = types.float64[:]
+
             def impl():
                 with objmode(out=shrubbery):
                     out = np.arange(10).astype(np.float64)
                 return out
+
             # Remove closure var.
             # Otherwise, it will "shrubbery" will be a global
             del shrubbery
@@ -908,8 +943,10 @@ class TestLiftObj(MemoryLeak, TestCase):
 
         with self.assertRaisesRegex(
             errors.TypingError,
-            ("Error handling objmode argument 'out'. "
-             "Freevar 'shrubbery' is not defined"),
+            (
+                "Error handling objmode argument 'out'. "
+                "Freevar 'shrubbery' is not defined"
+            ),
         ):
             bar()
 
@@ -919,17 +956,21 @@ class TestLiftObj(MemoryLeak, TestCase):
             with objmode(bad=1 + 1):
                 out = 1
             return val
+
         with self.assertRaisesRegex(
             errors.CompilerError,
-            ("Error handling objmode argument 'bad'. "
-             "The value must be a compile-time constant either as "
-             "a non-local variable or a getattr expression that "
-             "refers to a Numba type."),
+            (
+                "Error handling objmode argument 'bad'. "
+                "The value must be a compile-time constant either as "
+                "a non-local variable or a getattr expression that "
+                "refers to a Numba type."
+            ),
         ):
             moderror()
 
     def test_objmode_multi_type_args(self):
         array_ty = types.int32[:]
+
         @njit
         def foo():
             # t1 is a string
@@ -937,7 +978,7 @@ class TestLiftObj(MemoryLeak, TestCase):
             # t3 is a non-local/freevar
             with objmode(t1="float64", t2=gv_type, t3=array_ty):
                 t1 = 793856.5
-                t2 = t1         # to observe truncation
+                t2 = t1  # to observe truncation
                 t3 = np.arange(5).astype(np.int32)
             return t1, t2, t3
 
@@ -948,8 +989,8 @@ class TestLiftObj(MemoryLeak, TestCase):
 
     def test_objmode_jitclass(self):
         spec = [
-            ('value', types.int32),               # a simple scalar field
-            ('array', types.float32[:]),          # an array field
+            ("value", types.int32),  # a simple scalar field
+            ("array", types.float32[:]),  # an array field
         ]
 
         @jitclass(spec)
@@ -980,11 +1021,13 @@ class TestLiftObj(MemoryLeak, TestCase):
         @overload(foo)
         def foo_overload():
             shrubbery = mybag._numba_type_
+
             def impl():
                 with objmode(out=shrubbery):
                     out = Bag(123)
                     out.increment(3)
                 return out
+
             return impl
 
         @njit
@@ -997,15 +1040,15 @@ class TestLiftObj(MemoryLeak, TestCase):
         exp_array = np.zeros(123, dtype=np.float32) + 3
         self.assertPreciseEqual(z.array, exp_array)
 
-
     @staticmethod
     def case_objmode_cache(x):
-        with objmode(output='float64'):
+        with objmode(output="float64"):
             output = x / 10
         return output
 
     def test_objmode_reflected_list(self):
         ret_type = typeof([1, 2, 3, 4, 5])
+
         @njit
         def test2():
             with objmode(out=ret_type):
@@ -1016,14 +1059,17 @@ class TestLiftObj(MemoryLeak, TestCase):
             test2()
         self.assertRegex(
             str(raises.exception),
-            (r"Objmode context failed. "
-             r"Argument 'out' is declared as an unsupported type: "
-             r"reflected list\(int(32|64)\)<iv=None>. "
-             r"Reflected types are not supported."),
+            (
+                r"Objmode context failed. "
+                r"Argument 'out' is declared as an unsupported type: "
+                r"reflected list\(int(32|64)\)<iv=None>. "
+                r"Reflected types are not supported."
+            ),
         )
 
     def test_objmode_reflected_set(self):
         ret_type = typeof({1, 2, 3, 4, 5})
+
         @njit
         def test2():
             with objmode(result=ret_type):
@@ -1034,30 +1080,36 @@ class TestLiftObj(MemoryLeak, TestCase):
             test2()
         self.assertRegex(
             str(raises.exception),
-            (r"Objmode context failed. "
-             r"Argument 'result' is declared as an unsupported type: "
-             r"reflected set\(int(32|64)\). "
-             r"Reflected types are not supported."),
+            (
+                r"Objmode context failed. "
+                r"Argument 'result' is declared as an unsupported type: "
+                r"reflected set\(int(32|64)\). "
+                r"Reflected types are not supported."
+            ),
         )
 
     def test_objmode_typed_dict(self):
         ret_type = types.DictType(types.unicode_type, types.int64)
+
         @njit
         def test4():
             with objmode(res=ret_type):
-                res = {'A': 1, 'B': 2}
+                res = {"A": 1, "B": 2}
             return res
 
         with self.assertRaises(TypeError) as raises:
             test4()
         self.assertIn(
-            ("can't unbox a <class 'dict'> "
-             "as a <class 'numba.typed.typeddict.Dict'>"),
+            (
+                "can't unbox a <class 'dict'> "
+                "as a <class 'numba.typed.typeddict.Dict'>"
+            ),
             str(raises.exception),
         )
 
     def test_objmode_typed_list(self):
         ret_type = types.ListType(types.int64)
+
         @njit
         def test4():
             with objmode(res=ret_type):
@@ -1068,8 +1120,10 @@ class TestLiftObj(MemoryLeak, TestCase):
             test4()
         self.assertRegex(
             str(raises.exception),
-            (r"can't unbox a <class 'list'> "
-             r"as a (<class ')?numba.typed.typedlist.List('>)?"),
+            (
+                r"can't unbox a <class 'list'> "
+                r"as a (<class ')?numba.typed.typedlist.List('>)?"
+            ),
         )
 
     def test_objmode_use_of_view(self):
@@ -1081,7 +1135,7 @@ class TestLiftObj(MemoryLeak, TestCase):
                 y = x.view("int64")
             return y
 
-        a = np.ones(1, np.int64).view('float64')
+        a = np.ones(1, np.int64).view("float64")
         expected = foo.py_func(a)
         got = foo(a)
         self.assertPreciseEqual(expected, got)
@@ -1092,7 +1146,7 @@ def case_inner_pyfunc(x):
 
 
 def case_objmode_cache(x):
-    with objmode(output='float64'):
+    with objmode(output="float64"):
         output = case_inner_pyfunc(x)
     return output
 
@@ -1117,7 +1171,7 @@ class TestLiftObjCaching(MemoryLeak, TestCase):
 
     def test_objmode_caching_basic(self):
         def pyfunc(x):
-            with objmode(output='float64'):
+            with objmode(output="float64"):
                 output = x / 10
             return output
 
@@ -1128,7 +1182,7 @@ class TestLiftObjCaching(MemoryLeak, TestCase):
             return x / 10
 
         def pyfunc(x):
-            with objmode(output='float64'):
+            with objmode(output="float64"):
                 output = other_pyfunc(x)
             return output
 
@@ -1144,37 +1198,46 @@ class TestBogusContext(BaseTestWithLifting):
 
         with self.assertRaises(errors.CompilerError) as raises:
             with_lifting(
-                the_ir, self.typingctx, self.targetctx, self.flags, locals={},
+                the_ir,
+                self.typingctx,
+                self.targetctx,
+                self.flags,
+                locals={},
             )
         self.assertIn(
             "Undefined variable used as context manager",
             str(raises.exception),
-            )
+        )
 
     def test_invalid(self):
         the_ir = get_func_ir(lift_invalid)
 
         with self.assertRaises(errors.CompilerError) as raises:
             with_lifting(
-                the_ir, self.typingctx, self.targetctx, self.flags, locals={},
+                the_ir,
+                self.typingctx,
+                self.targetctx,
+                self.flags,
+                locals={},
             )
         self.assertIn(
             "Unsupported context manager in use",
             str(raises.exception),
-            )
+        )
 
     def test_with_as_fails_gracefully(self):
         @njit
         def foo():
-            with open('') as f:
+            with open("") as f:
                 pass
 
         with self.assertRaises(errors.UnsupportedError) as raises:
             foo()
 
         excstr = str(raises.exception)
-        msg = ("The 'with (context manager) as (variable):' construct is not "
-               "supported.")
+        msg = (
+            "The 'with (context manager) as (variable):' construct is not " "supported."
+        )
         self.assertIn(msg, excstr)
 
 
@@ -1197,18 +1260,18 @@ class TestMisc(TestCase):
             self.skipTest("strace support missing")
 
         def force_compile():
-            @njit('void()') # force compilation
+            @njit("void()")  # force compilation
             def f():
                 with numba.objmode():
                     pass
 
         # capture these syscalls:
-        syscalls = ['fork', 'clone', 'execve']
+        syscalls = ["fork", "clone", "execve"]
 
         # check that compilation does not trigger fork, clone or execve
         strace_data = strace(force_compile, syscalls)
         self.assertFalse(strace_data)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

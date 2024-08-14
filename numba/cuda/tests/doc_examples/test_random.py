@@ -10,8 +10,10 @@ class TestRandom(CUDATestCase):
     def test_ex_3d_grid(self):
         # magictoken.ex_3d_grid.begin
         from numba import cuda
-        from numba.cuda.random import (create_xoroshiro128p_states,
-                                       xoroshiro128p_uniform_float32)
+        from numba.cuda.random import (
+            create_xoroshiro128p_states,
+            xoroshiro128p_uniform_float32,
+        )
         import numpy as np
 
         @cuda.jit
@@ -55,5 +57,5 @@ class TestRandom(CUDATestCase):
         self.assertTrue(np.all(host_arr >= 0.0))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

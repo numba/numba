@@ -9,12 +9,11 @@ from numba.tests.support import linux_only, override_config
 from unittest.mock import call, patch
 
 
-@skip_on_cudasim('CUDA Array Interface is not supported in the simulator')
+@skip_on_cudasim("CUDA Array Interface is not supported in the simulator")
 class TestCudaArrayInterface(ContextResettingTestCase):
     def assertPointersEqual(self, a, b):
         if driver.USE_NV_BINDING:
-            self.assertEqual(int(a.device_ctypes_pointer),
-                             int(b.device_ctypes_pointer))
+            self.assertEqual(int(a.device_ctypes_pointer), int(b.device_ctypes_pointer))
 
     def test_as_cuda_array(self):
         h_arr = np.arange(10)
@@ -37,7 +36,7 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         else:
             return stream.handle.value
 
-    @skip_if_external_memmgr('Ownership not relevant with external memmgr')
+    @skip_if_external_memmgr("Ownership not relevant with external memmgr")
     def test_ownership(self):
         # Get the deallocation queue
         ctx = cuda.current_context()
@@ -82,7 +81,7 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         np.testing.assert_array_equal(d_arr.copy_to_host(), h_arr + val)
 
     def test_ufunc_arg(self):
-        @vectorize(['f8(f8, f8)'], target='cuda')
+        @vectorize(["f8(f8, f8)"], target="cuda")
         def vadd(a, b):
             return a + b
 
@@ -99,7 +98,7 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         np.testing.assert_array_equal(returned.copy_to_host(), h_arr + val)
 
     def test_gufunc_arg(self):
-        @guvectorize(['(f8, f8, f8[:])'], '(),()->()', target='cuda')
+        @guvectorize(["(f8, f8, f8[:])"], "(),()->()", target="cuda")
         def vadd(inp, val, out):
             out[0] = inp + val
 
@@ -118,8 +117,8 @@ class TestCudaArrayInterface(ContextResettingTestCase):
 
     def test_array_views(self):
         """Views created via array interface support:
-            - Strided slices
-            - Strided slices
+        - Strided slices
+        - Strided slices
         """
         h_arr = np.random.random(10)
         c_arr = cuda.to_device(h_arr)
@@ -148,23 +147,20 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         self.assertEqual(arr[::2].strides, arr_strided.strides)
         self.assertEqual(arr[::2].dtype.itemsize, arr_strided.dtype.itemsize)
         self.assertEqual(arr[::2].alloc_size, arr_strided.alloc_size)
-        self.assertEqual(arr[::2].nbytes,
-                         arr_strided.size * arr_strided.dtype.itemsize)
+        self.assertEqual(arr[::2].nbytes, arr_strided.size * arr_strided.dtype.itemsize)
 
         # __setitem__ interface propagates into external array
 
         # Writes to a slice
         arr[:5] = np.pi
         np.testing.assert_array_equal(
-            c_arr.copy_to_host(),
-            np.concatenate((np.full(5, np.pi), h_arr[5:]))
+            c_arr.copy_to_host(), np.concatenate((np.full(5, np.pi), h_arr[5:]))
         )
 
         # Writes to a slice from a view
         arr[:5] = arr[5:]
         np.testing.assert_array_equal(
-            c_arr.copy_to_host(),
-            np.concatenate((h_arr[5:], h_arr[5:]))
+            c_arr.copy_to_host(), np.concatenate((h_arr[5:], h_arr[5:]))
         )
 
         # Writes through a view
@@ -177,10 +173,7 @@ class TestCudaArrayInterface(ContextResettingTestCase):
             c_arr.copy_to_host()[::2],
             np.full(5, np.pi),
         )
-        np.testing.assert_array_equal(
-            c_arr.copy_to_host()[1::2],
-            h_arr[1::2]
-        )
+        np.testing.assert_array_equal(c_arr.copy_to_host()[1::2], h_arr[1::2])
 
     def test_negative_strided_issue(self):
         # issue #3705
@@ -188,7 +181,7 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         c_arr = cuda.to_device(h_arr)
 
         def base_offset(orig, sliced):
-            return sliced['data'][0] - orig['data'][0]
+            return sliced["data"][0] - orig["data"][0]
 
         h_ai = h_arr.__array_interface__
         c_ai = c_arr.__cuda_array_interface__
@@ -202,8 +195,8 @@ class TestCudaArrayInterface(ContextResettingTestCase):
             base_offset(c_ai, c_ai_sliced),
         )
         # Check shape and strides are correct
-        self.assertEqual(h_ai_sliced['shape'], c_ai_sliced['shape'])
-        self.assertEqual(h_ai_sliced['strides'], c_ai_sliced['strides'])
+        self.assertEqual(h_ai_sliced["shape"], c_ai_sliced["shape"])
+        self.assertEqual(h_ai_sliced["strides"], c_ai_sliced["strides"])
 
     def test_negative_strided_copy_to_host(self):
         # issue #3705
@@ -212,28 +205,28 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         sliced = c_arr[::-1]
         with self.assertRaises(NotImplementedError) as raises:
             sliced.copy_to_host()
-        expected_msg = 'D->H copy not implemented for negative strides'
+        expected_msg = "D->H copy not implemented for negative strides"
         self.assertIn(expected_msg, str(raises.exception))
 
     def test_masked_array(self):
         h_arr = np.random.random(10)
-        h_mask = np.random.randint(2, size=10, dtype='bool')
+        h_mask = np.random.randint(2, size=10, dtype="bool")
         c_arr = cuda.to_device(h_arr)
         c_mask = cuda.to_device(h_mask)
 
         # Manually create a masked CUDA Array Interface dictionary
         masked_cuda_array_interface = c_arr.__cuda_array_interface__.copy()
-        masked_cuda_array_interface['mask'] = c_mask
+        masked_cuda_array_interface["mask"] = c_mask
 
         with self.assertRaises(NotImplementedError) as raises:
             cuda.from_cuda_array_interface(masked_cuda_array_interface)
-        expected_msg = 'Masked arrays are not supported'
+        expected_msg = "Masked arrays are not supported"
         self.assertIn(expected_msg, str(raises.exception))
 
     def test_zero_size_array(self):
         # for #4175
         c_arr = cuda.device_array(0)
-        self.assertEqual(c_arr.__cuda_array_interface__['data'][0], 0)
+        self.assertEqual(c_arr.__cuda_array_interface__["data"][0], 0)
 
         @cuda.jit
         def add_one(arr):
@@ -249,49 +242,49 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         # for #4175
         # First, test C-contiguous array
         c_arr = cuda.device_array((2, 3, 4))
-        self.assertEqual(c_arr.__cuda_array_interface__['strides'], None)
+        self.assertEqual(c_arr.__cuda_array_interface__["strides"], None)
 
         # Second, test non C-contiguous array
         c_arr = c_arr[:, 1, :]
-        self.assertNotEqual(c_arr.__cuda_array_interface__['strides'], None)
+        self.assertNotEqual(c_arr.__cuda_array_interface__["strides"], None)
 
     def test_consuming_strides(self):
         hostarray = np.arange(10).reshape(2, 5)
         devarray = cuda.to_device(hostarray)
         face = devarray.__cuda_array_interface__
-        self.assertIsNone(face['strides'])
+        self.assertIsNone(face["strides"])
         got = cuda.from_cuda_array_interface(face).copy_to_host()
         np.testing.assert_array_equal(got, hostarray)
-        self.assertTrue(got.flags['C_CONTIGUOUS'])
+        self.assertTrue(got.flags["C_CONTIGUOUS"])
         # Try non-NULL strides
-        face['strides'] = hostarray.strides
-        self.assertIsNotNone(face['strides'])
+        face["strides"] = hostarray.strides
+        self.assertIsNotNone(face["strides"])
         got = cuda.from_cuda_array_interface(face).copy_to_host()
         np.testing.assert_array_equal(got, hostarray)
-        self.assertTrue(got.flags['C_CONTIGUOUS'])
+        self.assertTrue(got.flags["C_CONTIGUOUS"])
 
     def test_produce_no_stream(self):
         c_arr = cuda.device_array(10)
-        self.assertIsNone(c_arr.__cuda_array_interface__['stream'])
+        self.assertIsNone(c_arr.__cuda_array_interface__["stream"])
 
         mapped_arr = cuda.mapped_array(10)
-        self.assertIsNone(mapped_arr.__cuda_array_interface__['stream'])
+        self.assertIsNone(mapped_arr.__cuda_array_interface__["stream"])
 
     @linux_only
     def test_produce_managed_no_stream(self):
         managed_arr = cuda.managed_array(10)
-        self.assertIsNone(managed_arr.__cuda_array_interface__['stream'])
+        self.assertIsNone(managed_arr.__cuda_array_interface__["stream"])
 
     def test_produce_stream(self):
         s = cuda.stream()
         c_arr = cuda.device_array(10, stream=s)
-        cai_stream = c_arr.__cuda_array_interface__['stream']
+        cai_stream = c_arr.__cuda_array_interface__["stream"]
         stream_value = self.get_stream_value(s)
         self.assertEqual(stream_value, cai_stream)
 
         s = cuda.stream()
         mapped_arr = cuda.mapped_array(10, stream=s)
-        cai_stream = mapped_arr.__cuda_array_interface__['stream']
+        cai_stream = mapped_arr.__cuda_array_interface__["stream"]
         stream_value = self.get_stream_value(s)
         self.assertEqual(stream_value, cai_stream)
 
@@ -299,7 +292,7 @@ class TestCudaArrayInterface(ContextResettingTestCase):
     def test_produce_managed_stream(self):
         s = cuda.stream()
         managed_arr = cuda.managed_array(10, stream=s)
-        cai_stream = managed_arr.__cuda_array_interface__['stream']
+        cai_stream = managed_arr.__cuda_array_interface__["stream"]
         stream_value = self.get_stream_value(s)
         self.assertEqual(stream_value, cai_stream)
 
@@ -327,8 +320,9 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         # Create a foreign array with no stream
         f_arr = ForeignArray(cuda.device_array(10))
 
-        with patch.object(cuda.cudadrv.driver.Stream, 'synchronize',
-                          return_value=None) as mock_sync:
+        with patch.object(
+            cuda.cudadrv.driver.Stream, "synchronize", return_value=None
+        ) as mock_sync:
             cuda.as_cuda_array(f_arr)
 
         # Ensure the synchronize method of a stream was not called
@@ -339,8 +333,9 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         s = cuda.stream()
         f_arr = ForeignArray(cuda.device_array(10, stream=s))
 
-        with patch.object(cuda.cudadrv.driver.Stream, 'synchronize',
-                          return_value=None) as mock_sync:
+        with patch.object(
+            cuda.cudadrv.driver.Stream, "synchronize", return_value=None
+        ) as mock_sync:
             cuda.as_cuda_array(f_arr)
 
         # Ensure the synchronize method of a stream was called
@@ -354,9 +349,10 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         # Set sync to false before testing. The test suite should generally be
         # run with sync enabled, but stash the old value just in case it is
         # not.
-        with override_config('CUDA_ARRAY_INTERFACE_SYNC', False):
-            with patch.object(cuda.cudadrv.driver.Stream, 'synchronize',
-                              return_value=None) as mock_sync:
+        with override_config("CUDA_ARRAY_INTERFACE_SYNC", False):
+            with patch.object(
+                cuda.cudadrv.driver.Stream, "synchronize", return_value=None
+            ) as mock_sync:
                 cuda.as_cuda_array(f_arr)
 
             # Ensure the synchronize method of a stream was not called
@@ -370,8 +366,9 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         def f(x):
             pass
 
-        with patch.object(cuda.cudadrv.driver.Stream, 'synchronize',
-                          return_value=None) as mock_sync:
+        with patch.object(
+            cuda.cudadrv.driver.Stream, "synchronize", return_value=None
+        ) as mock_sync:
             f[1, 1](f_arr)
 
         # Ensure the synchronize method of a stream was not called
@@ -386,8 +383,9 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         def f(x):
             pass
 
-        with patch.object(cuda.cudadrv.driver.Stream, 'synchronize',
-                          return_value=None) as mock_sync:
+        with patch.object(
+            cuda.cudadrv.driver.Stream, "synchronize", return_value=None
+        ) as mock_sync:
             f[1, 1](f_arr)
 
         # Ensure the synchronize method of a stream was called
@@ -404,8 +402,9 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         def f(x, y):
             pass
 
-        with patch.object(cuda.cudadrv.driver.Stream, 'synchronize',
-                          return_value=None) as mock_sync:
+        with patch.object(
+            cuda.cudadrv.driver.Stream, "synchronize", return_value=None
+        ) as mock_sync:
             f[1, 1](f_arr1, f_arr2)
 
         # Ensure that synchronize was called twice
@@ -418,13 +417,15 @@ class TestCudaArrayInterface(ContextResettingTestCase):
         f_arr1 = ForeignArray(cuda.device_array(10, stream=s1))
         f_arr2 = ForeignArray(cuda.device_array(10, stream=s2))
 
-        with override_config('CUDA_ARRAY_INTERFACE_SYNC', False):
+        with override_config("CUDA_ARRAY_INTERFACE_SYNC", False):
+
             @cuda.jit
             def f(x, y):
                 pass
 
-            with patch.object(cuda.cudadrv.driver.Stream, 'synchronize',
-                              return_value=None) as mock_sync:
+            with patch.object(
+                cuda.cudadrv.driver.Stream, "synchronize", return_value=None
+            ) as mock_sync:
                 f[1, 1](f_arr1, f_arr2)
 
             # Ensure that synchronize was not called

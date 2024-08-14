@@ -62,5 +62,5 @@ class TestCudaFrexpLdexp(CUDATestCase):
         self.template_test_ldexp(np.float64, float64)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

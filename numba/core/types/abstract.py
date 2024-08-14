@@ -17,13 +17,16 @@ from numba.core.utils import get_hashable_key
 # in _dispatcher.c's internal caches).
 _typecodes = itertools.count()
 
+
 def _autoincr():
     n = next(_typecodes)
     # 4 billion types should be enough, right?
-    assert n < 2 ** 32, "Limited to 4 billion types"
+    assert n < 2**32, "Limited to 4 billion types"
     return n
 
+
 _typecache: ptDict[weakref.ref, weakref.ref] = {}
+
 
 def _on_type_disposal(wr, _pop=_typecache.pop):
     _pop(wr, None)
@@ -43,7 +46,7 @@ class _TypeMetaclass(ABCMeta):
         # module) or an external type (one which is defined elsewhere, for
         # example a user defined type).
         super(_TypeMetaclass, cls).__init__(name, bases, orig_vars)
-        root = (cls.__module__.split('.'))[0]
+        root = (cls.__module__.split("."))[0]
         cls._is_internal = root == "numba"
 
     def _intern(cls, inst):
@@ -176,16 +179,17 @@ class Type(metaclass=_TypeMetaclass):
 
     def __call__(self, *args):
         from numba.core.typing import signature
+
         if len(args) == 1 and not isinstance(args[0], Type):
             return self.cast_python_value(args[0])
-        return signature(self, # return_type
-                         *args)
+        return signature(self, *args)  # return_type
 
     def __getitem__(self, args):
         """
         Return an array of this type.
         """
         from numba.core.types import Array
+
         ndim, layout = self._determine_array_spec(args)
         return Array(dtype=self, ndim=ndim, layout=layout)
 
@@ -198,39 +202,42 @@ class Type(metaclass=_TypeMetaclass):
         if isinstance(args, (tuple, list)) and all(map(validate_slice, args)):
             ndim = len(args)
             if args[0].step == 1:
-                layout = 'F'
+                layout = "F"
             elif args[-1].step == 1:
-                layout = 'C'
+                layout = "C"
             else:
-                layout = 'A'
+                layout = "A"
         elif validate_slice(args):
             ndim = 1
             if args.step == 1:
-                layout = 'C'
+                layout = "C"
             else:
-                layout = 'A'
+                layout = "A"
         else:
             # Raise a KeyError to not be handled by collection constructors (e.g. list).
-            raise KeyError(f"Can only index numba types with slices with no start or stop, got {args}.")
+            raise KeyError(
+                f"Can only index numba types with slices with no start or stop, got {args}."
+            )
 
         return ndim, layout
 
     def cast_python_value(self, args):
         raise NotImplementedError
 
-
     @property
     def is_internal(self):
-        """ Returns True if this class is an internally defined Numba type by
+        """Returns True if this class is an internally defined Numba type by
         virtue of the module in which it is instantiated, False else."""
         return self._is_internal
 
-    def dump(self, tab=''):
-        print(f'{tab}DUMP {type(self).__name__}[code={self._code}, name={self.name}]')
+    def dump(self, tab=""):
+        print(f"{tab}DUMP {type(self).__name__}[code={self._code}, name={self.name}]")
+
 
 # XXX we should distinguish between Dummy (no meaningful
 # representation, e.g. None or a builtin function) and Opaque (has a
 # meaningful representation, e.g. ExternalFunctionPointer)
+
 
 class Dummy(Type):
     """
@@ -255,6 +262,7 @@ class Number(Hashable):
         Unify the two number types using Numpy's rules.
         """
         from numba.np import numpy_support
+
         if isinstance(other, Number):
             # XXX: this can produce unsafe conversions,
             # e.g. would unify {int64, uint64} to float64
@@ -324,6 +332,7 @@ class ConstSized(Sized):
     """
     For types that have a constant size
     """
+
     @abstractmethod
     def __len__(self):
         pass
@@ -377,6 +386,7 @@ class ArrayCompatible(Type):
     exposing an __array__ method).
     Derived classes should implement the *as_array* attribute.
     """
+
     # If overridden by a subclass, it should also implement typing
     # for '__array_wrap__' with arguments (input, formal result).
     array_priority = 0.0
@@ -415,7 +425,7 @@ class Literal(Type):
     # for constructing a numba type for a given Python type.
     # It is used in `literal(val)` function.
     # To add new Literal subclass, register a new mapping to this dict.
-    ctor_map: ptDict[type, ptType['Literal']] = {}
+    ctor_map: ptDict[type, ptType["Literal"]] = {}
 
     # *_literal_type_cache* is used to cache the numba type of the given value.
     _literal_type_cache = None
@@ -444,6 +454,7 @@ class Literal(Type):
     def literal_type(self):
         if self._literal_type_cache is None:
             from numba.core import typing
+
             ctx = typing.Context()
             try:
                 res = ctx.resolve_value_type(self.literal_value)
@@ -465,15 +476,15 @@ class Literal(Type):
         return self._literal_type_cache
 
 
-
 class TypeRef(Dummy):
     """Reference to a type.
 
     Used when a type is passed as a value.
     """
+
     def __init__(self, instance_type):
         self.instance_type = instance_type
-        super(TypeRef, self).__init__('typeref[{}]'.format(self.instance_type))
+        super(TypeRef, self).__init__("typeref[{}]".format(self.instance_type))
 
     @property
     def key(self):
@@ -485,6 +496,7 @@ class InitialValue(object):
     Used as a mixin for a type will potentially have an initial value that will
     be carried in the .initial_value attribute.
     """
+
     def __init__(self, initial_value):
         self._initial_value = initial_value
 
@@ -500,6 +512,7 @@ class Poison(Type):
     to call the constructor with the type that's being poisoned (for whatever
     reason) but this isn't strictly required.
     """
+
     def __init__(self, ty):
         self.ty = ty
         super(Poison, self).__init__(name="Poison<%s>" % ty)

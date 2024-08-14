@@ -36,21 +36,28 @@ class Generator(SimpleIteratorType):
     Type class for Numba-compiled generator objects.
     """
 
-    def __init__(self, gen_func, yield_type, arg_types, state_types,
-                 has_finalizer):
+    def __init__(self, gen_func, yield_type, arg_types, state_types, has_finalizer):
         self.gen_func = gen_func
         self.arg_types = tuple(arg_types)
         self.state_types = tuple(state_types)
         self.has_finalizer = has_finalizer
         name = "%s generator(func=%s, args=%s, has_finalizer=%s)" % (
-            yield_type, self.gen_func, self.arg_types,
-            self.has_finalizer)
+            yield_type,
+            self.gen_func,
+            self.arg_types,
+            self.has_finalizer,
+        )
         super(Generator, self).__init__(name, yield_type)
 
     @property
     def key(self):
-        return (self.gen_func, self.arg_types, self.yield_type,
-                self.has_finalizer, self.state_types)
+        return (
+            self.gen_func,
+            self.arg_types,
+            self.yield_type,
+            self.has_finalizer,
+            self.state_types,
+        )
 
 
 class EnumerateType(SimpleIteratorType):
@@ -61,9 +68,10 @@ class EnumerateType(SimpleIteratorType):
 
     def __init__(self, iterable_type):
         from numba.core.types import Tuple, intp
+
         self.source_type = iterable_type.iterator_type
         yield_type = Tuple([intp, self.source_type.yield_type])
-        name = 'enumerate(%s)' % (self.source_type)
+        name = "enumerate(%s)" % (self.source_type)
         super(EnumerateType, self).__init__(name, yield_type)
 
     @property
@@ -79,9 +87,10 @@ class ZipType(SimpleIteratorType):
 
     def __init__(self, iterable_types):
         from numba.core.types import Tuple
+
         self.source_types = tuple(tp.iterator_type for tp in iterable_types)
         yield_type = Tuple([tp.yield_type for tp in self.source_types])
-        name = 'zip(%s)' % ', '.join(str(tp) for tp in self.source_types)
+        name = "zip(%s)" % ", ".join(str(tp) for tp in self.source_types)
         super(ZipType, self).__init__(name, yield_type)
 
     @property
@@ -104,5 +113,5 @@ class ArrayIterator(SimpleIteratorType):
             yield_type = array_type.dtype
         else:
             # iteration semantics leads to A order layout
-            yield_type = array_type.copy(ndim=array_type.ndim - 1, layout='A')
+            yield_type = array_type.copy(ndim=array_type.ndim - 1, layout="A")
         super(ArrayIterator, self).__init__(name, yield_type)

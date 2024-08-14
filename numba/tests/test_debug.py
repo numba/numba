@@ -6,9 +6,15 @@ import warnings
 
 import numpy as np
 
-from numba.tests.support import (TestCase, override_config, override_env_config,
-                      captured_stdout, forbid_codegen, skip_parfors_unsupported,
-                      needs_blas)
+from numba.tests.support import (
+    TestCase,
+    override_config,
+    override_env_config,
+    captured_stdout,
+    forbid_codegen,
+    skip_parfors_unsupported,
+    needs_blas,
+)
 from numba import jit, njit
 from numba.core import types, compiler, utils
 from numba.core.errors import NumbaPerformanceWarning
@@ -21,6 +27,7 @@ def simple_nopython(somearg):
     retval = somearg + 1
     return retval
 
+
 def simple_gen(x, y):
     yield x
     yield y
@@ -30,19 +37,24 @@ class SimpleClass(object):
     def __init__(self):
         self.h = 5
 
-simple_class_spec = [('h', types.int32)]
+
+simple_class_spec = [("h", types.int32)]
+
 
 def simple_class_user(obj):
     return obj.h
 
+
 def unsupported_parfor(a, b):
-    return np.dot(a, b) # dot as gemm unsupported
+    return np.dot(a, b)  # dot as gemm unsupported
+
 
 def supported_parfor(n):
     a = np.ones(n)
     for i in prange(n):
         a[i] = a[i] + np.sin(i)
     return a
+
 
 def unsupported_prange(n):
     a = np.ones(n)
@@ -54,8 +66,18 @@ def unsupported_prange(n):
 
 class DebugTestBase(TestCase):
 
-    all_dumps = set(['bytecode', 'cfg', 'ir', 'typeinfer', 'llvm',
-                     'func_opt_llvm', 'optimized_llvm', 'assembly'])
+    all_dumps = set(
+        [
+            "bytecode",
+            "cfg",
+            "ir",
+            "typeinfer",
+            "llvm",
+            "func_opt_llvm",
+            "optimized_llvm",
+            "assembly",
+        ]
+    )
 
     def assert_fails(self, *args, **kwargs):
         self.assertRaises(AssertionError, *args, **kwargs)
@@ -66,7 +88,7 @@ class DebugTestBase(TestCase):
             assert name in enabled_dumps
             enabled_dumps[name] = True
         for name, enabled in sorted(enabled_dumps.items()):
-            check_meth = getattr(self, '_check_dump_%s' % name)
+            check_meth = getattr(self, "_check_dump_%s" % name)
             if enabled:
                 check_meth(out)
             else:
@@ -74,44 +96,44 @@ class DebugTestBase(TestCase):
 
     def _check_dump_bytecode(self, out):
         if utils.PYVERSION in ((3, 11), (3, 12)):
-            self.assertIn('BINARY_OP', out)
+            self.assertIn("BINARY_OP", out)
         elif utils.PYVERSION in ((3, 9), (3, 10)):
-            self.assertIn('BINARY_ADD', out)
+            self.assertIn("BINARY_ADD", out)
         else:
             raise NotImplementedError(utils.PYVERSION)
 
     def _check_dump_cfg(self, out):
-        self.assertIn('CFG dominators', out)
+        self.assertIn("CFG dominators", out)
 
     def _check_dump_ir(self, out):
-        self.assertIn('--IR DUMP: %s--' % self.func_name, out)
+        self.assertIn("--IR DUMP: %s--" % self.func_name, out)
 
     def _check_dump_typeinfer(self, out):
-        self.assertIn('--propagate--', out)
+        self.assertIn("--propagate--", out)
 
     def _check_dump_llvm(self, out):
-        self.assertIn('--LLVM DUMP', out)
+        self.assertIn("--LLVM DUMP", out)
         if compiler.Flags.options["auto_parallel"].default.enabled == False:
             self.assertRegex(out, r'store i64 %\"\.\d", i64\* %"retptr"', out)
 
     def _check_dump_func_opt_llvm(self, out):
-        self.assertIn('--FUNCTION OPTIMIZED DUMP %s' % self.func_name, out)
+        self.assertIn("--FUNCTION OPTIMIZED DUMP %s" % self.func_name, out)
         # allocas have been optimized away
-        self.assertIn('add nsw i64 %arg.somearg, 1', out)
+        self.assertIn("add nsw i64 %arg.somearg, 1", out)
 
     def _check_dump_optimized_llvm(self, out):
-        self.assertIn('--OPTIMIZED DUMP %s' % self.func_name, out)
-        self.assertIn('add nsw i64 %arg.somearg, 1', out)
+        self.assertIn("--OPTIMIZED DUMP %s" % self.func_name, out)
+        self.assertIn("add nsw i64 %arg.somearg, 1", out)
 
     def _check_dump_assembly(self, out):
-        self.assertIn('--ASSEMBLY %s' % self.func_name, out)
-        if platform.machine() in ('x86_64', 'AMD64', 'i386', 'i686'):
-            self.assertIn('xorl', out)
+        self.assertIn("--ASSEMBLY %s" % self.func_name, out)
+        if platform.machine() in ("x86_64", "AMD64", "i386", "i686"):
+            self.assertIn("xorl", out)
 
 
 class FunctionDebugTestBase(DebugTestBase):
 
-    func_name = 'simple_nopython'
+    func_name = "simple_nopython"
 
     def compile_simple_nopython(self):
         with captured_stdout() as out:
@@ -124,44 +146,44 @@ class FunctionDebugTestBase(DebugTestBase):
 class TestFunctionDebugOutput(FunctionDebugTestBase):
 
     def test_dump_bytecode(self):
-        with override_config('DUMP_BYTECODE', True):
+        with override_config("DUMP_BYTECODE", True):
             out = self.compile_simple_nopython()
-        self.check_debug_output(out, ['bytecode'])
+        self.check_debug_output(out, ["bytecode"])
 
     def test_dump_ir(self):
-        with override_config('DUMP_IR', True):
+        with override_config("DUMP_IR", True):
             out = self.compile_simple_nopython()
-        self.check_debug_output(out, ['ir'])
+        self.check_debug_output(out, ["ir"])
 
     def test_dump_cfg(self):
-        with override_config('DUMP_CFG', True):
+        with override_config("DUMP_CFG", True):
             out = self.compile_simple_nopython()
-        self.check_debug_output(out, ['cfg'])
+        self.check_debug_output(out, ["cfg"])
 
     def test_dump_llvm(self):
-        with override_config('DUMP_LLVM', True):
+        with override_config("DUMP_LLVM", True):
             out = self.compile_simple_nopython()
-        self.check_debug_output(out, ['llvm'])
+        self.check_debug_output(out, ["llvm"])
 
     def test_dump_func_opt_llvm(self):
-        with override_config('DUMP_FUNC_OPT', True):
+        with override_config("DUMP_FUNC_OPT", True):
             out = self.compile_simple_nopython()
-        self.check_debug_output(out, ['func_opt_llvm'])
+        self.check_debug_output(out, ["func_opt_llvm"])
 
     def test_dump_optimized_llvm(self):
-        with override_config('DUMP_OPTIMIZED', True):
+        with override_config("DUMP_OPTIMIZED", True):
             out = self.compile_simple_nopython()
-        self.check_debug_output(out, ['optimized_llvm'])
+        self.check_debug_output(out, ["optimized_llvm"])
 
     def test_dump_assembly(self):
-        with override_config('DUMP_ASSEMBLY', True):
+        with override_config("DUMP_ASSEMBLY", True):
             out = self.compile_simple_nopython()
-        self.check_debug_output(out, ['assembly'])
+        self.check_debug_output(out, ["assembly"])
 
 
 class TestGeneratorDebugOutput(DebugTestBase):
 
-    func_name = 'simple_gen'
+    func_name = "simple_gen"
 
     def compile_simple_gen(self):
         with captured_stdout() as out:
@@ -171,15 +193,17 @@ class TestGeneratorDebugOutput(DebugTestBase):
         return out.getvalue()
 
     def test_dump_ir_generator(self):
-        with override_config('DUMP_IR', True):
+        with override_config("DUMP_IR", True):
             out = self.compile_simple_gen()
-        self.check_debug_output(out, ['ir'])
-        self.assertIn('--GENERATOR INFO: %s' % self.func_name, out)
-        expected_gen_info = textwrap.dedent("""
+        self.check_debug_output(out, ["ir"])
+        self.assertIn("--GENERATOR INFO: %s" % self.func_name, out)
+        expected_gen_info = textwrap.dedent(
+            """
             generator state variables: ['x', 'y']
             yield point #1: live variables = ['y'], weak live variables = ['x']
             yield point #2: live variables = [], weak live variables = ['y']
-            """)
+            """
+        )
         self.assertIn(expected_gen_info, out)
 
 
@@ -189,13 +213,13 @@ class TestDisableJIT(DebugTestBase):
     """
 
     def test_jit(self):
-        with override_config('DISABLE_JIT', True):
+        with override_config("DISABLE_JIT", True):
             with forbid_codegen():
                 cfunc = jit(nopython=True)(simple_nopython)
                 self.assertPreciseEqual(cfunc(2), 3)
 
     def test_jitclass(self):
-        with override_config('DISABLE_JIT', True):
+        with override_config("DISABLE_JIT", True):
             with forbid_codegen():
                 SimpleJITClass = jitclass(simple_class_spec)(SimpleClass)
 
@@ -217,15 +241,24 @@ class TestEnvironmentOverride(FunctionDebugTestBase):
     def test_debug(self):
         out = self.compile_simple_nopython()
         self.assertFalse(out)
-        with override_env_config('NUMBA_DEBUG', '1'):
+        with override_env_config("NUMBA_DEBUG", "1"):
             out = self.compile_simple_nopython()
             # Note that all variables dependent on NUMBA_DEBUG are
             # updated too.
-            self.check_debug_output(out, ['ir', 'typeinfer',
-                                          'llvm', 'func_opt_llvm',
-                                          'optimized_llvm', 'assembly'])
+            self.check_debug_output(
+                out,
+                [
+                    "ir",
+                    "typeinfer",
+                    "llvm",
+                    "func_opt_llvm",
+                    "optimized_llvm",
+                    "assembly",
+                ],
+            )
         out = self.compile_simple_nopython()
         self.assertFalse(out)
+
 
 class TestParforsDebug(TestCase):
     """
@@ -236,8 +269,10 @@ class TestParforsDebug(TestCase):
     _numba_parallel_test_ = False
 
     def check_parfors_warning(self, warn_list):
-        msg = ("'parallel=True' was specified but no transformation for "
-               "parallel execution was possible.")
+        msg = (
+            "'parallel=True' was specified but no transformation for "
+            "parallel execution was possible."
+        )
         warning_found = False
         for w in warn_list:
             if msg in str(w.message):
@@ -246,9 +281,11 @@ class TestParforsDebug(TestCase):
         self.assertTrue(warning_found, "Warning message should be found.")
 
     def check_parfors_unsupported_prange_warning(self, warn_list):
-        msg = ("prange or pndindex loop will not be executed in parallel "
-               "due to there being more than one entry to or exit from the "
-               "loop (e.g., an assertion).")
+        msg = (
+            "prange or pndindex loop will not be executed in parallel "
+            "due to there being more than one entry to or exit from the "
+            "loop (e.g., an assertion)."
+        )
         warning_found = False
         for w in warn_list:
             if msg in str(w.message):
@@ -291,50 +328,47 @@ class TestParforsDebug(TestCase):
         # indices.
         njit((types.int64,), parallel=True)(supported_parfor)
 
-        with override_env_config('NUMBA_DEBUG_ARRAY_OPT_STATS', '1'):
+        with override_env_config("NUMBA_DEBUG_ARRAY_OPT_STATS", "1"):
             with captured_stdout() as out:
                 njit((types.int64,), parallel=True)(supported_parfor)
 
             # grab the various parts out the output
-            output = out.getvalue().split('\n')
-            parallel_loop_output = \
-                [x for x in output if 'is produced from pattern' in x]
-            fuse_output = \
-                [x for x in output if 'is fused into' in x]
-            after_fusion_output = \
-                [x for x in output if 'After fusion, function' in x]
+            output = out.getvalue().split("\n")
+            parallel_loop_output = [
+                x for x in output if "is produced from pattern" in x
+            ]
+            fuse_output = [x for x in output if "is fused into" in x]
+            after_fusion_output = [x for x in output if "After fusion, function" in x]
 
             # Parfor's have a shared state index, grab the current value
             # as it will be used as an offset for all loop messages
-            parfor_state = int(re.compile(r'#([0-9]+)').search(
-                parallel_loop_output[0]).group(1))
-            bounds = range(parfor_state,
-                           parfor_state + len(parallel_loop_output))
+            parfor_state = int(
+                re.compile(r"#([0-9]+)").search(parallel_loop_output[0]).group(1)
+            )
+            bounds = range(parfor_state, parfor_state + len(parallel_loop_output))
 
             # Check the Parallel for-loop <index> is produced from <pattern>
             # works first
-            pattern = ("('ones function', 'NumPy mapping')",
-                       ('prange', 'user', ''))
-            fmt = 'Parallel for-loop #{} is produced from pattern \'{}\' at'
-            for i, trials, lpattern in zip(bounds, parallel_loop_output,
-                                           pattern):
+            pattern = ("('ones function', 'NumPy mapping')", ("prange", "user", ""))
+            fmt = "Parallel for-loop #{} is produced from pattern '{}' at"
+            for i, trials, lpattern in zip(bounds, parallel_loop_output, pattern):
                 to_match = fmt.format(i, lpattern)
                 self.assertIn(to_match, trials)
 
             # Check the fusion statements are correct
             pattern = (parfor_state + 1, parfor_state + 0)
-            fmt = 'Parallel for-loop #{} is fused into for-loop #{}.'
+            fmt = "Parallel for-loop #{} is fused into for-loop #{}."
             for trials in fuse_output:
                 to_match = fmt.format(*pattern)
                 self.assertIn(to_match, trials)
 
             # Check the post fusion statements are correct
             pattern = (supported_parfor.__name__, 1, set([parfor_state]))
-            fmt = 'After fusion, function {} has {} parallel for-loop(s) #{}.'
+            fmt = "After fusion, function {} has {} parallel for-loop(s) #{}."
             for trials in after_fusion_output:
                 to_match = fmt.format(*pattern)
                 self.assertIn(to_match, trials)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

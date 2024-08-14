@@ -23,7 +23,7 @@ class TestArrayAdaptor(unittest.TestCase):
     def test_array_adaptor(self):
         arystruct = ArrayStruct3D()
 
-        adaptorptr = _helperlib.c_helpers['adapt_ndarray']
+        adaptorptr = _helperlib.c_helpers["adapt_ndarray"]
         adaptor = PYFUNCTYPE(c_int, py_object, c_void_p)(adaptorptr)
 
         ary = np.arange(60).reshape(2, 3, 10)
@@ -39,5 +39,5 @@ class TestArrayAdaptor(unittest.TestCase):
             self.assertEqual(arystruct.strides[i], ary.ctypes.strides[i])
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

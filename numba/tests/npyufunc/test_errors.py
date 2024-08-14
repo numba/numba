@@ -5,34 +5,37 @@ import numpy as np
 
 from numba import vectorize, guvectorize
 
-from numba.tests.support import (TestCase, CheckWarningsMixin,
-                                 skip_macos_fenv_errors)
+from numba.tests.support import TestCase, CheckWarningsMixin, skip_macos_fenv_errors
 import unittest
 
 
 def sqrt(val):
     if val < 0.0:
-        raise ValueError('Value must be positive')
-    return val ** 0.5
+        raise ValueError("Value must be positive")
+    return val**0.5
 
 
 def gufunc_foo(inp, n, out):
     for i in range(inp.shape[0]):
         if inp[i] < 0:
-            raise ValueError('Value must be positive')
+            raise ValueError("Value must be positive")
         out[i] = inp[i] * n[0]
+
 
 def truediv(a, b):
     return a / b
 
+
 def floordiv(a, b):
     return a // b
+
 
 def remainder(a, b):
     return a % b
 
+
 def power(a, b):
-    return a ** b
+    return a**b
 
 
 class TestExceptions(TestCase):
@@ -41,12 +44,12 @@ class TestExceptions(TestCase):
     """
 
     def check_ufunc_raise(self, **vectorize_args):
-        f = vectorize(['float64(float64)'], **vectorize_args)(sqrt)
+        f = vectorize(["float64(float64)"], **vectorize_args)(sqrt)
         arr = np.array([1, 4, -2, 9, -1, 16], dtype=np.float64)
         out = np.zeros_like(arr)
         with self.assertRaises(ValueError) as cm:
             f(arr, out)
-        self.assertIn('Value must be positive', str(cm.exception))
+        self.assertIn("Value must be positive", str(cm.exception))
         # All values were computed except for the ones giving an error
         self.assertEqual(list(out), [1, 2, 0, 3, 0, 4])
 
@@ -57,8 +60,9 @@ class TestExceptions(TestCase):
         self.check_ufunc_raise(forceobj=True)
 
     def check_gufunc_raise(self, **vectorize_args):
-        f = guvectorize(['int32[:], int32[:], int32[:]'], '(n),()->(n)',
-                        **vectorize_args)(gufunc_foo)
+        f = guvectorize(
+            ["int32[:], int32[:], int32[:]"], "(n),()->(n)", **vectorize_args
+        )(gufunc_foo)
         arr = np.array([1, 2, -3, 4], dtype=np.int32)
         out = np.zeros_like(arr)
         with self.assertRaises(ValueError) as cm:
@@ -72,6 +76,7 @@ class TestExceptions(TestCase):
     def test_gufunc_raise_objmode(self):
         self.check_gufunc_raise(forceobj=True)
 
+
 class TestFloatingPointExceptions(TestCase, CheckWarningsMixin):
     """
     Test floating-point exceptions inside ufuncs.
@@ -84,11 +89,12 @@ class TestFloatingPointExceptions(TestCase, CheckWarningsMixin):
         Test 1 / 0 and 0 / 0.
         """
         f = vectorize(nopython=True)(truediv)
-        a = np.array([5., 6., 0., 8.], dtype=dtype)
-        b = np.array([1., 0., 0., 4.], dtype=dtype)
-        expected = np.array([5., float('inf'), float('nan'), 2.])
-        with self.check_warnings(["divide by zero encountered",
-                                  "invalid value encountered"]):
+        a = np.array([5.0, 6.0, 0.0, 8.0], dtype=dtype)
+        b = np.array([1.0, 0.0, 0.0, 4.0], dtype=dtype)
+        expected = np.array([5.0, float("inf"), float("nan"), 2.0])
+        with self.check_warnings(
+            ["divide by zero encountered", "invalid value encountered"]
+        ):
             res = f(a, b)
             self.assertPreciseEqual(res, expected)
 
@@ -103,24 +109,27 @@ class TestFloatingPointExceptions(TestCase, CheckWarningsMixin):
         Test 1 // 0 and 0 // 0.
         """
         f = vectorize(nopython=True)(pyfunc)
-        a = np.array([5., 6., 0., 9.])
-        b = np.array([1., 0., 0., 4.])
+        a = np.array([5.0, 6.0, 0.0, 9.0])
+        b = np.array([1.0, 0.0, 0.0, 4.0])
         expected = np.array(values)
         with self.check_warnings(messages):
             res = f(a, b)
             self.assertPreciseEqual(res, expected)
 
     def test_floordiv_float(self):
-        self.check_divmod_float(floordiv,
-                                [5.0, float('inf'), float('nan'), 2.0],
-                                ["divide by zero encountered",
-                                 "invalid value encountered"])
+        self.check_divmod_float(
+            floordiv,
+            [5.0, float("inf"), float("nan"), 2.0],
+            ["divide by zero encountered", "invalid value encountered"],
+        )
 
     @skip_macos_fenv_errors
     def test_remainder_float(self):
-        self.check_divmod_float(remainder,
-                                [0.0, float('nan'), float('nan'), 1.0],
-                                ["invalid value encountered"])
+        self.check_divmod_float(
+            remainder,
+            [0.0, float("nan"), float("nan"), 1.0],
+            ["invalid value encountered"],
+        )
 
     def check_divmod_int(self, pyfunc, values):
         """
@@ -146,11 +155,12 @@ class TestFloatingPointExceptions(TestCase, CheckWarningsMixin):
         Test 0 ** -1 and 2 ** <big number>.
         """
         f = vectorize(nopython=True)(power)
-        a = np.array([5., 0., 2., 8.])
-        b = np.array([1., -1., 1e20, 4.])
-        expected = np.array([5., float('inf'), float('inf'), 4096.])
-        with self.check_warnings(["divide by zero encountered",
-                                  "overflow encountered"]):
+        a = np.array([5.0, 0.0, 2.0, 8.0])
+        b = np.array([1.0, -1.0, 1e20, 4.0])
+        expected = np.array([5.0, float("inf"), float("inf"), 4096.0])
+        with self.check_warnings(
+            ["divide by zero encountered", "overflow encountered"]
+        ):
             res = f(a, b)
             self.assertPreciseEqual(res, expected)
 
@@ -164,7 +174,7 @@ class TestFloatingPointExceptions(TestCase, CheckWarningsMixin):
         f = vectorize(["int64(int64, int64)"], nopython=True)(power)
         a = np.array([5, 0, 6], dtype=dtype)
         b = np.array([1, -1, 2], dtype=dtype)
-        expected = np.array([5, -2**63, 36], dtype=dtype)
+        expected = np.array([5, -(2**63), 36], dtype=dtype)
         with self.check_warnings([]):
             res = f(a, b)
             self.assertPreciseEqual(res, expected)

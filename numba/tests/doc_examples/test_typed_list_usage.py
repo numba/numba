@@ -23,12 +23,12 @@ class DocsTypedListUsageTest(unittest.TestCase):
                 l.append(42)
                 # The usual list operations, getitem, pop and length are
                 # supported
-                print(l[0])   # 42
+                print(l[0])  # 42
                 l[0] = 23
-                print(l[0])   # 23
-                print(len(l)) # 1
+                print(l[0])  # 23
+                print(len(l))  # 1
                 l.pop()
-                print(len(l)) # 0
+                print(len(l))  # 0
                 return l
 
             foo()
@@ -53,23 +53,23 @@ class DocsTypedListUsageTest(unittest.TestCase):
             # (depending on platform)
             l.append(42)
             # The usual list operations, getitem, pop and length are supported
-            print(l[0])   # 42
+            print(l[0])  # 42
             l[0] = 23
-            print(l[0])   # 23
-            print(len(l)) # 1
+            print(l[0])  # 23
+            print(len(l))  # 1
             l.pop()
-            print(len(l)) # 0
+            print(len(l))  # 0
 
             # And you can use the typed-list as an argument for a jit compiled
             # function
             l = foo(l)
-            print(len(l)) # 10
+            print(len(l))  # 10
 
             # You can also directly construct a typed-list from an existing
             # Python list
             py_list = [2, 3, 5]
             numba_list = List(py_list)
-            print(len(numba_list)) # 3
+            print(len(numba_list))  # 3
 
             # magictoken.ex_inferred_list.end
 
@@ -91,5 +91,5 @@ class DocsTypedListUsageTest(unittest.TestCase):
             # magictoken.ex_nested_list.end
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

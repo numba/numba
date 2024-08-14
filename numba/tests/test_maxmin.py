@@ -35,5 +35,5 @@ class TestMaxMin(unittest.TestCase):
         self.assertEqual(pyfunc(a, b, c), cfunc(a, b, c))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

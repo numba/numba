@@ -3,18 +3,31 @@ import operator
 from collections import namedtuple
 
 from numba.core import types, utils
-from numba.core.typing.templates import (AttributeTemplate, AbstractTemplate,
-                                         infer, infer_global, infer_getattr,
-                                         signature, bound_function)
+from numba.core.typing.templates import (
+    AttributeTemplate,
+    AbstractTemplate,
+    infer,
+    infer_global,
+    infer_getattr,
+    signature,
+    bound_function,
+)
+
 # import time side effect: array operations requires typing support of sequence
 # defined in collections: e.g. array.shape[i]
 from numba.core.typing import collections
-from numba.core.errors import (TypingError, RequireLiteralValue, NumbaTypeError,
-                               NumbaNotImplementedError, NumbaAssertionError,
-                               NumbaKeyError, NumbaIndexError)
+from numba.core.errors import (
+    TypingError,
+    RequireLiteralValue,
+    NumbaTypeError,
+    NumbaNotImplementedError,
+    NumbaAssertionError,
+    NumbaKeyError,
+    NumbaIndexError,
+)
 from numba.core.cgutils import is_nonelike
 
-numpy_version = tuple(map(int, np.__version__.split('.')[:2]))
+numpy_version = tuple(map(int, np.__version__.split(".")[:2]))
 
 
 Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
@@ -53,8 +66,8 @@ def get_array_index_type(ary, idx):
         if ty is types.ellipsis:
             if ellipsis_met:
                 raise NumbaTypeError(
-                    "Only one ellipsis allowed in array indices "
-                    "(got %s)" % (idx,))
+                    "Only one ellipsis allowed in array indices " "(got %s)" % (idx,)
+                )
             ellipsis_met = True
             in_subspace = False
         elif isinstance(ty, types.SliceType):
@@ -77,19 +90,22 @@ def get_array_index_type(ary, idx):
                 # this branch then we have a new subspace/group.
                 num_subspaces += 1
                 in_subspace = True
-        elif (isinstance(ty, types.Array) and ty.ndim == 0
-              and isinstance(ty.dtype, types.Integer)):
+        elif (
+            isinstance(ty, types.Array)
+            and ty.ndim == 0
+            and isinstance(ty.dtype, types.Integer)
+        ):
             # 0-d array used as integer index
             ndim -= 1
             if not in_subspace:
                 num_subspaces += 1
                 in_subspace = True
-        elif (isinstance(ty, types.Array)
-              and isinstance(ty.dtype, (types.Integer, types.Boolean))):
+        elif isinstance(ty, types.Array) and isinstance(
+            ty.dtype, (types.Integer, types.Boolean)
+        ):
             if ty.ndim > 1:
                 # Advanced indexing limitation # 1
-                raise NumbaTypeError(
-                    "Multi-dimensional indices are not supported.")
+                raise NumbaTypeError("Multi-dimensional indices are not supported.")
             array_indices += 1
             # The condition for activating advanced indexing is simply
             # having at least one array with size > 1.
@@ -97,12 +113,11 @@ def get_array_index_type(ary, idx):
             if not in_subspace:
                 num_subspaces += 1
                 in_subspace = True
-        elif (is_nonelike(ty)):
+        elif is_nonelike(ty):
             ndim += 1
             num_newaxis += 1
         else:
-            raise NumbaTypeError("Unsupported array index type %s in %s"
-                                 % (ty, idx))
+            raise NumbaTypeError("Unsupported array index type %s in %s" % (ty, idx))
         (right_indices if ellipsis_met else left_indices).append(ty)
 
     if advanced:
@@ -113,9 +128,11 @@ def get_array_index_type(ary, idx):
 
         if num_subspaces > 1:
             # Advanced indexing limitation # 3
-            msg = ("Using more than one indexing subspace is unsupported."
-                   " An indexing subspace is a group of one or more"
-                   " consecutive indices comprising integer or array types.")
+            msg = (
+                "Using more than one indexing subspace is unsupported."
+                " An indexing subspace is a group of one or more"
+                " consecutive indices comprising integer or array types."
+            )
             raise NumbaTypeError(msg)
 
     # Only Numpy arrays support advanced indexing
@@ -130,8 +147,9 @@ def get_array_index_type(ary, idx):
 
     n_indices = len(all_indices) - ellipsis_met - num_newaxis
     if n_indices > ary.ndim:
-        raise NumbaTypeError("cannot index %s with %d indices: %s"
-                             % (ary, n_indices, idx))
+        raise NumbaTypeError(
+            "cannot index %s with %d indices: %s" % (ary, n_indices, idx)
+        )
     if n_indices == ary.ndim and ndim == 0 and not ellipsis_met:
         # Full integer indexing => scalar result
         # (note if ellipsis is present, a 0-d view is returned instead)
@@ -139,7 +157,7 @@ def get_array_index_type(ary, idx):
 
     elif advanced:
         # Result is a copy
-        res = ary.copy(ndim=ndim, layout='C', readonly=False)
+        res = ary.copy(ndim=ndim, layout="C", readonly=False)
 
     else:
         # Result is a view
@@ -154,9 +172,13 @@ def get_array_index_type(ary, idx):
         def keeps_contiguity(ty, is_innermost):
             # A slice can only keep an array contiguous if it is the
             # innermost index and it is not strided
-            return (ty is types.ellipsis or isinstance(ty, types.Integer)
-                    or (is_innermost and isinstance(ty, types.SliceType)
-                        and not ty.has_step))
+            return (
+                ty is types.ellipsis
+                or isinstance(ty, types.Integer)
+                or (
+                    is_innermost and isinstance(ty, types.SliceType) and not ty.has_step
+                )
+            )
 
         def check_contiguity(outer_indices):
             """
@@ -170,26 +192,26 @@ def get_array_index_type(ary, idx):
                 return False
             return True
 
-        if layout == 'C':
+        if layout == "C":
             # Integer indexing on the left keeps the array C-contiguous
             if n_indices == ary.ndim:
                 # If all indices are there, ellipsis's place is indifferent
                 left_indices = left_indices + right_indices
                 right_indices = []
             if right_indices:
-                layout = 'A'
+                layout = "A"
             elif not check_contiguity(left_indices):
-                layout = 'A'
-        elif layout == 'F':
+                layout = "A"
+        elif layout == "F":
             # Integer indexing on the right keeps the array F-contiguous
             if n_indices == ary.ndim:
                 # If all indices are there, ellipsis's place is indifferent
                 right_indices = left_indices + right_indices
                 left_indices = []
             if left_indices:
-                layout = 'A'
+                layout = "A"
             elif not check_contiguity(right_indices[::-1]):
-                layout = 'A'
+                layout = "A"
 
         if ndim == 0:
             # Implicitly convert to a scalar if the output ndim==0
@@ -201,7 +223,7 @@ def get_array_index_type(ary, idx):
     if isinstance(idx, types.BaseTuple):
         idx = types.BaseTuple.from_types(all_indices)
     else:
-        idx, = all_indices
+        (idx,) = all_indices
 
     return Indexing(idx, res, advanced)
 
@@ -241,8 +263,7 @@ class SetItemBuffer(AbstractTemplate):
                 else:
                     res = val
             elif isinstance(val, types.Sequence):
-                if (res.ndim == 1 and
-                    self.context.can_convert(val.dtype, res.dtype)):
+                if res.ndim == 1 and self.context.can_convert(val.dtype, res.dtype):
                     # Allow assignment of sequence to 1d array
                     res = val
                 else:
@@ -266,8 +287,11 @@ class SetItemBuffer(AbstractTemplate):
                 else:
                     return
             res = val
-        elif (isinstance(val, types.Array) and val.ndim == 0
-              and self.context.can_convert(val.dtype, res)):
+        elif (
+            isinstance(val, types.Array)
+            and val.ndim == 0
+            and self.context.can_convert(val.dtype, res)
+        ):
             # val is an array(T, 0d, O), where T is the type of res, O is order
             res = val
         else:
@@ -329,17 +353,17 @@ class ArrayAttribute(AttributeTemplate):
         return retty
 
     def resolve_real(self, ary):
-        return self._resolve_real_imag(ary, attr='real')
+        return self._resolve_real_imag(ary, attr="real")
 
     def resolve_imag(self, ary):
-        return self._resolve_real_imag(ary, attr='imag')
+        return self._resolve_real_imag(ary, attr="imag")
 
     def _resolve_real_imag(self, ary, attr):
         if ary.dtype in types.complex_domain:
-            return ary.copy(dtype=ary.dtype.underlying_float, layout='A')
+            return ary.copy(dtype=ary.dtype.underlying_float, layout="A")
         elif ary.dtype in types.number_domain:
             res = ary.copy(dtype=ary.dtype)
-            if attr == 'imag':
+            if attr == "imag":
                 res = res.copy(readonly=True)
             return res
         else:
@@ -362,7 +386,7 @@ class ArrayAttribute(AttributeTemplate):
             return signature(self.resolve_T(ary))
 
         if len(args) == 1:
-            shape, = args
+            (shape,) = args
 
             if sentry_shape_scalar(shape):
                 assert ary.ndim == 1
@@ -380,8 +404,9 @@ class ArrayAttribute(AttributeTemplate):
 
         else:
             if any(not sentry_shape_scalar(a) for a in args):
-                raise TypeError("transpose({0}) is not supported".format(
-                    ', '.join(args)))
+                raise TypeError(
+                    "transpose({0}) is not supported".format(", ".join(args))
+                )
             assert ary.ndim == len(args)
             return signature(self.resolve_T(ary).copy(layout="A"), *args)
 
@@ -402,6 +427,7 @@ class ArrayAttribute(AttributeTemplate):
             return signature(ary.dtype)
 
     if numpy_version < (2, 0):
+
         @bound_function("array.itemset")
         def resolve_itemset(self, ary, args, kws):
             assert not kws
@@ -417,7 +443,7 @@ class ArrayAttribute(AttributeTemplate):
         assert not kws
         # 0-dim arrays return one result array
         ndim = max(ary.ndim, 1)
-        retty = types.UniTuple(types.Array(types.intp, 1, 'C'), ndim)
+        retty = types.UniTuple(types.Array(types.intp, 1, "C"), ndim)
         return signature(retty)
 
     @bound_function("array.reshape")
@@ -432,13 +458,13 @@ class ArrayAttribute(AttributeTemplate):
                 return False
 
         assert not kws
-        if ary.layout not in 'CF':
+        if ary.layout not in "CF":
             # only work for contiguous array
             raise TypeError("reshape() supports contiguous array only")
 
         if len(args) == 1:
             # single arg
-            shape, = args
+            (shape,) = args
 
             if sentry_shape_scalar(shape):
                 ndim = 1
@@ -457,8 +483,9 @@ class ArrayAttribute(AttributeTemplate):
         else:
             # vararg case
             if any(not sentry_shape_scalar(a) for a in args):
-                raise TypeError("reshape({0}) is not supported".format(
-                    ', '.join(map(str, args))))
+                raise TypeError(
+                    "reshape({0}) is not supported".format(", ".join(map(str, args)))
+                )
 
             retty = ary.copy(ndim=len(args))
             return signature(retty, *args)
@@ -473,24 +500,27 @@ class ArrayAttribute(AttributeTemplate):
     def resolve_argsort(self, ary, args, kws):
         assert not args
         kwargs = dict(kws)
-        kind = kwargs.pop('kind', types.StringLiteral('quicksort'))
+        kind = kwargs.pop("kind", types.StringLiteral("quicksort"))
         if not isinstance(kind, types.StringLiteral):
             raise TypingError('"kind" must be a string literal')
         if kwargs:
             msg = "Unsupported keywords: {!r}"
             raise TypingError(msg.format([k for k in kwargs.keys()]))
         if ary.ndim == 1:
-            def argsort_stub(kind='quicksort'):
+
+            def argsort_stub(kind="quicksort"):
                 pass
+
             pysig = utils.pysignature(argsort_stub)
-            sig = signature(types.Array(types.intp, 1, 'C'), kind).replace(pysig=pysig)
+            sig = signature(types.Array(types.intp, 1, "C"), kind).replace(pysig=pysig)
             return sig
 
     @bound_function("array.view")
     def resolve_view(self, ary, args, kws):
         from .npydecl import parse_dtype
+
         assert not kws
-        dtype, = args
+        (dtype,) = args
         dtype = parse_dtype(dtype)
         if dtype is None:
             return
@@ -500,19 +530,22 @@ class ArrayAttribute(AttributeTemplate):
     @bound_function("array.astype")
     def resolve_astype(self, ary, args, kws):
         from .npydecl import parse_dtype
+
         assert not kws
-        dtype, = args
+        (dtype,) = args
         if isinstance(dtype, types.UnicodeType):
-            raise RequireLiteralValue(("array.astype if dtype is a string it "
-                                       "must be constant"))
+            raise RequireLiteralValue(
+                ("array.astype if dtype is a string it " "must be constant")
+            )
         dtype = parse_dtype(dtype)
         if dtype is None:
             return
         if not self.context.can_convert(ary.dtype, dtype):
-            raise TypeError("astype(%s) not supported on %s: "
-                            "cannot convert from %s to %s"
-                            % (dtype, ary, ary.dtype, dtype))
-        layout = ary.layout if ary.layout in 'CF' else 'C'
+            raise TypeError(
+                "astype(%s) not supported on %s: "
+                "cannot convert from %s to %s" % (dtype, ary, ary.dtype, dtype)
+            )
+        layout = ary.layout if ary.layout in "CF" else "C"
         # reset the write bit irrespective of whether the cast type is the same
         # as the current dtype, this replicates numpy
         retty = ary.copy(dtype=dtype, layout=layout, readonly=False)
@@ -523,9 +556,9 @@ class ArrayAttribute(AttributeTemplate):
         # Only support no argument version (default order='C')
         assert not kws
         assert not args
-        copy_will_be_made = ary.layout != 'C'
+        copy_will_be_made = ary.layout != "C"
         readonly = not (copy_will_be_made or ary.mutable)
-        return signature(ary.copy(ndim=1, layout='C', readonly=readonly))
+        return signature(ary.copy(ndim=1, layout="C", readonly=readonly))
 
     @bound_function("array.flatten")
     def resolve_flatten(self, ary, args, kws):
@@ -538,7 +571,7 @@ class ArrayAttribute(AttributeTemplate):
         # Because flatten always returns a copy. (see NumPy docs for "flatten")
         # And because a copy always returns a writeable array.
         # ref: https://numpy.org/doc/stable/reference/generated/numpy.copy.html
-        return signature(ary.copy(ndim=1, layout='C', readonly=False))
+        return signature(ary.copy(ndim=1, layout="C", readonly=False))
 
     def generic_resolve(self, ary, attr):
         # Resolution of other attributes, for record arrays
@@ -549,10 +582,10 @@ class ArrayAttribute(AttributeTemplate):
                     return ary.copy(
                         dtype=attr_dtype.dtype,
                         ndim=ary.ndim + attr_dtype.ndim,
-                        layout='A'
+                        layout="A",
                     )
                 else:
-                    return ary.copy(dtype=attr_dtype, layout='A')
+                    return ary.copy(dtype=attr_dtype, layout="A")
 
 
 @infer_getattr
@@ -565,9 +598,9 @@ class DTypeAttr(AttributeTemplate):
 
     def resolve_kind(self, ary):
         if isinstance(ary.key, types.scalars.Float):
-            val = 'f'
+            val = "f"
         elif isinstance(ary.key, types.scalars.Integer):
-            val = 'i'
+            val = "i"
         else:
             return None  # other types not supported yet
         return types.StringLiteral(val)
@@ -580,19 +613,22 @@ class StaticGetItemArray(AbstractTemplate):
     def generic(self, args, kws):
         # Resolution of members for record and structured arrays
         ary, idx = args
-        if (isinstance(ary, types.Array) and isinstance(idx, str) and
-                isinstance(ary.dtype, types.Record)):
+        if (
+            isinstance(ary, types.Array)
+            and isinstance(idx, str)
+            and isinstance(ary.dtype, types.Record)
+        ):
             if idx in ary.dtype.fields:
                 attr_dtype = ary.dtype.typeof(idx)
                 if isinstance(attr_dtype, types.NestedArray):
                     ret = ary.copy(
                         dtype=attr_dtype.dtype,
                         ndim=ary.ndim + attr_dtype.ndim,
-                        layout='A'
+                        layout="A",
                     )
                     return signature(ret, *args)
                 else:
-                    ret = ary.copy(dtype=attr_dtype, layout='A')
+                    ret = ary.copy(dtype=attr_dtype, layout="A")
                     return signature(ret, *args)
 
 
@@ -615,8 +651,10 @@ class StaticGetItemRecord(AbstractTemplate):
         record, idx = args
         if isinstance(record, types.Record) and isinstance(idx, str):
             if idx not in record.fields:
-                raise KeyError(f"Field '{idx}' was not found in record with "
-                               f"fields {tuple(record.fields.keys())}")
+                raise KeyError(
+                    f"Field '{idx}' was not found in record with "
+                    f"fields {tuple(record.fields.keys())}"
+                )
             ret = record.typeof(idx)
             assert ret
             return signature(ret, *args)
@@ -630,8 +668,10 @@ class StaticGetItemLiteralRecord(AbstractTemplate):
         if isinstance(record, types.Record):
             if isinstance(idx, types.StringLiteral):
                 if idx.literal_value not in record.fields:
-                    msg = (f"Field '{idx.literal_value}' was not found in "
-                           f"record with fields {tuple(record.fields.keys())}")
+                    msg = (
+                        f"Field '{idx.literal_value}' was not found in "
+                        f"record with fields {tuple(record.fields.keys())}"
+                    )
                     raise NumbaKeyError(msg)
                 ret = record.typeof(idx.literal_value)
                 assert ret
@@ -657,8 +697,7 @@ class StaticSetItemRecord(AbstractTemplate):
             if isinstance(idx, str):
                 expectedty = record.typeof(idx)
                 if self.context.can_convert(value, expectedty) is not None:
-                    return signature(types.void, record, types.literal(idx),
-                                     value)
+                    return signature(types.void, record, types.literal(idx), value)
             elif isinstance(idx, int):
                 if idx >= len(record.fields):
                     msg = f"Requested index {idx} is out of range"
@@ -666,8 +705,7 @@ class StaticSetItemRecord(AbstractTemplate):
                 str_field = list(record.fields)[idx]
                 expectedty = record.typeof(str_field)
                 if self.context.can_convert(value, expectedty) is not None:
-                    return signature(types.void, record, types.literal(idx),
-                                     value)
+                    return signature(types.void, record, types.literal(idx), value)
 
 
 @infer_global(operator.setitem)
@@ -677,8 +715,10 @@ class StaticSetItemLiteralRecord(AbstractTemplate):
         target, idx, value = args
         if isinstance(target, types.Record) and isinstance(idx, types.StringLiteral):
             if idx.literal_value not in target.fields:
-                msg = (f"Field '{idx.literal_value}' was not found in record "
-                       f"with fields {tuple(target.fields.keys())}")
+                msg = (
+                    f"Field '{idx.literal_value}' was not found in record "
+                    f"with fields {tuple(target.fields.keys())}"
+                )
                 raise NumbaKeyError(msg)
             expectedty = target.typeof(idx.literal_value)
             if self.context.can_convert(value, expectedty) is not None:
@@ -748,33 +788,38 @@ def sum_expand(self, args, kws):
     a dtype parameter
     """
     pysig = None
-    if 'axis' in kws and 'dtype' not in kws:
+    if "axis" in kws and "dtype" not in kws:
+
         def sum_stub(axis):
             pass
+
         pysig = utils.pysignature(sum_stub)
         # rewrite args
-        args = list(args) + [kws['axis']]
-    elif 'dtype' in kws and 'axis' not in kws:
+        args = list(args) + [kws["axis"]]
+    elif "dtype" in kws and "axis" not in kws:
+
         def sum_stub(dtype):
             pass
+
         pysig = utils.pysignature(sum_stub)
         # rewrite args
-        args = list(args) + [kws['dtype']]
-    elif 'dtype' in kws and 'axis' in kws:
+        args = list(args) + [kws["dtype"]]
+    elif "dtype" in kws and "axis" in kws:
+
         def sum_stub(axis, dtype):
             pass
+
         pysig = utils.pysignature(sum_stub)
         # rewrite args
-        args = list(args) + [kws['axis'], kws['dtype']]
+        args = list(args) + [kws["axis"], kws["dtype"]]
 
     args_len = len(args)
     assert args_len <= 2
     if args_len == 0:
         # No axis or dtype parameter so the return type of the summation is a scalar
         # of the type of the array.
-        out = signature(_expand_integer(self.this.dtype), *args,
-                        recvr=self.this)
-    elif args_len == 1 and 'dtype' not in kws:
+        out = signature(_expand_integer(self.this.dtype), *args, recvr=self.this)
+    elif args_len == 1 and "dtype" not in kws:
         # There is an axis parameter, either arg or kwarg
         if self.this.ndim == 1:
             # 1d reduces to a scalar
@@ -782,29 +827,35 @@ def sum_expand(self, args, kws):
         else:
             # the return type of this summation is  an array of dimension one
             # less than the input array.
-            return_type = types.Array(dtype=_expand_integer(self.this.dtype),
-                                    ndim=self.this.ndim-1, layout='C')
+            return_type = types.Array(
+                dtype=_expand_integer(self.this.dtype),
+                ndim=self.this.ndim - 1,
+                layout="C",
+            )
         out = signature(return_type, *args, recvr=self.this)
 
-    elif args_len == 1 and 'dtype' in kws:
+    elif args_len == 1 and "dtype" in kws:
         # No axis parameter so the return type of the summation is a scalar
         # of the dtype parameter.
         from .npydecl import parse_dtype
-        dtype, = args
+
+        (dtype,) = args
         dtype = parse_dtype(dtype)
         out = signature(dtype, *args, recvr=self.this)
 
     elif args_len == 2:
         # There is an axis and dtype parameter, either arg or kwarg
         from .npydecl import parse_dtype
+
         dtype = parse_dtype(args[1])
         return_type = dtype
         if self.this.ndim != 1:
             # 1d reduces to a scalar, 2d and above reduce dim by 1
             # the return type of this summation is  an array of dimension one
             # less than the input array.
-            return_type = types.Array(dtype=return_type,
-                                    ndim=self.this.ndim-1, layout='C')
+            return_type = types.Array(
+                dtype=return_type, ndim=self.this.ndim - 1, layout="C"
+            )
         out = signature(return_type, *args, recvr=self.this)
     else:
         pass
@@ -817,8 +868,9 @@ def generic_expand_cumulative(self, args, kws):
     if kws:
         raise NumbaAssertionError("kwargs unsupported")
     assert isinstance(self.this, types.Array)
-    return_type = types.Array(dtype=_expand_integer(self.this.dtype),
-                              ndim=1, layout='C')
+    return_type = types.Array(
+        dtype=_expand_integer(self.this.dtype), ndim=1, layout="C"
+    )
     return signature(return_type, recvr=self.this)
 
 
@@ -847,8 +899,11 @@ def generic_index(self, args, kws):
 
 
 def install_array_method(name, generic, prefer_literal=True):
-    my_attr = {"key": "array." + name, "generic": generic,
-               "prefer_literal": prefer_literal}
+    my_attr = {
+        "key": "array." + name,
+        "generic": generic,
+        "prefer_literal": prefer_literal,
+    }
     temp_class = type("Array_" + name, (AbstractTemplate,), my_attr)
 
     def array_attribute_attachment(self, ary):
@@ -863,7 +918,7 @@ install_array_method("sum", sum_expand, prefer_literal=True)
 
 @infer_global(operator.eq)
 class CmpOpEqArray(AbstractTemplate):
-    #key = operator.eq
+    # key = operator.eq
 
     def generic(self, args, kws):
         assert not kws

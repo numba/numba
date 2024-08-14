@@ -5,16 +5,17 @@ from numba.core.typing.asnumbatype import as_numba_type
 
 
 def pndindex(*args):
-    """ Provides an n-dimensional parallel iterator that generates index tuples
+    """Provides an n-dimensional parallel iterator that generates index tuples
     for each iteration point. Sequentially, pndindex is identical to np.ndindex.
     """
     return np.ndindex(*args)
 
 
 class prange(object):
-    """ Provides a 1D parallel iterator that generates a sequence of integers.
+    """Provides a 1D parallel iterator that generates a sequence of integers.
     In non-parallel contexts, prange is identical to range.
     """
+
     def __new__(cls, *args):
         return range(*args)
 
@@ -23,13 +24,17 @@ def _gdb_python_call_gen(func_name, *args):
     # generates a call to a function containing a compiled in gdb command,
     # this is to make `numba.gdb*` work in the interpreter.
     import numba
+
     fn = getattr(numba, func_name)
-    argstr = ','.join(['"%s"' for _ in args]) % args
+    argstr = ",".join(['"%s"' for _ in args]) % args
     defn = """def _gdb_func_injection():\n\t%s(%s)\n
-    """ % (func_name, argstr)
+    """ % (
+        func_name,
+        argstr,
+    )
     l = {}
     exec(defn, {func_name: fn}, l)
-    return numba.njit(l['_gdb_func_injection'])
+    return numba.njit(l["_gdb_func_injection"])
 
 
 def gdb(*args):
@@ -38,7 +43,7 @@ def gdb(*args):
     at the call site. Arguments are strings in the gdb command language syntax
     which will be executed by gdb once initialisation has occurred.
     """
-    _gdb_python_call_gen('gdb', *args)()
+    _gdb_python_call_gen("gdb", *args)()
 
 
 def gdb_breakpoint():
@@ -48,7 +53,7 @@ def gdb_breakpoint():
     multiple points. gdb will stop in the user defined code just after the frame
     employed by the breakpoint returns.
     """
-    _gdb_python_call_gen('gdb_breakpoint')()
+    _gdb_python_call_gen("gdb_breakpoint")()
 
 
 def gdb_init(*args):
@@ -58,7 +63,7 @@ def gdb_init(*args):
     Arguments are strings in the gdb command language syntax which will be
     executed by gdb once initialisation has occurred.
     """
-    _gdb_python_call_gen('gdb_init', *args)()
+    _gdb_python_call_gen("gdb_init", *args)()
 
 
 def literally(obj):
@@ -92,13 +97,13 @@ def literal_unroll(container):
 
 
 __all__ = [
-    'typeof',
-    'as_numba_type',
-    'prange',
-    'pndindex',
-    'gdb',
-    'gdb_breakpoint',
-    'gdb_init',
-    'literally',
-    'literal_unroll',
+    "typeof",
+    "as_numba_type",
+    "prange",
+    "pndindex",
+    "gdb",
+    "gdb_breakpoint",
+    "gdb_init",
+    "literally",
+    "literal_unroll",
 ]

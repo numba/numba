@@ -2,14 +2,18 @@
 # "magictoken" is used for markers as beginning and ending of example text.
 
 import unittest
-from numba.cuda.testing import (CUDATestCase, skip_on_cudasim,
-                                skip_if_cudadevrt_missing, skip_unless_cc_60,
-                                skip_if_mvc_enabled)
+from numba.cuda.testing import (
+    CUDATestCase,
+    skip_on_cudasim,
+    skip_if_cudadevrt_missing,
+    skip_unless_cc_60,
+    skip_if_mvc_enabled,
+)
 
 
 @skip_if_cudadevrt_missing
 @skip_unless_cc_60
-@skip_if_mvc_enabled('CG not supported with MVC')
+@skip_if_mvc_enabled("CG not supported with MVC")
 @skip_on_cudasim("cudasim doesn't support cuda import at non-top-level")
 class TestCooperativeGroups(CUDATestCase):
     def test_ex_grid_sync(self):
@@ -17,7 +21,7 @@ class TestCooperativeGroups(CUDATestCase):
         from numba import cuda, int32
         import numpy as np
 
-        sig = (int32[:,::1],)
+        sig = (int32[:, ::1],)
 
         @cuda.jit(sig)
         def sequential_rows(M):
@@ -34,6 +38,7 @@ class TestCooperativeGroups(CUDATestCase):
                 # Wait until all threads have written their column element,
                 # and that the write is visible to all other threads
                 g.sync()
+
         # magictoken.ex_grid_sync_kernel.end
 
         # magictoken.ex_grid_sync_data.begin
@@ -50,7 +55,7 @@ class TestCooperativeGroups(CUDATestCase):
         # a cooperative launch on the current GPU
         mb = sequential_rows.overloads[sig].max_cooperative_grid_blocks(blockdim)
         if mb < griddim:
-            self.skipTest('Device does not support a large enough coop grid')
+            self.skipTest("Device does not support a large enough coop grid")
 
         # magictoken.ex_grid_sync_launch.begin
         # Kernel launch - this is implicitly a cooperative launch
@@ -73,5 +78,5 @@ class TestCooperativeGroups(CUDATestCase):
         np.testing.assert_equal(A, reference)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

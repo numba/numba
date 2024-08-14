@@ -5,8 +5,7 @@ from numba.cuda.compiler import compile_ptx_for_current_device, compile_ptx
 from math import cos, sin, tan, exp, log, log10, log2, pow, tanh
 from operator import truediv
 import numpy as np
-from numba.cuda.testing import (CUDATestCase, skip_on_cudasim,
-                                skip_unless_cc_75)
+from numba.cuda.testing import CUDATestCase, skip_on_cudasim, skip_unless_cc_75
 import unittest
 
 
@@ -24,7 +23,7 @@ class FastMathCriterion:
         test.assertTrue(all(i not in prec for i in self.prec_unexpected))
 
 
-@skip_on_cudasim('Fastmath and PTX inspection not available on cudasim')
+@skip_on_cudasim("Fastmath and PTX inspection not available on cudasim")
 class TestFastMathOption(CUDATestCase):
     def _test_fast_math_common(self, pyfunc, sig, device, criterion):
 
@@ -32,17 +31,13 @@ class TestFastMathOption(CUDATestCase):
         fastver = cuda.jit(sig, device=device, fastmath=True)(pyfunc)
         precver = cuda.jit(sig, device=device)(pyfunc)
 
-        criterion.check(
-            self, fastver.inspect_asm(sig), precver.inspect_asm(sig)
-        )
+        criterion.check(self, fastver.inspect_asm(sig), precver.inspect_asm(sig))
 
         # Test compile_ptx code path
         fastptx, _ = compile_ptx_for_current_device(
             pyfunc, sig, device=device, fastmath=True
         )
-        precptx, _ = compile_ptx_for_current_device(
-            pyfunc, sig, device=device
-        )
+        precptx, _ = compile_ptx_for_current_device(pyfunc, sig, device=device)
 
         criterion.check(self, fastptx, precptx)
 
@@ -68,8 +63,7 @@ class TestFastMathOption(CUDATestCase):
             return op(x, y)
 
         self._test_fast_math_common(
-            kernel,
-            (float32[::1], float32, float32), device=False, criterion=criterion
+            kernel, (float32[::1], float32, float32), device=False, criterion=criterion
         )
         self._test_fast_math_common(
             device, (float32, float32), device=True, criterion=criterion
@@ -79,28 +73,31 @@ class TestFastMathOption(CUDATestCase):
         self._test_fast_math_unary(
             cos,
             FastMathCriterion(
-                fast_expected=['cos.approx.ftz.f32 '],
-                prec_unexpected=['cos.approx.ftz.f32 ']
-            )
+                fast_expected=["cos.approx.ftz.f32 "],
+                prec_unexpected=["cos.approx.ftz.f32 "],
+            ),
         )
 
     def test_sinf(self):
         self._test_fast_math_unary(
             sin,
             FastMathCriterion(
-                fast_expected=['sin.approx.ftz.f32 '],
-                prec_unexpected=['sin.approx.ftz.f32 ']
-            )
+                fast_expected=["sin.approx.ftz.f32 "],
+                prec_unexpected=["sin.approx.ftz.f32 "],
+            ),
         )
 
     def test_tanf(self):
         self._test_fast_math_unary(
             tan,
-            FastMathCriterion(fast_expected=[
-                'sin.approx.ftz.f32 ',
-                'cos.approx.ftz.f32 ',
-                'div.approx.ftz.f32 '
-            ], prec_unexpected=['sin.approx.ftz.f32 '])
+            FastMathCriterion(
+                fast_expected=[
+                    "sin.approx.ftz.f32 ",
+                    "cos.approx.ftz.f32 ",
+                    "div.approx.ftz.f32 ",
+                ],
+                prec_unexpected=["sin.approx.ftz.f32 "],
+            ),
         )
 
     @skip_unless_cc_75
@@ -109,9 +106,8 @@ class TestFastMathOption(CUDATestCase):
         self._test_fast_math_unary(
             tanh,
             FastMathCriterion(
-                fast_expected=['tanh.approx.f32 '],
-                prec_unexpected=['tanh.approx.f32 ']
-            )
+                fast_expected=["tanh.approx.f32 "], prec_unexpected=["tanh.approx.f32 "]
+            ),
         )
 
     def test_tanhf_compile_ptx(self):
@@ -119,74 +115,82 @@ class TestFastMathOption(CUDATestCase):
             r[0] = tanh(x)
 
         def tanh_common_test(cc, criterion):
-            fastptx, _ = compile_ptx(tanh_kernel, (float32[::1], float32),
-                                     fastmath=True, cc=cc)
-            precptx, _ = compile_ptx(tanh_kernel, (float32[::1], float32),
-                                     cc=cc)
+            fastptx, _ = compile_ptx(
+                tanh_kernel, (float32[::1], float32), fastmath=True, cc=cc
+            )
+            precptx, _ = compile_ptx(tanh_kernel, (float32[::1], float32), cc=cc)
             criterion.check(self, fastptx, precptx)
 
-        tanh_common_test(cc=(7, 5), criterion=FastMathCriterion(
-            fast_expected=['tanh.approx.f32 '],
-            prec_unexpected=['tanh.approx.f32 ']
-        ))
+        tanh_common_test(
+            cc=(7, 5),
+            criterion=FastMathCriterion(
+                fast_expected=["tanh.approx.f32 "], prec_unexpected=["tanh.approx.f32 "]
+            ),
+        )
 
-        tanh_common_test(cc=(7, 0),
-                         criterion=FastMathCriterion(
-            fast_expected=['ex2.approx.ftz.f32 ',
-                           'rcp.approx.ftz.f32 '],
-            prec_unexpected=['tanh.approx.f32 ']))
+        tanh_common_test(
+            cc=(7, 0),
+            criterion=FastMathCriterion(
+                fast_expected=["ex2.approx.ftz.f32 ", "rcp.approx.ftz.f32 "],
+                prec_unexpected=["tanh.approx.f32 "],
+            ),
+        )
 
     def test_expf(self):
         self._test_fast_math_unary(
             exp,
             FastMathCriterion(
-                fast_unexpected=['fma.rn.f32 '],
-                prec_expected=['fma.rn.f32 ']
-            )
+                fast_unexpected=["fma.rn.f32 "], prec_expected=["fma.rn.f32 "]
+            ),
         )
 
     def test_logf(self):
         # Look for constant used to convert from log base 2 to log base e
         self._test_fast_math_unary(
-            log, FastMathCriterion(
-                fast_expected=['lg2.approx.ftz.f32 ', '0f3F317218'],
-                prec_unexpected=['lg2.approx.ftz.f32 '],
-            )
+            log,
+            FastMathCriterion(
+                fast_expected=["lg2.approx.ftz.f32 ", "0f3F317218"],
+                prec_unexpected=["lg2.approx.ftz.f32 "],
+            ),
         )
 
     def test_log10f(self):
         # Look for constant used to convert from log base 2 to log base 10
         self._test_fast_math_unary(
-            log10, FastMathCriterion(
-                fast_expected=['lg2.approx.ftz.f32 ', '0f3E9A209B'],
-                prec_unexpected=['lg2.approx.ftz.f32 ']
-            )
+            log10,
+            FastMathCriterion(
+                fast_expected=["lg2.approx.ftz.f32 ", "0f3E9A209B"],
+                prec_unexpected=["lg2.approx.ftz.f32 "],
+            ),
         )
 
     def test_log2f(self):
         self._test_fast_math_unary(
-            log2, FastMathCriterion(
-                fast_expected=['lg2.approx.ftz.f32 '],
-                prec_unexpected=['lg2.approx.ftz.f32 ']
-            )
+            log2,
+            FastMathCriterion(
+                fast_expected=["lg2.approx.ftz.f32 "],
+                prec_unexpected=["lg2.approx.ftz.f32 "],
+            ),
         )
 
     def test_powf(self):
         self._test_fast_math_binary(
-            pow, FastMathCriterion(
-                fast_expected=['lg2.approx.ftz.f32 '],
-                prec_unexpected=['lg2.approx.ftz.f32 '],
-            )
+            pow,
+            FastMathCriterion(
+                fast_expected=["lg2.approx.ftz.f32 "],
+                prec_unexpected=["lg2.approx.ftz.f32 "],
+            ),
         )
 
     def test_divf(self):
         self._test_fast_math_binary(
-            truediv, FastMathCriterion(
-                fast_expected=['div.approx.ftz.f32 '],
-                fast_unexpected=['div.rn.f32'],
-                prec_expected=['div.rn.f32'],
-                prec_unexpected=['div.approx.ftz.f32 '],
-            )
+            truediv,
+            FastMathCriterion(
+                fast_expected=["div.approx.ftz.f32 "],
+                fast_unexpected=["div.rn.f32"],
+                prec_expected=["div.rn.f32"],
+                prec_unexpected=["div.approx.ftz.f32 "],
+            ),
         )
 
     def test_divf_exception(self):
@@ -232,13 +236,13 @@ class TestFastMathOption(CUDATestCase):
         # https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#floating-point-instructions-div
 
         # The fast version should use the "fast, approximate divide" variant
-        self.assertIn('div.approx.f32', fastver.inspect_asm(sig))
+        self.assertIn("div.approx.f32", fastver.inspect_asm(sig))
         # The precise version should use the "IEEE 754 compliant rounding"
         # variant, and neither of the "approximate divide" variants.
-        self.assertIn('div.rn.f32', precver.inspect_asm(sig))
-        self.assertNotIn('div.approx.f32', precver.inspect_asm(sig))
-        self.assertNotIn('div.full.f32', precver.inspect_asm(sig))
+        self.assertIn("div.rn.f32", precver.inspect_asm(sig))
+        self.assertNotIn("div.approx.f32", precver.inspect_asm(sig))
+        self.assertNotIn("div.full.f32", precver.inspect_asm(sig))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

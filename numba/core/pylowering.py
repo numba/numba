@@ -2,7 +2,6 @@
 Lowering implementation for object mode.
 """
 
-
 import builtins
 import operator
 import inspect
@@ -11,8 +10,11 @@ from functools import cached_property
 import llvmlite.ir
 
 from numba.core import types, utils, ir, generators, cgutils
-from numba.core.errors import (ForbiddenConstruct, LoweringError,
-                               NumbaNotImplementedError)
+from numba.core.errors import (
+    ForbiddenConstruct,
+    LoweringError,
+    NumbaNotImplementedError,
+)
 from numba.core.lowering import BaseLower
 
 
@@ -25,6 +27,7 @@ class _Undefined:
     """
     A sentinel value for undefined variable created by Expr.undef.
     """
+
     def __repr__(self):
         return "<undefined>"
 
@@ -65,16 +68,17 @@ PYTHON_BINOPMAP[operator.matmul] = ("number_matrix_multiply", False)
 PYTHON_BINOPMAP[operator.imatmul] = ("number_matrix_multiply", True)
 
 PYTHON_COMPAREOPMAP = {
-    operator.eq: '==',
-    operator.ne: '!=',
-    operator.lt: '<',
-    operator.le: '<=',
-    operator.gt: '>',
-    operator.ge: '>=',
-    operator.is_: 'is',
-    operator.is_not: 'is not',
-    operator.contains: 'in'
+    operator.eq: "==",
+    operator.ne: "!=",
+    operator.lt: "<",
+    operator.le: "<=",
+    operator.gt: ">",
+    operator.ge: ">=",
+    operator.is_: "is",
+    operator.is_not: "is not",
+    operator.contains: "in",
 }
+
 
 class PyLower(BaseLower):
 
@@ -117,15 +121,14 @@ class PyLower(BaseLower):
         elif isinstance(inst, ir.SetAttr):
             target = self.loadvar(inst.target.name)
             value = self.loadvar(inst.value.name)
-            ok = self.pyapi.object_setattr(target,
-                                           self._freeze_string(inst.attr),
-                                           value)
+            ok = self.pyapi.object_setattr(
+                target, self._freeze_string(inst.attr), value
+            )
             self.check_int_status(ok)
 
         elif isinstance(inst, ir.DelAttr):
             target = self.loadvar(inst.target.name)
-            ok = self.pyapi.object_delattr(target,
-                                           self._freeze_string(inst.attr))
+            ok = self.pyapi.object_delattr(target, self._freeze_string(inst.attr))
             self.check_int_status(ok)
 
         elif isinstance(inst, ir.StoreMap):
@@ -154,7 +157,7 @@ class PyLower(BaseLower):
             else:
                 istrue = self.pyapi.object_istrue(cond)
             zero = llvmlite.ir.Constant(istrue.type, None)
-            pred = self.builder.icmp_unsigned('!=', istrue, zero)
+            pred = self.builder.icmp_unsigned("!=", istrue, zero)
             tr = self.blkmap[inst.truebr]
             fl = self.blkmap[inst.falsebr]
             self.builder.cbranch(pred, tr, fl)
@@ -167,7 +170,7 @@ class PyLower(BaseLower):
             self.delvar(inst.value)
 
         elif isinstance(inst, ir.PopBlock):
-            pass # this is just a marker
+            pass  # this is just a marker
 
         elif isinstance(inst, ir.Raise):
             if inst.exception is not None:
@@ -190,8 +193,8 @@ class PyLower(BaseLower):
         testing at runtime.
         """
         from numba.core.dispatcher import OmittedArg
-        return self.pyapi.unserialize(
-            self.pyapi.serialize_object(OmittedArg))
+
+        return self.pyapi.unserialize(self.pyapi.serialize_object(OmittedArg))
 
     def lower_assign(self, inst):
         """
@@ -223,15 +226,19 @@ class PyLower(BaseLower):
                 # When an argument is omitted, the dispatcher hands it as
                 # _OmittedArg(<default value>)
                 typobj = self.pyapi.get_type(obj)
-                is_omitted = self.builder.icmp_unsigned('==', typobj,
-                                                        self._omitted_typobj)
-                with self.builder.if_else(is_omitted, likely=False) as (omitted, present):
+                is_omitted = self.builder.icmp_unsigned(
+                    "==", typobj, self._omitted_typobj
+                )
+                with self.builder.if_else(is_omitted, likely=False) as (
+                    omitted,
+                    present,
+                ):
                     with present:
                         self.incref(obj)
                         self.builder.store(obj, slot)
                     with omitted:
                         # The argument is omitted => get the default value
-                        obj = self.pyapi.object_getattr_string(obj, 'value')
+                        obj = self.pyapi.object_getattr_string(obj, "value")
                         self.builder.store(obj, slot)
 
             return self.builder.load(slot)
@@ -269,18 +276,18 @@ class PyLower(BaseLower):
         else:
             # Assumed to be rich comparison
             fn = PYTHON_COMPAREOPMAP.get(expr.fn, expr.fn)
-            if fn == 'in':      # 'in' and operator.contains have args reversed
+            if fn == "in":  # 'in' and operator.contains have args reversed
                 lhs, rhs = rhs, lhs
             res = self.pyapi.object_richcompare(lhs, rhs, fn)
         self.check_error(res)
         return res
 
     def lower_expr(self, expr):
-        if expr.op == 'binop':
+        if expr.op == "binop":
             return self.lower_binop(expr, expr.fn, inplace=False)
-        elif expr.op == 'inplace_binop':
+        elif expr.op == "inplace_binop":
             return self.lower_binop(expr, expr.fn, inplace=True)
-        elif expr.op == 'unary':
+        elif expr.op == "unary":
             value = self.loadvar(expr.value.name)
             if expr.fn == operator.neg:
                 res = self.pyapi.number_negative(value)
@@ -296,14 +303,13 @@ class PyLower(BaseLower):
                 raise NotImplementedError(expr)
             self.check_error(res)
             return res
-        elif expr.op == 'call':
+        elif expr.op == "call":
             argvals = [self.loadvar(a.name) for a in expr.args]
             fn = self.loadvar(expr.func.name)
             args = self.pyapi.tuple_pack(argvals)
             if expr.vararg:
                 # Expand *args
-                varargs = self.pyapi.sequence_tuple(
-                                self.loadvar(expr.vararg.name))
+                varargs = self.pyapi.sequence_tuple(self.loadvar(expr.vararg.name))
                 new_args = self.pyapi.sequence_concat(args, varargs)
                 self.decref(varargs)
                 self.decref(args)
@@ -320,22 +326,22 @@ class PyLower(BaseLower):
             self.decref(args)
             self.check_error(ret)
             return ret
-        elif expr.op == 'getattr':
+        elif expr.op == "getattr":
             obj = self.loadvar(expr.value.name)
             res = self.pyapi.object_getattr(obj, self._freeze_string(expr.attr))
             self.check_error(res)
             return res
-        elif expr.op == 'build_tuple':
+        elif expr.op == "build_tuple":
             items = [self.loadvar(it.name) for it in expr.items]
             res = self.pyapi.tuple_pack(items)
             self.check_error(res)
             return res
-        elif expr.op == 'build_list':
+        elif expr.op == "build_list":
             items = [self.loadvar(it.name) for it in expr.items]
             res = self.pyapi.list_pack(items)
             self.check_error(res)
             return res
-        elif expr.op == 'build_map':
+        elif expr.op == "build_map":
             res = self.pyapi.dict_new(expr.size)
             self.check_error(res)
             for k, v in expr.items:
@@ -344,7 +350,7 @@ class PyLower(BaseLower):
                 ok = self.pyapi.dict_setitem(res, key, value)
                 self.check_int_status(ok)
             return res
-        elif expr.op == 'build_set':
+        elif expr.op == "build_set":
             items = [self.loadvar(it.name) for it in expr.items]
             res = self.pyapi.set_new()
             self.check_error(res)
@@ -352,12 +358,12 @@ class PyLower(BaseLower):
                 ok = self.pyapi.set_add(res, it)
                 self.check_int_status(ok)
             return res
-        elif expr.op == 'getiter':
+        elif expr.op == "getiter":
             obj = self.loadvar(expr.value.name)
             res = self.pyapi.object_getiter(obj)
             self.check_error(res)
             return res
-        elif expr.op == 'iternext':
+        elif expr.op == "iternext":
             iterobj = self.loadvar(expr.value.name)
             item = self.pyapi.iter_next(iterobj)
             is_valid = cgutils.is_not_null(self.builder, item)
@@ -372,35 +378,34 @@ class PyLower(BaseLower):
                     self.pyapi.tuple_setitem(pair, 0, self.pyapi.make_none())
             self.pyapi.tuple_setitem(pair, 1, self.pyapi.bool_from_bool(is_valid))
             return pair
-        elif expr.op == 'pair_first':
+        elif expr.op == "pair_first":
             pair = self.loadvar(expr.value.name)
             first = self.pyapi.tuple_getitem(pair, 0)
             self.incref(first)
             return first
-        elif expr.op == 'pair_second':
+        elif expr.op == "pair_second":
             pair = self.loadvar(expr.value.name)
             second = self.pyapi.tuple_getitem(pair, 1)
             self.incref(second)
             return second
-        elif expr.op == 'exhaust_iter':
+        elif expr.op == "exhaust_iter":
             iterobj = self.loadvar(expr.value.name)
             tup = self.pyapi.sequence_tuple(iterobj)
             self.check_error(tup)
             # Check tuple size is as expected
             tup_size = self.pyapi.tuple_size(tup)
             expected_size = self.context.get_constant(types.intp, expr.count)
-            has_wrong_size = self.builder.icmp_unsigned('!=',
-                                               tup_size, expected_size)
+            has_wrong_size = self.builder.icmp_unsigned("!=", tup_size, expected_size)
             with cgutils.if_unlikely(self.builder, has_wrong_size):
                 self.return_exception(ValueError)
             return tup
-        elif expr.op == 'getitem':
+        elif expr.op == "getitem":
             value = self.loadvar(expr.value.name)
             index = self.loadvar(expr.index.name)
             res = self.pyapi.object_getitem(value, index)
             self.check_error(res)
             return res
-        elif expr.op == 'static_getitem':
+        elif expr.op == "static_getitem":
             value = self.loadvar(expr.value.name)
             index = self.context.get_constant(types.intp, expr.index)
             indexobj = self.pyapi.long_from_ssize_t(index)
@@ -409,7 +414,7 @@ class PyLower(BaseLower):
             self.decref(indexobj)
             self.check_error(res)
             return res
-        elif expr.op == 'getslice':
+        elif expr.op == "getslice":
             target = self.loadvar(expr.target.name)
             start = self.loadvar(expr.start.name)
             stop = self.loadvar(expr.stop.name)
@@ -424,18 +429,18 @@ class PyLower(BaseLower):
 
             return res
 
-        elif expr.op == 'cast':
+        elif expr.op == "cast":
             val = self.loadvar(expr.value.name)
             self.incref(val)
             return val
-        elif expr.op == 'phi':
+        elif expr.op == "phi":
             raise LoweringError("PHI not stripped")
 
-        elif expr.op == 'null':
+        elif expr.op == "null":
             # Make null value
             return cgutils.get_null_value(self.pyapi.pyobj)
 
-        elif expr.op == 'undef':
+        elif expr.op == "undef":
             # Use a sentinel value for undefined variable
             return self.lower_const(_UNDEFINED)
 
@@ -463,8 +468,9 @@ class PyLower(BaseLower):
 
         try:
             if value in _unsupported_builtins:
-                raise ForbiddenConstruct("builtins %s() is not supported"
-                                         % name, loc=self.loc)
+                raise ForbiddenConstruct(
+                    "builtins %s() is not supported" % name, loc=self.loc
+                )
         except TypeError:
             # `value` is unhashable, ignore
             pass
@@ -474,8 +480,9 @@ class PyLower(BaseLower):
             bbelse = self.builder.basic_block
 
             with self.builder.if_then(obj_is_null):
-                mod = self.pyapi.dict_getitem(moddict,
-                                          self._freeze_string("__builtins__"))
+                mod = self.pyapi.dict_getitem(
+                    moddict, self._freeze_string("__builtins__")
+                )
                 builtin = self.builtin_lookup(mod, name)
                 bbif = self.builder.basic_block
 
@@ -499,8 +506,7 @@ class PyLower(BaseLower):
     def get_builtin_obj(self, name):
         # XXX The builtins dict could be bound into the environment
         moddict = self.get_module_dict()
-        mod = self.pyapi.dict_getitem(moddict,
-                                      self._freeze_string("__builtins__"))
+        mod = self.pyapi.dict_getitem(moddict, self._freeze_string("__builtins__"))
         return self.builtin_lookup(mod, name)
 
     def builtin_lookup(self, mod, name):
@@ -514,7 +520,7 @@ class PyLower(BaseLower):
             The object to lookup
         """
         fromdict = self.pyapi.dict_getitem(mod, self._freeze_string(name))
-        self.incref(fromdict)       # fromdict is borrowed
+        self.incref(fromdict)  # fromdict is borrowed
         bbifdict = self.builder.basic_block
 
         with cgutils.if_unlikely(self.builder, self.is_null(fromdict)):
@@ -537,8 +543,7 @@ class PyLower(BaseLower):
         """
         Return if an exception occurred.
         """
-        err_occurred = cgutils.is_not_null(self.builder,
-                                           self.pyapi.err_occurred())
+        err_occurred = cgutils.is_not_null(self.builder, self.pyapi.err_occurred())
 
         with cgutils.if_unlikely(self.builder, err_occurred):
             self.return_exception_raised()
@@ -557,7 +562,7 @@ class PyLower(BaseLower):
         Raise an exception if *num* is smaller than *ok_value*.
         """
         ok = llvmlite.ir.Constant(num.type, ok_value)
-        pred = self.builder.icmp_signed('<', num, ok)
+        pred = self.builder.icmp_signed("<", num, ok)
         with cgutils.if_unlikely(self.builder, pred):
             self.return_exception_raised()
 
@@ -620,8 +625,7 @@ class PyLower(BaseLower):
             old = self.builder.load(ptr)
         else:
             self._live_vars.add(name)
-        assert value.type == ptr.type.pointee, (str(value.type),
-                                                str(ptr.type.pointee))
+        assert value.type == ptr.type.pointee, (str(value.type), str(ptr.type.pointee))
         self.builder.store(value, ptr)
         # Safe to call decref even on non python object
         if is_redefine:

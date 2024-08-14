@@ -51,17 +51,16 @@ class ConstantInference(object):
         # (the message) are captured and then raised again but with the location
         # set to the expression that caused the constant inference error.
         raise ConstantInferenceError(
-            "Constant inference not possible for: %s" % (val,), loc=None)
+            "Constant inference not possible for: %s" % (val,), loc=None
+        )
 
     def _do_infer(self, name):
         if not isinstance(name, str):
-            raise TypeError("infer_constant() called with non-str %r"
-                            % (name,))
+            raise TypeError("infer_constant() called with non-str %r" % (name,))
         try:
             defn = self._func_ir.get_definition(name)
         except KeyError:
-            raise ConstantInferenceError(
-                "no single definition for %r" % (name,))
+            raise ConstantInferenceError("no single definition for %r" % (name,))
         try:
             const = defn.infer_constant()
         except ConstantInferenceError:
@@ -72,18 +71,16 @@ class ConstantInference(object):
 
     def _infer_expr(self, expr):
         # Infer an expression: handle supported cases
-        if expr.op == 'call':
+        if expr.op == "call":
             func = self.infer_constant(expr.func.name, loc=expr.loc)
             return self._infer_call(func, expr)
-        elif expr.op == 'getattr':
+        elif expr.op == "getattr":
             value = self.infer_constant(expr.value.name, loc=expr.loc)
             return self._infer_getattr(value, expr)
-        elif expr.op == 'build_list':
-            return [self.infer_constant(i.name, loc=expr.loc) for i in
-                    expr.items]
-        elif expr.op == 'build_tuple':
-            return tuple(self.infer_constant(i.name, loc=expr.loc) for i in
-                         expr.items)
+        elif expr.op == "build_list":
+            return [self.infer_constant(i.name, loc=expr.loc) for i in expr.items]
+        elif expr.op == "build_tuple":
+            return tuple(self.infer_constant(i.name, loc=expr.loc) for i in expr.items)
         self._fail(expr)
 
     def _infer_call(self, func, expr):
@@ -93,8 +90,7 @@ class ConstantInference(object):
         _slice = func in (slice,)
         _exc = isinstance(func, type) and issubclass(func, BaseException)
         if _slice or _exc:
-            args = [self.infer_constant(a.name, loc=expr.loc) for a in
-                    expr.args]
+            args = [self.infer_constant(a.name, loc=expr.loc) for a in expr.args]
             if _slice:
                 return func(*args)
             elif _exc:
@@ -104,7 +100,7 @@ class ConstantInference(object):
                 # site in the way the user source expects it to be.
                 return func, args
             else:
-                assert 0, 'Unreachable'
+                assert 0, "Unreachable"
 
         self._fail(expr)
 

@@ -1,6 +1,7 @@
 """
 Test mutable struct, aka, structref
 """
+
 import warnings
 
 import numpy as np
@@ -10,7 +11,10 @@ from numba.core import types
 from numba.experimental import structref
 from numba.extending import overload_method, overload_attribute
 from numba.tests.support import (
-    MemoryLeakMixin, TestCase, temp_directory, override_config,
+    MemoryLeakMixin,
+    TestCase,
+    temp_directory,
+    override_config,
 )
 
 
@@ -19,6 +23,7 @@ class MySimplerStructType(types.StructRef):
     """
     Test associated with this type represent the lowest level uses of structref.
     """
+
     pass
 
 
@@ -67,6 +72,7 @@ class MyStructType(types.StructRef):
     """Test associated with this type represent the higher-level uses of
     structef.
     """
+
     pass
 
 
@@ -76,7 +82,7 @@ class MyStructType(types.StructRef):
 structref.define_proxy(
     MyStruct,
     MyStructType,
-    ['values', 'counter'],
+    ["values", "counter"],
 )
 
 
@@ -128,18 +134,18 @@ def compute_fields(st):
 
 class TestStructRefBasic(MemoryLeakMixin, TestCase):
     def test_structref_type(self):
-        sr = types.StructRef([('a', types.int64)])
-        self.assertEqual(sr.field_dict['a'], types.int64)
-        sr = types.StructRef([('a', types.int64), ('b', types.float64)])
-        self.assertEqual(sr.field_dict['a'], types.int64)
-        self.assertEqual(sr.field_dict['b'], types.float64)
+        sr = types.StructRef([("a", types.int64)])
+        self.assertEqual(sr.field_dict["a"], types.int64)
+        sr = types.StructRef([("a", types.int64), ("b", types.float64)])
+        self.assertEqual(sr.field_dict["a"], types.int64)
+        self.assertEqual(sr.field_dict["b"], types.float64)
         # bad case
-        with self.assertRaisesRegex(ValueError,
-                                    "expecting a str for field name"):
+        with self.assertRaisesRegex(ValueError, "expecting a str for field name"):
             types.StructRef([(1, types.int64)])
-        with self.assertRaisesRegex(ValueError,
-                                    "expecting a Numba Type for field type"):
-            types.StructRef([('a', 123)])
+        with self.assertRaisesRegex(
+            ValueError, "expecting a Numba Type for field type"
+        ):
+            types.StructRef([("a", 123)])
 
     def test_invalid_uses(self):
         with self.assertRaisesRegex(ValueError, "cannot register"):
@@ -167,9 +173,9 @@ class TestStructRefBasic(MemoryLeakMixin, TestCase):
         ctr = 13
         wrapper = ctor_by_intrinsic(vs, ctr)
         self.assertIsInstance(wrapper, structref.StructRefProxy)
-        with self.assertRaisesRegex(AttributeError, 'values'):
+        with self.assertRaisesRegex(AttributeError, "values"):
             wrapper.values
-        with self.assertRaisesRegex(AttributeError, 'counter'):
+        with self.assertRaisesRegex(AttributeError, "counter"):
             wrapper.counter
 
     def test_MyStructType(self):
@@ -200,34 +206,35 @@ class TestStructRefBasic(MemoryLeakMixin, TestCase):
 
     def test_MyStructType_in_dict(self):
         td = typed.Dict()
-        td['a'] = MyStruct(1, 2.3)
-        self.assertEqual(td['a'].values, 1)
-        self.assertEqual(td['a'].counter, 2.3)
+        td["a"] = MyStruct(1, 2.3)
+        self.assertEqual(td["a"].values, 1)
+        self.assertEqual(td["a"].counter, 2.3)
         # overwrite
-        td['a'] = MyStruct(2, 3.3)
-        self.assertEqual(td['a'].values, 2)
-        self.assertEqual(td['a'].counter, 3.3)
+        td["a"] = MyStruct(2, 3.3)
+        self.assertEqual(td["a"].values, 2)
+        self.assertEqual(td["a"].counter, 3.3)
         # mutate
-        td['a'].values += 10
-        self.assertEqual(td['a'].values, 12)    # changed
-        self.assertEqual(td['a'].counter, 3.3)  # unchanged
+        td["a"].values += 10
+        self.assertEqual(td["a"].values, 12)  # changed
+        self.assertEqual(td["a"].counter, 3.3)  # unchanged
         # insert
-        td['b'] = MyStruct(4, 5.6)
+        td["b"] = MyStruct(4, 5.6)
 
     def test_MyStructType_in_dict_mixed_type_error(self):
         self.disable_leak_check()
 
         td = typed.Dict()
-        td['a'] = MyStruct(1, 2.3)
-        self.assertEqual(td['a'].values, 1)
-        self.assertEqual(td['a'].counter, 2.3)
+        td["a"] = MyStruct(1, 2.3)
+        self.assertEqual(td["a"].values, 1)
+        self.assertEqual(td["a"].counter, 2.3)
 
         # ERROR: store different types
-        with self.assertRaisesRegex(errors.TypingError,
-                                    r"Cannot cast numba.MyStructType"):
+        with self.assertRaisesRegex(
+            errors.TypingError, r"Cannot cast numba.MyStructType"
+        ):
             # because first field is not a float;
             # the second field is now an integer.
-            td['b'] = MyStruct(2.3, 1)
+            td["b"] = MyStruct(2.3, 1)
 
     def test_MyStructType_hash_no_typeof_recursion(self):
         # Tests that __hash__ is not called prematurely in typeof
@@ -242,6 +249,7 @@ class TestStructRefBasic(MemoryLeakMixin, TestCase):
 def _ol_mystructtype_testme(self, arg):
     def impl(self, arg):
         return self.values * arg + self.counter
+
     return impl
 
 
@@ -249,6 +257,7 @@ def _ol_mystructtype_testme(self, arg):
 def _ol_mystructtype_prop(self):
     def get(self):
         return self.values, self.counter
+
     return get
 
 
@@ -291,7 +300,7 @@ def caching_test_use(struct, z):
 class TestStructRefCaching(MemoryLeakMixin, TestCase):
     def setUp(self):
         self._cache_dir = temp_directory(TestStructRefCaching.__name__)
-        self._cache_override = override_config('CACHE_DIR', self._cache_dir)
+        self._cache_override = override_config("CACHE_DIR", self._cache_dir)
         self._cache_override.__enter__()
         warnings.simplefilter("error")
         warnings.filterwarnings(action="ignore", module="typeguard")
@@ -337,18 +346,19 @@ class PolygonStructType(types.StructRef):
     def preprocess_fields(self, fields):
         # temp name to allow Optional instantiation
         self.name = f"numba.PolygonStructType#{id(self)}"
-        fields = tuple([
-            ('value', types.Optional(types.int64)),
-            ('parent', types.Optional(self)),
-        ])
+        fields = tuple(
+            [
+                ("value", types.Optional(types.int64)),
+                ("parent", types.Optional(self)),
+            ]
+        )
 
         return fields
 
 
-polygon_struct_type = PolygonStructType(fields=(
-    ('value', types.Any),
-    ('parent', types.Any)
-))
+polygon_struct_type = PolygonStructType(
+    fields=(("value", types.Any), ("parent", types.Any))
+)
 
 
 class PolygonStruct(structref.StructRefProxy):
@@ -374,11 +384,7 @@ def PolygonStruct_get_parent(self):
     return self.parent
 
 
-structref.define_proxy(
-    PolygonStruct,
-    PolygonStructType,
-    ["value", "parent"]
-)
+structref.define_proxy(PolygonStruct, PolygonStructType, ["value", "parent"])
 
 
 @overload_method(PolygonStructType, "flip")
@@ -386,6 +392,7 @@ def _ol_polygon_struct_flip(self):
     def impl(self):
         if self.value is not None:
             self.value = -self.value
+
     return impl
 
 
@@ -393,6 +400,7 @@ def _ol_polygon_struct_flip(self):
 def _ol_polygon_struct_prop(self):
     def get(self):
         return self.value, self.parent
+
     return get
 
 

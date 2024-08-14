@@ -30,6 +30,7 @@ class TestMonteCarlo(CUDATestCase):
             create_xoroshiro128p_states,
             xoroshiro128p_uniform_float32,
         )
+
         # ex_montecarlo.import.end
 
         # ex_montecarlo.define.begin
@@ -59,6 +60,7 @@ class TestMonteCarlo(CUDATestCase):
                 # value of the sample
                 y = func(samp)
                 out[gid] = y
+
         # ex_montecarlo.kernel.end
 
         # ex_montecarlo.callfunc.begin
@@ -76,14 +78,13 @@ class TestMonteCarlo(CUDATestCase):
 
             # jit the function for use in CUDA kernels
 
-            mc_integrator_kernel.forall(nsamps)(
-                out, rng_states, lower_lim, upper_lim
-            )
+            mc_integrator_kernel.forall(nsamps)(out, rng_states, lower_lim, upper_lim)
             # normalization factor to convert
             # to the average: (b - a)/(N - 1)
             factor = (upper_lim - lower_lim) / (nsamps - 1)
 
             return sum_reduce(out) * factor
+
         # ex_montecarlo.callfunc.end
 
         # ex_montecarlo.launch.begin
@@ -97,12 +98,8 @@ class TestMonteCarlo(CUDATestCase):
         # ex_montecarlo.launch.end
 
         # values computed independently using maple
-        np.testing.assert_allclose(
-            mc_integrate(1, 2, nsamps), 0.69315, atol=0.001
-        )
-        np.testing.assert_allclose(
-            mc_integrate(2, 3, nsamps), 0.4055, atol=0.001
-        )
+        np.testing.assert_allclose(mc_integrate(1, 2, nsamps), 0.69315, atol=0.001)
+        np.testing.assert_allclose(mc_integrate(2, 3, nsamps), 0.4055, atol=0.001)
 
 
 if __name__ == "__main__":

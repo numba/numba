@@ -39,17 +39,17 @@ def check_access_is_preventable():
     # elevated rights (e.g. root) then writes are likely to be possible
     # anyway. Tests that require functioning access prevention are
     # therefore skipped based on the result of this check.
-    tempdir = temp_directory('test_cache')
-    test_dir = (os.path.join(tempdir, 'writable_test'))
+    tempdir = temp_directory("test_cache")
+    test_dir = os.path.join(tempdir, "writable_test")
     os.mkdir(test_dir)
     # check a write is possible
-    with open(os.path.join(test_dir, 'write_ok'), 'wt') as f:
-        f.write('check1')
+    with open(os.path.join(test_dir, "write_ok"), "wt") as f:
+        f.write("check1")
     # now forbid access
     os.chmod(test_dir, 0o500)
     try:
-        with open(os.path.join(test_dir, 'write_forbidden'), 'wt') as f:
-            f.write('check2')
+        with open(os.path.join(test_dir, "write_forbidden"), "wt") as f:
+            f.write("check2")
         # access prevention is not possible
         return False
     except PermissionError:
@@ -84,7 +84,7 @@ def check_constant_unicode_cache():
 
 
 def dict_cache():
-    return {'a': 1, 'b': 2}
+    return {"a": 1, "b": 2}
 
 
 def check_dict_cache():
@@ -112,7 +112,7 @@ class TestCaching(SerialMixin, TestCase):
     def run_test(self, func):
         func()
         res = run_in_new_process_caching(func)
-        self.assertEqual(res['exitcode'], 0)
+        self.assertEqual(res["exitcode"], 0)
 
     def test_constant_unicode_cache(self):
         self.run_test(check_constant_unicode_cache)
@@ -141,15 +141,10 @@ class TestCaching(SerialMixin, TestCase):
         if not success:
             self.fail(output)
 
-        self.assertEqual(
-            output,
-            1000,
-            "Omitted function returned an incorrect output"
-        )
+        self.assertEqual(output, 1000, "Omitted function returned an incorrect output")
 
         proc = ctx.Process(
-            target=omitted_child_test_wrapper,
-            args=(result_queue, cache_dir, True)
+            target=omitted_child_test_wrapper, args=(result_queue, cache_dir, True)
         )
         proc.start()
         proc.join()
@@ -159,15 +154,12 @@ class TestCaching(SerialMixin, TestCase):
         if not success:
             self.fail(output)
 
-        self.assertEqual(
-            output,
-            1000,
-            "Omitted function returned an incorrect output"
-        )
+        self.assertEqual(output, 1000, "Omitted function returned an incorrect output")
 
 
 def omitted_child_test_wrapper(result_queue, cache_dir, second_call):
     with override_config("CACHE_DIR", cache_dir):
+
         @njit(cache=True)
         def test(num=1000):
             return num
@@ -177,18 +169,22 @@ def omitted_child_test_wrapper(result_queue, cache_dir, second_call):
             # If we have a second call, we should have a cache hit.
             # Otherwise, we expect a cache miss.
             if second_call:
-                assert test._cache_hits[test.signatures[0]] == 1, \
-                    "Cache did not hit as expected"
-                assert test._cache_misses[test.signatures[0]] == 0, \
-                    "Cache has an unexpected miss"
+                assert (
+                    test._cache_hits[test.signatures[0]] == 1
+                ), "Cache did not hit as expected"
+                assert (
+                    test._cache_misses[test.signatures[0]] == 0
+                ), "Cache has an unexpected miss"
             else:
-                assert test._cache_misses[test.signatures[0]] == 1, \
-                    "Cache did not miss as expected"
-                assert test._cache_hits[test.signatures[0]] == 0, \
-                    "Cache has an unexpected hit"
+                assert (
+                    test._cache_misses[test.signatures[0]] == 1
+                ), "Cache did not miss as expected"
+                assert (
+                    test._cache_hits[test.signatures[0]] == 0
+                ), "Cache has an unexpected hit"
             success = True
         # Catch anything raised so it can be propagated
-        except: # noqa: E722
+        except:  # noqa: E722
             output = traceback.format_exc()
             success = False
         result_queue.put((success, output))
@@ -201,7 +197,7 @@ class BaseCacheTest(TestCase):
     modname = None
 
     def setUp(self):
-        self.tempdir = temp_directory('test_cache')
+        self.tempdir = temp_directory("test_cache")
         sys.path.insert(0, self.tempdir)
         self.modfile = os.path.join(self.tempdir, self.modname + ".py")
         self.cache_dir = os.path.join(self.tempdir, "__pycache__")
@@ -227,19 +223,24 @@ class BaseCacheTest(TestCase):
                 except FileNotFoundError:
                     pass
         mod = import_dynamic(self.modname)
-        self.assertEqual(mod.__file__.rstrip('co'), self.modfile)
+        self.assertEqual(mod.__file__.rstrip("co"), self.modfile)
         return mod
 
     def cache_contents(self):
         try:
-            return [fn for fn in os.listdir(self.cache_dir)
-                    if not fn.endswith(('.pyc', ".pyo"))]
+            return [
+                fn
+                for fn in os.listdir(self.cache_dir)
+                if not fn.endswith((".pyc", ".pyo"))
+            ]
         except FileNotFoundError:
             return []
 
     def get_cache_mtimes(self):
-        return dict((fn, os.path.getmtime(os.path.join(self.cache_dir, fn)))
-                    for fn in sorted(self.cache_contents()))
+        return dict(
+            (fn, os.path.getmtime(os.path.join(self.cache_dir, fn)))
+            for fn in sorted(self.cache_contents())
+        )
 
     def check_pycache(self, n):
         c = self.cache_contents()
@@ -264,28 +265,31 @@ class DispatcherCacheUsecasesTest(BaseCacheTest):
             sys.path.insert(0, %(tempdir)r)
             mod = __import__(%(modname)r)
             mod.self_test()
-            """ % dict(tempdir=self.tempdir, modname=self.modname)
+            """ % dict(
+            tempdir=self.tempdir, modname=self.modname
+        )
 
         subp_env = os.environ.copy()
         subp_env.update(envvars)
-        popen = subprocess.Popen([sys.executable, "-c", code],
-                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                 env=subp_env)
+        popen = subprocess.Popen(
+            [sys.executable, "-c", code],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=subp_env,
+        )
         out, err = popen.communicate()
         if popen.returncode != 0:
             raise AssertionError(
                 "process failed with code %s: \n"
                 "stdout follows\n%s\n"
-                "stderr follows\n%s\n"
-                % (popen.returncode, out.decode(), err.decode()),
+                "stderr follows\n%s\n" % (popen.returncode, out.decode(), err.decode()),
             )
 
     def check_hits(self, func, hits, misses=None):
         st = func.stats
         self.assertEqual(sum(st.cache_hits.values()), hits, st.cache_hits)
         if misses is not None:
-            self.assertEqual(sum(st.cache_misses.values()), misses,
-                             st.cache_misses)
+            self.assertEqual(sum(st.cache_misses.values()), misses, st.cache_misses)
 
 
 class TestCache(DispatcherCacheUsecasesTest):
@@ -379,29 +383,34 @@ class TestCache(DispatcherCacheUsecasesTest):
         mod = self.import_module()
 
         with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always', NumbaWarning)
+            warnings.simplefilter("always", NumbaWarning)
 
             f = mod.looplifted
             self.assertPreciseEqual(f(4), 6)
             self.check_pycache(0)
 
         self.assertEqual(len(w), 1)
-        self.assertIn('Cannot cache compiled function "looplifted" '
-                      'as it uses lifted code', str(w[0].message))
+        self.assertIn(
+            'Cannot cache compiled function "looplifted" ' "as it uses lifted code",
+            str(w[0].message),
+        )
 
     def test_big_array(self):
         # Code references big array globals cannot be cached
         mod = self.import_module()
         with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always', NumbaWarning)
+            warnings.simplefilter("always", NumbaWarning)
 
             f = mod.use_big_array
             np.testing.assert_equal(f(), mod.biggie)
             self.check_pycache(0)
 
         self.assertEqual(len(w), 1)
-        self.assertIn('Cannot cache compiled function "use_big_array" '
-                      'as it uses dynamic globals', str(w[0].message))
+        self.assertIn(
+            'Cannot cache compiled function "use_big_array" '
+            "as it uses dynamic globals",
+            str(w[0].message),
+        )
 
     def test_ctypes(self):
         # Functions using a ctypes pointer can't be cached and raise
@@ -410,7 +419,7 @@ class TestCache(DispatcherCacheUsecasesTest):
 
         for f in [mod.use_c_sin, mod.use_c_sin_nest1, mod.use_c_sin_nest2]:
             with warnings.catch_warnings(record=True) as w:
-                warnings.simplefilter('always', NumbaWarning)
+                warnings.simplefilter("always", NumbaWarning)
 
                 self.assertPreciseEqual(f(0.0), 0.0)
                 self.check_pycache(0)
@@ -425,17 +434,17 @@ class TestCache(DispatcherCacheUsecasesTest):
         mod = self.import_module()
 
         with warnings.catch_warnings():
-            warnings.simplefilter('error', NumbaWarning)
+            warnings.simplefilter("error", NumbaWarning)
 
             f = mod.closure1
-            self.assertPreciseEqual(f(3), 6) # 3 + 3 = 6
+            self.assertPreciseEqual(f(3), 6)  # 3 + 3 = 6
             f = mod.closure2
-            self.assertPreciseEqual(f(3), 8) # 3 + 5 = 8
+            self.assertPreciseEqual(f(3), 8)  # 3 + 5 = 8
             f = mod.closure3
-            self.assertPreciseEqual(f(3), 10) # 3 + 7 = 10
+            self.assertPreciseEqual(f(3), 10)  # 3 + 7 = 10
             f = mod.closure4
-            self.assertPreciseEqual(f(3), 12) # 3 + 9 = 12
-            self.check_pycache(5) # 1 nbi, 4 nbc
+            self.assertPreciseEqual(f(3), 12)  # 3 + 9 = 12
+            self.check_pycache(5)  # 1 nbi, 4 nbc
 
     def test_first_class_function(self):
         mod = self.import_module()
@@ -521,8 +530,9 @@ class TestCache(DispatcherCacheUsecasesTest):
 
     def test_frozen(self):
         from .dummy_module import function
+
         old_code = function.__code__
-        code_obj = compile('pass', 'tests/dummy_module.py', 'exec')
+        code_obj = compile("pass", "tests/dummy_module.py", "exec")
         try:
             function.__code__ = code_obj
 
@@ -568,8 +578,9 @@ class TestCache(DispatcherCacheUsecasesTest):
         self.check_pycache(0)
 
     @skip_bad_access
-    @unittest.skipIf(os.name == "nt",
-                     "cannot easily make a directory read-only on Windows")
+    @unittest.skipIf(
+        os.name == "nt", "cannot easily make a directory read-only on Windows"
+    )
     def test_non_creatable_pycache(self):
         # Make it impossible to create the __pycache__ directory
         old_perms = os.stat(self.tempdir).st_mode
@@ -579,11 +590,12 @@ class TestCache(DispatcherCacheUsecasesTest):
         self._test_pycache_fallback()
 
     @skip_bad_access
-    @unittest.skipIf(os.name == "nt",
-                     "cannot easily make a directory read-only on Windows")
+    @unittest.skipIf(
+        os.name == "nt", "cannot easily make a directory read-only on Windows"
+    )
     def test_non_writable_pycache(self):
         # Make it impossible to write to the __pycache__ directory
-        pycache = os.path.join(self.tempdir, '__pycache__')
+        pycache = os.path.join(self.tempdir, "__pycache__")
         os.mkdir(pycache)
         old_perms = os.stat(pycache).st_mode
         os.chmod(pycache, 0o500)
@@ -593,18 +605,18 @@ class TestCache(DispatcherCacheUsecasesTest):
 
     def test_ipython(self):
         # Test caching in an IPython session
-        base_cmd = [sys.executable, '-m', 'IPython']
-        base_cmd += ['--quiet', '--quick', '--no-banner', '--colors=NoColor']
+        base_cmd = [sys.executable, "-m", "IPython"]
+        base_cmd += ["--quiet", "--quick", "--no-banner", "--colors=NoColor"]
         try:
-            ver = subprocess.check_output(base_cmd + ['--version'])
+            ver = subprocess.check_output(base_cmd + ["--version"])
         except subprocess.CalledProcessError as e:
-            self.skipTest("ipython not available: return code %d"
-                          % e.returncode)
+            self.skipTest("ipython not available: return code %d" % e.returncode)
         ver = ver.strip().decode()
         # Create test input
         inputfn = os.path.join(self.tempdir, "ipython_cache_usecase.txt")
         with open(inputfn, "w") as f:
-            f.write(r"""
+            f.write(
+                r"""
                 import os
                 import sys
 
@@ -622,21 +634,26 @@ class TestCache(DispatcherCacheUsecasesTest):
                 sys.stdout.flush()
                 sys.stderr.flush()
                 os._exit(res)
-                """)
+                """
+            )
 
         def execute_with_input():
             # Feed the test input as stdin, to execute it in REPL context
             with open(inputfn, "rb") as stdin:
-                p = subprocess.Popen(base_cmd, stdin=stdin,
-                                     stdout=subprocess.PIPE,
-                                     stderr=subprocess.PIPE,
-                                     universal_newlines=True)
+                p = subprocess.Popen(
+                    base_cmd,
+                    stdin=stdin,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    universal_newlines=True,
+                )
                 out, err = p.communicate()
                 if p.returncode != 42:
-                    self.fail("unexpected return code %d\n"
-                              "-- stdout:\n%s\n"
-                              "-- stderr:\n%s\n"
-                              % (p.returncode, out, err))
+                    self.fail(
+                        "unexpected return code %d\n"
+                        "-- stdout:\n%s\n"
+                        "-- stderr:\n%s\n" % (p.returncode, out, err)
+                    )
                 return err
 
         execute_with_input()
@@ -644,24 +661,27 @@ class TestCache(DispatcherCacheUsecasesTest):
         err = execute_with_input()
         self.assertIn("cache hits = 1", err.strip())
 
-    @unittest.skipIf((ipykernel is None) or (ipykernel.version_info[0] < 6),
-                     "requires ipykernel >= 6")
+    @unittest.skipIf(
+        (ipykernel is None) or (ipykernel.version_info[0] < 6),
+        "requires ipykernel >= 6",
+    )
     def test_ipykernel(self):
         # Test caching in an IPython session using ipykernel
 
-        base_cmd = [sys.executable, '-m', 'IPython']
-        base_cmd += ['--quiet', '--quick', '--no-banner', '--colors=NoColor']
+        base_cmd = [sys.executable, "-m", "IPython"]
+        base_cmd += ["--quiet", "--quick", "--no-banner", "--colors=NoColor"]
         try:
-            ver = subprocess.check_output(base_cmd + ['--version'])
+            ver = subprocess.check_output(base_cmd + ["--version"])
         except subprocess.CalledProcessError as e:
-            self.skipTest("ipython not available: return code %d"
-                          % e.returncode)
+            self.skipTest("ipython not available: return code %d" % e.returncode)
         ver = ver.strip().decode()
         # Create test input
         from ipykernel import compiler
+
         inputfn = compiler.get_tmp_directory()
         with open(inputfn, "w") as f:
-            f.write(r"""
+            f.write(
+                r"""
                 import os
                 import sys
 
@@ -679,21 +699,26 @@ class TestCache(DispatcherCacheUsecasesTest):
                 sys.stdout.flush()
                 sys.stderr.flush()
                 os._exit(res)
-                """)
+                """
+            )
 
         def execute_with_input():
             # Feed the test input as stdin, to execute it in REPL context
             with open(inputfn, "rb") as stdin:
-                p = subprocess.Popen(base_cmd, stdin=stdin,
-                                     stdout=subprocess.PIPE,
-                                     stderr=subprocess.PIPE,
-                                     universal_newlines=True)
+                p = subprocess.Popen(
+                    base_cmd,
+                    stdin=stdin,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    universal_newlines=True,
+                )
                 out, err = p.communicate()
                 if p.returncode != 42:
-                    self.fail("unexpected return code %d\n"
-                              "-- stdout:\n%s\n"
-                              "-- stderr:\n%s\n"
-                              % (p.returncode, out, err))
+                    self.fail(
+                        "unexpected return code %d\n"
+                        "-- stdout:\n%s\n"
+                        "-- stderr:\n%s\n" % (p.returncode, out, err)
+                    )
                 return err
 
         execute_with_input()
@@ -720,8 +745,9 @@ class TestSequentialParForsCache(DispatcherCacheUsecasesTest):
         f = mod.parfor_usecase
         ary = np.ones(10)
         self.assertPreciseEqual(f(ary), ary * ary + ary)
-        dynamic_globals = [cres.library.has_dynamic_globals
-                           for cres in f.overloads.values()]
+        dynamic_globals = [
+            cres.library.has_dynamic_globals for cres in f.overloads.values()
+        ]
         self.assertEqual(dynamic_globals, [False])
         self.check_pycache(2)  # 1 index, 1 data
 
@@ -736,8 +762,7 @@ class TestCacheWithCpuSetting(DispatcherCacheUsecasesTest):
             if k in mtimes_old:
                 self.assertGreaterEqual(v, mtimes_old[k])
                 match_count += 1
-        self.assertGreater(match_count, 0,
-                           msg='nothing to compare')
+        self.assertGreater(match_count, 0, msg="nothing to compare")
 
     def test_user_set_cpu_name(self):
         self.check_pycache(0)
@@ -747,7 +772,7 @@ class TestCacheWithCpuSetting(DispatcherCacheUsecasesTest):
 
         mtimes = self.get_cache_mtimes()
         # Change CPU name to generic
-        self.run_in_separate_process(envvars={'NUMBA_CPU_NAME': 'generic'})
+        self.run_in_separate_process(envvars={"NUMBA_CPU_NAME": "generic"})
 
         self.check_later_mtimes(mtimes)
         self.assertGreater(len(self.cache_contents()), cache_size)
@@ -763,8 +788,8 @@ class TestCacheWithCpuSetting(DispatcherCacheUsecasesTest):
             key_host, key_generic = key_b, key_a
         self.assertEqual(key_host[1][1], ll.get_host_cpu_name())
         self.assertEqual(key_host[1][2], codegen.get_host_cpu_features())
-        self.assertEqual(key_generic[1][1], 'generic')
-        self.assertEqual(key_generic[1][2], '')
+        self.assertEqual(key_generic[1][1], "generic")
+        self.assertEqual(key_generic[1][2], "")
 
     def test_user_set_cpu_features(self):
         self.check_pycache(0)
@@ -774,13 +799,13 @@ class TestCacheWithCpuSetting(DispatcherCacheUsecasesTest):
 
         mtimes = self.get_cache_mtimes()
         # Change CPU feature
-        my_cpu_features = '-sse;-avx'
+        my_cpu_features = "-sse;-avx"
 
         system_features = codegen.get_host_cpu_features()
 
         self.assertNotEqual(system_features, my_cpu_features)
         self.run_in_separate_process(
-            envvars={'NUMBA_CPU_FEATURES': my_cpu_features},
+            envvars={"NUMBA_CPU_FEATURES": my_cpu_features},
         )
         self.check_later_mtimes(mtimes)
         self.assertGreater(len(self.cache_contents()), cache_size)
@@ -820,7 +845,7 @@ class TestMultiprocessCache(BaseCacheTest):
         f = mod.simple_usecase_caller
         n = 3
         try:
-            ctx = multiprocessing.get_context('spawn')
+            ctx = multiprocessing.get_context("spawn")
         except AttributeError:
             ctx = multiprocessing
         pool = ctx.Pool(n)
@@ -852,17 +877,17 @@ def bar():
 """
 
     def setUp(self):
-        self.tempdir = temp_directory('test_cache_file_loc')
+        self.tempdir = temp_directory("test_cache_file_loc")
         sys.path.insert(0, self.tempdir)
-        self.modname = 'module_name_that_is_unlikely'
+        self.modname = "module_name_that_is_unlikely"
         self.assertNotIn(self.modname, sys.modules)
         self.modname_bar1 = self.modname
-        self.modname_bar2 = '.'.join([self.modname, 'foo'])
+        self.modname_bar2 = ".".join([self.modname, "foo"])
         foomod = os.path.join(self.tempdir, self.modname)
         os.mkdir(foomod)
-        with open(os.path.join(foomod, '__init__.py'), 'w') as fout:
+        with open(os.path.join(foomod, "__init__.py"), "w") as fout:
             print(self.source_text_1, file=fout)
-        with open(os.path.join(foomod, 'foo.py'), 'w') as fout:
+        with open(os.path.join(foomod, "foo.py"), "w") as fout:
             print(self.source_text_2, file=fout)
 
     def tearDown(self):
@@ -886,8 +911,10 @@ def bar():
         self.assertTrue(idxname1.startswith("__init__.bar-3.py"))
         self.assertTrue(idxname2.startswith("foo.bar-3.py"))
 
-    @unittest.skipUnless(hasattr(multiprocessing, 'get_context'),
-                         'Test requires multiprocessing.get_context')
+    @unittest.skipUnless(
+        hasattr(multiprocessing, "get_context"),
+        "Test requires multiprocessing.get_context",
+    )
     def test_no_collision(self):
         bar1 = self.import_bar1()
         bar2 = self.import_bar2()
@@ -895,33 +922,33 @@ def bar():
             res1 = bar1()
         cachelog = buf.getvalue()
         # bar1 should save new index and data
-        self.assertEqual(cachelog.count('index saved'), 1)
-        self.assertEqual(cachelog.count('data saved'), 1)
-        self.assertEqual(cachelog.count('index loaded'), 0)
-        self.assertEqual(cachelog.count('data loaded'), 0)
+        self.assertEqual(cachelog.count("index saved"), 1)
+        self.assertEqual(cachelog.count("data saved"), 1)
+        self.assertEqual(cachelog.count("index loaded"), 0)
+        self.assertEqual(cachelog.count("data loaded"), 0)
         with capture_cache_log() as buf:
             res2 = bar2()
         cachelog = buf.getvalue()
         # bar2 should save new index and data
-        self.assertEqual(cachelog.count('index saved'), 1)
-        self.assertEqual(cachelog.count('data saved'), 1)
-        self.assertEqual(cachelog.count('index loaded'), 0)
-        self.assertEqual(cachelog.count('data loaded'), 0)
+        self.assertEqual(cachelog.count("index saved"), 1)
+        self.assertEqual(cachelog.count("data saved"), 1)
+        self.assertEqual(cachelog.count("index loaded"), 0)
+        self.assertEqual(cachelog.count("data loaded"), 0)
         self.assertNotEqual(res1, res2)
 
         try:
             # Make sure we can spawn new process without inheriting
             # the parent context.
-            mp = multiprocessing.get_context('spawn')
+            mp = multiprocessing.get_context("spawn")
         except ValueError:
             print("missing spawn context")
 
         q = mp.Queue()
         # Start new process that calls `cache_file_collision_tester`
-        proc = mp.Process(target=cache_file_collision_tester,
-                          args=(q, self.tempdir,
-                                self.modname_bar1,
-                                self.modname_bar2))
+        proc = mp.Process(
+            target=cache_file_collision_tester,
+            args=(q, self.tempdir, self.modname_bar1, self.modname_bar2),
+        )
         proc.start()
         # Get results from the process
         log1 = q.get()
@@ -936,16 +963,16 @@ def bar():
         self.assertEqual(got2, res2)
 
         # The remote should have loaded bar1 from cache
-        self.assertEqual(log1.count('index saved'), 0)
-        self.assertEqual(log1.count('data saved'), 0)
-        self.assertEqual(log1.count('index loaded'), 1)
-        self.assertEqual(log1.count('data loaded'), 1)
+        self.assertEqual(log1.count("index saved"), 0)
+        self.assertEqual(log1.count("data saved"), 0)
+        self.assertEqual(log1.count("index loaded"), 1)
+        self.assertEqual(log1.count("data loaded"), 1)
 
         # The remote should have loaded bar2 from cache
-        self.assertEqual(log2.count('index saved'), 0)
-        self.assertEqual(log2.count('data saved'), 0)
-        self.assertEqual(log2.count('index loaded'), 1)
-        self.assertEqual(log2.count('data loaded'), 1)
+        self.assertEqual(log2.count("index saved"), 0)
+        self.assertEqual(log2.count("data saved"), 0)
+        self.assertEqual(log2.count("index loaded"), 1)
+        self.assertEqual(log2.count("data loaded"), 1)
 
 
 def cache_file_collision_tester(q, tempdir, modname_bar1, modname_bar2):
@@ -983,14 +1010,14 @@ def function2(x):
 """
 
     def setUp(self):
-        self.tempdir = temp_directory('test_cache_file_loc')
+        self.tempdir = temp_directory("test_cache_file_loc")
 
-        self.file1 = os.path.join(self.tempdir, 'file1.py')
-        with open(self.file1, 'w') as fout:
+        self.file1 = os.path.join(self.tempdir, "file1.py")
+        with open(self.file1, "w") as fout:
             print(self.source_text_file1, file=fout)
 
-        self.file2 = os.path.join(self.tempdir, 'file2.py')
-        with open(self.file2, 'w') as fout:
+        self.file2 = os.path.join(self.tempdir, "file2.py")
+        with open(self.file2, "w") as fout:
             print(self.source_text_file2, file=fout)
 
     def tearDown(self):
@@ -998,17 +1025,17 @@ def function2(x):
 
     def test_caching_mutliple_files_with_signature(self):
         # Execute file1.py
-        popen = subprocess.Popen([sys.executable, self.file1],
-                                 stdout=subprocess.PIPE,
-                                 stderr=subprocess.PIPE)
+        popen = subprocess.Popen(
+            [sys.executable, self.file1], stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
         out, err = popen.communicate()
         msg = f"stdout:\n{out.decode()}\n\nstderr:\n{err.decode()}"
         self.assertEqual(popen.returncode, 0, msg=msg)
 
         # Execute file2.py
-        popen = subprocess.Popen([sys.executable, self.file2],
-                                 stdout=subprocess.PIPE,
-                                 stderr=subprocess.PIPE)
+        popen = subprocess.Popen(
+            [sys.executable, self.file2], stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
         out, err = popen.communicate()
         msg = f"stdout:\n{out.decode()}\n\nstderr:\n{err.decode()}"
         self.assertEqual(popen.returncode, 0, msg)
@@ -1035,14 +1062,19 @@ class TestCFuncCache(BaseCacheTest):
             assert f.cache_hits == 1
             f = mod.div_usecase
             assert f.cache_hits == 1
-            """ % dict(tempdir=self.tempdir, modname=self.modname)
+            """ % dict(
+            tempdir=self.tempdir, modname=self.modname
+        )
 
-        popen = subprocess.Popen([sys.executable, "-c", code],
-                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        popen = subprocess.Popen(
+            [sys.executable, "-c", code], stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
         out, err = popen.communicate()
         if popen.returncode != 0:
-            raise AssertionError(f"process failed with code {popen.returncode}:"
-                                 f"stderr follows\n{err.decode()}\n")
+            raise AssertionError(
+                f"process failed with code {popen.returncode}:"
+                f"stderr follows\n{err.decode()}\n"
+            )
 
     def check_module(self, mod):
         mod.self_test()
@@ -1071,5 +1103,5 @@ class TestCFuncCache(BaseCacheTest):
         self.run_in_separate_process()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

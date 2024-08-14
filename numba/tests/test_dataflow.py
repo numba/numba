@@ -4,8 +4,8 @@ from numba.core import types
 from numba.tests.support import TestCase
 
 
-force_pyobj_jit_opt = {'forceobj': True}
-no_pyobj_jit_opt = {'nopython': True}
+force_pyobj_jit_opt = {"forceobj": True}
+no_pyobj_jit_opt = {"nopython": True}
 
 
 def assignments(a):
@@ -19,6 +19,7 @@ def assignments2(a):
 
 
 # Use cases for issue #503
+
 
 def var_propagate1(a, b):
     c = (a if a > b else b) + 5
@@ -54,6 +55,7 @@ def stack_effect_error(x):
             c = i
     return i + c
 
+
 # Some more issues with stack effect and blocks
 def for_break(n, x):
     for i in range(n):
@@ -64,12 +66,14 @@ def for_break(n, x):
         n = i
     return i, n
 
+
 # Issue #571
 def var_swapping(a, b, c, d, e):
     a, b = b, a
     c, d, e = e, c, d
     a, b, c, d = b, c, d, a
-    return a + b + c + d +e
+    return a + b + c + d + e
+
 
 class TestDataFlow(TestCase):
 
@@ -158,13 +162,12 @@ class TestDataFlow(TestCase):
         # BREAK_LOOP must unwind the current inner syntax block.
         pyfunc = for_break
         cfunc = jit((types.intp, types.intp), **flags)(pyfunc)
-        for (n, x) in [(4, 2), (4, 6)]:
+        for n, x in [(4, 2), (4, 6)]:
             self.assertPreciseEqual(pyfunc(n, x), cfunc(n, x))
 
     def test_for_break_npm(self):
         self.test_for_break(no_pyobj_jit_opt)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
-

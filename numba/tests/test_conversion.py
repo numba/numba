@@ -13,11 +13,14 @@ from numba.np import numpy_support
 def identity(x):
     return x
 
+
 def addition(x, y):
     return x + y
 
+
 def equality(x, y):
     return x == y
+
 
 def foobar(x, y, z):
     return x
@@ -32,7 +35,7 @@ class TestConversion(TestCase):
         pyfunc = identity
         cfunc = njit(types.complex64(types.complex64))(pyfunc)
 
-        xs = [1.0j, (1+1j), (-1-1j), (1+0j)]
+        xs = [1.0j, (1 + 1j), (-1 - 1j), (1 + 0j)]
         for x in xs:
             self.assertEqual(cfunc(x), x)
         for x in np.complex64(xs):
@@ -40,7 +43,7 @@ class TestConversion(TestCase):
 
         cfunc = njit(types.complex128(types.complex128))(pyfunc)
 
-        xs = [1.0j, (1+1j), (-1-1j), (1+0j)]
+        xs = [1.0j, (1 + 1j), (-1 - 1j), (1 + 0j)]
         for x in xs:
             self.assertEqual(cfunc(x), x)
         for x in np.complex128(xs):
@@ -50,7 +53,7 @@ class TestConversion(TestCase):
         pyfunc = addition
         cfunc = njit(types.complex64(types.complex64, types.complex64))(pyfunc)
 
-        xs = [1.0j, (1+1j), (-1-1j), (1+0j)]
+        xs = [1.0j, (1 + 1j), (-1 - 1j), (1 + 0j)]
         for x in xs:
             y = x
             self.assertEqual(cfunc(x, y), x + y)
@@ -58,11 +61,9 @@ class TestConversion(TestCase):
             y = x
             self.assertEqual(cfunc(x, y), x + y)
 
+        cfunc = njit(types.complex128(types.complex128, types.complex128))(pyfunc)
 
-        cfunc = njit(types.complex128(types.complex128,
-                                      types.complex128))(pyfunc)
-
-        xs = [1.0j, (1+1j), (-1-1j), (1+0j)]
+        xs = [1.0j, (1 + 1j), (-1 - 1j), (1 + 0j)]
         for x in xs:
             y = x
             self.assertEqual(cfunc(x, y), x + y)
@@ -108,15 +109,17 @@ class TestConversion(TestCase):
     def test_negative_to_unsigned(self):
         def f(x):
             return x
+
         with self.assertRaises(OverflowError):
-            jit('uintp(uintp)', nopython=True)(f)(-5)
+            jit("uintp(uintp)", nopython=True)(f)(-5)
 
     # test the switch logic in callwraper.py:build_wrapper() works for more than one argument
-    # and where the error occurs 
-    def test_multiple_args_negative_to_unsigned(self): 
+    # and where the error occurs
+    def test_multiple_args_negative_to_unsigned(self):
         pyfunc = foobar
-        cfunc = njit(types.uint64(types.uint64, types.uint64,
-                                  types.uint64),)(pyfunc)
+        cfunc = njit(
+            types.uint64(types.uint64, types.uint64, types.uint64),
+        )(pyfunc)
 
         test_fail_args = ((-1, 0, 1), (0, -1, 1), (0, 1, -1))
         with self.assertRaises(OverflowError):
@@ -124,16 +127,17 @@ class TestConversion(TestCase):
                 cfunc(a, b, c)
 
     # test switch logic of callwraper.py:build_wrapper() with records as function parameters
-    def test_multiple_args_records(self): 
+    def test_multiple_args_records(self):
         pyfunc = foobar
 
-        mystruct_dt = np.dtype([('p', np.float64),
-                           ('row', np.float64),
-                           ('col', np.float64)])
+        mystruct_dt = np.dtype(
+            [("p", np.float64), ("row", np.float64), ("col", np.float64)]
+        )
         mystruct = numpy_support.from_dtype(mystruct_dt)
 
-        cfunc = njit(mystruct[:](mystruct[:], types.uint64,
-                                 types.uint64),)(pyfunc)
+        cfunc = njit(
+            mystruct[:](mystruct[:], types.uint64, types.uint64),
+        )(pyfunc)
 
         st1 = np.recarray(3, dtype=mystruct_dt)
 
@@ -154,13 +158,15 @@ class TestConversion(TestCase):
     # test switch logic of callwraper.py:build_wrapper() with no function parameters
     def test_with_no_parameters(self):
         def f():
-            pass 
-        self.assertEqual(f(), jit('()', nopython=True)(f)())
+            pass
+
+        self.assertEqual(f(), jit("()", nopython=True)(f)())
 
     def check_argument_cleanup(self, typ, obj):
         """
         Check that argument cleanup doesn't leak references.
         """
+
         def f(x, y):
             pass
 
@@ -189,21 +195,21 @@ class TestConversion(TestCase):
 
     def test_cleanup_buffer(self):
         mem = memoryview(bytearray(b"xyz"))
-        self.check_argument_cleanup(types.MemoryView(types.byte, 1, 'C'), mem)
+        self.check_argument_cleanup(types.MemoryView(types.byte, 1, "C"), mem)
 
     def test_cleanup_record(self):
-        dtype = np.dtype([('x', np.float64), ('y', np.float64)])
+        dtype = np.dtype([("x", np.float64), ("y", np.float64)])
         recarr = np.zeros(1, dtype=dtype)
         self.check_argument_cleanup(numpy_support.from_dtype(dtype), recarr[0])
 
     def test_cleanup_tuple(self):
         mem = memoryview(bytearray(b"xyz"))
-        tp = types.UniTuple(types.MemoryView(types.byte, 1, 'C'), 2)
+        tp = types.UniTuple(types.MemoryView(types.byte, 1, "C"), 2)
         self.check_argument_cleanup(tp, (mem, mem))
 
     def test_cleanup_optional(self):
         mem = memoryview(bytearray(b"xyz"))
-        tp = types.Optional(types.MemoryView(types.byte, 1, 'C'))
+        tp = types.Optional(types.MemoryView(types.byte, 1, "C"))
         self.check_argument_cleanup(tp, mem)
 
     def test_stringliteral_to_unicode(self):
@@ -219,5 +225,5 @@ class TestConversion(TestCase):
             bar("literal string")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

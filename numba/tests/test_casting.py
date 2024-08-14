@@ -25,6 +25,7 @@ def float_to_complex(x):
 def numpy_scalar_cast_error():
     np.int32(np.zeros((4,)))
 
+
 class TestCasting(unittest.TestCase):
     def test_float_to_int(self):
         pyfunc = float_to_int
@@ -40,10 +41,9 @@ class TestCasting(unittest.TestCase):
         pyfunc = int_to_float
         cfunc = njit((types.int64,))(pyfunc)
 
-        self.assertEqual(cfunc.nopython_signatures[0].return_type,
-                         types.float64)
+        self.assertEqual(cfunc.nopython_signatures[0].return_type, types.float64)
         self.assertEqual(cfunc(321), pyfunc(321))
-        self.assertEqual(cfunc(321), 321. / 2)
+        self.assertEqual(cfunc(321), 321.0 / 2)
 
     def test_float_to_unsigned(self):
         pyfunc = float_to_unsigned
@@ -51,14 +51,12 @@ class TestCasting(unittest.TestCase):
 
         self.assertEqual(cfunc.nopython_signatures[0].return_type, types.uint32)
         self.assertEqual(cfunc(3.21), pyfunc(3.21))
-        self.assertEqual(cfunc(3.21), struct.unpack('I', struct.pack('i',
-                                                                      3))[0])
+        self.assertEqual(cfunc(3.21), struct.unpack("I", struct.pack("i", 3))[0])
 
     def test_float_to_complex(self):
         pyfunc = float_to_complex
         cfunc = njit((types.float64,))(pyfunc)
-        self.assertEqual(cfunc.nopython_signatures[0].return_type,
-                         types.complex128)
+        self.assertEqual(cfunc.nopython_signatures[0].return_type, types.complex128)
         self.assertEqual(cfunc(-3.21), pyfunc(-3.21))
         self.assertEqual(cfunc(-3.21), -3.21 + 0j)
 
@@ -67,6 +65,7 @@ class TestCasting(unittest.TestCase):
 
         Cast C to A array
         """
+
         @njit("f8(f8[:])")
         def inner(x):
             return x[0]
@@ -91,14 +90,14 @@ class TestCasting(unittest.TestCase):
             (np.float32, 12.3),
             (np.float64, 12.3),
             (np.int64, 12),
-            (np.complex64, 2j+3),
-            (np.complex128, 2j+3),
-            (np.timedelta64, np.timedelta64(3, 'h')),
-            (np.datetime64, np.datetime64('2016-01-01')),
-            ('<U3', 'ABC'),
+            (np.complex64, 2j + 3),
+            (np.complex128, 2j + 3),
+            (np.timedelta64, np.timedelta64(3, "h")),
+            (np.datetime64, np.datetime64("2016-01-01")),
+            ("<U3", "ABC"),
         ]
 
-        for (T, inp) in inputs:
+        for T, inp in inputs:
             x = np.array(inp, dtype=T)
             self.assertEqual(inner(x), x[()])
 
@@ -111,8 +110,10 @@ class TestCasting(unittest.TestCase):
         with self.assertRaises(TypingError) as raises:
             njit(())(numpy_scalar_cast_error)
 
-        self.assertIn("Casting array(float64, 1d, C) to int32 directly is unsupported.",
-                      str(raises.exception))
+        self.assertIn(
+            "Casting array(float64, 1d, C) to int32 directly is unsupported.",
+            str(raises.exception),
+        )
 
     def test_optional_to_optional(self):
         """
@@ -133,5 +134,5 @@ class TestCasting(unittest.TestCase):
         self.assertIsNone(foo(None))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

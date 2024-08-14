@@ -21,7 +21,7 @@ class Issue455(object):
         """
         d = {}
         exec(code.strip(), d)
-        self.f.append(numba.jit("void(f8[:])", nopython=True)(d['f']))
+        self.f.append(numba.jit("void(f8[:])", nopython=True)(d["f"]))
 
     def call_f(self):
         a = np.zeros(10)
@@ -39,5 +39,5 @@ class TestDynFunc(TestCase):
         self.assertPreciseEqual(a, np.ones_like(a))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

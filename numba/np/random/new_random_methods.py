@@ -2,8 +2,7 @@ import numpy as np
 
 from numba.core.extending import register_jitable
 
-from numba.np.random._constants import (UINT32_MAX, UINT64_MAX,
-                                        UINT16_MAX, UINT8_MAX)
+from numba.np.random._constants import UINT32_MAX, UINT64_MAX, UINT16_MAX, UINT8_MAX
 from numba.np.random.generator_core import next_uint32, next_uint64
 
 # All following implementations are direct translations from:
@@ -24,7 +23,7 @@ def gen_mask(max):
 
 @register_jitable
 def buffered_bounded_bool(bitgen, off, rng, bcnt, buf):
-    if (rng == 0):
+    if rng == 0:
         return off, bcnt, buf
     if not bcnt:
         buf = next_uint32(bitgen)
@@ -77,7 +76,7 @@ def buffered_bounded_lemire_uint8(bitgen, rng, bcnt, buf):
     # zero.
     rng_excl = np.uint8(rng) + np.uint8(1)
 
-    assert (rng != 0xFF)
+    assert rng != 0xFF
 
     # Generate a scaled random number.
     n, bcnt, buf = buffered_uint8(bitgen, bcnt, buf)
@@ -86,11 +85,11 @@ def buffered_bounded_lemire_uint8(bitgen, rng, bcnt, buf):
     # Rejection sampling to remove any bias
     leftover = m & 0xFF
 
-    if (leftover < rng_excl):
+    if leftover < rng_excl:
         # `rng_excl` is a simple upper bound for `threshold`.
-        threshold = ((np.uint8(UINT8_MAX) - rng) % rng_excl)
+        threshold = (np.uint8(UINT8_MAX) - rng) % rng_excl
 
-        while (leftover < threshold):
+        while leftover < threshold:
             n, bcnt, buf = buffered_uint8(bitgen, bcnt, buf)
             m = np.uint16(n * rng_excl)
             leftover = m & 0xFF
@@ -113,7 +112,7 @@ def buffered_bounded_lemire_uint16(bitgen, rng, bcnt, buf):
     # zero.
     rng_excl = np.uint16(rng) + np.uint16(1)
 
-    assert (rng != 0xFFFF)
+    assert rng != 0xFFFF
 
     # Generate a scaled random number.
     n, bcnt, buf = buffered_uint16(bitgen, bcnt, buf)
@@ -122,11 +121,11 @@ def buffered_bounded_lemire_uint16(bitgen, rng, bcnt, buf):
     # Rejection sampling to remove any bias
     leftover = m & 0xFFFF
 
-    if (leftover < rng_excl):
+    if leftover < rng_excl:
         # `rng_excl` is a simple upper bound for `threshold`.
-        threshold = ((np.uint16(UINT16_MAX) - rng) % rng_excl)
+        threshold = (np.uint16(UINT16_MAX) - rng) % rng_excl
 
-        while (leftover < threshold):
+        while leftover < threshold:
             n, bcnt, buf = buffered_uint16(bitgen, bcnt, buf)
             m = np.uint32(n * rng_excl)
             leftover = m & 0xFFFF
@@ -142,7 +141,7 @@ def buffered_bounded_lemire_uint32(bitgen, rng):
     """
     rng_excl = np.uint32(rng) + np.uint32(1)
 
-    assert (rng != 0xFFFFFFFF)
+    assert rng != 0xFFFFFFFF
 
     # Generate a scaled random number.
     m = np.uint64(next_uint32(bitgen)) * np.uint64(rng_excl)
@@ -150,15 +149,15 @@ def buffered_bounded_lemire_uint32(bitgen, rng):
     # Rejection sampling to remove any bias
     leftover = m & 0xFFFFFFFF
 
-    if (leftover < rng_excl):
+    if leftover < rng_excl:
         # `rng_excl` is a simple upper bound for `threshold`.
         threshold = (UINT32_MAX - rng) % rng_excl
 
-        while (leftover < threshold):
+        while leftover < threshold:
             m = np.uint64(next_uint32(bitgen)) * np.uint64(rng_excl)
             leftover = m & 0xFFFFFFFF
 
-    return (m >> 32)
+    return m >> 32
 
 
 @register_jitable
@@ -169,16 +168,16 @@ def bounded_lemire_uint64(bitgen, rng):
     """
     rng_excl = np.uint64(rng) + np.uint64(1)
 
-    assert (rng != 0xFFFFFFFFFFFFFFFF)
+    assert rng != 0xFFFFFFFFFFFFFFFF
 
     x = next_uint64(bitgen)
 
     leftover = np.uint64(x) * np.uint64(rng_excl)
 
-    if (leftover < rng_excl):
+    if leftover < rng_excl:
         threshold = (UINT64_MAX - rng) % rng_excl
 
-        while (leftover < threshold):
+        while leftover < threshold:
             x = next_uint64(bitgen)
             leftover = np.uint64(x) * np.uint64(rng_excl)
 
@@ -207,14 +206,14 @@ def random_bounded_uint64_fill(bitgen, low, rng, size, dtype):
         for i in np.ndindex(size):
             out[i] = low
     elif rng <= 0xFFFFFFFF:
-        if (rng == 0xFFFFFFFF):
+        if rng == 0xFFFFFFFF:
             for i in np.ndindex(size):
                 out[i] = low + next_uint32(bitgen)
         else:
             for i in np.ndindex(size):
                 out[i] = low + buffered_bounded_lemire_uint32(bitgen, rng)
 
-    elif (rng == 0xFFFFFFFFFFFFFFFF):
+    elif rng == 0xFFFFFFFFFFFFFFFF:
         for i in np.ndindex(size):
             out[i] = low + next_uint64(bitgen)
     else:
@@ -265,9 +264,7 @@ def random_bounded_uint16_fill(bitgen, low, rng, size, dtype):
 
     else:
         for i in np.ndindex(size):
-            val, bcnt, buf = \
-                buffered_bounded_lemire_uint16(bitgen, rng,
-                                               bcnt, buf)
+            val, bcnt, buf = buffered_bounded_lemire_uint16(bitgen, rng, bcnt, buf)
             out[i] = low + val
     return out
 
@@ -292,9 +289,7 @@ def random_bounded_uint8_fill(bitgen, low, rng, size, dtype):
             out[i] = low + val
     else:
         for i in np.ndindex(size):
-            val, bcnt, buf = \
-                buffered_bounded_lemire_uint8(bitgen, rng,
-                                              bcnt, buf)
+            val, bcnt, buf = buffered_bounded_lemire_uint8(bitgen, rng, bcnt, buf)
             out[i] = low + val
     return out
 
@@ -346,13 +341,13 @@ def _randint_arg_check(low, high, endpoint, lower_bound, upper_bound):
 
 @register_jitable
 def random_interval(bitgen, max_val):
-    if (max_val == 0):
+    if max_val == 0:
         return 0
 
     max_val = np.uint64(max_val)
     mask = np.uint64(gen_mask(max_val))
 
-    if (max_val <= 0xffffffff):
+    if max_val <= 0xFFFFFFFF:
         value = np.uint64(next_uint32(bitgen)) & mask
         while value > max_val:
             value = np.uint64(next_uint32(bitgen)) & mask

@@ -33,7 +33,7 @@ class TestChromeTraceModule(TestCase):
         with TemporaryDirectory() as tmpdir:
             path = os.path.join(tmpdir, "test_trace.json")
             env = os.environ.copy()
-            env['NUMBA_CHROME_TRACE'] = path
+            env["NUMBA_CHROME_TRACE"] = path
             run_in_subprocess(src, env=env)
             with open(path) as file:
                 events = json.load(file)

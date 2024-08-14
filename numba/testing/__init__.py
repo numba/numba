@@ -17,15 +17,15 @@ def load_testsuite(loader, dir):
         files = []
         for f in os.listdir(dir):
             path = join(dir, f)
-            if isfile(path) and fnmatch(f, 'test_*.py'):
+            if isfile(path) and fnmatch(f, "test_*.py"):
                 files.append(f)
-            elif isfile(join(path, '__init__.py')):
+            elif isfile(join(path, "__init__.py")):
                 suite.addTests(loader.discover(path))
         for f in files:
             # turn 'f' into a filename relative to the toplevel dir...
             f = relpath(join(dir, f), loader._top_level_dir)
             # ...and translate it to a module name.
-            f = splitext(normpath(f.replace(os.path.sep, '.')))[0]
+            f = splitext(normpath(f.replace(os.path.sep, ".")))[0]
             suite.addTests(loader.loadTestsFromName(f))
         return suite
     except Exception:
@@ -33,8 +33,14 @@ def load_testsuite(loader, dir):
         sys.exit(-1)
 
 
-def run_tests(argv=None, defaultTest=None, topleveldir=None,
-              xmloutput=None, verbosity=1, nomultiproc=False):
+def run_tests(
+    argv=None,
+    defaultTest=None,
+    topleveldir=None,
+    xmloutput=None,
+    verbosity=1,
+    nomultiproc=False,
+):
     """
     args
     ----
@@ -48,14 +54,18 @@ def run_tests(argv=None, defaultTest=None, topleveldir=None,
 
     if xmloutput is not None:
         import xmlrunner
+
         runner = xmlrunner.XMLTestRunner(output=xmloutput)
     else:
         runner = None
-    prog = NumbaTestProgram(argv=argv,
-                            module=None,
-                            defaultTest=defaultTest,
-                            topleveldir=topleveldir,
-                            testRunner=runner, exit=False,
-                            verbosity=verbosity,
-                            nomultiproc=nomultiproc)
+    prog = NumbaTestProgram(
+        argv=argv,
+        module=None,
+        defaultTest=defaultTest,
+        topleveldir=topleveldir,
+        testRunner=runner,
+        exit=False,
+        verbosity=verbosity,
+        nomultiproc=nomultiproc,
+    )
     return prog.result

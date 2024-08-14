@@ -2,7 +2,6 @@
 Tests for numba.types.
 """
 
-
 from collections import namedtuple
 import gc
 import os
@@ -17,8 +16,14 @@ from numba.core.types.abstract import _typecache
 from numba.core.types.functions import _header_lead
 from numba.core.typing.templates import make_overload_template
 from numba import jit, njit, typeof
-from numba.core.extending import (overload, register_model, models, unbox,
-                                  NativeValue, typeof_impl)
+from numba.core.extending import (
+    overload,
+    register_model,
+    models,
+    unbox,
+    NativeValue,
+    typeof_impl,
+)
 from numba.tests.support import TestCase, create_temp_module
 from numba.tests.enum_usecases import Color, Shake, Shape
 import unittest
@@ -31,9 +36,9 @@ except ImportError:
     import pickle
 
 
-Point = namedtuple('Point', ('x', 'y'))
+Point = namedtuple("Point", ("x", "y"))
 
-Rect = namedtuple('Rect', ('width', 'height'))
+Rect = namedtuple("Rect", ("width", "height"))
 
 
 def gen(x):
@@ -70,8 +75,9 @@ class TestTypes(TestCase):
         self.assertNotEqual(a, b)
         # Different call convention
         a = types.ExternalFunctionPointer(sig=sig_a, get_pointer=get_pointer)
-        b = types.ExternalFunctionPointer(sig=sig_a, get_pointer=get_pointer,
-                                          cconv='stdcall')
+        b = types.ExternalFunctionPointer(
+            sig=sig_a, get_pointer=get_pointer, cconv="stdcall"
+        )
         self.assertNotEqual(a, b)
         # Different get_pointer
         a = types.ExternalFunctionPointer(sig=sig_a, get_pointer=get_pointer)
@@ -81,10 +87,12 @@ class TestTypes(TestCase):
         # Different template classes bearing the same name
         class DummyTemplate(object):
             key = "foo"
+
         a = types.BoundFunction(DummyTemplate, types.int32)
 
         class DummyTemplate(object):
             key = "bar"
+
         b = types.BoundFunction(DummyTemplate, types.int32)
         self.assertNotEqual(a, b)
 
@@ -92,12 +100,12 @@ class TestTypes(TestCase):
         self.assertNotEqual(types.DType(types.int32), types.DType(types.int64))
 
         # CPointer with same addrspace
-        self.assertEqual(types.CPointer(types.float32),
-                         types.CPointer(types.float32))
+        self.assertEqual(types.CPointer(types.float32), types.CPointer(types.float32))
 
         # CPointer with different addrspace
-        self.assertNotEqual(types.CPointer(types.float32, 0),
-                            types.CPointer(types.float32, 1))
+        self.assertNotEqual(
+            types.CPointer(types.float32, 0), types.CPointer(types.float32, 1)
+        )
 
     def test_weaktype(self):
         d = Dummy()
@@ -147,21 +155,21 @@ class TestTypes(TestCase):
 
     def test_interning(self):
         # Test interning and lifetime of dynamic types.
-        a = types.Dummy('xyzzyx')
+        a = types.Dummy("xyzzyx")
         code = a._code
-        b = types.Dummy('xyzzyx')
+        b = types.Dummy("xyzzyx")
         self.assertIs(b, a)
         wr = weakref.ref(a)
         del a
         gc.collect()
-        c = types.Dummy('xyzzyx')
+        c = types.Dummy("xyzzyx")
         self.assertIs(c, b)
         # The code is always the same
         self.assertEqual(c._code, code)
         del b, c
         gc.collect()
         self.assertIs(wr(), None)
-        d = types.Dummy('xyzzyx')
+        d = types.Dummy("xyzzyx")
         # The original code wasn't reused.
         self.assertNotEqual(d._code, code)
 
@@ -173,8 +181,8 @@ class TestTypes(TestCase):
         # Keep strong references to existing types, to avoid spurious failures
         existing_types = [wr() for wr in cache]  # noqa: F841
         cache_len = len(cache)
-        a = types.Dummy('xyzzyx')
-        b = types.Dummy('foox')
+        a = types.Dummy("xyzzyx")
+        b = types.Dummy("foox")
         self.assertEqual(len(cache), cache_len + 2)
         del a, b
         gc.collect()
@@ -190,15 +198,16 @@ class TestTypes(TestCase):
             with self.assertRaises(KeyError) as raises:
                 callable()
             self.assertIn(
-                "Can only index numba types with slices with no start or "
-                "stop, got", str(raises.exception))
+                "Can only index numba types with slices with no start or " "stop, got",
+                str(raises.exception),
+            )
 
         scalar = types.int32
-        check(scalar[:], scalar, 1, 'A')
-        check(scalar[::1], scalar, 1, 'C')
-        check(scalar[:, :], scalar, 2, 'A')
-        check(scalar[:, ::1], scalar, 2, 'C')
-        check(scalar[::1, :], scalar, 2, 'F')
+        check(scalar[:], scalar, 1, "A")
+        check(scalar[::1], scalar, 1, "C")
+        check(scalar[:, :], scalar, 2, "A")
+        check(scalar[:, ::1], scalar, 2, "C")
+        check(scalar[::1, :], scalar, 2, "F")
 
         check_index_error(lambda: scalar[0])
         check_index_error(lambda: scalar[:, 4])
@@ -211,13 +220,14 @@ class TestTypes(TestCase):
             self.assertIs(arrty.dtype, scalar)
             self.assertEqual(arrty.ndim, ndim)
             self.assertEqual(arrty.layout, layout)
+
         scalar = types.int32
         dtyped = types.DType(scalar)
-        check(dtyped[:], scalar, 1, 'A')
-        check(dtyped[::1], scalar, 1, 'C')
-        check(dtyped[:, :], scalar, 2, 'A')
-        check(dtyped[:, ::1], scalar, 2, 'C')
-        check(dtyped[::1, :], scalar, 2, 'F')
+        check(dtyped[:], scalar, 1, "A")
+        check(dtyped[::1], scalar, 1, "C")
+        check(dtyped[:, :], scalar, 2, "A")
+        check(dtyped[:, ::1], scalar, 2, "C")
+        check(dtyped[::1, :], scalar, 2, "F")
 
     def test_call_notation(self):
         # Function call signature
@@ -229,18 +239,18 @@ class TestTypes(TestCase):
         # Value cast
         self.assertPreciseEqual(i(42.5), 42)
         self.assertPreciseEqual(d(-5), -5.0)
-        ty = types.NPDatetime('Y')
-        self.assertPreciseEqual(ty('1900'), np.datetime64('1900', 'Y'))
-        self.assertPreciseEqual(ty('NaT'), np.datetime64('NaT', 'Y'))
-        ty = types.NPTimedelta('s')
-        self.assertPreciseEqual(ty(5), np.timedelta64(5, 's'))
-        self.assertPreciseEqual(ty('NaT'), np.timedelta64('NaT', 's'))
-        ty = types.NPTimedelta('')
+        ty = types.NPDatetime("Y")
+        self.assertPreciseEqual(ty("1900"), np.datetime64("1900", "Y"))
+        self.assertPreciseEqual(ty("NaT"), np.datetime64("NaT", "Y"))
+        ty = types.NPTimedelta("s")
+        self.assertPreciseEqual(ty(5), np.timedelta64(5, "s"))
+        self.assertPreciseEqual(ty("NaT"), np.timedelta64("NaT", "s"))
+        ty = types.NPTimedelta("")
         self.assertPreciseEqual(ty(5), np.timedelta64(5))
-        self.assertPreciseEqual(ty('NaT'), np.timedelta64('NaT'))
+        self.assertPreciseEqual(ty("NaT"), np.timedelta64("NaT"))
 
     def test_list_type_getitem(self):
-        for listty in (types.int64, types.Array(types.float64, 1, 'C')):
+        for listty in (types.int64, types.Array(types.float64, 1, "C")):
             l_int = types.List(listty)
             self.assertTrue(isinstance(l_int, types.List))
             self.assertTrue(isinstance(l_int[0], type(listty)))
@@ -256,8 +266,8 @@ class TestTypes(TestCase):
         def ol():
             pass
 
-        template1 = make_overload_template(func_stub, ol, {}, True, 'never')
-        template2 = make_overload_template(func_stub2, ol, {}, True, 'never')
+        template1 = make_overload_template(func_stub, ol, {}, True, "never")
+        template2 = make_overload_template(func_stub2, ol, {}, True, "never")
 
         with self.assertRaises(ValueError) as raises:
             types.Function((template1, template2))
@@ -330,9 +340,7 @@ class TestNdIter(TestCase):
             self.assertEqual(ty.dtypes, dtypes)
             views = [types.Array(dtype, 0, "C") for dtype in dtypes]
             if len(views) > 1:
-                self.assertEqual(
-                    ty.yield_type,
-                    types.BaseTuple.from_types(views))
+                self.assertEqual(ty.yield_type, types.BaseTuple.from_types(views))
             else:
                 self.assertEqual(ty.yield_type, views[0])
             if indexers is not None:
@@ -351,86 +359,110 @@ class TestNdIter(TestCase):
 
         # 0-dim iterator
         ty = types.NumpyNdIterType((e,))
-        check(ty, (i16,), 0, "C", [('0d', 0, 0, [0])])
+        check(ty, (i16,), 0, "C", [("0d", 0, 0, [0])])
         self.assertFalse(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((e, g))
-        check(ty, (i16, f32), 0, "C", [('0d', 0, 0, [0, 1])])
+        check(ty, (i16, f32), 0, "C", [("0d", 0, 0, [0, 1])])
         self.assertFalse(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((e, c64))
-        check(ty, (i16, c64), 0, "C",
-              [('0d', 0, 0, [0]), ('scalar', 0, 0, [1])])
+        check(ty, (i16, c64), 0, "C", [("0d", 0, 0, [0]), ("scalar", 0, 0, [1])])
         self.assertFalse(ty.need_shaped_indexing)
 
         # 1-dim iterator
         ty = types.NumpyNdIterType((a,))
-        check(ty, (f32,), 1, "C",
-              [('flat', 0, 1, [0])])
+        check(ty, (f32,), 1, "C", [("flat", 0, 1, [0])])
         self.assertFalse(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((a, a))
-        check(ty, (f32, f32), 1, "C",
-              [('flat', 0, 1, [0, 1])])
+        check(ty, (f32, f32), 1, "C", [("flat", 0, 1, [0, 1])])
         self.assertFalse(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((a, e, e, c64))
-        check(ty, (f32, i16, i16, c64), 1, "C",
-              [('flat', 0, 1, [0]),  # a
-               ('0d', 0, 0, [1, 2]),  # e, e
-               ('scalar', 0, 0, [3]),  # c64
-               ])
+        check(
+            ty,
+            (f32, i16, i16, c64),
+            1,
+            "C",
+            [
+                ("flat", 0, 1, [0]),  # a
+                ("0d", 0, 0, [1, 2]),  # e, e
+                ("scalar", 0, 0, [3]),  # c64
+            ],
+        )
         self.assertFalse(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((a, f))
-        check(ty, (f32, f32), 1, "C",
-              [('flat', 0, 1, [0]), ('indexed', 0, 1, [1])])
+        check(ty, (f32, f32), 1, "C", [("flat", 0, 1, [0]), ("indexed", 0, 1, [1])])
         self.assertTrue(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((f,))
-        check(ty, (f32,), 1, "C", [('indexed', 0, 1, [0])])
+        check(ty, (f32,), 1, "C", [("indexed", 0, 1, [0])])
         self.assertTrue(ty.need_shaped_indexing)
 
         # 2-dim C-order iterator
         ty = types.NumpyNdIterType((b,))
-        check(ty, (f32,), 2, "C", [('flat', 0, 2, [0])])
+        check(ty, (f32,), 2, "C", [("flat", 0, 2, [0])])
         self.assertFalse(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((b, c))
-        check(
-            ty, (f32, c64), 2, "C", [
-                ('flat', 0, 2, [0]), ('indexed', 0, 2, [1])])
+        check(ty, (f32, c64), 2, "C", [("flat", 0, 2, [0]), ("indexed", 0, 2, [1])])
         self.assertTrue(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((d,))
-        check(ty, (i16,), 2, "C", [('indexed', 0, 2, [0])])
+        check(ty, (i16,), 2, "C", [("indexed", 0, 2, [0])])
         self.assertTrue(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((b, c, d, d, e))
-        check(ty, (f32, c64, i16, i16, i16), 2, "C",
-              [('flat', 0, 2, [0]),  # b
-               ('indexed', 0, 2, [1, 2, 3]),  # c, d, d
-               ('0d', 0, 0, [4]),  # e
-               ])
+        check(
+            ty,
+            (f32, c64, i16, i16, i16),
+            2,
+            "C",
+            [
+                ("flat", 0, 2, [0]),  # b
+                ("indexed", 0, 2, [1, 2, 3]),  # c, d, d
+                ("0d", 0, 0, [4]),  # e
+            ],
+        )
         self.assertTrue(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((a, b, c, d, d, f))
-        check(ty, (f32, f32, c64, i16, i16, f32), 2, "C",
-              [('flat', 1, 2, [0]),  # a
-               ('flat', 0, 2, [1]),  # b
-               ('indexed', 0, 2, [2, 3, 4]),  # c, d, d
-               ('indexed', 1, 2, [5]),  # f
-               ])
+        check(
+            ty,
+            (f32, f32, c64, i16, i16, f32),
+            2,
+            "C",
+            [
+                ("flat", 1, 2, [0]),  # a
+                ("flat", 0, 2, [1]),  # b
+                ("indexed", 0, 2, [2, 3, 4]),  # c, d, d
+                ("indexed", 1, 2, [5]),  # f
+            ],
+        )
         self.assertTrue(ty.need_shaped_indexing)
 
         # 2-dim F-order iterator
         ty = types.NumpyNdIterType((c,))
-        check(ty, (c64,), 2, "F", [('flat', 0, 2, [0])])
+        check(ty, (c64,), 2, "F", [("flat", 0, 2, [0])])
         self.assertFalse(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((c, b, c, f))
-        check(ty, (c64, f32, c64, f32), 2, "F",
-              [('flat', 0, 2, [0, 2]),  # c, c
-               ('indexed', 0, 2, [1]),  # b
-               ('indexed', 0, 1, [3]),  # f
-               ])
+        check(
+            ty,
+            (c64, f32, c64, f32),
+            2,
+            "F",
+            [
+                ("flat", 0, 2, [0, 2]),  # c, c
+                ("indexed", 0, 2, [1]),  # b
+                ("indexed", 0, 1, [3]),  # f
+            ],
+        )
         self.assertTrue(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((b, c, c, d, d, a, e))
-        check(ty, (f32, c64, c64, i16, i16, f32, i16), 2, "F",
-              [('indexed', 0, 2, [0, 3, 4]),  # b, d, d
-               ('flat', 0, 2, [1, 2]),  # c, c
-               ('flat', 0, 1, [5]),  # a
-               ('0d', 0, 0, [6]),  # e
-               ])
+        check(
+            ty,
+            (f32, c64, c64, i16, i16, f32, i16),
+            2,
+            "F",
+            [
+                ("indexed", 0, 2, [0, 3, 4]),  # b, d, d
+                ("flat", 0, 2, [1, 2]),  # c, c
+                ("flat", 0, 1, [5]),  # a
+                ("0d", 0, 0, [6]),  # e
+            ],
+        )
         self.assertTrue(ty.need_shaped_indexing)
 
 
@@ -462,7 +494,7 @@ class TestPickling(TestCase):
             self.check_pickling(ty)
 
     def test_atomic_types(self):
-        for unit in ('M', 'ms'):
+        for unit in ("M", "ms"):
             ty = types.NPDatetime(unit)
             self.check_pickling(ty)
             ty = types.NPTimedelta(unit)
@@ -470,18 +502,22 @@ class TestPickling(TestCase):
 
     def test_arrays(self):
         for ndim in (0, 1, 2):
-            for layout in ('A', 'C', 'F'):
+            for layout in ("A", "C", "F"):
                 ty = types.Array(types.int16, ndim, layout)
                 self.check_pickling(ty)
 
     def test_records(self):
-        recordtype = np.dtype([('a', np.float64),
-                               ('b', np.int32),
-                               ('c', np.complex64),
-                               ('d', (np.str_, 5))])
+        recordtype = np.dtype(
+            [
+                ("a", np.float64),
+                ("b", np.int32),
+                ("c", np.complex64),
+                ("d", (np.str_, 5)),
+            ]
+        )
         ty = numpy_support.from_dtype(recordtype)
         self.check_pickling(ty)
-        self.check_pickling(types.Array(ty, 1, 'A'))
+        self.check_pickling(types.Array(ty, 1, "A"))
 
     def test_optional(self):
         ty = types.Optional(types.int32)
@@ -523,6 +559,7 @@ class TestPickling(TestCase):
     def test_external_function_pointers(self):
         from numba.core.typing import ctypes_utils
         from numba.tests.ctypes_usecases import c_sin, c_cos
+
         for fnptr in (c_sin, c_cos):
             ty = ctypes_utils.make_function_type(fnptr)
             self.assertIsInstance(ty, types.ExternalFunctionPointer)
@@ -562,7 +599,7 @@ class TestSignatures(TestCase):
 
 class TestRecordDtype(unittest.TestCase):
     def test_record_type_equiv(self):
-        rec_dt = np.dtype([('a', np.int32), ('b', np.float32)])
+        rec_dt = np.dtype([("a", np.int32), ("b", np.float32)])
         rec_ty = typeof(rec_dt)
         art1 = rec_ty[::1]
         arr = np.zeros(5, dtype=rec_dt)
@@ -571,21 +608,21 @@ class TestRecordDtype(unittest.TestCase):
         self.assertEqual(art1, art2)
 
     def test_user_specified(self):
-        rec_dt = np.dtype([('a', np.int32), ('b', np.float32)])
+        rec_dt = np.dtype([("a", np.int32), ("b", np.float32)])
         rec_type = typeof(rec_dt)
 
         @jit((rec_type[:],), nopython=True)
         def foo(x):
-            return x['a'], x['b']
+            return x["a"], x["b"]
 
         arr = np.zeros(1, dtype=rec_dt)
-        arr[0]['a'] = 123
-        arr[0]['b'] = 32.1
+        arr[0]["a"] = 123
+        arr[0]["b"] = 32.1
 
         a, b = foo(arr)
 
-        self.assertEqual(a, arr[0]['a'])
-        self.assertEqual(b, arr[0]['b'])
+        self.assertEqual(a, arr[0]["a"])
+        self.assertEqual(b, arr[0]["b"])
 
 
 class TestDType(TestCase):
@@ -611,23 +648,27 @@ class TestDType(TestCase):
 
     def test_kind(self):
         def tkind(A):
-            return A.dtype.kind == 'f'
+            return A.dtype.kind == "f"
+
         jit_tkind = jit(nopython=True)(tkind)
         self.assertEqual(tkind(np.ones(3)), jit_tkind(np.ones(3)))
-        self.assertEqual(tkind(np.ones(3, dtype=np.intp)),
-                         jit_tkind(np.ones(3, dtype=np.intp)))
+        self.assertEqual(
+            tkind(np.ones(3, dtype=np.intp)), jit_tkind(np.ones(3, dtype=np.intp))
+        )
 
     def test_dtype_with_type(self):
         def impl():
             a = np.dtype(np.float64)
             return a.type(0)
+
         jit_impl = jit(nopython=True)(impl)
         self.assertEqual(impl(), jit_impl())
 
     def test_dtype_with_string(self):
         def impl():
-            a = np.dtype('float64')
+            a = np.dtype("float64")
             return a.type(0)
+
         jit_impl = jit(nopython=True)(impl)
         self.assertEqual(impl(), jit_impl())
 
@@ -636,6 +677,7 @@ class TestIsInternalTypeMarker(TestCase):
     """Tests the use of the Type metaclass init correctly setting the flag on
     the `is_internal` attr of a concrete Type class
     """
+
     source_lines = """
 from numba.core import types
 
@@ -696,9 +738,9 @@ class FooType(types.Type):
             @overload(false_if_not_array)
             def ol_false_if_not_array(a):
                 if isinstance(a, types.Array):
-                    return lambda a : True
+                    return lambda a: True
                 else:
-                    return lambda a : False
+                    return lambda a: False
 
             @njit
             def call_false_if_not_array(a):
@@ -720,9 +762,9 @@ class FooType(types.Type):
             def ol_false_if_not_array_closed_system(a):
                 if a.is_internal:  # guard
                     if isinstance(a, types.Array):
-                        return lambda a : True
+                        return lambda a: True
                     else:
-                        return lambda a : False
+                        return lambda a: False
 
             @njit
             def call_false_if_not_array_closed_system(a):
@@ -774,9 +816,9 @@ class FooType(types.Type):
             def f(a):
                 return a == "A", a != "A"
 
-            self.assertEqual(("RAN CUSTOM EQ OVERLOAD",
-                              "RAN CUSTOM NE OVERLOAD"),
-                             f(Foo()))
+            self.assertEqual(
+                ("RAN CUSTOM EQ OVERLOAD", "RAN CUSTOM NE OVERLOAD"), f(Foo())
+            )
 
 
 class TestIssues(TestCase):
@@ -792,7 +834,7 @@ class TestIssues(TestCase):
             return lambda a: a
 
         @njit
-        def my_func(a='a'):
+        def my_func(a="a"):
             return inner(a)
 
         @njit
@@ -801,10 +843,10 @@ class TestIssues(TestCase):
 
         @njit
         def g():
-            return my_func('b')
+            return my_func("b")
 
-        self.assertEqual(f(), 'a')
-        self.assertEqual(g(), 'b')
+        self.assertEqual(f(), "a")
+        self.assertEqual(g(), "b")
 
     def test_type_of_literal(self):
         # type(val) where val is a literal should not give a literal type.
@@ -838,7 +880,7 @@ class TestIssues(TestCase):
         # issue https://github.com/numba/numba/issues/6336
         class NoUniqueNameType(types.Dummy):
             def __init__(self, param):
-                super(NoUniqueNameType, self).__init__('NoUniqueNameType')
+                super(NoUniqueNameType, self).__init__("NoUniqueNameType")
                 self.param = param
 
             @property
@@ -850,14 +892,13 @@ class TestIssues(TestCase):
 
         for ty1 in (no_unique_name_type_1, no_unique_name_type_2):
             for ty2 in (no_unique_name_type_1, no_unique_name_type_2):
-                self.assertIs(
-                    types.TypeRef(ty1) == types.TypeRef(ty2), ty1 == ty2)
+                self.assertIs(types.TypeRef(ty1) == types.TypeRef(ty2), ty1 == ty2)
 
     def test_issue_list_type_key(self):
         # https://github.com/numba/numba/issues/6397
         class NoUniqueNameType(types.Dummy):
             def __init__(self, param):
-                super(NoUniqueNameType, self).__init__('NoUniqueNameType')
+                super(NoUniqueNameType, self).__init__("NoUniqueNameType")
                 self.param = param
 
             @property
@@ -870,10 +911,9 @@ class TestIssues(TestCase):
         for ty1 in (no_unique_name_type_1, no_unique_name_type_2):
             for ty2 in (no_unique_name_type_1, no_unique_name_type_2):
                 self.assertIs(
-                    types.ListType(ty1) == types.ListType(ty2),  # noqa: E721
-                    ty1 == ty2
+                    types.ListType(ty1) == types.ListType(ty2), ty1 == ty2  # noqa: E721
                 )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -27,6 +27,7 @@ def load_inline_module():
     ffi.cdef(defs)
     # Load the _helperlib namespace
     from numba import _helperlib
+
     return ffi, ffi.dlopen(_helperlib.__file__)
 
 
@@ -54,7 +55,9 @@ def load_ool_module():
     #endif
     """
 
-    defs = numba_complex + """
+    defs = (
+        numba_complex
+        + """
     bool boolean(void);
     double sin(double x);
     double cos(double x);
@@ -64,8 +67,12 @@ def load_ool_module():
     void vector_real(numba_complex *c, double *real, int n);
     void vector_imag(numba_complex *c, double *imag, int n);
     """
+    )
 
-    source = numba_complex + bool_define + """
+    source = (
+        numba_complex
+        + bool_define
+        + """
     static bool boolean(void)
     {
         return true;
@@ -100,18 +107,18 @@ def load_ool_module():
             imag[i] = c[i].imag;
     }
     """
+    )
 
     ffi = FFI()
-    ffi.set_source('cffi_usecases_ool', source)
+    ffi.set_source("cffi_usecases_ool", source)
     ffi.cdef(defs, override=True)
-    tmpdir = temp_directory('test_cffi')
+    tmpdir = temp_directory("test_cffi")
     ffi.compile(tmpdir=tmpdir)
     sys.path.append(tmpdir)
     try:
-        mod = import_dynamic('cffi_usecases_ool')
+        mod = import_dynamic("cffi_usecases_ool")
         cffi_support.register_module(mod)
-        cffi_support.register_type(mod.ffi.typeof('struct _numba_complex'),
-                                   complex128)
+        cffi_support.register_type(mod.ffi.typeof("struct _numba_complex"), complex128)
         return mod.ffi, mod
     finally:
         sys.path.remove(tmpdir)
@@ -130,6 +137,7 @@ def init():
         cffi_cos = dll._numba_test_cos
         cffi_bool = dll._numba_test_boolean
         del dll
+
 
 def init_ool():
     """
@@ -150,23 +158,29 @@ def init_ool():
         vector_imag = mod.lib.vector_imag
         del mod
 
+
 ffi = ffi_ool = None
 
 
 def use_cffi_sin(x):
     return cffi_sin(x) * 2
 
+
 def use_two_funcs(x):
     return cffi_sin(x) - cffi_cos(x)
+
 
 def use_cffi_sin_ool(x):
     return cffi_sin_ool(x) * 2
 
+
 def use_cffi_boolean_true():
     return cffi_bool_ool()
 
+
 def use_two_funcs_ool(x):
     return cffi_sin_ool(x) - cffi_cos_ool(x)
+
 
 def use_func_pointer(fa, fb, x):
     if x > 0:
@@ -174,15 +188,19 @@ def use_func_pointer(fa, fb, x):
     else:
         return fb(x)
 
+
 def use_user_defined_symbols():
     return cffi_foo(1, 2, 3)
+
 
 # The from_buffer method is member of cffi.FFI, and also of CompiledFFI objects
 # (cffi_usecases_ool.ffi is a CompiledFFI object) so we use both in these
 # functions.
 
+
 def vector_sin_float32(x, y):
     vsSin(len(x), ffi.from_buffer(x), ffi_ool.from_buffer(y))
+
 
 def vector_sin_float64(x, y):
     vdSin(len(x), ffi.from_buffer(x), ffi_ool.from_buffer(y))
@@ -190,8 +208,10 @@ def vector_sin_float64(x, y):
 
 # For testing pointer to structs from buffers
 
+
 def vector_extract_real(x, y):
     vector_real(ffi.from_buffer(x), ffi.from_buffer(y), len(x))
+
 
 def vector_extract_imag(x, y):
     vector_imag(ffi.from_buffer(x), ffi.from_buffer(y), len(x))

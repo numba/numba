@@ -71,13 +71,13 @@ class TestUsecases(TestCase):
     @TestCase.run_test_in_subprocess
     def test_copy_arrays(self):
         pyfunc = usecases.copy_arrays
-        arraytype = types.Array(types.int32, 1, 'A')
+        arraytype = types.Array(types.int32, 1, "A")
         cfunc = njit((arraytype, arraytype))(pyfunc)
 
         nda = 0, 1, 10, 100
 
         for nd in nda:
-            a = np.arange(nd, dtype='int32')
+            a = np.arange(nd, dtype="int32")
             b = np.empty_like(a)
             args = a, b
 
@@ -87,14 +87,14 @@ class TestUsecases(TestCase):
     @TestCase.run_test_in_subprocess
     def test_copy_arrays2d(self):
         pyfunc = usecases.copy_arrays2d
-        arraytype = types.Array(types.int32, 2, 'A')
+        arraytype = types.Array(types.int32, 2, "A")
         cfunc = njit((arraytype, arraytype))(pyfunc)
 
         nda = (0, 0), (1, 1), (2, 5), (4, 25)
 
         for nd in nda:
             d1, d2 = nd
-            a = np.arange(d1 * d2, dtype='int32').reshape(d1, d2)
+            a = np.arange(d1 * d2, dtype="int32").reshape(d1, d2)
             b = np.empty_like(a)
             args = a, b
 
@@ -118,11 +118,11 @@ class TestUsecases(TestCase):
         pyfunc = usecases.string_len
         cfunc = jit((types.pyobject,), forceobj=True)(pyfunc)
 
-        test_str = '123456'
+        test_str = "123456"
         self.assertEqual(pyfunc(test_str), cfunc(test_str))
-        test_str = '1'
+        test_str = "1"
         self.assertEqual(pyfunc(test_str), cfunc(test_str))
-        test_str = ''
+        test_str = ""
         self.assertEqual(pyfunc(test_str), cfunc(test_str))
 
     @TestCase.run_test_in_subprocess
@@ -130,7 +130,7 @@ class TestUsecases(TestCase):
         pyfunc = usecases.string_slicing
         cfunc = jit((types.pyobject,) * 3, forceobj=True)(pyfunc)
 
-        test_str = '123456'
+        test_str = "123456"
         self.assertEqual(pyfunc(test_str, 0, 3), cfunc(test_str, 0, 3))
         self.assertEqual(pyfunc(test_str, 1, 5), cfunc(test_str, 1, 5))
         self.assertEqual(pyfunc(test_str, 2, 3), cfunc(test_str, 2, 3))
@@ -148,33 +148,39 @@ class TestUsecases(TestCase):
     @TestCase.run_test_in_subprocess
     def test_string_comparisons(self):
         import operator
+
         pyfunc = usecases.string_comparison
-        cfunc = jit((types.pyobject, types.pyobject, types.pyobject),
-                    forceobj=True)(pyfunc)
+        cfunc = jit((types.pyobject, types.pyobject, types.pyobject), forceobj=True)(
+            pyfunc
+        )
 
-        test_str1 = '123'
-        test_str2 = '123'
+        test_str1 = "123"
+        test_str2 = "123"
         op = operator.eq
-        self.assertEqual(pyfunc(test_str1, test_str2, op),
-            cfunc(test_str1, test_str2, op))
+        self.assertEqual(
+            pyfunc(test_str1, test_str2, op), cfunc(test_str1, test_str2, op)
+        )
 
-        test_str1 = '123'
-        test_str2 = '456'
+        test_str1 = "123"
+        test_str2 = "456"
         op = operator.eq
-        self.assertEqual(pyfunc(test_str1, test_str2, op),
-            cfunc(test_str1, test_str2, op))
+        self.assertEqual(
+            pyfunc(test_str1, test_str2, op), cfunc(test_str1, test_str2, op)
+        )
 
-        test_str1 = '123'
-        test_str2 = '123'
+        test_str1 = "123"
+        test_str2 = "123"
         op = operator.ne
-        self.assertEqual(pyfunc(test_str1, test_str2, op),
-            cfunc(test_str1, test_str2, op))
+        self.assertEqual(
+            pyfunc(test_str1, test_str2, op), cfunc(test_str1, test_str2, op)
+        )
 
-        test_str1 = '123'
-        test_str2 = '456'
+        test_str1 = "123"
+        test_str2 = "456"
         op = operator.ne
-        self.assertEqual(pyfunc(test_str1, test_str2, op),
-            cfunc(test_str1, test_str2, op))
+        self.assertEqual(
+            pyfunc(test_str1, test_str2, op), cfunc(test_str1, test_str2, op)
+        )
 
     @TestCase.run_test_in_subprocess
     def test_blackscholes_cnd(self):
@@ -188,5 +194,5 @@ class TestUsecases(TestCase):
             self.assertEqual(pyfunc(*args), cfunc(*args), args)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

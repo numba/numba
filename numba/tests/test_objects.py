@@ -2,7 +2,6 @@
 Test generic manipulation of objects.
 """
 
-
 import unittest
 from numba import jit
 from numba.core import types
@@ -53,5 +52,5 @@ class TestAttributes(TestCase):
             cfunc(C())
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

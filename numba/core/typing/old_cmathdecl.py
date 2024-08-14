@@ -1,8 +1,12 @@
 import cmath
 
 from numba.core import types, utils
-from numba.core.typing.templates import (AbstractTemplate, ConcreteTemplate,
-                                    signature, Registry)
+from numba.core.typing.templates import (
+    AbstractTemplate,
+    ConcreteTemplate,
+    signature,
+    Registry,
+)
 
 registry = Registry()
 infer_global = registry.register_global
@@ -27,8 +31,7 @@ class CMath_unary(ConcreteTemplate):
 @infer_global(cmath.isinf)
 @infer_global(cmath.isnan)
 class CMath_predicate(ConcreteTemplate):
-    cases = [signature(types.boolean, tp) for tp in
-             sorted(types.complex_domain)]
+    cases = [signature(types.boolean, tp) for tp in sorted(types.complex_domain)]
 
 
 @infer_global(cmath.isfinite)

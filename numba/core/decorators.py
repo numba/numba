@@ -2,7 +2,6 @@
 Define @jit and related decorators.
 """
 
-
 import sys
 import warnings
 import inspect
@@ -18,13 +17,21 @@ _logger = logging.getLogger(__name__)
 # -----------------------------------------------------------------------------
 # Decorators
 
-_msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
-                                 "Signatures should be passed as the first "
-                                 "positional argument.")
+_msg_deprecated_signature_arg = (
+    "Deprecated keyword argument `{0}`. "
+    "Signatures should be passed as the first "
+    "positional argument."
+)
 
 
-def jit(signature_or_function=None, locals={}, cache=False,
-        pipeline_class=None, boundscheck=None, **options):
+def jit(
+    signature_or_function=None,
+    locals={},
+    cache=False,
+    pipeline_class=None,
+    boundscheck=None,
+    **options,
+):
     """
     This decorator is used to compile a Python function into native code.
 
@@ -138,32 +145,34 @@ def jit(signature_or_function=None, locals={}, cache=False,
                 return x + y
 
     """
-    forceobj = options.get('forceobj', False)
-    if 'argtypes' in options:
-        raise DeprecationError(_msg_deprecated_signature_arg.format('argtypes'))
-    if 'restype' in options:
-        raise DeprecationError(_msg_deprecated_signature_arg.format('restype'))
-    nopython = options.get('nopython', None)
+    forceobj = options.get("forceobj", False)
+    if "argtypes" in options:
+        raise DeprecationError(_msg_deprecated_signature_arg.format("argtypes"))
+    if "restype" in options:
+        raise DeprecationError(_msg_deprecated_signature_arg.format("restype"))
+    nopython = options.get("nopython", None)
     if nopython is not None:
         assert type(nopython) is bool, "nopython option must be a bool"
     if nopython is True and forceobj:
         raise ValueError("Only one of 'nopython' or 'forceobj' can be True.")
-    target = options.pop('_target', 'cpu')
+    target = options.pop("_target", "cpu")
 
     if nopython is False:
-        msg = ("The keyword argument 'nopython=False' was supplied. From "
-               "Numba 0.59.0 the default is True and supplying this argument "
-               "has no effect.")
+        msg = (
+            "The keyword argument 'nopython=False' was supplied. From "
+            "Numba 0.59.0 the default is True and supplying this argument "
+            "has no effect."
+        )
         warnings.warn(msg, NumbaDeprecationWarning)
     # nopython is True by default since 0.59.0, but if `forceobj` is set
     # `nopython` needs to set to False so that things like typing of args in the
     # dispatcher layer continues to work.
     if forceobj:
-        options['nopython'] = False
+        options["nopython"] = False
     else:
-        options['nopython'] = True
+        options["nopython"] = True
 
-    options['boundscheck'] = boundscheck
+    options["boundscheck"] = boundscheck
 
     # Handle signature
     if signature_or_function is None:
@@ -185,9 +194,15 @@ def jit(signature_or_function=None, locals={}, cache=False,
 
     dispatcher_args = {}
     if pipeline_class is not None:
-        dispatcher_args['pipeline_class'] = pipeline_class
-    wrapper = _jit(sigs, locals=locals, target=target, cache=cache,
-                   targetoptions=options, **dispatcher_args)
+        dispatcher_args["pipeline_class"] = pipeline_class
+    wrapper = _jit(
+        sigs,
+        locals=locals,
+        target=target,
+        cache=cache,
+        targetoptions=options,
+        **dispatcher_args,
+    )
     if pyfunc is not None:
         return wrapper(pyfunc)
     else:
@@ -197,6 +212,7 @@ def jit(signature_or_function=None, locals={}, cache=False,
 def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
 
     from numba.core.target_extension import resolve_dispatcher_from_str
+
     dispatcher = resolve_dispatcher_from_str(target)
 
     def wrapper(func):
@@ -209,24 +225,25 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
 
         if not inspect.isfunction(func):
             raise TypeError(
-                "The decorated object is not a function (got type "
-                f"{type(func)})."
+                "The decorated object is not a function (got type " f"{type(func)})."
             )
 
-        if config.ENABLE_CUDASIM and target == 'cuda':
+        if config.ENABLE_CUDASIM and target == "cuda":
             from numba import cuda
+
             return cuda.jit(func)
-        if config.DISABLE_JIT and not target == 'npyufunc':
+        if config.DISABLE_JIT and not target == "npyufunc":
             return func
-        disp = dispatcher(py_func=func, locals=locals,
-                          targetoptions=targetoptions,
-                          **dispatcher_args)
+        disp = dispatcher(
+            py_func=func, locals=locals, targetoptions=targetoptions, **dispatcher_args
+        )
         if cache:
             disp.enable_caching()
         if sigs is not None:
             # Register the Dispatcher to the type inference mechanism,
             # even though the decorator hasn't returned yet.
             from numba.core import typeinfer
+
             with typeinfer.register_dispatcher(disp):
                 for sig in sigs:
                     disp.compile(sig)
@@ -242,12 +259,12 @@ def njit(*args, **kws):
 
     See documentation for jit function/decorator for full description.
     """
-    if 'nopython' in kws:
-        warnings.warn('nopython is set for njit and is ignored', RuntimeWarning)
-    if 'forceobj' in kws:
-        warnings.warn('forceobj is set for njit and is ignored', RuntimeWarning)
-        del kws['forceobj']
-    kws.update({'nopython': True})
+    if "nopython" in kws:
+        warnings.warn("nopython is set for njit and is ignored", RuntimeWarning)
+    if "forceobj" in kws:
+        warnings.warn("forceobj is set for njit and is ignored", RuntimeWarning)
+        del kws["forceobj"]
+    kws.update({"nopython": True})
     return jit(*args, **kws)
 
 
@@ -266,9 +283,10 @@ def cfunc(sig, locals={}, cache=False, pipeline_class=None, **options):
 
     def wrapper(func):
         from numba.core.ccallback import CFunc
+
         additional_args = {}
         if pipeline_class is not None:
-            additional_args['pipeline_class'] = pipeline_class
+            additional_args["pipeline_class"] = pipeline_class
         res = CFunc(func, sig, locals=locals, options=options, **additional_args)
         if cache:
             res.enable_caching()
@@ -279,7 +297,7 @@ def cfunc(sig, locals={}, cache=False, pipeline_class=None, **options):
 
 
 def jit_module(**kwargs):
-    """ Automatically ``jit``-wraps functions defined in a Python module
+    """Automatically ``jit``-wraps functions defined in a Python module
 
     Note that ``jit_module`` should only be called at the end of the module to
     be jitted. In addition, only functions which are defined in the module
@@ -297,6 +315,8 @@ def jit_module(**kwargs):
     # Replace functions in module with jit-wrapped versions
     for name, obj in module.__dict__.items():
         if inspect.isfunction(obj) and inspect.getmodule(obj) == module:
-            _logger.debug("Auto decorating function {} from module {} with jit "
-                          "and options: {}".format(obj, module.__name__, kwargs))
+            _logger.debug(
+                "Auto decorating function {} from module {} with jit "
+                "and options: {}".format(obj, module.__name__, kwargs)
+            )
             module.__dict__[name] = jit(obj, **kwargs)

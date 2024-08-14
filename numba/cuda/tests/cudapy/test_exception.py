@@ -83,20 +83,19 @@ class TestException(CUDATestCase):
                         x[i] += x[i] // y[i]
 
         n = 32
-        got_x = 1. / (np.arange(n) + 0.01)
-        got_y = 1. / (np.arange(n) + 0.01)
+        got_x = 1.0 / (np.arange(n) + 0.01)
+        got_y = 1.0 / (np.arange(n) + 0.01)
         problematic[1, n](got_x, got_y)
 
-        expect_x = 1. / (np.arange(n) + 0.01)
-        expect_y = 1. / (np.arange(n) + 0.01)
+        expect_x = 1.0 / (np.arange(n) + 0.01)
+        expect_y = 1.0 / (np.arange(n) + 0.01)
         oracle[1, n](expect_x, expect_y)
 
         np.testing.assert_almost_equal(expect_x, got_x)
         np.testing.assert_almost_equal(expect_y, got_y)
 
     def test_raise_causing_warp_diverge(self):
-        """Test case for issue #2655.
-        """
+        """Test case for issue #2655."""
         self.case_raise_causing_warp_diverge(with_debug_mode=False)
 
     # The following two cases relate to Issue #7806: Division by zero stops the
@@ -117,8 +116,8 @@ class TestException(CUDATestCase):
 
         f[1, 1](r, x, y)
 
-        self.assertTrue(np.isinf(r[0]), 'Expected inf from div by zero')
-        self.assertEqual(r[1], y[0], 'Expected execution to continue')
+        self.assertTrue(np.isinf(r[0]), "Expected inf from div by zero")
+        self.assertEqual(r[1], y[0], "Expected execution to continue")
 
     def test_zero_division_error_in_debug(self):
         # When debug is True:
@@ -146,15 +145,15 @@ class TestException(CUDATestCase):
         with self.assertRaises(exc):
             f[1, 1](r, x, y)
 
-        self.assertEqual(r[0], 0, 'Expected result to be left unset')
-        self.assertEqual(r[1], 0, 'Expected execution to stop')
+        self.assertEqual(r[0], 0, "Expected result to be left unset")
+        self.assertEqual(r[1], 0, "Expected execution to stop")
 
     @xfail_unless_cudasim
     def test_raise_in_device_function(self):
         # This is an expected failure because reporting of exceptions raised in
         # device functions does not work correctly - see Issue #8036:
         # https://github.com/numba/numba/issues/8036
-        msg = 'Device Function Error'
+        msg = "Device Function Error"
 
         @cuda.jit(device=True)
         def f():
@@ -170,5 +169,5 @@ class TestException(CUDATestCase):
         self.assertIn(msg, str(raises.exception))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

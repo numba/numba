@@ -3,14 +3,18 @@ from contextlib import contextmanager
 import numpy as np
 
 from numba import cuda
-from numba.cuda.testing import (unittest, skip_on_cudasim,
-                                skip_if_external_memmgr, CUDATestCase)
+from numba.cuda.testing import (
+    unittest,
+    skip_on_cudasim,
+    skip_if_external_memmgr,
+    CUDATestCase,
+)
 from numba.tests.support import captured_stderr
 from numba.core import config
 
 
-@skip_on_cudasim('not supported on CUDASIM')
-@skip_if_external_memmgr('Deallocation specific to Numba memory management')
+@skip_on_cudasim("not supported on CUDASIM")
+@skip_if_external_memmgr("Deallocation specific to Numba memory management")
 class TestDeallocation(CUDATestCase):
     def test_max_pending_count(self):
         # get deallocation manager and flush it
@@ -41,8 +45,7 @@ class TestDeallocation(CUDATestCase):
             config.CUDA_DEALLOCS_RATIO = max_pending / mi.total
             # due to round off error (floor is used in calculating
             # _max_pending_bytes) it can be off by 1.
-            self.assertAlmostEqual(deallocs._max_pending_bytes, max_pending,
-                                   delta=1)
+            self.assertAlmostEqual(deallocs._max_pending_bytes, max_pending, delta=1)
 
             # allocate half the max size
             # this will not trigger deallocation
@@ -51,8 +54,9 @@ class TestDeallocation(CUDATestCase):
 
             # allocate another remaining
             # this will not trigger deallocation
-            cuda.to_device(np.ones(deallocs._max_pending_bytes -
-                                   deallocs._size, dtype=np.int8))
+            cuda.to_device(
+                np.ones(deallocs._max_pending_bytes - deallocs._size, dtype=np.int8)
+            )
             self.assertEqual(len(deallocs), 2)
 
             # another byte to trigger .clear()
@@ -64,7 +68,7 @@ class TestDeallocation(CUDATestCase):
 
 
 @skip_on_cudasim("defer_cleanup has no effect in CUDASIM")
-@skip_if_external_memmgr('Deallocation specific to Numba memory management')
+@skip_if_external_memmgr("Deallocation specific to Numba memory management")
 class TestDeferCleanup(CUDATestCase):
     def test_basic(self):
         harr = np.arange(5)
@@ -138,11 +142,12 @@ class TestDeferCleanupAvail(CUDATestCase):
             pass
 
 
-@skip_on_cudasim('not supported on CUDASIM')
+@skip_on_cudasim("not supported on CUDASIM")
 class TestDel(CUDATestCase):
     """
     Ensure resources are deleted properly without ignored exception.
     """
+
     @contextmanager
     def check_ignored_exception(self, ctx):
         with captured_stderr() as cap:
@@ -245,5 +250,5 @@ class TestDel(CUDATestCase):
                     pass
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

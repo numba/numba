@@ -2,9 +2,13 @@ import operator
 
 from numba.core import types, typing, cgutils
 
-from numba.core.imputils import (lower_cast, lower_builtin,
-                                 lower_getattr_generic, impl_ret_untracked,
-                                 lower_setattr_generic)
+from numba.core.imputils import (
+    lower_cast,
+    lower_builtin,
+    lower_getattr_generic,
+    impl_ret_untracked,
+    lower_setattr_generic,
+)
 
 
 def always_return_true_impl(context, builder, sig, args):
@@ -88,14 +92,12 @@ def optional_to_optional(context, builder, fromty, toty, val):
         with is_valid:
             # Cast internal value
             outoptval.valid = cgutils.true_bit
-            outoptval.data = context.cast(builder, optval.data,
-                                          fromty.type, toty.type)
+            outoptval.data = context.cast(builder, optval.data, fromty.type, toty.type)
 
         with is_not_valid:
             # Store None to result
             outoptval.valid = cgutils.false_bit
-            outoptval.data = cgutils.get_null_value(
-                outoptval.data.type)
+            outoptval.data = cgutils.get_null_value(outoptval.data.type)
 
     return outoptval._getvalue()
 

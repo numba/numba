@@ -4,24 +4,34 @@ Timsort implementation.  Mostly adapted from CPython's listobject.c.
 For more information, see listsort.txt in CPython's source tree.
 """
 
-
 import collections
 
 from numba.core import types
 
 
 TimsortImplementation = collections.namedtuple(
-    'TimsortImplementation',
-    (# The compile function itself
-     'compile',
-     # All subroutines exercised by test_sort
-     'count_run', 'binarysort', 'gallop_left', 'gallop_right',
-     'merge_init', 'merge_append', 'merge_pop',
-     'merge_compute_minrun', 'merge_lo', 'merge_hi', 'merge_at',
-     'merge_force_collapse', 'merge_collapse',
-     # The top-level functions
-     'run_timsort', 'run_timsort_with_values'
-     ))
+    "TimsortImplementation",
+    (  # The compile function itself
+        "compile",
+        # All subroutines exercised by test_sort
+        "count_run",
+        "binarysort",
+        "gallop_left",
+        "gallop_right",
+        "merge_init",
+        "merge_append",
+        "merge_pop",
+        "merge_compute_minrun",
+        "merge_lo",
+        "merge_hi",
+        "merge_at",
+        "merge_force_collapse",
+        "merge_collapse",
+        # The top-level functions
+        "run_timsort",
+        "run_timsort_with_values",
+    ),
+)
 
 
 # The maximum number of entries in a MergeState's pending-runs stack.
@@ -31,7 +41,7 @@ TimsortImplementation = collections.namedtuple(
 # with 2**64 elements.
 # NOTE this implementation doesn't depend on it (the stack is dynamically
 # allocated), but it's still good to check as an invariant.
-MAX_MERGE_PENDING  = 85
+MAX_MERGE_PENDING = 85
 
 # When we get into galloping mode, we stay there until both runs win less
 # often than MIN_GALLOP consecutive times.  See listsort.txt for more info.
@@ -48,10 +58,11 @@ MERGESTATE_TEMP_SIZE = 256
 #  - *n* is the current stack length of *pending*
 
 MergeState = collections.namedtuple(
-    'MergeState', ('min_gallop', 'keys', 'values', 'pending', 'n'))
+    "MergeState", ("min_gallop", "keys", "values", "pending", "n")
+)
 
 
-MergeRun = collections.namedtuple('MergeRun', ('start', 'size'))
+MergeRun = collections.namedtuple("MergeRun", ("start", "size"))
 
 
 def make_timsort_impl(wrap, make_temp_area):
@@ -130,7 +141,6 @@ def make_timsort_impl(wrap, make_temp_area):
         """
         return MergeState(intp(new_gallop), ms.keys, ms.values, ms.pending, ms.n)
 
-
     @wrap
     def LT(a, b):
         """
@@ -170,7 +180,7 @@ def make_timsort_impl(wrap, make_temp_area):
                 if LT(pivot, keys[p]):
                     r = p
                 else:
-                    l = p+1
+                    l = p + 1
 
             # The invariants still hold, so pivot >= all in [lo, l) and
             # pivot < all in [l, start), so pivot belongs at l.  Note
@@ -187,7 +197,6 @@ def make_timsort_impl(wrap, make_temp_area):
                 values[l] = pivot_val
 
             start += 1
-
 
     @wrap
     def count_run(keys, lo, hi):
@@ -224,7 +233,6 @@ def make_timsort_impl(wrap, make_temp_area):
                 if LT(keys[k], keys[k - 1]):
                     return k - lo, False
             return hi - lo, False
-
 
     @wrap
     def gallop_left(key, a, start, stop, hint):
@@ -311,7 +319,6 @@ def make_timsort_impl(wrap, make_temp_area):
         # Now lastofs == ofs, so a[ofs - 1] < key <= a[ofs]
         return ofs
 
-
     @wrap
     def gallop_right(key, a, start, stop, hint):
         """
@@ -387,7 +394,6 @@ def make_timsort_impl(wrap, make_temp_area):
         # Now lastofs == ofs, so a[ofs - 1] <= key < a[ofs]
         return ofs
 
-
     @wrap
     def merge_compute_minrun(n):
         """
@@ -408,11 +414,10 @@ def make_timsort_impl(wrap, make_temp_area):
             n >>= 1
         return n + r
 
-
     @wrap
-    def sortslice_copy(dest_keys, dest_values, dest_start,
-                       src_keys, src_values, src_start,
-                       nitems):
+    def sortslice_copy(
+        dest_keys, dest_values, dest_start, src_keys, src_values, src_start, nitems
+    ):
         """
         Upwards memcpy().
         """
@@ -425,9 +430,9 @@ def make_timsort_impl(wrap, make_temp_area):
                 dest_values[dest_start + i] = src_values[src_start + i]
 
     @wrap
-    def sortslice_copy_down(dest_keys, dest_values, dest_start,
-                            src_keys, src_values, src_start,
-                            nitems):
+    def sortslice_copy_down(
+        dest_keys, dest_values, dest_start, src_keys, src_values, src_start, nitems
+    ):
         """
         Downwards memcpy().
         """
@@ -438,7 +443,6 @@ def make_timsort_impl(wrap, make_temp_area):
         if has_values(src_keys, src_values):
             for i in range(nitems):
                 dest_values[dest_start - i] = src_values[src_start - i]
-
 
     # Disable this for debug or perf comparison
     DO_GALLOP = 1
@@ -462,9 +466,7 @@ def make_timsort_impl(wrap, make_temp_area):
         assert ssb == ssa + na
         # First copy [ssa, ssa + na) into the temp space
         ms = merge_getmem(ms, na)
-        sortslice_copy(ms.keys, ms.values, 0,
-                       keys, values, ssa,
-                       na)
+        sortslice_copy(ms.keys, ms.values, 0, keys, values, ssa, na)
         a_keys = ms.keys
         a_values = ms.values
         b_keys = keys
@@ -532,9 +534,7 @@ def make_timsort_impl(wrap, make_temp_area):
                     acount = k
                     if k > 0:
                         # Copy everything from A before k
-                        sortslice_copy(keys, values, dest,
-                                       a_keys, a_values, ssa,
-                                       k)
+                        sortslice_copy(keys, values, dest, a_keys, a_values, ssa, k)
                         dest += k
                         ssa += k
                         na -= k
@@ -561,9 +561,7 @@ def make_timsort_impl(wrap, make_temp_area):
                         # Copy everything from B before k
                         # NOTE: source and dest are the same buffer, but the
                         # destination index is below the source index
-                        sortslice_copy(keys, values, dest,
-                                       b_keys, b_values, ssb,
-                                       k)
+                        sortslice_copy(keys, values, dest, b_keys, b_values, ssb, k)
                         dest += k
                         ssb += k
                         nb -= k
@@ -587,16 +585,13 @@ def make_timsort_impl(wrap, make_temp_area):
         # Merge finished, now handle the remaining areas
         if nb == 0:
             # Only A remaining to copy at the end of the destination area
-            sortslice_copy(keys, values, dest,
-                           a_keys, a_values, ssa,
-                           na)
+            sortslice_copy(keys, values, dest, a_keys, a_values, ssa, na)
         else:
             assert na == 0
             assert dest == ssb
             # B's tail is already at the right place, do nothing
 
         return merge_adjust_gallop(ms, min_gallop)
-
 
     @wrap
     def merge_hi(ms, keys, values, ssa, na, ssb, nb):
@@ -617,9 +612,7 @@ def make_timsort_impl(wrap, make_temp_area):
         assert ssb == ssa + na
         # First copy [ssb, ssb + nb) into the temp space
         ms = merge_getmem(ms, nb)
-        sortslice_copy(ms.keys, ms.values, 0,
-                       keys, values, ssb,
-                       nb)
+        sortslice_copy(ms.keys, ms.values, 0, keys, values, ssb, nb)
         a_keys = keys
         a_values = values
         b_keys = ms.keys
@@ -692,9 +685,9 @@ def make_timsort_impl(wrap, make_temp_area):
                         # Copy everything from A after k.
                         # Destination and source are the same buffer, and destination
                         # index is greater, so copy from the end to the start.
-                        sortslice_copy_down(keys, values, dest,
-                                            a_keys, a_values, ssa,
-                                            k)
+                        sortslice_copy_down(
+                            keys, values, dest, a_keys, a_values, ssa, k
+                        )
                         dest -= k
                         ssa -= k
                         na -= k
@@ -719,9 +712,9 @@ def make_timsort_impl(wrap, make_temp_area):
                     bcount = k
                     if k > 0:
                         # Copy everything from B before k
-                        sortslice_copy_down(keys, values, dest,
-                                            b_keys, b_values, ssb,
-                                            k)
+                        sortslice_copy_down(
+                            keys, values, dest, b_keys, b_values, ssb, k
+                        )
                         dest -= k
                         ssb -= k
                         nb -= k
@@ -745,16 +738,15 @@ def make_timsort_impl(wrap, make_temp_area):
         # Merge finished, now handle the remaining areas
         if na == 0:
             # Only B remaining to copy at the front of the destination area
-            sortslice_copy(keys, values, dest - nb + 1,
-                           b_keys, b_values, ssb - nb + 1,
-                           nb)
+            sortslice_copy(
+                keys, values, dest - nb + 1, b_keys, b_values, ssb - nb + 1, nb
+            )
         else:
             assert nb == 0
             assert dest == ssa
             # A's front is already at the right place, do nothing
 
         return merge_adjust_gallop(ms, min_gallop)
-
 
     @wrap
     def merge_at(ms, keys, values, i):
@@ -803,7 +795,6 @@ def make_timsort_impl(wrap, make_temp_area):
         else:
             return merge_hi(ms, keys, values, ssa, na, ssb, nb)
 
-
     @wrap
     def merge_collapse(ms, keys, values):
         """
@@ -820,8 +811,11 @@ def make_timsort_impl(wrap, make_temp_area):
         while ms.n > 1:
             pending = ms.pending
             n = ms.n - 2
-            if ((n > 0 and pending[n-1].size <= pending[n].size + pending[n+1].size) or
-                (n > 1 and pending[n-2].size <= pending[n-1].size + pending[n].size)):
+            if (
+                n > 0 and pending[n - 1].size <= pending[n].size + pending[n + 1].size
+            ) or (
+                n > 1 and pending[n - 2].size <= pending[n - 1].size + pending[n].size
+            ):
                 if pending[n - 1].size < pending[n + 1].size:
                     # Merge smaller one first
                     n -= 1
@@ -850,7 +844,6 @@ def make_timsort_impl(wrap, make_temp_area):
             ms = merge_at(ms, keys, values, n)
         return ms
 
-
     @wrap
     def reverse_slice(keys, values, start, stop):
         """
@@ -869,7 +862,6 @@ def make_timsort_impl(wrap, make_temp_area):
                 values[i], values[j] = values[j], values[i]
                 i += 1
                 j -= 1
-
 
     @wrap
     def run_timsort_with_mergestate(ms, keys, values):
@@ -907,7 +899,6 @@ def make_timsort_impl(wrap, make_temp_area):
         assert ms.n == 1
         assert ms.pending[0] == (0, len(keys))
 
-
     @wrap
     def run_timsort(keys):
         """
@@ -916,28 +907,38 @@ def make_timsort_impl(wrap, make_temp_area):
         values = keys
         run_timsort_with_mergestate(merge_init(keys), keys, values)
 
-
     @wrap
     def run_timsort_with_values(keys, values):
         """
         Run timsort over the given keys and values.
         """
-        run_timsort_with_mergestate(merge_init_with_values(keys, values),
-                                    keys, values)
+        run_timsort_with_mergestate(merge_init_with_values(keys, values), keys, values)
 
     return TimsortImplementation(
         wrap,
-        count_run, binarysort, gallop_left, gallop_right,
-        merge_init, merge_append, merge_pop,
-        merge_compute_minrun, merge_lo, merge_hi, merge_at,
-        merge_force_collapse, merge_collapse,
-        run_timsort, run_timsort_with_values)
+        count_run,
+        binarysort,
+        gallop_left,
+        gallop_right,
+        merge_init,
+        merge_append,
+        merge_pop,
+        merge_compute_minrun,
+        merge_lo,
+        merge_hi,
+        merge_at,
+        merge_force_collapse,
+        merge_collapse,
+        run_timsort,
+        run_timsort_with_values,
+    )
 
 
 def make_py_timsort(*args):
     return make_timsort_impl((lambda f: f), *args)
 
+
 def make_jit_timsort(*args):
     from numba import jit
-    return make_timsort_impl((lambda f: jit(nopython=True)(f)),
-                              *args)
+
+    return make_timsort_impl((lambda f: jit(nopython=True)(f)), *args)

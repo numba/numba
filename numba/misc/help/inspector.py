@@ -17,18 +17,18 @@ from numba.tests.support import captured_stdout
 
 
 def _get_commit():
-    full = get_versions()['full-revisionid']
+    full = get_versions()["full-revisionid"]
     if not full:
         warnings.warn(
             "Cannot find git commit hash. Source links could be inaccurate.",
             category=errors.NumbaWarning,
         )
-        return 'main'
+        return "main"
     return full
 
 
 commit = _get_commit()
-github_url = 'https://github.com/numba/numba/blob/{commit}/{path}#L{firstline}-L{lastline}'    # noqa: E501
+github_url = "https://github.com/numba/numba/blob/{commit}/{path}#L{firstline}-L{lastline}"  # noqa: E501
 
 
 def inspect_function(function, target=None):
@@ -58,7 +58,7 @@ def inspect_function(function, target=None):
         nbty = tyct.resolve_value_type(function)
     except ValueError:
         nbty = None
-        explained = 'not supported'
+        explained = "not supported"
     else:
         # Make a longer explanation of the type
         explained = tyct.explain_function_type(nbty)
@@ -68,9 +68,9 @@ def inspect_function(function, target=None):
             except AttributeError:
                 source_infos[temp] = None
 
-    info['numba_type'] = nbty
-    info['explained'] = explained
-    info['source_infos'] = source_infos
+    info["numba_type"] = nbty
+    info["explained"] = explained
+    info["source_infos"] = source_infos
     return info
 
 
@@ -81,7 +81,7 @@ def inspect_module(module, target=None, alias=None):
     alias = {} if alias is None else alias
     # Walk the module
     for name in dir(module):
-        if name.startswith('_'):
+        if name.startswith("_"):
             # Skip
             continue
         obj = getattr(module, name)
@@ -93,16 +93,16 @@ def inspect_module(module, target=None, alias=None):
 
         info = dict(module=module, name=name, obj=obj)
         if obj in alias:
-            info['alias'] = alias[obj]
+            info["alias"] = alias[obj]
         else:
-            alias[obj] = "{module}.{name}".format(module=module.__name__,
-                                                  name=name)
+            alias[obj] = "{module}.{name}".format(module=module.__name__, name=name)
         info.update(inspect_function(obj, target=target))
         yield info
 
 
 class _Stat(object):
     """For gathering simple statistic of (un)supported functions"""
+
     def __init__(self):
         self.supported = 0
         self.unsupported = 0
@@ -134,11 +134,11 @@ class _Stat(object):
 
 
 def filter_private_module(module_components):
-    return not any(x.startswith('_') for x in module_components)
+    return not any(x.startswith("_") for x in module_components)
 
 
 def filter_tests_module(module_components):
-    return not any(x == 'tests' for x in module_components)
+    return not any(x == "tests" for x in module_components)
 
 
 _default_module_filters = (
@@ -162,9 +162,8 @@ def list_modules_in_package(package, module_filters=_default_module_filters):
     )
 
     def check_filter(modname):
-        module_components = modname.split('.')
-        return any(not filter_fn(module_components)
-                   for filter_fn in module_filters)
+        module_components = modname.split(".")
+        return any(not filter_fn(module_components) for filter_fn in module_filters)
 
     modname = package.__name__
     if not check_filter(modname):
@@ -183,7 +182,7 @@ def list_modules_in_package(package, module_filters=_default_module_filters):
                 continue
 
             # Extract the module
-            for part in modname.split('.')[1:]:
+            for part in modname.split(".")[1:]:
                 try:
                     mod = getattr(mod, part)
                 except AttributeError:
@@ -200,102 +199,109 @@ def list_modules_in_package(package, module_filters=_default_module_filters):
 
 
 class Formatter(object):
-    """Base class for formatters.
-    """
+    """Base class for formatters."""
+
     def __init__(self, fileobj):
         self._fileobj = fileobj
 
     def print(self, *args, **kwargs):
-        kwargs.setdefault('file', self._fileobj)
+        kwargs.setdefault("file", self._fileobj)
         print(*args, **kwargs)
 
 
 class HTMLFormatter(Formatter):
-    """Formatter that outputs HTML
-    """
+    """Formatter that outputs HTML"""
 
     def escape(self, text):
         import html
+
         return html.escape(text)
 
     def title(self, text):
-        self.print('<h1>', text, '</h2>')
+        self.print("<h1>", text, "</h2>")
 
     def begin_module_section(self, modname):
-        self.print('<h2>', modname, '</h2>')
-        self.print('<ul>')
+        self.print("<h2>", modname, "</h2>")
+        self.print("<ul>")
 
     def end_module_section(self):
-        self.print('</ul>')
+        self.print("</ul>")
 
-    def write_supported_item(self, modname, itemname, typename, explained,
-                             sources, alias):
-        self.print('<li>')
-        self.print('{}.<b>{}</b>'.format(
-            modname,
-            itemname,
-        ))
-        self.print(': <b>{}</b>'.format(typename))
-        self.print('<div><pre>', explained, '</pre></div>')
+    def write_supported_item(
+        self, modname, itemname, typename, explained, sources, alias
+    ):
+        self.print("<li>")
+        self.print(
+            "{}.<b>{}</b>".format(
+                modname,
+                itemname,
+            )
+        )
+        self.print(": <b>{}</b>".format(typename))
+        self.print("<div><pre>", explained, "</pre></div>")
 
         self.print("<ul>")
         for tcls, source in sources.items():
             if source:
                 self.print("<li>")
-                impl = source['name']
-                sig = source['sig']
-                filename = source['filename']
-                lines = source['lines']
+                impl = source["name"]
+                sig = source["sig"]
+                filename = source["filename"]
+                lines = source["lines"]
                 self.print(
                     "<p>defined by <b>{}</b>{} at {}:{}-{}</p>".format(
-                        self.escape(impl), self.escape(sig),
-                        self.escape(filename), lines[0], lines[1],
+                        self.escape(impl),
+                        self.escape(sig),
+                        self.escape(filename),
+                        lines[0],
+                        lines[1],
                     ),
                 )
-                self.print('<p>{}</p>'.format(
-                    self.escape(source['docstring'] or '')
-                ))
+                self.print("<p>{}</p>".format(self.escape(source["docstring"] or "")))
             else:
                 self.print("<li>{}".format(self.escape(str(tcls))))
             self.print("</li>")
         self.print("</ul>")
-        self.print('</li>')
+        self.print("</li>")
 
     def write_unsupported_item(self, modname, itemname):
-        self.print('<li>')
-        self.print('{}.<b>{}</b>: UNSUPPORTED'.format(
-            modname,
-            itemname,
-        ))
-        self.print('</li>')
+        self.print("<li>")
+        self.print(
+            "{}.<b>{}</b>: UNSUPPORTED".format(
+                modname,
+                itemname,
+            )
+        )
+        self.print("</li>")
 
     def write_statistic(self, stats):
-        self.print('<p>{}</p>'.format(stats.describe()))
+        self.print("<p>{}</p>".format(stats.describe()))
 
 
 class ReSTFormatter(Formatter):
-    """Formatter that output ReSTructured text format for Sphinx docs.
-    """
+    """Formatter that output ReSTructured text format for Sphinx docs."""
+
     def escape(self, text):
         return text
 
     def title(self, text):
         self.print(text)
-        self.print('=' * len(text))
+        self.print("=" * len(text))
         self.print()
 
     def begin_module_section(self, modname):
         self.print(modname)
-        self.print('-' * len(modname))
+        self.print("-" * len(modname))
         self.print()
 
     def end_module_section(self):
         self.print()
 
-    def write_supported_item(self, modname, itemname, typename, explained,
-                             sources, alias):
-        self.print('.. function:: {}.{}'.format(modname, itemname))
-        self.print('   :noindex:')
+    def write_supported_item(
+        self, modname, itemname, typename, explained, sources, alias
+    ):
+        self.print(".. function:: {}.{}".format(modname, itemname))
+        self.print("   :noindex:")
         self.print()
 
         if alias:
@@ -304,10 +310,10 @@ class ReSTFormatter(Formatter):
 
         for tcls, source in sources.items():
             if source:
-                impl = source['name']
-                sig = source['sig']
-                filename = source['filename']
-                lines = source['lines']
+                impl = source["name"]
+                sig = source["sig"]
+                filename = source["filename"]
+                lines = source["lines"]
                 source_link = github_url.format(
                     commit=commit,
                     path=filename,
@@ -316,7 +322,12 @@ class ReSTFormatter(Formatter):
                 )
                 self.print(
                     "   - defined by ``{}{}`` at `{}:{}-{} <{}>`_".format(
-                        impl, sig, filename, lines[0], lines[1], source_link,
+                        impl,
+                        sig,
+                        filename,
+                        lines[0],
+                        lines[1],
+                        source_link,
                     ),
                 )
 
@@ -339,32 +350,31 @@ class ReSTFormatter(Formatter):
 
 
 def _format_module_infos(formatter, package_name, mod_sequence, target=None):
-    """Format modules.
-    """
-    formatter.title('Listings for {}'.format(package_name))
+    """Format modules."""
+    formatter.title("Listings for {}".format(package_name))
     alias_map = {}  # remember object seen to track alias
     for mod in mod_sequence:
         stat = _Stat()
         modname = mod.__name__
         formatter.begin_module_section(formatter.escape(modname))
         for info in inspect_module(mod, target=target, alias=alias_map):
-            nbtype = info['numba_type']
+            nbtype = info["numba_type"]
             if nbtype is not None:
                 stat.supported += 1
                 formatter.write_supported_item(
-                    modname=formatter.escape(info['module'].__name__),
-                    itemname=formatter.escape(info['name']),
+                    modname=formatter.escape(info["module"].__name__),
+                    itemname=formatter.escape(info["name"]),
                     typename=formatter.escape(str(nbtype)),
-                    explained=formatter.escape(info['explained']),
-                    sources=info['source_infos'],
-                    alias=info.get('alias'),
+                    explained=formatter.escape(info["explained"]),
+                    sources=info["source_infos"],
+                    alias=info.get("alias"),
                 )
 
             else:
                 stat.unsupported += 1
                 formatter.write_unsupported_item(
-                    modname=formatter.escape(info['module'].__name__),
-                    itemname=formatter.escape(info['name']),
+                    modname=formatter.escape(info["module"].__name__),
+                    itemname=formatter.escape(info["name"]),
                 )
 
         formatter.write_statistic(stat)
@@ -384,22 +394,21 @@ def write_listings(package_name, filename, output_format):
         Support formats are "html" and "rst".
     """
     package = __import__(package_name)
-    if hasattr(package, '__path__'):
+    if hasattr(package, "__path__"):
         mods = list_modules_in_package(package)
     else:
         mods = [package]
 
-    if output_format == 'html':
-        with open(filename + '.html', 'w') as fout:
+    if output_format == "html":
+        with open(filename + ".html", "w") as fout:
             fmtr = HTMLFormatter(fileobj=fout)
             _format_module_infos(fmtr, package_name, mods)
-    elif output_format == 'rst':
-        with open(filename + '.rst', 'w') as fout:
+    elif output_format == "rst":
+        with open(filename + ".rst", "w") as fout:
             fmtr = ReSTFormatter(fileobj=fout)
             _format_module_infos(fmtr, package_name, mods)
     else:
-        raise ValueError(
-            "Output format '{}' is not supported".format(output_format))
+        raise ValueError("Output format '{}' is not supported".format(output_format))
 
 
 program_description = """
@@ -410,15 +419,21 @@ Inspect Numba support for a given top-level package.
 def main():
     parser = argparse.ArgumentParser(description=program_description)
     parser.add_argument(
-        'package', metavar='package', type=str,
-        help='Package to inspect',
+        "package",
+        metavar="package",
+        type=str,
+        help="Package to inspect",
     )
     parser.add_argument(
-        '--format', dest='format', default='html',
+        "--format",
+        dest="format",
+        default="html",
         help='Output format; i.e. "html", "rst"',
     )
     parser.add_argument(
-        '--file', dest='file', default='inspector_output',
+        "--file",
+        dest="file",
+        default="inspector_output",
         help='Output filename. Defaults to "inspector_output.<format>"',
     )
 
@@ -429,5 +444,5 @@ def main():
     write_listings(package_name, filename, output_format)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

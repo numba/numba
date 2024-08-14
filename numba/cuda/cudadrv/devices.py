@@ -10,6 +10,7 @@ Note:
 - This module must be imported by the main-thread.
 
 """
+
 import functools
 import threading
 from contextlib import contextmanager
@@ -24,8 +25,10 @@ class _DeviceList(object):
             # Device list is not initialized.
             # Query all CUDA devices.
             numdev = driver.get_device_count()
-            gpus = [_DeviceContextManager(driver.get_device(devid))
-                    for devid in range(numdev)]
+            gpus = [
+                _DeviceContextManager(driver.get_device(devid))
+                for devid in range(numdev)
+            ]
             # Define "lst" to avoid re-initialization
             self.lst = gpus
             return gpus
@@ -34,13 +37,13 @@ class _DeviceList(object):
         return super(_DeviceList, self).__getattr__(attr)
 
     def __getitem__(self, devnum):
-        '''
+        """
         Returns the context manager for device *devnum*.
-        '''
+        """
         return self.lst[devnum]
 
     def __str__(self):
-        return ', '.join([str(d) for d in self.lst])
+        return ", ".join([str(d) for d in self.lst])
 
     def __iter__(self):
         return iter(self.lst)
@@ -50,8 +53,7 @@ class _DeviceList(object):
 
     @property
     def current(self):
-        """Returns the active device or None if there's no active device
-        """
+        """Returns the active device or None if there's no active device"""
         with driver.get_active_context() as ac:
             devnum = ac.devnum
             if devnum is not None:
@@ -164,8 +166,7 @@ class _Runtime(object):
                         ctx_handle = ctx.handle.value
                         ac_ctx_handle = ac.context_handle.value
                     if ctx_handle != ac_ctx_handle:
-                        msg = ('Numba cannot operate on non-primary'
-                               ' CUDA context {:x}')
+                        msg = "Numba cannot operate on non-primary" " CUDA context {:x}"
                         raise RuntimeError(msg.format(ac_ctx_handle))
                     # Ensure the context is ready
                     ctx.prepare_for_use()
@@ -178,12 +179,12 @@ class _Runtime(object):
             # Detect unexpected context switch
             cached_ctx = self._get_attached_context()
             if cached_ctx is not None and cached_ctx is not newctx:
-                raise RuntimeError('Cannot switch CUDA-context.')
+                raise RuntimeError("Cannot switch CUDA-context.")
             newctx.push()
             return newctx
 
     def _get_attached_context(self):
-        return getattr(self._tls, 'attached_context', None)
+        return getattr(self._tls, "attached_context", None)
 
     def _set_attached_context(self, ctx):
         self._tls.attached_context = ctx
@@ -226,6 +227,7 @@ def require_context(fn):
 
     Note: The function *fn* cannot switch CUDA-context.
     """
+
     @functools.wraps(fn)
     def _require_cuda_context(*args, **kws):
         with _runtime.ensure_context():

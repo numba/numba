@@ -30,6 +30,7 @@ class TestLowering(MemoryLeakMixin, TestCase):
         defined once per assignment. Semantically, their lifetime stop only
         when the variable is re-assigned or when the function ends.
         """
+
         @njit
         def udt(N):
             sum_vec = np.zeros(3)
@@ -51,6 +52,7 @@ class TestLowering(MemoryLeakMixin, TestCase):
 
         Adding an outer loop.
         """
+
         @njit
         def udt(N):
             sum_vec = np.zeros(3)
@@ -74,6 +76,7 @@ class TestLowering(MemoryLeakMixin, TestCase):
 
         Adding deeper outer loop.
         """
+
         @njit
         def udt(N):
             sum_vec = np.zeros(3)
@@ -98,6 +101,7 @@ class TestLowering(MemoryLeakMixin, TestCase):
 
         Adding inner loop around allocation
         """
+
         @njit
         def udt(N):
             sum_vec = np.zeros(3)
@@ -122,6 +126,7 @@ class TestLowering(MemoryLeakMixin, TestCase):
 
         Interleaves loops and allocations
         """
+
         @njit
         def udt(N):
             sum_vec = 0
@@ -139,8 +144,7 @@ class TestLowering(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(got, expect)
 
     def test_issue_with_literal_in_static_getitem(self):
-        """Test an issue with literal type used as index of static_getitem
-        """
+        """Test an issue with literal type used as index of static_getitem"""
 
         @register_pass(mutates_CFG=False, analysis_only=False)
         class ForceStaticGetitemLiteral(FunctionPass):
@@ -155,11 +159,9 @@ class TestLowering(MemoryLeakMixin, TestCase):
                 # Force the static_getitem to have a literal type as
                 # index to replicate the problem.
                 for inst, sig in state.calltypes.items():
-                    if (isinstance(inst, ir.Expr) and
-                            inst.op == 'static_getitem'):
+                    if isinstance(inst, ir.Expr) and inst.op == "static_getitem":
                         [obj, idx] = sig.args
-                        new_sig = sig.replace(args=(obj,
-                                                    types.literal(inst.index)))
+                        new_sig = sig.replace(args=(obj, types.literal(inst.index)))
                         repl[inst] = new_sig
                 state.calltypes.update(repl)
                 return True
@@ -167,8 +169,7 @@ class TestLowering(MemoryLeakMixin, TestCase):
         class CustomPipeline(CompilerBase):
             def define_pipelines(self):
                 pm = DefaultPassBuilder.define_nopython_pipeline(self.state)
-                pm.add_pass_after(ForceStaticGetitemLiteral,
-                                  NopythonTypeInference)
+                pm.add_pass_after(ForceStaticGetitemLiteral, NopythonTypeInference)
                 pm.finalize()
                 return [pm]
 
@@ -200,12 +201,11 @@ class TestLowering(MemoryLeakMixin, TestCase):
                 @lower_builtin(issue7507_lround, types.float64)
                 def codegen(context, builder, sig, args):
                     # Simply truncate with the cast to integer.
-                    return context.cast(builder, args[0], sig.args[0],
-                                        sig.return_type)
+                    return context.cast(builder, args[0], sig.args[0], sig.return_type)
 
                 return signature
 
-        @njit('int64(float64)')
+        @njit("int64(float64)")
         def foo(a):
             return issue7507_lround(a)
 

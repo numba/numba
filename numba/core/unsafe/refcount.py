@@ -1,6 +1,7 @@
 """
 Helpers to see the refcount information of an object
 """
+
 from llvmlite import ir
 
 from numba.core import types, cgutils
@@ -15,6 +16,7 @@ def dump_refcount(typingctx, obj):
 
     Returns True if and only if object is reference-counted and NRT is enabled.
     """
+
     def codegen(context, builder, signature, args):
         [obj] = args
         [ty] = signature.args
@@ -58,6 +60,7 @@ def get_refcount(typingctx, obj):
 
     FIXME: only handles the first object
     """
+
     def codegen(context, builder, signature, args):
         [obj] = args
         [ty] = signature.args

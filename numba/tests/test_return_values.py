@@ -2,7 +2,6 @@
 Test return values
 """
 
-
 import math
 
 import unittest
@@ -11,15 +10,17 @@ from numba.core import types
 from numba.core.errors import TypingError, NumbaTypeError
 
 
-enable_pyobj_flags = {'forceobj': True}
-no_pyobj_flags = {'nopython': True}
+enable_pyobj_flags = {"forceobj": True}
+no_pyobj_flags = {"nopython": True}
 
 
 def get_nopython_func():
     return abs
 
+
 def get_pyobj_func():
     return open
+
 
 def get_module_func():
     return math.floor
@@ -70,5 +71,5 @@ class TestReturnValues(unittest.TestCase):
             self.test_module_func(flags=no_pyobj_flags)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

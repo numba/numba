@@ -10,6 +10,7 @@ from numba.core.imputils import impl_ret_untracked
 from numba.core import typing, types, errors, cgutils
 from numba.cpython.unsafe.numbers import viewer
 
+
 def _int_arith_flags(rettype):
     """
     Return the modifier flags for integer arithmetic.
@@ -22,7 +23,7 @@ def _int_arith_flags(rettype):
         # index is treated differently: its resolution has a runtime cost.
         # Telling LLVM to ignore signed overflows allows it to optimize
         # away the check for a negative `i+1` if it knows `i` is positive.
-        return ['nsw']
+        return ["nsw"]
     else:
         return []
 
@@ -86,8 +87,9 @@ def int_divmod_signed(context, builder, ty, x, y):
     resmod = cgutils.alloca_once_value(builder, ZERO)
 
     is_overflow = builder.and_(
-        builder.icmp_signed('==', x, x.type(ty.minval)),
-        builder.icmp_signed('==', y, y.type(-1)))
+        builder.icmp_signed("==", x, x.type(ty.minval)),
+        builder.icmp_signed("==", y, y.type(-1)),
+    )
 
     with builder.if_then(builder.not_(is_overflow), likely=True):
         # Note LLVM will optimize this to a single divmod instruction,
@@ -95,8 +97,8 @@ def int_divmod_signed(context, builder, ty, x, y):
         xdivy = builder.sdiv(x, y)
         xmody = builder.srem(x, y)
 
-        y_xor_xmody_ltz = builder.icmp_signed('<', builder.xor(y, xmody), ZERO)
-        xmody_istrue = builder.icmp_signed('!=', xmody, ZERO)
+        y_xor_xmody_ltz = builder.icmp_signed("<", builder.xor(y, xmody), ZERO)
+        xmody_istrue = builder.icmp_signed("!=", xmody, ZERO)
         cond = builder.and_(xmody_istrue, y_xor_xmody_ltz)
 
         with builder.if_else(cond) as (if_different_signs, if_same_signs):
@@ -133,11 +135,12 @@ def _int_divmod_impl(context, builder, sig, args, zerodiv_message):
     quot = cgutils.alloca_once(builder, a.type, name="quot")
     rem = cgutils.alloca_once(builder, a.type, name="rem")
 
-    with builder.if_else(cgutils.is_scalar_zero(builder, b), likely=False
-                         ) as (if_zero, if_non_zero):
+    with builder.if_else(cgutils.is_scalar_zero(builder, b), likely=False) as (
+        if_zero,
+        if_non_zero,
+    ):
         with if_zero:
-            if not context.error_model.fp_zero_division(
-                builder, (zerodiv_message,)):
+            if not context.error_model.fp_zero_division(builder, (zerodiv_message,)):
                 # No exception raised => return 0
                 # XXX We should also set the FPU exception status, but
                 # there's no easy way to do that from LLVM.
@@ -153,18 +156,17 @@ def _int_divmod_impl(context, builder, sig, args, zerodiv_message):
 
 # @lower_builtin(divmod, types.Integer, types.Integer)
 def int_divmod_impl(context, builder, sig, args):
-    quot, rem = _int_divmod_impl(context, builder, sig, args,
-                                 "integer divmod by zero")
+    quot, rem = _int_divmod_impl(context, builder, sig, args, "integer divmod by zero")
 
-    return cgutils.pack_array(builder,
-                              (builder.load(quot), builder.load(rem)))
+    return cgutils.pack_array(builder, (builder.load(quot), builder.load(rem)))
 
 
 # @lower_builtin(operator.floordiv, types.Integer, types.Integer)
 # @lower_builtin(operator.ifloordiv, types.Integer, types.Integer)
 def int_floordiv_impl(context, builder, sig, args):
-    quot, rem = _int_divmod_impl(context, builder, sig, args,
-                                 "integer division by zero")
+    quot, rem = _int_divmod_impl(
+        context, builder, sig, args, "integer division by zero"
+    )
     return builder.load(quot)
 
 
@@ -184,14 +186,15 @@ def int_truediv_impl(context, builder, sig, args):
 # @lower_builtin(operator.mod, types.Integer, types.Integer)
 # @lower_builtin(operator.imod, types.Integer, types.Integer)
 def int_rem_impl(context, builder, sig, args):
-    quot, rem = _int_divmod_impl(context, builder, sig, args,
-                                 "integer modulo by zero")
+    quot, rem = _int_divmod_impl(context, builder, sig, args, "integer modulo by zero")
     return builder.load(rem)
 
 
 def _get_power_zerodiv_return(context, return_type):
-    if (isinstance(return_type, types.Integer)
-        and not context.error_model.raise_on_fp_zero_division):
+    if (
+        isinstance(return_type, types.Integer)
+        and not context.error_model.raise_on_fp_zero_division
+    ):
         # If not raising, return 0x8000... when computing 0 ** <negative number>
         return -1 << (return_type.bitwidth - 1)
     else:
@@ -220,7 +223,9 @@ def int_power_impl(context, builder, sig, args):
                     if zerodiv_return:
                         return zerodiv_return
                     else:
-                        raise ZeroDivisionError("0 cannot be raised to a negative power")
+                        raise ZeroDivisionError(
+                            "0 cannot be raised to a negative power"
+                        )
                 if a != 1 and a != -1:
                     return 0
         else:
@@ -289,7 +294,9 @@ def static_power_impl(context, builder, sig, args):
                     if zerodiv_return:
                         return zerodiv_return
                     else:
-                        raise ZeroDivisionError("0 cannot be raised to a negative power")
+                        raise ZeroDivisionError(
+                            "0 cannot be raised to a negative power"
+                        )
                 if a != 1 and a != -1:
                     return 0
                 else:
@@ -300,59 +307,60 @@ def static_power_impl(context, builder, sig, args):
             def invert_impl(a):
                 return 1.0 / a
 
-        res = context.compile_internal(builder, invert_impl,
-                                       typing.signature(tp, tp), (res,))
+        res = context.compile_internal(
+            builder, invert_impl, typing.signature(tp, tp), (res,)
+        )
 
     return res
 
 
 def int_slt_impl(context, builder, sig, args):
-    res = builder.icmp_signed('<', *args)
+    res = builder.icmp_signed("<", *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def int_sle_impl(context, builder, sig, args):
-    res = builder.icmp_signed('<=', *args)
+    res = builder.icmp_signed("<=", *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def int_sgt_impl(context, builder, sig, args):
-    res = builder.icmp_signed('>', *args)
+    res = builder.icmp_signed(">", *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def int_sge_impl(context, builder, sig, args):
-    res = builder.icmp_signed('>=', *args)
+    res = builder.icmp_signed(">=", *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def int_ult_impl(context, builder, sig, args):
-    res = builder.icmp_unsigned('<', *args)
+    res = builder.icmp_unsigned("<", *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def int_ule_impl(context, builder, sig, args):
-    res = builder.icmp_unsigned('<=', *args)
+    res = builder.icmp_unsigned("<=", *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def int_ugt_impl(context, builder, sig, args):
-    res = builder.icmp_unsigned('>', *args)
+    res = builder.icmp_unsigned(">", *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def int_uge_impl(context, builder, sig, args):
-    res = builder.icmp_unsigned('>=', *args)
+    res = builder.icmp_unsigned(">=", *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def int_eq_impl(context, builder, sig, args):
-    res = builder.icmp_unsigned('==', *args)
+    res = builder.icmp_unsigned("==", *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def int_ne_impl(context, builder, sig, args):
-    res = builder.icmp_unsigned('!=', *args)
+    res = builder.icmp_unsigned("!=", *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
@@ -368,11 +376,12 @@ def int_signed_unsigned_cmp(op):
         # equal to zero, then we can safely cast it to an unsigned value and do
         # the expected unsigned-unsigned comparison operation.
         # Original: https://github.com/numpy/numpy/pull/23713
-        cmp_zero = builder.icmp_signed('<', left, Constant(left.type, 0))
+        cmp_zero = builder.icmp_signed("<", left, Constant(left.type, 0))
         lt_zero = builder.icmp_signed(op, left, Constant(left.type, 0))
         ge_zero = builder.icmp_unsigned(op, left, right)
         res = builder.select(cmp_zero, lt_zero, ge_zero)
         return impl_ret_untracked(context, builder, sig.return_type, res)
+
     return impl
 
 
@@ -380,18 +389,19 @@ def int_unsigned_signed_cmp(op):
     def impl(context, builder, sig, args):
         (left, right) = args
         # See the function `int_signed_unsigned_cmp` for implementation notes.
-        cmp_zero = builder.icmp_signed('<', right, Constant(right.type, 0))
+        cmp_zero = builder.icmp_signed("<", right, Constant(right.type, 0))
         lt_zero = builder.icmp_signed(op, Constant(right.type, 0), right)
         ge_zero = builder.icmp_unsigned(op, left, right)
         res = builder.select(cmp_zero, lt_zero, ge_zero)
         return impl_ret_untracked(context, builder, sig.return_type, res)
+
     return impl
 
 
 def int_abs_impl(context, builder, sig, args):
     [x] = args
     ZERO = Constant(x.type, None)
-    ltz = builder.icmp_signed('<', x, ZERO)
+    ltz = builder.icmp_signed("<", x, ZERO)
     negated = builder.neg(x)
     res = builder.select(ltz, negated, x)
     return impl_ret_untracked(context, builder, sig.return_type, res)
@@ -470,7 +480,7 @@ def int_invert_impl(context, builder, sig, args):
     [typ] = sig.args
     [val] = args
     # Invert before upcasting, for unsigned numbers
-    res = builder.xor(val, Constant(val.type, int('1' * val.type.width, 2)))
+    res = builder.xor(val, Constant(val.type, int("1" * val.type.width, 2)))
     res = context.cast(builder, res, typ, sig.return_type)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
@@ -484,8 +494,8 @@ def int_sign_impl(context, builder, sig, args):
     NEG = Constant(x.type, -1)
     ZERO = Constant(x.type, 0)
 
-    cmp_zero = builder.icmp_unsigned('==', x, ZERO)
-    cmp_pos = builder.icmp_signed('>', x, ZERO)
+    cmp_zero = builder.icmp_unsigned("==", x, ZERO)
+    cmp_pos = builder.icmp_signed(">", x, ZERO)
 
     presult = cgutils.alloca_once(builder, x.type)
 
@@ -638,8 +648,8 @@ def real_divmod(context, builder, x, y):
     fn = cgutils.get_or_insert_function(module, fnty, fname)
 
     if fn.is_declaration:
-        fn.linkage = 'linkonce_odr'
-        fnbuilder = ir.IRBuilder(fn.append_basic_block('entry'))
+        fn.linkage = "linkonce_odr"
+        fnbuilder = ir.IRBuilder(fn.append_basic_block("entry"))
         fx, fy, pmod = fn.args
         div, mod = real_divmod_func_body(context, fnbuilder, fx, fy)
         fnbuilder.store(mod, pmod)
@@ -710,15 +720,15 @@ def real_divmod_func_body(context, builder, vx, wx):
     ZERO = vx.type(0.0)
     NZERO = vx.type(-0.0)
     ONE = vx.type(1.0)
-    mod_istrue = builder.fcmp_unordered('!=', mod, ZERO)
-    wx_ltz = builder.fcmp_ordered('<', wx, ZERO)
-    mod_ltz = builder.fcmp_ordered('<', mod, ZERO)
+    mod_istrue = builder.fcmp_unordered("!=", mod, ZERO)
+    wx_ltz = builder.fcmp_ordered("<", wx, ZERO)
+    mod_ltz = builder.fcmp_ordered("<", mod, ZERO)
 
     with builder.if_else(mod_istrue, likely=True) as (if_nonzero_mod, if_zero_mod):
         with if_nonzero_mod:
             # `mod` is non-zero or NaN
             # Ensure the remainder has the same sign as the denominator
-            wx_ltz_ne_mod_ltz = builder.icmp_unsigned('!=', wx_ltz, mod_ltz)
+            wx_ltz_ne_mod_ltz = builder.icmp_unsigned("!=", wx_ltz, mod_ltz)
 
             with builder.if_then(wx_ltz_ne_mod_ltz):
                 builder.store(builder.fsub(div, ONE), pdiv)
@@ -733,19 +743,17 @@ def real_divmod_func_body(context, builder, vx, wx):
     del mod, div
 
     div = builder.load(pdiv)
-    div_istrue = builder.fcmp_ordered('!=', div, ZERO)
+    div_istrue = builder.fcmp_ordered("!=", div, ZERO)
 
     with builder.if_then(div_istrue):
-        realtypemap = {'float': types.float32,
-                       'double': types.float64}
+        realtypemap = {"float": types.float32, "double": types.float64}
         realtype = realtypemap[str(wx.type)]
-        floorfn = context.get_function(math.floor,
-                                       typing.signature(realtype, realtype))
+        floorfn = context.get_function(math.floor, typing.signature(realtype, realtype))
         floordiv = floorfn(builder, [div])
         floordivdiff = builder.fsub(div, floordiv)
         floordivincr = builder.fadd(floordiv, ONE)
         HALF = Constant(wx.type, 0.5)
-        pred = builder.fcmp_ordered('>', floordivdiff, HALF)
+        pred = builder.fcmp_ordered(">", floordivdiff, HALF)
         floordiv = builder.select(pred, floordivincr, floordiv)
         builder.store(floordiv, pfloordiv)
 
@@ -764,11 +772,14 @@ def real_divmod_impl(context, builder, sig, args, loc=None):
     quot = cgutils.alloca_once(builder, x.type, name="quot")
     rem = cgutils.alloca_once(builder, x.type, name="rem")
 
-    with builder.if_else(cgutils.is_scalar_zero(builder, y), likely=False
-                         ) as (if_zero, if_non_zero):
+    with builder.if_else(cgutils.is_scalar_zero(builder, y), likely=False) as (
+        if_zero,
+        if_non_zero,
+    ):
         with if_zero:
             if not context.error_model.fp_zero_division(
-                builder, ("modulo by zero",), loc):
+                builder, ("modulo by zero",), loc
+            ):
                 # No exception raised => compute the nan result,
                 # and set the FP exception word for Numpy warnings.
                 q = builder.fdiv(x, y)
@@ -780,18 +791,20 @@ def real_divmod_impl(context, builder, sig, args, loc=None):
             builder.store(q, quot)
             builder.store(r, rem)
 
-    return cgutils.pack_array(builder,
-                              (builder.load(quot), builder.load(rem)))
+    return cgutils.pack_array(builder, (builder.load(quot), builder.load(rem)))
 
 
 def real_mod_impl(context, builder, sig, args, loc=None):
     x, y = args
     res = cgutils.alloca_once(builder, x.type)
-    with builder.if_else(cgutils.is_scalar_zero(builder, y), likely=False
-                         ) as (if_zero, if_non_zero):
+    with builder.if_else(cgutils.is_scalar_zero(builder, y), likely=False) as (
+        if_zero,
+        if_non_zero,
+    ):
         with if_zero:
             if not context.error_model.fp_zero_division(
-                builder, ("modulo by zero",), loc):
+                builder, ("modulo by zero",), loc
+            ):
                 # No exception raised => compute the nan result,
                 # and set the FP exception word for Numpy warnings.
                 rem = builder.frem(x, y)
@@ -799,18 +812,20 @@ def real_mod_impl(context, builder, sig, args, loc=None):
         with if_non_zero:
             _, rem = real_divmod(context, builder, x, y)
             builder.store(rem, res)
-    return impl_ret_untracked(context, builder, sig.return_type,
-                              builder.load(res))
+    return impl_ret_untracked(context, builder, sig.return_type, builder.load(res))
 
 
 def real_floordiv_impl(context, builder, sig, args, loc=None):
     x, y = args
     res = cgutils.alloca_once(builder, x.type)
-    with builder.if_else(cgutils.is_scalar_zero(builder, y), likely=False
-                         ) as (if_zero, if_non_zero):
+    with builder.if_else(cgutils.is_scalar_zero(builder, y), likely=False) as (
+        if_zero,
+        if_non_zero,
+    ):
         with if_zero:
             if not context.error_model.fp_zero_division(
-                builder, ("division by zero",), loc):
+                builder, ("division by zero",), loc
+            ):
                 # No exception raised => compute the +/-inf or nan result,
                 # and set the FP exception word for Numpy warnings.
                 quot = builder.fdiv(x, y)
@@ -818,8 +833,7 @@ def real_floordiv_impl(context, builder, sig, args, loc=None):
         with if_non_zero:
             quot, _ = real_divmod(context, builder, x, y)
             builder.store(quot, res)
-    return impl_ret_untracked(context, builder, sig.return_type,
-                              builder.load(res))
+    return impl_ret_untracked(context, builder, sig.return_type, builder.load(res))
 
 
 def real_power_impl(context, builder, sig, args):
@@ -829,38 +843,38 @@ def real_power_impl(context, builder, sig, args):
         imp = context.get_function(math.pow, sig)
         res = imp(builder, args)
     else:
-        fn = module.declare_intrinsic('llvm.pow', [y.type])
+        fn = module.declare_intrinsic("llvm.pow", [y.type])
         res = builder.call(fn, (x, y))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def real_lt_impl(context, builder, sig, args):
-    res = builder.fcmp_ordered('<', *args)
+    res = builder.fcmp_ordered("<", *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def real_le_impl(context, builder, sig, args):
-    res = builder.fcmp_ordered('<=', *args)
+    res = builder.fcmp_ordered("<=", *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def real_gt_impl(context, builder, sig, args):
-    res = builder.fcmp_ordered('>', *args)
+    res = builder.fcmp_ordered(">", *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def real_ge_impl(context, builder, sig, args):
-    res = builder.fcmp_ordered('>=', *args)
+    res = builder.fcmp_ordered(">=", *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def real_eq_impl(context, builder, sig, args):
-    res = builder.fcmp_ordered('==', *args)
+    res = builder.fcmp_ordered("==", *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def real_ne_impl(context, builder, sig, args):
-    res = builder.fcmp_unordered('!=', *args)
+    res = builder.fcmp_unordered("!=", *args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
@@ -873,6 +887,7 @@ def real_abs_impl(context, builder, sig, args):
 
 def real_negate_impl(context, builder, sig, args):
     from numba.cpython import mathimpl
+
     res = mathimpl.negate_real(builder, args[0])
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
@@ -895,8 +910,8 @@ def real_sign_impl(context, builder, sig, args):
 
     presult = cgutils.alloca_once(builder, x.type)
 
-    is_pos = builder.fcmp_ordered('>', x, ZERO)
-    is_neg = builder.fcmp_ordered('<', x, ZERO)
+    is_pos = builder.fcmp_ordered(">", x, ZERO)
+    is_neg = builder.fcmp_ordered("<", x, ZERO)
 
     with builder.if_else(is_pos) as (gt_zero, not_gt_zero):
         with gt_zero:
@@ -953,29 +968,36 @@ def complex_real_impl(context, builder, typ, value):
     res = cplx.real
     return impl_ret_untracked(context, builder, typ, res)
 
+
 # @lower_getattr(types.Complex, "imag")
 def complex_imag_impl(context, builder, typ, value):
     cplx = context.make_complex(builder, typ, value=value)
     res = cplx.imag
     return impl_ret_untracked(context, builder, typ, res)
 
+
 # @lower_builtin("complex.conjugate", types.Complex)
 def complex_conjugate_impl(context, builder, sig, args):
     from numba.cpython import mathimpl
+
     z = context.make_complex(builder, sig.args[0], args[0])
     z.imag = mathimpl.negate_real(builder, z.imag)
     res = z._getvalue()
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+
 def real_real_impl(context, builder, typ, value):
     return impl_ret_untracked(context, builder, typ, value)
+
 
 def real_imag_impl(context, builder, typ, value):
     res = cgutils.get_null_value(value.type)
     return impl_ret_untracked(context, builder, typ, res)
 
+
 def real_conjugate_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, args[0])
+
 
 # for cls in (types.Float, types.Integer):
 #     lower_getattr(cls, "real")(real_real_impl)
@@ -1002,8 +1024,8 @@ def complex_power_impl(context, builder, sig, args):
     TWO = context.get_constant(fty, 2)
     ZERO = context.get_constant(fty, 0)
 
-    b_real_is_two = builder.fcmp_ordered('==', b.real, TWO)
-    b_imag_is_zero = builder.fcmp_ordered('==', b.imag, ZERO)
+    b_real_is_two = builder.fcmp_ordered("==", b.real, TWO)
+    b_imag_is_zero = builder.fcmp_ordered("==", b.imag, ZERO)
     b_is_two = builder.and_(b_real_is_two, b_imag_is_zero)
 
     with builder.if_else(b_is_two) as (then, otherwise):
@@ -1019,13 +1041,14 @@ def complex_power_impl(context, builder, sig, args):
             func_name = {
                 types.complex64: "numba_cpowf",
                 types.complex128: "numba_cpow",
-                }[ty]
+            }[ty]
             fnty = ir.FunctionType(ir.VoidType(), [pa.type] * 3)
             cpow = cgutils.get_or_insert_function(module, fnty, func_name)
             builder.call(cpow, (pa, pb, pc))
 
     res = builder.load(pc)
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 def complex_add_impl(context, builder, sig, args):
     [cx, cy] = args
@@ -1082,7 +1105,8 @@ def complex_mul_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-NAN = float('nan')
+NAN = float("nan")
+
 
 def complex_div_impl(context, builder, sig, args):
     def complex_div(a, b):
@@ -1100,8 +1124,8 @@ def complex_div_impl(context, builder, sig, args):
             ratio = bimag / breal
             denom = breal + bimag * ratio
             return complex(
-                (areal + aimag * ratio) / denom,
-                (aimag - areal * ratio) / denom)
+                (areal + aimag * ratio) / denom, (aimag - areal * ratio) / denom
+            )
         else:
             # Divide tops and bottom by b.imag
             if not bimag:
@@ -1109,8 +1133,8 @@ def complex_div_impl(context, builder, sig, args):
             ratio = breal / bimag
             denom = breal * ratio + bimag
             return complex(
-                (a.real * ratio + a.imag) / denom,
-                (a.imag * ratio - a.real) / denom)
+                (a.real * ratio + a.imag) / denom, (a.imag * ratio - a.real) / denom
+            )
 
     res = context.compile_internal(builder, complex_div, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
@@ -1118,6 +1142,7 @@ def complex_div_impl(context, builder, sig, args):
 
 def complex_negate_impl(context, builder, sig, args):
     from numba.cpython import mathimpl
+
     [typ] = sig.args
     [val] = args
     cmplx = context.make_complex(builder, typ, value=val)
@@ -1139,8 +1164,8 @@ def complex_eq_impl(context, builder, sig, args):
     x = context.make_complex(builder, typ, value=cx)
     y = context.make_complex(builder, typ, value=cy)
 
-    reals_are_eq = builder.fcmp_ordered('==', x.real, y.real)
-    imags_are_eq = builder.fcmp_ordered('==', x.imag, y.imag)
+    reals_are_eq = builder.fcmp_ordered("==", x.real, y.real)
+    imags_are_eq = builder.fcmp_ordered("==", x.imag, y.imag)
     res = builder.and_(reals_are_eq, imags_are_eq)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
@@ -1151,8 +1176,8 @@ def complex_ne_impl(context, builder, sig, args):
     x = context.make_complex(builder, typ, value=cx)
     y = context.make_complex(builder, typ, value=cy)
 
-    reals_are_ne = builder.fcmp_unordered('!=', x.real, y.real)
-    imags_are_ne = builder.fcmp_unordered('!=', x.imag, y.imag)
+    reals_are_ne = builder.fcmp_unordered("!=", x.real, y.real)
+    imags_are_ne = builder.fcmp_unordered("!=", x.imag, y.imag)
     res = builder.or_(reals_are_ne, imags_are_ne)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
@@ -1161,6 +1186,7 @@ def complex_abs_impl(context, builder, sig, args):
     """
     abs(z) := hypot(z.real, z.imag)
     """
+
     def complex_abs(z):
         return math.hypot(z.real, z.imag)
 
@@ -1199,7 +1225,7 @@ def number_item_impl(context, builder, sig, args):
     return args[0]
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 
 def number_not_impl(context, builder, sig, args):
@@ -1209,20 +1235,24 @@ def number_not_impl(context, builder, sig, args):
     res = builder.not_(istrue)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+
 # @lower_builtin(bool, types.Boolean)
 def bool_as_bool(context, builder, sig, args):
     [val] = args
     return val
 
+
 # @lower_builtin(bool, types.Integer)
 def int_as_bool(context, builder, sig, args):
     [val] = args
-    return builder.icmp_unsigned('!=', val, Constant(val.type, 0))
+    return builder.icmp_unsigned("!=", val, Constant(val.type, 0))
+
 
 # @lower_builtin(bool, types.Float)
 def float_as_bool(context, builder, sig, args):
     [val] = args
-    return builder.fcmp_unordered('!=', val, Constant(val.type, 0.0))
+    return builder.fcmp_unordered("!=", val, Constant(val.type, 0.0))
+
 
 # @lower_builtin(bool, types.Complex)
 def complex_as_bool(context, builder, sig, args):
@@ -1231,8 +1261,8 @@ def complex_as_bool(context, builder, sig, args):
     cmplx = context.make_complex(builder, typ, val)
     real, imag = cmplx.real, cmplx.imag
     zero = Constant(real.type, 0.0)
-    real_istrue = builder.fcmp_unordered('!=', real, zero)
-    imag_istrue = builder.fcmp_unordered('!=', imag, zero)
+    real_istrue = builder.fcmp_unordered("!=", real, zero)
+    imag_istrue = builder.fcmp_unordered("!=", imag, zero)
     return builder.or_(real_istrue, imag_istrue)
 
 
@@ -1242,11 +1272,12 @@ def complex_as_bool(context, builder, sig, args):
 # lower_builtin(operator.not_, types.boolean)(number_not_impl)
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Hashing numbers, see hashing.py
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # Implicit casts between numerics
+
 
 # @lower_cast(types.IntegerLiteral, types.Integer)
 # @lower_cast(types.IntegerLiteral, types.Float)
@@ -1256,7 +1287,7 @@ def literal_int_to_number(context, builder, fromty, toty, val):
         builder,
         fromty.literal_type,
         fromty.literal_value,
-        )
+    )
     return context.cast(builder, lit, fromty.literal_type, toty)
 
 
@@ -1275,9 +1306,11 @@ def integer_to_integer(context, builder, fromty, toty, val):
         # Unsigned upcast
         return builder.zext(val, context.get_value_type(toty))
 
+
 # @lower_cast(types.Integer, types.voidptr)
 def integer_to_voidptr(context, builder, fromty, toty, val):
     return builder.inttoptr(val, context.get_value_type(toty))
+
 
 # @lower_cast(types.Float, types.Float)
 def float_to_float(context, builder, fromty, toty, val):
@@ -1287,6 +1320,7 @@ def float_to_float(context, builder, fromty, toty, val):
     else:
         return builder.fptrunc(val, lty)
 
+
 # @lower_cast(types.Integer, types.Float)
 def integer_to_float(context, builder, fromty, toty, val):
     lty = context.get_value_type(toty)
@@ -1295,6 +1329,7 @@ def integer_to_float(context, builder, fromty, toty, val):
     else:
         return builder.uitofp(val, lty)
 
+
 # @lower_cast(types.Float, types.Integer)
 def float_to_integer(context, builder, fromty, toty, val):
     lty = context.get_value_type(toty)
@@ -1302,6 +1337,7 @@ def float_to_integer(context, builder, fromty, toty, val):
         return builder.fptosi(val, lty)
     else:
         return builder.fptoui(val, lty)
+
 
 # @lower_cast(types.Float, types.Complex)
 # @lower_cast(types.Integer, types.Complex)
@@ -1314,6 +1350,7 @@ def non_complex_to_complex(context, builder, fromty, toty, val):
     cmplx.imag = imag
     return cmplx._getvalue()
 
+
 # @lower_cast(types.Complex, types.Complex)
 def complex_to_complex(context, builder, fromty, toty, val):
     srcty = fromty.underlying_float
@@ -1325,15 +1362,18 @@ def complex_to_complex(context, builder, fromty, toty, val):
     dst.imag = context.cast(builder, src.imag, srcty, dstty)
     return dst._getvalue()
 
+
 # @lower_cast(types.Any, types.Boolean)
 def any_to_boolean(context, builder, fromty, toty, val):
     return context.is_true(builder, fromty, val)
+
 
 # @lower_cast(types.Boolean, types.Number)
 def boolean_to_any(context, builder, fromty, toty, val):
     # Casting from boolean to anything first casts to int32
     asint = builder.zext(val, ir.IntType(32))
     return context.cast(builder, asint, types.int32, toty)
+
 
 # @lower_cast(types.IntegerLiteral, types.Boolean)
 # @lower_cast(types.BooleanLiteral, types.Boolean)
@@ -1342,11 +1382,13 @@ def literal_int_to_boolean(context, builder, fromty, toty, val):
         builder,
         fromty.literal_type,
         fromty.literal_value,
-        )
+    )
     return context.is_true(builder, fromty.literal_type, lit)
 
-#-------------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------------
 # Constants
+
 
 # @lower_constant(types.Complex)
 def constant_complex(context, builder, ty, pyval):
@@ -1354,6 +1396,7 @@ def constant_complex(context, builder, ty, pyval):
     real = context.get_constant_generic(builder, fty, pyval.real)
     imag = context.get_constant_generic(builder, fty, pyval.imag)
     return Constant.literal_struct((real, imag))
+
 
 # @lower_constant(types.Integer)
 # @lower_constant(types.Float)
@@ -1369,20 +1412,24 @@ def constant_integer(context, builder, ty, pyval):
     return lty(pyval)
 
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # View
 
+
 def scalar_view(scalar, viewty):
-    """ Typing for the np scalar 'view' method. """
-    if (isinstance(scalar, (types.Float, types.Integer))
-            and isinstance(viewty, types.abstract.DTypeSpec)):
+    """Typing for the np scalar 'view' method."""
+    if isinstance(scalar, (types.Float, types.Integer)) and isinstance(
+        viewty, types.abstract.DTypeSpec
+    ):
         if scalar.bitwidth != viewty.dtype.bitwidth:
             raise errors.TypingError(
                 "Changing the dtype of a 0d array is only supported if the "
-                "itemsize is unchanged")
+                "itemsize is unchanged"
+            )
 
         def impl(scalar, viewty):
             return viewer(scalar, viewty)
+
         return impl
 
 

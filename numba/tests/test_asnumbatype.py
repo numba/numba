@@ -1,6 +1,7 @@
 """
 Tests for the as_numba_type() machinery.
 """
+
 import typing as py_typing
 
 
@@ -36,9 +37,7 @@ class TestAsNumbaType(TestCase):
             types.intp,
             types.boolean,
             types.ListType(types.float64),
-            types.DictType(
-                types.intp, types.Tuple([types.float32, types.float32])
-            ),
+            types.DictType(types.intp, types.Tuple([types.float32, types.float32])),
         ]
 
         for ty in numba_types:
@@ -84,8 +83,9 @@ class TestAsNumbaType(TestCase):
         # TypingError if the right type is not NoneType.
         with self.assertRaises(TypingError) as raises:
             as_numba_type(py_typing.Union[int, float])
-        self.assertIn("Cannot type Union that is not an Optional",
-                      str(raises.exception))
+        self.assertIn(
+            "Cannot type Union that is not an Optional", str(raises.exception)
+        )
 
     def test_nested_containers(self):
         IntList = py_typing.List[int]
@@ -95,15 +95,15 @@ class TestAsNumbaType(TestCase):
         )
         self.assertEqual(
             as_numba_type(py_typing.List[py_typing.Dict[float, bool]]),
-            types.ListType(
-                types.DictType(self.float_nb_type, self.bool_nb_type)
-            ),
+            types.ListType(types.DictType(self.float_nb_type, self.bool_nb_type)),
         )
         self.assertEqual(
             as_numba_type(
-                py_typing.Set[py_typing.Tuple[py_typing.Optional[int], float]]),
-            types.Set(types.Tuple(
-                [types.Optional(self.int_nb_type), self.float_nb_type])),
+                py_typing.Set[py_typing.Tuple[py_typing.Optional[int], float]]
+            ),
+            types.Set(
+                types.Tuple([types.Optional(self.int_nb_type), self.float_nb_type])
+            ),
         )
 
     def test_jitclass_registers(self):
@@ -123,9 +123,7 @@ class TestAsNumbaType(TestCase):
 
         pair_nb_type = types.Tuple((self.int_nb_type, self.int_nb_type))
         self.assertEqual(as_numba_type(Pair), pair_nb_type)
-        self.assertEqual(
-            as_numba_type(ListOfPairs), types.ListType(pair_nb_type)
-        )
+        self.assertEqual(as_numba_type(ListOfPairs), types.ListType(pair_nb_type))
 
     def test_overwrite_type(self):
         as_numba_type = AsNumbaTypeRegistry()
@@ -166,5 +164,5 @@ class TestAsNumbaType(TestCase):
             self.assertIn("Cannot type Union", str(raises.exception))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -8,6 +8,7 @@ and uses `@jit` functions to access it. Since it inherits from MutableSequence
 it should really quack like the CPython `list`.
 
 """
+
 from collections.abc import MutableSequence
 
 from numba.core.types import ListType
@@ -32,15 +33,13 @@ import typing as pt
 Int_or_Slice = pt.Union["pt.SupportsIndex", slice]
 
 
-T_co = pt.TypeVar('T_co', covariant=True)
+T_co = pt.TypeVar("T_co", covariant=True)
 
 
 class _Sequence(pt.Protocol[T_co]):
-    def __getitem__(self, i: int) -> T_co:
-        ...
+    def __getitem__(self, i: int) -> T_co: ...
 
-    def __len__(self) -> int:
-        ...
+    def __len__(self) -> int: ...
 
 
 DEFAULT_ALLOCATED = listobject.DEFAULT_ALLOCATED
@@ -48,8 +47,7 @@ DEFAULT_ALLOCATED = listobject.DEFAULT_ALLOCATED
 
 @njit
 def _make_list(itemty, allocated=DEFAULT_ALLOCATED):
-    return listobject._as_meminfo(listobject.new_list(itemty,
-                                                      allocated=allocated))
+    return listobject._as_meminfo(listobject.new_list(itemty, allocated=allocated))
 
 
 @njit
@@ -186,8 +184,8 @@ def _from_meminfo_ptr(ptr, listtype):
     return List(meminfo=ptr, lsttype=listtype)
 
 
-T = pt.TypeVar('T')
-T_or_ListT = pt.Union[T, 'List[T]']
+T = pt.TypeVar("T")
+T_or_ListT = pt.Union[T, "List[T]"]
 
 
 class List(MutableSequence, pt.Generic[T]):
@@ -198,12 +196,9 @@ class List(MutableSequence, pt.Generic[T]):
 
     _legal_kwargs = ["lsttype", "meminfo", "allocated"]
 
-    def __new__(cls,
-                *args,
-                lsttype=None,
-                meminfo=None,
-                allocated=DEFAULT_ALLOCATED,
-                **kwargs):
+    def __new__(
+        cls, *args, lsttype=None, meminfo=None, allocated=DEFAULT_ALLOCATED, **kwargs
+    ):
         if config.DISABLE_JIT:
             return list(*args, **kwargs)
         else:
@@ -251,8 +246,7 @@ class List(MutableSequence, pt.Generic[T]):
             if args:
                 if not 0 <= len(args) <= 1:
                     raise TypeError(
-                        "List() expected at most 1 argument, got {}"
-                        .format(len(args))
+                        "List() expected at most 1 argument, got {}".format(len(args))
                     )
                 iterable = args[0]
                 # Special case Numpy scalars or anything that quacks like a
@@ -269,7 +263,7 @@ class List(MutableSequence, pt.Generic[T]):
 
     def _parse_arg(self, lsttype, meminfo=None, allocated=DEFAULT_ALLOCATED):
         if not isinstance(lsttype, ListType):
-            raise TypeError('*lsttype* must be a ListType')
+            raise TypeError("*lsttype* must be a ListType")
 
         if meminfo is not None:
             opaque = meminfo
@@ -285,8 +279,7 @@ class List(MutableSequence, pt.Generic[T]):
 
     @property
     def _typed(self):
-        """Returns True if the list is typed.
-        """
+        """Returns True if the list is typed."""
         return self._list_type is not None
 
     @property
@@ -348,9 +341,11 @@ class List(MutableSequence, pt.Generic[T]):
     @pt.overload  # type: ignore[override]
     def __setitem__(self, i: int, o: T) -> None: ...  # noqa: F811, E704
     @pt.overload
-    def __setitem__(self, s: slice, o: 'List[T]') -> None: ...  # noqa: F811, E704, E501
+    def __setitem__(self, s: slice, o: "List[T]") -> None: ...  # noqa: F811, E704, E501
 
-    def __setitem__(self, i: Int_or_Slice, item: T_or_ListT) -> None:  # noqa: F811, E501
+    def __setitem__(
+        self, i: Int_or_Slice, item: T_or_ListT
+    ) -> None:  # noqa: F811, E501
         if not self._typed:
             self._initialise_list(item)
         _setitem(self, i, item)
@@ -360,7 +355,7 @@ class List(MutableSequence, pt.Generic[T]):
     @pt.overload
     def __getitem__(self, i: int) -> T: ...  # noqa: F811, E704
     @pt.overload
-    def __getitem__(self, i: slice) -> 'List[T]': ...  # noqa: F811, E704
+    def __getitem__(self, i: slice) -> "List[T]": ...  # noqa: F811, E704
 
     def __getitem__(self, i: Int_or_Slice) -> T_or_ListT:  # noqa: F811
         if not self._typed:
@@ -389,7 +384,7 @@ class List(MutableSequence, pt.Generic[T]):
     def pop(self, i: "pt.SupportsIndex" = -1) -> T:
         return _pop(self, i)
 
-    def extend(self, iterable: "_Sequence[T]") -> None: #type: ignore[override]
+    def extend(self, iterable: "_Sequence[T]") -> None:  # type: ignore[override]
         # Empty iterable, do nothing
         if len(iterable) == 0:
             return None
@@ -412,8 +407,9 @@ class List(MutableSequence, pt.Generic[T]):
     def copy(self):
         return _copy(self)
 
-    def index(self, item: T, start: pt.Optional[int] = None,
-              stop: pt.Optional[int] = None) -> int:
+    def index(
+        self, item: T, start: pt.Optional[int] = None, stop: pt.Optional[int] = None
+    ) -> int:
         return _index(self, item, start, stop)
 
     def sort(self, key=None, reverse=False):
@@ -433,9 +429,9 @@ class List(MutableSequence, pt.Generic[T]):
         # Check whether the code was invoked from IPython shell
         try:
             get_ipython
-            return '[{0}, ...]'.format(', '.join(buf[:1000]))
+            return "[{0}, ...]".format(", ".join(buf[:1000]))
         except (NameError, IndexError):
-            return '[{0}]'.format(', '.join(buf))
+            return "[{0}]".format(", ".join(buf))
 
     def __repr__(self):
         body = str(self)
@@ -443,7 +439,7 @@ class List(MutableSequence, pt.Generic[T]):
         return "{prefix}({body})".format(prefix=prefix, body=body)
 
 
-@overload_classmethod(ListType, 'empty_list')
+@overload_classmethod(ListType, "empty_list")
 def typedlist_empty(cls, item_type, allocated=DEFAULT_ALLOCATED):
     if cls.instance_type is not ListType:
         return
@@ -469,10 +465,11 @@ def box_lsttype(typ, val, c):
     )
 
     modname = c.context.insert_const_string(
-        c.builder.module, 'numba.typed.typedlist',
+        c.builder.module,
+        "numba.typed.typedlist",
     )
     typedlist_mod = c.pyapi.import_module_noblock(modname)
-    fmp_fn = c.pyapi.object_getattr_string(typedlist_mod, '_from_meminfo_ptr')
+    fmp_fn = c.pyapi.object_getattr_string(typedlist_mod, "_from_meminfo_ptr")
 
     lsttype_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ))
 
@@ -481,7 +478,8 @@ def box_lsttype(typ, val, c):
 
     with builder.if_then(cgutils.is_not_null(builder, lsttype_obj)):
         res = c.pyapi.call_function_objargs(
-            fmp_fn, (boxed_meminfo, lsttype_obj),
+            fmp_fn,
+            (boxed_meminfo, lsttype_obj),
         )
         c.pyapi.decref(fmp_fn)
         c.pyapi.decref(typedlist_mod)
@@ -502,7 +500,7 @@ def unbox_listtype(typ, val, c):
 
     with c.builder.if_else(same_type) as (then, orelse):
         with then:
-            miptr = c.pyapi.object_getattr_string(val, '_opaque')
+            miptr = c.pyapi.object_getattr_string(val, "_opaque")
 
             native = c.unbox(types.MemInfoPointer(types.voidptr), miptr)
 
@@ -528,7 +526,8 @@ def unbox_listtype(typ, val, c):
             c.pyapi.err_format(
                 "PyExc_TypeError",
                 "can't unbox a %S as a %S",
-                valtype, list_type,
+                valtype,
+                list_type,
             )
             bb_else = c.builder.basic_block
 
@@ -553,14 +552,14 @@ def unbox_listtype(typ, val, c):
 # The following contains the logic for the type-inferred constructor
 #
 
+
 def _guess_dtype(iterable):
-    """Guess the correct dtype of the iterable type. """
+    """Guess the correct dtype of the iterable type."""
     if not isinstance(iterable, types.IterableType):
-        raise TypingError(
-            "List() argument must be iterable")
+        raise TypingError("List() argument must be iterable")
     # Special case for nested NumPy arrays.
     elif isinstance(iterable, types.Array) and iterable.ndim > 1:
-        return iterable.copy(ndim=iterable.ndim - 1, layout='A')
+        return iterable.copy(ndim=iterable.ndim - 1, layout="A")
     elif hasattr(iterable, "dtype"):
         return iterable.dtype
     elif hasattr(iterable, "yield_type"):
@@ -572,8 +571,7 @@ def _guess_dtype(iterable):
     else:
         # This should never happen, since the 'dtype' of any iterable
         # should have determined above.
-        raise TypingError(
-            "List() argument does not have a suitable dtype")
+        raise TypingError("List() argument does not have a suitable dtype")
 
 
 @type_callable(ListType)
@@ -608,18 +606,16 @@ def typedlist_call(context):
 
             def mytyper(iterable):
                 pass
+
             self.pysig = mypysig(mytyper)
 
         def __call__(self, *args, **kwargs):
             if kwargs:
-                raise TypingError(
-                    "List() takes no keyword arguments"
-                )
+                raise TypingError("List() takes no keyword arguments")
             elif args:
                 if not 0 <= len(args) <= 1:
                     raise TypingError(
-                        "List() expected at most 1 argument, got {}"
-                        .format(len(args))
+                        "List() expected at most 1 argument, got {}".format(len(args))
                     )
                 rt = types.ListType(_guess_dtype(args[0]))
                 self.attach_sig()
@@ -664,13 +660,16 @@ def impl_numba_typeref_ctor(cls, *args):
     if args:
         # special case 0d Numpy arrays
         if isinstance(args[0], types.Array) and args[0].ndim == 0:
+
             def impl(cls, *args):
                 # Instantiate an empty list and populate it with the single
                 # value from the array.
                 r = List.empty_list(item_type)
                 r.append(args[0].item())
                 return r
+
         else:
+
             def impl(cls, *args):
                 # Instantiate an empty list and populate it with values from
                 # the iterable.
@@ -678,7 +677,9 @@ def impl_numba_typeref_ctor(cls, *args):
                 for i in args[0]:
                     r.append(i)
                 return r
+
     else:
+
         def impl(cls, *args):
             # Simply call .empty_list with the item type from *cls*
             return List.empty_list(item_type)

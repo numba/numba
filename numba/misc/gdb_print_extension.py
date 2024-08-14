@@ -1,5 +1,6 @@
 """gdb printing extension for Numba types.
 """
+
 import re
 
 try:
@@ -17,6 +18,7 @@ class NumbaArrayPrinter:
     def to_string(self):
         try:
             import numpy as np
+
             HAVE_NUMPY = True
         except ImportError:
             HAVE_NUMPY = False
@@ -49,30 +51,30 @@ class NumbaArrayPrinter:
 
             # type information decode, simple type:
             ty_str = str(self.val.type)
-            if HAVE_NUMPY and ('aligned' in ty_str or 'Record' in ty_str):
-                ty_str = ty_str.replace('unaligned ','').strip()
+            if HAVE_NUMPY and ("aligned" in ty_str or "Record" in ty_str):
+                ty_str = ty_str.replace("unaligned ", "").strip()
                 matcher = re.compile(r"array\((Record.*), (.*), (.*)\)\ \(.*")
                 # NOTE: need to deal with "Alignment" else dtype size is wrong
                 arr_info = [x.strip() for x in matcher.match(ty_str).groups()]
                 dtype_str, ndim_str, order_str = arr_info
-                rstr = r'Record\((.*\[.*\]);([0-9]+);(True|False)'
+                rstr = r"Record\((.*\[.*\]);([0-9]+);(True|False)"
                 rstr_match = re.match(rstr, dtype_str)
                 # balign is unused, it's the alignment
                 fields, balign, is_aligned_str = rstr_match.groups()
-                is_aligned = is_aligned_str == 'True'
-                field_dts = fields.split(',')
+                is_aligned = is_aligned_str == "True"
+                field_dts = fields.split(",")
                 struct_entries = []
                 for f in field_dts:
-                    splitted = f.split('[')
+                    splitted = f.split("[")
                     name = splitted[0]
                     dt_part = splitted[1:]
                     if len(dt_part) > 1:
-                        raise TypeError('Unsupported sub-type: %s' % f)
+                        raise TypeError("Unsupported sub-type: %s" % f)
                     else:
                         dt_part = dt_part[0]
                         if "nestedarray" in dt_part:
-                            raise TypeError('Unsupported sub-type: %s' % f)
-                        dt_as_str = dt_part.split(';')[0].split('=')[1]
+                            raise TypeError("Unsupported sub-type: %s" % f)
+                        dt_as_str = dt_part.split(";")[0].split("=")[1]
                         dtype = np.dtype(dt_as_str)
                     struct_entries.append((name, dtype))
                     # The dtype is actually a record of some sort
@@ -82,8 +84,8 @@ class NumbaArrayPrinter:
                 arr_info = [x.strip() for x in matcher.match(ty_str).groups()]
                 dtype_str, ndim_str, order_str = arr_info
                 # fix up unichr dtype
-                if 'unichr x ' in dtype_str:
-                    dtype_str = dtype_str[1:-1].replace('unichr x ', '<U')
+                if "unichr x " in dtype_str:
+                    dtype_str = dtype_str[1:-1].replace("unichr x ", "<U")
 
             def dwarr2inttuple(dwarr):
                 # Converts a gdb handle to a dwarf array to a tuple of ints
@@ -110,18 +112,20 @@ class NumbaArrayPrinter:
                     this_proc = gdb.selected_inferior()
                     mem = this_proc.read_memory(int(data), extent)
                     arr_data = np.frombuffer(mem, dtype=dtype)
-                    new_arr = np.lib.stride_tricks.as_strided(arr_data,
-                                                              shape=shape,
-                                                              strides=strides,)
-                    return '\n' + str(new_arr)
+                    new_arr = np.lib.stride_tricks.as_strided(
+                        arr_data,
+                        shape=shape,
+                        strides=strides,
+                    )
+                    return "\n" + str(new_arr)
                 # Catch all for no NumPy
                 return "array([...], dtype=%s, shape=%s)" % (dtype_str, shape)
             else:
                 # Not yet initialized or NULLed out data
                 buf = list(["NULL/Uninitialized"])
-                return "array([" + ', '.join(buf) + "]" + ")"
+                return "array([" + ", ".join(buf) + "]" + ")"
         except Exception as e:
-            return 'array[Exception: Failed to parse. %s]' % e
+            return "array[Exception: Failed to parse. %s]" % e
 
 
 class NumbaComplexPrinter:
@@ -130,7 +134,7 @@ class NumbaComplexPrinter:
         self.val = val
 
     def to_string(self):
-        return "%s+%sj" % (self.val['real'], self.val['imag'])
+        return "%s+%sj" % (self.val["real"], self.val["imag"])
 
 
 class NumbaTuplePrinter:
@@ -143,7 +147,7 @@ class NumbaTuplePrinter:
         fields = self.val.type.fields()
         for f in fields:
             buf.append(str(self.val[f.name]))
-        return "(%s)" % ', '.join(buf)
+        return "(%s)" % ", ".join(buf)
 
 
 class NumbaUniTuplePrinter:
@@ -158,7 +162,7 @@ class NumbaUniTuplePrinter:
         buf = []
         for i in range(lo, hi + 1):
             buf.append(str(self.val[i]))
-        return "(%s)" % ', '.join(buf)
+        return "(%s)" % ", ".join(buf)
 
 
 class NumbaUnicodeTypePrinter:
@@ -178,7 +182,7 @@ class NumbaUnicodeTypePrinter:
             if isinstance(mem, memoryview):
                 buf = bytes(mem).decode()
             else:
-                buf = mem.decode('utf-8')
+                buf = mem.decode("utf-8")
         else:
             buf = str(data)
         return "'%s'" % buf
@@ -186,17 +190,18 @@ class NumbaUnicodeTypePrinter:
 
 def _create_printers():
     printer = gdb.printing.RegexpCollectionPrettyPrinter("Numba")
-    printer.add_printer('Numba unaligned array printer', '^unaligned array\\(',
-                        NumbaArrayPrinter)
-    printer.add_printer('Numba array printer', '^array\\(', NumbaArrayPrinter)
-    printer.add_printer('Numba complex printer', '^complex[0-9]+\\ ',
-                        NumbaComplexPrinter)
-    printer.add_printer('Numba Tuple printer', '^Tuple\\(',
-                        NumbaTuplePrinter)
-    printer.add_printer('Numba UniTuple printer', '^UniTuple\\(',
-                        NumbaUniTuplePrinter)
-    printer.add_printer('Numba unicode_type printer', '^unicode_type\\s+\\(',
-                        NumbaUnicodeTypePrinter)
+    printer.add_printer(
+        "Numba unaligned array printer", "^unaligned array\\(", NumbaArrayPrinter
+    )
+    printer.add_printer("Numba array printer", "^array\\(", NumbaArrayPrinter)
+    printer.add_printer(
+        "Numba complex printer", "^complex[0-9]+\\ ", NumbaComplexPrinter
+    )
+    printer.add_printer("Numba Tuple printer", "^Tuple\\(", NumbaTuplePrinter)
+    printer.add_printer("Numba UniTuple printer", "^UniTuple\\(", NumbaUniTuplePrinter)
+    printer.add_printer(
+        "Numba unicode_type printer", "^unicode_type\\s+\\(", NumbaUnicodeTypePrinter
+    )
     return printer
 
 

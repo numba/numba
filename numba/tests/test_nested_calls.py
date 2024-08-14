@@ -3,7 +3,6 @@ Test problems in nested calls.
 Usually due to invalid type conversion between function boundaries.
 """
 
-
 from numba import int32, int64
 from numba import jit
 from numba.core import types
@@ -16,25 +15,32 @@ import unittest
 def f_inner(a, b, c):
     return a, b, c
 
+
 def f(x, y, z):
     return f_inner(x, c=y, b=z)
+
 
 @jit(nopython=True)
 def g_inner(a, b=2, c=3):
     return a, b, c
 
+
 def g(x, y, z):
     return g_inner(x, b=y), g_inner(a=z, c=x)
+
 
 @jit(nopython=True)
 def star_inner(a=5, *b):
     return a, b
 
+
 def star(x, y, z):
     return star_inner(a=x), star_inner(x, y, z)
 
+
 def star_call(x, y, z):
     return star_inner(x, *y), star_inner(*z)
+
 
 @jit(nopython=True)
 def argcast_inner(a, b):
@@ -42,6 +48,7 @@ def argcast_inner(a, b):
         # Here `a` is unified to int64 (from int32 originally)
         a = int64(0)
     return a
+
 
 def argcast(a, b):
     return argcast_inner(int32(a), b)
@@ -54,11 +61,15 @@ def generated_inner(x, y=5, z=6):
 @overload(generated_inner)
 def ol_generated_inner(x, y=5, z=6):
     if isinstance(x, types.Complex):
+
         def impl(x, y=5, z=6):
             return x + y, z
+
     else:
+
         def impl(x, y=5, z=6):
             return x - y, z
+
     return impl
 
 
@@ -73,6 +84,7 @@ class TestNestedCall(TestCase):
             expected = pyfunc(*args, **kwargs)
             result = f(*args, **kwargs)
             self.assertPreciseEqual(result, expected)
+
         flags = dict(forceobj=True) if objmode else dict(nopython=True)
         f = jit(**flags)(pyfunc)
         return f, check
@@ -149,5 +161,5 @@ class TestNestedCall(TestCase):
         self.assertPreciseEqual(cfunc(1j, 2), (1j + 5, 2))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

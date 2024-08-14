@@ -29,7 +29,7 @@ class TestUserExc(CUDATestCase):
             elif x == 2:
                 raise MyError("foo")
 
-        test_exc[1, 1](0)    # no raise
+        test_exc[1, 1](0)  # no raise
         with self.assertRaises(MyError) as cm:
             test_exc[1, 1](1)
         if not config.ENABLE_CUDASIM:
@@ -43,5 +43,5 @@ class TestUserExc(CUDATestCase):
         self.assertIn("tid=[0, 0, 0] ctaid=[0, 0, 0]: foo", str(cm.exception))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

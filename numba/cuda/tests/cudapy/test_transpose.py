@@ -5,17 +5,18 @@ from numba.cuda.testing import unittest
 from numba.cuda.testing import skip_on_cudasim, CUDATestCase
 
 
-recordwith2darray = np.dtype([('i', np.int32),
-                              ('j', np.float32, (3, 2))])
+recordwith2darray = np.dtype([("i", np.int32), ("j", np.float32, (3, 2))])
 
 
-@skip_on_cudasim('Device Array API unsupported in the simulator')
+@skip_on_cudasim("Device Array API unsupported in the simulator")
 class TestTranspose(CUDATestCase):
 
     def test_transpose(self):
-        variants = ((5, 6, np.float64),
-                    (128, 128, np.complex128),
-                    (1025, 512, np.float64))
+        variants = (
+            (5, 6, np.float64),
+            (128, 128, np.complex128),
+            (1025, 512, np.float64),
+        )
 
         for rows, cols, dtype in variants:
             with self.subTest(rows=rows, cols=cols, dtype=dtype):
@@ -27,8 +28,15 @@ class TestTranspose(CUDATestCase):
                 dy.copy_to_host(y)
                 np.testing.assert_array_equal(x.transpose(), y)
 
-    small_variants = ((2, 3), (16, 16), (16, 17), (17, 16), (14, 15), (15, 14),
-                      (14, 14))
+    small_variants = (
+        (2, 3),
+        (16, 16),
+        (16, 17),
+        (17, 16),
+        (14, 15),
+        (15, 14),
+        (14, 14),
+    )
 
     def test_transpose_record(self):
         for rows, cols in self.small_variants:
@@ -36,7 +44,7 @@ class TestTranspose(CUDATestCase):
                 arr = np.recarray((rows, cols), dtype=recordwith2darray)
                 for x in range(rows):
                     for y in range(cols):
-                        arr[x, y].i = x ** 2 + y
+                        arr[x, y].i = x**2 + y
                         j = np.arange(3 * 2, dtype=np.float32)
                         arr[x, y].j = j.reshape(3, 2) * x + y
 
@@ -76,5 +84,5 @@ class TestTranspose(CUDATestCase):
         np.testing.assert_array_equal(a_view_t, h_a_view_t)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -9,10 +9,11 @@ default_type_manager = TypeManager()
 def dump_number_rules():
     tm = default_type_manager
     for a, b in itertools.product(types.number_domain, types.number_domain):
-        print(a, '->', b, tm.check_compatible(a, b))
+        print(a, "->", b, tm.check_compatible(a, b))
 
 
-if config.USE_LEGACY_TYPE_SYSTEM: # Old type system
+if config.USE_LEGACY_TYPE_SYSTEM:  # Old type system
+
     def _init_casting_rules(tm):
         tcr = TypeCastingRules(tm)
         tcr.safe_unsafe(types.boolean, types.int8)
@@ -35,7 +36,6 @@ if config.USE_LEGACY_TYPE_SYSTEM: # Old type system
         tcr.safe_unsafe(types.int16, types.float32)
         tcr.safe_unsafe(types.int32, types.float64)
 
-
         tcr.unsafe_unsafe(types.int16, types.float16)
         tcr.unsafe_unsafe(types.int32, types.float32)
         # XXX this is inconsistent with the above; but we want to prefer
@@ -57,13 +57,14 @@ if config.USE_LEGACY_TYPE_SYSTEM: # Old type system
         tcr.unsafe_unsafe(types.uintp, types.voidptr)
 
         return tcr
-else: # New type system
+
+else:  # New type system
     # Currently left as empty
     # If no casting rules are required we may opt to remove
-    # this framework upon deprecation 
+    # this framework upon deprecation
     def _init_casting_rules(tm):
         tcr = TypeCastingRules(tm)
         return tcr
 
-default_casting_rules = _init_casting_rules(default_type_manager)
 
+default_casting_rules = _init_casting_rules(default_type_manager)

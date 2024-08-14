@@ -14,6 +14,7 @@ voidptr = ir.PointerType(ir.IntType(8))
 
 # NOTE: we don't use @lower here since print_item() doesn't return a LLVM value
 
+
 @singledispatch
 def print_item(ty, context, builder, val):
     """
@@ -21,8 +22,7 @@ def print_item(ty, context, builder, val):
     A (format string, [list of arguments]) is returned that will allow
     forming the final printf()-like call.
     """
-    raise NotImplementedError("printing unimplemented for values of type %s"
-                              % (ty,))
+    raise NotImplementedError("printing unimplemented for values of type %s" % (ty,))
 
 
 @print_item.register(types.Integer)
@@ -71,11 +71,13 @@ def print_varargs(context, builder, sig, args):
 
     rawfmt = " ".join(formats) + "\n"
     if len(args) > 32:
-        msg = ('CUDA print() cannot print more than 32 items. '
-               'The raw format string will be emitted by the kernel instead.')
+        msg = (
+            "CUDA print() cannot print more than 32 items. "
+            "The raw format string will be emitted by the kernel instead."
+        )
         warn(msg, NumbaWarning)
 
-        rawfmt = rawfmt.replace('%', '%%')
+        rawfmt = rawfmt.replace("%", "%%")
     fmt = context.insert_string_const_addrspace(builder, rawfmt)
     array = cgutils.make_anonymous_struct(builder, values)
     arrayptr = cgutils.alloca_once_value(builder, array)

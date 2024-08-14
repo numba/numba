@@ -4,6 +4,7 @@ from numba import jit
 
 _GLOBAL_STR = "abc"
 
+
 def sum1d(s, e):
     c = 0
     for i in range(s, e):
@@ -43,7 +44,7 @@ def redefine1():
     x = 0
     for i in range(5):
         x += 1
-    x = 0. + x
+    x = 0.0 + x
     for i in range(5):
         x += 1
     return x
@@ -51,6 +52,7 @@ def redefine1():
 
 def andor(x, y):
     return (x > 0 and x < 10) or (y > 0 and y < 10)
+
 
 andornopython = jit(nopython=True)(andor)
 
@@ -86,8 +88,11 @@ def blackscholes_cnd(d):
     A5 = 1.330274429
     RSQRT2PI = 0.39894228040143267793994605993438
     K = 1.0 / (1.0 + 0.2316419 * math.fabs(d))
-    ret_val = (RSQRT2PI * math.exp(-0.5 * d * d) *
-               (K * (A1 + K * (A2 + K * (A3 + K * (A4 + K * A5))))))
+    ret_val = (
+        RSQRT2PI
+        * math.exp(-0.5 * d * d)
+        * (K * (A1 + K * (A2 + K * (A3 + K * (A4 + K * A5)))))
+    )
     if d > 0:
         ret_val = 1.0 - ret_val
     return ret_val

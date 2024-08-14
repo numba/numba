@@ -20,7 +20,7 @@ from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
 import unittest
 
 
-_TEST_TIMEOUT = _RUNNER_TIMEOUT - 60.
+_TEST_TIMEOUT = _RUNNER_TIMEOUT - 60.0
 
 
 try:
@@ -33,7 +33,7 @@ try:
 except ImportError:
     pygments = None
 
-_is_armv7l = platform.machine() == 'armv7l'
+_is_armv7l = platform.machine() == "armv7l"
 
 
 def dummy(x):
@@ -58,28 +58,35 @@ def star_defaults(x, y=2, *z):
 
 def generated_usecase(x, y=5):
     if isinstance(x, types.Complex):
+
         def impl(x, y):
             return x + y
+
     else:
+
         def impl(x, y):
             return x - y
+
     return impl
 
 
 def bad_generated_usecase(x, y=5):
     if isinstance(x, types.Complex):
+
         def impl(x):
             return x
+
     else:
+
         def impl(x, y=6):
             return x - y
+
     return impl
 
 
 def dtype_generated_usecase(a, b, dtype=None):
     if isinstance(dtype, (types.misc.NoneType, types.misc.Omitted)):
-        out_dtype = np.result_type(*(np.dtype(ary.dtype.name)
-                                   for ary in (a, b)))
+        out_dtype = np.result_type(*(np.dtype(ary.dtype.name) for ary in (a, b)))
     elif isinstance(dtype, (types.DType, types.NumberClass)):
         out_dtype = as_dtype(dtype)
     else:
@@ -100,6 +107,7 @@ class BaseTest(TestCase):
             expected = pyfunc(*args, **kwargs)
             result = f(*args, **kwargs)
             self.assertPreciseEqual(result, expected)
+
         f = jit(**self.jit_args)(pyfunc)
         return f, check
 
@@ -150,7 +158,7 @@ class TestDispatcher(BaseTest):
         self.assertPreciseEqual(c_add(12300000000, 456), add(12300000000, 456))
 
         # Now force compilation of only a single specialization
-        c_add = jit('(i4, i4)', nopython=True)(add)
+        c_add = jit("(i4, i4)", nopython=True)(add)
         self.assertPreciseEqual(c_add(123, 456), add(123, 456))
         # Implicit (unsafe) conversion of float to int
         self.assertPreciseEqual(c_add(12.3, 45.6), add(12, 45))
@@ -159,8 +167,8 @@ class TestDispatcher(BaseTest):
             c_add(12.3, 45.6j)
 
     def test_ambiguous_new_version(self):
-        """Test compiling new version in an ambiguous case
-        """
+        """Test compiling new version in an ambiguous case"""
+
         @jit
         def foo(a, b):
             return a + b
@@ -176,8 +184,7 @@ class TestDispatcher(BaseTest):
         # The following call is ambiguous because (int, int) can resolve
         # to (float, int) or (int, float) with equal weight.
         self.assertAlmostEqual(foo(1, 1), INT + INT)
-        self.assertEqual(len(foo.overloads), 4, "didn't compile a new "
-                                                "version")
+        self.assertEqual(len(foo.overloads), 4, "didn't compile a new " "version")
 
     def test_lock(self):
         """
@@ -224,9 +231,7 @@ class TestDispatcher(BaseTest):
         self.assertPreciseEqual(f(np.float32(1), np.float32(2**-25)), 1.0)
         self.assertPreciseEqual(f(1, 2**-25), 1.0000000298023224)
         # Fail to resolve ambiguity between the two best overloads
-        f = jit(["(float32,float64)",
-                 "(float64,float32)",
-                 "(int64,int64)"])(add)
+        f = jit(["(float32,float64)", "(float64,float32)", "(int64,int64)"])(add)
         with self.assertRaises(TypeError) as cm:
             f(1.0, 2.0)
         # The two best matches are output in the error message, as well
@@ -236,14 +241,16 @@ class TestDispatcher(BaseTest):
             r"Ambiguous overloading for <function add [^>]*> "
             r"\(float64, float64\):\n"
             r"\(float32, float64\) -> float64\n"
-            r"\(float64, float32\) -> float64"
+            r"\(float64, float32\) -> float64",
         )
         # The integer signature is not part of the best matches
         self.assertNotIn("int64", str(cm.exception))
 
     def test_signature_mismatch(self):
-        tmpl = ("Signature mismatch: %d argument types given, but function "
-                "takes 2 arguments")
+        tmpl = (
+            "Signature mismatch: %d argument types given, but function "
+            "takes 2 arguments"
+        )
         with self.assertRaises(TypeError) as cm:
             jit("()")(add)
         self.assertIn(tmpl % 0, str(cm.exception))
@@ -263,9 +270,10 @@ class TestDispatcher(BaseTest):
         f = jit("(intc,intc)")(add)
         with self.assertRaises(TypeError) as cm:
             f(1j, 1j)
-        self.assertEqual(str(cm.exception),
-                         "No matching definition for argument type(s) "
-                         "complex128, complex128")
+        self.assertEqual(
+            str(cm.exception),
+            "No matching definition for argument type(s) " "complex128, complex128",
+        )
 
     def test_disabled_compilation(self):
         @jit
@@ -311,11 +319,12 @@ class TestDispatcher(BaseTest):
         function.  On the other hand, with nopython=True, a ValueError should
         be raised to report the failure with fingerprint.
         """
+
         def foo(x):
             return x
 
         # Empty list will trigger failure in compile_fingerprint
-        errmsg = 'cannot compute fingerprint of empty list'
+        errmsg = "cannot compute fingerprint of empty list"
         with self.assertRaises(ValueError) as raises:
             _dispatcher.compute_fingerprint([])
         self.assertIn(errmsg, str(raises.exception))
@@ -346,6 +355,7 @@ class TestDispatcher(BaseTest):
         """
         Test serialization of Dispatcher objects
         """
+
         @jit(nopython=True)
         def foo(x):
             return x + 1
@@ -463,10 +473,8 @@ class TestDispatcher(BaseTest):
         # bit set
         check("C_contig_aligned", C_contig_aligned, disable_write_bit=True)
         check("F_contig_aligned", F_contig_aligned, disable_write_bit=True)
-        check("C_contig_misaligned", C_contig_misaligned,
-              disable_write_bit=True)
-        check("F_contig_misaligned", F_contig_misaligned,
-              disable_write_bit=True)
+        check("C_contig_misaligned", C_contig_misaligned, disable_write_bit=True)
+        check("F_contig_misaligned", F_contig_misaligned, disable_write_bit=True)
 
     @needs_lapack
     @unittest.skipIf(_is_armv7l, "Unaligned loads unsupported")
@@ -493,21 +501,18 @@ class TestDispatcher(BaseTest):
 
         # create some arrays as Cartesian production of:
         # [F/C] x [aligned/misaligned]
-        C_contig_aligned = tmp[:-1].view(np.complex128).\
-            reshape(r, r, r, r, r, r)
-        check_properties(C_contig_aligned, 'C', True)
-        C_contig_misaligned = tmp[1:].view(np.complex128).\
-            reshape(r, r, r, r, r, r)
-        check_properties(C_contig_misaligned, 'C', False)
+        C_contig_aligned = tmp[:-1].view(np.complex128).reshape(r, r, r, r, r, r)
+        check_properties(C_contig_aligned, "C", True)
+        C_contig_misaligned = tmp[1:].view(np.complex128).reshape(r, r, r, r, r, r)
+        check_properties(C_contig_misaligned, "C", False)
         F_contig_aligned = C_contig_aligned.T
-        check_properties(F_contig_aligned, 'F', True)
+        check_properties(F_contig_aligned, "F", True)
         F_contig_misaligned = C_contig_misaligned.T
-        check_properties(F_contig_misaligned, 'F', False)
+        check_properties(F_contig_misaligned, "F", False)
 
         # checking routine
         def check(name, a):
-            a[:, :] = np.arange(n, dtype=np.complex128).\
-                reshape(r, r, r, r, r, r)
+            a[:, :] = np.arange(n, dtype=np.complex128).reshape(r, r, r, r, r, r)
             expected = foo(a)
             got = jitfoo(a)
             np.testing.assert_allclose(expected, got)
@@ -558,7 +563,8 @@ class TestDispatcher(BaseTest):
             jit(foo)
         err_msg = str(raises.exception)
         self.assertIn(
-            "A jit decorator was called on an already jitted function", err_msg)
+            "A jit decorator was called on an already jitted function", err_msg
+        )
         self.assertIn("foo", err_msg)
         self.assertIn(".py_func", err_msg)
 
@@ -587,12 +593,10 @@ class TestSignatureHandling(BaseTest):
         # Errors
         with self.assertRaises(TypeError) as cm:
             f(3, 4, y=6, z=7)
-        self.assertIn("too many arguments: expected 3, got 4",
-                      str(cm.exception))
+        self.assertIn("too many arguments: expected 3, got 4", str(cm.exception))
         with self.assertRaises(TypeError) as cm:
             f()
-        self.assertIn("not enough arguments: expected 3, got 0",
-                      str(cm.exception))
+        self.assertIn("not enough arguments: expected 3, got 0", str(cm.exception))
         with self.assertRaises(TypeError) as cm:
             f(3, 4, y=6)
         self.assertIn("missing argument 'z'", str(cm.exception))
@@ -614,12 +618,12 @@ class TestSignatureHandling(BaseTest):
         # Errors
         with self.assertRaises(TypeError) as cm:
             f(3, 4, y=6, z=7)
-        self.assertIn("too many arguments: expected 3, got 4",
-                      str(cm.exception))
+        self.assertIn("too many arguments: expected 3, got 4", str(cm.exception))
         with self.assertRaises(TypeError) as cm:
             f()
-        self.assertIn("not enough arguments: expected at least 1, got 0",
-                      str(cm.exception))
+        self.assertIn(
+            "not enough arguments: expected at least 1, got 0", str(cm.exception)
+        )
         with self.assertRaises(TypeError) as cm:
             f(y=6, z=7)
         self.assertIn("missing argument 'x'", str(cm.exception))
@@ -664,6 +668,7 @@ class TestDispatcherMethods(TestCase):
         @jit
         def foo(x):
             return x + closure
+
         self.assertPreciseEqual(foo(1), 2)
         self.assertPreciseEqual(foo(1.5), 2.5)
         self.assertEqual(len(foo.signatures), 2)
@@ -683,6 +688,7 @@ class TestDispatcherMethods(TestCase):
         @jit("int32(int32)")
         def foo(x):
             return x + closure
+
         self.assertPreciseEqual(foo(1), 2)
         self.assertPreciseEqual(foo(1.5), 2)
         closure = 2
@@ -736,15 +742,15 @@ class TestDispatcherMethods(TestCase):
             # Look for the function name
             self.assertTrue("foo" in asm)
 
-    def _check_cfg_display(self, cfg, wrapper=''):
+    def _check_cfg_display(self, cfg, wrapper=""):
         # simple stringify test
         if wrapper:
             wrapper = "{}{}".format(len(wrapper), wrapper)
-        module_name = __name__.split('.', 1)[0]
+        module_name = __name__.split(".", 1)[0]
         module_len = len(module_name)
-        prefix = r'^digraph "CFG for \'_ZN{}{}{}'.format(wrapper,
-                                                         module_len,
-                                                         module_name)
+        prefix = r'^digraph "CFG for \'_ZN{}{}{}'.format(
+            wrapper, module_len, module_name
+        )
         self.assertRegex(str(cfg), prefix)
         # .display() requires an optional dependency on `graphviz`.
         # just test for the attribute without running it.
@@ -773,8 +779,9 @@ class TestDispatcherMethods(TestCase):
 
         # Makes sure all the signatures are correct
         [s1, s2, s3] = cfgs.keys()
-        self.assertEqual(set([s1, s2, s3]),
-                         set(map(lambda x: (typeof(x),), [a1, a2, a3])))
+        self.assertEqual(
+            set([s1, s2, s3]), set(map(lambda x: (typeof(x),), [a1, a2, a3]))
+        )
 
         for cfg in cfgs.values():
             self._check_cfg_display(cfg)
@@ -801,9 +808,8 @@ class TestDispatcherMethods(TestCase):
         foo(a3)
 
         # Call inspect_cfg(signature, show_wrapper="python")
-        cfg = foo.inspect_cfg(signature=foo.signatures[0],
-                              show_wrapper="python")
-        self._check_cfg_display(cfg, wrapper='cpython')
+        cfg = foo.inspect_cfg(signature=foo.signatures[0], show_wrapper="python")
+        self._check_cfg_display(cfg, wrapper="cpython")
 
     def test_inspect_types(self):
         @jit
@@ -855,8 +861,8 @@ class TestDispatcherMethods(TestCase):
         # ensure HTML <span> is found in the annotation output
         for k, v in ann.ann.items():
             span_found = False
-            for line in v['pygments_lines']:
-                if 'span' in line[2]:
+            for line in v["pygments_lines"]:
+                if "span" in line[2]:
                     span_found = True
             self.assertTrue(span_found)
 
@@ -864,8 +870,7 @@ class TestDispatcherMethods(TestCase):
         with self.assertRaises(ValueError) as raises:
             foo.inspect_types(file=StringIO(), pretty=True)
 
-        self.assertIn("`file` must be None if `pretty=True`",
-                      str(raises.exception))
+        self.assertIn("`file` must be None if `pretty=True`", str(raises.exception))
 
     def test_get_annotation_info(self):
         @jit
@@ -875,8 +880,11 @@ class TestDispatcherMethods(TestCase):
         foo(1)
         foo(1.3)
 
-        expected = dict(chain.from_iterable(foo.get_annotation_info(i).items()
-                                            for i in foo.signatures))
+        expected = dict(
+            chain.from_iterable(
+                foo.get_annotation_info(i).items() for i in foo.signatures
+            )
+        )
         result = foo.get_annotation_info()
         self.assertEqual(expected, result)
 
@@ -888,19 +896,20 @@ class TestDispatcherMethods(TestCase):
         for C contiguous first. This results in an C contiguous code inserted
         as F contiguous function.
         """
+
         def pyfunc(A, i, j):
             return A[i, j]
 
         cfunc = jit(pyfunc)
 
-        ary_c_and_f = np.array([[1.]])
-        ary_c = np.array([[0., 1.], [2., 3.]], order='C')
-        ary_f = np.array([[0., 1.], [2., 3.]], order='F')
+        ary_c_and_f = np.array([[1.0]])
+        ary_c = np.array([[0.0, 1.0], [2.0, 3.0]], order="C")
+        ary_f = np.array([[0.0, 1.0], [2.0, 3.0]], order="F")
 
         exp_c = pyfunc(ary_c, 1, 0)
         exp_f = pyfunc(ary_f, 1, 0)
 
-        self.assertEqual(1., cfunc(ary_c_and_f, 0, 0))
+        self.assertEqual(1.0, cfunc(ary_c_and_f, 0, 0))
         got_c = cfunc(ary_c, 1, 0)
         got_f = cfunc(ary_f, 1, 0)
 
@@ -946,11 +955,13 @@ class TestDispatcherFunctionBoundaries(TestCase):
 
         got = maximum([1, 2, 3, 4], cmpfn=jit(lambda x, y: x - y))
         self.assertEqual(got, 4)
-        got = maximum(list(zip(range(5), range(5)[::-1])),
-                      cmpfn=jit(lambda x, y: x[0] - y[0]))
+        got = maximum(
+            list(zip(range(5), range(5)[::-1])), cmpfn=jit(lambda x, y: x[0] - y[0])
+        )
         self.assertEqual(got, (4, 0))
-        got = maximum(list(zip(range(5), range(5)[::-1])),
-                      cmpfn=jit(lambda x, y: x[1] - y[1]))
+        got = maximum(
+            list(zip(range(5), range(5)[::-1])), cmpfn=jit(lambda x, y: x[1] - y[1])
+        )
         self.assertEqual(got, (0, 4))
 
     def test_dispatcher_can_return_to_python(self):
@@ -991,6 +1002,7 @@ class TestBoxingDefaultError(unittest.TestCase):
         # Dummy type has no unbox support
         def foo(x):
             pass
+
         argtys = (types.Dummy("dummy_type"),)
         # This needs `compile_isolated`-like behaviour so as to bypass
         # dispatcher type checking logic
@@ -1005,6 +1017,7 @@ class TestBoxingDefaultError(unittest.TestCase):
         @njit
         def foo():
             return unittest  # Module type has no boxing logic
+
         with self.assertRaises(TypeError) as raises:
             foo()
         pat = "cannot convert native Module.* to Python object"
@@ -1012,8 +1025,7 @@ class TestBoxingDefaultError(unittest.TestCase):
 
 
 class TestNoRetryFailedSignature(unittest.TestCase):
-    """Test that failed-to-compile signatures are not recompiled.
-    """
+    """Test that failed-to-compile signatures are not recompiled."""
 
     def run_test(self, func):
         fcom = func._compiler
@@ -1063,7 +1075,7 @@ class TestNoRetryFailedSignature(unittest.TestCase):
             # much longer than of the successful case. This can be detected
             # by the number of times `trigger()` is visited.
             k = 10
-            counter = {'c': 0}
+            counter = {"c": 0}
 
             def trigger(x):
                 assert 0, "unreachable"
@@ -1071,7 +1083,7 @@ class TestNoRetryFailedSignature(unittest.TestCase):
             @overload(trigger)
             def ol_trigger(x):
                 # Keep track of every visit
-                counter['c'] += 1
+                counter["c"] += 1
                 if would_fail:
                     raise errors.TypingError("invoke_failed")
                 return lambda x: x
@@ -1098,15 +1110,15 @@ class TestNoRetryFailedSignature(unittest.TestCase):
             if would_fail:
                 with self.assertRaises(errors.TypingError) as raises:
                     chain(out, 1)
-                self.assertIn('invoke_failed', str(raises.exception))
+                self.assertIn("invoke_failed", str(raises.exception))
             else:
                 chain(out, 1)
 
             # Returns the visit counts
-            return counter['c']
+            return counter["c"]
 
-        ct_ok = check('a', False)
-        ct_bad = check('c', True)
+        ct_ok = check("a", False)
+        ct_bad = check("c", True)
         # `trigger()` is visited exactly once for both successful and failed
         # compilation.
         self.assertEqual(ct_ok, 1)
@@ -1140,7 +1152,7 @@ def _checker(f1, arg):
 class TestMultiprocessingDefaultParameters(SerialMixin, unittest.TestCase):
     def run_fc_multiproc(self, fc):
         try:
-            ctx = multiprocessing.get_context('spawn')
+            ctx = multiprocessing.get_context("spawn")
         except AttributeError:
             ctx = multiprocessing
 
@@ -1150,44 +1162,49 @@ class TestMultiprocessingDefaultParameters(SerialMixin, unittest.TestCase):
         # itself, e.g. watcher threads etc, or if it's a problem synonymous with
         # a "timing attack".
         for a in [1, 2, 3]:
-            p = ctx.Process(target=_checker, args=(fc, a,))
+            p = ctx.Process(
+                target=_checker,
+                args=(
+                    fc,
+                    a,
+                ),
+            )
             p.start()
             p.join(_TEST_TIMEOUT)
             self.assertEqual(p.exitcode, 0)
 
     def test_int_def_param(self):
-        """ Tests issue #4888"""
+        """Tests issue #4888"""
 
         self.run_fc_multiproc(add_y1)
 
     def test_none_def_param(self):
-        """ Tests None as a default parameter"""
+        """Tests None as a default parameter"""
 
         self.run_fc_multiproc(add_func)
 
     def test_function_def_param(self):
-        """ Tests a function as a default parameter"""
+        """Tests a function as a default parameter"""
 
         self.run_fc_multiproc(add_func)
 
 
 class TestVectorizeDifferentTargets(unittest.TestCase):
-    """Test that vectorize can be reapplied if the target is different
-    """
+    """Test that vectorize can be reapplied if the target is different"""
 
     def test_cpu_vs_parallel(self):
         @jit
         def add(x, y):
             return x + y
 
-        custom_vectorize = vectorize([], identity=None, target='cpu')
+        custom_vectorize = vectorize([], identity=None, target="cpu")
 
         custom_vectorize(add)
 
-        custom_vectorize_2 = vectorize([], identity=None, target='parallel')
+        custom_vectorize_2 = vectorize([], identity=None, target="parallel")
 
         custom_vectorize_2(add)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

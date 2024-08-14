@@ -15,7 +15,7 @@ def global_ndarray_func(x):
 # Create complex array with real and imaginary parts of distinct value
 cplx_X = np.arange(10, dtype=np.complex128)
 tmp = np.arange(10, dtype=np.complex128)
-cplx_X += (tmp+10)*1j
+cplx_X += (tmp + 10) * 1j
 
 
 def global_cplx_arr_copy(a):
@@ -24,7 +24,7 @@ def global_cplx_arr_copy(a):
 
 
 # Create a recarray with fields of distinct value
-x_dt = np.dtype([('a', np.int32), ('b', np.float32)])
+x_dt = np.dtype([("a", np.int32), ("b", np.float32)])
 rec_X = np.recarray(10, dtype=x_dt)
 for i in range(len(rec_X)):
     rec_X[i].a = i
@@ -43,7 +43,7 @@ def global_rec_arr_extract_fields(a, b):
 
 
 # Create additional global recarray
-y_dt = np.dtype([('c', np.int16), ('d', np.float64)])
+y_dt = np.dtype([("c", np.int16), ("d", np.float64)])
 rec_Y = np.recarray(10, dtype=y_dt)
 for i in range(len(rec_Y)):
     rec_Y[i].c = i + 10
@@ -63,6 +63,7 @@ record_only_X = np.recarray(1, dtype=x_dt)[0]
 record_only_X.a = 1
 record_only_X.b = 1.5
 
+
 @jit(nopython=True)
 def global_record_func(x):
     return x.a == record_only_X.a
@@ -72,14 +73,23 @@ def global_record_func(x):
 def global_module_func(x, y):
     return usecases.andornopython(x, y)
 
+
 # Test a global tuple
 tup_int = (1, 2)
-tup_str = ('a', 'b')
-tup_mixed = (1, 'a')
+tup_str = ("a", "b")
+tup_mixed = (1, "a")
 tup_float = (1.2, 3.5)
 tup_npy_ints = (np.uint64(12), np.int8(3))
 tup_tup_array = ((np.ones(5),),)
-mixed_tup_tup_array = (('Z', np.ones(5),), 2j, 'A')
+mixed_tup_tup_array = (
+    (
+        "Z",
+        np.ones(5),
+    ),
+    2j,
+    "A",
+)
+
 
 def global_int_tuple():
     return tup_int[0] + tup_int[1]
@@ -104,20 +114,21 @@ def global_npy_int_tuple():
 
 
 def global_write_to_arr_in_tuple():
-    tup_tup_array[0][0][0] = 10.
+    tup_tup_array[0][0][0] = 10.0
 
 
 def global_write_to_arr_in_mixed_tuple():
-    mixed_tup_tup_array[0][1][0] = 10.
+    mixed_tup_tup_array[0][1][0] = 10.0
 
 
 _glbl_np_bool_T = np.bool_(True)
 _glbl_np_bool_F = np.bool_(False)
 
 
-@register_jitable # consumer function
+@register_jitable  # consumer function
 def _sink(*args):
     pass
+
 
 def global_npy_bool():
     _sink(_glbl_np_bool_T, _glbl_np_bool_F)
@@ -139,7 +150,6 @@ class TestGlobals(unittest.TestCase):
     def test_global_ndarray_npm(self):
         self.check_global_ndarray(nopython=True)
 
-
     def check_global_complex_arr(self, **jitargs):
         # (see github issue #897)
         ctestfunc = jit(**jitargs)(global_cplx_arr_copy)
@@ -153,7 +163,6 @@ class TestGlobals(unittest.TestCase):
     def test_global_complex_arr_npm(self):
         self.check_global_complex_arr(nopython=True)
 
-
     def check_global_rec_arr(self, **jitargs):
         # (see github issue #897)
         ctestfunc = jit(**jitargs)(global_rec_arr_copy)
@@ -166,7 +175,6 @@ class TestGlobals(unittest.TestCase):
 
     def test_global_rec_arr_npm(self):
         self.check_global_rec_arr(nopython=True)
-
 
     def check_global_rec_arr_extract(self, **jitargs):
         # (see github issue #897)
@@ -182,7 +190,6 @@ class TestGlobals(unittest.TestCase):
 
     def test_global_rec_arr_extract_npm(self):
         self.check_global_rec_arr_extract(nopython=True)
-
 
     def check_two_global_rec_arrs(self, **jitargs):
         # (see github issue #897)
@@ -246,8 +253,7 @@ class TestGlobals(unittest.TestCase):
     def test_global_write_to_arr_in_tuple(self):
         # Test writing to an array in a global tuple
         # See issue https://github.com/numba/numba/issues/7120
-        for func in (global_write_to_arr_in_tuple,
-                     global_write_to_arr_in_mixed_tuple):
+        for func in (global_write_to_arr_in_tuple, global_write_to_arr_in_mixed_tuple):
             jitfunc = njit(func)
             with self.assertRaises(errors.TypingError) as e:
                 jitfunc()
@@ -262,5 +268,5 @@ class TestGlobals(unittest.TestCase):
         self.assertEqual(pyfunc(), jitfunc())
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

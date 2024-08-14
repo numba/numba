@@ -1,7 +1,11 @@
 import math
 from numba.core import types, utils
-from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
-                                         signature, Registry)
+from numba.core.typing.templates import (
+    AttributeTemplate,
+    ConcreteTemplate,
+    signature,
+    Registry,
+)
 
 # TODO: New Type System
 # These functions are part of the Python standard library

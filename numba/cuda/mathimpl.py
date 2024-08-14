@@ -12,57 +12,57 @@ lower = registry.lower
 
 
 booleans = []
-booleans += [('isnand', 'isnanf', math.isnan)]
-booleans += [('isinfd', 'isinff', math.isinf)]
-booleans += [('isfinited', 'finitef', math.isfinite)]
+booleans += [("isnand", "isnanf", math.isnan)]
+booleans += [("isinfd", "isinff", math.isinf)]
+booleans += [("isfinited", "finitef", math.isfinite)]
 
 unarys = []
-unarys += [('ceil', 'ceilf', math.ceil)]
-unarys += [('floor', 'floorf', math.floor)]
-unarys += [('fabs', 'fabsf', math.fabs)]
-unarys += [('exp', 'expf', math.exp)]
-unarys += [('expm1', 'expm1f', math.expm1)]
-unarys += [('erf', 'erff', math.erf)]
-unarys += [('erfc', 'erfcf', math.erfc)]
-unarys += [('tgamma', 'tgammaf', math.gamma)]
-unarys += [('lgamma', 'lgammaf', math.lgamma)]
-unarys += [('sqrt', 'sqrtf', math.sqrt)]
-unarys += [('log', 'logf', math.log)]
-unarys += [('log2', 'log2f', math.log2)]
-unarys += [('log10', 'log10f', math.log10)]
-unarys += [('log1p', 'log1pf', math.log1p)]
-unarys += [('acosh', 'acoshf', math.acosh)]
-unarys += [('acos', 'acosf', math.acos)]
-unarys += [('cos', 'cosf', math.cos)]
-unarys += [('cosh', 'coshf', math.cosh)]
-unarys += [('asinh', 'asinhf', math.asinh)]
-unarys += [('asin', 'asinf', math.asin)]
-unarys += [('sin', 'sinf', math.sin)]
-unarys += [('sinh', 'sinhf', math.sinh)]
-unarys += [('atan', 'atanf', math.atan)]
-unarys += [('atanh', 'atanhf', math.atanh)]
-unarys += [('tan', 'tanf', math.tan)]
-unarys += [('trunc', 'truncf', math.trunc)]
+unarys += [("ceil", "ceilf", math.ceil)]
+unarys += [("floor", "floorf", math.floor)]
+unarys += [("fabs", "fabsf", math.fabs)]
+unarys += [("exp", "expf", math.exp)]
+unarys += [("expm1", "expm1f", math.expm1)]
+unarys += [("erf", "erff", math.erf)]
+unarys += [("erfc", "erfcf", math.erfc)]
+unarys += [("tgamma", "tgammaf", math.gamma)]
+unarys += [("lgamma", "lgammaf", math.lgamma)]
+unarys += [("sqrt", "sqrtf", math.sqrt)]
+unarys += [("log", "logf", math.log)]
+unarys += [("log2", "log2f", math.log2)]
+unarys += [("log10", "log10f", math.log10)]
+unarys += [("log1p", "log1pf", math.log1p)]
+unarys += [("acosh", "acoshf", math.acosh)]
+unarys += [("acos", "acosf", math.acos)]
+unarys += [("cos", "cosf", math.cos)]
+unarys += [("cosh", "coshf", math.cosh)]
+unarys += [("asinh", "asinhf", math.asinh)]
+unarys += [("asin", "asinf", math.asin)]
+unarys += [("sin", "sinf", math.sin)]
+unarys += [("sinh", "sinhf", math.sinh)]
+unarys += [("atan", "atanf", math.atan)]
+unarys += [("atanh", "atanhf", math.atanh)]
+unarys += [("tan", "tanf", math.tan)]
+unarys += [("trunc", "truncf", math.trunc)]
 
 unarys_fastmath = {}
-unarys_fastmath['cosf'] = 'fast_cosf'
-unarys_fastmath['sinf'] = 'fast_sinf'
-unarys_fastmath['tanf'] = 'fast_tanf'
-unarys_fastmath['expf'] = 'fast_expf'
-unarys_fastmath['log2f'] = 'fast_log2f'
-unarys_fastmath['log10f'] = 'fast_log10f'
-unarys_fastmath['logf'] = 'fast_logf'
+unarys_fastmath["cosf"] = "fast_cosf"
+unarys_fastmath["sinf"] = "fast_sinf"
+unarys_fastmath["tanf"] = "fast_tanf"
+unarys_fastmath["expf"] = "fast_expf"
+unarys_fastmath["log2f"] = "fast_log2f"
+unarys_fastmath["log10f"] = "fast_log10f"
+unarys_fastmath["logf"] = "fast_logf"
 
 binarys = []
-binarys += [('copysign', 'copysignf', math.copysign)]
-binarys += [('atan2', 'atan2f', math.atan2)]
-binarys += [('pow', 'powf', math.pow)]
-binarys += [('fmod', 'fmodf', math.fmod)]
-binarys += [('hypot', 'hypotf', math.hypot)]
-binarys += [('remainder', 'remainderf', math.remainder)]
+binarys += [("copysign", "copysignf", math.copysign)]
+binarys += [("atan2", "atan2f", math.atan2)]
+binarys += [("pow", "powf", math.pow)]
+binarys += [("fmod", "fmodf", math.fmod)]
+binarys += [("hypot", "hypotf", math.hypot)]
+binarys += [("remainder", "remainderf", math.remainder)]
 
 binarys_fastmath = {}
-binarys_fastmath['powf'] = 'fast_powf'
+binarys_fastmath["powf"] = "fast_powf"
 
 
 @lower(math.isinf, types.Integer)
@@ -179,8 +179,7 @@ def fp16_trunc_impl(context, builder, sig, args):
 
 def impl_boolean(key, ty, libfunc):
     def lower_boolean_impl(context, builder, sig, args):
-        libfunc_impl = context.get_function(libfunc,
-                                            typing.signature(types.int32, ty))
+        libfunc_impl = context.get_function(libfunc, typing.signature(types.int32, ty))
         result = libfunc_impl(builder, args)
         return context.cast(builder, result, types.int32, types.boolean)
 
@@ -197,9 +196,9 @@ def get_lower_unary_impl(key, ty, libfunc):
         if fast_replacement is not None:
             actual_libfunc = getattr(libdevice, fast_replacement)
 
-        libfunc_impl = context.get_function(actual_libfunc,
-                                            typing.signature(ty, ty))
+        libfunc_impl = context.get_function(actual_libfunc, typing.signature(ty, ty))
         return libfunc_impl(builder, args)
+
     return lower_unary_impl
 
 
@@ -208,7 +207,7 @@ def get_unary_impl_for_fn_and_ty(fn, ty):
     # unary implementations, it does not appear in the unarys list. However,
     # its implementation can be looked up by key like the other
     # implementations, so we add it to the list we search here.
-    tanh_impls = ('tanh', 'tanhf', math.tanh)
+    tanh_impls = ("tanh", "tanhf", math.tanh)
     for fname64, fname32, key in unarys + [tanh_impls]:
         if fn == key:
             if ty == float32:
@@ -233,7 +232,7 @@ def impl_unary_int(key, ty, libfunc):
         elif sig.args[0] == uint64:
             convert = builder.uitofp
         else:
-            m = 'Only 64-bit integers are supported for generic unary int ops'
+            m = "Only 64-bit integers are supported for generic unary int ops"
             raise TypeError(m)
 
         arg = convert(args[0], ir.DoubleType())
@@ -254,9 +253,11 @@ def get_lower_binary_impl(key, ty, libfunc):
         if fast_replacement is not None:
             actual_libfunc = getattr(libdevice, fast_replacement)
 
-        libfunc_impl = context.get_function(actual_libfunc,
-                                            typing.signature(ty, ty, ty))
+        libfunc_impl = context.get_function(
+            actual_libfunc, typing.signature(ty, ty, ty)
+        )
         return libfunc_impl(builder, args)
+
     return lower_binary_impl
 
 
@@ -285,7 +286,7 @@ def impl_binary_int(key, ty, libfunc):
         elif sig.args[0] == uint64:
             convert = builder.uitofp
         else:
-            m = 'Only 64-bit integers are supported for generic binary int ops'
+            m = "Only 64-bit integers are supported for generic binary int ops"
             raise TypeError(m)
 
         args = [convert(arg, ir.DoubleType()) for arg in args]
@@ -390,12 +391,12 @@ def impl_tanh(ty, libfunc):
 
         def tanhf_impl_fastmath():
             fnty = ir.FunctionType(ir.FloatType(), [ir.FloatType()])
-            asm = ir.InlineAsm(fnty, 'tanh.approx.f32 $0, $1;', '=f,f')
+            asm = ir.InlineAsm(fnty, "tanh.approx.f32 $0, $1;", "=f,f")
             return builder.call(asm, args)
 
         if ty == float32 and context.fastmath:
             cc = get_compute_capability()
-            if cc >= (7,5):
+            if cc >= (7, 5):
                 return tanhf_impl_fastmath()
 
         return tanh_impl_libdevice()
@@ -434,8 +435,7 @@ def cpow_implement(fty, cty):
                 len /= math.exp(at * b.imag)
                 phase += b.imag * math.log(vabs)
 
-            return len * (cty(math.cos(phase)) +
-                          cty(math.sin(phase) * cty(1.0j)))
+            return len * (cty(math.cos(phase)) + cty(math.sin(phase) * cty(1.0j)))
 
         return context.compile_internal(builder, cpow_internal, sig, args)
 

@@ -23,24 +23,29 @@ RSQRT2PI = 0.39894228040143267793994605993438
 @register_jitable
 def cnd_array(d):
     K = 1.0 / (1.0 + 0.2316419 * np.abs(d))
-    ret_val = (RSQRT2PI * np.exp(-0.5 * d * d) *
-               (K * (A1 + K * (A2 + K * (A3 + K * (A4 + K * A5))))))
+    ret_val = (
+        RSQRT2PI
+        * np.exp(-0.5 * d * d)
+        * (K * (A1 + K * (A2 + K * (A3 + K * (A4 + K * A5)))))
+    )
     return np.where(d > 0, 1.0 - ret_val, ret_val)
 
 
 @register_jitable
 def cnd(d):
     K = 1.0 / (1.0 + 0.2316419 * math.fabs(d))
-    ret_val = (RSQRT2PI * math.exp(-0.5 * d * d) *
-               (K * (A1 + K * (A2 + K * (A3 + K * (A4 + K * A5))))))
+    ret_val = (
+        RSQRT2PI
+        * math.exp(-0.5 * d * d)
+        * (K * (A1 + K * (A2 + K * (A3 + K * (A4 + K * A5)))))
+    )
     if d > 0:
         ret_val = 1.0 - ret_val
     return ret_val
 
 
 @njit
-def blackscholes_arrayexpr(stockPrice, optionStrike, optionYears, Riskfree,
-                           Volatility):
+def blackscholes_arrayexpr(stockPrice, optionStrike, optionYears, Riskfree, Volatility):
     S = stockPrice
     X = optionStrike
     T = optionYears
@@ -52,16 +57,17 @@ def blackscholes_arrayexpr(stockPrice, optionStrike, optionYears, Riskfree,
     cndd1 = cnd_array(d1)
     cndd2 = cnd_array(d2)
 
-    expRT = np.exp(- R * T)
+    expRT = np.exp(-R * T)
 
-    callResult = (S * cndd1 - X * expRT * cndd2)
-    putResult = (X * expRT * (1.0 - cndd2) - S * (1.0 - cndd1))
+    callResult = S * cndd1 - X * expRT * cndd2
+    putResult = X * expRT * (1.0 - cndd2) - S * (1.0 - cndd1)
     return callResult, putResult
 
 
 @njit
-def blackscholes_scalar(callResult, putResult, stockPrice, optionStrike,
-                        optionYears, Riskfree, Volatility):
+def blackscholes_scalar(
+    callResult, putResult, stockPrice, optionStrike, optionYears, Riskfree, Volatility
+):
     S = stockPrice
     X = optionStrike
     T = optionYears
@@ -74,9 +80,9 @@ def blackscholes_scalar(callResult, putResult, stockPrice, optionStrike,
         cndd1 = cnd(d1)
         cndd2 = cnd(d2)
 
-        expRT = math.exp((-1. * R) * T[i])
-        callResult[i] = (S[i] * cndd1 - X[i] * expRT * cndd2)
-        putResult[i] = (X[i] * expRT * (1.0 - cndd2) - S[i] * (1.0 - cndd1))
+        expRT = math.exp((-1.0 * R) * T[i])
+        callResult[i] = S[i] * cndd1 - X[i] * expRT * cndd2
+        putResult[i] = X[i] * expRT * (1.0 - cndd2) - S[i] * (1.0 - cndd1)
 
 
 def randfloat(rand_var, low, high):

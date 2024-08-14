@@ -14,7 +14,7 @@ from numba.tests.support import override_config, TestCase
 
 @contextmanager
 def set_refprune_flags(flags):
-    with override_config('LLVM_REFPRUNE_FLAGS', flags):
+    with override_config("LLVM_REFPRUNE_FLAGS", flags):
         yield
 
 
@@ -35,16 +35,16 @@ class TestRefOpPruning(TestCase):
         no effect else.
         """
 
-        with override_config('LLVM_REFPRUNE_PASS', '1'):
+        with override_config("LLVM_REFPRUNE_PASS", "1"):
             cres = njit((*argtys,))(func).overloads[(*argtys,)]
 
-        pstats = cres.metadata.get('prune_stats', None)
+        pstats = cres.metadata.get("prune_stats", None)
         self.assertIsNotNone(pstats)
 
         for k, v in prune_types.items():
             stat = getattr(pstats, k, None)
             self.assertIsNotNone(stat)
-            msg = f'failed checking {k}'
+            msg = f"failed checking {k}"
             if v:
                 self.assertGreater(stat, 0, msg=msg)
             else:
@@ -78,9 +78,15 @@ class TestRefOpPruning(TestCase):
             return x + 1
 
         # disable fanout pruning
-        with set_refprune_flags('per_bb,diamond'):
-            self.check(func, (types.intp), basicblock=True, diamond=True,
-                       fanout=False, fanout_raise=False)
+        with set_refprune_flags("per_bb,diamond"):
+            self.check(
+                func,
+                (types.intp),
+                basicblock=True,
+                diamond=True,
+                fanout=False,
+                fanout_raise=False,
+            )
 
     @TestCase.run_test_in_subprocess
     def test_diamond_2(self):
@@ -95,9 +101,15 @@ class TestRefOpPruning(TestCase):
             return c
 
         # disable fanout pruning
-        with set_refprune_flags('per_bb,diamond'):
-            self.check(func, (types.intp), basicblock=True, diamond=True,
-                       fanout=False, fanout_raise=False)
+        with set_refprune_flags("per_bb,diamond"):
+            self.check(
+                func,
+                (types.intp),
+                basicblock=True,
+                diamond=True,
+                fanout=False,
+                fanout_raise=False,
+            )
 
     @TestCase.run_test_in_subprocess
     def test_fanout_1(self):
@@ -106,7 +118,7 @@ class TestRefOpPruning(TestCase):
             a = np.zeros(n)
             b = np.zeros(n)
             x = (a, b)
-            acc = 0.
+            acc = 0.0
             for i in x:
                 acc += i[0]
             return acc
@@ -125,9 +137,15 @@ class TestRefOpPruning(TestCase):
                     raise ValueError
             return x
 
-        with set_refprune_flags('per_bb,fanout'):
-            self.check(func, (types.intp), basicblock=True, diamond=False,
-                       fanout=True, fanout_raise=False)
+        with set_refprune_flags("per_bb,fanout"):
+            self.check(
+                func,
+                (types.intp),
+                basicblock=True,
+                diamond=False,
+                fanout=True,
+                fanout_raise=False,
+            )
 
     @TestCase.run_test_in_subprocess
     def test_fanout_3(self):
@@ -142,39 +160,45 @@ class TestRefOpPruning(TestCase):
                 c += v.item()
             return 1
 
-        with set_refprune_flags('per_bb,fanout_raise'):
-            self.check(func, (types.intp), basicblock=True, diamond=False,
-                       fanout=False, fanout_raise=True)
+        with set_refprune_flags("per_bb,fanout_raise"):
+            self.check(
+                func,
+                (types.intp),
+                basicblock=True,
+                diamond=False,
+                fanout=False,
+                fanout_raise=True,
+            )
 
 
 class TestRefPruneFlags(TestCase):
     def setUp(self):
-        warnings.simplefilter('error', NumbaInvalidConfigWarning)
+        warnings.simplefilter("error", NumbaInvalidConfigWarning)
 
     def tearDown(self):
         warnings.resetwarnings()
 
     def test_warn_invalid_flags(self):
-        with set_refprune_flags('abc,per_bb,cde'):
+        with set_refprune_flags("abc,per_bb,cde"):
             with self.assertWarns(NumbaInvalidConfigWarning) as cm:
                 optval = _parse_refprune_flags()
             self.assertEqual(len(cm.warnings), 2)
-            self.assertIn('abc', str(cm.warnings[0].message))
-            self.assertIn('cde', str(cm.warnings[1].message))
+            self.assertIn("abc", str(cm.warnings[0].message))
+            self.assertIn("cde", str(cm.warnings[1].message))
             self.assertEqual(optval, llvm.RefPruneSubpasses.PER_BB)
 
     def test_valid_flag(self):
-        with set_refprune_flags('per_bb, diamond, fanout,fanout_raise'):
+        with set_refprune_flags("per_bb, diamond, fanout,fanout_raise"):
             optval = _parse_refprune_flags()
             self.assertEqual(optval, llvm.RefPruneSubpasses.ALL)
 
     def test_the_all_flag(self):
-        with set_refprune_flags('all'):
+        with set_refprune_flags("all"):
             optval = _parse_refprune_flags()
             self.assertEqual(optval, llvm.RefPruneSubpasses.ALL)
 
     def test_some_flags(self):
-        with set_refprune_flags('per_bb, fanout'):
+        with set_refprune_flags("per_bb, fanout"):
             optval = _parse_refprune_flags()
             enumcls = llvm.RefPruneSubpasses
             self.assertEqual(optval, enumcls.PER_BB | enumcls.FANOUT)

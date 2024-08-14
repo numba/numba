@@ -23,31 +23,31 @@ class DocsTypedDictUsageTest(unittest.TestCase):
             )
 
             # The typed-dict can be used from the interpreter.
-            d['posx'] = np.asarray([1, 0.5, 2], dtype='f8')
-            d['posy'] = np.asarray([1.5, 3.5, 2], dtype='f8')
-            d['velx'] = np.asarray([0.5, 0, 0.7], dtype='f8')
-            d['vely'] = np.asarray([0.2, -0.2, 0.1], dtype='f8')
+            d["posx"] = np.asarray([1, 0.5, 2], dtype="f8")
+            d["posy"] = np.asarray([1.5, 3.5, 2], dtype="f8")
+            d["velx"] = np.asarray([0.5, 0, 0.7], dtype="f8")
+            d["vely"] = np.asarray([0.2, -0.2, 0.1], dtype="f8")
 
             # Here's a function that expects a typed-dict as the argument
             @njit
             def move(d):
                 # inplace operations on the arrays
-                d['posx'] += d['velx']
-                d['posy'] += d['vely']
+                d["posx"] += d["velx"]
+                d["posy"] += d["vely"]
 
-            print('posx: ', d['posx'])  # Out: posx:  [1.  0.5 2. ]
-            print('posy: ', d['posy'])  # Out: posy:  [1.5 3.5 2. ]
+            print("posx: ", d["posx"])  # Out: posx:  [1.  0.5 2. ]
+            print("posy: ", d["posy"])  # Out: posy:  [1.5 3.5 2. ]
 
             # Call move(d) to inplace update the arrays in the typed-dict.
             move(d)
 
-            print('posx: ', d['posx'])  # Out: posx:  [1.5 0.5 2.7]
-            print('posy: ', d['posy'])  # Out: posy:  [1.7 3.3 2.1]
+            print("posx: ", d["posx"])  # Out: posx:  [1.5 0.5 2.7]
+            print("posy: ", d["posy"])  # Out: posy:  [1.7 3.3 2.1]
             # magictoken.ex_typed_dict_from_cpython.end
 
         # Test
-        np.testing.assert_array_equal(d['posx'], [1.5, 0.5, 2.7])
-        np.testing.assert_array_equal(d['posy'], [1.7, 3.3, 2.1])
+        np.testing.assert_array_equal(d["posx"], [1.5, 0.5, 2.7])
+        np.testing.assert_array_equal(d["posy"], [1.7, 3.3, 2.1])
 
     def test_ex_typed_dict_njit(self):
         with captured_stdout():
@@ -77,8 +77,8 @@ class DocsTypedDictUsageTest(unittest.TestCase):
             # Print the dictionary
             print(d)  # Out: {posx: [0. 1. 2.], posy: [3. 4. 5.]}
             # magictoken.ex_typed_dict_njit.end
-        np.testing.assert_array_equal(d['posx'], [0, 1, 2])
-        np.testing.assert_array_equal(d['posy'], [3, 4, 5])
+        np.testing.assert_array_equal(d["posx"], [0, 1, 2])
+        np.testing.assert_array_equal(d["posy"], [3, 4, 5])
 
     def test_ex_inferred_dict_njit(self):
         with captured_stdout():
@@ -98,8 +98,8 @@ class DocsTypedDictUsageTest(unittest.TestCase):
                 return d, k
 
             d, k = foo()
-            print(d)    # {3: [0 1 2], 5: [0 1 2 3 4]}
-            print(k)    # {1: [0], 2: [0 1]}
+            print(d)  # {3: [0 1 2], 5: [0 1 2 3 4]}
+            print(k)  # {1: [0], 2: [0 1]}
             # magictoken.ex_inferred_dict_njit.end
         np.testing.assert_array_equal(d[3], [0, 1, 2])
         np.testing.assert_array_equal(d[5], [0, 1, 2, 3, 4])
@@ -107,5 +107,5 @@ class DocsTypedDictUsageTest(unittest.TestCase):
         np.testing.assert_array_equal(k[2], [0, 1])
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

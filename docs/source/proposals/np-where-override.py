@@ -3,6 +3,7 @@ import numpy as np
 from numba.core import types
 from numba.extending import overload
 
+
 @overload(np.where)
 def where(cond, x, y):
     """
@@ -11,7 +12,8 @@ def where(cond, x, y):
     # Choose implementation based on argument types.
     if isinstance(cond, types.Array):
         # Array where() => return an array of the same shape
-        if all(ty.layout == 'C' for ty in (cond, x, y)):
+        if all(ty.layout == "C" for ty in (cond, x, y)):
+
             def where_impl(cond, x, y):
                 """
                 Fast implementation for C-contiguous arrays
@@ -27,7 +29,9 @@ def where(cond, x, y):
                 for i in range(cond.size):
                     rf[i] = xf[i] if cf[i] else yf[i]
                 return res
+
         else:
+
             def where_impl(cond, x, y):
                 """
                 Generic implementation for other arrays
@@ -41,6 +45,7 @@ def where(cond, x, y):
                 return res
 
     else:
+
         def where_impl(cond, x, y):
             """
             Scalar where() => return a 0-dim array

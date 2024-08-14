@@ -5,7 +5,6 @@ ref: https://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__TYPES.html
 anchor: #group__CUDA__TYPES
 """
 
-
 # Error codes
 
 CUDA_SUCCESS = 0
@@ -140,7 +139,7 @@ CU_CTX_USER_COREDUMP_ENABLE = 0x40
 # Force synchronous blocking on cudaMemcpy/cudaMemset
 CU_CTX_SYNC_MEMOPS = 0x80
 
-CU_CTX_FLAGS_MASK = 0xff
+CU_CTX_FLAGS_MASK = 0xFF
 
 
 # DEFINES

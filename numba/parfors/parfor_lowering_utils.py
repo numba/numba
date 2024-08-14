@@ -8,8 +8,8 @@ _CallableNode = namedtuple("BoundFunc", ["func", "sig"])
 
 
 class ParforLoweringBuilder:
-    """Helper class for building Numba-IR and lowering for Parfor.
-    """
+    """Helper class for building Numba-IR and lowering for Parfor."""
+
     def __init__(self, lowerer, scope, loc):
         self._lowerer = lowerer
         self._scope = scope
@@ -72,9 +72,7 @@ class ParforLoweringBuilder:
         -------
         res : ir.Var
         """
-        return self.assign(
-            rhs=ir.Const(cval, loc=self._loc), typ=typ, name=name
-        )
+        return self.assign(rhs=ir.Const(cval, loc=self._loc), typ=typ, name=name)
 
     def make_tuple_variable(self, varlist, name="pf_tuple") -> ir.Var:
         """Makes a tuple variable
@@ -93,9 +91,7 @@ class ParforLoweringBuilder:
         loc = self._loc
         vartys = [self._typemap[x.name] for x in varlist]
         tupty = types.Tuple.from_types(vartys)
-        return self.assign(
-            rhs=ir.Expr.build_tuple(varlist, loc), typ=tupty, name=name
-        )
+        return self.assign(rhs=ir.Expr.build_tuple(varlist, loc), typ=tupty, name=name)
 
     def assign(self, rhs, typ, name="pf_assign") -> ir.Var:
         """Assign a value to a new variable
@@ -207,6 +203,8 @@ class ParforLoweringBuilder:
         tm = self._typemap
         getitem = ir.Expr.getitem(obj, index, loc=self._loc)
         self._lowerer.fndesc.calltypes[getitem] = signature(
-            typ, tm[obj.name], tm[index.name],
+            typ,
+            tm[obj.name],
+            tm[index.name],
         )
         return getitem

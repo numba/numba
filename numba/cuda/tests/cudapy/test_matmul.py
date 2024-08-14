@@ -70,5 +70,5 @@ class TestCudaMatMul(CUDATestCase):
         np.testing.assert_allclose(C, Cans, rtol=1e-5)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

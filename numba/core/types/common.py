@@ -39,20 +39,23 @@ class Buffer(IterableType, ArrayCompatible):
     Type class for objects providing the buffer protocol.
     Derived classes exist for more specific cases.
     """
+
     mutable = True
     slice_is_copy = False
     aligned = True
 
     # CS and FS are not reserved for inner contig but strided
-    LAYOUTS = frozenset(['C', 'F', 'CS', 'FS', 'A'])
+    LAYOUTS = frozenset(["C", "F", "CS", "FS", "A"])
 
     def __init__(self, dtype, ndim, layout, readonly=False, name=None):
         from .misc import unliteral
 
         if isinstance(dtype, Buffer):
-            msg = ("The dtype of a Buffer type cannot itself be a Buffer type, "
-                   "this is unsupported behaviour."
-                   "\nThe dtype requested for the unsupported Buffer was: {}.")
+            msg = (
+                "The dtype of a Buffer type cannot itself be a Buffer type, "
+                "this is unsupported behaviour."
+                "\nThe dtype requested for the unsupported Buffer was: {}."
+            )
             raise NumbaTypeError(msg.format(dtype))
         if layout not in self.LAYOUTS:
             raise NumbaValueError("Invalid layout '%s'" % layout)
@@ -71,6 +74,7 @@ class Buffer(IterableType, ArrayCompatible):
     @property
     def iterator_type(self):
         from .iterators import ArrayIterator
+
         return ArrayIterator(self)
 
     @property
@@ -84,8 +88,9 @@ class Buffer(IterableType, ArrayCompatible):
             ndim = self.ndim
         if layout is None:
             layout = self.layout
-        return self.__class__(dtype=dtype, ndim=ndim, layout=layout,
-                              readonly=not self.mutable)
+        return self.__class__(
+            dtype=dtype, ndim=ndim, layout=layout, readonly=not self.mutable
+        )
 
     @property
     def key(self):
@@ -93,12 +98,12 @@ class Buffer(IterableType, ArrayCompatible):
 
     @property
     def is_c_contig(self):
-        return self.layout == 'C' or (self.ndim <= 1 and self.layout in 'CF')
+        return self.layout == "C" or (self.ndim <= 1 and self.layout in "CF")
 
     @property
     def is_f_contig(self):
-        return self.layout == 'F' or (self.ndim <= 1 and self.layout in 'CF')
+        return self.layout == "F" or (self.ndim <= 1 and self.layout in "CF")
 
     @property
     def is_contig(self):
-        return self.layout in 'CF'
+        return self.layout in "CF"

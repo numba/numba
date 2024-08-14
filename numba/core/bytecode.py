@@ -9,8 +9,9 @@ from numba.core import errors, utils, serialize
 from numba.core.utils import PYVERSION
 
 
-if PYVERSION in ((3, 12), ):
+if PYVERSION in ((3, 12),):
     from opcode import _inline_cache_entries
+
     # Instruction/opcode length in bytes
     INSTR_LEN = 2
 elif PYVERSION in ((3, 9), (3, 10), (3, 11)):
@@ -19,9 +20,10 @@ else:
     raise NotImplementedError(PYVERSION)
 
 
-opcode_info = namedtuple('opcode_info', ['argsize'])
-_ExceptionTableEntry = namedtuple("_ExceptionTableEntry",
-                                  "start end target depth lasti")
+opcode_info = namedtuple("opcode_info", ["argsize"])
+_ExceptionTableEntry = namedtuple(
+    "_ExceptionTableEntry", "start end target depth lasti"
+)
 
 # The following offset is used as a hack to inject a NOP at the start of the
 # bytecode. So that function starting with `while True` will not have block-0
@@ -43,7 +45,7 @@ def get_function_object(obj):
 
 def get_code_object(obj):
     "Shamelessly borrowed from llpython"
-    return getattr(obj, '__code__', getattr(obj, 'func_code', None))
+    return getattr(obj, "__code__", getattr(obj, "func_code", None))
 
 
 def _as_opcodes(seq):
@@ -58,13 +60,13 @@ def _as_opcodes(seq):
 JREL_OPS = frozenset(dis.hasjrel)
 JABS_OPS = frozenset(dis.hasjabs)
 JUMP_OPS = JREL_OPS | JABS_OPS
-TERM_OPS = frozenset(_as_opcodes(['RETURN_VALUE', 'RAISE_VARARGS']))
+TERM_OPS = frozenset(_as_opcodes(["RETURN_VALUE", "RAISE_VARARGS"]))
 EXTENDED_ARG = dis.EXTENDED_ARG
 HAVE_ARGUMENT = dis.HAVE_ARGUMENT
 
 
 class ByteCodeInst(object):
-    '''
+    """
     Attributes
     ----------
     - offset:
@@ -75,8 +77,9 @@ class ByteCodeInst(object):
         instruction arg
     - lineno:
         -1 means unknown
-    '''
-    __slots__ = 'offset', 'next', 'opcode', 'opname', 'arg', 'lineno'
+    """
+
+    __slots__ = "offset", "next", "opcode", "opname", "arg", "lineno"
 
     def __init__(self, offset, opcode, arg, nextoffset):
         self.offset = offset
@@ -104,17 +107,20 @@ class ByteCodeInst(object):
         # https://bugs.python.org/issue27129
         # https://github.com/python/cpython/pull/25069
         assert self.is_jump
-        if PYVERSION in ((3, 12), ):
-            if self.opcode in (dis.opmap[k]
-                               for k in ["JUMP_BACKWARD"]):
+        if PYVERSION in ((3, 12),):
+            if self.opcode in (dis.opmap[k] for k in ["JUMP_BACKWARD"]):
                 return self.offset - (self.arg - 1) * 2
-        elif PYVERSION in ((3, 11), ):
-            if self.opcode in (dis.opmap[k]
-                               for k in ("JUMP_BACKWARD",
-                                         "POP_JUMP_BACKWARD_IF_TRUE",
-                                         "POP_JUMP_BACKWARD_IF_FALSE",
-                                         "POP_JUMP_BACKWARD_IF_NONE",
-                                         "POP_JUMP_BACKWARD_IF_NOT_NONE",)):
+        elif PYVERSION in ((3, 11),):
+            if self.opcode in (
+                dis.opmap[k]
+                for k in (
+                    "JUMP_BACKWARD",
+                    "POP_JUMP_BACKWARD_IF_TRUE",
+                    "POP_JUMP_BACKWARD_IF_FALSE",
+                    "POP_JUMP_BACKWARD_IF_NONE",
+                    "POP_JUMP_BACKWARD_IF_NOT_NONE",
+                )
+            ):
                 return self.offset - (self.arg - 1) * 2
         elif PYVERSION in ((3, 9), (3, 10)):
             pass
@@ -137,16 +143,16 @@ class ByteCodeInst(object):
             raise NotImplementedError(PYVERSION)
 
     def __repr__(self):
-        return '%s(arg=%s, lineno=%d)' % (self.opname, self.arg, self.lineno)
+        return "%s(arg=%s, lineno=%d)" % (self.opname, self.arg, self.lineno)
 
     @property
     def block_effect(self):
         """Effect of the block stack
         Returns +1 (push), 0 (none) or -1 (pop)
         """
-        if self.opname.startswith('SETUP_'):
+        if self.opname.startswith("SETUP_"):
             return 1
-        elif self.opname == 'POP_BLOCK':
+        elif self.opname == "POP_BLOCK":
             return -1
         else:
             return 0
@@ -156,7 +162,7 @@ CODE_LEN = 1
 ARG_LEN = 1
 NO_ARG_LEN = 1
 
-OPCODE_NOP = dis.opname.index('NOP')
+OPCODE_NOP = dis.opname.index("NOP")
 
 
 # Adapted from Lib/dis.py
@@ -176,7 +182,7 @@ def _unpack_opargs(code):
             for j in range(ARG_LEN):
                 arg |= code[i + j] << (8 * j)
             i += ARG_LEN
-            if PYVERSION in ((3, 12), ):
+            if PYVERSION in ((3, 12),):
                 # Python 3.12 introduced cache slots. We need to account for
                 # cache slots when we determine the offset of the next opcode.
                 # The number of cache slots is specific to each opcode and can
@@ -200,7 +206,7 @@ def _unpack_opargs(code):
         else:
             arg = None
             i += NO_ARG_LEN
-            if PYVERSION in ((3, 12), ):
+            if PYVERSION in ((3, 12),):
                 # Python 3.12 introduced cache slots. We need to account for
                 # cache slots when we determine the offset of the next opcode.
                 # The number of cache slots is specific to each opcode and can
@@ -244,8 +250,9 @@ class ByteCodeIter(object):
 
     def next(self):
         offset, opcode, arg, nextoffset = self._fetch_opcode()
-        return offset, ByteCodeInst(offset=offset, opcode=opcode, arg=arg,
-                                    nextoffset=nextoffset)
+        return offset, ByteCodeInst(
+            offset=offset, opcode=opcode, arg=arg, nextoffset=nextoffset
+        )
 
     __next__ = next
 
@@ -261,9 +268,18 @@ class _ByteCode(object):
     """
     The decoded bytecode of a function, and related information.
     """
-    __slots__ = ('func_id', 'co_names', 'co_varnames', 'co_consts',
-                 'co_cellvars', 'co_freevars', 'exception_entries',
-                 'table', 'labels')
+
+    __slots__ = (
+        "func_id",
+        "co_names",
+        "co_varnames",
+        "co_consts",
+        "co_cellvars",
+        "co_freevars",
+        "exception_entries",
+        "table",
+        "labels",
+    )
 
     def __init__(self, func_id):
         code = func_id.code
@@ -316,13 +332,15 @@ class _ByteCode(object):
     def dump(self):
         def label_marker(i):
             if i[1].offset in self.labels:
-                return '>'
+                return ">"
             else:
-                return ' '
+                return " "
 
-        return '\n'.join('%s %10s\t%s' % ((label_marker(i),) + i)
-                         for i in self.table.items()
-                         if i[1].opname != "CACHE")
+        return "\n".join(
+            "%s %10s\t%s" % ((label_marker(i),) + i)
+            for i in self.table.items()
+            if i[1].opname != "CACHE"
+        )
 
     @classmethod
     def _compute_used_globals(cls, func, table, co_consts, co_names):
@@ -332,12 +350,12 @@ class _ByteCode(object):
         """
         d = {}
         globs = func.__globals__
-        builtins = globs.get('__builtins__', utils.builtins)
+        builtins = globs.get("__builtins__", utils.builtins)
         if isinstance(builtins, ModuleType):
             builtins = builtins.__dict__
         # Look for LOAD_GLOBALs in the bytecode
         for inst in table.values():
-            if inst.opname == 'LOAD_GLOBAL':
+            if inst.opname == "LOAD_GLOBAL":
                 name = co_names[_fix_LOAD_GLOBAL_arg(inst.arg)]
                 if name not in d:
                     try:
@@ -349,8 +367,9 @@ class _ByteCode(object):
         for co in co_consts:
             if isinstance(co, CodeType):
                 subtable = OrderedDict(ByteCodeIter(co))
-                d.update(cls._compute_used_globals(func, subtable,
-                                                   co.co_consts, co.co_names))
+                d.update(
+                    cls._compute_used_globals(func, subtable, co.co_consts, co.co_names)
+                )
         return d
 
     def get_used_globals(self):
@@ -358,8 +377,9 @@ class _ByteCode(object):
         Get a {name: value} map of the globals used by this code
         object and any nested code objects.
         """
-        return self._compute_used_globals(self.func_id.func, self.table,
-                                          self.co_consts, self.co_names)
+        return self._compute_used_globals(
+            self.func_id.func, self.table, self.co_consts, self.co_names
+        )
 
 
 def _fix_LOAD_GLOBAL_arg(arg):
@@ -383,9 +403,11 @@ class ByteCodePy311(_ByteCode):
         # Patch up the exception table offset
         # because we add a NOP in _patched_opargs
         out = dis._ExceptionTableEntry(
-            start=ent.start + _FIXED_OFFSET, end=ent.end + _FIXED_OFFSET,
+            start=ent.start + _FIXED_OFFSET,
+            end=ent.end + _FIXED_OFFSET,
             target=ent.target + _FIXED_OFFSET,
-            depth=ent.depth, lasti=ent.lasti,
+            depth=ent.depth,
+            lasti=ent.lasti,
         )
         return out
 
@@ -411,9 +433,9 @@ class ByteCodePy312(ByteCodePy311):
         self._ordered_offsets = None
 
         # Fixup offsets for all exception entries.
-        entries = [self.fixup_eh(e) for e in
-                   dis.Bytecode(func_id.code).exception_entries
-                   ]
+        entries = [
+            self.fixup_eh(e) for e in dis.Bytecode(func_id.code).exception_entries
+        ]
 
         # Remove exceptions, innermost ones first
         # Can be done by using a stack
@@ -438,24 +460,25 @@ class ByteCodePy312(ByteCodePy311):
         return self._ordered_offsets
 
     def remove_build_list_swap_pattern(self, entries):
-        """ Find the following bytecode pattern:
+        """Find the following bytecode pattern:
 
-            BUILD_{LIST, MAP, SET}
-            SWAP(2)
-            FOR_ITER
-            ...
-            END_FOR
-            SWAP(2)
+        BUILD_{LIST, MAP, SET}
+        SWAP(2)
+        FOR_ITER
+        ...
+        END_FOR
+        SWAP(2)
 
-            This pattern indicates that a list/dict/set comprehension has
-            been inlined. In this case we can skip the exception blocks
-            entirely along with the dead exceptions that it points to.
-            A pair of exception that sandwiches these exception will
-            also be merged into a single exception.
+        This pattern indicates that a list/dict/set comprehension has
+        been inlined. In this case we can skip the exception blocks
+        entirely along with the dead exceptions that it points to.
+        A pair of exception that sandwiches these exception will
+        also be merged into a single exception.
         """
 
-        def pop_and_merge_exceptions(entries: list,
-                                     entry_to_remove: _ExceptionTableEntry):
+        def pop_and_merge_exceptions(
+            entries: list, entry_to_remove: _ExceptionTableEntry
+        ):
             lower_entry_idx = entries.index(entry_to_remove) - 1
             upper_entry_idx = entries.index(entry_to_remove) + 1
 
@@ -469,14 +492,14 @@ class ByteCodePy312(ByteCodePy311):
                         upper_entry.end,
                         lower_entry.target,
                         lower_entry.depth,
-                        upper_entry.lasti)
+                        upper_entry.lasti,
+                    )
                     entries.remove(upper_entry)
 
             # Remove the exception entry.
             entries.remove(entry_to_remove)
             # Remove dead exceptions, if any, that the entry above may point to.
-            entries = [e for e in entries
-                       if not e.start == entry_to_remove.target]
+            entries = [e for e in entries if not e.start == entry_to_remove.target]
             return entries
 
         work_remaining = True
@@ -491,9 +514,7 @@ class ByteCodePy312(ByteCodePy311):
                 # If there is a BUILD_{LIST, MAP, SET} instruction at this
                 # location.
                 curr_inst = self.table[self.ordered_offsets[index]]
-                if curr_inst.opname not in ("BUILD_LIST",
-                                            "BUILD_MAP",
-                                            "BUILD_SET"):
+                if curr_inst.opname not in ("BUILD_LIST", "BUILD_MAP", "BUILD_SET"):
                     continue
                 # Check if the BUILD_{LIST, MAP, SET} instruction is followed
                 # by a SWAP(2).
@@ -544,6 +565,7 @@ class FunctionIdentity(serialize.ReduceMixin):
     being compiled, not necessarily the top-level user function
     (the two might be distinct).
     """
+
     _unique_ids = itertools.count(1)
 
     @classmethod
@@ -555,8 +577,7 @@ class FunctionIdentity(serialize.ReduceMixin):
         code = get_code_object(func)
         pysig = utils.pysignature(func)
         if not code:
-            raise errors.ByteCodeSupportError(
-                "%s does not provide its bytecode" % func)
+            raise errors.ByteCodeSupportError("%s does not provide its bytecode" % func)
 
         try:
             func_qualname = func.__qualname__
@@ -566,12 +587,12 @@ class FunctionIdentity(serialize.ReduceMixin):
         self = cls()
         self.func = func
         self.func_qualname = func_qualname
-        self.func_name = func_qualname.split('.')[-1]
+        self.func_name = func_qualname.split(".")[-1]
         self.code = code
         self.module = inspect.getmodule(func)
-        self.modname = (utils._dynamic_modname
-                        if self.module is None
-                        else self.module.__name__)
+        self.modname = (
+            utils._dynamic_modname if self.module is None else self.module.__name__
+        )
         self.is_generator = inspect.isgeneratorfunction(func)
         self.pysig = pysig
         self.filename = code.co_filename
@@ -583,14 +604,13 @@ class FunctionIdentity(serialize.ReduceMixin):
         # several different function objects with distinct closure
         # variables, so we make sure to disambiguate using an unique id.
         uid = next(cls._unique_ids)
-        self.unique_name = '{}${}'.format(self.func_qualname, uid)
+        self.unique_name = "{}${}".format(self.func_qualname, uid)
         self.unique_id = uid
 
         return self
 
     def derive(self):
-        """Copy the object and increment the unique counter.
-        """
+        """Copy the object and increment the unique counter."""
         return self.from_function(self.func)
 
     def _reduce_states(self):

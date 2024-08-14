@@ -8,7 +8,11 @@ from numba.core import types, errors, cgutils
 from numba.core.typing import signature
 from numba.core.datamodel import models
 from numba.core.extending import (
-    overload, SentryLiteralArgs, overload_method, register_model, intrinsic,
+    overload,
+    SentryLiteralArgs,
+    overload_method,
+    register_model,
+    intrinsic,
 )
 from numba.misc.special import literally
 
@@ -161,6 +165,7 @@ class TestLiteralDispatch(TestCase):
         @njit
         def foo(a, b=1):
             return (a, literally(b))
+
         foo(a=1)
 
     @unittest.expectedFailure
@@ -222,6 +227,7 @@ class TestLiteralDispatch(TestCase):
         def foo(a, b, c):
             def closure(d):
                 return literally(d) + 10 * inner(a, b)
+
             # The inlining of the closure will create an alias to c
             return closure(c)
 
@@ -248,7 +254,7 @@ class TestLiteralDispatch(TestCase):
 
         @overload(do_this)
         def ov_do_this(x, y):
-            SentryLiteralArgs(['x']).for_function(ov_do_this).bind(x, y)
+            SentryLiteralArgs(["x"]).for_function(ov_do_this).bind(x, y)
             return lambda x, y: x + y
 
         @njit
@@ -313,8 +319,10 @@ class TestLiteralDispatch(TestCase):
                 # version is valid.
                 raise errors.NumbaValueError("oops")
             else:
+
                 def impl(x, y):
                     return hidden(x, y)
+
                 return impl
 
         @njit
@@ -325,8 +333,7 @@ class TestLiteralDispatch(TestCase):
         # literal typing request.
         with self.assertRaises(errors.CompilerError) as raises:
             foo(a=123, b=321)
-        self.assertIn("Repeated literal typing request",
-                      str(raises.exception))
+        self.assertIn("Repeated literal typing request", str(raises.exception))
 
 
 class TestLiteralDispatchWithCustomType(TestCase):
@@ -348,8 +355,9 @@ class TestLiteralDispatchWithCustomType(TestCase):
         @intrinsic
         def init_dummy(typingctx):
             def codegen(context, builder, signature, args):
-                dummy = cgutils.create_struct_proxy(
-                    signature.return_type)(context, builder)
+                dummy = cgutils.create_struct_proxy(signature.return_type)(
+                    context, builder
+                )
 
                 return dummy._getvalue()
 
@@ -369,7 +377,7 @@ class TestLiteralDispatchWithCustomType(TestCase):
         # from issue #5011
         DummyType, Dummy = self.make_dummy_type()
 
-        @overload_method(DummyType, 'lit')
+        @overload_method(DummyType, "lit")
         def lit_overload(self, a):
             def impl(self, a):
                 return literally(a)  # <-- using literally here
@@ -396,5 +404,5 @@ class TestLiteralDispatchWithCustomType(TestCase):
         self.assertIn("Cannot request literal type.", str(raises.exception))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

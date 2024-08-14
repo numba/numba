@@ -79,21 +79,18 @@ jit_module({jit_options})
 
             # Test output of jitted functions is as expected
             x, y = 1.7, 2.3
-            self.assertEqual(test_module.inc(x),
-                             test_module.inc.py_func(x))
-            self.assertEqual(test_module.add(x, y),
-                             test_module.add.py_func(x, y))
-            self.assertEqual(test_module.inc_add(x),
-                             test_module.inc_add.py_func(x))
+            self.assertEqual(test_module.inc(x), test_module.inc.py_func(x))
+            self.assertEqual(test_module.add(x, y), test_module.add.py_func(x, y))
+            self.assertEqual(test_module.inc_add(x), test_module.inc_add.py_func(x))
 
     def test_jit_module_jit_options(self):
-        jit_options = {"nopython": True,
-                       "nogil": False,
-                       "error_model": "numpy",
-                       "boundscheck": False,
-                       }
-        with create_temp_module(self.source_lines,
-                                **jit_options) as test_module:
+        jit_options = {
+            "nopython": True,
+            "nogil": False,
+            "error_model": "numpy",
+            "boundscheck": False,
+        }
+        with create_temp_module(self.source_lines, **jit_options) as test_module:
             self.assertEqual(test_module.inc.targetoptions, jit_options)
 
     def test_jit_module_jit_options_override(self):
@@ -109,38 +106,48 @@ def add(x, y):
 
 jit_module({jit_options})
 """
-        jit_options = {"nopython": True,
-                       "error_model": "numpy",
-                       "boundscheck": False,
-                       }
-        with create_temp_module(source_lines=source_lines,
-                                **jit_options) as test_module:
+        jit_options = {
+            "nopython": True,
+            "error_model": "numpy",
+            "boundscheck": False,
+        }
+        with create_temp_module(
+            source_lines=source_lines, **jit_options
+        ) as test_module:
             self.assertEqual(test_module.add.targetoptions, jit_options)
             # Test that manual jit-wrapping overrides jit_module options,
             # `forceobj` will automatically apply `nopython=False`.
-            self.assertEqual(test_module.inc.targetoptions,
-                             {'nogil': True, 'forceobj': True,
-                              'boundscheck': None, 'nopython': False})
+            self.assertEqual(
+                test_module.inc.targetoptions,
+                {
+                    "nogil": True,
+                    "forceobj": True,
+                    "boundscheck": None,
+                    "nopython": False,
+                },
+            )
 
     def test_jit_module_logging_output(self):
-        logger = logging.getLogger('numba.core.decorators')
+        logger = logging.getLogger("numba.core.decorators")
         logger.setLevel(logging.DEBUG)
-        jit_options = {"nopython": True,
-                       "error_model": "numpy",
-                       }
+        jit_options = {
+            "nopython": True,
+            "error_model": "numpy",
+        }
         with captured_logs(logger) as logs:
-            with create_temp_module(self.source_lines,
-                                    **jit_options) as test_module:
+            with create_temp_module(self.source_lines, **jit_options) as test_module:
                 logs = logs.getvalue()
-                expected = ["Auto decorating function",
-                            "from module {}".format(test_module.__name__),
-                            "with jit and options: {}".format(jit_options)]
+                expected = [
+                    "Auto decorating function",
+                    "from module {}".format(test_module.__name__),
+                    "with jit and options: {}".format(jit_options),
+                ]
                 self.assertTrue(all(i in logs for i in expected))
 
     def test_jit_module_logging_level(self):
-        logger = logging.getLogger('numba.core.decorators')
+        logger = logging.getLogger("numba.core.decorators")
         # Test there's no logging for INFO level
         logger.setLevel(logging.INFO)
         with captured_logs(logger) as logs:
             with create_temp_module(self.source_lines):
-                self.assertEqual(logs.getvalue(), '')
+                self.assertEqual(logs.getvalue(), "")

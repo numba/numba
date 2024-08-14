@@ -5,12 +5,12 @@ from numba import njit, cfunc
 from numba.tests.support import TestCase, unittest
 from numba.core import cgutils
 
-unicode_name1 = u"""
+unicode_name1 = """
 def unicode_name1(ಠ_ರೃ, ಠਊಠ):
     return (ಠ_ರೃ) + (ಠਊಠ)
 """
 
-unicode_name2 = u"""
+unicode_name2 = """
 def Ծ_Ծ(ಠ_ರೃ, ಠਊಠ):
     return (ಠ_ರೃ) + (ಠਊಠ)
 """
@@ -24,17 +24,17 @@ class TestUnicodeNames(TestCase):
         return fn
 
     def test_unicode_name1(self):
-        fn = self.make_testcase(unicode_name1, 'unicode_name1')
+        fn = self.make_testcase(unicode_name1, "unicode_name1")
         cfn = njit(fn)
         self.assertEqual(cfn(1, 2), 3)
 
     def test_unicode_name2(self):
-        fn = self.make_testcase(unicode_name2, 'Ծ_Ծ')
+        fn = self.make_testcase(unicode_name2, "Ծ_Ծ")
         cfn = njit(fn)
         self.assertEqual(cfn(1, 2), 3)
 
     def test_cfunc(self):
-        fn = self.make_testcase(unicode_name2, 'Ծ_Ծ')
+        fn = self.make_testcase(unicode_name2, "Ծ_Ծ")
         cfn = cfunc("int32(int32, int32)")(fn)
         self.assertEqual(cfn.ctypes(1, 2), 3)
 
@@ -42,11 +42,11 @@ class TestUnicodeNames(TestCase):
 class TestUnicodeUtils(TestCase):
     def test_normalize_ir_text(self):
         # non-unicode input
-        out = cgutils.normalize_ir_text('abc')
+        out = cgutils.normalize_ir_text("abc")
         # str returned
         self.assertIsInstance(out, str)
         # try encoding to latin
-        out.encode('latin1')
+        out.encode("latin1")
 
     def test_normalize_ir_text_unicode(self):
         # unicode input
@@ -54,8 +54,8 @@ class TestUnicodeUtils(TestCase):
         # str returned
         self.assertIsInstance(out, str)
         # try encoding to latin
-        out.encode('latin1')
+        out.encode("latin1")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

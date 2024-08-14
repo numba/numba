@@ -16,9 +16,15 @@ from numba.core import cgutils, types, typing
 from numba.core.pythonapi import box
 from numba.core.errors import TypingError
 from numba.core.registry import cpu_target
-from numba.extending import (intrinsic, lower_builtin, overload_classmethod,
-                             register_model, type_callable, typeof_impl,
-                             register_jitable)
+from numba.extending import (
+    intrinsic,
+    lower_builtin,
+    overload_classmethod,
+    register_model,
+    type_callable,
+    typeof_impl,
+    register_jitable,
+)
 from numba.np import numpy_support
 
 from numba.tests.support import TestCase, MemoryLeakMixin
@@ -45,6 +51,7 @@ def use_logger(fn):
         global _logger
         _logger = []
         return fn(*args, **kwargs)
+
     return core
 
 
@@ -86,8 +93,9 @@ class MyArray(np.ndarray):
 class MyArrayType(types.Array):
     def __init__(self, dtype, ndim, layout, readonly=False, aligned=True):
         name = f"MyArray({ndim}, {dtype}, {layout})"
-        super().__init__(dtype, ndim, layout, readonly=readonly,
-                         aligned=aligned, name=name)
+        super().__init__(
+            dtype, ndim, layout, readonly=readonly, aligned=aligned, name=name
+        )
 
     def copy(self, *args, **kwargs):
         # This is here to future-proof.
@@ -128,14 +136,14 @@ class MyArrayTypeModel(numba.core.datamodel.models.StructModel):
     def __init__(self, dmm, fe_type):
         ndim = fe_type.ndim
         members = [
-            ('meminfo', types.MemInfoPointer(fe_type.dtype)),
-            ('parent', types.pyobject),
-            ('nitems', types.intp),
-            ('itemsize', types.intp),
-            ('data', types.CPointer(fe_type.dtype)),
-            ('shape', types.UniTuple(types.intp, ndim)),
-            ('strides', types.UniTuple(types.intp, ndim)),
-            ('extra_field', types.intp),
+            ("meminfo", types.MemInfoPointer(fe_type.dtype)),
+            ("parent", types.pyobject),
+            ("nitems", types.intp),
+            ("itemsize", types.intp),
+            ("data", types.CPointer(fe_type.dtype)),
+            ("shape", types.UniTuple(types.intp, ndim)),
+            ("strides", types.UniTuple(types.intp, ndim)),
+            ("extra_field", types.intp),
         ]
         super(MyArrayTypeModel, self).__init__(dmm, fe_type, members)
 
@@ -143,9 +151,7 @@ class MyArrayTypeModel(numba.core.datamodel.models.StructModel):
 @type_callable(MyArray)
 def type_myarray(context):
     def typer(shape, dtype, buf):
-        out = MyArrayType(
-            dtype=buf.dtype, ndim=len(shape), layout=buf.layout
-        )
+        out = MyArrayType(dtype=buf.dtype, ndim=len(shape), layout=buf.layout)
         return out
 
     return typer
@@ -162,12 +168,14 @@ def impl_myarray(context, builder, sig, args):
     # Copy source array and remove the parent field to avoid boxer re-using
     # the original ndarray instance.
     retary = make_array(sig.return_type)(context, builder)
-    populate_array(retary,
-                   data=srcary.data,
-                   shape=srcary.shape,
-                   strides=srcary.strides,
-                   itemsize=srcary.itemsize,
-                   meminfo=srcary.meminfo)
+    populate_array(
+        retary,
+        data=srcary.data,
+        shape=srcary.shape,
+        strides=srcary.strides,
+        itemsize=srcary.itemsize,
+        meminfo=srcary.meminfo,
+    )
 
     ret = retary._getvalue()
     context.nrt.incref(builder, sig.return_type, ret)
@@ -187,8 +195,8 @@ def box_array(typ, val, c):
 
 @overload_classmethod(MyArrayType, "_allocate")
 def _ol_array_allocate(cls, allocsize, align):
-    """Implements a Numba-only classmethod on the array type.
-    """
+    """Implements a Numba-only classmethod on the array type."""
+
     def impl(cls, allocsize, align):
         log("LOG _ol_array_allocate", allocsize, align)
         return allocator_MyArray(allocsize, align)
@@ -233,8 +241,8 @@ def allocator_MyArray(typingctx, allocsize, align):
 class TestNdarraySubclasses(MemoryLeakMixin, TestCase):
 
     def test_myarray_return(self):
-        """This tests the path to `MyArrayType.box_type`
-        """
+        """This tests the path to `MyArrayType.box_type`"""
+
         @njit
         def foo(a):
             return a + 1
@@ -307,8 +315,10 @@ class TestNdarraySubclasses(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as raises:
             foo(buf)
 
-        msg = ("No implementation of function",
-               "add(MyArray(1, float32, C), MyArray(1, float32, C))")
+        msg = (
+            "No implementation of function",
+            "add(MyArray(1, float32, C), MyArray(1, float32, C))",
+        )
         for m in msg:
             self.assertIn(m, str(raises.exception))
 
@@ -317,6 +327,7 @@ class TestNdarraySubclasses(MemoryLeakMixin, TestCase):
         """
         Checks that our custom allocator is used
         """
+
         @njit
         def foo(a):
             b = a + np.arange(a.size, dtype=np.float64)
@@ -336,10 +347,13 @@ class TestNdarraySubclasses(MemoryLeakMixin, TestCase):
         targetctx = cpu_target.target_context
         nb_dtype = typeof(buf.dtype)
         align = targetctx.get_preferred_array_alignment(nb_dtype)
-        self.assertEqual(logged_lines, [
-            ("LOG _ol_array_allocate", expected[0].nbytes, align),
-            ("LOG _ol_array_allocate", expected[1].nbytes, align),
-        ])
+        self.assertEqual(
+            logged_lines,
+            [
+                ("LOG _ol_array_allocate", expected[0].nbytes, align),
+                ("LOG _ol_array_allocate", expected[1].nbytes, align),
+            ],
+        )
 
 
 if __name__ == "__main__":

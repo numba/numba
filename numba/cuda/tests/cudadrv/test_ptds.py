@@ -2,8 +2,11 @@ import multiprocessing as mp
 import logging
 import traceback
 from numba.cuda.testing import unittest, CUDATestCase
-from numba.cuda.testing import (skip_on_cudasim, skip_with_cuda_python,
-                                skip_under_cuda_memcheck)
+from numba.cuda.testing import (
+    skip_on_cudasim,
+    skip_with_cuda_python,
+    skip_under_cuda_memcheck,
+)
 from numba.tests.support import linux_only
 
 
@@ -23,12 +26,12 @@ def child_test():
     # used.
     logbuf = io.StringIO()
     handler = logging.StreamHandler(logbuf)
-    cudadrv_logger = logging.getLogger('numba.cuda.cudadrv.driver')
+    cudadrv_logger = logging.getLogger("numba.cuda.cudadrv.driver")
     cudadrv_logger.addHandler(handler)
     cudadrv_logger.setLevel(logging.DEBUG)
 
     # Set up data for our test, and copy over to the device
-    N = 2 ** 16
+    N = 2**16
     N_THREADS = 10
     N_ADDITIONS = 4096
 
@@ -65,8 +68,9 @@ def child_test():
         f[n_blocks, n_threads, stream](rs[n], xs[n])
 
     # Create threads
-    threads = [threading.Thread(target=kernel_thread, args=(i,))
-               for i in range(N_THREADS)]
+    threads = [
+        threading.Thread(target=kernel_thread, args=(i,)) for i in range(N_THREADS)
+    ]
 
     # Start all threads
     for thread in threads:
@@ -95,7 +99,7 @@ def child_test_wrapper(result_queue):
         output = child_test()
         success = True
     # Catch anything raised so it can be propagated
-    except: # noqa: E722
+    except:  # noqa: E722
         output = traceback.format_exc()
         success = False
 
@@ -105,13 +109,13 @@ def child_test_wrapper(result_queue):
 # Run on Linux only until the reason for test hangs on Windows (Issue #8635,
 # https://github.com/numba/numba/issues/8635) is diagnosed
 @linux_only
-@skip_under_cuda_memcheck('Hangs cuda-memcheck')
-@skip_on_cudasim('Streams not supported on the simulator')
+@skip_under_cuda_memcheck("Hangs cuda-memcheck")
+@skip_on_cudasim("Streams not supported on the simulator")
 class TestPTDS(CUDATestCase):
-    @skip_with_cuda_python('Function names unchanged for PTDS with NV Binding')
+    @skip_with_cuda_python("Function names unchanged for PTDS with NV Binding")
     def test_ptds(self):
         # Run a test with PTDS enabled in a child process
-        ctx = mp.get_context('spawn')
+        ctx = mp.get_context("spawn")
         result_queue = ctx.Queue()
         proc = ctx.Process(target=child_test_wrapper, args=(result_queue,))
         proc.start()
@@ -124,8 +128,11 @@ class TestPTDS(CUDATestCase):
 
         # Functions with a per-thread default stream variant that we expect to
         # see in the output
-        ptds_functions = ('cuMemcpyHtoD_v2_ptds', 'cuLaunchKernel_ptsz',
-                          'cuMemcpyDtoH_v2_ptds')
+        ptds_functions = (
+            "cuMemcpyHtoD_v2_ptds",
+            "cuLaunchKernel_ptsz",
+            "cuMemcpyDtoH_v2_ptds",
+        )
 
         for fn in ptds_functions:
             with self.subTest(fn=fn, expected=True):
@@ -133,17 +140,16 @@ class TestPTDS(CUDATestCase):
 
         # Non-PTDS versions of the functions that we should not see in the
         # output:
-        legacy_functions = ('cuMemcpyHtoD_v2', 'cuLaunchKernel',
-                            'cuMemcpyDtoH_v2')
+        legacy_functions = ("cuMemcpyHtoD_v2", "cuLaunchKernel", "cuMemcpyDtoH_v2")
 
         for fn in legacy_functions:
             with self.subTest(fn=fn, expected=False):
                 # Ensure we only spot these function names appearing without a
                 # _ptds or _ptsz suffix by checking including the end of the
                 # line in the log
-                fn_at_end = f'{fn}\n'
+                fn_at_end = f"{fn}\n"
                 self.assertNotIn(fn_at_end, output)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

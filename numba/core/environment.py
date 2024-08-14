@@ -9,7 +9,8 @@ class Environment(_dynfunc.Environment):
 
     It is often needed to convert b/w nopython objects and pyobjects.
     """
-    __slots__ = ('env_name', '__weakref__')
+
+    __slots__ = ("env_name", "__weakref__")
     # A weak-value dictionary to store live environment with env_name as the
     # key.
     _memo = weakref.WeakValueDictionary()
@@ -26,12 +27,12 @@ class Environment(_dynfunc.Environment):
             return inst
 
     def can_cache(self):
-        is_dyn = '__name__' not in self.globals
+        is_dyn = "__name__" not in self.globals
         return not is_dyn
 
     def __reduce__(self):
         return _rebuild_env, (
-            self.globals.get('__name__'),
+            self.globals.get("__name__"),
             self.consts,
             self.env_name,
         )

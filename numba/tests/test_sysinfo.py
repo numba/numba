@@ -17,12 +17,8 @@ class TestSysInfo(TestCase):
         super(TestSysInfo, self).setUp()
         self.info = nsi.get_sysinfo()
         self.safe_contents = {
-            int: (
-                nsi._cpu_count,
-            ),
-            float: (
-                nsi._runtime,
-            ),
+            int: (nsi._cpu_count,),
+            float: (nsi._runtime,),
             str: (
                 nsi._machine,
                 nsi._cpu_name,
@@ -50,9 +46,7 @@ class TestSysInfo(TestCase):
                 nsi._errors,
                 nsi._warnings,
             ),
-            dict: (
-                nsi._numba_env_vars,
-            ),
+            dict: (nsi._numba_env_vars,),
             datetime: (
                 nsi._start,
                 nsi._start_utc,
@@ -89,8 +83,8 @@ class TestSysInfo(TestCase):
 
 class TestSysInfoWithPsutil(TestCase):
 
-    mem_total = 2 * 1024 ** 2  # 2_097_152
-    mem_available = 1024 ** 2  # 1_048_576
+    mem_total = 2 * 1024**2  # 2_097_152
+    mem_available = 1024**2  # 1_048_576
     cpus_list = [1, 2]
 
     def setUp(self):
@@ -102,7 +96,10 @@ class TestSysInfoWithPsutil(TestCase):
         vm = nsi.psutil.virtual_memory.return_value
         vm.total = self.mem_total
         vm.available = self.mem_available
-        if platform.system() in ('Linux', 'Windows',):
+        if platform.system() in (
+            "Linux",
+            "Windows",
+        ):
             # cpu_affiniy only available on Linux and Windows
             proc = nsi.psutil.Process.return_value
             proc.cpu_affinity.return_value = self.cpus_list
@@ -126,12 +123,15 @@ class TestSysInfoWithPsutil(TestCase):
         self.assertEqual(self.info[nsi._mem_total], self.mem_total)
         self.assertEqual(self.info[nsi._mem_available], self.mem_available)
 
-    @skipUnless(platform.system() in ('Linux', 'Windows'),
-                "CPUs allowed info only available on Linux and Windows")
+    @skipUnless(
+        platform.system() in ("Linux", "Windows"),
+        "CPUs allowed info only available on Linux and Windows",
+    )
     def test_cpus_list(self):
         self.assertEqual(self.info[nsi._cpus_allowed], len(self.cpus_list))
-        self.assertEqual(self.info[nsi._cpus_list],
-                         ' '.join(str(n) for n in self.cpus_list))
+        self.assertEqual(
+            self.info[nsi._cpus_list], " ".join(str(n) for n in self.cpus_list)
+        )
 
 
 class TestSysInfoWithoutPsutil(TestCase):
@@ -158,13 +158,13 @@ class TestPlatformSpecificInfo(TestCase):
 
     def setUp(self):
         self.plat_spec_info = {
-            'Linux': {
+            "Linux": {
                 str: (nsi._libc_version,),
             },
-            'Windows': {
+            "Windows": {
                 str: (nsi._os_spec_version,),
             },
-            'Darwin': {
+            "Darwin": {
                 str: (nsi._os_spec_version,),
             },
         }
@@ -185,5 +185,5 @@ class TestPlatformSpecificInfo(TestCase):
                     self.assertIsInstance(self.info[k], t)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -1,3 +1,5 @@
+# fmt: off
+
 # Declare that function `myfunc` is going to be overloaded (have a
 # substitutable Numba implementation)
 @overload(myfunc)

@@ -7,9 +7,13 @@ import numpy as np
 
 from numba import cuda
 from numba.cuda.cudadrv import driver
-from numba.cuda.testing import (skip_on_arm, skip_on_cudasim,
-                                skip_under_cuda_memcheck,
-                                ContextResettingTestCase, ForeignArray)
+from numba.cuda.testing import (
+    skip_on_arm,
+    skip_on_cudasim,
+    skip_under_cuda_memcheck,
+    ContextResettingTestCase,
+    ForeignArray,
+)
 from numba.tests.support import linux_only, windows_only
 import unittest
 
@@ -32,8 +36,9 @@ def core_ipc_handle_test(the_work, result_queue):
 def base_ipc_handle_test(handle, size, result_queue):
     def the_work():
         dtype = np.dtype(np.intp)
-        with cuda.open_ipc_array(handle, shape=size // dtype.itemsize,
-                                 dtype=dtype) as darr:
+        with cuda.open_ipc_array(
+            handle, shape=size // dtype.itemsize, dtype=dtype
+        ) as darr:
             # copy the data to host
             return darr.copy_to_host()
 
@@ -43,9 +48,9 @@ def base_ipc_handle_test(handle, size, result_queue):
 def serialize_ipc_handle_test(handle, result_queue):
     def the_work():
         dtype = np.dtype(np.intp)
-        darr = handle.open_array(cuda.current_context(),
-                                 shape=handle.size // dtype.itemsize,
-                                 dtype=dtype)
+        darr = handle.open_array(
+            cuda.current_context(), shape=handle.size // dtype.itemsize, dtype=dtype
+        )
         # copy the data to host
         arr = darr.copy_to_host()
         handle.close()
@@ -63,10 +68,10 @@ def ipc_array_test(ipcarr, result_queue):
                 with ipcarr:
                     pass
             except ValueError as e:
-                if str(e) != 'IpcHandle is already opened':
-                    raise AssertionError('invalid exception message')
+                if str(e) != "IpcHandle is already opened":
+                    raise AssertionError("invalid exception message")
             else:
-                raise AssertionError('did not raise on reopen')
+                raise AssertionError("did not raise on reopen")
     # Catch any exception so we can propagate it
     except:  # noqa: E722
         # FAILED. propagate the exception as a string
@@ -80,9 +85,9 @@ def ipc_array_test(ipcarr, result_queue):
 
 
 @linux_only
-@skip_under_cuda_memcheck('Hangs cuda-memcheck')
-@skip_on_cudasim('Ipc not available in CUDASIM')
-@skip_on_arm('CUDA IPC not supported on ARM in Numba')
+@skip_under_cuda_memcheck("Hangs cuda-memcheck")
+@skip_on_cudasim("Ipc not available in CUDASIM")
+@skip_on_arm("CUDA IPC not supported on ARM in Numba")
 class TestIpcMemory(ContextResettingTestCase):
 
     def test_ipc_handle(self):
@@ -102,7 +107,7 @@ class TestIpcMemory(ContextResettingTestCase):
         size = ipch.size
 
         # spawn new process for testing
-        ctx = mp.get_context('spawn')
+        ctx = mp.get_context("spawn")
         result_queue = ctx.Queue()
         args = (handle_bytes, size, result_queue)
         proc = ctx.Process(target=base_ipc_handle_test, args=args)
@@ -148,7 +153,7 @@ class TestIpcMemory(ContextResettingTestCase):
             self.assertEqual(tuple(ipch_recon.handle), tuple(ipch.handle))
 
         # spawn new process for testing
-        ctx = mp.get_context('spawn')
+        ctx = mp.get_context("spawn")
         result_queue = ctx.Queue()
         args = (ipch, result_queue)
         proc = ctx.Process(target=serialize_ipc_handle_test, args=args)
@@ -161,7 +166,10 @@ class TestIpcMemory(ContextResettingTestCase):
         proc.join(3)
 
     def test_ipc_handle_serialization(self):
-        for index, foreign, in self.variants():
+        for (
+            index,
+            foreign,
+        ) in self.variants():
             with self.subTest(index=index, foreign=foreign):
                 self.check_ipc_handle_serialization(index, foreign)
 
@@ -178,7 +186,7 @@ class TestIpcMemory(ContextResettingTestCase):
         ipch = devarr.get_ipc_handle()
 
         # spawn new process for testing
-        ctx = mp.get_context('spawn')
+        ctx = mp.get_context("spawn")
         result_queue = ctx.Queue()
         args = (ipch, result_queue)
         proc = ctx.Process(target=ipc_array_test, args=args)
@@ -191,7 +199,10 @@ class TestIpcMemory(ContextResettingTestCase):
         proc.join(3)
 
     def test_ipc_array(self):
-        for index, foreign, in self.variants():
+        for (
+            index,
+            foreign,
+        ) in self.variants():
             with self.subTest(index=index, foreign=foreign):
                 self.check_ipc_array(index, foreign)
 
@@ -204,7 +215,9 @@ def staged_ipc_handle_test(handle, device_num, result_queue):
             arrsize = handle.size // np.dtype(np.intp).itemsize
             hostarray = np.zeros(arrsize, dtype=np.intp)
             cuda.driver.device_to_host(
-                hostarray, deviceptr, size=handle.size,
+                hostarray,
+                deviceptr,
+                size=handle.size,
             )
             handle.close()
         return hostarray
@@ -222,10 +235,10 @@ def staged_ipc_array_test(ipcarr, device_num, result_queue):
                     with ipcarr:
                         pass
                 except ValueError as e:
-                    if str(e) != 'IpcHandle is already opened':
-                        raise AssertionError('invalid exception message')
+                    if str(e) != "IpcHandle is already opened":
+                        raise AssertionError("invalid exception message")
                 else:
-                    raise AssertionError('did not raise on reopen')
+                    raise AssertionError("did not raise on reopen")
     # Catch any exception so we can propagate it
     except:  # noqa: E722
         # FAILED. propagate the exception as a string
@@ -239,9 +252,9 @@ def staged_ipc_array_test(ipcarr, device_num, result_queue):
 
 
 @linux_only
-@skip_under_cuda_memcheck('Hangs cuda-memcheck')
-@skip_on_cudasim('Ipc not available in CUDASIM')
-@skip_on_arm('CUDA IPC not supported on ARM in Numba')
+@skip_under_cuda_memcheck("Hangs cuda-memcheck")
+@skip_on_cudasim("Ipc not available in CUDASIM")
+@skip_on_arm("CUDA IPC not supported on ARM in Numba")
 class TestIpcStaged(ContextResettingTestCase):
     def test_staged(self):
         # prepare data for IPC
@@ -249,7 +262,7 @@ class TestIpcStaged(ContextResettingTestCase):
         devarr = cuda.to_device(arr)
 
         # spawn new process for testing
-        mpctx = mp.get_context('spawn')
+        mpctx = mp.get_context("spawn")
         result_queue = mpctx.Queue()
 
         # create IPC handle
@@ -285,7 +298,7 @@ class TestIpcStaged(ContextResettingTestCase):
             ipch = devarr.get_ipc_handle()
 
             # spawn new process for testing
-            ctx = mp.get_context('spawn')
+            ctx = mp.get_context("spawn")
             result_queue = ctx.Queue()
             args = (ipch, device_num, result_queue)
             proc = ctx.Process(target=staged_ipc_array_test, args=args)
@@ -299,7 +312,7 @@ class TestIpcStaged(ContextResettingTestCase):
 
 
 @windows_only
-@skip_on_cudasim('Ipc not available in CUDASIM')
+@skip_on_cudasim("Ipc not available in CUDASIM")
 class TestIpcNotSupported(ContextResettingTestCase):
     def test_unsupported(self):
         arr = np.arange(10, dtype=np.intp)
@@ -307,8 +320,8 @@ class TestIpcNotSupported(ContextResettingTestCase):
         with self.assertRaises(OSError) as raises:
             devarr.get_ipc_handle()
         errmsg = str(raises.exception)
-        self.assertIn('OS does not support CUDA IPC', errmsg)
+        self.assertIn("OS does not support CUDA IPC", errmsg)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

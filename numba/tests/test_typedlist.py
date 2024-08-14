@@ -12,14 +12,19 @@ from numba.core import types
 from numba import typeof
 from numba.typed import List, Dict
 from numba.core.errors import TypingError
-from numba.tests.support import (TestCase, MemoryLeakMixin, override_config,
-                                 forbid_codegen, skip_parfors_unsupported)
+from numba.tests.support import (
+    TestCase,
+    MemoryLeakMixin,
+    override_config,
+    forbid_codegen,
+    skip_parfors_unsupported,
+)
 from numba.core.unsafe.refcount import get_refcount
 from numba.experimental import jitclass
 
 
 def to_tl(l):
-    """ Convert cpython list to typed-list. """
+    """Convert cpython list to typed-list."""
     tl = List.empty_list(int32)
     for k in l:
         tl.append(k)
@@ -178,7 +183,7 @@ class TestTypedList(MemoryLeakMixin, TestCase):
             lf.append(float32(1.0))
             return li._dtype, lf._dtype
 
-        self.assertEqual(foo(), (np.dtype('int32'), np.dtype('float32')))
+        self.assertEqual(foo(), (np.dtype("int32"), np.dtype("float32")))
         self.assertEqual(foo.py_func(), (int32, float32))
 
     def test_dtype_raises_exception_on_untyped_list(self):
@@ -223,7 +228,7 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         self.assertEqual(val, 23)
 
     def test_getitem_slice(self):
-        """ Test getitem using a slice.
+        """Test getitem using a slice.
 
         This tests suffers from combinatorial explosion, so we parametrize it
         and compare results against the regular list in a quasi fuzzing
@@ -271,7 +276,7 @@ class TestTypedList(MemoryLeakMixin, TestCase):
             self.assertEqual(rl[sa:so:se], list(tl[sa:so:se]))
 
     def test_setitem_slice(self):
-        """ Test setitem using a slice.
+        """Test setitem using a slice.
 
         This tests suffers from combinatorial explosion, so we parametrize it
         and compare results against the regular list in a quasi fuzzing
@@ -300,7 +305,7 @@ class TestTypedList(MemoryLeakMixin, TestCase):
 
         # extend self
         rl, tl = setup()
-        rl[len(rl):], tl[len(tl):] = rl, tl
+        rl[len(rl) :], tl[len(tl) :] = rl, tl
         self.assertEqual(rl, list(tl))
         # prepend self
         rl, tl = setup()
@@ -321,31 +326,31 @@ class TestTypedList(MemoryLeakMixin, TestCase):
 
         # extend
         rl, tl = setup()
-        rl[len(rl):] = list(range(110, 120))
-        tl[len(tl):] = to_tl(range(110,120))
+        rl[len(rl) :] = list(range(110, 120))
+        tl[len(tl) :] = to_tl(range(110, 120))
         self.assertEqual(rl, list(tl))
         # extend empty
         rl, tl = setup(0, 0)
-        rl[len(rl):] = list(range(110, 120))
-        tl[len(tl):] = to_tl(range(110,120))
+        rl[len(rl) :] = list(range(110, 120))
+        tl[len(tl) :] = to_tl(range(110, 120))
         self.assertEqual(rl, list(tl))
         # extend singleton
         rl, tl = setup(0, 1)
-        rl[len(rl):] = list(range(110, 120))
-        tl[len(tl):] = to_tl(range(110,120))
+        rl[len(rl) :] = list(range(110, 120))
+        tl[len(tl) :] = to_tl(range(110, 120))
         self.assertEqual(rl, list(tl))
 
         # prepend
         rl, tl = setup()
-        rl[:0], tl[:0] = list(range(110, 120)), to_tl(range(110,120))
+        rl[:0], tl[:0] = list(range(110, 120)), to_tl(range(110, 120))
         self.assertEqual(rl, list(tl))
         # prepend empty
-        rl, tl = setup(0,0)
-        rl[:0], tl[:0] = list(range(110, 120)), to_tl(range(110,120))
+        rl, tl = setup(0, 0)
+        rl[:0], tl[:0] = list(range(110, 120)), to_tl(range(110, 120))
         self.assertEqual(rl, list(tl))
         # prepend singleton
-        rl, tl = setup(0,1)
-        rl[:0], tl[:0] = list(range(110, 120)), to_tl(range(110,120))
+        rl, tl = setup(0, 1)
+        rl[:0], tl[:0] = list(range(110, 120)), to_tl(range(110, 120))
         self.assertEqual(rl, list(tl))
 
         # simple equal length assignment, just replace
@@ -377,11 +382,11 @@ class TestTypedList(MemoryLeakMixin, TestCase):
 
         # replace every second element
         rl, tl = setup()
-        rl[::2], tl[::2] = [100,200,300,400,500], to_tl([100,200,300,400,500])
+        rl[::2], tl[::2] = [100, 200, 300, 400, 500], to_tl([100, 200, 300, 400, 500])
         self.assertEqual(rl, list(tl))
         # replace every second element, backwards
         rl, tl = setup()
-        rl[::-2], tl[::-2] = [100,200,300,400,500], to_tl([100,200,300,400,500])
+        rl[::-2], tl[::-2] = [100, 200, 300, 400, 500], to_tl([100, 200, 300, 400, 500])
         self.assertEqual(rl, list(tl))
 
         # reverse assign to itself
@@ -393,7 +398,7 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         self.disable_leak_check()
 
         tl = List.empty_list(int32)
-        for i in range(10,20):
+        for i in range(10, 20):
             tl.append(i)
 
         assignment = List.empty_list(int32)
@@ -408,7 +413,7 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         )
 
     def test_delitem_slice(self):
-        """ Test delitem using a slice.
+        """Test delitem using a slice.
 
         This tests suffers from combinatorial explosion, so we parametrize it
         and compare results against the regular list in a quasi fuzzing
@@ -487,13 +492,13 @@ class TestTypedList(MemoryLeakMixin, TestCase):
             self.assertEqual(rl, list(tl))
 
     def test_list_create_no_jit_using_empty_list(self):
-        with override_config('DISABLE_JIT', True):
+        with override_config("DISABLE_JIT", True):
             with forbid_codegen():
                 l = List.empty_list(types.int32)
                 self.assertEqual(type(l), list)
 
     def test_list_create_no_jit_using_List(self):
-        with override_config('DISABLE_JIT', True):
+        with override_config("DISABLE_JIT", True):
             with forbid_codegen():
                 l = List()
                 self.assertEqual(type(l), list)
@@ -501,11 +506,13 @@ class TestTypedList(MemoryLeakMixin, TestCase):
     def test_catch_global_typed_list(self):
         from numba.tests.typedlist_usecases import catch_global
 
-        expected_message = ("The use of a ListType[int32] type, assigned to "
-                            "variable 'global_typed_list' in globals, is not "
-                            "supported as globals are considered compile-time "
-                            "constants and there is no known way to compile "
-                            "a ListType[int32] type as a constant.")
+        expected_message = (
+            "The use of a ListType[int32] type, assigned to "
+            "variable 'global_typed_list' in globals, is not "
+            "supported as globals are considered compile-time "
+            "constants and there is no known way to compile "
+            "a ListType[int32] type as a constant."
+        )
         with self.assertRaises(TypingError) as raises:
             njit(catch_global)()
         self.assertIn(
@@ -525,21 +532,30 @@ class TestTypedList(MemoryLeakMixin, TestCase):
 
     def test_repr_long_list_ipython(self):
         # Test repr of long typed Lists in an IPython session
-        args = ["-m", "IPython", "--quiet", "--quick", "--no-banner",
-                "--colors=NoColor", "-c"]
+        args = [
+            "-m",
+            "IPython",
+            "--quiet",
+            "--quick",
+            "--no-banner",
+            "--colors=NoColor",
+            "-c",
+        ]
         base_cmd = [sys.executable] + args
         try:
             subprocess.check_output(base_cmd + ["--version"])
         except subprocess.CalledProcessError as e:
             self.skipTest("ipython not found: return code %d" % e.returncode)
-        repr_cmd = [" ".join(
-            [
-                "import sys;",
-                "from numba.typed import List;",
-                "res = repr(List(range(1005)));",
-                "sys.stderr.write(res);"
-            ]
-        )]
+        repr_cmd = [
+            " ".join(
+                [
+                    "import sys;",
+                    "from numba.typed import List;",
+                    "res = repr(List(range(1005)));",
+                    "sys.stderr.write(res);",
+                ]
+            )
+        ]
         cmd = base_cmd + repr_cmd
         p = subprocess.Popen(
             cmd,
@@ -562,13 +578,13 @@ class TestTypedList(MemoryLeakMixin, TestCase):
             count = 0
             for i in x:
                 if count > 1:
-                    x.append(2.)
+                    x.append(2.0)
                 count += 1
 
         l = List()
-        l.append(1.)
-        l.append(1.)
-        l.append(1.)
+        l.append(1.0)
+        l.append(1.0)
+        l.append(1.0)
         with self.assertRaises(RuntimeError) as raises:
             foo(l)
 
@@ -652,31 +668,40 @@ class TestNoneType(MemoryLeakMixin, TestCase):
         self.assertEqual(impl.py_func(), impl())
 
     def test_none_typed_method_fails(self):
-        """ Test that unsupported operations on List[None] raise. """
+        """Test that unsupported operations on List[None] raise."""
+
         def generate_function(line1, line2):
             context = {}
-            exec(dedent("""
+            exec(
+                dedent(
+                    """
                 from numba.typed import List
                 def bar():
                     lst = List()
                     {}
                     {}
-                """.format(line1, line2)), context)
+                """.format(
+                        line1, line2
+                    )
+                ),
+                context,
+            )
             return njit(context["bar"])
+
         for line1, line2 in (
-                ("lst.append(None)", "lst.pop()"),
-                ("lst.append(None)", "del lst[0]"),
-                ("lst.append(None)", "lst.count(None)"),
-                ("lst.append(None)", "lst.index(None)"),
-                ("lst.append(None)", "lst.insert(0, None)"),
-                (""                , "lst.insert(0, None)"),
-                ("lst.append(None)", "lst.clear()"),
-                ("lst.append(None)", "lst.copy()"),
-                ("lst.append(None)", "lst.extend([None])"),
-                ("",                 "lst.extend([None])"),
-                ("lst.append(None)", "lst.remove(None)"),
-                ("lst.append(None)", "lst.reverse()"),
-                ("lst.append(None)", "None in lst"),
+            ("lst.append(None)", "lst.pop()"),
+            ("lst.append(None)", "del lst[0]"),
+            ("lst.append(None)", "lst.count(None)"),
+            ("lst.append(None)", "lst.index(None)"),
+            ("lst.append(None)", "lst.insert(0, None)"),
+            ("", "lst.insert(0, None)"),
+            ("lst.append(None)", "lst.clear()"),
+            ("lst.append(None)", "lst.copy()"),
+            ("lst.append(None)", "lst.extend([None])"),
+            ("", "lst.extend([None])"),
+            ("lst.append(None)", "lst.remove(None)"),
+            ("lst.append(None)", "lst.reverse()"),
+            ("lst.append(None)", "None in lst"),
         ):
             with self.assertRaises(TypingError) as raises:
                 foo = generate_function(line1, line2)
@@ -721,8 +746,8 @@ class TestAllocation(MemoryLeakMixin, TestCase):
 
     def test_growth_and_shrinkage(self):
         tl = List.empty_list(types.int32)
-        growth_before = {0: 0, 4:4, 8:8, 16:16}
-        growth_after = {0: 4, 4:8, 8:16, 16:25}
+        growth_before = {0: 0, 4: 4, 8: 8, 16: 16}
+        growth_after = {0: 4, 4: 8, 8: 16, 16: 25}
         for i in range(17):
             if i in growth_before:
                 self.assertEqual(growth_before[i], tl._allocated())
@@ -730,8 +755,8 @@ class TestAllocation(MemoryLeakMixin, TestCase):
             if i in growth_after:
                 self.assertEqual(growth_after[i], tl._allocated())
 
-        shrink_before = {17: 25, 12:25, 9:18, 6:12, 4:8, 3:6, 2:5, 1:4}
-        shrink_after = {17: 25, 12:18, 9:12, 6:8, 4:6, 3:5, 2:4, 1:0}
+        shrink_before = {17: 25, 12: 25, 9: 18, 6: 12, 4: 8, 3: 6, 2: 5, 1: 4}
+        shrink_after = {17: 25, 12: 18, 9: 12, 6: 8, 4: 6, 3: 5, 2: 4, 1: 0}
         for i in range(17, 0, -1):
             if i in shrink_before:
                 self.assertEqual(shrink_before[i], tl._allocated())
@@ -778,7 +803,7 @@ class TestExtend(MemoryLeakMixin, TestCase):
             l = List.empty_list(types.int32)
             for x in range(10):
                 l.append(x)
-            l.extend((100,200,300))
+            l.extend((100, 200, 300))
             return l
 
         expected = impl.py_func()
@@ -992,8 +1017,8 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
             self.assertEqual(l[i], s)
         self.assertEqual(list(l), expected)
         # Test insert replacement
-        l[3] = 'uxyz'
-        self.assertEqual(l[3], 'uxyz')
+        l[3] = "uxyz"
+        self.assertEqual(l[3], "uxyz")
         # Test list growth
         nelem = 100
         for i in range(4, nelem):
@@ -1004,9 +1029,9 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
         @njit
         def foo():
             # use some tricks to make ref-counted unicode
-            i, j = 'ab', 'c'
+            i, j = "ab", "c"
             a = i + j
-            m, n = 'zy', 'x'
+            m, n = "zy", "x"
             z = m + n
             l = List.empty_list(types.unicode_type)
             l.append(a)
@@ -1089,7 +1114,7 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
         self.assertEqual(expected, got)
 
     def test_array_as_item_in_list(self):
-        nested_type = types.Array(types.float64, 1, 'C')
+        nested_type = types.Array(types.float64, 1, "C")
 
         @njit
         def foo():
@@ -1121,15 +1146,15 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
         # Test the reproducer from #5264 and make sure it doesn't segfault
         float_array = types.float64[:]
         l = List.empty_list(float_array)
-        l.append(np.ones(3,dtype=np.float64))
+        l.append(np.ones(3, dtype=np.float64))
         l.pop()
         self.assertEqual(0, len(l))
 
     def test_jitclass_as_item_in_list(self):
 
         spec = [
-            ('value', int32),               # a simple scalar field
-            ('array', float32[:]),          # an array field
+            ("value", int32),  # a simple scalar field
+            ("array", float32[:]),  # an array field
         ]
 
         @jitclass(spec)
@@ -1167,14 +1192,14 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
     def test_4960(self):
         # Test the reproducer from #4960 and make sure it doesn't segfault
-        @jitclass([('value', int32)])
+        @jitclass([("value", int32)])
         class Simple(object):
             def __init__(self, value):
                 self.value = value
 
         @njit
         def foo():
-            l = List((Simple(23),Simple(24)))
+            l = List((Simple(23), Simple(24)))
             l.pop()
             return l
 
@@ -1248,8 +1273,8 @@ class TestListSort(MemoryLeakMixin, TestCase):
 
     def make_both(self, data):
         return {
-            'py': self.make(list, data),
-            'nb': self.make(List, data),
+            "py": self.make(list, data),
+            "nb": self.make(List, data),
         }
 
     def test_sort_no_args(self):
@@ -1259,7 +1284,7 @@ class TestListSort(MemoryLeakMixin, TestCase):
 
         for nelem in [13, 29, 127]:
             my_lists = self.make_both(np.random.randint(0, nelem, nelem))
-            self.assertEqual(list(udt(my_lists['nb'])), udt(my_lists['py']))
+            self.assertEqual(list(udt(my_lists["nb"])), udt(my_lists["py"]))
 
     def test_sort_all_args(self):
         def udt(lst, key, reverse):
@@ -1267,18 +1292,18 @@ class TestListSort(MemoryLeakMixin, TestCase):
             return lst
 
         possible_keys = [
-            lambda x: -x,           # negative
+            lambda x: -x,  # negative
             lambda x: 1 / (1 + x),  # make float
-            lambda x: (x, -x),      # tuple
-            lambda x: x,            # identity
+            lambda x: (x, -x),  # tuple
+            lambda x: x,  # identity
         ]
         possible_reverse = [True, False]
         for key, reverse in product(possible_keys, possible_reverse):
             my_lists = self.make_both(np.random.randint(0, 100, 23))
             msg = "case for key={} reverse={}".format(key, reverse)
             self.assertEqual(
-                list(udt(my_lists['nb'], key=key, reverse=reverse)),
-                udt(my_lists['py'], key=key, reverse=reverse),
+                list(udt(my_lists["nb"], key=key, reverse=reverse)),
+                udt(my_lists["py"], key=key, reverse=reverse),
                 msg=msg,
             )
 
@@ -1292,13 +1317,13 @@ class TestListSort(MemoryLeakMixin, TestCase):
         nb_key = njit(lambda x: x + 1)
         # test typedlist with jitted function
         self.assertEqual(
-            list(udt(my_lists['nb'], key=nb_key)),
-            udt(my_lists['py'], key=py_key),
+            list(udt(my_lists["nb"], key=nb_key)),
+            udt(my_lists["py"], key=py_key),
         )
         # test typedlist with and without jitted function
         self.assertEqual(
-            list(udt(my_lists['nb'], key=nb_key)),
-            list(udt(my_lists['nb'], key=py_key)),
+            list(udt(my_lists["nb"], key=nb_key)),
+            list(udt(my_lists["nb"], key=py_key)),
         )
 
     def test_sort_in_jit_w_lambda_key(self):
@@ -1332,8 +1357,8 @@ class TestListSort(MemoryLeakMixin, TestCase):
         arrays = [np.random.random(3) for _ in range(10)]
         my_lists = self.make_both(arrays)
         self.assertEqual(
-            list(foo(my_lists['nb'])),
-            foo.py_func(my_lists['py']),
+            list(foo(my_lists["nb"])),
+            foo.py_func(my_lists["py"]),
         )
 
 
@@ -1345,6 +1370,7 @@ class TestImmutable(MemoryLeakMixin, TestCase):
             l = List()
             l.append(1)
             return l._is_mutable()
+
         self.assertTrue(foo())
         self.assertTrue(foo.py_func())
 
@@ -1355,6 +1381,7 @@ class TestImmutable(MemoryLeakMixin, TestCase):
             l.append(1)
             l._make_immutable()
             return l._is_mutable()
+
         self.assertFalse(foo())
         self.assertFalse(foo.py_func())
 
@@ -1364,7 +1391,8 @@ class TestImmutable(MemoryLeakMixin, TestCase):
             l = List()
             l.append(1)
             l._make_immutable()
-            return len(l),l._is_mutable()
+            return len(l), l._is_mutable()
+
         length, mutable = foo()
         self.assertEqual(length, 1)
         self.assertFalse(mutable)
@@ -1376,6 +1404,7 @@ class TestImmutable(MemoryLeakMixin, TestCase):
             l.append(1)
             l._make_immutable()
             return l[0], l._is_mutable()
+
         test_item, mutable = foo()
         self.assertEqual(test_item, 1)
         self.assertFalse(mutable)
@@ -1394,35 +1423,44 @@ class TestImmutable(MemoryLeakMixin, TestCase):
             with self.assertRaises(ValueError) as raises:
                 func()
             self.assertIn(
-                'list is immutable',
+                "list is immutable",
                 str(raises.exception),
             )
 
     def test_mutation_fails(self):
-        """ Test that any attempt to mutate an immutable typed list fails. """
+        """Test that any attempt to mutate an immutable typed list fails."""
         self.disable_leak_check()
 
         def generate_function(line):
             context = {}
-            exec(dedent("""
+            exec(
+                dedent(
+                    """
                 from numba.typed import List
                 def bar():
                     lst = List()
                     lst.append(1)
                     lst._make_immutable()
                     {}
-                """.format(line)), context)
+                """.format(
+                        line
+                    )
+                ),
+                context,
+            )
             return njit(context["bar"])
-        for line in ("lst.append(0)",
-                     "lst[0] = 0",
-                     "lst.pop()",
-                     "del lst[0]",
-                     "lst.extend((0,))",
-                     "lst.insert(0, 0)",
-                     "lst.clear()",
-                     "lst.reverse()",
-                     "lst.sort()",
-                     ):
+
+        for line in (
+            "lst.append(0)",
+            "lst[0] = 0",
+            "lst.pop()",
+            "del lst[0]",
+            "lst.extend((0,))",
+            "lst.insert(0, 0)",
+            "lst.clear()",
+            "lst.reverse()",
+            "lst.sort()",
+        ):
             foo = generate_function(line)
             for func in (foo, foo.py_func):
                 with self.assertRaises(ValueError) as raises:
@@ -1436,8 +1474,8 @@ class TestImmutable(MemoryLeakMixin, TestCase):
 class TestGetItemIndexType(MemoryLeakMixin, TestCase):
 
     def test_indexing_with_uint8(self):
-        """ Test for reproducer at https://github.com/numba/numba/issues/7250
-        """
+        """Test for reproducer at https://github.com/numba/numba/issues/7250"""
+
         @njit
         def foo():
             l = List.empty_list(uint8)
@@ -1456,20 +1494,24 @@ class TestListFromIter(MemoryLeakMixin, TestCase):
 
         def generate_function(line):
             context = {}
-            code = dedent("""
+            code = dedent(
+                """
                 from numba.typed import List
                 def bar():
                     {}
                     return l
-                """).format(line)
+                """
+            ).format(line)
             exec(code, context)
             return njit(context["bar"])
-        for line in ("l = List([0, 1, 2])",
-                     "l = List(range(3))",
-                     "l = List(List([0, 1, 2]))",
-                     "l = List((0, 1, 2))",
-                     "l = List(set([0, 1, 2]))",
-                     ):
+
+        for line in (
+            "l = List([0, 1, 2])",
+            "l = List(range(3))",
+            "l = List(List([0, 1, 2]))",
+            "l = List((0, 1, 2))",
+            "l = List(set([0, 1, 2]))",
+        ):
             foo = generate_function(line)
             cf_received, py_received = foo(), foo.py_func()
             for result in (cf_received, py_received):
@@ -1478,10 +1520,12 @@ class TestListFromIter(MemoryLeakMixin, TestCase):
 
     def test_unicode(self):
         """Test that a List can be created from a unicode string."""
+
         @njit
         def foo():
             l = List("abc")
             return l
+
         expected = List()
         for i in ("a", "b", "c"):
             expected.append(i)
@@ -1493,14 +1537,16 @@ class TestListFromIter(MemoryLeakMixin, TestCase):
 
         def generate_function(line):
             context = {}
-            code = dedent("""
+            code = dedent(
+                """
                 from numba.typed import List, Dict
                 def bar():
                     d = Dict()
                     d[0], d[1], d[2] = "a", "b", "c"
                     {}
                     return l
-                """).format(line)
+                """
+            ).format(line)
             exec(code, context)
             return njit(context["bar"])
 
@@ -1511,10 +1557,10 @@ class TestListFromIter(MemoryLeakMixin, TestCase):
             return expected
 
         for line, values in (
-                ("l = List(d)", (0, 1, 2)),
-                ("l = List(d.keys())", (0, 1, 2)),
-                ("l = List(d.values())", ("a", "b", "c")),
-                ("l = List(d.items())", ((0, "a"), (1, "b"), (2, "c"))),
+            ("l = List(d)", (0, 1, 2)),
+            ("l = List(d.keys())", (0, 1, 2)),
+            ("l = List(d.values())", ("a", "b", "c")),
+            ("l = List(d.items())", ((0, "a"), (1, "b"), (2, "c"))),
         ):
             foo, expected = generate_function(line), generate_expected(values)
             for func in (foo, foo.py_func):
@@ -1555,7 +1601,7 @@ class TestListFromIter(MemoryLeakMixin, TestCase):
         farr = np.asfortranarray(carr)
         aarr = np.arange(8).reshape((2, 4))[:, ::2]
 
-        for layout, arr in zip('CFA', (carr, farr, aarr)):
+        for layout, arr in zip("CFA", (carr, farr, aarr)):
             self.assertEqual(typeof(arr).layout, layout)
             expected = List()
             expected.append(arr[0, :])

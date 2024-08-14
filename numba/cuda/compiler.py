@@ -1,15 +1,18 @@
 from llvmlite import ir
 from numba.core.typing.templates import ConcreteTemplate
 from numba.core import types, typing, funcdesc, config, compiler, sigutils
-from numba.core.compiler import (sanitize_compile_result_entries, CompilerBase,
-                                 DefaultPassBuilder, Flags, Option,
-                                 CompileResult)
+from numba.core.compiler import (
+    sanitize_compile_result_entries,
+    CompilerBase,
+    DefaultPassBuilder,
+    Flags,
+    Option,
+    CompileResult,
+)
 from numba.core.compiler_lock import global_compiler_lock
-from numba.core.compiler_machinery import (LoweringPass,
-                                           PassManager, register_pass)
+from numba.core.compiler_machinery import LoweringPass, PassManager, register_pass
 from numba.core.errors import NumbaInvalidConfigWarning
-from numba.core.typed_passes import (IRLegalization, NativeLowering,
-                                     AnnotateTypes)
+from numba.core.typed_passes import IRLegalization, NativeLowering, AnnotateTypes
 from warnings import warn
 from numba.cuda.api import get_current_device
 from numba.cuda.target import CUDACABICallConv
@@ -53,6 +56,7 @@ class CUDAFlags(Flags):
 #    point will no longer need to be a synthetic value, but will instead be a
 #    pointer to the compiled function as in the CPU target.
 
+
 class CUDACompileResult(CompileResult):
     @property
     def entry_point(self):
@@ -76,7 +80,7 @@ class CUDABackend(LoweringPass):
         """
         Back-end: Packages lowering output in a compile result
         """
-        lowered = state['cr']
+        lowered = state["cr"]
         signature = typing.signature(state.return_type, *state.args)
 
         state.cr = cuda_compile_result(
@@ -119,7 +123,7 @@ class CreateLibrary(LoweringPass):
 class CUDACompiler(CompilerBase):
     def define_pipelines(self):
         dpb = DefaultPassBuilder
-        pm = PassManager('cuda')
+        pm = PassManager("cuda")
 
         untyped_passes = dpb.define_untyped_pipeline(self.state)
         pm.passes.extend(untyped_passes.passes)
@@ -134,10 +138,9 @@ class CUDACompiler(CompilerBase):
         return [pm]
 
     def define_cuda_lowering_pipeline(self, state):
-        pm = PassManager('cuda_lowering')
+        pm = PassManager("cuda_lowering")
         # legalise
-        pm.add_pass(IRLegalization,
-                    "ensure IR is legal prior to lowering")
+        pm.add_pass(IRLegalization, "ensure IR is legal prior to lowering")
         pm.add_pass(AnnotateTypes, "annotate types")
 
         # lower
@@ -150,13 +153,22 @@ class CUDACompiler(CompilerBase):
 
 
 @global_compiler_lock
-def compile_cuda(pyfunc, return_type, args, debug=False, lineinfo=False,
-                 inline=False, fastmath=False, nvvm_options=None,
-                 cc=None):
+def compile_cuda(
+    pyfunc,
+    return_type,
+    args,
+    debug=False,
+    lineinfo=False,
+    inline=False,
+    fastmath=False,
+    nvvm_options=None,
+    cc=None,
+):
     if cc is None:
-        raise ValueError('Compute Capability must be supplied')
+        raise ValueError("Compute Capability must be supplied")
 
     from .descriptor import cuda_target
+
     typingctx = cuda_target.typing_context
     targetctx = cuda_target.target_context
 
@@ -178,9 +190,9 @@ def compile_cuda(pyfunc, return_type, args, debug=False, lineinfo=False,
         flags.dbg_directives_only = True
 
     if debug:
-        flags.error_model = 'python'
+        flags.error_model = "python"
     else:
-        flags.error_model = 'numpy'
+        flags.error_model = "numpy"
 
     if inline:
         flags.forceinline = True
@@ -192,15 +204,18 @@ def compile_cuda(pyfunc, return_type, args, debug=False, lineinfo=False,
 
     # Run compilation pipeline
     from numba.core.target_extension import target_override
-    with target_override('cuda'):
-        cres = compiler.compile_extra(typingctx=typingctx,
-                                      targetctx=targetctx,
-                                      func=pyfunc,
-                                      args=args,
-                                      return_type=return_type,
-                                      flags=flags,
-                                      locals={},
-                                      pipeline_class=CUDACompiler)
+
+    with target_override("cuda"):
+        cres = compiler.compile_extra(
+            typingctx=typingctx,
+            targetctx=targetctx,
+            func=pyfunc,
+            args=args,
+            return_type=return_type,
+            flags=flags,
+            locals={},
+            pipeline_class=CUDACompiler,
+        )
 
     library = cres.library
     library.finalize()
@@ -208,8 +223,7 @@ def compile_cuda(pyfunc, return_type, args, debug=False, lineinfo=False,
     return cres
 
 
-def cabi_wrap_function(context, lib, fndesc, wrapper_function_name,
-                       nvvm_options):
+def cabi_wrap_function(context, lib, fndesc, wrapper_function_name, nvvm_options):
     """
     Wrap a Numba ABI function in a C ABI wrapper at the NVVM IR level.
 
@@ -217,9 +231,11 @@ def cabi_wrap_function(context, lib, fndesc, wrapper_function_name,
     """
     # The wrapper will be contained in a new library that links to the wrapped
     # function's library
-    library = lib.codegen.create_library(f'{lib.name}_function_',
-                                         entry_name=wrapper_function_name,
-                                         nvvm_options=nvvm_options)
+    library = lib.codegen.create_library(
+        f"{lib.name}_function_",
+        entry_name=wrapper_function_name,
+        nvvm_options=nvvm_options,
+    )
     library.add_linking_library(lib)
 
     # Determine the caller (C ABI) and wrapper (Numba ABI) function types
@@ -237,14 +253,15 @@ def cabi_wrap_function(context, lib, fndesc, wrapper_function_name,
     # its return value
 
     wrapfn = ir.Function(wrapper_module, wrapfnty, wrapper_function_name)
-    builder = ir.IRBuilder(wrapfn.append_basic_block(''))
+    builder = ir.IRBuilder(wrapfn.append_basic_block(""))
 
     arginfo = context.get_arg_packer(argtypes)
     callargs = arginfo.from_arguments(builder, wrapfn.args)
     # We get (status, return_value), but we ignore the status since we
     # can't propagate it through the C ABI anyway
     _, return_value = context.call_conv.call_function(
-        builder, func, restype, argtypes, callargs)
+        builder, func, restype, argtypes, callargs
+    )
     builder.ret(return_value)
 
     library.add_ir_module(wrapper_module)
@@ -253,9 +270,19 @@ def cabi_wrap_function(context, lib, fndesc, wrapper_function_name,
 
 
 @global_compiler_lock
-def compile(pyfunc, sig, debug=False, lineinfo=False, device=True,
-            fastmath=False, cc=None, opt=True, abi="c", abi_info=None,
-            output='ptx'):
+def compile(
+    pyfunc,
+    sig,
+    debug=False,
+    lineinfo=False,
+    device=True,
+    fastmath=False,
+    cc=None,
+    opt=True,
+    abi="c",
+    abi_info=None,
+    output="ptx",
+):
     """Compile a Python function to PTX or LTO-IR for a given set of argument
     types.
 
@@ -299,37 +326,43 @@ def compile(pyfunc, sig, debug=False, lineinfo=False, device=True,
     :rtype: tuple
     """
     if abi not in ("numba", "c"):
-        raise NotImplementedError(f'Unsupported ABI: {abi}')
+        raise NotImplementedError(f"Unsupported ABI: {abi}")
 
-    if abi == 'c' and not device:
-        raise NotImplementedError('The C ABI is not supported for kernels')
+    if abi == "c" and not device:
+        raise NotImplementedError("The C ABI is not supported for kernels")
 
     if output not in ("ptx", "ltoir"):
-        raise NotImplementedError(f'Unsupported output type: {output}')
+        raise NotImplementedError(f"Unsupported output type: {output}")
 
     if debug and opt:
-        msg = ("debug=True with opt=True (the default) "
-               "is not supported by CUDA. This may result in a crash"
-               " - set debug=False or opt=False.")
+        msg = (
+            "debug=True with opt=True (the default) "
+            "is not supported by CUDA. This may result in a crash"
+            " - set debug=False or opt=False."
+        )
         warn(NumbaInvalidConfigWarning(msg))
 
-    lto = (output == 'ltoir')
+    lto = output == "ltoir"
     abi_info = abi_info or dict()
 
-    nvvm_options = {
-        'fastmath': fastmath,
-        'opt': 3 if opt else 0
-    }
+    nvvm_options = {"fastmath": fastmath, "opt": 3 if opt else 0}
 
     if lto:
-        nvvm_options['gen-lto'] = None
+        nvvm_options["gen-lto"] = None
 
     args, return_type = sigutils.normalize_signature(sig)
 
     cc = cc or config.CUDA_DEFAULT_PTX_CC
-    cres = compile_cuda(pyfunc, return_type, args, debug=debug,
-                        lineinfo=lineinfo, fastmath=fastmath,
-                        nvvm_options=nvvm_options, cc=cc)
+    cres = compile_cuda(
+        pyfunc,
+        return_type,
+        args,
+        debug=debug,
+        lineinfo=lineinfo,
+        fastmath=fastmath,
+        nvvm_options=nvvm_options,
+        cc=cc,
+    )
     resty = cres.signature.return_type
 
     if resty and not device and resty != types.void:
@@ -340,17 +373,16 @@ def compile(pyfunc, sig, debug=False, lineinfo=False, device=True,
     if device:
         lib = cres.library
         if abi == "c":
-            wrapper_name = abi_info.get('abi_name', pyfunc.__name__)
-            lib = cabi_wrap_function(tgt, lib, cres.fndesc, wrapper_name,
-                                     nvvm_options)
+            wrapper_name = abi_info.get("abi_name", pyfunc.__name__)
+            lib = cabi_wrap_function(tgt, lib, cres.fndesc, wrapper_name, nvvm_options)
     else:
         code = pyfunc.__code__
         filename = code.co_filename
         linenum = code.co_firstlineno
 
-        lib, kernel = tgt.prepare_cuda_kernel(cres.library, cres.fndesc, debug,
-                                              lineinfo, nvvm_options, filename,
-                                              linenum)
+        lib, kernel = tgt.prepare_cuda_kernel(
+            cres.library, cres.fndesc, debug, lineinfo, nvvm_options, filename, linenum
+        )
 
     if lto:
         code = lib.get_ltoir(cc=cc)
@@ -359,38 +391,94 @@ def compile(pyfunc, sig, debug=False, lineinfo=False, device=True,
     return code, resty
 
 
-def compile_for_current_device(pyfunc, sig, debug=False, lineinfo=False,
-                               device=True, fastmath=False, opt=True,
-                               abi="c", abi_info=None, output='ptx'):
+def compile_for_current_device(
+    pyfunc,
+    sig,
+    debug=False,
+    lineinfo=False,
+    device=True,
+    fastmath=False,
+    opt=True,
+    abi="c",
+    abi_info=None,
+    output="ptx",
+):
     """Compile a Python function to PTX or LTO-IR for a given signature for the
     current device's compute capabilility. This calls :func:`compile` with an
     appropriate ``cc`` value for the current device."""
     cc = get_current_device().compute_capability
-    return compile(pyfunc, sig, debug=debug, lineinfo=lineinfo, device=device,
-                   fastmath=fastmath, cc=cc, opt=opt, abi=abi,
-                   abi_info=abi_info, output=output)
+    return compile(
+        pyfunc,
+        sig,
+        debug=debug,
+        lineinfo=lineinfo,
+        device=device,
+        fastmath=fastmath,
+        cc=cc,
+        opt=opt,
+        abi=abi,
+        abi_info=abi_info,
+        output=output,
+    )
 
 
-def compile_ptx(pyfunc, sig, debug=False, lineinfo=False, device=False,
-                fastmath=False, cc=None, opt=True, abi="numba", abi_info=None):
+def compile_ptx(
+    pyfunc,
+    sig,
+    debug=False,
+    lineinfo=False,
+    device=False,
+    fastmath=False,
+    cc=None,
+    opt=True,
+    abi="numba",
+    abi_info=None,
+):
     """Compile a Python function to PTX for a given signature. See
     :func:`compile`. The defaults for this function are to compile a kernel
     with the Numba ABI, rather than :func:`compile`'s default of compiling a
     device function with the C ABI."""
-    return compile(pyfunc, sig, debug=debug, lineinfo=lineinfo, device=device,
-                   fastmath=fastmath, cc=cc, opt=opt, abi=abi,
-                   abi_info=abi_info, output='ptx')
+    return compile(
+        pyfunc,
+        sig,
+        debug=debug,
+        lineinfo=lineinfo,
+        device=device,
+        fastmath=fastmath,
+        cc=cc,
+        opt=opt,
+        abi=abi,
+        abi_info=abi_info,
+        output="ptx",
+    )
 
 
-def compile_ptx_for_current_device(pyfunc, sig, debug=False, lineinfo=False,
-                                   device=False, fastmath=False, opt=True,
-                                   abi="numba", abi_info=None):
+def compile_ptx_for_current_device(
+    pyfunc,
+    sig,
+    debug=False,
+    lineinfo=False,
+    device=False,
+    fastmath=False,
+    opt=True,
+    abi="numba",
+    abi_info=None,
+):
     """Compile a Python function to PTX for a given signature for the current
     device's compute capabilility. See :func:`compile_ptx`."""
     cc = get_current_device().compute_capability
-    return compile_ptx(pyfunc, sig, debug=debug, lineinfo=lineinfo,
-                       device=device, fastmath=fastmath, cc=cc, opt=opt,
-                       abi=abi, abi_info=abi_info)
+    return compile_ptx(
+        pyfunc,
+        sig,
+        debug=debug,
+        lineinfo=lineinfo,
+        device=device,
+        fastmath=fastmath,
+        cc=cc,
+        opt=opt,
+        abi=abi,
+        abi_info=abi_info,
+    )
 
 
 def declare_device_function(name, restype, argtypes):
@@ -399,6 +487,7 @@ def declare_device_function(name, restype, argtypes):
 
 def declare_device_function_template(name, restype, argtypes):
     from .descriptor import cuda_target
+
     typingctx = cuda_target.typing_context
     targetctx = cuda_target.target_context
     sig = typing.signature(restype, *argtypes)
@@ -409,7 +498,8 @@ def declare_device_function_template(name, restype, argtypes):
         cases = [sig]
 
     fndesc = funcdesc.ExternalFunctionDescriptor(
-        name=name, restype=restype, argtypes=argtypes)
+        name=name, restype=restype, argtypes=argtypes
+    )
     typingctx.insert_user_function(extfn, device_function_template)
     targetctx.insert_user_function(extfn, fndesc)
 

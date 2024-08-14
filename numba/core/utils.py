@@ -18,12 +18,15 @@ from types import ModuleType
 from importlib import import_module
 import numpy as np
 
-from inspect import signature as pysignature # noqa: F401
-from inspect import Signature as pySignature # noqa: F401
-from inspect import Parameter as pyParameter # noqa: F401
+from inspect import signature as pysignature  # noqa: F401
+from inspect import Signature as pySignature  # noqa: F401
+from inspect import Parameter as pyParameter  # noqa: F401
 
-from numba.core.config import (PYVERSION, MACHINE_BITS, # noqa: F401
-                               DEVELOPER_MODE) # noqa: F401
+from numba.core.config import (
+    PYVERSION,
+    MACHINE_BITS,  # noqa: F401
+    DEVELOPER_MODE,
+)  # noqa: F401
 from numba.core import config
 from numba.core import types
 
@@ -60,101 +63,100 @@ def safe_relpath(path, start=os.curdir):
 # operators.
 
 BINOPS_TO_OPERATORS = {
-    '+': operator.add,
-    '-': operator.sub,
-    '*': operator.mul,
-    '//': operator.floordiv,
-    '/': operator.truediv,
-    '%': operator.mod,
-    '**': operator.pow,
-    '&': operator.and_,
-    '|': operator.or_,
-    '^': operator.xor,
-    '<<': operator.lshift,
-    '>>': operator.rshift,
-    '==': operator.eq,
-    '!=': operator.ne,
-    '<': operator.lt,
-    '<=': operator.le,
-    '>': operator.gt,
-    '>=': operator.ge,
-    'is': operator.is_,
-    'is not': operator.is_not,
+    "+": operator.add,
+    "-": operator.sub,
+    "*": operator.mul,
+    "//": operator.floordiv,
+    "/": operator.truediv,
+    "%": operator.mod,
+    "**": operator.pow,
+    "&": operator.and_,
+    "|": operator.or_,
+    "^": operator.xor,
+    "<<": operator.lshift,
+    ">>": operator.rshift,
+    "==": operator.eq,
+    "!=": operator.ne,
+    "<": operator.lt,
+    "<=": operator.le,
+    ">": operator.gt,
+    ">=": operator.ge,
+    "is": operator.is_,
+    "is not": operator.is_not,
     # This one has its args reversed!
-    'in': operator.contains,
-    '@': operator.matmul,
+    "in": operator.contains,
+    "@": operator.matmul,
 }
 
 INPLACE_BINOPS_TO_OPERATORS = {
-    '+=': operator.iadd,
-    '-=': operator.isub,
-    '*=': operator.imul,
-    '//=': operator.ifloordiv,
-    '/=': operator.itruediv,
-    '%=': operator.imod,
-    '**=': operator.ipow,
-    '&=': operator.iand,
-    '|=': operator.ior,
-    '^=': operator.ixor,
-    '<<=': operator.ilshift,
-    '>>=': operator.irshift,
-    '@=': operator.imatmul,
+    "+=": operator.iadd,
+    "-=": operator.isub,
+    "*=": operator.imul,
+    "//=": operator.ifloordiv,
+    "/=": operator.itruediv,
+    "%=": operator.imod,
+    "**=": operator.ipow,
+    "&=": operator.iand,
+    "|=": operator.ior,
+    "^=": operator.ixor,
+    "<<=": operator.ilshift,
+    ">>=": operator.irshift,
+    "@=": operator.imatmul,
 }
 
 
-ALL_BINOPS_TO_OPERATORS = {**BINOPS_TO_OPERATORS,
-                           **INPLACE_BINOPS_TO_OPERATORS}
+ALL_BINOPS_TO_OPERATORS = {**BINOPS_TO_OPERATORS, **INPLACE_BINOPS_TO_OPERATORS}
 
 
 UNARY_BUITINS_TO_OPERATORS = {
-    '+': operator.pos,
-    '-': operator.neg,
-    '~': operator.invert,
-    'not': operator.not_,
-    'is_true': operator.truth
+    "+": operator.pos,
+    "-": operator.neg,
+    "~": operator.invert,
+    "not": operator.not_,
+    "is_true": operator.truth,
 }
 
 OPERATORS_TO_BUILTINS = {
-    operator.add: '+',
-    operator.iadd: '+=',
-    operator.sub: '-',
-    operator.isub: '-=',
-    operator.mul: '*',
-    operator.imul: '*=',
-    operator.floordiv: '//',
-    operator.ifloordiv: '//=',
-    operator.truediv: '/',
-    operator.itruediv: '/=',
-    operator.mod: '%',
-    operator.imod: '%=',
-    operator.pow: '**',
-    operator.ipow: '**=',
-    operator.and_: '&',
-    operator.iand: '&=',
-    operator.or_: '|',
-    operator.ior: '|=',
-    operator.xor: '^',
-    operator.ixor: '^=',
-    operator.lshift: '<<',
-    operator.ilshift: '<<=',
-    operator.rshift: '>>',
-    operator.irshift: '>>=',
-    operator.eq: '==',
-    operator.ne: '!=',
-    operator.lt: '<',
-    operator.le: '<=',
-    operator.gt: '>',
-    operator.ge: '>=',
-    operator.is_: 'is',
-    operator.is_not: 'is not',
+    operator.add: "+",
+    operator.iadd: "+=",
+    operator.sub: "-",
+    operator.isub: "-=",
+    operator.mul: "*",
+    operator.imul: "*=",
+    operator.floordiv: "//",
+    operator.ifloordiv: "//=",
+    operator.truediv: "/",
+    operator.itruediv: "/=",
+    operator.mod: "%",
+    operator.imod: "%=",
+    operator.pow: "**",
+    operator.ipow: "**=",
+    operator.and_: "&",
+    operator.iand: "&=",
+    operator.or_: "|",
+    operator.ior: "|=",
+    operator.xor: "^",
+    operator.ixor: "^=",
+    operator.lshift: "<<",
+    operator.ilshift: "<<=",
+    operator.rshift: ">>",
+    operator.irshift: ">>=",
+    operator.eq: "==",
+    operator.ne: "!=",
+    operator.lt: "<",
+    operator.le: "<=",
+    operator.gt: ">",
+    operator.ge: ">=",
+    operator.is_: "is",
+    operator.is_not: "is not",
     # This one has its args reversed!
-    operator.contains: 'in',
+    operator.contains: "in",
     # Unary
-    operator.pos: '+',
-    operator.neg: '-',
-    operator.invert: '~',
-    operator.not_: 'not',
-    operator.truth: 'is_true',
+    operator.pos: "+",
+    operator.neg: "-",
+    operator.invert: "~",
+    operator.not_: "not",
+    operator.truth: "is_true",
 }
 
 
@@ -174,7 +176,7 @@ def shutting_down(globals=globals):
     since at shutdown module globals may be cleared.
     """
     # At shutdown, the attribute may have been cleared or set to None.
-    v = globals().get('_shutting_down')
+    v = globals().get("_shutting_down")
     return v is True or v is None
 
 
@@ -192,7 +194,7 @@ _old_style_deprecation_msg = (
     "Code using Numba extension API maybe depending on 'old_style' "
     "error-capturing, which is deprecated and will be replaced by 'new_style' "
     "in the next release. See details at "
-    "https://numba.readthedocs.io/en/latest/reference/deprecation.html#deprecation-of-old-style-numba-captured-errors" # noqa: E501
+    "https://numba.readthedocs.io/en/latest/reference/deprecation.html#deprecation-of-old-style-numba-captured-errors"  # noqa: E501
 )
 
 
@@ -206,15 +208,14 @@ def _warn_old_style():
     if exccls is not None and not issubclass(exccls, numba_errs):
         tb_last = traceback.format_tb(tb)[-1]
         msg = f"{_old_style_deprecation_msg}\nException origin:\n{tb_last}"
-        warnings.warn(msg,
-                      errors.NumbaDeprecationWarning)
+        warnings.warn(msg, errors.NumbaDeprecationWarning)
 
 
 def use_new_style_errors():
     """Returns True if new style errors are to be used, false otherwise"""
     # This uses `config` so as to make sure it gets the current value from the
     # module as e.g. some tests mutate the config with `override_config`.
-    res = config.CAPTURED_ERRORS == 'new_style'
+    res = config.CAPTURED_ERRORS == "new_style"
     if not res:
         _warn_old_style()
     return res
@@ -224,7 +225,7 @@ def use_old_style_errors():
     """Returns True if old style errors are to be used, false otherwise"""
     # This uses `config` so as to make sure it gets the current value from the
     # module as e.g. some tests mutate the config with `override_config`.
-    res = config.CAPTURED_ERRORS == 'old_style'
+    res = config.CAPTURED_ERRORS == "old_style"
     if res:
         _warn_old_style()
     return res
@@ -235,6 +236,7 @@ class ThreadLocalStack:
 
     Uses the BORG pattern and stores states in threadlocal storage.
     """
+
     _tls = threading.local()
     stack_name: str
     _registered = {}
@@ -242,8 +244,9 @@ class ThreadLocalStack:
     def __init_subclass__(cls, *, stack_name, **kwargs):
         super().__init_subclass__(**kwargs)
         # Register stack_name mapping to the new subclass
-        assert stack_name not in cls._registered, \
-            f"stack_name: '{stack_name}' already in use"
+        assert (
+            stack_name not in cls._registered
+        ), f"stack_name: '{stack_name}' already in use"
         cls.stack_name = stack_name
         cls._registered[stack_name] = cls
 
@@ -261,13 +264,11 @@ class ThreadLocalStack:
         self._stack = tls_stack
 
     def push(self, state):
-        """Push to the stack
-        """
+        """Push to the stack"""
         self._stack.append(state)
 
     def pop(self):
-        """Pop from the stack
-        """
+        """Pop from the stack"""
         return self._stack.pop()
 
     def top(self):
@@ -316,16 +317,16 @@ class ConfigOptions(object):
         return self._values[name]
 
     def __setattr__(self, name, value):
-        if name.startswith('_'):
+        if name.startswith("_"):
             super(ConfigOptions, self).__setattr__(name, value)
         else:
             self._check_attr(name)
             self._values[name] = value
 
     def __repr__(self):
-        return "Flags(%s)" % ', '.join('%s=%s' % (k, v)
-                                       for k, v in self._values.items()
-                                       if v is not False)
+        return "Flags(%s)" % ", ".join(
+            "%s=%s" % (k, v) for k, v in self._values.items() if v is not False
+        )
 
     def copy(self):
         copy = type(self)()
@@ -333,8 +334,7 @@ class ConfigOptions(object):
         return copy
 
     def __eq__(self, other):
-        return (isinstance(other, ConfigOptions) and
-                other._values == self._values)
+        return isinstance(other, ConfigOptions) and other._values == self._values
 
     def __ne__(self, other):
         return not self == other
@@ -343,7 +343,7 @@ class ConfigOptions(object):
         return hash(tuple(sorted(self._values.items())))
 
 
-def order_by_target_specificity(target, templates, fnkey=''):
+def order_by_target_specificity(target, templates, fnkey=""):
     """This orders the given templates from most to least specific against the
     current "target". "fnkey" is an indicative typing key for use in the
     exception message in the case that there's no usable templates for the
@@ -357,12 +357,12 @@ def order_by_target_specificity(target, templates, fnkey=''):
 
     # fish out templates that are specific to the target if a target is
     # specified
-    DEFAULT_TARGET = 'generic'
+    DEFAULT_TARGET = "generic"
     usable = []
     for ix, temp_cls in enumerate(templates):
         # ? Need to do something about this next line
         md = getattr(temp_cls, "metadata", {})
-        hw = md.get('target', DEFAULT_TARGET)
+        hw = md.get("target", DEFAULT_TARGET)
         if hw is not None:
             hw_clazz = target_registry[hw]
             if target.inherits_from(hw_clazz):
@@ -371,18 +371,22 @@ def order_by_target_specificity(target, templates, fnkey=''):
     # sort templates based on target specificity
     def key(x):
         return target.__mro__.index(x[1])
+
     order = [x[0] for x in sorted(usable, key=key)]
 
     if not order:
-        msg = (f"Function resolution cannot find any matches for function "
-               f"'{fnkey}' for the current target: '{target}'.")
+        msg = (
+            f"Function resolution cannot find any matches for function "
+            f"'{fnkey}' for the current target: '{target}'."
+        )
         from numba.core.errors import UnsupportedError
+
         raise UnsupportedError(msg)
 
     return order
 
 
-T = _tp.TypeVar('T')
+T = _tp.TypeVar("T")
 
 
 class OrderedSet(MutableSet[T]):
@@ -408,8 +412,7 @@ class OrderedSet(MutableSet[T]):
 
 
 class MutableSortedSet(MutableSet[T], _tp.Generic[T]):
-    """Mutable Sorted Set
-    """
+    """Mutable Sorted Set"""
 
     def __init__(self, values: _tp.Iterable[T] = ()):
         self._values = set(values)
@@ -433,13 +436,12 @@ class MutableSortedSet(MutableSet[T], _tp.Generic[T]):
         self._values.update(values)
 
 
-Tk = _tp.TypeVar('Tk')
-Tv = _tp.TypeVar('Tv')
+Tk = _tp.TypeVar("Tk")
+Tv = _tp.TypeVar("Tv")
 
 
 class SortedMap(Mapping[Tk, Tv], _tp.Generic[Tk, Tv]):
-    """Immutable
-    """
+    """Immutable"""
 
     def __init__(self, seq):
         self._values = []
@@ -521,6 +523,7 @@ def stream_list(lst):
     In effect, each iterator will give the newly appended elements from the
     previous iterator instantiation time.
     """
+
     def sublist_iterator(start, stop):
         return iter(lst[start:stop])
 
@@ -577,7 +580,7 @@ def benchmark(func, maxsec=1):
 
 
 # A dummy module for dynamically-generated functions
-_dynamic_modname = '<dynamic>'
+_dynamic_modname = "<dynamic>"
 _dynamic_module = ModuleType(_dynamic_modname)
 _dynamic_module.__builtins__ = builtins
 
@@ -652,14 +655,17 @@ def unified_function_type(numba_types, require_precise=True):
     """
     from numba.core.errors import NumbaExperimentalFeatureWarning
 
-    if not (isinstance(numba_types, Sequence) and
-            len(numba_types) > 0 and
-            isinstance(numba_types[0],
-                       (types.Dispatcher, types.FunctionType))):
+    if not (
+        isinstance(numba_types, Sequence)
+        and len(numba_types) > 0
+        and isinstance(numba_types[0], (types.Dispatcher, types.FunctionType))
+    ):
         return
 
-    warnings.warn("First-class function type feature is experimental",
-                  category=NumbaExperimentalFeatureWarning)
+    warnings.warn(
+        "First-class function type feature is experimental",
+        category=NumbaExperimentalFeatureWarning,
+    )
 
     mnargs, mxargs = None, None
     dispatchers = set()
@@ -724,8 +730,9 @@ class _RedirectSubpackage(ModuleType):
 
     >>> from numba.old_subpackage.module import item
     """
+
     def __init__(self, old_module_locals, new_module):
-        old_module = old_module_locals['__name__']
+        old_module = old_module_locals["__name__"]
         super().__init__(old_module)
 
         self.__old_module_states = {}
@@ -745,7 +752,7 @@ class _RedirectSubpackage(ModuleType):
 
         # copy across dunders so that package imports work too
         for attr, value in old_module_locals.items():
-            if attr.startswith('__') and attr.endswith('__'):
+            if attr.startswith("__") and attr.endswith("__"):
                 if attr != "__builtins__":
                     setattr(self, attr, value)
                     self.__old_module_states[attr] = value
@@ -757,11 +764,11 @@ class _RedirectSubpackage(ModuleType):
 
 def get_hashable_key(value):
     """
-        Given a value, returns a key that can be used
-        as a hash. If the value is hashable, we return
-        the value, otherwise we return id(value).
+    Given a value, returns a key that can be used
+    as a hash. If the value is hashable, we return
+    the value, otherwise we return id(value).
 
-        See discussion in gh #6957
+    See discussion in gh #6957
     """
     try:
         hash(value)
@@ -782,18 +789,24 @@ class threadsafe_cached_property(functools.cached_property):
 
 
 def dump_llvm(fndesc, module):
-    print(("LLVM DUMP %s" % fndesc).center(80, '-'))
+    print(("LLVM DUMP %s" % fndesc).center(80, "-"))
     if config.HIGHLIGHT_DUMPS:
         try:
             from pygments import highlight
             from pygments.lexers import LlvmLexer as lexer
             from pygments.formatters import Terminal256Formatter
             from numba.misc.dump_style import by_colorscheme
-            print(highlight(module.__repr__(), lexer(),
-                            Terminal256Formatter( style=by_colorscheme())))
+
+            print(
+                highlight(
+                    module.__repr__(),
+                    lexer(),
+                    Terminal256Formatter(style=by_colorscheme()),
+                )
+            )
         except ImportError:
             msg = "Please install pygments to see highlighted dumps"
             raise ValueError(msg)
     else:
         print(module)
-    print('=' * 80)
+    print("=" * 80)

@@ -1,6 +1,7 @@
 """
 Implement python 3.8+ bytecode analysis
 """
+
 import dis
 from pprint import pformat
 import logging
@@ -17,14 +18,16 @@ _logger = logging.getLogger(__name__)
 
 _EXCEPT_STACK_OFFSET = 6
 _FINALLY_POP = _EXCEPT_STACK_OFFSET
-_NO_RAISE_OPS = frozenset({
-    'LOAD_CONST',
-    'NOP',
-    'LOAD_DEREF',
-    'PRECALL',
-})
+_NO_RAISE_OPS = frozenset(
+    {
+        "LOAD_CONST",
+        "NOP",
+        "LOAD_DEREF",
+        "PRECALL",
+    }
+)
 
-if PYVERSION in ((3, 12), ):
+if PYVERSION in ((3, 12),):
     from enum import Enum
 
     # Operands for CALL_INTRINSIC_1
@@ -32,6 +35,7 @@ if PYVERSION in ((3, 12), ):
         INTRINSIC_STOPITERATION_ERROR = 3
         UNARY_POSITIVE = 5
         INTRINSIC_LIST_TO_TUPLE = 6
+
     ci1op = CALL_INTRINSIC_1_Operand
 elif PYVERSION in ((3, 9), (3, 10), (3, 11)):
     pass
@@ -41,13 +45,18 @@ else:
 
 @total_ordering
 class BlockKind(object):
-    """Kinds of block to make related code safer than just `str`.
-    """
-    _members = frozenset({
-        'LOOP',
-        'TRY', 'EXCEPT', 'FINALLY',
-        'WITH', 'WITH_FINALLY',
-    })
+    """Kinds of block to make related code safer than just `str`."""
+
+    _members = frozenset(
+        {
+            "LOOP",
+            "TRY",
+            "EXCEPT",
+            "FINALLY",
+            "WITH",
+            "WITH_FINALLY",
+        }
+    )
 
     def __init__(self, value):
         assert value in self._members
@@ -60,13 +69,13 @@ class BlockKind(object):
         if isinstance(other, BlockKind):
             return self._value < other._value
         else:
-            raise TypeError('cannot compare to {!r}'.format(type(other)))
+            raise TypeError("cannot compare to {!r}".format(type(other)))
 
     def __eq__(self, other):
         if isinstance(other, BlockKind):
             return self._value == other._value
         else:
-            raise TypeError('cannot compare to {!r}'.format(type(other)))
+            raise TypeError("cannot compare to {!r}".format(type(other)))
 
     def __repr__(self):
         return "BlockKind({})".format(self._value)
@@ -86,6 +95,7 @@ class Flow(object):
 
     Simulate execution to recover dataflow and controlflow information.
     """
+
     def __init__(self, bytecode):
         _logger.debug("bytecode dump:\n%s", bytecode.dump())
         self._bytecode = bytecode
@@ -101,8 +111,7 @@ class Flow(object):
         A newly forked state is then added to the list of pending states.
         The trace ends when there are no more pending states.
         """
-        firststate = State(bytecode=self._bytecode, pc=0, nstack=0,
-                           blockstack=())
+        firststate = State(bytecode=self._bytecode, pc=0, nstack=0, blockstack=())
         runner = TraceRunner(debug_filename=self._bytecode.func_id.filename)
         runner.pending.append(firststate)
 
@@ -150,10 +159,11 @@ class Flow(object):
             _logger.debug("block_infos %s:\n%s", state, si)
 
     if PYVERSION in ((3, 11), (3, 12)):
+
         def _run_handle_exception(self, runner, state):
             if not state.in_with() and (
-                    state.has_active_try() and
-                    state.get_inst().opname not in _NO_RAISE_OPS):
+                state.has_active_try() and state.get_inst().opname not in _NO_RAISE_OPS
+            ):
                 # Is in a *try* block
                 state.fork(pc=state.get_inst().next)
                 runner._adjust_except_stack(state)
@@ -163,42 +173,45 @@ class Flow(object):
 
                 # Must the new PC be a new block?
                 if not state.in_with() and state.is_in_exception():
-                    _logger.debug("3.11 exception %s PC=%s",
-                                  state.get_exception(), state._pc)
+                    _logger.debug(
+                        "3.11 exception %s PC=%s", state.get_exception(), state._pc
+                    )
                     eh = state.get_exception()
-                    eh_top = state.get_top_block('TRY')
-                    if eh_top and eh_top['end'] == eh.target:
+                    eh_top = state.get_top_block("TRY")
+                    if eh_top and eh_top["end"] == eh.target:
                         # Same exception
                         eh_block = None
                     else:
                         eh_block = state.make_block("TRY", end=eh.target)
-                        eh_block['end_offset'] = eh.end
-                        eh_block['stack_depth'] = eh.depth
-                        eh_block['push_lasti'] = eh.lasti
+                        eh_block["end_offset"] = eh.end
+                        eh_block["stack_depth"] = eh.depth
+                        eh_block["push_lasti"] = eh.lasti
                         state.fork(pc=state._pc, extra_block=eh_block)
                         return True
+
     elif PYVERSION in ((3, 9), (3, 10)):
+
         def _run_handle_exception(self, runner, state):
-            if (state.has_active_try() and
-                    state.get_inst().opname not in _NO_RAISE_OPS):
+            if state.has_active_try() and state.get_inst().opname not in _NO_RAISE_OPS:
                 # Is in a *try* block
                 state.fork(pc=state.get_inst().next)
-                tryblk = state.get_top_block('TRY')
+                tryblk = state.get_top_block("TRY")
                 state.pop_block_and_above(tryblk)
                 nstack = state.stack_depth
                 kwargs = {}
-                if nstack > tryblk['entry_stack']:
-                    kwargs['npop'] = nstack - tryblk['entry_stack']
-                handler = tryblk['handler']
-                kwargs['npush'] = {
-                    BlockKind('EXCEPT'): _EXCEPT_STACK_OFFSET,
-                    BlockKind('FINALLY'): _FINALLY_POP
-                }[handler['kind']]
-                kwargs['extra_block'] = handler
-                state.fork(pc=tryblk['end'], **kwargs)
+                if nstack > tryblk["entry_stack"]:
+                    kwargs["npop"] = nstack - tryblk["entry_stack"]
+                handler = tryblk["handler"]
+                kwargs["npush"] = {
+                    BlockKind("EXCEPT"): _EXCEPT_STACK_OFFSET,
+                    BlockKind("FINALLY"): _FINALLY_POP,
+                }[handler["kind"]]
+                kwargs["extra_block"] = handler
+                state.fork(pc=tryblk["end"], **kwargs)
                 return True
             else:
                 state.advance_pc()
+
     else:
         raise NotImplementedError(PYVERSION)
 
@@ -216,7 +229,7 @@ class Flow(object):
 
     def _prune_phis(self, runner):
         # Find phis that are unused in the local block
-        _logger.debug("Prune PHIs".center(60, '-'))
+        _logger.debug("Prune PHIs".center(60, "-"))
 
         # Compute dataflow for used phis and propagate
 
@@ -289,7 +302,7 @@ class Flow(object):
         defmap, phismap = find_use_defs()
         propagate_phi_map(phismap)
         apply_changes(used_phis, phismap)
-        _logger.debug("DONE Prune PHIs".center(60, '-'))
+        _logger.debug("DONE Prune PHIs".center(60, "-"))
 
     def _is_implicit_new_block(self, state):
         inst = state.get_inst()
@@ -309,9 +322,11 @@ class Flow(object):
         if current_inst.opname in {"SETUP_WITH", "BEFORE_WITH"}:
             next_op = self._bytecode[current_inst.next].opname
             if next_op != "POP_TOP":
-                msg = ("The 'with (context manager) as "
-                       "(variable):' construct is not "
-                       "supported.")
+                msg = (
+                    "The 'with (context manager) as "
+                    "(variable):' construct is not "
+                    "supported."
+                )
                 raise UnsupportedError(msg)
 
 
@@ -320,8 +335,8 @@ def _is_null_temp_reg(reg):
 
 
 class TraceRunner(object):
-    """Trace runner contains the states for the trace and the opcode dispatch.
-    """
+    """Trace runner contains the states for the trace and the opcode dispatch."""
+
     def __init__(self, debug_filename):
         self.debug_filename = debug_filename
         self.pending = deque()
@@ -336,7 +351,7 @@ class TraceRunner(object):
                 state: State
                 while state._blockstack:
                     topblk = state._blockstack[-1]
-                    blk_end = topblk['end']
+                    blk_end = topblk["end"]
                     if blk_end is not None and blk_end <= state.pc_initial:
                         state._blockstack.pop()
                     else:
@@ -361,20 +376,20 @@ class TraceRunner(object):
         Adjust stack when entering an exception handler to match expectation
         by the bytecode.
         """
-        tryblk = state.get_top_block('TRY')
+        tryblk = state.get_top_block("TRY")
         state.pop_block_and_above(tryblk)
         nstack = state.stack_depth
         kwargs = {}
-        expected_depth = tryblk['stack_depth']
+        expected_depth = tryblk["stack_depth"]
         if nstack > expected_depth:
             # Pop extra item in the stack
-            kwargs['npop'] = nstack - expected_depth
+            kwargs["npop"] = nstack - expected_depth
         # Set extra stack itemcount due to the exception values.
         extra_stack = 1
-        if tryblk['push_lasti']:
+        if tryblk["push_lasti"]:
             extra_stack += 1
-        kwargs['npush'] = extra_stack
-        state.fork(pc=tryblk['end'], **kwargs)
+        kwargs["npush"] = extra_stack
+        state.fork(pc=tryblk["end"], **kwargs)
 
     def op_NOP(self, state, inst):
         state.append(inst)
@@ -443,6 +458,7 @@ class TraceRunner(object):
         state.pop()
 
     if PYVERSION in ((3, 11), (3, 12)):
+
         def op_LOAD_GLOBAL(self, state, inst):
             res = state.make_temp()
             idx = inst.arg >> 1
@@ -451,11 +467,14 @@ class TraceRunner(object):
             if inst.arg & 1:
                 state.push(state.make_null())
             state.push(res)
+
     elif PYVERSION in ((3, 9), (3, 10)):
+
         def op_LOAD_GLOBAL(self, state, inst):
             res = state.make_temp()
             state.append(inst, res=res)
             state.push(res)
+
     else:
         raise NotImplementedError(PYVERSION)
 
@@ -477,7 +496,7 @@ class TraceRunner(object):
 
     def op_LOAD_ATTR(self, state, inst):
         item = state.pop()
-        if PYVERSION in ((3, 12), ):
+        if PYVERSION in ((3, 12),):
             if inst.arg & 1:
                 state.push(state.make_null())
         elif PYVERSION in ((3, 9), (3, 10), (3, 11)):
@@ -494,7 +513,7 @@ class TraceRunner(object):
         state.append(inst, res=res)
         state.push(res)
 
-    if PYVERSION in ((3, 12), ):
+    if PYVERSION in ((3, 12),):
         op_LOAD_FAST_CHECK = op_LOAD_FAST
         op_LOAD_FAST_AND_CLEAR = op_LOAD_FAST
     elif PYVERSION in ((3, 9), (3, 10), (3, 11)):
@@ -672,7 +691,10 @@ class TraceRunner(object):
         indexvar = state.make_temp()
         nonevar = state.make_temp()
         state.append(
-            inst, base=tos, slicevar=slicevar, indexvar=indexvar,
+            inst,
+            base=tos,
+            slicevar=slicevar,
+            indexvar=indexvar,
             nonevar=nonevar,
         )
 
@@ -722,8 +744,7 @@ class TraceRunner(object):
         slicevar = state.make_temp()
         indexvar = state.make_temp()
         state.append(
-            inst, base=tos2, start=tos1, stop=tos, slicevar=slicevar,
-            indexvar=indexvar
+            inst, base=tos2, start=tos1, stop=tos, slicevar=slicevar, indexvar=indexvar
         )
 
     def op_BUILD_SLICE(self, state, inst):
@@ -753,7 +774,8 @@ class TraceRunner(object):
         )
         state.push(res)
 
-    if PYVERSION in ((3, 12), ):
+    if PYVERSION in ((3, 12),):
+
         def op_BINARY_SLICE(self, state, inst):
             end = state.pop()
             start = state.pop()
@@ -762,16 +784,23 @@ class TraceRunner(object):
             res = state.make_temp()
             slicevar = state.make_temp()
             state.append(
-                inst, start=start, end=end, container=container, res=res,
-                slicevar=slicevar, temp_res=temp_res
+                inst,
+                start=start,
+                end=end,
+                container=container,
+                res=res,
+                slicevar=slicevar,
+                temp_res=temp_res,
             )
             state.push(res)
+
     elif PYVERSION in ((3, 9), (3, 10), (3, 11)):
         pass
     else:
         raise NotImplementedError(PYVERSION)
 
-    if PYVERSION in ((3, 12), ):
+    if PYVERSION in ((3, 12),):
+
         def op_STORE_SLICE(self, state, inst):
             end = state.pop()
             start = state.pop()
@@ -781,9 +810,15 @@ class TraceRunner(object):
             slicevar = state.make_temp()
             res = state.make_temp()
             state.append(
-                inst, start=start, end=end, container=container, value=value,
-                res=res, slicevar=slicevar,
+                inst,
+                start=start,
+                end=end,
+                container=container,
+                value=value,
+                res=res,
+                slicevar=slicevar,
             )
+
     elif PYVERSION in ((3, 9), (3, 10), (3, 11)):
         pass
     else:
@@ -804,7 +839,7 @@ class TraceRunner(object):
     op_POP_JUMP_IF_TRUE = _op_POP_JUMP_IF
     op_POP_JUMP_IF_FALSE = _op_POP_JUMP_IF
 
-    if PYVERSION in ((3, 12), ):
+    if PYVERSION in ((3, 12),):
         op_POP_JUMP_IF_NONE = _op_POP_JUMP_IF
         op_POP_JUMP_IF_NOT_NONE = _op_POP_JUMP_IF
     elif PYVERSION in ((3, 9), (3, 10), (3, 11)):
@@ -859,7 +894,7 @@ class TraceRunner(object):
 
     def op_BREAK_LOOP(self, state, inst):
         # NOTE: bytecode removed since py3.8
-        end = state.get_top_block('LOOP')['end']
+        end = state.get_top_block("LOOP")["end"]
         state.append(inst, end=end)
         state.pop_block()
         state.fork(pc=end)
@@ -868,11 +903,13 @@ class TraceRunner(object):
         state.append(inst, retval=state.pop(), castval=state.make_temp())
         state.terminate()
 
-    if PYVERSION in ((3, 12), ):
+    if PYVERSION in ((3, 12),):
+
         def op_RETURN_CONST(self, state, inst):
             res = state.make_temp("const")
             state.append(inst, retval=res, castval=state.make_temp())
             state.terminate()
+
     elif PYVERSION in ((3, 9), (3, 10), (3, 11)):
         pass
     else:
@@ -885,6 +922,7 @@ class TraceRunner(object):
         state.push(res)
 
     if PYVERSION in ((3, 11), (3, 12)):
+
         def op_RAISE_VARARGS(self, state, inst):
             if inst.arg == 0:
                 exc = None
@@ -907,11 +945,14 @@ class TraceRunner(object):
                 state.terminate()
 
     elif PYVERSION in ((3, 9), (3, 10)):
+
         def op_RAISE_VARARGS(self, state, inst):
-            in_exc_block = any([
-                state.get_top_block("EXCEPT") is not None,
-                state.get_top_block("FINALLY") is not None
-            ])
+            in_exc_block = any(
+                [
+                    state.get_top_block("EXCEPT") is not None,
+                    state.get_top_block("FINALLY") is not None,
+                ]
+            )
             if inst.arg == 0:
                 exc = None
                 if in_exc_block:
@@ -925,6 +966,7 @@ class TraceRunner(object):
                 raise ValueError("Multiple argument raise is not supported.")
             state.append(inst, exc=exc)
             state.terminate()
+
     else:
         raise NotImplementedError(PYVERSION)
 
@@ -938,12 +980,14 @@ class TraceRunner(object):
 
     def op_END_FINALLY(self, state, inst):
         blk = state.pop_block()
-        state.reset_stack(blk['entry_stack'])
+        state.reset_stack(blk["entry_stack"])
 
-    if PYVERSION in ((3, 12), ):
+    if PYVERSION in ((3, 12),):
+
         def op_END_FOR(self, state, inst):
             state.pop()
             state.pop()
+
     elif PYVERSION in ((3, 9), (3, 10), (3, 11)):
         pass
     else:
@@ -952,8 +996,10 @@ class TraceRunner(object):
     def op_POP_FINALLY(self, state, inst):
         # we don't emulate the exact stack behavior
         if inst.arg != 0:
-            msg = ('Unsupported use of a bytecode related to try..finally'
-                   ' or a with-context')
+            msg = (
+                "Unsupported use of a bytecode related to try..finally"
+                " or a with-context"
+            )
             raise UnsupportedError(msg, loc=self.get_debug_loc(inst.lineno))
 
     def op_CALL_FINALLY(self, state, inst):
@@ -974,17 +1020,17 @@ class TraceRunner(object):
         # NOTE: bytecode removed since py3.8
         state.push_block(
             state.make_block(
-                kind='LOOP',
+                kind="LOOP",
                 end=inst.get_jump_target(),
             )
         )
 
     def op_BEFORE_WITH(self, state, inst):
         # Almost the same as py3.10 SETUP_WITH just lacking the finally block.
-        cm = state.pop()    # the context-manager
+        cm = state.pop()  # the context-manager
 
         yielded = state.make_temp()
-        exitfn = state.make_temp(prefix='setup_with_exitfn')
+        exitfn = state.make_temp(prefix="setup_with_exitfn")
 
         state.push(exitfn)
         state.push(yielded)
@@ -1002,7 +1048,7 @@ class TraceRunner(object):
 
         state.push_block(
             state.make_block(
-                kind='WITH',
+                kind="WITH",
                 end=end,
             )
         )
@@ -1010,17 +1056,17 @@ class TraceRunner(object):
         state.fork(pc=inst.next)
 
     def op_SETUP_WITH(self, state, inst):
-        cm = state.pop()    # the context-manager
+        cm = state.pop()  # the context-manager
 
         yielded = state.make_temp()
-        exitfn = state.make_temp(prefix='setup_with_exitfn')
+        exitfn = state.make_temp(prefix="setup_with_exitfn")
         state.append(inst, contextmanager=cm, exitfn=exitfn)
 
         # py39 doesn't have with-finally
         if PYVERSION < (3, 9):
             state.push_block(
                 state.make_block(
-                    kind='WITH_FINALLY',
+                    kind="WITH_FINALLY",
                     end=inst.get_jump_target(),
                 )
             )
@@ -1030,7 +1076,7 @@ class TraceRunner(object):
 
         state.push_block(
             state.make_block(
-                kind='WITH',
+                kind="WITH",
                 end=inst.get_jump_target(),
             )
         )
@@ -1050,11 +1096,11 @@ class TraceRunner(object):
         state.fork(
             pc=next,
             extra_block=state.make_block(
-                kind='TRY',
+                kind="TRY",
                 end=end,
                 reset_stack=False,
                 handler=handler_block,
-            )
+            ),
         )
 
     def op_PUSH_EXC_INFO(self, state, inst):
@@ -1065,17 +1111,22 @@ class TraceRunner(object):
     def op_SETUP_FINALLY(self, state, inst):
         state.append(inst)
         self._setup_try(
-            'FINALLY', state, next=inst.next, end=inst.get_jump_target(),
+            "FINALLY",
+            state,
+            next=inst.next,
+            end=inst.get_jump_target(),
         )
 
     if PYVERSION in ((3, 11), (3, 12)):
+
         def op_POP_EXCEPT(self, state, inst):
             state.pop()
 
     elif PYVERSION in ((3, 9), (3, 10)):
+
         def op_POP_EXCEPT(self, state, inst):
             blk = state.pop_block()
-            if blk['kind'] not in {BlockKind('EXCEPT'), BlockKind('FINALLY')}:
+            if blk["kind"] not in {BlockKind("EXCEPT"), BlockKind("FINALLY")}:
                 raise UnsupportedError(
                     f"POP_EXCEPT got an unexpected block: {blk['kind']}",
                     loc=self.get_debug_loc(inst.lineno),
@@ -1085,15 +1136,16 @@ class TraceRunner(object):
             state.pop()
             # Forces a new block
             state.fork(pc=inst.next)
+
     else:
         raise NotImplementedError(PYVERSION)
 
     def op_POP_BLOCK(self, state, inst):
         blk = state.pop_block()
-        if blk['kind'] == BlockKind('TRY'):
-            state.append(inst, kind='try')
-        elif blk['kind'] == BlockKind('WITH'):
-            state.append(inst, kind='with')
+        if blk["kind"] == BlockKind("TRY"):
+            state.append(inst, kind="try")
+        elif blk["kind"] == BlockKind("WITH"):
+            state.append(inst, kind="with")
         state.fork(pc=inst.next)
 
     def op_BINARY_SUBSCR(self, state, inst):
@@ -1165,7 +1217,7 @@ class TraceRunner(object):
 
         if PYVERSION in ((3, 11), (3, 12)):
             if _is_null_temp_reg(state.peek(1)):
-                state.pop() # pop NULL, it's not used
+                state.pop()  # pop NULL, it's not used
         elif PYVERSION in ((3, 9), (3, 10)):
             pass
         else:
@@ -1187,7 +1239,8 @@ class TraceRunner(object):
         for val in duped:
             state.push(val)
 
-    if PYVERSION in ((3, 12), ):
+    if PYVERSION in ((3, 12),):
+
         def op_CALL_INTRINSIC_1(self, state, inst):
             # See https://github.com/python/cpython/blob/v3.12.0rc2/Include/
             # internal/pycore_intrinsics.h#L3-L17C36
@@ -1202,15 +1255,13 @@ class TraceRunner(object):
             elif operand == ci1op.UNARY_POSITIVE:
                 val = state.pop()
                 res = state.make_temp()
-                state.append(inst, operand=operand,
-                             value=val, res=res)
+                state.append(inst, operand=operand, value=val, res=res)
                 state.push(res)
                 return
             elif operand == ci1op.INTRINSIC_LIST_TO_TUPLE:
                 tos = state.pop()
                 res = state.make_temp()
-                state.append(inst, operand=operand,
-                             const_list=tos, res=res)
+                state.append(inst, operand=operand, const_list=tos, res=res)
                 state.push(res)
                 return
             else:
@@ -1287,7 +1338,9 @@ class TraceRunner(object):
         # differently.
         is_assign = len(tuples) == 1
         if is_assign:
-            temps = [state.make_temp(),]
+            temps = [
+                state.make_temp(),
+            ]
 
         state.append(inst, tuples=tuples, temps=temps, is_assign=is_assign)
         # The result is in the last temp var
@@ -1304,7 +1357,7 @@ class TraceRunner(object):
         # "Pops a list from the stack and pushes a tuple containing the same
         #  values."
         tos = state.pop()
-        res = state.make_temp() # new tuple var
+        res = state.make_temp()  # new tuple var
         state.append(inst, const_list=tos, res=res)
         state.push(res)
 
@@ -1329,8 +1382,7 @@ class TraceRunner(object):
         target = state.peek(index)
         appendvar = state.make_temp()
         res = state.make_temp()
-        state.append(inst, target=target, value=value, appendvar=appendvar,
-                     res=res)
+        state.append(inst, target=target, value=value, appendvar=appendvar, res=res)
 
     def op_LIST_EXTEND(self, state, inst):
         value = state.pop()
@@ -1338,8 +1390,7 @@ class TraceRunner(object):
         target = state.peek(index)
         extendvar = state.make_temp()
         res = state.make_temp()
-        state.append(inst, target=target, value=value, extendvar=extendvar,
-                     res=res)
+        state.append(inst, target=target, value=value, extendvar=extendvar, res=res)
 
     def op_BUILD_MAP(self, state, inst):
         dct = state.make_temp()
@@ -1360,8 +1411,9 @@ class TraceRunner(object):
         target = state.peek(index)
         setitemvar = state.make_temp()
         res = state.make_temp()
-        state.append(inst, target=target, key=key, value=value,
-                     setitemvar=setitemvar, res=res)
+        state.append(
+            inst, target=target, key=key, value=value, setitemvar=setitemvar, res=res
+        )
 
     def op_BUILD_SET(self, state, inst):
         count = inst.arg
@@ -1377,8 +1429,7 @@ class TraceRunner(object):
         target = state.peek(index)
         updatevar = state.make_temp()
         res = state.make_temp()
-        state.append(inst, target=target, value=value, updatevar=updatevar,
-                     res=res)
+        state.append(inst, target=target, value=value, updatevar=updatevar, res=res)
 
     def op_DICT_UPDATE(self, state, inst):
         value = state.pop()
@@ -1386,8 +1437,7 @@ class TraceRunner(object):
         target = state.peek(index)
         updatevar = state.make_temp()
         res = state.make_temp()
-        state.append(inst, target=target, value=value, updatevar=updatevar,
-                     res=res)
+        state.append(inst, target=target, value=value, updatevar=updatevar, res=res)
 
     def op_GET_ITER(self, state, inst):
         value = state.pop()
@@ -1400,11 +1450,10 @@ class TraceRunner(object):
         pair = state.make_temp()
         indval = state.make_temp()
         pred = state.make_temp()
-        state.append(inst, iterator=iterator, pair=pair, indval=indval,
-                     pred=pred)
+        state.append(inst, iterator=iterator, pair=pair, indval=indval, pred=pred)
         state.push(indval)
         end = inst.get_jump_target()
-        if PYVERSION in ((3, 12), ):
+        if PYVERSION in ((3, 12),):
             # Changed in version 3.12: Up until 3.11 the iterator was
             # popped when it was exhausted. Now this is handled using END_FOR
             # op code.
@@ -1552,11 +1601,12 @@ class TraceRunner(object):
         state.fork(pc=inst.get_jump_target())
 
     if PYVERSION in ((3, 11), (3, 12)):
+
         def op_RERAISE(self, state, inst):
             # This isn't handled, but the state is set up anyway
             exc = state.pop()
             if inst.arg != 0:
-                state.pop()     # lasti
+                state.pop()  # lasti
             state.append(inst, exc=exc)
 
             if state.has_active_try():
@@ -1565,21 +1615,24 @@ class TraceRunner(object):
                 state.terminate()
 
     elif PYVERSION in ((3, 9), (3, 10)):
+
         def op_RERAISE(self, state, inst):
             # This isn't handled, but the state is set up anyway
             exc = state.pop()
             state.append(inst, exc=exc)
             state.terminate()
+
     else:
         raise NotImplementedError(PYVERSION)
 
     # NOTE: Please see notes in `interpreter.py` surrounding the implementation
     # of LOAD_METHOD and CALL_METHOD.
 
-    if PYVERSION in ((3, 12), ):
+    if PYVERSION in ((3, 12),):
         # LOAD_METHOD has become a pseudo-instruction in 3.12
         pass
-    elif PYVERSION in ((3, 11), ):
+    elif PYVERSION in ((3, 11),):
+
         def op_LOAD_METHOD(self, state, inst):
             item = state.pop()
             extra = state.make_null()
@@ -1587,9 +1640,12 @@ class TraceRunner(object):
             res = state.make_temp()
             state.append(inst, item=item, res=res)
             state.push(res)
+
     elif PYVERSION in ((3, 9), (3, 10)):
+
         def op_LOAD_METHOD(self, state, inst):
             self.op_LOAD_ATTR(state, inst)
+
     else:
         raise NotImplementedError(PYVERSION)
 
@@ -1599,8 +1655,8 @@ class TraceRunner(object):
 
 @total_ordering
 class _State(object):
-    """State of the trace
-    """
+    """State of the trace"""
+
     def __init__(self, bytecode, pc, nstack, blockstack, nullvals=()):
         """
         Parameters
@@ -1688,8 +1744,7 @@ class _State(object):
 
     @property
     def blockstack_initial(self):
-        """A copy of the initial state of the blockstack
-        """
+        """A copy of the initial state of the blockstack"""
         return self._blockstack_initial
 
     @property
@@ -1703,10 +1758,9 @@ class _State(object):
         return len(self._stack)
 
     def find_initial_try_block(self):
-        """Find the initial *try* block.
-        """
+        """Find the initial *try* block."""
         for blk in reversed(self._blockstack_initial):
-            if blk['kind'] == BlockKind('TRY'):
+            if blk["kind"] == BlockKind("TRY"):
                 return blk
 
     def has_terminated(self):
@@ -1746,8 +1800,7 @@ class _State(object):
         return self.peek(1)
 
     def peek(self, k):
-        """Return the k'th element on the stack
-        """
+        """Return the k'th element on the stack"""
         return self._stack[-k]
 
     def push(self, item):
@@ -1764,9 +1817,8 @@ class _State(object):
         s[-1], s[-idx] = s[-idx], s[-1]
 
     def push_block(self, synblk):
-        """Push a block to blockstack
-        """
-        assert 'stack_depth' in synblk
+        """Push a block to blockstack"""
+        assert "stack_depth" in synblk
         self._blockstack.append(synblk)
 
     def reset_stack(self, depth):
@@ -1777,25 +1829,23 @@ class _State(object):
         return popped
 
     def make_block(self, kind, end, reset_stack=True, handler=None):
-        """Make a new block
-        """
+        """Make a new block"""
         d = {
-            'kind': BlockKind(kind),
-            'end': end,
-            'entry_stack': len(self._stack),
+            "kind": BlockKind(kind),
+            "end": end,
+            "entry_stack": len(self._stack),
         }
         if reset_stack:
-            d['stack_depth'] = len(self._stack)
+            d["stack_depth"] = len(self._stack)
         else:
-            d['stack_depth'] = None
-        d['handler'] = handler
+            d["stack_depth"] = None
+        d["handler"] = handler
         return d
 
     def pop_block(self):
-        """Pop a block and unwind the stack
-        """
+        """Pop a block and unwind the stack"""
         b = self._blockstack.pop()
-        self.reset_stack(b['stack_depth'])
+        self.reset_stack(b["stack_depth"])
         return b
 
     def pop_block_and_above(self, blk):
@@ -1807,39 +1857,33 @@ class _State(object):
         self._blockstack = self._blockstack[:idx]
 
     def get_top_block(self, kind):
-        """Find the first block that matches *kind*
-        """
+        """Find the first block that matches *kind*"""
         kind = BlockKind(kind)
         for bs in reversed(self._blockstack):
-            if bs['kind'] == kind:
+            if bs["kind"] == kind:
                 return bs
 
     def get_top_block_either(self, *kinds):
-        """Find the first block that matches *kind*
-        """
+        """Find the first block that matches *kind*"""
         kinds = {BlockKind(kind) for kind in kinds}
         for bs in reversed(self._blockstack):
-            if bs['kind'] in kinds:
+            if bs["kind"] in kinds:
                 return bs
 
     def has_active_try(self):
-        """Returns a boolean indicating if the top-block is a *try* block
-        """
-        return self.get_top_block('TRY') is not None
+        """Returns a boolean indicating if the top-block is a *try* block"""
+        return self.get_top_block("TRY") is not None
 
     def get_varname(self, inst):
-        """Get referenced variable name from the oparg
-        """
+        """Get referenced variable name from the oparg"""
         return self._bytecode.co_varnames[inst.arg]
 
     def terminate(self):
-        """Mark block as terminated
-        """
+        """Mark block as terminated"""
         self._terminated = True
 
     def fork(self, pc, npop=0, npush=0, extra_block=None):
-        """Fork the state
-        """
+        """Fork the state"""
         # Handle changes on the stack
         stack = list(self._stack)
         if npop:
@@ -1856,40 +1900,45 @@ class _State(object):
             # pop expired block in destination pc
             while blockstack:
                 top = blockstack[-1]
-                end = top.get('end_offset') or top['end']
+                end = top.get("end_offset") or top["end"]
                 if pc >= end:
                     blockstack.pop()
                 else:
                     break
         elif PYVERSION in ((3, 9), (3, 10)):
-            pass # intentionally bypass
+            pass  # intentionally bypass
         else:
             raise NotImplementedError(PYVERSION)
 
         if extra_block:
             blockstack.append(extra_block)
-        self._outedges.append(Edge(
-            pc=pc, stack=tuple(stack), npush=npush,
-            blockstack=tuple(blockstack),
-        ))
+        self._outedges.append(
+            Edge(
+                pc=pc,
+                stack=tuple(stack),
+                npush=npush,
+                blockstack=tuple(blockstack),
+            )
+        )
         self.terminate()
 
     def split_new_block(self):
-        """Split the state
-        """
+        """Split the state"""
         self.fork(pc=self._pc)
 
     def get_outgoing_states(self):
-        """Get states for each outgoing edges
-        """
+        """Get states for each outgoing edges"""
         # Should only call once
         assert not self._outgoing_phis
         ret = []
         for edge in self._outedges:
-            state = State(bytecode=self._bytecode, pc=edge.pc,
-                          nstack=len(edge.stack), blockstack=edge.blockstack,
-                          nullvals=[i for i, v in enumerate(edge.stack)
-                                    if _is_null_temp_reg(v)])
+            state = State(
+                bytecode=self._bytecode,
+                pc=edge.pc,
+                nstack=len(edge.stack),
+                blockstack=edge.blockstack,
+                nullvals=[i for i, v in enumerate(edge.stack) if _is_null_temp_reg(v)],
+            )
             ret.append(state)
             # Map outgoing_phis
             for phi, i in state._phis.items():
@@ -1905,8 +1954,7 @@ class _State(object):
             values are the edge-pushed stack values
         """
 
-        return {edge.pc: tuple(edge.stack[-edge.npush:])
-                for edge in self._outedges}
+        return {edge.pc: tuple(edge.stack[-edge.npush :]) for edge in self._outedges}
 
 
 class StatePy311(_State):
@@ -1952,8 +2000,8 @@ Edge = namedtuple("Edge", ["pc", "stack", "blockstack", "npush"])
 
 
 class AdaptDFA(object):
-    """Adapt Flow to the old DFA class expected by Interpreter
-    """
+    """Adapt Flow to the old DFA class expected by Interpreter"""
+
     def __init__(self, flow):
         self._flow = flow
 
@@ -1964,8 +2012,7 @@ class AdaptDFA(object):
 
 AdaptBlockInfo = namedtuple(
     "AdaptBlockInfo",
-    ["insts", "outgoing_phis", "blockstack", "active_try_block",
-     "outgoing_edgepushed"],
+    ["insts", "outgoing_phis", "blockstack", "active_try_block", "outgoing_edgepushed"],
 )
 
 
@@ -1980,8 +2027,7 @@ def adapt_state_infos(state):
 
 
 def _flatten_inst_regs(iterable):
-    """Flatten an iterable of registers used in an instruction
-    """
+    """Flatten an iterable of registers used in an instruction"""
     for item in iterable:
         if isinstance(item, str):
             yield item
@@ -1991,8 +2037,8 @@ def _flatten_inst_regs(iterable):
 
 
 class AdaptCFA(object):
-    """Adapt Flow to the old CFA class expected by Interpreter
-    """
+    """Adapt Flow to the old CFA class expected by Interpreter"""
+
     def __init__(self, flow):
         self._flow = flow
         self._blocks = {}

@@ -22,7 +22,7 @@ class TestDispatcherPickling(TestCase):
 
     @contextlib.contextmanager
     def simulate_fresh_target(self):
-        hwstr = 'cpu'
+        hwstr = "cpu"
         dispatcher_cls = resolve_dispatcher_from_str(hwstr)
         old_descr = dispatcher_cls.targetdescr
         # Simulate fresh targetdescr
@@ -36,8 +36,9 @@ class TestDispatcherPickling(TestCase):
 
     def check_call(self, proto, func, expected_result, args):
         def check_result(func):
-            if (isinstance(expected_result, type)
-                and issubclass(expected_result, Exception)):
+            if isinstance(expected_result, type) and issubclass(
+                expected_result, Exception
+            ):
                 self.assertRaises(expected_result, func, *args)
             else:
                 self.assertPreciseEqual(func(*args), expected_result)
@@ -51,12 +52,14 @@ class TestDispatcherPickling(TestCase):
 
     def test_call_with_sig(self):
         from .serialize_usecases import add_with_sig
+
         self.run_with_protocols(self.check_call, add_with_sig, 5, (1, 4))
         # Compilation has been disabled => float inputs will be coerced to int
         self.run_with_protocols(self.check_call, add_with_sig, 5, (1.2, 4.2))
 
     def test_call_without_sig(self):
         from .serialize_usecases import add_without_sig
+
         self.run_with_protocols(self.check_call, add_without_sig, 5, (1, 4))
         self.run_with_protocols(self.check_call, add_without_sig, 5.5, (1.2, 4.3))
         # Object mode is enabled
@@ -64,26 +67,33 @@ class TestDispatcherPickling(TestCase):
 
     def test_call_nopython(self):
         from .serialize_usecases import add_nopython
+
         self.run_with_protocols(self.check_call, add_nopython, 5.5, (1.2, 4.3))
         # Object mode is disabled
-        self.run_with_protocols(self.check_call, add_nopython, TypingError, (object(), object()))
+        self.run_with_protocols(
+            self.check_call, add_nopython, TypingError, (object(), object())
+        )
 
     def test_call_nopython_fail(self):
         from .serialize_usecases import add_nopython_fail
+
         # Compilation fails
         self.run_with_protocols(self.check_call, add_nopython_fail, TypingError, (1, 2))
 
     def test_call_objmode_with_global(self):
         from .serialize_usecases import get_global_objmode
+
         self.run_with_protocols(self.check_call, get_global_objmode, 7.5, (2.5,))
 
     def test_call_closure(self):
         from .serialize_usecases import closure
+
         inner = closure(1)
         self.run_with_protocols(self.check_call, inner, 6, (2, 3))
 
     def check_call_closure_with_globals(self, **jit_args):
         from .serialize_usecases import closure_with_globals
+
         inner = closure_with_globals(3.0, **jit_args)
         self.run_with_protocols(self.check_call, inner, 7.0, (4.0,))
 
@@ -95,31 +105,35 @@ class TestDispatcherPickling(TestCase):
 
     def test_call_closure_calling_other_function(self):
         from .serialize_usecases import closure_calling_other_function
+
         inner = closure_calling_other_function(3.0)
         self.run_with_protocols(self.check_call, inner, 11.0, (4.0, 6.0))
 
     def test_call_closure_calling_other_closure(self):
         from .serialize_usecases import closure_calling_other_closure
+
         inner = closure_calling_other_closure(3.0)
         self.run_with_protocols(self.check_call, inner, 8.0, (4.0,))
 
     def test_call_dyn_func(self):
         from .serialize_usecases import dyn_func
+
         # Check serializing a dynamically-created function
         self.run_with_protocols(self.check_call, dyn_func, 36, (6,))
 
     def test_call_dyn_func_objmode(self):
         from .serialize_usecases import dyn_func_objmode
+
         # Same with an object mode function
         self.run_with_protocols(self.check_call, dyn_func_objmode, 36, (6,))
 
     def test_renamed_module(self):
         from .serialize_usecases import get_renamed_module
+
         # Issue #1559: using a renamed module (e.g. `import numpy as np`)
         # should not fail serializing
         expected = get_renamed_module(0.0)
-        self.run_with_protocols(self.check_call, get_renamed_module,
-                                expected, (0.0,))
+        self.run_with_protocols(self.check_call, get_renamed_module, expected, (0.0,))
 
     def test_other_process(self):
         """
@@ -127,6 +141,7 @@ class TestDispatcherPickling(TestCase):
         instantiated in the original process.
         """
         from .serialize_usecases import closure_calling_other_closure
+
         func = closure_calling_other_closure(3.0)
         pickled = pickle.dumps(func)
         code = """if 1:
@@ -136,7 +151,9 @@ class TestDispatcherPickling(TestCase):
             func = pickle.loads(data)
             res = func(4.0)
             assert res == 8.0, res
-            """.format(**locals())
+            """.format(
+            **locals()
+        )
         subprocess.check_call([sys.executable, "-c", code])
 
     def test_reuse(self):
@@ -147,6 +164,7 @@ class TestDispatcherPickling(TestCase):
         Note that "same function" is intentionally under-specified.
         """
         from .serialize_usecases import closure
+
         func = closure(5)
         pickled = pickle.dumps(func)
         func2 = closure(6)
@@ -217,8 +235,8 @@ class TestSerializationMisc(TestCase):
 
 
 class TestCloudPickleIssues(TestCase):
-    """This test case includes issues specific to the cloudpickle implementation.
-    """
+    """This test case includes issues specific to the cloudpickle implementation."""
+
     _numba_parallel_test_ = False
 
     def test_dynamic_class_reset_on_unpickle(self):
@@ -241,10 +259,11 @@ class TestCloudPickleIssues(TestCase):
         loads(saved)
         check()
 
-    @unittest.skipIf(__name__ == "__main__",
-                     "Test cannot run as when module is __main__")
+    @unittest.skipIf(
+        __name__ == "__main__", "Test cannot run as when module is __main__"
+    )
     def test_main_class_reset_on_unpickle(self):
-        mp = get_context('spawn')
+        mp = get_context("spawn")
         proc = mp.Process(target=check_main_class_reset_on_unpickle)
         proc.start()
         proc.join(timeout=60)
@@ -259,7 +278,7 @@ class TestCloudPickleIssues(TestCase):
         saved = dumps(Klass)
 
         # Check the reset problem in a new process
-        mp = get_context('spawn')
+        mp = get_context("spawn")
         proc = mp.Process(target=check_unpickle_dyn_class_new_proc, args=(saved,))
         proc.start()
         proc.join(timeout=60)
@@ -291,7 +310,7 @@ def check_main_class_reset_on_unpickle():
         run_name="__main__",
     )
     # Get the Klass and check it is from __main__
-    Klass = glbs['Klass']
+    Klass = glbs["Klass"]
     assert Klass.__module__ == "__main__"
     assert Klass.classvar != 100
     saved = dumps(Klass)
@@ -327,5 +346,5 @@ def _check_dyn_class(Klass, saved):
     check()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

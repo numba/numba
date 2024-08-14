@@ -21,13 +21,10 @@ def set_array_to_three(arr):
 
 
 def set_record_to_three(rec):
-    rec[0]['b'] = 3
+    rec[0]["b"] = 3
 
 
-recordtype = np.dtype(
-    [('b', np.int32)],
-    align=True
-)
+recordtype = np.dtype([("b", np.int32)], align=True)
 
 
 class TestRetrieveAutoconvertedArrays(CUDATestCase):
@@ -61,23 +58,23 @@ class TestRetrieveAutoconvertedArrays(CUDATestCase):
     def test_record_in(self):
         host_rec = np.zeros(1, dtype=recordtype)
         self.set_record_to_three[1, 1](cuda.In(host_rec))
-        self.assertEqual(0, host_rec[0]['b'])
+        self.assertEqual(0, host_rec[0]["b"])
 
     def test_record_inout(self):
         host_rec = np.zeros(1, dtype=recordtype)
         self.set_record_to_three[1, 1](cuda.InOut(host_rec))
-        self.assertEqual(3, host_rec[0]['b'])
+        self.assertEqual(3, host_rec[0]["b"])
 
     def test_record_default(self):
         host_rec = np.zeros(1, dtype=recordtype)
         self.set_record_to_three[1, 1](host_rec)
-        self.assertEqual(3, host_rec[0]['b'])
+        self.assertEqual(3, host_rec[0]["b"])
 
     def test_record_in_from_config(self):
         host_rec = np.zeros(1, dtype=recordtype)
         self.set_record_to_three_nocopy[1, 1](host_rec)
-        self.assertEqual(0, host_rec[0]['b'])
+        self.assertEqual(0, host_rec[0]["b"])
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

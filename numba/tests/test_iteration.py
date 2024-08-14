@@ -7,8 +7,8 @@ from numba.tests.support import TestCase, MemoryLeakMixin
 from numba.np import numpy_support
 
 
-force_pyobj_flags = {'forceobj': True}
-no_pyobj_flags = {'nopython': True}
+force_pyobj_flags = {"forceobj": True}
+no_pyobj_flags = {"nopython": True}
 
 
 def int_tuple_iter_usecase():
@@ -17,11 +17,13 @@ def int_tuple_iter_usecase():
         res += i
     return res
 
+
 def float_tuple_iter_usecase():
     res = 0.0
     for i in (1.5, 2.0, 99.3, 3.4):
         res += i
     return res
+
 
 def tuple_tuple_iter_usecase():
     # Recursively homogeneous tuple type
@@ -32,6 +34,7 @@ def tuple_tuple_iter_usecase():
         res = res * 2
     return res
 
+
 def enumerate_nested_tuple_usecase():
     res = 0.0
     for i, j in enumerate(((1.5, 2.0), (99.3, 3.4), (1.8, 2.5))):
@@ -39,6 +42,7 @@ def enumerate_nested_tuple_usecase():
             res += i * l
         res = res * 2
     return res
+
 
 def nested_enumerate_usecase():
     res = 0.0
@@ -63,20 +67,25 @@ def scalar_iter_usecase(iterable):
         res += x
     return res
 
+
 def record_iter_usecase(iterable):
     res = 0.0
     for x in iterable:
         res += x.a * x.b
     return res
 
+
 def record_iter_mutate_usecase(iterable):
     for x in iterable:
         x.a = x.a + x.b
 
 
-record_dtype = np.dtype([('a', np.float64),
-                         ('b', np.int32),
-                         ])
+record_dtype = np.dtype(
+    [
+        ("a", np.float64),
+        ("b", np.int32),
+    ]
+)
 
 
 class IterationTest(MemoryLeakMixin, TestCase):
@@ -122,14 +131,21 @@ class IterationTest(MemoryLeakMixin, TestCase):
     def test_enumerate_refct(self):
         # Test issue 3473
         pyfunc = enumerate_array_usecase
-        cfunc = njit((),)(pyfunc)
+        cfunc = njit(
+            (),
+        )(pyfunc)
         expected = pyfunc()
         self.assertPreciseEqual(cfunc(), expected)
 
     def run_array_1d(self, item_type, arg, flags):
         # Iteration over a 1d numpy array
         pyfunc = scalar_iter_usecase
-        cfunc = jit(item_type(types.Array(item_type, 1, 'A'),), **flags)(pyfunc)
+        cfunc = jit(
+            item_type(
+                types.Array(item_type, 1, "A"),
+            ),
+            **flags
+        )(pyfunc)
         self.assertPreciseEqual(cfunc(arg), pyfunc(arg))
 
     def test_array_1d_float(self, flags=force_pyobj_flags):
@@ -147,7 +163,7 @@ class IterationTest(MemoryLeakMixin, TestCase):
     def test_array_1d_record(self, flags=force_pyobj_flags):
         pyfunc = record_iter_usecase
         item_type = numpy_support.from_dtype(record_dtype)
-        cfunc = jit((types.Array(item_type, 1, 'A'),), **flags)(pyfunc)
+        cfunc = jit((types.Array(item_type, 1, "A"),), **flags)(pyfunc)
         arr = np.recarray(3, dtype=record_dtype)
         for i in range(3):
             arr[i].a = float(i * 2)
@@ -161,7 +177,7 @@ class IterationTest(MemoryLeakMixin, TestCase):
     def test_array_1d_record_mutate_npm(self, flags=no_pyobj_flags):
         pyfunc = record_iter_mutate_usecase
         item_type = numpy_support.from_dtype(record_dtype)
-        cfunc = jit((types.Array(item_type, 1, 'A'),), **flags)(pyfunc)
+        cfunc = jit((types.Array(item_type, 1, "A"),), **flags)(pyfunc)
         arr = np.recarray(3, dtype=record_dtype)
         for i in range(3):
             arr[i].a = float(i * 2)
@@ -183,7 +199,7 @@ class IterationTest(MemoryLeakMixin, TestCase):
 
         # 0d is typing error
         with self.assertRaises(errors.TypingError) as raises:
-            aryty = types.Array(types.int32, 0, 'C')
+            aryty = types.Array(types.int32, 0, "C")
             njit((aryty,))(foo)
 
         self.assertIn("0-d array", str(raises.exception))
@@ -198,7 +214,7 @@ class IterationTest(MemoryLeakMixin, TestCase):
             return total
 
         x = y = np.arange(3, dtype=np.int32)
-        aryty = types.Array(types.int32, 1, 'C')
+        aryty = types.Array(types.int32, 1, "C")
         cfunc = njit((aryty, aryty))(bar)
 
         expect = bar(x, y)
@@ -215,13 +231,12 @@ class IterationTest(MemoryLeakMixin, TestCase):
             return total
 
         x = y = np.arange(3, dtype=np.int32)
-        aryty = types.Array(types.int32, 1, 'C')
+        aryty = types.Array(types.int32, 1, "C")
         cfunc = njit((types.containers.UniTuple(aryty, 2),))(bar)
 
         expect = bar((x, y))
         got = cfunc((x, y))
         self.assertEqual(expect, got)
-
 
 
 class TestIterationRefct(MemoryLeakMixin, TestCase):
@@ -237,5 +252,5 @@ class TestIterationRefct(MemoryLeakMixin, TestCase):
         self.assertEqual(foo(sequence), foo.py_func(sequence))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

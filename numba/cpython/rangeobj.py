@@ -6,11 +6,21 @@ import operator
 
 from numba import prange
 from numba.core import types, cgutils, errors, config
-from numba.core.imputils import (lower_builtin, lower_cast,
-                                    iterator_impl, impl_ret_untracked)
+from numba.core.imputils import (
+    lower_builtin,
+    lower_cast,
+    iterator_impl,
+    impl_ret_untracked,
+)
 from numba.core.typing import signature
-from numba.core.extending import intrinsic, overload, overload_attribute, register_jitable
+from numba.core.extending import (
+    intrinsic,
+    overload,
+    overload_attribute,
+    register_jitable,
+)
 from numba.parfors.parfor import internal_prange
+
 
 def make_range_iterator(typ):
     """
@@ -35,10 +45,7 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
         state.start = context.get_constant(int_type, 0)
         state.stop = stop
         state.step = context.get_constant(int_type, 1)
-        return impl_ret_untracked(context,
-                                  builder,
-                                  range_state_type,
-                                  state._getvalue())
+        return impl_ret_untracked(context, builder, range_state_type, state._getvalue())
 
     @lower_builtin(range, int_type, int_type)
     @lower_builtin(prange, int_type, int_type)
@@ -52,10 +59,7 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
         state.start = start
         state.stop = stop
         state.step = context.get_constant(int_type, 1)
-        return impl_ret_untracked(context,
-                                  builder,
-                                  range_state_type,
-                                  state._getvalue())
+        return impl_ret_untracked(context, builder, range_state_type, state._getvalue())
 
     @lower_builtin(range, int_type, int_type, int_type)
     @lower_builtin(prange, int_type, int_type, int_type)
@@ -69,10 +73,7 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
         state.start = start
         state.stop = stop
         state.step = step
-        return impl_ret_untracked(context,
-                                  builder,
-                                  range_state_type,
-                                  state._getvalue())
+        return impl_ret_untracked(context, builder, range_state_type, state._getvalue())
 
     @lower_builtin(len, range_state_type)
     def range_len(context, builder, sig, args):
@@ -84,7 +85,7 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
         res = RangeIter.from_range_state(context, builder, state)
         return impl_ret_untracked(context, builder, int_type, builder.load(res.count))
 
-    @lower_builtin('getiter', range_state_type)
+    @lower_builtin("getiter", range_state_type)
     def getiter_range32_impl(context, builder, sig, args):
         """
         range.__iter__
@@ -120,15 +121,16 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
             diff = builder.sub(stop, start)
             zero = context.get_constant(int_type, 0)
             one = context.get_constant(int_type, 1)
-            pos_diff = builder.icmp_signed('>', diff, zero)
-            pos_step = builder.icmp_signed('>', step, zero)
+            pos_diff = builder.icmp_signed(">", diff, zero)
+            pos_step = builder.icmp_signed(">", step, zero)
             sign_differs = builder.xor(pos_diff, pos_step)
-            zero_step = builder.icmp_unsigned('==', step, zero)
+            zero_step = builder.icmp_unsigned("==", step, zero)
 
             with cgutils.if_unlikely(builder, zero_step):
                 # step shouldn't be zero
-                context.call_conv.return_user_exc(builder, ValueError,
-                                                  ("range() arg 3 must not be zero",))
+                context.call_conv.return_user_exc(
+                    builder, ValueError, ("range() arg 3 must not be zero",)
+                )
 
             with builder.if_else(sign_differs) as (then, orelse):
                 with then:
@@ -137,9 +139,10 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
                 with orelse:
                     rem = builder.srem(diff, step)
                     rem = builder.select(pos_diff, rem, builder.neg(rem))
-                    uneven = builder.icmp_signed('>', rem, zero)
-                    newcount = builder.add(builder.sdiv(diff, step),
-                                           builder.select(uneven, one, zero))
+                    uneven = builder.icmp_signed(">", rem, zero)
+                    newcount = builder.add(
+                        builder.sdiv(diff, step), builder.select(uneven, one, zero)
+                    )
                     builder.store(newcount, self.count)
 
             return self
@@ -148,7 +151,7 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
             zero = context.get_constant(int_type, 0)
             countptr = self.count
             count = builder.load(countptr)
-            is_valid = builder.icmp_signed('>', count, zero)
+            is_valid = builder.icmp_signed(">", count, zero)
             result.set_valid(is_valid)
 
             with builder.if_then(is_valid):
@@ -162,9 +165,12 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
 
 if config.USE_LEGACY_TYPE_SYSTEM:
     range_impl_map = {
-        types.int32 : (types.range_state32_type, types.range_iter32_type),
-        types.int64 : (types.range_state64_type, types.range_iter64_type),
-        types.uint64 : (types.unsigned_range_state64_type, types.unsigned_range_iter64_type)
+        types.int32: (types.range_state32_type, types.range_iter32_type),
+        types.int64: (types.range_state64_type, types.range_iter64_type),
+        types.uint64: (
+            types.unsigned_range_state64_type,
+            types.unsigned_range_iter64_type,
+        ),
     }
 else:
     range_impl_map = {
@@ -174,11 +180,11 @@ else:
 for int_type, state_types in range_impl_map.items():
     make_range_impl(int_type, *state_types)
 
+
 @lower_cast(types.RangeType, types.RangeType)
 def range_to_range(context, builder, fromty, toty, val):
     olditems = cgutils.unpack_tuple(builder, val, 3)
-    items = [context.cast(builder, v, fromty.dtype, toty.dtype)
-             for v in olditems]
+    items = [context.cast(builder, v, fromty.dtype, toty.dtype) for v in olditems]
     return cgutils.make_anonymous_struct(builder, items)
 
 
@@ -186,17 +192,21 @@ def make_range_attr(index, attribute):
     @intrinsic
     def rangetype_attr_getter(typingctx, a):
         if isinstance(a, types.RangeType):
+
             def codegen(context, builder, sig, args):
                 (val,) = args
                 items = cgutils.unpack_tuple(builder, val, 3)
-                return impl_ret_untracked(context, builder, sig.return_type,
-                                          items[index])
+                return impl_ret_untracked(
+                    context, builder, sig.return_type, items[index]
+                )
+
             return signature(a.dtype, a), codegen
 
     @overload_attribute(types.RangeType, attribute)
     def range_attr(rnge):
         def get(rnge):
             return rangetype_attr_getter(rnge)
+
         return get
 
 
@@ -222,14 +232,17 @@ def impl_contains(robj, val):
         return impl_contains_helper
 
     elif isinstance(val, types.Float):
+
         def impl(robj, val):
             if val % 1 != 0:
                 return False
             else:
                 return impl_contains_helper(robj, int(val))
+
         return impl
 
     elif isinstance(val, types.Complex):
+
         def impl(robj, val):
             if val.imag != 0:
                 return False
@@ -237,11 +250,12 @@ def impl_contains(robj, val):
                 return False
             else:
                 return impl_contains_helper(robj, int(val.real))
+
         return impl
 
     elif not isinstance(val, types.Number):
         return impl_false
 
 
-for ix, attr in enumerate(('start', 'stop', 'step')):
+for ix, attr in enumerate(("start", "stop", "step")):
     make_range_attr(index=ix, attribute=attr)

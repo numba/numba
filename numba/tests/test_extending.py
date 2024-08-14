@@ -503,8 +503,9 @@ class CallableTypeRef(types.Callable):
         self.instance_type = instance_type
         self.sig_to_impl_key = {}
         self.compiled_templates = []
-        super(CallableTypeRef, self).__init__('callable_type_ref'
-                                              '[{}]'.format(self.instance_type))
+        super(CallableTypeRef, self).__init__(
+            "callable_type_ref" "[{}]".format(self.instance_type)
+        )
 
     def get_call_type(self, context, args, kws):
 
@@ -515,7 +516,7 @@ class CallableTypeRef(types.Callable):
             except Exception:
                 pass  # for simplicity assume args must match exactly
             else:
-                compiled_ovlds = getattr(template, '_compiled_overloads', {})
+                compiled_ovlds = getattr(template, "_compiled_overloads", {})
                 if args in compiled_ovlds:
                     self.sig_to_impl_key[res_sig] = compiled_ovlds[args]
                     self.compiled_templates.append(template)
@@ -589,19 +590,19 @@ class TestLowLevelExtending(TestCase):
     @TestCase.run_test_in_subprocess
     def test_cast_mydummy(self):
         pyfunc = get_dummy
-        cfunc = njit(types.float64(),)(pyfunc)
+        cfunc = njit(
+            types.float64(),
+        )(pyfunc)
         self.assertPreciseEqual(cfunc(), 42.0)
 
     def test_mk_func_literal(self):
-        """make sure make_function is passed to typer class as a literal
-        """
+        """make sure make_function is passed to typer class as a literal"""
         test_ir = compiler.run_frontend(mk_func_test_impl)
         typingctx = cpu_target.typing_context
         targetctx = cpu_target.target_context
         typingctx.refresh()
         targetctx.refresh()
-        typing_res = type_inference_stage(typingctx, targetctx, test_ir, (),
-                                          None)
+        typing_res = type_inference_stage(typingctx, targetctx, test_ir, (), None)
         self.assertTrue(
             any(
                 isinstance(a, types.MakeFunctionLiteral)
@@ -735,9 +736,7 @@ class TestHighLevelExtending(TestCase):
         # The typing error is propagated
         with self.assertRaises(errors.TypingError) as raises:
             cfunc(np.bool_([]), np.int32([]), np.int64([]))
-        self.assertIn(
-            "x and y should have the same dtype", str(raises.exception)
-        )
+        self.assertIn("x and y should have the same dtype", str(raises.exception))
 
     def test_len(self):
         """
@@ -922,7 +921,7 @@ class TestHighLevelExtending(TestCase):
 
         # arg name is different
         def impl3(z, b, c, kw=None):
-            if a > 10:      # noqa: F821
+            if a > 10:  # noqa: F821
                 return 1
             else:
                 return -1
@@ -1158,19 +1157,23 @@ class TestHighLevelExtending(TestCase):
             )
 
         self.assertEqual(
-            bar(obj), ((1, 2, ()), (1, 2, (3,)), (1, 2, (3, 4))),
+            bar(obj),
+            ((1, 2, ()), (1, 2, (3,)), (1, 2, (3, 4))),
         )
 
         # Check cases that put tuple type into stararg
         # NOTE: the expected result has an extra tuple because of stararg.
         self.assertEqual(
-            foo(obj, 1, 2, (3,)), (1, 2, ((3,),)),
+            foo(obj, 1, 2, (3,)),
+            (1, 2, ((3,),)),
         )
         self.assertEqual(
-            foo(obj, 1, 2, (3, 4)), (1, 2, ((3, 4),)),
+            foo(obj, 1, 2, (3, 4)),
+            (1, 2, ((3, 4),)),
         )
         self.assertEqual(
-            foo(obj, 1, 2, (3, (4, 5))), (1, 2, ((3, (4, 5)),)),
+            foo(obj, 1, 2, (3, (4, 5))),
+            (1, 2, ((3, (4, 5)),)),
         )
 
     def test_overload_classmethod(self):
@@ -1183,6 +1186,7 @@ class TestHighLevelExtending(TestCase):
             def impl(cls, nitems):
                 arr = np.arange(nitems)
                 return arr
+
             return impl
 
         @njit
@@ -1210,15 +1214,18 @@ class TestHighLevelExtending(TestCase):
         @overload(CallableTypeRef)
         def callable_type_call_ovld1(x):
             if isinstance(x, types.Integer):
+
                 def impl(x):
                     return 42.5 + x
+
                 return impl
 
         @overload(CallableTypeRef)
         def callable_type_call_ovld2(x):
             if isinstance(x, types.UnicodeType):
+
                 def impl(x):
-                    return '42.5' + x
+                    return "42.5" + x
 
                 return impl
 
@@ -1226,8 +1233,8 @@ class TestHighLevelExtending(TestCase):
         def foo(a, b):
             return MyClass(a), MyClass(b)
 
-        args = (4, '4')
-        expected = (42.5 + args[0], '42.5' + args[1])
+        args = (4, "4")
+        expected = (42.5 + args[0], "42.5" + args[1])
         self.assertPreciseEqual(foo(*args), expected)
 
 
@@ -1269,9 +1276,7 @@ class TestOverloadMethodCaching(TestCase):
         except AttributeError:
             ctx = multiprocessing
         q = ctx.Queue()
-        p = ctx.Process(
-            target=run_caching_overload_method, args=(q, self._cache_dir)
-        )
+        p = ctx.Process(target=run_caching_overload_method, args=(q, self._cache_dir))
         p.start()
         q.put(MyDummy())
         p.join()
@@ -1407,6 +1412,7 @@ class TestIntrinsic(TestCase):
         """
         Test serialization of intrinsic objects
         """
+
         # define a intrinsic
         @intrinsic
         def identity(context, x):
@@ -1504,9 +1510,10 @@ class TestIntrinsic(TestCase):
 
         self.assertEqual("numba.tests.test_extending", void_func.__module__)
         self.assertEqual("void_func", void_func.__name__)
-        self.assertEqual("TestIntrinsic.test_docstring.<locals>.void_func",
-                         void_func.__qualname__)
-        self.assertDictEqual({'a': int}, void_func.__annotations__)
+        self.assertEqual(
+            "TestIntrinsic.test_docstring.<locals>.void_func", void_func.__qualname__
+        )
+        self.assertDictEqual({"a": int}, void_func.__annotations__)
         self.assertEqual("void_func docstring", void_func.__doc__)
 
 
@@ -1538,19 +1545,14 @@ class TestRegisterJitable(unittest.TestCase):
         cbar = jit(nopython=True)(bar)
         with self.assertRaises(errors.TypingError) as raises:
             cbar(2)
-        msg = (
-            "Only accept returning of array passed into the function as "
-            "argument"
-        )
+        msg = "Only accept returning of array passed into the function as " "argument"
         self.assertIn(msg, str(raises.exception))
 
 
 class TestImportCythonFunction(unittest.TestCase):
     @unittest.skipIf(sc is None, "Only run if SciPy >= 0.19 is installed")
     def test_getting_function(self):
-        addr = get_cython_function_address(
-            "scipy.special.cython_special", "j0"
-        )
+        addr = get_cython_function_address("scipy.special.cython_special", "j0")
         functype = ctypes.CFUNCTYPE(ctypes.c_double, ctypes.c_double)
         _j0 = functype(addr)
         j0 = jit(nopython=True)(lambda x: _j0(x))
@@ -1567,9 +1569,7 @@ class TestImportCythonFunction(unittest.TestCase):
     @unittest.skipIf(sc is None, "Only run if SciPy >= 0.19 is installed")
     def test_missing_function(self):
         with self.assertRaises(ValueError) as raises:
-            get_cython_function_address(
-                "scipy.special.cython_special", "foo"
-            )
+            get_cython_function_address("scipy.special.cython_special", "foo")
         msg = (
             "No function 'foo' found in __pyx_capi__ of "
             "'scipy.special.cython_special'"
@@ -1577,9 +1577,7 @@ class TestImportCythonFunction(unittest.TestCase):
         self.assertEqual(msg, str(raises.exception))
 
 
-@overload_method(
-    MyDummyType, "method_jit_option_check_nrt", jit_options={"_nrt": True}
-)
+@overload_method(MyDummyType, "method_jit_option_check_nrt", jit_options={"_nrt": True})
 def ov_method_jit_option_check_nrt(obj):
     def imp(obj):
         return np.arange(10)
@@ -1622,10 +1620,7 @@ class TestJitOptionsNoNRT(TestCase):
 
     def check_error_no_nrt(self, func, *args, **kwargs):
         # Check that the compilation fails with a complaint about dynamic array
-        msg = (
-            "Only accept returning of array passed into "
-            "the function as argument"
-        )
+        msg = "Only accept returning of array passed into " "the function as argument"
         with self.assertRaises(errors.TypingError) as raises:
             func(*args, **kwargs)
         self.assertIn(msg, str(raises.exception))
@@ -1758,7 +1753,8 @@ class TestBoxingCallingJIT(TestCase):
         with self.assertRaises(ValueError) as raises:
             passthru(self.dyn_type)
         self.assertIn(
-            "cannot be x > 0", str(raises.exception),
+            "cannot be x > 0",
+            str(raises.exception),
         )
 
     def test_boxer(self):
@@ -1828,7 +1824,8 @@ class TestBoxingCallingJIT(TestCase):
         with self.assertRaises(ValueError) as raises:
             passthru(self.dyn_type)
         self.assertIn(
-            "cannot do x > 0", str(raises.exception),
+            "cannot do x > 0",
+            str(raises.exception),
         )
 
 
@@ -1843,6 +1840,7 @@ class TestCachingOverloadObjmode(TestCase):
     """Test caching of the use of overload implementations that use
     `with objmode`
     """
+
     _numba_parallel_test_ = False
 
     def setUp(self):
@@ -1896,9 +1894,10 @@ class TestCachingOverloadObjmode(TestCase):
         @overload(do_something)
         def overload_do_something(a, b):
             def _do_something_impl(a, b):
-                with objmode(y='float64'):
+                with objmode(y="float64"):
                     y = do_this(a, b)
                 return y
+
             return _do_something_impl
 
         @njit(cache=True)
@@ -1923,7 +1922,7 @@ class TestCachingOverloadObjmode(TestCase):
     def check_objmode_cache_ndarray_check_cache(cls):
         disp = cls.check_objmode_cache_ndarray()
         if len(disp.stats.cache_misses) != 0:
-            raise AssertionError('unexpected cache miss')
+            raise AssertionError("unexpected cache miss")
         if len(disp.stats.cache_hits) <= 0:
             raise AssertionError("unexpected missing cache hit")
 
@@ -1940,7 +1939,7 @@ class TestCachingOverloadObjmode(TestCase):
             res = run_in_new_process_in_cache_dir(
                 self.check_objmode_cache_ndarray_check_cache, cache_dir
             )
-        self.assertEqual(res['exitcode'], 0)
+        self.assertEqual(res["exitcode"], 0)
 
 
 class TestMisc(TestCase):
@@ -1952,9 +1951,7 @@ class TestMisc(TestCase):
         self.assertTrue(is_jitted(njit(foo)))
         self.assertFalse(is_jitted(vectorize(foo)))
         self.assertFalse(is_jitted(vectorize(parallel=True)(foo)))
-        self.assertFalse(
-            is_jitted(guvectorize("void(float64[:])", "(m)")(foo))
-        )
+        self.assertFalse(is_jitted(guvectorize("void(float64[:])", "(m)")(foo)))
 
     def test_overload_arg_binding(self):
         # See issue #7982, checks that calling a function with named args works
@@ -1983,14 +1980,18 @@ class TestOverloadPreferLiteral(TestCase):
             if isinstance(x, types.IntegerLiteral):
                 # With prefer_literal=False, this branch will not be reached.
                 if x.literal_value == 1:
+
                     def impl(x):
-                        return 0xcafe
+                        return 0xCAFE
+
                     return impl
                 else:
-                    raise errors.TypingError('literal value')
+                    raise errors.TypingError("literal value")
             else:
+
                 def impl(x):
                     return x * 100
+
                 return impl
 
         overload(prefer_lit, prefer_literal=True)(ov)
@@ -2001,7 +2002,7 @@ class TestOverloadPreferLiteral(TestCase):
             return prefer_lit(1), prefer_lit(2), prefer_lit(x)
 
         a, b, c = check_prefer_lit(3)
-        self.assertEqual(a, 0xcafe)
+        self.assertEqual(a, 0xCAFE)
         self.assertEqual(b, 200)
         self.assertEqual(c, 300)
 
@@ -2019,23 +2020,29 @@ class TestOverloadPreferLiteral(TestCase):
             if isinstance(x, types.IntegerLiteral):
                 # With prefer_literal=False, this branch will not be reached.
                 if x.literal_value == 1:
+
                     def impl(self, x):
-                        return 0xcafe
+                        return 0xCAFE
+
                     return impl
                 else:
-                    raise errors.TypingError('literal value')
+                    raise errors.TypingError("literal value")
             else:
+
                 def impl(self, x):
                     return x * 100
+
                 return impl
 
         overload_method(
-            MyDummyType, "method_prefer_literal",
+            MyDummyType,
+            "method_prefer_literal",
             prefer_literal=True,
         )(ov)
 
         overload_method(
-            MyDummyType, "method_non_literal",
+            MyDummyType,
+            "method_non_literal",
             prefer_literal=False,
         )(ov)
 
@@ -2048,7 +2055,7 @@ class TestOverloadPreferLiteral(TestCase):
             )
 
         a, b, c = check_prefer_lit(MyDummy(), 3)
-        self.assertEqual(a, 0xcafe)
+        self.assertEqual(a, 0xCAFE)
         self.assertEqual(b, 200)
         self.assertEqual(c, 300)
 
@@ -2074,19 +2081,23 @@ class TestIntrinsicPreferLiteral(TestCase):
             if isinstance(x, types.IntegerLiteral):
                 # With prefer_literal=False, this branch will not be reached
                 if x.literal_value == 1:
+
                     def codegen(context, builder, signature, args):
                         atype = signature.args[0]
                         llrtype = context.get_value_type(atype)
-                        return ir.Constant(llrtype, 0xcafe)
+                        return ir.Constant(llrtype, 0xCAFE)
+
                     return sig, codegen
                 else:
-                    raise errors.TypingError('literal value')
+                    raise errors.TypingError("literal value")
             else:
+
                 def codegen(context, builder, signature, args):
                     atype = signature.return_type
                     llrtype = context.get_value_type(atype)
                     int_100 = ir.Constant(llrtype, 100)
                     return builder.mul(args[0], int_100)
+
                 return sig, codegen
 
         prefer_lit = intrinsic(prefer_literal=True)(intrin)
@@ -2097,7 +2108,7 @@ class TestIntrinsicPreferLiteral(TestCase):
             return prefer_lit(1), prefer_lit(2), prefer_lit(x)
 
         a, b, c = check_prefer_lit(3)
-        self.assertEqual(a, 0xcafe)
+        self.assertEqual(a, 0xCAFE)
         self.assertEqual(b, 200)
         self.assertEqual(c, 300)
 
@@ -2129,14 +2140,14 @@ class TestNumbaInternalOverloads(TestCase):
         # np.random.* does not have a signature exposed to `inspect`... so
         # custom parse the docstrings.
         def sig_from_np_random(x):
-            if not x.startswith('_'):
+            if not x.startswith("_"):
                 thing = getattr(np.random, x)
                 if inspect.isbuiltin(thing):
                     docstr = thing.__doc__.splitlines()
                     for l in docstr:
                         if l:
                             sl = l.strip()
-                            if sl.startswith(x): # its the signature
+                            if sl.startswith(x):  # its the signature
                                 # special case np.random.seed, it has `self` in
                                 # the signature whereas all the other functions
                                 # do not!?
@@ -2150,8 +2161,9 @@ class TestNumbaInternalOverloads(TestCase):
                                 except SyntaxError:
                                     # likely elipsis, e.g. rand(d0, d1, ..., dn)
                                     if DEBUG == 2:
-                                        print("... skipped as cannot parse "
-                                              "signature")
+                                        print(
+                                            "... skipped as cannot parse " "signature"
+                                        )
                                     return None
                                 else:
                                     fn = l.get(x)
@@ -2163,16 +2175,18 @@ class TestNumbaInternalOverloads(TestCase):
 
             def create_message(func, overload_func, func_sig, ol_sig):
                 msg = []
-                s = (f"{func} from module '{getattr(func, '__module__')}' "
-                     "has mismatched sig.")
+                s = (
+                    f"{func} from module '{getattr(func, '__module__')}' "
+                    "has mismatched sig."
+                )
                 msg.append(s)
                 msg.append(f"    - expected: {func_sig}")
                 msg.append(f"    -      got: {ol_sig}")
                 lineno = inspect.getsourcelines(overload_func)[1]
                 tmpsrcfile = inspect.getfile(overload_func)
-                srcfile = tmpsrcfile.replace(numba.__path__[0], '')
+                srcfile = tmpsrcfile.replace(numba.__path__[0], "")
                 msg.append(f"from {srcfile}:{lineno}")
-                msgstr = '\n' + '\n'.join(msg)
+                msgstr = "\n" + "\n".join(msg)
                 return msgstr
 
             func_sig = None
@@ -2180,7 +2194,7 @@ class TestNumbaInternalOverloads(TestCase):
                 func_sig = inspect.signature(func)
             except ValueError:
                 # probably a built-in/C code, see if it's a np.random function
-                if fname := getattr(func, '__name__', False):
+                if fname := getattr(func, "__name__", False):
                     if maybe_func := getattr(np.random, fname, False):
                         if maybe_func == func:
                             # it's a built-in from np.random
@@ -2190,26 +2204,29 @@ class TestNumbaInternalOverloads(TestCase):
                 ol_sig = inspect.signature(overload_func)
                 x = list(func_sig.parameters.keys())
                 y = list(ol_sig.parameters.keys())
-                for a, b in zip(x[:len(y)], y):
+                for a, b in zip(x[: len(y)], y):
                     if a != b:
                         p = func_sig.parameters[a]
                         if p.kind == p.POSITIONAL_ONLY:
                             # probably a built-in/C code
                             if DEBUG == 2:
-                                print("... skipped as positional only "
-                                      "arguments found")
+                                print(
+                                    "... skipped as positional only " "arguments found"
+                                )
                             break
-                        elif '*' in str(p): # probably *args or similar
+                        elif "*" in str(p):  # probably *args or similar
                             if DEBUG == 2:
                                 print("... skipped as contains *args")
                             break
                         else:
                             # Only error/report on functions that have a module
                             # or are from somewhere other than Numba.
-                            if (not func.__module__ or
-                                    not func.__module__.startswith("numba")):
-                                msgstr = create_message(func, overload_func,
-                                                        func_sig, ol_sig)
+                            if not func.__module__ or not func.__module__.startswith(
+                                "numba"
+                            ):
+                                msgstr = create_message(
+                                    func, overload_func, func_sig, ol_sig
+                                )
                                 if DEBUG != 0:
                                     if DEBUG == 2:
                                         print("... INVALID")
@@ -2221,8 +2238,7 @@ class TestNumbaInternalOverloads(TestCase):
                             else:
                                 if DEBUG == 2:
                                     if not func.__module__:
-                                        print("... skipped as no __module__ "
-                                              "present")
+                                        print("... skipped as no __module__ " "present")
                                     else:
                                         print("... skipped as Numba internal")
                                 break
@@ -2232,7 +2248,7 @@ class TestNumbaInternalOverloads(TestCase):
 
         # Compile something to make sure that the typing context registries
         # are populated with everything from the CPU target.
-        njit(lambda : None).compile(())
+        njit(lambda: None).compile(())
         tyctx = numba.core.typing.context.Context()
         tyctx.refresh()
 
@@ -2240,7 +2256,7 @@ class TestNumbaInternalOverloads(TestCase):
         regs = tyctx._registries
         for k, v in regs.items():
             for item in k.functions:
-                if getattr(item, '_overload_func', False):
+                if getattr(item, "_overload_func", False):
                     checker(item.key, item._overload_func)
 
 

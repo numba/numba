@@ -17,8 +17,14 @@ from numba.core.extending import (
     intrinsic,
     register_jitable,
 )
-from numba.core.imputils import (lower_constant, lower_cast, lower_builtin,
-                                 iternext_impl, impl_ret_new_ref, RefType)
+from numba.core.imputils import (
+    lower_constant,
+    lower_cast,
+    lower_builtin,
+    iternext_impl,
+    impl_ret_new_ref,
+    RefType,
+)
 from numba.core.datamodel import register_default, StructModel
 from numba.core import types, cgutils, config
 from numba.core.utils import PYVERSION
@@ -31,44 +37,48 @@ from numba._helperlib import c_helpers
 from numba.cpython.hashing import _Py_hash_t
 from numba.core.unsafe.bytes import memcpy_region
 from numba.core.errors import TypingError
-from numba.cpython.unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4,
-                                           _Py_ISALNUM,
-                                           _PyUnicode_ToUpperFull,
-                                           _PyUnicode_ToLowerFull,
-                                           _PyUnicode_ToFoldedFull,
-                                           _PyUnicode_ToTitleFull,
-                                           _PyUnicode_IsPrintable,
-                                           _PyUnicode_IsSpace,
-                                           _Py_ISSPACE,
-                                           _PyUnicode_IsXidStart,
-                                           _PyUnicode_IsXidContinue,
-                                           _PyUnicode_IsCased,
-                                           _PyUnicode_IsCaseIgnorable,
-                                           _PyUnicode_IsUppercase,
-                                           _PyUnicode_IsLowercase,
-                                           _PyUnicode_IsLineBreak,
-                                           _Py_ISLINEBREAK,
-                                           _Py_ISLINEFEED,
-                                           _Py_ISCARRIAGERETURN,
-                                           _PyUnicode_IsTitlecase,
-                                           _Py_ISLOWER,
-                                           _Py_ISUPPER,
-                                           _Py_TAB,
-                                           _Py_LINEFEED,
-                                           _Py_CARRIAGE_RETURN,
-                                           _Py_SPACE,
-                                           _PyUnicode_IsAlpha,
-                                           _PyUnicode_IsNumeric,
-                                           _Py_ISALPHA,
-                                           _PyUnicode_IsDigit,
-                                           _PyUnicode_IsDecimalDigit)
+from numba.cpython.unicode_support import (
+    _Py_TOUPPER,
+    _Py_TOLOWER,
+    _Py_UCS4,
+    _Py_ISALNUM,
+    _PyUnicode_ToUpperFull,
+    _PyUnicode_ToLowerFull,
+    _PyUnicode_ToFoldedFull,
+    _PyUnicode_ToTitleFull,
+    _PyUnicode_IsPrintable,
+    _PyUnicode_IsSpace,
+    _Py_ISSPACE,
+    _PyUnicode_IsXidStart,
+    _PyUnicode_IsXidContinue,
+    _PyUnicode_IsCased,
+    _PyUnicode_IsCaseIgnorable,
+    _PyUnicode_IsUppercase,
+    _PyUnicode_IsLowercase,
+    _PyUnicode_IsLineBreak,
+    _Py_ISLINEBREAK,
+    _Py_ISLINEFEED,
+    _Py_ISCARRIAGERETURN,
+    _PyUnicode_IsTitlecase,
+    _Py_ISLOWER,
+    _Py_ISUPPER,
+    _Py_TAB,
+    _Py_LINEFEED,
+    _Py_CARRIAGE_RETURN,
+    _Py_SPACE,
+    _PyUnicode_IsAlpha,
+    _PyUnicode_IsNumeric,
+    _Py_ISALPHA,
+    _PyUnicode_IsDigit,
+    _PyUnicode_IsDecimalDigit,
+)
 from numba.cpython import slicing
 
 if PYVERSION in ((3, 9), (3, 10), (3, 11)):
     from numba.core.pythonapi import PY_UNICODE_WCHAR_KIND
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L84-L85    # noqa: E501
-_MAX_UNICODE = 0x10ffff
+_MAX_UNICODE = 0x10FFFF
 
 # https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/stringlib/fastsearch.h#L31    # noqa: E501
 if config.USE_LEGACY_TYPE_SYSTEM:
@@ -83,31 +93,34 @@ else:
 class UnicodeModel(models.StructModel):
     def __init__(self, dmm, fe_type):
         members = [
-            ('data', types.voidptr),
-            ('length', types.intp),
-            ('kind', types.int32),
-            ('is_ascii', types.uint32),
-            ('hash', _Py_hash_t),
-            ('meminfo', types.MemInfoPointer(types.voidptr)),
+            ("data", types.voidptr),
+            ("length", types.intp),
+            ("kind", types.int32),
+            ("is_ascii", types.uint32),
+            ("hash", _Py_hash_t),
+            ("meminfo", types.MemInfoPointer(types.voidptr)),
             # A pointer to the owner python str/unicode object
-            ('parent', types.pyobject),
+            ("parent", types.pyobject),
         ]
         models.StructModel.__init__(self, dmm, fe_type, members)
 
 
-make_attribute_wrapper(types.UnicodeType, 'data', '_data')
-make_attribute_wrapper(types.UnicodeType, 'length', '_length')
-make_attribute_wrapper(types.UnicodeType, 'kind', '_kind')
-make_attribute_wrapper(types.UnicodeType, 'is_ascii', '_is_ascii')
-make_attribute_wrapper(types.UnicodeType, 'hash', '_hash')
+make_attribute_wrapper(types.UnicodeType, "data", "_data")
+make_attribute_wrapper(types.UnicodeType, "length", "_length")
+make_attribute_wrapper(types.UnicodeType, "kind", "_kind")
+make_attribute_wrapper(types.UnicodeType, "is_ascii", "_is_ascii")
+make_attribute_wrapper(types.UnicodeType, "hash", "_hash")
 
 
 @register_default(types.UnicodeIteratorType)
 class UnicodeIteratorModel(StructModel):
     def __init__(self, dmm, fe_type):
-        members = [('index', types.EphemeralPointer(types.uintp)),
-                   ('data', fe_type.data)]
+        members = [
+            ("index", types.EphemeralPointer(types.uintp)),
+            ("data", fe_type.data),
+        ]
         super(UnicodeIteratorModel, self).__init__(dmm, fe_type, members)
+
 
 # CAST
 
@@ -117,13 +130,26 @@ def compile_time_get_string_data(obj):
     the string data into the LLVM module.
     """
     from ctypes import (
-        CFUNCTYPE, c_void_p, c_int, c_uint, c_ssize_t, c_ubyte, py_object,
-        POINTER, byref,
+        CFUNCTYPE,
+        c_void_p,
+        c_int,
+        c_uint,
+        c_ssize_t,
+        c_ubyte,
+        py_object,
+        POINTER,
+        byref,
     )
 
-    extract_unicode_fn = c_helpers['extract_unicode']
-    proto = CFUNCTYPE(c_void_p, py_object, POINTER(c_ssize_t), POINTER(c_int),
-                      POINTER(c_uint), POINTER(c_ssize_t))
+    extract_unicode_fn = c_helpers["extract_unicode"]
+    proto = CFUNCTYPE(
+        c_void_p,
+        py_object,
+        POINTER(c_ssize_t),
+        POINTER(c_int),
+        POINTER(c_uint),
+        POINTER(c_ssize_t),
+    )
     fn = proto(extract_unicode_fn)
     length = c_ssize_t()
     kind = c_int()
@@ -145,8 +171,9 @@ def make_string_from_constant(context, builder, typ, literal_string):
     Get string data by `compile_time_get_string_data()` and return a
     unicode_type LLVM value
     """
-    databytes, length, kind, is_ascii, hashv = \
-        compile_time_get_string_data(literal_string)
+    databytes, length, kind, is_ascii, hashv = compile_time_get_string_data(
+        literal_string
+    )
     mod = builder.module
     gv = context.insert_const_bytes(mod, databytes)
     uni_str = cgutils.create_struct_proxy(typ)(context, builder)
@@ -163,11 +190,15 @@ def make_string_from_constant(context, builder, typ, literal_string):
 @lower_cast(types.StringLiteral, types.unicode_type)
 def cast_from_literal(context, builder, fromty, toty, val):
     return make_string_from_constant(
-        context, builder, toty, fromty.literal_value,
+        context,
+        builder,
+        toty,
+        fromty.literal_value,
     )
 
 
 # CONSTANT
+
 
 @lower_constant(types.unicode_type)
 def constant_unicode(context, builder, typ, pyval):
@@ -182,8 +213,9 @@ def unbox_unicode_str(typ, obj, c):
     """
     Convert a unicode str object to a native unicode structure.
     """
-    ok, data, length, kind, is_ascii, hashv = \
-        c.pyapi.string_as_string_size_and_kind(obj)
+    ok, data, length, kind, is_ascii, hashv = c.pyapi.string_as_string_size_and_kind(
+        obj
+    )
     uni_str = cgutils.create_struct_proxy(typ)(c.context, c.builder)
     uni_str.data = data
     uni_str.length = length
@@ -192,7 +224,7 @@ def unbox_unicode_str(typ, obj, c):
     uni_str.hash = hashv
     uni_str.meminfo = c.pyapi.nrt_meminfo_new_from_pyobject(
         data,  # the borrowed data pointer
-        obj,   # the owner pyobject; the call will incref it.
+        obj,  # the owner pyobject; the call will incref it.
     )
     uni_str.parent = obj
 
@@ -206,8 +238,7 @@ def box_unicode_str(typ, val, c):
     Convert a native unicode structure to a unicode string
     """
     uni_str = cgutils.create_struct_proxy(typ)(c.context, c.builder, value=val)
-    res = c.pyapi.string_from_kind_and_data(
-        uni_str.kind, uni_str.data, uni_str.length)
+    res = c.pyapi.string_from_kind_and_data(uni_str.kind, uni_str.data, uni_str.length)
     # hash isn't needed now, just compute it so it ends up in the unicodeobject
     # hash cache, cpython doesn't always do this, depends how a string was
     # created it's safe, just burns the cycles required to hash on @box
@@ -253,6 +284,7 @@ def _malloc_string(typingctx, kind, char_bytes, length, is_ascii):
 
     Must set length and kind values for string after it is returned
     """
+
     def details(context, builder, signature, args):
         [kind_val, char_bytes_val, length_val, is_ascii_val] = args
 
@@ -260,9 +292,9 @@ def _malloc_string(typingctx, kind, char_bytes, length, is_ascii):
         uni_str_ctor = cgutils.create_struct_proxy(types.unicode_type)
         uni_str = uni_str_ctor(context, builder)
         # add null padding character
-        nbytes_val = builder.mul(char_bytes_val,
-                                 builder.add(length_val,
-                                             Constant(length_val.type, 1)))
+        nbytes_val = builder.mul(
+            char_bytes_val, builder.add(length_val, Constant(length_val.type, 1))
+        )
         uni_str.meminfo = context.nrt.meminfo_alloc(builder, nbytes_val)
         uni_str.kind = kind_val
         uni_str.is_ascii = is_ascii_val
@@ -282,7 +314,7 @@ def _malloc_string(typingctx, kind, char_bytes, length, is_ascii):
 def _empty_string(kind, length, is_ascii=0):
     char_width = _kind_to_byte_width(kind)
     s = _malloc_string(kind, char_width, length, is_ascii)
-    _set_code_point(s, length, np.uint32(0))    # Write NULL character
+    _set_code_point(s, length, np.uint32(0))  # Write NULL character
     return s
 
 
@@ -299,6 +331,7 @@ def _get_code_point(a, i):
         # there's also a wchar kind, but that's one of the above,
         # so skipping for this example
         return 0
+
 
 ####
 
@@ -348,11 +381,11 @@ def _set_code_point(a, i, ch):
     elif a._kind == PY_UNICODE_4BYTE_KIND:
         set_uint32(a._data, i, ch)
     else:
-        raise AssertionError(
-            "Unexpected unicode representation in _set_code_point")
+        raise AssertionError("Unexpected unicode representation in _set_code_point")
 
 
 if PYVERSION in ((3, 12),):
+
     @register_jitable
     def _pick_kind(kind1, kind2):
         if kind1 == PY_UNICODE_1BYTE_KIND:
@@ -365,12 +398,13 @@ if PYVERSION in ((3, 12),):
         elif kind1 == PY_UNICODE_4BYTE_KIND:
             return kind1
         else:
-            raise AssertionError(
-                "Unexpected unicode representation in _pick_kind")
+            raise AssertionError("Unexpected unicode representation in _pick_kind")
+
 elif PYVERSION in ((3, 9), (3, 10), (3, 11)):
+
     @register_jitable
     def _pick_kind(kind1, kind2):
-        if (kind1 == PY_UNICODE_WCHAR_KIND or kind2 == PY_UNICODE_WCHAR_KIND):
+        if kind1 == PY_UNICODE_WCHAR_KIND or kind2 == PY_UNICODE_WCHAR_KIND:
             raise AssertionError("PY_UNICODE_WCHAR_KIND unsupported")
 
         if kind1 == PY_UNICODE_1BYTE_KIND:
@@ -383,8 +417,8 @@ elif PYVERSION in ((3, 9), (3, 10), (3, 11)):
         elif kind1 == PY_UNICODE_4BYTE_KIND:
             return kind1
         else:
-            raise AssertionError(
-                "Unexpected unicode representation in _pick_kind")
+            raise AssertionError("Unexpected unicode representation in _pick_kind")
+
 else:
     raise NotImplementedError(PYVERSION)
 
@@ -397,6 +431,7 @@ def _pick_ascii(is_ascii1, is_ascii2):
 
 
 if PYVERSION in ((3, 12),):
+
     @register_jitable
     def _kind_to_byte_width(kind):
         if kind == PY_UNICODE_1BYTE_KIND:
@@ -407,7 +442,9 @@ if PYVERSION in ((3, 12),):
             return 4
         else:
             raise AssertionError("Unexpected unicode encoding encountered")
+
 elif PYVERSION in ((3, 9), (3, 10), (3, 11)):
+
     @register_jitable
     def _kind_to_byte_width(kind):
         if kind == PY_UNICODE_1BYTE_KIND:
@@ -420,6 +457,7 @@ elif PYVERSION in ((3, 9), (3, 10), (3, 11)):
             raise AssertionError("PY_UNICODE_WCHAR_KIND unsupported")
         else:
             raise AssertionError("Unexpected unicode encoding encountered")
+
 else:
     raise NotImplementedError(PYVERSION)
 
@@ -455,7 +493,7 @@ def _codepoint_to_kind(cp):
         return PY_UNICODE_2BYTE_KIND
     else:
         # Maximum code point of Unicode 6.0: 0x10ffff (1,114,111)
-        MAX_UNICODE = 0x10ffff
+        MAX_UNICODE = 0x10FFFF
         if cp > MAX_UNICODE:
             msg = "Invalid codepoint. Found value greater than Unicode maximum"
             raise ValueError(msg)
@@ -476,8 +514,10 @@ def _codepoint_is_ascii(ch):
 @overload(len)
 def unicode_len(s):
     if isinstance(s, types.UnicodeType):
+
         def len_impl(s):
             return s._length
+
         return len_impl
 
 
@@ -497,6 +537,7 @@ def unicode_eq(a, b):
     a_unicode = isinstance(check_a, accept)
     b_unicode = isinstance(check_b, accept)
     if a_unicode and b_unicode:
+
         def eq_impl(a, b):
             # handle Optionals at runtime
             a_none = a is None
@@ -512,11 +553,13 @@ def unicode_eq(a, b):
             if len(a) != len(b):
                 return False
             return _cmp_region(a, 0, b, 0, len(a)) == 0
+
         return eq_impl
     elif a_unicode ^ b_unicode:
         # one of the things is unicode, everything compares False
         def eq_impl(a, b):
             return False
+
         return eq_impl
 
 
@@ -528,13 +571,16 @@ def unicode_ne(a, b):
     a_unicode = isinstance(a, accept)
     b_unicode = isinstance(b, accept)
     if a_unicode and b_unicode:
+
         def ne_impl(a, b):
             return not (a == b)
+
         return ne_impl
     elif a_unicode ^ b_unicode:
         # one of the things is unicode, everything compares True
         def eq_impl(a, b):
             return True
+
         return eq_impl
 
 
@@ -543,6 +589,7 @@ def unicode_lt(a, b):
     a_unicode = isinstance(a, (types.UnicodeType, types.StringLiteral))
     b_unicode = isinstance(b, (types.UnicodeType, types.StringLiteral))
     if a_unicode and b_unicode:
+
         def lt_impl(a, b):
             minlen = min(len(a), len(b))
             eqcode = _cmp_region(a, 0, b, 0, minlen)
@@ -551,6 +598,7 @@ def unicode_lt(a, b):
             elif eqcode == 0:
                 return len(a) < len(b)
             return False
+
         return lt_impl
 
 
@@ -559,6 +607,7 @@ def unicode_gt(a, b):
     a_unicode = isinstance(a, (types.UnicodeType, types.StringLiteral))
     b_unicode = isinstance(b, (types.UnicodeType, types.StringLiteral))
     if a_unicode and b_unicode:
+
         def gt_impl(a, b):
             minlen = min(len(a), len(b))
             eqcode = _cmp_region(a, 0, b, 0, minlen)
@@ -567,6 +616,7 @@ def unicode_gt(a, b):
             elif eqcode == 0:
                 return len(a) > len(b)
             return False
+
         return gt_impl
 
 
@@ -575,8 +625,10 @@ def unicode_le(a, b):
     a_unicode = isinstance(a, (types.UnicodeType, types.StringLiteral))
     b_unicode = isinstance(b, (types.UnicodeType, types.StringLiteral))
     if a_unicode and b_unicode:
+
         def le_impl(a, b):
             return not (a > b)
+
         return le_impl
 
 
@@ -585,17 +637,21 @@ def unicode_ge(a, b):
     a_unicode = isinstance(a, (types.UnicodeType, types.StringLiteral))
     b_unicode = isinstance(b, (types.UnicodeType, types.StringLiteral))
     if a_unicode and b_unicode:
+
         def ge_impl(a, b):
             return not (a < b)
+
         return ge_impl
 
 
 @overload(operator.contains)
 def unicode_contains(a, b):
     if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
+
         def contains_impl(a, b):
             # note parameter swap: contains(a, b) == b in a
             return _find(a, b) > -1
+
         return contains_impl
 
 
@@ -628,9 +684,10 @@ def unicode_sub_check_type(ty, name):
 
 # FAST SEARCH algorithm implementation from cpython
 
+
 @register_jitable
 def _bloom_add(mask, ch):
-    mask |= (1 << (ch & (_BLOOM_WIDTH - 1)))
+    mask |= 1 << (ch & (_BLOOM_WIDTH - 1))
     return mask
 
 
@@ -738,6 +795,7 @@ def _default_rfind(data, substr, start, end):
 
 def generate_finder(find_func):
     """Generate finder either left or right."""
+
     def impl(data, substr, start=None, end=None):
         length = len(data)
         sub_length = len(substr)
@@ -759,48 +817,52 @@ _find = register_jitable(generate_finder(_default_find))
 _rfind = register_jitable(generate_finder(_default_rfind))
 
 
-@overload_method(types.UnicodeType, 'find')
+@overload_method(types.UnicodeType, "find")
 def unicode_find(data, substr, start=None, end=None):
     """Implements str.find()"""
     if isinstance(substr, types.UnicodeCharSeq):
+
         def find_impl(data, substr, start=None, end=None):
             return data.find(str(substr))
+
         return find_impl
 
-    unicode_idx_check_type(start, 'start')
-    unicode_idx_check_type(end, 'end')
-    unicode_sub_check_type(substr, 'substr')
+    unicode_idx_check_type(start, "start")
+    unicode_idx_check_type(end, "end")
+    unicode_sub_check_type(substr, "substr")
 
     return _find
 
 
-@overload_method(types.UnicodeType, 'rfind')
+@overload_method(types.UnicodeType, "rfind")
 def unicode_rfind(data, substr, start=None, end=None):
     """Implements str.rfind()"""
     if isinstance(substr, types.UnicodeCharSeq):
+
         def rfind_impl(data, substr, start=None, end=None):
             return data.rfind(str(substr))
+
         return rfind_impl
 
-    unicode_idx_check_type(start, 'start')
-    unicode_idx_check_type(end, 'end')
-    unicode_sub_check_type(substr, 'substr')
+    unicode_idx_check_type(start, "start")
+    unicode_idx_check_type(end, "end")
+    unicode_sub_check_type(substr, "substr")
 
     return _rfind
 
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12831-L12857    # noqa: E501
-@overload_method(types.UnicodeType, 'rindex')
+@overload_method(types.UnicodeType, "rindex")
 def unicode_rindex(s, sub, start=None, end=None):
     """Implements str.rindex()"""
-    unicode_idx_check_type(start, 'start')
-    unicode_idx_check_type(end, 'end')
-    unicode_sub_check_type(sub, 'sub')
+    unicode_idx_check_type(start, "start")
+    unicode_idx_check_type(end, "end")
+    unicode_sub_check_type(sub, "sub")
 
     def rindex_impl(s, sub, start=None, end=None):
         result = s.rfind(sub, start, end)
         if result < 0:
-            raise ValueError('substring not found')
+            raise ValueError("substring not found")
 
         return result
 
@@ -808,17 +870,17 @@ def unicode_rindex(s, sub, start=None, end=None):
 
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11692-L11718    # noqa: E501
-@overload_method(types.UnicodeType, 'index')
+@overload_method(types.UnicodeType, "index")
 def unicode_index(s, sub, start=None, end=None):
     """Implements str.index()"""
-    unicode_idx_check_type(start, 'start')
-    unicode_idx_check_type(end, 'end')
-    unicode_sub_check_type(sub, 'sub')
+    unicode_idx_check_type(start, "start")
+    unicode_idx_check_type(end, "end")
+    unicode_sub_check_type(sub, "sub")
 
     def index_impl(s, sub, start=None, end=None):
         result = s.find(sub, start, end)
         if result < 0:
-            raise ValueError('substring not found')
+            raise ValueError("substring not found")
 
         return result
 
@@ -826,7 +888,7 @@ def unicode_index(s, sub, start=None, end=None):
 
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12922-L12976    # noqa: E501
-@overload_method(types.UnicodeType, 'partition')
+@overload_method(types.UnicodeType, "partition")
 def unicode_partition(data, sep):
     """Implements str.partition()"""
     thety = sep
@@ -839,7 +901,7 @@ def unicode_partition(data, sep):
 
     accepted = (types.UnicodeType, types.UnicodeCharSeq)
     if thety is not None and not isinstance(thety, accepted):
-        msg = '"{}" must be {}, not {}'.format('sep', accepted, sep)
+        msg = '"{}" must be {}, not {}'.format("sep", accepted, sep)
         raise TypingError(msg)
 
     def impl(data, sep):
@@ -851,24 +913,25 @@ def unicode_partition(data, sep):
             return data, empty_str, empty_str
 
         if sep_length == 0:
-            raise ValueError('empty separator')
+            raise ValueError("empty separator")
 
         pos = data.find(sep)
         if pos < 0:
             return data, empty_str, empty_str
 
-        return data[0:pos], sep, data[pos + sep_length:len(data)]
+        return data[0:pos], sep, data[pos + sep_length : len(data)]
 
     return impl
 
 
-@overload_method(types.UnicodeType, 'count')
+@overload_method(types.UnicodeType, "count")
 def unicode_count(src, sub, start=None, end=None):
 
     _count_args_types_check(start)
     _count_args_types_check(end)
 
     if isinstance(sub, types.UnicodeType):
+
         def count_impl(src, sub, start=None, end=None):
             count = 0
             src_len = len(src)
@@ -880,26 +943,27 @@ def unicode_count(src, sub, start=None, end=None):
             if end - start < 0 or start > src_len:
                 return 0
 
-            src = src[start : end]
+            src = src[start:end]
             src_len = len(src)
             start, end = 0, src_len
             if sub_len == 0:
                 return src_len + 1
 
-            while (start + sub_len <= src_len):
+            while start + sub_len <= src_len:
                 if src[start : start + sub_len] == sub:
                     count += 1
                     start += sub_len
                 else:
                     start += 1
             return count
+
         return count_impl
     error_msg = "The substring must be a UnicodeType, not {}"
     raise TypingError(error_msg.format(type(sub)))
 
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12979-L13033    # noqa: E501
-@overload_method(types.UnicodeType, 'rpartition')
+@overload_method(types.UnicodeType, "rpartition")
 def unicode_rpartition(data, sep):
     """Implements str.rpartition()"""
     thety = sep
@@ -912,7 +976,7 @@ def unicode_rpartition(data, sep):
 
     accepted = (types.UnicodeType, types.UnicodeCharSeq)
     if thety is not None and not isinstance(thety, accepted):
-        msg = '"{}" must be {}, not {}'.format('sep', accepted, sep)
+        msg = '"{}" must be {}, not {}'.format("sep", accepted, sep)
         raise TypingError(msg)
 
     def impl(data, sep):
@@ -924,13 +988,13 @@ def unicode_rpartition(data, sep):
             return empty_str, empty_str, data
 
         if sep_length == 0:
-            raise ValueError('empty separator')
+            raise ValueError("empty separator")
 
         pos = data.rfind(sep)
         if pos < 0:
             return empty_str, empty_str, data
 
-        return data[0:pos], sep, data[pos + sep_length:len(data)]
+        return data[0:pos], sep, data[pos + sep_length : len(data)]
 
     return impl
 
@@ -952,18 +1016,17 @@ def _adjust_indices(length, start, end):
     return start, end
 
 
-@overload_method(types.UnicodeType, 'startswith')
+@overload_method(types.UnicodeType, "startswith")
 def unicode_startswith(s, prefix, start=None, end=None):
     if not is_nonelike(start) and not isinstance(start, types.Integer):
-        raise TypingError(
-            "When specified, the arg 'start' must be an Integer or None")
+        raise TypingError("When specified, the arg 'start' must be an Integer or None")
 
     if not is_nonelike(end) and not isinstance(end, types.Integer):
-        raise TypingError(
-            "When specified, the arg 'end' must be an Integer or None")
+        raise TypingError("When specified, the arg 'end' must be an Integer or None")
 
-    if isinstance(prefix, types.UniTuple) and \
-            isinstance(prefix.dtype, types.UnicodeType):
+    if isinstance(prefix, types.UniTuple) and isinstance(
+        prefix.dtype, types.UnicodeType
+    ):
 
         def startswith_tuple_impl(s, prefix, start=None, end=None):
             for item in prefix:
@@ -974,12 +1037,14 @@ def unicode_startswith(s, prefix, start=None, end=None):
         return startswith_tuple_impl
 
     elif isinstance(prefix, types.UnicodeCharSeq):
+
         def startswith_char_seq_impl(s, prefix, start=None, end=None):
             return s.startswith(str(prefix), start, end)
 
         return startswith_char_seq_impl
 
     elif isinstance(prefix, types.UnicodeType):
+
         def startswith_unicode_impl(s, prefix, start=None, end=None):
             length, prefix_length = len(s), len(prefix)
             if start is None:
@@ -1001,32 +1066,35 @@ def unicode_startswith(s, prefix, start=None, end=None):
         return startswith_unicode_impl
 
     else:
-        raise TypingError(
-            "The arg 'prefix' should be a string or a tuple of strings")
+        raise TypingError("The arg 'prefix' should be a string or a tuple of strings")
 
 
-@overload_method(types.UnicodeType, 'endswith')
+@overload_method(types.UnicodeType, "endswith")
 def unicode_endswith(s, substr, start=None, end=None):
-    if not (start is None or isinstance(start, (types.Omitted,
-                                                types.Integer,
-                                                types.NoneType))):
-        raise TypingError('The arg must be a Integer or None')
+    if not (
+        start is None
+        or isinstance(start, (types.Omitted, types.Integer, types.NoneType))
+    ):
+        raise TypingError("The arg must be a Integer or None")
 
-    if not (end is None or isinstance(end, (types.Omitted,
-                                            types.Integer,
-                                            types.NoneType))):
-        raise TypingError('The arg must be a Integer or None')
+    if not (
+        end is None or isinstance(end, (types.Omitted, types.Integer, types.NoneType))
+    ):
+        raise TypingError("The arg must be a Integer or None")
 
     if isinstance(substr, (types.Tuple, types.UniTuple)):
+
         def endswith_impl(s, substr, start=None, end=None):
             for item in substr:
                 if s.endswith(item, start, end) is True:
                     return True
 
             return False
+
         return endswith_impl
 
     if isinstance(substr, types.UnicodeType):
+
         def endswith_impl(s, substr, start=None, end=None):
             length = len(s)
             sub_length = len(substr)
@@ -1046,16 +1114,19 @@ def unicode_endswith(s, substr, start=None, end=None):
             offset = len(s) - sub_length
 
             return _cmp_region(s, offset, substr, 0, sub_length) == 0
+
         return endswith_impl
 
     if isinstance(substr, types.UnicodeCharSeq):
+
         def endswith_impl(s, substr, start=None, end=None):
             return s.endswith(str(substr), start, end)
+
         return endswith_impl
 
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11519-L11595    # noqa: E501
-@overload_method(types.UnicodeType, 'expandtabs')
+@overload_method(types.UnicodeType, "expandtabs")
 def unicode_expandtabs(data, tabsize=8):
     """Implements str.expandtabs()"""
     thety = tabsize
@@ -1068,8 +1139,7 @@ def unicode_expandtabs(data, tabsize=8):
 
     accepted = (types.Integer, int)
     if thety is not None and not isinstance(thety, accepted):
-        raise TypingError(
-            '"tabsize" must be {}, not {}'.format(accepted, tabsize))
+        raise TypingError('"tabsize" must be {}, not {}'.format(accepted, tabsize))
 
     def expandtabs_impl(data, tabsize=8):
         length = len(data)
@@ -1083,12 +1153,12 @@ def unicode_expandtabs(data, tabsize=8):
                     # cannot overflow
                     incr = tabsize - (line_pos % tabsize)
                     if j > sys.maxsize - incr:
-                        raise OverflowError('new string is too long')
+                        raise OverflowError("new string is too long")
                     line_pos += incr
                     j += incr
             else:
                 if j > sys.maxsize - 1:
-                    raise OverflowError('new string is too long')
+                    raise OverflowError("new string is too long")
                 line_pos += 1
                 j += 1
                 if code_point in (_Py_LINEFEED, _Py_CARRIAGE_RETURN):
@@ -1120,25 +1190,29 @@ def unicode_expandtabs(data, tabsize=8):
     return expandtabs_impl
 
 
-@overload_method(types.UnicodeType, 'split')
+@overload_method(types.UnicodeType, "split")
 def unicode_split(a, sep=None, maxsplit=-1):
-    if not (maxsplit == -1 or
-            isinstance(maxsplit, (types.Omitted, types.Integer,
-                                  types.IntegerLiteral))):
+    if not (
+        maxsplit == -1
+        or isinstance(maxsplit, (types.Omitted, types.Integer, types.IntegerLiteral))
+    ):
         return None  # fail typing if maxsplit is not an integer
 
     if isinstance(sep, types.UnicodeCharSeq):
+
         def split_impl(a, sep=None, maxsplit=-1):
             return a.split(str(sep), maxsplit=maxsplit)
+
         return split_impl
 
     if isinstance(sep, types.UnicodeType):
+
         def split_impl(a, sep=None, maxsplit=-1):
             a_len = len(a)
             sep_len = len(sep)
 
             if sep_len == 0:
-                raise ValueError('empty separator')
+                raise ValueError("empty separator")
 
             parts = []
             last = 0
@@ -1153,8 +1227,7 @@ def unicode_split(a, sep=None, maxsplit=-1):
             else:
                 split_count = 0
 
-                while idx < a_len and (maxsplit == -1 or
-                                       split_count < maxsplit):
+                while idx < a_len and (maxsplit == -1 or split_count < maxsplit):
                     if _cmp_region(a, idx, sep, 0, sep_len) == 0:
                         parts.append(a[last:idx])
                         idx += sep_len
@@ -1167,9 +1240,14 @@ def unicode_split(a, sep=None, maxsplit=-1):
                 parts.append(a[last:])
 
             return parts
+
         return split_impl
-    elif sep is None or isinstance(sep, types.NoneType) or \
-            getattr(sep, 'value', False) is None:
+    elif (
+        sep is None
+        or isinstance(sep, types.NoneType)
+        or getattr(sep, "value", False) is None
+    ):
+
         def split_whitespace_impl(a, sep=None, maxsplit=-1):
             a_len = len(a)
 
@@ -1202,6 +1280,7 @@ def unicode_split(a, sep=None, maxsplit=-1):
                 parts.append(a[last:])
 
             return parts
+
         return split_whitespace_impl
 
 
@@ -1230,7 +1309,7 @@ def generate_rsplit_whitespace_impl(isspace_func):
                 if isspace_func(code_point):
                     break
                 i -= 1
-            result.append(data[i + 1:j + 1])
+            result.append(data[i + 1 : j + 1])
             maxsplit -= 1
 
         if i >= 0:
@@ -1242,7 +1321,7 @@ def generate_rsplit_whitespace_impl(isspace_func):
                     break
                 i -= 1
             if i >= 0:
-                result.append(data[0:i + 1])
+                result.append(data[0 : i + 1])
 
         return result[::-1]
 
@@ -1250,13 +1329,15 @@ def generate_rsplit_whitespace_impl(isspace_func):
 
 
 unicode_rsplit_whitespace_impl = register_jitable(
-    generate_rsplit_whitespace_impl(_PyUnicode_IsSpace))
+    generate_rsplit_whitespace_impl(_PyUnicode_IsSpace)
+)
 ascii_rsplit_whitespace_impl = register_jitable(
-    generate_rsplit_whitespace_impl(_Py_ISSPACE))
+    generate_rsplit_whitespace_impl(_Py_ISSPACE)
+)
 
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L13095-L13108    # noqa: E501
-@overload_method(types.UnicodeType, 'rsplit')
+@overload_method(types.UnicodeType, "rsplit")
 def unicode_rsplit(data, sep=None, maxsplit=-1):
     """Implements str.unicode_rsplit()"""
 
@@ -1271,13 +1352,12 @@ def unicode_rsplit(data, sep=None, maxsplit=-1):
             thety = ty.type
 
         if thety is not None and not isinstance(thety, accepted):
-            raise TypingError(
-                '"{}" must be {}, not {}'.format(name, accepted, ty))
+            raise TypingError('"{}" must be {}, not {}'.format(name, accepted, ty))
 
-    _unicode_rsplit_check_type(sep, 'sep', (types.UnicodeType,
-                                            types.UnicodeCharSeq,
-                                            types.NoneType))
-    _unicode_rsplit_check_type(maxsplit, 'maxsplit', (types.Integer, int))
+    _unicode_rsplit_check_type(
+        sep, "sep", (types.UnicodeType, types.UnicodeCharSeq, types.NoneType)
+    )
+    _unicode_rsplit_check_type(maxsplit, "maxsplit", (types.Integer, int))
 
     if sep is None or isinstance(sep, (types.NoneType, types.Omitted)):
 
@@ -1317,7 +1397,7 @@ def unicode_rsplit(data, sep=None, maxsplit=-1):
         sep_length = len(sep)
 
         if sep_length == 0:
-            raise ValueError('empty separator')
+            raise ValueError("empty separator")
         if sep_length == 1:
             return _rsplit_char(data, sep, maxsplit)
 
@@ -1327,7 +1407,7 @@ def unicode_rsplit(data, sep=None, maxsplit=-1):
             pos = data.rfind(sep, start=0, end=j)
             if pos < 0:
                 break
-            result.append(data[pos + sep_length:j])
+            result.append(data[pos + sep_length : j])
             j = pos
             maxsplit -= 1
 
@@ -1338,27 +1418,29 @@ def unicode_rsplit(data, sep=None, maxsplit=-1):
     return rsplit_impl
 
 
-@overload_method(types.UnicodeType, 'center')
-def unicode_center(string, width, fillchar=' '):
+@overload_method(types.UnicodeType, "center")
+def unicode_center(string, width, fillchar=" "):
     if not isinstance(width, types.Integer):
-        raise TypingError('The width must be an Integer')
+        raise TypingError("The width must be an Integer")
 
     if isinstance(fillchar, types.UnicodeCharSeq):
-        def center_impl(string, width, fillchar=' '):
+
+        def center_impl(string, width, fillchar=" "):
             return string.center(width, str(fillchar))
+
         return center_impl
 
-    if not (fillchar == ' ' or
-            isinstance(fillchar, (types.Omitted, types.UnicodeType))):
-        raise TypingError('The fillchar must be a UnicodeType')
+    if not (
+        fillchar == " " or isinstance(fillchar, (types.Omitted, types.UnicodeType))
+    ):
+        raise TypingError("The fillchar must be a UnicodeType")
 
-    def center_impl(string, width, fillchar=' '):
+    def center_impl(string, width, fillchar=" "):
         str_len = len(string)
         fillchar_len = len(fillchar)
 
         if fillchar_len != 1:
-            raise ValueError('The fill character must be exactly one '
-                             'character long')
+            raise ValueError("The fill character must be exactly one " "character long")
 
         if width <= str_len:
             return string
@@ -1377,36 +1459,42 @@ def unicode_center(string, width, fillchar=' '):
 
 
 def gen_unicode_Xjust(STRING_FIRST):
-    def unicode_Xjust(string, width, fillchar=' '):
+    def unicode_Xjust(string, width, fillchar=" "):
         if not isinstance(width, types.Integer):
-            raise TypingError('The width must be an Integer')
+            raise TypingError("The width must be an Integer")
 
         if isinstance(fillchar, types.UnicodeCharSeq):
             if STRING_FIRST:
-                def ljust_impl(string, width, fillchar=' '):
+
+                def ljust_impl(string, width, fillchar=" "):
                     return string.ljust(width, str(fillchar))
+
                 return ljust_impl
             else:
-                def rjust_impl(string, width, fillchar=' '):
+
+                def rjust_impl(string, width, fillchar=" "):
                     return string.rjust(width, str(fillchar))
+
                 return rjust_impl
 
-        if not (fillchar == ' ' or
-                isinstance(fillchar, (types.Omitted, types.UnicodeType))):
-            raise TypingError('The fillchar must be a UnicodeType')
+        if not (
+            fillchar == " " or isinstance(fillchar, (types.Omitted, types.UnicodeType))
+        ):
+            raise TypingError("The fillchar must be a UnicodeType")
 
-        def impl(string, width, fillchar=' '):
+        def impl(string, width, fillchar=" "):
             str_len = len(string)
             fillchar_len = len(fillchar)
 
             if fillchar_len != 1:
-                raise ValueError('The fill character must be exactly one '
-                                 'character long')
+                raise ValueError(
+                    "The fill character must be exactly one " "character long"
+                )
 
             if width <= str_len:
                 return string
 
-            newstr = (fillchar * (width - str_len))
+            newstr = fillchar * (width - str_len)
             if STRING_FIRST:
                 return string + newstr
             else:
@@ -1417,12 +1505,13 @@ def gen_unicode_Xjust(STRING_FIRST):
     return unicode_Xjust
 
 
-overload_method(types.UnicodeType, 'rjust')(gen_unicode_Xjust(False))
-overload_method(types.UnicodeType, 'ljust')(gen_unicode_Xjust(True))
+overload_method(types.UnicodeType, "rjust")(gen_unicode_Xjust(False))
+overload_method(types.UnicodeType, "ljust")(gen_unicode_Xjust(True))
 
 
 def generate_splitlines_func(is_line_break_func):
     """Generate splitlines performer based on ascii or unicode line breaks."""
+
     def impl(data, keepends):
         # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/stringlib/split.h#L335-L389    # noqa: E501
         length = len(data)
@@ -1457,12 +1546,11 @@ def generate_splitlines_func(is_line_break_func):
 
 
 _ascii_splitlines = register_jitable(generate_splitlines_func(_Py_ISLINEBREAK))
-_unicode_splitlines = register_jitable(generate_splitlines_func(
-    _PyUnicode_IsLineBreak))
+_unicode_splitlines = register_jitable(generate_splitlines_func(_PyUnicode_IsLineBreak))
 
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L10196-L10229    # noqa: E501
-@overload_method(types.UnicodeType, 'splitlines')
+@overload_method(types.UnicodeType, "splitlines")
 def unicode_splitlines(data, keepends=False):
     """Implements str.splitlines()"""
     thety = keepends
@@ -1476,7 +1564,8 @@ def unicode_splitlines(data, keepends=False):
     accepted = (types.Integer, int, types.Boolean, bool)
     if thety is not None and not isinstance(thety, accepted):
         raise TypingError(
-            '"{}" must be {}, not {}'.format('keepends', accepted, keepends))
+            '"{}" must be {}, not {}'.format("keepends", accepted, keepends)
+        )
 
     def splitlines_impl(data, keepends=False):
         if data._is_ascii:
@@ -1491,7 +1580,7 @@ def unicode_splitlines(data, keepends=False):
 def join_list(sep, parts):
     parts_len = len(parts)
     if parts_len == 0:
-        return ''
+        return ""
 
     # Precompute size and char_width of result
     sep_len = len(sep)
@@ -1519,35 +1608,42 @@ def join_list(sep, parts):
     return result
 
 
-@overload_method(types.UnicodeType, 'join')
+@overload_method(types.UnicodeType, "join")
 def unicode_join(sep, parts):
 
     if isinstance(parts, types.List):
         if isinstance(parts.dtype, types.UnicodeType):
+
             def join_list_impl(sep, parts):
                 return join_list(sep, parts)
+
             return join_list_impl
         elif isinstance(parts.dtype, types.UnicodeCharSeq):
+
             def join_list_impl(sep, parts):
                 _parts = [str(p) for p in parts]
                 return join_list(sep, _parts)
+
             return join_list_impl
         else:
             pass  # lists of any other type not supported
     elif isinstance(parts, types.IterableType):
+
         def join_iter_impl(sep, parts):
             parts_list = [p for p in parts]
             return sep.join(parts_list)
+
         return join_iter_impl
     elif isinstance(parts, types.UnicodeType):
         # Temporary workaround until UnicodeType is iterable
         def join_str_impl(sep, parts):
             parts_list = [parts[i] for i in range(len(parts))]
             return join_list(sep, parts_list)
+
         return join_str_impl
 
 
-@overload_method(types.UnicodeType, 'zfill')
+@overload_method(types.UnicodeType, "zfill")
 def unicode_zfill(string, width):
     if not isinstance(width, types.Integer):
         raise TypingError("<width> must be an Integer")
@@ -1559,10 +1655,10 @@ def unicode_zfill(string, width):
         if width <= str_len:
             return string
 
-        first_char = string[0] if str_len else ''
-        padding = '0' * (width - str_len)
+        first_char = string[0] if str_len else ""
+        padding = "0" * (width - str_len)
 
-        if first_char in ['+', '-']:
+        if first_char in ["+", "-"]:
             newstr = first_char + padding + string[1:]
         else:
             newstr = padding + string
@@ -1613,57 +1709,66 @@ def unicode_strip_right_bound(string, chars):
 def unicode_strip_types_check(chars):
     if isinstance(chars, types.Optional):
         chars = chars.type  # catch optional type with invalid non-None type
-    if not (chars is None or isinstance(chars, (types.Omitted,
-                                                types.UnicodeType,
-                                                types.NoneType))):
-        raise TypingError('The arg must be a UnicodeType or None')
+    if not (
+        chars is None
+        or isinstance(chars, (types.Omitted, types.UnicodeType, types.NoneType))
+    ):
+        raise TypingError("The arg must be a UnicodeType or None")
 
 
 def _count_args_types_check(arg):
     if isinstance(arg, types.Optional):
         arg = arg.type
-    if not (arg is None or isinstance(arg, (types.Omitted,
-                                            types.Integer,
-                                            types.NoneType))):
+    if not (
+        arg is None or isinstance(arg, (types.Omitted, types.Integer, types.NoneType))
+    ):
         raise TypingError("The slice indices must be an Integer or None")
 
 
-@overload_method(types.UnicodeType, 'lstrip')
+@overload_method(types.UnicodeType, "lstrip")
 def unicode_lstrip(string, chars=None):
 
     if isinstance(chars, types.UnicodeCharSeq):
+
         def lstrip_impl(string, chars=None):
             return string.lstrip(str(chars))
+
         return lstrip_impl
 
     unicode_strip_types_check(chars)
 
     def lstrip_impl(string, chars=None):
-        return string[unicode_strip_left_bound(string, chars):]
+        return string[unicode_strip_left_bound(string, chars) :]
+
     return lstrip_impl
 
 
-@overload_method(types.UnicodeType, 'rstrip')
+@overload_method(types.UnicodeType, "rstrip")
 def unicode_rstrip(string, chars=None):
 
     if isinstance(chars, types.UnicodeCharSeq):
+
         def rstrip_impl(string, chars=None):
             return string.rstrip(str(chars))
+
         return rstrip_impl
 
     unicode_strip_types_check(chars)
 
     def rstrip_impl(string, chars=None):
-        return string[:unicode_strip_right_bound(string, chars)]
+        return string[: unicode_strip_right_bound(string, chars)]
+
     return rstrip_impl
 
 
-@overload_method(types.UnicodeType, 'strip')
+@overload_method(types.UnicodeType, "strip")
 def unicode_strip(string, chars=None):
 
     if isinstance(chars, types.UnicodeCharSeq):
+
         def strip_impl(string, chars=None):
             return string.strip(str(chars))
+
         return strip_impl
 
     unicode_strip_types_check(chars)
@@ -1672,12 +1777,14 @@ def unicode_strip(string, chars=None):
         lb = unicode_strip_left_bound(string, chars)
         rb = unicode_strip_right_bound(string, chars)
         return string[lb:rb]
+
     return strip_impl
 
 
 # ------------------------------------------------------------------------------
 # Slice functions
 # ------------------------------------------------------------------------------
+
 
 @register_jitable
 def normalize_str_idx(idx, length, is_start=True):
@@ -1733,8 +1840,7 @@ def _normalize_slice_idx_count(arg, slice_len, default):
 
 @intrinsic
 def _normalize_slice(typingctx, sliceobj, length):
-    """Fix slice object.
-    """
+    """Fix slice object."""
     sig = sliceobj(sliceobj, length)
 
     def codegen(context, builder, sig, args):
@@ -1750,8 +1856,7 @@ def _normalize_slice(typingctx, sliceobj, length):
 
 @intrinsic
 def _slice_span(typingctx, sliceobj):
-    """Compute the span from the given slice object.
-    """
+    """Compute the span from the given slice object."""
     sig = types.intp(sliceobj)
 
     def codegen(context, builder, sig, args):
@@ -1771,12 +1876,12 @@ def _strncpy(dst, dst_offset, src, src_offset, n):
         src_byte_offset = byte_width * src_offset
         dst_byte_offset = byte_width * dst_offset
         nbytes = n * byte_width
-        memcpy_region(dst._data, dst_byte_offset, src._data,
-                      src_byte_offset, nbytes, align=1)
+        memcpy_region(
+            dst._data, dst_byte_offset, src._data, src_byte_offset, nbytes, align=1
+        )
     else:
         for i in range(n):
-            _set_code_point(dst, dst_offset + i,
-                            _get_code_point(src, src_offset + i))
+            _set_code_point(dst, dst_offset + i, _get_code_point(src, src_offset + i))
 
 
 @intrinsic
@@ -1788,10 +1893,10 @@ def _get_str_slice_view(typingctx, src_t, start_t, length_t):
 
     def codegen(context, builder, sig, args):
         src, start, length = args
-        in_str = cgutils.create_struct_proxy(
-            types.unicode_type)(context, builder, value=src)
-        view_str = cgutils.create_struct_proxy(
-            types.unicode_type)(context, builder)
+        in_str = cgutils.create_struct_proxy(types.unicode_type)(
+            context, builder, value=src
+        )
+        view_str = cgutils.create_struct_proxy(types.unicode_type)(context, builder)
         view_str.meminfo = in_str.meminfo
         view_str.kind = in_str.kind
         view_str.is_ascii = in_str.is_ascii
@@ -1800,8 +1905,7 @@ def _get_str_slice_view(typingctx, src_t, start_t, length_t):
         view_str.hash = context.get_constant(_Py_hash_t, -1)
         # get a pointer to start of slice data
         bw_typ = context.typing_context.resolve_value_type(_kind_to_byte_width)
-        bw_sig = bw_typ.get_call_type(
-            context.typing_context, (types.int32,), {})
+        bw_sig = bw_typ.get_call_type(context.typing_context, (types.int32,), {})
         bw_impl = context.get_function(bw_typ, bw_sig)
         byte_width = bw_impl(builder, (in_str.kind,))
         offset = builder.mul(start, byte_width)
@@ -1821,6 +1925,7 @@ def _get_str_slice_view(typingctx, src_t, start_t, length_t):
 def unicode_getitem(s, idx):
     if isinstance(s, types.UnicodeType):
         if isinstance(idx, types.Integer):
+
             def getitem_char(s, idx):
                 idx = normalize_str_idx(idx, len(s))
                 cp = _get_code_point(s, idx)
@@ -1832,8 +1937,10 @@ def unicode_getitem(s, idx):
                     ret = _empty_string(kind, 1, is_ascii)
                     _set_code_point(ret, 0, cp)
                     return ret
+
             return getitem_char
         elif isinstance(idx, types.SliceType):
+
             def getitem_slice(s, idx):
                 slice_idx = _normalize_slice(idx, len(s))
                 span = _slice_span(slice_idx)
@@ -1843,8 +1950,9 @@ def unicode_getitem(s, idx):
                 is_ascii = _codepoint_is_ascii(cp)
 
                 # Check slice to see if it's homogeneous in kind
-                for i in range(slice_idx.start + slice_idx.step,
-                               slice_idx.stop, slice_idx.step):
+                for i in range(
+                    slice_idx.start + slice_idx.step, slice_idx.stop, slice_idx.step
+                ):
                     cp = _get_code_point(s, i)
                     is_ascii &= _codepoint_is_ascii(cp)
                     new_kind = _codepoint_to_kind(cp)
@@ -1882,6 +1990,7 @@ def unicode_getitem(s, idx):
 @overload(operator.iadd)
 def unicode_concat(a, b):
     if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
+
         def concat_impl(a, b):
             new_length = a._length + b._length
             new_kind = _pick_kind(a._kind, b._kind)
@@ -1892,18 +2001,21 @@ def unicode_concat(a, b):
             for j in range(len(b)):
                 _set_code_point(result, len(a) + j, _get_code_point(b, j))
             return result
+
         return concat_impl
 
     if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeCharSeq):
+
         def concat_impl(a, b):
             return a + str(b)
+
         return concat_impl
 
 
 @register_jitable
 def _repeat_impl(str_arg, mult_arg):
-    if str_arg == '' or mult_arg < 1:
-        return ''
+    if str_arg == "" or mult_arg < 1:
+        return ""
     elif mult_arg == 1:
         return str_arg
     else:
@@ -1930,24 +2042,30 @@ def _repeat_impl(str_arg, mult_arg):
 @overload(operator.mul)
 def unicode_repeat(a, b):
     if isinstance(a, types.UnicodeType) and isinstance(b, types.Integer):
+
         def wrap(a, b):
             return _repeat_impl(a, b)
+
         return wrap
     elif isinstance(a, types.Integer) and isinstance(b, types.UnicodeType):
+
         def wrap(a, b):
             return _repeat_impl(b, a)
+
         return wrap
 
 
 @overload(operator.not_)
 def unicode_not(a):
     if isinstance(a, types.UnicodeType):
+
         def impl(a):
             return len(a) == 0
+
         return impl
 
 
-@overload_method(types.UnicodeType, 'replace')
+@overload_method(types.UnicodeType, "replace")
 def unicode_replace(s, old_str, new_str, count=-1):
     thety = count
     if isinstance(count, types.Omitted):
@@ -1956,21 +2074,25 @@ def unicode_replace(s, old_str, new_str, count=-1):
         thety = count.type
 
     if not isinstance(thety, (int, types.Integer)):
-        raise TypingError('Unsupported parameters. The parameters '
-                          'must be Integer. Given count: {}'.format(count))
+        raise TypingError(
+            "Unsupported parameters. The parameters "
+            "must be Integer. Given count: {}".format(count)
+        )
 
     if not isinstance(old_str, (types.UnicodeType, types.NoneType)):
-        raise TypingError('The object must be a UnicodeType.'
-                          ' Given: {}'.format(old_str))
+        raise TypingError(
+            "The object must be a UnicodeType." " Given: {}".format(old_str)
+        )
 
     if not isinstance(new_str, types.UnicodeType):
-        raise TypingError('The object must be a UnicodeType.'
-                          ' Given: {}'.format(new_str))
+        raise TypingError(
+            "The object must be a UnicodeType." " Given: {}".format(new_str)
+        )
 
     def impl(s, old_str, new_str, count=-1):
         if count == 0:
             return s
-        if old_str == '':
+        if old_str == "":
             schars = list(s)
             if count == -1:
                 return new_str + new_str.join(schars) + new_str
@@ -1981,15 +2103,16 @@ def unicode_replace(s, old_str, new_str, count=-1):
                 if i + 1 != min_count:
                     split_result.append(new_str)
                 else:
-                    split_result.append(''.join(schars[(i + 1):]))
+                    split_result.append("".join(schars[(i + 1) :]))
             if count > len(schars):
                 split_result.append(new_str)
-            return ''.join(split_result)
+            return "".join(split_result)
         schars = s.split(old_str, count)
         result = new_str.join(schars)
         return result
 
     return impl
+
 
 # ------------------------------------------------------------------------------
 # String `is*()` methods
@@ -2026,20 +2149,21 @@ def gen_isAlX(ascii_func, unicode_func):
             return True
 
         return impl
+
     return unicode_isAlX
 
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11928-L11964    # noqa: E501
-overload_method(types.UnicodeType, 'isalpha')(gen_isAlX(_Py_ISALPHA,
-                                                        _PyUnicode_IsAlpha))
+overload_method(types.UnicodeType, "isalpha")(
+    gen_isAlX(_Py_ISALPHA, _PyUnicode_IsAlpha)
+)
 
-_unicode_is_alnum = register_jitable(lambda x:
-                                     (_PyUnicode_IsNumeric(x) or
-                                      _PyUnicode_IsAlpha(x)))
+_unicode_is_alnum = register_jitable(
+    lambda x: (_PyUnicode_IsNumeric(x) or _PyUnicode_IsAlpha(x))
+)
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11975-L12006    # noqa: E501
-overload_method(types.UnicodeType, 'isalnum')(gen_isAlX(_Py_ISALNUM,
-                                                        _unicode_is_alnum))
+overload_method(types.UnicodeType, "isalnum")(gen_isAlX(_Py_ISALNUM, _unicode_is_alnum))
 
 
 def _is_upper(is_lower, is_upper, is_title):
@@ -2058,43 +2182,46 @@ def _is_upper(is_lower, is_upper, is_title):
             code_point = _get_code_point(a, idx)
             if is_lower(code_point) or is_title(code_point):
                 return False
-            elif (not cased and is_upper(code_point)):
+            elif not cased and is_upper(code_point):
                 cased = True
         return cased
+
     return impl
 
 
 _always_false = register_jitable(lambda x: False)
-_ascii_is_upper = register_jitable(_is_upper(_Py_ISLOWER, _Py_ISUPPER,
-                                             _always_false))
-_unicode_is_upper = register_jitable(_is_upper(_PyUnicode_IsLowercase,
-                                               _PyUnicode_IsUppercase,
-                                               _PyUnicode_IsTitlecase))
+_ascii_is_upper = register_jitable(_is_upper(_Py_ISLOWER, _Py_ISUPPER, _always_false))
+_unicode_is_upper = register_jitable(
+    _is_upper(_PyUnicode_IsLowercase, _PyUnicode_IsUppercase, _PyUnicode_IsTitlecase)
+)
 
 
-@overload_method(types.UnicodeType, 'isupper')
+@overload_method(types.UnicodeType, "isupper")
 def unicode_isupper(a):
     """
     Implements .isupper()
     """
+
     def impl(a):
         if a._is_ascii:
             return _ascii_is_upper(a)
         else:
             return _unicode_is_upper(a)
+
     return impl
 
 
-@overload_method(types.UnicodeType, 'isascii')
+@overload_method(types.UnicodeType, "isascii")
 def unicode_isascii(data):
     """Implements UnicodeType.isascii()"""
 
     def impl(data):
         return data._is_ascii
+
     return impl
 
 
-@overload_method(types.UnicodeType, 'istitle')
+@overload_method(types.UnicodeType, "istitle")
 def unicode_istitle(data):
     """
     Implements UnicodeType.istitle()
@@ -2129,10 +2256,11 @@ def unicode_istitle(data):
                 previous_is_cased = False
 
         return cased
+
     return impl
 
 
-@overload_method(types.UnicodeType, 'islower')
+@overload_method(types.UnicodeType, "islower")
 def unicode_islower(data):
     """
     impl is an approximate translation of:
@@ -2156,11 +2284,12 @@ def unicode_islower(data):
             elif not cased and _PyUnicode_IsLowercase(cp):
                 cased = True
         return cased
+
     return impl
 
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12126-L12161    # noqa: E501
-@overload_method(types.UnicodeType, 'isidentifier')
+@overload_method(types.UnicodeType, "isidentifier")
 def unicode_isidentifier(data):
     """Implements UnicodeType.isidentifier()"""
 
@@ -2202,25 +2331,26 @@ def gen_isX(_PyUnicode_IS_func, empty_is_false=True):
             return True
 
         return impl
+
     return unicode_isX
 
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11896-L11925    # noqa: E501
-overload_method(types.UnicodeType, 'isspace')(gen_isX(_PyUnicode_IsSpace))
+overload_method(types.UnicodeType, "isspace")(gen_isX(_PyUnicode_IsSpace))
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12096-L12124    # noqa: E501
-overload_method(types.UnicodeType, 'isnumeric')(gen_isX(_PyUnicode_IsNumeric))
+overload_method(types.UnicodeType, "isnumeric")(gen_isX(_PyUnicode_IsNumeric))
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12056-L12085    # noqa: E501
-overload_method(types.UnicodeType, 'isdigit')(gen_isX(_PyUnicode_IsDigit))
+overload_method(types.UnicodeType, "isdigit")(gen_isX(_PyUnicode_IsDigit))
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12017-L12045    # noqa: E501
-overload_method(types.UnicodeType, 'isdecimal')(
-    gen_isX(_PyUnicode_IsDecimalDigit))
+overload_method(types.UnicodeType, "isdecimal")(gen_isX(_PyUnicode_IsDecimalDigit))
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12188-L12213    # noqa: E501
-overload_method(types.UnicodeType, 'isprintable')(
-    gen_isX(_PyUnicode_IsPrintable, False))
+overload_method(types.UnicodeType, "isprintable")(
+    gen_isX(_PyUnicode_IsPrintable, False)
+)
 
 # ------------------------------------------------------------------------------
 # String methods that apply a transformation to the characters themselves
@@ -2230,6 +2360,7 @@ overload_method(types.UnicodeType, 'isprintable')(
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9863-L9908    # noqa: E501
 def case_operation(ascii_func, unicode_func):
     """Generate common case operation performer."""
+
     def impl(data):
         length = len(data)
         if length == 0:
@@ -2267,7 +2398,7 @@ def _handle_capital_sigma(data, length, idx):
         if not _PyUnicode_IsCaseIgnorable(c):
             break
         j -= 1
-    final_sigma = (j >= 0 and _PyUnicode_IsCased(c))
+    final_sigma = j >= 0 and _PyUnicode_IsCased(c)
     if final_sigma:
         j = idx + 1
         while j < length:
@@ -2275,9 +2406,9 @@ def _handle_capital_sigma(data, length, idx):
             if not _PyUnicode_IsCaseIgnorable(c):
                 break
             j += 1
-        final_sigma = (j == length or (not _PyUnicode_IsCased(c)))
+        final_sigma = j == length or (not _PyUnicode_IsCased(c))
 
-    return 0x3c2 if final_sigma else 0x3c3
+    return 0x3C2 if final_sigma else 0x3C3
 
 
 # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9885-L9895    # noqa: E501
@@ -2307,6 +2438,7 @@ def _gen_unicode_upper_or_lower(lower):
                 _set_code_point(res, k, m)
                 k += 1
         return k
+
     return _do_upper_or_lower
 
 
@@ -2319,6 +2451,7 @@ def _gen_ascii_upper_or_lower(func):
         for idx in range(len(data)):
             code_point = _get_code_point(data, idx)
             _set_code_point(res, idx, func(code_point))
+
     return _ascii_upper_or_lower
 
 
@@ -2326,13 +2459,13 @@ _ascii_upper = register_jitable(_gen_ascii_upper_or_lower(_Py_TOUPPER))
 _ascii_lower = register_jitable(_gen_ascii_upper_or_lower(_Py_TOLOWER))
 
 
-@overload_method(types.UnicodeType, 'lower')
+@overload_method(types.UnicodeType, "lower")
 def unicode_lower(data):
     """Implements .lower()"""
     return case_operation(_ascii_lower, _unicode_lower)
 
 
-@overload_method(types.UnicodeType, 'upper')
+@overload_method(types.UnicodeType, "upper")
 def unicode_upper(data):
     """Implements .upper()"""
     return case_operation(_ascii_upper, _unicode_upper)
@@ -2363,7 +2496,7 @@ def _ascii_casefold(data, res):
         _set_code_point(res, idx, _Py_TOLOWER(code_point))
 
 
-@overload_method(types.UnicodeType, 'casefold')
+@overload_method(types.UnicodeType, "casefold")
 def unicode_casefold(data):
     """Implements str.casefold()"""
     return case_operation(_ascii_casefold, _unicode_casefold)
@@ -2406,7 +2539,7 @@ def _ascii_capitalize(data, res):
 
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L10765-L10774    # noqa: E501
-@overload_method(types.UnicodeType, 'capitalize')
+@overload_method(types.UnicodeType, "capitalize")
 def unicode_capitalize(data):
     return case_operation(_ascii_capitalize, _unicode_capitalize)
 
@@ -2426,7 +2559,7 @@ def _unicode_title(data, length, res, maxchars):
         else:
             n_res = _PyUnicode_ToTitleFull(_Py_UCS4(code_point), mapped)
         for m in mapped[:n_res]:
-            maxchar, = maxchars
+            (maxchar,) = maxchars
             maxchars[0] = max(maxchar, m)
             _set_code_point(res, k, m)
             k += 1
@@ -2437,7 +2570,7 @@ def _unicode_title(data, length, res, maxchars):
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/bytes_methods.c#L332-L352    # noqa: E501
 @register_jitable
 def _ascii_title(data, res):
-    """ Does .title() on an ASCII string """
+    """Does .title() on an ASCII string"""
     previous_is_cased = False
     for idx in range(len(data)):
         code_point = _get_code_point(data, idx)
@@ -2455,7 +2588,7 @@ def _ascii_title(data, res):
 
 
 # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L10023-L10069    # noqa: E501
-@overload_method(types.UnicodeType, 'title')
+@overload_method(types.UnicodeType, "title")
 def unicode_title(data):
     """Implements str.title()"""
     # https://docs.python.org/3/library/stdtypes.html#str.title
@@ -2498,7 +2631,7 @@ def _unicode_swapcase(data, length, res, maxchars):
     return k
 
 
-@overload_method(types.UnicodeType, 'swapcase')
+@overload_method(types.UnicodeType, "swapcase")
 def unicode_swapcase(data):
     return case_operation(_ascii_swapcase, _unicode_swapcase)
 
@@ -2507,12 +2640,14 @@ def unicode_swapcase(data):
 @overload(ord)
 def ol_ord(c):
     if isinstance(c, types.UnicodeType):
+
         def impl(c):
             lc = len(c)
             if lc != 1:
                 # CPython does TypeError
                 raise TypeError("ord() expected a character")
             return _get_code_point(c, 0)
+
         return impl
 
 
@@ -2537,7 +2672,7 @@ _out_of_range_msg = "chr() arg not in range(0x%hx)" % _MAX_UNICODE
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L3045-L3055    # noqa: E501
 @register_jitable
 def _PyUnicode_FromOrdinal(ordinal):
-    if (ordinal < 0 or ordinal > _MAX_UNICODE):
+    if ordinal < 0 or ordinal > _MAX_UNICODE:
         raise ValueError(_out_of_range_msg)
 
     return _unicode_char(_Py_UCS4(ordinal))
@@ -2547,8 +2682,10 @@ def _PyUnicode_FromOrdinal(ordinal):
 @overload(chr)
 def ol_chr(i):
     if isinstance(i, types.Integer):
+
         def impl(i):
             return _PyUnicode_FromOrdinal(i)
+
         return impl
 
 
@@ -2575,20 +2712,21 @@ def integer_str(n):
             n = -n
             flag = True
         if n == 0:
-            return '0'
+            return "0"
         length = flag + 1 + int(np.floor(np.log10(n)))
         kind = PY_UNICODE_1BYTE_KIND
         char_width = _kind_to_byte_width(kind)
         s = _malloc_string(kind, char_width, length, True)
         if flag:
-            _set_code_point(s, 0, ord('-'))
+            _set_code_point(s, 0, ord("-"))
         idx = length - 1
         while n > 0:
             n, digit = divmod(n, ten)
-            c = ord('0') + digit
+            c = ord("0") + digit
             _set_code_point(s, idx, c)
             idx -= 1
         return s
+
     return impl
 
 
@@ -2600,7 +2738,7 @@ def integer_repr(n):
 @overload_method(types.Boolean, "__repr__")
 @overload_method(types.Boolean, "__str__")
 def boolean_str(b):
-    return lambda b: 'True' if b else 'False'
+    return lambda b: "True" if b else "False"
 
 
 # ------------------------------------------------------------------------------
@@ -2608,7 +2746,7 @@ def boolean_str(b):
 # ------------------------------------------------------------------------------
 
 
-@lower_builtin('getiter', types.UnicodeType)
+@lower_builtin("getiter", types.UnicodeType)
 def getiter_unicode(context, builder, sig, args):
     [ty] = sig.args
     [data] = args
@@ -2632,7 +2770,7 @@ def getiter_unicode(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
-@lower_builtin('iternext', types.UnicodeIteratorType)
+@lower_builtin("iternext", types.UnicodeIteratorType)
 # a new ref counted object is put into result._yield so set the new_ref to True!
 @iternext_impl(RefType.NEW)
 def iternext_unicode(context, builder, sig, args, result):
@@ -2643,8 +2781,7 @@ def iternext_unicode(context, builder, sig, args, result):
 
     # get ref to unicode.__getitem__
     fnty = tyctx.resolve_value_type(operator.getitem)
-    getitem_sig = fnty.get_call_type(tyctx, (types.unicode_type, types.uintp),
-                                     {})
+    getitem_sig = fnty.get_call_type(tyctx, (types.unicode_type, types.uintp), {})
     getitem_impl = context.get_function(fnty, getitem_sig)
 
     # get ref to unicode.__len__
@@ -2662,12 +2799,18 @@ def iternext_unicode(context, builder, sig, args, result):
     index = builder.load(iterobj.index)
 
     # see if the index is in range
-    is_valid = builder.icmp_unsigned('<', index, strlen)
+    is_valid = builder.icmp_unsigned("<", index, strlen)
     result.set_valid(is_valid)
 
     with builder.if_then(is_valid):
         # return value at index
-        gotitem = getitem_impl(builder, (iterobj.data, index,))
+        gotitem = getitem_impl(
+            builder,
+            (
+                iterobj.data,
+                index,
+            ),
+        )
         result.yield_(gotitem)
 
         # bump index for next cycle

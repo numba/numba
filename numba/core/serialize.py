@@ -1,6 +1,7 @@
 """
 Serialization support for compiled functions.
 """
+
 import sys
 import abc
 import io
@@ -15,6 +16,7 @@ from llvmlite import ir
 #
 # Pickle support
 #
+
 
 def _rebuild_reduction(cls, *args):
     """
@@ -50,8 +52,7 @@ def _numba_unpickle(address, bytedata, hashed):
 
 
 def dumps(obj):
-    """Similar to `pickle.dumps()`. Returns the serialized object in bytes.
-    """
+    """Similar to `pickle.dumps()`. Returns the serialized object in bytes."""
     pickler = NumbaPickler
     with io.BytesIO() as buf:
         p = pickler(buf, protocol=4)
@@ -88,7 +89,7 @@ class _CustomPickled:
     `NumbaPickler`.
     """
 
-    __slots__ = 'ctor', 'states'
+    __slots__ = "ctor", "states"
 
     def __init__(self, ctor, states):
         self.ctor = ctor
@@ -178,8 +179,7 @@ def _no_pickle(obj):
 
 
 def disable_pickling(typ):
-    """This is called on a type to disable pickling
-    """
+    """This is called on a type to disable pickling"""
     NumbaPickler.disabled_types.add(typ)
     # Return `typ` to allow use as a decorator
     return typ
@@ -208,6 +208,7 @@ class ReduceMixin(abc.ABC):
     """A mixin class for objects that should be reduced by the NumbaPickler
     instead of the standard pickler.
     """
+
     # Subclass MUST override the below methods
 
     @abc.abstractmethod
@@ -245,6 +246,7 @@ class PickleCallableByPath:
     >>> wrapped_fn = PickleCallableByPath(my_fn)
     >>> # refer to `wrapped_fn` instead of `my_fn`
     """
+
     def __init__(self, fn):
         self._fn = fn
 
@@ -252,7 +254,10 @@ class PickleCallableByPath:
         return self._fn(*args, **kwargs)
 
     def __reduce__(self):
-        return type(self)._rebuild, (self._fn.__module__, self._fn.__name__,)
+        return type(self)._rebuild, (
+            self._fn.__module__,
+            self._fn.__name__,
+        )
 
     @classmethod
     def _rebuild(cls, modname, fn_path):

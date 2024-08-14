@@ -79,7 +79,7 @@ PRESERVED_PREFIX = "preserved_"
 
 
 def copy_files(branch: str, prefix: str, remove_prefix: bool = False) -> None:
-    """ copy files on a branch using git mv
+    """copy files on a branch using git mv
 
     This function will create a git branch and then copy all files in global
     FILES to insert or remove a prefix into or from the filename. Lastly, those

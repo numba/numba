@@ -12,7 +12,14 @@ from abc import abstractmethod
 
 from numba import _dispatcher
 from numba.core import (
-    utils, types, errors, typing, serialize, config, compiler, sigutils
+    utils,
+    types,
+    errors,
+    typing,
+    serialize,
+    config,
+    compiler,
+    sigutils,
 )
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.typeconv.rules import default_type_manager
@@ -41,8 +48,7 @@ class OmittedArg(object):
 
 
 class _FunctionCompiler(object):
-    def __init__(self, py_func, targetdescr, targetoptions, locals,
-                 pipeline_class):
+    def __init__(self, py_func, targetdescr, targetoptions, locals, pipeline_class):
         self.py_func = py_func
         self.targetdescr = targetdescr
         self.targetoptions = targetoptions
@@ -61,6 +67,7 @@ class _FunctionCompiler(object):
 
         A (pysig, argument types) tuple is returned.
         """
+
         def normal_handler(index, param, value):
             return value
 
@@ -69,11 +76,11 @@ class _FunctionCompiler(object):
 
         def stararg_handler(index, param, values):
             return types.StarArgTuple(values)
+
         # For now, we take argument values from the @jit function
-        args = fold_arguments(self.pysig, args, kws,
-                              normal_handler,
-                              default_handler,
-                              stararg_handler)
+        args = fold_arguments(
+            self.pysig, args, kws, normal_handler, default_handler, stararg_handler
+        )
         return self.pysig, args
 
     def compile(self, args, return_type):
@@ -104,12 +111,16 @@ class _FunctionCompiler(object):
         flags = self._customize_flags(flags)
 
         impl = self._get_implementation(args, {})
-        cres = compiler.compile_extra(self.targetdescr.typing_context,
-                                      self.targetdescr.target_context,
-                                      impl,
-                                      args=args, return_type=return_type,
-                                      flags=flags, locals=self.locals,
-                                      pipeline_class=self.pipeline_class)
+        cres = compiler.compile_extra(
+            self.targetdescr.typing_context,
+            self.targetdescr.target_context,
+            impl,
+            args=args,
+            return_type=return_type,
+            flags=flags,
+            locals=self.locals,
+            pipeline_class=self.pipeline_class,
+        )
         # Check typing error if object mode is used
         if cres.typing_error is not None and not flags.enable_pyobject:
             raise cres.typing_error
@@ -127,10 +138,10 @@ class _FunctionCompiler(object):
 
 class _GeneratedFunctionCompiler(_FunctionCompiler):
 
-    def __init__(self, py_func, targetdescr, targetoptions, locals,
-                 pipeline_class):
+    def __init__(self, py_func, targetdescr, targetoptions, locals, pipeline_class):
         super(_GeneratedFunctionCompiler, self).__init__(
-            py_func, targetdescr, targetoptions, locals, pipeline_class)
+            py_func, targetdescr, targetoptions, locals, pipeline_class
+        )
         self.impls = set()
 
     def get_globals_for_reduction(self):
@@ -146,25 +157,32 @@ class _GeneratedFunctionCompiler(_FunctionCompiler):
         implsig = utils.pysignature(impl)
         ok = len(pysig.parameters) == len(implsig.parameters)
         if ok:
-            for pyparam, implparam in zip(pysig.parameters.values(),
-                                          implsig.parameters.values()):
+            for pyparam, implparam in zip(
+                pysig.parameters.values(), implsig.parameters.values()
+            ):
                 # We allow the implementation to omit default values, but
                 # if it mentions them, they should have the same value...
-                if (pyparam.name != implparam.name or
-                    pyparam.kind != implparam.kind or
-                    (implparam.default is not implparam.empty and
-                     implparam.default != pyparam.default)):
+                if (
+                    pyparam.name != implparam.name
+                    or pyparam.kind != implparam.kind
+                    or (
+                        implparam.default is not implparam.empty
+                        and implparam.default != pyparam.default
+                    )
+                ):
                     ok = False
         if not ok:
-            raise TypeError("generated implementation %s should be compatible "
-                            "with signature '%s', but has signature '%s'"
-                            % (impl, pysig, implsig))
+            raise TypeError(
+                "generated implementation %s should be compatible "
+                "with signature '%s', but has signature '%s'" % (impl, pysig, implsig)
+            )
         self.impls.add(impl)
         return impl
 
 
 _CompileStats = collections.namedtuple(
-    '_CompileStats', ('cache_path', 'cache_hits', 'cache_misses'))
+    "_CompileStats", ("cache_path", "cache_hits", "cache_misses")
+)
 
 
 class CompilingCounter(object):
@@ -196,8 +214,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
 
     __numba__ = "py_func"
 
-    def __init__(self, arg_count, py_func, pysig, can_fallback,
-                 exact_match_required):
+    def __init__(self, arg_count, py_func, pysig, can_fallback, exact_match_required):
         self._tm = default_type_manager
 
         # A mapping of signatures to compile results
@@ -222,12 +239,17 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             has_stararg = False
         else:
             has_stararg = lastarg.kind == lastarg.VAR_POSITIONAL
-        _dispatcher.Dispatcher.__init__(self, self._tm.get_pointer(),
-                                        arg_count, self._fold_args,
-                                        argnames, defargs,
-                                        can_fallback,
-                                        has_stararg,
-                                        exact_match_required)
+        _dispatcher.Dispatcher.__init__(
+            self,
+            self._tm.get_pointer(),
+            arg_count,
+            self._fold_args,
+            argnames,
+            defargs,
+            can_fallback,
+            has_stararg,
+            exact_match_required,
+        )
 
         self.doc = py_func.__doc__
         self._compiling_counter = CompilingCounter()
@@ -281,12 +303,12 @@ class _DispatcherBase(_dispatcher.Dispatcher):
 
     @property
     def nopython_signatures(self):
-        return [cres.signature for cres in self.overloads.values()
-                if not cres.objectmode]
+        return [
+            cres.signature for cres in self.overloads.values() if not cres.objectmode
+        ]
 
     def disable_compile(self, val=True):
-        """Disable the compilation of new signatures at call time.
-        """
+        """Disable the compilation of new signatures at call time."""
         # If disabling compilation then there must be at least one signature
         assert (not val) or len(self.signatures) > 0
         self._can_compile = not val
@@ -323,7 +345,8 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         # The `key` isn't really used except for diagnosis here,
         # so avoid keeping a reference to `cfunc`.
         call_template = typing.make_concrete_template(
-            name, key=func_name, signatures=self.nopython_signatures)
+            name, key=func_name, signatures=self.nopython_signatures
+        )
         return call_template, pysig, args, kws
 
     def get_overload(self, sig):
@@ -357,7 +380,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             """
             if config.SHOW_HELP:
                 help_msg = errors.error_extras[issue_type]
-                e.patch_message('\n'.join((str(e).rstrip(), help_msg)))
+                e.patch_message("\n".join((str(e).rstrip(), help_msg)))
             if config.FULL_TRACEBACKS:
                 raise e
             else:
@@ -377,23 +400,27 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             # Received request for compiler re-entry with the list of arguments
             # indicated by e.requested_args.
             # First, check if any of these args are already Literal-ized
-            already_lit_pos = [i for i in e.requested_args
-                               if isinstance(args[i], types.Literal)]
+            already_lit_pos = [
+                i for i in e.requested_args if isinstance(args[i], types.Literal)
+            ]
             if already_lit_pos:
                 # Abort compilation if any argument is already a Literal.
                 # Letting this continue will cause infinite compilation loop.
-                m = ("Repeated literal typing request.\n"
-                     "{}.\n"
-                     "This is likely caused by an error in typing. "
-                     "Please see nested and suppressed exceptions.")
-                info = ', '.join('Arg #{} is {}'.format(i, args[i])
-                                 for i in sorted(already_lit_pos))
+                m = (
+                    "Repeated literal typing request.\n"
+                    "{}.\n"
+                    "This is likely caused by an error in typing. "
+                    "Please see nested and suppressed exceptions."
+                )
+                info = ", ".join(
+                    "Arg #{} is {}".format(i, args[i]) for i in sorted(already_lit_pos)
+                )
                 raise errors.CompilerError(m.format(info))
             # Convert requested arguments into a Literal.
-            args = [(types.literal
-                     if i in e.requested_args
-                     else lambda x: x)(args[i])
-                    for i, v in enumerate(args)]
+            args = [
+                (types.literal if i in e.requested_args else lambda x: x)(args[i])
+                for i, v in enumerate(args)
+            ]
             # Re-enter compilation with the Literal-ized arguments
             return_val = self._compile_for_args(*args)
 
@@ -410,34 +437,38 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                 else:
                     if tp is None:
                         failed_args.append(
-                            (i, f"cannot determine Numba type of value {val}"))
+                            (i, f"cannot determine Numba type of value {val}")
+                        )
             if failed_args:
                 # Patch error message to ease debugging
-                args_str = "\n".join(
-                    f"- argument {i}: {err}" for i, err in failed_args
+                args_str = "\n".join(f"- argument {i}: {err}" for i, err in failed_args)
+                msg = (
+                    f"{str(e).rstrip()} \n\nThis error may have been caused "
+                    f"by the following argument(s):\n{args_str}\n"
                 )
-                msg = (f"{str(e).rstrip()} \n\nThis error may have been caused "
-                       f"by the following argument(s):\n{args_str}\n")
                 e.patch_message(msg)
 
-            error_rewrite(e, 'typing')
+            error_rewrite(e, "typing")
         except errors.UnsupportedError as e:
             # Something unsupported is present in the user code, add help info
-            error_rewrite(e, 'unsupported_error')
-        except (errors.NotDefinedError, errors.RedefinedError,
-                errors.VerificationError) as e:
+            error_rewrite(e, "unsupported_error")
+        except (
+            errors.NotDefinedError,
+            errors.RedefinedError,
+            errors.VerificationError,
+        ) as e:
             # These errors are probably from an issue with either the code
             # supplied being syntactically or otherwise invalid
-            error_rewrite(e, 'interpreter')
+            error_rewrite(e, "interpreter")
         except errors.ConstantInferenceError as e:
             # this is from trying to infer something as constant when it isn't
             # or isn't supported as a constant
-            error_rewrite(e, 'constant_inference')
+            error_rewrite(e, "constant_inference")
         except Exception as e:
             if config.SHOW_HELP:
-                if hasattr(e, 'patch_message'):
-                    help_msg = errors.error_extras['reportable']
-                    e.patch_message('\n'.join((str(e).rstrip(), help_msg)))
+                if hasattr(e, "patch_message"):
+                    help_msg = errors.error_extras["reportable"]
+                    e.patch_message("\n".join((str(e).rstrip(), help_msg)))
             # ignore the FULL_TRACEBACKS config, this needs reporting!
             raise e
         finally:
@@ -488,8 +519,9 @@ class _DispatcherBase(_dispatcher.Dispatcher):
 
         return dict((sig, self.inspect_asm(sig)) for sig in self.signatures)
 
-    def inspect_types(self, file=None, signature=None,
-                      pretty=False, style='default', **kwargs):
+    def inspect_types(
+        self, file=None, signature=None, pretty=False, style="default", **kwargs
+    ):
         """Print/return Numba intermediate representation (IR)-annotated code.
 
         Parameters
@@ -528,13 +560,14 @@ class _DispatcherBase(_dispatcher.Dispatcher):
 
             for ver, res in overloads.items():
                 print("%s %s" % (self.py_func.__name__, ver), file=file)
-                print('-' * 80, file=file)
+                print("-" * 80, file=file)
                 print(res.type_annotation, file=file)
-                print('=' * 80, file=file)
+                print("=" * 80, file=file)
         else:
             if file is not None:
                 raise ValueError("`file` must be None if `pretty=True`")
             from numba.core.annotations.pretty_annotate import Annotate
+
             return Annotate(self, signature=signature, style=style)
 
     def inspect_cfg(self, signature=None, show_wrapper=None, **kwargs):
@@ -587,16 +620,18 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         if signature is not None:
             cres = self.overloads[signature]
             lib = cres.library
-            if show_wrapper == 'python':
+            if show_wrapper == "python":
                 fname = cres.fndesc.llvm_cpython_wrapper_name
-            elif show_wrapper == 'cfunc':
+            elif show_wrapper == "cfunc":
                 fname = cres.fndesc.llvm_cfunc_wrapper_name
             else:
                 fname = cres.fndesc.mangled_name
             return lib.get_function_cfg(fname, py_func=self.py_func, **kwargs)
 
-        return dict((sig, self.inspect_cfg(sig, show_wrapper=show_wrapper))
-                    for sig in self.signatures)
+        return dict(
+            (sig, self.inspect_cfg(sig, show_wrapper=show_wrapper))
+            for sig in self.signatures
+        )
 
     def inspect_disasm_cfg(self, signature=None):
         """
@@ -615,8 +650,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             lib = cres.library
             return lib.get_disasm_cfg(cres.fndesc.mangled_name)
 
-        return dict((sig, self.inspect_disasm_cfg(sig))
-                    for sig in self.signatures)
+        return dict((sig, self.inspect_disasm_cfg(sig)) for sig in self.signatures)
 
     def get_annotation_info(self, signature=None):
         """
@@ -629,8 +663,10 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         for sig in signatures:
             cres = self.overloads[sig]
             ta = cres.type_annotation
-            key = (ta.func_id.filename + ':' + str(ta.func_id.firstlineno + 1),
-                   ta.signature)
+            key = (
+                ta.func_id.filename + ":" + str(ta.func_id.firstlineno + 1),
+                ta.signature,
+            )
             out[key] = ta.annotate_raw()[key]
         return out
 
@@ -644,8 +680,9 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         # is ensured by the OrderedDict.
         sigs = self.nopython_signatures
         # This will raise
-        self.typingctx.resolve_overload(self.py_func, sigs, args, kws,
-                                        allow_ambiguous=False)
+        self.typingctx.resolve_overload(
+            self.py_func, sigs, args, kws, allow_ambiguous=False
+        )
 
     def _explain_matching_error(self, *args, **kws):
         """
@@ -653,8 +690,9 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         """
         assert not kws, "kwargs not handled"
         args = [self.typeof_pyval(a) for a in args]
-        msg = ("No matching definition for argument type(s) %s"
-               % ', '.join(map(str, args)))
+        msg = "No matching definition for argument type(s) %s" % ", ".join(
+            map(str, args)
+        )
         raise TypeError(msg)
 
     def _search_new_conversions(self, *args, **kws):
@@ -707,12 +745,10 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                 raise AssertionError(msg)
 
     def _callback_add_compiler_timer(self, duration, cres):
-        return self._callback_add_timer(duration, cres,
-                                        lock_name="compiler_lock")
+        return self._callback_add_timer(duration, cres, lock_name="compiler_lock")
 
     def _callback_add_llvm_timer(self, duration, cres):
-        return self._callback_add_timer(duration, cres,
-                                        lock_name="llvm_lock")
+        return self._callback_add_timer(duration, cres, lock_name="llvm_lock")
 
 
 class _MemoMixin:
@@ -751,12 +787,14 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
     This is an abstract base class. Subclasses should define the targetdescr
     class attribute.
     """
+
     _fold_args = True
 
-    __numba__ = 'py_func'
+    __numba__ = "py_func"
 
-    def __init__(self, py_func, locals={}, targetoptions={},
-                 pipeline_class=compiler.Compiler):
+    def __init__(
+        self, py_func, locals={}, targetoptions={}, pipeline_class=compiler.Compiler
+    ):
         """
         Parameters
         ----------
@@ -774,10 +812,11 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
 
         pysig = utils.pysignature(py_func)
         arg_count = len(pysig.parameters)
-        can_fallback = not targetoptions.get('nopython', False)
+        can_fallback = not targetoptions.get("nopython", False)
 
-        _DispatcherBase.__init__(self, arg_count, py_func, pysig, can_fallback,
-                                 exact_match_required=False)
+        _DispatcherBase.__init__(
+            self, arg_count, py_func, pysig, can_fallback, exact_match_required=False
+        )
 
         functools.update_wrapper(self, py_func)
 
@@ -785,20 +824,23 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         self.locals = locals
         self._cache = NullCache()
         compiler_class = _FunctionCompiler
-        self._compiler = compiler_class(py_func, self.targetdescr,
-                                        targetoptions, locals, pipeline_class)
+        self._compiler = compiler_class(
+            py_func, self.targetdescr, targetoptions, locals, pipeline_class
+        )
         self._cache_hits = collections.Counter()
         self._cache_misses = collections.Counter()
 
         self._type = types.Dispatcher(self)
         self.typingctx.insert_global(self, self._type)
 
-    def dump(self, tab=''):
-        print(f'{tab}DUMP {type(self).__name__}[{self.py_func.__name__}'
-              f', type code={self._type._code}]')
+    def dump(self, tab=""):
+        print(
+            f"{tab}DUMP {type(self).__name__}[{self.py_func.__name__}"
+            f", type code={self._type._code}]"
+        )
         for cres in self.overloads.values():
-            cres.dump(tab=tab + '  ')
-        print(f'{tab}END DUMP {type(self).__name__}[{self.py_func.__name__}]')
+            cres.dump(tab=tab + "  ")
+        print(f"{tab}END DUMP {type(self).__name__}[{self.py_func.__name__}]")
 
     @property
     def _numba_type_(self):
@@ -808,7 +850,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         self._cache = FunctionCache(self.py_func)
 
     def __get__(self, obj, objtype=None):
-        '''Allow a JIT function to be bound as a method to an object'''
+        """Allow a JIT function to be bound as a method to an object"""
         if obj is None:  # Unbound method
             return self
         else:  # Bound method
@@ -837,8 +879,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         )
 
     @classmethod
-    def _rebuild(cls, uuid, py_func, locals, targetoptions,
-                 can_compile, sigs):
+    def _rebuild(cls, uuid, py_func, locals, targetoptions, can_compile, sigs):
         """
         Rebuild an Dispatcher instance after it was __reduce__'d.
 
@@ -868,8 +909,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
                 if cres is not None:
                     self._callback_add_llvm_timer(dur, cres)
 
-            scope.enter_context(ev.install_timer("numba:compiler_lock",
-                                                 cb_compiler))
+            scope.enter_context(ev.install_timer("numba:compiler_lock", cb_compiler))
             scope.enter_context(ev.install_timer("numba:llvm_lock", cb_llvm))
             scope.enter_context(global_compiler_lock)
 
@@ -888,9 +928,9 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
                     self._cache_hits[sig] += 1
                     # XXX fold this in add_overload()? (also see compiler.py)
                     if not cres.objectmode:
-                        self.targetctx.insert_user_function(cres.entry_point,
-                                                            cres.fndesc,
-                                                            [cres.library])
+                        self.targetctx.insert_user_function(
+                            cres.entry_point, cres.fndesc, [cres.library]
+                        )
                     self.add_overload(cres)
                     return cres.entry_point
 
@@ -904,9 +944,10 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
                     try:
                         cres = self._compiler.compile(args, return_type)
                     except errors.ForceLiteralArg as e:
+
                         def folded(args, kws):
-                            return self._compiler.fold_argument_types(args,
-                                                                      kws)[1]
+                            return self._compiler.fold_argument_types(args, kws)[1]
+
                         raise e.bind_fold_arguments(folded)
                     self.add_overload(cres)
                 self._cache.save_overload(sig, cres)
@@ -962,13 +1003,15 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         used to adjust the verbosity, level=1 (default) is minimal verbosity,
         and 2, 3, and 4 provide increasing levels of verbosity.
         """
+
         def dump(sig):
             ol = self.overloads[sig]
-            pfdiag = ol.metadata.get('parfor_diagnostics', None)
+            pfdiag = ol.metadata.get("parfor_diagnostics", None)
             if pfdiag is None:
                 msg = "No parfors diagnostic available, is 'parallel=True' set?"
                 raise ValueError(msg)
             pfdiag.dump(level)
+
         if signature is not None:
             dump(signature)
         else:
@@ -981,9 +1024,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         if signature is not None:
             return self.overloads[signature].metadata
         else:
-            return dict(
-                (sig,self.overloads[sig].metadata) for sig in self.signatures
-            )
+            return dict((sig, self.overloads[sig].metadata) for sig in self.signatures)
 
     def get_function_type(self):
         """Return unique function type of dispatcher when possible, otherwise
@@ -1003,6 +1044,7 @@ class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
     Implementation of the hidden dispatcher objects used for lifted code
     (a lifted loop is really compiled as a separate function).
     """
+
     _fold_args = False
     can_cache = False
 
@@ -1015,11 +1057,14 @@ class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         self.flags = flags
         self.locals = locals
 
-        _DispatcherBase.__init__(self, self.func_ir.arg_count,
-                                 self.func_ir.func_id.func,
-                                 self.func_ir.func_id.pysig,
-                                 can_fallback=True,
-                                 exact_match_required=False)
+        _DispatcherBase.__init__(
+            self,
+            self.func_ir.arg_count,
+            self.func_ir.func_id.func,
+            self.func_ir.func_id.pysig,
+            can_fallback=True,
+            exact_match_required=False,
+        )
 
     def _reduce_states(self):
         """
@@ -1030,8 +1075,11 @@ class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         NOTE: part of ReduceMixin protocol
         """
         return dict(
-            uuid=self._uuid, func_ir=self.func_ir, flags=self.flags,
-            locals=self.locals, extras=self._reduce_extras(),
+            uuid=self._uuid,
+            func_ir=self.func_ir,
+            flags=self.flags,
+            locals=self.locals,
+            extras=self._reduce_extras(),
         )
 
     def _reduce_extras(self):
@@ -1057,6 +1105,7 @@ class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         # TODO: refactor this to not assume on `cpu_target`
 
         from numba.core import registry
+
         typingctx = registry.cpu_target.typing_context
         targetctx = registry.cpu_target.target_context
 
@@ -1065,13 +1114,11 @@ class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         return self
 
     def get_source_location(self):
-        """Return the starting line number of the loop.
-        """
+        """Return the starting line number of the loop."""
         return self.func_ir.loc.line
 
     def _pre_compile(self, args, return_type, flags):
-        """Pre-compile actions
-        """
+        """Pre-compile actions"""
         pass
 
     @abstractmethod
@@ -1102,8 +1149,7 @@ class LiftedLoop(LiftedCode):
                 if cres is not None:
                     self._callback_add_llvm_timer(dur, cres)
 
-            scope.enter_context(ev.install_timer("numba:compiler_lock",
-                                                 cb_compiler))
+            scope.enter_context(ev.install_timer("numba:compiler_lock", cb_compiler))
             scope.enter_context(ev.install_timer("numba:llvm_lock", cb_llvm))
             scope.enter_context(global_compiler_lock)
 
@@ -1140,29 +1186,33 @@ class LiftedLoop(LiftedCode):
                     # this emulates "object mode fall-back", try nopython, if it
                     # fails, then try again in object mode.
                     try:
-                        cres = compiler.compile_ir(typingctx=self.typingctx,
-                                                   targetctx=self.targetctx,
-                                                   func_ir=cloned_func_ir,
-                                                   args=args,
-                                                   return_type=return_type,
-                                                   flags=npm_loop_flags,
-                                                   locals=self.locals,
-                                                   lifted=(),
-                                                   lifted_from=self.lifted_from,
-                                                   is_lifted_loop=True,)
+                        cres = compiler.compile_ir(
+                            typingctx=self.typingctx,
+                            targetctx=self.targetctx,
+                            func_ir=cloned_func_ir,
+                            args=args,
+                            return_type=return_type,
+                            flags=npm_loop_flags,
+                            locals=self.locals,
+                            lifted=(),
+                            lifted_from=self.lifted_from,
+                            is_lifted_loop=True,
+                        )
                     except errors.TypingError:
-                        cres = compiler.compile_ir(typingctx=self.typingctx,
-                                                   targetctx=self.targetctx,
-                                                   func_ir=cloned_func_ir,
-                                                   args=args,
-                                                   return_type=return_type,
-                                                   flags=pyobject_loop_flags,
-                                                   locals=self.locals,
-                                                   lifted=(),
-                                                   lifted_from=self.lifted_from,
-                                                   is_lifted_loop=True,)
+                        cres = compiler.compile_ir(
+                            typingctx=self.typingctx,
+                            targetctx=self.targetctx,
+                            func_ir=cloned_func_ir,
+                            args=args,
+                            return_type=return_type,
+                            flags=pyobject_loop_flags,
+                            locals=self.locals,
+                            lifted=(),
+                            lifted_from=self.lifted_from,
+                            is_lifted_loop=True,
+                        )
                     # Check typing error if object mode is used
-                    if (cres.typing_error is not None):
+                    if cres.typing_error is not None:
                         raise cres.typing_error
                     self.add_overload(cres)
                 return cres.entry_point
@@ -1197,7 +1247,8 @@ class LiftedWith(LiftedCode):
         # The `key` isn't really used except for diagnosis here,
         # so avoid keeping a reference to `cfunc`.
         call_template = typing.make_concrete_template(
-            name, key=func_name, signatures=self.nopython_signatures)
+            name, key=func_name, signatures=self.nopython_signatures
+        )
         return call_template, pysig, args, kws
 
     def compile(self, sig):
@@ -1214,8 +1265,7 @@ class LiftedWith(LiftedCode):
                 if cres is not None:
                     self._callback_add_llvm_timer(dur, cres)
 
-            scope.enter_context(ev.install_timer("numba:compiler_lock",
-                                                 cb_compiler))
+            scope.enter_context(ev.install_timer("numba:compiler_lock", cb_compiler))
             scope.enter_context(ev.install_timer("numba:llvm_lock", cb_llvm))
             scope.enter_context(global_compiler_lock)
 
@@ -1242,19 +1292,21 @@ class LiftedWith(LiftedCode):
                     return_type=return_type,
                 )
                 with ev.trigger_event("numba:compile", data=ev_details):
-                    cres = compiler.compile_ir(typingctx=self.typingctx,
-                                               targetctx=self.targetctx,
-                                               func_ir=cloned_func_ir,
-                                               args=args,
-                                               return_type=return_type,
-                                               flags=flags, locals=self.locals,
-                                               lifted=(),
-                                               lifted_from=self.lifted_from,
-                                               is_lifted_loop=True,)
+                    cres = compiler.compile_ir(
+                        typingctx=self.typingctx,
+                        targetctx=self.targetctx,
+                        func_ir=cloned_func_ir,
+                        args=args,
+                        return_type=return_type,
+                        flags=flags,
+                        locals=self.locals,
+                        lifted=(),
+                        lifted_from=self.lifted_from,
+                        is_lifted_loop=True,
+                    )
 
                     # Check typing error if object mode is used
-                    if (cres.typing_error is not None and
-                            not flags.enable_pyobject):
+                    if cres.typing_error is not None and not flags.enable_pyobject:
                         raise cres.typing_error
                     self.add_overload(cres)
                 return cres.entry_point
@@ -1262,12 +1314,12 @@ class LiftedWith(LiftedCode):
 
 class ObjModeLiftedWith(LiftedWith):
     def __init__(self, *args, **kwargs):
-        self.output_types = kwargs.pop('output_types', None)
+        self.output_types = kwargs.pop("output_types", None)
         super(LiftedWith, self).__init__(*args, **kwargs)
         if not self.flags.force_pyobject:
             raise ValueError("expecting `flags.force_pyobject`")
         if self.output_types is None:
-            raise TypeError('`output_types` must be provided')
+            raise TypeError("`output_types` must be provided")
         # switch off rewrites, they have no effect
         self.flags.no_rewrites = True
 
@@ -1295,7 +1347,8 @@ class ObjModeLiftedWith(LiftedWith):
         func_name = self.py_func.__name__
         name = "CallTemplate({0})".format(func_name)
         call_template = typing.make_concrete_template(
-            name, key=func_name, signatures=signatures)
+            name, key=func_name, signatures=signatures
+        )
 
         return call_template, pysig, args, kws
 
@@ -1303,14 +1356,13 @@ class ObjModeLiftedWith(LiftedWith):
         for i, a in enumerate(args, start=1):
             if isinstance(a, types.List):
                 msg = (
-                    'Does not support list type inputs into '
-                    'with-context for arg {}'
+                    "Does not support list type inputs into " "with-context for arg {}"
                 )
                 raise errors.TypingError(msg.format(i))
             elif isinstance(a, types.Dispatcher):
                 msg = (
-                    'Does not support function type inputs into '
-                    'with-context for arg {}'
+                    "Does not support function type inputs into "
+                    "with-context for arg {}"
                 )
                 raise errors.TypingError(msg.format(i))
 
@@ -1321,13 +1373,14 @@ class ObjModeLiftedWith(LiftedWith):
         return super().compile(sig)
 
 
-if config.USE_LEGACY_TYPE_SYSTEM: # Old type system
+if config.USE_LEGACY_TYPE_SYSTEM:  # Old type system
+    # Initialize typeof machinery
+    _dispatcher.typeof_init(
+        OmittedArg, dict((str(t), t._code) for t in types.number_domain)
+    )
+else:  # New type system
     # Initialize typeof machinery
     _dispatcher.typeof_init(
         OmittedArg,
-        dict((str(t), t._code) for t in types.number_domain))
-else: # New type system
-    # Initialize typeof machinery
-    _dispatcher.typeof_init(
-        OmittedArg,
-        dict((str(t).split('_')[-1], t._code) for t in types.np_number_domain))
+        dict((str(t).split("_")[-1], t._code) for t in types.np_number_domain),
+    )

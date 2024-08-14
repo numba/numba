@@ -8,6 +8,7 @@ from numba.tests.support import TestCase
 def build_map():
     return {0: 1, 2: 3}
 
+
 def build_map_from_local_vars():
     # There used to be a crash due to wrong IR generation for STORE_MAP
     x = TestCase
@@ -31,6 +32,7 @@ class TestCompiledDict(TestCase):
     """Testing `dict()` and `{}` usage that are redirected to
     `numba.typed.Dict`.
     """
+
     def test_use_dict(self):
         # Test dict()
         @njit
@@ -52,13 +54,13 @@ class TestCompiledDict(TestCase):
         @njit
         def dict_iterable_2():
             # from python docs
-            return dict([('sape', 4139), ('guido', 4127), ('jack', 4098)])
+            return dict([("sape", 4139), ("guido", 4127), ("jack", 4098)])
 
         inps = (
             ([1, 2, 3], [4, 5, 6]),
             (np.arange(4), np.arange(4)),
-            ([1, 2, 3], 'abc'),
-            ([1, 2, 3, 4], 'abc'),
+            ([1, 2, 3], "abc"),
+            ([1, 2, 3, 4], "abc"),
         )
         for a, b in inps:
             d = dict_iterable_1(a, b)
@@ -87,11 +89,11 @@ class TestCompiledDict(TestCase):
 
         @njit
         def ctor2():
-            return dict(((1, 2), (3, 'a')))
+            return dict(((1, 2), (3, "a")))
 
         @njit
         def ctor3():
-            return dict((('a', 'b', 'c'), ('d', 'e', 'f')))
+            return dict((("a", "b", "c"), ("d", "e", "f")))
 
         @njit
         def ctor4():
@@ -185,7 +187,6 @@ class TestCompiledDict(TestCase):
             str(raises.exception),
         )
 
-
     def test_dict_use_with_optional_value(self):
         # Test that Optional cannot be used as value for Dict
         @njit
@@ -229,5 +230,6 @@ class TestCompiledDict(TestCase):
             str(raises.exception),
         )
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

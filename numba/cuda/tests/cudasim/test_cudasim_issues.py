@@ -10,12 +10,13 @@ import unittest
 
 class TestCudaSimIssues(CUDATestCase):
     def test_record_access(self):
-        backyard_type = [('statue', np.float64),
-                         ('newspaper', np.float64, (6,))]
+        backyard_type = [("statue", np.float64), ("newspaper", np.float64, (6,))]
 
-        goose_type = [('garden', np.float64, (12,)),
-                      ('town', np.float64, (42,)),
-                      ('backyard', backyard_type)]
+        goose_type = [
+            ("garden", np.float64, (12,)),
+            ("town", np.float64, (42,)),
+            ("backyard", backyard_type),
+        ]
 
         goose_np_type = np.dtype(goose_type, align=True)
 
@@ -27,20 +28,20 @@ class TestCudaSimIssues(CUDATestCase):
 
         item = np.recarray(1, dtype=goose_np_type)
         simple_kernel[1, 1](item[0])
-        np.testing.assert_equal(item[0]['garden'][0], 45)
-        np.testing.assert_equal(item[0]['backyard']['newspaper'][3], 5)
+        np.testing.assert_equal(item[0]["garden"][0], 45)
+        np.testing.assert_equal(item[0]["backyard"]["newspaper"][3], 5)
 
     def test_recarray_setting(self):
-        recordwith2darray = np.dtype([('i', np.int32),
-                                      ('j', np.float32, (3, 2))])
+        recordwith2darray = np.dtype([("i", np.int32), ("j", np.float32, (3, 2))])
         rec = np.recarray(2, dtype=recordwith2darray)
-        rec[0]['i'] = 45
+        rec[0]["i"] = 45
 
         @cuda.jit
         def simple_kernel(f):
             f[1] = f[0]
+
         simple_kernel[1, 1](rec)
-        np.testing.assert_equal(rec[0]['i'], rec[1]['i'])
+        np.testing.assert_equal(rec[0]["i"], rec[1]["i"])
 
     def test_cuda_module_in_device_function(self):
         """
@@ -63,7 +64,7 @@ class TestCudaSimIssues(CUDATestCase):
         expected = np.arange(arr.size, dtype=np.int32)
         np.testing.assert_equal(expected, arr)
 
-    @skip_unless_cudasim('Only works on CUDASIM')
+    @skip_unless_cudasim("Only works on CUDASIM")
     def test_deadlock_on_exception(self):
         def assert_no_blockthreads():
             blockthreads = []
@@ -98,5 +99,5 @@ class TestCudaSimIssues(CUDATestCase):
         assert_no_blockthreads()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -47,10 +47,7 @@ class VectorType(types.Type):
 
 
 def make_vector_type(
-    name: str,
-    base_type: types.Type,
-    attr_names: Tuple[str, ...],
-    user_facing_object
+    name: str, base_type: types.Type, attr_names: Tuple[str, ...], user_facing_object
 ) -> types.Type:
     """Create a vector type.
 
@@ -84,9 +81,7 @@ def make_vector_type(
     return vector_type
 
 
-def enable_vector_type_ctor(
-    vector_type: VectorType, overloads: List[List[types.Type]]
-):
+def enable_vector_type_ctor(vector_type: VectorType, overloads: List[List[types.Type]]):
     """Create typing and lowering for vector type constructor.
 
     Parameters
@@ -123,9 +118,7 @@ def enable_vector_type_ctor(
                     pxy = cgutils.create_struct_proxy(fml_arg)(
                         context, builder, actual_args[argidx]
                     )
-                    source_list += [
-                        getattr(pxy, attr) for attr in fml_arg.attr_names
-                    ]
+                    source_list += [getattr(pxy, attr) for attr in fml_arg.attr_names]
                 else:
                     # assumed primitive type
                     source_list.append(actual_args[argidx])
@@ -149,7 +142,7 @@ def enable_vector_type_ctor(
         lower(ctor, *arglist)(lowering)
 
 
-vector_types : Dict[str, VectorType] = {}
+vector_types: Dict[str, VectorType] = {}
 
 
 def build_constructor_overloads(base_type, vty_name, num_elements, arglists, l):

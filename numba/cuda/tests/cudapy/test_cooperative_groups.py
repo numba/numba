@@ -3,9 +3,14 @@ from __future__ import print_function
 import numpy as np
 
 from numba import config, cuda, int32
-from numba.cuda.testing import (unittest, CUDATestCase, skip_on_cudasim,
-                                skip_unless_cc_60, skip_if_cudadevrt_missing,
-                                skip_if_mvc_enabled)
+from numba.cuda.testing import (
+    unittest,
+    CUDATestCase,
+    skip_on_cudasim,
+    skip_unless_cc_60,
+    skip_if_cudadevrt_missing,
+    skip_if_mvc_enabled,
+)
 
 
 @cuda.jit
@@ -47,7 +52,7 @@ def sequential_rows(M):
 
 
 @skip_if_cudadevrt_missing
-@skip_if_mvc_enabled('CG not supported with MVC')
+@skip_if_mvc_enabled("CG not supported with MVC")
 class TestCudaCooperativeGroups(CUDATestCase):
     @skip_unless_cc_60
     def test_this_grid(self):
@@ -55,11 +60,12 @@ class TestCudaCooperativeGroups(CUDATestCase):
         this_grid[1, 1](A)
 
         # Ensure the kernel executed beyond the call to cuda.this_grid()
-        self.assertFalse(np.isnan(A[0]), 'Value was not set')
+        self.assertFalse(np.isnan(A[0]), "Value was not set")
 
     @skip_unless_cc_60
-    @skip_on_cudasim("Simulator doesn't differentiate between normal and "
-                     "cooperative kernels")
+    @skip_on_cudasim(
+        "Simulator doesn't differentiate between normal and " "cooperative kernels"
+    )
     def test_this_grid_is_cooperative(self):
         A = np.full(1, fill_value=np.nan)
         this_grid[1, 1](A)
@@ -74,11 +80,12 @@ class TestCudaCooperativeGroups(CUDATestCase):
         sync_group[1, 1](A)
 
         # Ensure the kernel executed beyond the call to cuda.sync_group()
-        self.assertFalse(np.isnan(A[0]), 'Value was not set')
+        self.assertFalse(np.isnan(A[0]), "Value was not set")
 
     @skip_unless_cc_60
-    @skip_on_cudasim("Simulator doesn't differentiate between normal and "
-                     "cooperative kernels")
+    @skip_on_cudasim(
+        "Simulator doesn't differentiate between normal and " "cooperative kernels"
+    )
     def test_sync_group_is_cooperative(self):
         A = np.full(1, fill_value=np.nan)
         sync_group[1, 1](A)
@@ -99,7 +106,7 @@ class TestCudaCooperativeGroups(CUDATestCase):
         for key, overload in no_sync.overloads.items():
             self.assertFalse(overload.cooperative)
             for link in overload._codelibrary._linking_files:
-                self.assertNotIn('cudadevrt', link)
+                self.assertNotIn("cudadevrt", link)
 
     @skip_unless_cc_60
     def test_sync_at_matrix_row(self):
@@ -113,7 +120,7 @@ class TestCudaCooperativeGroups(CUDATestCase):
         blockdim = 32
         griddim = A.shape[1] // blockdim
 
-        sig = (int32[:,::1],)
+        sig = (int32[:, ::1],)
         c_sequential_rows = cuda.jit(sig)(sequential_rows)
 
         overload = c_sequential_rows.overloads[sig]
@@ -133,7 +140,7 @@ class TestCudaCooperativeGroups(CUDATestCase):
         # doesn't error, and that varying the number of dimensions of the block
         # whilst keeping the total number of threads constant doesn't change
         # the maximum to validate some of the logic.
-        sig = (int32[:,::1],)
+        sig = (int32[:, ::1],)
         c_sequential_rows = cuda.jit(sig)(sequential_rows)
         overload = c_sequential_rows.overloads[sig]
         blocks1d = overload.max_cooperative_grid_blocks(256)
@@ -143,5 +150,5 @@ class TestCudaCooperativeGroups(CUDATestCase):
         self.assertEqual(blocks1d, blocks3d)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

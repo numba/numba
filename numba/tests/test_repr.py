@@ -37,7 +37,7 @@ class TestRepr(TestCase):
         # define some values for the test cases
         rec_dtype = [("a", "f8"), ("b", "U8"), ("c", "i8", (2, 3))]
         nb_dict = Dict()
-        nb_dict['a'] = 1
+        nb_dict["a"] = 1
         # tests cases: list of different types + list comp of number types
         val_types_cases = [
             True,
@@ -59,5 +59,5 @@ class TestRepr(TestCase):
             self.check_repr(val)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

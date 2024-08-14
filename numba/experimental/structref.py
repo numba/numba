@@ -4,6 +4,7 @@ A mutable struct is passed by reference;
 hence, structref (a reference to a struct).
 
 """
+
 from numba import njit
 from numba.core import types, imputils, cgutils
 from numba.core.datamodel import default_manager, models
@@ -21,8 +22,8 @@ from numba.core.typing.templates import AttributeTemplate
 
 
 class _Utils:
-    """Internal builder-code utils for structref definitions.
-    """
+    """Internal builder-code utils for structref definitions."""
+
     def __init__(self, context, builder, struct_type):
         """
         Parameters
@@ -38,8 +39,7 @@ class _Utils:
         self.struct_type = struct_type
 
     def new_struct_ref(self, mi):
-        """Encapsulate the MemInfo from a `StructRefPayload` in a `StructRef`
-        """
+        """Encapsulate the MemInfo from a `StructRefPayload` in a `StructRef`"""
         context = self.context
         builder = self.builder
         struct_type = self.struct_type
@@ -49,19 +49,15 @@ class _Utils:
         return st
 
     def get_struct_ref(self, val):
-        """Return a helper for accessing a StructRefType
-        """
+        """Return a helper for accessing a StructRefType"""
         context = self.context
         builder = self.builder
         struct_type = self.struct_type
 
-        return cgutils.create_struct_proxy(struct_type)(
-            context, builder, value=val
-        )
+        return cgutils.create_struct_proxy(struct_type)(context, builder, value=val)
 
     def get_data_pointer(self, val):
-        """Get the data pointer to the payload from a `StructRefType`.
-        """
+        """Get the data pointer to the payload from a `StructRefType`."""
         context = self.context
         builder = self.builder
         struct_type = self.struct_type
@@ -77,17 +73,14 @@ class _Utils:
         return data_ptr
 
     def get_data_struct(self, val):
-        """Get a getter/setter helper for accessing a `StructRefPayload`
-        """
+        """Get a getter/setter helper for accessing a `StructRefPayload`"""
         context = self.context
         builder = self.builder
         struct_type = self.struct_type
 
         data_ptr = self.get_data_pointer(val)
         valtype = struct_type.get_data_type()
-        dataval = cgutils.create_struct_proxy(valtype)(
-            context, builder, ref=data_ptr
-        )
+        dataval = cgutils.create_struct_proxy(valtype)(context, builder, ref=data_ptr)
         return dataval
 
 
@@ -98,6 +91,7 @@ def define_attributes(struct_typeclass):
 
     This is called directly in `register()`.
     """
+
     @infer_getattr
     class StructAttribute(AttributeTemplate):
         key = struct_typeclass
@@ -168,7 +162,8 @@ def define_boxing(struct_type, obj_class):
         ty_pyobj = c.pyapi.unserialize(c.pyapi.serialize_object(typ))
 
         res = c.pyapi.call_function_objargs(
-            ctor_pyfunc, [ty_pyobj, boxed_meminfo],
+            ctor_pyfunc,
+            [ty_pyobj, boxed_meminfo],
         )
         c.pyapi.decref(ctor_pyfunc)
         c.pyapi.decref(ty_pyobj)
@@ -199,12 +194,12 @@ def define_constructor(py_class, struct_typeclass, fields):
     logic defined.
     """
     # Build source code for the constructor
-    params = ', '.join(fields)
-    indent = ' ' * 8
+    params = ", ".join(fields)
+    indent = " " * 8
     init_fields_buf = []
     for k in fields:
         init_fields_buf.append(f"st.{k} = {k}")
-    init_fields = f'\n{indent}'.join(init_fields_buf)
+    init_fields = f"\n{indent}".join(init_fields_buf)
 
     source = f"""
 def ctor({params}):
@@ -218,7 +213,7 @@ def ctor({params}):
 
     glbs = dict(struct_typeclass=struct_typeclass, new=new)
     exec(source, glbs)
-    ctor = glbs['ctor']
+    ctor = glbs["ctor"]
     # Make it an overload
     overload(py_class)(ctor)
 
@@ -333,7 +328,8 @@ class StructRefProxy:
     * Subclasses should not define ``__init__``.
     * Subclasses can override ``__new__``.
     """
-    __slots__ = ('_type', '_meminfo')
+
+    __slots__ = ("_type", "_meminfo")
 
     @classmethod
     def _numba_box_(cls, ty, mi):
@@ -371,6 +367,7 @@ class StructRefProxy:
             @njit
             def ctor(*args):
                 return cls(*args)
+
             # cache it to attribute to avoid recompilation
             cls.__numba_ctor = ctor
         return ctor(*args)

@@ -17,7 +17,7 @@ from numba.core import utils
 
 
 class Rating(object):
-    __slots__ = 'promote', 'safe_convert', "unsafe_convert"
+    __slots__ = "promote", "safe_convert", "unsafe_convert"
 
     def __init__(self):
         self.promote = 0
@@ -105,6 +105,7 @@ class CallFrame(object):
     """
     A compile-time call frame
     """
+
     def __init__(self, target, typeinfer, func_id, args):
         self.typeinfer = typeinfer
         self.func_id = func_id
@@ -129,8 +130,7 @@ class CallFrame(object):
 
 
 class BaseContext(object):
-    """A typing context for storing function typing constrain template.
-    """
+    """A typing context for storing function typing constrain template."""
 
     def __init__(self):
         # A list of installed registries
@@ -172,19 +172,19 @@ class BaseContext(object):
 
         elif func in self._functions:
             for tpl in self._functions[func]:
-                param = param or hasattr(tpl, 'generic')
-                defns.extend(getattr(tpl, 'cases', []))
+                param = param or hasattr(tpl, "generic")
+                defns.extend(getattr(tpl, "cases", []))
 
         else:
             msg = "No type info available for {func!r} as a callable."
             desc.append(msg.format(func=func))
 
         if defns:
-            desc = ['Known signatures:']
+            desc = ["Known signatures:"]
             for sig in defns:
-                desc.append(' * {0}'.format(sig))
+                desc.append(" * {0}".format(sig))
 
-        return '\n'.join(desc)
+        return "\n".join(desc)
 
     def resolve_function_type(self, func, args, kws):
         """
@@ -265,10 +265,11 @@ class BaseContext(object):
         Resolve getting the attribute *attr* (a string) on the Numba type.
         The attribute's type is returned, or None if resolution failed.
         """
+
         def core(typ):
             out = self.find_matching_getattr_template(typ, attr)
             if out:
-                return out['return_type']
+                return out["return_type"]
 
         out = core(typ)
         if out is not None:
@@ -289,7 +290,8 @@ class BaseContext(object):
         templates = list(self._get_attribute_templates(typ))
 
         # get the order in which to try templates
-        from numba.core.target_extension import get_local_target # circular
+        from numba.core.target_extension import get_local_target  # circular
+
         target_hw = get_local_target(self)
         order = order_by_target_specificity(target_hw, templates, fnkey=attr)
 
@@ -297,8 +299,8 @@ class BaseContext(object):
             return_type = template.resolve(typ, attr)
             if return_type is not None:
                 return {
-                    'template': template,
-                    'return_type': return_type,
+                    "template": template,
+                    "return_type": return_type,
                 }
 
     def resolve_setattr(self, target, attr, value):
@@ -366,8 +368,9 @@ class BaseContext(object):
                 # There's no need to synchronize on a stream when we're only
                 # determining typing - synchronization happens at launch time,
                 # so eliding sync here is safe.
-                return typeof(numba.cuda.as_cuda_array(val, sync=False),
-                              Purpose.argument)
+                return typeof(
+                    numba.cuda.as_cuda_array(val, sync=False), Purpose.argument
+                )
             else:
                 raise
 
@@ -397,8 +400,7 @@ class BaseContext(object):
         raise typeof_exc
 
     def resolve_value_type_prefer_literal(self, value):
-        """Resolve value type and prefer Literal types whenever possible.
-        """
+        """Resolve value type and prefer Literal types whenever possible."""
         lit = types.maybe_literal(value)
         if lit is None:
             return self.resolve_value_type(value)
@@ -414,9 +416,13 @@ class BaseContext(object):
 
     def _load_builtins(self):
         # Initialize declarations
-        from numba.core.typing import builtins, arraydecl, npdatetime  # noqa: F401, E501
-        from numba.core.typing import ctypes_utils, bufproto           # noqa: F401, E501
-        from numba.core.unsafe import eh                    # noqa: F401
+        from numba.core.typing import (
+            builtins,
+            arraydecl,
+            npdatetime,
+        )  # noqa: F401, E501
+        from numba.core.typing import ctypes_utils, bufproto  # noqa: F401, E501
+        from numba.core.unsafe import eh  # noqa: F401
 
         self.install_registry(templates.builtin_registry)
 
@@ -436,16 +442,16 @@ class BaseContext(object):
             loader = templates.RegistryLoader(registry)
             self._registries[registry] = loader
 
-        from numba.core.target_extension import (get_local_target,
-                                                 resolve_target_str)
+        from numba.core.target_extension import get_local_target, resolve_target_str
+
         current_target = get_local_target(self)
 
         def is_for_this_target(ftcls):
-            metadata = getattr(ftcls, 'metadata', None)
+            metadata = getattr(ftcls, "metadata", None)
             if metadata is None:
                 return True
 
-            target_str = metadata.get('target')
+            target_str = metadata.get("target")
             if target_str is None:
                 return True
 
@@ -475,15 +481,15 @@ class BaseContext(object):
 
             return current_target.inherits_from(ft_target)
 
-        for ftcls in loader.new_registrations('functions'):
+        for ftcls in loader.new_registrations("functions"):
             if not is_for_this_target(ftcls):
                 continue
             self.insert_function(ftcls(self))
-        for ftcls in loader.new_registrations('attributes'):
+        for ftcls in loader.new_registrations("attributes"):
             if not is_for_this_target(ftcls):
                 continue
             self.insert_attributes(ftcls(self))
-        for gv, gty in loader.new_registrations('globals'):
+        for gv, gty in loader.new_registrations("globals"):
             existing = self._lookup_global(gv)
             if existing is None:
                 self.insert_global(gv, gty)
@@ -491,8 +497,7 @@ class BaseContext(object):
                 # A type was already inserted, see if we can add to it
                 newty = existing.augment(gty)
                 if newty is None:
-                    raise TypeError("cannot augment %s with %s"
-                                    % (existing, gty))
+                    raise TypeError("cannot augment %s with %s" % (existing, gty))
                 self._remove_global(gv)
                 self._insert_global(gv, newty)
 
@@ -515,10 +520,12 @@ class BaseContext(object):
         Register type *gty* for value *gv*.  Only a weak reference
         to *gv* is kept, if possible.
         """
+
         def on_disposal(wr, pop=self._globals.pop):
             # pop() is pre-looked up to avoid a crash late at shutdown on 3.5
             # (https://bugs.python.org/issue25217)
             pop(wr)
+
         try:
             gv = weakref.ref(gv, on_disposal)
         except TypeError:
@@ -583,8 +590,9 @@ class BaseContext(object):
             else:
                 return min(forward, backward)
 
-    def _rate_arguments(self, actualargs, formalargs, unsafe_casting=True,
-                        exact_match_required=False):
+    def _rate_arguments(
+        self, actualargs, formalargs, unsafe_casting=True, exact_match_required=False
+    ):
         """
         Rate the actual arguments for compatibility against the formal
         arguments.  A Rating instance is returned, or None if incompatible.
@@ -633,9 +641,16 @@ class BaseContext(object):
             self.tm.set_compatible(actual, formal, conv)
         return True
 
-    def resolve_overload(self, key, cases, args, kws,
-                         allow_ambiguous=True, unsafe_casting=True,
-                         exact_match_required=False):
+    def resolve_overload(
+        self,
+        key,
+        cases,
+        args,
+        kws,
+        allow_ambiguous=True,
+        unsafe_casting=True,
+        exact_match_required=False,
+    ):
         """
         Given actual *args* and *kws*, find the best matching
         signature in *cases*, or None if none matches.
@@ -646,8 +661,8 @@ class BaseContext(object):
         """
         assert not kws, "Keyword arguments are not supported, yet"
         options = {
-            'unsafe_casting': unsafe_casting,
-            'exact_match_required': exact_match_required,
+            "unsafe_casting": unsafe_casting,
+            "exact_match_required": exact_match_required,
         }
         # Rate each case
         candidates = []
@@ -669,7 +684,7 @@ class BaseContext(object):
                         break
                     tied.append(case)
                 if len(tied) > 1:
-                    args = (key, args, '\n'.join(map(str, tied)))
+                    args = (key, args, "\n".join(map(str, tied)))
                     msg = "Ambiguous overloading for %s %s:\n%s" % args
                     raise TypeError(msg)
             # Simply return the best matching candidate in order.
@@ -687,7 +702,8 @@ class BaseContext(object):
             """Uses bitwidth to order numeric-types.
             Fallback to stable, deterministic sort.
             """
-            return getattr(obj, 'bitwidth', 0)
+            return getattr(obj, "bitwidth", 0)
+
         typelist = sorted(typelist, key=keyfunc)
         unified = typelist[0]
         for tp in typelist[1:]:
@@ -729,8 +745,7 @@ class BaseContext(object):
             # Can convert from second to first
             return first
 
-        if isinstance(first, types.Literal) or \
-           isinstance(second, types.Literal):
+        if isinstance(first, types.Literal) or isinstance(second, types.Literal):
             first = types.unliteral(first)
             second = types.unliteral(second)
             return self.unify_pairs(first, second)
@@ -752,6 +767,7 @@ class Context(BaseContext):
             setdecl,
             dictdecl,
         )
+
         self.install_registry(cffi_utils.registry)
         self.install_registry(cmathdecl.registry)
         self.install_registry(enumdecl.registry)

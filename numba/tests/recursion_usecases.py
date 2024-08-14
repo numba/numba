@@ -24,6 +24,7 @@ def make_fib2():
 
     return fib2
 
+
 fib2 = make_fib2()
 
 
@@ -34,6 +35,7 @@ def make_type_change_self(jit=lambda x: x):
             return x + type_change_self(x - y, y)
         else:
             return y
+
     return type_change_self
 
 
@@ -93,6 +95,7 @@ def make_mutual2(jit=lambda x: x):
 
 # Mutual runaway recursion
 
+
 @jit(nopython=True)
 def runaway_mutual(x):
     return runaway_mutual_inner(x)
@@ -104,6 +107,7 @@ def runaway_mutual_inner(x):
 
 
 # Mutual type changing recursion
+
 
 def make_type_change_mutual(jit=lambda x: x):
     @jit
@@ -187,7 +191,7 @@ def make_raise_mutual(jit=lambda x: x):
     @jit
     def inner(x):
         if x == 1:
-            raise ValueError('raise_mutual')
+            raise ValueError("raise_mutual")
         elif x > 0:
             return outer(x - 1)
         else:
@@ -225,4 +229,5 @@ def make_growing_tuple_case(jit=lambda x: x):
             return None
 
         return (n, make_list(n - 1))
+
     return make_list

@@ -6,18 +6,34 @@ of random distributions.
 import numpy as np
 
 from numba.core.extending import register_jitable
-from numba.np.random._constants import (wi_double, ki_double,
-                                        ziggurat_nor_r, fi_double,
-                                        wi_float, ki_float,
-                                        ziggurat_nor_inv_r_f,
-                                        ziggurat_nor_r_f, fi_float,
-                                        we_double, ke_double,
-                                        ziggurat_exp_r, fe_double,
-                                        we_float, ke_float,
-                                        ziggurat_exp_r_f, fe_float,
-                                        INT64_MAX, ziggurat_nor_inv_r)
-from numba.np.random.generator_core import (next_double, next_float,
-                                            next_uint32, next_uint64)
+from numba.np.random._constants import (
+    wi_double,
+    ki_double,
+    ziggurat_nor_r,
+    fi_double,
+    wi_float,
+    ki_float,
+    ziggurat_nor_inv_r_f,
+    ziggurat_nor_r_f,
+    fi_float,
+    we_double,
+    ke_double,
+    ziggurat_exp_r,
+    fe_double,
+    we_float,
+    ke_float,
+    ziggurat_exp_r_f,
+    fe_float,
+    INT64_MAX,
+    ziggurat_nor_inv_r,
+)
+from numba.np.random.generator_core import (
+    next_double,
+    next_float,
+    next_uint32,
+    next_uint64,
+)
+
 # All of the following implementations are direct translations from:
 # https://github.com/numpy/numpy/blob/7cfef93c77599bd387ecc6a15d186c5a46024dac/numpy/random/src/distributions/distributions.c
 
@@ -46,12 +62,12 @@ def np_expm1(x):
 def random_standard_normal(bitgen):
     while 1:
         r = next_uint64(bitgen)
-        idx = r & 0xff
+        idx = r & 0xFF
         r >>= 8
         sign = r & 0x1
-        rabs = (r >> 1) & 0x000fffffffffffff
+        rabs = (r >> 1) & 0x000FFFFFFFFFFFFF
         x = rabs * wi_double[idx]
-        if (sign & 0x1):
+        if sign & 0x1:
             x = -x
         if rabs < ki_double[idx]:
             return x
@@ -59,15 +75,16 @@ def random_standard_normal(bitgen):
             while 1:
                 xx = -ziggurat_nor_inv_r * np.log1p(-next_double(bitgen))
                 yy = -np.log1p(-next_double(bitgen))
-                if (yy + yy > xx * xx):
-                    if ((rabs >> 8) & 0x1):
+                if yy + yy > xx * xx:
+                    if (rabs >> 8) & 0x1:
                         return -(ziggurat_nor_r + xx)
                     else:
                         return ziggurat_nor_r + xx
         else:
-            if (((fi_double[idx - 1] - fi_double[idx]) *
-                    next_double(bitgen) + fi_double[idx]) <
-                    np.exp(-0.5 * x * x)):
+            if (
+                (fi_double[idx - 1] - fi_double[idx]) * next_double(bitgen)
+                + fi_double[idx]
+            ) < np.exp(-0.5 * x * x):
                 return x
 
 
@@ -75,27 +92,27 @@ def random_standard_normal(bitgen):
 def random_standard_normal_f(bitgen):
     while 1:
         r = next_uint32(bitgen)
-        idx = r & 0xff
+        idx = r & 0xFF
         sign = (r >> 8) & 0x1
-        rabs = (r >> 9) & 0x0007fffff
+        rabs = (r >> 9) & 0x0007FFFFF
         x = np.float32(np.float32(rabs) * wi_float[idx])
-        if (sign & 0x1):
+        if sign & 0x1:
             x = -x
-        if (rabs < ki_float[idx]):
+        if rabs < ki_float[idx]:
             return x
-        if (idx == 0):
+        if idx == 0:
             while 1:
-                xx = np.float32(-ziggurat_nor_inv_r_f *
-                             np_log1pf(-next_float(bitgen)))
+                xx = np.float32(-ziggurat_nor_inv_r_f * np_log1pf(-next_float(bitgen)))
                 yy = np.float32(-np_log1pf(-next_float(bitgen)))
-                if (np.float32(yy + yy) > np.float32(xx * xx)):
-                    if ((rabs >> 8) & 0x1):
+                if np.float32(yy + yy) > np.float32(xx * xx):
+                    if (rabs >> 8) & 0x1:
                         return -np.float32(ziggurat_nor_r_f + xx)
                     else:
                         return np.float32(ziggurat_nor_r_f + xx)
         else:
-            if (((fi_float[idx - 1] - fi_float[idx]) * next_float(bitgen) +
-                 fi_float[idx]) < np.float32(np.exp(-np.float32(0.5) * x * x))):
+            if (
+                (fi_float[idx - 1] - fi_float[idx]) * next_float(bitgen) + fi_float[idx]
+            ) < np.float32(np.exp(-np.float32(0.5) * x * x)):
                 return x
 
 
@@ -107,13 +124,14 @@ def random_standard_exponential(bitgen):
         idx = ri & 0xFF
         ri >>= 8
         x = ri * we_double[idx]
-        if (ri < ke_double[idx]):
+        if ri < ke_double[idx]:
             return x
         else:
             if idx == 0:
                 return ziggurat_exp_r - np_log1p(-next_double(bitgen))
-            elif ((fe_double[idx - 1] - fe_double[idx]) * next_double(bitgen) +
-                  fe_double[idx] < np.exp(-x)):
+            elif (fe_double[idx - 1] - fe_double[idx]) * next_double(
+                bitgen
+            ) + fe_double[idx] < np.exp(-x):
                 return x
 
 
@@ -125,14 +143,16 @@ def random_standard_exponential_f(bitgen):
         idx = ri & 0xFF
         ri >>= 8
         x = np.float32(np.float32(ri) * we_float[idx])
-        if (ri < ke_float[idx]):
+        if ri < ke_float[idx]:
             return x
         else:
-            if (idx == 0):
-                return np.float32(ziggurat_exp_r_f -
-                               np.float32(np_log1pf(-next_float(bitgen))))
-            elif ((fe_float[idx - 1] - fe_float[idx]) * next_float(bitgen) +
-                  fe_float[idx] < np.float32(np.exp(np.float32(-x)))):
+            if idx == 0:
+                return np.float32(
+                    ziggurat_exp_r_f - np.float32(np_log1pf(-next_float(bitgen)))
+                )
+            elif (fe_float[idx - 1] - fe_float[idx]) * next_float(bitgen) + fe_float[
+                idx
+            ] < np.float32(np.exp(np.float32(-x))):
                 return x
 
 
@@ -148,63 +168,67 @@ def random_standard_exponential_inv_f(bitgen):
 
 @register_jitable
 def random_standard_gamma(bitgen, shape):
-    if (shape == 1.0):
+    if shape == 1.0:
         return random_standard_exponential(bitgen)
-    elif (shape == 0.0):
+    elif shape == 0.0:
         return 0.0
-    elif (shape < 1.0):
+    elif shape < 1.0:
         while 1:
             U = next_double(bitgen)
             V = random_standard_exponential(bitgen)
-            if (U <= 1.0 - shape):
-                X = pow(U, 1. / shape)
-                if (X <= V):
+            if U <= 1.0 - shape:
+                X = pow(U, 1.0 / shape)
+                if X <= V:
                     return X
             else:
                 Y = -np.log((1 - U) / shape)
-                X = pow(1.0 - shape + shape * Y, 1. / shape)
-                if (X <= (V + Y)):
+                X = pow(1.0 - shape + shape * Y, 1.0 / shape)
+                if X <= (V + Y):
                     return X
     else:
-        b = shape - 1. / 3.
-        c = 1. / np.sqrt(9 * b)
+        b = shape - 1.0 / 3.0
+        c = 1.0 / np.sqrt(9 * b)
         while 1:
             while 1:
                 X = random_standard_normal(bitgen)
                 V = 1.0 + c * X
-                if (V > 0.0):
+                if V > 0.0:
                     break
 
             V = V * V * V
             U = next_double(bitgen)
-            if (U < 1.0 - 0.0331 * (X * X) * (X * X)):
-                return (b * V)
+            if U < 1.0 - 0.0331 * (X * X) * (X * X):
+                return b * V
 
-            if (np.log(U) < 0.5 * X * X + b * (1. - V + np.log(V))):
-                return (b * V)
+            if np.log(U) < 0.5 * X * X + b * (1.0 - V + np.log(V)):
+                return b * V
 
 
 @register_jitable
 def random_standard_gamma_f(bitgen, shape):
     f32_one = np.float32(1.0)
     shape = np.float32(shape)
-    if (shape == f32_one):
+    if shape == f32_one:
         return random_standard_exponential_f(bitgen)
-    elif (shape == np.float32(0.0)):
+    elif shape == np.float32(0.0):
         return np.float32(0.0)
-    elif (shape < f32_one):
+    elif shape < f32_one:
         while 1:
             U = next_float(bitgen)
             V = random_standard_exponential_f(bitgen)
-            if (U <= f32_one - shape):
+            if U <= f32_one - shape:
                 X = np.float32(pow(U, np.float32(f32_one / shape)))
-                if (X <= V):
+                if X <= V:
                     return X
             else:
                 Y = np.float32(-np.log(np.float32((f32_one - U) / shape)))
-                X = np.float32(pow(f32_one - shape + np.float32(shape * Y),
-                            np.float32(f32_one / shape)))
-                if (X <= (V + Y)):
+                X = np.float32(
+                    pow(
+                        f32_one - shape + np.float32(shape * Y),
+                        np.float32(f32_one / shape),
+                    )
+                )
+                if X <= (V + Y):
                     return X
     else:
         b = shape - f32_one / np.float32(3.0)
@@ -213,16 +237,15 @@ def random_standard_gamma_f(bitgen, shape):
             while 1:
                 X = np.float32(random_standard_normal_f(bitgen))
                 V = np.float32(f32_one + c * X)
-                if (V > np.float32(0.0)):
+                if V > np.float32(0.0):
                     break
 
             V = np.float32(V * V * V)
             U = next_float(bitgen)
-            if (U < f32_one - np.float32(0.0331) * (X * X) * (X * X)):
+            if U < f32_one - np.float32(0.0331) * (X * X) * (X * X):
                 return np.float32(b * V)
 
-            if (np.log(U) < np.float32(0.5) * X * X + b *
-                    (f32_one - V + np.log(V))):
+            if np.log(U) < np.float32(0.5) * X * X + b * (f32_one - V + np.log(V)):
                 return np.float32(b * V)
 
 
@@ -269,7 +292,7 @@ def random_beta(bitgen, a, b):
             Y = pow(V, 1.0 / b)
             XpY = X + Y
             if XpY <= 1.0 and XpY > 0.0:
-                if (X + Y > 0):
+                if X + Y > 0:
                     return X / XpY
                 else:
                     logX = np.log(U) / a
@@ -292,8 +315,9 @@ def random_chisquare(bitgen, df):
 
 @register_jitable
 def random_f(bitgen, dfnum, dfden):
-    return ((random_chisquare(bitgen, dfnum) * dfden) /
-            (random_chisquare(bitgen, dfden) * dfnum))
+    return (random_chisquare(bitgen, dfnum) * dfden) / (
+        random_chisquare(bitgen, dfden) * dfnum
+    )
 
 
 @register_jitable
@@ -308,14 +332,14 @@ def random_pareto(bitgen, a):
 
 @register_jitable
 def random_weibull(bitgen, a):
-    if (a == 0.0):
+    if a == 0.0:
         return 0.0
-    return pow(random_standard_exponential(bitgen), 1. / a)
+    return pow(random_standard_exponential(bitgen), 1.0 / a)
 
 
 @register_jitable
 def random_power(bitgen, a):
-    return pow(-np_expm1(-random_standard_exponential(bitgen)), 1. / a)
+    return pow(-np_expm1(-random_standard_exponential(bitgen)), 1.0 / a)
 
 
 @register_jitable
@@ -323,9 +347,9 @@ def random_laplace(bitgen, loc, scale):
     U = next_double(bitgen)
     while U <= 0:
         U = next_double(bitgen)
-    if (U >= 0.5):
+    if U >= 0.5:
         U = loc - scale * np.log(2.0 - U - U)
-    elif (U > 0.0):
+    elif U > 0.0:
         U = loc + scale * np.log(U + U)
     return U
 
@@ -357,7 +381,7 @@ def random_wald(bitgen, mean, scale):
     Y = mean * Y * Y
     X = mean + mu_2l * (Y - np.sqrt(4 * scale * Y + Y * Y))
     U = next_double(bitgen)
-    if (U <= mean / (mean + X)):
+    if U <= mean / (mean + X):
         return X
     else:
         return mean * mean / X
@@ -369,7 +393,7 @@ def random_geometric_search(bitgen, p):
     sum = prod = p
     q = 1.0 - p
     U = next_double(bitgen)
-    while (U > sum):
+    while U > sum:
         prod *= q
         sum += prod
         X = X + 1
@@ -383,7 +407,7 @@ def random_geometric_inversion(bitgen, p):
 
 @register_jitable
 def random_geometric(bitgen, p):
-    if (p >= 0.333333333333333333333333):
+    if p >= 0.333333333333333333333333:
         return random_geometric_search(bitgen, p)
     else:
         return random_geometric_inversion(bitgen, p)
@@ -397,17 +421,16 @@ def random_zipf(bitgen, a):
         U = 1.0 - next_double(bitgen)
         V = next_double(bitgen)
         X = np.floor(pow(U, -1.0 / am1))
-        if (X > INT64_MAX or X < 1.0):
+        if X > INT64_MAX or X < 1.0:
             continue
 
         T = pow(1.0 + 1.0 / X, am1)
-        if (V * X * (T - 1.0) / (b - 1.0) <= T / b):
+        if V * X * (T - 1.0) / (b - 1.0) <= T / b:
             return X
 
 
 @register_jitable
-def random_triangular(bitgen, left, mode,
-                      right):
+def random_triangular(bitgen, left, mode, right):
     base = right - left
     leftbase = mode - left
     ratio = leftbase / base
@@ -415,7 +438,7 @@ def random_triangular(bitgen, left, mode,
     rightprod = (right - mode) * base
 
     U = next_double(bitgen)
-    if (U <= ratio):
+    if U <= ratio:
         return left + np.sqrt(U * leftprod)
     else:
         return right - np.sqrt((1.0 - U) * rightprod)
@@ -423,15 +446,22 @@ def random_triangular(bitgen, left, mode,
 
 @register_jitable
 def random_loggam(x):
-    a = [8.333333333333333e-02, -2.777777777777778e-03,
-         7.936507936507937e-04, -5.952380952380952e-04,
-         8.417508417508418e-04, -1.917526917526918e-03,
-         6.410256410256410e-03, -2.955065359477124e-02,
-         1.796443723688307e-01, -1.39243221690590e+00]
+    a = [
+        8.333333333333333e-02,
+        -2.777777777777778e-03,
+        7.936507936507937e-04,
+        -5.952380952380952e-04,
+        8.417508417508418e-04,
+        -1.917526917526918e-03,
+        6.410256410256410e-03,
+        -2.955065359477124e-02,
+        1.796443723688307e-01,
+        -1.39243221690590e00,
+    ]
 
-    if ((x == 1.0) or (x == 2.0)):
+    if (x == 1.0) or (x == 2.0):
         return 0.0
-    elif (x < 7.0):
+    elif x < 7.0:
         n = int(7 - x)
     else:
         n = 0
@@ -439,7 +469,7 @@ def random_loggam(x):
     x0 = x + n
     x2 = (1.0 / x0) * (1.0 / x0)
     # /* log(2 * M_PI) */
-    lg2pi = 1.8378770664093453e+00
+    lg2pi = 1.8378770664093453e00
     gl0 = a[9]
 
     for k in range(0, 9):
@@ -447,7 +477,7 @@ def random_loggam(x):
         gl0 += a[8 - k]
 
     gl = gl0 / x0 + 0.5 * lg2pi + (x0 - 0.5) * np.log(x0) - x0
-    if (x < 7.0):
+    if x < 7.0:
         for k in range(1, n + 1):
             gl = gl - np.log(x0 - 1.0)
             x0 = x0 - 1.0
@@ -460,10 +490,10 @@ def random_poisson_mult(bitgen, lam):
     enlam = np.exp(-lam)
     X = 0
     prod = 1.0
-    while (1):
+    while 1:
         U = next_double(bitgen)
         prod *= U
-        if (prod > enlam):
+        if prod > enlam:
             X += 1
         else:
             return X
@@ -479,29 +509,30 @@ def random_poisson_ptrs(bitgen, lam):
     invalpha = 1.1239 + 1.1328 / (b - 3.4)
     vr = 0.9277 - 3.6224 / (b - 2)
 
-    while (1):
+    while 1:
         U = next_double(bitgen) - 0.5
         V = next_double(bitgen)
         us = 0.5 - np.fabs(U)
         k = int((2 * a / us + b) * U + lam + 0.43)
-        if ((us >= 0.07) and (V <= vr)):
+        if (us >= 0.07) and (V <= vr):
             return k
 
-        if ((k < 0) or ((us < 0.013) and (V > us))):
+        if (k < 0) or ((us < 0.013) and (V > us)):
             continue
 
         # /* log(V) == log(0.0) ok here */
         # /* if U==0.0 so that us==0.0, log is ok since always returns */
-        if ((np.log(V) + np.log(invalpha) - np.log(a / (us * us) + b)) <=
-           (-lam + k * loglam - random_loggam(k + 1))):
+        if (np.log(V) + np.log(invalpha) - np.log(a / (us * us) + b)) <= (
+            -lam + k * loglam - random_loggam(k + 1)
+        ):
             return k
 
 
 @register_jitable
 def random_poisson(bitgen, lam):
-    if (lam >= 10):
+    if lam >= 10:
         return random_poisson_ptrs(bitgen, lam)
-    elif (lam == 0):
+    elif lam == 0:
         return 0
     else:
         return random_poisson_mult(bitgen, lam)
@@ -542,17 +573,17 @@ def random_logseries(bitgen, p):
 
     while 1:
         V = next_double(bitgen)
-        if (V >= p):
+        if V >= p:
             return 1
         U = next_double(bitgen)
         q = -np.expm1(r * U)
-        if (V <= q * q):
+        if V <= q * q:
             result = np.int64(np.floor(1 + np.log(V) / np.log(q)))
             if result < 1 or V == 0.0:
                 continue
             else:
                 return result
-        if (V >= q):
+        if V >= q:
             return 1
         else:
             return 2
@@ -584,30 +615,30 @@ def random_binomial_btpe(bitgen, n, p):
             nrq = n * r * q
             u = next_double(bitgen) * p4
             v = next_double(bitgen)
-            if (u > p1):
+            if u > p1:
                 case = 20
                 continue
             y = int(np.floor(xm - p1 * v + u))
             case = 60
             continue
         elif case == 20:
-            if (u > p2):
+            if u > p2:
                 case = 30
                 continue
             x = xl + (u - p1) / c
             v = v * c + 1.0 - np.fabs(m - x + 0.5) / p1
-            if (v > 1.0):
+            if v > 1.0:
                 case = 10
                 continue
             y = int(np.floor(x))
             case = 50
             continue
         elif case == 30:
-            if (u > p3):
+            if u > p3:
                 case = 40
                 continue
             y = int(np.floor(xl + np.log(v) / laml))
-            if ((y < 0) or (v == 0.0)):
+            if (y < 0) or (v == 0.0):
                 case = 10
                 continue
             v = v * (u - p2) * laml
@@ -615,7 +646,7 @@ def random_binomial_btpe(bitgen, n, p):
             continue
         elif case == 40:
             y = int(np.floor(xr - np.log(v) / lamr))
-            if ((y > n) or (v == 0.0)):
+            if (y > n) or (v == 0.0):
                 case = 10
                 continue
             v = v * (u - p3) * lamr
@@ -623,33 +654,33 @@ def random_binomial_btpe(bitgen, n, p):
             continue
         elif case == 50:
             k = abs(y - m)
-            if ((k > 20) and (k < ((nrq) / 2.0 - 1))):
+            if (k > 20) and (k < ((nrq) / 2.0 - 1)):
                 case = 52
                 continue
             s = r / q
             a = s * (n + 1)
             F = 1.0
-            if (m < y):
+            if m < y:
                 for i in range(m + 1, y + 1):
                     F = F * (a / i - s)
-            elif (m > y):
+            elif m > y:
                 for i in range(y + 1, m + 1):
                     F = F / (a / i - s)
-            if (v > F):
+            if v > F:
                 case = 10
                 continue
             case = 60
             continue
         elif case == 52:
-            rho = (k / (nrq)) * \
-                  ((k * (k / 3.0 + 0.625) + 0.16666666666666666) /
-                   nrq + 0.5)
+            rho = (k / (nrq)) * (
+                (k * (k / 3.0 + 0.625) + 0.16666666666666666) / nrq + 0.5
+            )
             t = -k * k / (2 * nrq)
             A = np.log(v)
-            if (A < (t - rho)):
+            if A < (t - rho):
                 case = 60
                 continue
-            if (A > (t + rho)):
+            if A > (t + rho):
                 case = 10
                 continue
             x1 = y + 1
@@ -660,20 +691,27 @@ def random_binomial_btpe(bitgen, n, p):
             f2 = f1 * f1
             z2 = z * z
             w2 = w * w
-            if (A > (xm * np.log(f1 / x1) + (n - m + 0.5) * np.log(z / w) +
-                     (y - m) * np.log(w * r / (x1 * q)) +
-                     (13680. - (462. - (132. - (99. - 140. / f2) / f2) / f2)
-                      / f2) / f1 / 166320. +
-                     (13680. - (462. - (132. - (99. - 140. / z2) / z2) / z2)
-                      / z2) / z / 166320. +
-                     (13680. - (462. - (132. - (99. - 140. / x2) / x2) / x2)
-                      / x2) / x1 / 166320. +
-                     (13680. - (462. - (132. - (99. - 140. / w2) / w2) / w2)
-                      / w2) / w / 66320.)):
+            if A > (
+                xm * np.log(f1 / x1)
+                + (n - m + 0.5) * np.log(z / w)
+                + (y - m) * np.log(w * r / (x1 * q))
+                + (13680.0 - (462.0 - (132.0 - (99.0 - 140.0 / f2) / f2) / f2) / f2)
+                / f1
+                / 166320.0
+                + (13680.0 - (462.0 - (132.0 - (99.0 - 140.0 / z2) / z2) / z2) / z2)
+                / z
+                / 166320.0
+                + (13680.0 - (462.0 - (132.0 - (99.0 - 140.0 / x2) / x2) / x2) / x2)
+                / x1
+                / 166320.0
+                + (13680.0 - (462.0 - (132.0 - (99.0 - 140.0 / w2) / w2) / w2) / w2)
+                / w
+                / 66320.0
+            ):
                 case = 10
                 continue
         elif case == 60:
-            if (p > 0.5):
+            if p > 0.5:
                 y = n - y
             return y
 
@@ -688,9 +726,9 @@ def random_binomial_inversion(bitgen, n, p):
     X = 0
     px = qn
     U = next_double(bitgen)
-    while (U > px):
+    while U > px:
         X = X + 1
-        if (X > bound):
+        if X > bound:
             X = 0
             px = qn
             U = next_double(bitgen)
@@ -703,17 +741,17 @@ def random_binomial_inversion(bitgen, n, p):
 
 @register_jitable
 def random_binomial(bitgen, n, p):
-    if ((n == 0) or (p == 0.0)):
+    if (n == 0) or (p == 0.0):
         return 0
 
-    if (p <= 0.5):
-        if (p * n <= 30.0):
+    if p <= 0.5:
+        if p * n <= 30.0:
             return random_binomial_inversion(bitgen, n, p)
         else:
             return random_binomial_btpe(bitgen, n, p)
     else:
         q = 1.0 - p
-        if (q * n <= 30.0):
+        if q * n <= 30.0:
             return n - random_binomial_inversion(bitgen, n, q)
         else:
             return n - random_binomial_btpe(bitgen, n, q)

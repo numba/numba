@@ -6,20 +6,21 @@ from numba.core import types, cgutils, errors, config
 from numba.core.utils import PYVERSION
 
 
-_NRT_Meminfo_Functions = namedtuple("_NRT_Meminfo_Functions",
-                                    ("alloc",
-                                     "alloc_dtor",
-                                     "alloc_aligned"))
+_NRT_Meminfo_Functions = namedtuple(
+    "_NRT_Meminfo_Functions", ("alloc", "alloc_dtor", "alloc_aligned")
+)
 
 
-_NRT_MEMINFO_SAFE_API = _NRT_Meminfo_Functions("NRT_MemInfo_alloc_safe",
-                                               "NRT_MemInfo_alloc_dtor_safe",
-                                               "NRT_MemInfo_alloc_safe_aligned")
+_NRT_MEMINFO_SAFE_API = _NRT_Meminfo_Functions(
+    "NRT_MemInfo_alloc_safe",
+    "NRT_MemInfo_alloc_dtor_safe",
+    "NRT_MemInfo_alloc_safe_aligned",
+)
 
 
-_NRT_MEMINFO_DEFAULT_API = _NRT_Meminfo_Functions("NRT_MemInfo_alloc",
-                                                  "NRT_MemInfo_alloc_dtor",
-                                                  "NRT_MemInfo_alloc_aligned")
+_NRT_MEMINFO_DEFAULT_API = _NRT_Meminfo_Functions(
+    "NRT_MemInfo_alloc", "NRT_MemInfo_alloc_dtor", "NRT_MemInfo_alloc_aligned"
+)
 
 
 class NRTContext(object):
@@ -48,6 +49,7 @@ class NRTContext(object):
             msg = "Allocation failed (probably too large)."
             cgutils.guard_memory_error(self._context, builder, memptr, msg=msg)
             return memptr
+
         return wrap
 
     @_check_null_result
@@ -107,8 +109,7 @@ class NRTContext(object):
 
         mod = builder.module
         fnty = ir.FunctionType(cgutils.voidptr_t, [cgutils.intp_t])
-        fn = cgutils.get_or_insert_function(mod, fnty,
-                                            self._meminfo_api.alloc)
+        fn = cgutils.get_or_insert_function(mod, fnty, self._meminfo_api.alloc)
         fn.return_value.add_attribute("noalias")
         return builder.call(fn, [size])
 
@@ -137,13 +138,10 @@ class NRTContext(object):
         self._require_nrt()
 
         mod = builder.module
-        fnty = ir.FunctionType(cgutils.voidptr_t,
-                               [cgutils.intp_t, cgutils.voidptr_t])
-        fn = cgutils.get_or_insert_function(mod, fnty,
-                                            self._meminfo_api.alloc_dtor)
+        fnty = ir.FunctionType(cgutils.voidptr_t, [cgutils.intp_t, cgutils.voidptr_t])
+        fn = cgutils.get_or_insert_function(mod, fnty, self._meminfo_api.alloc_dtor)
         fn.return_value.add_attribute("noalias")
-        return builder.call(fn, [size,
-                                 builder.bitcast(dtor, cgutils.voidptr_t)])
+        return builder.call(fn, [size, builder.bitcast(dtor, cgutils.voidptr_t)])
 
     @_check_null_result
     def meminfo_alloc_aligned(self, builder, size, align):
@@ -174,8 +172,7 @@ class NRTContext(object):
         mod = builder.module
         u32 = ir.IntType(32)
         fnty = ir.FunctionType(cgutils.voidptr_t, [cgutils.intp_t, u32])
-        fn = cgutils.get_or_insert_function(mod, fnty,
-                                            self._meminfo_api.alloc_aligned)
+        fn = cgutils.get_or_insert_function(mod, fnty, self._meminfo_api.alloc_aligned)
         fn.return_value.add_attribute("noalias")
         if isinstance(align, int):
             align = self._context.get_constant(types.uint32, align)
@@ -211,8 +208,7 @@ class NRTContext(object):
 
         mod = builder.module
         fnty = ir.FunctionType(cgutils.voidptr_t, [cgutils.intp_t])
-        fn = cgutils.get_or_insert_function(mod, fnty,
-                                            "NRT_MemInfo_new_varsize")
+        fn = cgutils.get_or_insert_function(mod, fnty, "NRT_MemInfo_new_varsize")
         fn.return_value.add_attribute("noalias")
         return builder.call(fn, [size])
 
@@ -241,10 +237,8 @@ class NRTContext(object):
         self._require_nrt()
 
         mod = builder.module
-        fnty = ir.FunctionType(cgutils.voidptr_t,
-                               [cgutils.intp_t, cgutils.voidptr_t])
-        fn = cgutils.get_or_insert_function(
-            mod, fnty, "NRT_MemInfo_new_varsize_dtor")
+        fnty = ir.FunctionType(cgutils.voidptr_t, [cgutils.intp_t, cgutils.voidptr_t])
+        fn = cgutils.get_or_insert_function(mod, fnty, "NRT_MemInfo_new_varsize_dtor")
         return builder.call(fn, [size, dtor])
 
     @_check_null_result
@@ -277,8 +271,9 @@ class NRTContext(object):
 
         Returns NULL to indicate error/failure to allocate.
         """
-        return self._call_varsize_alloc(builder, meminfo, size,
-                                        "NRT_MemInfo_varsize_alloc")
+        return self._call_varsize_alloc(
+            builder, meminfo, size, "NRT_MemInfo_varsize_alloc"
+        )
 
     @_check_null_result
     def meminfo_varsize_realloc(self, builder, meminfo, size):
@@ -298,8 +293,9 @@ class NRTContext(object):
 
         Returns NULL to indicate error/failure to allocate.
         """
-        return self._call_varsize_alloc(builder, meminfo, size,
-                                        "NRT_MemInfo_varsize_realloc")
+        return self._call_varsize_alloc(
+            builder, meminfo, size, "NRT_MemInfo_varsize_realloc"
+        )
 
     def meminfo_varsize_free(self, builder, meminfo, ptr):
         """
@@ -309,18 +305,15 @@ class NRTContext(object):
         self._require_nrt()
 
         mod = builder.module
-        fnty = ir.FunctionType(ir.VoidType(),
-                               [cgutils.voidptr_t, cgutils.voidptr_t])
-        fn = cgutils.get_or_insert_function(mod, fnty,
-                                            "NRT_MemInfo_varsize_free")
+        fnty = ir.FunctionType(ir.VoidType(), [cgutils.voidptr_t, cgutils.voidptr_t])
+        fn = cgutils.get_or_insert_function(mod, fnty, "NRT_MemInfo_varsize_free")
         return builder.call(fn, (meminfo, ptr))
 
     def _call_varsize_alloc(self, builder, meminfo, size, funcname):
         self._require_nrt()
 
         mod = builder.module
-        fnty = ir.FunctionType(cgutils.voidptr_t,
-                               [cgutils.voidptr_t, cgutils.intp_t])
+        fnty = ir.FunctionType(cgutils.voidptr_t, [cgutils.voidptr_t, cgutils.intp_t])
         fn = cgutils.get_or_insert_function(mod, fnty, funcname)
         fn.return_value.add_attribute("noalias")
         return builder.call(fn, [meminfo, size])
@@ -336,13 +329,13 @@ class NRTContext(object):
         from numba.core.runtime.nrtdynmod import meminfo_data_ty
 
         mod = builder.module
-        fn = cgutils.get_or_insert_function(mod, meminfo_data_ty,
-                                            "NRT_MemInfo_data_fast")
+        fn = cgutils.get_or_insert_function(
+            mod, meminfo_data_ty, "NRT_MemInfo_data_fast"
+        )
         return builder.call(fn, [meminfo])
 
     def get_meminfos(self, builder, ty, val):
-        """Return a list of *(type, meminfo)* inside the given value.
-        """
+        """Return a list of *(type, meminfo)* inside the given value."""
         datamodel = self._context.data_model_manager[ty]
         members = datamodel.traverse(builder)
 
@@ -358,8 +351,7 @@ class NRTContext(object):
         return meminfos
 
     def _call_incref_decref(self, builder, typ, value, funcname):
-        """Call function of *funcname* on every meminfo found in *value*.
-        """
+        """Call function of *funcname* on every meminfo found in *value*."""
         self._require_nrt()
 
         from numba.core.runtime.nrtdynmod import incref_decref_ty
@@ -367,8 +359,7 @@ class NRTContext(object):
         meminfos = self.get_meminfos(builder, typ, value)
         for _, mi in meminfos:
             mod = builder.module
-            fn = cgutils.get_or_insert_function(mod, incref_decref_ty,
-                                                funcname)
+            fn = cgutils.get_or_insert_function(mod, incref_decref_ty, funcname)
             # XXX "nonnull" causes a crash in test_dyn_array: can this
             # function be called with a NULL pointer?
             fn.args[0].add_attribute("noalias")
@@ -388,8 +379,7 @@ class NRTContext(object):
         self._call_incref_decref(builder, typ, value, "NRT_decref")
 
     def get_nrt_api(self, builder):
-        """Calls NRT_get_api(), which returns the NRT API function table.
-        """
+        """Calls NRT_get_api(), which returns the NRT API function table."""
         self._require_nrt()
 
         fnty = ir.FunctionType(cgutils.voidptr_t, ())
@@ -398,8 +388,7 @@ class NRTContext(object):
         return builder.call(fn, ())
 
     def eh_check(self, builder):
-        """Check if an exception is raised
-        """
+        """Check if an exception is raised"""
         ctx = self._context
         cc = ctx.call_conv
         # Inspect the excinfo argument on the function
@@ -412,15 +401,13 @@ class NRTContext(object):
         return has_raised
 
     def eh_try(self, builder):
-        """Begin a try-block.
-        """
+        """Begin a try-block."""
         ctx = self._context
         cc = ctx.call_conv
         cc.set_try_status(builder)
 
     def eh_end_try(self, builder):
-        """End a try-block
-        """
+        """End a try-block"""
         ctx = self._context
         cc = ctx.call_conv
         cc.unset_try_status(builder)

@@ -2,14 +2,14 @@
 Implementation of some CFFI functions
 """
 
-
 from numba.core.imputils import Registry
 from numba.core import types
 from numba.np import arrayobj
 
-registry = Registry('cffiimpl')
+registry = Registry("cffiimpl")
 
-@registry.lower('ffi.from_buffer', types.Buffer)
+
+@registry.lower("ffi.from_buffer", types.Buffer)
 def from_buffer(context, builder, sig, args):
     assert len(sig.args) == 1
     assert len(args) == 1

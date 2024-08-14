@@ -8,20 +8,31 @@ import warnings
 
 from llvmlite import ir
 
-from numba.core.imputils import (lower_builtin, lower_getattr,
-                                 lower_getattr_generic, lower_cast,
-                                 lower_constant, iternext_impl,
-                                 call_getiter, call_iternext, impl_ret_borrowed,
-                                 impl_ret_untracked, numba_typeref_ctor)
+from numba.core.imputils import (
+    lower_builtin,
+    lower_getattr,
+    lower_getattr_generic,
+    lower_cast,
+    lower_constant,
+    iternext_impl,
+    call_getiter,
+    call_iternext,
+    impl_ret_borrowed,
+    impl_ret_untracked,
+    numba_typeref_ctor,
+)
 from numba.core import typing, types, utils, cgutils
 from numba.core.extending import overload, intrinsic
 from numba.core.typeconv import Conversion
-from numba.core.typing.templates import (AbstractTemplate, infer_global,
-                                         signature)
-from numba.core.errors import (TypingError, LoweringError,
-                               NumbaExperimentalFeatureWarning,
-                               NumbaTypeError, RequireLiteralValue,
-                               NumbaPerformanceWarning)
+from numba.core.typing.templates import AbstractTemplate, infer_global, signature
+from numba.core.errors import (
+    TypingError,
+    LoweringError,
+    NumbaExperimentalFeatureWarning,
+    NumbaTypeError,
+    RequireLiteralValue,
+    NumbaPerformanceWarning,
+)
 from numba.misc.special import literal_unroll
 from numba.core.typing.asnumbatype import as_numba_type
 
@@ -29,8 +40,10 @@ from numba.core.typing.asnumbatype import as_numba_type
 @overload(operator.truth)
 def ol_truth(val):
     if isinstance(val, types.Boolean):
+
         def impl(val):
             return val
+
         return impl
 
 
@@ -51,20 +64,20 @@ def generic_is(context, builder, sig, args):
     lhs_type, rhs_type = sig.args
     # the lhs and rhs have the same type
     if lhs_type == rhs_type:
-            # mutable types
-            if lhs_type.mutable:
-                msg = 'no default `is` implementation'
-                raise LoweringError(msg)
-            # immutable types
+        # mutable types
+        if lhs_type.mutable:
+            msg = "no default `is` implementation"
+            raise LoweringError(msg)
+        # immutable types
+        else:
+            # fallbacks to `==`
+            try:
+                eq_impl = context.get_function(operator.eq, sig)
+            except NotImplementedError:
+                # no `==` implemented for this type
+                return cgutils.false_bit
             else:
-                # fallbacks to `==`
-                try:
-                    eq_impl = context.get_function(operator.eq, sig)
-                except NotImplementedError:
-                    # no `==` implemented for this type
-                    return cgutils.false_bit
-                else:
-                    return eq_impl(builder, args)
+                return eq_impl(builder, args)
     else:
         return cgutils.false_bit
 
@@ -80,7 +93,7 @@ def opaque_is(context, builder, sig, args):
         lhs_ptr = builder.ptrtoint(args[0], cgutils.intp_t)
         rhs_ptr = builder.ptrtoint(args[1], cgutils.intp_t)
 
-        return builder.icmp_unsigned('==', lhs_ptr, rhs_ptr)
+        return builder.icmp_unsigned("==", lhs_ptr, rhs_ptr)
     else:
         return cgutils.false_bit
 
@@ -97,8 +110,7 @@ def bool_is_impl(context, builder, sig, args):
     _arg1 = context.cast(builder, arg1, arg1_type, types.boolean)
     _arg2 = context.cast(builder, arg2, arg2_type, types.boolean)
     eq_impl = context.get_function(
-        operator.eq,
-        typing.signature(types.boolean, types.boolean, types.boolean)
+        operator.eq, typing.signature(types.boolean, types.boolean, types.boolean)
     )
     return eq_impl(builder, (_arg1, _arg2))
 
@@ -132,19 +144,26 @@ def gen_non_eq(val):
         a_none = isinstance(a, types.NoneType)
         b_none = isinstance(b, types.NoneType)
         if a_none and b_none:
+
             def impl(a, b):
                 return val
+
             return impl
         elif a_none ^ b_none:
+
             def impl(a, b):
                 return not val
+
             return impl
+
     return none_equality
+
 
 overload(operator.eq)(gen_non_eq(True))
 overload(operator.ne)(gen_non_eq(False))
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
+
 
 @lower_getattr_generic(types.DeferredType)
 def deferred_getattr(context, builder, typ, value, attr):
@@ -156,6 +175,7 @@ def deferred_getattr(context, builder, typ, value, attr):
     imp = context.get_getattr(inner_type, attr)
     return imp(context, builder, inner_type, val, attr)
 
+
 @lower_cast(types.Any, types.DeferredType)
 @lower_cast(types.Optional, types.DeferredType)
 @lower_cast(types.Boolean, types.DeferredType)
@@ -163,6 +183,7 @@ def any_to_deferred(context, builder, fromty, toty, val):
     actual = context.cast(builder, val, fromty, toty.get())
     model = context.data_model_manager[toty]
     return model.set(builder, model.make_uninitialized(), actual)
+
 
 @lower_cast(types.DeferredType, types.Any)
 @lower_cast(types.DeferredType, types.Boolean)
@@ -173,7 +194,8 @@ def deferred_to_any(context, builder, fromty, toty, val):
     return context.cast(builder, val, fromty.get(), toty)
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 @lower_builtin(operator.getitem, types.CPointer, types.Integer)
 def getitem_cpointer(context, builder, sig, args):
@@ -190,7 +212,8 @@ def setitem_cpointer(context, builder, sig, args):
     builder.store(val, elem_ptr)
 
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
+
 
 def do_minmax(context, builder, argtys, args, cmpop):
     assert len(argtys) == len(args), (argtys, args)
@@ -222,15 +245,18 @@ def max_iterable(context, builder, sig, args):
     args = cgutils.unpack_tuple(builder, args[0])
     return do_minmax(context, builder, argtys, args, operator.gt)
 
+
 @lower_builtin(max, types.VarArg(types.Any))
 def max_vararg(context, builder, sig, args):
     return do_minmax(context, builder, sig.args, args, operator.gt)
+
 
 @lower_builtin(min, types.BaseTuple)
 def min_iterable(context, builder, sig, args):
     argtys = list(sig.args[0])
     args = cgutils.unpack_tuple(builder, args[0])
     return do_minmax(context, builder, argtys, args, operator.lt)
+
 
 @lower_builtin(min, types.VarArg(types.Any))
 def min_vararg(context, builder, sig, args):
@@ -240,6 +266,7 @@ def min_vararg(context, builder, sig, args):
 def _round_intrinsic(tp):
     # round() rounds half to even
     return "llvm.rint.f%d" % (tp.bitwidth,)
+
 
 @lower_builtin(round, types.Float)
 def round_impl_unary(context, builder, sig, args):
@@ -253,13 +280,15 @@ def round_impl_unary(context, builder, sig, args):
     res = builder.fptosi(res, context.get_value_type(sig.return_type))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+
 @lower_builtin(round, types.Float, types.Integer)
 def round_impl_binary(context, builder, sig, args):
     fltty = sig.args[0]
     # Allow calling the intrinsic from the Python implementation below.
     # This avoids the conversion to an int in Python 3's unary round().
     _round = types.ExternalFunction(
-        _round_intrinsic(fltty), typing.signature(fltty, fltty))
+        _round_intrinsic(fltty), typing.signature(fltty, fltty)
+    )
 
     def round_ndigits(x, ndigits):
         if math.isinf(x) or math.isnan(x):
@@ -272,7 +301,7 @@ def round_impl_binary(context, builder, sig, args):
                 pow1 = 10.0 ** (ndigits - 22)
                 pow2 = 1e22
             else:
-                pow1 = 10.0 ** ndigits
+                pow1 = 10.0**ndigits
                 pow2 = 1.0
             y = (x * pow1) * pow2
             if math.isinf(y):
@@ -288,8 +317,9 @@ def round_impl_binary(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # Numeric constructors
+
 
 @lower_builtin(int, types.Any)
 @lower_builtin(float, types.Any)
@@ -343,8 +373,10 @@ def number_constructor(context, builder, sig, args):
     if isinstance(sig.return_type, types.Array):
         # Array constructor
         dt = sig.return_type.dtype
+
         def foo(*arg_hack):
             return np.array(arg_hack, dtype=dt)
+
         res = context.compile_internal(builder, foo, sig, args)
         return impl_ret_untracked(context, builder, sig.return_type, res)
     else:
@@ -354,19 +386,20 @@ def number_constructor(context, builder, sig, args):
         return context.cast(builder, val, valty, sig.return_type)
 
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # Constants
+
 
 @lower_constant(types.Dummy)
 def constant_dummy(context, builder, ty, pyval):
     # This handles None, etc.
     return context.get_dummy_value()
 
+
 @lower_constant(types.ExternalFunctionPointer)
 def constant_function_pointer(context, builder, ty, pyval):
     ptrty = context.get_function_pointer_type(ty)
-    ptrval = context.add_dynamic_addr(builder, ty.get_pointer(pyval),
-                                      info=str(pyval))
+    ptrval = context.add_dynamic_addr(builder, ty.get_pointer(pyval), info=str(pyval))
     return builder.bitcast(ptrval, ptrty)
 
 
@@ -380,6 +413,7 @@ def constant_optional(context, builder, ty, pyval):
 
 # -----------------------------------------------------------------------------
 
+
 @lower_builtin(type, types.Any)
 def type_impl(context, builder, sig, args):
     """
@@ -390,16 +424,16 @@ def type_impl(context, builder, sig, args):
 
 @lower_builtin(iter, types.IterableType)
 def iter_impl(context, builder, sig, args):
-    ty, = sig.args
-    val, = args
+    (ty,) = sig.args
+    (val,) = args
     iterval = call_getiter(context, builder, ty, val)
     return iterval
 
 
 @lower_builtin(next, types.IteratorType)
 def next_impl(context, builder, sig, args):
-    iterty, = sig.args
-    iterval, = args
+    (iterty,) = sig.args
+    (iterval,) = args
 
     res = call_iternext(context, builder, iterty, iterval)
 
@@ -411,6 +445,7 @@ def next_impl(context, builder, sig, args):
 
 # -----------------------------------------------------------------------------
 
+
 @lower_builtin("not in", types.Any, types.Any)
 def not_in(context, builder, sig, args):
     def in_impl(a, b):
@@ -421,6 +456,7 @@ def not_in(context, builder, sig, args):
 
 
 # -----------------------------------------------------------------------------
+
 
 @lower_builtin(len, types.ConstSized)
 def constsized_len(context, builder, sig, args):
@@ -438,16 +474,19 @@ def sized_bool(context, builder, sig, args):
     else:
         return cgutils.false_bit
 
+
 @lower_builtin(tuple)
 def lower_empty_tuple(context, builder, sig, args):
     retty = sig.return_type
     res = context.get_constant_undef(retty)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+
 @lower_builtin(tuple, types.BaseTuple)
 def lower_tuple(context, builder, sig, args):
-    val, = args
+    (val,) = args
     return impl_ret_borrowed(context, builder, sig.return_type, val)
+
 
 @overload(bool)
 def bool_sequence(x):
@@ -461,16 +500,21 @@ def bool_sequence(x):
     )
 
     if isinstance(x, valid_types):
+
         def bool_impl(x):
             return len(x) > 0
+
         return bool_impl
 
-@overload(bool, inline='always')
+
+@overload(bool, inline="always")
 def bool_none(x):
     if isinstance(x, types.NoneType) or x is None:
         return lambda x: False
 
+
 # -----------------------------------------------------------------------------
+
 
 def get_type_max_value(typ):
     if isinstance(typ, types.Float):
@@ -479,12 +523,14 @@ def get_type_max_value(typ):
         return typ.maxval
     raise NotImplementedError("Unsupported type")
 
+
 def get_type_min_value(typ):
     if isinstance(typ, types.Float):
         return -np.inf
     if isinstance(typ, types.Integer):
         return typ.minval
     raise NotImplementedError("Unsupported type")
+
 
 @infer_global(get_type_min_value)
 @infer_global(get_type_max_value)
@@ -494,6 +540,7 @@ class MinValInfer(AbstractTemplate):
         assert len(args) == 1
         if isinstance(args[0], (types.DType, types.NumberClass)):
             return signature(args[0].dtype, *args)
+
 
 @lower_builtin(get_type_min_value, types.NumberClass)
 @lower_builtin(get_type_min_value, types.DType)
@@ -513,14 +560,17 @@ def lower_get_type_min_value(context, builder, sig, args):
             lty = ir.DoubleType()
         else:
             raise NotImplementedError("llvmlite only supports 32 and 64 bit floats")
-        npty = getattr(np, 'float{}'.format(bw))
+        npty = getattr(np, "float{}".format(bw))
         res = ir.Constant(lty, -np.inf)
     elif isinstance(typ, (types.NPDatetime, types.NPTimedelta)):
         bw = 64
         lty = ir.IntType(bw)
-        val = types.int64.minval + 1 # minval is NaT, so minval + 1 is the smallest value
+        val = (
+            types.int64.minval + 1
+        )  # minval is NaT, so minval + 1 is the smallest value
         res = ir.Constant(lty, val)
     return impl_ret_untracked(context, builder, lty, res)
+
 
 @lower_builtin(get_type_max_value, types.NumberClass)
 @lower_builtin(get_type_max_value, types.DType)
@@ -540,7 +590,7 @@ def lower_get_type_max_value(context, builder, sig, args):
             lty = ir.DoubleType()
         else:
             raise NotImplementedError("llvmlite only supports 32 and 64 bit floats")
-        npty = getattr(np, 'float{}'.format(bw))
+        npty = getattr(np, "float{}".format(bw))
         res = ir.Constant(lty, np.inf)
     elif isinstance(typ, (types.NPDatetime, types.NPTimedelta)):
         bw = 64
@@ -549,10 +599,12 @@ def lower_get_type_max_value(context, builder, sig, args):
         res = ir.Constant(lty, val)
     return impl_ret_untracked(context, builder, lty, res)
 
+
 # -----------------------------------------------------------------------------
 
 from numba.core.typing.builtins import IndexValue, IndexValueType
 from numba.extending import overload, register_jitable
+
 
 @lower_builtin(IndexValue, types.py_int, types.Type)
 @lower_builtin(IndexValue, types.np_intp, types.Type)
@@ -568,8 +620,8 @@ def impl_index_value(context, builder, sig, args):
 
 @overload(min)
 def indval_min(indval1, indval2):
-    if isinstance(indval1, IndexValueType) and \
-       isinstance(indval2, IndexValueType):
+    if isinstance(indval1, IndexValueType) and isinstance(indval2, IndexValueType):
+
         def min_impl(indval1, indval2):
             if np.isnan(indval1.value):
                 if np.isnan(indval2.value):
@@ -592,22 +644,24 @@ def indval_min(indval1, indval2):
                 else:
                     return indval2
             return indval1
+
         return min_impl
 
 
 @overload(min)
 def boolval_min(val1, val2):
-    if isinstance(val1, types.Boolean) and \
-       isinstance(val2, types.Boolean):
+    if isinstance(val1, types.Boolean) and isinstance(val2, types.Boolean):
+
         def bool_min_impl(val1, val2):
             return val1 and val2
+
         return bool_min_impl
 
 
 @overload(max)
 def indval_max(indval1, indval2):
-    if isinstance(indval1, IndexValueType) and \
-       isinstance(indval2, IndexValueType):
+    if isinstance(indval1, IndexValueType) and isinstance(indval2, IndexValueType):
+
         def max_impl(indval1, indval2):
             if np.isnan(indval1.value):
                 if np.isnan(indval2.value):
@@ -630,15 +684,17 @@ def indval_max(indval1, indval2):
                 else:
                     return indval2
             return indval1
+
         return max_impl
 
 
 @overload(max)
 def boolval_max(val1, val2):
-    if isinstance(val1, types.Boolean) and \
-       isinstance(val2, types.Boolean):
+    if isinstance(val1, types.Boolean) and isinstance(val2, types.Boolean):
+
         def bool_max_impl(val1, val2):
             return val1 or val2
+
         return bool_max_impl
 
 
@@ -649,6 +705,7 @@ less_than = register_jitable(lambda a, b: a < b)
 @register_jitable
 def min_max_impl(iterable, op):
     if isinstance(iterable, types.IterableType):
+
         def impl(iterable):
             it = iter(iterable)
             return_val = next(it)
@@ -656,6 +713,7 @@ def min_max_impl(iterable, op):
                 if op(val, return_val):
                     return_val = val
             return return_val
+
         return impl
 
 
@@ -692,11 +750,15 @@ def redirect_type_ctor(context, builder, sig, args):
     # Make signature T(TypeRef[T], *args) where T is cls
     sig = typing.signature(cls, types.TypeRef(cls), ctor_args)
     if len(ctor_args) > 0:
-        args = (context.get_dummy_value(),   # Type object has no runtime repr.
-                context.make_tuple(builder, ctor_args, args))
+        args = (
+            context.get_dummy_value(),  # Type object has no runtime repr.
+            context.make_tuple(builder, ctor_args, args),
+        )
     else:
-        args = (context.get_dummy_value(),   # Type object has no runtime repr.
-                context.make_tuple(builder, ctor_args, ()))
+        args = (
+            context.get_dummy_value(),  # Type object has no runtime repr.
+            context.make_tuple(builder, ctor_args, ()),
+        )
 
     return context.compile_internal(builder, call_ctor, sig, args)
 
@@ -707,19 +769,27 @@ def ol_sum(iterable, start=0):
     # https://github.com/python/cpython/blob/3.9/Python/bltinmodule.c#L2310-L2329 # noqa: E501
     error = None
     if isinstance(start, types.UnicodeType):
-        error = ('strings', '')
+        error = ("strings", "")
     elif isinstance(start, types.Bytes):
-        error = ('bytes', 'b')
+        error = ("bytes", "b")
     elif isinstance(start, types.ByteArray):
-        error = ('bytearray', 'b')
+        error = ("bytearray", "b")
 
     if error is not None:
         msg = "sum() can't sum {} [use {}''.join(seq) instead]".format(*error)
         raise TypingError(msg)
 
     # if the container is homogeneous then it's relatively easy to handle.
-    if isinstance(iterable, (types.containers._HomogeneousTuple, types.List,
-                             types.ListType, types.Array, types.RangeType)):
+    if isinstance(
+        iterable,
+        (
+            types.containers._HomogeneousTuple,
+            types.List,
+            types.ListType,
+            types.Array,
+            types.RangeType,
+        ),
+    ):
         iterator = iter
     elif isinstance(iterable, (types.containers._HeterogeneousTuple)):
         # if container is heterogeneous then literal unroll and hope for the
@@ -734,6 +804,7 @@ def ol_sum(iterable, start=0):
             # This most likely widens the type, this is expected Numba behaviour
             acc = acc + x
         return acc
+
     return impl
 
 
@@ -746,21 +817,26 @@ def ol_map(func, iterable, *args):
     def impl(func, iterable, *args):
         for x in zip(iterable, *args):
             yield func(*x)
+
     return impl
 
 
 @overload(filter)
 def ol_filter(func, iterable):
     if (func is None) or isinstance(func, types.NoneType):
+
         def impl(func, iterable):
             for x in iterable:
                 if x:
                     yield x
+
     else:
+
         def impl(func, iterable):
             for x in iterable:
                 if func(x):
                     yield x
+
     return impl
 
 
@@ -785,13 +861,30 @@ def ol_isinstance(var, typs):
     # required and this means that if there is a bug in the logic of the
     # comparison tree `isinstance` returns False! It's therefore safer to just
     # reject the compilation as untypable!
-    supported_var_ty = (types.Number, types.Bytes, types.RangeType,
-                        types.DictType, types.LiteralStrKeyDict, types.List,
-                        types.ListType, types.Tuple, types.UniTuple, types.Set,
-                        types.Function, types.ClassType, types.UnicodeType,
-                        types.ClassInstanceType, types.NoneType, types.Array,
-                        types.Boolean, types.Float, types.UnicodeCharSeq,
-                        types.Complex, types.NPDatetime, types.NPTimedelta,)
+    supported_var_ty = (
+        types.Number,
+        types.Bytes,
+        types.RangeType,
+        types.DictType,
+        types.LiteralStrKeyDict,
+        types.List,
+        types.ListType,
+        types.Tuple,
+        types.UniTuple,
+        types.Set,
+        types.Function,
+        types.ClassType,
+        types.UnicodeType,
+        types.ClassInstanceType,
+        types.NoneType,
+        types.Array,
+        types.Boolean,
+        types.Float,
+        types.UnicodeCharSeq,
+        types.Complex,
+        types.NPDatetime,
+        types.NPTimedelta,
+    )
     if not isinstance(var_ty, supported_var_ty):
         msg = f'isinstance() does not support variables of type "{var_ty}".'
         raise NumbaTypeError(msg)
@@ -802,10 +895,10 @@ def ol_isinstance(var, typs):
     # a unituple or a tuple.
     if isinstance(t_typs, types.UniTuple):
         # corner case - all types in isinstance are the same
-        t_typs = (t_typs.key[0])
+        t_typs = t_typs.key[0]
 
     if not isinstance(t_typs, types.Tuple):
-        t_typs = (t_typs, )
+        t_typs = (t_typs,)
 
     for typ in t_typs:
 
@@ -835,8 +928,10 @@ def ol_isinstance(var, typs):
             # Use of Numba type classes is in general not supported as they do
             # not work when the jit is disabled.
             if key not in (types.ListType, types.DictType):
-                msg = ("Numba type classes (except numba.typed.* container "
-                       "types) are not supported.")
+                msg = (
+                    "Numba type classes (except numba.typed.* container "
+                    "types) are not supported."
+                )
                 raise NumbaTypeError(msg)
             # Case for TypeRef (i.e. isinstance(var, typed.List))
             #      var_ty == ListType[int64] (instance)
@@ -849,23 +944,29 @@ def ol_isinstance(var, typs):
             elif isinstance(numba_typ, (types.NPDatetime, types.NPTimedelta)):
                 if isinstance(var_ty, type(numba_typ)):
                     return true_impl
-            elif isinstance(numba_typ, types.ClassType) and \
-                    isinstance(var_ty, types.ClassInstanceType) and \
-                    var_ty.key == numba_typ.instance_type.key:
+            elif (
+                isinstance(numba_typ, types.ClassType)
+                and isinstance(var_ty, types.ClassInstanceType)
+                and var_ty.key == numba_typ.instance_type.key
+            ):
                 # check for jitclasses
                 return true_impl
-            elif isinstance(numba_typ, types.Container) and \
-                    numba_typ.key[0] == types.undefined:
+            elif (
+                isinstance(numba_typ, types.Container)
+                and numba_typ.key[0] == types.undefined
+            ):
                 # check for containers (list, tuple, set, ...)
-                if isinstance(var_ty, numba_typ.__class__) or \
-                    (isinstance(var_ty, types.BaseTuple) and \
-                        isinstance(numba_typ, types.BaseTuple)):
+                if isinstance(var_ty, numba_typ.__class__) or (
+                    isinstance(var_ty, types.BaseTuple)
+                    and isinstance(numba_typ, types.BaseTuple)
+                ):
                     return true_impl
 
     return false_impl
 
 
 # -- getattr implementation
+
 
 def _getattr_raise_attr_exc(obj, name):
     # Dummy function for the purpose of creating an overloadable stub from
@@ -882,6 +983,7 @@ def ol__getattr_raise_attr_exc(obj, name):
 
     def impl(obj, name):
         raise AttributeError(message)
+
     return impl
 
 
@@ -894,27 +996,34 @@ def resolve_getattr(tyctx, obj, name, default):
     # Cannot handle things like `getattr(np, 'cos')` as the return type is
     # types.Function.
     if isinstance(fn, types.Function):
-        msg = ("Returning function objects is not implemented. "
-               f"getattr() was requested to return {fn} from attribute "
-               f"'{lname}' of {obj}.")
+        msg = (
+            "Returning function objects is not implemented. "
+            f"getattr() was requested to return {fn} from attribute "
+            f"'{lname}' of {obj}."
+        )
         raise TypingError(msg)
 
     if fn is None:  # No attribute
 
         # if default is not _getattr_default then return the default
-        if not (isinstance(default, types.NamedTuple) and
-                default.instance_class == _getattr_default_type):
+        if not (
+            isinstance(default, types.NamedTuple)
+            and default.instance_class == _getattr_default_type
+        ):
             # it's not the marker default value, so return it
             sig = default(obj, name, default)
+
             def impl(cgctx, builder, sig, llargs):
                 tmp = llargs[-1]
                 cgctx.nrt.incref(builder, default, tmp)
                 return tmp
+
         else:
             # else wire in raising an AttributeError
             fnty = tyctx.resolve_value_type(_getattr_raise_attr_exc)
             raise_sig = fnty.get_call_type(tyctx, (obj, name), {})
             sig = types.none(obj, name, default)
+
             def impl(cgctx, builder, sig, llargs):
                 native_impl = cgctx.get_function(fnty, raise_sig)
                 return native_impl(builder, llargs[:-1])
@@ -929,21 +1038,24 @@ def resolve_getattr(tyctx, obj, name, default):
                 res = cgctx.get_bound_function(builder, casted, cast_type)
                 cgctx.nrt.incref(builder, fn, res)
                 return res
+
         else:
             # Else it's some other type of attribute.
             # Ensure typing calls occur at typing time, not at lowering
             attrty = tyctx.resolve_getattr(obj, lname)
+
             def impl(cgctx, builder, sig, ll_args):
                 attr_impl = cgctx.get_getattr(obj, lname)
                 res = attr_impl(cgctx, builder, obj, ll_args[0], lname)
                 casted = cgctx.cast(builder, res, attrty, fn)
                 cgctx.nrt.incref(builder, fn, casted)
                 return casted
+
     return sig, impl
 
 
 # These are marker objects to indicate "no default has been provided" in a call
-_getattr_default_type = namedtuple('_getattr_default_type', '')
+_getattr_default_type = namedtuple("_getattr_default_type", "")
 _getattr_default = _getattr_default_type()
 
 
@@ -954,6 +1066,7 @@ _getattr_default = _getattr_default_type()
 def ol_getattr_2(obj, name):
     def impl(obj, name):
         return resolve_getattr(obj, name, _getattr_default)
+
     return impl
 
 
@@ -965,6 +1078,7 @@ def ol_getattr_2(obj, name):
 def ol_getattr_3(obj, name, default):
     def impl(obj, name, default):
         return resolve_getattr(obj, name, default)
+
     return impl
 
 
@@ -985,9 +1099,12 @@ def resolve_hasattr(tyctx, obj, name):
     else:
         retty = types.literal(True)
     sig = retty(obj, name)
+
     def impl(cgctx, builder, sig, ll_args):
-       return cgutils.false_bit if fn is None else cgutils.true_bit
+        return cgutils.false_bit if fn is None else cgutils.true_bit
+
     return sig, impl
+
 
 # hasattr cannot be implemented as a getattr call and then catching
 # AttributeError because Numba doesn't support catching anything other than
@@ -998,29 +1115,33 @@ def resolve_hasattr(tyctx, obj, name):
 def ol_hasattr(obj, name):
     def impl(obj, name):
         return resolve_hasattr(obj, name)
+
     return impl
 
 
 @overload(repr)
 def ol_repr_generic(obj):
     missing_repr_format = f"<object type:{obj}>"
+
     def impl(obj):
-        attr = '__repr__'
+        attr = "__repr__"
         if hasattr(obj, attr) == True:
             return getattr(obj, attr)()
         else:
             # There's no __str__ or __repr__ defined for this object, return
             # something generic
             return missing_repr_format
+
     return impl
 
 
 @overload(str)
-def ol_str_generic(object=''):
+def ol_str_generic(object=""):
     def impl(object=""):
-        attr = '__str__'
+        attr = "__str__"
         if hasattr(object, attr) == True:
             return getattr(object, attr)()
         else:
             return repr(object)
+
     return impl

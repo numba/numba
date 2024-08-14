@@ -4,6 +4,7 @@ See numpy/core/src/npysort/mergesort.c.src.
 The high-level numba code is adding a little overhead comparing to
 the pure-C implementation in numpy.
 """
+
 import numpy as np
 from collections import namedtuple
 
@@ -11,9 +12,12 @@ from collections import namedtuple
 SMALL_MERGESORT = 20
 
 
-MergesortImplementation = namedtuple('MergesortImplementation', [
-    'run_mergesort',
-])
+MergesortImplementation = namedtuple(
+    "MergesortImplementation",
+    [
+        "run_mergesort",
+    ],
+)
 
 
 def make_mergesort_impl(wrap, lt=None, is_argsort=False):
@@ -21,17 +25,22 @@ def make_mergesort_impl(wrap, lt=None, is_argsort=False):
 
     # The less than
     if lt is None:
+
         @wrap(**kwargs_lite)
         def lt(a, b):
             return a < b
+
     else:
         lt = wrap(**kwargs_lite)(lt)
 
     if is_argsort:
+
         @wrap(**kwargs_lite)
         def lessthan(a, b, vals):
             return lt(vals[a], vals[b])
+
     else:
+
         @wrap(**kwargs_lite)
         def lessthan(a, b, vals):
             return lt(a, b)
@@ -105,7 +114,6 @@ def make_mergesort_impl(wrap, lt=None, is_argsort=False):
         argmergesort_inner(arr, None, ws)
         return arr
 
-
     @wrap(no_cpython_wrapper=True)
     def argmergesort(arr):
         "Out-of-place"
@@ -116,11 +124,12 @@ def make_mergesort_impl(wrap, lt=None, is_argsort=False):
 
     return MergesortImplementation(
         run_mergesort=(argmergesort if is_argsort else mergesort)
-        )
+    )
 
 
 def make_jit_mergesort(*args, **kwargs):
     from numba import njit
+
     # NOTE: wrap with njit to allow recursion
     #       because @register_jitable => @overload doesn't support recursion
     return make_mergesort_impl(njit, *args, **kwargs)

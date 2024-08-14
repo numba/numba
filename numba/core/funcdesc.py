@@ -18,7 +18,7 @@ def qualifying_prefix(modname, qualname):
     Returns a new string that is used for the first half of the mangled name.
     """
     # XXX choose a different convention for object mode
-    return '{}.{}'.format(modname, qualname) if modname else qualname
+    return "{}.{}".format(modname, qualname) if modname else qualname
 
 
 class FunctionDescriptor(object):
@@ -30,15 +30,49 @@ class FunctionDescriptor(object):
     which is being concretely compiled by Numba, `FunctionDescriptor`
     may be more "abstract".
     """
-    __slots__ = ('native', 'modname', 'qualname', 'doc', 'typemap',
-                 'calltypes', 'args', 'kws', 'restype', 'argtypes',
-                 'mangled_name', 'unique_name', 'env_name', 'global_dict',
-                 'inline', 'noalias', 'abi_tags', 'uid')
 
-    def __init__(self, native, modname, qualname, unique_name, doc,
-                 typemap, restype, calltypes, args, kws, mangler=None,
-                 argtypes=None, inline=False, noalias=False, env_name=None,
-                 global_dict=None, abi_tags=(), uid=None):
+    __slots__ = (
+        "native",
+        "modname",
+        "qualname",
+        "doc",
+        "typemap",
+        "calltypes",
+        "args",
+        "kws",
+        "restype",
+        "argtypes",
+        "mangled_name",
+        "unique_name",
+        "env_name",
+        "global_dict",
+        "inline",
+        "noalias",
+        "abi_tags",
+        "uid",
+    )
+
+    def __init__(
+        self,
+        native,
+        modname,
+        qualname,
+        unique_name,
+        doc,
+        typemap,
+        restype,
+        calltypes,
+        args,
+        kws,
+        mangler=None,
+        argtypes=None,
+        inline=False,
+        noalias=False,
+        env_name=None,
+        global_dict=None,
+        abi_tags=(),
+        uid=None,
+    ):
         self.native = native
         self.modname = modname
         self.global_dict = global_dict
@@ -59,18 +93,25 @@ class FunctionDescriptor(object):
         else:
             # Get argument types from the type inference result
             # (note the "arg.FOO" convention as used in typeinfer
-            self.argtypes = tuple(self.typemap['arg.' + a] for a in args)
+            self.argtypes = tuple(self.typemap["arg." + a] for a in args)
         mangler = default_mangler if mangler is None else mangler
         # The mangled name *must* be unique, else the wrong function can
         # be chosen at link time.
         qualprefix = qualifying_prefix(self.modname, self.qualname)
         self.uid = uid
         self.mangled_name = mangler(
-            qualprefix, self.argtypes, abi_tags=abi_tags, uid=uid,
+            qualprefix,
+            self.argtypes,
+            abi_tags=abi_tags,
+            uid=uid,
         )
         if env_name is None:
-            env_name = mangler(".NumbaEnv.{}".format(qualprefix),
-                               self.argtypes, abi_tags=abi_tags, uid=uid)
+            env_name = mangler(
+                ".NumbaEnv.{}".format(qualprefix),
+                self.argtypes,
+                abi_tags=abi_tags,
+                uid=uid,
+            )
         self.env_name = env_name
         self.inline = inline
         self.noalias = noalias
@@ -120,8 +161,7 @@ class FunctionDescriptor(object):
         The LLVM-registered name for a CPython-compatible wrapper of the
         raw function (i.e. a PyCFunctionWithKeywords).
         """
-        return itanium_mangler.prepend_namespace(self.mangled_name,
-                                                 ns='cpython')
+        return itanium_mangler.prepend_namespace(self.mangled_name, ns="cpython")
 
     @property
     def llvm_cfunc_wrapper_name(self):
@@ -129,7 +169,7 @@ class FunctionDescriptor(object):
         The LLVM-registered name for a C-compatible wrapper of the
         raw function.
         """
-        return 'cfunc.' + self.mangled_name
+        return "cfunc." + self.mangled_name
 
     def __repr__(self):
         return "<function descriptor %r>" % (self.unique_name)
@@ -147,9 +187,9 @@ class FunctionDescriptor(object):
         qualname = func_ir.func_id.func_qualname
         # XXX to func_id
         modname = func.__module__
-        doc = func.__doc__ or ''
+        doc = func.__doc__ or ""
         args = tuple(func_ir.arg_names)
-        kws = ()        # TODO
+        kws = ()  # TODO
         global_dict = None
 
         if modname is None:
@@ -164,17 +204,46 @@ class FunctionDescriptor(object):
         return qualname, unique_name, modname, doc, args, kws, global_dict
 
     @classmethod
-    def _from_python_function(cls, func_ir, typemap, restype,
-                              calltypes, native, mangler=None,
-                              inline=False, noalias=False, abi_tags=()):
-        (qualname, unique_name, modname, doc, args, kws, global_dict,
-         ) = cls._get_function_info(func_ir)
+    def _from_python_function(
+        cls,
+        func_ir,
+        typemap,
+        restype,
+        calltypes,
+        native,
+        mangler=None,
+        inline=False,
+        noalias=False,
+        abi_tags=(),
+    ):
+        (
+            qualname,
+            unique_name,
+            modname,
+            doc,
+            args,
+            kws,
+            global_dict,
+        ) = cls._get_function_info(func_ir)
 
-        self = cls(native, modname, qualname, unique_name, doc,
-                   typemap, restype, calltypes,
-                   args, kws, mangler=mangler, inline=inline, noalias=noalias,
-                   global_dict=global_dict, abi_tags=abi_tags,
-                   uid=func_ir.func_id.unique_id)
+        self = cls(
+            native,
+            modname,
+            qualname,
+            unique_name,
+            doc,
+            typemap,
+            restype,
+            calltypes,
+            args,
+            kws,
+            mangler=mangler,
+            inline=inline,
+            noalias=noalias,
+            global_dict=global_dict,
+            abi_tags=abi_tags,
+            uid=func_ir.func_id.unique_id,
+        )
         return self
 
 
@@ -182,19 +251,28 @@ class PythonFunctionDescriptor(FunctionDescriptor):
     """
     A FunctionDescriptor subclass for Numba-compiled functions.
     """
+
     __slots__ = ()
 
     @classmethod
-    def from_specialized_function(cls, func_ir, typemap, restype, calltypes,
-                                  mangler, inline, noalias, abi_tags):
+    def from_specialized_function(
+        cls, func_ir, typemap, restype, calltypes, mangler, inline, noalias, abi_tags
+    ):
         """
         Build a FunctionDescriptor for a given specialization of a Python
         function (in nopython mode).
         """
-        return cls._from_python_function(func_ir, typemap, restype, calltypes,
-                                         native=True, mangler=mangler,
-                                         inline=inline, noalias=noalias,
-                                         abi_tags=abi_tags)
+        return cls._from_python_function(
+            func_ir,
+            typemap,
+            restype,
+            calltypes,
+            native=True,
+            mangler=mangler,
+            inline=inline,
+            noalias=noalias,
+            abi_tags=abi_tags,
+        )
 
     @classmethod
     def from_object_mode_function(cls, func_ir):
@@ -205,8 +283,9 @@ class PythonFunctionDescriptor(FunctionDescriptor):
         typemap = defaultdict(lambda: types.pyobject)
         calltypes = typemap.copy()
         restype = types.pyobject
-        return cls._from_python_function(func_ir, typemap, restype, calltypes,
-                                         native=False)
+        return cls._from_python_function(
+            func_ir, typemap, restype, calltypes, native=False
+        )
 
 
 class ExternalFunctionDescriptor(FunctionDescriptor):
@@ -214,6 +293,7 @@ class ExternalFunctionDescriptor(FunctionDescriptor):
     A FunctionDescriptor subclass for opaque external functions
     (e.g. raw C functions).
     """
+
     __slots__ = ()
 
     def __init__(self, name, restype, argtypes):
@@ -221,10 +301,18 @@ class ExternalFunctionDescriptor(FunctionDescriptor):
 
         def mangler(a, x, abi_tags, uid=None):
             return a
-        super(ExternalFunctionDescriptor, self
-              ).__init__(native=True, modname=None, qualname=name,
-                         unique_name=name, doc='', typemap=None,
-                         restype=restype, calltypes=None, args=args,
-                         kws=None,
-                         mangler=mangler,
-                         argtypes=argtypes)
+
+        super(ExternalFunctionDescriptor, self).__init__(
+            native=True,
+            modname=None,
+            qualname=name,
+            unique_name=name,
+            doc="",
+            typemap=None,
+            restype=restype,
+            calltypes=None,
+            args=args,
+            kws=None,
+            mangler=mangler,
+            argtypes=argtypes,
+        )

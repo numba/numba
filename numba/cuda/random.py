@@ -1,7 +1,6 @@
 import math
 
-from numba import (config, cuda, float32, float64, uint32, int64, uint64,
-                   from_dtype, jit)
+from numba import config, cuda, float32, float64, uint32, int64, uint64, from_dtype, jit
 
 import numpy as np
 
@@ -29,8 +28,7 @@ import numpy as np
 # using the CPU @jit decorator everywhere to create functions that work as
 # both CPU and CUDA device functions.
 
-xoroshiro128p_dtype = np.dtype([('s0', np.uint64), ('s1', np.uint64)],
-                               align=True)
+xoroshiro128p_dtype = np.dtype([("s0", np.uint64), ("s1", np.uint64)], align=True)
 xoroshiro128p_type = from_dtype(xoroshiro128p_dtype)
 
 # When cudasim is enabled, Fake CUDA arrays are passed to some of the
@@ -45,7 +43,7 @@ _nopython = not config.ENABLE_CUDASIM
 
 @jit(forceobj=_forceobj, looplift=_looplift, nopython=_nopython)
 def init_xoroshiro128p_state(states, index, seed):
-    '''Use SplitMix64 to generate an xoroshiro128p state from 64-bit seed.
+    """Use SplitMix64 to generate an xoroshiro128p state from 64-bit seed.
 
     This ensures that manually set small seeds don't result in a predictable
     initial sequence from the random number generator.
@@ -56,7 +54,7 @@ def init_xoroshiro128p_state(states, index, seed):
     :param index: offset in states to update
     :type seed: int64
     :param seed: seed value to use when initializing state
-    '''
+    """
     index = int64(index)
     seed = uint64(seed)
 
@@ -65,13 +63,13 @@ def init_xoroshiro128p_state(states, index, seed):
     z = (z ^ (z >> uint32(27))) * uint64(0x94D049BB133111EB)
     z = z ^ (z >> uint32(31))
 
-    states[index]['s0'] = z
-    states[index]['s1'] = z
+    states[index]["s0"] = z
+    states[index]["s1"] = z
 
 
 @jit(forceobj=_forceobj, looplift=_looplift, nopython=_nopython)
 def rotl(x, k):
-    '''Left rotate x by k bits.'''
+    """Left rotate x by k bits."""
     x = uint64(x)
     k = uint32(k)
     return (x << k) | (x >> uint32(64 - k))
@@ -79,38 +77,38 @@ def rotl(x, k):
 
 @jit(forceobj=_forceobj, looplift=_looplift, nopython=_nopython)
 def xoroshiro128p_next(states, index):
-    '''Return the next random uint64 and advance the RNG in states[index].
+    """Return the next random uint64 and advance the RNG in states[index].
 
     :type states: 1D array, dtype=xoroshiro128p_dtype
     :param states: array of RNG states
     :type index: int64
     :param index: offset in states to update
     :rtype: uint64
-    '''
+    """
     index = int64(index)
-    s0 = states[index]['s0']
-    s1 = states[index]['s1']
+    s0 = states[index]["s0"]
+    s1 = states[index]["s1"]
     result = s0 + s1
 
     s1 ^= s0
-    states[index]['s0'] = uint64(rotl(s0, uint32(55))) ^ s1 ^ (s1 << uint32(14))
-    states[index]['s1'] = uint64(rotl(s1, uint32(36)))
+    states[index]["s0"] = uint64(rotl(s0, uint32(55))) ^ s1 ^ (s1 << uint32(14))
+    states[index]["s1"] = uint64(rotl(s1, uint32(36)))
 
     return result
 
 
 @jit(forceobj=_forceobj, looplift=_looplift, nopython=_nopython)
 def xoroshiro128p_jump(states, index):
-    '''Advance the RNG in ``states[index]`` by 2**64 steps.
+    """Advance the RNG in ``states[index]`` by 2**64 steps.
 
     :type states: 1D array, dtype=xoroshiro128p_dtype
     :param states: array of RNG states
     :type index: int64
     :param index: offset in states to update
-    '''
+    """
     index = int64(index)
 
-    jump = (uint64(0xbeac0467eba5facb), uint64(0xd86b048b86aa9922))
+    jump = (uint64(0xBEAC0467EBA5FACB), uint64(0xD86B048B86AA9922))
 
     s0 = uint64(0)
     s1 = uint64(0)
@@ -118,52 +116,52 @@ def xoroshiro128p_jump(states, index):
     for i in range(2):
         for b in range(64):
             if jump[i] & (uint64(1) << uint32(b)):
-                s0 ^= states[index]['s0']
-                s1 ^= states[index]['s1']
+                s0 ^= states[index]["s0"]
+                s1 ^= states[index]["s1"]
             xoroshiro128p_next(states, index)
 
-    states[index]['s0'] = s0
-    states[index]['s1'] = s1
+    states[index]["s0"] = s0
+    states[index]["s1"] = s1
 
 
 @jit(forceobj=_forceobj, looplift=_looplift, nopython=_nopython)
 def uint64_to_unit_float64(x):
-    '''Convert uint64 to float64 value in the range [0.0, 1.0)'''
+    """Convert uint64 to float64 value in the range [0.0, 1.0)"""
     x = uint64(x)
     return (x >> uint32(11)) * (float64(1) / (uint64(1) << uint32(53)))
 
 
 @jit(forceobj=_forceobj, looplift=_looplift, nopython=_nopython)
 def uint64_to_unit_float32(x):
-    '''Convert uint64 to float32 value in the range [0.0, 1.0)'''
+    """Convert uint64 to float32 value in the range [0.0, 1.0)"""
     x = uint64(x)
     return float32(uint64_to_unit_float64(x))
 
 
 @jit(forceobj=_forceobj, looplift=_looplift, nopython=_nopython)
 def xoroshiro128p_uniform_float32(states, index):
-    '''Return a float32 in range [0.0, 1.0) and advance ``states[index]``.
+    """Return a float32 in range [0.0, 1.0) and advance ``states[index]``.
 
     :type states: 1D array, dtype=xoroshiro128p_dtype
     :param states: array of RNG states
     :type index: int64
     :param index: offset in states to update
     :rtype: float32
-    '''
+    """
     index = int64(index)
     return uint64_to_unit_float32(xoroshiro128p_next(states, index))
 
 
 @jit(forceobj=_forceobj, looplift=_looplift, nopython=_nopython)
 def xoroshiro128p_uniform_float64(states, index):
-    '''Return a float64 in range [0.0, 1.0) and advance ``states[index]``.
+    """Return a float64 in range [0.0, 1.0) and advance ``states[index]``.
 
     :type states: 1D array, dtype=xoroshiro128p_dtype
     :param states: array of RNG states
     :type index: int64
     :param index: offset in states to update
     :rtype: float64
-    '''
+    """
     index = int64(index)
     return uint64_to_unit_float64(xoroshiro128p_next(states, index))
 
@@ -174,7 +172,7 @@ TWO_PI_FLOAT64 = np.float64(2 * math.pi)
 
 @jit(forceobj=_forceobj, looplift=_looplift, nopython=_nopython)
 def xoroshiro128p_normal_float32(states, index):
-    '''Return a normally distributed float32 and advance ``states[index]``.
+    """Return a normally distributed float32 and advance ``states[index]``.
 
     The return value is drawn from a Gaussian of mean=0 and sigma=1 using the
     Box-Muller transform.  This advances the RNG sequence by two steps.
@@ -184,7 +182,7 @@ def xoroshiro128p_normal_float32(states, index):
     :type index: int64
     :param index: offset in states to update
     :rtype: float32
-    '''
+    """
     index = int64(index)
 
     u1 = xoroshiro128p_uniform_float32(states, index)
@@ -199,7 +197,7 @@ def xoroshiro128p_normal_float32(states, index):
 
 @jit(forceobj=_forceobj, looplift=_looplift, nopython=_nopython)
 def xoroshiro128p_normal_float64(states, index):
-    '''Return a normally distributed float32 and advance ``states[index]``.
+    """Return a normally distributed float32 and advance ``states[index]``.
 
     The return value is drawn from a Gaussian of mean=0 and sigma=1 using the
     Box-Muller transform.  This advances the RNG sequence by two steps.
@@ -209,7 +207,7 @@ def xoroshiro128p_normal_float64(states, index):
     :type index: int64
     :param index: offset in states to update
     :rtype: float64
-    '''
+    """
     index = int64(index)
 
     u1 = xoroshiro128p_uniform_float32(states, index)
@@ -242,7 +240,7 @@ def init_xoroshiro128p_states_cpu(states, seed, subsequence_start):
 
 
 def init_xoroshiro128p_states(states, seed, subsequence_start=0, stream=0):
-    '''Initialize RNG states on the GPU for parallel generators.
+    """Initialize RNG states on the GPU for parallel generators.
 
     This initializes the RNG states so that each state in the array corresponds
     subsequences in the separated by 2**64 steps from each other in the main
@@ -257,7 +255,7 @@ def init_xoroshiro128p_states(states, seed, subsequence_start=0, stream=0):
     :param states: array of RNG states
     :type seed: uint64
     :param seed: starting seed for list of generators
-    '''
+    """
 
     # Initialization on CPU is much faster than the GPU
     states_cpu = np.empty(shape=states.shape, dtype=xoroshiro128p_dtype)
@@ -267,7 +265,7 @@ def init_xoroshiro128p_states(states, seed, subsequence_start=0, stream=0):
 
 
 def create_xoroshiro128p_states(n, seed, subsequence_start=0, stream=0):
-    '''Returns a new device array initialized for n random number generators.
+    """Returns a new device array initialized for n random number generators.
 
     This initializes the RNG states so that each state in the array corresponds
     subsequences in the separated by 2**64 steps from each other in the main
@@ -286,7 +284,7 @@ def create_xoroshiro128p_states(n, seed, subsequence_start=0, stream=0):
     :param subsequence_start:
     :type stream: CUDA stream
     :param stream: stream to run initialization kernel on
-    '''
+    """
     states = cuda.device_array(n, dtype=xoroshiro128p_dtype, stream=stream)
     init_xoroshiro128p_states(states, seed, subsequence_start, stream)
     return states

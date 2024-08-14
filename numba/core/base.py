@@ -9,14 +9,27 @@ from llvmlite import ir as llvmir
 from llvmlite.ir import Constant
 import llvmlite.binding as ll
 
-from numba.core import types, utils, datamodel, debuginfo, funcdesc, config, cgutils, imputils
+from numba.core import (
+    types,
+    utils,
+    datamodel,
+    debuginfo,
+    funcdesc,
+    config,
+    cgutils,
+    imputils,
+)
 from numba.core import event, errors, targetconfig
 from numba import _dynfunc, _helperlib
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.pythonapi import PythonAPI
-from numba.core.imputils import (user_function, user_generator,
-                       builtin_registry, impl_ret_borrowed,
-                       RegistryLoader)
+from numba.core.imputils import (
+    user_function,
+    user_generator,
+    builtin_registry,
+    impl_ret_borrowed,
+    RegistryLoader,
+)
 from numba.cpython import builtins
 
 GENERIC_POINTER = llvmir.PointerType(llvmir.IntType(8))
@@ -51,7 +64,7 @@ class OverloadSelector(object):
         if candidates:
             return candidates[self._best_signature(candidates)]
         else:
-            raise errors.NumbaNotImplementedError(f'{self}, {sig}')
+            raise errors.NumbaNotImplementedError(f"{self}, {sig}")
 
     def _select_compatible(self, sig):
         """
@@ -71,13 +84,12 @@ class OverloadSelector(object):
         # check for ambiguous signatures
         if len(ordered) > 1:
             firstscore = genericity[ordered[0]]
-            same = list(takewhile(lambda x: genericity[x] == firstscore,
-                                  ordered))
+            same = list(takewhile(lambda x: genericity[x] == firstscore, ordered))
             if len(same) > 1:
                 msg = ["{n} ambiguous signatures".format(n=len(same))]
                 for sig in same:
                     msg += ["{0} => {1}".format(sig, candidates[sig])]
-                raise errors.NumbaTypeError('\n'.join(msg))
+                raise errors.NumbaTypeError("\n".join(msg))
         return ordered[0]
 
     def _sort_signatures(self, candidates):
@@ -175,6 +187,7 @@ class BaseContext(object):
     Only POD structure can live across function boundaries by copying the
     data.
     """
+
     # True if the target requires strict alignment
     # Causes exception to be raised if the record members are not aligned.
     strict_alignment = False
@@ -228,6 +241,7 @@ class BaseContext(object):
         self.address_size = utils.MACHINE_BITS
         self.typing_context = typing_context
         from numba.core.target_extension import target_registry
+
         self.target_name = target
         self.target = target_registry[target]
 
@@ -311,7 +325,7 @@ class BaseContext(object):
         """
         if envname not in module.globals:
             gv = llvmir.GlobalVariable(module, cgutils.voidptr_t, name=envname)
-            gv.linkage = 'common'
+            gv.linkage = "common"
             gv.initializer = cgutils.get_null_value(gv.type.pointee)
 
         return module.globals[envname]
@@ -336,6 +350,7 @@ class BaseContext(object):
     @cached_property
     def nrt(self):
         from numba.core.runtime.context import NRTContext
+
         return NRTContext(self, self.enable_nrt)
 
     def subtarget(self, **kws):
@@ -359,11 +374,11 @@ class BaseContext(object):
         except KeyError:
             loader = RegistryLoader(registry)
             self._registries[registry] = loader
-        self.insert_func_defn(loader.new_registrations('functions'))
-        self._insert_getattr_defn(loader.new_registrations('getattrs'))
-        self._insert_setattr_defn(loader.new_registrations('setattrs'))
-        self._insert_cast_defn(loader.new_registrations('casts'))
-        self._insert_get_constant_defn(loader.new_registrations('constants'))
+        self.insert_func_defn(loader.new_registrations("functions"))
+        self._insert_getattr_defn(loader.new_registrations("getattrs"))
+        self._insert_setattr_defn(loader.new_registrations("setattrs"))
+        self._insert_cast_defn(loader.new_registrations("casts"))
+        self._insert_get_constant_defn(loader.new_registrations("constants"))
 
     def insert_func_defn(self, defns):
         for impl, func, sig in defns:
@@ -402,8 +417,7 @@ class BaseContext(object):
         del self._defns[func]
 
     def get_external_function_type(self, fndesc):
-        argtypes = [self.get_argument_type(aty)
-                    for aty in fndesc.argtypes]
+        argtypes = [self.get_argument_type(aty) for aty in fndesc.argtypes]
         # don't wrap in pointer
         restype = self.get_argument_type(fndesc.restype)
         fnty = llvmir.FunctionType(restype, argtypes)
@@ -412,12 +426,14 @@ class BaseContext(object):
     def declare_function(self, module, fndesc):
         fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
         fn = cgutils.get_or_insert_function(module, fnty, fndesc.mangled_name)
-        self.call_conv.decorate_function(fn, fndesc.args, fndesc.argtypes, noalias=fndesc.noalias)
+        self.call_conv.decorate_function(
+            fn, fndesc.args, fndesc.argtypes, noalias=fndesc.noalias
+        )
         if fndesc.inline:
-            fn.attributes.add('alwaysinline')
+            fn.attributes.add("alwaysinline")
             # alwaysinline overrides optnone
-            fn.attributes.discard('noinline')
-            fn.attributes.discard('optnone')
+            fn.attributes.discard("noinline")
+            fn.attributes.discard("optnone")
         return fn
 
     def declare_external_function(self, module, fndesc):
@@ -558,15 +574,13 @@ class BaseContext(object):
         raise NotImplementedError("No definition for lowering %s%s" % (key, sig))
 
     def get_generator_desc(self, genty):
-        """
-        """
+        """ """
         return self._generators[genty][0]
 
     def get_generator_impl(self, genty):
-        """
-        """
+        """ """
         res = self._generators[genty][1]
-        self.add_linking_libs(getattr(res, 'libs', ()))
+        self.add_linking_libs(getattr(res, "libs", ()))
         return res
 
     def get_bound_function(self, builder, obj, ty):
@@ -592,9 +606,11 @@ class BaseContext(object):
                 return None
             else:
                 pyval = getattr(typ.pymod, attr)
+
                 def imp(context, builder, typ, val, attr):
                     llval = self.get_constant_generic(builder, attrty, pyval)
                     return impl_ret_borrowed(context, builder, attrty, llval)
+
                 return imp
 
         # Lookup specific getattr implementation for this type and attribute
@@ -625,6 +641,7 @@ class BaseContext(object):
         def wrap_setattr(impl):
             def wrapped(builder, args):
                 return impl(self, builder, sig, args, attr)
+
             return wrapped
 
         # Lookup specific setattr implementation for this type and attribute
@@ -640,8 +657,9 @@ class BaseContext(object):
         except errors.NumbaNotImplementedError:
             pass
 
-        raise NotImplementedError("No definition for lowering %s.%s = %s"
-                                  % (typ, attr, valty))
+        raise NotImplementedError(
+            "No definition for lowering %s.%s = %s" % (typ, attr, valty)
+        )
 
     def get_argument_value(self, builder, ty, val):
         """
@@ -662,8 +680,7 @@ class BaseContext(object):
         return self.data_model_manager[ty].as_return(builder, val)
 
     def get_value_as_argument(self, builder, ty, val):
-        """Prepare local value representation as argument type representation
-        """
+        """Prepare local value representation as argument type representation"""
         return self.data_model_manager[ty].as_argument(builder, val)
 
     def get_value_as_data(self, builder, ty, val):
@@ -702,7 +719,8 @@ class BaseContext(object):
             return impl(self, builder, fromty, toty, val)
         except errors.NumbaNotImplementedError:
             raise errors.NumbaNotImplementedError(
-                "Cannot cast %s to %s: %s" % (fromty, toty, val))
+                "Cannot cast %s to %s: %s" % (fromty, toty, val)
+            )
 
     def generic_compare(self, builder, key, argtypes, args):
         """
@@ -720,7 +738,7 @@ class BaseContext(object):
         # the sig is homogeneous in the unified casted type
         cmpsig = fnty.get_call_type(self.typing_context, (ty, ty), {})
         cmpfunc = self.get_function(fnty, cmpsig)
-        self.add_linking_libs(getattr(cmpfunc, 'libs', ()))
+        self.add_linking_libs(getattr(cmpfunc, "libs", ()))
         return cmpfunc(builder, (cav, cbv))
 
     def make_optional_none(self, builder, valtype):
@@ -755,13 +773,15 @@ class BaseContext(object):
             gv = module.globals[name]
         except KeyError:
             gv = cgutils.add_global_variable(module, typ, name)
-            if dllimport and self.aot_mode and sys.platform == 'win32':
+            if dllimport and self.aot_mode and sys.platform == "win32":
                 gv.storage_class = "dllimport"
         return gv
 
     def call_external_function(self, builder, callee, argtys, args):
-        args = [self.get_value_as_argument(builder, ty, arg)
-                for ty, arg in zip(argtys, args)]
+        args = [
+            self.get_value_as_argument(builder, ty, arg)
+            for ty, arg in zip(argtys, args)
+        ]
         retval = builder.call(callee, args)
         return retval
 
@@ -806,8 +826,7 @@ class BaseContext(object):
     def get_dummy_type(self):
         return GENERIC_POINTER
 
-    def _compile_subroutine_no_cache(self, builder, impl, sig, locals={},
-                                     flags=None):
+    def _compile_subroutine_no_cache(self, builder, impl, sig, locals={}, flags=None):
         """
         Invoke the compiler to compile a function to be used inside a
         nopython function, but without generating code to call that
@@ -834,18 +853,24 @@ class BaseContext(object):
             flags.no_cpython_wrapper = True
             flags.no_cfunc_wrapper = True
 
-            cres = compiler.compile_internal(self.typing_context, self,
-                                             library,
-                                             impl, sig.args,
-                                             sig.return_type, flags,
-                                             locals=locals)
+            cres = compiler.compile_internal(
+                self.typing_context,
+                self,
+                library,
+                impl,
+                sig.args,
+                sig.return_type,
+                flags,
+                locals=locals,
+            )
 
             # Allow inlining the function inside callers.
             self.active_code_library.add_linking_library(cres.library)
             return cres
 
-    def compile_subroutine(self, builder, impl, sig, locals={}, flags=None,
-                           caching=True):
+    def compile_subroutine(
+        self, builder, impl, sig, locals={}, flags=None, caching=True
+    ):
         """
         Compile the function *impl* for the given *sig* (in nopython mode).
         Return an instance of CompileResult.
@@ -863,9 +888,9 @@ class BaseContext(object):
                 cache_key += tuple(c.cell_contents for c in impl.__closure__)
             cached = self.cached_internal_func.get(cache_key)
         if cached is None:
-            cres = self._compile_subroutine_no_cache(builder, impl, sig,
-                                                     locals=locals,
-                                                     flags=flags)
+            cres = self._compile_subroutine_no_cache(
+                builder, impl, sig, locals=locals, flags=flags
+            )
             self.cached_internal_func[cache_key] = cres
 
         cres = self.cached_internal_func[cache_key]
@@ -900,8 +925,9 @@ class BaseContext(object):
         # Add call to the generated function
         llvm_mod = builder.module
         fn = self.declare_function(llvm_mod, fndesc)
-        status, res = self.call_conv.call_function(builder, fn, sig.return_type,
-                                                   sig.args, args)
+        status, res = self.call_conv.call_function(
+            builder, fn, sig.return_type, sig.args, args
+        )
         return status, res
 
     def call_unresolved(self, builder, name, sig, args):
@@ -940,8 +966,9 @@ class BaseContext(object):
         fnty = self.call_conv.get_function_type(sig.return_type, sig.args)
         fn = codegen.insert_unresolved_ref(builder, fnty, name)
         # Normal call sequence
-        status, res = self.call_conv.call_function(builder, fn, sig.return_type,
-                                                   sig.args, args)
+        status, res = self.call_conv.call_function(
+            builder, fn, sig.return_type, sig.args, args
+        )
         with cgutils.if_unlikely(builder, status.is_error):
             self.call_conv.return_status_propagate(builder, status)
 
@@ -969,10 +996,11 @@ class BaseContext(object):
             align = self.get_abi_alignment(self.get_data_type(elemty))
             if offset % align:
                 msg = "{rec}.{attr} of type {type} is not aligned".format(
-                    rec=rectyp, attr=attr, type=elemty)
+                    rec=rectyp, attr=attr, type=elemty
+                )
                 raise TypeError(msg)
 
-    def get_helper_class(self, typ, kind='value'):
+    def get_helper_class(self, typ, kind="value"):
         """
         Get a helper class for the given *typ*.
         """
@@ -980,7 +1008,7 @@ class BaseContext(object):
         # XXX should it be a method on the model instead? this would allow a default kind...
         return cgutils.create_struct_proxy(typ, kind)
 
-    def _make_helper(self, builder, typ, value=None, ref=None, kind='value'):
+    def _make_helper(self, builder, typ, value=None, ref=None, kind="value"):
         cls = self.get_helper_class(typ, kind)
         return cls(self, builder, value=value, ref=ref)
 
@@ -989,17 +1017,18 @@ class BaseContext(object):
         Get a helper object to access the *typ*'s members,
         for the given value or reference.
         """
-        return self._make_helper(builder, typ, value, ref, kind='value')
+        return self._make_helper(builder, typ, value, ref, kind="value")
 
     def make_data_helper(self, builder, typ, ref=None):
         """
         As make_helper(), but considers the value as stored in memory,
         rather than a live value.
         """
-        return self._make_helper(builder, typ, ref=ref, kind='data')
+        return self._make_helper(builder, typ, ref=ref, kind="data")
 
     def make_array(self, typ):
         from numba.np import arrayobj
+
         return arrayobj.make_array(typ)
 
     def populate_array(self, arr, **kwargs):
@@ -1007,6 +1036,7 @@ class BaseContext(object):
         Populate array structure.
         """
         from numba.np import arrayobj
+
         return arrayobj.populate_array(arr, **kwargs)
 
     def make_complex(self, builder, typ, value=None):
@@ -1034,8 +1064,9 @@ class BaseContext(object):
         # don't freeze ary of non-contig or bigger than 1MB
         size_limit = 10**6
 
-        if (self.allow_dynamic_globals and
-                (typ.layout not in 'FC' or ary.nbytes > size_limit)):
+        if self.allow_dynamic_globals and (
+            typ.layout not in "FC" or ary.nbytes > size_limit
+        ):
             # get pointer from the ary
             dataptr = ary.ctypes.data
             data = self.add_dynamic_addr(builder, dataptr, info=str(type(dataptr)))
@@ -1046,7 +1077,9 @@ class BaseContext(object):
             flat = ary.flatten(order=typ.layout)
             # Note: we use `bytearray(flat.data)` instead of `bytearray(flat)` to
             #       workaround issue #1850 which is due to numpy issue #3147
-            consts = cgutils.create_constant_array(llvmir.IntType(8), bytearray(flat.data))
+            consts = cgutils.create_constant_array(
+                llvmir.IntType(8), bytearray(flat.data)
+            )
             data = cgutils.global_constant(builder, ".const.array.data", consts)
             # Ensure correct data alignment (issue #1933)
             data.align = self.get_abi_alignment(datatype)
@@ -1066,13 +1099,15 @@ class BaseContext(object):
         cary = self.make_array(typ)(self, builder)
 
         intp_itemsize = self.get_constant(types.intp, ary.dtype.itemsize)
-        self.populate_array(cary,
-                            data=builder.bitcast(data, cary.data.type),
-                            shape=cshape,
-                            strides=cstrides,
-                            itemsize=intp_itemsize,
-                            parent=rt_addr,
-                            meminfo=None)
+        self.populate_array(
+            cary,
+            data=builder.bitcast(data, cary.data.type),
+            shape=cshape,
+            strides=cstrides,
+            itemsize=intp_itemsize,
+            parent=rt_addr,
+            meminfo=None,
+        )
 
         return cary._getvalue()
 
@@ -1084,16 +1119,16 @@ class BaseContext(object):
         the usage of dynamic addresses.  Caching will be disabled.
         """
         assert self.allow_dynamic_globals, "dyn globals disabled in this target"
-        assert isinstance(intaddr, int), 'dyn addr not of int type'
+        assert isinstance(intaddr, int), "dyn addr not of int type"
         mod = builder.module
         llvoidptr = self.get_value_type(types.voidptr)
         addr = self.get_constant(types.uintp, intaddr).inttoptr(llvoidptr)
         # Use a unique name by embedding the address value
-        symname = 'numba.dynamic.globals.{:x}'.format(intaddr)
+        symname = "numba.dynamic.globals.{:x}".format(intaddr)
         gv = cgutils.add_global_variable(mod, llvoidptr, symname)
         # Use linkonce linkage to allow merging with other GV of the same name.
         # And, avoid optimization from assuming its value.
-        gv.linkage = 'linkonce'
+        gv.linkage = "linkonce"
         gv.initializer = addr
         return builder.load(gv)
 
@@ -1119,8 +1154,7 @@ class BaseContext(object):
         return 32
 
     def post_lowering(self, mod, library):
-        """Run target specific post-lowering transformation here.
-        """
+        """Run target specific post-lowering transformation here."""
 
     def create_module(self, name):
         """Create a LLVM module
@@ -1133,14 +1167,12 @@ class BaseContext(object):
 
     @property
     def active_code_library(self):
-        """Get the active code library
-        """
+        """Get the active code library"""
         return self._codelib_stack[-1]
 
     @contextmanager
     def push_code_library(self, lib):
-        """Push the active code library for the context
-        """
+        """Push the active code library for the context"""
         self._codelib_stack.append(lib)
         try:
             yield
@@ -1148,8 +1180,7 @@ class BaseContext(object):
             self._codelib_stack.pop()
 
     def add_linking_libs(self, libs):
-        """Add iterable of linking libraries to the *active_code_library*.
-        """
+        """Add iterable of linking libraries to the *active_code_library*."""
         colib = self.active_code_library
         for lib in libs:
             colib.add_linking_library(lib)
@@ -1173,6 +1204,7 @@ class BaseContext(object):
         """
         raise NotImplementedError(f"{self} does not support ufunc")
 
+
 class _wrap_impl(object):
     """
     A wrapper object to call an implementation function with some predefined
@@ -1188,7 +1220,7 @@ class _wrap_impl(object):
 
     def __call__(self, builder, args, loc=None):
         res = self._imp(self._context, builder, self._sig, args, loc=loc)
-        self._context.add_linking_libs(getattr(self, 'libs', ()))
+        self._context.add_linking_libs(getattr(self, "libs", ()))
         return res
 
     def __getattr__(self, item):
@@ -1197,17 +1229,17 @@ class _wrap_impl(object):
     def __repr__(self):
         return "<wrapped %s>" % repr(self._callable)
 
+
 def _has_loc(fn):
-    """Does function *fn* take ``loc`` argument?
-    """
+    """Does function *fn* take ``loc`` argument?"""
     sig = utils.pysignature(fn)
-    return 'loc' in sig.parameters
+    return "loc" in sig.parameters
 
 
 class _wrap_missing_loc(object):
 
     def __init__(self, fn):
-        self.func = fn # store this to help with debug
+        self.func = fn  # store this to help with debug
 
     def __call__(self):
         """Wrap function for missing ``loc`` keyword argument.
@@ -1215,14 +1247,15 @@ class _wrap_missing_loc(object):
         """
         fn = self.func
         if not _has_loc(fn):
+
             def wrapper(*args, **kwargs):
-                kwargs.pop('loc')     # drop unused loc
+                kwargs.pop("loc")  # drop unused loc
                 return fn(*args, **kwargs)
 
             # Copy the following attributes from the wrapped.
             # Following similar implementation as functools.wraps but
             # ignore attributes if not available (i.e fix py2.7)
-            attrs = '__name__', 'libs'
+            attrs = "__name__", "libs"
             for attr in attrs:
                 try:
                     val = getattr(fn, attr)
@@ -1241,8 +1274,8 @@ class _wrap_missing_loc(object):
 
 @utils.runonce
 def _initialize_llvm_lock_event():
-    """Initial event triggers for LLVM lock
-    """
+    """Initial event triggers for LLVM lock"""
+
     def enter_fn():
         event.start_event("numba:llvm_lock")
 

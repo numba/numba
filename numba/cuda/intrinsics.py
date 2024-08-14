@@ -9,8 +9,9 @@ from numba.cuda import nvvmutils
 from numba.cuda.extending import intrinsic
 
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # Grid functions
+
 
 def _type_grid_function(ndim):
     val = ndim.literal_value
@@ -19,14 +20,14 @@ def _type_grid_function(ndim):
     elif val in (2, 3):
         restype = types.UniTuple(types.int64, val)
     else:
-        raise ValueError('argument can only be 1, 2, 3')
+        raise ValueError("argument can only be 1, 2, 3")
 
     return signature(restype, types.int32)
 
 
 @intrinsic
 def grid(typingctx, ndim):
-    '''grid(ndim)
+    """grid(ndim)
 
     Return the absolute position of the current thread in the entire grid of
     blocks.  *ndim* should correspond to the number of dimensions declared when
@@ -39,7 +40,7 @@ def grid(typingctx, ndim):
 
     and is similar for the other two indices, but using the ``y`` and ``z``
     attributes.
-    '''
+    """
 
     if not isinstance(ndim, types.IntegerLiteral):
         raise RequireLiteralValue(ndim)
@@ -59,7 +60,7 @@ def grid(typingctx, ndim):
 
 @intrinsic
 def gridsize(typingctx, ndim):
-    '''gridsize(ndim)
+    """gridsize(ndim)
 
     Return the absolute size (or shape) in threads of the entire grid of
     blocks. *ndim* should correspond to the number of dimensions declared when
@@ -72,7 +73,7 @@ def gridsize(typingctx, ndim):
 
     and is similar for the other two indices, but using the ``y`` and ``z``
     attributes.
-    '''
+    """
 
     if not isinstance(ndim, types.IntegerLiteral):
         raise RequireLiteralValue(ndim)
@@ -87,17 +88,17 @@ def gridsize(typingctx, ndim):
 
     def codegen(context, builder, sig, args):
         restype = sig.return_type
-        nx = _nthreads_for_dim(builder, 'x')
+        nx = _nthreads_for_dim(builder, "x")
 
         if restype == types.int64:
             return nx
         elif isinstance(restype, types.UniTuple):
-            ny = _nthreads_for_dim(builder, 'y')
+            ny = _nthreads_for_dim(builder, "y")
 
             if restype.count == 2:
                 return cgutils.pack_array(builder, (nx, ny))
             elif restype.count == 3:
-                nz = _nthreads_for_dim(builder, 'z')
+                nz = _nthreads_for_dim(builder, "z")
                 return cgutils.pack_array(builder, (nx, ny, nz))
 
     return sig, codegen
@@ -108,37 +109,40 @@ def _warpsize(typingctx):
     sig = signature(types.int32)
 
     def codegen(context, builder, sig, args):
-        return nvvmutils.call_sreg(builder, 'warpsize')
+        return nvvmutils.call_sreg(builder, "warpsize")
 
     return sig, codegen
 
 
-@overload_attribute(types.Module(cuda), 'warpsize', target='cuda')
+@overload_attribute(types.Module(cuda), "warpsize", target="cuda")
 def cuda_warpsize(mod):
-    '''
+    """
     The size of a warp. All architectures implemented to date have a warp size
     of 32.
-    '''
+    """
+
     def get(mod):
         return _warpsize()
+
     return get
 
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # syncthreads
+
 
 @intrinsic
 def syncthreads(typingctx):
-    '''
+    """
     Synchronize all threads in the same thread block.  This function implements
     the same pattern as barriers in traditional multi-threaded programming: this
     function waits until all threads in the block call it, at which point it
     returns control to all its callers.
-    '''
+    """
     sig = signature(types.none)
 
     def codegen(context, builder, sig, args):
-        fname = 'llvm.nvvm.barrier0'
+        fname = "llvm.nvvm.barrier0"
         lmod = builder.module
         fnty = ir.FunctionType(ir.VoidType(), ())
         sync = cgutils.get_or_insert_function(lmod, fnty, fname)
@@ -164,35 +168,35 @@ def _syncthreads_predicate(typingctx, predicate, fname):
 
 @intrinsic
 def syncthreads_count(typingctx, predicate):
-    '''
+    """
     syncthreads_count(predicate)
 
     An extension to numba.cuda.syncthreads where the return value is a count
     of the threads where predicate is true.
-    '''
-    fname = 'llvm.nvvm.barrier0.popc'
+    """
+    fname = "llvm.nvvm.barrier0.popc"
     return _syncthreads_predicate(typingctx, predicate, fname)
 
 
 @intrinsic
 def syncthreads_and(typingctx, predicate):
-    '''
+    """
     syncthreads_and(predicate)
 
     An extension to numba.cuda.syncthreads where 1 is returned if predicate is
     true for all threads or 0 otherwise.
-    '''
-    fname = 'llvm.nvvm.barrier0.and'
+    """
+    fname = "llvm.nvvm.barrier0.and"
     return _syncthreads_predicate(typingctx, predicate, fname)
 
 
 @intrinsic
 def syncthreads_or(typingctx, predicate):
-    '''
+    """
     syncthreads_or(predicate)
 
     An extension to numba.cuda.syncthreads where 1 is returned if predicate is
     true for any thread or 0 otherwise.
-    '''
-    fname = 'llvm.nvvm.barrier0.or'
+    """
+    fname = "llvm.nvvm.barrier0.or"
     return _syncthreads_predicate(typingctx, predicate, fname)

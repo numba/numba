@@ -17,13 +17,17 @@ RSQRT2PI = 0.39894228040143267793994605993438
 
 def cnd(d):
     K = 1.0 / (1.0 + 0.2316419 * np.abs(d))
-    ret_val = (RSQRT2PI * np.exp(-0.5 * d * d) *
-               (K * (A1 + K * (A2 + K * (A3 + K * (A4 + K * A5))))))
+    ret_val = (
+        RSQRT2PI
+        * np.exp(-0.5 * d * d)
+        * (K * (A1 + K * (A2 + K * (A3 + K * (A4 + K * A5)))))
+    )
     return np.where(d > 0, 1.0 - ret_val, ret_val)
 
 
-def black_scholes(callResult, putResult, stockPrice, optionStrike, optionYears,
-                  Riskfree, Volatility):
+def black_scholes(
+    callResult, putResult, stockPrice, optionStrike, optionYears, Riskfree, Volatility
+):
     S = stockPrice
     X = optionStrike
     T = optionYears
@@ -35,9 +39,9 @@ def black_scholes(callResult, putResult, stockPrice, optionStrike, optionYears,
     cndd1 = cnd(d1)
     cndd2 = cnd(d2)
 
-    expRT = np.exp(- R * T)
-    callResult[:] = (S * cndd1 - X * expRT * cndd2)
-    putResult[:] = (X * expRT * (1.0 - cndd2) - S * (1.0 - cndd1))
+    expRT = np.exp(-R * T)
+    callResult[:] = S * cndd1 - X * expRT * cndd2
+    putResult[:] = X * expRT * (1.0 - cndd2) - S * (1.0 - cndd1)
 
 
 def randfloat(rand_var, low, high):
@@ -61,34 +65,44 @@ class TestBlackScholes(CUDATestCase):
 
         # numpy
         for i in range(iterations):
-            black_scholes(callResultNumpy, putResultNumpy, stockPrice,
-                          optionStrike, optionYears, RISKFREE, VOLATILITY)
+            black_scholes(
+                callResultNumpy,
+                putResultNumpy,
+                stockPrice,
+                optionStrike,
+                optionYears,
+                RISKFREE,
+                VOLATILITY,
+            )
 
         @cuda.jit(double(double), device=True, inline=True)
         def cnd_cuda(d):
             K = 1.0 / (1.0 + 0.2316419 * math.fabs(d))
-            ret_val = (RSQRT2PI * math.exp(-0.5 * d * d) *
-                       (K * (A1 + K * (A2 + K * (A3 + K * (A4 + K * A5))))))
+            ret_val = (
+                RSQRT2PI
+                * math.exp(-0.5 * d * d)
+                * (K * (A1 + K * (A2 + K * (A3 + K * (A4 + K * A5)))))
+            )
             if d > 0:
                 ret_val = 1.0 - ret_val
             return ret_val
 
-        @cuda.jit(void(double[:], double[:], double[:], double[:], double[:],
-                       double, double))
+        @cuda.jit(
+            void(double[:], double[:], double[:], double[:], double[:], double, double)
+        )
         def black_scholes_cuda(callResult, putResult, S, X, T, R, V):
             i = cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
             if i >= S.shape[0]:
                 return
             sqrtT = math.sqrt(T[i])
-            d1 = ((math.log(S[i] / X[i]) + (R + 0.5 * V * V) * T[i])
-                  / (V * sqrtT))
+            d1 = (math.log(S[i] / X[i]) + (R + 0.5 * V * V) * T[i]) / (V * sqrtT)
             d2 = d1 - V * sqrtT
             cndd1 = cnd_cuda(d1)
             cndd2 = cnd_cuda(d2)
 
-            expRT = math.exp((-1. * R) * T[i])
-            callResult[i] = (S[i] * cndd1 - X[i] * expRT * cndd2)
-            putResult[i] = (X[i] * expRT * (1.0 - cndd2) - S[i] * (1.0 - cndd1))
+            expRT = math.exp((-1.0 * R) * T[i])
+            callResult[i] = S[i] * cndd1 - X[i] * expRT * cndd2
+            putResult[i] = X[i] * expRT * (1.0 - cndd2) - S[i] * (1.0 - cndd1)
 
         # numba
         blockdim = 512, 1
@@ -102,8 +116,14 @@ class TestBlackScholes(CUDATestCase):
 
         for i in range(iterations):
             black_scholes_cuda[griddim, blockdim, stream](
-                d_callResult, d_putResult, d_stockPrice, d_optionStrike,
-                d_optionYears, RISKFREE, VOLATILITY)
+                d_callResult,
+                d_putResult,
+                d_stockPrice,
+                d_optionStrike,
+                d_optionYears,
+                RISKFREE,
+                VOLATILITY,
+            )
         d_callResult.copy_to_host(callResultNumba, stream)
         d_putResult.copy_to_host(putResultNumba, stream)
         stream.synchronize()
@@ -116,5 +136,5 @@ class TestBlackScholes(CUDATestCase):
         self.assertTrue(max_abs_err < 1e-13)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

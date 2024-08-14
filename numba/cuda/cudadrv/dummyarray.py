@@ -20,7 +20,7 @@ attempt_nocopy_reshape = ctypes.CFUNCTYPE(
     np.ctypeslib.ndpointer(np.ctypeslib.c_intp, ndim=1),  # newstrides
     ctypes.c_long,  # itemsize
     ctypes.c_int,  # is_f_order
-)(_helperlib.c_helpers['attempt_nocopy_reshape'])
+)(_helperlib.c_helpers["attempt_nocopy_reshape"])
 
 
 class Dim(object):
@@ -37,7 +37,8 @@ class Dim(object):
     stride:
         item stride
     """
-    __slots__ = 'start', 'stop', 'size', 'stride', 'single'
+
+    __slots__ = "start", "stop", "size", "stride", "single"
 
     def __init__(self, start, stop, size, stride, single):
         self.start = start
@@ -57,16 +58,10 @@ class Dim(object):
                 size = 1
             else:
                 size = _compute_size(start, stop, stride)
-            ret = Dim(
-                start=start,
-                stop=stop,
-                size=size,
-                stride=stride,
-                single=False
-            )
+            ret = Dim(start=start, stop=stop, size=size, stride=stride, single=False)
             return ret
         else:
-            sliced = self[item:item + 1] if item != -1 else self[-1:]
+            sliced = self[item : item + 1] if item != -1 else self[-1:]
             if sliced.size != 1:
                 raise IndexError
             return Dim(
@@ -85,8 +80,13 @@ class Dim(object):
         return strfmt % (self.start, self.stop, self.size, self.stride)
 
     def normalize(self, base):
-        return Dim(start=self.start - base, stop=self.stop - base,
-                   size=self.size, stride=self.stride, single=self.single)
+        return Dim(
+            start=self.start - base,
+            stop=self.stop - base,
+            size=self.size,
+            stride=self.stride,
+            single=self.single,
+        )
 
     def copy(self, start=None, stop=None, size=None, stride=None, single=None):
         if start is None:
@@ -143,14 +143,14 @@ class Array(object):
     extent: (start, end)
         start and end offset containing the memory region
     """
+
     is_array = True
 
     @classmethod
     def from_desc(cls, offset, shape, strides, itemsize):
         dims = []
         for ashape, astride in zip(shape, strides):
-            dim = Dim(offset, offset + ashape * astride, ashape, astride,
-                      single=False)
+            dim = Dim(offset, offset + ashape * astride, ashape, astride, single=False)
             dims.append(dim)
             offset = 0  # offset only applies to first dimension
         return cls(dims, itemsize)
@@ -173,23 +173,23 @@ class Array(object):
 
         # Records have no dims, and we can treat them as contiguous
         if not self.dims:
-            return {'C_CONTIGUOUS': True, 'F_CONTIGUOUS': True}
+            return {"C_CONTIGUOUS": True, "F_CONTIGUOUS": True}
 
         # If this is a broadcast array then it is not contiguous
         if any([dim.stride == 0 for dim in self.dims]):
-            return {'C_CONTIGUOUS': False, 'F_CONTIGUOUS': False}
+            return {"C_CONTIGUOUS": False, "F_CONTIGUOUS": False}
 
-        flags = {'C_CONTIGUOUS': True, 'F_CONTIGUOUS': True}
+        flags = {"C_CONTIGUOUS": True, "F_CONTIGUOUS": True}
 
         # Check C contiguity
         sd = self.itemsize
         for dim in reversed(self.dims):
             if dim.size == 0:
                 # Contiguous by definition
-                return {'C_CONTIGUOUS': True, 'F_CONTIGUOUS': True}
+                return {"C_CONTIGUOUS": True, "F_CONTIGUOUS": True}
             if dim.size != 1:
                 if dim.stride != sd:
-                    flags['C_CONTIGUOUS'] = False
+                    flags["C_CONTIGUOUS"] = False
                 sd *= dim.size
 
         # Check F contiguity
@@ -197,7 +197,7 @@ class Array(object):
         for dim in self.dims:
             if dim.size != 1:
                 if dim.stride != sd:
-                    flags['F_CONTIGUOUS'] = False
+                    flags["F_CONTIGUOUS"] = False
                     return flags
                 sd *= dim.size
 
@@ -208,11 +208,11 @@ class Array(object):
         lastidx = [s - 1 for s in self.shape]
         start = compute_index(firstidx, self.dims)
         stop = compute_index(lastidx, self.dims) + self.itemsize
-        stop = max(stop, start)   # ensure positive extent
+        stop = max(stop, start)  # ensure positive extent
         return Extent(start, stop)
 
     def __repr__(self):
-        return '<Array dims=%s itemsize=%s>' % (self.dims, self.itemsize)
+        return "<Array dims=%s itemsize=%s>" % (self.dims, self.itemsize)
 
     def __getitem__(self, item):
         if not isinstance(item, tuple):
@@ -240,15 +240,14 @@ class Array(object):
 
     @property
     def is_c_contig(self):
-        return self.flags['C_CONTIGUOUS']
+        return self.flags["C_CONTIGUOUS"]
 
     @property
     def is_f_contig(self):
-        return self.flags['F_CONTIGUOUS']
+        return self.flags["F_CONTIGUOUS"]
 
     def iter_contiguous_extent(self):
-        """ Generates extents
-        """
+        """Generates extents"""
         if self.is_c_contig or self.is_f_contig:
             yield self.extent
         else:
@@ -279,11 +278,11 @@ class Array(object):
         if newdims == self.shape:
             return self, None
 
-        order = kws.pop('order', 'C')
+        order = kws.pop("order", "C")
         if kws:
-            raise TypeError('unknown keyword arguments %s' % kws.keys())
-        if order not in 'CFA':
-            raise ValueError('order not C|F|A')
+            raise TypeError("unknown keyword arguments %s" % kws.keys())
+        if order not in "CFA":
+            raise ValueError("order not C|F|A")
 
         # check for exactly one instance of -1 in newdims
         # https://github.com/numpy/numpy/blob/623bc1fae1d47df24e7f1e29321d0c0ba2771ce0/numpy/core/src/multiarray/shape.c#L470-L515   # noqa: E501
@@ -301,25 +300,26 @@ class Array(object):
         # compute the missing dimension
         if unknownidx >= 0:
             if knownsize == 0 or self.size % knownsize != 0:
-                raise ValueError("cannot infer valid shape "
-                                 "for unknown dimension")
+                raise ValueError("cannot infer valid shape " "for unknown dimension")
             else:
-                newdims = newdims[0:unknownidx] \
-                    + (self.size // knownsize,) \
-                    + newdims[unknownidx + 1:]
+                newdims = (
+                    newdims[0:unknownidx]
+                    + (self.size // knownsize,)
+                    + newdims[unknownidx + 1 :]
+                )
 
         newsize = functools.reduce(operator.mul, newdims, 1)
 
-        if order == 'A':
-            order = 'F' if self.is_f_contig else 'C'
+        if order == "A":
+            order = "F" if self.is_f_contig else "C"
 
         if newsize != self.size:
             raise ValueError("reshape changes the size of the array")
 
         if self.is_c_contig or self.is_f_contig:
-            if order == 'C':
+            if order == "C":
                 newstrides = list(iter_strides_c_contig(self, newdims))
-            elif order == 'F':
+            elif order == "F":
                 newstrides = list(iter_strides_f_contig(self, newdims))
             else:
                 raise AssertionError("unreachable")
@@ -340,12 +340,13 @@ class Array(object):
                 newdims,
                 newstrides,
                 self.itemsize,
-                order == 'F',
+                order == "F",
             ):
-                raise NotImplementedError('reshape would require copy')
+                raise NotImplementedError("reshape would require copy")
 
-        ret = self.from_desc(self.extent.begin, shape=newdims,
-                             strides=newstrides, itemsize=self.itemsize)
+        ret = self.from_desc(
+            self.extent.begin, shape=newdims, strides=newstrides, itemsize=self.itemsize
+        )
 
         return ret, list(self.iter_contiguous_extent())
 
@@ -377,16 +378,14 @@ class Array(object):
         )
         return newarr, list(self.iter_contiguous_extent())
 
-    def ravel(self, order='C'):
-        if order not in 'CFA':
-            raise ValueError('order not C|F|A')
+    def ravel(self, order="C"):
+        if order not in "CFA":
+            raise ValueError("order not C|F|A")
 
-        if (order in 'CA' and self.is_c_contig
-                or order in 'FA' and self.is_f_contig):
+        if order in "CA" and self.is_c_contig or order in "FA" and self.is_f_contig:
             newshape = (self.size,)
             newstrides = (self.itemsize,)
-            arr = self.from_desc(self.extent.begin, newshape, newstrides,
-                                 self.itemsize)
+            arr = self.from_desc(self.extent.begin, newshape, newstrides, self.itemsize)
             return arr, list(self.iter_contiguous_extent())
 
         else:
@@ -394,8 +393,7 @@ class Array(object):
 
 
 def iter_strides_f_contig(arr, shape=None):
-    """yields the f-contiguous strides
-    """
+    """yields the f-contiguous strides"""
     shape = arr.shape if shape is None else shape
     itemsize = arr.itemsize
     yield itemsize
@@ -406,8 +404,7 @@ def iter_strides_f_contig(arr, shape=None):
 
 
 def iter_strides_c_contig(arr, shape=None):
-    """yields the c-contiguous strides
-    """
+    """yields the c-contiguous strides"""
     shape = arr.shape if shape is None else shape
     itemsize = arr.itemsize
 
@@ -438,8 +435,7 @@ def is_element_indexing(item, ndim):
 
 
 def _compute_size(start, stop, step):
-    """Algorithm adapted from cpython rangeobject.c
-    """
+    """Algorithm adapted from cpython rangeobject.c"""
     if step > 0:
         lo = start
         hi = stop

@@ -7,9 +7,18 @@ import numpy as np
 from numba.core import types, cgutils
 from numba.core.datamodel import models
 from numba.core.extending import (
-    typeof_impl, type_callable, register_model,
-    lower_builtin, box, unbox, NativeValue,
-    overload, overload_attribute, overload_method, make_attribute_wrapper)
+    typeof_impl,
+    type_callable,
+    register_model,
+    lower_builtin,
+    box,
+    unbox,
+    NativeValue,
+    overload,
+    overload_attribute,
+    overload_method,
+    make_attribute_wrapper,
+)
 from numba.core.imputils import impl_ret_borrowed
 
 
@@ -39,6 +48,7 @@ class IndexType(types.Buffer):
     """
     The type class for Index objects.
     """
+
     array_priority = 1000
 
     def __init__(self, dtype, layout, pyclass):
@@ -89,13 +99,14 @@ class SeriesType(types.ArrayCompatible):
     """
     The type class for Series objects.
     """
+
     array_priority = 1000
 
     def __init__(self, dtype, index):
         assert isinstance(index, IndexType)
         self.dtype = dtype
         self.index = index
-        self.values = types.Array(self.dtype, 1, 'C')
+        self.values = types.Array(self.dtype, 1, "C")
         name = "series(%s, %s)" % (dtype, index)
         super(SeriesType, self).__init__(name)
 
@@ -107,9 +118,9 @@ class SeriesType(types.ArrayCompatible):
     def as_array(self):
         return self.values
 
-    def copy(self, dtype=None, ndim=1, layout='C'):
+    def copy(self, dtype=None, ndim=1, layout="C"):
         assert ndim == 1
-        assert layout == 'C'
+        assert layout == "C"
         if dtype is None:
             dtype = self.dtype
         return type(self)(dtype, self.index)
@@ -121,29 +132,32 @@ def typeof_index(val, c):
     assert arrty.ndim == 1
     return IndexType(arrty.dtype, arrty.layout, type(val))
 
+
 @typeof_impl.register(Series)
 def typeof_series(val, c):
     index = typeof_impl(val._index, c)
     arrty = typeof_impl(val._values, c)
     assert arrty.ndim == 1
-    assert arrty.layout == 'C'
+    assert arrty.layout == "C"
     return SeriesType(arrty.dtype, index)
 
-@type_callable('__array_wrap__')
+
+@type_callable("__array_wrap__")
 def type_array_wrap(context):
     def typer(input_type, result):
         if isinstance(input_type, (IndexType, SeriesType)):
-            return input_type.copy(dtype=result.dtype,
-                                   ndim=result.ndim,
-                                   layout=result.layout)
+            return input_type.copy(
+                dtype=result.dtype, ndim=result.ndim, layout=result.layout
+            )
 
     return typer
+
 
 @type_callable(Series)
 def type_series_constructor(context):
     def typer(data, index):
         if isinstance(index, IndexType) and isinstance(data, types.Array):
-            assert data.layout == 'C'
+            assert data.layout == "C"
             assert data.ndim == 1
             return SeriesType(data.dtype, index)
 
@@ -152,54 +166,64 @@ def type_series_constructor(context):
 
 # Backend extensions for Index and Series
 
+
 @register_model(IndexType)
 class IndexModel(models.StructModel):
     def __init__(self, dmm, fe_type):
-        members = [('data', fe_type.as_array)]
+        members = [("data", fe_type.as_array)]
         models.StructModel.__init__(self, dmm, fe_type, members)
+
 
 @register_model(SeriesType)
 class SeriesModel(models.StructModel):
     def __init__(self, dmm, fe_type):
         members = [
-            ('index', fe_type.index),
-            ('values', fe_type.as_array),
-            ]
+            ("index", fe_type.index),
+            ("values", fe_type.as_array),
+        ]
         models.StructModel.__init__(self, dmm, fe_type, members)
 
-make_attribute_wrapper(IndexType, 'data', '_data')
-make_attribute_wrapper(SeriesType, 'index', '_index')
-make_attribute_wrapper(SeriesType, 'values', '_values')
+
+make_attribute_wrapper(IndexType, "data", "_data")
+make_attribute_wrapper(SeriesType, "index", "_index")
+make_attribute_wrapper(SeriesType, "values", "_values")
+
 
 def make_index(context, builder, typ, **kwargs):
     return cgutils.create_struct_proxy(typ)(context, builder, **kwargs)
 
+
 def make_series(context, builder, typ, **kwargs):
     return cgutils.create_struct_proxy(typ)(context, builder, **kwargs)
 
-@lower_builtin('__array__', IndexType)
+
+@lower_builtin("__array__", IndexType)
 def index_as_array(context, builder, sig, args):
     val = make_index(context, builder, sig.args[0], ref=args[0])
-    return val._get_ptr_by_name('data')
+    return val._get_ptr_by_name("data")
 
-@lower_builtin('__array__', SeriesType)
+
+@lower_builtin("__array__", SeriesType)
 def series_as_array(context, builder, sig, args):
     val = make_series(context, builder, sig.args[0], ref=args[0])
-    return val._get_ptr_by_name('values')
+    return val._get_ptr_by_name("values")
 
-@lower_builtin('__array_wrap__', IndexType, types.Array)
+
+@lower_builtin("__array_wrap__", IndexType, types.Array)
 def index_wrap_array(context, builder, sig, args):
     dest = make_index(context, builder, sig.return_type)
     dest.data = args[1]
     return impl_ret_borrowed(context, builder, sig.return_type, dest._getvalue())
 
-@lower_builtin('__array_wrap__', SeriesType, types.Array)
+
+@lower_builtin("__array_wrap__", SeriesType, types.Array)
 def series_wrap_array(context, builder, sig, args):
     src = make_series(context, builder, sig.args[0], value=args[0])
     dest = make_series(context, builder, sig.return_type)
     dest.values = args[1]
     dest.index = src.index
     return impl_ret_borrowed(context, builder, sig.return_type, dest._getvalue())
+
 
 @lower_builtin(Series, types.Array, IndexType)
 def pdseries_constructor(context, builder, sig, args):
@@ -220,6 +244,7 @@ def unbox_index(typ, obj, c):
     index.data = c.unbox(typ.as_array, data).value
 
     return NativeValue(index._getvalue())
+
 
 @unbox(SeriesType)
 def unbox_series(typ, obj, c):
@@ -247,6 +272,7 @@ def box_index(typ, val, c):
     indexobj = c.pyapi.call_function_objargs(classobj, (arrayobj,))
     return indexobj
 
+
 @box(SeriesType)
 def box_series(typ, val, c):
     """
@@ -260,11 +286,12 @@ def box_series(typ, val, c):
     return seriesobj
 
 
-@overload_attribute(IndexType, 'is_monotonic_increasing')
+@overload_attribute(IndexType, "is_monotonic_increasing")
 def index_is_monotonic_increasing(index):
     """
     Index.is_monotonic_increasing
     """
+
     def getter(index):
         data = index._data
         if len(data) == 0:
@@ -278,21 +305,26 @@ def index_is_monotonic_increasing(index):
 
     return getter
 
+
 @overload(len)
 def series_len(series):
     """
     len(Series)
     """
     if isinstance(series, SeriesType):
+
         def len_impl(series):
             return len(series._values)
+
         return len_impl
 
-@overload_method(SeriesType, 'clip')
+
+@overload_method(SeriesType, "clip")
 def series_clip(series, lower, upper):
     """
     Series.clip(...)
     """
+
     def clip_impl(series, lower, upper):
         data = series._values.copy()
         for i in range(len(data)):

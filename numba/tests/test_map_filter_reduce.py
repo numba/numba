@@ -80,6 +80,7 @@ class TestReduce(unittest.TestCase):
         def impl():
             def func(x, y):
                 return x + y
+
             return reduce(func, range(-10, 10), 100)
 
         cfunc = njit(impl)
@@ -87,5 +88,5 @@ class TestReduce(unittest.TestCase):
         self.assertEqual(impl(), cfunc())
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

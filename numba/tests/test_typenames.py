@@ -13,5 +13,5 @@ class TestTypeNames(unittest.TestCase):
         self.assertEqual(types.uint, expect)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

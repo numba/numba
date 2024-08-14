@@ -4,6 +4,7 @@ Test that all docstrings are the same:
 >>> len({f.__doc__ for f in (a, b, c, d)})
 1
 """
+
 from numba import guvectorize, int64, njit, vectorize
 
 

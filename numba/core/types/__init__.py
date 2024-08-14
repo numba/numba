@@ -12,72 +12,72 @@ from .npytypes import *
 from .scalars import *
 from .function_type import *
 
-numpy_version = tuple(map(int, np.__version__.split('.')[:2]))
+numpy_version = tuple(map(int, np.__version__.split(".")[:2]))
 
 # Short names
 
-pyobject = PyObject('pyobject')
-ffi_forced_object = Opaque('ffi_forced_object')
-ffi = Opaque('ffi')
-none = NoneType('none')
-ellipsis = EllipsisType('...')
-Any = Phantom('any')
-undefined = Undefined('undefined')
-py2_string_type = Opaque('str')
-unicode_type = UnicodeType('unicode_type')
+pyobject = PyObject("pyobject")
+ffi_forced_object = Opaque("ffi_forced_object")
+ffi = Opaque("ffi")
+none = NoneType("none")
+ellipsis = EllipsisType("...")
+Any = Phantom("any")
+undefined = Undefined("undefined")
+py2_string_type = Opaque("str")
+unicode_type = UnicodeType("unicode_type")
 string = unicode_type
-unknown = Dummy('unknown')
-npy_rng = NumPyRandomGeneratorType('rng')
-npy_bitgen = NumPyRandomBitGeneratorType('bitgen')
+unknown = Dummy("unknown")
+npy_rng = NumPyRandomGeneratorType("rng")
+npy_bitgen = NumPyRandomBitGeneratorType("bitgen")
 
 # _undef_var is used to represent undefined variables in the type system.
-_undef_var = UndefVar('_undef_var')
+_undef_var = UndefVar("_undef_var")
 
-code_type = Opaque('code')
-pyfunc_type = Opaque('pyfunc')
+code_type = Opaque("code")
+pyfunc_type = Opaque("pyfunc")
 
 # No operation is defined on voidptr
 # Can only pass it around
-voidptr = RawPointer('void*')
+voidptr = RawPointer("void*")
 
 # optional types
 optional = Optional
 deferred_type = DeferredType
-slice2_type = SliceType('slice<a:b>', 2)
-slice3_type = SliceType('slice<a:b:c>', 3)
+slice2_type = SliceType("slice<a:b>", 2)
+slice3_type = SliceType("slice<a:b:c>", 3)
 void = none
 
 # Need to ignore mypy errors because mypy cannot unify types for both
 # the type systems even if they're logically mutually exclusive.
 # mypy: ignore-errors
 
-if config.USE_LEGACY_TYPE_SYSTEM: # type: ignore
-    boolean = bool_ = Boolean('bool')
+if config.USE_LEGACY_TYPE_SYSTEM:  # type: ignore
+    boolean = bool_ = Boolean("bool")
     if numpy_version >= (2, 0):
         bool = bool_
 
-    byte = uint8 = Integer('uint8')
-    uint16 = Integer('uint16')
-    uint32 = Integer('uint32')
-    uint64 = Integer('uint64')
+    byte = uint8 = Integer("uint8")
+    uint16 = Integer("uint16")
+    uint32 = Integer("uint32")
+    uint64 = Integer("uint64")
 
-    int8 = Integer('int8')
-    int16 = Integer('int16')
-    int32 = Integer('int32')
-    int64 = Integer('int64')
+    int8 = Integer("int8")
+    int16 = Integer("int16")
+    int32 = Integer("int32")
+    int64 = Integer("int64")
     intp = int32 if utils.MACHINE_BITS == 32 else int64
     uintp = uint32 if utils.MACHINE_BITS == 32 else uint64
-    intc = int32 if struct.calcsize('i') == 4 else int64
-    uintc = uint32 if struct.calcsize('I') == 4 else uint64
-    ssize_t = int32 if struct.calcsize('n') == 4 else int64
-    size_t = uint32 if struct.calcsize('N') == 4 else uint64
+    intc = int32 if struct.calcsize("i") == 4 else int64
+    uintc = uint32 if struct.calcsize("I") == 4 else uint64
+    ssize_t = int32 if struct.calcsize("n") == 4 else int64
+    size_t = uint32 if struct.calcsize("N") == 4 else uint64
 
-    float32 = Float('float32')
-    float64 = Float('float64')
-    float16 = Float('float16')
+    float32 = Float("float32")
+    float64 = Float("float64")
+    float16 = Float("float16")
 
-    complex64 = Complex('complex64', float32)
-    complex128 = Complex('complex128', float64)
+    complex64 = Complex("complex64", float32)
+    complex128 = Complex("complex128", float64)
 
     range_iter32_type = RangeIteratorType(int32)
     range_iter64_type = RangeIteratorType(int64)
@@ -156,14 +156,14 @@ if config.USE_LEGACY_TYPE_SYSTEM: # type: ignore
     ushort = np_ushort = _make_unsigned(np.short)
     int_ = np_int_ = _make_signed(np.int_)
     uint = np_uint = _make_unsigned(np.int_)
-    intc = np_intc = _make_signed(np.intc) # C-compat int
-    uintc = np_uintc = _make_unsigned(np.uintc) # C-compat uint
+    intc = np_intc = _make_signed(np.intc)  # C-compat int
+    uintc = np_uintc = _make_unsigned(np.uintc)  # C-compat uint
     long_ = np_long = _make_signed(np.int_)  # C-compat long
     ulong = np_ulong = _make_unsigned(np.int_)  # C-compat ulong
     longlong = np_longlong = _make_signed(np.longlong)
     ulonglong = np_ulonglong = _make_unsigned(np.longlong)
 
-    all_str = '''
+    all_str = """
     int8
     int16
     int32
@@ -216,31 +216,32 @@ if config.USE_LEGACY_TYPE_SYSTEM: # type: ignore
     ffi_forced_object
     ffi
     deferred_type
-    '''
+    """
 else:
     from .new_scalars import *
+
     ### Machine Datatypes ###
-    c_bool = MachineBoolean('c_bool')
-    c_byte = c_int8 = MachineInteger('c_int8')
-    c_int16 = MachineInteger('c_int16')
-    c_int32 = MachineInteger('c_int32')
-    c_int64 = MachineInteger('c_int64')
-    c_uint8 = MachineInteger('c_uint8')
-    c_uint16 = MachineInteger('c_uint16')
-    c_uint32 = MachineInteger('c_uint32')
-    c_uint64 = MachineInteger('c_uint64')
+    c_bool = MachineBoolean("c_bool")
+    c_byte = c_int8 = MachineInteger("c_int8")
+    c_int16 = MachineInteger("c_int16")
+    c_int32 = MachineInteger("c_int32")
+    c_int64 = MachineInteger("c_int64")
+    c_uint8 = MachineInteger("c_uint8")
+    c_uint16 = MachineInteger("c_uint16")
+    c_uint32 = MachineInteger("c_uint32")
+    c_uint64 = MachineInteger("c_uint64")
 
     c_intp = c_int32 if utils.MACHINE_BITS == 32 else c_int64
     c_uintp = c_uint32 if utils.MACHINE_BITS == 32 else c_uint64
 
     # Machine Floats
-    c_float16 = MachineFloat('c_float16')
-    c_float32 = MachineFloat('c_float32')
-    c_float64 = MachineFloat('c_float64')
+    c_float16 = MachineFloat("c_float16")
+    c_float32 = MachineFloat("c_float32")
+    c_float64 = MachineFloat("c_float64")
 
     # Machine Complex
-    c_complex64 = MachineComplex('c_complex64', c_float32)
-    c_complex128 = MachineComplex('c_complex128', c_float64)
+    c_complex64 = MachineComplex("c_complex64", c_float32)
+    c_complex128 = MachineComplex("c_complex128", c_float64)
 
     c_signed_domain = frozenset([c_int8, c_int16, c_int32, c_int64])
     c_unsigned_domain = frozenset([c_uint8, c_uint16, c_uint32, c_uint64])
@@ -251,14 +252,14 @@ else:
 
     ### Python Datatypes ###
     # Python Integers
-    py_bool = PythonBoolean('py_bool')
-    py_int = PythonInteger('py_int')
+    py_bool = PythonBoolean("py_bool")
+    py_int = PythonInteger("py_int")
 
     # Python Float
-    py_float = PythonFloat('py_float')
+    py_float = PythonFloat("py_float")
 
     # Python Complex
-    py_complex = PythonComplex('py_complex', py_float)
+    py_complex = PythonComplex("py_complex", py_float)
 
     py_signed_domain = frozenset([py_int])
     py_integer_domain = py_signed_domain
@@ -271,27 +272,27 @@ else:
 
     ### NumPy Datatypes ###
     # Numpy Integers
-    np_bool_ = np_bool = NumPyBoolean('np_bool_')
-    np_byte = np_int8 = NumPyInteger('np_int8')
-    np_int16 = NumPyInteger('np_int16')
-    np_int32 = NumPyInteger('np_int32')
-    np_int64 = NumPyInteger('np_int64')
-    np_uint8 = NumPyInteger('np_uint8')
-    np_uint16 = NumPyInteger('np_uint16')
-    np_uint32 = NumPyInteger('np_uint32')
-    np_uint64 = NumPyInteger('np_uint64')
+    np_bool_ = np_bool = NumPyBoolean("np_bool_")
+    np_byte = np_int8 = NumPyInteger("np_int8")
+    np_int16 = NumPyInteger("np_int16")
+    np_int32 = NumPyInteger("np_int32")
+    np_int64 = NumPyInteger("np_int64")
+    np_uint8 = NumPyInteger("np_uint8")
+    np_uint16 = NumPyInteger("np_uint16")
+    np_uint32 = NumPyInteger("np_uint32")
+    np_uint64 = NumPyInteger("np_uint64")
 
     np_intp = np_int32 if utils.MACHINE_BITS == 32 else np_int64
     np_uintp = np_uint32 if utils.MACHINE_BITS == 32 else np_uint64
 
     # NumPy Floats
-    np_float16 = NumPyFloat('np_float16')
-    np_float32 = NumPyFloat('np_float32')
-    np_float64 = NumPyFloat('np_float64')
+    np_float16 = NumPyFloat("np_float16")
+    np_float32 = NumPyFloat("np_float32")
+    np_float64 = NumPyFloat("np_float64")
 
     # NumPy Complex
-    np_complex64 = NumPyComplex('np_complex64', np_float32)
-    np_complex128 = NumPyComplex('np_complex128', np_float64)
+    np_complex64 = NumPyComplex("np_complex64", np_float32)
+    np_complex128 = NumPyComplex("np_complex128", np_float64)
 
     np_signed_domain = frozenset([np_int8, np_int16, np_int32, np_int64])
     np_unsigned_domain = frozenset([np_uint8, np_uint16, np_uint32, np_uint64])
@@ -311,14 +312,14 @@ else:
     np_ushort = _make_unsigned(np.short)
     np_int_ = _make_signed(np.int_)
     np_uint = _make_unsigned(np.int_)
-    np_intc = _make_signed(np.intc) # C-compat int
-    np_uintc = _make_unsigned(np.uintc) # C-compat uint
+    np_intc = _make_signed(np.intc)  # C-compat int
+    np_uintc = _make_unsigned(np.uintc)  # C-compat uint
     np_long_ = _make_signed(np.int_)  # C-compat long
     np_ulong = _make_unsigned(np.int_)  # C-compat ulong
     np_longlong = _make_signed(np.longlong)
     np_ulonglong = _make_unsigned(np.longlong)
 
-    all_str = '''
+    all_str = """
     c_bool
     c_byte
     c_int8
@@ -377,10 +378,10 @@ else:
     optional
     deferred_type
     void
-    '''
+    """
 
 
 __all__ = all_str.split()
 if numpy_version >= (2, 0) and config.USE_LEGACY_TYPE_SYSTEM:
-    __all__.remove('float_')
-    __all__.append('bool')
+    __all__.remove("float_")
+    __all__.append("bool")

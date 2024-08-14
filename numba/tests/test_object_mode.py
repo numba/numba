@@ -77,6 +77,7 @@ class TestObjectMode(TestCase):
         """
         Test handling of the `in` comparison
         """
+
         @jit(forceobj=True)
         def foo(x, y):
             return x in y
@@ -138,6 +139,7 @@ class TestObjectModeInvalidRewrite(TestCase):
         Test code based on user submitted issue at
         https://github.com/numba/numba/issues/2159
         """
+
         def test0(n):
             return n
 
@@ -166,7 +168,7 @@ class TestObjectModeInvalidRewrite(TestCase):
             # static setitem here will fail in objmode if the IR is modified by
             # rewrite pass
             a2[0] = 1
-            return test0(a1.sum() + a2.sum())   # trigger objmode fallback
+            return test0(a1.sum() + a2.sum())  # trigger objmode fallback
 
         compiled = jit(forceobj=True)(test)
         args = np.array([3]), np.array([4])
@@ -180,12 +182,12 @@ class TestObjectModeInvalidRewrite(TestCase):
         func_text = "def func():\n"
         func_text += "    np.array([1,2,3])\n"
         loc_vars = {}
-        custom_globals = {'np': np}
+        custom_globals = {"np": np}
         exec(func_text, custom_globals, loc_vars)
-        func = loc_vars['func']
+        func = loc_vars["func"]
         jitted = jit(forceobj=True)(func)
         jitted()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -12,11 +12,11 @@ class TestDocTest(TestCase):
         tests = finder.find(doctest_usecase)
         testnames = {x.name for x in tests}
         expected = {
-            'numba.tests.doctest_usecase',
-            'numba.tests.doctest_usecase.a',
-            'numba.tests.doctest_usecase.b',
-            'numba.tests.doctest_usecase.c',
-            'numba.tests.doctest_usecase.d',
+            "numba.tests.doctest_usecase",
+            "numba.tests.doctest_usecase.a",
+            "numba.tests.doctest_usecase.b",
+            "numba.tests.doctest_usecase.c",
+            "numba.tests.doctest_usecase.d",
         }
         self.assertEqual(testnames, expected)
 

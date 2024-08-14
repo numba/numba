@@ -31,7 +31,7 @@ def use_sad(r, x, y, z):
         r[i] = libdevice.sad(x[i], y[i], z[i])
 
 
-@skip_on_cudasim('Libdevice functions are not supported on cudasim')
+@skip_on_cudasim("Libdevice functions are not supported on cudasim")
 class TestLibdevice(CUDATestCase):
     """
     Some tests of libdevice function wrappers that check the returned values.
@@ -108,8 +108,9 @@ def make_test_call(libname):
 
         # Construct arguments to the libdevice function. These are all
         # non-pointer arguments to the underlying bitcode function.
-        funcargs = ", ".join(['a%d' % i for i, arg in enumerate(args) if not
-                              arg.is_ptr])
+        funcargs = ", ".join(
+            ["a%d" % i for i, arg in enumerate(args) if not arg.is_ptr]
+        )
 
         # Arguments to the Python function (`pyfunc` in the template above) are
         # the arguments to the libdevice function, plus as many extra arguments
@@ -118,35 +119,35 @@ def make_test_call(libname):
         # returns.
         if isinstance(sig.return_type, (types.Tuple, types.UniTuple)):
             # Start with the parameters for the return values
-            pyargs = ", ".join(['r%d' % i for i in
-                                range(len(sig.return_type))])
+            pyargs = ", ".join(["r%d" % i for i in range(len(sig.return_type))])
             # Add the parameters for the argument values
             pyargs += ", " + funcargs
             # Generate the unpacking of the return value from the libdevice
             # function into the Python function return values (`r0`, `r1`,
             # etc.).
-            retvars = ", ".join(['r%d[0]' % i for i in
-                                 range(len(sig.return_type))])
+            retvars = ", ".join(["r%d[0]" % i for i in range(len(sig.return_type))])
         else:
             # Scalar return is a more straightforward case
             pyargs = "r0, " + funcargs
             retvars = "r0[0]"
 
         # Create the string containing the function to compile
-        d = { 'func': apiname,
-              'pyargs': pyargs,
-              'funcargs': funcargs,
-              'retvars': retvars }
+        d = {
+            "func": apiname,
+            "pyargs": pyargs,
+            "funcargs": funcargs,
+            "retvars": retvars,
+        }
         code = function_template % d
 
         # Convert the string to a Python function
         locals = {}
         exec(code, globals(), locals)
-        pyfunc = locals['pyfunc']
+        pyfunc = locals["pyfunc"]
 
         # Compute the signature for compilation. This mirrors the creation of
         # arguments to the Python function above.
-        pyargs = [ arg.ty for arg in args if not arg.is_ptr ]
+        pyargs = [arg.ty for arg in args if not arg.is_ptr]
         if isinstance(sig.return_type, (types.Tuple, types.UniTuple)):
             pyreturns = [ret[::1] for ret in sig.return_type]
             pyargs = pyreturns + pyargs
@@ -159,16 +160,16 @@ def make_test_call(libname):
         # If the function body was discarded by optimization (therefore making
         # the test a bit weak), there won't be any loading of parameters -
         # ensure that a load from parameters occurs somewhere in the PTX
-        self.assertIn('ld.param', ptx)
+        self.assertIn("ld.param", ptx)
 
         # Returning the result (through a passed-in array) should also require
         # a store to global memory, so check for at least one of those too.
-        self.assertIn('st.global', ptx)
+        self.assertIn("st.global", ptx)
 
     return _test_call_functions
 
 
-@skip_on_cudasim('Compilation to PTX is not supported on cudasim')
+@skip_on_cudasim("Compilation to PTX is not supported on cudasim")
 class TestLibdeviceCompilation(unittest.TestCase):
     """
     Class for holding all tests of compiling calls to libdevice functions. We
@@ -179,9 +180,8 @@ class TestLibdeviceCompilation(unittest.TestCase):
 
 
 for libname in functions:
-    setattr(TestLibdeviceCompilation, 'test_%s' % libname,
-            make_test_call(libname))
+    setattr(TestLibdeviceCompilation, "test_%s" % libname, make_test_call(libname))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

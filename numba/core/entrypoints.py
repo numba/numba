@@ -33,23 +33,24 @@ def init_all():
     _already_initialized = True
 
     def load_ep(entry_point):
-        """Loads a given entry point. Warns and logs on failure.
-        """
-        logger.debug('Loading extension: %s', entry_point)
+        """Loads a given entry point. Warns and logs on failure."""
+        logger.debug("Loading extension: %s", entry_point)
         try:
             func = entry_point.load()
             func()
         except Exception as e:
-            msg = (f"Numba extension module '{entry_point.module}' "
-                   f"failed to load due to '{type(e).__name__}({str(e)})'.")
+            msg = (
+                f"Numba extension module '{entry_point.module}' "
+                f"failed to load due to '{type(e).__name__}({str(e)})'."
+            )
             warnings.warn(msg, stacklevel=3)
-            logger.debug('Extension loading failed for: %s', entry_point)
+            logger.debug("Extension loading failed for: %s", entry_point)
 
     eps = importlib_metadata.entry_points()
     # Split, Python 3.10+ and importlib_metadata 3.6+ have the "selectable"
     # interface, versions prior to that do not. See "compatibility note" in:
     # https://docs.python.org/3.10/library/importlib.metadata.html#entry-points
-    if hasattr(eps, 'select'):
+    if hasattr(eps, "select"):
         for entry_point in eps.select(group="numba_extensions", name="init"):
             load_ep(entry_point)
     else:

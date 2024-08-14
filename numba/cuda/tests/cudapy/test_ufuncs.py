@@ -9,11 +9,11 @@ from numba.tests.test_ufuncs import BasicUFuncTest
 
 def _make_ufunc_usecase(ufunc):
     ldict = {}
-    arg_str = ','.join(['a{0}'.format(i) for i in range(ufunc.nargs)])
-    func_str = f'def fn({arg_str}):\n    np.{ufunc.__name__}({arg_str})'
+    arg_str = ",".join(["a{0}".format(i) for i in range(ufunc.nargs)])
+    func_str = f"def fn({arg_str}):\n    np.{ufunc.__name__}({arg_str})"
     exec(func_str, globals(), ldict)
-    fn = ldict['fn']
-    fn.__name__ = '{0}_usecase'.format(ufunc.__name__)
+    fn = ldict["fn"]
+    fn.__name__ = "{0}_usecase".format(ufunc.__name__)
     return fn
 
 
@@ -32,58 +32,75 @@ class TestUFuncs(BasicUFuncTest, TestCase):
 
         # The basic ufunc test does not set up complex inputs, so we'll add
         # some here for testing with CUDA.
-        self.inputs.extend([
-            (np.complex64(-0.5 - 0.5j), types.complex64),
-            (np.complex64(0.0), types.complex64),
-            (np.complex64(0.5 + 0.5j), types.complex64),
-
-            (np.complex128(-0.5 - 0.5j), types.complex128),
-            (np.complex128(0.0), types.complex128),
-            (np.complex128(0.5 + 0.5j), types.complex128),
-
-            (np.array([-0.5 - 0.5j, 0.0, 0.5 + 0.5j], dtype='c8'),
-             types.Array(types.complex64, 1, 'C')),
-            (np.array([-0.5 - 0.5j, 0.0, 0.5 + 0.5j], dtype='c16'),
-             types.Array(types.complex128, 1, 'C')),
-        ])
+        self.inputs.extend(
+            [
+                (np.complex64(-0.5 - 0.5j), types.complex64),
+                (np.complex64(0.0), types.complex64),
+                (np.complex64(0.5 + 0.5j), types.complex64),
+                (np.complex128(-0.5 - 0.5j), types.complex128),
+                (np.complex128(0.0), types.complex128),
+                (np.complex128(0.5 + 0.5j), types.complex128),
+                (
+                    np.array([-0.5 - 0.5j, 0.0, 0.5 + 0.5j], dtype="c8"),
+                    types.Array(types.complex64, 1, "C"),
+                ),
+                (
+                    np.array([-0.5 - 0.5j, 0.0, 0.5 + 0.5j], dtype="c16"),
+                    types.Array(types.complex128, 1, "C"),
+                ),
+            ]
+        )
 
         # Test with multiple dimensions
-        self.inputs.extend([
-            # Basic 2D and 3D arrays
-            (np.linspace(0, 1).reshape((5, -1)),
-             types.Array(types.float64, 2, 'C')),
-            (np.linspace(0, 1).reshape((2, 5, -1)),
-             types.Array(types.float64, 3, 'C')),
-            # Complex data (i.e. interleaved)
-            (np.linspace(0, 1 + 1j).reshape(5, -1),
-             types.Array(types.complex128, 2, 'C')),
-            # F-ordered
-            (np.asfortranarray(np.linspace(0, 1).reshape((5, -1))),
-             types.Array(types.float64, 2, 'F')),
-        ])
+        self.inputs.extend(
+            [
+                # Basic 2D and 3D arrays
+                (
+                    np.linspace(0, 1).reshape((5, -1)),
+                    types.Array(types.float64, 2, "C"),
+                ),
+                (
+                    np.linspace(0, 1).reshape((2, 5, -1)),
+                    types.Array(types.float64, 3, "C"),
+                ),
+                # Complex data (i.e. interleaved)
+                (
+                    np.linspace(0, 1 + 1j).reshape(5, -1),
+                    types.Array(types.complex128, 2, "C"),
+                ),
+                # F-ordered
+                (
+                    np.asfortranarray(np.linspace(0, 1).reshape((5, -1))),
+                    types.Array(types.float64, 2, "F"),
+                ),
+            ]
+        )
 
         # Add tests for other integer types
-        self.inputs.extend([
-            (np.uint8(0), types.uint8),
-            (np.uint8(1), types.uint8),
-            (np.int8(-1), types.int8),
-            (np.int8(0), types.int8),
-
-            (np.uint16(0), types.uint16),
-            (np.uint16(1), types.uint16),
-            (np.int16(-1), types.int16),
-            (np.int16(0), types.int16),
-
-            (np.ulonglong(0), types.ulonglong),
-            (np.ulonglong(1), types.ulonglong),
-            (np.longlong(-1), types.longlong),
-            (np.longlong(0), types.longlong),
-
-            (np.array([0,1], dtype=np.ulonglong),
-             types.Array(types.ulonglong, 1, 'C')),
-            (np.array([0,1], dtype=np.longlong),
-             types.Array(types.longlong, 1, 'C')),
-        ])
+        self.inputs.extend(
+            [
+                (np.uint8(0), types.uint8),
+                (np.uint8(1), types.uint8),
+                (np.int8(-1), types.int8),
+                (np.int8(0), types.int8),
+                (np.uint16(0), types.uint16),
+                (np.uint16(1), types.uint16),
+                (np.int16(-1), types.int16),
+                (np.int16(0), types.int16),
+                (np.ulonglong(0), types.ulonglong),
+                (np.ulonglong(1), types.ulonglong),
+                (np.longlong(-1), types.longlong),
+                (np.longlong(0), types.longlong),
+                (
+                    np.array([0, 1], dtype=np.ulonglong),
+                    types.Array(types.ulonglong, 1, "C"),
+                ),
+                (
+                    np.array([0, 1], dtype=np.longlong),
+                    types.Array(types.longlong, 1, "C"),
+                ),
+            ]
+        )
 
         self._low_occupancy_warnings = config.CUDA_LOW_OCCUPANCY_WARNINGS
         self._warn_on_implicit_copy = config.CUDA_WARN_ON_IMPLICIT_COPY
@@ -111,18 +128,18 @@ class TestUFuncs(BasicUFuncTest, TestCase):
         skip_inputs = [
             types.float32,
             types.float64,
-            types.Array(types.float32, 1, 'C'),
-            types.Array(types.float32, 2, 'C'),
-            types.Array(types.float64, 1, 'C'),
-            types.Array(types.float64, 2, 'C'),
-            types.Array(types.float64, 3, 'C'),
-            types.Array(types.float64, 2, 'F'),
+            types.Array(types.float32, 1, "C"),
+            types.Array(types.float32, 2, "C"),
+            types.Array(types.float64, 1, "C"),
+            types.Array(types.float64, 2, "C"),
+            types.Array(types.float64, 3, "C"),
+            types.Array(types.float64, 2, "F"),
             types.complex64,
             types.complex128,
-            types.Array(types.complex64, 1, 'C'),
-            types.Array(types.complex64, 2, 'C'),
-            types.Array(types.complex128, 1, 'C'),
-            types.Array(types.complex128, 2, 'C'),
+            types.Array(types.complex64, 1, "C"),
+            types.Array(types.complex64, 2, "C"),
+            types.Array(types.complex128, 1, "C"),
+            types.Array(types.complex128, 2, "C"),
         ]
         self.basic_ufunc_test(name, skip_inputs=skip_inputs)
 
@@ -130,43 +147,43 @@ class TestUFuncs(BasicUFuncTest, TestCase):
     # Trigonometric Functions
 
     def test_sin_ufunc(self):
-        self.basic_ufunc_test(np.sin, kinds='cf')
+        self.basic_ufunc_test(np.sin, kinds="cf")
 
     def test_cos_ufunc(self):
-        self.basic_ufunc_test(np.cos, kinds='cf')
+        self.basic_ufunc_test(np.cos, kinds="cf")
 
     def test_tan_ufunc(self):
-        self.basic_ufunc_test(np.tan, kinds='cf')
+        self.basic_ufunc_test(np.tan, kinds="cf")
 
     def test_arcsin_ufunc(self):
-        self.basic_ufunc_test(np.arcsin, kinds='cf')
+        self.basic_ufunc_test(np.arcsin, kinds="cf")
 
     def test_arccos_ufunc(self):
-        self.basic_ufunc_test(np.arccos, kinds='cf')
+        self.basic_ufunc_test(np.arccos, kinds="cf")
 
     def test_arctan_ufunc(self):
-        self.basic_ufunc_test(np.arctan, kinds='cf')
+        self.basic_ufunc_test(np.arctan, kinds="cf")
 
     def test_arctan2_ufunc(self):
-        self.basic_ufunc_test(np.arctan2, kinds='f')
+        self.basic_ufunc_test(np.arctan2, kinds="f")
 
     def test_hypot_ufunc(self):
-        self.basic_ufunc_test(np.hypot, kinds='f')
+        self.basic_ufunc_test(np.hypot, kinds="f")
 
     def test_sinh_ufunc(self):
-        self.basic_ufunc_test(np.sinh, kinds='cf')
+        self.basic_ufunc_test(np.sinh, kinds="cf")
 
     def test_cosh_ufunc(self):
-        self.basic_ufunc_test(np.cosh, kinds='cf')
+        self.basic_ufunc_test(np.cosh, kinds="cf")
 
     def test_tanh_ufunc(self):
-        self.basic_ufunc_test(np.tanh, kinds='cf')
+        self.basic_ufunc_test(np.tanh, kinds="cf")
 
     def test_arcsinh_ufunc(self):
-        self.basic_ufunc_test(np.arcsinh, kinds='cf')
+        self.basic_ufunc_test(np.arcsinh, kinds="cf")
 
     def test_arccosh_ufunc(self):
-        self.basic_ufunc_test(np.arccosh, kinds='cf')
+        self.basic_ufunc_test(np.arccosh, kinds="cf")
 
     def test_arctanh_ufunc(self):
         # arctanh is only valid is only finite in the range ]-1, 1[
@@ -177,24 +194,30 @@ class TestUFuncs(BasicUFuncTest, TestCase):
         # used to compile NumPy may differ from the result generated by
         # llvm. Skipping the integer types in this test avoids failed
         # tests because of this.
-        to_skip = [types.Array(types.uint32, 1, 'C'), types.uint32,
-                   types.Array(types.int32, 1, 'C'), types.int32,
-                   types.Array(types.uint64, 1, 'C'), types.uint64,
-                   types.Array(types.int64, 1, 'C'), types.int64]
+        to_skip = [
+            types.Array(types.uint32, 1, "C"),
+            types.uint32,
+            types.Array(types.int32, 1, "C"),
+            types.int32,
+            types.Array(types.uint64, 1, "C"),
+            types.uint64,
+            types.Array(types.int64, 1, "C"),
+            types.int64,
+        ]
 
-        self.basic_ufunc_test(np.arctanh, skip_inputs=to_skip, kinds='cf')
+        self.basic_ufunc_test(np.arctanh, skip_inputs=to_skip, kinds="cf")
 
     def test_deg2rad_ufunc(self):
-        self.basic_ufunc_test(np.deg2rad, kinds='f')
+        self.basic_ufunc_test(np.deg2rad, kinds="f")
 
     def test_rad2deg_ufunc(self):
-        self.basic_ufunc_test(np.rad2deg, kinds='f')
+        self.basic_ufunc_test(np.rad2deg, kinds="f")
 
     def test_degrees_ufunc(self):
-        self.basic_ufunc_test(np.degrees, kinds='f')
+        self.basic_ufunc_test(np.degrees, kinds="f")
 
     def test_radians_ufunc(self):
-        self.basic_ufunc_test(np.radians, kinds='f')
+        self.basic_ufunc_test(np.radians, kinds="f")
 
     ############################################################################
     # Comparison functions
@@ -264,14 +287,14 @@ class TestUFuncs(BasicUFuncTest, TestCase):
     # Mathematical Functions
 
     def test_log_ufunc(self):
-        self.basic_ufunc_test(np.log, kinds='cf')
+        self.basic_ufunc_test(np.log, kinds="cf")
 
     def test_log2_ufunc(self):
-        self.basic_ufunc_test(np.log2, kinds='cf')
+        self.basic_ufunc_test(np.log2, kinds="cf")
 
     def test_log10_ufunc(self):
-        self.basic_ufunc_test(np.log10, kinds='cf')
+        self.basic_ufunc_test(np.log10, kinds="cf")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

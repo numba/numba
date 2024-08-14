@@ -1,6 +1,7 @@
 """
 Test extending types via the numba.extending.* API.
 """
+
 import operator
 
 from numba import njit, literally
@@ -21,6 +22,7 @@ def gen_mock_float():
     # not used as multiple registrations can collide.
     def mock_float(x):
         pass
+
     return mock_float
 
 
@@ -33,7 +35,7 @@ class TestExtTypDummy(unittest.TestCase):
 
         class DummyType(types.Type):
             def __init__(self):
-                super(DummyType, self).__init__(name='Dummy')
+                super(DummyType, self).__init__(name="Dummy")
 
         dummy_type = DummyType()
 
@@ -41,16 +43,17 @@ class TestExtTypDummy(unittest.TestCase):
         class DummyModel(models.StructModel):
             def __init__(self, dmm, fe_type):
                 members = [
-                    ('value', types.intp),
+                    ("value", types.intp),
                 ]
                 models.StructModel.__init__(self, dmm, fe_type, members)
 
-        make_attribute_wrapper(DummyType, 'value', 'value')
+        make_attribute_wrapper(DummyType, "value", "value")
 
         @type_callable(Dummy)
         def type_dummy(context):
             def typer(value):
                 return dummy_type
+
             return typer
 
         @lower_builtin(Dummy, types.intp)
@@ -73,11 +76,13 @@ class TestExtTypDummy(unittest.TestCase):
         @overload(mock_float_inst)
         def dummy_to_float(x):
             if isinstance(x, self.DummyType):
+
                 def codegen(x):
                     return float(x.value)
+
                 return codegen
             else:
-                raise NumbaTypeError('cannot type float({})'.format(x))
+                raise NumbaTypeError("cannot type float({})".format(x))
 
     def test_overload_float(self):
         mock_float = gen_mock_float()
@@ -101,12 +106,10 @@ class TestExtTypDummy(unittest.TestCase):
         with self.assertRaises(TypingError) as raises:
             foo(1j)
 
-        self.assertIn("cannot type float(complex128)",
-                      str(raises.exception))
+        self.assertIn("cannot type float(complex128)", str(raises.exception))
 
     def test_unboxing(self):
-        """A test for the unboxing logic on unknown type
-        """
+        """A test for the unboxing logic on unknown type"""
         Dummy = self.Dummy
 
         @njit
@@ -125,8 +128,7 @@ class TestExtTypDummy(unittest.TestCase):
         self.assertIn("can't unbox Dummy type", str(raises.exception))
 
     def test_boxing(self):
-        """A test for the boxing logic on unknown type
-        """
+        """A test for the boxing logic on unknown type"""
         Dummy = self.Dummy
 
         @njit
@@ -135,8 +137,9 @@ class TestExtTypDummy(unittest.TestCase):
 
         with self.assertRaises(TypeError) as raises:
             foo(123)
-        self.assertIn("cannot convert native Dummy to Python object",
-                      str(raises.exception))
+        self.assertIn(
+            "cannot convert native Dummy to Python object", str(raises.exception)
+        )
 
     def test_issue5565_literal_getitem(self):
         # the following test is adapted from
@@ -151,13 +154,17 @@ class TestExtTypDummy(unittest.TestCase):
                 return None
             # suppose we can only support idx as literal argument
             if isinstance(idx, types.StringLiteral):
+
                 def dummy_getitem_impl(self, idx):
                     return MAGIC_NUMBER
+
                 return dummy_getitem_impl
 
             if isinstance(idx, types.UnicodeType):
+
                 def dummy_getitem_impl(self, idx):
                     return literally(idx)
+
                 return dummy_getitem_impl
 
             return None
@@ -166,5 +173,5 @@ class TestExtTypDummy(unittest.TestCase):
         def test_impl(x, y):
             return Dummy(x)[y]
 
-        var = 'abc'
+        var = "abc"
         self.assertEqual(test_impl(1, var), MAGIC_NUMBER)

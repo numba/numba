@@ -7,11 +7,11 @@ import unittest
 sig = [float64(float64, float64)]
 
 
-@skip_on_cudasim('ufunc API unsupported in the simulator')
+@skip_on_cudasim("ufunc API unsupported in the simulator")
 class TestCUDAVectorizeScalarArg(CUDATestCase):
 
     def test_vectorize_scalar_arg(self):
-        @vectorize(sig, target='cuda')
+        @vectorize(sig, target="cuda")
         def vector_add(a, b):
             return a + b
 
@@ -20,11 +20,11 @@ class TestCUDAVectorizeScalarArg(CUDATestCase):
         v = vector_add(1.0, dA)
 
         np.testing.assert_array_almost_equal(
-            v.copy_to_host(),
-            np.arange(1, 11, dtype=np.float64))
+            v.copy_to_host(), np.arange(1, 11, dtype=np.float64)
+        )
 
     def test_vectorize_all_scalars(self):
-        @vectorize(sig, target='cuda')
+        @vectorize(sig, target="cuda")
         def vector_add(a, b):
             return a + b
 
@@ -33,5 +33,5 @@ class TestCUDAVectorizeScalarArg(CUDATestCase):
         np.testing.assert_almost_equal(2.0, v)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

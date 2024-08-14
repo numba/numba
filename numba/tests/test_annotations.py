@@ -21,7 +21,7 @@ except ImportError:
 @unittest.skipIf(jinja2 is None, "please install the 'jinja2' package")
 class TestAnnotation(TestCase):
 
-    @TestCase.run_test_in_subprocess # annotations compound per module
+    @TestCase.run_test_in_subprocess  # annotations compound per module
     def test_exercise_code_path(self):
         """
         Ensures template.html is available
@@ -43,18 +43,19 @@ class TestAnnotation(TestCase):
         buf.close()
         self.assertIn("foo", output)
 
-    @TestCase.run_test_in_subprocess # annotations compound per module
+    @TestCase.run_test_in_subprocess  # annotations compound per module
     def test_exercise_code_path_with_lifted_loop(self):
         """
         Ensures that lifted loops are handled correctly in obj mode
         """
+
         # the functions to jit
         def bar(x):
             return x
 
         def foo(x):
-            h = 0.
-            for i in range(x): # py 38 needs two loops for one to lift?!
+            h = 0.0
+            for i in range(x):  # py 38 needs two loops for one to lift?!
                 h = h + i
             for k in range(x):
                 h = h + k
@@ -76,11 +77,12 @@ class TestAnnotation(TestCase):
         self.assertIn("foo", output)
         self.assertIn("LiftedLoop", output)
 
-    @TestCase.run_test_in_subprocess # annotations compound per module
+    @TestCase.run_test_in_subprocess  # annotations compound per module
     def test_html_output_with_lifted_loop(self):
         """
         Test some format and behavior of the html annotation with lifted loop
         """
+
         @numba.jit(forceobj=True)
         def udt(x):
             object()  # to force object mode
@@ -92,12 +94,13 @@ class TestAnnotation(TestCase):
         # Regex pattern to check for the "lifted_tag" in the line of the loop
         re_lifted_tag = re.compile(
             r'<td class="lifted_tag">\s*'
-            r'\s*<details>'
-            r'\s*<summary>'
-            r'\s*<code>'
-            r'\s*[0-9]+:'
-            r'\s*[&nbsp;]+for i in range\(x\):  # this line is tagged\s*',
-            re.MULTILINE)
+            r"\s*<details>"
+            r"\s*<summary>"
+            r"\s*<code>"
+            r"\s*[0-9]+:"
+            r"\s*[&nbsp;]+for i in range\(x\):  # this line is tagged\s*",
+            re.MULTILINE,
+        )
 
         # Compile int64 version
         sig_i64 = (types.int64,)
@@ -116,8 +119,11 @@ class TestAnnotation(TestCase):
         sigfmt = "with signature: {} -&gt; pyobject"
         self.assertEqual(output.count(sigfmt.format(sig_i64)), 1)
         # Ensure the loop is tagged
-        self.assertEqual(len(re.findall(re_lifted_tag, output)), 1,
-                         msg='%s not found in %s' % (re_lifted_tag, output))
+        self.assertEqual(
+            len(re.findall(re_lifted_tag, output)),
+            1,
+            msg="%s not found in %s" % (re_lifted_tag, output),
+        )
 
         # Compile float64 version
         sig_f64 = (types.float64,)
@@ -150,9 +156,8 @@ class TestAnnotation(TestCase):
 
         # Exercise but supply a not None file kwarg, this is invalid
         with self.assertRaises(ValueError) as raises:
-            foo.inspect_types(pretty=True, file='should be None')
-        self.assertIn('`file` must be None if `pretty=True`',
-                      str(raises.exception))
+            foo.inspect_types(pretty=True, file="should be None")
+        self.assertIn("`file` must be None if `pretty=True`", str(raises.exception))
 
 
 class TestTypeAnnotation(unittest.TestCase):
@@ -178,34 +183,36 @@ class TestTypeAnnotation(unittest.TestCase):
         lines = self.getlines(foo)
 
         # Ensure deletion show up after their use
-        sa = self.findpatloc(lines, 'appleorange = arg(0, name=appleorange)')
-        sb = self.findpatloc(lines, 'berrycherry = arg(1, name=berrycherry)')
+        sa = self.findpatloc(lines, "appleorange = arg(0, name=appleorange)")
+        sb = self.findpatloc(lines, "berrycherry = arg(1, name=berrycherry)")
 
-        ea = self.findpatloc(lines, 'del appleorange')
-        eb = self.findpatloc(lines, 'del berrycherry')
+        ea = self.findpatloc(lines, "del appleorange")
+        eb = self.findpatloc(lines, "del berrycherry")
 
         self.assertLess(sa, ea)
         self.assertLess(sb, eb)
 
     def _lifetimes_impl(self, extend):
-        with override_config('EXTEND_VARIABLE_LIFETIMES', extend):
+        with override_config("EXTEND_VARIABLE_LIFETIMES", extend):
+
             @njit
             def foo(a):
                 b = a
                 return b
+
             x = 10
             b = foo(x)
             self.assertEqual(b, x)
 
         lines = self.getlines(foo)
 
-        sa = self.findpatloc(lines, 'a = arg(0, name=a)')
-        sb = self.findpatloc(lines, 'b = a')
+        sa = self.findpatloc(lines, "a = arg(0, name=a)")
+        sb = self.findpatloc(lines, "b = a")
 
-        cast_ret = self.findpatloc(lines, 'cast(value=b)')
+        cast_ret = self.findpatloc(lines, "cast(value=b)")
 
-        dela = self.findpatloc(lines, 'del a')
-        delb = self.findpatloc(lines, 'del b')
+        dela = self.findpatloc(lines, "del a")
+        delb = self.findpatloc(lines, "del b")
 
         return sa, sb, cast_ret, dela, delb
 
@@ -248,5 +255,5 @@ class TestTypeAnnotation(unittest.TestCase):
         self.assertGreater(delb, cast_ret)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

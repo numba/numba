@@ -1,23 +1,23 @@
 import unittest
 
-from numba.tests.support import (TestCase, override_config)
+from numba.tests.support import TestCase, override_config
 from numba import njit
 from numba.core import types
 import llvmlite.binding as llvm
 
 
 class TestPassManagerOptimization(TestCase):
-    """ Tests that pass manager is not overriding the intended
+    """Tests that pass manager is not overriding the intended
     optimization level.
     """
 
     def _get_llvmir(self, fn, sig):
-        with override_config('OPT', 0):
+        with override_config("OPT", 0):
             fn.compile(sig)
             return fn.inspect_llvm(sig)
 
     def test_override_config(self):
-        @njit(debug=True, error_model='numpy')
+        @njit(debug=True, error_model="numpy")
         def foo(a):
             b = a + 1.23
             c = b * 2.34
@@ -39,8 +39,8 @@ class TestPassManagerOptimization(TestCase):
         block = blocks[0]
 
         # Find sequence with non-debug instructions
-        instrs = [x for x in block.instructions if x.opcode != 'call']
-        op_expect = {'fadd', 'fmul', 'fdiv'}
+        instrs = [x for x in block.instructions if x.opcode != "call"]
+        op_expect = {"fadd", "fmul", "fdiv"}
         started = False
         for x in instrs:
             if x.opcode in op_expect:
@@ -50,9 +50,8 @@ class TestPassManagerOptimization(TestCase):
             elif op_expect and started:
                 break
 
-        self.assertGreater(len(op_expect), 0,
-                           "Function was optimized unexpectedly")
+        self.assertGreater(len(op_expect), 0, "Function was optimized unexpectedly")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

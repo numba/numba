@@ -1,6 +1,7 @@
 """
 Test bytecode fixes provided in interpreter.py
 """
+
 import unittest
 from numba import jit, njit, objmode, typeof, literally
 from numba.extending import overload
@@ -127,13 +128,14 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
     There are different paths when n_args > 30 and n_args <= 30 and when
     n_kws > 15 and n_kws <= 15.
     """
+
     THRESHOLD_ARGS = 31
     THRESHOLD_KWS = 16
 
     def gen_func(self, n_args, n_kws):
         """
-            Generates a function that calls sum_jit_func
-            with the desired number of args and kws.
+        Generates a function that calls sum_jit_func
+        with the desired number of args and kws.
         """
         param_list = [f"arg{i}" for i in range(n_args + n_kws)]
         args_list = []
@@ -255,6 +257,7 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
         """
         Tests calling an objectmode function with > 15 return values.
         """
+
         def py_func():
             return (
                 0,
@@ -283,59 +286,25 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
             call is not properly updated this test will fail.
             """
             with objmode(
-                a='int64',
-                b='int64',
-                c='int64',
-                d='int64',
-                e='int64',
-                f='int64',
-                g='int64',
-                h='int64',
-                i='int64',
-                j='int64',
-                k='int64',
-                l='int64',
-                m='int64',
-                n='int64',
-                o='int64',
-                p='int64',
+                a="int64",
+                b="int64",
+                c="int64",
+                d="int64",
+                e="int64",
+                f="int64",
+                g="int64",
+                h="int64",
+                i="int64",
+                j="int64",
+                k="int64",
+                l="int64",
+                m="int64",
+                n="int64",
+                o="int64",
+                p="int64",
             ):
-                (
-                    a,
-                    b,
-                    c,
-                    d,
-                    e,
-                    f,
-                    g,
-                    h,
-                    i,
-                    j,
-                    k,
-                    l,
-                    m,
-                    n,
-                    o,
-                    p
-                ) = py_func()
-            return (
-                a
-                + b
-                + c
-                + d
-                + e
-                + f
-                + g
-                + h
-                + i
-                + j
-                + k
-                + l
-                + m
-                + n
-                + o
-                + p
-            )
+                (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p) = py_func()
+            return a + b + c + d + e + f + g + h + i + j + k + l + m + n + o + p
 
         a = sum(list(py_func()))
         b = objmode_func()
@@ -347,6 +316,7 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
         Tests generating large args when one of the inputs
         has inlined controlflow.
         """
+
         def inline_func(flag):
             return sum_jit_func(
                 1,
@@ -391,8 +361,8 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
         with self.assertRaises(UnsupportedError) as raises:
             njit()(inline_func)(False)
         self.assertIn(
-            'You can resolve this issue by moving the control flow out',
-            str(raises.exception)
+            "You can resolve this issue by moving the control flow out",
+            str(raises.exception),
         )
 
     @skip_unless_py10_or_later
@@ -402,6 +372,7 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
         has the change suggested in the error message
         for inlined control flow.
         """
+
         def inline_func(flag):
             a_val = 1 if flag else 2
             return sum_jit_func(
@@ -458,6 +429,7 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
         inside peep_hole_call_function_ex_to_call_function_kw
         because it usually only handles varkwargs.
         """
+
         def inline_func(flag):
             return sum_jit_func(
                 1,
@@ -501,8 +473,8 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
         with self.assertRaises(UnsupportedError) as raises:
             njit()(inline_func)(False)
         self.assertIn(
-            'You can resolve this issue by moving the control flow out',
-            str(raises.exception)
+            "You can resolve this issue by moving the control flow out",
+            str(raises.exception),
         )
 
     @skip_unless_py10_or_later
@@ -512,6 +484,7 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
         has the change suggested in the error message
         for inlined control flow.
         """
+
         def inline_func(flag):
             a_val = 1 if flag else 2
             return sum_jit_func(
@@ -565,6 +538,7 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
         Tests generating large kws when one of the inputs
         has inlined controlflow.
         """
+
         def inline_func(flag):
             return sum_jit_func(
                 arg0=1,
@@ -588,8 +562,8 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
         with self.assertRaises(UnsupportedError) as raises:
             njit()(inline_func)(False)
         self.assertIn(
-            'You can resolve this issue by moving the control flow out',
-            str(raises.exception)
+            "You can resolve this issue by moving the control flow out",
+            str(raises.exception),
         )
 
     @skip_unless_py10_or_later
@@ -599,6 +573,7 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
         has the change suggested in the error message
         for inlined control flow.
         """
+
         def inline_func(flag):
             a_val = 1 if flag else 2
             return sum_jit_func(
@@ -649,6 +624,7 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
         Tests that a function with a large heterogeneous constant
         dictionary remains a constant.
         """
+
         def const_func():
             # D is a heterogeneous dictionary
             # so this code can only compile if
@@ -672,7 +648,7 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
                 "P": 1,
                 "Q": 1,
                 "R": 1,
-                "S": 'a',
+                "S": "a",
             }
             return d["S"]
 
@@ -688,8 +664,7 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
         optimizations because it is heterogeneous.
         """
 
-        def bar(d):
-            ...
+        def bar(d): ...
 
         @overload(bar)
         def ol_bar(d):
@@ -712,15 +687,16 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
                 "P": 1,
                 "Q": 1,
                 "R": 1,
-                "S": 'a',
+                "S": "a",
             }
 
             def specific_ty(z):
                 return types.literal(z) if types.maybe_literal(z) else typeof(z)
+
             expected = {types.literal(x): specific_ty(y) for x, y in a.items()}
             self.assertTrue(isinstance(d, types.LiteralStrKeyDict))
             self.assertEqual(d.literal_value, expected)
-            self.assertEqual(hasattr(d, 'initial_value'), False)
+            self.assertEqual(hasattr(d, "initial_value"), False)
             return lambda d: d
 
         @njit
@@ -747,7 +723,7 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
                 "P": 1,
                 "Q": 1,
                 "R": 1,
-                "S": 'a',
+                "S": "a",
             }
             bar(d)
 
@@ -759,6 +735,7 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
         Tests that a function with a large heterogeneous constant
         dictionary remains a constant.
         """
+
         def const_keys_func(a):
             # D is a heterogeneous dictionary
             # so this code can only compile if
@@ -800,8 +777,8 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
         do not incorrectly update initial values due to other
         mutations.
         """
-        def bar(d):
-            ...
+
+        def bar(d): ...
 
         @overload(bar)
         def ol_bar(d):
@@ -857,7 +834,7 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
                 "R": 1,
                 "S": 7,
             }
-            d['X'] = 4
+            d["X"] = 4
             bar(d)
 
         foo()
@@ -920,10 +897,7 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
                 "b": 2,
                 "c": 3,
             }
-            d2 = {
-                "d": 4,
-                "e": 4
-            }
+            d2 = {"d": 4, "e": 4}
             check_before(d1)
             d1.update(d2)
             check_after(d1)
@@ -946,6 +920,7 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
         has the change suggested in the error message
         for inlined control flow.
         """
+
         def inline_func(a, flag):
             # D is a heterogeneous dictionary
             # so this code can only compile if
@@ -976,8 +951,8 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
         with self.assertRaises(UnsupportedError) as raises:
             njit()(inline_func)("a_string", False)
         self.assertIn(
-            'You can resolve this issue by moving the control flow out',
-            str(raises.exception)
+            "You can resolve this issue by moving the control flow out",
+            str(raises.exception),
         )
 
     @skip_unless_py10_or_later
@@ -987,6 +962,7 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
         inputs has the change suggested in the error message
         for inlined control flow.
         """
+
         def non_inline_func(a, flag):
             # D is a heterogeneous dictionary
             # so this code can only compile if
@@ -1029,48 +1005,48 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
         for a dictionary that produces two DICT_UPDATE
         bytecode entries for the same dictionary.
         """
-        def bar(d):
-            ...
+
+        def bar(d): ...
 
         @overload(bar)
         def ol_bar(d):
             a = {
-                "a1" : 1,
-                "a2" : 2,
-                "a3" : 3,
-                "a4" : 4,
-                "a5" : 5,
-                "a6" : 6,
-                "a7" : 7,
-                "a8" : 8,
-                "a9" : 9,
-                "a10" : 10,
-                "a11" : 11,
-                "a12" : 12,
-                "a13" : 13,
-                "a14" : 14,
-                "a15" : 15,
-                "a16" : 16,
-                "a17" : 17,
-                "a18" : 18,
-                "a19" : 19,
-                "a20" : 20,
-                "a21" : 21,
-                "a22" : 22,
-                "a23" : 23,
-                "a24" : 24,
-                "a25" : 25,
-                "a26" : 26,
-                "a27" : 27,
-                "a28" : 28,
-                "a29" : 29,
-                "a30" : 30,
-                "a31" : 31,
-                "a32" : 32,
-                "a33" : 33,
-                "a34" : 34, # 34 items is the limit of
-                            # (LOAD_CONST + MAP_ADD)^n + DICT_UPDATE
-                "a35" : 35, # 35 Generates an additional BUILD_MAP + DICT_UPDATE
+                "a1": 1,
+                "a2": 2,
+                "a3": 3,
+                "a4": 4,
+                "a5": 5,
+                "a6": 6,
+                "a7": 7,
+                "a8": 8,
+                "a9": 9,
+                "a10": 10,
+                "a11": 11,
+                "a12": 12,
+                "a13": 13,
+                "a14": 14,
+                "a15": 15,
+                "a16": 16,
+                "a17": 17,
+                "a18": 18,
+                "a19": 19,
+                "a20": 20,
+                "a21": 21,
+                "a22": 22,
+                "a23": 23,
+                "a24": 24,
+                "a25": 25,
+                "a26": 26,
+                "a27": 27,
+                "a28": 28,
+                "a29": 29,
+                "a30": 30,
+                "a31": 31,
+                "a32": 32,
+                "a33": 33,
+                "a34": 34,  # 34 items is the limit of
+                # (LOAD_CONST + MAP_ADD)^n + DICT_UPDATE
+                "a35": 35,  # 35 Generates an additional BUILD_MAP + DICT_UPDATE
             }
             if d.initial_value is None:
                 return lambda d: literally(d)
@@ -1083,42 +1059,42 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
             # This dictionary is mutated, check the initial_value carries
             # correctly and is not mutated
             d = {
-                "a1" : 1,
-                "a2" : 2,
-                "a3" : 3,
-                "a4" : 4,
-                "a5" : 5,
-                "a6" : 6,
-                "a7" : 7,
-                "a8" : 8,
-                "a9" : 9,
-                "a10" : 10,
-                "a11" : 11,
-                "a12" : 12,
-                "a13" : 13,
-                "a14" : 14,
-                "a15" : 15,
-                "a16" : 16,
-                "a17" : 17,
-                "a18" : 18,
-                "a19" : 19,
-                "a20" : 20,
-                "a21" : 21,
-                "a22" : 22,
-                "a23" : 23,
-                "a24" : 24,
-                "a25" : 25,
-                "a26" : 26,
-                "a27" : 27,
-                "a28" : 28,
-                "a29" : 29,
-                "a30" : 30,
-                "a31" : 31,
-                "a32" : 32,
-                "a33" : 33,
-                "a34" : 34, # 34 items is the limit of
-                            # (LOAD_CONST + MAP_ADD)^n + DICT_UPDATE
-                "a35" : 35, # 35 Generates an additional BUILD_MAP + DICT_UPDATE
+                "a1": 1,
+                "a2": 2,
+                "a3": 3,
+                "a4": 4,
+                "a5": 5,
+                "a6": 6,
+                "a7": 7,
+                "a8": 8,
+                "a9": 9,
+                "a10": 10,
+                "a11": 11,
+                "a12": 12,
+                "a13": 13,
+                "a14": 14,
+                "a15": 15,
+                "a16": 16,
+                "a17": 17,
+                "a18": 18,
+                "a19": 19,
+                "a20": 20,
+                "a21": 21,
+                "a22": 22,
+                "a23": 23,
+                "a24": 24,
+                "a25": 25,
+                "a26": 26,
+                "a27": 27,
+                "a28": 28,
+                "a29": 29,
+                "a30": 30,
+                "a31": 31,
+                "a32": 32,
+                "a33": 33,
+                "a34": 34,  # 34 items is the limit of
+                # (LOAD_CONST + MAP_ADD)^n + DICT_UPDATE
+                "a35": 35,  # 35 Generates an additional BUILD_MAP + DICT_UPDATE
             }
             bar(d)
 
@@ -1136,6 +1112,7 @@ class TestListExtendInStarArgNonTupleIterable(MemoryLeakMixin, TestCase):
     NOTE: At the moment, there are no meaningful tests for NoPython because the
     lack of support for `tuple(iterable)` for most iterable types.
     """
+
     def test_list_extend_forceobj(self):
         def consumer(*x):
             return x

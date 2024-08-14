@@ -12,12 +12,14 @@ class TestExtendedArg(TestCase):
     """
     Test support for the EXTENDED_ARG opcode.
     """
-    bytecode_len = 0xff
+
+    bytecode_len = 0xFF
 
     def get_extended_arg_load_const(self):
         """
         Get a function with a EXTENDED_ARG opcode before a LOAD_CONST opcode.
         """
+
         def f():
             x = 5
             return x
@@ -29,7 +31,7 @@ class TestExtendedArg(TestCase):
         if utils.PYVERSION >= (3, 11):
             # Python 3.11 has a RESUME op code at the start of a function, need
             # to inject the EXTENDED_ARG after this to influence the LOAD_CONST
-            offset = 2 # 2 byte op code
+            offset = 2  # 2 byte op code
         else:
             offset = 0
 
@@ -47,5 +49,5 @@ class TestExtendedArg(TestCase):
         self.assertPreciseEqual(cfunc(), 42)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

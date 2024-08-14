@@ -17,6 +17,7 @@ class UseCase:
     The return type is inferred from the type of the first argument, unless it
     is explicitly overridden by the ``retty`` kwarg.
     """
+
     def __init__(self, func, retty=None):
         self._func = func
         self._retty = retty
@@ -59,6 +60,7 @@ Z = 1
 
 # Inner / outer cached / uncached cases
 
+
 @cuda.jit(cache=True)
 def inner(x, y):
     return x + y + Z
@@ -81,13 +83,13 @@ outer_uncached = CUDAUseCase(outer_uncached_kernel)
 # Exercise returning a record instance.  This used to hardcode the dtype
 # pointer's value in the bitcode.
 
-packed_record_type = np.dtype([('a', np.int8), ('b', np.float64)])
-aligned_record_type = np.dtype([('a', np.int8), ('b', np.float64)], align=True)
+packed_record_type = np.dtype([("a", np.int8), ("b", np.float64)])
+aligned_record_type = np.dtype([("a", np.int8), ("b", np.float64)], align=True)
 
 packed_arr = np.empty(2, dtype=packed_record_type)
 for i in range(packed_arr.size):
-    packed_arr[i]['a'] = i + 1
-    packed_arr[i]['b'] = i + 42.5
+    packed_arr[i]["a"] = i + 1
+    packed_arr[i]["b"] = i + 42.5
 
 aligned_arr = np.array(packed_arr, dtype=aligned_record_type)
 
@@ -102,6 +104,7 @@ record_return_aligned = CUDAUseCase(record_return, retty=aligned_record_type)
 
 
 # Closure test cases
+
 
 def make_closure(x):
     @cuda.jit(cache=True)
@@ -118,6 +121,7 @@ closure4 = make_closure(9)
 
 
 # Ambiguous / renamed functions
+
 
 @cuda.jit(cache=True)
 def ambiguous_function(r, x):
@@ -190,6 +194,7 @@ def many_locals():
 
 # Simple use case for multiprocessing test
 
+
 @cuda.jit(cache=True)
 def simple_usecase_kernel(r, x):
     r[()] = x[()]
@@ -199,6 +204,7 @@ simple_usecase_caller = CUDAUseCase(simple_usecase_kernel)
 
 
 # Usecase with cooperative groups
+
 
 @cuda.jit(cache=True)
 def cg_usecase_kernel(r, x):

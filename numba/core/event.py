@@ -48,19 +48,21 @@ from numba.core import config
 
 
 class EventStatus(enum.Enum):
-    """Status of an event.
-    """
+    """Status of an event."""
+
     START = enum.auto()
     END = enum.auto()
 
 
 # Builtin event kinds.
-_builtin_kinds = frozenset([
-    "numba:compiler_lock",
-    "numba:compile",
-    "numba:llvm_lock",
-    "numba:run_pass",
-])
+_builtin_kinds = frozenset(
+    [
+        "numba:compiler_lock",
+        "numba:compile",
+        "numba:llvm_lock",
+        "numba:run_pass",
+    ]
+)
 
 
 def _guard_kind(kind):
@@ -79,8 +81,10 @@ def _guard_kind(kind):
     res : str
     """
     if kind.startswith("numba:") and kind not in _builtin_kinds:
-        msg = (f"{kind} is not a valid event kind, "
-               "it starts with the reserved prefix 'numba:'")
+        msg = (
+            f"{kind} is not a valid event kind, "
+            "it starts with the reserved prefix 'numba:'"
+        )
         raise ValueError(msg)
     return kind
 
@@ -97,13 +101,14 @@ class Event:
     exc_details : 3-tuple; optional
         Same 3-tuple for ``__exit__``.
     """
+
     def __init__(self, kind, status, data=None, exc_details=None):
         self._kind = _guard_kind(kind)
         self._status = status
         self._data = data
-        self._exc_details = (None
-                             if exc_details is None or exc_details[0] is None
-                             else exc_details)
+        self._exc_details = (
+            None if exc_details is None or exc_details[0] is None else exc_details
+        )
 
     @property
     def kind(self):
@@ -169,8 +174,7 @@ class Event:
         return self._exc_details is None
 
     def __str__(self):
-        data = (f"{type(self.data).__qualname__}"
-                if self.data is not None else "None")
+        data = f"{type(self.data).__qualname__}" if self.data is not None else "None"
         return f"Event({self._kind}, {self._status}, data: {data})"
 
     __repr__ = __str__
@@ -218,8 +222,8 @@ def broadcast(event):
 
 
 class Listener(abc.ABC):
-    """Base class for all event listeners.
-    """
+    """Base class for all event listeners."""
+
     @abc.abstractmethod
     def on_start(self, event):
         """Called when there is a *START* event.
@@ -259,6 +263,7 @@ class TimingListener(Listener):
     """A listener that measures the total time spent between *START* and
     *END* events during the time this listener is active.
     """
+
     def __init__(self):
         self._depth = 0
 
@@ -299,6 +304,7 @@ class RecordingListener(Listener):
     is the time the event occurred as returned by ``time.time()`` and the second
     element is the event.
     """
+
     def __init__(self):
         self.buffer = []
 
@@ -414,7 +420,10 @@ def end_event(kind, data=None, exc_details=None):
         Same 3-tuple for ``__exit__``. Or, ``None`` if no error.
     """
     evt = Event(
-        kind=kind, status=EventStatus.END, data=data, exc_details=exc_details,
+        kind=kind,
+        status=EventStatus.END,
+        data=data,
+        exc_details=exc_details,
     )
     broadcast(evt)
 
@@ -433,6 +442,7 @@ def trigger_event(kind, data=None):
         Extra event data.
     """
     with ExitStack() as scope:
+
         @scope.push
         def on_exit(*exc_details):
             end_event(kind, data=data, exc_details=exc_details)
@@ -442,8 +452,7 @@ def trigger_event(kind, data=None):
 
 
 def _prepare_chrome_trace_data(listener: RecordingListener):
-    """Prepare events in `listener` for serializing as chrome trace data.
-    """
+    """Prepare events in `listener` for serializing as chrome trace data."""
     # The spec for the trace event format can be found at:
     # https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU/edit   # noqa
     # This code only uses the JSON Array Format for simplicity.
@@ -453,12 +462,17 @@ def _prepare_chrome_trace_data(listener: RecordingListener):
     for ts, rec in listener.buffer:
         data = rec.data
         cat = str(rec.kind)
-        ts_scaled = ts * 1_000_000   # scale to microseconds
-        ph = 'B' if rec.is_start else 'E'
-        name = data['name']
+        ts_scaled = ts * 1_000_000  # scale to microseconds
+        ph = "B" if rec.is_start else "E"
+        name = data["name"]
         args = data
         ev = dict(
-            cat=cat, pid=pid, tid=tid, ts=ts_scaled, ph=ph, name=name,
+            cat=cat,
+            pid=pid,
+            tid=tid,
+            ts=ts_scaled,
+            ph=ph,
+            name=name,
             args=args,
         )
         evs.append(ev)

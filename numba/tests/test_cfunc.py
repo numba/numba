@@ -2,7 +2,6 @@
 Tests for @cfunc and friends.
 """
 
-
 import ctypes
 import os
 import subprocess
@@ -14,8 +13,7 @@ import numpy as np
 from numba import cfunc, carray, farray, njit
 from numba.core import types, typing, utils
 import numba.core.typing.cffi_utils as cffi_support
-from numba.tests.support import (TestCase, skip_unless_cffi, tag,
-                                 captured_stderr)
+from numba.tests.support import TestCase, skip_unless_cffi, tag, captured_stderr
 import unittest
 from numba.np import numpy_support
 
@@ -23,12 +21,15 @@ from numba.np import numpy_support
 def add_usecase(a, b):
     return a + b
 
+
 def div_usecase(a, b):
     c = a / b
     return c
 
+
 def square_usecase(a):
-    return a ** 2
+    return a**2
+
 
 add_sig = "float64(float64, float64)"
 
@@ -36,13 +37,16 @@ div_sig = "float64(int64, int64)"
 
 square_sig = "float64(float64)"
 
+
 def objmode_usecase(a, b):
     object()
     return a + b
 
+
 # Test functions for carray() and farray()
 
 CARRAY_USECASE_OUT_LEN = 8
+
 
 def make_cfarray_usecase(func):
 
@@ -62,6 +66,7 @@ def make_cfarray_usecase(func):
         out[7] = s
 
     return cfarray_usecase
+
 
 carray_usecase = make_cfarray_usecase(carray)
 farray_usecase = make_cfarray_usecase(farray)
@@ -87,19 +92,21 @@ def make_cfarray_dtype_usecase(func):
 
     return cfarray_usecase
 
+
 carray_dtype_usecase = make_cfarray_dtype_usecase(carray)
 farray_dtype_usecase = make_cfarray_dtype_usecase(farray)
 
-carray_float32_usecase_sig = types.void(types.CPointer(types.float32),
-                                        types.CPointer(types.float32),
-                                        types.intp, types.intp)
+carray_float32_usecase_sig = types.void(
+    types.CPointer(types.float32), types.CPointer(types.float32), types.intp, types.intp
+)
 
-carray_float64_usecase_sig = types.void(types.CPointer(types.float64),
-                                        types.CPointer(types.float64),
-                                        types.intp, types.intp)
+carray_float64_usecase_sig = types.void(
+    types.CPointer(types.float64), types.CPointer(types.float64), types.intp, types.intp
+)
 
-carray_voidptr_usecase_sig = types.void(types.voidptr, types.voidptr,
-                                        types.intp, types.intp)
+carray_voidptr_usecase_sig = types.void(
+    types.voidptr, types.voidptr, types.intp, types.intp
+)
 
 
 class TestCFunc(TestCase):
@@ -129,6 +136,7 @@ class TestCFunc(TestCase):
     @skip_unless_cffi
     def test_cffi(self):
         from numba.tests import cffi_usecases
+
         ffi, lib = cffi_usecases.load_inline_module()
 
         f = cfunc(square_sig)(square_usecase)
@@ -139,7 +147,7 @@ class TestCFunc(TestCase):
     def test_locals(self):
         # By forcing the intermediate result into an integer, we
         # truncate the ultimate function result
-        f = cfunc(div_sig, locals={'c': types.int64})(div_usecase)
+        f = cfunc(div_sig, locals={"c": types.int64})(div_usecase)
         self.assertPreciseEqual(f.ctypes(8, 3), 2.0)
 
     def test_errors(self):
@@ -214,7 +222,7 @@ class TestCArray(TestCase):
         eq(a, base)
         # Integer shape
         a = func(self.make_float32_pointer(base), base.size)
-        eq(a, base.ravel('K'))
+        eq(a, base.ravel("K"))
 
         # With typed pointer and explicit dtype
         a = func(self.make_float32_pointer(base), base.shape, base.dtype)
@@ -237,30 +245,34 @@ class TestCArray(TestCase):
         # Mismatching dtype
         with self.assertRaises(TypeError) as raises:
             func(self.make_float32_pointer(base), base.shape, np.int32)
-        self.assertIn("mismatching dtype 'int32' for pointer",
-                      str(raises.exception))
+        self.assertIn("mismatching dtype 'int32' for pointer", str(raises.exception))
 
     def test_carray(self):
         """
         Test pure Python carray().
         """
-        self.check_carray_farray(carray, 'C')
+        self.check_carray_farray(carray, "C")
 
     def test_farray(self):
         """
         Test pure Python farray().
         """
-        self.check_carray_farray(farray, 'F')
+        self.check_carray_farray(farray, "F")
 
     def make_carray_sigs(self, formal_sig):
         """
         Generate a bunch of concrete signatures by varying the width
         and signedness of size arguments (see issue #1923).
         """
-        for actual_size in (types.intp, types.int32, types.intc,
-                            types.uintp, types.uint32, types.uintc):
-            args = tuple(actual_size if a == types.intp else a
-                         for a in formal_sig.args)
+        for actual_size in (
+            types.intp,
+            types.int32,
+            types.intc,
+            types.uintp,
+            types.uint32,
+            types.uintc,
+        ):
+            args = tuple(actual_size if a == types.intp else a for a in formal_sig.args)
             yield formal_sig.return_type(*args)
 
     def check_numba_carray_farray(self, usecase, dtype_usecase):
@@ -278,8 +290,10 @@ class TestCArray(TestCase):
         # With typed pointers and mismatching dtype
         with self.assertTypingError() as raises:
             f = cfunc(carray_float64_usecase_sig)(pyfunc)
-        self.assertIn("mismatching dtype 'float32' for pointer type 'float64*'",
-                      str(raises.exception))
+        self.assertIn(
+            "mismatching dtype 'float32' for pointer type 'float64*'",
+            str(raises.exception),
+        )
 
         # With voidptr
         pyfunc = dtype_usecase
@@ -327,20 +341,20 @@ typedef double (*myfunc)(big_struct*, size_t);
     def test_type_parsing(self):
         ffi = self.get_ffi()
         # Check struct typedef
-        big_struct = ffi.typeof('big_struct')
+        big_struct = ffi.typeof("big_struct")
         nbtype = cffi_support.map_type(big_struct, use_record_dtype=True)
         self.assertIsInstance(nbtype, types.Record)
         self.assertEqual(len(nbtype), 4)
-        self.assertEqual(nbtype.typeof('i1'), types.int32)
-        self.assertEqual(nbtype.typeof('f2'), types.float32)
-        self.assertEqual(nbtype.typeof('d3'), types.float64)
+        self.assertEqual(nbtype.typeof("i1"), types.int32)
+        self.assertEqual(nbtype.typeof("f2"), types.float32)
+        self.assertEqual(nbtype.typeof("d3"), types.float64)
         self.assertEqual(
-            nbtype.typeof('af4'),
+            nbtype.typeof("af4"),
             types.NestedArray(dtype=types.float32, shape=(9,)),
         )
 
         # Check function typedef
-        myfunc = ffi.typeof('myfunc')
+        myfunc = ffi.typeof("myfunc")
         sig = cffi_support.map_type(myfunc, use_record_dtype=True)
         self.assertIsInstance(sig, typing.Signature)
         self.assertEqual(sig.args[0], types.CPointer(nbtype))
@@ -349,9 +363,9 @@ typedef double (*myfunc)(big_struct*, size_t);
 
     def test_cfunc_callback(self):
         ffi = self.get_ffi()
-        big_struct = ffi.typeof('big_struct')
+        big_struct = ffi.typeof("big_struct")
         nb_big_struct = cffi_support.map_type(big_struct, use_record_dtype=True)
-        sig = cffi_support.map_type(ffi.typeof('myfunc'), use_record_dtype=True)
+        sig = cffi_support.map_type(ffi.typeof("myfunc"), use_record_dtype=True)
 
         @njit
         def calc(base):
@@ -368,8 +382,8 @@ typedef double (*myfunc)(big_struct*, size_t);
             return calc(base)
 
         # Make data
-        mydata = ffi.new('big_struct[3]')
-        ptr = ffi.cast('big_struct*', mydata)
+        mydata = ffi.new("big_struct[3]")
+        ptr = ffi.cast("big_struct*", mydata)
         for i in range(3):
             ptr[i].i1 = i * 123
             ptr[i].f2 = i * 213
@@ -378,7 +392,7 @@ typedef double (*myfunc)(big_struct*, size_t);
                 ptr[i].af4[j] = i * 10 + j
 
         # Address of my data
-        addr = int(ffi.cast('size_t', ptr))
+        addr = int(ffi.cast("size_t", ptr))
         got = foo.ctypes(addr, 3)
 
         # Make numpy array from the cffi buffer
@@ -386,7 +400,7 @@ typedef double (*myfunc)(big_struct*, size_t);
             buffer=ffi.buffer(mydata),
             dtype=numpy_support.as_dtype(nb_big_struct),
             shape=3,
-            )
+        )
         expect = calc(array)
         self.assertEqual(got, expect)
 
@@ -394,13 +408,12 @@ typedef double (*myfunc)(big_struct*, size_t);
         ffi = self.get_ffi()
         with self.assertRaises(ValueError) as raises:
             cffi_support.map_type(
-                ffi.typeof('error'),
+                ffi.typeof("error"),
                 use_record_dtype=True,
             )
         # When bitsize is provided, bitshift defaults to 0.
         self.assertEqual(
-            "field 'bits' has bitshift, this is not supported",
-            str(raises.exception)
+            "field 'bits' has bitshift, this is not supported", str(raises.exception)
         )
 
 

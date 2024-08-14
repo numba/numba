@@ -4,6 +4,7 @@ This test is used by `docs/source/extending/interval-example.rst`.
 The "magictoken" comments are used as markers for the beginning and ending of
 example code.
 """
+
 import unittest
 
 
@@ -15,16 +16,18 @@ class IntervalExampleTest(unittest.TestCase):
             """
             A half-open interval on the real number line.
             """
+
             def __init__(self, lo, hi):
                 self.lo = lo
                 self.hi = hi
 
             def __repr__(self):
-                return 'Interval(%f, %f)' % (self.lo, self.hi)
+                return "Interval(%f, %f)" % (self.lo, self.hi)
 
             @property
             def width(self):
                 return self.hi - self.lo
+
         # magictoken.interval_py_class.end
 
         # magictoken.interval_type_class.begin
@@ -32,7 +35,7 @@ class IntervalExampleTest(unittest.TestCase):
 
         class IntervalType(types.Type):
             def __init__(self):
-                super(IntervalType, self).__init__(name='Interval')
+                super(IntervalType, self).__init__(name="Interval")
 
         interval_type = IntervalType()
         # magictoken.interval_type_class.end
@@ -43,6 +46,7 @@ class IntervalExampleTest(unittest.TestCase):
         @typeof_impl.register(Interval)
         def typeof_index(val, c):
             return interval_type
+
         # magictoken.interval_typeof_register.end
 
         # magictoken.numba_type_register.begin
@@ -59,7 +63,9 @@ class IntervalExampleTest(unittest.TestCase):
             def typer(lo, hi):
                 if isinstance(lo, types.Float) and isinstance(hi, types.Float):
                     return interval_type
+
             return typer
+
         # magictoken.numba_type_callable.end
 
         # magictoken.interval_model.begin
@@ -68,16 +74,19 @@ class IntervalExampleTest(unittest.TestCase):
         @register_model(IntervalType)
         class IntervalModel(models.StructModel):
             def __init__(self, dmm, fe_type):
-                members = [('lo', types.float64),
-                           ('hi', types.float64),]
+                members = [
+                    ("lo", types.float64),
+                    ("hi", types.float64),
+                ]
                 models.StructModel.__init__(self, dmm, fe_type, members)
+
         # magictoken.interval_model.end
 
         # magictoken.interval_attribute_wrapper.begin
         from numba.extending import make_attribute_wrapper
 
-        make_attribute_wrapper(IntervalType, 'lo', 'lo')
-        make_attribute_wrapper(IntervalType, 'hi', 'hi')
+        make_attribute_wrapper(IntervalType, "lo", "lo")
+        make_attribute_wrapper(IntervalType, "hi", "hi")
         # magictoken.interval_attribute_wrapper.end
 
         # magictoken.interval_overload_attribute.begin
@@ -87,7 +96,9 @@ class IntervalExampleTest(unittest.TestCase):
         def get_width(interval):
             def getter(interval):
                 return interval.hi - interval.lo
+
             return getter
+
         # magictoken.interval_overload_attribute.end
 
         # magictoken.interval_lower_builtin.begin
@@ -102,6 +113,7 @@ class IntervalExampleTest(unittest.TestCase):
             interval.lo = lo
             interval.hi = hi
             return interval._getvalue()
+
         # magictoken.interval_lower_builtin.end
 
         # magictoken.interval_unbox.begin
@@ -136,7 +148,10 @@ class IntervalExampleTest(unittest.TestCase):
                 interval.lo = lo_native.value
                 interval.hi = hi_native.value
 
-            return NativeValue(interval._getvalue(), is_error=c.builder.load(is_error_ptr))
+            return NativeValue(
+                interval._getvalue(), is_error=c.builder.load(is_error_ptr)
+            )
+
         # magictoken.interval_unbox.end
 
         # magictoken.interval_box.begin
@@ -151,7 +166,9 @@ class IntervalExampleTest(unittest.TestCase):
             fail_obj = c.pyapi.get_null_object()
 
             with ExitStack() as stack:
-                interval = cgutils.create_struct_proxy(typ)(c.context, c.builder, value=val)
+                interval = cgutils.create_struct_proxy(typ)(
+                    c.context, c.builder, value=val
+                )
                 lo_obj = c.box(types.float64, interval.lo)
                 with cgutils.early_exit_if_null(c.builder, stack, lo_obj):
                     c.builder.store(fail_obj, ret_ptr)
@@ -177,6 +194,7 @@ class IntervalExampleTest(unittest.TestCase):
                 c.builder.store(res, ret_ptr)
 
             return c.builder.load(ret_ptr)
+
         # magictoken.interval_box.end
 
         # magictoken.interval_usage.begin
@@ -193,6 +211,7 @@ class IntervalExampleTest(unittest.TestCase):
         @njit
         def sum_intervals(i, j):
             return Interval(i.lo + j.lo, i.hi + j.hi)
+
         # magictoken.interval_usage.end
 
         def check_equal_intervals(x, y):
@@ -238,5 +257,5 @@ class IntervalExampleTest(unittest.TestCase):
         check_equal_intervals(c, sum_intervals(a, b))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

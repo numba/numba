@@ -136,5 +136,5 @@ class Math_isnan(ConcreteTemplate):
 class Math_modf(ConcreteTemplate):
     cases = [
         signature(types.UniTuple(types.float64, 2), types.float64),
-        signature(types.UniTuple(types.float32, 2), types.float32)
+        signature(types.UniTuple(types.float32, 2), types.float32),
     ]

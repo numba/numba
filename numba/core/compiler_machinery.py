@@ -30,8 +30,7 @@ class SimpleTimer(object):
 
 
 class CompilerPass(metaclass=ABCMeta):
-    """ The base class for all compiler passes.
-    """
+    """The base class for all compiler passes."""
 
     @abstractmethod
     def __init__(self, *args, **kwargs):
@@ -96,8 +95,7 @@ class CompilerPass(metaclass=ABCMeta):
         return False
 
     def get_analysis_usage(self, AU):
-        """ Override to set analysis usage
-        """
+        """Override to set analysis usage"""
         pass
 
     def get_analysis(self, pass_name):
@@ -108,33 +106,33 @@ class CompilerPass(metaclass=ABCMeta):
 
 
 class SSACompliantMixin(object):
-    """ Mixin to indicate a pass is SSA form compliant. Nothing is asserted
+    """Mixin to indicate a pass is SSA form compliant. Nothing is asserted
     about this condition at present.
     """
+
     pass
 
 
 class FunctionPass(CompilerPass):
-    """ Base class for function passes
-    """
+    """Base class for function passes"""
+
     pass
 
 
 class AnalysisPass(CompilerPass):
-    """ Base class for analysis passes (no modification made to state)
-    """
+    """Base class for analysis passes (no modification made to state)"""
+
     pass
 
 
 class LoweringPass(CompilerPass):
-    """ Base class for lowering passes
-    """
+    """Base class for lowering passes"""
+
     pass
 
 
 class AnalysisUsage(object):
-    """This looks and behaves like LLVM's AnalysisUsage because its like that.
-    """
+    """This looks and behaves like LLVM's AnalysisUsage because its like that."""
 
     def __init__(self):
         self._required = set()
@@ -164,13 +162,14 @@ def debug_print(*args, **kwargs):
         print(*args, **kwargs)
 
 
-pass_timings = namedtuple('pass_timings', 'init run finalize')
+pass_timings = namedtuple("pass_timings", "init run finalize")
 
 
 class PassManager(object):
     """
     The PassManager is a named instance of a particular compilation pipeline
     """
+
     # TODO: Eventually enable this, it enforces self consistency after each pass
     _ENFORCING = False
 
@@ -186,11 +185,14 @@ class PassManager(object):
         self.pipeline_name = pipeline_name
 
     def _validate_pass(self, pass_cls):
-        if (not (isinstance(pass_cls, str) or
-                 (inspect.isclass(pass_cls) and
-                  issubclass(pass_cls, CompilerPass)))):
-            msg = ("Pass must be referenced by name or be a subclass of a "
-                   "CompilerPass. Have %s" % pass_cls)
+        if not (
+            isinstance(pass_cls, str)
+            or (inspect.isclass(pass_cls) and issubclass(pass_cls, CompilerPass))
+        ):
+            msg = (
+                "Pass must be referenced by name or be a subclass of a "
+                "CompilerPass. Have %s" % pass_cls
+            )
             raise TypeError(msg)
         if isinstance(pass_cls, str):
             pass_cls = _pass_registry.find_by_name(pass_cls)
@@ -235,12 +237,15 @@ class PassManager(object):
                     # we don't validate whether the named passes exist in this
                     # pipeline the compiler may be used reentrantly and
                     # different pipelines may contain different passes
-                    splitted = conf_item.split(',')
+                    splitted = conf_item.split(",")
                     print_passes = [x.strip() for x in splitted]
             return print_passes
-        ret = (parse(config.DEBUG_PRINT_AFTER),
-               parse(config.DEBUG_PRINT_BEFORE),
-               parse(config.DEBUG_PRINT_WRAP),)
+
+        ret = (
+            parse(config.DEBUG_PRINT_AFTER),
+            parse(config.DEBUG_PRINT_BEFORE),
+            parse(config.DEBUG_PRINT_WRAP),
+        )
         return ret
 
     def finalize(self):
@@ -249,8 +254,7 @@ class PassManager(object):
         without re-finalization.
         """
         self._analysis = self.dependency_analysis()
-        self._print_after, self._print_before, self._print_wrap = \
-            self._debug_init()
+        self._print_after, self._print_before, self._print_wrap = self._debug_init()
         self._finalized = True
 
     @property
@@ -272,17 +276,24 @@ class PassManager(object):
         def check(func, compiler_state):
             mangled = func(compiler_state)
             if mangled not in (True, False):
-                msg = ("CompilerPass implementations should return True/False. "
-                       "CompilerPass with name '%s' did not.")
+                msg = (
+                    "CompilerPass implementations should return True/False. "
+                    "CompilerPass with name '%s' did not."
+                )
                 raise ValueError(msg % pss.name())
             return mangled
 
         def debug_print(pass_name, print_condition, printable_condition):
             if pass_name in print_condition:
                 fid = internal_state.func_id
-                args = (fid.modname, fid.func_qualname, self.pipeline_name,
-                        printable_condition, pass_name)
-                print(("%s.%s: %s: %s %s" % args).center(120, '-'))
+                args = (
+                    fid.modname,
+                    fid.func_qualname,
+                    self.pipeline_name,
+                    printable_condition,
+                    pass_name,
+                )
+                print(("%s.%s: %s: %s %s" % args).center(120, "-"))
                 if internal_state.func_ir is not None:
                     internal_state.func_ir.dump()
                 else:
@@ -325,15 +336,15 @@ class PassManager(object):
                     PostProcessor(internal_state.func_ir).run()
                 else:  # CFG level changes rebuild CFG
                     internal_state.func_ir.blocks = transforms.canonicalize_cfg(
-                        internal_state.func_ir.blocks)
+                        internal_state.func_ir.blocks
+                    )
             # Check the func_ir has exactly one Scope instance
             if not legalize_single_scope(internal_state.func_ir.blocks):
                 raise errors.CompilerError(
                     f"multiple scope in func_ir detected in {pss}",
                 )
         # inject runtimes
-        pt = pass_timings(init_time.elapsed, pass_time.elapsed,
-                          finalize_time.elapsed)
+        pt = pass_timings(init_time.elapsed, pass_time.elapsed, finalize_time.elapsed)
         self.exec_times["%s_%s" % (index, pss.name())] = pt
 
         # debug print after this pass?
@@ -344,6 +355,7 @@ class PassManager(object):
         Run the defined pipelines on the state.
         """
         from numba.core.compiler import _EarlyPipelineCompletion
+
         if not self.finalized:
             raise RuntimeError("Cannot run non-finalised pipeline")
 
@@ -359,11 +371,14 @@ class PassManager(object):
             except _EarlyPipelineCompletion as e:
                 raise e
             except Exception as e:
-                if (utils.use_new_style_errors() and not
-                        isinstance(e, errors.NumbaError)):
+                if utils.use_new_style_errors() and not isinstance(
+                    e, errors.NumbaError
+                ):
                     raise e
-                msg = "Failed in %s mode pipeline (step: %s)" % \
-                    (self.pipeline_name, pass_desc)
+                msg = "Failed in %s mode pipeline (step: %s)" % (
+                    self.pipeline_name,
+                    pass_desc,
+                )
                 patched_exception = self._patch_error(msg, e)
                 raise patched_exception
 
@@ -372,7 +387,7 @@ class PassManager(object):
         Computes dependency analysis
         """
         deps = dict()
-        for (pss, _) in self.passes:
+        for pss, _ in self.passes:
             x = _pass_registry.get(pss).pass_inst
             au = AnalysisUsage()
             x.get_analysis_usage(au)
@@ -387,10 +402,11 @@ class PassManager(object):
                 dep_set = rmap[lkey] if lkey in rmap else set()
                 if dep_set:
                     for x in dep_set:
-                        dep_set |= (walk(x, rmap))
+                        dep_set |= walk(x, rmap)
                     return dep_set
                 else:
                     return set()
+
             ret = set()
             for k in key:
                 ret |= walk(k, rmap)
@@ -403,7 +419,7 @@ class PassManager(object):
         return dep_chain
 
 
-pass_info = namedtuple('pass_info', 'pass_inst mutates_CFG analysis_only')
+pass_info = namedtuple("pass_info", "pass_inst mutates_CFG analysis_only")
 
 
 class PassRegistry(object):
@@ -421,9 +437,11 @@ class PassRegistry(object):
             assert not self._does_pass_name_alias(pass_class.name())
             pass_class.pass_id = self._id
             self._id += 1
-            self._registry[pass_class] = pass_info(pass_class(), mutates_CFG,
-                                                   analysis_only)
+            self._registry[pass_class] = pass_info(
+                pass_class(), mutates_CFG, analysis_only
+            )
             return pass_class
+
         return make_festive
 
     def is_registered(self, clazz):

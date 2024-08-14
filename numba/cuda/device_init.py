@@ -1,21 +1,58 @@
 # Re export
 import sys
 from numba.cuda import cg
-from .stubs import (threadIdx, blockIdx, blockDim, gridDim, laneid, warpsize,
-                    syncwarp, shared, local, const, atomic,
-                    shfl_sync_intrinsic, vote_sync_intrinsic, match_any_sync,
-                    match_all_sync, threadfence_block, threadfence_system,
-                    threadfence, selp, popc, brev, clz, ffs, fma, cbrt,
-                    activemask, lanemask_lt, nanosleep, fp16,
-                    _vector_type_stubs)
-from .intrinsics import (grid, gridsize, syncthreads, syncthreads_and,
-                         syncthreads_count, syncthreads_or)
+from .stubs import (
+    threadIdx,
+    blockIdx,
+    blockDim,
+    gridDim,
+    laneid,
+    warpsize,
+    syncwarp,
+    shared,
+    local,
+    const,
+    atomic,
+    shfl_sync_intrinsic,
+    vote_sync_intrinsic,
+    match_any_sync,
+    match_all_sync,
+    threadfence_block,
+    threadfence_system,
+    threadfence,
+    selp,
+    popc,
+    brev,
+    clz,
+    ffs,
+    fma,
+    cbrt,
+    activemask,
+    lanemask_lt,
+    nanosleep,
+    fp16,
+    _vector_type_stubs,
+)
+from .intrinsics import (
+    grid,
+    gridsize,
+    syncthreads,
+    syncthreads_and,
+    syncthreads_count,
+    syncthreads_or,
+)
 from .cudadrv.error import CudaSupportError
-from numba.cuda.cudadrv.driver import (BaseCUDAMemoryManager,
-                                       HostOnlyCUDAMemoryManager,
-                                       GetIpcHandleMixin, MemoryPointer,
-                                       MappedMemory, PinnedMemory, MemoryInfo,
-                                       IpcHandle, set_memory_manager)
+from numba.cuda.cudadrv.driver import (
+    BaseCUDAMemoryManager,
+    HostOnlyCUDAMemoryManager,
+    GetIpcHandleMixin,
+    MemoryPointer,
+    MappedMemory,
+    PinnedMemory,
+    MemoryInfo,
+    IpcHandle,
+    set_memory_manager,
+)
 from numba.cuda.cudadrv.runtime import runtime
 from .cudadrv import nvvm
 from numba.cuda import initialize
@@ -26,9 +63,16 @@ from .api import *
 from .api import _auto_device
 from .args import In, Out, InOut
 
-from .intrinsic_wrapper import (all_sync, any_sync, eq_sync, ballot_sync,
-                                shfl_sync, shfl_up_sync, shfl_down_sync,
-                                shfl_xor_sync)
+from .intrinsic_wrapper import (
+    all_sync,
+    any_sync,
+    eq_sync,
+    ballot_sync,
+    shfl_sync,
+    shfl_up_sync,
+    shfl_down_sync,
+    shfl_xor_sync,
+)
 
 from .kernels import reduction
 

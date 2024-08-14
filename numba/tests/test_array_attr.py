@@ -4,8 +4,7 @@ import unittest
 from numba.np.numpy_support import from_dtype
 from numba import njit, typeof
 from numba.core import types
-from numba.tests.support import (TestCase, MemoryLeakMixin,
-                                 skip_parfors_unsupported)
+from numba.tests.support import TestCase, MemoryLeakMixin, skip_parfors_unsupported
 from numba.core.errors import TypingError
 from numba.experimental import jitclass
 
@@ -19,7 +18,7 @@ def use_dtype(a, b):
 
 
 def dtype_eq_int64(a):
-    return a.dtype == np.dtype('int64')
+    return a.dtype == np.dtype("int64")
 
 
 def array_itemsize(a):
@@ -49,8 +48,10 @@ def array_size(a):
 def array_flags_contiguous(a):
     return a.flags.contiguous
 
+
 def array_flags_c_contiguous(a):
     return a.flags.c_contiguous
+
 
 def array_flags_f_contiguous(a):
     return a.flags.f_contiguous
@@ -59,8 +60,10 @@ def array_flags_f_contiguous(a):
 def nested_array_itemsize(a):
     return a.f.itemsize
 
+
 def nested_array_nbytes(a):
     return a.f.nbytes
+
 
 def nested_array_shape(a):
     return a.f.shape
@@ -108,10 +111,13 @@ class TestArrayAttr(MemoryLeakMixin, TestCase):
         expected = pyfunc(arr)
         self.assertPreciseEqual(cfunc(arr), expected)
         # Retry with forced any layout
-        cfunc = self.get_cfunc(pyfunc, (aryty.copy(layout='A'),))
+        cfunc = self.get_cfunc(pyfunc, (aryty.copy(layout="A"),))
         self.assertPreciseEqual(cfunc(arr), expected)
 
-    def check_unary_with_arrays(self, pyfunc,):
+    def check_unary_with_arrays(
+        self,
+        pyfunc,
+    ):
         self.check_unary(pyfunc, self.a)
         self.check_unary(pyfunc, self.a.T)
         self.check_unary(pyfunc, self.a[::2])
@@ -130,14 +136,14 @@ class TestArrayAttr(MemoryLeakMixin, TestCase):
 
     def test_shape(self):
         pyfunc = array_shape
-        cfunc = self.get_cfunc(pyfunc, (types.int32[:,:], types.int32))
+        cfunc = self.get_cfunc(pyfunc, (types.int32[:, :], types.int32))
 
         for i in range(self.a.ndim):
             self.assertEqual(pyfunc(self.a, i), cfunc(self.a, i))
 
     def test_strides(self):
         pyfunc = array_strides
-        cfunc = self.get_cfunc(pyfunc, (types.int32[:,:], types.int32))
+        cfunc = self.get_cfunc(pyfunc, (types.int32[:, :], types.int32))
 
         for i in range(self.a.ndim):
             self.assertEqual(pyfunc(self.a, i), cfunc(self.a, i))
@@ -157,7 +163,7 @@ class TestArrayAttr(MemoryLeakMixin, TestCase):
     def test_dtype(self):
         pyfunc = array_dtype
         self.check_unary(pyfunc, self.a)
-        dtype = np.dtype([('x', np.int8), ('y', np.int8)])
+        dtype = np.dtype([("x", np.int8), ("y", np.int8)])
         arr = np.zeros(4, dtype=dtype)
         self.check_unary(pyfunc, arr)
 
@@ -188,7 +194,7 @@ class TestArrayAttr(MemoryLeakMixin, TestCase):
 class TestNestedArrayAttr(MemoryLeakMixin, unittest.TestCase):
     def setUp(self):
         super(TestNestedArrayAttr, self).setUp()
-        dtype = np.dtype([('a', np.int32), ('f', np.int32, (2, 5))])
+        dtype = np.dtype([("a", np.int32), ("f", np.int32, (2, 5))])
         self.a = np.recarray(1, dtype)[0]
         self.nbrecord = from_dtype(self.a.dtype)
 
@@ -271,9 +277,9 @@ class TestArrayCTypes(MemoryLeakMixin, TestCase):
                 return True
             except:
                 import traceback
+
                 traceback.print_exception()
                 return False
-
 
         # parallel=True is required to reproduce the error.
         @njit(parallel=True)
@@ -352,8 +358,7 @@ class TestRealImagAttr(MemoryLeakMixin, TestCase):
         imag = cfunc(arr)
         with self.assertRaises(ValueError) as raises:
             imag[0] = 1
-        self.assertEqual('assignment destination is read-only',
-                         str(raises.exception))
+        self.assertEqual("assignment destination is read-only", str(raises.exception))
 
     def test_number_imag(self):
         """
@@ -363,10 +368,10 @@ class TestRealImagAttr(MemoryLeakMixin, TestCase):
             self.check_number_imag(dtype)
 
     def test_record_real(self):
-        rectyp = np.dtype([('real', np.float32), ('imag', np.complex64)])
+        rectyp = np.dtype([("real", np.float32), ("imag", np.complex64)])
         arr = np.zeros(3, dtype=rectyp)
-        arr['real'] = np.random.random(arr.size)
-        arr['imag'] = np.random.random(arr.size) * 1.3j
+        arr["real"] = np.random.random(arr.size)
+        arr["imag"] = np.random.random(arr.size) * 1.3j
 
         # check numpy behavior
         # .real is identity
@@ -381,16 +386,15 @@ class TestRealImagAttr(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as raises:
             jit_array_real(arr)
-        self.assertIn("cannot access .real of array of Record",
-                      str(raises.exception))
+        self.assertIn("cannot access .real of array of Record", str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
             jit_array_imag(arr)
-        self.assertIn("cannot access .imag of array of Record",
-                      str(raises.exception))
+        self.assertIn("cannot access .imag of array of Record", str(raises.exception))
+
 
 class TestJitclassFlagsSegfault(MemoryLeakMixin, TestCase):
-    """Regression test for: https://github.com/numba/numba/issues/4775 """
+    """Regression test for: https://github.com/numba/numba/issues/4775"""
 
     def test(self):
 
@@ -406,5 +410,6 @@ class TestJitclassFlagsSegfault(MemoryLeakMixin, TestCase):
         Z = B()
         Z.foo(np.ones(4))
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

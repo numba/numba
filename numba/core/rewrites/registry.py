@@ -4,36 +4,34 @@ from numba.core import config
 
 
 class Rewrite(object):
-    '''Defines the abstract base class for Numba rewrites.
-    '''
+    """Defines the abstract base class for Numba rewrites."""
 
     def __init__(self, state=None):
-        '''Constructor for the Rewrite class.
-        '''
+        """Constructor for the Rewrite class."""
         pass
 
     def match(self, func_ir, block, typemap, calltypes):
-        '''Overload this method to check an IR block for matching terms in the
+        """Overload this method to check an IR block for matching terms in the
         rewrite.
-        '''
+        """
         return False
 
     def apply(self):
-        '''Overload this method to return a rewritten IR basic block when a
+        """Overload this method to return a rewritten IR basic block when a
         match has been found.
-        '''
+        """
         raise NotImplementedError("Abstract Rewrite.apply() called!")
 
 
 class RewriteRegistry(object):
-    '''Defines a registry for Numba rewrites.
-    '''
-    _kinds = frozenset(['before-inference', 'after-inference'])
+    """Defines a registry for Numba rewrites."""
+
+    _kinds = frozenset(["before-inference", "after-inference"])
 
     def __init__(self):
-        '''Constructor for the rewrite registry.  Initializes the rewrites
+        """Constructor for the rewrite registry.  Initializes the rewrites
         member to an empty list.
-        '''
+        """
         self.rewrites = defaultdict(list)
 
     def register(self, kind):
@@ -43,18 +41,19 @@ class RewriteRegistry(object):
         """
         if kind not in self._kinds:
             raise KeyError("invalid kind %r" % (kind,))
+
         def do_register(rewrite_cls):
             if not issubclass(rewrite_cls, Rewrite):
-                raise TypeError('{0} is not a subclass of Rewrite'.format(
-                    rewrite_cls))
+                raise TypeError("{0} is not a subclass of Rewrite".format(rewrite_cls))
             self.rewrites[kind].append(rewrite_cls)
             return rewrite_cls
+
         return do_register
 
     def apply(self, kind, state):
-        '''Given a pipeline and a dictionary of basic blocks, exhaustively
+        """Given a pipeline and a dictionary of basic blocks, exhaustively
         attempt to apply all registered rewrites to all basic blocks.
-        '''
+        """
         assert kind in self._kinds
         blocks = state.func_ir.blocks
         old_blocks = blocks.copy()
@@ -64,8 +63,9 @@ class RewriteRegistry(object):
             work_list = list(blocks.items())
             while work_list:
                 key, block = work_list.pop()
-                matches = rewrite.match(state.func_ir, block, state.typemap,
-                                        state.calltypes)
+                matches = rewrite.match(
+                    state.func_ir, block, state.typemap, state.calltypes
+                )
                 if matches:
                     if config.DEBUG or config.DUMP_IR:
                         print("_" * 70)
@@ -90,6 +90,7 @@ class RewriteRegistry(object):
         # see #4093 for context. This has to be run here opposed to in
         # apply() as the CFG needs computing so full IR is needed.
         from numba.core import postproc
+
         post_proc = postproc.PostProcessor(state.func_ir)
         post_proc.run()
 

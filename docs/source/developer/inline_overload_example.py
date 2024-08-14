@@ -8,13 +8,15 @@ def bar(x):
     pass
 
 
-@overload(bar, inline='always')
+@overload(bar, inline="always")
 def ol_bar_tuple(x):
     # An overload that will always inline, there is a type guard so that this
     # only applies to UniTuples.
     if isinstance(x, types.UniTuple):
+
         def impl(x):
             return x[0]
+
         return impl
 
 
@@ -28,8 +30,10 @@ def ol_bar_scalar(x):
     # An overload that will inline based on a cost model, it only applies to
     # scalar values in the numerical domain as per the type guard on Number
     if isinstance(x, types.Number):
+
         def impl(x):
             return x + 1
+
         return impl
 
 

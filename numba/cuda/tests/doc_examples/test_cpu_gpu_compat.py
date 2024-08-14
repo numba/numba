@@ -28,6 +28,7 @@ class TestCpuGpuCompat(CUDATestCase):
 
         import numba
         from numba import cuda
+
         # ex_cpu_gpu_compat.import.end
 
         # ex_cpu_gpu_compat.allocate.begin
@@ -41,6 +42,7 @@ class TestCpuGpuCompat(CUDATestCase):
         @numba.jit
         def business_logic(x, y, z):
             return 4 * z * (2 * x - (4 * y) / 2 * pi)
+
         # ex_cpu_gpu_compat.define.end
 
         # ex_cpu_gpu_compat.cpurun.begin
@@ -54,6 +56,7 @@ class TestCpuGpuCompat(CUDATestCase):
             if tid < len(xarr):
                 # The function decorated with numba.jit may be directly reused
                 res[tid] = business_logic(xarr[tid], yarr[tid], zarr[tid])
+
         # ex_cpu_gpu_compat.usegpu.end
 
         # ex_cpu_gpu_compat.launch.begin
@@ -62,14 +65,9 @@ class TestCpuGpuCompat(CUDATestCase):
         # [-126.79644737231007, 416.28324559588634, -218912930.2987788]
         # ex_cpu_gpu_compat.launch.end
 
-        expect = [
-            business_logic(x, y, z) for x, y, z in zip(X, Y, Z)
-        ]
+        expect = [business_logic(x, y, z) for x, y, z in zip(X, Y, Z)]
 
-        np.testing.assert_equal(
-            expect,
-            results.copy_to_host()
-        )
+        np.testing.assert_equal(expect, results.copy_to_host())
 
 
 if __name__ == "__main__":

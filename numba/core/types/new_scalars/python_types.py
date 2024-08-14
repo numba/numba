@@ -3,10 +3,15 @@
 """
 
 from numba.core.types.abstract import Literal
-from numba.core.types.new_scalars.scalars \
-    import (Integer, IntegerLiteral, Boolean,
-            BooleanLiteral, Float, Complex,
-            parse_integer_signed)
+from numba.core.types.new_scalars.scalars import (
+    Integer,
+    IntegerLiteral,
+    Boolean,
+    BooleanLiteral,
+    Float,
+    Complex,
+    parse_integer_signed,
+)
 from functools import total_ordering
 from numba.core.typeconv import Conversion
 
@@ -56,12 +61,14 @@ class PythonInteger(Integer):
 class PythonIntegerLiteral(IntegerLiteral, PythonInteger):
     def __init__(self, value):
         self._literal_init(value)
-        name = 'Literal[int]({})'.format(value)
+        name = "Literal[int]({})".format(value)
         basetype = self.literal_type
-        PythonInteger.__init__(self,
-                               name=name,
-                               bitwidth=basetype.bitwidth,
-                               signed=basetype.signed,)
+        PythonInteger.__init__(
+            self,
+            name=name,
+            bitwidth=basetype.bitwidth,
+            signed=basetype.signed,
+        )
 
     def can_convert_to(self, typingctx, other):
         conv = typingctx.can_convert(self.literal_type, other)
@@ -81,7 +88,7 @@ class PythonBooleanLiteral(BooleanLiteral, PythonBoolean):
 
     def __init__(self, value):
         self._literal_init(value)
-        name = 'Literal[bool]({})'.format(value)
+        name = "Literal[bool]({})".format(value)
         PythonBoolean.__init__(self, name=name)
 
     def can_convert_to(self, typingctx, other):
@@ -98,7 +105,7 @@ class PythonFloat(Float):
     def __init__(self, *args, **kws):
         super(PythonFloat, self).__init__(*args, **kws)
         # Determine bitwidth
-        assert self.name.startswith('py_float')
+        assert self.name.startswith("py_float")
         bitwidth = 64
         self.bitwidth = bitwidth
 
@@ -117,7 +124,7 @@ class PythonComplex(Complex):
         super(PythonComplex, self).__init__(name, **kwargs)
         self.underlying_float = underlying_float
         # Determine bitwidth
-        assert self.name.startswith('py_complex')
+        assert self.name.startswith("py_complex")
         bitwidth = 128
         self.bitwidth = bitwidth
 

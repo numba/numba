@@ -7,15 +7,14 @@ from textwrap import dedent
 import unittest
 import warnings
 
-from numba.tests.support import (TestCase, override_config,
-                                 ignore_internal_warnings)
+from numba.tests.support import TestCase, override_config, ignore_internal_warnings
 from numba import jit, njit
 from numba.core import types
 from numba.core.datamodel import default_manager
 from numba.core.errors import NumbaDebugInfoWarning
 import llvmlite.binding as llvm
 
-#NOTE: These tests are potentially sensitive to changes in SSA or lowering
+# NOTE: These tests are potentially sensitive to changes in SSA or lowering
 # behaviour and may need updating should changes be made to the corresponding
 # algorithms.
 
@@ -33,7 +32,7 @@ class TestDebugInfo(TestCase):
         asm = self._getasm(fn, sig=sig)
         m = re.search(r"\.section.+debug", asm, re.I)
         got = m is not None
-        self.assertEqual(expect, got, msg='debug info not found in:\n%s' % asm)
+        self.assertEqual(expect, got, msg="debug info not found in:\n%s" % asm)
 
     def test_no_debuginfo_in_asm(self):
         @jit(nopython=True, debug=False)
@@ -50,17 +49,19 @@ class TestDebugInfo(TestCase):
         self._check(foo, sig=(types.int32,), expect=True)
 
     def test_environment_override(self):
-        with override_config('DEBUGINFO_DEFAULT', 1):
+        with override_config("DEBUGINFO_DEFAULT", 1):
             # Using default value
             @jit(nopython=True)
             def foo(x):
                 return x
+
             self._check(foo, sig=(types.int32,), expect=True)
 
             # User override default
             @jit(nopython=True, debug=False)
             def bar(x):
                 return x
+
             self._check(bar, sig=(types.int32,), expect=False)
 
     def test_llvm_inliner_flag_conflict(self):
@@ -83,7 +84,7 @@ class TestDebugInfo(TestCase):
             return a, b
 
         # check it compiles
-        with override_config('DEBUGINFO_DEFAULT', 1):
+        with override_config("DEBUGINFO_DEFAULT", 1):
             result = foo(np.pi)
 
         self.assertPreciseEqual(result, foo.py_func(np.pi))
@@ -100,7 +101,7 @@ class TestDebugInfo(TestCase):
         f_names = []
         for blk in func.blocks:
             for stmt in blk.instructions:
-                if stmt.opcode == 'call':
+                if stmt.opcode == "call":
                     # stmt.function.name  This is the function being called
                     f_names.append(str(stmt).strip())
 
@@ -111,9 +112,9 @@ class TestDebugInfo(TestCase):
         found_baz = False
         baz_name = baz.overloads[baz.signatures[0]].fndesc.mangled_name
         for x in f_names:
-            if not found_sin and re.match('.*llvm.sin.f64.*', x):
+            if not found_sin and re.match(".*llvm.sin.f64.*", x):
                 found_sin = True
-            if not found_baz and re.match(f'.*{baz_name}.*', x):
+            if not found_baz and re.match(f".*{baz_name}.*", x):
                 found_baz = True
 
         self.assertTrue(found_sin)
@@ -121,19 +122,18 @@ class TestDebugInfo(TestCase):
 
 
 class TestDebugInfoEmission(TestCase):
-    """ Tests that debug info is emitted correctly.
-    """
+    """Tests that debug info is emitted correctly."""
 
-    _NUMBA_OPT_0_ENV = {'NUMBA_OPT': '0'}
+    _NUMBA_OPT_0_ENV = {"NUMBA_OPT": "0"}
 
     def _get_llvmir(self, fn, sig):
-        with override_config('OPT', 0):
+        with override_config("OPT", 0):
             fn.compile(sig)
             return fn.inspect_llvm(sig)
 
     def _get_metadata(self, fn, sig):
         ll = self._get_llvmir(fn, sig).splitlines()
-        meta_re = re.compile(r'![0-9]+ =.*')
+        meta_re = re.compile(r"![0-9]+ =.*")
         metadata = []
         for line in ll:
             if meta_re.match(line):
@@ -145,7 +145,7 @@ class TestDebugInfoEmission(TestCase):
         '!33' -> '!{!"branch_weights", i32 1, i32 99}'
         """
         metadata_definition_map = dict()
-        meta_definition_split = re.compile(r'(![0-9]+) = (.*)')
+        meta_definition_split = re.compile(r"(![0-9]+) = (.*)")
         for line in metadata:
             matched = meta_definition_split.match(line)
             if matched:
@@ -173,15 +173,14 @@ class TestDebugInfoEmission(TestCase):
 
         metadata = self._get_metadata(foo, sig=())
         DICompileUnit = metadata[0]
-        self.assertEqual('!0', DICompileUnit[:2])
-        self.assertIn('!DICompileUnit(language: DW_LANG_C_plus_plus',
-                      DICompileUnit)
+        self.assertEqual("!0", DICompileUnit[:2])
+        self.assertIn("!DICompileUnit(language: DW_LANG_C_plus_plus", DICompileUnit)
         self.assertIn('producer: "clang (Numba)"', DICompileUnit)
 
     def test_DILocation(self):
-        """ Tests that DILocation information is reasonable.
-        """
-        @njit(debug=True, error_model='numpy')
+        """Tests that DILocation information is reasonable."""
+
+        @njit(debug=True, error_model="numpy")
         def foo(a):
             b = a + 1.23
             c = b * 2.34
@@ -222,9 +221,10 @@ class TestDebugInfoEmission(TestCase):
         block = blocks[0]
 
         # Find non-call/non-memory instr and check the sequence is as expected
-        instrs = [x for x in block.instructions if x.opcode not in
-                  ['call', 'load', 'store']]
-        op_expect = {'fadd', 'fmul', 'fdiv'}
+        instrs = [
+            x for x in block.instructions if x.opcode not in ["call", "load", "store"]
+        ]
+        op_expect = {"fadd", "fmul", "fdiv"}
         started = False
         for x in instrs:
             if x.opcode in op_expect:
@@ -239,7 +239,7 @@ class TestDebugInfoEmission(TestCase):
         # ascends with LLVM source line. Also store all the dbg references,
         # these will be checked later.
         line2dbg = set()
-        re_dbg_ref = re.compile(r'.*!dbg (![0-9]+).*$')
+        re_dbg_ref = re.compile(r".*!dbg (![0-9]+).*$")
         found = -1
         for instr in instrs:
             inst_as_str = str(instr)
@@ -248,7 +248,7 @@ class TestDebugInfoEmission(TestCase):
                 # if there's no match, ensure it is one of alloca or store,
                 # it's important that the zero init/alloca instructions have
                 # no dbg data
-                accepted = ('alloca ', 'store ')
+                accepted = ("alloca ", "store ")
                 self.assertTrue(any([x in inst_as_str for x in accepted]))
                 continue
             groups = matched.groups()
@@ -270,18 +270,18 @@ class TestDebugInfoEmission(TestCase):
         # Pull out metadata entries referred to by the llvm line end !dbg
         # check they match the python source, the +2 is for the @njit decorator
         # and the function definition line.
-        offsets = [0,  # b = a + 1
-                   1,  # a * 2.34
-                   2,  # d = b / c
-                   3,  # print(d)
-                   ]
+        offsets = [
+            0,  # b = a + 1
+            1,  # a * 2.34
+            2,  # d = b / c
+            3,  # print(d)
+        ]
         pyln_range = [pysrc_line_start + 2 + x for x in offsets]
 
         # do the check
-        for (k, line_no) in zip(sorted(line2dbg, key=lambda x: int(x[1:])),
-                                pyln_range):
+        for k, line_no in zip(sorted(line2dbg, key=lambda x: int(x[1:])), pyln_range):
             dilocation_info = metadata_definition_map[k]
-            self.assertIn(f'line: {line_no}', dilocation_info)
+            self.assertIn(f"line: {line_no}", dilocation_info)
 
         # Check that variable "a" is declared as on the same line as function
         # definition.
@@ -300,7 +300,7 @@ class TestDebugInfoEmission(TestCase):
                 self.assertEqual(dbg_line, defline)
                 break
         else:
-            self.fail('Assertion on DILocalVariable not made')
+            self.fail("Assertion on DILocalVariable not made")
 
     @TestCase.run_test_in_subprocess(envvars=_NUMBA_OPT_0_ENV)
     def test_DILocation_entry_blk(self):
@@ -321,6 +321,7 @@ class TestDebugInfoEmission(TestCase):
         @njit(debug=True)
         def foo(a):
             return a + 1
+
         foo(123)
 
         full_ir = foo.inspect_llvm(foo.signatures[0])
@@ -349,11 +350,11 @@ class TestDebugInfoEmission(TestCase):
         # the body block and that the jump has no associated debug info.
         entry_instr = [x for x in entry_block.instructions]
         ujmp = entry_instr[-1]
-        self.assertEqual(ujmp.opcode, 'br')
+        self.assertEqual(ujmp.opcode, "br")
         ujmp_operands = [x for x in ujmp.operands]
         self.assertEqual(len(ujmp_operands), 1)
         target_data = ujmp_operands[0]
-        target = str(target_data).split(':')[0].strip()
+        target = str(target_data).split(":")[0].strip()
         # check the unconditional jump target is to the body block
         self.assertEqual(target, body_block.name)
         # check the uncondition jump instr itself has no metadata
@@ -361,7 +362,7 @@ class TestDebugInfoEmission(TestCase):
 
     @TestCase.run_test_in_subprocess(envvars=_NUMBA_OPT_0_ENV)
     def test_DILocation_decref(self):
-        """ This tests that decref's generated from `ir.Del`s as variables go
+        """This tests that decref's generated from `ir.Del`s as variables go
         out of scope do not have debuginfo associated with them (the location of
         `ir.Del` is an implementation detail).
         """
@@ -387,15 +388,16 @@ class TestDebugInfoEmission(TestCase):
         count = 0
         for line in full_ir.splitlines():
             line_stripped = line.strip()
-            if line_stripped.startswith('call void @NRT_decref'):
-                self.assertRegex(line, r'.*meminfo\.[0-9]+\)$')
+            if line_stripped.startswith("call void @NRT_decref"):
+                self.assertRegex(line, r".*meminfo\.[0-9]+\)$")
                 count += 1
-        self.assertGreater(count, 0) # make sure there were some decrefs!
+        self.assertGreater(count, 0)  # make sure there were some decrefs!
 
     def test_DILocation_undefined(self):
-        """ Tests that DILocation information for undefined vars is associated
+        """Tests that DILocation information for undefined vars is associated
         with the line of the function definition (so it ends up in the prologue)
         """
+
         @njit(debug=True)
         def foo(n):
             if n:
@@ -425,7 +427,7 @@ class TestDebugInfoEmission(TestCase):
         self.assertIn(pysrc_line_start, associated_lines)
 
     def test_DILocation_versioned_variables(self):
-        """ Tests that DILocation information for versions of variables matches
+        """Tests that DILocation information for versions of variables matches
         up to their definition site."""
         # Note: there's still something wrong in the DI/SSA naming, the ret c is
         # associated with the logically first definition.
@@ -458,37 +460,37 @@ class TestDebugInfoEmission(TestCase):
                 groups = match.groups()
                 self.assertEqual(len(groups), 1)
                 associated_lines.add(int(groups[0]))
-        self.assertEqual(len(associated_lines), 2) # 2 SSA versioned names 'c'
+        self.assertEqual(len(associated_lines), 2)  # 2 SSA versioned names 'c'
 
         # Now find the `c = ` lines in the python source
         py_lines = set()
         for ix, pyln in enumerate(pysrc):
-            if 'c = ' in pyln:
+            if "c = " in pyln:
                 py_lines.add(ix + pysrc_line_start)
-        self.assertEqual(len(py_lines), 2) # 2 assignments to c
+        self.assertEqual(len(py_lines), 2)  # 2 assignments to c
 
         # check that the DILocation from the DI for `c` matches the python src
         self.assertEqual(associated_lines, py_lines)
 
     def test_numeric_scalars(self):
-        """ Tests that dwarf info is correctly emitted for numeric scalars."""
+        """Tests that dwarf info is correctly emitted for numeric scalars."""
 
-        DI = namedtuple('DI', 'name bits encoding')
+        DI = namedtuple("DI", "name bits encoding")
 
-        type_infos = {np.float32: DI("float32", 32, "DW_ATE_float"),
-                      np.float64: DI("float64", 64, "DW_ATE_float"),
-                      np.int8: DI("int8", 8, "DW_ATE_signed"),
-                      np.int16: DI("int16", 16, "DW_ATE_signed"),
-                      np.int32: DI("int32", 32, "DW_ATE_signed"),
-                      np.int64: DI("int64", 64, "DW_ATE_signed"),
-                      np.uint8: DI("uint8", 8, "DW_ATE_unsigned"),
-                      np.uint16: DI("uint16", 16, "DW_ATE_unsigned"),
-                      np.uint32: DI("uint32", 32, "DW_ATE_unsigned"),
-                      np.uint64: DI("uint64", 64, "DW_ATE_unsigned"),
-                      np.complex64: DI("complex64", 64,
-                                       "DW_TAG_structure_type"),
-                      np.complex128: DI("complex128", 128,
-                                        "DW_TAG_structure_type"),}
+        type_infos = {
+            np.float32: DI("float32", 32, "DW_ATE_float"),
+            np.float64: DI("float64", 64, "DW_ATE_float"),
+            np.int8: DI("int8", 8, "DW_ATE_signed"),
+            np.int16: DI("int16", 16, "DW_ATE_signed"),
+            np.int32: DI("int32", 32, "DW_ATE_signed"),
+            np.int64: DI("int64", 64, "DW_ATE_signed"),
+            np.uint8: DI("uint8", 8, "DW_ATE_unsigned"),
+            np.uint16: DI("uint16", 16, "DW_ATE_unsigned"),
+            np.uint32: DI("uint32", 32, "DW_ATE_unsigned"),
+            np.uint64: DI("uint64", 64, "DW_ATE_unsigned"),
+            np.complex64: DI("complex64", 64, "DW_TAG_structure_type"),
+            np.complex128: DI("complex128", 128, "DW_TAG_structure_type"),
+        }
 
         for ty, dwarf_info in type_infos.items():
 
@@ -507,22 +509,26 @@ class TestDebugInfoEmission(TestCase):
             else:
                 assert 0, "missing DILocalVariable 'a'"
 
-            type_marker = re.match('.*type: (![0-9]+).*', lvar).groups()[0]
+            type_marker = re.match(".*type: (![0-9]+).*", lvar).groups()[0]
             type_decl = metadata_definition_map[type_marker]
 
-            if 'DW_ATE' in dwarf_info.encoding:
-                expected = (f'!DIBasicType(name: "{dwarf_info.name}", '
-                            f'size: {dwarf_info.bits}, '
-                            f'encoding: {dwarf_info.encoding})')
+            if "DW_ATE" in dwarf_info.encoding:
+                expected = (
+                    f'!DIBasicType(name: "{dwarf_info.name}", '
+                    f"size: {dwarf_info.bits}, "
+                    f"encoding: {dwarf_info.encoding})"
+                )
                 self.assertEqual(type_decl, expected)
-            else: # numerical complex type
+            else:  # numerical complex type
                 # Don't match the whole string, just the known parts
-                raw_flt = 'float' if dwarf_info.bits == 64 else 'double'
-                expected = (f'distinct !DICompositeType('
-                            f'tag: {dwarf_info.encoding}, '
-                            f'name: "{dwarf_info.name} '
-                            f'({{{raw_flt}, {raw_flt}}})", '
-                            f'size: {dwarf_info.bits}')
+                raw_flt = "float" if dwarf_info.bits == 64 else "double"
+                expected = (
+                    f"distinct !DICompositeType("
+                    f"tag: {dwarf_info.encoding}, "
+                    f'name: "{dwarf_info.name} '
+                    f'({{{raw_flt}, {raw_flt}}})", '
+                    f"size: {dwarf_info.bits}"
+                )
                 self.assertIn(expected, type_decl)
 
     def test_arrays(self):
@@ -542,7 +548,7 @@ class TestDebugInfoEmission(TestCase):
         else:
             assert 0, "missing DILocalVariable 'a'"
 
-        type_marker = re.match('.*type: (![0-9]+).*', lvar).groups()[0]
+        type_marker = re.match(".*type: (![0-9]+).*", lvar).groups()[0]
         type_decl = metadata_definition_map[type_marker]
 
         # check type
@@ -551,7 +557,7 @@ class TestDebugInfoEmission(TestCase):
         self.assertIn(f'name: "{str(types.float64[:, ::1])}', type_decl)
 
         # pop out the "elements" of the composite type
-        match_elements = re.compile(r'.*elements: (![0-9]+),.*')
+        match_elements = re.compile(r".*elements: (![0-9]+),.*")
         elem_matches = match_elements.match(type_decl).groups()
         self.assertEqual(len(elem_matches), 1)
         elem_match = elem_matches[0]
@@ -559,7 +565,7 @@ class TestDebugInfoEmission(TestCase):
         # data model.
         # !{!35, !36, !37, !39, !40, !43, !45}'
         struct_markers = metadata_definition_map[elem_match]
-        struct_pattern = '!{' + '(![0-9]+), ' * 6 + '(![0-9]+)}'
+        struct_pattern = "!{" + "(![0-9]+), " * 6 + "(![0-9]+)}"
         match_struct = re.compile(struct_pattern)
         struct_member_matches = match_struct.match(struct_markers).groups()
         self.assertIsNotNone(struct_member_matches is not None)
@@ -567,25 +573,33 @@ class TestDebugInfoEmission(TestCase):
         self.assertEqual(len(struct_member_matches), len(data_model._fields))
 
         ptr_size = types.intp.bitwidth
-        ptr_re = (r'!DIDerivedType\(tag: DW_TAG_pointer_type, '
-                  rf'baseType: ![0-9]+, size: {ptr_size}\)')
-        int_re = (rf'!DIBasicType\(name: "int{ptr_size}", size: {ptr_size}, '
-                  r'encoding: DW_ATE_signed\)')
-        utuple_re = (r'!DICompositeType\(tag: DW_TAG_array_type, '
-                     rf'name: "UniTuple\(int{ptr_size} x 2\) '
-                     rf'\(\[2 x i{ptr_size}\]\)", baseType: ![0-9]+, '
-                     rf'size: {2 * ptr_size}, elements: ![0-9]+, '
-                     rf'identifier: "\[2 x i{ptr_size}\]"\)')
-        expected = {'meminfo': ptr_re,
-                    'parent': ptr_re,
-                    'nitems': int_re,
-                    'itemsize': int_re,
-                    'data': ptr_re,
-                    'shape': utuple_re,
-                    'strides': utuple_re}
+        ptr_re = (
+            r"!DIDerivedType\(tag: DW_TAG_pointer_type, "
+            rf"baseType: ![0-9]+, size: {ptr_size}\)"
+        )
+        int_re = (
+            rf'!DIBasicType\(name: "int{ptr_size}", size: {ptr_size}, '
+            r"encoding: DW_ATE_signed\)"
+        )
+        utuple_re = (
+            r"!DICompositeType\(tag: DW_TAG_array_type, "
+            rf'name: "UniTuple\(int{ptr_size} x 2\) '
+            rf'\(\[2 x i{ptr_size}\]\)", baseType: ![0-9]+, '
+            rf"size: {2 * ptr_size}, elements: ![0-9]+, "
+            rf'identifier: "\[2 x i{ptr_size}\]"\)'
+        )
+        expected = {
+            "meminfo": ptr_re,
+            "parent": ptr_re,
+            "nitems": int_re,
+            "itemsize": int_re,
+            "data": ptr_re,
+            "shape": utuple_re,
+            "strides": utuple_re,
+        }
 
         # look for `baseType: <>` for the type
-        base_type_pattern = r'!DIDerivedType\(.*, baseType: (![0-9]+),.*'
+        base_type_pattern = r"!DIDerivedType\(.*, baseType: (![0-9]+),.*"
         base_type_matcher = re.compile(base_type_pattern)
 
         for ix, field in enumerate(data_model._fields):
@@ -609,7 +623,7 @@ class TestDebugInfoEmission(TestCase):
             cres = fn.overloads[fn.signatures[0]]
             lib = cres.library
             fn = lib._final_module.get_function(cres.fndesc.mangled_name)
-            attrs = set(b' '.join(fn.attributes).split())
+            attrs = set(b" ".join(fn.attributes).split())
             return attrs
 
         def foo():
@@ -621,8 +635,9 @@ class TestDebugInfoEmission(TestCase):
 
         foo_debug = njit(debug=True)(foo)
         foo_debug_optnone = njit(debug=True, _dbg_optnone=True)(foo)
-        foo_debug_optnone_inline = njit(debug=True, _dbg_optnone=True,
-                                        forceinline=True)(foo)
+        foo_debug_optnone_inline = njit(
+            debug=True, _dbg_optnone=True, forceinline=True
+        )(foo)
 
         firstline = foo.__code__.co_firstlineno
 
@@ -671,7 +686,7 @@ class TestDebugInfoEmission(TestCase):
             pass
 
         # check that it will actually compile (verifies DI emission is ok)
-        with override_config('DEBUGINFO_DEFAULT', 1):
+        with override_config("DEBUGINFO_DEFAULT", 1):
             foo()
 
         metadata = self._get_metadata(foo, sig=(types.Omitted(None),))
@@ -685,8 +700,7 @@ class TestDebugInfoEmission(TestCase):
         self.assertEqual(len(tmp_disubr), 1)
         disubr = tmp_disubr.pop()
 
-        disubr_matched = re.match(r'.*!DISubroutineType\(types: ([!0-9]+)\)$',
-                                  disubr)
+        disubr_matched = re.match(r".*!DISubroutineType\(types: ([!0-9]+)\)$", disubr)
         self.assertIsNotNone(disubr_matched)
         disubr_groups = disubr_matched.groups()
         self.assertEqual(len(disubr_groups), 1)
@@ -694,22 +708,24 @@ class TestDebugInfoEmission(TestCase):
 
         # Find the types in the DISubroutineType arg list
         disubr_types = metadata_definition_map[disubr_meta]
-        disubr_types_matched = re.match(r'!{(.*)}', disubr_types)
+        disubr_types_matched = re.match(r"!{(.*)}", disubr_types)
         self.assertIsNotNone(disubr_matched)
         disubr_types_groups = disubr_types_matched.groups()
         self.assertEqual(len(disubr_types_groups), 1)
 
         # fetch out and assert the last argument type, should be void *
-        md_fn_arg = [x.strip() for x in disubr_types_groups[0].split(',')][-1]
+        md_fn_arg = [x.strip() for x in disubr_types_groups[0].split(",")][-1]
         arg_ty = metadata_definition_map[md_fn_arg]
-        expected_arg_ty = (r'^.*!DICompositeType\(tag: DW_TAG_structure_type, '
-                           r'name: "Anonymous struct \({}\)", elements: '
-                           r'(![0-9]+), identifier: "{}"\)')
+        expected_arg_ty = (
+            r"^.*!DICompositeType\(tag: DW_TAG_structure_type, "
+            r'name: "Anonymous struct \({}\)", elements: '
+            r'(![0-9]+), identifier: "{}"\)'
+        )
         self.assertRegex(arg_ty, expected_arg_ty)
         md_base_ty = re.match(expected_arg_ty, arg_ty).groups()[0]
         base_ty = metadata_definition_map[md_base_ty]
         # expect ir.LiteralStructType([])
-        self.assertEqual(base_ty, ('!{}'))
+        self.assertEqual(base_ty, ("!{}"))
 
     def test_missing_source(self):
         strsrc = """
@@ -718,10 +734,10 @@ class TestDebugInfoEmission(TestCase):
         """
         l = dict()
         exec(dedent(strsrc), {}, l)
-        foo = njit(debug=True)(l['foo'])
+        foo = njit(debug=True)(l["foo"])
 
         with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always', NumbaDebugInfoWarning)
+            warnings.simplefilter("always", NumbaDebugInfoWarning)
             ignore_internal_warnings()
             foo()
 
@@ -730,7 +746,7 @@ class TestDebugInfoEmission(TestCase):
         self.assertEqual(found.category, NumbaDebugInfoWarning)
         msg = str(found.message)
         # make sure the warning contains the right message
-        self.assertIn('Could not find source for function', msg)
+        self.assertIn("Could not find source for function", msg)
         # and refers to the offending function
         self.assertIn(str(foo.py_func), msg)
 
@@ -738,11 +754,11 @@ class TestDebugInfoEmission(TestCase):
 
         @njit(debug=True)
         def foo():
-# NOTE: THIS COMMENT MUST START AT COLUMN 0 FOR THIS SAMPLE CODE TO BE VALID # noqa: E115, E501
+            # NOTE: THIS COMMENT MUST START AT COLUMN 0 FOR THIS SAMPLE CODE TO BE VALID # noqa: E115, E501
             return 1
 
         with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always', NumbaDebugInfoWarning)
+            warnings.simplefilter("always", NumbaDebugInfoWarning)
             ignore_internal_warnings()
             foo()
 
@@ -755,5 +771,5 @@ class TestDebugInfoEmission(TestCase):
         self.assertEqual(len(lines), 1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -28,7 +28,6 @@ values like the '1' in the array type shown earlier.  There is special encoding
 scheme for them to avoid leading digits.
 """
 
-
 import re
 
 from numba.core import types, config
@@ -37,46 +36,46 @@ from numba.core import types, config
 # According the scheme, valid characters for mangled names are [a-zA-Z0-9_].
 # We borrow the '_' as the escape character to encode invalid char into
 # '_xx' where 'xx' is the hex codepoint.
-_re_invalid_char = re.compile(r'[^a-z0-9_]', re.I)
+_re_invalid_char = re.compile(r"[^a-z0-9_]", re.I)
 
 PREFIX = "_Z"
 
 # Numba types to mangled type code. These correspond with the codes listed in
 # https://itanium-cxx-abi.github.io/cxx-abi/abi.html#mangling-builtin
-if config.USE_LEGACY_TYPE_SYSTEM: # Old type system
+if config.USE_LEGACY_TYPE_SYSTEM:  # Old type system
     N2CODE = {
-        types.void: 'v',
-        types.boolean: 'b',
-        types.uint8: 'h',
-        types.int8: 'a',
-        types.uint16: 't',
-        types.int16: 's',
-        types.uint32: 'j',
-        types.int32: 'i',
-        types.uint64: 'y',
-        types.int64: 'x',
-        types.float16: 'Dh',
-        types.float32: 'f',
-        types.float64: 'd'
+        types.void: "v",
+        types.boolean: "b",
+        types.uint8: "h",
+        types.int8: "a",
+        types.uint16: "t",
+        types.int16: "s",
+        types.uint32: "j",
+        types.int32: "i",
+        types.uint64: "y",
+        types.int64: "x",
+        types.float16: "Dh",
+        types.float32: "f",
+        types.float64: "d",
     }
 else:
     N2CODE = {
-        types.void: 'v',
-        types.py_bool: 'b',
-        types.py_int: 'x',
-        types.py_float: 'd',
-        types.np_bool_: 'b',
-        types.np_uint8: 'h',
-        types.np_int8: 'a',
-        types.np_uint16: 't',
-        types.np_int16: 's',
-        types.np_uint32: 'j',
-        types.np_int32: 'i',
-        types.np_uint64: 'y',
-        types.np_int64: 'x',
-        types.np_float16: 'Dh',
-        types.np_float32: 'f',
-        types.np_float64: 'd'
+        types.void: "v",
+        types.py_bool: "b",
+        types.py_int: "x",
+        types.py_float: "d",
+        types.np_bool_: "b",
+        types.np_uint8: "h",
+        types.np_int8: "a",
+        types.np_uint16: "t",
+        types.np_int16: "s",
+        types.np_uint32: "j",
+        types.np_int32: "i",
+        types.np_uint64: "y",
+        types.np_int64: "x",
+        types.np_float16: "Dh",
+        types.np_float32: "f",
+        types.np_float64: "d",
     }
 
 
@@ -92,12 +91,12 @@ def _escape_string(text):
     """
 
     def repl(m):
-        return ''.join(('_%02x' % ch)
-                       for ch in m.group(0).encode('utf8'))
+        return "".join(("_%02x" % ch) for ch in m.group(0).encode("utf8"))
+
     ret = re.sub(_re_invalid_char, repl, text)
     # Return str if we got a unicode (for py2)
     if not isinstance(ret, str):
-        return ret.encode('ascii')
+        return ret.encode("ascii")
     return ret
 
 
@@ -106,7 +105,7 @@ def _fix_lead_digit(text):
     Fix text with leading digit
     """
     if text and text[0].isdigit():
-        return '_' + text
+        return "_" + text
     else:
         return text
 
@@ -117,14 +116,14 @@ def _len_encoded(string):
     Add underscore if string is prefixed with digits.
     """
     string = _fix_lead_digit(string)
-    return '%u%s' % (len(string), string)
+    return "%u%s" % (len(string), string)
 
 
 def mangle_abi_tag(abi_tag: str) -> str:
     return "B" + _len_encoded(_escape_string(abi_tag))
 
 
-def mangle_identifier(ident, template_params='', *, abi_tags=(), uid=None):
+def mangle_identifier(ident, template_params="", *, abi_tags=(), uid=None):
     """
     Mangle the identifier with optional template parameters and abi_tags.
 
@@ -135,13 +134,13 @@ def mangle_identifier(ident, template_params='', *, abi_tags=(), uid=None):
     if uid is not None:
         # Add uid to abi-tags
         abi_tags = (f"v{uid}", *abi_tags)
-    parts = [_len_encoded(_escape_string(x)) for x in ident.split('.')]
+    parts = [_len_encoded(_escape_string(x)) for x in ident.split(".")]
     enc_abi_tags = list(map(mangle_abi_tag, abi_tags))
-    extras = template_params + ''.join(enc_abi_tags)
+    extras = template_params + "".join(enc_abi_tags)
     if len(parts) > 1:
-        return 'N%s%sE' % (''.join(parts), extras)
+        return "N%s%sE" % ("".join(parts), extras)
     else:
-        return '%s%s' % (parts[0], extras)
+        return "%s%s" % (parts[0], extras)
 
 
 def mangle_type_or_value(typ):
@@ -156,7 +155,7 @@ def mangle_type_or_value(typ):
             return mangle_templated_ident(*typ.mangling_args)
     # Handle integer literal
     elif isinstance(typ, int):
-        return 'Li%dE' % typ
+        return "Li%dE" % typ
     # Handle str as identifier
     elif isinstance(typ, str):
         return mangle_identifier(typ)
@@ -175,8 +174,9 @@ def mangle_templated_ident(identifier, parameters):
     """
     Mangle templated identifier.
     """
-    template_params = ('I%sE' % ''.join(map(mangle_type_or_value, parameters))
-                       if parameters else '')
+    template_params = (
+        "I%sE" % "".join(map(mangle_type_or_value, parameters)) if parameters else ""
+    )
     return mangle_identifier(identifier, template_params)
 
 
@@ -184,16 +184,20 @@ def mangle_args(argtys):
     """
     Mangle sequence of Numba type objects and arbitrary values.
     """
-    return ''.join([mangle_type_or_value(t) for t in argtys])
+    return "".join([mangle_type_or_value(t) for t in argtys])
 
 
 def mangle(ident, argtys, *, abi_tags=(), uid=None):
     """
     Mangle identifier with Numba type objects and abi-tags.
     """
-    return ''.join([PREFIX,
-                    mangle_identifier(ident, abi_tags=abi_tags, uid=uid),
-                    mangle_args(argtys)])
+    return "".join(
+        [
+            PREFIX,
+            mangle_identifier(ident, abi_tags=abi_tags, uid=uid),
+            mangle_args(argtys),
+        ]
+    )
 
 
 def prepend_namespace(mangled, ns):
@@ -201,16 +205,16 @@ def prepend_namespace(mangled, ns):
     Prepend namespace to mangled name.
     """
     if not mangled.startswith(PREFIX):
-        raise ValueError('input is not a mangled name')
-    elif mangled.startswith(PREFIX + 'N'):
+        raise ValueError("input is not a mangled name")
+    elif mangled.startswith(PREFIX + "N"):
         # nested
         remaining = mangled[3:]
-        ret = PREFIX + 'N' + mangle_identifier(ns) + remaining
+        ret = PREFIX + "N" + mangle_identifier(ns) + remaining
     else:
         # non-nested
         remaining = mangled[2:]
         head, tail = _split_mangled_ident(remaining)
-        ret = PREFIX + 'N' + mangle_identifier(ns) + head + 'E' + tail
+        ret = PREFIX + "N" + mangle_identifier(ns) + head + "E" + tail
     return ret
 
 

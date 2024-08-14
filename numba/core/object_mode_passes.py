@@ -1,7 +1,5 @@
-from numba.core import (types, typing, funcdesc, config, pylowering, transforms,
-                        errors)
-from numba.core.compiler_machinery import (FunctionPass, LoweringPass,
-                                           register_pass)
+from numba.core import types, typing, funcdesc, config, pylowering, transforms, errors
+from numba.core.compiler_machinery import FunctionPass, LoweringPass, register_pass
 from collections import defaultdict
 import warnings
 
@@ -26,26 +24,37 @@ class ObjectModeFrontEnd(FunctionPass):
             loop_flags.enable_pyobject = False
         loop_flags.enable_ssa = False
 
-        main, loops = transforms.loop_lifting(state.func_ir,
-                                              typingctx=state.typingctx,
-                                              targetctx=state.targetctx,
-                                              locals=state.locals,
-                                              flags=loop_flags)
+        main, loops = transforms.loop_lifting(
+            state.func_ir,
+            typingctx=state.typingctx,
+            targetctx=state.targetctx,
+            locals=state.locals,
+            flags=loop_flags,
+        )
         if loops:
             # Some loops were extracted
             if config.DEBUG_FRONTEND or config.DEBUG:
                 for loop in loops:
                     print("Lifting loop", loop.get_source_location())
             from numba.core.compiler import compile_ir
-            cres = compile_ir(state.typingctx, state.targetctx, main,
-                              state.args, state.return_type,
-                              outer_flags, state.locals,
-                              lifted=tuple(loops), lifted_from=None,
-                              is_lifted_loop=True)
+
+            cres = compile_ir(
+                state.typingctx,
+                state.targetctx,
+                main,
+                state.args,
+                state.return_type,
+                outer_flags,
+                state.locals,
+                lifted=tuple(loops),
+                lifted_from=None,
+                is_lifted_loop=True,
+            )
             return cres
 
     def run_pass(self, state):
         from numba.core.compiler import _EarlyPipelineCompletion
+
         # NOTE: That so much stuff, including going back into the compiler, is
         # captured in a single pass is not ideal.
         if state.flags.enable_looplift:
@@ -70,9 +79,7 @@ class ObjectModeBackEnd(LoweringPass):
         LoweringPass.__init__(self)
 
     def _py_lowering_stage(self, targetctx, library, interp, flags):
-        fndesc = funcdesc.PythonFunctionDescriptor.from_object_mode_function(
-            interp
-        )
+        fndesc = funcdesc.PythonFunctionDescriptor.from_object_mode_function(interp)
         with targetctx.push_code_library(library):
             lower = pylowering.PyLower(targetctx, library, fndesc, interp)
             lower.lower()
@@ -82,6 +89,7 @@ class ObjectModeBackEnd(LoweringPass):
             call_helper = lower.call_helper
             del lower
         from numba.core.compiler import _LowerResult  # TODO: move this
+
         if flags.no_compile:
             return _LowerResult(fndesc, call_helper, cfunc=None, env=env)
         else:
@@ -109,17 +117,18 @@ class ObjectModeBackEnd(LoweringPass):
                 # append missing
                 # BUG?: What's going on with nargs here?
                 # check state.nargs vs self.nargs on original code
-                state.args = (tuple(state.args) + (types.pyobject,) *
-                              (state.nargs - len(state.args)))
+                state.args = tuple(state.args) + (types.pyobject,) * (
+                    state.nargs - len(state.args)
+                )
 
-            return self._py_lowering_stage(state.targetctx,
-                                           state.library,
-                                           state.func_ir,
-                                           state.flags)
+            return self._py_lowering_stage(
+                state.targetctx, state.library, state.func_ir, state.flags
+            )
 
         lowered = backend_object_mode()
         signature = typing.signature(state.return_type, *state.args)
         from numba.core.compiler import compile_result
+
         state.cr = compile_result(
             typing_context=state.typingctx,
             target_context=state.targetctx,
@@ -138,10 +147,15 @@ class ObjectModeBackEnd(LoweringPass):
         )
 
         if state.flags.release_gil:
-            warn_msg = ("Code running in object mode won't allow parallel"
-                        " execution despite nogil=True.")
-            warnings.warn_explicit(warn_msg, errors.NumbaWarning,
-                                   state.func_id.filename,
-                                   state.func_id.firstlineno)
+            warn_msg = (
+                "Code running in object mode won't allow parallel"
+                " execution despite nogil=True."
+            )
+            warnings.warn_explicit(
+                warn_msg,
+                errors.NumbaWarning,
+                state.func_id.filename,
+                state.func_id.firstlineno,
+            )
 
         return True

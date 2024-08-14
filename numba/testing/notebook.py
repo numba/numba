@@ -15,12 +15,14 @@ try:
 
     def isstr(s):
         return isinstance(s, str)
+
 except ImportError:
     # py2
     from Queue import Empty
 
     def isstr(s):
         return isinstance(s, basestring)  # noqa
+
 
 class NotebookTest(TestCase):
     """Validate a notebook. All code cells are executed in order. The output is either checked
@@ -30,8 +32,7 @@ class NotebookTest(TestCase):
     Useful references:
     http://nbformat.readthedocs.org/en/latest/format_description.html
     http://jupyter-client.readthedocs.org/en/latest/messaging.html
-"""
-
+    """
 
     IGNORE_TYPES = ["execute_request", "execute_input", "status", "pyin"]
     STRIP_KEYS = ["execution_count", "traceback", "prompt_number", "source"]
@@ -42,12 +43,12 @@ class NotebookTest(TestCase):
         with open(notebook) as f:
             nb = convert(reads(f.read()), self.NBFORMAT_VERSION)
         _, kernel = utils.start_new_kernel()
-        for i, c in enumerate([c for c in nb.cells if c.cell_type == 'code']):
+        for i, c in enumerate([c for c in nb.cells if c.cell_type == "code"]):
             self._test_notebook_cell(self.sanitize_cell(c), i, kernel, test)
 
     def _test_notebook_cell(self, cell, i, kernel, test):
 
-        if hasattr(cell, 'source'): # nbformat 4.0 and later
+        if hasattr(cell, "source"):  # nbformat 4.0 and later
             code = cell.source
         else:
             code = cell.input
@@ -57,15 +58,20 @@ class NotebookTest(TestCase):
         msg = None
         no_error = True
         first_error = -1
-        error_msg = ''
+        error_msg = ""
         while self.should_continue(msg):
             try:
                 msg = iopub.get_msg(block=True, timeout=1)
             except Empty:
                 continue
-            if msg['msg_type'] not in self.IGNORE_TYPES:
-                if msg['msg_type'] == 'error':
-                    error_msg = '  ' + msg['content']['ename'] + '\n  ' + msg['content']['evalue']
+            if msg["msg_type"] not in self.IGNORE_TYPES:
+                if msg["msg_type"] == "error":
+                    error_msg = (
+                        "  "
+                        + msg["content"]["ename"]
+                        + "\n  "
+                        + msg["content"]["evalue"]
+                    )
                     no_error = False
                     if first_error == -1:
                         first_error = i
@@ -74,8 +80,12 @@ class NotebookTest(TestCase):
                 o = self.transform_message(msg, expected)
                 outputs.append(o)
 
-        if (test == 'check_error'):
-            self.assertTrue(no_error, 'Executing cell %d resulted in an error:\n%s'%(first_error, error_msg))
+        if test == "check_error":
+            self.assertTrue(
+                no_error,
+                "Executing cell %d resulted in an error:\n%s"
+                % (first_error, error_msg),
+            )
         else:
             # Compare computed output against stored output.
             # TODO: This doesn't work right now as the generated output is too diverse to
@@ -83,10 +93,10 @@ class NotebookTest(TestCase):
             scrub = lambda x: self.dump_canonical(list(self.scrub_outputs(x)))
             scrubbed = scrub(outputs)
             expected = scrub(cell.outputs)
-            #print('output=%s'%outputs)
-            #print('expected=%s'%expected)
-            #self.assertEqual(scrubbed, expected, "\n{}\n\n{}".format(scrubbed, expected))
-        
+            # print('output=%s'%outputs)
+            # print('expected=%s'%expected)
+            # self.assertEqual(scrubbed, expected, "\n{}\n\n{}".format(scrubbed, expected))
+
     def dump_canonical(self, obj):
         return json.dumps(obj, indent=2, sort_keys=True)
 
@@ -97,7 +107,8 @@ class NotebookTest(TestCase):
         for output in outputs:
             out = copy(output)
 
-            for scrub, sub in []:#self.scrubs.items():
+            for scrub, sub in []:  # self.scrubs.items():
+
                 def _scrubLines(lines):
                     if isstr(lines):
                         return re.sub(scrub, sub, lines)
@@ -135,16 +146,9 @@ class NotebookTest(TestCase):
         """
         transform a message into something like the notebook
         """
-        SWAP_KEYS = {
-            "output_type": {
-                "pyout": "execute_result",
-                "pyerr": "error"
-            }
-        }
+        SWAP_KEYS = {"output_type": {"pyout": "execute_result", "pyerr": "error"}}
 
-        output = {
-            u"output_type": msg["msg_type"]
-        }
+        output = {"output_type": msg["msg_type"]}
         output.update(msg["content"])
 
         output = self.strip_keys(output)
@@ -165,7 +169,6 @@ class NotebookTest(TestCase):
         if msg is None:
             return True
 
-        return not (msg["msg_type"] == "status" and
-                    msg["content"]["execution_state"] == "idle")
-
-
+        return not (
+            msg["msg_type"] == "status" and msg["content"]["execution_state"] == "idle"
+        )

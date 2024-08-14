@@ -3,8 +3,8 @@ from numba import jit
 from numba.core import types
 
 
-force_pyobj_flags = {'forceobj': True}
-no_pyobj_flags = {'nopython': True}
+force_pyobj_flags = {"forceobj": True}
+no_pyobj_flags = {"nopython": True}
 
 
 def return_int(a, b):
@@ -16,8 +16,9 @@ class TestPythonInt(unittest.TestCase):
     # Issue #474: ints should be returned rather than longs under Python 2,
     # as much as possible.
 
-    def test_int_return_type(self, flags=force_pyobj_flags,
-                             int_type=types.int64, operands=(3, 4)):
+    def test_int_return_type(
+        self, flags=force_pyobj_flags, int_type=types.int64, operands=(3, 4)
+    ):
         pyfunc = return_int
         cfunc = jit((int_type, int_type), **flags)(pyfunc)
         expected = pyfunc(*operands)
@@ -47,5 +48,5 @@ class TestPythonInt(unittest.TestCase):
         self.test_int_return_type(flags=flags, operands=(2**70, 2**75))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

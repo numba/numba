@@ -1,14 +1,18 @@
 import unittest
 
-from numba.cuda.testing import (CUDATestCase, skip_if_cudadevrt_missing,
-                                skip_on_cudasim, skip_unless_cc_60,
-                                skip_if_mvc_enabled)
+from numba.cuda.testing import (
+    CUDATestCase,
+    skip_if_cudadevrt_missing,
+    skip_on_cudasim,
+    skip_unless_cc_60,
+    skip_if_mvc_enabled,
+)
 from numba.tests.support import captured_stdout
 
 
 @skip_if_cudadevrt_missing
 @skip_unless_cc_60
-@skip_if_mvc_enabled('CG not supported with MVC')
+@skip_if_mvc_enabled("CG not supported with MVC")
 @skip_on_cudasim("cudasim doesn't support cuda import at non-top-level")
 class TestLaplace(CUDATestCase):
     """
@@ -35,6 +39,7 @@ class TestLaplace(CUDATestCase):
         # ex_laplace.import.begin
         import numpy as np
         from numba import cuda
+
         # ex_laplace.import.end
 
         # ex_laplace.allocate.begin
@@ -55,24 +60,25 @@ class TestLaplace(CUDATestCase):
 
         if plot:
             import matplotlib.pyplot as plt
+
             fig, ax = plt.subplots(figsize=(16 * 0.66, 9 * 0.66))
             plt.plot(
                 np.arange(len(buf_0)),
                 buf_0.copy_to_host(),
                 lw=3,
                 marker="*",
-                color='black'
+                color="black",
             )
 
-            plt.title('Initial State', fontsize=24)
-            plt.xlabel('Position', fontsize=24)
-            plt.ylabel('Temperature', fontsize=24)
+            plt.title("Initial State", fontsize=24)
+            plt.xlabel("Position", fontsize=24)
+            plt.ylabel("Temperature", fontsize=24)
 
             ax.set_xticks(ax.get_xticks(), fontsize=16)
             ax.set_yticks(ax.get_yticks(), fontsize=16)
             plt.xlim(0, len(data))
             plt.ylim(0, 10001)
-            plt.savefig('laplace_initial.svg')
+            plt.savefig("laplace_initial.svg")
 
         # ex_laplace.kernel.begin
         @cuda.jit
@@ -116,33 +122,27 @@ class TestLaplace(CUDATestCase):
 
                 # Wait for every thread to write before moving on
                 grid.sync()
+
         # ex_laplace.kernel.end
 
         # ex_laplace.launch.begin
-        solve_heat_equation.forall(len(data))(
-            buf_0, buf_1, niter, 0.25
-        )
+        solve_heat_equation.forall(len(data))(buf_0, buf_1, niter, 0.25)
         # ex_laplace.launch.end
 
         results = buf_1.copy_to_host()
         if plot:
             fig, ax = plt.subplots(figsize=(16 * 0.66, 9 * 0.66))
-            plt.plot(
-                np.arange(len(results)),
-                results, lw=3,
-                marker="*",
-                color='black'
-            )
+            plt.plot(np.arange(len(results)), results, lw=3, marker="*", color="black")
             plt.title(f"T = {niter}", fontsize=24)
-            plt.xlabel('Position', fontsize=24)
-            plt.ylabel('Temperature', fontsize=24)
+            plt.xlabel("Position", fontsize=24)
+            plt.ylabel("Temperature", fontsize=24)
 
             ax.set_xticks(ax.get_xticks(), fontsize=16)
             ax.set_yticks(ax.get_yticks(), fontsize=16)
 
             plt.ylim(0, max(results))
             plt.xlim(0, len(results))
-            plt.savefig('laplace_final.svg')
+            plt.savefig("laplace_final.svg")
 
         # Integral over the domain should be equal to its initial value.
         # Note that this should match the initial value of data[500] above, but

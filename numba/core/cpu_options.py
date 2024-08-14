@@ -1,16 +1,16 @@
 """
 Defines CPU Options for use in the CPU target
 """
+
 from abc import ABCMeta, abstractmethod
 
 
 class AbstractOptionValue(metaclass=ABCMeta):
-    """Abstract base class for custom option values.
-    """
+    """Abstract base class for custom option values."""
+
     @abstractmethod
     def encode(self) -> str:
-        """Returns an encoding of the values
-        """
+        """Returns an encoding of the values"""
         ...
 
     def __repr__(self) -> str:
@@ -25,15 +25,20 @@ class FastMathOptions(AbstractOptionValue):
     def __init__(self, value):
         # https://releases.llvm.org/7.0.0/docs/LangRef.html#fast-math-flags
         valid_flags = {
-            'fast',
-            'nnan', 'ninf', 'nsz', 'arcp',
-            'contract', 'afn', 'reassoc',
+            "fast",
+            "nnan",
+            "ninf",
+            "nsz",
+            "arcp",
+            "contract",
+            "afn",
+            "reassoc",
         }
 
         if isinstance(value, FastMathOptions):
             self.flags = value.flags.copy()
         elif value is True:
-            self.flags = {'fast'}
+            self.flags = {"fast"}
         elif value is False:
             self.flags = set()
         elif isinstance(value, set):
@@ -68,8 +73,18 @@ class ParallelOptions(AbstractOptionValue):
     """
     Options for controlling auto parallelization.
     """
-    __slots__ = ("enabled", "comprehension", "reduction", "inplace_binop",
-                 "setitem", "numpy", "stencil", "fusion", "prange")
+
+    __slots__ = (
+        "enabled",
+        "comprehension",
+        "reduction",
+        "inplace_binop",
+        "setitem",
+        "numpy",
+        "stencil",
+        "fusion",
+        "prange",
+    )
 
     def __init__(self, value):
         if isinstance(value, bool):
@@ -84,14 +99,14 @@ class ParallelOptions(AbstractOptionValue):
             self.prange = value
         elif isinstance(value, dict):
             self.enabled = True
-            self.comprehension = value.pop('comprehension', True)
-            self.reduction = value.pop('reduction', True)
-            self.inplace_binop = value.pop('inplace_binop', True)
-            self.setitem = value.pop('setitem', True)
-            self.numpy = value.pop('numpy', True)
-            self.stencil = value.pop('stencil', True)
-            self.fusion = value.pop('fusion', True)
-            self.prange = value.pop('prange', True)
+            self.comprehension = value.pop("comprehension", True)
+            self.reduction = value.pop("reduction", True)
+            self.inplace_binop = value.pop("inplace_binop", True)
+            self.setitem = value.pop("setitem", True)
+            self.numpy = value.pop("numpy", True)
+            self.stencil = value.pop("stencil", True)
+            self.fusion = value.pop("fusion", True)
+            self.prange = value.pop("prange", True)
             if value:
                 msg = "Unrecognized parallel options: %s" % value.keys()
                 raise NameError(msg)
@@ -110,8 +125,7 @@ class ParallelOptions(AbstractOptionValue):
             raise ValueError(msg)
 
     def _get_values(self):
-        """Get values as dictionary.
-        """
+        """Get values as dictionary."""
         return {k: getattr(self, k) for k in self.__slots__}
 
     def __eq__(self, other):
@@ -131,17 +145,19 @@ class InlineOptions(AbstractOptionValue):
     def __init__(self, value):
         ok = False
         if isinstance(value, str):
-            if value in ('always', 'never'):
+            if value in ("always", "never"):
                 ok = True
         else:
-            ok = hasattr(value, '__call__')
+            ok = hasattr(value, "__call__")
 
         if ok:
             self._inline = value
         else:
-            msg = ("kwarg 'inline' must be one of the strings 'always' or "
-                   "'never', or it can be a callable that returns True/False. "
-                   "Found value %s" % value)
+            msg = (
+                "kwarg 'inline' must be one of the strings 'always' or "
+                "'never', or it can be a callable that returns True/False. "
+                "Found value %s" % value
+            )
             raise ValueError(msg)
 
     @property
@@ -149,14 +165,14 @@ class InlineOptions(AbstractOptionValue):
         """
         True if never inline
         """
-        return self._inline == 'never'
+        return self._inline == "never"
 
     @property
     def is_always_inline(self):
         """
         True if always inline
         """
-        return self._inline == 'always'
+        return self._inline == "always"
 
     @property
     def has_cost_model(self):

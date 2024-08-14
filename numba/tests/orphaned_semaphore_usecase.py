@@ -5,7 +5,7 @@
 
 import multiprocessing as mp
 
-import numba # noqa, deliberately unused, here to test import is safe
+import numba  # noqa, deliberately unused, here to test import is safe
 
 
 def w():
@@ -18,7 +18,7 @@ def main():
     [p.join() for p in ps]
 
 
-if __name__ == '__main__':
-    p = mp.get_context('spawn').Process(target=main)
+if __name__ == "__main__":
+    p = mp.get_context("spawn").Process(target=main)
     p.start()
     p.join()

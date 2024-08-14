@@ -19,7 +19,7 @@ class TestParallelLowWorkCount(unittest.TestCase):
 
     def test_low_workcount(self):
         # build parallel native code ufunc
-        pv = Vectorize(vector_add, target='parallel')
+        pv = Vectorize(vector_add, target="parallel")
         for ty in (int32, uint32, float32, float64):
             pv.add(ty(ty, ty))
         para_ufunc = pv.build_ufunc()
@@ -29,7 +29,7 @@ class TestParallelLowWorkCount(unittest.TestCase):
 
         # test it out
         def test(ty):
-            data = np.arange(1).astype(ty) # just one item
+            data = np.arange(1).astype(ty)  # just one item
             result = para_ufunc(data, data)
             gold = np_ufunc(data, data)
             np.testing.assert_allclose(gold, result)
@@ -40,5 +40,5 @@ class TestParallelLowWorkCount(unittest.TestCase):
         test(np.uint32)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -2,8 +2,8 @@ import unittest
 from numba import jit
 from numba.core import types
 
-enable_pyobj_flags = {'forceobj': True}
-no_pyobj_flags = {'nopython': True}
+enable_pyobj_flags = {"forceobj": True}
+no_pyobj_flags = {"nopython": True}
 
 
 def isnan(x):
@@ -20,18 +20,18 @@ class TestNaN(unittest.TestCase):
         pyfunc = isnan
         cfunc = jit((types.float64,), **flags)(pyfunc)
 
-        self.assertTrue(cfunc(float('nan')))
+        self.assertTrue(cfunc(float("nan")))
         self.assertFalse(cfunc(1.0))
 
         pyfunc = isequal
         cfunc = jit((types.float64,), **flags)(pyfunc)
 
-        self.assertFalse(cfunc(float('nan')))
+        self.assertFalse(cfunc(float("nan")))
         self.assertTrue(cfunc(1.0))
 
     def test_nans_npm(self):
         self.test_nans(flags=no_pyobj_flags)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

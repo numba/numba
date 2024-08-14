@@ -8,7 +8,7 @@ import unittest
 from numba.np import numpy_support
 from numba.tests.support import TestCase, skip_ppc64le_issue6465
 
-_FS = ('e', 'f')
+_FS = ("e", "f")
 
 
 def get_a(ary, i):
@@ -27,6 +27,7 @@ def make_getitem(item):
     # This also exercises constant lookup from a closure variable
     def get_xx(ary, i):
         return ary[i][item]
+
     return get_xx
 
 
@@ -35,9 +36,9 @@ def get_zero_a(ary, _unused):
     return ary[0].a
 
 
-getitem_a = make_getitem('a')
-getitem_b = make_getitem('b')
-getitem_c = make_getitem('c')
+getitem_a = make_getitem("a")
+getitem_b = make_getitem("b")
+getitem_c = make_getitem("c")
 getitem_0 = make_getitem(0)
 getitem_1 = make_getitem(1)
 getitem_2 = make_getitem(2)
@@ -64,12 +65,13 @@ def make_getitem_subarray(item):
     # This also exercises constant lookup from a closure variable
     def get_xx_subarray(ary, i):
         return ary[item][i]
+
     return get_xx_subarray
 
 
-getitem_a_subarray = make_getitem_subarray('a')
-getitem_b_subarray = make_getitem_subarray('b')
-getitem_c_subarray = make_getitem_subarray('c')
+getitem_a_subarray = make_getitem_subarray("a")
+getitem_b_subarray = make_getitem_subarray("b")
+getitem_c_subarray = make_getitem_subarray("c")
 
 
 def get_two_arrays_a(ary1, ary2, i):
@@ -103,12 +105,13 @@ def set_c(ary, i, v):
 def make_setitem(item):
     def set_xx(ary, i, v):
         ary[i][item] = v
+
     return set_xx
 
 
-setitem_a = make_setitem('a')
-setitem_b = make_setitem('b')
-setitem_c = make_setitem('c')
+setitem_a = make_setitem("a")
+setitem_b = make_setitem("b")
+setitem_c = make_setitem("c")
 setitem_0 = make_setitem(0)
 setitem_1 = make_setitem(1)
 setitem_2 = make_setitem(2)
@@ -130,12 +133,13 @@ def set_c_subarray(ary, i, v):
 def make_setitem_subarray(item):
     def set_xx_subarray(ary, i, v):
         ary[item][i] = v
+
     return set_xx_subarray
 
 
-setitem_a_subarray = make_setitem('a')
-setitem_b_subarray = make_setitem('b')
-setitem_c_subarray = make_setitem('c')
+setitem_a_subarray = make_setitem("a")
+setitem_b_subarray = make_setitem("b")
+setitem_c_subarray = make_setitem("c")
 
 
 def set_record(ary, i, j):
@@ -223,7 +227,7 @@ def record_write_full_array(rec):
 
 
 def record_write_full_array_alt(rec):
-    rec['j'][:, :] = np.ones((3, 2))
+    rec["j"][:, :] = np.ones((3, 2))
 
 
 def recarray_set_record(ary, rec):
@@ -236,7 +240,7 @@ def recarray_write_array_of_nestedarray_broadcast(ary):
 
 
 def record_setitem_array(rec_source, rec_dest):
-    rec_dest['j'] = rec_source['j']
+    rec_dest["j"] = rec_source["j"]
 
 
 def recarray_write_array_of_nestedarray(ary):
@@ -249,7 +253,7 @@ def recarray_getitem_return(ary):
 
 
 def recarray_getitem_field_return(ary):
-    return ary['h']
+    return ary["h"]
 
 
 def recarray_getitem_field_return2(ary):
@@ -269,19 +273,19 @@ def recarray_getitem_field_slice_2d(ary):
 
 
 def array_rec_getitem_field_slice_2d_0(rec):
-    return rec['j'][0]
+    return rec["j"][0]
 
 
 def array_getitem_field_slice_2d_0(ary):
-    return ary['j'][0][0]
+    return ary["j"][0][0]
 
 
 def array_rec_getitem_field_slice_2d_1(rec):
-    return rec['j'][1]
+    return rec["j"][1]
 
 
 def array_getitem_field_slice_2d_1(ary):
-    return ary['j'][1][0]
+    return ary["j"][1][0]
 
 
 def rec_getitem_range_slice_4d(rec):
@@ -309,15 +313,15 @@ def record_read_whole_array(ary):
 
 
 def record_read_2d_array00(ary):
-    return ary.j[0,0]
+    return ary.j[0, 0]
 
 
 def record_read_2d_array10(ary):
-    return ary.j[1,0]
+    return ary.j[1, 0]
 
 
 def record_read_2d_array01(ary):
-    return ary.j[0,1]
+    return ary.j[0, 1]
 
 
 def record_read_first_arr(ary):
@@ -349,13 +353,13 @@ def get_charseq_tuple(ary, i):
 
 
 def get_field1(rec):
-    fs = ('e', 'f')
+    fs = ("e", "f")
     f = fs[1]
     return rec[f]
 
 
 def get_field2(rec):
-    fs = ('e', 'f')
+    fs = ("e", "f")
     out = 0
     for f in literal_unroll(fs):
         out += rec[f]
@@ -375,14 +379,14 @@ def get_field4(rec):
 
 
 def set_field1(rec):
-    fs = ('e', 'f')
+    fs = ("e", "f")
     f = fs[1]
     rec[f] = 10
     return rec
 
 
 def set_field2(rec):
-    fs = ('e', 'f')
+    fs = ("e", "f")
     for f in literal_unroll(fs):
         rec[f] = 10
     return rec
@@ -401,46 +405,43 @@ def set_field4(rec):
 
 
 def set_field_slice(arr):
-    arr['k'][:] = 0.0
+    arr["k"][:] = 0.0
     return arr
 
 
 def assign_array_to_nested(dest):
     tmp = (np.arange(3) + 1).astype(np.int16)
-    dest['array1'] = tmp
+    dest["array1"] = tmp
 
 
 def assign_array_to_nested_2d(dest):
     tmp = (np.arange(6) + 1).astype(np.int16).reshape((3, 2))
-    dest['array2'] = tmp
+    dest["array2"] = tmp
 
 
-recordtype = np.dtype([('a', np.float64),
-                       ('b', np.int16),
-                       ('c', np.complex64),
-                       ('d', (np.str_, 5))])
+recordtype = np.dtype(
+    [("a", np.float64), ("b", np.int16), ("c", np.complex64), ("d", (np.str_, 5))]
+)
 
-recordtype2 = np.dtype([('e', np.int32),
-                        ('f', np.float64)], align=True)
+recordtype2 = np.dtype([("e", np.int32), ("f", np.float64)], align=True)
 
-recordtype3 = np.dtype([('first', np.float32),
-                        ('second', np.float64)])
+recordtype3 = np.dtype([("first", np.float32), ("second", np.float64)])
 
-recordwitharray = np.dtype([('g', np.int32),
-                            ('h', np.float32, 2)])
+recordwitharray = np.dtype([("g", np.int32), ("h", np.float32, 2)])
 
-recordwith2darray = np.dtype([('i', np.int32),
-                              ('j', np.float32, (3, 2))])
+recordwith2darray = np.dtype([("i", np.int32), ("j", np.float32, (3, 2))])
 
-recordwith2arrays = np.dtype([('k', np.int32, (10, 20)),
-                              ('l', np.int32, (6, 12))])
+recordwith2arrays = np.dtype([("k", np.int32, (10, 20)), ("l", np.int32, (6, 12))])
 
-recordwithcharseq = np.dtype([('m', np.int32),
-                              ('n', 'S5')])
+recordwithcharseq = np.dtype([("m", np.int32), ("n", "S5")])
 
-recordwith4darray = np.dtype([('o', np.int64),
-                              ('p', np.float32, (3, 2, 5, 7)),
-                              ('q', 'U10'),])
+recordwith4darray = np.dtype(
+    [
+        ("o", np.int64),
+        ("p", np.float32, (3, 2, 5, 7)),
+        ("q", "U10"),
+    ]
+)
 
 nested_array1_dtype = np.dtype([("array1", np.int16, (3,))], align=True)
 
@@ -452,18 +453,20 @@ class TestRecordDtypeMakeCStruct(TestCase):
 
         class Ref(ctypes.Structure):
             _fields_ = [
-                ('apple', ctypes.c_int32),
-                ('orange', ctypes.c_float),
+                ("apple", ctypes.c_int32),
+                ("orange", ctypes.c_float),
             ]
 
-        ty = types.Record.make_c_struct([
-            ('apple', types.int32),
-            ('orange', types.float32),
-        ])
+        ty = types.Record.make_c_struct(
+            [
+                ("apple", types.int32),
+                ("orange", types.float32),
+            ]
+        )
         # Correct offsets
         self.assertEqual(len(ty), 2)
-        self.assertEqual(ty.offset('apple'), Ref.apple.offset)
-        self.assertEqual(ty.offset('orange'), Ref.orange.offset)
+        self.assertEqual(ty.offset("apple"), Ref.apple.offset)
+        self.assertEqual(ty.offset("orange"), Ref.orange.offset)
         # Correct size
         self.assertEqual(ty.size, ctypes.sizeof(Ref))
         # Is aligned
@@ -474,21 +477,23 @@ class TestRecordDtypeMakeCStruct(TestCase):
 
         class Ref(ctypes.Structure):
             _fields_ = [
-                ('apple', ctypes.c_int32),
-                ('mango', ctypes.c_int8),
-                ('orange', ctypes.c_float),
+                ("apple", ctypes.c_int32),
+                ("mango", ctypes.c_int8),
+                ("orange", ctypes.c_float),
             ]
 
-        ty = types.Record.make_c_struct([
-            ('apple', types.int32),
-            ('mango', types.int8),
-            ('orange', types.float32),
-        ])
+        ty = types.Record.make_c_struct(
+            [
+                ("apple", types.int32),
+                ("mango", types.int8),
+                ("orange", types.float32),
+            ]
+        )
         # Correct offsets
         self.assertEqual(len(ty), 3)
-        self.assertEqual(ty.offset('apple'), Ref.apple.offset)
-        self.assertEqual(ty.offset('mango'), Ref.mango.offset)
-        self.assertEqual(ty.offset('orange'), Ref.orange.offset)
+        self.assertEqual(ty.offset("apple"), Ref.apple.offset)
+        self.assertEqual(ty.offset("mango"), Ref.mango.offset)
+        self.assertEqual(ty.offset("orange"), Ref.orange.offset)
         # Correct size
         self.assertEqual(ty.size, ctypes.sizeof(Ref))
         # Is aligned
@@ -498,24 +503,26 @@ class TestRecordDtypeMakeCStruct(TestCase):
     def test_complex_struct(self):
         class Complex(ctypes.Structure):
             _fields_ = [
-                ('real', ctypes.c_double),
-                ('imag', ctypes.c_double),
+                ("real", ctypes.c_double),
+                ("imag", ctypes.c_double),
             ]
 
         class Ref(ctypes.Structure):
             _fields_ = [
-                ('apple', ctypes.c_int32),
-                ('mango', Complex),
+                ("apple", ctypes.c_int32),
+                ("mango", Complex),
             ]
 
-        ty = types.Record.make_c_struct([
-            ('apple', types.intc),
-            ('mango', types.complex128),
-        ])
+        ty = types.Record.make_c_struct(
+            [
+                ("apple", types.intc),
+                ("mango", types.complex128),
+            ]
+        )
         # Correct offsets
         self.assertEqual(len(ty), 2)
-        self.assertEqual(ty.offset('apple'), Ref.apple.offset)
-        self.assertEqual(ty.offset('mango'), Ref.mango.offset)
+        self.assertEqual(ty.offset("apple"), Ref.apple.offset)
+        self.assertEqual(ty.offset("mango"), Ref.mango.offset)
         # Correct size
         self.assertEqual(ty.size, ctypes.sizeof(Ref))
         # Is aligned?
@@ -528,9 +535,11 @@ class TestRecordDtypeMakeCStruct(TestCase):
 
         # Make an array that is longer than the array object structure.
         data = np.arange(27 * 2, dtype=np.float64).reshape(27, 2)
-        recty = types.Record.make_c_struct([
-            ('data', types.NestedArray(dtype=types.float64, shape=data.shape)),
-        ])
+        recty = types.Record.make_c_struct(
+            [
+                ("data", types.NestedArray(dtype=types.float64, shape=data.shape)),
+            ]
+        )
         arr = np.array((data,), dtype=recty.dtype)
         # unpack the nestedarray as a normal array
         [extracted_array] = arr.tolist()
@@ -541,12 +550,12 @@ class TestRecordDtypeMakeCStruct(TestCase):
 class TestRecordDtype(TestCase):
 
     def _createSampleArrays(self):
-        '''
+        """
         Set up the data structures to be used with the Numpy and Numba
         versions of functions.
 
         In this case, both accept recarrays.
-        '''
+        """
         self.refsample1d = np.recarray(3, dtype=recordtype)
         self.refsample1d2 = np.recarray(3, dtype=recordtype2)
         self.refsample1d3 = np.recarray(3, dtype=recordtype)
@@ -562,46 +571,45 @@ class TestRecordDtype(TestCase):
         for ary in (self.refsample1d, self.nbsample1d):
             for i in range(ary.size):
                 x = i + 1
-                ary[i]['a'] = x / 2
-                ary[i]['b'] = x
-                ary[i]['c'] = x * 1j
-                ary[i]['d'] = "%d" % x
+                ary[i]["a"] = x / 2
+                ary[i]["b"] = x
+                ary[i]["c"] = x * 1j
+                ary[i]["d"] = "%d" % x
 
         for ary2 in (self.refsample1d2, self.nbsample1d2):
             for i in range(ary2.size):
                 x = i + 5
-                ary2[i]['e'] = x
-                ary2[i]['f'] = x / 2
+                ary2[i]["e"] = x
+                ary2[i]["f"] = x / 2
 
         for ary3 in (self.refsample1d3, self.nbsample1d3):
             for i in range(ary3.size):
                 x = i + 10
-                ary3[i]['a'] = x / 2
-                ary3[i]['b'] = x
-                ary3[i]['c'] = x * 1j
-                ary3[i]['d'] = "%d" % x
+                ary3[i]["a"] = x / 2
+                ary3[i]["b"] = x
+                ary3[i]["c"] = x * 1j
+                ary3[i]["d"] = "%d" % x
 
     def get_cfunc(self, pyfunc, argspec):
         return njit(argspec)(pyfunc)
 
     def test_from_dtype(self):
         rec = numpy_support.from_dtype(recordtype)
-        self.assertEqual(rec.typeof('a'), types.float64)
-        self.assertEqual(rec.typeof('b'), types.int16)
-        self.assertEqual(rec.typeof('c'), types.complex64)
-        self.assertEqual(rec.typeof('d'), types.UnicodeCharSeq(5))
-        self.assertEqual(rec.offset('a'), recordtype.fields['a'][1])
-        self.assertEqual(rec.offset('b'), recordtype.fields['b'][1])
-        self.assertEqual(rec.offset('c'), recordtype.fields['c'][1])
-        self.assertEqual(rec.offset('d'), recordtype.fields['d'][1])
+        self.assertEqual(rec.typeof("a"), types.float64)
+        self.assertEqual(rec.typeof("b"), types.int16)
+        self.assertEqual(rec.typeof("c"), types.complex64)
+        self.assertEqual(rec.typeof("d"), types.UnicodeCharSeq(5))
+        self.assertEqual(rec.offset("a"), recordtype.fields["a"][1])
+        self.assertEqual(rec.offset("b"), recordtype.fields["b"][1])
+        self.assertEqual(rec.offset("c"), recordtype.fields["c"][1])
+        self.assertEqual(rec.offset("d"), recordtype.fields["d"][1])
         self.assertEqual(recordtype.itemsize, rec.size)
 
     def _test_get_equal(self, pyfunc):
         rec = numpy_support.from_dtype(recordtype)
         cfunc = self.get_cfunc(pyfunc, (rec[:], types.intp))
         for i in range(self.refsample1d.size):
-            self.assertEqual(pyfunc(self.refsample1d, i),
-                             cfunc(self.nbsample1d, i))
+            self.assertEqual(pyfunc(self.refsample1d, i), cfunc(self.nbsample1d, i))
 
     def test_get_a(self):
         self._test_get_equal(get_a)
@@ -637,19 +645,21 @@ class TestRecordDtype(TestCase):
         self.assertIn(msg, str(raises.exception))
 
     def _test_get_two_equal(self, pyfunc):
-        '''
+        """
         Test with two arrays of the same type
-        '''
+        """
         rec = numpy_support.from_dtype(recordtype)
         cfunc = self.get_cfunc(pyfunc, (rec[:], rec[:], types.intp))
         for i in range(self.refsample1d.size):
-            self.assertEqual(pyfunc(self.refsample1d, self.refsample1d3, i),
-                             cfunc(self.nbsample1d, self.nbsample1d3, i))
+            self.assertEqual(
+                pyfunc(self.refsample1d, self.refsample1d3, i),
+                cfunc(self.nbsample1d, self.nbsample1d3, i),
+            )
 
     def test_two_distinct_arrays(self):
-        '''
+        """
         Test with two arrays of distinct record types
-        '''
+        """
         pyfunc = get_two_arrays_distinct
         rec1 = numpy_support.from_dtype(recordtype)
         rec2 = numpy_support.from_dtype(recordtype2)
@@ -657,7 +667,7 @@ class TestRecordDtype(TestCase):
         for i in range(self.refsample1d.size):
             pres = pyfunc(self.refsample1d, self.refsample1d2, i)
             cres = cfunc(self.nbsample1d, self.nbsample1d2, i)
-            self.assertEqual(pres,cres)
+            self.assertEqual(pres, cres)
 
     def test_get_two_a(self):
         self._test_get_two_equal(get_two_arrays_a)
@@ -686,7 +696,8 @@ class TestRecordDtype(TestCase):
         def check(pyfunc):
             self._test_set_equal(pyfunc, 3.1415, types.float64)
             # Test again to check if coercion works
-            self._test_set_equal(pyfunc, 3., types.float32)
+            self._test_set_equal(pyfunc, 3.0, types.float32)
+
         check(set_a)
         check(set_a_subarray)
         check(setitem_a)
@@ -697,6 +708,7 @@ class TestRecordDtype(TestCase):
             self._test_set_equal(pyfunc, 123, types.int32)
             # Test again to check if coercion works
             self._test_set_equal(pyfunc, 123, types.float64)
+
         check(set_b)
         check(set_b_subarray)
         check(setitem_b)
@@ -707,6 +719,7 @@ class TestRecordDtype(TestCase):
             self._test_set_equal(pyfunc, 43j, types.complex64)
             # Test again to check if coercion works
             self._test_set_equal(pyfunc, 43j, types.complex128)
+
         check(set_c)
         check(set_c_subarray)
         check(setitem_c)
@@ -716,7 +729,7 @@ class TestRecordDtype(TestCase):
         def check(pyfunc):
             self._test_set_equal(pyfunc, 3.1415, types.float64)
             # Test again to check if coercion works
-            self._test_set_equal(pyfunc, 3., types.float32)
+            self._test_set_equal(pyfunc, 3.0, types.float32)
 
         check(setitem_0)
         check(setitem_1)
@@ -753,7 +766,7 @@ class TestRecordDtype(TestCase):
 
         npval = self.refsample1d.copy()[0]
         nbval = self.nbsample1d.copy()[0]
-        attrs = 'abc'
+        attrs = "abc"
         valtypes = types.float64, types.int16, types.complex64
         values = 1.23, 12345, 123 + 456j
         # Check for potential leaks (issue #441)
@@ -765,11 +778,11 @@ class TestRecordDtype(TestCase):
                 # Test with a record as either the first argument or the second
                 # argument (issue #870)
                 if revargs:
-                    prefix = 'get_record_rev_'
+                    prefix = "get_record_rev_"
                     argtypes = (valtyp, nbrecord)
                     args = (val, nbval)
                 else:
-                    prefix = 'get_record_'
+                    prefix = "get_record_"
                     argtypes = (nbrecord, valtyp)
                     args = (nbval, val)
 
@@ -783,9 +796,10 @@ class TestRecordDtype(TestCase):
                     # On ARM, a LLVM misoptimization can produce buggy code,
                     # see https://llvm.org/bugs/show_bug.cgi?id=24669
                     import llvmlite.binding as ll
-                    if attr != 'c':
+
+                    if attr != "c":
                         raise
-                    triple = 'armv7l-unknown-linux-gnueabihf'
+                    triple = "armv7l-unknown-linux-gnueabihf"
                     if ll.get_default_triple() != triple:
                         raise
                     self.assertEqual(val, got)
@@ -800,33 +814,33 @@ class TestRecordDtype(TestCase):
         self._test_record_args(True)
 
     def test_two_records(self):
-        '''
+        """
         Testing the use of two scalar records of the same type
-        '''
+        """
         npval1 = self.refsample1d.copy()[0]
         npval2 = self.refsample1d.copy()[1]
         nbval1 = self.nbsample1d.copy()[0]
         nbval2 = self.nbsample1d.copy()[1]
-        attrs = 'abc'
+        attrs = "abc"
         valtypes = types.float64, types.int32, types.complex64
 
         for attr, valtyp in zip(attrs, valtypes):
             expected = getattr(npval1, attr) + getattr(npval2, attr)
 
             nbrecord = numpy_support.from_dtype(recordtype)
-            pyfunc = globals()['get_two_records_' + attr]
+            pyfunc = globals()["get_two_records_" + attr]
             cfunc = self.get_cfunc(pyfunc, (nbrecord, nbrecord))
 
             got = cfunc(nbval1, nbval2)
             self.assertEqual(expected, got)
 
     def test_two_distinct_records(self):
-        '''
+        """
         Testing the use of two scalar records of differing type
-        '''
+        """
         nbval1 = self.nbsample1d.copy()[0]
         nbval2 = self.refsample1d2.copy()[0]
-        expected = nbval1['a'] + nbval2['f']
+        expected = nbval1["a"] + nbval2["f"]
 
         nbrecord1 = numpy_support.from_dtype(recordtype)
         nbrecord2 = numpy_support.from_dtype(recordtype2)
@@ -842,7 +856,7 @@ class TestRecordDtype(TestCase):
         recty = numpy_support.from_dtype(recordtype)
         cfunc = self.get_cfunc(pyfunc, (recty[:], types.intp))
 
-        attrs = 'abc'
+        attrs = "abc"
         indices = [0, 1, 2]
         for index, attr in zip(indices, attrs):
             nbary = self.nbsample1d.copy()
@@ -863,18 +877,18 @@ class TestRecordDtype(TestCase):
 
         rec = numpy_support.from_dtype(recordtype3)
         transformed = mangle_type(rec)
-        self.assertNotIn('first', transformed)
-        self.assertNotIn('second', transformed)
+        self.assertNotIn("first", transformed)
+        self.assertNotIn("second", transformed)
         # len(transformed) is generally 10, but could be longer if a large
         # number of typecodes are in use. Checking <20 should provide enough
         # tolerance.
         self.assertLess(len(transformed), 20)
 
-        struct_arr = types.Array(rec, 1, 'C')
+        struct_arr = types.Array(rec, 1, "C")
         transformed = mangle_type(struct_arr)
-        self.assertIn('Array', transformed)
-        self.assertNotIn('first', transformed)
-        self.assertNotIn('second', transformed)
+        self.assertIn("Array", transformed)
+        self.assertNotIn("first", transformed)
+        self.assertNotIn("second", transformed)
         # Length is usually 50 - 5 chars tolerance as above.
         self.assertLess(len(transformed), 50)
 
@@ -886,8 +900,8 @@ class TestRecordDtype(TestCase):
 
         nbrecord = numpy_support.from_dtype(recordwith2arrays)
         rec = np.recarray(1, dtype=recordwith2arrays)[0]
-        rec.k[:] = np.arange(200).reshape(10,20)
-        rec.l[:] = np.arange(72).reshape(6,12)
+        rec.k[:] = np.arange(200).reshape(10, 20)
+        rec.l[:] = np.arange(72).reshape(6, 12)
 
         pyfunc = record_read_first_arr
         cfunc = self.get_cfunc(pyfunc, (nbrecord,))
@@ -903,8 +917,14 @@ class TestRecordDtype(TestCase):
 
     def test_structure_dtype_with_titles(self):
         # the following is the definition of int4 vector type from pyopencl
-        vecint4 = np.dtype([(('x', 's0'), 'i4'), (('y', 's1'), 'i4'),
-                            (('z', 's2'), 'i4'), (('w', 's3'), 'i4')])
+        vecint4 = np.dtype(
+            [
+                (("x", "s0"), "i4"),
+                (("y", "s1"), "i4"),
+                (("z", "s2"), "i4"),
+                (("w", "s3"), "i4"),
+            ]
+        )
         nbtype = numpy_support.from_dtype(vecint4)
         self.assertEqual(len(nbtype.fields), len(vecint4.fields))
 
@@ -913,17 +933,17 @@ class TestRecordDtype(TestCase):
         def pyfunc(a):
             for i in range(a.size):
                 j = i + 1
-                a[i]['s0'] = j * 2
-                a[i]['x'] += -1
+                a[i]["s0"] = j * 2
+                a[i]["x"] += -1
 
-                a[i]['s1'] = j * 3
-                a[i]['y'] += -2
+                a[i]["s1"] = j * 3
+                a[i]["y"] += -2
 
-                a[i]['s2'] = j * 4
-                a[i]['z'] += -3
+                a[i]["s2"] = j * 4
+                a[i]["z"] += -3
 
-                a[i]['s3'] = j * 5
-                a[i]['w'] += -4
+                a[i]["s3"] = j * 5
+                a[i]["w"] += -4
 
             return a
 
@@ -933,11 +953,11 @@ class TestRecordDtype(TestCase):
         np.testing.assert_equal(expect, got)
 
     def test_record_dtype_with_titles_roundtrip(self):
-        recdtype = np.dtype([(("title a", 'a'), np.float64), ('b', np.float64)])
+        recdtype = np.dtype([(("title a", "a"), np.float64), ("b", np.float64)])
         nbtype = numpy_support.from_dtype(recdtype)
-        self.assertTrue(nbtype.is_title('title a'))
-        self.assertFalse(nbtype.is_title('a'))
-        self.assertFalse(nbtype.is_title('b'))
+        self.assertTrue(nbtype.is_title("title a"))
+        self.assertFalse(nbtype.is_title("a"))
+        self.assertFalse(nbtype.is_title("b"))
         got = numpy_support.as_dtype(nbtype)
         self.assertTrue(got, recdtype)
 
@@ -947,30 +967,30 @@ def _get_cfunc_nopython(pyfunc, argspec):
 
 
 class TestRecordDtypeWithDispatcher(TestRecordDtype):
-    '''
+    """
     Same as TestRecordDtype, but stressing the Dispatcher's type dispatch
     mechanism (issue #384). Note that this does not stress caching of ndarray
     typecodes as the path that uses the cache is not taken with recarrays.
-    '''
+    """
 
     def get_cfunc(self, pyfunc, argspec):
         return _get_cfunc_nopython(pyfunc, argspec)
 
 
 class TestRecordDtypeWithStructArrays(TestRecordDtype):
-    '''
+    """
     Same as TestRecordDtype, but using structured arrays instead of recarrays.
-    '''
+    """
 
     def _createSampleArrays(self):
-        '''
+        """
         Two different versions of the data structures are required because Numba
         supports attribute access on structured arrays, whereas Numpy does not.
 
         However, the semantics of recarrays and structured arrays are equivalent
         for these tests so Numpy with recarrays can be used for comparison with
         Numba using structured arrays.
-        '''
+        """
 
         self.refsample1d = np.recarray(3, dtype=recordtype)
         self.refsample1d2 = np.recarray(3, dtype=recordtype2)
@@ -981,12 +1001,14 @@ class TestRecordDtypeWithStructArrays(TestRecordDtype):
         self.nbsample1d3 = np.zeros(3, dtype=recordtype)
 
 
-class TestRecordDtypeWithStructArraysAndDispatcher(TestRecordDtypeWithStructArrays):    # noqa: E501
-    '''
+class TestRecordDtypeWithStructArraysAndDispatcher(
+    TestRecordDtypeWithStructArrays
+):  # noqa: E501
+    """
     Same as TestRecordDtypeWithStructArrays, stressing the Dispatcher's type
     dispatch mechanism (issue #384) and caching of ndarray typecodes for void
     types (which occur in structured arrays).
-    '''
+    """
 
     def get_cfunc(self, pyfunc, argspec):
         return _get_cfunc_nopython(pyfunc, argspec)
@@ -1001,11 +1023,11 @@ class TestRecordDtypeWithCharSeq(TestCase):
 
     def _fillData(self, arr):
         for i in range(arr.size):
-            arr[i]['m'] = i
+            arr[i]["m"] = i
 
-        arr[0]['n'] = 'abcde'  # no null-byte
-        arr[1]['n'] = 'xyz'  # null-byte
-        arr[2]['n'] = 'u\x00v\x00\x00'  # null-byte at the middle and at the end
+        arr[0]["n"] = "abcde"  # no null-byte
+        arr[1]["n"] = "xyz"  # null-byte
+        arr[2]["n"] = "u\x00v\x00\x00"  # null-byte at the middle and at the end
 
     def setUp(self):
         self._createSampleaArray()
@@ -1030,7 +1052,7 @@ class TestRecordDtypeWithCharSeq(TestCase):
         def pyfunc(arr, i):
             return arr[i].n
 
-        identity = njit(lambda x: x)   # an identity function
+        identity = njit(lambda x: x)  # an identity function
 
         @jit(nopython=True)
         def cfunc(arr, i):
@@ -1048,7 +1070,7 @@ class TestRecordDtypeWithCharSeq(TestCase):
 
         # compile
         rectype = numpy_support.from_dtype(recordwithcharseq)
-        sig = (rectype[::1], types.intp, rectype.typeof('n'))
+        sig = (rectype[::1], types.intp, rectype.typeof("n"))
         cfunc = njit(sig)(pyfunc).overloads[sig].entry_point
 
         for i in range(self.refsample1d.size):
@@ -1063,17 +1085,15 @@ class TestRecordDtypeWithCharSeq(TestCase):
         pyfunc = set_charseq
         # compile
         rectype = numpy_support.from_dtype(recordwithcharseq)
-        sig = (rectype[::1], types.intp, rectype.typeof('n'))
+        sig = (rectype[::1], types.intp, rectype.typeof("n"))
         cfunc = njit(sig)(pyfunc).overloads[sig].entry_point
 
         cs_near_overflow = "abcde"
 
-        self.assertEqual(len(cs_near_overflow),
-                         recordwithcharseq['n'].itemsize)
+        self.assertEqual(len(cs_near_overflow), recordwithcharseq["n"].itemsize)
 
         cfunc(self.nbsample1d, 0, cs_near_overflow)
-        self.assertEqual(self.nbsample1d[0]['n'].decode('ascii'),
-                         cs_near_overflow)
+        self.assertEqual(self.nbsample1d[0]["n"].decode("ascii"), cs_near_overflow)
         # Check that we didn't overwrite
         np.testing.assert_equal(self.refsample1d[1:], self.nbsample1d[1:])
 
@@ -1083,7 +1103,7 @@ class TestRecordDtypeWithCharSeq(TestCase):
         pyfunc = set_charseq
         # compile
         rectype = numpy_support.from_dtype(recordwithcharseq)
-        sig = (rectype[::1], types.intp, rectype.typeof('n'))
+        sig = (rectype[::1], types.intp, rectype.typeof("n"))
         cfunc = njit(sig)(pyfunc).overloads[sig].entry_point
 
         cs_overflowed = "abcdef"
@@ -1091,8 +1111,7 @@ class TestRecordDtypeWithCharSeq(TestCase):
         pyfunc(self.refsample1d, 1, cs_overflowed)
         cfunc(self.nbsample1d, 1, cs_overflowed)
         np.testing.assert_equal(self.refsample1d, self.nbsample1d)
-        self.assertEqual(self.refsample1d[1].n,
-                         cs_overflowed[:-1].encode("ascii"))
+        self.assertEqual(self.refsample1d[1].n, cs_overflowed[:-1].encode("ascii"))
 
     def test_return_charseq_tuple(self):
         pyfunc = get_charseq_tuple
@@ -1146,7 +1165,7 @@ class TestRecordArrayGetItem(TestCase):
         # It tests getitem behaviour but also tests that literal_unroll accepts
         # a free variable tuple as argument
 
-        fs = ('e', 'f')
+        fs = ("e", "f")
         arr = np.array([1, 2], dtype=recordtype2)
 
         def get_field(rec):
@@ -1163,12 +1182,14 @@ class TestRecordArrayGetItem(TestCase):
         jitfunc = njit(get_field1)
         with self.assertRaises(TypingError) as raises:
             jitfunc(arr[0])
-        self.assertIn("Field 'f' was not found in record with fields "
-                      "('first', 'second')", str(raises.exception))
+        self.assertIn(
+            "Field 'f' was not found in record with fields " "('first', 'second')",
+            str(raises.exception),
+        )
 
     def test_literal_unroll_dynamic_to_static_getitem_transform(self):
         # See issue #6634
-        keys = ('a', 'b', 'c')
+        keys = ("a", "b", "c")
         n = 5
 
         def pyfunc(rec):
@@ -1179,7 +1200,13 @@ class TestRecordArrayGetItem(TestCase):
 
         dt = np.float64
         ldd = [np.arange(dt(n)) for x in keys]
-        ldk = [(x, np.float64,) for x in keys]
+        ldk = [
+            (
+                x,
+                np.float64,
+            )
+            for x in keys
+        ]
         rec = np.rec.fromarrays(ldd, dtype=ldk)
 
         expected = pyfunc(rec)
@@ -1191,6 +1218,7 @@ class TestRecordArraySetItem(TestCase):
     """
     Test setitem when index is Literal[str]
     """
+
     def test_literal_variable(self):
         arr = np.array([1, 2], dtype=recordtype2)
         pyfunc = set_field1
@@ -1247,20 +1275,22 @@ class TestRecordArraySetItem(TestCase):
         jitfunc = njit(set_field1)
         with self.assertRaises(TypingError) as raises:
             jitfunc(arr[0])
-        self.assertIn("Field 'f' was not found in record with fields "
-                      "('first', 'second')", str(raises.exception))
+        self.assertIn(
+            "Field 'f' was not found in record with fields " "('first', 'second')",
+            str(raises.exception),
+        )
 
 
 class TestSubtyping(TestCase):
     def setUp(self):
         self.value = 2
-        a_dtype = np.dtype([('a', 'f8')])
-        ab_dtype = np.dtype([('a', 'f8'), ('b', 'f8')])
+        a_dtype = np.dtype([("a", "f8")])
+        ab_dtype = np.dtype([("a", "f8"), ("b", "f8")])
         self.a_rec1 = np.array([1], dtype=a_dtype)[0]
         self.a_rec2 = np.array([2], dtype=a_dtype)[0]
         self.ab_rec1 = np.array([(self.value, 3)], dtype=ab_dtype)[0]
         self.ab_rec2 = np.array([(self.value + 1, 3)], dtype=ab_dtype)[0]
-        self.func = lambda rec: rec['a']
+        self.func = lambda rec: rec["a"]
 
     def test_common_field(self):
         # Test that subtypes do not require new compilations
@@ -1268,7 +1298,7 @@ class TestSubtyping(TestCase):
         njit_sig = njit(types.float64(typeof(self.a_rec1)))
         functions = [
             njit(self.func),  # jitted function with open njit
-            njit_sig(self.func)  # jitted fc with closed signature
+            njit_sig(self.func),  # jitted fc with closed signature
         ]
 
         for fc in functions:
@@ -1283,7 +1313,7 @@ class TestSubtyping(TestCase):
         def foo(rec_tup):
             x = 0
             for i in range(len(rec_tup)):
-                x += rec_tup[i]['a']
+                x += rec_tup[i]["a"]
             return x
 
         foo((self.a_rec1, self.a_rec2))
@@ -1294,14 +1324,14 @@ class TestSubtyping(TestCase):
     def test_array_field(self):
         # Tests subtyping with array fields
 
-        rec1 = np.empty(1, dtype=[('a', 'f8', (4,))])[0]
-        rec1['a'][0] = 1
-        rec2 = np.empty(1, dtype=[('a', 'f8', (4,)), ('b', 'f8')])[0]
-        rec2['a'][0] = self.value
+        rec1 = np.empty(1, dtype=[("a", "f8", (4,))])[0]
+        rec1["a"][0] = 1
+        rec2 = np.empty(1, dtype=[("a", "f8", (4,)), ("b", "f8")])[0]
+        rec2["a"][0] = self.value
 
         @njit
         def foo(rec):
-            return rec['a'][0]
+            return rec["a"][0]
 
         foo(rec1)
         foo.disable_compile()
@@ -1312,19 +1342,20 @@ class TestSubtyping(TestCase):
         # test that conversion rules don't allow subtypes with different field
         # names
 
-        c_dtype = np.dtype([('c', 'f8')])
+        c_dtype = np.dtype([("c", "f8")])
         c_rec1 = np.array([1], dtype=c_dtype)[0]
 
         @njit
         def foo(rec):
-            return rec['c']
+            return rec["c"]
 
         foo(c_rec1)
         foo.disable_compile()
         with self.assertRaises(TypeError) as err:
             foo(self.a_rec1)
-            self.assertIn("No matching definition for argument type(s) Record",
-                          str(err.exception))
+            self.assertIn(
+                "No matching definition for argument type(s) Record", str(err.exception)
+            )
 
     def test_no_subtyping2(self):
         # test that conversion rules don't allow smaller records as subtypes
@@ -1334,21 +1365,23 @@ class TestSubtyping(TestCase):
         jit_fc.disable_compile()
         with self.assertRaises(TypeError) as err:
             jit_fc(self.a_rec1)
-            self.assertIn("No matching definition for argument type(s) Record",
-                          str(err.exception))
+            self.assertIn(
+                "No matching definition for argument type(s) Record", str(err.exception)
+            )
 
     def test_no_subtyping3(self):
         # test that conversion rules don't allow records with fields with same
         # name but incompatible type
 
-        other_a_rec = np.array(['a'], dtype=np.dtype([('a', 'U25')]))[0]
+        other_a_rec = np.array(["a"], dtype=np.dtype([("a", "U25")]))[0]
         jit_fc = njit(self.func)
         jit_fc(self.a_rec1)
         jit_fc.disable_compile()
         with self.assertRaises(TypeError) as err:
             jit_fc(other_a_rec)
-            self.assertIn("No matching definition for argument type(s) Record",
-                          str(err.exception))
+            self.assertIn(
+                "No matching definition for argument type(s) Record", str(err.exception)
+            )
 
     def test_branch_pruning(self):
         # test subtyping behaviour in a case with a dead branch
@@ -1356,11 +1389,11 @@ class TestSubtyping(TestCase):
         @njit
         def foo(rec, flag=None):
             n = 0
-            n += rec['a']
+            n += rec["a"]
             if flag is not None:
                 # Dead branch pruning will hide this branch
-                n += rec['b']
-                rec['b'] += 20
+                n += rec["b"]
+                rec["b"] += 20
             return n
 
         self.assertEqual(foo(self.a_rec1), self.a_rec1[0])
@@ -1405,8 +1438,9 @@ class TestNestedArrays(TestCase):
 
         expected = np.recarray(1, dtype=recordwith2darray)
         expected[0].i = 3
-        expected[0].j[:] = np.asarray([5.0, 6.0, 7.0, 8.0, 9.0, 10.0],
-                                      np.float32).reshape(3, 2)
+        expected[0].j[:] = np.asarray(
+            [5.0, 6.0, 7.0, 8.0, 9.0, 10.0], np.float32
+        ).reshape(3, 2)
         np.testing.assert_equal(expected, nbval)
 
     def test_record_read_array(self):
@@ -1444,8 +1478,9 @@ class TestNestedArrays(TestCase):
         # Test reading from a 2D array within a structured type
 
         nbval = np.recarray(1, dtype=recordwith2darray)
-        nbval[0].j = np.asarray([1.5, 2.5, 3.5, 4.5, 5.5, 6.5],
-                                np.float32).reshape(3, 2)
+        nbval[0].j = np.asarray([1.5, 2.5, 3.5, 4.5, 5.5, 6.5], np.float32).reshape(
+            3, 2
+        )
         nbrecord = numpy_support.from_dtype(recordwith2darray)
         cfunc = self.get_cfunc(record_read_2d_array00, (nbrecord,))
         res = cfunc(nbval[0])
@@ -1494,8 +1529,8 @@ class TestNestedArrays(TestCase):
         nbarr = np.zeros(2, dtype=recordwith2darray).view(np.recarray)
         ty = typeof(nbarr)
         for pyfunc in (
-                recarray_write_array_of_nestedarray_broadcast,
-                recarray_write_array_of_nestedarray,
+            recarray_write_array_of_nestedarray_broadcast,
+            recarray_write_array_of_nestedarray,
         ):
             arr_expected = pyfunc(arr)
             cfunc = self.get_cfunc(pyfunc, (ty,))
@@ -1505,12 +1540,15 @@ class TestNestedArrays(TestCase):
     def test_setitem(self):
         def gen():
             nbarr1 = np.recarray(1, dtype=recordwith2darray)
-            nbarr1[0] = np.array([(1, ((1, 2), (4, 5), (2, 3)))],
-                                 dtype=recordwith2darray)[0]
+            nbarr1[0] = np.array(
+                [(1, ((1, 2), (4, 5), (2, 3)))], dtype=recordwith2darray
+            )[0]
             nbarr2 = np.recarray(1, dtype=recordwith2darray)
-            nbarr2[0] = np.array([(10, ((10, 20), (40, 50), (20, 30)))],
-                                 dtype=recordwith2darray)[0]
+            nbarr2[0] = np.array(
+                [(10, ((10, 20), (40, 50), (20, 30)))], dtype=recordwith2darray
+            )[0]
             return nbarr1[0], nbarr2[0]
+
         pyfunc = record_setitem_array
         pyargs = gen()
         pyfunc(*pyargs)
@@ -1554,8 +1592,7 @@ class TestNestedArrays(TestCase):
         # return the first item when passing a record
 
         nbarr = np.recarray(2, dtype=recordwith2darray)
-        nbarr[0] = np.array([(1, ((1, 2), (4, 5), (2, 3)))],
-                            dtype=recordwith2darray)[0]
+        nbarr[0] = np.array([(1, ((1, 2), (4, 5), (2, 3)))], dtype=recordwith2darray)[0]
         for arg in [nbarr, nbarr[0]]:
             ty = typeof(arg)
             pyfunc = recarray_getitem_field_return2_2d
@@ -1573,8 +1610,10 @@ class TestNestedArrays(TestCase):
         nbarr = np.recarray(2, dtype=recordwitharray)
         nbarr[0] = np.array([(1, (2, 3))], dtype=recordwitharray)[0]
         for arg in [nbarr, nbarr[0]]:
-            for pyfunc in [recarray_getitem_field_return,
-                           recarray_getitem_field_return2]:
+            for pyfunc in [
+                recarray_getitem_field_return,
+                recarray_getitem_field_return2,
+            ]:
                 ty = typeof(arg)
                 arr_expected = pyfunc(arg)
                 cfunc = self.get_cfunc(pyfunc, (ty,))
@@ -1595,8 +1634,7 @@ class TestNestedArrays(TestCase):
     def test_slice_2d_array(self):
         # test slicing the nestedarray inside a record
         nbarr = np.recarray(2, dtype=recordwith2darray)
-        nbarr[0] = np.array([(1, ((1, 2), (4, 5), (2, 3)))],
-                            dtype=recordwith2darray)[0]
+        nbarr[0] = np.array([(1, ((1, 2), (4, 5), (2, 3)))], dtype=recordwith2darray)[0]
 
         funcs = rec_getitem_field_slice_2d, recarray_getitem_field_slice_2d
         for arg, pyfunc in zip([nbarr[0], nbarr], funcs):
@@ -1609,8 +1647,7 @@ class TestNestedArrays(TestCase):
     def test_shape(self):
         # test getting the shape of a nestedarray inside a record
         nbarr = np.recarray(2, dtype=recordwith2darray)
-        nbarr[0] = np.array([(1, ((1, 2), (4, 5), (2, 3)))],
-                            dtype=recordwith2darray)[0]
+        nbarr[0] = np.array([(1, ((1, 2), (4, 5), (2, 3)))], dtype=recordwith2darray)[0]
 
         arg = nbarr[0]
         pyfunc = get_shape
@@ -1623,8 +1660,7 @@ class TestNestedArrays(TestCase):
     def test_size(self):
         # test getting the size of a nestedarray inside a record
         nbarr = np.recarray(2, dtype=recordwith2darray)
-        nbarr[0] = np.array([(1, ((1, 2), (4, 5), (2, 3)))],
-                            dtype=recordwith2darray)[0]
+        nbarr[0] = np.array([(1, ((1, 2), (4, 5), (2, 3)))], dtype=recordwith2darray)[0]
 
         arg = nbarr[0]
         pyfunc = get_size
@@ -1636,12 +1672,12 @@ class TestNestedArrays(TestCase):
 
     def test_corner_slice(self):
         # testing corner cases while slicing nested arrays
-        nbarr = np.recarray((1, 2, 3, 5, 7, 13, 17), dtype=recordwith4darray,
-                            order='F')
+        nbarr = np.recarray((1, 2, 3, 5, 7, 13, 17), dtype=recordwith4darray, order="F")
         np.random.seed(1)
         for index, _ in np.ndenumerate(nbarr):
-            nbarr[index].p = np.random.randint(0, 1000, (3, 2, 5, 7),
-                                               np.int64).astype(np.float32)
+            nbarr[index].p = np.random.randint(0, 1000, (3, 2, 5, 7), np.int64).astype(
+                np.float32
+            )
 
         funcs = rec_getitem_range_slice_4d, recarray_getitem_range_slice_4d
         for arg, pyfunc in zip([nbarr[0], nbarr], funcs):
@@ -1653,17 +1689,17 @@ class TestNestedArrays(TestCase):
 
     def test_broadcast_slice(self):
         nbarr = np.recarray(2, dtype=recordwith2darray)
-        nbarr[0] = np.array([(1, ((1, 2), (4, 5), (2, 3)))],
-                            dtype=recordwith2darray)[0]
-        nbarr[1] = np.array([(10, ((10, 20), (40, 50), (20, 30)))],
-                            dtype=recordwith2darray)[0]
+        nbarr[0] = np.array([(1, ((1, 2), (4, 5), (2, 3)))], dtype=recordwith2darray)[0]
+        nbarr[1] = np.array(
+            [(10, ((10, 20), (40, 50), (20, 30)))], dtype=recordwith2darray
+        )[0]
         nbarr = np.broadcast_to(nbarr, (3, 2))
 
         funcs = (
             array_rec_getitem_field_slice_2d_0,
             array_getitem_field_slice_2d_0,
             array_rec_getitem_field_slice_2d_1,
-            array_getitem_field_slice_2d_1
+            array_getitem_field_slice_2d_1,
         )
 
         for arg, pyfunc in zip([nbarr[0], nbarr, nbarr[1], nbarr], funcs):
@@ -1694,20 +1730,18 @@ class TestNestedArrays(TestCase):
         np.testing.assert_array_equal(expected, got)
 
     def test_issue_7693(self):
-        src_dtype = np.dtype([
-            ("user", np.float64),
-            ("array", np.int16, (3,))],
-            align=True)
+        src_dtype = np.dtype(
+            [("user", np.float64), ("array", np.int16, (3,))], align=True
+        )
 
-        dest_dtype = np.dtype([
-            ("user1", np.float64),
-            ("array1", np.int16, (3,))],
-            align=True)
+        dest_dtype = np.dtype(
+            [("user1", np.float64), ("array1", np.int16, (3,))], align=True
+        )
 
         @njit
         def copy(index, src, dest):
-            dest['user1'] = src[index]['user']
-            dest['array1'] = src[index]['array']
+            dest["user1"] = src[index]["user"]
+            dest["array1"] = src[index]["array"]
 
         source = np.zeros(2, dtype=src_dtype)
         got = np.zeros(2, dtype=dest_dtype)
@@ -1723,8 +1757,8 @@ class TestNestedArrays(TestCase):
         # Dimensions of nested arrays as a dtype are concatenated with the
         # dimensions of the array.
         nptype = np.dtype((np.float64, (4,)))
-        nbtype = types.Array(numpy_support.from_dtype(nptype), 2, 'C')
-        expected = types.Array(types.float64, 3, 'C')
+        nbtype = types.Array(numpy_support.from_dtype(nptype), 2, "C")
+        expected = types.Array(types.float64, 3, "C")
         self.assertEqual(nbtype, expected)
 
     def test_issue_1469_2(self):
@@ -1732,36 +1766,34 @@ class TestNestedArrays(TestCase):
         # In this example a 3D array of a 2D nested array of 2D nested arrays
         # results in a 7D type.
         nptype = np.dtype((np.dtype((np.float64, (5, 2))), (3, 6)))
-        nbtype = types.Array(numpy_support.from_dtype(nptype), 3, 'C')
-        expected = types.Array(types.float64, 7, 'C')
+        nbtype = types.Array(numpy_support.from_dtype(nptype), 3, "C")
+        expected = types.Array(types.float64, 7, "C")
         self.assertEqual(nbtype, expected)
 
     def test_issue_1469_3(self):
         # Nested arrays in record dtypes are accepted, but alignment is not
         # guaranteed.
-        nptype = np.dtype([('a', np.float64,(4,))])
-        nbtype = types.Array(numpy_support.from_dtype(nptype), 2, 'C')
+        nptype = np.dtype([("a", np.float64, (4,))])
+        nbtype = types.Array(numpy_support.from_dtype(nptype), 2, "C")
 
         # Manual construction of expected array of record type
         natype = types.NestedArray(types.float64, (4,))
-        fields = [('a', {'type': natype, 'offset': 0})]
+        fields = [("a", {"type": natype, "offset": 0})]
         rectype = types.Record(fields=fields, size=32, aligned=False)
-        expected = types.Array(rectype, 2, 'C', aligned=False)
+        expected = types.Array(rectype, 2, "C", aligned=False)
 
         self.assertEqual(nbtype, expected)
 
     def test_issue_3158_1(self):
         # A nested array dtype.
-        item = np.dtype([('some_field', np.int32)])
-        items = np.dtype([('items', item, 3)])
+        item = np.dtype([("some_field", np.int32)])
+        items = np.dtype([("items", item, 3)])
 
         @njit
         def fn(x):
             return x[0]
 
-        arr = np.asarray([([(0,), (1,), (2,)],),
-                          ([(3,), (4,), (5,)],)],
-                         dtype=items)
+        arr = np.asarray([([(0,), (1,), (2,)],), ([(3,), (4,), (5,)],)], dtype=items)
 
         expected = fn.py_func(arr)
         actual = fn(arr)
@@ -1770,22 +1802,26 @@ class TestNestedArrays(TestCase):
 
     def test_issue_3158_2(self):
         # A slightly more complex nested array dtype example.
-        dtype1 = np.dtype([('a', 'i8'), ('b', 'i4')])
+        dtype1 = np.dtype([("a", "i8"), ("b", "i4")])
         dtype2 = np.dtype((dtype1, (2, 2)))
-        dtype3 = np.dtype([('x', '?'), ('y', dtype2)])
+        dtype3 = np.dtype([("x", "?"), ("y", dtype2)])
 
         @njit
         def fn(arr):
             return arr[0]
 
-        arr = np.asarray([(False, [[(0, 1), (2, 3)], [(4, 5), (6, 7)]]),
-                          (True, [[(8, 9), (10, 11)], [(12, 13), (14, 15)]])],
-                         dtype=dtype3)
+        arr = np.asarray(
+            [
+                (False, [[(0, 1), (2, 3)], [(4, 5), (6, 7)]]),
+                (True, [[(8, 9), (10, 11)], [(12, 13), (14, 15)]]),
+            ],
+            dtype=dtype3,
+        )
         expected = fn.py_func(arr)
         actual = fn(arr)
 
         self.assertEqual(expected, actual)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -33,5 +33,5 @@ class TestCudaIDiv(CUDATestCase):
         self.assertTrue(np.all(y == 0.5))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -12,7 +12,7 @@ from numba.tests.enum_usecases import (
     Shape,
     Planet,
     RequestError,
-    IntEnumWithNegatives
+    IntEnumWithNegatives,
 )
 
 
@@ -23,7 +23,7 @@ class EnumTest(CUDATestCase):
         (Color.red, Color.green),
         (Planet.EARTH, Planet.EARTH),
         (Planet.VENUS, Planet.MARS),
-        (Shape.circle, IntEnumWithNegatives.two) # IntEnum, same value
+        (Shape.circle, IntEnumWithNegatives.two),  # IntEnum, same value
     ]
 
     def test_compare(self):
@@ -45,7 +45,7 @@ class EnumTest(CUDATestCase):
         def f(out):
             # Lookup of an enum member on its class
             out[0] = Color.red == Color.green
-            out[1] = Color['red'] == Color['green']
+            out[1] = Color["red"] == Color["green"]
 
         cuda_f = cuda.jit(f)
         got = np.zeros((2,), dtype=np.bool_)
@@ -106,16 +106,16 @@ class EnumTest(CUDATestCase):
     def test_vectorize(self):
         def f(x):
             if x != RequestError.not_found:
-                return RequestError['internal_error']
+                return RequestError["internal_error"]
             else:
                 return RequestError.dummy
 
-        cuda_func = vectorize("int64(int64)", target='cuda')(f)
+        cuda_func = vectorize("int64(int64)", target="cuda")(f)
         arr = np.array([2, 404, 500, 404], dtype=np.int64)
         expected = np.array([f(x) for x in arr], dtype=np.int64)
         got = cuda_func(arr)
         self.assertPreciseEqual(expected, got)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

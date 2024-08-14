@@ -8,14 +8,16 @@ from llvmlite import binding as llvm
 import unittest
 
 
-original = "call void @llvm.memset.p0i8.i64(" \
-           "i8* align 4 %arg.x.41, i8 0, i64 %0, i1 false)"
+original = (
+    "call void @llvm.memset.p0i8.i64(" "i8* align 4 %arg.x.41, i8 0, i64 %0, i1 false)"
+)
 
-missing_align = "call void @llvm.memset.p0i8.i64(" \
-                "i8* %arg.x.41, i8 0, i64 %0, i1 false)"
+missing_align = (
+    "call void @llvm.memset.p0i8.i64(" "i8* %arg.x.41, i8 0, i64 %0, i1 false)"
+)
 
 
-@skip_on_cudasim('libNVVM not supported in simulator')
+@skip_on_cudasim("libNVVM not supported in simulator")
 @unittest.skipIf(utils.MACHINE_BITS == 32, "CUDA not support for 32-bit")
 @unittest.skipIf(not nvvm.is_available(), "No libNVVM")
 class TestNvvmWithoutCuda(unittest.TestCase):
@@ -30,10 +32,9 @@ class TestNvvmWithoutCuda(unittest.TestCase):
         # NVVM that it cannot parse correctly
 
         # Create a module with a constant containing all 8-bit characters
-        c = ir.Constant(ir.ArrayType(ir.IntType(8), 256),
-                        bytearray(range(256)))
+        c = ir.Constant(ir.ArrayType(ir.IntType(8), 256), bytearray(range(256)))
         m = ir.Module()
-        m.triple = 'nvptx64-nvidia-cuda'
+        m.triple = "nvptx64-nvidia-cuda"
         nvvm.add_ir_version(m)
         gv = ir.GlobalVariable(m, c.type, "myconstant")
         gv.global_constant = True
@@ -46,9 +47,9 @@ class TestNvvmWithoutCuda(unittest.TestCase):
 
         # Ensure all characters appear in the generated constant array.
         elements = ", ".join([str(i) for i in range(256)])
-        myconstant = f"myconstant[256] = {{{elements}}}".encode('utf-8')
+        myconstant = f"myconstant[256] = {{{elements}}}".encode("utf-8")
         self.assertIn(myconstant, ptx)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

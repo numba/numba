@@ -12,11 +12,12 @@ class _MarkNrtCallVisitor(CallVisitor):
     """
     A pass to mark all NRT_incref and NRT_decref.
     """
+
     def __init__(self):
         self.marked = set()
 
     def visit_Call(self, instr):
-        if getattr(instr.callee, 'name', '') in _accepted_nrtfns:
+        if getattr(instr.callee, "name", "") in _accepted_nrtfns:
             self.marked.add(instr)
 
 
@@ -31,7 +32,7 @@ def _rewrite_function(function):
                 bb.instructions.remove(inst)
 
 
-_accepted_nrtfns = 'NRT_incref', 'NRT_decref'
+_accepted_nrtfns = "NRT_incref", "NRT_decref"
 
 
 def _legalize(module, dmm, fndesc):
@@ -53,7 +54,6 @@ def _legalize(module, dmm, fndesc):
         Valid input are any type that does not need refcount except Array.
         """
         return valid_output(ty) or isinstance(ty, types.Array)
-
 
     # Ensure no reference to function marked as
     # "numba_args_may_always_need_nrt"

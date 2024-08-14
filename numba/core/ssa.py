@@ -7,6 +7,7 @@ References:
   http://ssabook.gforge.inria.fr/latest/book.pdf
 - Choi et al. Incremental computation of static single assignment form.
 """
+
 import logging
 import operator
 import warnings
@@ -46,8 +47,7 @@ class _CacheListVars:
 
 
 def _run_ssa(blocks):
-    """Run SSA reconstruction on IR blocks of a function.
-    """
+    """Run SSA reconstruction on IR blocks of a function."""
     if not blocks:
         # Empty blocks?
         return {}
@@ -62,7 +62,8 @@ def _run_ssa(blocks):
     # Process one SSA-violating variable at a time
     for varname in violators:
         _logger.debug(
-            "Fix SSA violator on var %s", varname,
+            "Fix SSA violator on var %s",
+            varname,
         )
         # Fix up the LHS
         # Put fresh variables for all assignments to the variable
@@ -70,8 +71,7 @@ def _run_ssa(blocks):
         _logger.debug("Replaced assignments: %s", pformat(defmap))
         # Fix up the RHS
         # Re-associate the variable uses with the reaching definition
-        blocks = _fix_ssa_vars(blocks, varname, defmap, cfg, df_plus,
-                               cache_list_vars)
+        blocks = _fix_ssa_vars(blocks, varname, defmap, cfg, df_plus, cache_list_vars)
 
     # Post-condition checks.
     # CFG invariant
@@ -82,14 +82,13 @@ def _run_ssa(blocks):
 
 
 def _fix_ssa_vars(blocks, varname, defmap, cfg, df_plus, cache_list_vars):
-    """Rewrite all uses to ``varname`` given the definition map
-    """
+    """Rewrite all uses to ``varname`` given the definition map"""
     states = _make_states(blocks)
-    states['varname'] = varname
-    states['defmap'] = defmap
-    states['phimap'] = phimap = defaultdict(list)
-    states['cfg'] = cfg
-    states['phi_locations'] = _compute_phi_locations(df_plus, defmap)
+    states["varname"] = varname
+    states["defmap"] = defmap
+    states["phimap"] = phimap = defaultdict(list)
+    states["cfg"] = cfg
+    states["phi_locations"] = _compute_phi_locations(df_plus, defmap)
     newblocks = _run_block_rewrite(blocks, states, _FixSSAVars(cache_list_vars))
     # insert phi nodes
     for label, philist in phimap.items():
@@ -129,11 +128,10 @@ def _compute_phi_locations(iterated_df, defmap):
 
 
 def _fresh_vars(blocks, varname):
-    """Rewrite to put fresh variable names
-    """
+    """Rewrite to put fresh variable names"""
     states = _make_states(blocks)
-    states['varname'] = varname
-    states['defmap'] = defmap = defaultdict(list)
+    states["varname"] = varname
+    states["defmap"] = defmap = defaultdict(list)
     newblocks = _run_block_rewrite(blocks, states, _FreshVarHandler())
     return newblocks, defmap
 
@@ -165,7 +163,7 @@ def _find_defs_violators(blocks, cfg):
         if k not in violators:
             for label in use_blocks:
                 dom = doms[label]
-                def_labels = {label for _assign, label in defs[k] }
+                def_labels = {label for _assign, label in defs[k]}
                 if not def_labels.intersection(dom):
                     violators.add(k)
                     break
@@ -176,7 +174,7 @@ def _find_defs_violators(blocks, cfg):
 def _run_block_analysis(blocks, states, handler):
     for label, blk in blocks.items():
         _logger.debug("==== SSA block analysis pass on %s", label)
-        states['label'] = label
+        states["label"] = label
         for _ in _run_ssa_block_pass(states, blk, handler):
             pass
 
@@ -188,8 +186,8 @@ def _run_block_rewrite(blocks, states, handler):
         newblk = ir.Block(scope=blk.scope, loc=blk.loc)
 
         newbody = []
-        states['label'] = label
-        states['block'] = blk
+        states["label"] = label
+        states["block"] = blk
         for stmt in _run_ssa_block_pass(states, blk, handler):
             assert stmt is not None
             newbody.append(stmt)
@@ -218,8 +216,8 @@ def _run_ssa_block_pass(states, blk, handler):
 
 
 class _BaseHandler:
-    """A base handler for all the passes used here for the SSA algorithm.
-    """
+    """A base handler for all the passes used here for the SSA algorithm."""
+
     def on_assign(self, states, assign):
         """
         Called when the pass sees an ``ir.Assign``.
@@ -266,6 +264,7 @@ class _GatherDefsHandler(_BaseHandler):
           IR node and the block label.
     ``states["uses"]`` is a Mapping[Set[int]]
     """
+
     def on_assign(self, states, assign):
         # keep track of assignment and the block
         states["defs"][assign.target.name].append((assign, states["label"]))
@@ -290,28 +289,23 @@ class UndefinedVariable:
 
 
 class _FreshVarHandler(_BaseHandler):
-    """Replaces assignment target with new fresh variables.
-    """
+    """Replaces assignment target with new fresh variables."""
+
     def on_assign(self, states, assign):
-        if assign.target.name == states['varname']:
-            scope = states['scope']
-            defmap = states['defmap']
+        if assign.target.name == states["varname"]:
+            scope = states["scope"]
+            defmap = states["defmap"]
             # Allow first assignment to retain the name
             if len(defmap) == 0:
                 newtarget = assign.target
                 _logger.debug("first assign: %s", newtarget)
                 if newtarget.name not in scope.localvars:
                     wmsg = f"variable {newtarget.name!r} is not in scope."
-                    warnings.warn(errors.NumbaIRAssumptionWarning(wmsg,
-                                  loc=assign.loc))
+                    warnings.warn(errors.NumbaIRAssumptionWarning(wmsg, loc=assign.loc))
             else:
                 newtarget = scope.redefine(assign.target.name, loc=assign.loc)
-            assign = ir.Assign(
-                target=newtarget,
-                value=assign.value,
-                loc=assign.loc
-            )
-            defmap[states['label']].append(assign)
+            assign = ir.Assign(target=newtarget, value=assign.value, loc=assign.loc)
+            defmap[states["label"]].append(assign)
         return assign
 
     def on_other(self, states, stmt):
@@ -334,12 +328,14 @@ class _FixSSAVars(_BaseHandler):
         rhs = assign.value
         if isinstance(rhs, ir.Inst):
             newdef = self._fix_var(
-                states, assign, self._cache_list_vars.get(assign.value),
+                states,
+                assign,
+                self._cache_list_vars.get(assign.value),
             )
             # Has a replacement that is not the current variable
             if newdef is not None and newdef.target is not ir.UNDEFINED:
-                if states['varname'] != newdef.target.name:
-                    replmap = {states['varname']: newdef.target}
+                if states["varname"] != newdef.target.name:
+                    replmap = {states["varname"]: newdef.target}
                     rhs = copy(rhs)
 
                     ir_utils.replace_vars_inner(rhs, replmap)
@@ -352,7 +348,7 @@ class _FixSSAVars(_BaseHandler):
             newdef = self._fix_var(states, assign, [rhs])
             # Has a replacement that is not the current variable
             if newdef is not None and newdef.target is not ir.UNDEFINED:
-                if states['varname'] != newdef.target.name:
+                if states["varname"] != newdef.target.name:
                     return ir.Assign(
                         target=assign.target,
                         value=newdef.target,
@@ -363,32 +359,32 @@ class _FixSSAVars(_BaseHandler):
 
     def on_other(self, states, stmt):
         newdef = self._fix_var(
-            states, stmt, self._cache_list_vars.get(stmt),
+            states,
+            stmt,
+            self._cache_list_vars.get(stmt),
         )
         if newdef is not None and newdef.target is not ir.UNDEFINED:
-            if states['varname'] != newdef.target.name:
-                replmap = {states['varname']: newdef.target}
+            if states["varname"] != newdef.target.name:
+                replmap = {states["varname"]: newdef.target}
                 stmt = copy(stmt)
                 ir_utils.replace_vars_stmt(stmt, replmap)
         return stmt
 
     def _fix_var(self, states, stmt, used_vars):
-        """Fix all variable uses in ``used_vars``.
-        """
+        """Fix all variable uses in ``used_vars``."""
         varnames = [k.name for k in used_vars]
-        phivar = states['varname']
+        phivar = states["varname"]
         if phivar in varnames:
             return self._find_def(states, stmt)
 
     def _find_def(self, states, stmt):
-        """Find definition of ``stmt`` for the statement ``stmt``
-        """
-        _logger.debug("find_def var=%r stmt=%s", states['varname'], stmt)
+        """Find definition of ``stmt`` for the statement ``stmt``"""
+        _logger.debug("find_def var=%r stmt=%s", states["varname"], stmt)
         selected_def = None
-        label = states['label']
-        local_defs = states['defmap'][label]
-        local_phis = states['phimap'][label]
-        block = states['block']
+        label = states["label"]
+        local_defs = states["defmap"][label]
+        local_phis = states["phimap"][label]
+        block = states["block"]
 
         cur_pos = self._stmt_index(stmt, block)
         for defstmt in reversed(local_defs):
@@ -404,7 +400,9 @@ class _FixSSAVars(_BaseHandler):
 
         if selected_def is None:
             selected_def = self._find_def_from_top(
-                states, label, loc=stmt.loc,
+                states,
+                label,
+                loc=stmt.loc,
             )
         return selected_def
 
@@ -415,16 +413,16 @@ class _FixSSAVars(_BaseHandler):
         Insert phi node if necessary.
         """
         _logger.debug("find_def_from_top label %r", label)
-        cfg = states['cfg']
-        defmap = states['defmap']
-        phimap = states['phimap']
-        phi_locations = states['phi_locations']
+        cfg = states["cfg"]
+        defmap = states["defmap"]
+        phimap = states["phimap"]
+        phi_locations = states["phi_locations"]
 
         if label in phi_locations:
-            scope = states['scope']
-            loc = states['block'].loc
+            scope = states["scope"]
+            loc = states["block"].loc
             # fresh variable
-            freshvar = scope.redefine(states['varname'], loc=loc)
+            freshvar = scope.redefine(states["varname"], loc=loc)
             # insert phi
             phinode = ir.Assign(
                 target=freshvar,
@@ -437,7 +435,9 @@ class _FixSSAVars(_BaseHandler):
             # Find incoming values for the Phi node
             for pred, _ in cfg.predecessors(label):
                 incoming_def = self._find_def_from_bottom(
-                    states, pred, loc=loc,
+                    states,
+                    pred,
+                    loc=loc,
                 )
                 _logger.debug("incoming_def %s", incoming_def)
                 phinode.value.incoming_values.append(incoming_def.target)
@@ -449,16 +449,15 @@ class _FixSSAVars(_BaseHandler):
                 # We have searched to the top of the idom tree.
                 # Since we still cannot find a definition,
                 # we will warn.
-                _warn_about_uninitialized_variable(states['varname'], loc)
+                _warn_about_uninitialized_variable(states["varname"], loc)
                 return UndefinedVariable
             _logger.debug("idom %s from label %s", idom, label)
             return self._find_def_from_bottom(states, idom, loc=loc)
 
     def _find_def_from_bottom(self, states, label, loc):
-        """Find definition from within the block at ``label``.
-        """
+        """Find definition from within the block at ``label``."""
         _logger.debug("find_def_from_bottom label %r", label)
-        defmap = states['defmap']
+        defmap = states["defmap"]
         defs = defmap[label]
         if defs:
             lastdef = defs[-1]
@@ -484,7 +483,5 @@ class _FixSSAVars(_BaseHandler):
 def _warn_about_uninitialized_variable(varname, loc):
     if config.ALWAYS_WARN_UNINIT_VAR:
         warnings.warn(
-            errors.NumbaWarning(
-                f"Detected uninitialized variable {varname}",
-                loc=loc),
+            errors.NumbaWarning(f"Detected uninitialized variable {varname}", loc=loc),
         )

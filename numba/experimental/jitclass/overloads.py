@@ -2,6 +2,7 @@
 Overloads for ClassInstanceType for built-in functions that call dunder methods
 on an object.
 """
+
 from functools import wraps
 import inspect
 import operator
@@ -20,6 +21,7 @@ def class_instance_overload(target):
     Decorator to add an overload for target that applies when the first argument
     is a ClassInstanceType.
     """
+
     def decorator(func):
         @wraps(func)
         def wrapped(*args, **kwargs):
@@ -45,7 +47,11 @@ def extract_template(template, name):
     return namespace[name]
 
 
-def register_simple_overload(func, *attrs, n_args=1,):
+def register_simple_overload(
+    func,
+    *attrs,
+    n_args=1,
+):
     """
     Register an overload for func that checks for methods __attr__ for each
     attr in attrs.
@@ -59,10 +65,7 @@ def func({','.join(arg_names)}):
 
     @wraps(extract_template(template, "func"))
     def overload_func(*args, **kwargs):
-        options = [
-            try_call_method(args[0], f"__{attr}__", n_args)
-            for attr in attrs
-        ]
+        options = [try_call_method(args[0], f"__{attr}__", n_args) for attr in attrs]
         return take_first(*options)
 
     return class_instance_overload(func)(overload_func)
@@ -83,7 +86,7 @@ def func({','.join(arg_names)}):
 
 
 def try_call_complex_method(cls_type, method):
-    """ __complex__ needs special treatment as the argument names are kwargs
+    """__complex__ needs special treatment as the argument names are kwargs
     and therefore specific in name and default value.
     """
     if method in cls_type.jit_methods:
@@ -108,9 +111,11 @@ def take_first(*options):
 def class_bool(x):
     using_bool_impl = try_call_method(x, "__bool__")
 
-    if '__len__' in x.jit_methods:
+    if "__len__" in x.jit_methods:
+
         def using_len_impl(x):
             return bool(len(x))
+
     else:
         using_len_impl = None
 
@@ -123,7 +128,7 @@ def class_bool(x):
 def class_complex(real=0, imag=0):
     return take_first(
         try_call_complex_method(real, "__complex__"),
-        lambda real=0, imag=0: complex(float(real))
+        lambda real=0, imag=0: complex(float(real)),
     )
 
 
@@ -138,9 +143,7 @@ def class_contains(x, y):
 def class_float(x):
     options = [try_call_method(x, "__float__")]
 
-    if (
-        "__index__" in x.jit_methods
-    ):
+    if "__index__" in x.jit_methods:
         options.append(lambda x: float(x.__index__()))
 
     return take_first(*options)
@@ -179,8 +182,10 @@ def register_reflected_overload(func, meth_forward, meth_reflected):
         normal_impl = try_call_method(x, f"__{meth_forward}__", 2)
 
         if f"__{meth_reflected}__" in y.jit_methods:
+
             def reflected_impl(x, y):
                 return y > x
+
         else:
             reflected_impl = None
 

@@ -2,15 +2,19 @@
 Tests for enum support.
 """
 
-
 import numpy as np
 import unittest
 from numba import jit, vectorize, int8, int16, int32
 
 from numba.tests.support import TestCase
-from numba.tests.enum_usecases import (Color, Shape, Shake,
-                                       Planet, RequestError,
-                                       IntEnumWithNegatives)
+from numba.tests.enum_usecases import (
+    Color,
+    Shape,
+    Shake,
+    Planet,
+    RequestError,
+    IntEnumWithNegatives,
+)
 
 
 def compare_usecase(a, b):
@@ -24,19 +28,21 @@ def getattr_usecase(a):
 
 def getitem_usecase(a):
     """Lookup enum member by string name"""
-    return a is Color['red']
+    return a is Color["red"]
 
 
 def identity_usecase(a, b, c):
-    return (a is Shake.mint,
-            b is Shape.circle,
-            c is RequestError.internal_error,
-            )
+    return (
+        a is Shake.mint,
+        b is Shape.circle,
+        c is RequestError.internal_error,
+    )
 
 
 def make_constant_usecase(const):
     def constant_usecase(a):
         return a is const
+
     return constant_usecase
 
 
@@ -51,6 +57,7 @@ def int_coerce_usecase(x):
     else:
         return x + Shape.circle
 
+
 def int_cast_usecase(x):
     # Explicit coercion of intenums to ints
     if x > int16(RequestError.internal_error):
@@ -61,7 +68,7 @@ def int_cast_usecase(x):
 
 def vectorize_usecase(x):
     if x != RequestError.not_found:
-        return RequestError['internal_error']
+        return RequestError["internal_error"]
     else:
         return RequestError.dummy
 
@@ -103,6 +110,7 @@ class TestEnum(BaseEnumTest, TestCase):
     """
     Tests for Enum classes and members.
     """
+
     values = [Color.red, Color.green]
 
     pairs = [
@@ -111,7 +119,7 @@ class TestEnum(BaseEnumTest, TestCase):
         (Shake.mint, Shake.vanilla),
         (Planet.VENUS, Planet.MARS),
         (Planet.EARTH, Planet.EARTH),
-        ]
+    ]
 
     def test_identity(self):
         """
@@ -127,6 +135,7 @@ class TestIntEnum(BaseEnumTest, TestCase):
     """
     Tests for IntEnum classes and members.
     """
+
     values = [Shape.circle, Shape.square]
 
     pairs = [
@@ -134,7 +143,7 @@ class TestIntEnum(BaseEnumTest, TestCase):
         (Shape.circle, Shape.square),
         (RequestError.not_found, RequestError.not_found),
         (RequestError.internal_error, RequestError.not_found),
-        ]
+    ]
 
     def test_int_coerce(self):
         pyfunc = int_coerce_usecase
@@ -159,17 +168,21 @@ class TestIntEnum(BaseEnumTest, TestCase):
     def test_hash(self):
         def pyfun(x):
             return hash(x)
+
         cfunc = jit(nopython=True)(pyfun)
         for member in IntEnumWithNegatives:
             self.assertPreciseEqual(pyfun(member), cfunc(member))
 
     def test_int_shape_cast(self):
         def pyfun_empty(x):
-            return np.empty((x, x), dtype='int64').fill(-1)
+            return np.empty((x, x), dtype="int64").fill(-1)
+
         def pyfun_zeros(x):
-            return np.zeros((x, x), dtype='int64')
+            return np.zeros((x, x), dtype="int64")
+
         def pyfun_ones(x):
-            return np.ones((x, x), dtype='int64')
+            return np.ones((x, x), dtype="int64")
+
         for pyfun in [pyfun_empty, pyfun_zeros, pyfun_ones]:
             cfunc = jit(nopython=True)(pyfun)
             for member in IntEnumWithNegatives:
@@ -177,5 +190,5 @@ class TestIntEnum(BaseEnumTest, TestCase):
                     self.assertPreciseEqual(pyfun(member), cfunc(member))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

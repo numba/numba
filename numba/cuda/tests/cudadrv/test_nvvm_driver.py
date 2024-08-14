@@ -7,7 +7,7 @@ from numba.cuda.cudadrv.nvvm import LibDevice, NvvmError, NVVM
 from numba.cuda.testing import skip_on_cudasim
 
 
-@skip_on_cudasim('NVVM Driver unsupported in the simulator')
+@skip_on_cudasim("NVVM Driver unsupported in the simulator")
 class TestNvvmDriver(unittest.TestCase):
     def get_nvvmir(self):
         versions = NVVM().get_ir_version()
@@ -16,9 +16,9 @@ class TestNvvmDriver(unittest.TestCase):
 
     def test_nvvm_compile_simple(self):
         nvvmir = self.get_nvvmir()
-        ptx = nvvm.compile_ir(nvvmir).decode('utf8')
-        self.assertTrue('simple' in ptx)
-        self.assertTrue('ave' in ptx)
+        ptx = nvvm.compile_ir(nvvmir).decode("utf8")
+        self.assertTrue("simple" in ptx)
+        self.assertTrue("ave" in ptx)
 
     def test_nvvm_compile_nullary_option(self):
         # Tests compilation with an option that doesn't take an argument
@@ -34,7 +34,7 @@ class TestNvvmDriver(unittest.TestCase):
 
         # Verify we correctly passed the option by checking if we got LTOIR
         # from NVVM (by looking for the expected magic number for LTOIR)
-        self.assertEqual(ltoir[:4], b'\xed\x43\x4e\x7f')
+        self.assertEqual(ltoir[:4], b"\xed\x43\x4e\x7f")
 
     def test_nvvm_bad_option(self):
         # Ensure that unsupported / non-existent options are reported as such
@@ -45,36 +45,35 @@ class TestNvvmDriver(unittest.TestCase):
 
     def test_nvvm_from_llvm(self):
         m = ir.Module("test_nvvm_from_llvm")
-        m.triple = 'nvptx64-nvidia-cuda'
+        m.triple = "nvptx64-nvidia-cuda"
         nvvm.add_ir_version(m)
         fty = ir.FunctionType(ir.VoidType(), [ir.IntType(32)])
-        kernel = ir.Function(m, fty, name='mycudakernel')
-        bldr = ir.IRBuilder(kernel.append_basic_block('entry'))
+        kernel = ir.Function(m, fty, name="mycudakernel")
+        bldr = ir.IRBuilder(kernel.append_basic_block("entry"))
         bldr.ret_void()
         nvvm.set_cuda_kernel(kernel)
 
         m.data_layout = NVVM().data_layout
-        ptx = nvvm.compile_ir(str(m)).decode('utf8')
-        self.assertTrue('mycudakernel' in ptx)
-        self.assertTrue('.address_size 64' in ptx)
+        ptx = nvvm.compile_ir(str(m)).decode("utf8")
+        self.assertTrue("mycudakernel" in ptx)
+        self.assertTrue(".address_size 64" in ptx)
 
     def test_used_list(self):
         # Construct a module
         m = ir.Module("test_used_list")
-        m.triple = 'nvptx64-nvidia-cuda'
+        m.triple = "nvptx64-nvidia-cuda"
         m.data_layout = NVVM().data_layout
         nvvm.add_ir_version(m)
 
         # Add a function and mark it as a kernel
         fty = ir.FunctionType(ir.VoidType(), [ir.IntType(32)])
-        kernel = ir.Function(m, fty, name='mycudakernel')
-        bldr = ir.IRBuilder(kernel.append_basic_block('entry'))
+        kernel = ir.Function(m, fty, name="mycudakernel")
+        bldr = ir.IRBuilder(kernel.append_basic_block("entry"))
         bldr.ret_void()
         nvvm.set_cuda_kernel(kernel)
 
         # Verify that the used list was correctly constructed
-        used_lines = [line for line in str(m).splitlines()
-                      if 'llvm.used' in line]
+        used_lines = [line for line in str(m).splitlines() if "llvm.used" in line]
         msg = 'Expected exactly one @"llvm.used" array'
         self.assertEqual(len(used_lines), 1, msg)
 
@@ -91,70 +90,71 @@ class TestNvvmDriver(unittest.TestCase):
         m.triple = "unknown-unknown-unknown"
         m.data_layout = NVVM().data_layout
         nvvm.add_ir_version(m)
-        with self.assertRaisesRegex(NvvmError, 'Invalid target triple'):
+        with self.assertRaisesRegex(NvvmError, "Invalid target triple"):
             nvvm.compile_ir(str(m))
 
     def _test_nvvm_support(self, arch):
-        compute_xx = 'compute_{0}{1}'.format(*arch)
+        compute_xx = "compute_{0}{1}".format(*arch)
         nvvmir = self.get_nvvmir()
-        ptx = nvvm.compile_ir(nvvmir, arch=compute_xx, ftz=1, prec_sqrt=0,
-                              prec_div=0).decode('utf8')
+        ptx = nvvm.compile_ir(
+            nvvmir, arch=compute_xx, ftz=1, prec_sqrt=0, prec_div=0
+        ).decode("utf8")
         self.assertIn(".target sm_{0}{1}".format(*arch), ptx)
-        self.assertIn('simple', ptx)
-        self.assertIn('ave', ptx)
+        self.assertIn("simple", ptx)
+        self.assertIn("ave", ptx)
 
     def test_nvvm_support(self):
-        """Test supported CC by NVVM
-        """
+        """Test supported CC by NVVM"""
         for arch in nvvm.get_supported_ccs():
             self._test_nvvm_support(arch=arch)
 
     def test_nvvm_warning(self):
         m = ir.Module("test_nvvm_warning")
-        m.triple = 'nvptx64-nvidia-cuda'
+        m.triple = "nvptx64-nvidia-cuda"
         m.data_layout = NVVM().data_layout
         nvvm.add_ir_version(m)
 
         fty = ir.FunctionType(ir.VoidType(), [])
-        kernel = ir.Function(m, fty, name='inlinekernel')
-        builder = ir.IRBuilder(kernel.append_basic_block('entry'))
+        kernel = ir.Function(m, fty, name="inlinekernel")
+        builder = ir.IRBuilder(kernel.append_basic_block("entry"))
         builder.ret_void()
         nvvm.set_cuda_kernel(kernel)
 
         # Add the noinline attribute to trigger NVVM to generate a warning
-        kernel.attributes.add('noinline')
+        kernel.attributes.add("noinline")
 
         with warnings.catch_warnings(record=True) as w:
             nvvm.compile_ir(str(m))
 
         self.assertEqual(len(w), 1)
-        self.assertIn('overriding noinline attribute', str(w[0]))
+        self.assertIn("overriding noinline attribute", str(w[0]))
 
 
-@skip_on_cudasim('NVVM Driver unsupported in the simulator')
+@skip_on_cudasim("NVVM Driver unsupported in the simulator")
 class TestArchOption(unittest.TestCase):
     def test_get_arch_option(self):
         # Test returning the nearest lowest arch.
-        self.assertEqual(nvvm.get_arch_option(5, 3), 'compute_53')
-        self.assertEqual(nvvm.get_arch_option(7, 5), 'compute_75')
-        self.assertEqual(nvvm.get_arch_option(7, 7), 'compute_75')
+        self.assertEqual(nvvm.get_arch_option(5, 3), "compute_53")
+        self.assertEqual(nvvm.get_arch_option(7, 5), "compute_75")
+        self.assertEqual(nvvm.get_arch_option(7, 7), "compute_75")
         # Test known arch.
         supported_cc = nvvm.get_supported_ccs()
         for arch in supported_cc:
-            self.assertEqual(nvvm.get_arch_option(*arch), 'compute_%d%d' % arch)
-        self.assertEqual(nvvm.get_arch_option(1000, 0),
-                         'compute_%d%d' % supported_cc[-1])
+            self.assertEqual(nvvm.get_arch_option(*arch), "compute_%d%d" % arch)
+        self.assertEqual(
+            nvvm.get_arch_option(1000, 0), "compute_%d%d" % supported_cc[-1]
+        )
 
 
-@skip_on_cudasim('NVVM Driver unsupported in the simulator')
+@skip_on_cudasim("NVVM Driver unsupported in the simulator")
 class TestLibDevice(unittest.TestCase):
     def test_libdevice_load(self):
         # Test that constructing LibDevice gives a bitcode file
         libdevice = LibDevice()
-        self.assertEqual(libdevice.bc[:4], b'BC\xc0\xde')
+        self.assertEqual(libdevice.bc[:4], b"BC\xc0\xde")
 
 
-nvvmir_generic = '''\
+nvvmir_generic = """\
 target triple="nvptx64-nvidia-cuda"
 target datalayout = "{data_layout}"
 
@@ -192,8 +192,8 @@ declare i32 @llvm.nvvm.read.ptx.sreg.tid.x() nounwind readnone
 !2 = !{{void (i32*)* @simple, !"kernel", i32 1}}
 
 @"llvm.used" = appending global [1 x i8*] [i8* bitcast (void (i32*)* @simple to i8*)], section "llvm.metadata"
-'''  # noqa: E501
+"""  # noqa: E501
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

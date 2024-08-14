@@ -29,24 +29,23 @@ class TestIR(unittest.TestCase):
         top = ir.Scope(parent=None, loc=ir.Loc(filename=filename, line=1))
         local = ir.Scope(parent=top, loc=ir.Loc(filename=filename, line=2))
 
-        apple = local.define('apple', loc=ir.Loc(filename=filename, line=3))
-        self.assertIs(local.get('apple'), apple)
+        apple = local.define("apple", loc=ir.Loc(filename=filename, line=3))
+        self.assertIs(local.get("apple"), apple)
         self.assertEqual(len(local.localvars), 1)
 
-        orange = top.define('orange', loc=ir.Loc(filename=filename, line=4))
+        orange = top.define("orange", loc=ir.Loc(filename=filename, line=4))
         self.assertEqual(len(local.localvars), 1)
         self.assertEqual(len(top.localvars), 1)
-        self.assertIs(top.get('orange'), orange)
-        self.assertIs(local.get('orange'), orange)
+        self.assertIs(top.get("orange"), orange)
+        self.assertIs(local.get("orange"), orange)
 
-        more_orange = local.define('orange', loc=ir.Loc(filename=filename,
-                                                        line=5))
-        self.assertIs(top.get('orange'), orange)
-        self.assertIsNot(local.get('orange'), not orange)
-        self.assertIs(local.get('orange'), more_orange)
+        more_orange = local.define("orange", loc=ir.Loc(filename=filename, line=5))
+        self.assertIs(top.get("orange"), orange)
+        self.assertIsNot(local.get("orange"), not orange)
+        self.assertIs(local.get("orange"), more_orange)
 
         try:
-            local.define('orange', loc=ir.Loc(filename=filename, line=5))
+            local.define("orange", loc=ir.Loc(filename=filename, line=5))
         except ir.RedefinedError:
             pass
         else:
@@ -55,14 +54,14 @@ class TestIR(unittest.TestCase):
 
 class CheckEquality(unittest.TestCase):
 
-    var_a = ir.Var(None, 'a', ir.unknown_loc)
-    var_b = ir.Var(None, 'b', ir.unknown_loc)
-    var_c = ir.Var(None, 'c', ir.unknown_loc)
-    var_d = ir.Var(None, 'd', ir.unknown_loc)
-    var_e = ir.Var(None, 'e', ir.unknown_loc)
-    loc1 = ir.Loc('mock', 1, 0)
-    loc2 = ir.Loc('mock', 2, 0)
-    loc3 = ir.Loc('mock', 3, 0)
+    var_a = ir.Var(None, "a", ir.unknown_loc)
+    var_b = ir.Var(None, "b", ir.unknown_loc)
+    var_c = ir.Var(None, "c", ir.unknown_loc)
+    var_d = ir.Var(None, "d", ir.unknown_loc)
+    var_e = ir.Var(None, "e", ir.unknown_loc)
+    loc1 = ir.Loc("mock", 1, 0)
+    loc2 = ir.Loc("mock", 2, 0)
+    loc3 = ir.Loc("mock", 3, 0)
 
     def check(self, base, same=[], different=[]):
         for s in same:
@@ -75,23 +74,36 @@ class TestIRMeta(CheckEquality):
     """
     Tests IR node meta, like Loc and Scope
     """
-    def test_loc(self):
-        a = ir.Loc('file', 1, 0)
-        b = ir.Loc('file', 1, 0)
-        c = ir.Loc('pile', 1, 0)
-        d = ir.Loc('file', 2, 0)
-        e = ir.Loc('file', 1, 1)
-        self.check(a, same=[b,], different=[c, d, e])
 
-        f = ir.Loc('file', 1, 0, maybe_decorator=False)
-        g = ir.Loc('file', 1, 0, maybe_decorator=True)
+    def test_loc(self):
+        a = ir.Loc("file", 1, 0)
+        b = ir.Loc("file", 1, 0)
+        c = ir.Loc("pile", 1, 0)
+        d = ir.Loc("file", 2, 0)
+        e = ir.Loc("file", 1, 1)
+        self.check(
+            a,
+            same=[
+                b,
+            ],
+            different=[c, d, e],
+        )
+
+        f = ir.Loc("file", 1, 0, maybe_decorator=False)
+        g = ir.Loc("file", 1, 0, maybe_decorator=True)
         self.check(a, same=[f, g])
 
     def test_scope(self):
         parent1 = ir.Scope(None, self.loc1)
         parent2 = ir.Scope(None, self.loc1)
         parent3 = ir.Scope(None, self.loc2)
-        self.check(parent1, same=[parent2, parent3,])
+        self.check(
+            parent1,
+            same=[
+                parent2,
+                parent3,
+            ],
+        )
 
         a = ir.Scope(parent1, self.loc1)
         b = ir.Scope(parent1, self.loc1)
@@ -102,13 +114,19 @@ class TestIRMeta(CheckEquality):
         # parent1 and parent2 are equal, so children referring to either parent
         # should be equal
         e = ir.Scope(parent2, self.loc1)
-        self.check(a, same=[e,])
+        self.check(
+            a,
+            same=[
+                e,
+            ],
+        )
 
 
 class TestIRNodes(CheckEquality):
     """
     Tests IR nodes
     """
+
     def test_terminator(self):
         # terminator base class inst should always be equal
         t1 = ir.Terminator()
@@ -154,10 +172,10 @@ class TestIRNodes(CheckEquality):
         self.check(a, same=[b, c], different=[d, e, f])
 
     def test_expr(self):
-        a = ir.Expr('some_op', self.loc1)
-        b = ir.Expr('some_op', self.loc1)
-        c = ir.Expr('some_op', self.loc2)
-        d = ir.Expr('some_other_op', self.loc1)
+        a = ir.Expr("some_op", self.loc1)
+        b = ir.Expr("some_op", self.loc1)
+        c = ir.Expr("some_op", self.loc2)
+        d = ir.Expr("some_other_op", self.loc1)
         self.check(a, same=[b, c], different=[d])
 
     def test_setitem(self):
@@ -195,20 +213,20 @@ class TestIRNodes(CheckEquality):
         self.check(a, same=[b, c], different=[d])
 
     def test_setattr(self):
-        a = ir.SetAttr(self.var_a, 'foo', self.var_b, self.loc1)
-        b = ir.SetAttr(self.var_a, 'foo', self.var_b, self.loc1)
-        c = ir.SetAttr(self.var_a, 'foo', self.var_b, self.loc2)
-        d = ir.SetAttr(self.var_c, 'foo', self.var_b, self.loc1)
-        e = ir.SetAttr(self.var_a, 'bar', self.var_b, self.loc1)
-        f = ir.SetAttr(self.var_a, 'foo', self.var_c, self.loc1)
+        a = ir.SetAttr(self.var_a, "foo", self.var_b, self.loc1)
+        b = ir.SetAttr(self.var_a, "foo", self.var_b, self.loc1)
+        c = ir.SetAttr(self.var_a, "foo", self.var_b, self.loc2)
+        d = ir.SetAttr(self.var_c, "foo", self.var_b, self.loc1)
+        e = ir.SetAttr(self.var_a, "bar", self.var_b, self.loc1)
+        f = ir.SetAttr(self.var_a, "foo", self.var_c, self.loc1)
         self.check(a, same=[b, c], different=[d, e, f])
 
     def test_delattr(self):
-        a = ir.DelAttr(self.var_a, 'foo', self.loc1)
-        b = ir.DelAttr(self.var_a, 'foo', self.loc1)
-        c = ir.DelAttr(self.var_a, 'foo', self.loc2)
-        d = ir.DelAttr(self.var_c, 'foo', self.loc1)
-        e = ir.DelAttr(self.var_a, 'bar', self.loc1)
+        a = ir.DelAttr(self.var_a, "foo", self.loc1)
+        b = ir.DelAttr(self.var_a, "foo", self.loc1)
+        c = ir.DelAttr(self.var_a, "foo", self.loc2)
+        d = ir.DelAttr(self.var_c, "foo", self.loc1)
+        e = ir.DelAttr(self.var_a, "bar", self.loc1)
         self.check(a, same=[b, c], different=[d, e])
 
     def test_assign(self):
@@ -254,11 +272,11 @@ class TestIRNodes(CheckEquality):
         self.check(a, same=[b, c], different=[d, e, f])
 
     def test_arg(self):
-        a = ir.Arg('foo', 0, self.loc1)
-        b = ir.Arg('foo', 0, self.loc1)
-        c = ir.Arg('foo', 0, self.loc2)
-        d = ir.Arg('bar', 0, self.loc1)
-        e = ir.Arg('foo', 1, self.loc1)
+        a = ir.Arg("foo", 0, self.loc1)
+        b = ir.Arg("foo", 0, self.loc1)
+        c = ir.Arg("foo", 0, self.loc2)
+        d = ir.Arg("bar", 0, self.loc1)
+        e = ir.Arg("foo", 1, self.loc1)
         self.check(a, same=[b, c], different=[d, e])
 
     def test_const(self):
@@ -269,19 +287,19 @@ class TestIRNodes(CheckEquality):
         self.check(a, same=[b, c], different=[d])
 
     def test_global(self):
-        a = ir.Global('foo', 0, self.loc1)
-        b = ir.Global('foo', 0, self.loc1)
-        c = ir.Global('foo', 0, self.loc2)
-        d = ir.Global('bar', 0, self.loc1)
-        e = ir.Global('foo', 1, self.loc1)
+        a = ir.Global("foo", 0, self.loc1)
+        b = ir.Global("foo", 0, self.loc1)
+        c = ir.Global("foo", 0, self.loc2)
+        d = ir.Global("bar", 0, self.loc1)
+        e = ir.Global("foo", 1, self.loc1)
         self.check(a, same=[b, c], different=[d, e])
 
     def test_var(self):
-        a = ir.Var(None, 'foo', self.loc1)
-        b = ir.Var(None, 'foo', self.loc1)
-        c = ir.Var(None, 'foo', self.loc2)
-        d = ir.Var(ir.Scope(None, ir.unknown_loc), 'foo', self.loc1)
-        e = ir.Var(None, 'bar', self.loc1)
+        a = ir.Var(None, "foo", self.loc1)
+        b = ir.Var(None, "foo", self.loc1)
+        c = ir.Var(None, "foo", self.loc2)
+        d = ir.Var(ir.Scope(None, ir.unknown_loc), "foo", self.loc1)
+        e = ir.Var(None, "bar", self.loc1)
         self.check(a, same=[b, c, d], different=[e])
 
     def test_undefinedtype(self):
@@ -312,18 +330,19 @@ class TestIRCompounds(CheckEquality):
     """
     Tests IR concepts that have state
     """
+
     def test_varmap(self):
         a = ir.VarMap()
-        a.define(self.var_a, 'foo')
-        a.define(self.var_b, 'bar')
+        a.define(self.var_a, "foo")
+        a.define(self.var_b, "bar")
 
         b = ir.VarMap()
-        b.define(self.var_a, 'foo')
-        b.define(self.var_b, 'bar')
+        b.define(self.var_a, "foo")
+        b.define(self.var_b, "bar")
 
         c = ir.VarMap()
-        c.define(self.var_a, 'foo')
-        c.define(self.var_c, 'bar')
+        c.define(self.var_a, "foo")
+        c.define(self.var_c, "bar")
 
         self.check(a, same=[b], different=[c])
 
@@ -382,7 +401,7 @@ class TestIRCompounds(CheckEquality):
                     for r in range(len(p)):
                         q.append(p[r])
                         if r > 4 + 1:
-                            with objmode(s='intp', t='complex128'):
+                            with objmode(s="intp", t="complex128"):
                                 s = 123
                                 t = 5
                             if s > 122:
@@ -404,7 +423,7 @@ class TestIRCompounds(CheckEquality):
             lines = string.splitlines()
             for item in pointing_at:
                 for l in lines:
-                    if l.startswith('->'):
+                    if l.startswith("->"):
                         if item in l:
                             break
                 else:
@@ -420,7 +439,7 @@ class TestIRCompounds(CheckEquality):
                 ref.truebr, ref.falsebr = ref.falsebr, ref.truebr
                 break
 
-        check_diffstr(x_ir.diff_str(y_ir), ['branch'])
+        check_diffstr(x_ir.diff_str(y_ir), ["branch"])
 
         z = gen()
         self.assertFalse(x_ir.equal_ir(y_ir))
@@ -434,8 +453,7 @@ class TestIRCompounds(CheckEquality):
             idx = None
             for i in range(len(ref) - 1):
                 # look for two adjacent Del
-                if (isinstance(ref[i], ir.Del) and
-                        isinstance(ref[i + 1], ir.Del)):
+                if isinstance(ref[i], ir.Del) and isinstance(ref[i + 1], ir.Del):
                     idx = i
                     break
             if idx is not None:
@@ -451,7 +469,7 @@ class TestIRCompounds(CheckEquality):
         self.assertFalse(x_ir.equal_ir(z_ir))
         self.assertEqual(len(change_set), 2)
         for item in change_set:
-            self.assertTrue(item.startswith('del '))
+            self.assertTrue(item.startswith("del "))
         check_diffstr(x_ir.diff_str(z_ir), change_set)
 
         def foo(a, b):
@@ -460,7 +478,7 @@ class TestIRCompounds(CheckEquality):
             e = np.sqrt(d)
             return e
 
-        def bar(a, b): # same as foo
+        def bar(a, b):  # same as foo
             c = a * 2
             d = c + b
             e = np.sqrt(d)
@@ -502,8 +520,7 @@ class TestIRPedanticChecks(TestCase):
                 for blk in func_ir.blocks.values():
                     oldscope = blk.scope
                     # put in an empty Scope
-                    blk.scope = ir.Scope(parent=oldscope.parent,
-                                         loc=oldscope.loc)
+                    blk.scope = ir.Scope(parent=oldscope.parent, loc=oldscope.loc)
                 return True
 
         # Create a pass that always fails, to stop the compiler
@@ -556,5 +573,5 @@ class TestIRPedanticChecks(TestCase):
             )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

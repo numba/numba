@@ -20,6 +20,7 @@ def tuple_setitem(typingctx, tup, idx, val):
     - The dtype of the tuple cannot be changed.
       *val* is always cast to the existing dtype of the tuple.
     """
+
     def codegen(context, builder, signature, args):
         tup, idx, val = args
         stack = alloca_once(builder, tup.type)
@@ -73,12 +74,15 @@ def unpack_single_tuple(tyctx, tup):
     """
     # See issue #6534
     if not isinstance(tup, types.BaseTuple):
-        msg = (f"Only tuples are supported when unpacking a single item, "
-               f"got type: {tup}")
+        msg = (
+            f"Only tuples are supported when unpacking a single item, "
+            f"got type: {tup}"
+        )
         raise errors.UnsupportedError(msg)
 
     sig = tup(tup)
 
     def codegen(context, builder, signature, args):
-        return args[0] # there's only one tuple and it's a simple pass through
+        return args[0]  # there's only one tuple and it's a simple pass through
+
     return sig, codegen

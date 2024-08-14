@@ -24,6 +24,7 @@ class TestMakeFunctionToJITFunction(unittest.TestCase):
     This tests the pass that converts ir.Expr.op == make_function (i.e. closure)
     into a JIT function.
     """
+
     # NOTE: testing this is a bit tricky. The function receiving a JIT'd closure
     # must also be under JIT control so as to handle the JIT'd closure
     # correctly, however, in the case of running the test implementations in the
@@ -38,7 +39,9 @@ class TestMakeFunctionToJITFunction(unittest.TestCase):
             def impl():
                 def inner():
                     return 10
+
                 return consumer_func(inner)
+
             return impl
 
         cfunc = njit(impl_factory(consumer))
@@ -55,7 +58,9 @@ class TestMakeFunctionToJITFunction(unittest.TestCase):
 
                 def innerinner(x):
                     return x()
+
                 return consumer_func(inner, innerinner)
+
             return impl
 
         cfunc = njit(impl_factory(consumer2arg))
@@ -70,8 +75,11 @@ class TestMakeFunctionToJITFunction(unittest.TestCase):
                 def callinner():
                     def inner():
                         return 10
+
                     return inner()
+
                 return consumer_func(callinner)
+
             return impl
 
         cfunc = njit(impl_factory(consumer))
@@ -87,7 +95,9 @@ class TestMakeFunctionToJITFunction(unittest.TestCase):
 
                 def callinner(z):
                     return y + z + _global
+
                 return consumer_func(callinner, 6)
+
             return impl
 
         cfunc = njit(impl_factory(consumer))
@@ -103,7 +113,9 @@ class TestMakeFunctionToJITFunction(unittest.TestCase):
 
                 def callinner(z):
                     return y + z + _global
+
                 return consumer_func(callinner, x)
+
             return impl
 
         cfunc = njit(impl_factory(consumer))
@@ -126,12 +138,16 @@ class TestMakeFunctionToJITFunction(unittest.TestCase):
             # specialise on the number of args, as per `foo`
             nargs = len(args)
             if nargs == 1:
+
                 def impl(func, *args):
                     return func(*args)
+
                 return impl
             elif nargs == 2:
+
                 def impl(func, *args):
                     return func(func(*args))
+
                 return impl
 
         def impl_factory(consumer_func):
@@ -140,8 +156,10 @@ class TestMakeFunctionToJITFunction(unittest.TestCase):
 
                 def callinner(*z):
                     return y + np.sum(np.asarray(z)) + _global
+
                 # run both specialisations, 1 arg, and 2 arg.
                 return foo(callinner, x), foo(callinner, x, x)
+
             return impl
 
         cfunc = njit(impl_factory(consumer))
@@ -161,6 +179,7 @@ class TestMakeFunctionToJITFunction(unittest.TestCase):
         def impl(array):
             def mul10(x):
                 return x * 10
+
             return apply(array, mul10)
 
         cfunc = njit(impl)
@@ -175,10 +194,12 @@ class TestMakeFunctionToJITFunction(unittest.TestCase):
             def impl(x):
                 def inner(val):
                     return 1 / val
+
                 return consumer_func(inner, x)
+
             return impl
 
-        cfunc = njit(error_model='numpy')(impl_factory(consumer))
+        cfunc = njit(error_model="numpy")(impl_factory(consumer))
         impl = impl_factory(consumer.py_func)
 
         a = 0
@@ -208,8 +229,7 @@ class TestMakeFunctionToJITFunction(unittest.TestCase):
         with self.assertRaises(errors.TypingError) as e:
             impl(1)
 
-        self.assertIn("Cannot capture a constant value for variable",
-                      str(e.exception))
+        self.assertIn("Cannot capture a constant value for variable", str(e.exception))
 
     def test_non_const_in_escapee(self):
 
@@ -219,13 +239,15 @@ class TestMakeFunctionToJITFunction(unittest.TestCase):
 
             def inner(val):
                 return 1 + z + val  # z is non-const freevar
+
             return consumer(inner, x)
 
         with self.assertRaises(errors.TypingError) as e:
             impl(1)
 
-        self.assertIn("Cannot capture the non-constant value associated",
-                      str(e.exception))
+        self.assertIn(
+            "Cannot capture the non-constant value associated", str(e.exception)
+        )
 
     def test_escape_with_kwargs(self):
 
@@ -236,12 +258,21 @@ class TestMakeFunctionToJITFunction(unittest.TestCase):
                 def inner(a, b, c, mydefault1=123, mydefault2=456):
                     z = 4
                     return mydefault1 + mydefault2 + z + t + a + b + c
+
                 # this is awkward, top and tail closure inlining with a escapees
                 # in the middle that do/don't have defaults.
-                return (inner(1, 2, 5, 91, 53),
-                        consumer_func(inner, 1, 2, 3, 73),
-                        consumer_func(inner, 1, 2, 3,),
-                        inner(1, 2, 4))
+                return (
+                    inner(1, 2, 5, 91, 53),
+                    consumer_func(inner, 1, 2, 3, 73),
+                    consumer_func(
+                        inner,
+                        1,
+                        2,
+                        3,
+                    ),
+                    inner(1, 2, 4),
+                )
+
             return impl
 
         cfunc = njit(impl_factory(consumer))
@@ -266,12 +297,21 @@ class TestMakeFunctionToJITFunction(unittest.TestCase):
                 def inner(a, b, c, mydefault1=123, mydefault2=456):
                     z = 4
                     return mydefault1 + mydefault2 + z + t + a + b + c
+
                 # this is awkward, top and tail closure inlining with a escapees
                 # in the middle that get defaults specified in the consumer
-                return (inner(1, 2, 5, 91, 53),
-                        consumer_func(inner, 1, 2, 11),
-                        consumer_func(inner, 1, 2, 3,),
-                        inner(1, 2, 4))
+                return (
+                    inner(1, 2, 5, 91, 53),
+                    consumer_func(inner, 1, 2, 11),
+                    consumer_func(
+                        inner,
+                        1,
+                        2,
+                        3,
+                    ),
+                    inner(1, 2, 4),
+                )
+
             return impl
 
         cfunc = njit(impl_factory(specialised_consumer))
@@ -280,5 +320,5 @@ class TestMakeFunctionToJITFunction(unittest.TestCase):
         np.testing.assert_allclose(impl(), cfunc())
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

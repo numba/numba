@@ -33,9 +33,13 @@ import numpy as np
 from numba import testing, types
 from numba.core import errors, typing, utils, config, cpu
 from numba.core.typing import cffi_utils
-from numba.core.compiler import (compile_extra, Flags,
-                                 DEFAULT_FLAGS, CompilerBase,
-                                 DefaultPassBuilder)
+from numba.core.compiler import (
+    compile_extra,
+    Flags,
+    DEFAULT_FLAGS,
+    CompilerBase,
+    DefaultPassBuilder,
+)
 from numba.core.typed_passes import IRLegalization
 from numba.core.untyped_passes import PreserveIR
 import unittest
@@ -77,38 +81,31 @@ nrt_flags = Flags()
 nrt_flags.nrt = True
 
 
-tag = testing.make_tag_decorator(['important', 'long_running', 'always_test'])
+tag = testing.make_tag_decorator(["important", "long_running", "always_test"])
 
 # Use to mark a test as a test that must always run when sharded
-always_test = tag('always_test')
+always_test = tag("always_test")
 
-_32bit = sys.maxsize <= 2 ** 32
+_32bit = sys.maxsize <= 2**32
 is_parfors_unsupported = _32bit
 skip_parfors_unsupported = unittest.skipIf(
     is_parfors_unsupported,
-    'parfors not supported',
+    "parfors not supported",
 )
 
 skip_unless_py10_or_later = unittest.skipUnless(
-    utils.PYVERSION >= (3, 10),
-    "needs Python 3.10 or later"
+    utils.PYVERSION >= (3, 10), "needs Python 3.10 or later"
 )
 
-skip_unless_py10 = unittest.skipUnless(
-    utils.PYVERSION == (3, 10),
-    "needs Python 3.10"
-)
+skip_unless_py10 = unittest.skipUnless(utils.PYVERSION == (3, 10), "needs Python 3.10")
 
-skip_unless_py312 = unittest.skipUnless(
-    utils.PYVERSION == (3, 12),
-    "needs Python 3.12"
-)
+skip_unless_py312 = unittest.skipUnless(utils.PYVERSION == (3, 12), "needs Python 3.12")
 
 skip_if_32bit = unittest.skipIf(_32bit, "Not supported on 32 bit")
 
 IS_NUMPY_2 = numpy_support.numpy_version >= (2, 0)
-skip_if_numpy_2 = unittest.skipIf(IS_NUMPY_2,
-                                  "Not supported on numpy 2.0+")
+skip_if_numpy_2 = unittest.skipIf(IS_NUMPY_2, "Not supported on numpy 2.0+")
+
 
 def expected_failure_py311(fn):
     if utils.PYVERSION == (3, 11):
@@ -116,11 +113,13 @@ def expected_failure_py311(fn):
     else:
         return fn
 
+
 def expected_failure_py312(fn):
     if utils.PYVERSION == (3, 12):
         return unittest.expectedFailure(fn)
     else:
         return fn
+
 
 def expected_failure_np2(fn):
     if numpy_support.numpy_version == (2, 0):
@@ -128,70 +127,76 @@ def expected_failure_np2(fn):
     else:
         return fn
 
+
 _msg = "SciPy needed for test"
 skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
 
-skip_unless_cffi = unittest.skipUnless(cffi_utils.SUPPORTED, 'requires cffi')
+skip_unless_cffi = unittest.skipUnless(cffi_utils.SUPPORTED, "requires cffi")
 
-_lnx_reason = 'linux only test'
-linux_only = unittest.skipIf(not sys.platform.startswith('linux'), _lnx_reason)
+_lnx_reason = "linux only test"
+linux_only = unittest.skipIf(not sys.platform.startswith("linux"), _lnx_reason)
 
-_win_reason = 'Windows-only test'
-windows_only = unittest.skipIf(not sys.platform.startswith('win'), _win_reason)
+_win_reason = "Windows-only test"
+windows_only = unittest.skipIf(not sys.platform.startswith("win"), _win_reason)
 
-_is_armv7l = platform.machine() == 'armv7l'
+_is_armv7l = platform.machine() == "armv7l"
 
-disabled_test = unittest.skipIf(True, 'Test disabled')
+disabled_test = unittest.skipIf(True, "Test disabled")
 
 # See issue #4563, PPC64LE LLVM bug
-skip_ppc64le_issue4563 = unittest.skipIf(platform.machine() == 'ppc64le',
-                                         ("Hits: 'Parameter area must exist "
-                                          "to pass an argument in memory'"))
+skip_ppc64le_issue4563 = unittest.skipIf(
+    platform.machine() == "ppc64le",
+    ("Hits: 'Parameter area must exist " "to pass an argument in memory'"),
+)
 
 # Typeguard
-has_typeguard = bool(os.environ.get('NUMBA_USE_TYPEGUARD', 0))
+has_typeguard = bool(os.environ.get("NUMBA_USE_TYPEGUARD", 0))
 
 skip_unless_typeguard = unittest.skipUnless(
-    has_typeguard, "Typeguard is not enabled",
+    has_typeguard,
+    "Typeguard is not enabled",
 )
 
 skip_if_typeguard = unittest.skipIf(
-    has_typeguard, "Broken if Typeguard is enabled",
+    has_typeguard,
+    "Broken if Typeguard is enabled",
 )
 
 # See issue #6465, PPC64LE LLVM bug
-skip_ppc64le_issue6465 = unittest.skipIf(platform.machine() == 'ppc64le',
-                                         ("Hits: 'mismatch in size of "
-                                          "parameter area' in "
-                                          "LowerCall_64SVR4"))
+skip_ppc64le_issue6465 = unittest.skipIf(
+    platform.machine() == "ppc64le",
+    ("Hits: 'mismatch in size of " "parameter area' in " "LowerCall_64SVR4"),
+)
 
 # LLVM PPC issue.
 # Sample error message:
 #   Invalid PPC CTR loop!
 #   UNREACHABLE executed at /llvm/lib/Target/PowerPC/PPCCTRLoops.cpp:179!
 skip_ppc64le_invalid_ctr_loop = unittest.skipIf(
-    platform.machine() == 'ppc64le',
-    "Invalid PPC CTR loop")
+    platform.machine() == "ppc64le", "Invalid PPC CTR loop"
+)
 
 # fenv.h on M1 may have various issues:
 # https://github.com/numba/numba/issues/7822#issuecomment-1065356758
 _uname = platform.uname()
-IS_MACOS = _uname.system == 'Darwin'
-skip_macos_fenv_errors = unittest.skipIf(IS_MACOS,
-    "fenv.h-like functionality unreliable on macOS")
-IS_MACOS_ARM64 = IS_MACOS and _uname.machine == 'arm64'
+IS_MACOS = _uname.system == "Darwin"
+skip_macos_fenv_errors = unittest.skipIf(
+    IS_MACOS, "fenv.h-like functionality unreliable on macOS"
+)
+IS_MACOS_ARM64 = IS_MACOS and _uname.machine == "arm64"
 
 try:
     import scipy.linalg.cython_lapack
+
     has_lapack = True
 except ImportError:
     has_lapack = False
 
-needs_lapack = unittest.skipUnless(has_lapack,
-                                   "LAPACK needs SciPy 1.0+")
+needs_lapack = unittest.skipUnless(has_lapack, "LAPACK needs SciPy 1.0+")
 
 try:
     import scipy.linalg.cython_blas
+
     has_blas = True
 except ImportError:
     has_blas = False
@@ -202,19 +207,20 @@ needs_blas = unittest.skipUnless(has_blas, "BLAS needs SciPy 1.0+")
 # `SUBPROC_TEST` environment variable is set. Use this in conjunction with:
 # TestCase::subprocess_test_runner which will execute a given test in subprocess
 # with this environment variable set.
-_exec_cond = os.environ.get('SUBPROC_TEST', None) == '1'
+_exec_cond = os.environ.get("SUBPROC_TEST", None) == "1"
 needs_subprocess = unittest.skipUnless(_exec_cond, "needs subprocess harness")
 
 
 try:
     import setuptools
+
     has_setuptools = True
 except ImportError:
     has_setuptools = False
 
 
 # decorator for a test that need setuptools
-needs_setuptools = unittest.skipUnless(has_setuptools, 'Test needs setuptools')
+needs_setuptools = unittest.skipUnless(has_setuptools, "Test needs setuptools")
 
 
 def ignore_internal_warnings():
@@ -222,12 +228,14 @@ def ignore_internal_warnings():
     warnings that are unrelated/internally generated by Numba.
     """
     # Filter out warnings from typeguard
-    warnings.filterwarnings('ignore', module="typeguard")
+    warnings.filterwarnings("ignore", module="typeguard")
     # Filter out warnings about TBB interface mismatch
-    warnings.filterwarnings(action='ignore',
-                            message=r".*TBB_INTERFACE_VERSION.*",
-                            category=errors.NumbaWarning,
-                            module=r'numba\.np\.ufunc\.parallel.*')
+    warnings.filterwarnings(
+        action="ignore",
+        message=r".*TBB_INTERFACE_VERSION.*",
+        category=errors.NumbaWarning,
+        module=r"numba\.np\.ufunc\.parallel.*",
+    )
 
 
 class TestCase(unittest.TestCase):
@@ -259,8 +267,12 @@ class TestCase(unittest.TestCase):
         A context manager that asserts the enclosed code block fails
         compiling in nopython mode.
         """
-        _accepted_errors = (errors.LoweringError, errors.TypingError,
-                            TypeError, NotImplementedError)
+        _accepted_errors = (
+            errors.LoweringError,
+            errors.TypingError,
+            TypeError,
+            NotImplementedError,
+        )
         with self.assertRaises(_accepted_errors) as cm:
             yield cm
 
@@ -277,8 +289,9 @@ class TestCase(unittest.TestCase):
         new_refcounts = [sys.getrefcount(x) for x in objects]
         for old, new, obj in zip(old_refcounts, new_refcounts, objects):
             if old != new:
-                self.fail("Refcount changed from %d to %d for object: %r"
-                          % (old, new, obj))
+                self.fail(
+                    "Refcount changed from %d to %d for object: %r" % (old, new, obj)
+                )
 
     def assertRefCountEqual(self, *objects):
         gc.collect()
@@ -287,8 +300,10 @@ class TestCase(unittest.TestCase):
         for i in range(len(objects))[1:]:
             rc_i = rc[i]
             if rc_0 != rc_i:
-                self.fail(f"Refcount for objects does not match. "
-                          f"#0({rc_0}) != #{i}({rc_i}) does not match.")
+                self.fail(
+                    f"Refcount for objects does not match. "
+                    f"#0({rc_0}) != #{i}({rc_i}) does not match."
+                )
 
     @contextlib.contextmanager
     def assertNoNRTLeak(self):
@@ -303,15 +318,17 @@ class TestCase(unittest.TestCase):
         total_free = new.free - old.free
         total_mi_alloc = new.mi_alloc - old.mi_alloc
         total_mi_free = new.mi_free - old.mi_free
-        self.assertEqual(total_alloc, total_free,
-                         "number of data allocs != number of data frees")
-        self.assertEqual(total_mi_alloc, total_mi_free,
-                         "number of meminfo allocs != number of meminfo frees")
-
+        self.assertEqual(
+            total_alloc, total_free, "number of data allocs != number of data frees"
+        )
+        self.assertEqual(
+            total_mi_alloc,
+            total_mi_free,
+            "number of meminfo allocs != number of meminfo frees",
+        )
 
     _bool_types = (bool, np.bool_)
-    _exact_typesets = [_bool_types, (int,), (str,), (np.integer,),
-                       (bytes, np.bytes_)]
+    _exact_typesets = [_bool_types, (int,), (str,), (np.integer,), (bytes, np.bytes_)]
     _approx_typesets = [(float,), (complex,), (np.inexact)]
     _sequence_typesets = [(tuple, list)]
     _float_types = (float, np.floating)
@@ -353,9 +370,12 @@ class TestCase(unittest.TestCase):
         """
         # Under 64-bit Windows, Numpy may return either int32 or int64
         # arrays depending on the function.
-        if (sys.platform == 'win32' and sys.maxsize > 2**32 and
-            dtype == np.dtype('int32')):
-            return np.dtype('int64')
+        if (
+            sys.platform == "win32"
+            and sys.maxsize > 2**32
+            and dtype == np.dtype("int32")
+        ):
+            return np.dtype("int64")
         else:
             return dtype
 
@@ -367,9 +387,11 @@ class TestCase(unittest.TestCase):
         if arr.size == 0:
             return [0] * arr.ndim
         else:
-            return [stride / arr.itemsize
-                    for (stride, shape) in zip(arr.strides, arr.shape)
-                    if shape > 1]
+            return [
+                stride / arr.itemsize
+                for (stride, shape) in zip(arr.strides, arr.shape)
+                if shape > 1
+            ]
 
     def assertStridesEqual(self, first, second):
         """
@@ -377,13 +399,20 @@ class TestCase(unittest.TestCase):
         """
         self.assertEqual(first.shape, second.shape, "shapes differ")
         self.assertEqual(first.itemsize, second.itemsize, "itemsizes differ")
-        self.assertEqual(self._fix_strides(first), self._fix_strides(second),
-                         "strides differ")
+        self.assertEqual(
+            self._fix_strides(first), self._fix_strides(second), "strides differ"
+        )
 
-    def assertPreciseEqual(self, first, second, prec='exact', ulps=1,
-                           msg=None, ignore_sign_on_zero=False,
-                           abs_tol=None
-                           ):
+    def assertPreciseEqual(
+        self,
+        first,
+        second,
+        prec="exact",
+        ulps=1,
+        msg=None,
+        ignore_sign_on_zero=False,
+        abs_tol=None,
+    ):
         """
         Versatile equality testing function with more built-in checks than
         standard assertEqual().
@@ -417,8 +446,9 @@ class TestCase(unittest.TestCase):
         will raise an error.
         """
         try:
-            self._assertPreciseEqual(first, second, prec, ulps, msg,
-                ignore_sign_on_zero, abs_tol)
+            self._assertPreciseEqual(
+                first, second, prec, ulps, msg, ignore_sign_on_zero, abs_tol
+            )
         except AssertionError as exc:
             failure_msg = str(exc)
             # Fall off of the 'except' scope to avoid Python 3 exception
@@ -428,23 +458,33 @@ class TestCase(unittest.TestCase):
         # Decorate the failure message with more information
         self.fail("when comparing %s and %s: %s" % (first, second, failure_msg))
 
-    def _assertPreciseEqual(self, first, second, prec='exact', ulps=1,
-                            msg=None, ignore_sign_on_zero=False,
-                            abs_tol=None):
+    def _assertPreciseEqual(
+        self,
+        first,
+        second,
+        prec="exact",
+        ulps=1,
+        msg=None,
+        ignore_sign_on_zero=False,
+        abs_tol=None,
+    ):
         """Recursive workhorse for assertPreciseEqual()."""
 
         def _assertNumberEqual(first, second, delta=None):
-            if (delta is None or first == second == 0.0
-                or math.isinf(first) or math.isinf(second)):
+            if (
+                delta is None
+                or first == second == 0.0
+                or math.isinf(first)
+                or math.isinf(second)
+            ):
                 self.assertEqual(first, second, msg=msg)
                 # For signed zeros
                 if not ignore_sign_on_zero:
                     try:
                         if math.copysign(1, first) != math.copysign(1, second):
                             self.fail(
-                                self._formatMessage(msg,
-                                                    "%s != %s" %
-                                                    (first, second)))
+                                self._formatMessage(msg, "%s != %s" % (first, second))
+                            )
                     except TypeError:
                         pass
             else:
@@ -453,10 +493,12 @@ class TestCase(unittest.TestCase):
         first_family = self._detect_family(first)
         second_family = self._detect_family(second)
 
-        assertion_message = "Type Family mismatch. (%s != %s)" % (first_family,
-            second_family)
+        assertion_message = "Type Family mismatch. (%s != %s)" % (
+            first_family,
+            second_family,
+        )
         if msg:
-            assertion_message += ': %s' % (msg,)
+            assertion_message += ": %s" % (msg,)
         self.assertEqual(first_family, second_family, msg=assertion_message)
 
         # We now know they are in the same comparison family
@@ -466,29 +508,31 @@ class TestCase(unittest.TestCase):
         if compare_family == "ndarray":
             dtype = self._fix_dtype(first.dtype)
             self.assertEqual(dtype, self._fix_dtype(second.dtype))
-            self.assertEqual(first.ndim, second.ndim,
-                             "different number of dimensions")
-            self.assertEqual(first.shape, second.shape,
-                             "different shapes")
-            self.assertEqual(first.flags.writeable, second.flags.writeable,
-                             "different mutability")
+            self.assertEqual(first.ndim, second.ndim, "different number of dimensions")
+            self.assertEqual(first.shape, second.shape, "different shapes")
+            self.assertEqual(
+                first.flags.writeable, second.flags.writeable, "different mutability"
+            )
             # itemsize is already checked by the dtype test above
-            self.assertEqual(self._fix_strides(first),
-                self._fix_strides(second), "different strides")
+            self.assertEqual(
+                self._fix_strides(first), self._fix_strides(second), "different strides"
+            )
             if first.dtype != dtype:
                 first = first.astype(dtype)
             if second.dtype != dtype:
                 second = second.astype(dtype)
             for a, b in zip(first.flat, second.flat):
-                self._assertPreciseEqual(a, b, prec, ulps, msg,
-                                         ignore_sign_on_zero, abs_tol)
+                self._assertPreciseEqual(
+                    a, b, prec, ulps, msg, ignore_sign_on_zero, abs_tol
+                )
             return
 
         elif compare_family == "sequence":
             self.assertEqual(len(first), len(second), msg=msg)
             for a, b in zip(first, second):
-                self._assertPreciseEqual(a, b, prec, ulps, msg,
-                                         ignore_sign_on_zero, abs_tol)
+                self._assertPreciseEqual(
+                    a, b, prec, ulps, msg, ignore_sign_on_zero, abs_tol
+                )
             return
 
         elif compare_family == "exact":
@@ -499,9 +543,9 @@ class TestCase(unittest.TestCase):
 
         elif compare_family == "enum":
             self.assertIs(first.__class__, second.__class__)
-            self._assertPreciseEqual(first.value, second.value,
-                                     prec, ulps, msg,
-                                     ignore_sign_on_zero, abs_tol)
+            self._assertPreciseEqual(
+                first.value, second.value, prec, ulps, msg, ignore_sign_on_zero, abs_tol
+            )
             return
 
         elif compare_family == "unknown":
@@ -515,16 +559,17 @@ class TestCase(unittest.TestCase):
 
         # If a Numpy scalar, check the dtype is exactly the same too
         # (required for datetime64 and timedelta64).
-        if hasattr(first, 'dtype') and hasattr(second, 'dtype'):
+        if hasattr(first, "dtype") and hasattr(second, "dtype"):
             self.assertEqual(first.dtype, second.dtype)
 
         # Mixing bools and non-bools should always fail
-        if (isinstance(first, self._bool_types) !=
-            isinstance(second, self._bool_types)):
-            assertion_message = ("Mismatching return types (%s vs. %s)"
-                                 % (first.__class__, second.__class__))
+        if isinstance(first, self._bool_types) != isinstance(second, self._bool_types):
+            assertion_message = "Mismatching return types (%s vs. %s)" % (
+                first.__class__,
+                second.__class__,
+            )
             if msg:
-                assertion_message += ': %s' % (msg,)
+                assertion_message += ": %s" % (msg,)
             self.fail(assertion_message)
 
         try:
@@ -542,17 +587,16 @@ class TestCase(unittest.TestCase):
             elif isinstance(abs_tol, float):
                 rtol = abs_tol
             else:
-                raise ValueError("abs_tol is not \"eps\" or a float, found %s"
-                    % abs_tol)
+                raise ValueError('abs_tol is not "eps" or a float, found %s' % abs_tol)
             if abs(first - second) < rtol:
                 return
 
-        exact_comparison = exact_comparison or prec == 'exact'
+        exact_comparison = exact_comparison or prec == "exact"
 
-        if not exact_comparison and prec != 'exact':
-            if prec == 'single':
+        if not exact_comparison and prec != "exact":
+            if prec == "single":
                 bits = 24
-            elif prec == 'double':
+            elif prec == "double":
                 bits = 53
             else:
                 raise ValueError("unsupported precision %r" % (prec,))
@@ -572,9 +616,16 @@ class TestCase(unittest.TestCase):
         else:
             _assertNumberEqual(first, second, delta)
 
-    def subprocess_test_runner(self, test_module, test_class=None,
-                               test_name=None, envvars=None, timeout=60,
-                               flags=None, _subproc_test_env="1"):
+    def subprocess_test_runner(
+        self,
+        test_module,
+        test_class=None,
+        test_name=None,
+        envvars=None,
+        timeout=60,
+        flags=None,
+        _subproc_test_env="1",
+    ):
         """
         Runs named unit test(s) as specified in the arguments as:
         test_module.test_class.test_name. test_module must always be supplied
@@ -600,40 +651,52 @@ class TestCase(unittest.TestCase):
         themod = self.__module__
         thecls = type(self).__name__
         parts = (test_module, test_class, test_name)
-        fully_qualified_test = '.'.join(x for x in parts if x is not None)
+        fully_qualified_test = ".".join(x for x in parts if x is not None)
         flags_args = []
         if flags is not None:
             for flag, value in flags.items():
-                flags_args.append(f'{flag}')
-                flags_args.append(f'{value}')
-        cmd = [sys.executable, *flags_args, '-m', 'numba.runtests',
-               fully_qualified_test]
+                flags_args.append(f"{flag}")
+                flags_args.append(f"{value}")
+        cmd = [
+            sys.executable,
+            *flags_args,
+            "-m",
+            "numba.runtests",
+            fully_qualified_test,
+        ]
         env_copy = os.environ.copy()
-        env_copy['SUBPROC_TEST'] = _subproc_test_env
+        env_copy["SUBPROC_TEST"] = _subproc_test_env
         try:
-            env_copy['COVERAGE_PROCESS_START'] = os.environ['COVERAGE_RCFILE']
+            env_copy["COVERAGE_PROCESS_START"] = os.environ["COVERAGE_RCFILE"]
         except KeyError:
-            pass   # ignored
+            pass  # ignored
         envvars = pytypes.MappingProxyType({} if envvars is None else envvars)
         env_copy.update(envvars)
-        status = subprocess.run(cmd, stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE, timeout=timeout,
-                                env=env_copy, universal_newlines=True)
-        streams = (f'\ncaptured stdout: {status.stdout}\n'
-                   f'captured stderr: {status.stderr}')
+        status = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+            env=env_copy,
+            universal_newlines=True,
+        )
+        streams = (
+            f"\ncaptured stdout: {status.stdout}\n" f"captured stderr: {status.stderr}"
+        )
         self.assertEqual(status.returncode, 0, streams)
         # Python 3.12.1 report
         no_tests_ran = "NO TESTS RAN"
         if no_tests_ran in status.stderr:
             self.skipTest(no_tests_ran)
         else:
-            self.assertIn('OK', status.stderr)
+            self.assertIn("OK", status.stderr)
         return status
 
     def run_test_in_subprocess(maybefunc=None, timeout=60, envvars=None):
         """Runs the decorated test in a subprocess via invoking numba's test
         runner. kwargs timeout and envvars are passed through to
         subprocess_test_runner."""
+
         def wrapper(func):
             def inner(self, *args, **kwargs):
                 if os.environ.get("SUBPROC_TEST", None) != func.__name__:
@@ -652,6 +715,7 @@ class TestCase(unittest.TestCase):
                     # env var is set, so we're in the subprocess, run the
                     # actual test.
                     func(self)
+
             return inner
 
         if isinstance(maybefunc, pytypes.FunctionType):
@@ -665,7 +729,7 @@ class TestCase(unittest.TestCase):
 
         # Use test_id to make sure no collision is possible.
         test_id = self.id()
-        DummyType = type('DummyTypeFor{}'.format(test_id), (types.Opaque,), {})
+        DummyType = type("DummyTypeFor{}".format(test_id), (types.Opaque,), {})
 
         dummy_type = DummyType("my_dummy")
         register_model(DummyType)(OpaqueModel)
@@ -693,17 +757,19 @@ class TestCase(unittest.TestCase):
         # This is a local import to avoid deprecation warnings being generated
         # through the use of the numba.pycc module.
         from numba.pycc.platform import external_compiler_works
+
         if not external_compiler_works():
             self.skipTest("No suitable external compiler was found.")
 
 
 class SerialMixin(object):
-    """Mixin to mark test for serial execution.
-    """
+    """Mixin to mark test for serial execution."""
+
     _numba_parallel_test_ = False
 
 
 # Various helpers
+
 
 @contextlib.contextmanager
 def override_config(name, value):
@@ -754,26 +820,29 @@ def compile_function(name, code, globs):
     return ns[name]
 
 
-_trashcan_dir = 'numba-tests'
+_trashcan_dir = "numba-tests"
 
-if os.name == 'nt':
+if os.name == "nt":
     # Under Windows, gettempdir() points to the user-local temp dir
     _trashcan_dir = os.path.join(tempfile.gettempdir(), _trashcan_dir)
 else:
     # Mix the UID into the directory name to allow different users to
     # run the test suite without permission errors (issue #1586)
-    _trashcan_dir = os.path.join(tempfile.gettempdir(),
-                                 "%s.%s" % (_trashcan_dir, os.getuid()))
+    _trashcan_dir = os.path.join(
+        tempfile.gettempdir(), "%s.%s" % (_trashcan_dir, os.getuid())
+    )
 
 # Stale temporary directories are deleted after they are older than this value.
 # The test suite probably won't ever take longer than this...
 _trashcan_timeout = 24 * 3600  # 1 day
+
 
 def _create_trashcan_dir():
     try:
         os.mkdir(_trashcan_dir)
     except FileExistsError:
         pass
+
 
 def _purge_trashcan_dir():
     freshness_threshold = time.time() - _trashcan_timeout
@@ -788,10 +857,12 @@ def _purge_trashcan_dir():
             # remove the same entry at once, ignore.
             pass
 
+
 def _create_trashcan_subdir(prefix):
     _purge_trashcan_dir()
-    path = tempfile.mkdtemp(prefix=prefix + '-', dir=_trashcan_dir)
+    path = tempfile.mkdtemp(prefix=prefix + "-", dir=_trashcan_dir)
     return path
+
 
 def temp_directory(prefix):
     """
@@ -815,12 +886,14 @@ def import_dynamic(modname):
     avoid issues due to Python's internal directory caching.
     """
     import importlib
+
     importlib.invalidate_caches()
     __import__(modname)
     return sys.modules[modname]
 
 
 # From CPython
+
 
 @contextlib.contextmanager
 def captured_output(stream_name):
@@ -833,21 +906,23 @@ def captured_output(stream_name):
     finally:
         setattr(sys, stream_name, orig_stdout)
 
+
 def captured_stdout():
     """Capture the output of sys.stdout:
 
-       with captured_stdout() as stdout:
-           print("hello")
-       self.assertEqual(stdout.getvalue(), "hello\n")
+    with captured_stdout() as stdout:
+        print("hello")
+    self.assertEqual(stdout.getvalue(), "hello\n")
     """
     return captured_output("stdout")
+
 
 def captured_stderr():
     """Capture the output of sys.stderr:
 
-       with captured_stderr() as stderr:
-           print("hello", file=sys.stderr)
-       self.assertEqual(stderr.getvalue(), "hello\n")
+    with captured_stderr() as stderr:
+        print("hello", file=sys.stderr)
+    self.assertEqual(stderr.getvalue(), "hello\n")
     """
     return captured_output("stderr")
 
@@ -855,7 +930,7 @@ def captured_stderr():
 @contextlib.contextmanager
 def capture_cache_log():
     with captured_stdout() as out:
-        with override_config('DEBUG_CACHE', True):
+        with override_config("DEBUG_CACHE", True):
             yield out
 
 
@@ -918,21 +993,24 @@ def forbid_codegen():
     If code generation is invoked, a RuntimeError is raised.
     """
     from numba.core import codegen
-    patchpoints = ['CPUCodeLibrary._finalize_final_module']
+
+    patchpoints = ["CPUCodeLibrary._finalize_final_module"]
 
     old = {}
+
     def fail(*args, **kwargs):
         raise RuntimeError("codegen forbidden by test case")
+
     try:
         # XXX use the mock library instead?
         for name in patchpoints:
-            parts = name.split('.')
+            parts = name.split(".")
             obj = codegen
             for attrname in parts[:-1]:
                 obj = getattr(obj, attrname)
             attrname = parts[-1]
             value = getattr(obj, attrname)
-            assert callable(value), ("%r should be callable" % name)
+            assert callable(value), "%r should be callable" % name
             old[obj, attrname] = value
             setattr(obj, attrname, fail)
         yield
@@ -944,6 +1022,7 @@ def forbid_codegen():
 # For details about redirection of file-descriptor, read
 # https://eli.thegreenplace.net/2015/redirecting-all-kinds-of-stdout-in-python/
 
+
 @contextlib.contextmanager
 def redirect_fd(fd):
     """
@@ -952,6 +1031,7 @@ def redirect_fd(fd):
     """
 
     from numba import _helperlib
+
     libnumba = ctypes.CDLL(_helperlib.__file__)
 
     libnumba._numba_flush_stdout()
@@ -968,15 +1048,13 @@ def redirect_fd(fd):
 
 
 def redirect_c_stdout():
-    """Redirect C stdout
-    """
+    """Redirect C stdout"""
     fd = sys.__stdout__.fileno()
     return redirect_fd(fd)
 
 
 def redirect_c_stderr():
-    """Redirect C stderr
-    """
+    """Redirect C stderr"""
     fd = sys.__stderr__.fileno()
     return redirect_fd(fd)
 
@@ -1014,9 +1092,9 @@ def run_in_new_process_in_cache_dir(func, cache_dir, verbose=True):
         stdout: str
         stderr: str
     """
-    ctx = mp.get_context('spawn')
+    ctx = mp.get_context("spawn")
     qout = ctx.Queue()
-    with override_env_config('NUMBA_CACHE_DIR', cache_dir):
+    with override_env_config("NUMBA_CACHE_DIR", cache_dir):
         proc = ctx.Process(target=_remote_runner, args=[func, qout])
         proc.start()
         proc.join()
@@ -1024,22 +1102,21 @@ def run_in_new_process_in_cache_dir(func, cache_dir, verbose=True):
         stderr = qout.get_nowait()
         if verbose and stdout.strip():
             print()
-            print('STDOUT'.center(80, '-'))
+            print("STDOUT".center(80, "-"))
             print(stdout)
         if verbose and stderr.strip():
             print(file=sys.stderr)
-            print('STDERR'.center(80, '-'), file=sys.stderr)
+            print("STDERR".center(80, "-"), file=sys.stderr)
             print(stderr, file=sys.stderr)
     return {
-        'exitcode': proc.exitcode,
-        'stdout': stdout,
-        'stderr': stderr,
+        "exitcode": proc.exitcode,
+        "stdout": stdout,
+        "stderr": stderr,
     }
 
 
 def _remote_runner(fn, qout):
-    """Used by `run_in_new_process_caching()`
-    """
+    """Used by `run_in_new_process_caching()`"""
     with captured_stderr() as stderr:
         with captured_stdout() as stdout:
             try:
@@ -1052,6 +1129,7 @@ def _remote_runner(fn, qout):
         qout.put(stdout.getvalue())
     qout.put(stderr.getvalue())
     sys.exit(exitcode)
+
 
 class CheckWarningsMixin(object):
     @contextlib.contextmanager
@@ -1070,13 +1148,13 @@ class CheckWarningsMixin(object):
 
 def _format_jit_options(**jit_options):
     if not jit_options:
-        return ''
+        return ""
     out = []
     for key, value in jit_options.items():
         if isinstance(value, str):
             value = '"{}"'.format(value)
-        out.append('{}={}'.format(key, value))
-    return ', '.join(out)
+        out.append("{}={}".format(key, value))
+    return ", ".join(out)
 
 
 @contextlib.contextmanager
@@ -1089,14 +1167,15 @@ def create_temp_module(source_lines, **jit_options):
     """
     # Use try/finally so cleanup happens even when an exception is raised
     try:
-        tempdir = temp_directory('test_temp_module')
+        tempdir = temp_directory("test_temp_module")
         # Generate random module name
-        temp_module_name = 'test_temp_module_{}'.format(
-            str(uuid.uuid4()).replace('-', '_'))
-        temp_module_path = os.path.join(tempdir, temp_module_name + '.py')
+        temp_module_name = "test_temp_module_{}".format(
+            str(uuid.uuid4()).replace("-", "_")
+        )
+        temp_module_path = os.path.join(tempdir, temp_module_name + ".py")
 
         jit_options = _format_jit_options(**jit_options)
-        with open(temp_module_path, 'w') as f:
+        with open(temp_module_path, "w") as f:
             lines = source_lines.format(jit_options=jit_options)
             f.write(lines)
         # Add test_module to sys.path so it can be imported
@@ -1118,9 +1197,16 @@ def run_in_subprocess(code, flags=None, env=None, timeout=30):
     """
     if flags is None:
         flags = []
-    cmd = [sys.executable,] + flags + ["-c", code]
-    popen = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE, env=env)
+    cmd = (
+        [
+            sys.executable,
+        ]
+        + flags
+        + ["-c", code]
+    )
+    popen = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env
+    )
     out, err = popen.communicate(timeout=timeout)
     if popen.returncode != 0:
         msg = "process failed with code %s: stderr follows\n%s\n"
@@ -1136,30 +1222,41 @@ def strace(work, syscalls, timeout=10):
     """
 
     # Open a tmpfile for strace to write into.
-    with tempfile.NamedTemporaryFile('w+t') as ntf:
+    with tempfile.NamedTemporaryFile("w+t") as ntf:
 
         parent_pid = os.getpid()
-        strace_binary = shutil.which('strace')
+        strace_binary = shutil.which("strace")
         if strace_binary is None:
             raise ValueError("No valid 'strace' binary could be found")
-        cmd = [strace_binary, # strace
-               '-q', # quietly (no attach/detach print out)
-               '-p', str(parent_pid), # this PID
-               '-e', ','.join(syscalls), # these syscalls
-               '-o', ntf.name] # put output into this file
+        cmd = [
+            strace_binary,  # strace
+            "-q",  # quietly (no attach/detach print out)
+            "-p",
+            str(parent_pid),  # this PID
+            "-e",
+            ",".join(syscalls),  # these syscalls
+            "-o",
+            ntf.name,
+        ]  # put output into this file
 
         # redirect stdout, stderr is handled by the `-o` flag to strace.
-        popen = subprocess.Popen(cmd, stdout=subprocess.PIPE,)
+        popen = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+        )
         strace_pid = popen.pid
         thread_timeout = threading.Timer(timeout, popen.kill)
         thread_timeout.start()
 
-        def check_return(problem=''):
+        def check_return(problem=""):
             ret = popen.returncode
             if ret != 0:
-                msg = ("strace exited non-zero, process return code was:"
-                       f"{ret}. {problem}")
+                msg = (
+                    "strace exited non-zero, process return code was:"
+                    f"{ret}. {problem}"
+                )
                 raise RuntimeError(msg)
+
         try:
             # push the communication onto a thread so it doesn't block.
             # start comms thread
@@ -1175,7 +1272,7 @@ def strace(work, syscalls, timeout=10):
                 os.kill(strace_pid, signal.SIGINT)
             else:
                 # it's not running, probably an issue, raise
-                problem="If this is SIGKILL, increase the timeout?"
+                problem = "If this is SIGKILL, increase the timeout?"
                 check_return(problem)
             # Make sure the return code is 0, SIGINT to detach is considered
             # a successful exit.
@@ -1198,27 +1295,33 @@ def strace_supported():
 
     # Only support this on linux where the `strace` binary is likely to be the
     # strace needed.
-    if not sys.platform.startswith('linux'):
+    if not sys.platform.startswith("linux"):
         return False
 
-    def force_clone(): # subprocess triggers a clone
-        subprocess.run([sys.executable, '-c', 'exit()'])
+    def force_clone():  # subprocess triggers a clone
+        subprocess.run([sys.executable, "-c", "exit()"])
 
-    syscall = 'clone'
+    syscall = "clone"
     try:
-        trace = strace(force_clone, [syscall,])
+        trace = strace(
+            force_clone,
+            [
+                syscall,
+            ],
+        )
     except Exception:
         return False
-    return syscall in ''.join(trace)
+    return syscall in "".join(trace)
 
 
 class IRPreservingTestPipeline(CompilerBase):
-    """ Same as the standard pipeline, but preserves the func_ir into the
+    """Same as the standard pipeline, but preserves the func_ir into the
     metadata store after legalisation, useful for testing IR changes"""
 
     def define_pipelines(self):
         pipeline = DefaultPassBuilder.define_nopython_pipeline(
-            self.state, "ir_preserving_custom_pipe")
+            self.state, "ir_preserving_custom_pipe"
+        )
         # mangle the default pipeline and inject DCE and IR preservation ahead
         # of legalisation
 
@@ -1237,36 +1340,37 @@ def print_azure_matrix():
     azure-pipelines config to be able to quickly see what the coverage is."""
     import yaml
     from yaml import Loader
+
     base_path = os.path.dirname(os.path.abspath(__file__))
-    azure_pipe = os.path.join(base_path, '..', '..', 'azure-pipelines.yml')
+    azure_pipe = os.path.join(base_path, "..", "..", "azure-pipelines.yml")
     if not os.path.isfile(azure_pipe):
         raise RuntimeError("'azure-pipelines.yml' is not available")
-    with open(os.path.abspath(azure_pipe), 'rt') as f:
+    with open(os.path.abspath(azure_pipe), "rt") as f:
         data = f.read()
     pipe_yml = yaml.load(data, Loader=Loader)
 
-    templates = pipe_yml['jobs']
+    templates = pipe_yml["jobs"]
     # first look at the items in the first two templates, this is osx/linux
     py2np_map = defaultdict(lambda: defaultdict(int))
     for tmplt in templates[:2]:
-        matrix = tmplt['parameters']['matrix']
+        matrix = tmplt["parameters"]["matrix"]
         for setup in matrix.values():
-            py2np_map[setup['NUMPY']][setup['PYTHON']]+=1
+            py2np_map[setup["NUMPY"]][setup["PYTHON"]] += 1
 
     # next look at the items in the windows only template
-    winpath = ['..', '..', 'buildscripts', 'azure', 'azure-windows.yml']
+    winpath = ["..", "..", "buildscripts", "azure", "azure-windows.yml"]
     azure_windows = os.path.join(base_path, *winpath)
     if not os.path.isfile(azure_windows):
         raise RuntimeError("'azure-windows.yml' is not available")
-    with open(os.path.abspath(azure_windows), 'rt') as f:
+    with open(os.path.abspath(azure_windows), "rt") as f:
         data = f.read()
     windows_yml = yaml.load(data, Loader=Loader)
 
     # There's only one template in windows and its keyed differently to the
     # above, get its matrix.
-    matrix = windows_yml['jobs'][0]['strategy']['matrix']
+    matrix = windows_yml["jobs"][0]["strategy"]["matrix"]
     for setup in matrix.values():
-        py2np_map[setup['NUMPY']][setup['PYTHON']]+=1
+        py2np_map[setup["NUMPY"]][setup["PYTHON"]] += 1
 
     print("NumPy | Python | Count")
     print("-----------------------")
@@ -1281,7 +1385,7 @@ def print_azure_matrix():
             rev_map[pyver][npver] = count
     print("\nPython | NumPy | Count")
     print("-----------------------")
-    sorter = lambda x: int(x[0].split('.')[1])
+    sorter = lambda x: int(x[0].split(".")[1])
     for pyver, nps in sorted(rev_map.items(), key=sorter):
         for npver, count in nps.items():
             print(f" {pyver:<4} |  {npver}  |   {count}")

@@ -9,6 +9,7 @@ def Reduce(func):
             return None
         else:
             return r
+
     return reduce_wrapper
 
 

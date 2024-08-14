@@ -2,7 +2,6 @@
 Numba-specific errors and warnings.
 """
 
-
 import abc
 import contextlib
 import os
@@ -35,7 +34,12 @@ class NumbaWarning(Warning):
     Base category for all Numba compiler warnings.
     """
 
-    def __init__(self, msg, loc=None, highlighting=True, ):
+    def __init__(
+        self,
+        msg,
+        loc=None,
+        highlighting=True,
+    ):
         self.msg = msg
         self.loc = loc
 
@@ -44,11 +48,14 @@ class NumbaWarning(Warning):
         if highlighting and _is_numba_core_config_loaded():
             highlight = termcolor().errmsg
         else:
+
             def highlight(x):
                 return x
+
         if loc:
             super(NumbaWarning, self).__init__(
-                highlight("%s\n%s\n" % (msg, loc.strformat())))
+                highlight("%s\n%s\n" % (msg, loc.strformat()))
+            )
         else:
             super(NumbaWarning, self).__init__(highlight("%s" % (msg,)))
 
@@ -101,6 +108,7 @@ class NumbaPedanticWarning(NumbaWarning):
     """
     Warning category for reporting pedantic messages.
     """
+
     def __init__(self, msg, **kwargs):
         super().__init__(f"{msg}\n{pedantic_warning_info}")
 
@@ -121,6 +129,7 @@ class NumbaSystemWarning(NumbaWarning):
     """
     Warning category for an issue with the system configuration.
     """
+
 
 # These are needed in the color formatting of errors setup
 
@@ -185,11 +194,13 @@ try:
     # If the colorama version is < 0.3.9 it can break stdout/stderr in some
     # situations, as a result if this condition is met colorama is disabled and
     # the user is warned. Note that early versions did not have a __version__.
-    colorama_version = getattr(colorama, '__version__', '0.0.0')
+    colorama_version = getattr(colorama, "__version__", "0.0.0")
 
-    if tuple([int(x) for x in colorama_version.split('.')]) < (0, 3, 9):
-        msg = ("Insufficiently recent colorama version found. "
-               "Numba requires colorama >= 0.3.9")
+    if tuple([int(x) for x in colorama_version.split(".")]) < (0, 3, 9):
+        msg = (
+            "Insufficiently recent colorama version found. "
+            "Numba requires colorama >= 0.3.9"
+        )
         # warn the user
         warnings.warn(msg)
         # trip the exception to disable color errors
@@ -198,7 +209,7 @@ try:
     # If Numba is running in testsuite mode then do not use error message
     # coloring so CI system output is consistently readable without having
     # to read between shell escape characters.
-    if os.environ.get('NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING', None):
+    if os.environ.get("NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING", None):
         raise ImportError  # just to trigger the exception handler below
 
 except ImportError:
@@ -254,80 +265,90 @@ else:
 
     class reset_terminal(object):
         def __init__(self):
-            self._buf = bytearray(b'')
+            self._buf = bytearray(b"")
 
         def __enter__(self):
             return self._buf
 
         def __exit__(self, *exc_detail):
-            self._buf += bytearray(Style.RESET_ALL.encode('utf-8'))
+            self._buf += bytearray(Style.RESET_ALL.encode("utf-8"))
 
     # define some default themes, if more are added, update the envvars docs!
     themes = {}
 
     # No color added, just bold weighting
-    themes['no_color'] = {'code': None,
-                          'errmsg': None,
-                          'filename': None,
-                          'indicate': None,
-                          'highlight': None,
-                          'reset': None, }
+    themes["no_color"] = {
+        "code": None,
+        "errmsg": None,
+        "filename": None,
+        "indicate": None,
+        "highlight": None,
+        "reset": None,
+    }
 
     # suitable for terminals with a dark background
-    themes['dark_bg'] = {'code': Fore.BLUE,
-                         'errmsg': Fore.YELLOW,
-                         'filename': Fore.WHITE,
-                         'indicate': Fore.GREEN,
-                         'highlight': Fore.RED,
-                         'reset': Style.RESET_ALL, }
+    themes["dark_bg"] = {
+        "code": Fore.BLUE,
+        "errmsg": Fore.YELLOW,
+        "filename": Fore.WHITE,
+        "indicate": Fore.GREEN,
+        "highlight": Fore.RED,
+        "reset": Style.RESET_ALL,
+    }
 
     # suitable for terminals with a light background
-    themes['light_bg'] = {'code': Fore.BLUE,
-                          'errmsg': Fore.BLACK,
-                          'filename': Fore.MAGENTA,
-                          'indicate': Fore.BLACK,
-                          'highlight': Fore.RED,
-                          'reset': Style.RESET_ALL, }
+    themes["light_bg"] = {
+        "code": Fore.BLUE,
+        "errmsg": Fore.BLACK,
+        "filename": Fore.MAGENTA,
+        "indicate": Fore.BLACK,
+        "highlight": Fore.RED,
+        "reset": Style.RESET_ALL,
+    }
 
     # suitable for terminals with a blue background
-    themes['blue_bg'] = {'code': Fore.WHITE,
-                         'errmsg': Fore.YELLOW,
-                         'filename': Fore.MAGENTA,
-                         'indicate': Fore.CYAN,
-                         'highlight': Fore.RED,
-                         'reset': Style.RESET_ALL, }
+    themes["blue_bg"] = {
+        "code": Fore.WHITE,
+        "errmsg": Fore.YELLOW,
+        "filename": Fore.MAGENTA,
+        "indicate": Fore.CYAN,
+        "highlight": Fore.RED,
+        "reset": Style.RESET_ALL,
+    }
 
     # suitable for use in jupyter notebooks
-    themes['jupyter_nb'] = {'code': Fore.BLACK,
-                            'errmsg': Fore.BLACK,
-                            'filename': Fore.GREEN,
-                            'indicate': Fore.CYAN,
-                            'highlight': Fore.RED,
-                            'reset': Style.RESET_ALL, }
+    themes["jupyter_nb"] = {
+        "code": Fore.BLACK,
+        "errmsg": Fore.BLACK,
+        "filename": Fore.GREEN,
+        "indicate": Fore.CYAN,
+        "highlight": Fore.RED,
+        "reset": Style.RESET_ALL,
+    }
 
-    default_theme = themes['no_color']
+    default_theme = themes["no_color"]
 
     class HighlightColorScheme(_DummyColorScheme):
         def __init__(self, theme=default_theme):
-            self._code = theme['code']
-            self._errmsg = theme['errmsg']
-            self._filename = theme['filename']
-            self._indicate = theme['indicate']
-            self._highlight = theme['highlight']
-            self._reset = theme['reset']
+            self._code = theme["code"]
+            self._errmsg = theme["errmsg"]
+            self._filename = theme["filename"]
+            self._indicate = theme["indicate"]
+            self._highlight = theme["highlight"]
+            self._reset = theme["reset"]
             _DummyColorScheme.__init__(self, theme=theme)
 
         def _markup(self, msg, color=None, style=Style.BRIGHT):
-            features = ''
+            features = ""
             if color:
                 features += color
             if style:
                 features += style
             with ColorShell():
                 with reset_terminal() as mu:
-                    mu += features.encode('utf-8')
-                    mu += (msg).encode('utf-8')
-                return mu.decode('utf-8')
+                    mu += features.encode("utf-8")
+                    mu += (msg).encode("utf-8")
+                return mu.decode("utf-8")
 
         def code(self, msg):
             return self._markup(msg, self._code)
@@ -394,7 +415,8 @@ and
 https://numba.readthedocs.io/en/stable/reference/numpysupported.html
 """
 
-constant_inference_info = """
+constant_inference_info = (
+    """
 Numba could not make a constant out of something that it decided should be
 a constant. This could well be a current limitation in Numba's internals,
 however please first check that your code is valid for compilation,
@@ -407,7 +429,9 @@ please file a feature request at:
 https://github.com/numba/numba/issues/new?template=feature_request.md
 
 If you think your code should work with Numba. %s
-""" % feedback_details
+"""
+    % feedback_details
+)
 
 typing_error_info = """
 This is not usually a problem with Numba itself but instead often caused by
@@ -431,14 +455,17 @@ reportable_issue_info = """
 This should not have happened, a problem has occurred in Numba's internals.
 You are currently using Numba version %s.
 %s
-""" % (numba.__version__, feedback_details)
+""" % (
+    numba.__version__,
+    feedback_details,
+)
 
 error_extras = dict()
-error_extras['unsupported_error'] = unsupported_error_info
-error_extras['typing'] = typing_error_info
-error_extras['reportable'] = reportable_issue_info
-error_extras['interpreter'] = interpreter_error_info
-error_extras['constant_inference'] = constant_inference_info
+error_extras["unsupported_error"] = unsupported_error_info
+error_extras["typing"] = typing_error_info
+error_extras["reportable"] = reportable_issue_info
+error_extras["interpreter"] = interpreter_error_info
+error_extras["constant_inference"] = constant_inference_info
 
 
 def deprecated(arg):
@@ -456,11 +483,14 @@ def deprecated(arg):
 
     def decorator(func):
         def wrapper(*args, **kwargs):
-            msg = "Call to deprecated function \"{}\"."
+            msg = 'Call to deprecated function "{}".'
             if subst:
-                msg += "\n Use \"{}\" instead."
-            warnings.warn(msg.format(func.__name__, subst),
-                          category=DeprecationWarning, stacklevel=2)
+                msg += '\n Use "{}" instead.'
+            warnings.warn(
+                msg.format(func.__name__, subst),
+                category=DeprecationWarning,
+                stacklevel=2,
+            )
             return func(*args, **kwargs)
 
         return wraps(func)(wrapper)
@@ -492,7 +522,7 @@ class WarningsFixer(object):
         Store warnings and optionally fix their filename and lineno.
         """
         with warnings.catch_warnings(record=True) as wlist:
-            warnings.simplefilter('always', self._category)
+            warnings.simplefilter("always", self._category)
             yield
 
         for w in wlist:
@@ -504,13 +534,13 @@ class WarningsFixer(object):
                 self._warnings[filename, lineno, w.category].add(msg)
             else:
                 # Simply emit other warnings again
-                warnings.warn_explicit(msg, w.category,
-                                       w.filename, w.lineno)
+                warnings.warn_explicit(msg, w.category, w.filename, w.lineno)
 
     def flush(self):
         """
         Emit all stored warnings.
         """
+
         def key(arg):
             # It is possible through codegen to create entirely identical
             # warnings, this leads to comparing types when sorting which breaks
@@ -519,7 +549,8 @@ class WarningsFixer(object):
             return str(arg) + str(id(arg))
 
         for (filename, lineno, category), messages in sorted(
-                self._warnings.items(), key=key):
+            self._warnings.items(), key=key
+        ):
             for msg in sorted(messages):
                 warnings.warn_explicit(msg, category, filename, lineno)
         self._warnings.clear()
@@ -539,6 +570,7 @@ class NumbaError(Exception):
         if highlighting:
             highlight = termcolor().errmsg
         else:
+
             def highlight(x):
                 return x
 
@@ -562,7 +594,7 @@ class NumbaError(Exception):
         contextual information.
         """
         self.contexts.append(msg)
-        f = termcolor().errmsg('{0}\n') + termcolor().filename('During: {1}')
+        f = termcolor().errmsg("{0}\n") + termcolor().filename("During: {1}")
         newmsg = f.format(self, msg)
         self.args = (newmsg,)
         return self
@@ -578,12 +610,13 @@ class UnsupportedError(NumbaError):
     """
     Numba does not have an implementation for this functionality.
     """
+
     pass
 
 
 class UnsupportedRewriteError(UnsupportedError):
-    """UnsupportedError from rewrite passes
-    """
+    """UnsupportedError from rewrite passes"""
+
     pass
 
 
@@ -591,6 +624,7 @@ class IRError(NumbaError):
     """
     An error occurred during Numba IR generation.
     """
+
     pass
 
 
@@ -598,6 +632,7 @@ class RedefinedError(IRError):
     """
     An error occurred during interpretation of IR due to variable redefinition.
     """
+
     pass
 
 
@@ -608,8 +643,10 @@ class NotDefinedError(IRError):
 
     def __init__(self, name, loc=None):
         self.name = name
-        msg = ("The compiler failed to analyze the bytecode. "
-               "Variable '%s' is not defined." % name)
+        msg = (
+            "The compiler failed to analyze the bytecode. "
+            "Variable '%s' is not defined." % name
+        )
         super(NotDefinedError, self).__init__(msg, loc=loc)
 
 
@@ -621,6 +658,7 @@ class VerificationError(IRError):
     it is the case that this condition is not met, a VerificationError is
     raised.
     """
+
     pass
 
 
@@ -628,6 +666,7 @@ class DeprecationError(NumbaError):
     """
     Functionality is deprecated.
     """
+
     pass
 
 
@@ -644,6 +683,7 @@ class UnsupportedParforsError(NumbaError):
     """
     An error occurred because parfors is not supported on the platform.
     """
+
     pass
 
 
@@ -651,6 +691,7 @@ class ForbiddenConstruct(LoweringError):
     """
     A forbidden Python construct was encountered (e.g. use of locals()).
     """
+
     pass
 
 
@@ -658,16 +699,19 @@ class TypingError(NumbaError):
     """
     A type inference failure.
     """
+
     pass
 
 
 class UntypedAttributeError(TypingError):
     def __init__(self, value, attr, loc=None):
-        module = getattr(value, 'pymod', None)
+        module = getattr(value, "pymod", None)
         if module is not None and module == np:
             # unsupported numpy feature.
-            msg = ("Use of unsupported NumPy function 'numpy.%s' "
-                   "or unsupported use of the function.") % attr
+            msg = (
+                "Use of unsupported NumPy function 'numpy.%s' "
+                "or unsupported use of the function."
+            ) % attr
         else:
             msg = "Unknown attribute '{attr}' of type {type}"
             msg = msg.format(type=value, attr=attr)
@@ -687,6 +731,7 @@ class CompilerError(NumbaError):
     """
     Some high-level error in the compiler.
     """
+
     pass
 
 
@@ -713,16 +758,19 @@ class InternalTargetMismatchError(InternalError):
     """For signalling a target mismatch error occurred internally within the
     compiler.
     """
+
     def __init__(self, kind, target_hw, hw_clazz):
-        msg = (f"{kind.title()} being resolved on a target from which it does "
-               f"not inherit. Local target is {target_hw}, declared "
-               f"target class is {hw_clazz}.")
+        msg = (
+            f"{kind.title()} being resolved on a target from which it does "
+            f"not inherit. Local target is {target_hw}, declared "
+            f"target class is {hw_clazz}."
+        )
         super().__init__(msg)
 
 
 class NonexistentTargetError(InternalError):
-    """For signalling that a target that does not exist was requested.
-    """
+    """For signalling that a target that does not exist was requested."""
+
     pass
 
 
@@ -731,6 +779,7 @@ class RequireLiteralValue(TypingError):
     For signalling that a function's typing requires a constant value for
     some of its arguments.
     """
+
     pass
 
 
@@ -742,6 +791,7 @@ class ForceLiteralArg(NumbaError):
     requested_args : frozenset[int]
         requested positions of the arguments.
     """
+
     def __init__(self, arg_indices, fold_arguments=None, loc=None):
         """
         Parameters
@@ -761,26 +811,22 @@ class ForceLiteralArg(NumbaError):
         self.fold_arguments = fold_arguments
 
     def bind_fold_arguments(self, fold_arguments):
-        """Bind the fold_arguments function
-        """
+        """Bind the fold_arguments function"""
         # to avoid circular import
         from numba.core.utils import chain_exception
 
-        e = ForceLiteralArg(self.requested_args, fold_arguments,
-                            loc=self.loc)
+        e = ForceLiteralArg(self.requested_args, fold_arguments, loc=self.loc)
         return chain_exception(e, self)
 
     def combine(self, other):
-        """Returns a new instance by or'ing the requested_args.
-        """
+        """Returns a new instance by or'ing the requested_args."""
         if not isinstance(other, ForceLiteralArg):
-            m = '*other* must be a {} but got a {} instead'
+            m = "*other* must be a {} but got a {} instead"
             raise TypeError(m.format(ForceLiteralArg, type(other)))
         return ForceLiteralArg(self.requested_args | other.requested_args)
 
     def __or__(self, other):
-        """Same as self.combine(other)
-        """
+        """Same as self.combine(other)"""
         return self.combine(other)
 
 
@@ -788,6 +834,7 @@ class LiteralTypingError(TypingError):
     """
     Failure in typing a Literal type
     """
+
     pass
 
 
@@ -796,6 +843,7 @@ class LiteralTypingError(TypingError):
 # Exceptions extending from NumbaError are considered "special" by Numba's
 # internals and are treated differently to standard Python exceptions which are
 # permitted to just propagate up the stack.
+
 
 class NumbaValueError(TypingError):
     pass
@@ -856,9 +904,9 @@ def new_error_context(fmt_, *args, **kwargs):
         use_new_style_errors,
     )
 
-    errcls = kwargs.pop('errcls_', InternalError)
+    errcls = kwargs.pop("errcls_", InternalError)
 
-    loc = kwargs.get('loc', None)
+    loc = kwargs.get("loc", None)
     if loc is not None and not loc.filename.startswith(_numba_path):
         loc_info.update(kwargs)
 
@@ -881,11 +929,17 @@ def new_error_context(fmt_, *args, **kwargs):
         elif use_new_style_errors():
             raise e
         else:
-            msg = ("Unknown CAPTURED_ERRORS style: "
-                   f"'{numba.core.config.CAPTURED_ERRORS}'.")
+            msg = (
+                "Unknown CAPTURED_ERRORS style: "
+                f"'{numba.core.config.CAPTURED_ERRORS}'."
+            )
             assert 0, msg
 
 
-__all__ += [name for (name, value) in globals().items()
-            if not name.startswith('_') and isinstance(value, type)
-            and issubclass(value, (Exception, Warning))]
+__all__ += [
+    name
+    for (name, value) in globals().items()
+    if not name.startswith("_")
+    and isinstance(value, type)
+    and issubclass(value, (Exception, Warning))
+]

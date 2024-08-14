@@ -8,15 +8,19 @@ import warnings
 
 from numba import cuda
 from numba.core.errors import NumbaWarning
-from numba.cuda.testing import (CUDATestCase, skip_on_cudasim,
-                                skip_unless_cc_60, skip_if_cudadevrt_missing,
-                                skip_if_mvc_enabled, test_data_dir)
+from numba.cuda.testing import (
+    CUDATestCase,
+    skip_on_cudasim,
+    skip_unless_cc_60,
+    skip_if_cudadevrt_missing,
+    skip_if_mvc_enabled,
+    test_data_dir,
+)
 from numba.tests.support import SerialMixin
-from numba.tests.test_caching import (DispatcherCacheUsecasesTest,
-                                      skip_bad_access)
+from numba.tests.test_caching import DispatcherCacheUsecasesTest, skip_bad_access
 
 
-@skip_on_cudasim('Simulator does not implement caching')
+@skip_on_cudasim("Simulator does not implement caching")
 class CUDACachingTest(SerialMixin, DispatcherCacheUsecasesTest):
     here = os.path.dirname(__file__)
     usecases_file = os.path.join(here, "cache_usecases.py")
@@ -72,23 +76,23 @@ class CUDACachingTest(SerialMixin, DispatcherCacheUsecasesTest):
         mod = self.import_module()
         f = mod.many_locals
         f[1, 1]()
-        self.check_pycache(2) # 1 index, 1 data
+        self.check_pycache(2)  # 1 index, 1 data
 
     def test_closure(self):
         mod = self.import_module()
 
         with warnings.catch_warnings():
-            warnings.simplefilter('error', NumbaWarning)
+            warnings.simplefilter("error", NumbaWarning)
 
             f = mod.closure1
-            self.assertPreciseEqual(f(3), 6) # 3 + 3 = 6
+            self.assertPreciseEqual(f(3), 6)  # 3 + 3 = 6
             f = mod.closure2
-            self.assertPreciseEqual(f(3), 8) # 3 + 5 = 8
+            self.assertPreciseEqual(f(3), 8)  # 3 + 5 = 8
             f = mod.closure3
-            self.assertPreciseEqual(f(3), 10) # 3 + 7 = 10
+            self.assertPreciseEqual(f(3), 10)  # 3 + 7 = 10
             f = mod.closure4
-            self.assertPreciseEqual(f(3), 12) # 3 + 9 = 12
-            self.check_pycache(5) # 1 nbi, 4 nbc
+            self.assertPreciseEqual(f(3), 12)  # 3 + 9 = 12
+            self.check_pycache(5)  # 1 nbi, 4 nbc
 
     def test_cache_reuse(self):
         mod = self.import_module()
@@ -158,7 +162,7 @@ class CUDACachingTest(SerialMixin, DispatcherCacheUsecasesTest):
 
     @skip_unless_cc_60
     @skip_if_cudadevrt_missing
-    @skip_if_mvc_enabled('CG not supported with MVC')
+    @skip_if_mvc_enabled("CG not supported with MVC")
     def test_cache_cg(self):
         # Functions using cooperative groups should be cacheable. See Issue
         # #8888: https://github.com/numba/numba/issues/8888
@@ -174,7 +178,7 @@ class CUDACachingTest(SerialMixin, DispatcherCacheUsecasesTest):
 
     @skip_unless_cc_60
     @skip_if_cudadevrt_missing
-    @skip_if_mvc_enabled('CG not supported with MVC')
+    @skip_if_mvc_enabled("CG not supported with MVC")
     def test_cache_cg_clean_run(self):
         # See Issue #9432: https://github.com/numba/numba/issues/9432
         # If a cached function using CG sync was the first thing to compile,
@@ -189,18 +193,19 @@ class CUDACachingTest(SerialMixin, DispatcherCacheUsecasesTest):
             sys.path.insert(0, %(tempdir)r)
             mod = __import__(%(modname)r)
             mod.cg_usecase(0)
-            """ % dict(tempdir=self.tempdir, modname=self.modname)
+            """ % dict(
+            tempdir=self.tempdir, modname=self.modname
+        )
 
-        popen = subprocess.Popen([sys.executable, "-c", code],
-                                 stdout=subprocess.PIPE,
-                                 stderr=subprocess.PIPE)
+        popen = subprocess.Popen(
+            [sys.executable, "-c", code], stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
         out, err = popen.communicate(timeout=60)
         if popen.returncode != 0:
             raise AssertionError(
                 "process failed with code %s: \n"
                 "stdout follows\n%s\n"
-                "stderr follows\n%s\n"
-                % (popen.returncode, out.decode(), err.decode()),
+                "stderr follows\n%s\n" % (popen.returncode, out.decode(), err.decode()),
             )
 
     def _test_pycache_fallback(self):
@@ -212,8 +217,7 @@ class CUDACachingTest(SerialMixin, DispatcherCacheUsecasesTest):
         f = mod.add_usecase
         # Remove this function's cache files at the end, to avoid accumulation
         # across test calls.
-        self.addCleanup(shutil.rmtree, f.func.stats.cache_path,
-                        ignore_errors=True)
+        self.addCleanup(shutil.rmtree, f.func.stats.cache_path, ignore_errors=True)
 
         self.assertPreciseEqual(f(2, 3), 6)
         # It's a cache miss since the file was copied to a new temp location
@@ -230,8 +234,9 @@ class CUDACachingTest(SerialMixin, DispatcherCacheUsecasesTest):
         self.check_pycache(0)
 
     @skip_bad_access
-    @unittest.skipIf(os.name == "nt",
-                     "cannot easily make a directory read-only on Windows")
+    @unittest.skipIf(
+        os.name == "nt", "cannot easily make a directory read-only on Windows"
+    )
     def test_non_creatable_pycache(self):
         # Make it impossible to create the __pycache__ directory
         old_perms = os.stat(self.tempdir).st_mode
@@ -241,11 +246,12 @@ class CUDACachingTest(SerialMixin, DispatcherCacheUsecasesTest):
         self._test_pycache_fallback()
 
     @skip_bad_access
-    @unittest.skipIf(os.name == "nt",
-                     "cannot easily make a directory read-only on Windows")
+    @unittest.skipIf(
+        os.name == "nt", "cannot easily make a directory read-only on Windows"
+    )
     def test_non_writable_pycache(self):
         # Make it impossible to write to the __pycache__ directory
-        pycache = os.path.join(self.tempdir, '__pycache__')
+        pycache = os.path.join(self.tempdir, "__pycache__")
         os.mkdir(pycache)
         old_perms = os.stat(pycache).st_mode
         os.chmod(pycache, 0o500)
@@ -254,15 +260,16 @@ class CUDACachingTest(SerialMixin, DispatcherCacheUsecasesTest):
         self._test_pycache_fallback()
 
     def test_cannot_cache_linking_libraries(self):
-        link = str(test_data_dir / 'jitlink.ptx')
-        msg = 'Cannot pickle CUDACodeLibrary with linking files'
+        link = str(test_data_dir / "jitlink.ptx")
+        msg = "Cannot pickle CUDACodeLibrary with linking files"
         with self.assertRaisesRegex(RuntimeError, msg):
-            @cuda.jit('void()', cache=True, link=[link])
+
+            @cuda.jit("void()", cache=True, link=[link])
             def f():
                 pass
 
 
-@skip_on_cudasim('Simulator does not implement caching')
+@skip_on_cudasim("Simulator does not implement caching")
 class CUDAAndCPUCachingTest(SerialMixin, DispatcherCacheUsecasesTest):
     here = os.path.dirname(__file__)
     usecases_file = os.path.join(here, "cache_with_cpu_usecases.py")
@@ -353,7 +360,7 @@ def get_different_cc_gpus():
     return None
 
 
-@skip_on_cudasim('Simulator does not implement caching')
+@skip_on_cudasim("Simulator does not implement caching")
 class TestMultiCCCaching(SerialMixin, DispatcherCacheUsecasesTest):
     here = os.path.dirname(__file__)
     usecases_file = os.path.join(here, "cache_usecases.py")
@@ -370,7 +377,7 @@ class TestMultiCCCaching(SerialMixin, DispatcherCacheUsecasesTest):
     def test_cache(self):
         gpus = get_different_cc_gpus()
         if not gpus:
-            self.skipTest('Need two different CCs for multi-CC cache test')
+            self.skipTest("Need two different CCs for multi-CC cache test")
 
         self.check_pycache(0)
         mod = self.import_module()
@@ -482,11 +489,12 @@ def child_initializer():
     # Disable occupancy and implicit copy warnings in processes in a
     # multiprocessing pool.
     from numba.core import config
+
     config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
     config.CUDA_WARN_ON_IMPLICIT_COPY = 0
 
 
-@skip_on_cudasim('Simulator does not implement caching')
+@skip_on_cudasim("Simulator does not implement caching")
 class TestMultiprocessCache(SerialMixin, DispatcherCacheUsecasesTest):
 
     # Nested multiprocessing.Pool raises AssertionError:
@@ -513,7 +521,7 @@ class TestMultiprocessCache(SerialMixin, DispatcherCacheUsecasesTest):
         f = mod.simple_usecase_caller
         n = 3
         try:
-            ctx = multiprocessing.get_context('spawn')
+            ctx = multiprocessing.get_context("spawn")
         except AttributeError:
             ctx = multiprocessing
 
@@ -526,7 +534,7 @@ class TestMultiprocessCache(SerialMixin, DispatcherCacheUsecasesTest):
         self.assertEqual(res, n * (n - 1) // 2)
 
 
-@skip_on_cudasim('Simulator does not implement the CUDACodeLibrary')
+@skip_on_cudasim("Simulator does not implement the CUDACodeLibrary")
 class TestCUDACodeLibrary(CUDATestCase):
     # For tests of miscellaneous CUDACodeLibrary behaviour that we wish to
     # explicitly check
@@ -539,7 +547,7 @@ class TestCUDACodeLibrary(CUDATestCase):
         # Usually a CodeLibrary requires a real CodeGen, but since we don't
         # interact with it, anything will do
         codegen = object()
-        name = 'library'
+        name = "library"
         cl = CUDACodeLibrary(codegen, name)
-        with self.assertRaisesRegex(RuntimeError, 'Cannot pickle unfinalized'):
+        with self.assertRaisesRegex(RuntimeError, "Cannot pickle unfinalized"):
             cl._reduce_states()

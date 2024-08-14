@@ -34,5 +34,5 @@ class TestArrayReturn(MemoryLeakMixin, unittest.TestCase):
         self.assertIs(a, cfunc(a))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

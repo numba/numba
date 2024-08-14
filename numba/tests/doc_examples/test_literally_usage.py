@@ -31,7 +31,7 @@ class DocsLiterallyUsageTest(unittest.TestCase):
                     return lambda x, n: numba.literally(n)
 
                 print("generic")
-                return lambda x, n: x ** n
+                return lambda x, n: x**n
 
             @numba.njit
             def test_power(x, n):
@@ -47,13 +47,12 @@ class DocsLiterallyUsageTest(unittest.TestCase):
             print(test_power(3, 4))
 
             # magictoken.ex_literally_usage.end
-            assert test_power(3, 2) == 3 ** 2
-            assert test_power(3, 3) == 3 ** 3
-            assert test_power(3, 4) == 3 ** 4
+            assert test_power(3, 2) == 3**2
+            assert test_power(3, 3) == 3**3
+            assert test_power(3, 4) == 3**4
 
-        self.assertEqual('square\n9\ncubic\n27\ngeneric\n81\n',
-                         stdout.getvalue())
+        self.assertEqual("square\n9\ncubic\n27\ngeneric\n81\n", stdout.getvalue())
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

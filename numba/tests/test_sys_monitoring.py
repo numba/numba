@@ -11,7 +11,9 @@ from numba.core.serialize import _numba_unpickle
 
 
 def generate_usecase():
-    @jit('int64(int64)',)
+    @jit(
+        "int64(int64)",
+    )
     def foo(x):
         return x + 1
 
@@ -30,10 +32,7 @@ if PYVERSION == (3, 12):
     NO_EVENTS = sys.monitoring.events.NO_EVENTS
 
 
-TOOL2MONITORTYPE = {0 : "Debugger",
-                    1 : "Coverage",
-                    2 : "Profiler",
-                    5 : "Optimizer"}
+TOOL2MONITORTYPE = {0: "Debugger", 1: "Coverage", 2: "Profiler", 5: "Optimizer"}
 
 
 @skip_unless_py312
@@ -49,14 +48,16 @@ class TestMonitoring(TestCase):
         # First... check if there's other monitoring stuff registered (e.g. test
         # is running under cProfile or coverage), skip if so.
         monitor_kinds = []
-        for i in range(6): # there are 5 tool IDs
+        for i in range(6):  # there are 5 tool IDs
             if sys.monitoring.get_tool(i) is not None:
                 monitor_kinds.append(TOOL2MONITORTYPE[i])
 
         if monitor_kinds:
-            msg = ("Cannot run monitoring tests when other monitors are "
-                   "active, found monitor(s) of type: "
-                   f"{', '.join(monitor_kinds)}")
+            msg = (
+                "Cannot run monitoring tests when other monitors are "
+                "active, found monitor(s) of type: "
+                f"{', '.join(monitor_kinds)}"
+            )
             self.skipTest(msg)
 
         # set up some standard functions and answers for use throughout
@@ -73,12 +74,10 @@ class TestMonitoring(TestCase):
         mockcalls = allcalls[PY_START]
         self.assertEqual(mockcalls.call_count, 2)
         # Find the resume op, this is where the code for `call_foo` "starts"
-        inst = [x for x in dis.get_instructions(self.call_foo)
-                if x.opname == "RESUME"]
+        inst = [x for x in dis.get_instructions(self.call_foo) if x.opname == "RESUME"]
         offset = inst[0].offset
         # Numba always reports the start location as offset 0.
-        calls = (call(self.call_foo.__code__, offset),
-                 call(self.foo.__code__, 0))
+        calls = (call(self.call_foo.__code__, offset), call(self.foo.__code__, 0))
         mockcalls.assert_has_calls(calls)
 
     def check_py_return_calls(self, allcalls):
@@ -93,8 +92,10 @@ class TestMonitoring(TestCase):
         # location that the return occurred propagating from the machine code
         # back to the dispatcher (where the monitoring events are handled).
         offset = [x for x in dis.get_instructions(self.call_foo)][-1].offset
-        calls = [call(self.foo.__code__, 0, self.foo_result),
-                 call(self.call_foo.__code__, offset, self.call_foo_result)]
+        calls = [
+            call(self.foo.__code__, 0, self.foo_result),
+            call(self.call_foo.__code__, offset, self.call_foo_result),
+        ]
         mockcalls.assert_has_calls(calls)
 
     def run_with_events(self, function, args, events, tool_id=None):
@@ -141,8 +142,7 @@ class TestMonitoring(TestCase):
 
     def test_call_event_chain(self):
         # test event PY_START and PY_RETURN monitored at the same time
-        cb = self.run_with_events(self.call_foo, (self.arg,),
-                                  (PY_START, PY_RETURN))
+        cb = self.run_with_events(self.call_foo, (self.arg,), (PY_START, PY_RETURN))
         # Check...
         self.assertEqual(len(cb), 2)
         self.check_py_return_calls(cb)
@@ -164,7 +164,9 @@ class TestMonitoring(TestCase):
 
     def test_instrumented_code_does_not_trigger_numba_events(self):
         # 1. from above.
-        @jit('int64(int64)',)
+        @jit(
+            "int64(int64)",
+        )
         def foo(x):
             return x + 3
 
@@ -180,8 +182,7 @@ class TestMonitoring(TestCase):
                 callbacks[event] = callback
                 event_bitmask |= event
 
-            sys.monitoring.set_local_events(tool_id, foo.__code__,
-                                            event_bitmask)
+            sys.monitoring.set_local_events(tool_id, foo.__code__, event_bitmask)
             result = foo(self.arg)
         finally:
             for event in events:
@@ -217,11 +218,11 @@ class TestMonitoring(TestCase):
     def test_unhandled_events_are_ignored(self):
         # Check an unhandled event e.g. PY_YIELD isn't reported.
         def generate(dec):
-            @dec('void()')
+            @dec("void()")
             def producer():
                 yield 10
 
-            @dec('int64()')
+            @dec("int64()")
             def consumer():
                 p = producer()
                 return next(p)
@@ -232,11 +233,11 @@ class TestMonitoring(TestCase):
         # check that pure python reports
         wrapper = lambda sig: lambda fn: fn
         py_consumer = generate(wrapper)
-        py_cb = self.run_with_events(py_consumer, (),  (event,))
+        py_cb = self.run_with_events(py_consumer, (), (event,))
         py_cb[event].assert_called_once()
         # check the numba does not report
         nb_consumer = generate(jit)
-        nb_cb = self.run_with_events(nb_consumer, (),  (event,))
+        nb_cb = self.run_with_events(nb_consumer, (), (event,))
         nb_cb[event].assert_not_called()
 
     def test_event_with_no_callback_runs(self):
@@ -312,7 +313,7 @@ class TestMonitoring(TestCase):
                 if switch_on_event:
                     sys.monitoring.set_events(tool_id, event)
 
-            @jit('int64(int64)')
+            @jit("int64(int64)")
             def foo(enable):
                 with objmode:
                     objmode_enable_event(enable)
@@ -343,11 +344,15 @@ class TestMonitoring(TestCase):
         # (NO_EVENTS, PY_START, PY_RETURN).
 
         # the use of NO_EVENTS is superfluous, it is to demonstrate usage.
-        tool_ids_2_events = {sys.monitoring.DEBUGGER_ID: (NO_EVENTS,),
-                             sys.monitoring.COVERAGE_ID: (PY_START,),
-                             sys.monitoring.PROFILER_ID: (PY_RETURN,),
-                             sys.monitoring.OPTIMIZER_ID:
-                                 (PY_START, PY_RETURN,),}
+        tool_ids_2_events = {
+            sys.monitoring.DEBUGGER_ID: (NO_EVENTS,),
+            sys.monitoring.COVERAGE_ID: (PY_START,),
+            sys.monitoring.PROFILER_ID: (PY_RETURN,),
+            sys.monitoring.OPTIMIZER_ID: (
+                PY_START,
+                PY_RETURN,
+            ),
+        }
 
         all_callbacks = {}
         try:
@@ -360,8 +365,7 @@ class TestMonitoring(TestCase):
                     callback = Mock()
                     # Can't set an event for NO_EVENTS!
                     if event != NO_EVENTS:
-                        sys.monitoring.register_callback(tool_id, event,
-                                                         callback)
+                        sys.monitoring.register_callback(tool_id, event, callback)
                     callbacks[event] = callback
                     event_bitmask |= event
                 # only start monitoring once callbacks are registered
@@ -382,23 +386,23 @@ class TestMonitoring(TestCase):
 
         # check debugger tool slot
         dbg_tool = all_callbacks[sys.monitoring.DEBUGGER_ID]
-        self.assertEqual(len(dbg_tool), 1) # one event to capture
+        self.assertEqual(len(dbg_tool), 1)  # one event to capture
         callback = dbg_tool[NO_EVENTS]
         callback.assert_not_called()
 
         # check coverage tool slot
         cov_tool = all_callbacks[sys.monitoring.COVERAGE_ID]
-        self.assertEqual(len(cov_tool), 1) # one event to capture
+        self.assertEqual(len(cov_tool), 1)  # one event to capture
         self.check_py_start_calls(cov_tool)
 
         # check profiler tool slot
         prof_tool = all_callbacks[sys.monitoring.PROFILER_ID]
-        self.assertEqual(len(prof_tool), 1) # one event to capture
+        self.assertEqual(len(prof_tool), 1)  # one event to capture
         self.check_py_return_calls(prof_tool)
 
         # check optimiser tool slot
         opt_tool = all_callbacks[sys.monitoring.OPTIMIZER_ID]
-        self.assertEqual(len(opt_tool), 2) # two events to capture
+        self.assertEqual(len(opt_tool), 2)  # two events to capture
         self.check_py_start_calls(opt_tool)
         self.check_py_return_calls(opt_tool)
 
@@ -411,9 +415,9 @@ class TestMonitoring(TestCase):
         raise_callback = Mock()
         unwind_callback = Mock()
 
-        msg = 'exception raised'
+        msg = "exception raised"
 
-        @jit('()')
+        @jit("()")
         def foo():
             raise ValueError(msg)
 
@@ -423,8 +427,7 @@ class TestMonitoring(TestCase):
             sys.monitoring.use_tool_id(tool_id, "custom_monitor")
             sys.monitoring.register_callback(tool_id, PY_RETURN, ret_callback)
             sys.monitoring.register_callback(tool_id, RAISE, raise_callback)
-            sys.monitoring.register_callback(tool_id, PY_UNWIND,
-                                             unwind_callback)
+            sys.monitoring.register_callback(tool_id, PY_UNWIND, unwind_callback)
             sys.monitoring.set_events(tool_id, PY_RETURN | RAISE | PY_UNWIND)
             try:
                 foo()
@@ -445,8 +448,7 @@ class TestMonitoring(TestCase):
             # check that the RAISE event callback was triggered
             raise_callback.assert_called()
             numba_unpickle_call = raise_callback.call_args_list[0]
-            self.assertEqual(numba_unpickle_call.args[0],
-                             _numba_unpickle.__code__)
+            self.assertEqual(numba_unpickle_call.args[0], _numba_unpickle.__code__)
             self.assertIsInstance(numba_unpickle_call.args[2], KeyError)
             foo_call = raise_callback.call_args_list[1]
             self.assertEqual(foo_call.args[0], foo.py_func.__code__)
@@ -480,9 +482,9 @@ class TestMonitoring(TestCase):
         raise_callback = Mock()
         stopiter_callback = Mock()
 
-        msg = 'exception raised'
+        msg = "exception raised"
 
-        @jit('()')
+        @jit("()")
         def foo():
             raise StopIteration(msg)
 
@@ -490,14 +492,10 @@ class TestMonitoring(TestCase):
         try:
             tool_id = self.tool_id
             sys.monitoring.use_tool_id(tool_id, "custom_monitor")
-            sys.monitoring.register_callback(tool_id, PY_RETURN,
-                                             return_callback)
-            sys.monitoring.register_callback(tool_id, RAISE,
-                                             raise_callback)
-            sys.monitoring.register_callback(tool_id, STOP_ITERATION,
-                                             stopiter_callback)
-            sys.monitoring.set_events(tool_id,
-                                      PY_RETURN | STOP_ITERATION | RAISE)
+            sys.monitoring.register_callback(tool_id, PY_RETURN, return_callback)
+            sys.monitoring.register_callback(tool_id, RAISE, raise_callback)
+            sys.monitoring.register_callback(tool_id, STOP_ITERATION, stopiter_callback)
+            sys.monitoring.set_events(tool_id, PY_RETURN | STOP_ITERATION | RAISE)
             try:
                 foo()
             except StopIteration as raises:
@@ -521,8 +519,7 @@ class TestMonitoring(TestCase):
 
             # check the numba pickle call
             numba_unpickle_call = raise_callback.call_args_list[0]
-            self.assertEqual(numba_unpickle_call.args[0],
-                             _numba_unpickle.__code__)
+            self.assertEqual(numba_unpickle_call.args[0], _numba_unpickle.__code__)
             self.assertIsInstance(numba_unpickle_call.args[2], KeyError)
 
             # check the jit(foo) call
@@ -687,9 +684,12 @@ class TestMonitoring(TestCase):
         def t1_work(self, q):
             try:
                 # test event PY_START on a "debugger tool"
-                cb = self.run_with_events(self.call_foo, (self.arg,),
-                                          (PY_START,),
-                                          tool_id=sys.monitoring.DEBUGGER_ID)
+                cb = self.run_with_events(
+                    self.call_foo,
+                    (self.arg,),
+                    (PY_START,),
+                    tool_id=sys.monitoring.DEBUGGER_ID,
+                )
                 # Check...
                 self.assertEqual(len(cb), 1)
                 self.check_py_start_calls(cb)
@@ -699,9 +699,12 @@ class TestMonitoring(TestCase):
         def t2_work(self, q):
             try:
                 # test event PY_RETURN on a "coverage tool"
-                cb = self.run_with_events(self.call_foo, (self.arg,),
-                                          (PY_RETURN,),
-                                          tool_id=sys.monitoring.COVERAGE_ID)
+                cb = self.run_with_events(
+                    self.call_foo,
+                    (self.arg,),
+                    (PY_RETURN,),
+                    tool_id=sys.monitoring.COVERAGE_ID,
+                )
                 # Check...
                 self.assertEqual(len(cb), 1)
                 self.check_py_return_calls(cb)
@@ -731,12 +734,14 @@ class TestMonitoringSelfTest(TestCase):
         # check that the unit tests in the TestMonitoring class above will skip
         # if there are other monitoring tools registered in the thread (in this
         # case cProfile is used to cause that effect).
-        r = self.subprocess_test_runner(TestMonitoring.__module__,
-                                        'TestMonitoring',
-                                        'test_start_event',
-                                        flags={'-m': 'cProfile'})
+        r = self.subprocess_test_runner(
+            TestMonitoring.__module__,
+            "TestMonitoring",
+            "test_start_event",
+            flags={"-m": "cProfile"},
+        )
         self.assertIn("skipped=1", str(r))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

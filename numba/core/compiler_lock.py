@@ -23,7 +23,7 @@ class _CompilerLock(object):
         self.release()
 
     def is_locked(self):
-        is_owned = getattr(self._lock, '_is_owned')
+        is_owned = getattr(self._lock, "_is_owned")
         if not callable(is_owned):
             is_owned = self._is_owned
         return is_owned()
@@ -33,6 +33,7 @@ class _CompilerLock(object):
         def _acquire_compile_lock(*args, **kwargs):
             with self:
                 return func(*args, **kwargs)
+
         return _acquire_compile_lock
 
     def _is_owned(self):
@@ -50,7 +51,6 @@ global_compiler_lock = _CompilerLock()
 
 
 def require_global_compiler_lock():
-    """Sentry that checks the global_compiler_lock is acquired.
-    """
+    """Sentry that checks the global_compiler_lock is acquired."""
     # Use assert to allow turning off this check
     assert global_compiler_lock.is_locked()

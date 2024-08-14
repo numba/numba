@@ -7,9 +7,9 @@ from numba.cuda.testing import skip_on_cudasim, skip_on_arm
 from numba.tests.support import linux_only
 
 
-@skip_on_cudasim('CUDA Driver API unsupported in the simulator')
+@skip_on_cudasim("CUDA Driver API unsupported in the simulator")
 @linux_only
-@skip_on_arm('Managed Alloc support is experimental/untested on ARM')
+@skip_on_arm("Managed Alloc support is experimental/untested on ARM")
 class TestManagedAlloc(ContextResettingTestCase):
 
     def get_total_gpu_memory(self):
@@ -85,7 +85,7 @@ class TestManagedAlloc(ContextResettingTestCase):
         n_elems = n_bytes // dtype.itemsize
         ary = np.ndarray(shape=n_elems, dtype=dtype, buffer=mem)
 
-        magic = 0xab
+        magic = 0xAB
         device_memset(mem, magic, n_bytes)
         ctx.synchronize()
 
@@ -102,7 +102,7 @@ class TestManagedAlloc(ContextResettingTestCase):
         ary.fill(123.456)
         self.assertTrue(all(ary == 123.456))
 
-        @cuda.jit('void(double[:])')
+        @cuda.jit("void(double[:])")
         def kernel(x):
             i = cuda.grid(1)
             if i < x.shape[0]:
@@ -123,5 +123,5 @@ class TestManagedAlloc(ContextResettingTestCase):
         self._test_managed_array(attach_global=False)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

@@ -9,8 +9,15 @@ import unittest
 
 import numpy as np
 
-from numba import (njit, set_num_threads, get_num_threads, prange, config,
-                   threading_layer, guvectorize)
+from numba import (
+    njit,
+    set_num_threads,
+    get_num_threads,
+    prange,
+    config,
+    threading_layer,
+    guvectorize,
+)
 from numba.np.ufunc.parallel import get_thread_id
 from numba.core.errors import TypingError
 from numba.tests.support import TestCase, skip_parfors_unsupported, tag
@@ -28,19 +35,19 @@ class TestNumThreads(TestCase):
     def check_mask(self, expected, result):
         # There's no guarantee that TBB will use a full mask worth of
         # threads if it deems it inefficient to do so
-        if threading_layer() == 'tbb':
+        if threading_layer() == "tbb":
             self.assertTrue(np.all(result <= expected))
-        elif threading_layer() in ('omp', 'workqueue'):
+        elif threading_layer() in ("omp", "workqueue"):
             np.testing.assert_equal(expected, result)
         else:
-            assert 0, 'unreachable'
+            assert 0, "unreachable"
 
     @skip_parfors_unsupported
     def test_set_num_threads_type(self):
 
         @njit
         def foo():
-            set_num_threads('wrong_type')
+            set_num_threads("wrong_type")
 
         expected = "The number of threads specified must be an integer"
         for fn, errty in ((foo, TypingError), (foo.py_func, TypeError)):
@@ -93,10 +100,7 @@ class TestNumThreads(TestCase):
     def _test_set_num_threads_basic_guvectorize(self):
         max_threads = config.NUMBA_NUM_THREADS
 
-        @guvectorize(['void(int64[:])'],
-                     '(n)',
-                     nopython=True,
-                     target='parallel')
+        @guvectorize(["void(int64[:])"], "(n)", nopython=True, target="parallel")
         def get_n(x):
             x[:] = get_num_threads()
 
@@ -112,10 +116,7 @@ class TestNumThreads(TestCase):
         get_n(x)
         np.testing.assert_equal(x, max_threads)
 
-        @guvectorize(['void(int64[:])'],
-                     '(n)',
-                     nopython=True,
-                     target='parallel')
+        @guvectorize(["void(int64[:])"], "(n)", nopython=True, target="parallel")
         def set_get_n(n):
             set_num_threads(n[0])
             n[:] = get_num_threads()
@@ -144,10 +145,7 @@ class TestNumThreads(TestCase):
                 buf[i] = get_num_threads()
             return buf
 
-        @guvectorize(['void(int64[:])'],
-                     '(n)',
-                     nopython=True,
-                     target='parallel')
+        @guvectorize(["void(int64[:])"], "(n)", nopython=True, target="parallel")
         def test_gufunc(x):
             x[:] = get_num_threads()
 
@@ -179,10 +177,7 @@ class TestNumThreads(TestCase):
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
     def _test_set_num_threads_inside_guvectorize(self):
         # Test set_num_threads inside a jitted guvectorize function
-        @guvectorize(['void(int64[:])'],
-                     '(n)',
-                     nopython=True,
-                     target='parallel')
+        @guvectorize(["void(int64[:])"], "(n)", nopython=True, target="parallel")
         def test_func(x):
             set_num_threads(x[0])
             x[:] = get_num_threads()
@@ -213,10 +208,12 @@ class TestNumThreads(TestCase):
             out = test_func()
             self.check_mask((mask, mask), out)
 
-            @guvectorize(['void(int64[:], int64[:])'],
-                         '(n), (m)',
-                         nopython=True,
-                         target='parallel')
+            @guvectorize(
+                ["void(int64[:], int64[:])"],
+                "(n), (m)",
+                nopython=True,
+                target="parallel",
+            )
             def test_gufunc(x, out):
                 x[:] = get_thread_id()
                 out[0] = get_num_threads()
@@ -248,10 +245,12 @@ class TestNumThreads(TestCase):
             out = test_func()
             self.check_mask((mask, mask), out)
 
-            @guvectorize(['void(int64[:], int64[:])'],
-                         '(n), (m)',
-                         nopython=True,
-                         target='parallel')
+            @guvectorize(
+                ["void(int64[:], int64[:])"],
+                "(n), (m)",
+                nopython=True,
+                target="parallel",
+            )
             def test_gufunc(x, out):
                 set_num_threads(mask)
                 x[:] = get_thread_id()
@@ -269,7 +268,7 @@ class TestNumThreads(TestCase):
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
     def _test_nested_parallelism_1(self):
-        if threading_layer() == 'workqueue':
+        if threading_layer() == "workqueue":
             self.skipTest("workqueue is not threadsafe")
 
         # check that get_num_threads is ok in nesting
@@ -285,7 +284,8 @@ class TestNumThreads(TestCase):
                 buf[fid, i] = get_num_threads()
 
         def get_test(test_type):
-            if test_type == 'njit':
+            if test_type == "njit":
+
                 def test_func(nthreads, py_func=False):
                     @njit(parallel=True)
                     def _test_func(nthreads):
@@ -300,12 +300,14 @@ class TestNumThreads(TestCase):
                                 child_func(buf, local_mask)
                             acc += get_num_threads()
                         return acc, buf
+
                     if py_func:
                         return _test_func.py_func(nthreads)
                     else:
                         return _test_func(nthreads)
 
-            elif test_type == 'guvectorize':
+            elif test_type == "guvectorize":
+
                 def test_func(nthreads, py_func=False):
                     def _test_func(acc, buf, local_mask):
                         set_num_threads(nthreads)
@@ -318,20 +320,20 @@ class TestNumThreads(TestCase):
                     buf = np.zeros((M, N), dtype=np.int64)
                     acc = np.zeros((M, 1), dtype=np.int64)
                     local_mask = (1 + np.arange(M) % mask).reshape((M, 1))
-                    sig = ['void(int64[:], int64[:, :], int64[:])']
-                    layout = '(p), (n, m), (p)'
+                    sig = ["void(int64[:], int64[:, :], int64[:])"]
+                    layout = "(p), (n, m), (p)"
                     if not py_func:
-                        _test_func = guvectorize(sig, layout, nopython=True,
-                                                 target='parallel')(_test_func)
+                        _test_func = guvectorize(
+                            sig, layout, nopython=True, target="parallel"
+                        )(_test_func)
                     else:
-                        _test_func = guvectorize(sig, layout,
-                                                 forceobj=True)(_test_func)
+                        _test_func = guvectorize(sig, layout, forceobj=True)(_test_func)
                     _test_func(acc, buf, local_mask)
                     return acc, buf
 
             return test_func
 
-        for test_type in ['njit', 'guvectorize']:
+        for test_type in ["njit", "guvectorize"]:
             test_func = get_test(test_type)
             got_acc, got_arr = test_func(mask)
             exp_acc, exp_arr = test_func(mask, py_func=True)
@@ -340,7 +342,7 @@ class TestNumThreads(TestCase):
 
             # check the maths reconciles, guvectorize does not reduce, njit does
             math_acc_exp = 1 + np.arange(M) % mask
-            if test_type == 'guvectorize':
+            if test_type == "guvectorize":
                 math_acc = math_acc_exp.reshape((M, 1))
             else:
                 math_acc = np.sum(math_acc_exp)
@@ -358,7 +360,7 @@ class TestNumThreads(TestCase):
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
     def _test_nested_parallelism_2(self):
-        if threading_layer() == 'workqueue':
+        if threading_layer() == "workqueue":
             self.skipTest("workqueue is not threadsafe")
 
         # check that get_num_threads is ok in nesting
@@ -368,11 +370,12 @@ class TestNumThreads(TestCase):
 
         def get_impl(child_type, test_type):
 
-            if child_type == 'parallel':
+            if child_type == "parallel":
                 child_dec = njit(parallel=True)
-            elif child_type == 'njit':
+            elif child_type == "njit":
                 child_dec = njit(parallel=False)
-            elif child_type == 'none':
+            elif child_type == "none":
+
                 def child_dec(x):
                     return x
 
@@ -383,12 +386,13 @@ class TestNumThreads(TestCase):
                 for i in prange(N):
                     buf[fid, i] = get_num_threads()
 
-            if test_type in ['parallel', 'njit', 'none']:
-                if test_type == 'parallel':
+            if test_type in ["parallel", "njit", "none"]:
+                if test_type == "parallel":
                     test_dec = njit(parallel=True)
-                elif test_type == 'njit':
+                elif test_type == "njit":
                     test_dec = njit(parallel=False)
-                elif test_type == 'none':
+                elif test_type == "none":
+
                     def test_dec(x):
                         return x
 
@@ -405,14 +409,19 @@ class TestNumThreads(TestCase):
                             child(buf, local_mask)
                             assert get_num_threads() == local_mask
                     return buf
+
             else:
-                if test_type == 'guvectorize':
-                    test_dec = guvectorize(['int64[:,:], int64[:]'],
-                                           '(n, m), (k)', nopython=True,
-                                           target='parallel')
-                elif test_type == 'guvectorize-obj':
-                    test_dec = guvectorize(['int64[:,:], int64[:]'],
-                                           '(n, m), (k)', forceobj=True)
+                if test_type == "guvectorize":
+                    test_dec = guvectorize(
+                        ["int64[:,:], int64[:]"],
+                        "(n, m), (k)",
+                        nopython=True,
+                        target="parallel",
+                    )
+                elif test_type == "guvectorize-obj":
+                    test_dec = guvectorize(
+                        ["int64[:,:], int64[:]"], "(n, m), (k)", forceobj=True
+                    )
 
                 def test_func(nthreads):
                     @test_dec
@@ -435,16 +444,16 @@ class TestNumThreads(TestCase):
         mask = config.NUMBA_NUM_THREADS - 1
 
         res_arrays = {}
-        for test_type in ['parallel', 'njit', 'none',
-                          'guvectorize', 'guvectorize-obj']:
-            for child_type in ['parallel', 'njit', 'none']:
-                if child_type == 'none' and test_type != 'none':
+        for test_type in ["parallel", "njit", "none", "guvectorize", "guvectorize-obj"]:
+            for child_type in ["parallel", "njit", "none"]:
+                if child_type == "none" and test_type != "none":
                     continue
                 set_num_threads(mask)
-                res_arrays[test_type, child_type] = get_impl(
-                    child_type, test_type)(mask)
+                res_arrays[test_type, child_type] = get_impl(child_type, test_type)(
+                    mask
+                )
 
-        py_arr = res_arrays['none', 'none']
+        py_arr = res_arrays["none", "none"]
         for arr in res_arrays.values():
             np.testing.assert_equal(arr, py_arr)
 
@@ -463,7 +472,7 @@ class TestNumThreads(TestCase):
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 3, "Not enough CPU cores")
     def _test_nested_parallelism_3(self):
-        if threading_layer() == 'workqueue':
+        if threading_layer() == "workqueue":
             self.skipTest("workqueue is not threadsafe")
 
         # check that the right number of threads are present in nesting
@@ -482,7 +491,7 @@ class TestNumThreads(TestCase):
 
         @njit(parallel=True)
         def test_func_jit(nthreads):
-            set_num_threads(nthreads) # set to 2 threads
+            set_num_threads(nthreads)  # set to 2 threads
             lens = np.zeros(nthreads)
             total = 0
             for i in prange(nthreads):
@@ -500,10 +509,9 @@ class TestNumThreads(TestCase):
         self.check_mask(expected_thread_count, got_tc)
 
         def test_guvectorize(nthreads):
-            @guvectorize(['int64[:], int64[:]'],
-                         '(n), (n)',
-                         nopython=True,
-                         target='parallel')
+            @guvectorize(
+                ["int64[:], int64[:]"], "(n), (n)", nopython=True, target="parallel"
+            )
             def test_func_guvectorize(total, lens):
                 my_acc, tids = work(nthreads + 1)
                 lens[0] = len(tids)
@@ -523,9 +531,9 @@ class TestNumThreads(TestCase):
 
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
-    @unittest.skipIf(not sys.platform.startswith('linux'), "Linux only")
+    @unittest.skipIf(not sys.platform.startswith("linux"), "Linux only")
     def _test_threadmask_across_fork(self):
-        forkctx = multiprocessing.get_context('fork')
+        forkctx = multiprocessing.get_context("fork")
 
         @njit
         def foo():
@@ -587,8 +595,8 @@ class TestNumThreadsBackends(TestInSubprocess, TestCase):
 
     def run_test_in_separate_process(self, test, threading_layer, num_threads):
         env_copy = os.environ.copy()
-        env_copy['NUMBA_THREADING_LAYER'] = str(threading_layer)
-        env_copy['NUMBA_NUM_THREADS'] = str(num_threads)
+        env_copy["NUMBA_THREADING_LAYER"] = str(threading_layer)
+        env_copy["NUMBA_NUM_THREADS"] = str(num_threads)
         cmdline = [sys.executable, "-m", "numba.runtests", "-v", test]
         return self.run_cmd(cmdline, env_copy)
 
@@ -596,11 +604,12 @@ class TestNumThreadsBackends(TestInSubprocess, TestCase):
     def _inject(cls, name, backend, backend_guard, num_threads):
         themod = cls.__module__
         thecls = cls._class.__name__
-        injected_method = '%s.%s.%s' % (themod, thecls, name)
+        injected_method = "%s.%s.%s" % (themod, thecls, name)
 
         def test_template(self):
-            o, e = self.run_test_in_separate_process(injected_method, backend,
-                                                     num_threads)
+            o, e = self.run_test_in_separate_process(
+                injected_method, backend, num_threads
+            )
             if self._DEBUG:
                 print('stdout:\n "%s"\n stderr:\n "%s"' % (o, e))
             # If the test was skipped in the subprocess, then mark this as a
@@ -608,25 +617,24 @@ class TestNumThreadsBackends(TestInSubprocess, TestCase):
             m = re.search(r"\.\.\. skipped '(.*?)'", e)
             if m is not None:
                 self.skipTest(m.group(1))
-            self.assertIn('OK', e)
-            self.assertTrue('FAIL' not in e)
-            self.assertTrue('ERROR' not in e)
+            self.assertIn("OK", e)
+            self.assertTrue("FAIL" not in e)
+            self.assertTrue("ERROR" not in e)
 
         injected_test = "%s_%s_%s_threads" % (name[1:], backend, num_threads)
-        setattr(cls, injected_test,
-                tag('long_running')(backend_guard(test_template)))
+        setattr(cls, injected_test, tag("long_running")(backend_guard(test_template)))
 
     @classmethod
     def generate(cls):
         for name in cls._class.__dict__.copy():
             for backend, backend_guard in cls.backends.items():
                 for num_threads in cls.num_threads:
-                    if not name.startswith('_test_'):
+                    if not name.startswith("_test_"):
                         continue
                     cls._inject(name, backend, backend_guard, num_threads)
 
 
 TestNumThreadsBackends.generate()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

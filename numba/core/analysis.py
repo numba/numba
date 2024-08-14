@@ -1,6 +1,7 @@
 """
 Utils for IR analysis
 """
+
 import operator
 from functools import reduce
 from collections import namedtuple, defaultdict
@@ -13,7 +14,7 @@ from numba.misc import special
 # Analysis related to variable lifetime
 #
 
-_use_defs_result = namedtuple('use_defs_result', 'usemap,defmap')
+_use_defs_result = namedtuple("use_defs_result", "usemap,defmap")
 
 # other packages that define new nodes add calls for finding defs
 # format: {type:function}
@@ -25,8 +26,8 @@ def compute_use_defs(blocks):
     Find variable use/def per block.
     """
 
-    var_use_map = {}   # { block offset -> set of vars }
-    var_def_map = {}   # { block offset -> set of vars }
+    var_use_map = {}  # { block offset -> set of vars }
+    var_def_map = {}  # { block offset -> set of vars }
     for offset, ir_block in blocks.items():
         var_use_map[offset] = use_set = set()
         var_def_map[offset] = def_set = set()
@@ -40,11 +41,10 @@ def compute_use_defs(blocks):
                     rhs_set = set(var.name for var in stmt.value.list_vars())
                 elif isinstance(stmt.value, ir.Var):
                     rhs_set = set([stmt.value.name])
-                elif isinstance(stmt.value, (ir.Arg, ir.Const, ir.Global,
-                                             ir.FreeVar)):
+                elif isinstance(stmt.value, (ir.Arg, ir.Const, ir.Global, ir.FreeVar)):
                     rhs_set = ()
                 else:
-                    raise AssertionError('unreachable', type(stmt.value))
+                    raise AssertionError("unreachable", type(stmt.value))
                 # If lhs not in rhs of the assignment
                 if stmt.target.name not in rhs_set:
                     def_set.add(stmt.target.name)
@@ -63,14 +63,13 @@ def compute_live_map(cfg, blocks, var_use_map, var_def_map):
     We use a simple fix-point algorithm that iterates until the set of
     live variables is unchanged for each block.
     """
+
     def fix_point_progress(dct):
-        """Helper function to determine if a fix-point has been reached.
-        """
+        """Helper function to determine if a fix-point has been reached."""
         return tuple(len(v) for v in dct.values())
 
     def fix_point(fn, dct):
-        """Helper function to run fix-point algorithm.
-        """
+        """Helper function to run fix-point algorithm."""
         old_point = None
         new_point = fix_point_progress(dct)
         while old_point != new_point:
@@ -79,8 +78,7 @@ def compute_live_map(cfg, blocks, var_use_map, var_def_map):
             new_point = fix_point_progress(dct)
 
     def def_reach(dct):
-        """Find all variable definition reachable at the entry of a block
-        """
+        """Find all variable definition reachable at the entry of a block"""
         for offset in var_def_map:
             used_or_defined = var_def_map[offset] | var_use_map[offset]
             dct[offset] |= used_or_defined
@@ -112,7 +110,7 @@ def compute_live_map(cfg, blocks, var_use_map, var_def_map):
     return live_map
 
 
-_dead_maps_result = namedtuple('dead_maps_result', 'internal,escaping,combined')
+_dead_maps_result = namedtuple("dead_maps_result", "internal,escaping,combined")
 
 
 def compute_dead_maps(cfg, blocks, live_map, var_def_map):
@@ -135,14 +133,13 @@ def compute_dead_maps(cfg, blocks, live_map, var_def_map):
         # defined variables
         cur_live_set = live_map[offset] | var_def_map[offset]
         # vars alive in the outgoing blocks
-        outgoing_live_map = dict((out_blk, live_map[out_blk])
-                                 for out_blk, _data in cfg.successors(offset))
+        outgoing_live_map = dict(
+            (out_blk, live_map[out_blk]) for out_blk, _data in cfg.successors(offset)
+        )
         # vars to keep alive for the terminator
-        terminator_liveset = set(v.name
-                                 for v in ir_block.terminator.list_vars())
+        terminator_liveset = set(v.name for v in ir_block.terminator.list_vars())
         # vars to keep alive in the successors
-        combined_liveset = reduce(operator.or_, outgoing_live_map.values(),
-                                  set())
+        combined_liveset = reduce(operator.or_, outgoing_live_map.values(), set())
         # include variables used in terminator
         combined_liveset |= terminator_liveset
         # vars that are dead within the block because they are not
@@ -163,12 +160,10 @@ def compute_dead_maps(cfg, blocks, live_map, var_def_map):
 
     # Verify that the dead maps cover all live variables
     all_vars = reduce(operator.or_, live_map.values(), set())
-    internal_dead_vars = reduce(operator.or_, internal_dead_map.values(),
-                                set())
-    escaping_dead_vars = reduce(operator.or_, escaping_dead_map.values(),
-                                set())
+    internal_dead_vars = reduce(operator.or_, internal_dead_map.values(), set())
+    escaping_dead_vars = reduce(operator.or_, escaping_dead_map.values(), set())
     exit_dead_vars = reduce(operator.or_, exit_dead_map.values(), set())
-    dead_vars = (internal_dead_vars | escaping_dead_vars | exit_dead_vars)
+    dead_vars = internal_dead_vars | escaping_dead_vars | exit_dead_vars
     missing_vars = all_vars - dead_vars
     if missing_vars:
         # There are no exit points
@@ -176,15 +171,14 @@ def compute_dead_maps(cfg, blocks, live_map, var_def_map):
             # We won't be able to verify this
             pass
         else:
-            msg = 'liveness info missing for vars: {0}'.format(missing_vars)
+            msg = "liveness info missing for vars: {0}".format(missing_vars)
             raise RuntimeError(msg)
 
-    combined = dict((k, internal_dead_map[k] | escaping_dead_map[k])
-                    for k in blocks)
+    combined = dict((k, internal_dead_map[k] | escaping_dead_map[k]) for k in blocks)
 
-    return _dead_maps_result(internal=internal_dead_map,
-                             escaping=escaping_dead_map,
-                             combined=combined)
+    return _dead_maps_result(
+        internal=internal_dead_map, escaping=escaping_dead_map, combined=combined
+    )
 
 
 def compute_live_variables(cfg, blocks, var_def_map, var_dead_map):
@@ -231,6 +225,7 @@ def compute_live_variables(cfg, blocks, var_def_map, var_dead_map):
 #
 # Analysis related to controlflow
 #
+
 
 def compute_cfg_from_blocks(blocks):
     cfg = CFGraph()
@@ -284,7 +279,7 @@ def _fix_loop_exit(cfg, loop):
 
 
 # Used to describe a nullified condition in dead branch pruning
-nullified = namedtuple('nullified', 'condition, taken_br, rewrite_stmt')
+nullified = namedtuple("nullified", "condition, taken_br, rewrite_stmt")
 
 
 # Functions to manipulate IR
@@ -296,8 +291,7 @@ def dead_branch_prune(func_ir, called_args):
     func_ir is the IR
     called_args are the actual arguments with which the function is called
     """
-    from numba.core.ir_utils import (get_definition, guard, find_const,
-                                     GuardException)
+    from numba.core.ir_utils import get_definition, guard, find_const, GuardException
 
     DEBUG = 0
 
@@ -311,9 +305,11 @@ def dead_branch_prune(func_ir, called_args):
                 pred = guard(get_definition, func_ir, branch.cond.name)
                 if pred is not None and getattr(pred, "op", None) == "call":
                     function = guard(get_definition, func_ir, pred.func)
-                    if (function is not None and
-                        isinstance(function, ir.Global) and
-                            function.value is bool):
+                    if (
+                        function is not None
+                        and isinstance(function, ir.Global)
+                        and function.value is bool
+                    ):
                         condition = guard(get_definition, func_ir, pred.args[0])
                         if condition is not None:
                             branches.append((branch, condition, blk))
@@ -339,8 +335,7 @@ def dead_branch_prune(func_ir, called_args):
                 return False, None
             if DEBUG > 0:
                 kill = branch.falsebr if take_truebr else branch.truebr
-                print("Pruning %s" % kill, branch, lhs_cond, rhs_cond,
-                      condition.fn)
+                print("Pruning %s" % kill, branch, lhs_cond, rhs_cond, condition.fn)
             taken = do_prune(take_truebr, blk)
             return True, taken
         return False, None
@@ -362,7 +357,7 @@ def dead_branch_prune(func_ir, called_args):
             # Just to prevent accidents, whilst already guarded, ensure this
             # is an ir.Const
             if not isinstance(pred, (ir.Const, ir.FreeVar, ir.Global)):
-                raise TypeError('Expected constant Numba IR node')
+                raise TypeError("Expected constant Numba IR node")
             take_truebr = bool(pred.value)
         except TypeError:
             return False, None
@@ -391,15 +386,15 @@ def dead_branch_prune(func_ir, called_args):
             if isinstance(val, types.NoneType):
                 return val
             elif val is None:
-                return types.NoneType('none')
+                return types.NoneType("none")
 
         # literal type, return the type itself so comparisons like `x == None`
         # still work as e.g. x = types.int64 will never be None/NoneType so
         # the branch can still be pruned
-        return getattr(input_arg_ty, 'literal_type', Unknown())
+        return getattr(input_arg_ty, "literal_type", Unknown())
 
     if DEBUG > 1:
-        print("before".center(80, '-'))
+        print("before".center(80, "-"))
         print(func_ir.dump())
 
     phi2lbl = dict()
@@ -407,7 +402,7 @@ def dead_branch_prune(func_ir, called_args):
     for lbl, blk in func_ir.blocks.items():
         for stmt in blk.body:
             if isinstance(stmt, ir.Assign):
-                if isinstance(stmt.value, ir.Expr) and stmt.value.op == 'phi':
+                if isinstance(stmt.value, ir.Expr) and stmt.value.op == "phi":
                     phi2lbl[stmt.value] = lbl
                     phi2asgn[stmt.value] = stmt
 
@@ -421,7 +416,7 @@ def dead_branch_prune(func_ir, called_args):
 
     for branch, condition, blk in branch_info:
         const_conds = []
-        if isinstance(condition, ir.Expr) and condition.op == 'binop':
+        if isinstance(condition, ir.Expr) and condition.op == "binop":
             prune = prune_by_value
             for arg in [condition.lhs, condition.rhs]:
                 resolved_const = Unknown()
@@ -436,7 +431,7 @@ def dead_branch_prune(func_ir, called_args):
                     try:
                         resolved_const = find_const(func_ir, arg)
                         if resolved_const is None:
-                            resolved_const = types.NoneType('none')
+                            resolved_const = types.NoneType("none")
                     except GuardException:
                         pass
 
@@ -447,10 +442,9 @@ def dead_branch_prune(func_ir, called_args):
             if len(const_conds) == 2:
                 # prune the branch, switch the branch for an unconditional jump
                 prune_stat, taken = prune(branch, condition, blk, *const_conds)
-                if (prune_stat):
+                if prune_stat:
                     # add the condition to the list of nullified conditions
-                    nullified_conditions.append(nullified(condition, taken,
-                                                          True))
+                    nullified_conditions.append(nullified(condition, taken, True))
         else:
             # see if this is a branch on a constant value predicate
             resolved_const = Unknown()
@@ -458,16 +452,15 @@ def dead_branch_prune(func_ir, called_args):
                 pred_call = get_definition(func_ir, branch.cond)
                 resolved_const = find_const(func_ir, pred_call.args[0])
                 if resolved_const is None:
-                    resolved_const = types.NoneType('none')
+                    resolved_const = types.NoneType("none")
             except GuardException:
                 pass
 
             if not isinstance(resolved_const, Unknown):
                 prune_stat, taken = prune_by_predicate(branch, condition, blk)
-                if (prune_stat):
+                if prune_stat:
                     # add the condition to the list of nullified conditions
-                    nullified_conditions.append(nullified(condition, taken,
-                                                          False))
+                    nullified_conditions.append(nullified(condition, taken, False))
 
     # 'ERE BE DRAGONS...
     # It is the evaluation of the condition expression that often trips up type
@@ -552,8 +545,7 @@ def dead_branch_prune(func_ir, called_args):
                 # incoming and remove dead
                 ic_val_tmp = []
                 ic_blk_tmp = []
-                for ic_val, ic_blk in zip(phi.incoming_values,
-                                          phi.incoming_blocks):
+                for ic_val, ic_blk in zip(phi.incoming_values, phi.incoming_blocks):
                     if ic_blk in dead_blocks:
                         continue
                     else:
@@ -573,7 +565,7 @@ def dead_branch_prune(func_ir, called_args):
         func_ir._consts = consts.ConstantInference(func_ir)
 
     if DEBUG > 1:
-        print("after".center(80, '-'))
+        print("after".center(80, "-"))
         print(func_ir.dump())
 
 
@@ -589,9 +581,10 @@ def rewrite_semantic_constants(func_ir, called_args):
     DEBUG = 0
 
     if DEBUG > 1:
-        print(("rewrite_semantic_constants: " +
-               func_ir.func_id.func_name).center(80, '-'))
-        print("before".center(80, '*'))
+        print(
+            ("rewrite_semantic_constants: " + func_ir.func_id.func_name).center(80, "-")
+        )
+        print("before".center(80, "*"))
         func_ir.dump()
 
     def rewrite_statement(func_ir, stmt, new_val):
@@ -606,8 +599,8 @@ def rewrite_semantic_constants(func_ir, called_args):
 
     def rewrite_array_ndim(val, func_ir, called_args):
         # rewrite Array.ndim as const(ndim)
-        if getattr(val, 'op', None) == 'getattr':
-            if val.attr == 'ndim':
+        if getattr(val, "op", None) == "getattr":
+            if val.attr == "ndim":
                 arg_def = guard(get_definition, func_ir, val.value)
                 if isinstance(arg_def, ir.Arg):
                     argty = called_args[arg_def.index]
@@ -616,10 +609,13 @@ def rewrite_semantic_constants(func_ir, called_args):
 
     def rewrite_tuple_len(val, func_ir, called_args):
         # rewrite len(tuple) as const(len(tuple))
-        if getattr(val, 'op', None) == 'call':
+        if getattr(val, "op", None) == "call":
             func = guard(get_definition, func_ir, val.func)
-            if (func is not None and isinstance(func, ir.Global) and
-                    getattr(func, 'value', None) is len):
+            if (
+                func is not None
+                and isinstance(func, ir.Global)
+                and getattr(func, "value", None) is len
+            ):
 
                 (arg,) = val.args
                 arg_def = guard(get_definition, func_ir, arg)
@@ -627,13 +623,13 @@ def rewrite_semantic_constants(func_ir, called_args):
                     argty = called_args[arg_def.index]
                     if isinstance(argty, types.BaseTuple):
                         rewrite_statement(func_ir, stmt, argty.count)
-                elif (isinstance(arg_def, ir.Expr) and
-                      arg_def.op == 'typed_getitem'):
+                elif isinstance(arg_def, ir.Expr) and arg_def.op == "typed_getitem":
                     argty = arg_def.dtype
                     if isinstance(argty, types.BaseTuple):
                         rewrite_statement(func_ir, stmt, argty.count)
 
     from numba.core.ir_utils import get_definition, guard
+
     for blk in func_ir.blocks.values():
         for stmt in blk.body:
             if isinstance(stmt, ir.Assign):
@@ -643,9 +639,9 @@ def rewrite_semantic_constants(func_ir, called_args):
                     rewrite_tuple_len(val, func_ir, called_args)
 
     if DEBUG > 1:
-        print("after".center(80, '*'))
+        print("after".center(80, "*"))
         func_ir.dump()
-        print('-' * 80)
+        print("-" * 80)
 
 
 def find_literally_calls(func_ir, argtypes):
@@ -667,13 +663,12 @@ def find_literally_calls(func_ir, argtypes):
     first_loc = {}
     # Scan for literally calls
     for blk in func_ir.blocks.values():
-        for assign in blk.find_exprs(op='call'):
+        for assign in blk.find_exprs(op="call"):
             var = ir_utils.guard(ir_utils.get_definition, func_ir, assign.func)
             if isinstance(var, (ir.Global, ir.FreeVar)):
                 fnobj = var.value
             else:
-                fnobj = ir_utils.guard(ir_utils.resolve_func_from_module,
-                                       func_ir, var)
+                fnobj = ir_utils.guard(ir_utils.resolve_func_from_module, func_ir, var)
             if fnobj is special.literally:
                 # Found
                 [arg] = assign.args
@@ -685,8 +680,10 @@ def find_literally_calls(func_ir, argtypes):
     # Signal the dispatcher to force literal typing
     for pos in marked_args:
         query_arg = argtypes[pos]
-        do_raise = (isinstance(query_arg, types.InitialValue) and
-                    query_arg.initial_value is None)
+        do_raise = (
+            isinstance(query_arg, types.InitialValue)
+            and query_arg.initial_value is None
+        )
         if do_raise:
             loc = first_loc[pos]
             raise errors.ForceLiteralArg(marked_args, loc=loc)

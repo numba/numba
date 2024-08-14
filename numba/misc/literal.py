@@ -21,4 +21,5 @@ def literal_unroll_impl(container):
 
     def impl(container):
         return container
+
     return impl

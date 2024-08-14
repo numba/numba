@@ -8,55 +8,68 @@ import unittest
 
 # Array overlaps involving a displacement
 
+
 def array_overlap1(src, dest, k=1):
     assert src.shape == dest.shape
     dest[k:] = src[:-k]
+
 
 def array_overlap2(src, dest, k=1):
     assert src.shape == dest.shape
     dest[:-k] = src[k:]
 
+
 def array_overlap3(src, dest, k=1):
     assert src.shape == dest.shape
-    dest[:,:-k] = src[:,k:]
+    dest[:, :-k] = src[:, k:]
+
 
 def array_overlap4(src, dest, k=1):
     assert src.shape == dest.shape
-    dest[:,k:] = src[:,:-k]
+    dest[:, k:] = src[:, :-k]
+
 
 def array_overlap5(src, dest, k=1):
     assert src.shape == dest.shape
-    dest[...,:-k] = src[...,k:]
+    dest[..., :-k] = src[..., k:]
+
 
 def array_overlap6(src, dest, k=1):
     assert src.shape == dest.shape
-    dest[...,k:] = src[...,:-k]
+    dest[..., k:] = src[..., :-k]
+
 
 # Array overlaps involving an in-place reversal
+
 
 def array_overlap11(src, dest):
     assert src.shape == dest.shape
     dest[::-1] = src
 
+
 def array_overlap12(src, dest):
     assert src.shape == dest.shape
     dest[:] = src[::-1]
 
+
 def array_overlap13(src, dest):
     assert src.shape == dest.shape
-    dest[:,::-1] = src
+    dest[:, ::-1] = src
+
 
 def array_overlap14(src, dest):
     assert src.shape == dest.shape
-    dest[:] = src[:,::-1]
+    dest[:] = src[:, ::-1]
+
 
 def array_overlap15(src, dest):
     assert src.shape == dest.shape
-    dest[...,::-1] = src
+    dest[..., ::-1] = src
+
 
 def array_overlap16(src, dest):
     assert src.shape == dest.shape
-    dest[:] = src[...,::-1]
+    dest[:] = src[..., ::-1]
 
 
 class TestArrayOverlap(TestCase):
@@ -65,8 +78,8 @@ class TestArrayOverlap(TestCase):
         N = 4
 
         def vary_layouts(orig):
-            yield orig.copy(order='C')
-            yield orig.copy(order='F')
+            yield orig.copy(order="C")
+            yield orig.copy(order="F")
             a = orig[::-1].copy()[::-1]
             assert not a.flags.c_contiguous and not a.flags.f_contiguous
             yield a
@@ -130,5 +143,5 @@ class TestArrayOverlap(TestCase):
         self.check_overlap(array_overlap16, min_ndim=1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

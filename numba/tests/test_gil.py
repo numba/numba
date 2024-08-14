@@ -19,7 +19,7 @@ PyThread_get_thread_ident.restype = ctypes.c_long
 PyThread_get_thread_ident.argtypes = []
 
 # A way of sleeping from nopython code
-if os.name == 'nt':
+if os.name == "nt":
     sleep = ctypes.windll.kernel32.Sleep
     sleep.argtypes = [ctypes.c_uint]
     sleep.restype = None
@@ -41,17 +41,20 @@ def f(a, indices):
         sleep(10 * sleep_factor)
         a[idx] = PyThread_get_thread_ident()
 
+
 f_sig = "void(int64[:], intp[:])"
+
 
 def lifted_f(a, indices):
     """
     Same as f(), but inside a lifted loop
     """
-    object()   # Force object mode
+    object()  # Force object mode
     for idx in indices:
         # Let another thread run
         sleep(10 * sleep_factor)
         a[idx] = PyThread_get_thread_ident()
+
 
 def object_f(a, indices):
     """
@@ -60,7 +63,7 @@ def object_f(a, indices):
     for idx in indices:
         # Let another thread run
         sleep(10 * sleep_factor)
-        object()   # Force object mode
+        object()  # Force object mode
         a[idx] = PyThread_get_thread_ident()
 
 
@@ -138,9 +141,11 @@ class TestGILRelease(TestCase):
         released in a callee.
         """
         compiled_f = jit(f_sig, nopython=True)(f)
+
         @jit(f_sig, nopython=True, nogil=True)
         def caller(a, i):
             compiled_f(a, i)
+
         self.check_gil_released(caller)
 
     def test_gil_released_by_caller_and_callee(self):
@@ -148,9 +153,11 @@ class TestGILRelease(TestCase):
         Same, but with both caller and callee asking to release the GIL.
         """
         compiled_f = jit(f_sig, nopython=True, nogil=True)(f)
+
         @jit(f_sig, nopython=True, nogil=True)
         def caller(a, i):
             compiled_f(a, i)
+
         self.check_gil_released(caller)
 
     def test_gil_ignored_by_callee(self):
@@ -158,9 +165,11 @@ class TestGILRelease(TestCase):
         When only the callee asks to release the GIL, it gets ignored.
         """
         compiled_f = jit(f_sig, nopython=True, nogil=True)(f)
+
         @jit(f_sig, nopython=True)
         def caller(a, i):
             compiled_f(a, i)
+
         self.check_gil_held(caller)
 
     def test_object_mode(self):
@@ -169,14 +178,20 @@ class TestGILRelease(TestCase):
         printed out.
         """
         with warnings.catch_warnings(record=True) as wlist:
-            warnings.simplefilter('always', errors.NumbaWarning)
+            warnings.simplefilter("always", errors.NumbaWarning)
             cfunc = jit(f_sig, forceobj=True, nogil=True)(object_f)
-        self.assertTrue(any(w.category is errors.NumbaWarning
-                            and "Code running in object mode won't allow parallel execution" in str(w.message)
-                            for w in wlist), wlist)
+        self.assertTrue(
+            any(
+                w.category is errors.NumbaWarning
+                and "Code running in object mode won't allow parallel execution"
+                in str(w.message)
+                for w in wlist
+            ),
+            wlist,
+        )
         # Just check it doesn't crash.
         self.run_in_threads(cfunc, 2)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

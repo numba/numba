@@ -25,7 +25,7 @@ class TestFirstLineFinder(TestCase):
     def test_decorated_odd_comment_indent(self):
         @njit
         def foo():
-# NOTE: THIS COMMENT MUST START AT COLUMN 0 FOR THIS SAMPLE CODE TO BE VALID # noqa: E115, E501
+            # NOTE: THIS COMMENT MUST START AT COLUMN 0 FOR THIS SAMPLE CODE TO BE VALID # noqa: E115, E501
             return 1
 
         first_def_line = get_func_body_first_lineno(foo)
@@ -33,7 +33,7 @@ class TestFirstLineFinder(TestCase):
 
     def test_undecorated_odd_comment_indent(self):
         def foo():
-# NOTE: THIS COMMENT MUST START AT COLUMN 0 FOR THIS SAMPLE CODE TO BE VALID # noqa: E115, E501
+            # NOTE: THIS COMMENT MUST START AT COLUMN 0 FOR THIS SAMPLE CODE TO BE VALID # noqa: E115, E501
             return 1
 
         first_def_line = get_func_body_first_lineno(njit(foo))
@@ -73,7 +73,7 @@ class TestFirstLineFinder(TestCase):
 
         globalns = {}
         exec(source, globalns)
-        foo = globalns['foo']
+        foo = globalns["foo"]
 
         first_def_line = get_func_body_first_lineno(foo)
         # Cannot determine first line of string evaled functions
@@ -81,7 +81,8 @@ class TestFirstLineFinder(TestCase):
 
     def test_single_line_function(self):
         @njit
-        def foo(): pass   # noqa: E704
+        def foo():
+            pass  # noqa: E704
 
         first_def_line = get_func_body_first_lineno(foo)
         self.assert_line_location(first_def_line, 2)
@@ -89,8 +90,7 @@ class TestFirstLineFinder(TestCase):
     def test_docstring(self):
         @njit
         def foo():
-            """Docstring
-            """
+            """Docstring"""
             pass
 
         first_def_line = get_func_body_first_lineno(foo)
@@ -99,11 +99,11 @@ class TestFirstLineFinder(TestCase):
     def test_docstring_2(self):
         @njit
         def foo():
-            """Docstring
-            """
+            """Docstring"""
             """Not Docstring, but a bare string literal
             """
             pass
+
         # Variation on test_docstring but with a "fake" docstring following
         # the true docstring.
         first_def_line = get_func_body_first_lineno(foo)

@@ -19,16 +19,17 @@ class Test(TestCase):
         sz = types.intp.bitwidth
         driver = GdbMIDriver(__file__)
         driver.set_breakpoint(symbol="__main__::foo")
-        driver.run() # will hit cpython symbol match
+        driver.run()  # will hit cpython symbol match
         driver.check_hit_breakpoint(number=1)
-        driver.cont() # will hit njit symbol match
-        driver.check_hit_breakpoint(number=1, line=10) # Ensure line number
+        driver.cont()  # will hit njit symbol match
+        driver.check_hit_breakpoint(number=1, line=10)  # Ensure line number
         driver.stack_list_arguments(2)
-        expect = ('[frame={level="0",args=[{name="x",type="int%s",'
-                  'value="120"}]}]' % sz)
+        expect = (
+            '[frame={level="0",args=[{name="x",type="int%s",' 'value="120"}]}]' % sz
+        )
         driver.assert_output(expect)
         driver.quit()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

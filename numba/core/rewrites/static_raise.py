@@ -2,7 +2,7 @@ from numba.core import errors, ir, consts
 from numba.core.rewrites import register_rewrite, Rewrite
 
 
-@register_rewrite('before-inference')
+@register_rewrite("before-inference")
 class RewriteConstRaises(Rewrite):
     """
     Rewrite IR statements of the kind `raise(value)`
@@ -21,7 +21,7 @@ class RewriteConstRaises(Rewrite):
         """
         Break down constant exception.
         """
-        if isinstance(const, tuple): # it's a tuple(exception class, args)
+        if isinstance(const, tuple):  # it's a tuple(exception class, args)
             if not self._is_exception_type(const[0]):
                 msg = "Encountered unsupported exception constant %r"
                 raise errors.UnsupportedError(msg % (const[0],), loc)
@@ -30,8 +30,10 @@ class RewriteConstRaises(Rewrite):
             return const, None
         else:
             if isinstance(const, str):
-                msg = ("Directly raising a string constant as an exception is "
-                       "not supported.")
+                msg = (
+                    "Directly raising a string constant as an exception is "
+                    "not supported."
+                )
             else:
                 msg = "Encountered unsupported constant type used for exception"
             raise errors.UnsupportedError(msg, loc)
@@ -70,7 +72,7 @@ class RewriteConstRaises(Rewrite):
             elif isinstance(inst, ir.TryRaise):
                 tryraises[inst] = exc_type, exc_args
             else:
-                raise ValueError('unexpected: {}'.format(type(inst)))
+                raise ValueError("unexpected: {}".format(type(inst)))
         return (len(raises) + len(tryraises)) > 0
 
     def apply(self):

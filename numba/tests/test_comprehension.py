@@ -19,6 +19,7 @@ from numba.tests.support import tag, _32bit, captured_stdout
 
 PARALLEL_SUPPORTED = not _32bit
 
+
 def comp_list(n):
     l = [i for i in range(n)]
     s = 0
@@ -37,7 +38,7 @@ class TestListComprehension(TestCase):
         self.assertEqual(cfunc(-1), pyfunc(-1))
 
     def test_bulk_use_cases(self):
-        """ Tests the large number of use cases defined below """
+        """Tests the large number of use cases defined below"""
 
         # jitted function used in some tests
         @jit(nopython=True)
@@ -47,92 +48,98 @@ class TestListComprehension(TestCase):
             return fib3(n - 1) + fib3(n - 2)
 
         def list1(x):
-            """ Test basic list comprehension """
+            """Test basic list comprehension"""
             return [i for i in range(1, len(x) - 1)]
 
         def list2(x):
-            """ Test conditional list comprehension """
+            """Test conditional list comprehension"""
             return [y for y in x if y < 2]
 
         def list3(x):
-            """ Test ternary list comprehension """
+            """Test ternary list comprehension"""
             return [y if y < 2 else -1 for y in x]
 
         def list4(x):
-            """ Test list comprehension to np.array ctor """
+            """Test list comprehension to np.array ctor"""
             return np.array([1, 2, 3])
 
         # expected fail, unsupported type in sequence
         def list5(x):
-            """ Test nested list comprehension to np.array ctor """
+            """Test nested list comprehension to np.array ctor"""
             return np.array([np.array([z for z in x]) for y in x])
 
         def list6(x):
-            """ Test use of inner function in list comprehension """
+            """Test use of inner function in list comprehension"""
+
             def inner(x):
                 return x + 1
+
             return [inner(z) for z in x]
 
         def list7(x):
-            """ Test use of closure in list comprehension """
+            """Test use of closure in list comprehension"""
             y = 3
 
             def inner(x):
                 return x + y
+
             return [inner(z) for z in x]
 
         def list8(x):
-            """ Test use of list comprehension as arg to inner function """
+            """Test use of list comprehension as arg to inner function"""
             l = [z + 1 for z in x]
 
             def inner(x):
                 return x[0] + 1
+
             q = inner(l)
             return q
 
         def list9(x):
-            """ Test use of list comprehension access in closure """
+            """Test use of list comprehension access in closure"""
             l = [z + 1 for z in x]
 
             def inner(x):
                 return x[0] + l[1]
+
             return inner(x)
 
         def list10(x):
-            """ Test use of list comprehension access in closure and as arg """
+            """Test use of list comprehension access in closure and as arg"""
             l = [z + 1 for z in x]
 
             def inner(x):
                 return [y + l[0] for y in x]
+
             return inner(l)
 
         def list11(x):
-            """ Test scalar array construction in list comprehension """
+            """Test scalar array construction in list comprehension"""
             l = [np.array(z) for z in x]
             return l
 
         def list12(x):
-            """ Test scalar type conversion construction in list comprehension """
+            """Test scalar type conversion construction in list comprehension"""
             l = [np.float64(z) for z in x]
             return l
 
         def list13(x):
-            """ Test use of explicit numpy scalar ctor reference in list comprehension """
+            """Test use of explicit numpy scalar ctor reference in list comprehension"""
             l = [numpy.float64(z) for z in x]
             return l
 
         def list14(x):
-            """ Test use of python scalar ctor reference in list comprehension """
+            """Test use of python scalar ctor reference in list comprehension"""
             l = [float(z) for z in x]
             return l
 
         def list15(x):
-            """ Test use of python scalar ctor reference in list comprehension followed by np array construction from the list"""
+            """Test use of python scalar ctor reference in list comprehension followed by np array construction from the list"""
             l = [float(z) for z in x]
             return np.array(l)
 
         def list16(x):
-            """ Test type unification from np array ctors consuming list comprehension """
+            """Test type unification from np array ctors consuming list comprehension"""
             l1 = [float(z) for z in x]
             l2 = [z for z in x]
             ze = np.array(l1)
@@ -140,14 +147,15 @@ class TestListComprehension(TestCase):
             return ze + oe
 
         def list17(x):
-            """ Test complex list comprehension including math calls """
-            return [(a, b, c)
-                    for a in x for b in x for c in x if np.sqrt(a**2 + b**2) == c]
+            """Test complex list comprehension including math calls"""
+            return [
+                (a, b, c) for a in x for b in x for c in x if np.sqrt(a**2 + b**2) == c
+            ]
 
         _OUTER_SCOPE_VAR = 9
 
         def list18(x):
-            """ Test loop list with outer scope var as conditional"""
+            """Test loop list with outer scope var as conditional"""
             z = []
             for i in x:
                 if i < _OUTER_SCOPE_VAR:
@@ -157,31 +165,31 @@ class TestListComprehension(TestCase):
         _OUTER_SCOPE_VAR = 9
 
         def list19(x):
-            """ Test list comprehension with outer scope as conditional"""
+            """Test list comprehension with outer scope as conditional"""
             return [i for i in x if i < _OUTER_SCOPE_VAR]
 
         def list20(x):
-            """ Test return empty list """
+            """Test return empty list"""
             return [i for i in x if i == -1000]
 
         def list21(x):
-            """ Test call a jitted function in a list comprehension """
+            """Test call a jitted function in a list comprehension"""
             return [fib3(i) for i in x]
 
         def list22(x):
-            """ Test create two lists comprehensions and a third walking the first two """
+            """Test create two lists comprehensions and a third walking the first two"""
             a = [y - 1 for y in x]
             b = [y + 1 for y in x]
             return [x for x in a for y in b if x == y]
 
         def list23(x):
-            """ Test operation on comprehension generated list """
+            """Test operation on comprehension generated list"""
             z = [y for y in x]
             z.append(1)
             return z
 
         def list24(x):
-            """ Test type promotion """
+            """Test type promotion"""
             z = [float(y) if y > 3 else y for y in x]
             return z
 
@@ -195,11 +203,32 @@ class TestListComprehension(TestCase):
             return not_included
 
         # functions to test that are expected to pass
-        f = [list1, list2, list3, list4,
-             list6, list7, list8, list9, list10, list11,
-             list12, list13, list14, list15,
-             list16, list17, list18, list19, list20,
-             list21, list22, list23, list24, list25]
+        f = [
+            list1,
+            list2,
+            list3,
+            list4,
+            list6,
+            list7,
+            list8,
+            list9,
+            list10,
+            list11,
+            list12,
+            list13,
+            list14,
+            list15,
+            list16,
+            list17,
+            list18,
+            list19,
+            list20,
+            list21,
+            list22,
+            list23,
+            list24,
+            list25,
+        ]
 
         var = [1, 2, 3, 4, 5]
         for ref in f:
@@ -219,7 +248,7 @@ class TestListComprehension(TestCase):
         # TODO: we can't really assert the error message for the above
         # Also, test_nested_array is a similar case (but without list) that works.
 
-        if sys.maxsize > 2 ** 32:
+        if sys.maxsize > 2**32:
             bits = 64
         else:
             bits = 32
@@ -244,21 +273,21 @@ class TestArrayComprehension(unittest.TestCase):
     def check(self, pyfunc, *args, **kwargs):
         """A generic check function that run both pyfunc, and jitted pyfunc,
         and compare results."""
-        run_parallel = kwargs.get('run_parallel', False)
-        assert_allocate_list = kwargs.get('assert_allocate_list', False)
-        assert_dtype = kwargs.get('assert_dtype', False)
-        cfunc = jit(nopython=True,parallel=run_parallel)(pyfunc)
+        run_parallel = kwargs.get("run_parallel", False)
+        assert_allocate_list = kwargs.get("assert_allocate_list", False)
+        assert_dtype = kwargs.get("assert_dtype", False)
+        cfunc = jit(nopython=True, parallel=run_parallel)(pyfunc)
         pyres = pyfunc(*args)
         cres = cfunc(*args)
         np.testing.assert_array_equal(pyres, cres)
         if assert_dtype:
             self.assertEqual(cres[1].dtype, assert_dtype)
         if assert_allocate_list:
-            self.assertIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
+            self.assertIn("allocate list", cfunc.inspect_llvm(cfunc.signatures[0]))
         else:
-            self.assertNotIn('allocate list', cfunc.inspect_llvm(cfunc.signatures[0]))
+            self.assertNotIn("allocate list", cfunc.inspect_llvm(cfunc.signatures[0]))
         if run_parallel:
-            self.assertIn('@do_scheduling', cfunc.inspect_llvm(cfunc.signatures[0]))
+            self.assertIn("@do_scheduling", cfunc.inspect_llvm(cfunc.signatures[0]))
 
     def test_comp_with_array_1(self):
         def comp_with_array_1(n):
@@ -273,7 +302,7 @@ class TestArrayComprehension(unittest.TestCase):
     def test_comp_with_array_2(self):
         def comp_with_array_2(n, threshold):
             A = np.arange(-n, n)
-            return np.array([ x * x if x < threshold else x * 2 for x in A ])
+            return np.array([x * x if x < threshold else x * 2 for x in A])
 
         self.check(comp_with_array_2, 5, 0)
 
@@ -284,6 +313,7 @@ class TestArrayComprehension(unittest.TestCase):
             return l
 
         import numba.core.inline_closurecall as ic
+
         try:
             ic.enable_inline_arraycall = False
             self.check(comp_with_array_noinline, 5, assert_allocate_list=True)
@@ -311,7 +341,9 @@ class TestArrayComprehension(unittest.TestCase):
 
     def test_comp_nest_with_array_3(self):
         def comp_nest_with_array_3(n):
-            l = np.array([[[i * j * k for k in range(n)] for j in range(n)] for i in range(n)])
+            l = np.array(
+                [[[i * j * k for k in range(n)] for j in range(n)] for i in range(n)]
+            )
             return l
 
         self.check(comp_nest_with_array_3, 5)
@@ -324,10 +356,10 @@ class TestArrayComprehension(unittest.TestCase):
             return l
 
         import numba.core.inline_closurecall as ic
+
         try:
             ic.enable_inline_arraycall = False
-            self.check(comp_nest_with_array_noinline, 5,
-                       assert_allocate_list=True)
+            self.check(comp_nest_with_array_noinline, 5, assert_allocate_list=True)
         finally:
             ic.enable_inline_arraycall = True
 
@@ -349,6 +381,7 @@ class TestArrayComprehension(unittest.TestCase):
         def comp_with_array_conditional(n):
             l = np.array([i for i in range(n) if i % 2 == 1])
             return l
+
         # arraycall inline would not happen when conditional is present
         self.check(comp_with_array_conditional, 10, assert_allocate_list=True)
 
@@ -356,66 +389,74 @@ class TestArrayComprehension(unittest.TestCase):
         def comp_nest_with_array_conditional(n):
             l = np.array([[i * j for j in range(n)] for i in range(n) if i % 2 == 1])
             return l
-        self.check(comp_nest_with_array_conditional, 5,
-                   assert_allocate_list=True)
 
-    @unittest.skipUnless(numpy_version < (1, 24),
-                         'Setting an array element with a sequence is removed '
-                         'in NumPy 1.24')
+        self.check(comp_nest_with_array_conditional, 5, assert_allocate_list=True)
+
+    @unittest.skipUnless(
+        numpy_version < (1, 24),
+        "Setting an array element with a sequence is removed " "in NumPy 1.24",
+    )
     def test_comp_nest_with_dependency(self):
         def comp_nest_with_dependency(n):
-            l = np.array([[i * j for j in range(i+1)] for i in range(n)])
+            l = np.array([[i * j for j in range(i + 1)] for i in range(n)])
             return l
+
         # test is expected to fail
         with self.assertRaises(TypingError) as raises:
             self.check(comp_nest_with_dependency, 5)
         self.assertIn(_header_lead, str(raises.exception))
-        self.assertIn('array(undefined,', str(raises.exception))
+        self.assertIn("array(undefined,", str(raises.exception))
 
     def test_comp_unsupported_iter(self):
         def comp_unsupported_iter():
             val = zip([1, 2, 3], [4, 5, 6])
             return np.array([a for a, b in val])
+
         with self.assertRaises(TypingError) as raises:
             self.check(comp_unsupported_iter)
         self.assertIn(_header_lead, str(raises.exception))
-        self.assertIn('Unsupported iterator found in array comprehension',
-                      str(raises.exception))
+        self.assertIn(
+            "Unsupported iterator found in array comprehension", str(raises.exception)
+        )
 
     def test_no_array_comp(self):
         def no_array_comp1(n):
-            l = [1,2,3,4]
+            l = [1, 2, 3, 4]
             a = np.array(l)
             return a
+
         # const 1D array is actually inlined
         self.check(no_array_comp1, 10, assert_allocate_list=False)
+
         def no_array_comp2(n):
-            l = [1,2,3,4]
+            l = [1, 2, 3, 4]
             a = np.array(l)
             l.append(5)
             return a
+
         self.check(no_array_comp2, 10, assert_allocate_list=True)
 
     def test_nested_array(self):
         def nested_array(n):
-            l = np.array([ np.array([x for x in range(n)]) for y in range(n)])
+            l = np.array([np.array([x for x in range(n)]) for y in range(n)])
             return l
 
         self.check(nested_array, 10)
 
     def test_nested_array_with_const(self):
         def nested_array(n):
-            l = np.array([ np.array([x for x in range(3)]) for y in range(4)])
+            l = np.array([np.array([x for x in range(3)]) for y in range(4)])
             return l
 
         self.check(nested_array, 0)
 
     def test_array_comp_with_iter(self):
         def array_comp(a):
-            l = np.array([ x * x for x in a ])
+            l = np.array([x * x for x in a])
             return l
+
         # with list iterator
-        l = [1,2,3,4,5]
+        l = [1, 2, 3, 4, 5]
         self.check(array_comp, l)
         # with array iterator
         self.check(array_comp, np.array(l))
@@ -496,7 +537,7 @@ class TestArrayComprehension(unittest.TestCase):
         # For a large enough array, the chances of shuffle to not move any
         # element is tiny enough.
         self.assertNotEqual(got, expect)
-        self.assertRegex(got, r'\[(\s*\d+)+\]')
+        self.assertRegex(got, r"\[(\s*\d+)+\]")
 
     def test_empty_list_not_removed(self):
         # see issue #3724
@@ -506,10 +547,12 @@ class TestArrayComprehension(unittest.TestCase):
             a = np.random.choice(myList, 1)
             t.append(x + a)
             return a
+
         self.check(f, 5, assert_allocate_list=True)
 
     def test_reuse_of_array_var(self):
-        """ Test issue 3742 """
+        """Test issue 3742"""
+
         # redefinition of z breaks array comp as there's multiple defn
         def foo(n):
             # doesn't matter where this is in the code, it's just to ensure a
@@ -518,12 +561,12 @@ class TestArrayComprehension(unittest.TestCase):
             z = np.empty(n)
             for i in range(n):
                 z = np.zeros(n)
-                z[i] = i # write is required to trip the bug
+                z[i] = i  # write is required to trip the bug
 
             return z
 
         self.check(foo, 10, assert_allocate_list=True)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

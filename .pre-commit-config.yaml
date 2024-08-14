@@ -2,4 +2,8 @@ repos:
 - repo: https://github.com/PyCQA/flake8
   rev: 3.7.8
   hooks:
-  - id: flake8
+    - id: flake8
+- repo: https://github.com/psf/black-pre-commit-mirror
+  rev: 24.4.2
+  hooks:
+    - id: black

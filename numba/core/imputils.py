@@ -2,7 +2,6 @@
 Utilities to simplify the boilerplate for native lowering.
 """
 
-
 import collections
 import contextlib
 import inspect
@@ -17,7 +16,8 @@ class Registry(object):
     """
     A registry of function and attribute implementations.
     """
-    def __init__(self, name='unspecified'):
+
+    def __init__(self, name="unspecified"):
         self.name = name
         self.functions = []
         self.getattrs = []
@@ -34,9 +34,11 @@ class Registry(object):
         The decorated implementation has the signature
         (context, builder, sig, args).
         """
+
         def decorate(impl):
             self.functions.append((impl, func, argtys))
             return impl
+
         return decorate
 
     def _decorate_attr(self, impl, ty, attr, impl_list, decorator):
@@ -52,9 +54,10 @@ class Registry(object):
         The decorated implementation will have the signature
         (context, builder, typ, val).
         """
+
         def decorate(impl):
-            return self._decorate_attr(impl, ty, attr, self.getattrs,
-                                       _decorate_getattr)
+            return self._decorate_attr(impl, ty, attr, self.getattrs, _decorate_getattr)
+
         return decorate
 
     def lower_getattr_generic(self, ty):
@@ -76,9 +79,10 @@ class Registry(object):
         The decorated implementation will have the signature
         (context, builder, sig, args).
         """
+
         def decorate(impl):
-            return self._decorate_attr(impl, ty, attr, self.setattrs,
-                                       _decorate_setattr)
+            return self._decorate_attr(impl, ty, attr, self.setattrs, _decorate_setattr)
+
         return decorate
 
     def lower_setattr_generic(self, ty):
@@ -100,9 +104,11 @@ class Registry(object):
         The decorated implementation will have the signature
         (context, builder, fromty, toty, val).
         """
+
         def decorate(impl):
             self.casts.append((impl, (fromty, toty)))
             return impl
+
         return decorate
 
     def lower_constant(self, ty):
@@ -112,9 +118,11 @@ class Registry(object):
         The decorated implementation will have the signature
         (context, builder, ty, pyval).
         """
+
         def decorate(impl):
             self.constants.append((impl, (ty,)))
             return impl
+
         return decorate
 
     def __repr__(self):
@@ -125,12 +133,13 @@ class RegistryLoader(BaseRegistryLoader):
     """
     An incremental loader for a target registry.
     """
-    registry_items = ('functions', 'getattrs', 'setattrs', 'casts', 'constants')
+
+    registry_items = ("functions", "getattrs", "setattrs", "casts", "constants")
 
 
 # Global registry for implementations of builtin operations
 # (functions, attributes, type casts)
-builtin_registry = Registry('builtin_registry')
+builtin_registry = Registry("builtin_registry")
 
 lower_builtin = builtin_registry.lower
 lower_getattr = builtin_registry.lower_getattr
@@ -145,9 +154,12 @@ def _decorate_getattr(impl, ty, attr):
     real_impl = impl
 
     if attr is not None:
+
         def res(context, builder, typ, value, attr):
             return real_impl(context, builder, typ, value)
+
     else:
+
         def res(context, builder, typ, value, attr):
             return real_impl(context, builder, typ, value, attr)
 
@@ -155,13 +167,17 @@ def _decorate_getattr(impl, ty, attr):
     res.attr = attr
     return res
 
+
 def _decorate_setattr(impl, ty, attr):
     real_impl = impl
 
     if attr is not None:
+
         def res(context, builder, sig, args, attr):
             return real_impl(context, builder, sig, args)
+
     else:
+
         def res(context, builder, sig, args, attr):
             return real_impl(context, builder, sig, args, attr)
 
@@ -178,11 +194,14 @@ def fix_returning_optional(context, builder, sig, status, retval):
         retvalptr = cgutils.alloca_once_value(builder, optional_none)
         with builder.if_then(builder.not_(status.is_none)):
             optional_value = context.make_optional_value(
-                builder, value_type, retval,
-                )
+                builder,
+                value_type,
+                retval,
+            )
             builder.store(optional_value, retvalptr)
         retval = builder.load(retvalptr)
     return retval
+
 
 def user_function(fndesc, libs):
     """
@@ -193,7 +212,8 @@ def user_function(fndesc, libs):
         func = context.declare_function(builder.module, fndesc)
         # env=None assumes this is a nopython function
         status, retval = context.call_conv.call_function(
-            builder, func, fndesc.restype, fndesc.argtypes, args)
+            builder, func, fndesc.restype, fndesc.argtypes, args
+        )
         with cgutils.if_unlikely(builder, status.is_error):
             context.call_conv.return_status_propagate(builder, status)
         assert sig.return_type == fndesc.restype
@@ -220,7 +240,8 @@ def user_generator(gendesc, libs):
         func = context.declare_function(builder.module, gendesc)
         # env=None assumes this is a nopython function
         status, retval = context.call_conv.call_function(
-            builder, func, gendesc.restype, gendesc.argtypes, args)
+            builder, func, gendesc.restype, gendesc.argtypes, args
+        )
         # Return raw status for caller to process StopIteration
         return status, retval
 
@@ -244,7 +265,7 @@ def iterator_impl(iterable_type, iterator_type):
             iterobj = cls(context, builder, value)
             return iternext(iterobj, context, builder, result)
 
-        lower_builtin('iternext', iterator_type)(iternext_wrapper)
+        lower_builtin("iternext", iterator_type)(iternext_wrapper)
         return cls
 
     return wrapper
@@ -255,7 +276,8 @@ class _IternextResult(object):
     A result wrapper for iteration, passed by iternext_impl() into the
     wrapped function.
     """
-    __slots__ = ('_context', '_builder', '_pairobj')
+
+    __slots__ = ("_context", "_builder", "_pairobj")
 
     def __init__(self, context, builder, pairobj):
         self._context = context
@@ -287,9 +309,9 @@ class _IternextResult(object):
         """
         Return whether the iterator is marked valid.
         """
-        return self._context.get_argument_value(self._builder,
-                                                types.boolean,
-                                                self._pairobj.second)
+        return self._context.get_argument_value(
+            self._builder, types.boolean, self._pairobj.second
+        )
 
     def yielded_value(self):
         """
@@ -297,10 +319,12 @@ class _IternextResult(object):
         """
         return self._pairobj.first
 
+
 class RefType(Enum):
     """
     Enumerate the reference type
     """
+
     """
     A new reference
     """
@@ -313,6 +337,7 @@ class RefType(Enum):
     An untracked reference
     """
     UNTRACKED = 3
+
 
 def iternext_impl(ref_type=None):
     """
@@ -333,8 +358,9 @@ def iternext_impl(ref_type=None):
         def wrapper(context, builder, sig, args):
             pair_type = sig.return_type
             pairobj = context.make_helper(builder, pair_type)
-            func(context, builder, sig, args,
-                _IternextResult(context, builder, pairobj))
+            func(
+                context, builder, sig, args, _IternextResult(context, builder, pairobj)
+            )
             if ref_type == RefType.NEW:
                 impl_ret = impl_ret_new_ref
             elif ref_type == RefType.BORROWED:
@@ -343,9 +369,10 @@ def iternext_impl(ref_type=None):
                 impl_ret = impl_ret_untracked
             else:
                 raise ValueError("Unknown ref_type encountered")
-            return impl_ret(context, builder,
-                                    pair_type, pairobj._getvalue())
+            return impl_ret(context, builder, pair_type, pairobj._getvalue())
+
         return wrapper
+
     return outer
 
 
@@ -355,7 +382,7 @@ def call_getiter(context, builder, iterable_type, val):
     of value *val*, and return the corresponding LLVM inst.
     """
     getiter_sig = typing.signature(iterable_type.iterator_type, iterable_type)
-    getiter_impl = context.get_function('getiter', getiter_sig)
+    getiter_impl = context.get_function("getiter", getiter_sig)
     return getiter_impl(builder, (val,))
 
 
@@ -368,7 +395,7 @@ def call_iternext(context, builder, iterator_type, val):
     itemty = iterator_type.yield_type
     pair_type = types.Pair(itemty, types.boolean)
     iternext_sig = typing.signature(pair_type, iterator_type)
-    iternext_impl = context.get_function('iternext', iternext_sig)
+    iternext_impl = context.get_function("iternext", iternext_sig)
     val = iternext_impl(builder, (val,))
     pairobj = context.make_helper(builder, pair_type, val)
     return _IternextResult(context, builder, pairobj)
@@ -380,15 +407,20 @@ def call_len(context, builder, ty, val):
     this type.
     """
     try:
-        len_impl = context.get_function(len, typing.signature(types.intp, ty,))
+        len_impl = context.get_function(
+            len,
+            typing.signature(
+                types.intp,
+                ty,
+            ),
+        )
     except NotImplementedError:
         return None
     else:
         return len_impl(builder, (val,))
 
 
-_ForIterLoop = collections.namedtuple('_ForIterLoop',
-                                      ('value', 'do_break'))
+_ForIterLoop = collections.namedtuple("_ForIterLoop", ("value", "do_break"))
 
 
 @contextlib.contextmanager
@@ -402,8 +434,8 @@ def for_iter(context, builder, iterable_type, val):
     iterator_type = iterable_type.iterator_type
     iterval = call_getiter(context, builder, iterable_type, val)
 
-    bb_body = builder.append_basic_block('for_iter.body')
-    bb_end = builder.append_basic_block('for_iter.end')
+    bb_body = builder.append_basic_block("for_iter.body")
+    bb_end = builder.append_basic_block("for_iter.end")
 
     def do_break():
         builder.branch(bb_end)
@@ -448,7 +480,7 @@ def impl_ret_untracked(ctx, builder, retty, ret):
 
 
 @contextlib.contextmanager
-def force_error_model(context, model_name='numpy'):
+def force_error_model(context, model_name="numpy"):
     """
     Temporarily change the context's error model.
     """

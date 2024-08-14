@@ -40,10 +40,12 @@ def _generate_property(field, template, fname):
     return njit(glbls[fname])
 
 
-_generate_getter = partial(_generate_property, template=_getter_code_template,
-                           fname='accessor')
-_generate_setter = partial(_generate_property, template=_setter_code_template,
-                           fname='mutator')
+_generate_getter = partial(
+    _generate_property, template=_getter_code_template, fname="accessor"
+)
+_generate_setter = partial(
+    _generate_property, template=_setter_code_template, fname="mutator"
+)
 
 
 def _generate_method(name, func):
@@ -54,7 +56,7 @@ def _generate_method(name, func):
     source = _method_code_template.format(method=name)
     glbls = {}
     exec(source, glbls)
-    method = njit(glbls['method'])
+    method = njit(glbls["method"])
 
     @wraps(func)
     def wrapper(*args, **kwargs):
@@ -75,10 +77,11 @@ def _specialize_box(typ):
     # Check cache
     if typ in _cache_specialized_box:
         return _cache_specialized_box[typ]
-    dct = {'__slots__': (),
-           '_numba_type_': typ,
-           '__doc__': typ.class_type.class_doc,
-           }
+    dct = {
+        "__slots__": (),
+        "_numba_type_": typ,
+        "__doc__": typ.class_type.class_doc,
+    }
     # Inject attributes as class properties
     for field in typ.struct:
         getter = _generate_getter(field)
@@ -88,13 +91,13 @@ def _specialize_box(typ):
     for field, impdct in typ.jit_props.items():
         getter = None
         setter = None
-        if 'get' in impdct:
+        if "get" in impdct:
             getter = _generate_getter(field)
-        if 'set' in impdct:
+        if "set" in impdct:
             setter = _generate_setter(field)
         # get docstring from either the fget or fset
-        imp = impdct.get('get') or impdct.get('set') or None
-        doc = getattr(imp, '__doc__', None)
+        imp = impdct.get("get") or impdct.get("set") or None
+        doc = getattr(imp, "__doc__", None)
         dct[field] = property(getter, setter, doc=doc)
     # Inject methods as class members
     supported_dunders = {
@@ -188,15 +191,18 @@ def _specialize_box(typ):
                 fget = prop.fget
                 fast_fget = fget.compile((typ,))
                 fget.disable_compile()
-                setattr(subcls, k,
-                        property(fast_fget, prop.fset, prop.fdel,
-                                 doc=prop.__doc__))
+                setattr(
+                    subcls,
+                    k,
+                    property(fast_fget, prop.fset, prop.fdel, doc=prop.__doc__),
+                )
 
     return subcls
 
 
 ###############################################################################
 # Implement box/unbox for call wrapper
+
 
 @box(types.ClassInstanceType)
 def _box_class_instance(typ, val, c):

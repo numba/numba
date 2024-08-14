@@ -22,14 +22,14 @@ class SourceLines(Mapping):
             self.lines = ()
             self.startno = 0
         else:
-            self.lines = textwrap.dedent(''.join(lines)).splitlines()
+            self.lines = textwrap.dedent("".join(lines)).splitlines()
             self.startno = startno
 
     def __getitem__(self, lineno):
         try:
             return self.lines[lineno - self.startno].rstrip()
         except IndexError:
-            return ''
+            return ""
 
     def __iter__(self):
         return iter((self.startno + i) for i in range(len(self.lines)))
@@ -53,15 +53,24 @@ class TypeAnnotation(object):
     # to be compiled).
     func_data = OrderedDict()
 
-    def __init__(self, func_ir, typemap, calltypes, lifted, lifted_from,
-                 args, return_type, html_output=None):
+    def __init__(
+        self,
+        func_ir,
+        typemap,
+        calltypes,
+        lifted,
+        lifted_from,
+        args,
+        return_type,
+        html_output=None,
+    ):
         self.func_id = func_ir.func_id
         self.blocks = func_ir.blocks
         self.typemap = typemap
         self.calltypes = calltypes
         self.filename = func_ir.loc.filename
         self.linenum = str(func_ir.loc.line)
-        self.signature = str(args) + ' -> ' + str(return_type)
+        self.signature = str(args) + " -> " + str(return_type)
 
         # lifted loop information
         self.lifted = lifted
@@ -77,7 +86,7 @@ class TypeAnnotation(object):
         # Prepare annotations
         groupedinst = defaultdict(list)
         found_lifted_loop = False
-        #for blkid, blk in self.blocks.items():
+        # for blkid, blk in self.blocks.items():
         for blkid in sorted(self.blocks.keys()):
             blk = self.blocks[blkid]
             groupedinst[blk.loc.line].append("label %s" % blkid)
@@ -86,14 +95,14 @@ class TypeAnnotation(object):
 
                 if isinstance(inst, ir.Assign):
                     if found_lifted_loop:
-                        atype = 'XXX Lifted Loop XXX'
+                        atype = "XXX Lifted Loop XXX"
                         found_lifted_loop = False
-                    elif (isinstance(inst.value, ir.Expr) and
-                            inst.value.op ==  'call'):
+                    elif isinstance(inst.value, ir.Expr) and inst.value.op == "call":
                         atype = self.calltypes[inst.value]
-                    elif (isinstance(inst.value, ir.Const) and
-                            isinstance(inst.value.value, numba.core.dispatcher.LiftedLoop)):
-                        atype = 'XXX Lifted Loop XXX'
+                    elif isinstance(inst.value, ir.Const) and isinstance(
+                        inst.value.value, numba.core.dispatcher.LiftedLoop
+                    ):
+                        atype = "XXX Lifted Loop XXX"
                         found_lifted_loop = True
                     else:
                         # TODO: fix parfor lowering so that typemap is valid.
@@ -125,24 +134,22 @@ class TypeAnnotation(object):
                     ind = _getindent(srcline)
                     print("%s# --- LINE %d --- " % (ind, num), file=io)
                     for inst in groupedinst[num]:
-                        print('%s# %s' % (ind, inst), file=io)
+                        print("%s# %s" % (ind, inst), file=io)
                     print(file=io)
                     print(srcline, file=io)
                     print(file=io)
                 if self.lifted:
                     print("# The function contains lifted loops", file=io)
                     for loop in self.lifted:
-                        print("# Loop at line %d" % loop.get_source_location(),
-                              file=io)
-                        print("# Has %d overloads" % len(loop.overloads),
-                              file=io)
+                        print("# Loop at line %d" % loop.get_source_location(), file=io)
+                        print("# Has %d overloads" % len(loop.overloads), file=io)
                         for cres in loop.overloads.values():
                             print(cres.type_annotation, file=io)
             else:
                 print("# Source code unavailable", file=io)
                 for num in groupedinst:
                     for inst in groupedinst[num]:
-                        print('%s' % (inst,), file=io)
+                        print("%s" % (inst,), file=io)
                     print(file=io)
 
             return io.getvalue()
@@ -153,23 +160,21 @@ class TypeAnnotation(object):
         # make a deep copy ahead of the pending mutations
         func_data = copy.deepcopy(self.func_data)
 
-        key = 'python_indent'
+        key = "python_indent"
         for this_func in func_data.values():
             if key in this_func:
                 idents = {}
                 for line, amount in this_func[key].items():
-                    idents[line] = '&nbsp;' * amount
+                    idents[line] = "&nbsp;" * amount
                 this_func[key] = idents
 
-        key = 'ir_indent'
+        key = "ir_indent"
         for this_func in func_data.values():
             if key in this_func:
                 idents = {}
                 for line, ir_id in this_func[key].items():
-                    idents[line] = ['&nbsp;' * amount for amount in ir_id]
+                    idents[line] = ["&nbsp;" * amount for amount in ir_id]
                 this_func[key] = idents
-
-
 
         try:
             from jinja2 import Template
@@ -177,8 +182,8 @@ class TypeAnnotation(object):
             raise ImportError("please install the 'jinja2' package")
 
         root = os.path.join(os.path.dirname(__file__))
-        template_filename = os.path.join(root, 'template.html')
-        with open(template_filename, 'r') as template:
+        template_filename = os.path.join(root, "template.html")
+        with open(template_filename, "r") as template:
             html = template.read()
 
         template = Template(html)
@@ -197,17 +202,19 @@ class TypeAnnotation(object):
 
         def add_ir_line(func_data, line):
             line_str = line.strip()
-            line_type = ''
-            if line_str.endswith('pyobject'):
-                line_str = line_str.replace('pyobject', '')
-                line_type = 'pyobject'
-            func_data['ir_lines'][num].append((line_str, line_type))
+            line_type = ""
+            if line_str.endswith("pyobject"):
+                line_str = line_str.replace("pyobject", "")
+                line_type = "pyobject"
+            func_data["ir_lines"][num].append((line_str, line_type))
             indent_len = len(_getindent(line))
-            func_data['ir_indent'][num].append(indent_len)
+            func_data["ir_indent"][num].append(indent_len)
 
-        func_key = (self.func_id.filename + ':' + str(self.func_id.firstlineno + 1),
-                    self.signature)
-        if self.lifted_from is not None and self.lifted_from[1]['num_lifted_loops'] > 0:
+        func_key = (
+            self.func_id.filename + ":" + str(self.func_id.firstlineno + 1),
+            self.signature,
+        )
+        if self.lifted_from is not None and self.lifted_from[1]["num_lifted_loops"] > 0:
             # This is a lifted loop function that is being compiled. Get the
             # numba ir for lines in loop function to use for annotating
             # original python function that the loop was lifted from.
@@ -215,23 +222,23 @@ class TypeAnnotation(object):
             for num in line_nums:
                 if num not in ir_lines.keys():
                     continue
-                func_data['ir_lines'][num] = []
-                func_data['ir_indent'][num] = []
+                func_data["ir_lines"][num] = []
+                func_data["ir_indent"][num] = []
                 for line in ir_lines[num]:
                     add_ir_line(func_data, line)
-                    if line.strip().endswith('pyobject'):
-                        func_data['python_tags'][num] = 'object_tag'
+                    if line.strip().endswith("pyobject"):
+                        func_data["python_tags"][num] = "object_tag"
                         # If any pyobject line is found, make sure original python
                         # line that was marked as a lifted loop start line is tagged
                         # as an object line instead. Lifted loop start lines should
                         # only be marked as lifted loop lines if the lifted loop
                         # was successfully compiled in nopython mode.
-                        func_data['python_tags'][self.lifted_from[0]] = 'object_tag'
+                        func_data["python_tags"][self.lifted_from[0]] = "object_tag"
 
             # We're done with this lifted loop, so decrement lifted loop counter.
             # When lifted loop counter hits zero, that means we're ready to write
             # out annotations to html file.
-            self.lifted_from[1]['num_lifted_loops'] -= 1
+            self.lifted_from[1]["num_lifted_loops"] -= 1
 
         elif func_key not in TypeAnnotation.func_data.keys():
             TypeAnnotation.func_data[func_key] = {}
@@ -241,43 +248,42 @@ class TypeAnnotation(object):
                 # Make sure that when we process each lifted loop function later,
                 # we'll know where it originally came from.
                 loop.lifted_from = (lifted_lines[i], func_data)
-            func_data['num_lifted_loops'] = self.num_lifted_loops
+            func_data["num_lifted_loops"] = self.num_lifted_loops
 
-            func_data['filename'] = self.filename
-            func_data['funcname'] = self.func_id.func_name
-            func_data['python_lines'] = []
-            func_data['python_indent'] = {}
-            func_data['python_tags'] = {}
-            func_data['ir_lines'] = {}
-            func_data['ir_indent'] = {}
+            func_data["filename"] = self.filename
+            func_data["funcname"] = self.func_id.func_name
+            func_data["python_lines"] = []
+            func_data["python_indent"] = {}
+            func_data["python_tags"] = {}
+            func_data["ir_lines"] = {}
+            func_data["ir_indent"] = {}
 
             for num in line_nums:
-                func_data['python_lines'].append((num, python_source[num].strip()))
+                func_data["python_lines"].append((num, python_source[num].strip()))
                 indent_len = len(_getindent(python_source[num]))
-                func_data['python_indent'][num] = indent_len
-                func_data['python_tags'][num] = ''
-                func_data['ir_lines'][num] = []
-                func_data['ir_indent'][num] = []
+                func_data["python_indent"][num] = indent_len
+                func_data["python_tags"][num] = ""
+                func_data["ir_lines"][num] = []
+                func_data["ir_indent"][num] = []
 
                 for line in ir_lines[num]:
                     add_ir_line(func_data, line)
                     if num in lifted_lines:
-                        func_data['python_tags'][num] = 'lifted_tag'
-                    elif line.strip().endswith('pyobject'):
-                        func_data['python_tags'][num] = 'object_tag'
+                        func_data["python_tags"][num] = "lifted_tag"
+                    elif line.strip().endswith("pyobject"):
+                        func_data["python_tags"][num] = "object_tag"
         return self.func_data
-
 
     def __str__(self):
         return self.annotate()
 
 
-re_longest_white_prefix = re.compile(r'^\s*')
+re_longest_white_prefix = re.compile(r"^\s*")
 
 
 def _getindent(text):
     m = re_longest_white_prefix.match(text)
     if not m:
-        return ''
+        return ""
     else:
-        return ' ' * len(m.group(0))
+        return " " * len(m.group(0))

@@ -15,19 +15,19 @@ def add_kernel(r, x, y):
     r[0] = x + y
 
 
-@skip_on_cudasim('Specialization not implemented in the simulator')
+@skip_on_cudasim("Specialization not implemented in the simulator")
 class TestDispatcherSpecialization(CUDATestCase):
     def _test_no_double_specialize(self, dispatcher, ty):
 
         with self.assertRaises(RuntimeError) as e:
             dispatcher.specialize(ty)
 
-        self.assertIn('Dispatcher already specialized', str(e.exception))
+        self.assertIn("Dispatcher already specialized", str(e.exception))
 
     def test_no_double_specialize_sig_same_types(self):
         # Attempting to specialize a kernel jitted with a signature is illegal,
         # even for the same types the kernel is already specialized for.
-        @cuda.jit('void(float32[::1])')
+        @cuda.jit("void(float32[::1])")
         def f(x):
             pass
 
@@ -45,7 +45,7 @@ class TestDispatcherSpecialization(CUDATestCase):
 
     def test_no_double_specialize_sig_diff_types(self):
         # Attempting to specialize a kernel jitted with a signature is illegal.
-        @cuda.jit('void(int32[::1])')
+        @cuda.jit("void(int32[::1])")
         def f(x):
             pass
 
@@ -132,13 +132,13 @@ class TestDispatcher(CUDATestCase):
         self.assertEqual(r[0], add(12300000000, 456))
 
         # Now force compilation of only a single specialization
-        c_add = cuda.jit('(i4[::1], i4, i4)')(add_kernel)
+        c_add = cuda.jit("(i4[::1], i4, i4)")(add_kernel)
         r = np.zeros(1, dtype=np.int32)
 
         c_add[1, 1](r, 123, 456)
         self.assertPreciseEqual(r[0], add(123, 456))
 
-    @skip_on_cudasim('Simulator ignores signature')
+    @skip_on_cudasim("Simulator ignores signature")
     @unittest.expectedFailure
     def test_coerce_input_types_unsafe(self):
         # Implicit (unsafe) conversion of float to int, originally from
@@ -149,25 +149,24 @@ class TestDispatcher(CUDATestCase):
         #
         # This test is marked as xfail until future changes enable this
         # behavior.
-        c_add = cuda.jit('(i4[::1], i4, i4)')(add_kernel)
+        c_add = cuda.jit("(i4[::1], i4, i4)")(add_kernel)
         r = np.zeros(1, dtype=np.int32)
 
         c_add[1, 1](r, 12.3, 45.6)
         self.assertPreciseEqual(r[0], add(12, 45))
 
-    @skip_on_cudasim('Simulator ignores signature')
+    @skip_on_cudasim("Simulator ignores signature")
     def test_coerce_input_types_unsafe_complex(self):
         # Implicit conversion of complex to int disallowed
-        c_add = cuda.jit('(i4[::1], i4, i4)')(add_kernel)
+        c_add = cuda.jit("(i4[::1], i4, i4)")(add_kernel)
         r = np.zeros(1, dtype=np.int32)
 
         with self.assertRaises(TypeError):
             c_add[1, 1](r, 12.3, 45.6j)
 
-    @skip_on_cudasim('Simulator does not track overloads')
+    @skip_on_cudasim("Simulator does not track overloads")
     def test_ambiguous_new_version(self):
-        """Test compiling new version in an ambiguous case
-        """
+        """Test compiling new version in an ambiguous case"""
         c_add = cuda.jit(add_kernel)
 
         r = np.zeros(1, dtype=np.float64)
@@ -190,8 +189,7 @@ class TestDispatcher(CUDATestCase):
         # to (float, int) or (int, float) with equal weight.
         c_add[1, 1](r, 1, 1)
         self.assertAlmostEqual(r[0], INT + INT)
-        self.assertEqual(len(c_add.overloads), 4, "didn't compile a new "
-                                                  "version")
+        self.assertEqual(len(c_add.overloads), 4, "didn't compile a new " "version")
 
     @skip_on_cudasim("Simulator doesn't support concurrent kernels")
     def test_lock(self):
@@ -245,8 +243,7 @@ class TestDispatcher(CUDATestCase):
 
     def test_explicit_signatures_strings(self):
         # Check with a list of strings for signatures
-        sigs = ["(int64[::1], int64, int64)",
-                "(float64[::1], float64, float64)"]
+        sigs = ["(int64[::1], int64, int64)", "(float64[::1], float64, float64)"]
         self._test_explicit_signatures(sigs)
 
     def test_explicit_signatures_tuples(self):
@@ -256,26 +253,22 @@ class TestDispatcher(CUDATestCase):
 
     def test_explicit_signatures_signatures(self):
         # Check with a list of Signature objects for signatures
-        sigs = [void(int64[::1], int64, int64),
-                void(float64[::1], float64, float64)]
+        sigs = [void(int64[::1], int64, int64), void(float64[::1], float64, float64)]
         self._test_explicit_signatures(sigs)
 
     def test_explicit_signatures_mixed(self):
         # Check when we mix types of signature objects in a list of signatures
 
         # Tuple and string
-        sigs = [(int64[::1], int64, int64),
-                "(float64[::1], float64, float64)"]
+        sigs = [(int64[::1], int64, int64), "(float64[::1], float64, float64)"]
         self._test_explicit_signatures(sigs)
 
         # Tuple and Signature object
-        sigs = [(int64[::1], int64, int64),
-                void(float64[::1], float64, float64)]
+        sigs = [(int64[::1], int64, int64), void(float64[::1], float64, float64)]
         self._test_explicit_signatures(sigs)
 
         # Signature object and string
-        sigs = [void(int64[::1], int64, int64),
-                "(float64[::1], float64, float64)"]
+        sigs = [void(int64[::1], int64, int64), "(float64[::1], float64, float64)"]
         self._test_explicit_signatures(sigs)
 
     def test_explicit_signatures_same_type_class(self):
@@ -284,8 +277,7 @@ class TestDispatcher(CUDATestCase):
         # that dispatch is differentiated on the types of x and y only, to
         # closely preserve the intent of the original test from
         # numba.tests.test_dispatcher)
-        sigs = ["(float64[::1], float32, float32)",
-                "(float64[::1], float64, float64)"]
+        sigs = ["(float64[::1], float32, float32)", "(float64[::1], float64, float64)"]
         f = cuda.jit(sigs)(add_kernel)
 
         r = np.zeros(1, dtype=np.float64)
@@ -296,13 +288,17 @@ class TestDispatcher(CUDATestCase):
         f[1, 1](r, 1, 2**-25)
         self.assertPreciseEqual(r[0], 1.0000000298023224)
 
-    @skip_on_cudasim('No overload resolution in the simulator')
+    @skip_on_cudasim("No overload resolution in the simulator")
     def test_explicit_signatures_ambiguous_resolution(self):
         # Fail to resolve ambiguity between the two best overloads
         # (Also deliberate float64[::1] for the first argument in all cases)
-        f = cuda.jit(["(float64[::1], float32, float64)",
-                      "(float64[::1], float64, float32)",
-                      "(float64[::1], int64, int64)"])(add_kernel)
+        f = cuda.jit(
+            [
+                "(float64[::1], float32, float64)",
+                "(float64[::1], float64, float32)",
+                "(float64[::1], int64, int64)",
+            ]
+        )(add_kernel)
         with self.assertRaises(TypeError) as cm:
             r = np.zeros(1, dtype=np.float64)
             f[1, 1](r, 1.0, 2.0)
@@ -317,12 +313,12 @@ class TestDispatcher(CUDATestCase):
             r"\(Array\(float64, 1, 'C', False, aligned=True\), float32,"
             r" float64\) -> none\n"
             r"\(Array\(float64, 1, 'C', False, aligned=True\), float64,"
-            r" float32\) -> none"
+            r" float32\) -> none",
         )
         # The integer signature is not part of the best matches
         self.assertNotIn("int64", str(cm.exception))
 
-    @skip_on_cudasim('Simulator does not use _prepare_args')
+    @skip_on_cudasim("Simulator does not use _prepare_args")
     @unittest.expectedFailure
     def test_explicit_signatures_unsafe(self):
         # These tests are from test_explicit_signatures, but have to be xfail
@@ -336,8 +332,7 @@ class TestDispatcher(CUDATestCase):
         self.assertPreciseEqual(r[0], 3)
         self.assertEqual(len(f.overloads), 1, f.overloads)
 
-        sigs = ["(int64[::1], int64, int64)",
-                "(float64[::1], float64, float64)"]
+        sigs = ["(int64[::1], int64, int64)", "(float64[::1], float64, float64)"]
         f = cuda.jit(sigs)(add_kernel)
         r = np.zeros(1, dtype=np.float64)
         # Approximate match (int32 -> float64 is a safe conversion)
@@ -414,7 +409,7 @@ class TestDispatcher(CUDATestCase):
         f[1, 1](r, 1.5, 2.5)
         self.assertPreciseEqual(r[0], 4.0)
 
-    @skip_on_cudasim('CUDA Simulator does not force casting')
+    @skip_on_cudasim("CUDA Simulator does not force casting")
     def test_explicit_signatures_device_unsafe(self):
         # These tests are from test_explicit_signatures. The device function
         # variant of these tests can succeed on CUDA because the compilation
@@ -489,17 +484,15 @@ class TestDispatcherKernelProperties(CUDATestCase):
         # provides the same values as getting the registers per thread for
         # individual signatures.
         regs_per_thread_all = pi_sin_array.get_regs_per_thread()
-        self.assertEqual(regs_per_thread_all[sig_f32.args],
-                         regs_per_thread_f32)
-        self.assertEqual(regs_per_thread_all[sig_f64.args],
-                         regs_per_thread_f64)
+        self.assertEqual(regs_per_thread_all[sig_f32.args], regs_per_thread_f32)
+        self.assertEqual(regs_per_thread_all[sig_f64.args], regs_per_thread_f64)
 
         if regs_per_thread_f32 == regs_per_thread_f64:
             # If the register usage is the same for both variants, there may be
             # a bug, but this may also be an artifact of the compiler / driver
             # / device combination, so produce an informational message only.
-            print('f32 and f64 variant thread usages are equal.')
-            print('This may warrant some investigation. Devices:')
+            print("f32 and f64 variant thread usages are equal.")
+            print("This may warrant some investigation. Devices:")
             cuda.detect()
 
     def test_get_regs_per_thread_specialized(self):
@@ -696,5 +689,5 @@ class TestDispatcherKernelProperties(CUDATestCase):
         self.assertGreaterEqual(local_mem_per_thread, N * 4)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

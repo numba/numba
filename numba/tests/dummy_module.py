@@ -1,4 +1,5 @@
-'''Dummy module'''
+"""Dummy module"""
+
 
 def function():
-    '''Do nothing'''
+    """Do nothing"""

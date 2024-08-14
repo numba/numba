@@ -13,9 +13,7 @@ import unittest
 # Signatures to test with - these are all homogeneous in dtype, so the output
 # dtype should match the input dtype - the output should not have been cast
 # upwards, as reported in #8400: https://github.com/numba/numba/issues/8400
-signatures = [int32(int32, int32),
-              float32(float32, float32),
-              float64(float64, float64)]
+signatures = [int32(int32, int32), float32(float32, float32), float64(float64, float64)]
 
 # The order here is chosen such that each subsequent dtype might have been
 # casted to a previously-used dtype. This is unlikely to be an issue for CUDA,
@@ -25,16 +23,16 @@ signatures = [int32(int32, int32),
 dtypes = (np.float64, np.float32, np.int32)
 
 # NumPy ndarray orders
-orders = ('C', 'F')
+orders = ("C", "F")
 
 # Input sizes corresponding to operations:
 # - Less than one warp,
 # - Less than one block,
 # - Greater than one block (i.e. many blocks)
-input_sizes = (8, 100, 2 ** 10 + 1)
+input_sizes = (8, 100, 2**10 + 1)
 
 
-@skip_on_cudasim('ufunc API unsupported in the simulator')
+@skip_on_cudasim("ufunc API unsupported in the simulator")
 class TestCUDAVectorize(CUDATestCase):
     # Presumably chosen as an odd number unlikely to coincide with the total
     # thread count, and large enough to ensure a significant number of blocks
@@ -43,7 +41,7 @@ class TestCUDAVectorize(CUDATestCase):
 
     def test_scalar(self):
 
-        @vectorize(signatures, target='cuda')
+        @vectorize(signatures, target="cuda")
         def vector_add(a, b):
             return a + b
 
@@ -54,7 +52,7 @@ class TestCUDAVectorize(CUDATestCase):
 
     def test_1d(self):
 
-        @vectorize(signatures, target='cuda')
+        @vectorize(signatures, target="cuda")
         def vector_add(a, b):
             return a + b
 
@@ -67,7 +65,7 @@ class TestCUDAVectorize(CUDATestCase):
 
     def test_1d_async(self):
 
-        @vectorize(signatures, target='cuda')
+        @vectorize(signatures, target="cuda")
         def vector_add(a, b):
             return a + b
 
@@ -87,7 +85,7 @@ class TestCUDAVectorize(CUDATestCase):
 
     def test_nd(self):
 
-        @vectorize(signatures, target='cuda')
+        @vectorize(signatures, target="cuda")
         def vector_add(a, b):
             return a + b
 
@@ -102,7 +100,7 @@ class TestCUDAVectorize(CUDATestCase):
             self.assertEqual(actual.dtype, dtype)
 
     def test_output_arg(self):
-        @vectorize(signatures, target='cuda')
+        @vectorize(signatures, target="cuda")
         def vector_add(a, b):
             return a + b
 
@@ -117,7 +115,7 @@ class TestCUDAVectorize(CUDATestCase):
         self.assertEqual(expected.dtype, actual.dtype)
 
     def test_reduce(self):
-        @vectorize(signatures, target='cuda')
+        @vectorize(signatures, target="cuda")
         def vector_add(a, b):
             return a + b
 
@@ -136,7 +134,7 @@ class TestCUDAVectorize(CUDATestCase):
 
     def test_reduce_async(self):
 
-        @vectorize(signatures, target='cuda')
+        @vectorize(signatures, target="cuda")
         def vector_add(a, b):
             return a + b
 
@@ -153,7 +151,7 @@ class TestCUDAVectorize(CUDATestCase):
             self.assertEqual(dtype, actual.dtype)
 
     def test_manual_transfer(self):
-        @vectorize(signatures, target='cuda')
+        @vectorize(signatures, target="cuda")
         def vector_add(a, b):
             return a + b
 
@@ -166,7 +164,7 @@ class TestCUDAVectorize(CUDATestCase):
         self.assertEqual(expected.dtype, actual.dtype)
 
     def test_ufunc_output_2d(self):
-        @vectorize(signatures, target='cuda')
+        @vectorize(signatures, target="cuda")
         def vector_add(a, b):
             return a + b
 
@@ -181,7 +179,7 @@ class TestCUDAVectorize(CUDATestCase):
         self.assertEqual(expected.dtype, actual.dtype)
 
     def check_tuple_arg(self, a, b):
-        @vectorize(signatures, target='cuda')
+        @vectorize(signatures, target="cuda")
         def vector_add(a, b):
             return a + b
 
@@ -194,7 +192,7 @@ class TestCUDAVectorize(CUDATestCase):
         self.check_tuple_arg(a, b)
 
     def test_namedtuple_arg(self):
-        Point = namedtuple('Point', ('x', 'y', 'z'))
+        Point = namedtuple("Point", ("x", "y", "z"))
         a = Point(x=1.0, y=2.0, z=3.0)
         b = Point(x=4.0, y=5.0, z=6.0)
         self.check_tuple_arg(a, b)
@@ -206,7 +204,7 @@ class TestCUDAVectorize(CUDATestCase):
         self.check_tuple_arg(a, b)
 
     def test_tuple_of_namedtuple_arg(self):
-        Point = namedtuple('Point', ('x', 'y', 'z'))
+        Point = namedtuple("Point", ("x", "y", "z"))
         a = (Point(x=1.0, y=2.0, z=3.0), Point(x=1.5, y=2.5, z=3.5))
         b = (Point(x=4.0, y=5.0, z=6.0), Point(x=4.5, y=5.5, z=6.5))
         self.check_tuple_arg(a, b)
@@ -216,17 +214,17 @@ class TestCUDAVectorize(CUDATestCase):
         ys1 = xs1 + 2
         xs2 = np.arange(10, dtype=np.int32) * 2
         ys2 = xs2 + 1
-        Points = namedtuple('Points', ('xs', 'ys'))
+        Points = namedtuple("Points", ("xs", "ys"))
         a = Points(xs=xs1, ys=ys1)
         b = Points(xs=xs2, ys=ys2)
         self.check_tuple_arg(a, b)
 
     def test_name_attribute(self):
-        @vectorize('f8(f8)', target='cuda')
+        @vectorize("f8(f8)", target="cuda")
         def bar(x):
-            return x ** 2
+            return x**2
 
-        self.assertEqual(bar.__name__, 'bar')
+        self.assertEqual(bar.__name__, "bar")
 
     def test_no_transfer_for_device_data(self):
         # Initialize test data on the device prior to banning host <-> device
@@ -238,15 +236,15 @@ class TestCUDAVectorize(CUDATestCase):
         # A mock of a CUDA function that always raises a CudaAPIError
 
         def raising_transfer(*args, **kwargs):
-            raise CudaAPIError(999, 'Transfer not allowed')
+            raise CudaAPIError(999, "Transfer not allowed")
 
         # Use the mock for transfers between the host and device
 
-        old_HtoD = getattr(driver, 'cuMemcpyHtoD', None)
-        old_DtoH = getattr(driver, 'cuMemcpyDtoH', None)
+        old_HtoD = getattr(driver, "cuMemcpyHtoD", None)
+        old_DtoH = getattr(driver, "cuMemcpyDtoH", None)
 
-        setattr(driver, 'cuMemcpyHtoD', raising_transfer)
-        setattr(driver, 'cuMemcpyDtoH', raising_transfer)
+        setattr(driver, "cuMemcpyHtoD", raising_transfer)
+        setattr(driver, "cuMemcpyDtoH", raising_transfer)
 
         # Ensure that the mock functions are working as expected
 
@@ -260,7 +258,7 @@ class TestCUDAVectorize(CUDATestCase):
             # Check that defining and calling a ufunc with data on the device
             # induces no transfers
 
-            @vectorize(['float32(float32)'], target='cuda')
+            @vectorize(["float32(float32)"], target="cuda")
             def func(noise):
                 return noise + 1.0
 
@@ -270,14 +268,14 @@ class TestCUDAVectorize(CUDATestCase):
             # no original implementation, simply remove ours.
 
             if old_HtoD is not None:
-                setattr(driver, 'cuMemcpyHtoD', old_HtoD)
+                setattr(driver, "cuMemcpyHtoD", old_HtoD)
             else:
                 del driver.cuMemcpyHtoD
             if old_DtoH is not None:
-                setattr(driver, 'cuMemcpyDtoH', old_DtoH)
+                setattr(driver, "cuMemcpyDtoH", old_DtoH)
             else:
                 del driver.cuMemcpyDtoH
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

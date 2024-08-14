@@ -1,8 +1,16 @@
 import operator
 from numba.core import types
-from .templates import (ConcreteTemplate, AbstractTemplate, AttributeTemplate,
-                        CallableTemplate,  Registry, signature, bound_function,
-                        make_callable_template)
+from .templates import (
+    ConcreteTemplate,
+    AbstractTemplate,
+    AttributeTemplate,
+    CallableTemplate,
+    Registry,
+    signature,
+    bound_function,
+    make_callable_template,
+)
+
 # Ensure list is typed as a collection as well
 from numba.core.typing import collections
 
@@ -19,7 +27,7 @@ class ListBuiltin(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         if args:
-            iterable, = args
+            (iterable,) = args
             if isinstance(iterable, types.IterableType):
                 dtype = iterable.iterator_type.yield_type
                 return signature(types.List(dtype), iterable)
@@ -35,7 +43,7 @@ class ListAttribute(AttributeTemplate):
 
     @bound_function("list.append")
     def resolve_append(self, list, args, kws):
-        item, = args
+        (item,) = args
         assert not kws
         unified = self.context.unify_pairs(list.dtype, item)
         if unified is not None:
@@ -51,7 +59,7 @@ class ListAttribute(AttributeTemplate):
 
     @bound_function("list.extend")
     def resolve_extend(self, list, args, kws):
-        iterable, = args
+        (iterable,) = args
         assert not kws
         if not isinstance(iterable, types.IterableType):
             return
@@ -60,7 +68,7 @@ class ListAttribute(AttributeTemplate):
         unified = self.context.unify_pairs(list.dtype, dtype)
         if unified is not None:
             sig = signature(types.none, iterable)
-            sig = sig.replace(recvr = list.copy(dtype=unified))
+            sig = sig.replace(recvr=list.copy(dtype=unified))
             return sig
 
     @bound_function("list.insert")
@@ -71,7 +79,7 @@ class ListAttribute(AttributeTemplate):
             unified = self.context.unify_pairs(list.dtype, item)
             if unified is not None:
                 sig = signature(types.none, types.intp, unified)
-                sig = sig.replace(recvr = list.copy(dtype=unified))
+                sig = sig.replace(recvr=list.copy(dtype=unified))
                 return sig
 
     @bound_function("list.pop")
@@ -80,9 +88,10 @@ class ListAttribute(AttributeTemplate):
         if not args:
             return signature(list.dtype)
         else:
-            idx, = args
+            (idx,) = args
             if isinstance(idx, types.Integer):
                 return signature(list.dtype, types.intp)
+
 
 @infer_global(operator.add)
 class AddList(AbstractTemplate):
@@ -109,7 +118,7 @@ class InplaceAddList(AbstractTemplate):
 
 @infer_global(operator.mul)
 class MulList(AbstractTemplate):
-    #key = operator.mul
+    # key = operator.mul
 
     def generic(self, args, kws):
         a, b = args
@@ -120,8 +129,11 @@ class MulList(AbstractTemplate):
 
 
 @infer_global(operator.imul)
-class InplaceMulList(MulList): pass
-    #key = operator.imul
+class InplaceMulList(MulList):
+    pass
+
+
+# key = operator.imul
 
 
 class ListCompare(AbstractTemplate):
@@ -130,11 +142,16 @@ class ListCompare(AbstractTemplate):
         [lhs, rhs] = args
         if isinstance(lhs, types.List) and isinstance(rhs, types.List):
             # Check element-wise comparability
-            res = self.context.resolve_function_type(self.key,
-                                                     (lhs.dtype, rhs.dtype), {})
+            res = self.context.resolve_function_type(
+                self.key, (lhs.dtype, rhs.dtype), {}
+            )
             if res is not None:
                 return signature(types.boolean, lhs, rhs)
 
+
 @infer_global(operator.eq)
-class ListEq(ListCompare): pass
-    #key = operator.eq
+class ListEq(ListCompare):
+    pass
+
+
+# key = operator.eq

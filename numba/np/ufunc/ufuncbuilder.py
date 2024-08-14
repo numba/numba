@@ -22,11 +22,7 @@ from numba.core.compiler_lock import global_compiler_lock
 
 
 _options_mixin = include_default_options(
-    "nopython",
-    "forceobj",
-    "boundscheck",
-    "fastmath",
-    "writable_args"
+    "nopython", "forceobj", "boundscheck", "fastmath", "writable_args"
 )
 
 
@@ -56,7 +52,7 @@ class UFuncTarget(TargetDescriptor):
     options = UFuncTargetOptions
 
     def __init__(self):
-        super().__init__('ufunc')
+        super().__init__("ufunc")
 
     @property
     def typing_context(self):
@@ -74,6 +70,7 @@ class UFuncDispatcher(serialize.ReduceMixin):
     """
     An object handling compilation of various signatures for a ufunc.
     """
+
     targetdescr = ufunc_target
 
     def __init__(self, py_func, locals={}, targetoptions={}):
@@ -153,10 +150,15 @@ class UFuncDispatcher(serialize.ReduceMixin):
 
                     # Compile
                     args, return_type = sigutils.normalize_signature(sig)
-                    cres = compiler.compile_extra(typingctx, targetctx,
-                                                  self.py_func, args=args,
-                                                  return_type=return_type,
-                                                  flags=flags, locals=locals)
+                    cres = compiler.compile_extra(
+                        typingctx,
+                        targetctx,
+                        self.py_func,
+                        args=args,
+                        return_type=return_type,
+                        flags=flags,
+                        locals=locals,
+                    )
 
                     # cache lookup failed before so safe to save
                     self.cache.save_overload(sig, cres)
@@ -164,10 +166,11 @@ class UFuncDispatcher(serialize.ReduceMixin):
                     return cres
 
 
-dispatcher_registry[target_registry['npyufunc']] = UFuncDispatcher
+dispatcher_registry[target_registry["npyufunc"]] = UFuncDispatcher
 
 
 # Utility functions
+
 
 def _compile_element_wise_function(nb_func, targetoptions, sig):
     # Do compilation
@@ -178,10 +181,10 @@ def _compile_element_wise_function(nb_func, targetoptions, sig):
 
 
 def _finalize_ufunc_signature(cres, args, return_type):
-    '''Given a compilation result, argument types, and a return type,
+    """Given a compilation result, argument types, and a return type,
     build a valid Numba signature after validating that it doesn't
     violate the constraints for the compilation mode.
-    '''
+    """
     if return_type is None:
         if cres.objectmode:
             # Object mode is used and return type is not specified
@@ -194,16 +197,17 @@ def _finalize_ufunc_signature(cres, args, return_type):
 
 
 def _build_element_wise_ufunc_wrapper(cres, signature):
-    '''Build a wrapper for the ufunc loop entry point given by the
+    """Build a wrapper for the ufunc loop entry point given by the
     compilation result object, using the element-wise signature.
-    '''
+    """
     ctx = cres.target_context
     library = cres.library
     fname = cres.fndesc.llvm_func_name
 
     with global_compiler_lock:
-        info = build_ufunc_wrapper(library, ctx, fname, signature,
-                                   cres.objectmode, cres)
+        info = build_ufunc_wrapper(
+            library, ctx, fname, signature, cres.objectmode, cres
+        )
         ptr = info.library.get_pointer_to_function(info.name)
     # Get dtypes
     dtypenums = [as_dtype(a).num for a in signature.args]
@@ -238,24 +242,27 @@ def _suppress_deprecation_warning_nopython_not_supplied():
     places in the `{g,}ufunc` mechanism in Numba, predominantly to wrap the
     "kernel" function."""
     with warnings.catch_warnings():
-        warnings.filterwarnings('ignore',
-                                category=NumbaDeprecationWarning,
-                                message=(".*The 'nopython' keyword argument "
-                                         "was not supplied*"),)
+        warnings.filterwarnings(
+            "ignore",
+            category=NumbaDeprecationWarning,
+            message=(".*The 'nopython' keyword argument " "was not supplied*"),
+        )
         yield
 
 
 # Class definitions
 
+
 class _BaseUFuncBuilder(object):
 
     def add(self, sig=None):
-        if hasattr(self, 'targetoptions'):
+        if hasattr(self, "targetoptions"):
             targetoptions = self.targetoptions
         else:
             targetoptions = self.nb_func.targetoptions
         cres, args, return_type = _compile_element_wise_function(
-            self.nb_func, targetoptions, sig)
+            self.nb_func, targetoptions, sig
+        )
         sig = self._finalize_signature(cres, args, return_type)
         self._sigs.append(sig)
         self._cres[sig] = cres
@@ -276,16 +283,16 @@ class UFuncBuilder(_BaseUFuncBuilder):
         self.py_func = py_func
         self.identity = parse_identity(identity)
         with _suppress_deprecation_warning_nopython_not_supplied():
-            self.nb_func = jit(_target='npyufunc',
-                               cache=cache,
-                               **targetoptions)(py_func)
+            self.nb_func = jit(_target="npyufunc", cache=cache, **targetoptions)(
+                py_func
+            )
         self._sigs = []
         self._cres = {}
 
     def _finalize_signature(self, cres, args, return_type):
-        '''Slated for deprecation, use ufuncbuilder._finalize_ufunc_signature()
+        """Slated for deprecation, use ufuncbuilder._finalize_ufunc_signature()
         instead.
-        '''
+        """
         return _finalize_ufunc_signature(cres, args, return_type)
 
     def build_ufunc(self):
@@ -320,29 +327,42 @@ class UFuncBuilder(_BaseUFuncBuilder):
             # If elements of type-list (2nd arg) is tuple instead,
             # there will also memory corruption. (Seems like code rewrite.)
             ufunc = _internal.fromfunc(
-                self.py_func.__name__, self.py_func.__doc__,
-                ptrlist, dtypelist, inct, outct, datlist,
-                keepalive, self.identity,
+                self.py_func.__name__,
+                self.py_func.__doc__,
+                ptrlist,
+                dtypelist,
+                inct,
+                outct,
+                datlist,
+                keepalive,
+                self.identity,
             )
 
             return ufunc
 
     def build(self, cres, signature):
-        '''Slated for deprecation, use
+        """Slated for deprecation, use
         ufuncbuilder._build_element_wise_ufunc_wrapper().
-        '''
+        """
         return _build_element_wise_ufunc_wrapper(cres, signature)
 
 
 class GUFuncBuilder(_BaseUFuncBuilder):
 
     # TODO handle scalar
-    def __init__(self, py_func, signature, identity=None, cache=False,
-                 targetoptions={}, writable_args=()):
+    def __init__(
+        self,
+        py_func,
+        signature,
+        identity=None,
+        cache=False,
+        targetoptions={},
+        writable_args=(),
+    ):
         self.py_func = py_func
         self.identity = parse_identity(identity)
         with _suppress_deprecation_warning_nopython_not_supplied():
-            self.nb_func = jit(_target='npyufunc', cache=cache)(py_func)
+            self.nb_func = jit(_target="npyufunc", cache=cache)(py_func)
         self.signature = signature
         self.sin, self.sout = parse_signature(signature)
         self.targetoptions = targetoptions
@@ -385,9 +405,17 @@ class GUFuncBuilder(_BaseUFuncBuilder):
 
         # Pass envs to fromfuncsig to bind to the lifetime of the ufunc object
         ufunc = _internal.fromfunc(
-            self.py_func.__name__, self.py_func.__doc__,
-            func_list, type_list, nin, nout, datalist,
-            keepalive, self.identity, self.signature, self.writable_args
+            self.py_func.__name__,
+            self.py_func.__doc__,
+            func_list,
+            type_list,
+            nin,
+            nout,
+            datalist,
+            keepalive,
+            self.identity,
+            self.signature,
+            self.writable_args,
         )
         return ufunc
 
@@ -398,8 +426,12 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         # Builder wrapper for ufunc entry point
         signature = cres.signature
         info = build_gufunc_wrapper(
-            self.py_func, cres, self.sin, self.sout,
-            cache=self.cache, is_parfors=False,
+            self.py_func,
+            cres,
+            self.sin,
+            self.sout,
+            cache=self.cache,
+            is_parfors=False,
         )
 
         env = info.env
@@ -427,8 +459,10 @@ def _get_transform_arg(py_func):
         try:
             return pos_by_arg[arg]
         except KeyError:
-            msg = (f"Specified writable arg {arg} not found in arg list "
-                   f"{args} for function {py_func.__qualname__}")
+            msg = (
+                f"Specified writable arg {arg} not found in arg list "
+                f"{args} for function {py_func.__qualname__}"
+            )
             raise RuntimeError(msg)
 
     return transform_arg

@@ -8,6 +8,7 @@ class _ArgManager(object):
     """
     A utility class to handle argument unboxing and cleanup
     """
+
     def __init__(self, context, builder, api, env_manager, endblk, nargs):
         self.context = context
         self.builder = builder
@@ -52,8 +53,7 @@ class _ArgManager(object):
         self.cleanups.append(cleanup_arg)
 
         # Write the on-error cleanup block for this argument
-        cleanupblk = self.builder.append_basic_block(
-            "arg%d.err" % self.arg_count)
+        cleanupblk = self.builder.append_basic_block("arg%d.err" % self.arg_count)
         with self.builder.goto_block(cleanupblk):
             cleanup_arg()
             # Go to next cleanup block
@@ -89,8 +89,7 @@ class _GilManager(object):
 
 
 class PyCallWrapper(object):
-    def __init__(self, context, module, func, fndesc, env, call_helper,
-                 release_gil):
+    def __init__(self, context, module, func, fndesc, env, call_helper, release_gil):
         self.context = context
         self.module = module
         self.func = func
@@ -107,16 +106,16 @@ class PyCallWrapper(object):
         wrapty = llvmlite.ir.FunctionType(pyobj, [pyobj, pyobj, pyobj])
         wrapper = llvmlite.ir.Function(self.module, wrapty, name=wrapname)
 
-        builder = IRBuilder(wrapper.append_basic_block('entry'))
+        builder = IRBuilder(wrapper.append_basic_block("entry"))
 
         # - `closure` will receive the `self` pointer stored in the
         #   PyCFunction object (see _dynfunc.c)
         # - `args` and `kws` will receive the tuple and dict objects
         #   of positional and keyword arguments, respectively.
         closure, args, kws = wrapper.args
-        closure.name = 'py_closure'
-        args.name = 'py_args'
-        kws.name = 'py_kws'
+        closure.name = "py_closure"
+        args.name = "py_args"
+        kws.name = "py_kws"
 
         api = self.context.get_python_api(builder)
         self.build_wrapper(api, builder, closure, args, kws)
@@ -127,13 +126,9 @@ class PyCallWrapper(object):
         nargs = len(self.fndesc.argtypes)
 
         objs = [api.alloca_obj() for _ in range(nargs)]
-        parseok = api.unpack_tuple(args, self.fndesc.qualname,
-                                   nargs, nargs, *objs)
+        parseok = api.unpack_tuple(args, self.fndesc.qualname, nargs, nargs, *objs)
 
-        pred = builder.icmp_unsigned(
-            '==',
-            parseok,
-            Constant(parseok.type, None))
+        pred = builder.icmp_unsigned("==", parseok, Constant(parseok.type, None))
         with cgutils.if_unlikely(builder, pred):
             builder.ret(api.get_null_object())
 
@@ -145,8 +140,9 @@ class PyCallWrapper(object):
         # Get the Environment object
         env_manager = self.get_env(api, builder)
 
-        cleanup_manager = _ArgManager(self.context, builder, api,
-                                      env_manager, endblk, nargs)
+        cleanup_manager = _ArgManager(
+            self.context, builder, api, env_manager, endblk, nargs
+        )
 
         # Compute the arguments to the compiled Numba function.
         innerargs = []
@@ -173,8 +169,13 @@ class PyCallWrapper(object):
         # instruction stream being different from that of the instruction stream
         # present in the user function.
         status, retval = self.context.call_conv.call_function(
-            builder, self.func, self.fndesc.restype, self.fndesc.argtypes,
-            innerargs, attrs=('noinline',))
+            builder,
+            self.func,
+            self.fndesc.restype,
+            self.fndesc.argtypes,
+            innerargs,
+            attrs=("noinline",),
+        )
         # Do clean up
         self.debug_print(builder, "# callwrapper: emit_cleanup")
         cleanup_manager.emit_cleanup()
@@ -204,8 +205,9 @@ class PyCallWrapper(object):
 
         env_body = self.context.get_env_body(builder, envptr)
 
-        api.emit_environment_sentry(envptr, return_pyobject=True,
-                                    debug_msg=self.fndesc.env_name)
+        api.emit_environment_sentry(
+            envptr, return_pyobject=True, debug_msg=self.fndesc.env_name
+        )
         env_manager = api.get_env_manager(self.env, env_body, envptr)
         return env_manager
 

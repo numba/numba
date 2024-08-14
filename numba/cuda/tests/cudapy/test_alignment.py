@@ -6,7 +6,7 @@ import unittest
 
 class TestAlignment(CUDATestCase):
     def test_record_alignment(self):
-        rec_dtype = np.dtype([('a', 'int32'), ('b', 'float64')], align=True)
+        rec_dtype = np.dtype([("a", "int32"), ("b", "float64")], align=True)
         rec = from_dtype(rec_dtype)
 
         @cuda.jit((rec[:],))
@@ -24,19 +24,20 @@ class TestAlignment(CUDATestCase):
 
         self.assertTrue(np.all(a_recarray.a == a_recarray.b))
 
-    @skip_on_cudasim('Simulator does not check alignment')
+    @skip_on_cudasim("Simulator does not check alignment")
     def test_record_alignment_error(self):
-        rec_dtype = np.dtype([('a', 'int32'), ('b', 'float64')])
+        rec_dtype = np.dtype([("a", "int32"), ("b", "float64")])
         rec = from_dtype(rec_dtype)
 
         with self.assertRaises(Exception) as raises:
+
             @cuda.jit((rec[:],))
             def foo(a):
                 i = cuda.grid(1)
                 a[i].a = a[i].b
 
-        self.assertTrue('type float64 is not aligned' in str(raises.exception))
+        self.assertTrue("type float64 is not aligned" in str(raises.exception))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

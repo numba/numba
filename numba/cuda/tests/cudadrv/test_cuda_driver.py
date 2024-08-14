@@ -1,13 +1,17 @@
 from ctypes import byref, c_int, c_void_p, sizeof
 
-from numba.cuda.cudadrv.driver import (host_to_device, device_to_host, driver,
-                                       launch_kernel)
+from numba.cuda.cudadrv.driver import (
+    host_to_device,
+    device_to_host,
+    driver,
+    launch_kernel,
+)
 from numba.cuda.cudadrv import devices, drvapi, driver as _driver
 from numba.cuda.testing import unittest, CUDATestCase
 from numba.cuda.testing import skip_on_cudasim
 
 
-ptx1 = '''
+ptx1 = """
     .version 1.4
     .target sm_10, map_f64_to_f32
 
@@ -29,9 +33,9 @@ $LDWbegin__Z10helloworldPi:
     exit;
 $LDWend__Z10helloworldPi:
     } // _Z10helloworldPi
-'''
+"""
 
-ptx2 = '''
+ptx2 = """
 .version 3.0
 .target sm_20
 .address_size 64
@@ -57,10 +61,10 @@ ptx2 = '''
     .loc 2 7 2
     ret;
 }
-'''
+"""
 
 
-@skip_on_cudasim('CUDA Driver API unsupported in the simulator')
+@skip_on_cudasim("CUDA Driver API unsupported in the simulator")
 class TestCudaDriver(CUDATestCase):
     def setUp(self):
         super().setUp()
@@ -79,7 +83,7 @@ class TestCudaDriver(CUDATestCase):
 
     def test_cuda_driver_basic(self):
         module = self.context.create_module_ptx(self.ptx)
-        function = module.get_function('_Z10helloworldPi')
+        function = module.get_function("_Z10helloworldPi")
 
         array = (c_int * 100)()
 
@@ -93,12 +97,18 @@ class TestCudaDriver(CUDATestCase):
             ptr = c_void_p(int(ptr))
             stream = _driver.binding.CUstream(stream)
 
-        launch_kernel(function.handle,  # Kernel
-                      1,   1, 1,        # gx, gy, gz
-                      100, 1, 1,        # bx, by, bz
-                      0,                # dynamic shared mem
-                      stream,           # stream
-                      [ptr])            # arguments
+        launch_kernel(
+            function.handle,  # Kernel
+            1,
+            1,
+            1,  # gx, gy, gz
+            100,
+            1,
+            1,  # bx, by, bz
+            0,  # dynamic shared mem
+            stream,  # stream
+            [ptr],
+        )  # arguments
 
         device_to_host(array, memory, sizeof(array))
         for i, v in enumerate(array):
@@ -108,7 +118,7 @@ class TestCudaDriver(CUDATestCase):
 
     def test_cuda_driver_stream_operations(self):
         module = self.context.create_module_ptx(self.ptx)
-        function = module.get_function('_Z10helloworldPi')
+        function = module.get_function("_Z10helloworldPi")
 
         array = (c_int * 100)()
 
@@ -122,12 +132,18 @@ class TestCudaDriver(CUDATestCase):
             if _driver.USE_NV_BINDING:
                 ptr = c_void_p(int(ptr))
 
-            launch_kernel(function.handle,  # Kernel
-                          1,   1, 1,        # gx, gy, gz
-                          100, 1, 1,        # bx, by, bz
-                          0,                # dynamic shared mem
-                          stream.handle,    # stream
-                          [ptr])            # arguments
+            launch_kernel(
+                function.handle,  # Kernel
+                1,
+                1,
+                1,  # gx, gy, gz
+                100,
+                1,
+                1,  # bx, by, bz
+                0,  # dynamic shared mem
+                stream.handle,  # stream
+                [ptr],
+            )  # arguments
 
         device_to_host(array, memory, sizeof(array), stream=stream)
 
@@ -193,17 +209,15 @@ class TestCudaDriver(CUDATestCase):
 
     def test_cuda_driver_occupancy(self):
         module = self.context.create_module_ptx(self.ptx)
-        function = module.get_function('_Z10helloworldPi')
+        function = module.get_function("_Z10helloworldPi")
 
-        value = self.context.get_active_blocks_per_multiprocessor(function,
-                                                                  128, 128)
+        value = self.context.get_active_blocks_per_multiprocessor(function, 128, 128)
         self.assertTrue(value > 0)
 
         def b2d(bs):
             return bs
 
-        grid, block = self.context.get_max_potential_block_size(function, b2d,
-                                                                128, 128)
+        grid, block = self.context.get_max_potential_block_size(function, b2d, 128, 128)
         self.assertTrue(grid > 0)
         self.assertTrue(block > 0)
 
@@ -221,15 +235,15 @@ class TestDevice(CUDATestCase):
         # 4122) pertaining to versions and variants, so we do not extract and
         # validate the values of these bits.
 
-        h = '[0-9a-f]{%d}'
+        h = "[0-9a-f]{%d}"
         h4 = h % 4
         h8 = h % 8
         h12 = h % 12
-        uuid_format = f'^GPU-{h8}-{h4}-{h4}-{h4}-{h12}$'
+        uuid_format = f"^GPU-{h8}-{h4}-{h4}-{h4}-{h12}$"
 
         dev = devices.get_context().device
         self.assertRegex(dev.uuid, uuid_format)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

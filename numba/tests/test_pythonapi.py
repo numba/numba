@@ -15,6 +15,7 @@ def _pyapi_bytes_as_string(typingctx, csrc, size):
         api = context.get_python_api(builder)
         b = api.bytes_from_string_and_size(csrc, size)
         return api.bytes_as_string(b)
+
     return sig, codegen
 
 
@@ -43,6 +44,7 @@ def _pyapi_bytes_as_string_and_size(typingctx, csrc, size):
         size = builder.load(p_size)
         tup = context.make_tuple(builder, sig.return_type, (cstr, size))
         return tup
+
     return sig, codegen
 
 
@@ -54,7 +56,7 @@ class TestPythonAPI(unittest.TestCase):
 
     def test_PyBytes_AsString(self):
         cfunc = jit(nopython=True)(PyBytes_AsString)
-        cstr = cfunc('hello')  # returns a cstring
+        cstr = cfunc("hello")  # returns a cstring
 
         fn = ctypes.pythonapi.PyBytes_FromString
         fn.argtypes = [ctypes.c_void_p]
@@ -63,11 +65,11 @@ class TestPythonAPI(unittest.TestCase):
 
         # Use the cstring created from bytes_as_string to create a python
         # bytes object
-        self.assertEqual(obj, b'hello')
+        self.assertEqual(obj, b"hello")
 
     def test_PyBytes_AsStringAndSize(self):
         cfunc = jit(nopython=True)(PyBytes_AsStringAndSize)
-        tup = cfunc('hello\x00world')  # returns a tuple: cstring and its size
+        tup = cfunc("hello\x00world")  # returns a tuple: cstring and its size
 
         fn = ctypes.pythonapi.PyBytes_FromStringAndSize
         fn.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
@@ -76,7 +78,7 @@ class TestPythonAPI(unittest.TestCase):
 
         # Use the cstring created from bytes_from_string_and_size to create
         # a python bytes object
-        self.assertEqual(obj, b'hello\x00world')
+        self.assertEqual(obj, b"hello\x00world")
 
 
 class PythonAPIEmptyArgs(unittest.TestCase):
@@ -90,9 +92,7 @@ class PythonAPIEmptyArgs(unittest.TestCase):
                 pyapi = context.get_python_api(builder)
                 gil = pyapi.gil_ensure()
 
-                num = pyapi.long_from_longlong(
-                    context.get_constant(types.intp, 0xCAFE)
-                )
+                num = pyapi.long_from_longlong(context.get_constant(types.intp, 0xCAFE))
                 kwds = pyapi.dict_pack({"key": num}.items())
                 fn_print = pyapi.unserialize(pyapi.serialize_object(callme))
                 # segfault: https://github.com/numba/numba/issues/5871
@@ -119,5 +119,5 @@ class PythonAPIEmptyArgs(unittest.TestCase):
         self.assertEqual(out.getvalue(), expected)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

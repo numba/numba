@@ -94,70 +94,75 @@ class RefRecorder(object):
 
 
 def simple_usecase1(rec):
-    a = rec('a')
-    b = rec('b')
-    c = rec('c')
+    a = rec("a")
+    b = rec("b")
+    c = rec("c")
     a = b + c
-    rec.mark('--1--')
-    d = a + a   # b + c + b + c
-    rec.mark('--2--')
+    rec.mark("--1--")
+    d = a + a  # b + c + b + c
+    rec.mark("--2--")
     return d
 
+
 def simple_usecase2(rec):
-    a = rec('a')
-    b = rec('b')
-    rec.mark('--1--')
+    a = rec("a")
+    b = rec("b")
+    rec.mark("--1--")
     x = a
     y = x
     a = None
     return y
 
+
 def looping_usecase1(rec):
-    a = rec('a')
-    b = rec('b')
-    c = rec('c')
+    a = rec("a")
+    b = rec("b")
+    c = rec("c")
     x = b
     for y in a:
         x = x + y
-        rec.mark('--loop bottom--')
-    rec.mark('--loop exit--')
+        rec.mark("--loop bottom--")
+    rec.mark("--loop exit--")
     x = x + c
     return x
 
+
 def looping_usecase2(rec):
-    a = rec('a')
-    b = rec('b')
-    cum = rec('cum')
+    a = rec("a")
+    b = rec("b")
+    cum = rec("cum")
     for x in a:
-        rec.mark('--outer loop top--')
+        rec.mark("--outer loop top--")
         cum = cum + x
         z = x + x
-        rec.mark('--inner loop entry #{count}--')
+        rec.mark("--inner loop entry #{count}--")
         for y in b:
-            rec.mark('--inner loop top #{count}--')
+            rec.mark("--inner loop top #{count}--")
             cum = cum + y
-            rec.mark('--inner loop bottom #{count}--')
-        rec.mark('--inner loop exit #{count}--')
+            rec.mark("--inner loop bottom #{count}--")
+        rec.mark("--inner loop exit #{count}--")
         if cum:
             cum = y + z
         else:
             # Never gets here, but let the Numba compiler see a `break` opcode
             break
-        rec.mark('--outer loop bottom #{count}--')
+        rec.mark("--outer loop bottom #{count}--")
     else:
-        rec.mark('--outer loop else--')
-    rec.mark('--outer loop exit--')
+        rec.mark("--outer loop else--")
+    rec.mark("--outer loop exit--")
     return cum
 
+
 def generator_usecase1(rec):
-    a = rec('a')
-    b = rec('b')
+    a = rec("a")
+    b = rec("b")
     yield a
     yield b
 
+
 def generator_usecase2(rec):
-    a = rec('a')
-    b = rec('b')
+    a = rec("a")
+    b = rec("b")
     for x in a:
         yield x
     yield b
@@ -166,30 +171,34 @@ def generator_usecase2(rec):
 class MyError(RuntimeError):
     pass
 
+
 def do_raise(x):
     raise MyError(x)
 
+
 def raising_usecase1(rec):
-    a = rec('a')
-    b = rec('b')
-    d = rec('d')
+    a = rec("a")
+    b = rec("b")
+    d = rec("d")
     if a:
         do_raise("foo")
-        c = rec('c')
+        c = rec("c")
         c + a
     c + b
 
+
 def raising_usecase2(rec):
-    a = rec('a')
-    b = rec('b')
+    a = rec("a")
+    b = rec("b")
     if a:
-        c = rec('c')
+        c = rec("c")
         do_raise(b)
     a + c
 
+
 def raising_usecase3(rec):
-    a = rec('a')
-    b = rec('b')
+    a = rec("a")
+    b = rec("b")
     if a:
         raise MyError(b)
 
@@ -210,10 +219,10 @@ def del_before_definition(rec):
             elif i == 2:
                 for j in range(i):
                     return i
-                rec.mark('FAILED')
-            rec.mark('FAILED')
-        rec.mark('FAILED')
-    rec.mark('OK')
+                rec.mark("FAILED")
+            rec.mark("FAILED")
+        rec.mark("FAILED")
+    rec.mark("OK")
     return -1
 
 
@@ -225,9 +234,9 @@ def inf_loop_multiple_back_edge(rec):
     while True:
         rec.mark("yield")
         yield
-        p = rec('p')
+        p = rec("p")
         if p:
-            rec.mark('bra')
+            rec.mark("bra")
             pass
 
 
@@ -266,54 +275,82 @@ class TestObjLifetime(TestCase):
                 actual.append(d)
                 # User may or may not expect duplicates, handle them properly
                 remaining.remove(d)
-        self.assertEqual(actual, expected,
-                         "the full list of recorded events is: %r" % (recorded,))
+        self.assertEqual(
+            actual, expected, "the full list of recorded events is: %r" % (recorded,)
+        )
 
     def test_simple1(self):
         rec = self.compile_and_record(simple_usecase1)
         self.assertFalse(rec.alive)
-        self.assertRecordOrder(rec, ['a', 'b', '--1--'])
-        self.assertRecordOrder(rec, ['a', 'c', '--1--'])
-        self.assertRecordOrder(rec, ['--1--', 'b + c', '--2--'])
+        self.assertRecordOrder(rec, ["a", "b", "--1--"])
+        self.assertRecordOrder(rec, ["a", "c", "--1--"])
+        self.assertRecordOrder(rec, ["--1--", "b + c", "--2--"])
 
     def test_simple2(self):
         rec = self.compile_and_record(simple_usecase2)
         self.assertFalse(rec.alive)
-        self.assertRecordOrder(rec, ['b', '--1--', 'a'])
+        self.assertRecordOrder(rec, ["b", "--1--", "a"])
 
     def test_looping1(self):
         rec = self.compile_and_record(looping_usecase1)
         self.assertFalse(rec.alive)
         # a and b are unneeded after the loop, check they were disposed of
-        self.assertRecordOrder(rec, ['a', 'b', '--loop exit--', 'c'])
+        self.assertRecordOrder(rec, ["a", "b", "--loop exit--", "c"])
         # check disposal order of iterator items and iterator
-        self.assertRecordOrder(rec, ['iter(a)#1', '--loop bottom--',
-                                     'iter(a)#2', '--loop bottom--',
-                                     'iter(a)#3', '--loop bottom--',
-                                     'iter(a)', '--loop exit--',
-                                     ])
+        self.assertRecordOrder(
+            rec,
+            [
+                "iter(a)#1",
+                "--loop bottom--",
+                "iter(a)#2",
+                "--loop bottom--",
+                "iter(a)#3",
+                "--loop bottom--",
+                "iter(a)",
+                "--loop exit--",
+            ],
+        )
 
     def test_looping2(self):
         rec = self.compile_and_record(looping_usecase2)
         self.assertFalse(rec.alive)
         # `a` is disposed of after its iterator is taken
-        self.assertRecordOrder(rec, ['a', '--outer loop top--'])
+        self.assertRecordOrder(rec, ["a", "--outer loop top--"])
         # Check disposal of iterators
-        self.assertRecordOrder(rec, ['iter(a)', '--outer loop else--',
-                                     '--outer loop exit--'])
-        self.assertRecordOrder(rec, ['iter(b)', '--inner loop exit #1--',
-                                     'iter(b)', '--inner loop exit #2--',
-                                     'iter(b)', '--inner loop exit #3--',
-                                     ])
+        self.assertRecordOrder(
+            rec, ["iter(a)", "--outer loop else--", "--outer loop exit--"]
+        )
+        self.assertRecordOrder(
+            rec,
+            [
+                "iter(b)",
+                "--inner loop exit #1--",
+                "iter(b)",
+                "--inner loop exit #2--",
+                "iter(b)",
+                "--inner loop exit #3--",
+            ],
+        )
         # Disposal of in-loop variable `x`
-        self.assertRecordOrder(rec, ['iter(a)#1', '--inner loop entry #1--',
-                                     'iter(a)#2', '--inner loop entry #2--',
-                                     'iter(a)#3', '--inner loop entry #3--',
-                                     ])
+        self.assertRecordOrder(
+            rec,
+            [
+                "iter(a)#1",
+                "--inner loop entry #1--",
+                "iter(a)#2",
+                "--inner loop entry #2--",
+                "iter(a)#3",
+                "--inner loop entry #3--",
+            ],
+        )
         # Disposal of in-loop variable `z`
-        self.assertRecordOrder(rec, ['iter(a)#1 + iter(a)#1',
-                                     '--outer loop bottom #1--',
-                                     ])
+        self.assertRecordOrder(
+            rec,
+            [
+                "iter(a)#1 + iter(a)#1",
+                "--outer loop bottom #1--",
+            ],
+        )
 
     def exercise_generator(self, genfunc):
         cfunc = self.compile(genfunc)
@@ -350,7 +387,7 @@ class TestObjLifetime(TestCase):
 
     def test_del_before_definition(self):
         rec = self.compile_and_record(del_before_definition)
-        self.assertEqual(rec.recorded, ['0', '1', '2'])
+        self.assertEqual(rec.recorded, ["0", "1", "2"])
 
     def test_raising1(self):
         with self.assertRefCount(do_raise):
@@ -377,8 +414,9 @@ class TestObjLifetime(TestCase):
         self.assertEqual(rec.alive, [])
         next(iterator)
         self.assertEqual(rec.alive, [])
-        self.assertEqual(rec.recorded,
-                         ['yield', 'p', 'bra', 'yield', 'p', 'bra', 'yield'])
+        self.assertEqual(
+            rec.recorded, ["yield", "p", "bra", "yield", "p", "bra", "yield"]
+        )
 
 
 class TestExtendingVariableLifetimes(SerialMixin, TestCase):
@@ -406,13 +444,12 @@ class TestExtendingVariableLifetimes(SerialMixin, TestCase):
                 d = c / c
                 return d
 
-            with override_config('EXTEND_VARIABLE_LIFETIMES', extend_lifetimes):
+            with override_config("EXTEND_VARIABLE_LIFETIMES", extend_lifetimes):
                 foo()
                 cres = foo.overloads[foo.signatures[0]]
-                func_ir = cres.metadata['preserved_ir']
+                func_ir = cres.metadata["preserved_ir"]
 
             return func_ir
-
 
         def check(func_ir, expect):
             # assert single block
@@ -426,8 +463,16 @@ class TestExtendingVariableLifetimes(SerialMixin, TestCase):
         del_after_use_ir = get_ir(False)
         # should be 3 assigns (a, b, c), 2 del (a, b), assign (d), del (c)
         # assign for cast d to return, del (d), return
-        expect = [*((ir.Assign,) * 3), ir.Del, ir.Del, ir.Assign, ir.Del,
-                  ir.Assign, ir.Del, ir.Return]
+        expect = [
+            *((ir.Assign,) * 3),
+            ir.Del,
+            ir.Del,
+            ir.Assign,
+            ir.Del,
+            ir.Assign,
+            ir.Del,
+            ir.Return,
+        ]
         check(del_after_use_ir, expect)
 
         del_at_block_end_ir = get_ir(True)
@@ -458,7 +503,7 @@ class TestExtendingVariableLifetimes(SerialMixin, TestCase):
 
             foo()
             cres = foo.overloads[foo.signatures[0]]
-            func_ir = cres.metadata['preserved_ir']
+            func_ir = cres.metadata["preserved_ir"]
 
             return func_ir
 

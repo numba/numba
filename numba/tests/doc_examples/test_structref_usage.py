@@ -128,9 +128,7 @@ class TestStructRefUsage(unittest.TestCase):
         def ol_distance(self, other):
             # Guard that *other* is an instance of MyStructType
             if not isinstance(other, MyStructType):
-                raise TypingError(
-                    f"*other* must be a {MyStructType}; got {other}"
-                )
+                raise TypingError(f"*other* must be a {MyStructType}; got {other}")
 
             def impl(self, other):
                 return np.linalg.norm(self.vector - other.vector)
@@ -144,6 +142,7 @@ class TestStructRefUsage(unittest.TestCase):
             bob = MyStruct("Bob", vector=np.random.random(3))
             # Use the method
             return alice.distance(bob)
+
         # magictoken.ex_structref_method.end
 
         self.assertIsInstance(test(), float)

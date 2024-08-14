@@ -1,7 +1,11 @@
 import math
 from numba.core import types, utils
-from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
-                                         signature, Registry)
+from numba.core.typing.templates import (
+    AttributeTemplate,
+    ConcreteTemplate,
+    signature,
+    Registry,
+)
 
 registry = Registry()
 infer_global = registry.register_global
@@ -141,6 +145,7 @@ class Math_frexp(ConcreteTemplate):
         signature(types.Tuple((types.float64, types.intc)), types.float64),
         signature(types.Tuple((types.float32, types.intc)), types.float32),
     ]
+
 
 @infer_global(math.ldexp)
 class Math_ldexp(ConcreteTemplate):

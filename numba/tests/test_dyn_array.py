@@ -19,26 +19,34 @@ nrtjit = njit(_nrt=True, nogil=True)
 def np_concatenate1(a, b, c):
     return np.concatenate((a, b, c))
 
+
 def np_concatenate2(a, b, c, axis):
     return np.concatenate((a, b, c), axis=axis)
+
 
 def np_stack1(a, b, c):
     return np.stack((a, b, c))
 
+
 def np_stack2(a, b, c, axis):
     return np.stack((a, b, c), axis=axis)
+
 
 def np_hstack(a, b, c):
     return np.hstack((a, b, c))
 
+
 def np_vstack(a, b, c):
     return np.vstack((a, b, c))
+
 
 def np_row_stack(a, b, c):
     return np.row_stack((a, b, c))
 
+
 def np_dstack(a, b, c):
     return np.dstack((a, b, c))
+
 
 def np_column_stack(a, b, c):
     return np.column_stack((a, b, c))
@@ -237,7 +245,7 @@ class TestDynArray(NrtRefCtTest, TestCase):
 
     def test_array_pass_through_sliced(self):
         def pyfunc(y):
-            return y[y.size // 2:]
+            return y[y.size // 2 :]
 
         arr = np.ones(4, dtype=np.float32)
 
@@ -270,8 +278,7 @@ class TestDynArray(NrtRefCtTest, TestCase):
         arr_a = np.random.random(10)
         arr_b = np.random.random(10)
 
-        np.testing.assert_equal(pyfunc(arr_a, arr_b),
-                                cfunc(arr_a, arr_b))
+        np.testing.assert_equal(pyfunc(arr_a, arr_b), cfunc(arr_a, arr_b))
 
         self.assert_array_nrt_refct(cfunc(arr_a, arr_b), 1)
 
@@ -279,8 +286,7 @@ class TestDynArray(NrtRefCtTest, TestCase):
         arr_a = np.random.random(10).reshape(2, 5)
         arr_b = np.random.random(10).reshape(2, 5)
 
-        np.testing.assert_equal(pyfunc(arr_a, arr_b),
-                                cfunc(arr_a, arr_b))
+        np.testing.assert_equal(pyfunc(arr_a, arr_b), cfunc(arr_a, arr_b))
 
         self.assert_array_nrt_refct(cfunc(arr_a, arr_b), 1)
 
@@ -288,8 +294,7 @@ class TestDynArray(NrtRefCtTest, TestCase):
         arr_a = np.random.random(70).reshape(2, 5, 7)
         arr_b = np.random.random(70).reshape(2, 5, 7)
 
-        np.testing.assert_equal(pyfunc(arr_a, arr_b),
-                                cfunc(arr_a, arr_b))
+        np.testing.assert_equal(pyfunc(arr_a, arr_b), cfunc(arr_a, arr_b))
 
         self.assert_array_nrt_refct(cfunc(arr_a, arr_b), 1)
 
@@ -339,9 +344,9 @@ class TestDynArray(NrtRefCtTest, TestCase):
         for i in range(100):
             arr = np.random.randint(1, 10, size)
             out = np.empty_like(arr)
-            thread = threading.Thread(target=wrapped,
-                                      args=(arr, out),
-                                      name="worker{0}".format(i))
+            thread = threading.Thread(
+                target=wrapped, args=(arr, out), name="worker{0}".format(i)
+            )
             workers.append(thread)
             inputs.append(arr)
             outputs.append(out)
@@ -396,9 +401,9 @@ class TestDynArray(NrtRefCtTest, TestCase):
             out = np.empty(size)
             # All thread shares the same input
             swapct = random.randrange(1000)
-            thread = threading.Thread(target=wrapped,
-                                      args=(swapct, input, out),
-                                      name="worker{0}".format(i))
+            thread = threading.Thread(
+                target=wrapped, args=(swapct, input, out), name="worker{0}".format(i)
+            )
             workers.append(thread)
             outputs.append(out)
             swapcts.append(swapct)
@@ -437,13 +442,11 @@ class TestDynArray(NrtRefCtTest, TestCase):
     def test_swap(self):
 
         def pyfunc(x, y, t):
-            """Swap array x and y for t number of times
-            """
+            """Swap array x and y for t number of times"""
             for i in range(t):
                 x, y = y, x
 
             return x, y
-
 
         cfunc = nrtjit(pyfunc)
 
@@ -509,6 +512,7 @@ class TestDynArray(NrtRefCtTest, TestCase):
         Dispatcher returns a new reference.
         It need to workaround it for now.
         """
+
         @nrtjit
         def inner(out):
             return out
@@ -539,7 +543,7 @@ class ConstructorBaseTest(NrtRefCtTest):
         self.assertEqual(ret.strides, expected.strides)
         self.check_result_value(ret, expected)
         # test writability
-        expected = np.empty_like(ret) # np.full_like was not added until Numpy 1.8
+        expected = np.empty_like(ret)  # np.full_like was not added until Numpy 1.8
         expected.fill(123)
         ret.fill(123)
         np.testing.assert_equal(ret, expected)
@@ -556,7 +560,7 @@ class ConstructorBaseTest(NrtRefCtTest):
         self.assertEqual(ret.strides, expected.strides)
         self.check_result_value(ret, expected)
         # test writability
-        expected = np.empty_like(ret) # np.full_like was not added until Numpy 1.8
+        expected = np.empty_like(ret)  # np.full_like was not added until Numpy 1.8
         expected.fill(123)
         ret.fill(123)
         np.testing.assert_equal(ret, expected)
@@ -591,10 +595,7 @@ class ConstructorBaseTest(NrtRefCtTest):
         cfunc = nrtjit(pyfunc)
         with self.assertRaises(ValueError) as e:
             cfunc()
-        self.assertIn(
-            "array is too big",
-            str(e.exception)
-        )
+        self.assertIn("array is too big", str(e.exception))
 
 
 class TestNdZeros(ConstructorBaseTest, TestCase):
@@ -608,59 +609,75 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
 
     def test_0d(self):
         pyfunc = self.pyfunc
+
         def func():
             return pyfunc(())
+
         self.check_0d(func)
 
     def test_1d(self):
         pyfunc = self.pyfunc
+
         def func(n):
             return pyfunc(n)
+
         self.check_1d(func)
 
     def test_1d_dtype(self):
         pyfunc = self.pyfunc
+
         def func(n):
             return pyfunc(n, np.int32)
+
         self.check_1d(func)
 
     def test_1d_dtype_instance(self):
         # dtype as numpy dtype, not as scalar class
         pyfunc = self.pyfunc
-        _dtype = np.dtype('int32')
+        _dtype = np.dtype("int32")
+
         def func(n):
             return pyfunc(n, _dtype)
+
         self.check_1d(func)
 
     def test_1d_dtype_str(self):
         pyfunc = self.pyfunc
-        _dtype = 'int32'
+        _dtype = "int32"
+
         def func(n):
             return pyfunc(n, _dtype)
+
         self.check_1d(func)
 
         def func(n):
-            return pyfunc(n, 'complex128')
+            return pyfunc(n, "complex128")
+
         self.check_1d(func)
 
     def test_1d_dtype_str_alternative_spelling(self):
         # like test_1d_dtype_str but using the shorthand type spellings
         pyfunc = self.pyfunc
-        _dtype = 'i4'
+        _dtype = "i4"
+
         def func(n):
             return pyfunc(n, _dtype)
+
         self.check_1d(func)
 
         def func(n):
-            return pyfunc(n, 'c8')
+            return pyfunc(n, "c8")
+
         self.check_1d(func)
 
     def test_1d_dtype_str_structured_dtype(self):
         # test_1d_dtype_str but using a structured dtype
         pyfunc = self.pyfunc
         _dtype = "i4, (2,3)f8"
+
         def func(n):
             return pyfunc(n, _dtype)
+
         self.check_1d(func)
 
     def test_1d_dtype_non_const_str(self):
@@ -671,11 +688,13 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
             return pyfunc(n, dt)
 
         with self.assertRaises(TypingError) as raises:
-            func(5, 'int32')
+            func(5, "int32")
 
         excstr = str(raises.exception)
-        msg = (f"If np.{self.pyfunc.__name__} dtype is a string it must be a "
-               "string constant.")
+        msg = (
+            f"If np.{self.pyfunc.__name__} dtype is a string it must be a "
+            "string constant."
+        )
         self.assertIn(msg, excstr)
 
     def test_1d_dtype_invalid_str(self):
@@ -683,7 +702,7 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
 
         @njit
         def func(n):
-            return pyfunc(n, 'ABCDEF')
+            return pyfunc(n, "ABCDEF")
 
         with self.assertRaises(TypingError) as raises:
             func(5)
@@ -693,19 +712,25 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
 
     def test_2d(self):
         pyfunc = self.pyfunc
+
         def func(m, n):
             return pyfunc((m, n))
+
         self.check_2d(func)
 
     def test_2d_shape_dtypes(self):
         # Test for issue #4575
         pyfunc = self.pyfunc
+
         def func1(m, n):
             return pyfunc((np.int16(m), np.int32(n)))
+
         self.check_2d(func1)
+
         # Using a 64-bit value checks that 32 bit systems will downcast to intp
         def func2(m, n):
             return pyfunc((np.int64(m), np.int8(n)))
+
         self.check_2d(func2)
         # Make sure an error is thrown if we can't downcast safely
         if config.IS_32BITS:
@@ -715,28 +740,36 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
 
     def test_2d_dtype_kwarg(self):
         pyfunc = self.pyfunc
+
         def func(m, n):
             return pyfunc((m, n), dtype=np.complex64)
+
         self.check_2d(func)
 
     def test_2d_dtype_str_kwarg(self):
         pyfunc = self.pyfunc
+
         def func(m, n):
-            return pyfunc((m, n), dtype='complex64')
+            return pyfunc((m, n), dtype="complex64")
+
         self.check_2d(func)
 
     def test_2d_dtype_str_kwarg_alternative_spelling(self):
         # as test_2d_dtype_str_kwarg but with the numpy shorthand type spelling
         pyfunc = self.pyfunc
+
         def func(m, n):
-            return pyfunc((m, n), dtype='c8')
+            return pyfunc((m, n), dtype="c8")
+
         self.check_2d(func)
 
     def test_alloc_size(self):
         pyfunc = self.pyfunc
         width = types.intp.bitwidth
+
         def gen_func(shape, dtype):
-            return lambda : pyfunc(shape, dtype)
+            return lambda: pyfunc(shape, dtype)
+
         # Under these values numba will segfault, but that's another issue
         self.check_alloc_size(gen_func(1 << width - 2, np.intp))
         self.check_alloc_size(gen_func((1 << width - 8, 64), np.intp))
@@ -761,33 +794,40 @@ class TestNdFull(ConstructorBaseTest, TestCase):
     def test_0d(self):
         def func():
             return np.full((), 4.5)
+
         self.check_0d(func)
 
     def test_1d(self):
         def func(n):
             return np.full(n, 4.5)
+
         self.check_1d(func)
 
     def test_1d_dtype(self):
         def func(n):
             return np.full(n, 4.5, np.bool_)
+
         self.check_1d(func)
 
     def test_1d_dtype_instance(self):
-        dtype = np.dtype('bool')
+        dtype = np.dtype("bool")
+
         def func(n):
             return np.full(n, 4.5, dtype)
+
         self.check_1d(func)
 
     def test_1d_dtype_str(self):
         def func(n):
-            return np.full(n, 4.5, 'bool_')
+            return np.full(n, 4.5, "bool_")
+
         self.check_1d(func)
 
     def test_1d_dtype_str_alternative_spelling(self):
         # like test_1d_dtype_str but using the shorthand type spelling
         def func(n):
-            return np.full(n, 4.5, '?')
+            return np.full(n, 4.5, "?")
+
         self.check_1d(func)
 
     def test_1d_dtype_non_const_str(self):
@@ -797,18 +837,17 @@ class TestNdFull(ConstructorBaseTest, TestCase):
             return np.full(n, fv, dt)
 
         with self.assertRaises(TypingError) as raises:
-            func((5,), 4.5, 'int32')
+            func((5,), 4.5, "int32")
 
         excstr = str(raises.exception)
-        msg = ("If np.full dtype is a string it must be a "
-               "string constant.")
+        msg = "If np.full dtype is a string it must be a " "string constant."
         self.assertIn(msg, excstr)
 
     def test_1d_dtype_invalid_str(self):
 
         @njit
         def func(n, fv):
-            return np.full(n, fv, 'ABCDEF')
+            return np.full(n, fv, "ABCDEF")
 
         with self.assertRaises(TypingError) as raises:
             func((5,), 4.5)
@@ -819,37 +858,45 @@ class TestNdFull(ConstructorBaseTest, TestCase):
     def test_2d(self):
         def func(m, n):
             return np.full((m, n), 4.5)
+
         self.check_2d(func)
 
     def test_2d_dtype_kwarg(self):
         def func(m, n):
             return np.full((m, n), 1 + 4.5j, dtype=np.complex64)
+
         self.check_2d(func)
 
     def test_2d_dtype_from_type(self):
         # tests issue #2862
         def func(m, n):
             return np.full((m, n), np.int32(1))
+
         self.check_2d(func)
 
         # Complex uses `.real`, imaginary part dropped
         def func(m, n):
             return np.full((m, n), np.complex128(1))
+
         self.check_2d(func)
 
         # and that if a dtype is specified, this influences the return type
         def func(m, n):
             return np.full((m, n), 1, dtype=np.int8)
+
         self.check_2d(func)
 
     def test_2d_shape_dtypes(self):
         # Test for issue #4575
         def func1(m, n):
             return np.full((np.int16(m), np.int32(n)), 4.5)
+
         self.check_2d(func1)
+
         # Using a 64-bit value checks that 32 bit systems will downcast to intp
         def func2(m, n):
             return np.full((np.int64(m), np.int8(n)), 4.5)
+
         self.check_2d(func2)
         # Make sure an error is thrown if we can't downcast safely
         if config.IS_32BITS:
@@ -859,8 +906,10 @@ class TestNdFull(ConstructorBaseTest, TestCase):
 
     def test_alloc_size(self):
         width = types.intp.bitwidth
+
         def gen_func(shape, value):
-            return lambda : np.full(shape, value)
+            return lambda: np.full(shape, value)
+
         # Under these values numba will segfault, but that's another issue
         self.check_alloc_size(gen_func(1 << width - 2, 1))
         self.check_alloc_size(gen_func((1 << width - 8, 64), 1))
@@ -873,7 +922,7 @@ class ConstructorLikeBaseTest(object):
             arr.fill(42)
         except (TypeError, ValueError):
             # Try something else (e.g. Numpy 1.6 with structured dtypes)
-            fill_value = b'x' * arr.dtype.itemsize
+            fill_value = b"x" * arr.dtype.itemsize
             arr.fill(fill_value)
 
     def check_like(self, pyfunc, dtype):
@@ -902,7 +951,7 @@ class ConstructorLikeBaseTest(object):
             if arr.ndim > 0:
                 check_arr(arr[::2])
             # Check new array doesn't inherit readonly flag
-            arr.flags['WRITEABLE'] = False
+            arr.flags["WRITEABLE"] = False
             # verify read-only
             with self.assertRaises(ValueError):
                 arr[0] = 1
@@ -923,53 +972,69 @@ class TestNdEmptyLike(ConstructorLikeBaseTest, TestCase):
 
     def test_like(self):
         pyfunc = self.pyfunc
+
         def func(arr):
             return pyfunc(arr)
+
         self.check_like(func, np.float64)
 
     def test_like_structured(self):
-        dtype = np.dtype([('a', np.int16), ('b', np.float32)])
+        dtype = np.dtype([("a", np.int16), ("b", np.float32)])
         pyfunc = self.pyfunc
+
         def func(arr):
             return pyfunc(arr)
+
         self.check_like(func, dtype)
 
     def test_like_dtype(self):
         pyfunc = self.pyfunc
+
         def func(arr):
             return pyfunc(arr, np.int32)
+
         self.check_like(func, np.float64)
 
     def test_like_dtype_instance(self):
-        dtype = np.dtype('int32')
+        dtype = np.dtype("int32")
         pyfunc = self.pyfunc
+
         def func(arr):
             return pyfunc(arr, dtype)
+
         self.check_like(func, np.float64)
 
     def test_like_dtype_structured(self):
-        dtype = np.dtype([('a', np.int16), ('b', np.float32)])
+        dtype = np.dtype([("a", np.int16), ("b", np.float32)])
         pyfunc = self.pyfunc
+
         def func(arr):
             return pyfunc(arr, dtype)
+
         self.check_like(func, np.float64)
 
     def test_like_dtype_kwarg(self):
         pyfunc = self.pyfunc
+
         def func(arr):
             return pyfunc(arr, dtype=np.int32)
+
         self.check_like(func, np.float64)
 
     def test_like_dtype_str_kwarg(self):
         pyfunc = self.pyfunc
+
         def func(arr):
-            return pyfunc(arr, dtype='int32')
+            return pyfunc(arr, dtype="int32")
+
         self.check_like(func, np.float64)
 
     def test_like_dtype_str_kwarg_alternative_spelling(self):
         pyfunc = self.pyfunc
+
         def func(arr):
-            return pyfunc(arr, dtype='i4')
+            return pyfunc(arr, dtype="i4")
+
         self.check_like(func, np.float64)
 
     def test_like_dtype_non_const_str(self):
@@ -980,22 +1045,24 @@ class TestNdEmptyLike(ConstructorLikeBaseTest, TestCase):
             return pyfunc(n, dt)
 
         with self.assertRaises(TypingError) as raises:
-            func(np.ones(4), 'int32')
+            func(np.ones(4), "int32")
 
         excstr = str(raises.exception)
-        msg = (f"If np.{self.pyfunc.__name__} dtype is a string it must be a "
-               "string constant.")
+        msg = (
+            f"If np.{self.pyfunc.__name__} dtype is a string it must be a "
+            "string constant."
+        )
         self.assertIn(msg, excstr)
         self.assertIn(
-            '{}(array(float64, 1d, C), unicode_type)'.format(pyfunc.__name__),
-            excstr)
+            "{}(array(float64, 1d, C), unicode_type)".format(pyfunc.__name__), excstr
+        )
 
     def test_like_dtype_invalid_str(self):
         pyfunc = self.pyfunc
 
         @njit
         def func(n):
-            return pyfunc(n, 'ABCDEF')
+            return pyfunc(n, "ABCDEF")
 
         with self.assertRaises(TypingError) as raises:
             func(np.ones(4))
@@ -1046,40 +1113,49 @@ class TestNdFullLike(ConstructorLikeBaseTest, TestCase):
     def test_like(self):
         def func(arr):
             return np.full_like(arr, 3.5)
+
         self.check_like(func, np.float64)
 
     # Not supported yet.
     @unittest.expectedFailure
     def test_like_structured(self):
-        dtype = np.dtype([('a', np.int16), ('b', np.float32)])
+        dtype = np.dtype([("a", np.int16), ("b", np.float32)])
+
         def func(arr):
             return np.full_like(arr, 4.5)
+
         self.check_like(func, dtype)
 
     def test_like_dtype(self):
         def func(arr):
             return np.full_like(arr, 4.5, np.bool_)
+
         self.check_like(func, np.float64)
 
     def test_like_dtype_instance(self):
-        dtype = np.dtype('bool')
+        dtype = np.dtype("bool")
+
         def func(arr):
             return np.full_like(arr, 4.5, dtype)
+
         self.check_like(func, np.float64)
 
     def test_like_dtype_kwarg(self):
         def func(arr):
             return np.full_like(arr, 4.5, dtype=np.bool_)
+
         self.check_like(func, np.float64)
 
     def test_like_dtype_str_kwarg(self):
         def func(arr):
-            return np.full_like(arr, 4.5, 'bool_')
+            return np.full_like(arr, 4.5, "bool_")
+
         self.check_like(func, np.float64)
 
     def test_like_dtype_str_kwarg_alternative_spelling(self):
         def func(arr):
-            return np.full_like(arr, 4.5, dtype='?')
+            return np.full_like(arr, 4.5, dtype="?")
+
         self.check_like(func, np.float64)
 
     def test_like_dtype_non_const_str_kwarg(self):
@@ -1089,11 +1165,16 @@ class TestNdFullLike(ConstructorLikeBaseTest, TestCase):
             return np.full_like(arr, fv, dt)
 
         with self.assertRaises(TypingError) as raises:
-            func(np.ones(3,), 4.5, 'int32')
+            func(
+                np.ones(
+                    3,
+                ),
+                4.5,
+                "int32",
+            )
 
         excstr = str(raises.exception)
-        msg = ("If np.full_like dtype is a string it must be a "
-               "string constant.")
+        msg = "If np.full_like dtype is a string it must be a " "string constant."
         self.assertIn(msg, excstr)
 
     def test_like_dtype_invalid_str(self):
@@ -1117,13 +1198,15 @@ class TestNdIdentity(BaseTest):
     def test_identity(self):
         def func(n):
             return np.identity(n)
+
         self.check_identity(func)
 
     def test_identity_dtype(self):
-        for dtype in (np.complex64, np.int16, np.bool_, np.dtype('bool'),
-                      'bool_'):
+        for dtype in (np.complex64, np.int16, np.bool_, np.dtype("bool"), "bool_"):
+
             def func(n):
                 return np.identity(n, dtype)
+
             self.check_identity(func)
 
     def test_like_dtype_non_const_str_kwarg(self):
@@ -1133,13 +1216,11 @@ class TestNdIdentity(BaseTest):
             return np.identity(n, dt)
 
         with self.assertRaises(TypingError) as raises:
-            func(4, 'int32')
+            func(4, "int32")
 
         excstr = str(raises.exception)
-        msg = ("If np.identity dtype is a string it must be a "
-               "string constant.")
+        msg = "If np.identity dtype is a string it must be a " "string constant."
         self.assertIn(msg, excstr)
-
 
 
 class TestNdEye(BaseTest):
@@ -1147,42 +1228,47 @@ class TestNdEye(BaseTest):
     def test_eye_n(self):
         def func(n):
             return np.eye(n)
+
         self.check_outputs(func, [(1,), (3,)])
 
     def test_eye_n_dtype(self):
         # check None option, dtype class, instance of dtype class
         for dt in (None, np.complex128, np.complex64(1)):
+
             def func(n, dtype=dt):
                 return np.eye(n, dtype=dtype)
+
             self.check_outputs(func, [(1,), (3,)])
 
     def test_eye_n_m(self):
         def func(n, m):
             return np.eye(n, m)
+
         self.check_outputs(func, [(1, 2), (3, 2), (0, 3)])
 
     def check_eye_n_m_k(self, func):
-        self.check_outputs(func, [(1, 2, 0),
-                                  (3, 4, 1),
-                                  (3, 4, -1),
-                                  (4, 3, -2),
-                                  (4, 3, -5),
-                                  (4, 3, 5)])
+        self.check_outputs(
+            func, [(1, 2, 0), (3, 4, 1), (3, 4, -1), (4, 3, -2), (4, 3, -5), (4, 3, 5)]
+        )
 
     def test_eye_n_m_k(self):
         def func(n, m, k):
             return np.eye(n, m, k)
+
         self.check_eye_n_m_k(func)
 
     def test_eye_n_m_k_dtype(self):
         def func(n, m, k):
             return np.eye(N=n, M=m, k=k, dtype=np.int16)
+
         self.check_eye_n_m_k(func)
 
     def test_eye_n_m_k_dtype_instance(self):
-        dtype = np.dtype('int16')
+        dtype = np.dtype("int16")
+
         def func(n, m, k):
             return np.eye(N=n, M=m, k=k, dtype=dtype)
+
         self.check_eye_n_m_k(func)
 
 
@@ -1196,13 +1282,16 @@ class TestNdDiag(TestCase):
         a3x4 = np.arange(12).reshape(3, 4)
         a4x3 = np.arange(12).reshape(4, 3)
         self.matricies = [a3x4, a4x3]
+
         def func(q):
             return np.diag(q)
+
         self.py = func
         self.jit = nrtjit(func)
 
         def func_kwarg(q, k=0):
             return np.diag(q, k=k)
+
         self.py_kw = func_kwarg
         self.jit_kw = nrtjit(func_kwarg)
 
@@ -1238,7 +1327,7 @@ class TestNdDiag(TestCase):
 
     # check error handling
     def test_error_handling(self):
-        d = np.array([[[1.]]])
+        d = np.array([[[1.0]]])
         cfunc = nrtjit(self.py)
 
         # missing arg
@@ -1258,22 +1347,34 @@ class TestNdDiag(TestCase):
         with self.assertRaisesRegex(TypingError, msg) as raises:
             cfunc(None)
 
+
 class TestLinspace(BaseTest):
 
     def test_linspace_2(self):
         def pyfunc(n, m):
             return np.linspace(n, m)
-        self.check_outputs(pyfunc,
-                           [(0, 4), (1, 100), (-3.5, 2.5), (-3j, 2+3j),
-                            (2, 1), (1+0.5j, 1.5j)])
+
+        self.check_outputs(
+            pyfunc,
+            [(0, 4), (1, 100), (-3.5, 2.5), (-3j, 2 + 3j), (2, 1), (1 + 0.5j, 1.5j)],
+        )
 
     def test_linspace_3(self):
         def pyfunc(n, m, p):
             return np.linspace(n, m, p)
-        self.check_outputs(pyfunc,
-                           [(0, 4, 9), (1, 4, 3), (-3.5, 2.5, 8),
-                            (-3j, 2+3j, 7), (2, 1, 0),
-                            (1+0.5j, 1.5j, 5), (1, 1e100, 1)])
+
+        self.check_outputs(
+            pyfunc,
+            [
+                (0, 4, 9),
+                (1, 4, 3),
+                (-3.5, 2.5, 8),
+                (-3j, 2 + 3j, 7),
+                (2, 1, 0),
+                (1 + 0.5j, 1.5j, 5),
+                (1, 1e100, 1),
+            ],
+        )
 
     def test_linspace_accuracy(self):
         # Checking linspace reasonably replicates NumPy's algorithm
@@ -1301,7 +1402,7 @@ class TestNpyEmptyKeyword(TestCase):
             self.assertEqual(expected.shape, got.shape)
 
     def test_with_dtype_kws(self):
-        for dtype in [np.int32, np.float32, np.complex64, np.dtype('complex64')]:
+        for dtype in [np.int32, np.float32, np.complex64, np.dtype("complex64")]:
             self._test_with_dtype_kw(dtype)
 
     def _test_with_shape_and_dtype_kw(self, dtype):
@@ -1318,7 +1419,7 @@ class TestNpyEmptyKeyword(TestCase):
             self.assertEqual(expected.shape, got.shape)
 
     def test_with_shape_and_dtype_kws(self):
-        for dtype in [np.int32, np.float32, np.complex64, np.dtype('complex64')]:
+        for dtype in [np.int32, np.float32, np.complex64, np.dtype("complex64")]:
             self._test_with_shape_and_dtype_kw(dtype)
 
     def test_empty_no_args(self):
@@ -1371,23 +1472,29 @@ class TestNpArray(MemoryLeakMixin, BaseTest):
         def pyfunc(arg):
             return np.array(arg, dtype=np.float32)
 
-        self.check_outputs(pyfunc,
-                           [([2, 42],),
-                            ([3.5, 1.0],),
-                            ((1, 3.5, 42),),
-                            ((),),
-                            ])
+        self.check_outputs(
+            pyfunc,
+            [
+                ([2, 42],),
+                ([3.5, 1.0],),
+                ((1, 3.5, 42),),
+                ((),),
+            ],
+        )
 
     def test_1d_with_str_dtype(self):
         def pyfunc(arg):
-            return np.array(arg, dtype='float32')
+            return np.array(arg, dtype="float32")
 
-        self.check_outputs(pyfunc,
-                           [([2, 42],),
-                            ([3.5, 1.0],),
-                            ((1, 3.5, 42),),
-                            ((),),
-                            ])
+        self.check_outputs(
+            pyfunc,
+            [
+                ([2, 42],),
+                ([3.5, 1.0],),
+                ((1, 3.5, 42),),
+                ((),),
+            ],
+        )
 
     def test_1d_with_non_const_str_dtype(self):
 
@@ -1396,11 +1503,10 @@ class TestNpArray(MemoryLeakMixin, BaseTest):
             return np.array(arg, dtype=dt)
 
         with self.assertRaises(TypingError) as raises:
-            func((5, 3), 'int32')
+            func((5, 3), "int32")
 
         excstr = str(raises.exception)
-        msg = (f"If np.array dtype is a string it must be a "
-               "string constant.")
+        msg = f"If np.array dtype is a string it must be a " "string constant."
         self.assertIn(msg, excstr)
 
     def test_2d(self):
@@ -1445,19 +1551,24 @@ class TestNpArray(MemoryLeakMixin, BaseTest):
                 yield
             self.assertIn(msg, str(raises.exception))
 
-        with check_raises(('array(float64, 1d, C) not allowed in a '
-                           'homogeneous sequence')):
-            cfunc(np.array([1.]))
+        with check_raises(
+            ("array(float64, 1d, C) not allowed in a " "homogeneous sequence")
+        ):
+            cfunc(np.array([1.0]))
 
-        with check_raises(('type Tuple(int64, reflected list(int64)<iv=None>) '
-                          'does not have a regular shape')):
+        with check_raises(
+            (
+                "type Tuple(int64, reflected list(int64)<iv=None>) "
+                "does not have a regular shape"
+            )
+        ):
             cfunc((np.int64(1), [np.int64(2)]))
 
         with check_raises(
-                "cannot convert Tuple(int64, Record(a[type=int32;offset=0],"
-                "b[type=float32;offset=4];8;False)) to a homogeneous type",
-            ):
-            st = np.dtype([('a', 'i4'), ('b', 'f4')])
+            "cannot convert Tuple(int64, Record(a[type=int32;offset=0],"
+            "b[type=float32;offset=4];8;False)) to a homogeneous type",
+        ):
+            st = np.dtype([("a", "i4"), ("b", "f4")])
             val = np.zeros(1, dtype=st)[0]
             cfunc(((1, 2), (np.int64(1), val)))
 
@@ -1488,17 +1599,18 @@ class TestNpConcatenate(MemoryLeakMixin, TestCase):
     def _3d_arrays(self):
         a = np.arange(24).reshape((4, 3, 2))
         b = a + 10
-        c = (b + 10).copy(order='F')
+        c = (b + 10).copy(order="F")
         d = (c + 10)[::-1]
-        e = (d + 10)[...,::-1]
+        e = (d + 10)[..., ::-1]
         return a, b, c, d, e
 
     @contextlib.contextmanager
     def assert_invalid_sizes_over_dim(self, axis):
         with self.assertRaises(ValueError) as raises:
             yield
-        self.assertIn("input sizes over dimension %d do not match" % axis,
-                      str(raises.exception))
+        self.assertIn(
+            "input sizes over dimension %d do not match" % axis, str(raises.exception)
+        )
 
     def test_3d(self):
         pyfunc = np_concatenate2
@@ -1533,8 +1645,8 @@ class TestNpConcatenate(MemoryLeakMixin, TestCase):
 
         # Inputs with compatible sizes
         check(a[1:], b, c[::-1], axis=0)
-        check(a, b[:,1:], c, axis=1)
-        check(a, b, c[:,:,1:], axis=2)
+        check(a, b[:, 1:], c, axis=1)
+        check(a, b, c[:, :, 1:], axis=2)
 
         # Different but compatible dtypes
         check_all_axes(a, b.astype(np.float64), b)
@@ -1548,7 +1660,7 @@ class TestNpConcatenate(MemoryLeakMixin, TestCase):
                 cfunc(a[1:], b, b, axis)
         for axis in (0, 2, -3, -1):
             with self.assert_invalid_sizes_over_dim(1):
-                cfunc(a, b[:,1:], b, axis)
+                cfunc(a, b[:, 1:], b, axis)
 
     def test_3d_no_axis(self):
         pyfunc = np_concatenate1
@@ -1584,7 +1696,7 @@ class TestNpConcatenate(MemoryLeakMixin, TestCase):
 
         # Incompatible sizes
         with self.assert_invalid_sizes_over_dim(1):
-            cfunc(a, b[:,1:], b)
+            cfunc(a, b[:, 1:], b)
 
     def test_typing_errors(self):
         pyfunc = np_concatenate1
@@ -1592,31 +1704,33 @@ class TestNpConcatenate(MemoryLeakMixin, TestCase):
 
         a = np.arange(15)
         b = a.reshape((3, 5))
-        c = a.astype(np.dtype([('x', np.int8)]))
+        c = a.astype(np.dtype([("x", np.int8)]))
         d = np.array(42)
 
         # Different dimensionalities
         with self.assertTypingError() as raises:
             cfunc(a, b, b)
-        self.assertIn("all the input arrays must have same number of dimensions",
-                      str(raises.exception))
+        self.assertIn(
+            "all the input arrays must have same number of dimensions",
+            str(raises.exception),
+        )
 
         # Incompatible dtypes
         with self.assertTypingError() as raises:
             cfunc(a, c, c)
-        self.assertIn("input arrays must have compatible dtypes",
-                      str(raises.exception))
+        self.assertIn("input arrays must have compatible dtypes", str(raises.exception))
 
         # 0-d arrays
         with self.assertTypingError() as raises:
             cfunc(d, d, d)
-        self.assertIn("zero-dimensional arrays cannot be concatenated",
-                      str(raises.exception))
+        self.assertIn(
+            "zero-dimensional arrays cannot be concatenated", str(raises.exception)
+        )
 
         # non-tuple input
         with self.assertTypingError() as raises:
             cfunc(c, 1, c)
-        self.assertIn('expecting a non-empty tuple of arrays', str(raises.exception))
+        self.assertIn("expecting a non-empty tuple of arrays", str(raises.exception))
 
 
 @unittest.skipUnless(hasattr(np, "stack"), "this Numpy doesn't have np.stack()")
@@ -1628,17 +1742,18 @@ class TestNpStack(MemoryLeakMixin, TestCase):
     def _3d_arrays(self):
         a = np.arange(24).reshape((4, 3, 2))
         b = a + 10
-        c = (b + 10).copy(order='F')
+        c = (b + 10).copy(order="F")
         d = (c + 10)[::-1]
-        e = (d + 10)[...,::-1]
+        e = (d + 10)[..., ::-1]
         return a, b, c, d, e
 
     @contextlib.contextmanager
     def assert_invalid_sizes(self):
         with self.assertRaises(ValueError) as raises:
             yield
-        self.assertIn("all input arrays must have the same shape",
-                      str(raises.exception))
+        self.assertIn(
+            "all input arrays must have the same shape", str(raises.exception)
+        )
 
     def check_stack(self, pyfunc, cfunc, args):
         expected = pyfunc(*args)
@@ -1710,7 +1825,7 @@ class TestNpStack(MemoryLeakMixin, TestCase):
         cfunc = nrtjit(pyfunc)
 
         def generate_starargs():
-            yield()
+            yield ()
 
         self.check_3d(pyfunc, cfunc, generate_starargs)
         self.check_runtime_errors(cfunc, generate_starargs)
@@ -1732,8 +1847,9 @@ class TestNpStack(MemoryLeakMixin, TestCase):
         """
         3d and 0d tests for hstack(), vstack(), dstack().
         """
+
         def generate_starargs():
-            yield()
+            yield ()
 
         self.check_3d(pyfunc, cfunc, generate_starargs)
         # 0d
@@ -1817,13 +1933,14 @@ class TestNpStack(MemoryLeakMixin, TestCase):
             # non-tuple input
             with self.assertTypingError() as raises:
                 cfunc(c, 1, c)
-            self.assertIn('expecting a non-empty tuple of arrays', str(raises.exception))
+            self.assertIn(
+                "expecting a non-empty tuple of arrays", str(raises.exception)
+            )
 
 
 def benchmark_refct_speed():
     def pyfunc(x, y, t):
-        """Swap array x and y for t number of times
-        """
+        """Swap array x and y for t number of times"""
         for i in range(t):
             x, y = y, x
         return x, y

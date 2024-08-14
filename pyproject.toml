@@ -1,0 +1,2 @@
+[tool.black]
+extend-exclude = 'docs/source/extending/template.py'

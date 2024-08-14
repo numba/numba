@@ -14,15 +14,15 @@ from numba.tests.support import TestCase, linux_only
 import numba.misc.numba_sysinfo as nsi
 from numba.tests.gdb_support import needs_gdb
 from numba.misc.numba_gdbinfo import collect_gdbinfo
+
 # Going to mock parts of this in testing
 from numba.misc.numba_gdbinfo import _GDBTestWrapper
 
 
 def run_cmd(cmdline, env=os.environ, timeout=60):
-    popen = subprocess.Popen(cmdline,
-                             stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE,
-                             env=env)
+    popen = subprocess.Popen(
+        cmdline, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env
+    )
 
     timeout_timer = threading.Timer(timeout, popen.kill)
     try:
@@ -30,8 +30,9 @@ def run_cmd(cmdline, env=os.environ, timeout=60):
         out, err = popen.communicate()
         if popen.returncode != 0:
             raise AssertionError(
-                "process failed with code %s: stderr follows\n%s\n" %
-                (popen.returncode, err.decode()))
+                "process failed with code %s: stderr follows\n%s\n"
+                % (popen.returncode, err.decode())
+            )
         return out.decode(), err.decode()
     finally:
         timeout_timer.cancel()
@@ -60,15 +61,11 @@ class TestCLI(TestCase):
             with self.subTest(msg=f"{path} exists"):
                 self.assertTrue(os.path.exists(path))
             with self.subTest(msg="json load"):
-                with open(path, 'r') as f:
+                with open(path, "r") as f:
                     info = json.load(f)
             safe_contents = {
-                int: (
-                    nsi._cpu_count,
-                ),
-                float: (
-                    nsi._runtime,
-                ),
+                int: (nsi._cpu_count,),
+                float: (nsi._runtime,),
                 str: (
                     nsi._start,
                     nsi._start_utc,
@@ -96,9 +93,7 @@ class TestCLI(TestCase):
                     nsi._errors,
                     nsi._warnings,
                 ),
-                dict: (
-                    nsi._numba_env_vars,
-                ),
+                dict: (nsi._numba_env_vars,),
             }
             for t, keys in safe_contents.items():
                 for k in keys:
@@ -125,40 +120,34 @@ class TestGDBCLIInfo(TestCase):
         self._patches = []
 
         mock_init = lambda self: None
-        self._patches.append(mock.patch.object(_GDBTestWrapper, '__init__',
-                                               mock_init))
+        self._patches.append(mock.patch.object(_GDBTestWrapper, "__init__", mock_init))
 
-        bpath = 'numba.misc.numba_gdbinfo._GDBTestWrapper.gdb_binary'
-        self._patches.append(mock.patch(bpath, 'PATH_TO_GDB'))
+        bpath = "numba.misc.numba_gdbinfo._GDBTestWrapper.gdb_binary"
+        self._patches.append(mock.patch(bpath, "PATH_TO_GDB"))
 
         def _patch(fnstr, func):
-            self._patches.append(mock.patch.object(_GDBTestWrapper, fnstr,
-                                                   func))
+            self._patches.append(mock.patch.object(_GDBTestWrapper, fnstr, func))
 
         def mock_check_launch(self):
-            return CompletedProcess('COMMAND STRING', 0)
+            return CompletedProcess("COMMAND STRING", 0)
 
-        _patch('check_launch', mock_check_launch)
+        _patch("check_launch", mock_check_launch)
 
         # NOTE: The Python and NumPy versions are set to something unsupported!
         def mock_check_python(self):
-            return CompletedProcess('COMMAND STRING', 0,
-                                    stdout='(3, 2)',
-                                    stderr='')
+            return CompletedProcess("COMMAND STRING", 0, stdout="(3, 2)", stderr="")
 
-        _patch('check_python', mock_check_python)
+        _patch("check_python", mock_check_python)
 
         def mock_check_numpy(self):
-            return CompletedProcess('COMMAND STRING', 0, stdout='True',
-                                    stderr='')
+            return CompletedProcess("COMMAND STRING", 0, stdout="True", stderr="")
 
-        _patch('check_numpy', mock_check_numpy)
+        _patch("check_numpy", mock_check_numpy)
 
         def mock_check_numpy_version(self):
-            return CompletedProcess('COMMAND STRING', 0, stdout='1.15',
-                                    stderr='')
+            return CompletedProcess("COMMAND STRING", 0, stdout="1.15", stderr="")
 
-        _patch('check_numpy_version', mock_check_numpy_version)
+        _patch("check_numpy_version", mock_check_numpy_version)
 
         # start the patching
         for p in self._patches:
@@ -171,68 +160,69 @@ class TestGDBCLIInfo(TestCase):
 
     def test_valid(self):
         collected = collect_gdbinfo()
-        self.assertEqual(collected.binary_loc, 'PATH_TO_GDB')
+        self.assertEqual(collected.binary_loc, "PATH_TO_GDB")
         extp = os.path.exists(os.path.abspath(collected.extension_loc))
         self.assertTrue(extp)
-        self.assertEqual(collected.py_ver, '3.2')
-        self.assertEqual(collected.np_ver, '1.15')
-        self.assertIn('Full', collected.supported)
+        self.assertEqual(collected.py_ver, "3.2")
+        self.assertEqual(collected.np_ver, "1.15")
+        self.assertIn("Full", collected.supported)
 
     def test_invalid_binary(self):
 
         def mock_fn(self):
-            return CompletedProcess('INVALID_BINARY', 1)
+            return CompletedProcess("INVALID_BINARY", 1)
 
-        with mock.patch.object(_GDBTestWrapper, 'check_launch', mock_fn):
+        with mock.patch.object(_GDBTestWrapper, "check_launch", mock_fn):
             info = collect_gdbinfo()
             self.assertIn("Testing gdb binary failed.", info.binary_loc)
-            self.assertIn("gdb at 'PATH_TO_GDB' does not appear to work",
-                          info.binary_loc)
+            self.assertIn(
+                "gdb at 'PATH_TO_GDB' does not appear to work", info.binary_loc
+            )
 
     def test_no_python(self):
         def mock_fn(self):
-            return CompletedProcess('NO PYTHON', 1)
+            return CompletedProcess("NO PYTHON", 1)
 
-        with mock.patch.object(_GDBTestWrapper, 'check_python', mock_fn):
+        with mock.patch.object(_GDBTestWrapper, "check_python", mock_fn):
             collected = collect_gdbinfo()
-            self.assertEqual(collected.py_ver, 'No Python support')
-            self.assertEqual(collected.supported, 'None')
+            self.assertEqual(collected.py_ver, "No Python support")
+            self.assertEqual(collected.supported, "None")
 
     def test_unparsable_python_version(self):
         def mock_fn(self):
-            return CompletedProcess('NO PYTHON', 0, stdout='(NOT A VERSION)')
+            return CompletedProcess("NO PYTHON", 0, stdout="(NOT A VERSION)")
 
-        with mock.patch.object(_GDBTestWrapper, 'check_python', mock_fn):
+        with mock.patch.object(_GDBTestWrapper, "check_python", mock_fn):
             collected = collect_gdbinfo()
-            self.assertEqual(collected.py_ver, 'No Python support')
+            self.assertEqual(collected.py_ver, "No Python support")
 
     def test_no_numpy(self):
         def mock_fn(self):
-            return CompletedProcess('NO NUMPY', 1)
+            return CompletedProcess("NO NUMPY", 1)
 
-        with mock.patch.object(_GDBTestWrapper, 'check_numpy', mock_fn):
+        with mock.patch.object(_GDBTestWrapper, "check_numpy", mock_fn):
             collected = collect_gdbinfo()
-            self.assertEqual(collected.np_ver, 'No NumPy support')
-            self.assertEqual(collected.py_ver, '3.2')
-            self.assertIn('Partial', collected.supported)
+            self.assertEqual(collected.np_ver, "No NumPy support")
+            self.assertEqual(collected.py_ver, "3.2")
+            self.assertIn("Partial", collected.supported)
 
     def test_no_numpy_version(self):
         def mock_fn(self):
-            return CompletedProcess('NO NUMPY VERSION', 1)
+            return CompletedProcess("NO NUMPY VERSION", 1)
 
-        with mock.patch.object(_GDBTestWrapper, 'check_numpy_version', mock_fn):
+        with mock.patch.object(_GDBTestWrapper, "check_numpy_version", mock_fn):
             collected = collect_gdbinfo()
-            self.assertEqual(collected.np_ver, 'Unknown')
+            self.assertEqual(collected.np_ver, "Unknown")
 
     def test_traceback_in_numpy_version(self):
         def mock_fn(self):
-            return CompletedProcess('NO NUMPY VERSION', 0,
-                                    stdout='(NOT A VERSION)',
-                                    stderr='Traceback')
+            return CompletedProcess(
+                "NO NUMPY VERSION", 0, stdout="(NOT A VERSION)", stderr="Traceback"
+            )
 
-        with mock.patch.object(_GDBTestWrapper, 'check_numpy_version', mock_fn):
+        with mock.patch.object(_GDBTestWrapper, "check_numpy_version", mock_fn):
             collected = collect_gdbinfo()
-            self.assertEqual(collected.np_ver, 'Unknown')
+            self.assertEqual(collected.np_ver, "Unknown")
 
 
 @linux_only
@@ -244,7 +234,7 @@ class TestGDBCLIInfoBrokenGdbs(TestCase):
     def test_cannot_find_gdb_from_name(self):
         # Tests that supplying an invalid gdb binary name is handled ok
         env = os.environ.copy()
-        env['NUMBA_GDB_BINARY'] = 'THIS_IS_NOT_A_VALID_GDB_BINARY_NAME'
+        env["NUMBA_GDB_BINARY"] = "THIS_IS_NOT_A_VALID_GDB_BINARY_NAME"
         cmdline = [sys.executable, "-m", "numba", "-g"]
         stdout, stderr = run_cmd(cmdline, env=env)
         self.assertIn("Testing gdb binary failed", stdout)
@@ -256,8 +246,8 @@ class TestGDBCLIInfoBrokenGdbs(TestCase):
         env = os.environ.copy()
         with TemporaryDirectory() as d:
             # This wont exist as a path...
-            path = os.path.join(d, 'CANNOT_EXIST')
-            env['NUMBA_GDB_BINARY'] = path
+            path = os.path.join(d, "CANNOT_EXIST")
+            env["NUMBA_GDB_BINARY"] = path
             cmdline = [sys.executable, "-m", "numba", "-g"]
             stdout, stderr = run_cmd(cmdline, env=env)
             self.assertIn("Testing gdb binary failed", stdout)
@@ -267,7 +257,7 @@ class TestGDBCLIInfoBrokenGdbs(TestCase):
     def test_nonsense_gdb_binary(self):
         # Tests that a nonsense binary specified as gdb it picked up ok
         env = os.environ.copy()
-        env['NUMBA_GDB_BINARY'] = 'python' # 'python' isn't gdb!
+        env["NUMBA_GDB_BINARY"] = "python"  # 'python' isn't gdb!
         cmdline = [sys.executable, "-m", "numba", "-g"]
         stdout, stderr = run_cmd(cmdline, env=env)
         self.assertIn("Testing gdb binary failed", stdout)
@@ -277,5 +267,5 @@ class TestGDBCLIInfoBrokenGdbs(TestCase):
         self.assertIn("Unknown option", stdout)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

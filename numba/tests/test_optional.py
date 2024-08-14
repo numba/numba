@@ -88,7 +88,12 @@ class TestOptional(TestCase):
 
     def test_return_bool_optional_or_none(self):
         pyfunc = return_bool_optional_or_none
-        cfunc = njit((types.int32, types.int32,))(pyfunc)
+        cfunc = njit(
+            (
+                types.int32,
+                types.int32,
+            )
+        )(pyfunc)
 
         for x, y in itertools.product((0, 1, 2), (0, 1)):
             self.assertPreciseEqual(pyfunc(x, y), cfunc(x, y))
@@ -129,8 +134,8 @@ class TestOptional(TestCase):
                 return x + y
 
         cfunc = njit("(float64, optional(float64))")(pyfunc)
-        self.assertAlmostEqual(pyfunc(1., 12.3), cfunc(1., 12.3))
-        self.assertAlmostEqual(pyfunc(1., None), cfunc(1., None))
+        self.assertAlmostEqual(pyfunc(1.0, 12.3), cfunc(1.0, 12.3))
+        self.assertAlmostEqual(pyfunc(1.0, None), cfunc(1.0, None))
 
     def test_optional_array(self):
         def pyfunc(x, y):
@@ -143,9 +148,9 @@ class TestOptional(TestCase):
         cfunc = njit("(float32, optional(float32[:]))")(pyfunc)
         cy = np.array([12.3], dtype=np.float32)
         py = cy.copy()
-        self.assertAlmostEqual(pyfunc(1., py), cfunc(1., cy))
+        self.assertAlmostEqual(pyfunc(1.0, py), cfunc(1.0, cy))
         np.testing.assert_almost_equal(py, cy)
-        self.assertAlmostEqual(pyfunc(1., None), cfunc(1., None))
+        self.assertAlmostEqual(pyfunc(1.0, None), cfunc(1.0, None))
 
     def test_optional_array_error(self):
         def pyfunc(y):
@@ -154,16 +159,16 @@ class TestOptional(TestCase):
         cfunc = njit("(optional(int32[:]),)")(pyfunc)
         with self.assertRaises(TypeError) as raised:
             cfunc(None)
-        self.assertIn('expected array(int32, 1d, A), got None',
-                      str(raised.exception))
+        self.assertIn("expected array(int32, 1d, A), got None", str(raised.exception))
 
-        y = np.array([0xabcd], dtype=np.int32)
+        y = np.array([0xABCD], dtype=np.int32)
         self.assertEqual(cfunc(y), pyfunc(y))
 
     def test_optional_array_attribute(self):
         """
         Check that we can access attribute of an optional
         """
+
         def pyfunc(arr, do_it):
             opt = None
             if do_it:  # forces `opt` to be an optional of arr
@@ -178,6 +183,7 @@ class TestOptional(TestCase):
         """
         Check that we can assign to a variable of optional type
         """
+
         @njit
         def make_optional(val, get_none):
             if get_none:
@@ -214,6 +220,7 @@ class TestOptional(TestCase):
         """
         Issue 2171
         """
+
         def pyfunc(x):
             if x is None:
                 return
@@ -232,6 +239,7 @@ class TestOptional(TestCase):
         """
         Issue #4058
         """
+
         @njit
         def foo(maybe):
             lx = None
@@ -250,5 +258,5 @@ class TestOptional(TestCase):
         work()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

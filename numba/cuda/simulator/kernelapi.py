@@ -1,7 +1,7 @@
-'''
+"""
 Implements the cuda module as called from within an executing kernel
 (@cuda.jit-decorated function).
-'''
+"""
 
 from contextlib import contextmanager
 import sys
@@ -16,19 +16,20 @@ from .vector_types import vector_types
 
 
 class Dim3(object):
-    '''
+    """
     Used to implement thread/block indices/dimensions
-    '''
+    """
+
     def __init__(self, x, y, z):
         self.x = x
         self.y = y
         self.z = z
 
     def __str__(self):
-        return '(%s, %s, %s)' % (self.x, self.y, self.z)
+        return "(%s, %s, %s)" % (self.x, self.y, self.z)
 
     def __repr__(self):
-        return 'Dim3(%s, %s, %s)' % (self.x, self.y, self.z)
+        return "Dim3(%s, %s, %s)" % (self.x, self.y, self.z)
 
     def __iter__(self):
         yield self.x
@@ -37,9 +38,9 @@ class Dim3(object):
 
 
 class GridGroup:
-    '''
+    """
     Used to implement the grid group.
-    '''
+    """
 
     def sync(self):
         # Synchronization of the grid group is equivalent to synchronization of
@@ -49,17 +50,19 @@ class GridGroup:
 
 
 class FakeCUDACg:
-    '''
+    """
     CUDA Cooperative Groups
-    '''
+    """
+
     def this_grid(self):
         return GridGroup()
 
 
 class FakeCUDALocal(object):
-    '''
+    """
     CUDA Local arrays
-    '''
+    """
+
     def array(self, shape, dtype):
         if isinstance(dtype, types.Type):
             dtype = numpy_support.as_dtype(dtype)
@@ -67,15 +70,16 @@ class FakeCUDALocal(object):
 
 
 class FakeCUDAConst(object):
-    '''
+    """
     CUDA Const arrays
-    '''
+    """
+
     def array_like(self, ary):
         return ary
 
 
 class FakeCUDAShared(object):
-    '''
+    """
     CUDA Shared arrays.
 
     Limitations: assumes that only one call to cuda.shared.array is on a line,
@@ -90,7 +94,7 @@ class FakeCUDAShared(object):
 
     will alias all arrays created at that point (though it is not certain that
     this would be supported by Numba anyway).
-    '''
+    """
 
     def __init__(self, dynshared_size):
         self._allocations = {}
@@ -274,13 +278,13 @@ class FakeCUDAFp16(object):
         return np.exp2(x, dtype=np.float16)
 
     def hexp10(self, x):
-        return np.float16(10 ** x)
+        return np.float16(10**x)
 
     def hsqrt(self, x):
         return np.sqrt(x, dtype=np.float16)
 
     def hrsqrt(self, x):
-        return np.float16(x ** -0.5)
+        return np.float16(x**-0.5)
 
     def hceil(self, x):
         return np.ceil(x, dtype=np.float16)
@@ -323,7 +327,7 @@ class FakeCUDAFp16(object):
 
 
 class FakeCUDAModule(object):
-    '''
+    """
     An instance of this class will be injected into the __globals__ for an
     executing function in order to implement calls to cuda.*. This will fail to
     work correctly if the user code does::
@@ -331,7 +335,7 @@ class FakeCUDAModule(object):
         from numba import cuda as something_else
 
     In other words, the CUDA module must be called cuda.
-    '''
+    """
 
     def __init__(self, grid_dim, block_dim, dynshared_size):
         self.gridDim = Dim3(*grid_dim)
@@ -426,11 +430,11 @@ class FakeCUDAModule(object):
         return a ** (1 / 3)
 
     def brev(self, val):
-        return int('{:032b}'.format(val)[::-1], 2)
+        return int("{:032b}".format(val)[::-1], 2)
 
     def clz(self, val):
-        s = '{:032b}'.format(val)
-        return len(s) - len(s.lstrip('0'))
+        s = "{:032b}".format(val)
+        return len(s) - len(s.lstrip("0"))
 
     def ffs(self, val):
         # The algorithm is:
@@ -438,8 +442,8 @@ class FakeCUDAModule(object):
         # 2. Add 1, because the LSB is numbered 1 rather than 0, and so on.
         # 3. If we've counted 32 zeros (resulting in 33), there were no bits
         #    set so we need to return zero.
-        s = '{:032b}'.format(val)
-        r = (len(s) - len(s.rstrip('0')) + 1) % 33
+        s = "{:032b}".format(val)
+        r = (len(s) - len(s.rstrip("0")) + 1) % 33
         return r
 
     def selp(self, a, b, c):

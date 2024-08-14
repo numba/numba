@@ -3,8 +3,6 @@ from numba.core.utils import _RedirectSubpackage
 from numba.core import config
 
 if config.USE_LEGACY_TYPE_SYSTEM:
-    sys.modules[__name__] = _RedirectSubpackage(locals(),
-                                                "numba.cpython.old_hashing")
+    sys.modules[__name__] = _RedirectSubpackage(locals(), "numba.cpython.old_hashing")
 else:
-    sys.modules[__name__] = _RedirectSubpackage(locals(),
-                                                "numba.cpython.new_hashing")
+    sys.modules[__name__] = _RedirectSubpackage(locals(), "numba.cpython.new_hashing")

@@ -30,7 +30,7 @@ def fancy_array_modify(x):
 
 class TestBoundsCheckNoError(MemoryLeakMixin, TestCase):
 
-    @TestCase.run_test_in_subprocess(envvars={'NUMBA_BOUNDSCHECK': ''})
+    @TestCase.run_test_in_subprocess(envvars={"NUMBA_BOUNDSCHECK": ""})
     def test_basic_array_boundscheck(self):
         self.assertIsNone(config.BOUNDSCHECK)
 
@@ -47,7 +47,7 @@ class TestBoundsCheckNoError(MemoryLeakMixin, TestCase):
         noboundscheck(a)
         # boundscheck(a) is tested in TestBoundsCheckError below
 
-    @TestCase.run_test_in_subprocess(envvars={'NUMBA_BOUNDSCHECK': ''})
+    @TestCase.run_test_in_subprocess(envvars={"NUMBA_BOUNDSCHECK": ""})
     def test_slice_array_boundscheck(self):
         self.assertIsNone(config.BOUNDSCHECK)
 
@@ -72,7 +72,7 @@ class TestBoundsCheckNoError(MemoryLeakMixin, TestCase):
         # Doesn't raise
         boundscheck(b)
 
-    @TestCase.run_test_in_subprocess(envvars={'NUMBA_BOUNDSCHECK': ''})
+    @TestCase.run_test_in_subprocess(envvars={"NUMBA_BOUNDSCHECK": ""})
     def test_fancy_indexing_boundscheck(self):
         self.assertIsNone(config.BOUNDSCHECK)
 
@@ -101,10 +101,11 @@ class TestBoundsCheckNoError(MemoryLeakMixin, TestCase):
 
 class TestNoCudaBoundsCheck(SerialMixin, TestCase):
     @unittest.skipIf(not cuda.is_available(), "NO CUDA")
-    @TestCase.run_test_in_subprocess(envvars={'NUMBA_BOUNDSCHECK': '1'})
+    @TestCase.run_test_in_subprocess(envvars={"NUMBA_BOUNDSCHECK": "1"})
     def test_no_cuda_boundscheck(self):
         self.assertTrue(config.BOUNDSCHECK)
         with self.assertRaises(NotImplementedError):
+
             @cuda.jit(boundscheck=True)
             def func():
                 pass
@@ -130,7 +131,7 @@ class TestNoCudaBoundsCheck(SerialMixin, TestCase):
 # This is a separate test because the jitted functions that raise exceptions
 # have memory leaks.
 class TestBoundsCheckError(TestCase):
-    @TestCase.run_test_in_subprocess(envvars={'NUMBA_BOUNDSCHECK': ''})
+    @TestCase.run_test_in_subprocess(envvars={"NUMBA_BOUNDSCHECK": ""})
     def test_basic_array_boundscheck(self):
         self.assertIsNone(config.BOUNDSCHECK)
 
@@ -147,7 +148,7 @@ class TestBoundsCheckError(TestCase):
         with self.assertRaises(IndexError):
             boundscheck(a)
 
-    @TestCase.run_test_in_subprocess(envvars={'NUMBA_BOUNDSCHECK': ''})
+    @TestCase.run_test_in_subprocess(envvars={"NUMBA_BOUNDSCHECK": ""})
     def test_slice_array_boundscheck(self):
         self.assertIsNone(config.BOUNDSCHECK)
 
@@ -167,7 +168,7 @@ class TestBoundsCheckError(TestCase):
         with self.assertRaises(IndexError):
             boundscheck(a)
 
-    @TestCase.run_test_in_subprocess(envvars={'NUMBA_BOUNDSCHECK': ''})
+    @TestCase.run_test_in_subprocess(envvars={"NUMBA_BOUNDSCHECK": ""})
     def test_fancy_indexing_boundscheck(self):
         self.assertIsNone(config.BOUNDSCHECK)
 
@@ -188,7 +189,7 @@ class TestBoundsCheckError(TestCase):
         with self.assertRaises(IndexError):
             boundscheck(a)
 
-    @TestCase.run_test_in_subprocess(envvars={'NUMBA_BOUNDSCHECK': ''})
+    @TestCase.run_test_in_subprocess(envvars={"NUMBA_BOUNDSCHECK": ""})
     def test_fancy_indexing_with_modification_boundscheck(self):
         self.assertIsNone(config.BOUNDSCHECK)
 
@@ -228,7 +229,7 @@ class TestBoundsEnvironmentVariable(TestCase):
         self.off = off
         self.on = on
 
-    @TestCase.run_test_in_subprocess(envvars={'NUMBA_BOUNDSCHECK': ''})
+    @TestCase.run_test_in_subprocess(envvars={"NUMBA_BOUNDSCHECK": ""})
     def test_boundscheck_unset(self):
         self.assertIsNone(config.BOUNDSCHECK)
 
@@ -241,7 +242,7 @@ class TestBoundsEnvironmentVariable(TestCase):
         with self.assertRaises(IndexError):
             self.on(a)
 
-    @TestCase.run_test_in_subprocess(envvars={'NUMBA_BOUNDSCHECK': '1'})
+    @TestCase.run_test_in_subprocess(envvars={"NUMBA_BOUNDSCHECK": "1"})
     def test_boundscheck_enabled(self):
         self.assertTrue(config.BOUNDSCHECK)
 
@@ -252,7 +253,7 @@ class TestBoundsEnvironmentVariable(TestCase):
             self.off(a)
             self.on(a)
 
-    @TestCase.run_test_in_subprocess(envvars={'NUMBA_BOUNDSCHECK': '0'})
+    @TestCase.run_test_in_subprocess(envvars={"NUMBA_BOUNDSCHECK": "0"})
     def test_boundscheck_disabled(self):
         self.assertFalse(config.BOUNDSCHECK)
 
@@ -264,5 +265,5 @@ class TestBoundsEnvironmentVariable(TestCase):
         self.on(a)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

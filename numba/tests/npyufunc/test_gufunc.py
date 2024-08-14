@@ -21,11 +21,11 @@ def matmulcore(A, B, C):
 
 
 def axpy(a, x, y, out):
-    out[0] = a * x  + y
+    out[0] = a * x + y
 
 
 class TestGUFunc(TestCase):
-    target = 'cpu'
+    target = "cpu"
 
     def check_matmul_gufunc(self, gufunc):
         matrix_ct = 1001
@@ -38,17 +38,18 @@ class TestGUFunc(TestCase):
         np.testing.assert_allclose(C, Gold, rtol=1e-5, atol=1e-8)
 
     def test_gufunc(self):
-        gufunc = GUVectorize(matmulcore, '(m,n),(n,p)->(m,p)',
-                             target=self.target)
+        gufunc = GUVectorize(matmulcore, "(m,n),(n,p)->(m,p)", target=self.target)
         gufunc.add((float32[:, :], float32[:, :], float32[:, :]))
         gufunc = gufunc.build_ufunc()
 
         self.check_matmul_gufunc(gufunc)
 
     def test_guvectorize_decor(self):
-        gufunc = guvectorize([void(float32[:,:], float32[:,:], float32[:,:])],
-                             '(m,n),(n,p)->(m,p)',
-                             target=self.target)(matmulcore)
+        gufunc = guvectorize(
+            [void(float32[:, :], float32[:, :], float32[:, :])],
+            "(m,n),(n,p)->(m,p)",
+            target=self.target,
+        )(matmulcore)
 
         self.check_matmul_gufunc(gufunc)
 
@@ -56,8 +57,8 @@ class TestGUFunc(TestCase):
         # Test problem that the stride of "scalar" gufunc argument not properly
         # handled when the actual argument is an array,
         # causing the same value (first value) being repeated.
-        gufunc = GUVectorize(axpy, '(), (), () -> ()', target=self.target)
-        gufunc.add('(intp, intp, intp, intp[:])')
+        gufunc = GUVectorize(axpy, "(), (), () -> ()", target=self.target)
+        gufunc.add("(intp, intp, intp, intp[:])")
         gufunc = gufunc.build_ufunc()
 
         x = np.arange(10, dtype=np.intp)
@@ -85,7 +86,7 @@ class TestGUFunc(TestCase):
         np.testing.assert_equal(out_kw, expected)
 
     def test_docstring(self):
-        @guvectorize([(int64[:], int64, int64[:])], '(n),()->(n)')
+        @guvectorize([(int64[:], int64, int64[:])], "(n),()->(n)")
         def gufunc(x, y, res):
             "docstring for gufunc"
             for i in range(x.shape[0]):
@@ -93,16 +94,17 @@ class TestGUFunc(TestCase):
 
         self.assertEqual("numba.tests.npyufunc.test_gufunc", gufunc.__module__)
         self.assertEqual("gufunc", gufunc.__name__)
-        self.assertEqual("TestGUFunc.test_docstring.<locals>.gufunc", gufunc.__qualname__)
+        self.assertEqual(
+            "TestGUFunc.test_docstring.<locals>.gufunc", gufunc.__qualname__
+        )
         self.assertEqual("docstring for gufunc", gufunc.__doc__)
 
 
 class TestMultipleOutputs(TestCase):
-    target = 'cpu'
+    target = "cpu"
 
     def test_multiple_outputs_same_type_passed_in(self):
-        @guvectorize('(x)->(x),(x)',
-                     target=self.target)
+        @guvectorize("(x)->(x),(x)", target=self.target)
         def copy(A, B, C):
             for i in range(B.size):
                 B[i] = A[i]
@@ -117,8 +119,7 @@ class TestMultipleOutputs(TestCase):
 
     def test_multiple_outputs_distinct_values(self):
 
-        @guvectorize('(x)->(x),(x)',
-                     target=self.target)
+        @guvectorize("(x)->(x),(x)", target=self.target)
         def copy_and_double(A, B, C):
             for i in range(B.size):
                 B[i] = A[i]
@@ -133,8 +134,7 @@ class TestMultipleOutputs(TestCase):
 
     def test_multiple_output_dtypes(self):
 
-        @guvectorize('(x)->(x),(x)',
-                     target=self.target)
+        @guvectorize("(x)->(x),(x)", target=self.target)
         def copy_and_multiply(A, B, C):
             for i in range(B.size):
                 B[i] = A[i]
@@ -148,7 +148,7 @@ class TestMultipleOutputs(TestCase):
         np.testing.assert_allclose(A * np.float64(1.5), C)
 
     def test_incorrect_number_of_pos_args(self):
-        @guvectorize('(m),(m)->(m),(m)', target=self.target)
+        @guvectorize("(m),(m)->(m),(m)", target=self.target)
         def f(x, y, z, w):
             pass
 
@@ -168,11 +168,11 @@ class TestMultipleOutputs(TestCase):
 
 class TestGUFuncParallel(TestGUFunc):
     _numba_parallel_test_ = False
-    target = 'parallel'
+    target = "parallel"
 
 
 class TestDynamicGUFunc(TestCase):
-    target = 'cpu'
+    target = "cpu"
 
     def test_dynamic_matmul(self):
 
@@ -181,8 +181,9 @@ class TestDynamicGUFunc(TestCase):
             gufunc(A, B, C)
             np.testing.assert_allclose(C, Gold, rtol=1e-5, atol=1e-8)
 
-        gufunc = GUVectorize(matmulcore, '(m,n),(n,p)->(m,p)',
-                             target=self.target, is_dynamic=True)
+        gufunc = GUVectorize(
+            matmulcore, "(m,n),(n,p)->(m,p)", target=self.target, is_dynamic=True
+        )
         matrix_ct = 10
         Ai64 = np.arange(matrix_ct * 2 * 4, dtype=np.int64).reshape(matrix_ct, 2, 4)
         Bi64 = np.arange(matrix_ct * 4 * 5, dtype=np.int64).reshape(matrix_ct, 4, 5)
@@ -195,7 +196,6 @@ class TestDynamicGUFunc(TestCase):
         check_matmul_gufunc(gufunc, A, B, C)  # trigger compilation
 
         self.assertEqual(len(gufunc.types), 2)  # ensure two versions of gufunc
-
 
     def test_dynamic_ufunc_like(self):
 
@@ -211,11 +211,11 @@ class TestDynamicGUFunc(TestCase):
         # Test problem that the stride of "scalar" gufunc argument not properly
         # handled when the actual argument is an array,
         # causing the same value (first value) being repeated.
-        gufunc = GUVectorize(axpy, '(), (), () -> ()', target=self.target,
-                             is_dynamic=True)
+        gufunc = GUVectorize(
+            axpy, "(), (), () -> ()", target=self.target, is_dynamic=True
+        )
         x = np.arange(10, dtype=np.intp)
         check_ufunc_output(gufunc, x)
-
 
     def test_dynamic_scalar_output(self):
         """
@@ -223,9 +223,9 @@ class TestDynamicGUFunc(TestCase):
         a pointer to the output location.
         """
 
-        @guvectorize('(n)->()', target=self.target, nopython=True)
+        @guvectorize("(n)->()", target=self.target, nopython=True)
         def sum_row(inp, out):
-            tmp = 0.
+            tmp = 0.0
             for i in range(inp.shape[0]):
                 tmp += inp[i]
             out[()] = tmp
@@ -276,7 +276,7 @@ class TestDynamicGUFunc(TestCase):
                 res[i] = acc
 
         # ensure gufunc exports attributes
-        attrs = ['signature', 'accumulate', 'at', 'outer', 'reduce', 'reduceat']
+        attrs = ["signature", "accumulate", "at", "outer", "reduce", "reduceat"]
         for attr in attrs:
             contains = hasattr(gufunc, attr)
             self.assertTrue(contains, 'dynamic gufunc not exporting "%s"' % (attr,))
@@ -293,22 +293,31 @@ class TestDynamicGUFunc(TestCase):
 
         with self.assertRaises(RuntimeError) as raises:
             gufunc.accumulate(a)
-        self.assertEqual(str(raises.exception), "Reduction not defined on ufunc with signature")
+        self.assertEqual(
+            str(raises.exception), "Reduction not defined on ufunc with signature"
+        )
 
         with self.assertRaises(RuntimeError) as raises:
             gufunc.reduce(a)
-        self.assertEqual(str(raises.exception), "Reduction not defined on ufunc with signature")
+        self.assertEqual(
+            str(raises.exception), "Reduction not defined on ufunc with signature"
+        )
 
         with self.assertRaises(RuntimeError) as raises:
             gufunc.reduceat(a, [0, 2])
-        self.assertEqual(str(raises.exception), "Reduction not defined on ufunc with signature")
+        self.assertEqual(
+            str(raises.exception), "Reduction not defined on ufunc with signature"
+        )
 
         with self.assertRaises(TypeError) as raises:
             gufunc.outer(a, a)
-        self.assertEqual(str(raises.exception), "method outer is not allowed in ufunc with non-trivial signature")
+        self.assertEqual(
+            str(raises.exception),
+            "method outer is not allowed in ufunc with non-trivial signature",
+        )
 
     def test_gufunc_attributes2(self):
-        @guvectorize('(),()->()')
+        @guvectorize("(),()->()")
         def add(x, y, res):
             res[0] = x + y
 
@@ -338,7 +347,8 @@ class TestGUVectorizeScalar(TestCase):
     """
     Nothing keeps user from out-of-bound memory access
     """
-    target = 'cpu'
+
+    target = "cpu"
 
     def test_scalar_output(self):
         """
@@ -346,10 +356,11 @@ class TestGUVectorizeScalar(TestCase):
         a pointer to the output location.
         """
 
-        @guvectorize(['void(int32[:], int32[:])'], '(n)->()',
-                     target=self.target, nopython=True)
+        @guvectorize(
+            ["void(int32[:], int32[:])"], "(n)->()", target=self.target, nopython=True
+        )
         def sum_row(inp, out):
-            tmp = 0.
+            tmp = 0.0
             for i in range(inp.shape[0]):
                 tmp += inp[i]
             out[()] = tmp
@@ -367,8 +378,12 @@ class TestGUVectorizeScalar(TestCase):
 
     def test_scalar_input(self):
 
-        @guvectorize(['int32[:], int32[:], int32[:]'], '(n),()->(n)',
-                     target=self.target, nopython=True)
+        @guvectorize(
+            ["int32[:], int32[:], int32[:]"],
+            "(n),()->(n)",
+            target=self.target,
+            nopython=True,
+        )
         def foo(inp, n, out):
             for i in range(inp.shape[0]):
                 out[i] = inp[i] * n[0]
@@ -385,9 +400,9 @@ class TestGUVectorizeScalar(TestCase):
             for i in range(inp.size):
                 out[i] = n * (inp[i] + 1)
 
-        my_gufunc = guvectorize(['int32[:], int32, int32[:]'],
-                                '(n),()->(n)',
-                                target=self.target)(pyfunc)
+        my_gufunc = guvectorize(
+            ["int32[:], int32, int32[:]"], "(n),()->(n)", target=self.target
+        )(pyfunc)
 
         # test single core loop execution
         arr = np.arange(10).astype(np.int32)
@@ -410,32 +425,38 @@ class TestGUVectorizeScalar(TestCase):
 
     def test_scalar_input_core_type_error(self):
         with self.assertRaises(TypeError) as raises:
-            @guvectorize(['int32[:], int32, int32[:]'], '(n),(n)->(n)',
-                         target=self.target)
+
+            @guvectorize(
+                ["int32[:], int32, int32[:]"], "(n),(n)->(n)", target=self.target
+            )
             def pyfunc(a, b, c):
                 pass
-        self.assertEqual("scalar type int32 given for non scalar argument #2",
-                         str(raises.exception))
+
+        self.assertEqual(
+            "scalar type int32 given for non scalar argument #2", str(raises.exception)
+        )
 
     def test_ndim_mismatch(self):
         with self.assertRaises(TypeError) as raises:
-            @guvectorize(['int32[:], int32[:]'], '(m,n)->(n)',
-                         target=self.target)
+
+            @guvectorize(["int32[:], int32[:]"], "(m,n)->(n)", target=self.target)
             def pyfunc(a, b):
                 pass
-        self.assertEqual("type and shape signature mismatch for arg #1",
-                         str(raises.exception))
+
+        self.assertEqual(
+            "type and shape signature mismatch for arg #1", str(raises.exception)
+        )
 
 
 class TestGUVectorizeScalarParallel(TestGUVectorizeScalar):
     _numba_parallel_test_ = False
-    target = 'parallel'
+    target = "parallel"
 
 
 class TestGUVectorizePickling(TestCase):
     def test_pickle_gufunc_non_dyanmic(self):
-        """Non-dynamic gufunc.
-        """
+        """Non-dynamic gufunc."""
+
         @guvectorize(["f8,f8[:]"], "()->()")
         def double(x, out):
             out[:] = x * 2
@@ -448,8 +469,7 @@ class TestGUVectorizePickling(TestCase):
         self.assertEqual(cloned._frozen, double._frozen)
         self.assertEqual(cloned.identity, double.identity)
         self.assertEqual(cloned.is_dynamic, double.is_dynamic)
-        self.assertEqual(cloned.gufunc_builder._sigs,
-                         double.gufunc_builder._sigs)
+        self.assertEqual(cloned.gufunc_builder._sigs, double.gufunc_builder._sigs)
         # expected value of attributes
         self.assertTrue(cloned._frozen)
 
@@ -463,8 +483,8 @@ class TestGUVectorizePickling(TestCase):
         self.assertPreciseEqual(double(arr), cloned(arr))
 
     def test_pickle_gufunc_dyanmic_null_init(self):
-        """Dynamic gufunc w/o prepopulating before pickling.
-        """
+        """Dynamic gufunc w/o prepopulating before pickling."""
+
         @guvectorize("()->()", identity=1)
         def double(x, out):
             out[:] = x * 2
@@ -477,8 +497,7 @@ class TestGUVectorizePickling(TestCase):
         self.assertEqual(cloned._frozen, double._frozen)
         self.assertEqual(cloned.identity, double.identity)
         self.assertEqual(cloned.is_dynamic, double.is_dynamic)
-        self.assertEqual(cloned.gufunc_builder._sigs,
-                         double.gufunc_builder._sigs)
+        self.assertEqual(cloned.gufunc_builder._sigs, double.gufunc_builder._sigs)
         # expected value of attributes
         self.assertFalse(cloned._frozen)
 
@@ -502,6 +521,7 @@ class TestGUVectorizePickling(TestCase):
         Once unpickled, we disable compilation to verify that the gufunc
         compilation state is carried over.
         """
+
         @guvectorize("()->()", identity=1)
         def double(x, out):
             out[:] = x * 2
@@ -524,8 +544,7 @@ class TestGUVectorizePickling(TestCase):
         self.assertEqual(cloned._frozen, double._frozen)
         self.assertEqual(cloned.identity, double.identity)
         self.assertEqual(cloned.is_dynamic, double.is_dynamic)
-        self.assertEqual(cloned.gufunc_builder._sigs,
-                         double.gufunc_builder._sigs)
+        self.assertEqual(cloned.gufunc_builder._sigs, double.gufunc_builder._sigs)
         # expected value of attributes
         self.assertFalse(cloned._frozen)
 
@@ -547,22 +566,21 @@ class TestGUVectorizePickling(TestCase):
 
 
 class TestGUVectorizeJit(TestCase):
-    target = 'cpu'
+    target = "cpu"
 
     def check_add_gufunc(self, gufunc):
         @jit(nopython=True)
         def jit_add(x, y, res):
             gufunc(x, y, res)
 
-        x = np.arange(40, dtype='i8').reshape(4, 2, 5)
+        x = np.arange(40, dtype="i8").reshape(4, 2, 5)
         y = np.int32(100)
         res = np.zeros_like(x)
         jit_add(x, y, res)
         self.assertPreciseEqual(res, x + y)
 
     def test_add_static(self):
-        @guvectorize('int64[:], int64, int64[:]', '(n),()->(n)',
-                     target=self.target)
+        @guvectorize("int64[:], int64, int64[:]", "(n),()->(n)", target=self.target)
         def add(x, y, res):
             for i in range(x.shape[0]):
                 res[i] = x[i] + y
@@ -571,8 +589,7 @@ class TestGUVectorizeJit(TestCase):
 
     def test_add_static_cast_args(self):
         # cast the second argument from i32 -> i64
-        @guvectorize('int64[:], int64, int64[:]', '(n),()->(n)',
-                     target=self.target)
+        @guvectorize("int64[:], int64, int64[:]", "(n),()->(n)", target=self.target)
         def add(x, y, res):
             for i in range(x.shape[0]):
                 res[i] = x[i] + y
@@ -580,7 +597,7 @@ class TestGUVectorizeJit(TestCase):
         self.check_add_gufunc(add)
 
     def test_add_dynamic(self):
-        @guvectorize('(n),()->(n)', target=self.target)
+        @guvectorize("(n),()->(n)", target=self.target)
         def add(x, y, res):
             for i in range(x.shape[0]):
                 res[i] = x[i] + y
@@ -589,7 +606,7 @@ class TestGUVectorizeJit(TestCase):
 
     @unittest.expectedFailure
     def test_object_mode(self):
-        @guvectorize('(n),()->(n)', target=self.target, forceobj=True)
+        @guvectorize("(n),()->(n)", target=self.target, forceobj=True)
         def add(x, y, res):
             for i in range(x.shape[0]):
                 res[i] = x[i] + y
@@ -609,8 +626,7 @@ class TestGUVectorizeJit(TestCase):
 
     def test_njit_matmul_call(self):
 
-        gufunc = guvectorize('(m,n),(n,p)->(m,p)',
-                             target=self.target)(matmulcore)
+        gufunc = guvectorize("(m,n),(n,p)->(m,p)", target=self.target)(matmulcore)
 
         @jit(nopython=True)
         def matmul_jit(A, B, C):
@@ -619,8 +635,9 @@ class TestGUVectorizeJit(TestCase):
         self.check_matmul(matmul_jit)
 
     def test_axpy(self):
-        gufunc = GUVectorize(axpy, '(),(),() -> ()', target=self.target,
-                             is_dynamic=True)
+        gufunc = GUVectorize(
+            axpy, "(),(),() -> ()", target=self.target, is_dynamic=True
+        )
 
         @jit(nopython=True)
         def axpy_jit(a, x, y, out):
@@ -633,7 +650,7 @@ class TestGUVectorizeJit(TestCase):
 
     def test_output_scalar(self):
 
-        @guvectorize('(n),(m) -> ()')
+        @guvectorize("(n),(m) -> ()")
         def gufunc(x, y, res):
             res[0] = x.sum() + y.sum()
 
@@ -641,9 +658,9 @@ class TestGUVectorizeJit(TestCase):
         def jit_func(x, y, res):
             gufunc(x, y, res)
 
-        x = np.arange(40, dtype='i8').reshape(4, 10)
-        y = np.arange(20, dtype='i8')
-        res = np.zeros(4, dtype='i8')
+        x = np.arange(40, dtype="i8").reshape(4, 10)
+        y = np.arange(20, dtype="i8")
+        res = np.zeros(4, dtype="i8")
         jit_func(x, y, res)
         expected = np.zeros_like(res)
         gufunc(x, y, expected)
@@ -651,7 +668,7 @@ class TestGUVectorizeJit(TestCase):
 
     def test_input_scalar(self):
 
-        @guvectorize('() -> ()')
+        @guvectorize("() -> ()")
         def gufunc(x, res):
             res[0] = x + 100
 
@@ -659,7 +676,7 @@ class TestGUVectorizeJit(TestCase):
         def jit_func(x, res):
             gufunc(x, res)
 
-        x = np.arange(40, dtype='i8').reshape(5, 2, 4)
+        x = np.arange(40, dtype="i8").reshape(5, 2, 4)
         res = np.zeros_like(x)
         jit_func(x, res)
         expected = np.zeros_like(res)
@@ -668,6 +685,7 @@ class TestGUVectorizeJit(TestCase):
 
     def test_gufunc_ndim_mismatch(self):
         signature = "(n, m), (n, n, n) -> (m), (n, n)"
+
         @guvectorize(signature)
         def bar(x, y, res, out):
             res[0] = 123
@@ -687,33 +705,41 @@ class TestGUVectorizeJit(TestCase):
         with self.assertRaises(TypingError) as raises:
             x_ = np.arange(N * N)
             foo(x_, y, res, out)
-        msg = ('bar: Input operand 0 does not have enough dimensions (has '
-               f'1, gufunc core with signature {signature} requires 2)')
+        msg = (
+            "bar: Input operand 0 does not have enough dimensions (has "
+            f"1, gufunc core with signature {signature} requires 2)"
+        )
         self.assertIn(msg, str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
             y_ = np.arange(N * N).reshape(N, N)
             foo(x, y_, res, out)
-        msg = ('bar: Input operand 1 does not have enough dimensions (has '
-               f'2, gufunc core with signature {signature} requires 3)')
+        msg = (
+            "bar: Input operand 1 does not have enough dimensions (has "
+            f"2, gufunc core with signature {signature} requires 3)"
+        )
         self.assertIn(msg, str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
             res_ = np.array(3)
             foo(x, y, res_, out)
-        msg = ('bar: Output operand 0 does not have enough dimensions (has '
-               f'0, gufunc core with signature {signature} requires 1)')
+        msg = (
+            "bar: Output operand 0 does not have enough dimensions (has "
+            f"0, gufunc core with signature {signature} requires 1)"
+        )
         self.assertIn(msg, str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
             out_ = np.arange(N)
             foo(x, y, res, out_)
-        msg = ('bar: Output operand 1 does not have enough dimensions (has '
-               f'1, gufunc core with signature {signature} requires 2)')
+        msg = (
+            "bar: Output operand 1 does not have enough dimensions (has "
+            f"1, gufunc core with signature {signature} requires 2)"
+        )
         self.assertIn(msg, str(raises.exception))
 
     def test_mismatch_inner_dimensions(self):
-        @guvectorize('(n),(n) -> ()')
+        @guvectorize("(n),(n) -> ()")
         def bar(x, y, res):
             res[0] = 123
 
@@ -730,17 +756,19 @@ class TestGUVectorizeJit(TestCase):
         # ensure that NumPy raises an exception
         with self.assertRaises(ValueError) as np_raises:
             bar(x, y, res)
-        msg = ('Input operand 1 has a mismatch in its core dimension 0, with '
-               'gufunc signature (n),(n) -> () (size 3 is different from 2)')
+        msg = (
+            "Input operand 1 has a mismatch in its core dimension 0, with "
+            "gufunc signature (n),(n) -> () (size 3 is different from 2)"
+        )
         self.assertIn(msg, str(np_raises.exception))
 
         with self.assertRaises(ValueError) as raises:
             foo(x, y, res)
-        msg = ('Operand has a mismatch in one of its core dimensions')
+        msg = "Operand has a mismatch in one of its core dimensions"
         self.assertIn(msg, str(raises.exception))
 
     def test_mismatch_inner_dimensions_input_output(self):
-        @guvectorize('(n),(m) -> (n)')
+        @guvectorize("(n),(m) -> (n)")
         def bar(x, y, res):
             res[0] = 123
 
@@ -757,17 +785,19 @@ class TestGUVectorizeJit(TestCase):
         # ensure that NumPy raises an exception
         with self.assertRaises(ValueError) as np_raises:
             bar(x, y, res)
-        msg = ('Output operand 0 has a mismatch in its core dimension 0, with '
-               'gufunc signature (n),(m) -> (n) (size 3 is different from 2)')
+        msg = (
+            "Output operand 0 has a mismatch in its core dimension 0, with "
+            "gufunc signature (n),(m) -> (n) (size 3 is different from 2)"
+        )
         self.assertIn(msg, str(np_raises.exception))
 
         with self.assertRaises(ValueError) as raises:
             foo(x, y, res)
-        msg = ('Operand has a mismatch in one of its core dimensions')
+        msg = "Operand has a mismatch in one of its core dimensions"
         self.assertIn(msg, str(raises.exception))
 
     def test_mismatch_inner_dimensions_output(self):
-        @guvectorize('(n),(m) -> (m),(m)')
+        @guvectorize("(n),(m) -> (m),(m)")
         def bar(x, y, res, out):
             res[0] = 123
             out[0] = 456
@@ -786,17 +816,19 @@ class TestGUVectorizeJit(TestCase):
         # ensure that NumPy raises an exception
         with self.assertRaises(ValueError) as np_raises:
             bar(x, y, res, out)
-        msg = ('Output operand 0 has a mismatch in its core dimension 0, with '
-               'gufunc signature (n),(m) -> (m),(m) (size 2 is different from 3)')
+        msg = (
+            "Output operand 0 has a mismatch in its core dimension 0, with "
+            "gufunc signature (n),(m) -> (m),(m) (size 2 is different from 3)"
+        )
         self.assertIn(msg, str(np_raises.exception))
 
         with self.assertRaises(ValueError) as raises:
             foo(x, y, res, out)
-        msg = ('Operand has a mismatch in one of its core dimensions')
+        msg = "Operand has a mismatch in one of its core dimensions"
         self.assertIn(msg, str(raises.exception))
 
     def test_mismatch_loop_shape(self):
-        @guvectorize('(n),(n) -> ()')
+        @guvectorize("(n),(n) -> ()")
         def bar(x, y, res):
             res[0] = 123
 
@@ -805,17 +837,30 @@ class TestGUVectorizeJit(TestCase):
             bar(x, y, res)
 
         N = 2
-        x = np.empty((1, 5, 3, N,))
-        y = np.empty((5, 3, N,))
+        x = np.empty(
+            (
+                1,
+                5,
+                3,
+                N,
+            )
+        )
+        y = np.empty(
+            (
+                5,
+                3,
+                N,
+            )
+        )
         res = np.zeros((5, 3))
 
         with self.assertRaises(ValueError) as raises:
             foo(x, y, res)
-        msg = ('Loop and array shapes are incompatible')
+        msg = "Loop and array shapes are incompatible"
         self.assertIn(msg, str(raises.exception))
 
     def test_mismatch_loop_shape_2(self):
-        @guvectorize('(n),(n) -> (), (n)')
+        @guvectorize("(n),(n) -> (), (n)")
         def gufunc(x, y, res, out):
             res[0] = x.sum()
             for i in range(x.shape[0]):
@@ -827,7 +872,7 @@ class TestGUVectorizeJit(TestCase):
 
         N = 2
 
-        x = np.arange(4*N).reshape((4, N))
+        x = np.arange(4 * N).reshape((4, N))
         y = np.arange(N)
         res = np.empty((3,))
         out = np.zeros((3, N))
@@ -835,15 +880,18 @@ class TestGUVectorizeJit(TestCase):
         # ensure that NumPy raises an exception
         with self.assertRaises(ValueError) as np_raises:
             gufunc(x, y, res, out)
-        msg = ('operands could not be broadcast together with remapped shapes '
-               '[original->remapped]: (4,2)->(4,newaxis) (2,)->() '
-               '(3,)->(3,newaxis) (3,2)->(3,2)  and requested shape (2)')
+        msg = (
+            "operands could not be broadcast together with remapped shapes "
+            "[original->remapped]: (4,2)->(4,newaxis) (2,)->() "
+            "(3,)->(3,newaxis) (3,2)->(3,2)  and requested shape (2)"
+        )
         self.assertIn(msg, str(np_raises.exception))
 
         with self.assertRaises(ValueError) as raises:
             jit_func(x, y, res, out)
-        msg = ('Loop and array shapes are incompatible')
+        msg = "Loop and array shapes are incompatible"
         self.assertIn(msg, str(raises.exception))
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

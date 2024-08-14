@@ -5,8 +5,7 @@ from numba.core import types
 
 
 class DataModelManager(object):
-    """Manages mapping of FE types to their corresponding data model
-    """
+    """Manages mapping of FE types to their corresponding data model"""
 
     def __init__(self, handlers=None):
         """
@@ -21,14 +20,12 @@ class DataModelManager(object):
         self._cache = weakref.WeakKeyDictionary()
 
     def register(self, fetypecls, handler):
-        """Register the datamodel factory corresponding to a frontend-type class
-        """
+        """Register the datamodel factory corresponding to a frontend-type class"""
         assert issubclass(fetypecls, types.Type)
         self._handlers[fetypecls] = handler
 
     def lookup(self, fetype):
-        """Returns the corresponding datamodel given the frontend-type instance
-        """
+        """Returns the corresponding datamodel given the frontend-type instance"""
         try:
             return self._cache[fetype]
         except KeyError:
@@ -38,8 +35,7 @@ class DataModelManager(object):
         return model
 
     def __getitem__(self, fetype):
-        """Shorthand for lookup()
-        """
+        """Shorthand for lookup()"""
         return self.lookup(fetype)
 
     def copy(self):
@@ -65,4 +61,3 @@ class DataModelManager(object):
         """
         chained = ChainMap(self._handlers, other_manager._handlers)
         return DataModelManager(chained)
-

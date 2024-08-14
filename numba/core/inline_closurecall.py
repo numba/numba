@@ -2,8 +2,7 @@ import types as pytypes  # avoid confusion with numba.types
 import copy
 import ctypes
 import numba.core.analysis
-from numba.core import (types, typing, errors, ir, rewrites, config, ir_utils,
-                        cgutils)
+from numba.core import types, typing, errors, ir, rewrites, config, ir_utils, cgutils
 from numba.parfors.parfor import internal_prange
 from numba.core.ir_utils import (
     next_label,
@@ -29,7 +28,8 @@ from numba.core.ir_utils import (
 from numba.core.analysis import (
     compute_cfg_from_blocks,
     compute_use_defs,
-    compute_live_variables)
+    compute_live_variables,
+)
 from numba.core.imputils import impl_ret_untracked
 from numba.core.extending import intrinsic
 from numba.core.typing import signature
@@ -50,8 +50,7 @@ enable_inline_arraycall = True
 
 
 def callee_ir_validator(func_ir):
-    """Checks the IR of a callee is supported for inlining
-    """
+    """Checks the IR of a callee is supported for inlining"""
     for blk in func_ir.blocks.values():
         for stmt in blk.find_insts(ir.Assign):
             if isinstance(stmt.value, ir.Yield):
@@ -64,12 +63,12 @@ def _created_inlined_var_name(function_name, var_name):
     variable name. It does this "safely" to avoid the use of characters that are
     illegal in python variable names as there are occasions when function
     generation needs valid python name tokens."""
-    inlined_name = f'{function_name}.{var_name}'
+    inlined_name = f"{function_name}.{var_name}"
     # Replace angle brackets, e.g. "<locals>" is replaced with "_locals_"
-    new_name = inlined_name.replace('<', '_').replace('>', '_')
+    new_name = inlined_name.replace("<", "_").replace(">", "_")
     # The version "version" of the closure function e.g. foo$2 (id 2) is
     # rewritten as "foo_v2". Further "." is also replaced with "_".
-    new_name = new_name.replace('.', '_').replace('$', '_v')
+    new_name = new_name.replace(".", "_").replace("$", "_v")
     return new_name
 
 
@@ -86,8 +85,7 @@ class InlineClosureCallPass(object):
         self.typed = typed
 
     def run(self):
-        """Run inline closure call pass.
-        """
+        """Run inline closure call pass."""
         # Analysis relies on ir.Del presence, strip out later
         pp = postproc.PostProcessor(self.func_ir)
         pp.run(True)
@@ -101,23 +99,21 @@ class InlineClosureCallPass(object):
             for i, instr in enumerate(block.body):
                 if isinstance(instr, ir.Assign):
                     expr = instr.value
-                    if isinstance(expr, ir.Expr) and expr.op == 'call':
+                    if isinstance(expr, ir.Expr) and expr.op == "call":
                         call_name = guard(find_callname, self.func_ir, expr)
-                        func_def = guard(get_definition, self.func_ir,
-                                         expr.func)
+                        func_def = guard(get_definition, self.func_ir, expr.func)
 
-                        if guard(self._inline_reduction,
-                                 work_list, block, i, expr, call_name):
+                        if guard(
+                            self._inline_reduction, work_list, block, i, expr, call_name
+                        ):
                             modified = True
-                            break # because block structure changed
+                            break  # because block structure changed
 
-                        if guard(self._inline_closure,
-                                 work_list, block, i, func_def):
+                        if guard(self._inline_closure, work_list, block, i, func_def):
                             modified = True
-                            break # because block structure changed
+                            break  # because block structure changed
 
-                        if guard(self._inline_stencil,
-                                 instr, call_name, func_def):
+                        if guard(self._inline_stencil, instr, call_name, func_def):
                             modified = True
 
         if enable_inline_arraycall:
@@ -132,12 +128,18 @@ class InlineClosureCallPass(object):
             sized_loops = [(k, len(loops[k].body)) for k in loops.keys()]
             visited = []
             # We go over all loops, bigger loops first (outer first)
-            for k, s in sorted(sized_loops, key=lambda tup: tup[1],
-                               reverse=True):
+            for k, s in sorted(sized_loops, key=lambda tup: tup[1], reverse=True):
                 visited.append(k)
-                if guard(_inline_arraycall, self.func_ir, cfg, visited,
-                         loops[k], self.swapped,
-                         self.parallel_options.comprehension, self.typed):
+                if guard(
+                    _inline_arraycall,
+                    self.func_ir,
+                    cfg,
+                    visited,
+                    loops[k],
+                    self.swapped,
+                    self.parallel_options.comprehension,
+                    self.typed,
+                ):
                     modified = True
             if modified:
                 _fix_nested_array(self.func_ir)
@@ -164,12 +166,15 @@ class InlineClosureCallPass(object):
         # only inline reduction in sequential execution, parallel handling
         # is done in ParforPass.
         require(not self.parallel_options.reduction)
-        require(call_name == ('reduce', 'builtins') or
-                call_name == ('reduce', '_functools'))
+        require(
+            call_name == ("reduce", "builtins") or call_name == ("reduce", "_functools")
+        )
         if len(expr.args) not in (2, 3):
-            raise TypeError("invalid reduce call, "
-                            "two arguments are required (optional initial "
-                            "value can also be specified)")
+            raise TypeError(
+                "invalid reduce call, "
+                "two arguments are required (optional initial "
+                "value can also be specified)"
+            )
         check_reduce_func(self.func_ir, expr.args[0])
 
         def reduce_func(f, A, v=None):
@@ -183,58 +188,66 @@ class InlineClosureCallPass(object):
             return s
 
         inline_closure_call(
-            self.func_ir, self.func_ir.func_id.func.__globals__,
-            block, i, reduce_func, work_list=work_list,
-            callee_validator=callee_ir_validator
+            self.func_ir,
+            self.func_ir.func_id.func.__globals__,
+            block,
+            i,
+            reduce_func,
+            work_list=work_list,
+            callee_validator=callee_ir_validator,
         )
         return True
 
     def _inline_stencil(self, instr, call_name, func_def):
         from numba.stencils.stencil import StencilFunc
+
         lhs = instr.target
         expr = instr.value
         # We keep the escaping variables of the stencil kernel
         # alive by adding them to the actual kernel call as extra
         # keyword arguments, which is ignored anyway.
-        if (isinstance(func_def, ir.Global) and
-                func_def.name == 'stencil' and
-                isinstance(func_def.value, StencilFunc)):
+        if (
+            isinstance(func_def, ir.Global)
+            and func_def.name == "stencil"
+            and isinstance(func_def.value, StencilFunc)
+        ):
             if expr.kws:
                 expr.kws += func_def.value.kws
             else:
                 expr.kws = func_def.value.kws
             return True
         # Otherwise we proceed to check if it is a call to numba.stencil
-        require(call_name == ('stencil', 'numba.stencils.stencil') or
-                call_name == ('stencil', 'numba'))
+        require(
+            call_name == ("stencil", "numba.stencils.stencil")
+            or call_name == ("stencil", "numba")
+        )
         require(expr not in self._processed_stencils)
         self._processed_stencils.append(expr)
         if not len(expr.args) == 1:
-            raise ValueError("As a minimum Stencil requires"
-                             " a kernel as an argument")
+            raise ValueError("As a minimum Stencil requires" " a kernel as an argument")
         stencil_def = guard(get_definition, self.func_ir, expr.args[0])
-        require(isinstance(stencil_def, ir.Expr) and
-                stencil_def.op == "make_function")
-        kernel_ir = get_ir_of_code(self.func_ir.func_id.func.__globals__,
-                                   stencil_def.code)
+        require(isinstance(stencil_def, ir.Expr) and stencil_def.op == "make_function")
+        kernel_ir = get_ir_of_code(
+            self.func_ir.func_id.func.__globals__, stencil_def.code
+        )
         options = dict(expr.kws)
-        if 'neighborhood' in options:
+        if "neighborhood" in options:
             fixed = guard(self._fix_stencil_neighborhood, options)
             if not fixed:
                 raise ValueError(
                     "stencil neighborhood option should be a tuple"
                     " with constant structure such as ((-w, w),)"
                 )
-        if 'index_offsets' in options:
+        if "index_offsets" in options:
             fixed = guard(self._fix_stencil_index_offsets, options)
             if not fixed:
                 raise ValueError(
                     "stencil index_offsets option should be a tuple"
                     " with constant structure such as (offset, )"
                 )
-        sf = StencilFunc(kernel_ir, 'constant', options)
-        sf.kws = expr.kws # hack to keep variables live
-        sf_global = ir.Global('stencil', sf, expr.loc)
+        sf = StencilFunc(kernel_ir, "constant", options)
+        sf.kws = expr.kws  # hack to keep variables live
+        sf_global = ir.Global("stencil", sf, expr.loc)
         self.func_ir._definitions[lhs.name] = [sf_global]
         instr.value = sf_global
         return True
@@ -245,14 +258,14 @@ class InlineClosureCallPass(object):
         from the program IR to provide a tuple to StencilFunc.
         """
         # build_tuple node with neighborhood for each dimension
-        dims_build_tuple = get_definition(self.func_ir, options['neighborhood'])
-        require(hasattr(dims_build_tuple, 'items'))
+        dims_build_tuple = get_definition(self.func_ir, options["neighborhood"])
+        require(hasattr(dims_build_tuple, "items"))
         res = []
         for window_var in dims_build_tuple.items:
             win_build_tuple = get_definition(self.func_ir, window_var)
-            require(hasattr(win_build_tuple, 'items'))
+            require(hasattr(win_build_tuple, "items"))
             res.append(tuple(win_build_tuple.items))
-        options['neighborhood'] = tuple(res)
+        options["neighborhood"] = tuple(res)
         return True
 
     def _fix_stencil_index_offsets(self, options):
@@ -260,18 +273,22 @@ class InlineClosureCallPass(object):
         Extract the tuple representing the stencil index offsets
         from the program IR to provide to StencilFunc.
         """
-        offset_tuple = get_definition(self.func_ir, options['index_offsets'])
-        require(hasattr(offset_tuple, 'items'))
-        options['index_offsets'] = tuple(offset_tuple.items)
+        offset_tuple = get_definition(self.func_ir, options["index_offsets"])
+        require(hasattr(offset_tuple, "items"))
+        options["index_offsets"] = tuple(offset_tuple.items)
         return True
 
     def _inline_closure(self, work_list, block, i, func_def):
-        require(isinstance(func_def, ir.Expr) and
-                func_def.op == "make_function")
-        inline_closure_call(self.func_ir,
-                            self.func_ir.func_id.func.__globals__,
-                            block, i, func_def, work_list=work_list,
-                            callee_validator=callee_ir_validator)
+        require(isinstance(func_def, ir.Expr) and func_def.op == "make_function")
+        inline_closure_call(
+            self.func_ir,
+            self.func_ir.func_id.func.__globals__,
+            block,
+            i,
+            func_def,
+            work_list=work_list,
+            callee_validator=callee_ir_validator,
+        )
         return True
 
 
@@ -280,42 +297,42 @@ def check_reduce_func(func_ir, func_var):
     for inlining. Returns the function itself"""
     reduce_func = guard(get_definition, func_ir, func_var)
     if reduce_func is None:
-        raise ValueError("Reduce function cannot be found for njit \
-                            analysis")
+        raise ValueError(
+            "Reduce function cannot be found for njit \
+                            analysis"
+        )
     if isinstance(reduce_func, (ir.FreeVar, ir.Global)):
-        if not isinstance(reduce_func.value,
-                          numba.core.registry.CPUDispatcher):
+        if not isinstance(reduce_func.value, numba.core.registry.CPUDispatcher):
             raise ValueError("Invalid reduction function")
         # pull out the python function for inlining
         reduce_func = reduce_func.value.py_func
-    elif not (hasattr(reduce_func, 'code')
-              or hasattr(reduce_func, '__code__')):
+    elif not (hasattr(reduce_func, "code") or hasattr(reduce_func, "__code__")):
         raise ValueError("Invalid reduction function")
-    f_code = (reduce_func.code
-              if hasattr(reduce_func, 'code')
-              else reduce_func.__code__)
+    f_code = reduce_func.code if hasattr(reduce_func, "code") else reduce_func.__code__
     if not f_code.co_argcount == 2:
         raise TypeError("Reduction function should take 2 arguments")
     return reduce_func
 
 
 class InlineWorker(object):
-    """ A worker class for inlining, this is a more advanced version of
+    """A worker class for inlining, this is a more advanced version of
     `inline_closure_call` in that it permits inlining from function type, Numba
     IR and code object. It also, runs the entire untyped compiler pipeline on
     the inlinee to ensure that it is transformed as though it were compiled
     directly.
     """
 
-    def __init__(self,
-                 typingctx=None,
-                 targetctx=None,
-                 locals=None,
-                 pipeline=None,
-                 flags=None,
-                 validator=callee_ir_validator,
-                 typemap=None,
-                 calltypes=None):
+    def __init__(
+        self,
+        typingctx=None,
+        targetctx=None,
+        locals=None,
+        pipeline=None,
+        flags=None,
+        validator=callee_ir_validator,
+        typemap=None,
+        calltypes=None,
+    ):
         """
         Instantiate a new InlineWorker, all arguments are optional though some
         must be supplied together for certain use cases. The methods will refuse
@@ -325,6 +342,7 @@ class InlineWorker(object):
         (this is optional and really to just provide better error messages about
         things which the inliner cannot handle like yield in closure).
         """
+
         def check(arg, name):
             if arg is None:
                 raise TypeError("{} must not be None".format(name))
@@ -336,12 +354,12 @@ class InlineWorker(object):
         compiler_args = (targetctx, locals, pipeline, flags)
         compiler_group = [x is not None for x in compiler_args]
         if any(compiler_group) and not all(compiler_group):
-            check(targetctx, 'targetctx')
-            check(locals, 'locals')
-            check(pipeline, 'pipeline')
-            check(flags, 'flags')
+            check(targetctx, "targetctx")
+            check(locals, "locals")
+            check(pipeline, "pipeline")
+            check(flags, "flags")
         elif all(compiler_group):
-            check(typingctx, 'typingctx')
+            check(typingctx, "typingctx")
 
         self._compiler_pipeline = DefaultPassBuilder.define_untyped_pipeline
 
@@ -358,16 +376,17 @@ class InlineWorker(object):
         pair = (typemap, calltypes)
         pair_is_none = [x is None for x in pair]
         if any(pair_is_none) and not all(pair_is_none):
-            msg = ("typemap and calltypes must both be either None or have a "
-                   "value, got: %s, %s")
+            msg = (
+                "typemap and calltypes must both be either None or have a "
+                "value, got: %s, %s"
+            )
             raise TypeError(msg % pair)
         self._permit_update_type_and_call_maps = not all(pair_is_none)
         self.typemap = typemap
         self.calltypes = calltypes
 
-    def inline_ir(self, caller_ir, block, i, callee_ir, callee_freevars,
-                  arg_typs=None):
-        """ Inlines the callee_ir in the caller_ir at statement index i of block
+    def inline_ir(self, caller_ir, block, i, callee_ir, callee_freevars, arg_typs=None):
+        """Inlines the callee_ir in the caller_ir at statement index i of block
         `block`, callee_freevars are the free variables for the callee_ir. If
         the callee_ir is derived from a function `func` then this is
         `func.__code__.co_freevars`. If `arg_typs` is given and the InlineWorker
@@ -418,13 +437,14 @@ class InlineWorker(object):
         callee_scopes = _get_all_scopes(callee_blocks)
         self.debug_print("callee_scopes = ", callee_scopes)
         #    one function should only have one local scope
-        assert (len(callee_scopes) == 1)
+        assert len(callee_scopes) == 1
         callee_scope = callee_scopes[0]
         var_dict = {}
         for var in tuple(callee_scope.localvars._con.values()):
             if not (var.name in callee_freevars):
                 inlined_name = _created_inlined_var_name(
-                    callee_ir.func_id.unique_name, var.name)
+                    callee_ir.func_id.unique_name, var.name
+                )
                 # Update the caller scope with the new names
                 new_var = scope.redefine(inlined_name, loc=var.loc)
                 # Also update the callee scope with the new names. Should the
@@ -440,13 +460,12 @@ class InlineWorker(object):
 
         # 3. replace formal parameters with actual arguments
         callee_func = callee_ir.func_id.func
-        args = _get_callee_args(call_expr, callee_func, block.body[i].loc,
-                                caller_ir)
+        args = _get_callee_args(call_expr, callee_func, block.body[i].loc, caller_ir)
 
         # 4. Update typemap
         if self._permit_update_type_and_call_maps:
             if arg_typs is None:
-                raise TypeError('arg_typs should have a value not None')
+                raise TypeError("arg_typs should have a value not None")
             self.update_type_and_call_maps(callee_ir, arg_typs)
             # update_type_and_call_maps replaces blocks
             callee_blocks = callee_ir.blocks
@@ -458,7 +477,7 @@ class InlineWorker(object):
         # 5. split caller blocks into two
         new_blocks = []
         new_block = ir.Block(scope, block.loc)
-        new_block.body = block.body[i + 1:]
+        new_block.body = block.body[i + 1 :]
         new_label = next_label()
         caller_ir.blocks[new_label] = new_block
         new_blocks.append((new_label, new_block))
@@ -470,8 +489,10 @@ class InlineWorker(object):
         _replace_returns(callee_blocks, instr.target, new_label)
 
         # remove the old definition of instr.target too
-        if (instr.target.name in caller_ir._definitions
-                and call_expr in caller_ir._definitions[instr.target.name]):
+        if (
+            instr.target.name in caller_ir._definitions
+            and call_expr in caller_ir._definitions[instr.target.name]
+        ):
             # NOTE: target can have multiple definitions due to control flow
             caller_ir._definitions[instr.target.name].remove(call_expr)
 
@@ -489,15 +510,16 @@ class InlineWorker(object):
         return callee_ir_original, callee_blocks, var_dict, new_blocks
 
     def inline_function(self, caller_ir, block, i, function, arg_typs=None):
-        """ Inlines the function in the caller_ir at statement index i of block
+        """Inlines the function in the caller_ir at statement index i of block
         `block`. If `arg_typs` is given and the InlineWorker instance was
         initialized with a typemap and calltypes then they will be appropriately
         updated based on the arg_typs.
         """
         callee_ir = self.run_untyped_passes(function)
         freevars = function.__code__.co_freevars
-        return self.inline_ir(caller_ir, block, i, callee_ir, freevars,
-                              arg_typs=arg_typs)
+        return self.inline_ir(
+            caller_ir, block, i, callee_ir, freevars, arg_typs=arg_typs
+        )
 
     def run_untyped_passes(self, func, enable_ssa=False):
         """
@@ -511,6 +533,7 @@ class InlineWorker(object):
         from numba.core.untyped_passes import ExtractByteCode
         from numba.core import bytecode
         from numba.parfors.parfor import ParforDiagnostics
+
         state = StateDict()
         state.func_ir = None
         state.typingctx = self.typingctx
@@ -542,31 +565,35 @@ class InlineWorker(object):
         return state.func_ir
 
     def update_type_and_call_maps(self, callee_ir, arg_typs):
-        """ Updates the type and call maps based on calling callee_ir with
+        """Updates the type and call maps based on calling callee_ir with
         arguments from arg_typs"""
         from numba.core.ssa import reconstruct_ssa
         from numba.core.typed_passes import PreLowerStripPhis
 
         if not self._permit_update_type_and_call_maps:
-            msg = ("InlineWorker instance not configured correctly, typemap or "
-                   "calltypes missing in initialization.")
+            msg = (
+                "InlineWorker instance not configured correctly, typemap or "
+                "calltypes missing in initialization."
+            )
             raise ValueError(msg)
         from numba.core import typed_passes
+
         # call branch pruning to simplify IR and avoid inference errors
         callee_ir._definitions = ir_utils.build_definitions(callee_ir.blocks)
         numba.core.analysis.dead_branch_prune(callee_ir, arg_typs)
         # callee's typing may require SSA
         callee_ir = reconstruct_ssa(callee_ir)
         callee_ir._definitions = ir_utils.build_definitions(callee_ir.blocks)
-        [f_typemap,
-         _f_return_type,
-         f_calltypes, _] = typed_passes.type_inference_stage(
-            self.typingctx, self.targetctx, callee_ir, arg_typs, None,
+        [f_typemap, _f_return_type, f_calltypes, _] = typed_passes.type_inference_stage(
+            self.typingctx,
+            self.targetctx,
+            callee_ir,
+            arg_typs,
+            None,
         )
         callee_ir = PreLowerStripPhis()._strip_phi_nodes(callee_ir)
         callee_ir._definitions = ir_utils.build_definitions(callee_ir.blocks)
-        canonicalize_array_math(callee_ir, f_typemap,
-                                f_calltypes, self.typingctx)
+        canonicalize_array_math(callee_ir, f_typemap, f_calltypes, self.typingctx)
         # remove argument entries like arg.a from typemap
         arg_names = [vname for vname in f_typemap if vname.startswith("arg.")]
         for a in arg_names:
@@ -575,10 +602,21 @@ class InlineWorker(object):
         self.calltypes.update(f_calltypes)
 
 
-def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
-                        targetctx=None, arg_typs=None, typemap=None,
-                        calltypes=None, work_list=None, callee_validator=None,
-                        replace_freevars=True):
+def inline_closure_call(
+    func_ir,
+    glbls,
+    block,
+    i,
+    callee,
+    typingctx=None,
+    targetctx=None,
+    arg_typs=None,
+    typemap=None,
+    calltypes=None,
+    work_list=None,
+    callee_validator=None,
+    replace_freevars=True,
+):
     """Inline the body of `callee` at its callsite (`i`-th instruction of
     `block`)
 
@@ -602,12 +640,14 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     debug_print = _make_debug_print("inline_closure_call")
     debug_print("Found closure call: ", instr, " with callee = ", callee)
     # support both function object and make_function Expr
-    callee_code = callee.code if hasattr(callee, 'code') else callee.__code__
-    callee_closure = (callee.closure
-                      if hasattr(callee, 'closure') else callee.__closure__)
+    callee_code = callee.code if hasattr(callee, "code") else callee.__code__
+    callee_closure = (
+        callee.closure if hasattr(callee, "closure") else callee.__closure__
+    )
     # first, get the IR of the callee
     if isinstance(callee, pytypes.FunctionType):
         from numba.core import compiler
+
         callee_ir = compiler.run_frontend(callee, inline_closures=True)
     else:
         callee_ir = get_ir_of_code(glbls, callee_code)
@@ -636,13 +676,14 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     callee_scopes = _get_all_scopes(callee_blocks)
     debug_print("callee_scopes = ", callee_scopes)
     #    one function should only have one local scope
-    assert (len(callee_scopes) == 1)
+    assert len(callee_scopes) == 1
     callee_scope = callee_scopes[0]
     var_dict = {}
     for var in callee_scope.localvars._con.values():
         if not (var.name in callee_code.co_freevars):
             inlined_name = _created_inlined_var_name(
-                callee_ir.func_id.unique_name, var.name)
+                callee_ir.func_id.unique_name, var.name
+            )
             new_var = scope.redefine(inlined_name, loc=var.loc)
             var_dict[var.name] = new_var
     debug_print("var_dict = ", var_dict)
@@ -666,29 +707,32 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
             cellget.argtypes = (ctypes.py_object,)
             items = tuple(cellget(x) for x in closure)
         else:
-            assert (isinstance(closure, ir.Expr)
-                    and closure.op == 'build_tuple')
+            assert isinstance(closure, ir.Expr) and closure.op == "build_tuple"
             items = closure.items
-        assert (len(callee_code.co_freevars) == len(items))
+        assert len(callee_code.co_freevars) == len(items)
         _replace_freevars(callee_blocks, items)
         debug_print("After closure rename")
         _debug_dump(callee_ir)
 
     if typingctx:
         from numba.core import typed_passes
+
         # call branch pruning to simplify IR and avoid inference errors
         callee_ir._definitions = ir_utils.build_definitions(callee_ir.blocks)
         numba.core.analysis.dead_branch_prune(callee_ir, arg_typs)
         try:
-            [f_typemap, f_return_type,
-             f_calltypes, _] = typed_passes.type_inference_stage(
-                typingctx, targetctx, callee_ir, arg_typs, None)
+            [f_typemap, f_return_type, f_calltypes, _] = (
+                typed_passes.type_inference_stage(
+                    typingctx, targetctx, callee_ir, arg_typs, None
+                )
+            )
         except Exception:
-            [f_typemap, f_return_type,
-             f_calltypes, _] = typed_passes.type_inference_stage(
-                typingctx, targetctx, callee_ir, arg_typs, None)
-        canonicalize_array_math(callee_ir, f_typemap,
-                                f_calltypes, typingctx)
+            [f_typemap, f_return_type, f_calltypes, _] = (
+                typed_passes.type_inference_stage(
+                    typingctx, targetctx, callee_ir, arg_typs, None
+                )
+            )
+        canonicalize_array_math(callee_ir, f_typemap, f_calltypes, typingctx)
         # remove argument entries like arg.a from typemap
         arg_names = [vname for vname in f_typemap if vname.startswith("arg.")]
         for a in arg_names:
@@ -700,7 +744,7 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     # 5. split caller blocks into two
     new_blocks = []
     new_block = ir.Block(scope, block.loc)
-    new_block.body = block.body[i + 1:]
+    new_block.body = block.body[i + 1 :]
     new_label = next_label()
     func_ir.blocks[new_label] = new_block
     new_blocks.append((new_label, new_block))
@@ -712,8 +756,10 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     _replace_returns(callee_blocks, instr.target, new_label)
 
     # remove the old definition of instr.target too
-    if (instr.target.name in func_ir._definitions
-            and call_expr in func_ir._definitions[instr.target.name]):
+    if (
+        instr.target.name in func_ir._definitions
+        and call_expr in func_ir._definitions[instr.target.name]
+    ):
         # NOTE: target can have multiple definitions due to control flow
         func_ir._definitions[instr.target.name].remove(call_expr)
 
@@ -738,12 +784,12 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
     """Get arguments for calling 'callee', including the default arguments.
     keyword arguments are currently only handled when 'callee' is a function.
     """
-    if call_expr.op == 'call':
+    if call_expr.op == "call":
         args = list(call_expr.args)
         if call_expr.vararg:
             msg = "Calling a closure with *args is unsupported."
             raise errors.UnsupportedError(msg, call_expr.loc)
-    elif call_expr.op == 'getattr':
+    elif call_expr.op == "getattr":
         args = [call_expr.value]
     elif ir_utils.is_operator_or_getitem(call_expr):
         args = call_expr.list_vars()
@@ -762,20 +808,22 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
         # TODO: handle stararg
         def stararg_handler(index, param, default):
             raise NotImplementedError(
-                "Stararg not supported in inliner for arg {} {}".format(
-                    index, param))
-        if call_expr.op == 'call':
+                "Stararg not supported in inliner for arg {} {}".format(index, param)
+            )
+
+        if call_expr.op == "call":
             kws = dict(call_expr.kws)
         else:
             kws = {}
         return numba.core.typing.fold_arguments(
-            pysig, args, kws, normal_handler, default_handler,
-            stararg_handler)
+            pysig, args, kws, normal_handler, default_handler, stararg_handler
+        )
     else:
         # TODO: handle arguments for make_function case similar to function
         # case above
-        callee_defaults = (callee.defaults if hasattr(callee, 'defaults')
-                           else callee.__defaults__)
+        callee_defaults = (
+            callee.defaults if hasattr(callee, "defaults") else callee.__defaults__
+        )
         if callee_defaults:
             debug_print("defaults = ", callee_defaults)
             if isinstance(callee_defaults, tuple):  # Python 3.5
@@ -788,18 +836,18 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
                         # inlinable functions
                         defaults_list.append(ir.Const(value=x, loc=loc))
                 args = args + defaults_list
-            elif (isinstance(callee_defaults, ir.Var)
-                    or isinstance(callee_defaults, str)):
+            elif isinstance(callee_defaults, ir.Var) or isinstance(
+                callee_defaults, str
+            ):
                 default_tuple = func_ir.get_definition(callee_defaults)
-                assert (isinstance(default_tuple, ir.Expr))
-                assert (default_tuple.op == "build_tuple")
-                const_vals = [func_ir.get_definition(x) for
-                              x in default_tuple.items]
+                assert isinstance(default_tuple, ir.Expr)
+                assert default_tuple.op == "build_tuple"
+                const_vals = [func_ir.get_definition(x) for x in default_tuple.items]
                 args = args + const_vals
             else:
                 raise NotImplementedError(
-                    "Unsupported defaults to make_function: {}".format(
-                        callee_defaults))
+                    "Unsupported defaults to make_function: {}".format(callee_defaults)
+                )
         return args
 
 
@@ -807,6 +855,7 @@ def _make_debug_print(prefix):
     def debug_print(*args):
         if config.DEBUG_INLINE_CLOSURE:
             print(prefix + ": " + "".join(str(x) for x in args))
+
     return debug_print
 
 
@@ -816,8 +865,7 @@ def _debug_dump(func_ir):
 
 
 def _get_all_scopes(blocks):
-    """Get all block-local scopes from an IR.
-    """
+    """Get all block-local scopes from an IR."""
     all_scopes = []
     for label, block in blocks.items():
         if not (block.scope in all_scopes):
@@ -834,7 +882,7 @@ def _replace_args_with(blocks, args):
         for stmt in assigns:
             if isinstance(stmt.value, ir.Arg):
                 idx = stmt.value.index
-                assert (idx < len(args))
+                assert idx < len(args)
                 stmt.value = args[idx]
 
 
@@ -847,7 +895,7 @@ def _replace_freevars(blocks, args):
         for stmt in assigns:
             if isinstance(stmt.value, ir.FreeVar):
                 idx = stmt.value.index
-                assert (idx < len(args))
+                assert idx < len(args)
                 if isinstance(args[idx], ir.Var):
                     stmt.value = args[idx]
                 else:
@@ -863,16 +911,18 @@ def _replace_returns(blocks, target, return_label):
         for i in range(len(block.body)):
             stmt = block.body[i]
             if isinstance(stmt, ir.Return):
-                assert (i + 1 == len(block.body))
+                assert i + 1 == len(block.body)
                 block.body[i] = ir.Assign(stmt.value, target, stmt.loc)
                 block.body.append(ir.Jump(return_label, stmt.loc))
                 # remove cast of the returned value
                 for cast in casts:
                     if cast.target.name == stmt.value.name:
                         cast.value = cast.value.value
-            elif (isinstance(stmt, ir.Assign) and
-                    isinstance(stmt.value, ir.Expr) and
-                    stmt.value.op == 'cast'):
+            elif (
+                isinstance(stmt, ir.Assign)
+                and isinstance(stmt.value, ir.Expr)
+                and stmt.value.op == "cast"
+            ):
                 casts.append(stmt)
 
 
@@ -909,15 +959,18 @@ def _find_arraycall(func_ir, block):
             # Found array_var = array(list_var)
             lhs = instr.target
             expr = instr.value
-            if (guard(find_callname, func_ir, expr) == ('array', 'numpy') and
-                    isinstance(expr.args[0], ir.Var)):
+            if guard(find_callname, func_ir, expr) == ("array", "numpy") and isinstance(
+                expr.args[0], ir.Var
+            ):
                 list_var = expr.args[0]
                 array_var = lhs
                 array_stmt_index = i
                 array_kws = dict(expr.kws)
-        elif (isinstance(instr, ir.SetItem) and
-              isinstance(instr.value, ir.Var) and
-              not list_var):
+        elif (
+            isinstance(instr, ir.SetItem)
+            and isinstance(instr.value, ir.Var)
+            and not list_var
+        ):
             list_var = instr.value
             # Found array_var[..] = list_var, the case for nested array
             array_var = instr.target
@@ -942,20 +995,20 @@ def _find_iter_range(func_ir, range_iter_var, swapped):
     debug_print = _make_debug_print("find_iter_range")
     range_iter_def = get_definition(func_ir, range_iter_var)
     debug_print("range_iter_var = ", range_iter_var, " def = ", range_iter_def)
-    require(isinstance(range_iter_def, ir.Expr) and
-            range_iter_def.op == 'getiter')
+    require(isinstance(range_iter_def, ir.Expr) and range_iter_def.op == "getiter")
     range_var = range_iter_def.value
     range_def = get_definition(func_ir, range_var)
     debug_print("range_var = ", range_var, " range_def = ", range_def)
-    require(isinstance(range_def, ir.Expr) and range_def.op == 'call')
+    require(isinstance(range_def, ir.Expr) and range_def.op == "call")
     func_var = range_def.func
     func_def = get_definition(func_ir, func_var)
     debug_print("func_var = ", func_var, " func_def = ", func_def)
-    require(isinstance(func_def, ir.Global) and
-            (func_def.value == range or
-             func_def.value == numba.misc.special.prange))
+    require(
+        isinstance(func_def, ir.Global)
+        and (func_def.value == range or func_def.value == numba.misc.special.prange)
+    )
     nargs = len(range_def.args)
-    swapping = [('"array comprehension"', 'closure of'), range_def.func.loc]
+    swapping = [('"array comprehension"', "closure of"), range_def.func.loc]
     if nargs == 1:
         swapped[range_def.func.name] = swapping
         stop = get_definition(func_ir, range_def.args[0], lhs_only=True)
@@ -981,20 +1034,24 @@ def length_of_iterator(typingctx, val):
         def codegen(context, builder, sig, args):
             (value,) = args
             iter_type = range_impl_map[val_type][1]
-            iterobj = cgutils.create_struct_proxy(iter_type)(context, builder,
-                                                             value)
+            iterobj = cgutils.create_struct_proxy(iter_type)(context, builder, value)
             int_type = iterobj.count.type
-            return impl_ret_untracked(context, builder, int_type,
-                                      builder.load(iterobj.count))
+            return impl_ret_untracked(
+                context, builder, int_type, builder.load(iterobj.count)
+            )
+
         return signature(val_type, val), codegen
     elif isinstance(val, types.ListIter):
+
         def codegen(context, builder, sig, args):
             (value,) = args
             intp_t = context.get_value_type(types.intp)
             iterobj = ListIterInstance(context, builder, sig.args[0], value)
             return impl_ret_untracked(context, builder, intp_t, iterobj.size)
+
         return signature(types.intp, val), codegen
     elif isinstance(val, types.ArrayIterator):
+
         def codegen(context, builder, sig, args):
             (iterty,) = sig.args
             (value,) = args
@@ -1005,8 +1062,10 @@ def length_of_iterator(typingctx, val):
             shape = cgutils.unpack_tuple(builder, ary.shape)
             # array iterates along the outer dimension
             return impl_ret_untracked(context, builder, intp_t, shape[0])
+
         return signature(types.intp, val), codegen
     elif isinstance(val, types.UniTupleIter):
+
         def codegen(context, builder, sig, args):
             (iterty,) = sig.args
             tuplety = iterty.container
@@ -1016,21 +1075,27 @@ def length_of_iterator(typingctx, val):
 
         return signature(types.intp, val), codegen
     elif isinstance(val, types.ListTypeIteratorType):
+
         def codegen(context, builder, sig, args):
             (value,) = args
             intp_t = context.get_value_type(types.intp)
             from numba.typed.listobject import ListIterInstance
+
             iterobj = ListIterInstance(context, builder, sig.args[0], value)
             return impl_ret_untracked(context, builder, intp_t, iterobj.size)
+
         return signature(types.intp, val), codegen
     else:
-        msg = ('Unsupported iterator found in array comprehension, try '
-               'preallocating the array and filling manually.')
+        msg = (
+            "Unsupported iterator found in array comprehension, try "
+            "preallocating the array and filling manually."
+        )
         raise errors.TypingError(msg)
 
 
-def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
-                      typed=False):
+def _inline_arraycall(
+    func_ir, cfg, visited, loop, swapped, enable_prange=False, typed=False
+):
     """Look for array(list) call in the exit block of a given loop, and turn
     list operations into array operations in the loop if the following
     conditions are met:
@@ -1051,27 +1116,27 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
     require(len(loop.exits) == 1)
     exit_block = next(iter(loop.exits))
     list_var, array_call_index, array_kws = _find_arraycall(
-        func_ir, func_ir.blocks[exit_block],
+        func_ir,
+        func_ir.blocks[exit_block],
     )
 
     # check if dtype is present in array call
     dtype_def = None
     dtype_mod_def = None
-    if 'dtype' in array_kws:
-        require(isinstance(array_kws['dtype'], ir.Var))
+    if "dtype" in array_kws:
+        require(isinstance(array_kws["dtype"], ir.Var))
         # We require that dtype argument to be a constant of getattr Expr, and
         # we'll remember its definition for later use.
-        dtype_def = get_definition(func_ir, array_kws['dtype'])
-        require(isinstance(dtype_def, ir.Expr) and dtype_def.op == 'getattr')
+        dtype_def = get_definition(func_ir, array_kws["dtype"])
+        require(isinstance(dtype_def, ir.Expr) and dtype_def.op == "getattr")
         dtype_mod_def = get_definition(func_ir, dtype_def.value)
 
     list_var_def = get_definition(func_ir, list_var)
     debug_print("list_var = ", list_var, " def = ", list_var_def)
-    if isinstance(list_var_def, ir.Expr) and list_var_def.op == 'cast':
+    if isinstance(list_var_def, ir.Expr) and list_var_def.op == "cast":
         list_var_def = get_definition(func_ir, list_var_def.value)
     # Check if the definition is a build_list
-    require(isinstance(list_var_def, ir.Expr) and
-            list_var_def.op == 'build_list')
+    require(isinstance(list_var_def, ir.Expr) and list_var_def.op == "build_list")
     # The build_list must be empty
     require(len(list_var_def.items) == 0)
 
@@ -1089,13 +1154,15 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
         debug_print("check loop body block ", label)
         for stmt in block.find_insts(ir.Assign):
             expr = stmt.value
-            if isinstance(expr, ir.Expr) and expr.op == 'call':
+            if isinstance(expr, ir.Expr) and expr.op == "call":
                 func_def = get_definition(func_ir, expr.func)
-                if (isinstance(func_def, ir.Expr) and func_def.op == 'getattr'
-                        and func_def.attr == 'append'):
+                if (
+                    isinstance(func_def, ir.Expr)
+                    and func_def.op == "getattr"
+                    and func_def.attr == "append"
+                ):
                     list_def = get_definition(func_ir, func_def.value)
-                    debug_print("list_def = ", list_def,
-                                list_def is list_var_def)
+                    debug_print("list_def = ", list_def, list_def is list_var_def)
                     if list_def is list_var_def:
                         # found matching append call
                         list_append_stmts.append((label, block, stmt))
@@ -1120,11 +1187,11 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
     for stmt in loop_header.find_insts(ir.Assign):
         expr = stmt.value
         if isinstance(expr, ir.Expr):
-            if expr.op == 'iternext':
+            if expr.op == "iternext":
                 iter_def = get_definition(func_ir, expr.value)
                 debug_print("iter_def = ", iter_def)
                 iter_vars.append(expr.value)
-            elif expr.op == 'pair_first':
+            elif expr.op == "pair_first":
                 iter_first_vars.append(stmt.target)
 
     # Require only one iterator in loop header
@@ -1155,8 +1222,9 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
     # Skip list construction and skip terminator, add the rest to stmts
     for i in range(len(loop_entry.body) - 1):
         stmt = loop_entry.body[i]
-        if (isinstance(stmt, ir.Assign) and
-                (stmt.value is list_def or is_removed(stmt.value, removed))):
+        if isinstance(stmt, ir.Assign) and (
+            stmt.value is list_def or is_removed(stmt.value, removed)
+        ):
             removed.append(stmt.target)
         else:
             stmts.append(stmt)
@@ -1174,8 +1242,9 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
     else:
         # index_var = -1 # starting the index with -1 since it will incremented
         # in loop header
-        stmts.append(_new_definition(func_ir, index_var,
-                                     ir.Const(value=-1, loc=loc), loc))
+        stmts.append(
+            _new_definition(func_ir, index_var, ir.Const(value=-1, loc=loc), loc)
+        )
 
     # Insert statement to get the size of the loop iterator
     size_var = scope.redefine("size", loc)
@@ -1184,23 +1253,25 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
         if start == 0:
             size_val = stop
         else:
-            size_val = ir.Expr.binop(fn=operator.sub, lhs=stop, rhs=start,
-                                     loc=loc)
+            size_val = ir.Expr.binop(fn=operator.sub, lhs=stop, rhs=start, loc=loc)
         # we can parallelize this loop if enable_prange = True, by changing
         # range function from range, to prange.
         if enable_prange and isinstance(range_func_def, ir.Global):
-            range_func_def.name = 'internal_prange'
+            range_func_def.name = "internal_prange"
             range_func_def.value = internal_prange
 
     else:
         # this doesn't work in objmode as it's effectively untyped
         if typed:
             len_func_var = scope.redefine("len_func", loc)
-            stmts.append(_new_definition(func_ir, len_func_var,
-                                         ir.Global('length_of_iterator',
-                                                   length_of_iterator,
-                                                   loc=loc),
-                                         loc))
+            stmts.append(
+                _new_definition(
+                    func_ir,
+                    len_func_var,
+                    ir.Global("length_of_iterator", length_of_iterator, loc=loc),
+                    loc,
+                )
+            )
             size_val = ir.Expr.call(len_func_var, (iter_var,), (), loc=loc)
         else:
             raise GuardException
@@ -1208,8 +1279,11 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
     stmts.append(_new_definition(func_ir, size_var, size_val, loc))
 
     size_tuple_var = scope.redefine("size_tuple", loc)
-    stmts.append(_new_definition(func_ir, size_tuple_var,
-                 ir.Expr.build_tuple(items=[size_var], loc=loc), loc))
+    stmts.append(
+        _new_definition(
+            func_ir, size_tuple_var, ir.Expr.build_tuple(items=[size_var], loc=loc), loc
+        )
+    )
 
     # Insert array allocation
     array_var = scope.redefine("array", loc)
@@ -1218,31 +1292,46 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
         # when dtype is present, we'll call empty with dtype
         dtype_mod_var = scope.redefine("dtype_mod", loc)
         dtype_var = scope.redefine("dtype", loc)
-        stmts.append(_new_definition(
-            func_ir, dtype_mod_var, dtype_mod_def, loc))
-        stmts.append(_new_definition(
-            func_ir, dtype_var,
-            ir.Expr.getattr(dtype_mod_var, dtype_def.attr, loc), loc))
-        stmts.append(_new_definition(
-            func_ir, empty_func, ir.Global('empty', np.empty, loc=loc), loc))
-        array_kws = [('dtype', dtype_var)]
+        stmts.append(_new_definition(func_ir, dtype_mod_var, dtype_mod_def, loc))
+        stmts.append(
+            _new_definition(
+                func_ir,
+                dtype_var,
+                ir.Expr.getattr(dtype_mod_var, dtype_def.attr, loc),
+                loc,
+            )
+        )
+        stmts.append(
+            _new_definition(
+                func_ir, empty_func, ir.Global("empty", np.empty, loc=loc), loc
+            )
+        )
+        array_kws = [("dtype", dtype_var)]
     else:
         # this doesn't work in objmode as it's effectively untyped
         if typed:
             # otherwise we'll call unsafe_empty_inferred
-            stmts.append(_new_definition(
-                func_ir, empty_func,
-                ir.Global('unsafe_empty_inferred', unsafe_empty_inferred,
-                          loc=loc),
-                loc))
+            stmts.append(
+                _new_definition(
+                    func_ir,
+                    empty_func,
+                    ir.Global("unsafe_empty_inferred", unsafe_empty_inferred, loc=loc),
+                    loc,
+                )
+            )
             array_kws = []
         else:
             raise GuardException
 
     # array_var = empty_func(size_tuple_var)
-    stmts.append(_new_definition(func_ir, array_var,
-                 ir.Expr.call(empty_func, (size_tuple_var,), list(array_kws),
-                              loc=loc), loc))
+    stmts.append(
+        _new_definition(
+            func_ir,
+            array_var,
+            ir.Expr.call(empty_func, (size_tuple_var,), list(array_kws), loc=loc),
+            loc,
+        )
+    )
 
     # Add back removed just in case they are used by something else
     for var in removed:
@@ -1258,7 +1347,7 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
             # when range doesn't start from 0, index_var becomes loop index
             # (iter_first_var) minus an offset (range_def[0])
             terminator = loop_header.terminator
-            assert (isinstance(terminator, ir.Branch))
+            assert isinstance(terminator, ir.Branch)
             # find the block in the loop body that header jumps to
             block_id = terminator.truebr
             blk = func_ir.blocks[block_id]
@@ -1266,11 +1355,13 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
             blk.body.insert(
                 0,
                 _new_definition(
-                    func_ir, index_var,
-                    ir.Expr.binop(fn=operator.sub, lhs=iter_first_var,
-                                  rhs=range_def[0], loc=loc),
-                    loc
-                )
+                    func_ir,
+                    index_var,
+                    ir.Expr.binop(
+                        fn=operator.sub, lhs=iter_first_var, rhs=range_def[0], loc=loc
+                    ),
+                    loc,
+                ),
             )
     else:
         # Insert index_var increment to the end of loop header
@@ -1280,12 +1371,16 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
         next_index_var = scope.redefine("next_index", loc)
         one = scope.redefine("one", loc)
         # one = 1
-        stmts.append(_new_definition(func_ir, one,
-                     ir.Const(value=1,loc=loc), loc))
+        stmts.append(_new_definition(func_ir, one, ir.Const(value=1, loc=loc), loc))
         # next_index_var = index_var + 1
-        stmts.append(_new_definition(func_ir, next_index_var,
-                     ir.Expr.binop(fn=operator.add, lhs=index_var, rhs=one,
-                                   loc=loc), loc))
+        stmts.append(
+            _new_definition(
+                func_ir,
+                next_index_var,
+                ir.Expr.binop(fn=operator.add, lhs=index_var, rhs=one, loc=loc),
+                loc,
+            )
+        )
         # index_var = next_index_var
         stmts.append(_new_definition(func_ir, index_var, next_index_var, loc))
         stmts.append(terminator)
@@ -1296,8 +1391,11 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
         if append_block.body[i] is append_stmt:
             debug_print("Replace append with SetItem")
             append_block.body[i] = ir.SetItem(
-                target=array_var, index=index_var,
-                value=append_stmt.value.args[0], loc=append_stmt.loc)
+                target=array_var,
+                index=index_var,
+                value=append_stmt.value.args[0],
+                loc=append_stmt.loc,
+            )
 
     # replace array call, by changing "a = array(b)" to "a = b"
     stmt = func_ir.blocks[exit_block].body[array_call_index]
@@ -1311,7 +1409,7 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
 
 def _find_unsafe_empty_inferred(func_ir, expr):
     unsafe_empty_inferred
-    require(isinstance(expr, ir.Expr) and expr.op == 'call')
+    require(isinstance(expr, ir.Expr) and expr.op == "call")
     callee = expr.func
     callee_def = get_definition(func_ir, callee)
     require(isinstance(callee_def, ir.Global))
@@ -1339,7 +1437,7 @@ def _fix_nested_array(func_ir):
         if isinstance(arr_def, ir.Expr):
             if guard(_find_unsafe_empty_inferred, func_ir, arr_def):
                 return arr_def
-            elif arr_def.op == 'getitem':
+            elif arr_def.op == "getitem":
                 return find_array_def(arr_def.value)
         raise GuardException
 
@@ -1362,9 +1460,10 @@ def _fix_nested_array(func_ir):
                         for var in varlist:
                             # var must be defined before this inst, or live
                             # and not later defined.
-                            if (var.name in defined or
-                                (var.name in livemap[label] and
-                                 not (var.name in usedefs.defmap[label]))):
+                            if var.name in defined or (
+                                var.name in livemap[label]
+                                and not (var.name in usedefs.defmap[label])
+                            ):
                                 debug_print(var.name, " already defined")
                                 new_varlist.append(var)
                             else:
@@ -1375,7 +1474,8 @@ def _fix_nested_array(func_ir):
                                     new_var = scope.redefine("new_var", loc)
                                     new_const = ir.Const(var_def.value, loc)
                                     new_vardef = _new_definition(
-                                        func_ir, new_var, new_const, loc)
+                                        func_ir, new_var, new_const, loc
+                                    )
                                     new_body = []
                                     new_body.extend(body[:i])
                                     new_body.append(new_vardef)
@@ -1409,33 +1509,33 @@ def _fix_nested_array(func_ir):
         rhs_def = get_definition(func_ir, stmt.value)
         debug_print("found rhs_def: ", rhs_def)
         require(isinstance(rhs_def, ir.Expr))
-        if rhs_def.op == 'cast':
+        if rhs_def.op == "cast":
             rhs_def = get_definition(func_ir, rhs_def.value)
             require(isinstance(rhs_def, ir.Expr))
         require(_find_unsafe_empty_inferred(func_ir, rhs_def))
         # Find the array dimension of rhs
         dim_def = get_definition(func_ir, rhs_def.args[0])
-        require(isinstance(dim_def, ir.Expr) and dim_def.op == 'build_tuple')
+        require(isinstance(dim_def, ir.Expr) and dim_def.op == "build_tuple")
         debug_print("dim_def = ", dim_def)
-        extra_dims = [get_definition(func_ir, x, lhs_only=True)
-                      for x in dim_def.items ]
+        extra_dims = [get_definition(func_ir, x, lhs_only=True) for x in dim_def.items]
         debug_print("extra_dims = ", extra_dims)
         # Expand size tuple when creating lhs_def with extra_dims
         size_tuple_def = get_definition(func_ir, lhs_def.args[0])
-        require(isinstance(size_tuple_def, ir.Expr) and
-                size_tuple_def.op == 'build_tuple')
+        require(
+            isinstance(size_tuple_def, ir.Expr) and size_tuple_def.op == "build_tuple"
+        )
         debug_print("size_tuple_def = ", size_tuple_def)
         extra_dims = fix_dependencies(size_tuple_def, extra_dims)
         size_tuple_def.items += extra_dims
         # In-place modify rhs_def to be getitem
-        rhs_def.op = 'getitem'
+        rhs_def.op = "getitem"
         rhs_def.fn = operator.getitem
         rhs_def.value = get_definition(func_ir, lhs, lhs_only=True)
         rhs_def.index = stmt.index
-        del rhs_def._kws['func']
-        del rhs_def._kws['args']
-        del rhs_def._kws['vararg']
-        del rhs_def._kws['kws']
+        del rhs_def._kws["func"]
+        del rhs_def._kws["args"]
+        del rhs_def._kws["vararg"]
+        del rhs_def._kws["kws"]
         # success
         return True
 
@@ -1451,12 +1551,13 @@ def _new_definition(func_ir, var, value, loc):
     return ir.Assign(value=value, target=var, loc=loc)
 
 
-@rewrites.register_rewrite('after-inference')
+@rewrites.register_rewrite("after-inference")
 class RewriteArrayOfConsts(rewrites.Rewrite):
-    '''The RewriteArrayOfConsts class is responsible for finding
+    """The RewriteArrayOfConsts class is responsible for finding
     1D array creations from a constant list, and rewriting it into
     direct initialization of array elements without creating the list.
-    '''
+    """
+
     def __init__(self, state, *args, **kws):
         self.typingctx = state.typingctx
         super(RewriteArrayOfConsts, self).__init__(*args, **kws)
@@ -1465,8 +1566,9 @@ class RewriteArrayOfConsts(rewrites.Rewrite):
         if len(calltypes) == 0:
             return False
         self.crnt_block = block
-        self.new_body = guard(_inline_const_arraycall, block, func_ir,
-                              self.typingctx, typemap, calltypes)
+        self.new_body = guard(
+            _inline_const_arraycall, block, func_ir, self.typingctx, typemap, calltypes
+        )
         return self.new_body is not None
 
     def apply(self):
@@ -1493,11 +1595,10 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
         Extra statements produced with be appended to "stmts".
         """
         callname = guard(find_callname, func_ir, expr)
-        require(callname and callname[1] == 'numpy' and callname[0] == 'array')
+        require(callname and callname[1] == "numpy" and callname[0] == "array")
         require(expr.args[0].name in list_vars)
         ret_type = calltypes[expr].return_type
-        require(isinstance(ret_type, types.ArrayCompatible) and
-                ret_type.ndim == 1)
+        require(isinstance(ret_type, types.ArrayCompatible) and ret_type.ndim == 1)
         loc = expr.loc
         list_var = expr.args[0]
         # Get the type of the array to be created.
@@ -1515,13 +1616,15 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
         size_tuple_typ = types.UniTuple(size_typ, 1)
         typemap[size_var.name] = size_typ
         typemap[size_tuple_var.name] = size_tuple_typ
+        stmts.append(_new_definition(func_ir, size_var, ir.Const(size, loc=loc), loc))
         stmts.append(
-            _new_definition(func_ir, size_var,
-                            ir.Const(size, loc=loc), loc))
-        stmts.append(
-            _new_definition(func_ir, size_tuple_var,
-                            ir.Expr.build_tuple(items=[size_var], loc=loc),
-                            loc))
+            _new_definition(
+                func_ir,
+                size_tuple_var,
+                ir.Expr.build_tuple(items=[size_var], loc=loc),
+                loc,
+            )
+        )
 
         # The general approach is to create an empty array and then fill
         # the elements in one-by-one from their specification.
@@ -1532,13 +1635,15 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
         # Create a variable to hold the numpy empty function.
         empty_func = scope.redefine("empty_func", loc)
         fnty = get_np_ufunc_typ(np.empty)
-        context.resolve_function_type(fnty, (size_typ,), {'dtype': nptype})
+        context.resolve_function_type(fnty, (size_typ,), {"dtype": nptype})
 
         typemap[empty_func.name] = fnty
 
         stmts.append(
-            _new_definition(func_ir, empty_func,
-                            ir.Global('empty', np.empty, loc=loc), loc))
+            _new_definition(
+                func_ir, empty_func, ir.Global("empty", np.empty, loc=loc), loc
+            )
+        )
 
         # We pass two arguments to empty, first the size tuple and second
         # the dtype of the new array.  Here, we created typ_var which is
@@ -1548,15 +1653,15 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
         # Create var for numpy module.
         g_np_var = scope.redefine("$np_g_var", loc)
         typemap[g_np_var.name] = types.misc.Module(np)
-        g_np = ir.Global('np', np, loc)
+        g_np = ir.Global("np", np, loc)
         stmts.append(_new_definition(func_ir, g_np_var, g_np, loc))
 
         # Create var for result of numpy.<dtype>.
         typ_var = scope.redefine("$np_typ_var", loc)
         typemap[typ_var.name] = nptype
         dtype_str = str(dtype)
-        if dtype_str == 'bool':
-            dtype_str = 'bool_'
+        if dtype_str == "bool":
+            dtype_str = "bool_"
         # Get dtype attribute of numpy module.
         np_typ_getattr = ir.Expr.getattr(g_np_var, dtype_str, loc)
         stmts.append(_new_definition(func_ir, typ_var, np_typ_getattr, loc))
@@ -1571,11 +1676,11 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
             index_var = scope.redefine("index", loc)
             index_typ = types.intp
             typemap[index_var.name] = index_typ
-            stmts.append(
-                _new_definition(func_ir, index_var, ir.Const(i, loc), loc))
+            stmts.append(_new_definition(func_ir, index_var, ir.Const(i, loc), loc))
             setitem = ir.SetItem(array_var, index_var, seq[i], loc)
-            calltypes[setitem] = typing.signature(types.none, array_typ,
-                                                  index_typ, dtype)
+            calltypes[setitem] = typing.signature(
+                types.none, array_typ, index_typ, dtype
+            )
             stmts.append(setitem)
 
         stmts.extend(dels)
@@ -1631,16 +1736,22 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
                     continue
             elif isinstance(inst.value, ir.Expr):
                 expr = inst.value
-                if expr.op == 'build_list':
+                if expr.op == "build_list":
                     # new build_list encountered, reset state
                     state.reset()
                     state.list_items = [x.name for x in expr.items]
                     state.list_vars = [inst.target.name]
                     state.stmts.append(inst)
                     continue
-                elif expr.op == 'call' and expr in calltypes:
-                    if guard(inline_array, inst.target, expr,
-                             state.stmts, state.list_vars, state.dels):
+                elif expr.op == "call" and expr in calltypes:
+                    if guard(
+                        inline_array,
+                        inst.target,
+                        expr,
+                        state.stmts,
+                        state.list_vars,
+                        state.dels,
+                    ):
                         state.modified = True
                         continue
         elif isinstance(inst, ir.Del):
@@ -1661,10 +1772,12 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
                     # will also be empty when we reach this point.
                     body = []
                     for inst in state.stmts:
-                        if ((isinstance(inst, ir.Assign) and
-                             inst.target.name in state.dead_vars) or
-                            (isinstance(inst, ir.Del) and
-                             inst.value in state.dead_vars)):
+                        if (
+                            isinstance(inst, ir.Assign)
+                            and inst.target.name in state.dead_vars
+                        ) or (
+                            isinstance(inst, ir.Del) and inst.value in state.dead_vars
+                        ):
                             continue
                         body.append(inst)
                     state.stmts = body

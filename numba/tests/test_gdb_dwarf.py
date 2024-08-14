@@ -1,4 +1,5 @@
 """Tests for gdb interacting with the DWARF numba generates"""
+
 from numba.tests.support import TestCase, linux_only
 from numba.tests.gdb_support import needs_gdb, skip_unless_pexpect, GdbMIDriver
 from unittest.mock import patch, Mock
@@ -19,43 +20,48 @@ class TestGDBDwarf(TestCase):
     # is because gdb tests tend to be line number sensitive (breakpoints etc
     # care about this) and doing this prevents constant churn and permits the
     # reuse of the existing subprocess_test_runner harness.
-    _NUMBA_OPT_0_ENV = {'NUMBA_OPT': '0'}
+    _NUMBA_OPT_0_ENV = {"NUMBA_OPT": "0"}
 
     def _gdb_has_numpy(self):
         """Returns True if gdb has NumPy support, False otherwise"""
-        driver = GdbMIDriver(__file__, debug=False,)
+        driver = GdbMIDriver(
+            __file__,
+            debug=False,
+        )
         has_numpy = driver.supports_numpy()
         driver.quit()
         return has_numpy
 
     def _subprocess_test_runner(self, test_mod):
-        themod = f'numba.tests.gdb.{test_mod}'
-        self.subprocess_test_runner(test_module=themod,
-                                    test_class='Test',
-                                    test_name='test',
-                                    envvars=self._NUMBA_OPT_0_ENV)
+        themod = f"numba.tests.gdb.{test_mod}"
+        self.subprocess_test_runner(
+            test_module=themod,
+            test_class="Test",
+            test_name="test",
+            envvars=self._NUMBA_OPT_0_ENV,
+        )
 
     def test_basic(self):
-        self._subprocess_test_runner('test_basic')
+        self._subprocess_test_runner("test_basic")
 
     def test_array_arg(self):
-        self._subprocess_test_runner('test_array_arg')
+        self._subprocess_test_runner("test_array_arg")
 
     def test_conditional_breakpoint(self):
-        self._subprocess_test_runner('test_conditional_breakpoint')
+        self._subprocess_test_runner("test_conditional_breakpoint")
 
     def test_break_on_symbol(self):
-        self._subprocess_test_runner('test_break_on_symbol')
+        self._subprocess_test_runner("test_break_on_symbol")
 
     def test_break_on_symbol_version(self):
-        self._subprocess_test_runner('test_break_on_symbol_version')
+        self._subprocess_test_runner("test_break_on_symbol_version")
 
     def test_pretty_print(self):
         if not self._gdb_has_numpy():
             _msg = "Cannot find gdb with NumPy support"
             self.skipTest(_msg)
 
-        self._subprocess_test_runner('test_pretty_print')
+        self._subprocess_test_runner("test_pretty_print")
 
 
 class TestGDBPrettyPrinterLogic(TestCase):
@@ -69,9 +75,8 @@ class TestGDBPrettyPrinterLogic(TestCase):
         # numba.misc.gdb_print_extension can import ok, the rest of the gdb
         # classes etc are implemented later
 
-        mock_modules = {'gdb': Mock(),
-                        'gdb.printing': Mock()}
-        self.patched_sys = patch.dict('sys.modules', mock_modules)
+        mock_modules = {"gdb": Mock(), "gdb.printing": Mock()}
+        self.patched_sys = patch.dict("sys.modules", mock_modules)
         self.patched_sys.start()
 
         # Now sys.modules has a gdb in it, patch the gdb.selected_inferior.
@@ -81,14 +86,14 @@ class TestGDBPrettyPrinterLogic(TestCase):
 
         import gdb
 
-        class SelectedInferior():
+        class SelectedInferior:
 
             def read_memory(self, data, extent):
                 buf = (ct.c_char * extent).from_address(data)
-                return buf.raw # this is bytes
+                return buf.raw  # this is bytes
 
         si = SelectedInferior()
-        gdb.configure_mock(**{'selected_inferior': lambda :si})
+        gdb.configure_mock(**{"selected_inferior": lambda: si})
 
     def tearDown(self):
         # drop the sys.modules patch
@@ -106,7 +111,7 @@ class TestGDBPrettyPrinterLogic(TestCase):
         # easily/guaranteed importable from the test suite). They implement the
         # absolute bare minimum necessary to test the gdb_print_extension.
 
-        class DISubrange():
+        class DISubrange:
             def __init__(self, lo, hi):
                 self._lo = lo
                 self._hi = hi
@@ -118,14 +123,16 @@ class TestGDBPrettyPrinterLogic(TestCase):
             def range(self):
                 return self._lo, self._hi
 
-        class DW_TAG_array_type():
+        class DW_TAG_array_type:
             def __init__(self, lo, hi):
                 self._lo, self._hi = lo, hi
 
             def fields(self):
-                return [DISubrange(self._lo, self._hi),]
+                return [
+                    DISubrange(self._lo, self._hi),
+                ]
 
-        class DIDerivedType_tuple():
+        class DIDerivedType_tuple:
             def __init__(self, the_tuple):
                 self._type = DW_TAG_array_type(0, len(the_tuple) - 1)
                 self._tuple = the_tuple
@@ -137,7 +144,7 @@ class TestGDBPrettyPrinterLogic(TestCase):
             def __getitem__(self, item):
                 return self._tuple[item]
 
-        class DICompositeType_Array():
+        class DICompositeType_Array:
             def __init__(self, arr, type_str):
                 self._arr = arr
                 self._type_str = type_str
@@ -175,7 +182,7 @@ class TestGDBPrettyPrinterLogic(TestCase):
 
         printer = gdb_print_extension.NumbaArrayPrinter(fake_gdb_arr)
 
-        return printer.to_string().strip() # strip, there's new lines
+        return printer.to_string().strip()  # strip, there's new lines
 
     def check(self, array):
         gdb_printed = self.get_gdb_repr(array)
@@ -206,7 +213,7 @@ class TestGDBPrettyPrinterLogic(TestCase):
                 # x + 3 is to ensure that sometimes the stop is beyond the
                 # end of the size in a given dimension
                 stop = np.random.randint(start + 1, max(start + 1, x + 3))
-                step = np.random.randint(1, 3) # step as 1, 2
+                step = np.random.randint(1, 3)  # step as 1, 2
                 strd = slice(start, stop, step)
                 slices.append(strd)
 
@@ -223,13 +230,13 @@ class TestGDBPrettyPrinterLogic(TestCase):
 
         for dt in (aligned, unaligned):
             arr = np.empty(m * n, dtype=dt).reshape(m, n)
-            arr['x'] = np.arange(m * n, dtype=dt['x']).reshape(m, n)
-            arr['y'] = 100 * np.arange(m * n, dtype=dt['y']).reshape(m, n)
+            arr["x"] = np.arange(m * n, dtype=dt["x"]).reshape(m, n)
+            arr["y"] = 100 * np.arange(m * n, dtype=dt["y"]).reshape(m, n)
             self.check(arr)
 
     def test_np_array_printer_chr_array(self):
         # Test unichr array
-        arr = np.array(['abcde'])
+        arr = np.array(["abcde"])
         self.check(arr)
 
     def test_np_array_printer_unichr_structured_dtype(self):
@@ -237,7 +244,7 @@ class TestGDBPrettyPrinterLogic(TestCase):
         n = 4
         m = 3
 
-        dt = np.dtype([("x", '<U5'), ("y", np.float64)], align=True)
+        dt = np.dtype([("x", "<U5"), ("y", np.float64)], align=True)
         arr = np.zeros(m * n, dtype=dt).reshape(m, n)
         rep = self.get_gdb_repr(arr)
         self.assertIn("array[Exception:", rep)
@@ -257,5 +264,5 @@ class TestGDBPrettyPrinterLogic(TestCase):
         self.assertIn("nestedarray(int16", rep)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

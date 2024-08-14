@@ -12,13 +12,14 @@ from numba.np import npdatetime_helpers
 class Boolean(Hashable):
     pass
 
+
 def parse_integer_bitwidth(name):
-    bitwidth = int(re.findall(r'\d+', name)[-1])
+    bitwidth = int(re.findall(r"\d+", name)[-1])
     return bitwidth
 
 
 def parse_integer_signed(name):
-    signed = name.startswith('int')
+    signed = name.startswith("int")
     return signed
 
 
@@ -48,7 +49,7 @@ class _NPDatetimeBase(Type):
     """
 
     def __init__(self, unit, *args, **kws):
-        name = '%s[%s]' % (self.type_name, unit)
+        name = "%s[%s]" % (self.type_name, unit)
         self.unit = unit
         self.unit_code = npdatetime_helpers.DATETIME_UNITS[self.unit]
         super(_NPDatetimeBase, self).__init__(name, *args, **kws)
@@ -71,17 +72,19 @@ class _NPDatetimeBase(Type):
 
 @total_ordering
 class NPTimedelta(_NPDatetimeBase):
-    type_name = 'timedelta64'
+    type_name = "timedelta64"
+
 
 @total_ordering
 class NPDatetime(_NPDatetimeBase):
-    type_name = 'datetime64'
+    type_name = "datetime64"
 
 
 class EnumClass(Dummy):
     """
     Type class for Enum classes.
     """
+
     basename = "Enum class"
 
     def __init__(self, cls, dtype):
@@ -108,6 +111,7 @@ class IntEnumClass(EnumClass):
     """
     Type class for IntEnum classes.
     """
+
     basename = "IntEnum class"
 
     @cached_property
@@ -122,6 +126,7 @@ class EnumMember(Type):
     """
     Type class for Enum members.
     """
+
     basename = "Enum"
     class_type_class = EnumClass
 
@@ -149,6 +154,7 @@ class IntEnumMember(EnumMember):
     """
     Type class for IntEnum members.
     """
+
     basename = "IntEnum"
     class_type_class = IntEnumClass
 

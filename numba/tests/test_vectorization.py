@@ -9,6 +9,7 @@ from numba.tests.support import TestCase
 _DEBUG = False
 if _DEBUG:
     from llvmlite import binding as llvm
+
     # Prints debug info from the LLVMs vectorizer
     llvm.set_option("", "--debug-only=loop-vectorize")
 
@@ -19,11 +20,12 @@ _skylake_env = {
 }
 
 
-@unittest.skipIf(platform.machine() != 'x86_64', 'x86_64 only test')
+@unittest.skipIf(platform.machine() != "x86_64", "x86_64 only test")
 class TestVectorization(TestCase):
     """
     Tests to assert that code which should vectorize does indeed vectorize
     """
+
     def gen_ir(self, func, args_tuple, fastmath=False):
         self.assertEqual(config.CPU_NAME, "skylake-avx512")
         self.assertEqual(config.CPU_FEATURES, "")
@@ -47,7 +49,7 @@ class TestVectorization(TestCase):
     # SLP is off by default due to miscompilations, see #8705. Put this into a
     # subprocess to isolate any potential issues.
     @TestCase.run_test_in_subprocess(
-        envvars={'NUMBA_SLP_VECTORIZE': '1', **_skylake_env},
+        envvars={"NUMBA_SLP_VECTORIZE": "1", **_skylake_env},
     )
     def test_slp(self):
         # Sample translated from:
@@ -77,11 +79,12 @@ class TestVectorization(TestCase):
                 acc += np.sqrt(item)
             return acc
 
-        llvm_ir = self.gen_ir(sum_sqrt_list, (types.ListType(types.float64),),
-                              fastmath=True)
+        llvm_ir = self.gen_ir(
+            sum_sqrt_list, (types.ListType(types.float64),), fastmath=True
+        )
         self.assertIn("vector.body", llvm_ir)
         self.assertIn("llvm.loop.isvectorized", llvm_ir)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

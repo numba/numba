@@ -1,6 +1,7 @@
 """
 Tests gdb bindings
 """
+
 import os
 import platform
 import re
@@ -13,36 +14,37 @@ from numba import njit, gdb, gdb_init, gdb_breakpoint, prange
 from numba.core import errors
 from numba import jit
 
-from numba.tests.support import (TestCase, captured_stdout, tag,
-                                 skip_parfors_unsupported)
+from numba.tests.support import TestCase, captured_stdout, tag, skip_parfors_unsupported
 from numba.tests.gdb_support import needs_gdb
 import unittest
 
 
 _platform = sys.platform
 
-_unix_like = (_platform.startswith('linux')
-              or _platform.startswith('darwin')
-              or ('bsd' in _platform))
+_unix_like = (
+    _platform.startswith("linux")
+    or _platform.startswith("darwin")
+    or ("bsd" in _platform)
+)
 
 unix_only = unittest.skipUnless(_unix_like, "unix-like OS is required")
 not_unix = unittest.skipIf(_unix_like, "non unix-like OS is required")
 
 _arch_name = platform.machine()
-_is_arm = _arch_name in {'aarch64', 'armv7l'}
+_is_arm = _arch_name in {"aarch64", "armv7l"}
 not_arm = unittest.skipIf(_is_arm, "testing disabled on ARM")
 
-_gdb_cond = os.environ.get('GDB_TEST', None) == '1'
+_gdb_cond = os.environ.get("GDB_TEST", None) == "1"
 needs_gdb_harness = unittest.skipUnless(_gdb_cond, "needs gdb harness")
 
-long_running = tag('long_running')
+long_running = tag("long_running")
 
 _dbg_njit = njit(debug=True)
 _dbg_jit = jit(forceobj=True, debug=True)
 
 
 def impl_gdb_call(a):
-    gdb('-ex', 'set confirm off', '-ex', 'c', '-ex', 'q')
+    gdb("-ex", "set confirm off", "-ex", "c", "-ex", "q")
     b = a + 1
     c = a * 2.34
     d = (a, b, c)
@@ -50,7 +52,7 @@ def impl_gdb_call(a):
 
 
 def impl_gdb_call_w_bp(a):
-    gdb_init('-ex', 'set confirm off', '-ex', 'c', '-ex', 'q')
+    gdb_init("-ex", "set confirm off", "-ex", "c", "-ex", "q")
     b = a + 1
     c = a * 2.34
     d = (a, b, c)
@@ -59,7 +61,7 @@ def impl_gdb_call_w_bp(a):
 
 
 def impl_gdb_split_init_and_break_w_parallel(a):
-    gdb_init('-ex', 'set confirm off', '-ex', 'c', '-ex', 'q')
+    gdb_init("-ex", "set confirm off", "-ex", "c", "-ex", "q")
     a += 3
     for i in prange(4):
         b = a + 1
@@ -147,18 +149,17 @@ class TestGdbBinding(TestCase):
     _DEBUG = True
 
     def run_cmd(self, cmdline, env, kill_is_ok=False):
-        popen = subprocess.Popen(cmdline,
-                                 stdout=subprocess.PIPE,
-                                 stderr=subprocess.PIPE,
-                                 env=env,
-                                 shell=True)
+        popen = subprocess.Popen(
+            cmdline, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, shell=True
+        )
         # finish in 20s or kill it, there's no work being done
 
         def kill():
             popen.stdout.flush()
             popen.stderr.flush()
             popen.kill()
-        timeout = threading.Timer(20., kill)
+
+        timeout = threading.Timer(20.0, kill)
         try:
             timeout.start()
             out, err = popen.communicate()
@@ -167,7 +168,8 @@ class TestGdbBinding(TestCase):
                 raise AssertionError(
                     "process failed with code %s: "
                     "stderr follows\n%s\n"
-                    "stdout :%s" % (retcode, err.decode(), out.decode()))
+                    "stdout :%s" % (retcode, err.decode(), out.decode())
+                )
             return out.decode(), err.decode()
         finally:
             timeout.cancel()
@@ -175,35 +177,36 @@ class TestGdbBinding(TestCase):
 
     def run_test_in_separate_process(self, test, **kwargs):
         env_copy = os.environ.copy()
-        env_copy['NUMBA_OPT'] = '1'
+        env_copy["NUMBA_OPT"] = "1"
         # Set GDB_TEST to permit the execution of tests decorated with
         # @needs_gdb_harness
-        env_copy['GDB_TEST'] = '1'
+        env_copy["GDB_TEST"] = "1"
         cmdline = [sys.executable, "-m", "numba.runtests", test]
-        return self.run_cmd(' '.join(cmdline), env_copy, **kwargs)
+        return self.run_cmd(" ".join(cmdline), env_copy, **kwargs)
 
     @classmethod
     def _inject(cls, name):
         themod = TestGdbBindImpls.__module__
         thecls = TestGdbBindImpls.__name__
         # strip impl
-        assert name.endswith('_impl')
-        methname = name.replace('_impl', '')
-        injected_method = '%s.%s.%s' % (themod, thecls, name)
+        assert name.endswith("_impl")
+        methname = name.replace("_impl", "")
+        injected_method = "%s.%s.%s" % (themod, thecls, name)
 
         def test_template(self):
             o, e = self.run_test_in_separate_process(injected_method)
-            dbgmsg = f'\nSTDOUT={o}\nSTDERR={e}\n'
+            dbgmsg = f"\nSTDOUT={o}\nSTDERR={e}\n"
             # If the test was skipped in the subprocess, then mark this as a
             # skipped test.
             m = re.search(r"\.\.\. skipped '(.*?)'", e)
             if m is not None:
                 self.skipTest(m.group(1))
-            self.assertIn('GNU gdb', o, msg=dbgmsg)
-            self.assertIn('OK', e, msg=dbgmsg)
-            self.assertNotIn('FAIL', e, msg=dbgmsg)
-            self.assertNotIn('ERROR', e, msg=dbgmsg)
-        if 'quick' in name:
+            self.assertIn("GNU gdb", o, msg=dbgmsg)
+            self.assertIn("OK", e, msg=dbgmsg)
+            self.assertNotIn("FAIL", e, msg=dbgmsg)
+            self.assertNotIn("ERROR", e, msg=dbgmsg)
+
+        if "quick" in name:
             setattr(cls, methname, test_template)
         else:
             setattr(cls, methname, long_running(test_template))
@@ -211,7 +214,7 @@ class TestGdbBinding(TestCase):
     @classmethod
     def generate(cls):
         for name in dir(TestGdbBindImpls):
-            if name.startswith('test_gdb'):
+            if name.startswith("test_gdb"):
                 cls._inject(name)
 
 
@@ -233,6 +236,7 @@ class TestGdbMisc(TestCase):
                 b = 2
                 f2()
                 return a + b
+
             return impl
 
         msg_head = "Calling either numba.gdb() or numba.gdb_init() more than"
@@ -263,15 +267,18 @@ class TestGdbExceptions(TestCase):
     def test_call_gdb(self):
         def nop_compiler(x):
             return x
+
         for compiler in [nop_compiler, jit(forceobj=True), njit]:
             for meth in [gdb, gdb_init]:
+
                 def python_func():
                     meth()
+
                 with self.assertRaises(errors.TypingError) as raises:
                     compiler(python_func)()
                 msg = "gdb support is only available on unix-like systems"
                 self.assertIn(msg, str(raises.exception))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

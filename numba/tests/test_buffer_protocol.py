@@ -38,9 +38,12 @@ def iter_usecase(buf):
 
 
 def attrgetter(attr):
-    code = """def func(x):
+    code = (
+        """def func(x):
         return x.%(attr)s
-""" % locals()
+"""
+        % locals()
+    )
     pyfunc = compile_function("func", code, globals())
     return jit(nopython=True)(pyfunc)
 
@@ -64,19 +67,19 @@ class TestBufferProtocol(MemoryLeakMixin, TestCase):
     def _arrays(self):
         n = 10
         for letter, offset in [
-            ('b', -3),
-            ('B', 0),
-            ('h', -5000),
-            ('H', 40000),
-            ('i', -100000),
-            ('I', 1000000),
-            ('l', -100000),
-            ('L', 1000000),
-            ('q', -2**60),
-            ('Q', 2**63 + 1),
-            ('f', 1.5),
-            ('d', -1.5),
-            ]:
+            ("b", -3),
+            ("B", 0),
+            ("h", -5000),
+            ("H", 40000),
+            ("i", -100000),
+            ("I", 1000000),
+            ("l", -100000),
+            ("L", 1000000),
+            ("q", -(2**60)),
+            ("Q", 2**63 + 1),
+            ("f", 1.5),
+            ("d", -1.5),
+        ]:
             yield array.array(letter, [i + offset for i in range(n)])
 
     def _memoryviews(self):
@@ -85,19 +88,19 @@ class TestBufferProtocol(MemoryLeakMixin, TestCase):
         yield memoryview(b"abcdefghi")
         # Different item types
         for dtype, start, stop in [
-            ('int8', -10, 10),
-            ('uint8', 0, 10),
-            ('int16', -5000, 1000),
-            ('uint16', 40000, 50000),
-            ('int32', -100000, 100000),
-            ('uint32', 0, 1000000),
-            ('int64', -2**60, 10),
-            ('uint64', 0, 2**64 - 10),
-            ('float32', 1.5, 3.5),
-            ('float64', 1.5, 3.5),
-            ('complex64', -8j, 12 + 5j),
-            ('complex128', -8j, 12 + 5j),
-            ]:
+            ("int8", -10, 10),
+            ("uint8", 0, 10),
+            ("int16", -5000, 1000),
+            ("uint16", 40000, 50000),
+            ("int32", -100000, 100000),
+            ("uint32", 0, 1000000),
+            ("int64", -(2**60), 10),
+            ("uint64", 0, 2**64 - 10),
+            ("float32", 1.5, 3.5),
+            ("float64", 1.5, 3.5),
+            ("complex64", -8j, 12 + 5j),
+            ("complex128", -8j, 12 + 5j),
+        ]:
             yield memoryview(np.linspace(start, stop, n).astype(dtype))
         # Different layouts
         arr = np.arange(12).reshape((3, 4))
@@ -134,7 +137,7 @@ class TestBufferProtocol(MemoryLeakMixin, TestCase):
             try:
                 shape = obj.shape
             except AttributeError:
-                shape = len(obj),
+                shape = (len(obj),)
             for tup in np.ndindex(shape):
                 # Simple 1d buffer-providing objects usually don't support
                 # tuple indexing.
@@ -194,7 +197,7 @@ class TestBufferProtocol(MemoryLeakMixin, TestCase):
         self.check_getslice(b"xyzuvw")
         self.check_getslice(memoryview(b"xyzuvw"))
         with self.assertTypingError():
-            self.check_getslice(array.array('i', range(10)))
+            self.check_getslice(array.array("i", range(10)))
         for buf in self._readonlies():
             self.check_getitem(buf)
 
@@ -279,11 +282,12 @@ class TestMemoryView(MemoryLeakMixin, TestCase):
         for arr in self._arrays():
             m = memoryview(arr)
             # Note `arr.flags.contiguous` is wrong (it mimics c_contiguous)
-            self.assertIs(contiguous_usecase(m),
-                          arr.flags.f_contiguous or arr.flags.c_contiguous)
+            self.assertIs(
+                contiguous_usecase(m), arr.flags.f_contiguous or arr.flags.c_contiguous
+            )
             self.assertIs(c_contiguous_usecase(m), arr.flags.c_contiguous)
             self.assertIs(f_contiguous_usecase(m), arr.flags.f_contiguous)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

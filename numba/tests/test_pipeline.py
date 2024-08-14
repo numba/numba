@@ -1,6 +1,5 @@
 from numba.core.compiler import Compiler, DefaultPassBuilder
-from numba.core.compiler_machinery import (FunctionPass, AnalysisPass,
-                                           register_pass)
+from numba.core.compiler_machinery import FunctionPass, AnalysisPass, register_pass
 from numba.core.untyped_passes import InlineInlinables
 from numba.core.typed_passes import IRLegalization
 from numba import jit, objmode, njit, cfunc
@@ -25,8 +24,7 @@ class TestCustomPipeline(TestCase):
             def compile_ir(self, func_ir, *args, **kwargs):
                 # Store the compiled function
                 self.custom_pipeline_cache.append(func_ir)
-                return super(CustomPipeline, self).compile_ir(
-                    func_ir, *args, **kwargs)
+                return super(CustomPipeline, self).compile_ir(func_ir, *args, **kwargs)
 
         self.pipeline_class = CustomPipeline
 
@@ -38,8 +36,7 @@ class TestCustomPipeline(TestCase):
             return x
 
         self.assertEqual(foo(4), 4)
-        self.assertListEqual(self.pipeline_class.custom_pipeline_cache,
-                             [foo.py_func])
+        self.assertListEqual(self.pipeline_class.custom_pipeline_cache, [foo.py_func])
 
     def test_cfunc_custom_pipeline(self):
         self.assertListEqual(self.pipeline_class.custom_pipeline_cache, [])
@@ -49,8 +46,9 @@ class TestCustomPipeline(TestCase):
             return x
 
         self.assertEqual(foo(4), 4)
-        self.assertListEqual(self.pipeline_class.custom_pipeline_cache,
-                             [foo.__wrapped__])
+        self.assertListEqual(
+            self.pipeline_class.custom_pipeline_cache, [foo.__wrapped__]
+        )
 
     def test_objmode_custom_pipeline(self):
         self.assertListEqual(self.pipeline_class.custom_pipeline_cache, [])
@@ -88,6 +86,7 @@ class TestPassManagerFunctionality(TestCase):
             """
             This pass injects ir.Del nodes into the IR
             """
+
             _name = "inject_dels_%s" % str(base)
 
             def __init__(self):
@@ -109,8 +108,7 @@ class TestPassManagerFunctionality(TestCase):
         return TestCompiler
 
     def test_compiler_error_on_ir_del_from_functionpass(self):
-        new_compiler = self._create_pipeline_w_del(FunctionPass,
-                                                   InlineInlinables)
+        new_compiler = self._create_pipeline_w_del(FunctionPass, InlineInlinables)
 
         @njit(pipeline_class=new_compiler)
         def foo(x):
@@ -133,8 +131,7 @@ class TestPassManagerFunctionality(TestCase):
         # in the IR but by virtue of it being an AnalysisPass the checking
         # routine won't execute.
 
-        new_compiler = self._create_pipeline_w_del(AnalysisPass,
-                                                   IRLegalization)
+        new_compiler = self._create_pipeline_w_del(AnalysisPass, IRLegalization)
 
         @njit(pipeline_class=new_compiler)
         def foo(x):

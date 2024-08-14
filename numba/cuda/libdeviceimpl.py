@@ -49,8 +49,7 @@ def libdevice_implement_multiple_returns(func, retty, prototype_args):
         for arg in prototype_args:
             if arg.is_ptr:
                 # Allocate space for return value and add to args
-                tmp_arg = cgutils.alloca_once(builder,
-                                              context.get_value_type(arg.ty))
+                tmp_arg = cgutils.alloca_once(builder, context.get_value_type(arg.ty))
                 actual_args.append(tmp_arg)
                 virtual_args.append(tmp_arg)
             else:

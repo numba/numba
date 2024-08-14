@@ -11,6 +11,7 @@ class TestSelfRecursion(CUDATestCase):
         # Avoid importing this module at the top level, as it triggers
         # compilation and can therefore fail
         from numba.cuda.tests.cudapy import recursion_usecases
+
         self.mod = recursion_usecases
         super().setUp()
 
@@ -36,19 +37,18 @@ class TestSelfRecursion(CUDATestCase):
     def test_global_implicit_sig(self):
         self.check_fib(self.mod.fib3)
 
-    @skip_on_cudasim('Simulator does not compile')
+    @skip_on_cudasim("Simulator does not compile")
     def test_runaway(self):
         with self.assertRaises(TypingError) as raises:
             cfunc = self.mod.runaway_self
 
-            @cuda.jit('void()')
+            @cuda.jit("void()")
             def kernel():
                 cfunc(1)
 
-        self.assertIn("cannot type infer runaway recursion",
-                      str(raises.exception))
+        self.assertIn("cannot type infer runaway recursion", str(raises.exception))
 
-    @unittest.skip('Needs insert_unresolved_ref support in target')
+    @unittest.skip("Needs insert_unresolved_ref support in target")
     def test_type_change(self):
         pfunc = self.mod.type_change_self.py_func
         cfunc = self.mod.type_change_self
@@ -79,7 +79,7 @@ class TestSelfRecursion(CUDATestCase):
 
         self.assertEqual(str(raises.exception), "raise_self")
 
-    @unittest.skip('Needs insert_unresolved_ref support in target')
+    @unittest.skip("Needs insert_unresolved_ref support in target")
     def test_optional_return(self):
         pfunc = self.mod.make_optional_return_case()
         cfunc = self.mod.make_optional_return_case(cuda.jit)
@@ -106,12 +106,13 @@ class TestSelfRecursion(CUDATestCase):
 
             self.assertEqual(expected, actual)
 
-    @skip_on_cudasim('Recursion handled because simulator does not compile')
+    @skip_on_cudasim("Recursion handled because simulator does not compile")
     def test_growing_return_tuple(self):
         cfunc = self.mod.make_growing_tuple_case(cuda.jit)
 
         with self.assertRaises(TypingError) as raises:
-            @cuda.jit('void()')
+
+            @cuda.jit("void()")
             def kernel():
                 cfunc(100)
 
@@ -121,5 +122,5 @@ class TestSelfRecursion(CUDATestCase):
         )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

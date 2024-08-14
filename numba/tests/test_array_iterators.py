@@ -14,8 +14,10 @@ def array_iter(arr):
         total += i * v
     return total
 
+
 def array_iter_items(arr):
     return list(iter(arr))
+
 
 def array_view_iter(arr, idx):
     total = 0
@@ -23,15 +25,19 @@ def array_view_iter(arr, idx):
         total += i * v
     return total
 
+
 def array_flat(arr, out):
     for i, v in enumerate(arr.flat):
         out[i] = v
 
+
 def array_flat_getitem(arr, ind):
     return arr.flat[ind]
 
+
 def array_flat_setitem(arr, ind, val):
     arr.flat[ind] = val
+
 
 def array_flat_sum(arr):
     s = 0
@@ -39,8 +45,10 @@ def array_flat_sum(arr):
         s = s + (i + 1) * v
     return s
 
+
 def array_flat_len(arr):
     return len(arr.flat)
+
 
 def array_ndenumerate_sum(arr):
     s = 0
@@ -48,11 +56,13 @@ def array_ndenumerate_sum(arr):
         s = s + (i + 1) * (j + 1) * v
     return s
 
+
 def np_ndindex_empty():
     s = 0
     for ind in np.ndindex(()):
         s += s + len(ind) + 1
     return s
+
 
 def np_ndindex(x, y):
     s = 0
@@ -60,6 +70,7 @@ def np_ndindex(x, y):
     for i, j in np.ndindex(x, y):
         s = s + (i + 1) * (j + 1)
     return s
+
 
 def np_ndindex_array(arr):
     s = 0
@@ -69,11 +80,13 @@ def np_ndindex_array(arr):
             s = s + (i + 1) * (j + 1)
     return s
 
+
 def np_nditer1(a):
     res = []
     for u in np.nditer(a):
         res.append(u.item())
     return res
+
 
 def np_nditer2(a, b):
     res = []
@@ -81,11 +94,13 @@ def np_nditer2(a, b):
         res.append((u.item(), v.item()))
     return res
 
+
 def np_nditer3(a, b, c):
     res = []
     for u, v, w in np.nditer((a, b, c)):
         res.append((u.item(), v.item(), w.item()))
     return res
+
 
 def iter_next(arr):
     it = iter(arr)
@@ -102,12 +117,14 @@ def iter_next(arr):
 # the iterator will be reading garbage data of free'ed memory.
 #
 
+
 def array_flat_premature_free(size):
     x = np.arange(size)
     res = np.zeros_like(x, dtype=np.intp)
     for i, v in enumerate(x.flat):
         res[i] = v
     return res
+
 
 def array_ndenumerate_premature_free(size):
     x = np.arange(size)
@@ -139,7 +156,12 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
 
     def check_array_view_iter(self, arr, index):
         pyfunc = array_view_iter
-        cfunc = njit((typeof(arr), typeof(index),))(pyfunc)
+        cfunc = njit(
+            (
+                typeof(arr),
+                typeof(index),
+            )
+        )(pyfunc)
         expected = pyfunc(arr, index)
         self.assertPreciseEqual(cfunc(arr, index), expected)
 
@@ -149,7 +171,12 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         if arrty is None:
             arrty = typeof(arr)
 
-        cfunc = njit((arrty, typeof(out),))(array_flat)
+        cfunc = njit(
+            (
+                arrty,
+                typeof(out),
+            )
+        )(array_flat)
 
         array_flat(arr, out)
         cfunc(arr, nb_out)
@@ -191,25 +218,25 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
             return t
 
         # 'F' ordered
-        arr = np.arange(24).reshape((2, 3, 4), order='F')
+        arr = np.arange(24).reshape((2, 3, 4), order="F")
         expected = foo.py_func(arr)
         got = foo(arr)
         self.assertPreciseEqual(expected, got)
 
         # 'A' ordered, outer strided
-        arr = np.arange(64).reshape((4, 8, 2), order='F')[::2, :, :]
+        arr = np.arange(64).reshape((4, 8, 2), order="F")[::2, :, :]
         expected = foo.py_func(arr)
         got = foo(arr)
         self.assertPreciseEqual(expected, got)
 
         # 'A' ordered, middle strided
-        arr = np.arange(64).reshape((4, 8, 2), order='F')[:, ::2, :]
+        arr = np.arange(64).reshape((4, 8, 2), order="F")[:, ::2, :]
         expected = foo.py_func(arr)
         got = foo(arr)
         self.assertPreciseEqual(expected, got)
 
         # 'A' ordered, inner strided
-        arr = np.arange(64).reshape((4, 8, 2), order='F')[:, :, ::2]
+        arr = np.arange(64).reshape((4, 8, 2), order="F")[:, :, ::2]
         expected = foo.py_func(arr)
         got = foo(arr)
         self.assertPreciseEqual(expected, got)
@@ -218,11 +245,10 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         def flag_check(arr):
             out = []
             for sub in arr:
-                out.append((sub, sub.flags.c_contiguous,
-                            sub.flags.f_contiguous))
+                out.append((sub, sub.flags.c_contiguous, sub.flags.f_contiguous))
             return out
 
-        arr = np.arange(10).reshape((2, 5), order='F')
+        arr = np.arange(10).reshape((2, 5), order="F")
         expected = flag_check.py_func(arr)
         got = flag_check(arr)
 
@@ -248,7 +274,7 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
 
         arrty = typeof(arr)
         self.assertEqual(arrty.ndim, 3)
-        self.assertEqual(arrty.layout, 'C')
+        self.assertEqual(arrty.layout, "C")
         self.assertTrue(arr.flags.c_contiguous)
         # Test with C-contiguous array
         self.check_array_flat(arr)
@@ -256,13 +282,13 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         arr = arr.transpose()
         self.assertFalse(arr.flags.c_contiguous)
         self.assertTrue(arr.flags.f_contiguous)
-        self.assertEqual(typeof(arr).layout, 'F')
+        self.assertEqual(typeof(arr).layout, "F")
         self.check_array_flat(arr)
         # Test with non-contiguous array
         arr = arr[::2]
         self.assertFalse(arr.flags.c_contiguous)
         self.assertFalse(arr.flags.f_contiguous)
-        self.assertEqual(typeof(arr).layout, 'A')
+        self.assertEqual(typeof(arr).layout, "A")
         self.check_array_flat(arr)
         # Boolean array
         arr = np.bool_([1, 0, 0, 1] * 2).reshape((2, 2, 2))
@@ -284,24 +310,25 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
 
         arr = np.zeros(0, dtype=np.int32)
         arr = arr.reshape(0, 2)
-        arrty = types.Array(types.int32, 2, layout='C')
+        arrty = types.Array(types.int32, 2, layout="C")
         check(arr, arrty)
-        arrty = types.Array(types.int32, 2, layout='F')
+        arrty = types.Array(types.int32, 2, layout="F")
         check(arr, arrty)
-        arrty = types.Array(types.int32, 2, layout='A')
+        arrty = types.Array(types.int32, 2, layout="A")
         check(arr, arrty)
         arr = arr.reshape(2, 0)
-        arrty = types.Array(types.int32, 2, layout='C')
+        arrty = types.Array(types.int32, 2, layout="C")
         check(arr, arrty)
-        arrty = types.Array(types.int32, 2, layout='F')
+        arrty = types.Array(types.int32, 2, layout="F")
         check(arr, arrty)
-        arrty = types.Array(types.int32, 2, layout='A')
+        arrty = types.Array(types.int32, 2, layout="A")
         check(arr, arrty)
 
     def test_array_flat_getitem(self):
         # Test indexing of array.flat object
         pyfunc = array_flat_getitem
         cfunc = njit(pyfunc)
+
         def check(arr, ind):
             expected = pyfunc(arr, ind)
             self.assertEqual(cfunc(arr, ind), expected)
@@ -330,6 +357,7 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         # Test indexing of array.flat object
         pyfunc = array_flat_setitem
         cfunc = njit(pyfunc)
+
         def check(arr, ind):
             # Use np.copy() to keep the layout
             expected = np.copy(arr)
@@ -362,6 +390,7 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         # Test len(array.flat)
         pyfunc = array_flat_len
         cfunc = njit(array_flat_len)
+
         def check(arr):
             expected = pyfunc(arr)
             self.assertPreciseEqual(cfunc(arr), expected)
@@ -386,7 +415,7 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         arr = np.arange(12).reshape(4, 3)
         arrty = typeof(arr)
         self.assertEqual(arrty.ndim, 2)
-        self.assertEqual(arrty.layout, 'C')
+        self.assertEqual(arrty.layout, "C")
         self.assertTrue(arr.flags.c_contiguous)
         # Test with C-contiguous array
         self.check_array_ndenumerate_sum(arr, arrty)
@@ -395,14 +424,14 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         self.assertFalse(arr.flags.c_contiguous)
         self.assertTrue(arr.flags.f_contiguous)
         arrty = typeof(arr)
-        self.assertEqual(arrty.layout, 'F')
+        self.assertEqual(arrty.layout, "F")
         self.check_array_ndenumerate_sum(arr, arrty)
         # Test with non-contiguous array
         arr = arr[::2]
         self.assertFalse(arr.flags.c_contiguous)
         self.assertFalse(arr.flags.f_contiguous)
         arrty = typeof(arr)
-        self.assertEqual(arrty.layout, 'A')
+        self.assertEqual(arrty.layout, "A")
         self.check_array_ndenumerate_sum(arr, arrty)
         # Boolean array
         arr = np.bool_([1, 0, 0, 1]).reshape((2, 2))
@@ -421,18 +450,18 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
 
         arr = np.zeros(0, dtype=np.int32)
         arr = arr.reshape(0, 2)
-        arrty = types.Array(types.int32, 2, layout='C')
+        arrty = types.Array(types.int32, 2, layout="C")
         check(arr, arrty)
-        arrty = types.Array(types.int32, 2, layout='F')
+        arrty = types.Array(types.int32, 2, layout="F")
         check(arr, arrty)
-        arrty = types.Array(types.int32, 2, layout='A')
+        arrty = types.Array(types.int32, 2, layout="A")
         check(arr, arrty)
         arr = arr.reshape(2, 0)
-        arrty = types.Array(types.int32, 2, layout='C')
+        arrty = types.Array(types.int32, 2, layout="C")
         check(arr, arrty)
-        arrty = types.Array(types.int32, 2, layout='F')
+        arrty = types.Array(types.int32, 2, layout="F")
         check(arr, arrty)
-        arrty = types.Array(types.int32, 2, layout='A')
+        arrty = types.Array(types.int32, 2, layout="A")
         check(arr, arrty)
 
     def test_array_ndenumerate_premature_free(self):
@@ -444,7 +473,12 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
 
     def test_np_ndindex(self):
         func = np_ndindex
-        cfunc = njit((types.int32, types.int32,))(func)
+        cfunc = njit(
+            (
+                types.int32,
+                types.int32,
+            )
+        )(func)
         self.assertPreciseEqual(cfunc(3, 4), func(3, 4))
         self.assertPreciseEqual(cfunc(3, 0), func(3, 0))
         self.assertPreciseEqual(cfunc(0, 3), func(0, 3))
@@ -461,7 +495,9 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
 
     def test_np_ndindex_empty(self):
         func = np_ndindex_empty
-        cfunc = njit((),)(func)
+        cfunc = njit(
+            (),
+        )(func)
         self.assertPreciseEqual(cfunc(), func())
 
     def test_iter_next(self):
@@ -492,7 +528,7 @@ class TestNdIter(MemoryLeakMixin, TestCase):
         # 2-d arrays
         a = np.arange(12).reshape((3, 4))
         yield a
-        yield a.copy(order='F')
+        yield a.copy(order="F")
         a = np.arange(24).reshape((6, 4))[::2]
         yield a
 
@@ -501,7 +537,7 @@ class TestNdIter(MemoryLeakMixin, TestCase):
         yield np.arange(8)[::2]
         a = np.arange(12).reshape((3, 4))
         yield a
-        yield a.copy(order='F')
+        yield a.copy(order="F")
 
     def check_result(self, got, expected):
         self.assertEqual(set(got), set(expected), (got, expected))
@@ -542,8 +578,9 @@ class TestNdIter(MemoryLeakMixin, TestCase):
         def check_incompatible(a, b):
             with self.assertRaises(ValueError) as raises:
                 cfunc(a, b)
-            self.assertIn("operands could not be broadcast together",
-                          str(raises.exception))
+            self.assertIn(
+                "operands could not be broadcast together", str(raises.exception)
+            )
 
         check_incompatible(np.arange(2), np.arange(3))
         a = np.arange(12).reshape((3, 4))
@@ -551,5 +588,5 @@ class TestNdIter(MemoryLeakMixin, TestCase):
         check_incompatible(a, b)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

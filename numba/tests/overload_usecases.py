@@ -9,6 +9,7 @@ def impl4(z, *args, kw=None):
     else:
         return -1
 
+
 # arg name is different but at a detectable location, with *args
 
 
@@ -25,4 +26,5 @@ def var_positional_impl(a, *star_args_token, kw=None, kw1=12):
             return 1
         else:
             return -1
+
     return impl
