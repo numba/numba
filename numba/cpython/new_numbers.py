@@ -1338,8 +1338,8 @@ def any_to_boolean(context, builder, fromty, toty, val):
 @lower_cast(types.Boolean, types.Number)
 def boolean_to_any(context, builder, fromty, toty, val):
     # Casting from boolean to anything first casts to int32
-    asint = builder.zext(val, ir.IntType(64))
-    return context.cast(builder, asint, types.py_int, toty)
+    asint = builder.zext(val, ir.IntType(32))
+    return context.cast(builder, asint, types.c_int32, toty)
 
 @lower_cast(types.IntegerLiteral, types.Boolean)
 @lower_cast(types.BooleanLiteral, types.Boolean)

@@ -391,7 +391,7 @@ class PyLower(BaseLower):
             if config.USE_LEGACY_TYPE_SYSTEM:
                 expected_size = self.context.get_constant(types.intp, expr.count)
             else:
-                expected_size = self.context.get_constant(types.py_int, expr.count)
+                expected_size = self.context.get_constant(types.c_intp, expr.count)
             has_wrong_size = self.builder.icmp_unsigned('!=',
                                                tup_size, expected_size)
             with cgutils.if_unlikely(self.builder, has_wrong_size):
@@ -408,7 +408,7 @@ class PyLower(BaseLower):
             if config.USE_LEGACY_TYPE_SYSTEM:
                 index = self.context.get_constant(types.intp, expr.index)
             else:
-                index = self.context.get_constant(types.py_int, expr.index)
+                index = self.context.get_constant(types.c_intp, expr.index)
             indexobj = self.pyapi.long_from_ssize_t(index)
             self.check_error(indexobj)
             res = self.pyapi.object_getitem(value, indexobj)

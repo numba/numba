@@ -480,7 +480,7 @@ class Lower(BaseLower):
                                          condty, types.boolean)
             else:
                 pred = self.context.cast(self.builder, cond,
-                                         condty, types.py_bool)
+                                         condty, types.c_bool)
             assert pred.type == llvmlite.ir.IntType(1),\
                 ("cond is not i1: %s" % pred.type)
             self.builder.cbranch(pred, tr, fl)
@@ -1319,7 +1319,7 @@ class Lower(BaseLower):
             if config.USE_LEGACY_TYPE_SYSTEM:
                 pairty = types.Pair(itemty, types.boolean)
             else:
-                pairty = types.Pair(itemty, types.py_bool)
+                pairty = types.Pair(itemty, types.c_bool)
             getiter_sig = typing.signature(ty.iterator_type, ty)
             getiter_impl = self.context.get_function('getiter',
                                                      getiter_sig)

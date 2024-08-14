@@ -74,12 +74,12 @@ class TestDunderMethods(TestCase):
             res = foo(x, y)
             py_res = foo.py_func(x, y)
 
-            assert res == py_res, (
+            self.assertEqual(res, py_res, (
                 f"Failed for {x} and {y};" +
-                f" gave answer {res} should be {py_res}")
-            assert type(res) is type(py_res), (
+                f" gave answer {res} should be {py_res}"))
+            self.assertIs(type(res), type(py_res), (
                 f"Failed for type {type(x)} and {type(y)};" +
-                f" gave answer {type(res)} should be {type(py_res)}")
+                f" gave answer {type(res)} should be {type(py_res)}"))
 
     def test_dunder_radd(self):
         @njit
@@ -90,12 +90,12 @@ class TestDunderMethods(TestCase):
             res = foo(x, y)
             py_res = foo.py_func(x, y)
 
-            assert res == py_res, (
+            self.assertEqual(res, py_res, (
                 f"Failed for {x} and {y};" +
-                f" gave answer {res} should be {py_res}")
-            assert type(res) is type(py_res), (
+                f" gave answer {res} should be {py_res}"))
+            self.assertIs(type(res), type(py_res), (
                 f"Failed for type {type(x)} and {type(y)};" +
-                f" gave answer {type(res)} should be {type(py_res)}")
+                f" gave answer {type(res)} should be {type(py_res)}"))
 
     def test_add(self):
         @njit
@@ -106,9 +106,9 @@ class TestDunderMethods(TestCase):
             res = foo(x, y)
             py_res = foo.py_func(x, y)
 
-            assert res == py_res, (
+            self.assertEqual(res, py_res, (
                 f"Failed for {x} and {y};" +
-                f" gave answer {res} should be {py_res}")
-            assert type(res) is type(py_res), (
+                f" gave answer {res} should be {py_res}"))
+            self.assertIs(type(res), type(py_res), (
                 f"Failed for type {type(x)} and {type(y)};" +
-                f" gave answer {type(res)} should be {type(py_res)}")
+                f" gave answer {type(res)} should be {type(py_res)}"))
