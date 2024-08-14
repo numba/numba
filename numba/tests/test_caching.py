@@ -1,18 +1,19 @@
 import importlib
 import inspect
-from pathlib import Path
-import llvmlite.binding as ll
 import multiprocessing
-import numpy as np
 import os
-import stat
 import shutil
+import stat
 import subprocess
 import sys
 import traceback
 import unittest
 import warnings
 import zipfile
+from pathlib import Path
+
+import llvmlite.binding as ll
+import numpy as np
 
 from numba import njit
 from numba.core import codegen
@@ -20,8 +21,8 @@ from numba.core.caching import _UserWideCacheLocator, _ZipCacheLocator
 from numba.core.errors import NumbaWarning
 from numba.parfors import parfor
 from numba.tests.support import (
-    TestCase,
     SerialMixin,
+    TestCase,
     capture_cache_log,
     import_dynamic,
     override_config,
@@ -705,11 +706,11 @@ class TestCache(DispatcherCacheUsecasesTest):
         err = execute_with_input()
         self.assertIn("cache hits = 1", err.strip())
 
+
 class TestCacheZip(DispatcherCacheUsecasesTest):
 
     def setUp(self):
         super().setUp()
-
 
         # Create a simple Python module to be zipped
         mod_content = """
@@ -738,7 +739,8 @@ def add(x, y):
         sys.modules.pop("test_module", None)
 
     def test_zip_caching(self):
-        # (note that `self.import_module()` fails because its checks are incompatible
+        # (note that `self.import_module()` fails because its checks are
+        # incompatible
         # with the zip file, so we just use normal imports here)
 
         # First import and call
@@ -765,8 +767,11 @@ def add(x, y):
         # Check if the cache was hit
         self.check_hits(test_module.add, 1)
 
+
 class TestCacheZipLib(DispatcherCacheUsecasesTest):
-    """ZipCache tests that don't require the setup/teardown from `TestCacheZip`"""
+    """
+    ZipCache tests that don't require the setup/teardown from `TestCacheZip`
+    """
     def test_zip_locator_creation(self):
 
         def mock_func():
