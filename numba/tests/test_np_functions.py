@@ -783,6 +783,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.array([]), None
             yield np.zeros(10), None
             yield np.arange(10), None
+            yield np.ones(10, dtype=np.bool_), 0
             yield np.arange(3 * 4 * 5).reshape(3, 4, 5), None
             yield np.arange(3 * 4).reshape(3, 4), 0
             yield np.arange(3 * 4).reshape(3, 4), 1
