@@ -748,9 +748,7 @@ def add(x, y):
 
         result1 = test_module.add(2, 3)
         self.assertEqual(result1, 5)
-        self.assertEqual(
-            test_module.add.stats.cache_hits[(type(None), type(None))], 0
-        )
+        self.check_hits(test_module.add, 0, 1)
 
         # Record the initial cache hits
         self.check_hits(test_module.add, 0)
