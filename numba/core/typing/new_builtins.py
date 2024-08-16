@@ -184,7 +184,8 @@ def intrin_bool_add_bool(tyctx, boolxty, boolyty):
     sig = types.py_int(boolxty, boolyty)
 
     def codegen(cgctx, builder, sig, llargs):
-        new_args = [cgctx.cast(builder, v, t, sig.return_type) for v, t in zip(llargs, sig.args)]
+        new_args = [cgctx.cast(builder, v, t, sig.return_type)
+                    for v, t in zip(llargs, sig.args)]
         return builder.add(*new_args)
 
     return sig, codegen
@@ -646,7 +647,9 @@ class BinOpFloorDiv(ConcreteTemplate):
 @infer_global(divmod)
 class DivMod(ConcreteTemplate):
     # This probably needs a mixture
-    _tys = {types.py_int, types.py_float} | types.np_number_domain | types.np_real_domain
+    _tys = {types.py_int, types.py_float} | \
+            types.np_number_domain | \
+            types.np_real_domain
     cases = [signature(types.UniTuple(ty, 2), ty, ty) for ty in _tys]
 
 
@@ -784,16 +787,7 @@ class UnaryPositive(UnaryOp):
 
 @infer_global(operator.not_)
 class UnaryNot(ConcreteTemplate):
-    cases = [signature(types.py_bool, types.py_bool)]
-    cases += [signature(types.py_bool, op) for op in sorted(types.py_signed_domain)]
-    cases += [signature(types.py_bool, op) for op in sorted(types.py_real_domain)]
-    cases += [signature(types.py_bool, op) for op in sorted(types.py_complex_domain)]
-    
-    cases = [signature(types.np_bool_, types.np_bool_)]
-    cases += [signature(types.np_bool_, op) for op in sorted(types.np_signed_domain)]
-    cases += [signature(types.np_bool_, op) for op in sorted(types.np_unsigned_domain)]
-    cases += [signature(types.np_bool_, op) for op in sorted(types.np_real_domain)]
-    cases += [signature(types.np_bool_, op) for op in sorted(types.np_complex_domain)]
+    cases = []
 
 
 class OrderedCmpOp(ConcreteTemplate):
@@ -1389,7 +1383,9 @@ class Float(AbstractTemplate):
 
         [arg] = args
 
-        if arg not in (types.py_number_domain | types.np_number_domain | frozenset([types.py_bool, types. np_bool])):
+        if arg not in (types.py_number_domain |
+                       types.np_number_domain |
+                       frozenset([types.py_bool, types. np_bool])):
             raise errors.NumbaTypeError("float() only support for numbers")
 
         if arg in (types.py_complex_domain | types.np_complex_domain):
@@ -1404,7 +1400,9 @@ class Complex(AbstractTemplate):
 
     def generic(self, args, kws):
         assert not kws
-        number_domain = types.py_number_domain | types.np_number_domain | frozenset([types.py_bool, types.np_bool])
+        number_domain = (types.py_number_domain |
+                         types.np_number_domain |
+                         frozenset([types.py_bool, types.np_bool]))
 
         if len(args) == 1:
             [arg] = args
