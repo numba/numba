@@ -2,7 +2,6 @@ import itertools
 
 import numpy as np
 import operator
-import math
 
 from numba.core import types, errors, config
 from numba import prange
@@ -17,7 +16,6 @@ from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
 from numba.core.extending import (
     typeof_impl, type_callable, models, register_model, make_attribute_wrapper, overload, intrinsic, overload_method
     )
-from numba.cpython.new_numbers import real_add_impl, int_add_impl, complex_add_impl
 
 register_model(types.NotImplementedType)(models.OpaqueModel)
 
@@ -144,6 +142,7 @@ def ol_is_NotImplemented(a, b, /):
     # only use this overload if at least one of the types is NotImplementedType
     if a_is_notimplemented_ty or b_is_notimplemented_ty:
         pred = a_is_notimplemented_ty and b_is_notimplemented_ty
+
         def ol_is_NotImplemented(a, b, /):
             return pred
         return ol_is_NotImplemented
@@ -156,7 +155,8 @@ def ol_is_not_NotImplemented(a, b, /):
 
     # only use this overload if at least one of the types is NotImplementedType
     if a_is_notimplemented_ty or b_is_notimplemented_ty:
-        pred = not(a_is_notimplemented_ty and b_is_notimplemented_ty)
+        pred = not (a_is_notimplemented_ty and b_is_notimplemented_ty)
+
         def ol_is_not_NotImplemented(a, b, /):
             return pred
         return ol_is_not_NotImplemented
@@ -182,6 +182,7 @@ def complex_add_complex(x, y):
 def intrin_bool_add_bool(tyctx, boolxty, boolyty):
     assert boolxty == boolyty
     sig = types.py_int(boolxty, boolyty)
+
     def codegen(cgctx, builder, sig, llargs):
         new_args = [cgctx.cast(builder, v, t, sig.return_type) for v, t in zip(llargs, sig.args)]
         return builder.add(*new_args)
@@ -193,6 +194,7 @@ def intrin_bool_add_bool(tyctx, boolxty, boolyty):
 def intrin_int_add_int(tyctx, intxty, intyty):
     assert intxty == intyty
     sig = intxty(intxty, intxty)
+
     def codegen(cgctx, builder, sig, llargs):
         return builder.add(*llargs)
 
@@ -203,6 +205,7 @@ def intrin_int_add_int(tyctx, intxty, intyty):
 def intrin_float_add_float(tyctx, floatxty, floatyty):
     assert floatxty == floatyty, f"{floatxty} != {floatyty}"
     sig = floatxty(floatxty, floatyty)
+
     def codegen(cgctx, builder, sig, llargs):
         return builder.fadd(*llargs)
     return sig, codegen
@@ -212,6 +215,7 @@ def intrin_float_add_float(tyctx, floatxty, floatyty):
 def intrin_complex_add_complex(tyctx, compxty, compyty):
     assert compxty == compyty
     sig = compxty(compxty, compyty)
+
     def codegen(context, builder, sig, args):
         [cx, cy] = args
         ty = sig.args[0]
@@ -329,7 +333,7 @@ def py_complex__complex__(self):
 
 
 @overload_method(types.NumPyFloat, "__float__")
-def np_float64__complex__(self):
+def np_float64__float__(self):
     if self.bitwidth == 64:
         def impl(self):
             return types.py_float(self)
@@ -351,7 +355,7 @@ def np_float64__complex__(self):
 
 
 @overload_method(types.NumPyComplex, "__complex__")
-def np_float64__complex__(self):
+def np_complex128__complex__(self):
     if self.bitwidth == 128:
         def impl(self):
             return types.py_complex(self)
@@ -439,13 +443,16 @@ binop_cache = {
     "__radd__": {}
 }
 
+
 @intrinsic
 def np_bool_add_bool(tyctx, boolxty, boolyty):
     sig = types.np_bool_(boolxty, boolyty)
+
     def codegen(cgctx, builder, sig, llargs):
         return builder.or_(*llargs)
 
     return sig, codegen
+
 
 def find_np_res_type(op, op_cache, argtys):
     if argtys in op_cache[op]:
@@ -566,6 +573,7 @@ def generate_binop(op_func, slot, rslot, opchar):
         # this refers to numba types but should probably be mapped back to the
         # types in python
         msg = f"unsupported operand type(s) for {opchar}: {v} and {w}"
+
         def impl(v, w):
             raise TypeError(msg)
         return impl
@@ -1548,4 +1556,3 @@ class IndexValueModel(models.StructModel):
 
 make_attribute_wrapper(IndexValueType, 'index', 'index')
 make_attribute_wrapper(IndexValueType, 'value', 'value')
-

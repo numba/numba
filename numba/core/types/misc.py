@@ -555,8 +555,10 @@ class UnicodeIteratorType(SimpleIteratorType):
         self.data = dtype
         super(UnicodeIteratorType, self).__init__(name, dtype)
 
+
 if not config.USE_LEGACY_TYPE_SYSTEM: # type: ignore
-    class NotImplementedType(Opaque): # name aliases the python type but nevermind
+    class NotImplementedType(Opaque): 
+        # name aliases the python type but nevermind
         def __init__(self):
             super().__init__(name="NotImplemented")
 

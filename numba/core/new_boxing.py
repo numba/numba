@@ -37,7 +37,7 @@ def box_np_scalars(typ, val, c, py_boxing_func, py_type):
 
 @box(types.NotImplementedType)
 def box_NotImplementedType(typ, val, c):
-    ni_struct  = c.pyapi.get_c_object("_Py_NotImplementedStruct")
+    ni_struct = c.pyapi.get_c_object("_Py_NotImplementedStruct")
     c.pyapi.incref(ni_struct)
     return ni_struct
 
