@@ -14,8 +14,9 @@ from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
 
 
 from numba.core.extending import (
-    typeof_impl, type_callable, models, register_model, make_attribute_wrapper, overload, intrinsic, overload_method
-    )
+    typeof_impl, type_callable, models, register_model,
+    make_attribute_wrapper, overload, intrinsic, overload_method
+)
 
 register_model(types.NotImplementedType)(models.OpaqueModel)
 
@@ -647,9 +648,9 @@ class BinOpFloorDiv(ConcreteTemplate):
 @infer_global(divmod)
 class DivMod(ConcreteTemplate):
     # This probably needs a mixture
-    _tys = {types.py_int, types.py_float} | \
-            types.np_number_domain | \
-            types.np_real_domain
+    _tys = ({types.py_int, types.py_float} |
+            types.np_number_domain |
+            types.np_real_domain)
     cases = [signature(types.UniTuple(ty, 2), ty, ty) for ty in _tys]
 
 

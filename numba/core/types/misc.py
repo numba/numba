@@ -557,7 +557,7 @@ class UnicodeIteratorType(SimpleIteratorType):
 
 
 if not config.USE_LEGACY_TYPE_SYSTEM: # type: ignore
-    class NotImplementedType(Opaque): 
+    class NotImplementedType(Opaque):
         # name aliases the python type but nevermind
         def __init__(self):
             super().__init__(name="NotImplemented")
