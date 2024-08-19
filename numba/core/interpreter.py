@@ -2982,7 +2982,6 @@ class Interpreter(object):
         raise NotImplementedError(PYVERSION)
 
     if PYVERSION in ((3, 13),):
-
         def op_TO_BOOL(self, inst, val, res):
             self.store(self.get(val), res) # TODO: just a lazy hack
 

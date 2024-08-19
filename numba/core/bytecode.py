@@ -550,7 +550,6 @@ class ByteCodePy312(ByteCodePy311):
                     if not next_inst.opname == "SWAP" and next_inst.arg == 2:
                         continue
                 else:
-
                     assert PYVERSION < (3, 13)
                     # Check end of pattern, two instructions.
                     # Check for the corresponding END_FOR, exception table end

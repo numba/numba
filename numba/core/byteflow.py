@@ -14,7 +14,6 @@ from numba.core.errors import UnsupportedBytecodeError
 
 
 _logger = logging.getLogger(__name__)
-# logging.basicConfig(level=logging.DEBUG)
 
 _EXCEPT_STACK_OFFSET = 6
 _FINALLY_POP = _EXCEPT_STACK_OFFSET
@@ -88,12 +87,6 @@ class Flow(object):
     Simulate execution to recover dataflow and controlflow information.
     """
     def __init__(self, bytecode):
-        co = bytecode.func_id.code
-        _logger.debug("code object:\n%s", co)
-        _logger.debug("co.co_names:\n%s", co.co_names)
-        _logger.debug("co.co_varnames:\n%s", co.co_varnames)
-        _logger.debug("co.co_freevars:\n%s", co.co_freevars)
-        _logger.debug("co.co_cellvars:\n%s", co.co_cellvars)
         _logger.debug("bytecode dump:\n%s", bytecode.dump())
         self._bytecode = bytecode
         self.block_infos = UniqueDict()
