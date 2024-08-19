@@ -240,8 +240,8 @@ def handle_new_style_errors(e):
     from numba.core import errors
 
     if use_new_style_errors():
-        if (not isinstance(e, errors.NumbaError)
-                or getattr(e, 'recoverable', False)):
+        if not (isinstance(e, errors.NumbaError)
+                and getattr(e, 'recoverable', False)):
             raise e
 
 
