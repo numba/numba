@@ -86,17 +86,14 @@ jobs:
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 10
       py312_np126:
-        PYTHON: '3.11'
+        PYTHON: '3.12'
         NUMPY: '1.26'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 11
-      py312_np126:
+      py312_np126_2:
         PYTHON: '3.12'
         NUMPY: '1.26'
-        RUN_MYPY: yes
-        RUN_FLAKE8: yes
         CONDA_ENV: azure_ci
-        TEST_RVSDG: yes
         TEST_START_INDEX: 12
       py312_np126_svml:
         PYTHON: '3.12'
