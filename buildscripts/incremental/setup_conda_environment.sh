@@ -60,6 +60,7 @@ if [ "${VANILLA_INSTALL}" != "yes" ]; then
         # At the time of writing `ipykernel` was not available for Python 3.12
         $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython scipy pygments pexpect
     else
+        echo "PIP INSTALL $NUMPY"
         $PIP_INSTALL --pre numpy==$NUMPY
     fi
 fi
