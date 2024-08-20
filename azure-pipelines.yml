@@ -103,14 +103,14 @@ jobs:
         TEST_START_INDEX: 13
 
       # Python 3.13
-      py313_np126_1:
+      py313_np201_1:
         PYTHON: '3.13'
-        NUMPY: '1.26.3'
+        NUMPY: '2.1'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 14
-      py313_np126_2:
+      py313_np201_2:
         PYTHON: '3.13'
-        NUMPY: '1.26.3'
+        NUMPY: '2.1'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 15
       
