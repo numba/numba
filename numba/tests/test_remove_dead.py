@@ -355,6 +355,47 @@ class TestSSADeadBranchPrune(TestCase):
         self.assertEqual(compute(**kwargs),
                          compute.py_func(**kwargs))
 
+    def test_issue_5661(self):
+        @njit
+        def foo(a, b=None):
+            if b is None:
+                b = 1
+            elif b < a:
+                b += 1
+
+            return a + b
+
+        args_list = [
+            (1, 2),
+            (2, 1),
+            (1,),
+        ]
+        for args in args_list:
+            self.assertEqual(foo(*args), foo.py_func(*args))
+
+        # Variation
+        # https://github.com/numba/numba/issues/5661#issuecomment-697902475
+        def make(decor=njit):
+            @decor
+            def inner(state):
+                if state is None:
+                    state = 0
+                else:
+                    state += 1
+                return state
+
+            @decor
+            def fn():
+                state = None
+                for i in range(10):
+                    state = inner(state)
+                return state
+
+            return fn()
+
+        self.assertEqual(make(), make(lambda x: x))
+
+
 
 if __name__ == "__main__":
     unittest.main()
