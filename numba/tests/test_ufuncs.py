@@ -1541,6 +1541,10 @@ class TestLoopTypesInt(_LoopTypesTester):
     # special test for bool subtract/negative
     _ufuncs.remove(np.subtract)
     _ufuncs.remove(np.negative)
+    if numpy_support.numpy_version >= (2, 1):
+        _ufuncs.remove(np.ceil)
+        _ufuncs.remove(np.floor)
+        _ufuncs.remove(np.trunc)
     _required_types = '?bBhHiIlLqQ'
     _skip_types = 'fdFDmMO' + _LoopTypesTester._skip_types
 
