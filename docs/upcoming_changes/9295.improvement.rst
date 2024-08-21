@@ -1,0 +1,4 @@
+Improve reorderable ufunc support and add NumPy reduce related tests
+--------------------------------------------------------------------
+
+Improve reorderable ufunc support and add NumPy ufunc.reduce related tests.

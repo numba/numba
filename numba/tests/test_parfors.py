@@ -2378,6 +2378,8 @@ class TestParfors(TestParforsBase):
     @needs_lapack  # use of np.linalg.solve
     @skip_ppc64le_invalid_ctr_loop
     def test_issue9490_non_det_ssa_problem(self):
+        # Test modified to include https://github.com/numba/numba/issues/9581
+        # which is an issue with hoisting
         cmd = [
             sys.executable,
             "-m",
@@ -3324,6 +3326,23 @@ class TestParforsMisc(TestParforsBase):
             return acc
 
         self.assertEqual(foo(), foo.py_func())
+
+    def test_issue_9678_build_map(self):
+        def issue_9678(num_nodes):
+            out = 0
+            for inode_uint in numba.prange(num_nodes):
+                inode = numba.int64(inode_uint)
+                p = {inode: 0.0}   # mainly this build_map bytecode here
+                for _ in range(5):
+                    p[inode] += 1  # and here
+                out += p[inode]
+            return out
+
+        num_nodes = 12
+        issue_9678_serial = numba.jit(parallel=False)(issue_9678)
+        issue_9678_parallel = numba.jit(parallel=True)(issue_9678)
+        self.assertEqual(issue_9678_serial(num_nodes),
+                         issue_9678_parallel(num_nodes))
 
 
 @skip_parfors_unsupported
@@ -4444,7 +4463,7 @@ class TestPrangeSpecific(TestPrangeBase):
             return outputs[0][1][0]
 
         N = config.NUMBA_NUM_THREADS + 1
-        self.prange_tester(test_impl, [Dict.empty(key_type=types.int64, value_type=types.float64) for i in range(N)])
+        self.prange_tester(test_impl, [Dict.empty(key_type=types.int64, value_type=types.float64) for i in range(N)], patch_instance=[1])
 
     def test_call_hoisting(self):
         # issue9529
@@ -4458,7 +4477,7 @@ class TestPrangeSpecific(TestPrangeBase):
             return outputs[0][1][0]
 
         N = config.NUMBA_NUM_THREADS + 1
-        self.prange_tester(test_impl, [Dict.empty(key_type=types.int64, value_type=types.float64) for i in range(N)])
+        self.prange_tester(test_impl, [Dict.empty(key_type=types.int64, value_type=types.float64) for i in range(N)], patch_instance=[1])
 
     def test_record_array_setitem(self):
         # issue6704

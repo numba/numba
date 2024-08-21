@@ -528,6 +528,237 @@ class TestDUFuncAt(TestCase):
         self.assertIn('ufunc.at feature is experimental', str(w[0].message))
 
 
+class TestDUFuncReduceNumPyTests(TestCase):
+    # Tests taken from
+    # https://github.com/numpy/numpy/blob/51ee17b6bd4ccec60a5483ee8bff94ad0c0e8585/numpy/_core/tests/test_ufunc.py  # noqa: E501
+
+    def _generate_jit(self, ufunc, identity=None):
+        if ufunc.nin == 2:
+            vec = vectorize(identity=identity)(lambda a, b: ufunc(a, b))
+        else:
+            vec = vectorize(identity=identity)(lambda a: ufunc(a))
+
+        @njit
+        def fn(array, axis=0, initial=None):
+            return vec.reduce(array, axis=axis, initial=initial)
+        return fn
+
+    @unittest.expectedFailure
+    def test_numpy_scalar_reduction(self):
+        # scalar reduction is not supported
+        power_reduce = self._generate_jit(np.power)
+        expected = np.power.reduce(3)
+        got = power_reduce(3)
+        self.assertPreciseEqual(expected, got)
+
+    def check_identityless_reduction(self, a):
+        def compare_output(a, b):
+            # We don't use self.assertPreciseEqual as the dtype differs
+            # between the value from the reduction and the hardcoded output
+            np.testing.assert_equal(a, b)
+        # test taken from:
+        # https://github.com/numpy/numpy/blob/51ee17b6bd4ccec60a5483ee8bff94ad0c0e8585/numpy/_core/tests/test_ufunc.py#L1591  # noqa: E501
+
+        minimum_reduce = self._generate_jit(np.minimum, identity='reorderable')
+
+        # np.minimum.reduce is an identityless reduction
+
+        # Verify that it sees the zero at various positions
+        a[...] = 1
+        a[1, 0, 0] = 0
+        compare_output(minimum_reduce(a, axis=None), 0)
+        compare_output(minimum_reduce(a, axis=(0, 1)), [0, 1, 1, 1])
+        compare_output(minimum_reduce(a, axis=(0, 2)), [0, 1, 1])
+        compare_output(minimum_reduce(a, axis=(1, 2)), [1, 0])
+        compare_output(minimum_reduce(a, axis=0),
+                       [[0, 1, 1, 1], [1, 1, 1, 1], [1, 1, 1, 1]])
+        compare_output(minimum_reduce(a, axis=1),
+                       [[1, 1, 1, 1], [0, 1, 1, 1]])
+        compare_output(minimum_reduce(a, axis=2),
+                       [[1, 1, 1], [0, 1, 1]])
+        compare_output(minimum_reduce(a, axis=()), a)
+
+        a[...] = 1
+        a[0, 1, 0] = 0
+        compare_output(minimum_reduce(a, axis=None), 0)
+        compare_output(minimum_reduce(a, axis=(0, 1)), [0, 1, 1, 1])
+        compare_output(minimum_reduce(a, axis=(0, 2)), [1, 0, 1])
+        compare_output(minimum_reduce(a, axis=(1, 2)), [0, 1])
+        compare_output(minimum_reduce(a, axis=0),
+                       [[1, 1, 1, 1], [0, 1, 1, 1], [1, 1, 1, 1]])
+        compare_output(minimum_reduce(a, axis=1),
+                       [[0, 1, 1, 1], [1, 1, 1, 1]])
+        compare_output(minimum_reduce(a, axis=2),
+                       [[1, 0, 1], [1, 1, 1]])
+        compare_output(minimum_reduce(a, axis=()), a)
+
+        a[...] = 1
+        a[0, 0, 1] = 0
+        compare_output(minimum_reduce(a, axis=None), 0)
+        compare_output(minimum_reduce(a, axis=(0, 1)), [1, 0, 1, 1])
+        compare_output(minimum_reduce(a, axis=(0, 2)), [0, 1, 1])
+        compare_output(minimum_reduce(a, axis=(1, 2)), [0, 1])
+        compare_output(minimum_reduce(a, axis=0),
+                       [[1, 0, 1, 1], [1, 1, 1, 1], [1, 1, 1, 1]])
+        compare_output(minimum_reduce(a, axis=1),
+                       [[1, 0, 1, 1], [1, 1, 1, 1]])
+        compare_output(minimum_reduce(a, axis=2),
+                       [[0, 1, 1], [1, 1, 1]])
+        compare_output(minimum_reduce(a, axis=()), a)
+
+    def test_numpy_identityless_reduction_corder(self):
+        a = np.empty((2, 3, 4), order='C')
+        self.check_identityless_reduction(a)
+
+    def test_numpy_identityless_reduction_forder(self):
+        a = np.empty((2, 3, 4), order='F')
+        self.check_identityless_reduction(a)
+
+    def test_numpy_identityless_reduction_otherorder(self):
+        a = np.empty((2, 4, 3), order='C').swapaxes(1, 2)
+        self.check_identityless_reduction(a)
+
+    def test_numpy_identityless_reduction_noncontig(self):
+        a = np.empty((3, 5, 4), order='C').swapaxes(1, 2)
+        a = a[1:, 1:, 1:]
+        self.check_identityless_reduction(a)
+
+    def test_numpy_identityless_reduction_noncontig_unaligned(self):
+        a = np.empty((3 * 4 * 5 * 8 + 1,), dtype='i1')
+        a = a[1:].view(dtype='f8')
+        a.shape = (3, 4, 5)
+        a = a[1:, 1:, 1:]
+        self.check_identityless_reduction(a)
+
+    def test_numpy_initial_reduction(self):
+        # np.minimum.reduce is an identityless reduction
+        add_reduce = self._generate_jit(np.add)
+        min_reduce = self._generate_jit(np.minimum)
+        max_reduce = self._generate_jit(np.maximum)
+
+        # For cases like np.maximum(np.abs(...), initial=0)
+        # More generally, a supremum over non-negative numbers.
+        self.assertPreciseEqual(max_reduce(np.asarray([]), initial=0), 0.0)
+
+        # For cases like reduction of an empty array over the reals.
+        self.assertPreciseEqual(min_reduce(np.asarray([]), initial=np.inf),
+                                np.inf)
+        self.assertPreciseEqual(max_reduce(np.asarray([]), initial=-np.inf),
+                                -np.inf)
+
+        # Random tests
+        self.assertPreciseEqual(min_reduce(np.asarray([5]), initial=4), 4)
+        self.assertPreciseEqual(max_reduce(np.asarray([4]), initial=5), 5)
+        self.assertPreciseEqual(max_reduce(np.asarray([5]), initial=4), 5)
+        self.assertPreciseEqual(min_reduce(np.asarray([4]), initial=5), 4)
+
+        # Check initial=None raises ValueError for both types of ufunc
+        # reductions
+        msg = 'zero-size array to reduction operation'
+        for func in (add_reduce, min_reduce):
+            with self.assertRaisesRegex(ValueError, msg):
+                func(np.asarray([]), initial=None)
+
+    def test_numpy_empty_reduction_and_identity(self):
+        arr = np.zeros((0, 5))
+        true_divide_reduce = self._generate_jit(np.true_divide)
+
+        # OK, since the reduction itself is *not* empty, the result is
+        expected = np.true_divide.reduce(arr, axis=1)
+        got = true_divide_reduce(arr, axis=1)
+        self.assertPreciseEqual(expected, got)
+        self.assertPreciseEqual(got.shape, (0,))
+
+        # Not OK, the reduction itself is empty and we have no identity
+        msg = 'zero-size array to reduction operation'
+        with self.assertRaisesRegex(ValueError, msg):
+            true_divide_reduce(arr, axis=0)
+
+        # Test that an empty reduction fails also if the result is empty
+        arr = np.zeros((0, 0, 5))
+        with self.assertRaisesRegex(ValueError, msg):
+            true_divide_reduce(arr, axis=1)
+
+        # Division reduction makes sense with `initial=1` (empty or not):
+        expected = np.true_divide.reduce(arr, axis=1, initial=1)
+        got = true_divide_reduce(arr, axis=1, initial=1)
+        self.assertPreciseEqual(expected, got)
+
+    def test_identityless_reduction_nonreorderable(self):
+        a = np.array([[8.0, 2.0, 2.0], [1.0, 0.5, 0.25]])
+
+        divide_reduce = self._generate_jit(np.divide)
+        res = divide_reduce(a, axis=0)
+        self.assertPreciseEqual(res, np.asarray([8.0, 4.0, 8.0]))
+
+        res = divide_reduce(a, axis=1)
+        self.assertPreciseEqual(res, np.asarray([2.0, 8.0]))
+
+        res = divide_reduce(a, axis=())
+        self.assertPreciseEqual(res, a)
+
+        # will not raise as per Numba issue #9283
+        # assert_raises(ValueError, np.divide.reduce, a, axis=(0, 1))
+
+    def test_reduce_zero_axis(self):
+        # If we have a n x m array and do a reduction with axis=1, then we are
+        # doing n reductions, and each reduction takes an m-element array. For
+        # a reduction operation without an identity, then:
+        #   n > 0, m > 0: fine
+        #   n = 0, m > 0: fine, doing 0 reductions of m-element arrays
+        #   n > 0, m = 0: can't reduce a 0-element array, ValueError
+        #   n = 0, m = 0: can't reduce a 0-element array, ValueError (for
+        #     consistency with the above case)
+        # This test doesn't actually look at return values, it just checks to
+        # make sure that error we get an error in exactly those cases where we
+        # expect one, and assumes the calculations themselves are done
+        # correctly.
+
+        def ok(f, *args, **kwargs):
+            f(*args, **kwargs)
+
+        def err(f, *args, **kwargs):
+            with self.assertRaises(ValueError):
+                f(*args, **kwargs)
+
+        def t(expect, func, n, m):
+            expect(func, np.zeros((n, m)), axis=1)
+            expect(func, np.zeros((m, n)), axis=0)
+            expect(func, np.zeros((n // 2, n // 2, m)), axis=2)
+            expect(func, np.zeros((n // 2, m, n // 2)), axis=1)
+            expect(func, np.zeros((n, m // 2, m // 2)), axis=(1, 2))
+            expect(func, np.zeros((m // 2, n, m // 2)), axis=(0, 2))
+            expect(func, np.zeros((m // 3, m // 3, m // 3,
+                                   n // 2, n // 2)), axis=(0, 1, 2))
+            # Check what happens if the inner (resp. outer) dimensions are a
+            # mix of zero and non-zero:
+            expect(func, np.zeros((10, m, n)), axis=(0, 1))
+            expect(func, np.zeros((10, n, m)), axis=(0, 2))
+            expect(func, np.zeros((m, 10, n)), axis=0)
+            expect(func, np.zeros((10, m, n)), axis=1)
+            expect(func, np.zeros((10, n, m)), axis=2)
+
+        # np.maximum is just an arbitrary ufunc with no reduction identity
+        maximum_reduce = self._generate_jit(np.maximum, identity='reorderable')
+        self.assertEqual(np.maximum.identity, None)
+        t(ok, maximum_reduce, 30, 30)
+        t(ok, maximum_reduce, 0, 30)
+        t(err, maximum_reduce, 30, 0)
+        t(err, maximum_reduce, 0, 0)
+        err(maximum_reduce, [])
+        maximum_reduce(np.zeros((0, 0)), axis=())
+
+        # all of the combinations are fine for a reduction that has an
+        # identity
+        add_reduce = self._generate_jit(np.add, identity=0)
+        t(ok, add_reduce, 30, 30)
+        t(ok, add_reduce, 0, 30)
+        t(ok, add_reduce, 30, 0)
+        t(ok, add_reduce, 0, 0)
+        add_reduce(np.array([], dtype=np.int64))
+        add_reduce(np.zeros((0, 0)), axis=())
+
+
 class TestDUFuncReduce(TestCase):
     def _check_reduce(self, ufunc, dtype=None, initial=None):
 
@@ -591,8 +822,8 @@ class TestDUFuncReduce(TestCase):
         self._check_reduce(dumul)
 
     def test_non_associative_reduce(self):
-        dusub = vectorize('int64(int64, int64)')(pysub)
-        dudiv = vectorize('int64(int64, int64)')(pydiv)
+        dusub = vectorize('int64(int64, int64)', identity=None)(pysub)
+        dudiv = vectorize('int64(int64, int64)', identity=None)(pydiv)
         self._check_reduce(dusub)
         self._check_reduce_axis(dusub, dtype=np.int64)
         self._check_reduce(dudiv)
@@ -603,7 +834,7 @@ class TestDUFuncReduce(TestCase):
         self._check_reduce(duadd, dtype=np.float64)
 
     def test_min_reduce(self):
-        dumin = vectorize('int64(int64, int64)')(pymin)
+        dumin = vectorize('int64(int64, int64)', identity='reorderable')(pymin)
         self._check_reduce(dumin, initial=10)
         self._check_reduce_axis(dumin, dtype=np.int64)
 

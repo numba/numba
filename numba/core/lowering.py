@@ -16,6 +16,7 @@ from numba.core.funcdesc import default_mangler
 from numba.core.environment import Environment
 from numba.core.analysis import compute_use_defs, must_use_alloca
 from numba.misc.firstlinefinder import get_func_body_first_lineno
+from numba.misc.coverage_support import get_registered_loc_notify
 
 
 _VarArgItem = namedtuple("_VarArgItem", ("vararg", "index"))
@@ -68,6 +69,9 @@ class BaseLower(object):
                                       filepath=func_ir.loc.filename,
                                       cgctx=context,
                                       directives_only=directives_only)
+
+        # Loc notify objects
+        self._loc_notify_registry = get_registered_loc_notify()
 
         # Subclass initialization
         self.init()
@@ -139,6 +143,8 @@ class BaseLower(object):
         Called after all blocks are lowered
         """
         self.debuginfo.finalize()
+        for notify in self._loc_notify_registry:
+            notify.close()
 
     def pre_block(self, block):
         """
@@ -307,6 +313,13 @@ class BaseLower(object):
     def typeof(self, varname):
         return self.fndesc.typemap[varname]
 
+    def notify_loc(self, loc: ir.Loc) -> None:
+        """Called when a new instruction with the given `loc` is about to be
+        lowered.
+        """
+        for notify_obj in self._loc_notify_registry:
+            notify_obj.notify(loc)
+
     def debug_print(self, msg):
         if config.DEBUG_JIT:
             self.context.debug_print(
@@ -442,6 +455,7 @@ class Lower(BaseLower):
     def lower_inst(self, inst):
         # Set debug location for all subsequent LL instructions
         self.debuginfo.mark_location(self.builder, self.loc.line)
+        self.notify_loc(self.loc)
         self.debug_print(str(inst))
         if isinstance(inst, ir.Assign):
             ty = self.typeof(inst.target.name)
@@ -1091,15 +1105,73 @@ class Lower(BaseLower):
             raise UnsupportedError(
                 f'mismatch of function types:'
                 f' expected {fnty} but got {types.FunctionType(sig)}')
-        ftype = fnty.ftype
         argvals = self.fold_call_args(
             fnty, sig, expr.args, expr.vararg, expr.kws,
         )
-        func_ptr = self.__get_function_pointer(ftype, expr.func.name, sig=sig)
-        res = self.builder.call(func_ptr, argvals, cconv=fnty.cconv)
-        return res
+        return self.__call_first_class_function_pointer(
+            fnty.ftype, expr.func.name, sig, argvals,
+        )
 
-    def __get_function_pointer(self, ftype, fname, sig=None):
+    def __call_first_class_function_pointer(self, ftype, fname, sig, argvals):
+        """
+        Calls a first-class function pointer.
+
+        This function is responsible for calling a first-class function pointer,
+        which can either be a JIT-compiled function or a Python function. It
+        determines if a JIT address is available, and if so, calls the function
+        using the JIT address. Otherwise, it calls the function using a function
+        pointer obtained from the `__get_first_class_function_pointer` method.
+
+        Args:
+            ftype: The type of the function.
+            fname: The name of the function.
+            sig: The signature of the function.
+            argvals: The argument values to pass to the function.
+
+        Returns:
+            The result of calling the function.
+        """
+        context = self.context
+        builder = self.builder
+        # Determine if jit address is available
+        fstruct = self.loadvar(fname)
+        struct = cgutils.create_struct_proxy(self.typeof(fname))(
+            context, builder, value=fstruct
+        )
+        jit_addr = struct.jit_addr
+        jit_addr.name = f'jit_addr_of_{fname}'
+
+        ctx = context
+        res_slot = cgutils.alloca_once(builder,
+                                       ctx.get_value_type(sig.return_type))
+
+        if_jit_addr_is_null = builder.if_else(
+            cgutils.is_null(builder, jit_addr),
+            likely=False
+        )
+        with if_jit_addr_is_null as (then, orelse):
+            with then:
+                func_ptr = self.__get_first_class_function_pointer(
+                    ftype, fname, sig)
+                res = builder.call(func_ptr, argvals)
+                builder.store(res, res_slot)
+
+            with orelse:
+                llty = ctx.call_conv.get_function_type(
+                    sig.return_type,
+                    sig.args
+                ).as_pointer()
+                func_ptr = builder.bitcast(jit_addr, llty)
+                # call
+                status, res = ctx.call_conv.call_function(
+                    builder, func_ptr, sig.return_type, sig.args, argvals
+                )
+                with cgutils.if_unlikely(builder, status.is_error):
+                    context.call_conv.return_status_propagate(builder, status)
+                builder.store(res, res_slot)
+        return builder.load(res_slot)
+
+    def __get_first_class_function_pointer(self, ftype, fname, sig):
         from numba.experimental.function_type import lower_get_wrapper_address
 
         llty = self.context.get_value_type(ftype)

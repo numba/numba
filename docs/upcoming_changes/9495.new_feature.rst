@@ -1,0 +1,5 @@
+Schedule guvectorize'd functions over dask.distributed
+------------------------------------------------------
+
+Functions decorated with `@guvectorize` can now be scheduled over distributed
+`Dask <https://www.dask.org/>`_ clusters.

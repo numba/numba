@@ -19,7 +19,13 @@
 #else
     #include <stdint.h>
     #define _complex_float_t complex float
-    #define _complex_float_ctor(r, i) (r + I * i)
+    #if defined(_Imaginary_I)
+        #define _complex_float_ctor(r, i) (r + _Imaginary_I * i)
+    #elif defined(_Complex_I)
+        #define _complex_float_ctor(r, i) (r + _Complex_I * i)
+    #else
+        #error "Lack _Imaginary_I and _Complex_I"
+    #endif 
     #define _complex_double_t complex double
 #endif
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION

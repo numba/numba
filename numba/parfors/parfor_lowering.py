@@ -888,7 +888,10 @@ def _hoist_internal(inst, dep_on_param, call_table, hoisted, not_hoisted,
 
     uses = set()
     visit_vars_inner(inst.value, find_vars, uses)
+    unhoistable = {assgn.target.name for assgn, _ in not_hoisted}
+    use_unhoist = uses & unhoistable
     diff = uses.difference(dep_on_param)
+    diff |= use_unhoist
     if config.DEBUG_ARRAY_OPT >= 1:
         print("_hoist_internal:", inst, "uses:", uses, "diff:", diff)
     if len(diff) == 0 and is_pure(inst.value, None, call_table):
@@ -927,15 +930,22 @@ def find_setitems_block(setitems, itemsset, block, typemap):
             # used in a call then consider it unanalyzable and so
             # unavailable for hoisting.
             rhs = inst.value
+            def add_to_itemset(item):
+                assert isinstance(item, ir.Var), rhs
+                if getattr(typemap[item.name], "mutable", False):
+                    itemsset.add(item.name)
+
             if isinstance(rhs, ir.Expr):
-                if rhs.op in ["build_tuple", "build_list", "build_set", "build_map"]:
+                if rhs.op in ["build_tuple", "build_list", "build_set"]:
                     for item in rhs.items:
-                        if getattr(typemap[item.name], "mutable", False):
-                            itemsset.add(item.name)
+                        add_to_itemset(item)
+                elif rhs.op == "build_map":
+                    for pair in rhs.items:
+                        for item in pair:
+                            add_to_itemset(item)
                 elif rhs.op == "call":
                     for item in list(rhs.args) + [x[1] for x in rhs.kws]:
-                        if getattr(typemap[item.name], "mutable", False):
-                            itemsset.add(item.name)
+                        add_to_itemset(item)
 
 def find_setitems_body(setitems, itemsset, loop_body, typemap):
     """
