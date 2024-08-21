@@ -334,36 +334,24 @@ def py_complex__complex__(self):
     return impl
 
 
-@overload_method(types.NumPyFloat, "__float__")
+@overload_method(types.NumPyFloat64, "__float__")
 def np_float64__float__(self):
-    if self.bitwidth == 64:
-        def impl(self):
-            return types.py_float(self)
-    else:
-        def impl(self):
-            return NotImplemented
+    def impl(self):
+        return types.py_float(self)
     return impl
 
 
-@overload_method(types.NumPyFloat, "__complex__")
+@overload_method(types.NumPyFloat64, "__complex__")
 def np_float64__complex__(self):
-    if self.bitwidth == 64:
-        def impl(self):
-            return types.py_complex(self)
-    else:
-        def impl(self):
-            return NotImplemented
+    def impl(self):
+        return types.py_complex(self)
     return impl
 
 
-@overload_method(types.NumPyComplex, "__complex__")
+@overload_method(types.NumPyComplex128, "__complex__")
 def np_complex128__complex__(self):
-    if self.bitwidth == 128:
-        def impl(self):
-            return types.py_complex(self)
-    else:
-        def impl(self):
-            return NotImplemented
+    def impl(self):
+        return types.py_complex(self)
     return impl
 
 
@@ -372,9 +360,9 @@ def np_complex128__complex__(self):
 def py_bool__add__(self, other):
     def impl(self, other):
         if isinstance(other, bool):
-            return bool_add_bool(self, other)
+            return bool_add_bool(self, bool(other))
         elif isinstance(other, int):
-            return int_add_int(int(self), other)
+            return int_add_int(int(self), int(other))
         else:
             return NotImplemented
     return impl
@@ -384,9 +372,7 @@ def py_bool__add__(self, other):
 @overload_method(types.PythonInteger, "__radd__")
 def py_int__add__(self, other):
     def impl(self, other):
-        if isinstance(other, int):
-            return int_add_int(self, other)
-        elif isinstance(other, bool):
+        if isinstance(other, (int, bool)):
             return int_add_int(self, int(other))
         else:
             return NotImplemented
@@ -397,9 +383,8 @@ def py_int__add__(self, other):
 @overload_method(types.PythonFloat, "__radd__")
 def py_float__add__(self, other):
     def impl(self, other):
-        if isinstance(other, float):
-            return float_add_float(self, other)
-        elif isinstance(other, (int, bool, np.float64)):
+        if isinstance(other, (bool, int, float)):
+            # Cast is required in case the other is a NumPy float
             return float_add_float(self, float(other))
         else:
             return NotImplemented
@@ -410,9 +395,8 @@ def py_float__add__(self, other):
 @overload_method(types.PythonComplex, "__radd__")
 def py_complex__add__(self, other):
     def impl(self, other):
-        if isinstance(other, complex):
-            return complex_add_complex(self, other)
-        elif isinstance(other, (float, int, bool, np.float64, np.complex128)):
+        if isinstance(other, (bool, int, float, complex)):
+            # Cast is required in case the other is a NumPy complex
             return complex_add_complex(self, complex(other))
         else:
             return NotImplemented
@@ -474,8 +458,11 @@ def find_np_res_type(op, op_cache, argtys):
 
 @overload_method(types.NumPyBoolean, "__add__")
 @overload_method(types.NumPyInteger, "__add__")
-@overload_method(types.NumPyFloat, "__add__")
-@overload_method(types.NumPyComplex, "__add__")
+@overload_method(types.NumPyFloat16, "__add__")
+@overload_method(types.NumPyFloat32, "__add__")
+@overload_method(types.NumPyFloat64, "__add__")
+@overload_method(types.NumPyComplex64, "__add__")
+@overload_method(types.NumPyComplex128, "__add__")
 def np__add__(self, other):
     final_ty = find_np_res_type("__add__", binop_cache, (self, other))
 
@@ -503,8 +490,11 @@ def np__add__(self, other):
 
 @overload_method(types.NumPyBoolean, "__radd__")
 @overload_method(types.NumPyInteger, "__radd__")
-@overload_method(types.NumPyFloat, "__radd__")
-@overload_method(types.NumPyComplex, "__radd__")
+@overload_method(types.NumPyFloat16, "__radd__")
+@overload_method(types.NumPyFloat32, "__radd__")
+@overload_method(types.NumPyFloat64, "__radd__")
+@overload_method(types.NumPyComplex64, "__radd__")
+@overload_method(types.NumPyComplex128, "__radd__")
 def np__radd__(self, other):
     final_ty = find_np_res_type("__radd__", binop_cache, (self, other))
 

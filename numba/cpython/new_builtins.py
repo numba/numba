@@ -844,11 +844,8 @@ def ol_isinstance(var, typs):
             return true_impl if type(var_ty) is key else false_impl
         else:
             numba_typ = as_numba_type(key)
-            if var_ty == numba_typ:
+            if var_ty == numba_typ or isinstance(var_ty, type(numba_typ)):
                 return true_impl
-            elif isinstance(numba_typ, (types.NPDatetime, types.NPTimedelta)):
-                if isinstance(var_ty, type(numba_typ)):
-                    return true_impl
             elif isinstance(numba_typ, types.ClassType) and \
                     isinstance(var_ty, types.ClassInstanceType) and \
                     var_ty.key == numba_typ.instance_type.key:

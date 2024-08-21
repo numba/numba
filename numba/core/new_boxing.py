@@ -103,7 +103,9 @@ def box_py_float(typ, val, c):
     return c.pyapi.float_from_double(val)
 
 
-@box(types.NumPyFloat)
+@box(types.NumPyFloat16)
+@box(types.NumPyFloat32)
+@box(types.NumPyFloat64)
 def box_np_float(typ, val, c):
     if typ.bitwidth <= 32:
         val = c.builder.fpext(val, c.pyapi.double)
@@ -111,7 +113,9 @@ def box_np_float(typ, val, c):
 
 
 @unbox(types.PythonFloat)
-@unbox(types.NumPyFloat)
+@unbox(types.NumPyFloat16)
+@unbox(types.NumPyFloat32)
+@unbox(types.NumPyFloat64)
 def unbox_float(typ, obj, c):
     fobj = c.pyapi.number_float(obj)
     dbval = c.pyapi.float_as_double(fobj)
@@ -133,7 +137,8 @@ def box_py_complex(typ, val, c):
 
 
 @unbox(types.PythonComplex)
-@unbox(types.NumPyComplex)
+@unbox(types.NumPyComplex64)
+@unbox(types.NumPyComplex128)
 def unbox_py_complex(typ, obj, c):
     c128 = c.context.make_complex(c.builder, types.py_complex)
     ok = c.pyapi.complex_adaptor(obj, c128._getpointer())
@@ -156,7 +161,8 @@ def unbox_py_complex(typ, obj, c):
     return NativeValue(cplx._getvalue(), is_error=failed)
 
 
-@box(types.NumPyComplex)
+@box(types.NumPyComplex64)
+@box(types.NumPyComplex128)
 def box_np_complex(typ, val, c):
     cval = c.context.make_complex(c.builder, typ, value=val)
     if typ == types.np_complex64:

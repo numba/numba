@@ -9,6 +9,7 @@ from numba.core.types.new_scalars.scalars \
     import (Integer, IntegerLiteral, Boolean,
             BooleanLiteral, Float, Complex,
             parse_integer_bitwidth, parse_integer_signed)
+from numba.core.types.new_scalars.python_types import PythonFloat
 from functools import total_ordering
 from numba.core.typeconv import Conversion
 
@@ -118,9 +119,27 @@ class NumPyFloat(Float):
         return getattr(np, "float" + str(self.bitwidth))(value)
 
     def __lt__(self, other):
-        if self.__class__ is not other.__class__:
+        if (
+            self.__class__ is not other.__class__
+            and not isinstance(other, NumPyFloat)
+        ):
             return NotImplemented
         return self.bitwidth < other.bitwidth
+
+
+class NumPyFloat16(NumPyFloat):
+    def __init__(self):
+        super(NumPyFloat16, self).__init__('np_float16')
+
+
+class NumPyFloat32(NumPyFloat):
+    def __init__(self):
+        super(NumPyFloat32, self).__init__('np_float32')
+
+
+class NumPyFloat64(NumPyFloat, PythonFloat):
+    def __init__(self):
+        super(NumPyFloat64, self).__init__('np_float64')
 
 
 @total_ordering
@@ -137,6 +156,21 @@ class NumPyComplex(Complex):
         return getattr(np, "complex" + str(self.bitwidth))(value)
 
     def __lt__(self, other):
-        if self.__class__ is not other.__class__:
+        if (
+            self.__class__ is not other.__class__
+            and not isinstance(other, NumPyComplex)
+        ):
             return NotImplemented
         return self.bitwidth < other.bitwidth
+
+
+class NumPyComplex64(NumPyComplex):
+    def __init__(self, underlying_float):
+        super(NumPyComplex64, self).__init__('np_complex64',
+                                             underlying_float)
+
+
+class NumPyComplex128(NumPyComplex):
+    def __init__(self, underlying_float):
+        super(NumPyComplex128, self).__init__('np_complex128',
+                                              underlying_float)

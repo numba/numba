@@ -715,7 +715,9 @@ class IntegerModel(PrimitiveModel):
 
 
 @register_default(types.PythonFloat)
-@register_default(types.NumPyFloat)
+@register_default(types.NumPyFloat16)
+@register_default(types.NumPyFloat32)
+@register_default(types.NumPyFloat64)
 @register_default(types.MachineFloat)
 class FloatModel(PrimitiveModel):
     def __init__(self, dmm, fe_type):
@@ -724,7 +726,8 @@ class FloatModel(PrimitiveModel):
 
 
 @register_default(types.PythonComplex)
-@register_default(types.NumPyComplex)
+@register_default(types.NumPyComplex64)
+@register_default(types.NumPyComplex128)
 @register_default(types.MachineComplex)
 class ComplexModel(StructModel):
     _element_type = NotImplemented

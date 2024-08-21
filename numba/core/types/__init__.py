@@ -285,13 +285,13 @@ else:
     np_uintp = np_uint32 if utils.MACHINE_BITS == 32 else np_uint64
 
     # NumPy Floats
-    np_float16 = NumPyFloat('np_float16')
-    np_float32 = NumPyFloat('np_float32')
-    np_float64 = NumPyFloat('np_float64')
+    np_float16 = NumPyFloat16()
+    np_float32 = NumPyFloat32()
+    np_float64 = NumPyFloat64()
 
     # NumPy Complex
-    np_complex64 = NumPyComplex('np_complex64', np_float32)
-    np_complex128 = NumPyComplex('np_complex128', np_float64)
+    np_complex64 = NumPyComplex64(np_float32)
+    np_complex128 = NumPyComplex128(np_float64)
 
     np_signed_domain = frozenset([np_int8, np_int16, np_int32, np_int64])
     np_unsigned_domain = frozenset([np_uint8, np_uint16, np_uint32, np_uint64])
