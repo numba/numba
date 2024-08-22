@@ -24,8 +24,8 @@ requirements:
   # build and run dependencies are duplicated to avoid setuptools issues
   # when we also set install_requires in setup.py
   build:
-    - {{ compiler('c') }}      # [not aarch64]
-    - {{ compiler('cxx') }}    # [not aarch64]
+    - {{ compiler('c') }}
+    - {{ compiler('cxx') }}
     # OpenMP headers from llvm needed for OSX.
     - llvm-openmp              # [osx]
   host:
