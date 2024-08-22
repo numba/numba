@@ -1,4 +1,5 @@
 import functools
+import operator
 import warnings
 
 import numpy as np
@@ -12,11 +13,122 @@ from numba.core.typing import npydecl
 from numba.core.typing.templates import AbstractTemplate, signature
 from numba.cpython.unsafe.tuple import tuple_setitem
 from numba.np.ufunc import _internal
+from numba.np.ufunc.ufunc_base import UfuncBase, UfuncLowererBase
 from numba.parfors import array_analysis
 from numba.np.ufunc import ufuncbuilder
 from numba.np import numpy_support
 from typing import Callable
 from llvmlite import ir
+from numba.core.compiler_lock import global_compiler_lock
+
+
+class UfuncAtIterator:
+
+    def __init__(self, ufunc, a, a_ty, indices, indices_ty, b=None, b_ty=None):
+        self.ufunc = ufunc
+        self.a = a
+        self.a_ty = a_ty
+        self.indices = indices
+        self.indices_ty = indices_ty
+        self.b = b
+        self.b_ty = b_ty
+
+    def run(self, context, builder):
+        self._prepare(context, builder)
+        loop_indices, _ = self.indexer.begin_loops()
+        self._call_ufunc(context, builder, loop_indices)
+        self.indexer.end_loops()
+
+    def need_advanced_indexing(self):
+        return isinstance(self.indices_ty, types.BaseTuple)
+
+    def _prepare(self, context, builder):
+        from numba.np.arrayobj import normalize_indices, FancyIndexer
+
+        a, indices = self.a, self.indices
+        a_ty, indices_ty = self.a_ty, self.indices_ty
+
+        zero = context.get_value_type(types.intp)(0)
+
+        if self.b is not None:
+            self.b_indice = cgutils.alloca_once_value(builder, zero)
+
+        if self.need_advanced_indexing():
+            indices = cgutils.unpack_tuple(builder, indices,
+                                           count=len(indices_ty))
+            index_types = indices_ty.types
+            index_types, indices = normalize_indices(context, builder,
+                                                     index_types, indices)
+        else:
+            indices = (indices,)
+            index_types = (indices_ty,)
+            index_types, indices = normalize_indices(context, builder,
+                                                     index_types, indices)
+
+        self.indexer = FancyIndexer(context, builder, a_ty, a,
+                                    index_types, indices)
+        self.indexer.prepare()
+        self.cres = self._compile_ufunc(context, builder)
+
+    def _load_val(self, context, builder, loop_indices, array, array_ty):
+        from numba.np.arrayobj import load_item
+        shapes = cgutils.unpack_tuple(builder, array.shape)
+        strides = cgutils.unpack_tuple(builder, array.strides)
+        data = array.data
+
+        ptr = cgutils.get_item_pointer2(context, builder, data, shapes, strides,
+                                        array_ty.layout, loop_indices)
+        val = load_item(context, builder, array_ty, ptr)
+        return ptr, val
+
+    def _load_flat(self, context, builder, indices, array, array_ty):
+        idx = builder.load(indices)
+        sig = array_ty.dtype(array_ty, types.intp)
+        impl = context.get_function(operator.getitem, sig)
+        val = impl(builder, (array, idx))
+
+        # increment indices
+        one = context.get_value_type(types.intp)(1)
+        idx = builder.add(idx, one)
+        builder.store(idx, indices)
+
+        return None, val
+
+    def _store_val(self, context, builder, array, array_ty, ptr, val):
+        from numba.np.arrayobj import store_item
+        fromty = self.cres.signature.return_type
+        toty = array_ty.dtype
+        val = context.cast(builder, val, fromty, toty)
+        store_item(context, builder, array_ty, val, ptr)
+
+    def _compile_ufunc(self, context, builder):
+        ufunc = self.ufunc.key[0]
+
+        if self.b is None:
+            sig = (self.a_ty.dtype,)
+        else:
+            sig = (self.a_ty.dtype, self.b_ty.dtype)
+
+        cres = ufunc.add(sig)
+        context.add_linking_libs((cres.library,))
+        return cres
+
+    def _call_ufunc(self, context, builder, loop_indices):
+        cres = self.cres
+        a, a_ty = self.a, self.a_ty
+
+        ptr, val = self._load_val(context, builder, loop_indices, a, a_ty)
+
+        if self.b is None:
+            args = (val,)
+        else:
+            b, b_ty, b_idx = self.b, self.b_ty, self.b_indice
+            _, val_b = self._load_flat(context, builder, b_idx, b, b_ty)
+            args = (val, val_b)
+
+        res = context.call_internal(builder, cres.fndesc, cres.signature,
+                                    args)
+        self._store_val(context, builder, a, a_ty, ptr, res)
 
 
 def make_dufunc_kernel(_dufunc):
@@ -31,52 +143,25 @@ def make_dufunc_kernel(_dufunc):
         dufunc = _dufunc
 
         def __init__(self, context, builder, outer_sig):
-            super(DUFuncKernel, self).__init__(context, builder, outer_sig)
+            super().__init__(context, builder, outer_sig)
             self.inner_sig, self.cres = self.dufunc.find_ewise_function(
                 outer_sig.args)
-
-        def generate(self, *args):
-            isig = self.inner_sig
-            osig = self.outer_sig
-            cast_args = [self.cast(val, inty, outty)
-                         for val, inty, outty in
-                         zip(args, osig.args, isig.args)]
-            if self.cres.objectmode:
-                func_type = self.context.call_conv.get_function_type(
-                    types.pyobject, [types.pyobject] * len(isig.args))
-            else:
-                func_type = self.context.call_conv.get_function_type(
-                    isig.return_type, isig.args)
-            module = self.builder.block.function.module
-            entry_point = cgutils.get_or_insert_function(
-                module, func_type,
-                self.cres.fndesc.llvm_func_name)
-            entry_point.attributes.add("alwaysinline")
-
-            _, res = self.context.call_conv.call_function(
-                self.builder, entry_point, isig.return_type, isig.args,
-                cast_args)
-            return self.cast(res, isig.return_type, osig.return_type)
 
     DUFuncKernel.__name__ += _dufunc.ufunc.__name__
     return DUFuncKernel
 
 
-class DUFuncLowerer(object):
+class DUFuncLowerer(UfuncLowererBase):
     '''Callable class responsible for lowering calls to a specific DUFunc.
     '''
     def __init__(self, dufunc):
-        self.kernel = make_dufunc_kernel(dufunc)
-        self.libs = []
-
-    def __call__(self, context, builder, sig, args):
         from numba.np import npyimpl
-        return npyimpl.numpy_ufunc_kernel(context, builder, sig, args,
-                                          self.kernel.dufunc.ufunc,
-                                          self.kernel)
+        super().__init__(dufunc,
+                         make_dufunc_kernel,
+                         npyimpl.numpy_ufunc_kernel)
 
 
-class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
+class DUFunc(serialize.ReduceMixin, _internal._DUFunc, UfuncBase):
     """
     Dynamic universal function (DUFunc) intended to act like a normal
     Numpy ufunc, but capable of call-time (just-in-time) compilation
@@ -101,11 +186,12 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
         super(DUFunc, self).__init__(dispatcher, identity=identity)
         # Loop over a copy of the keys instead of the keys themselves,
         # since we're changing the dictionary while looping.
-        self._install_type()
-        self._lower_me = DUFuncLowerer(self)
-        self._install_cg()
+        self.reorderable = (identity != _internal.PyUFunc_None)
         self.__name__ = dispatcher.py_func.__name__
         self.__doc__ = dispatcher.py_func.__doc__
+        self._lower_me = DUFuncLowerer(self)
+        self._install_cg()
+        self._install_type()
 
     def _reduce_states(self):
         """
@@ -232,6 +318,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
             argtys.append(argty)
         return self._compile_for_argtys(tuple(argtys))
 
+    @global_compiler_lock
     def _compile_for_argtys(self, argtys, return_type=None):
         """
         Given a tuple of argument types (these should be the array
@@ -247,6 +334,16 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
             sig = argtys
         else:
             sig = return_type(*argtys)
+
+        for k, cres in self._dispatcher.overloads.items():
+            if argtys == k.args:
+                msg = ("Compilation requested for previously compiled argument"
+                       f" types ({argtys}). This has no effect and perhaps "
+                       "indicates a bug in the calling code (compiling a "
+                       "ufunc more than once for the same signature")
+                warnings.warn(msg, errors.NumbaWarning)
+                return cres
+
         cres, argtys, return_type = ufuncbuilder._compile_element_wise_function(
             self._dispatcher, self.targetoptions, sig)
         actual_sig = ufuncbuilder._finalize_ufunc_signature(
@@ -257,6 +354,9 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
         self._keepalive.append((ptr, cres.library, env))
         self._lower_me.libs.append(cres.library)
         return cres
+
+    def match_signature(self, ewise_types, sig):
+        return sig.args == ewise_types
 
     def _install_ufunc_attributes(self, template) -> None:
 
@@ -281,6 +381,108 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
 
     def _install_ufunc_methods(self, template) -> None:
         self._install_ufunc_reduce(template)
+        self._install_ufunc_at(template)
+
+    def _install_ufunc_at(self, template) -> None:
+        at = types.Function(template)
+
+        @overload_method(at, 'at')
+        def ol_at(ufunc, a, indices, b=None):
+            warnings.warn("ufunc.at feature is experimental",
+                          category=errors.NumbaExperimentalFeatureWarning)
+
+            if not isinstance(a, types.Array):
+                msg = 'The first argument "a" must be array-like'
+                raise errors.NumbaTypeError(msg)
+
+            indices_arr = isinstance(indices, types.Array)
+            indices_list = isinstance(indices, types.List)
+            indices_tuple = isinstance(indices, types.Tuple)
+            indices_slice = isinstance(indices, types.SliceType)
+            indices_scalar = not (indices_arr or indices_slice or indices_tuple)
+            indices_empty_tuple = indices_tuple and len(indices) == 0
+            b_array = isinstance(b, (types.Array, types.Sequence, types.List,
+                                     types.Tuple))
+            b_none = cgutils.is_nonelike(b)
+            b_scalar = not (b_array or b_none)
+            need_cast = any([indices_list])
+
+            nin = self.ufunc.nin
+
+            # missing second argument?
+            if nin == 2 and cgutils.is_nonelike(b):
+                raise errors.TypingError('second operand needed for ufunc')
+
+            # extra second argument
+            if nin == 1 and not cgutils.is_nonelike(b):
+                msg = 'second operand provided when ufunc is unary'
+                raise errors.TypingError(msg)
+
+            if cgutils.is_nonelike(b):
+                self.add((a.dtype,))
+            elif b_scalar:
+                self.add((a.dtype, b))
+            else:
+                self.add((a.dtype, b.dtype))
+
+            def apply_ufunc_codegen(context, builder, sig, args):
+                from numba.np.arrayobj import make_array
+
+                if len(args) == 4:
+                    _, aty, idxty, bty = sig.args
+                    _, a, indices, b = args
+                else:
+                    _, aty, idxty, bty = sig.args + (None,)
+                    _, a, indices, b = args + (None,)
+
+                a = make_array(aty)(context, builder, a)
+                at_iter = UfuncAtIterator(ufunc, a, aty, indices, idxty, b, bty)
+                at_iter.run(context, builder)
+
+            @intrinsic
+            def apply_a_b_ufunc(typingctx, ufunc, a, indices, b):
+                sig = types.none(ufunc, a, indices, b)
+                return sig, apply_ufunc_codegen
+
+            @intrinsic
+            def apply_a_ufunc(typingctx, ufunc, a, indices):
+                sig = types.none(ufunc, a, indices)
+                return sig, apply_ufunc_codegen
+
+            def impl_cast(ufunc, a, indices, b=None):
+                if b_none:
+                    return ufunc.at(a, np.asarray(indices))
+                else:
+                    return ufunc.at(a,
+                                    np.asarray(indices),
+                                    np.asarray(b))
+
+            def impl_generic(ufunc, a, indices, b=None):
+                if b_none:
+                    apply_a_ufunc(ufunc, a, indices,)
+                else:
+                    b_ = np.asarray(b)
+                    a_ = a[indices]
+                    b_ = np.broadcast_to(b_, a_.shape)
+                    apply_a_b_ufunc(ufunc, a, indices, b_.flat)
+
+            def impl_indices_empty_b_scalar(ufunc, a, indices, b=None):
+                a[()] = ufunc(a[()], b)
+
+            def impl_scalar_scalar(ufunc, a, indices, b=None):
+                if b_none:
+                    a[indices] = ufunc(a[indices])
+                else:
+                    a[indices] = ufunc(a[indices], b)
+
+            if need_cast:
+                return impl_cast
+            elif indices_empty_tuple and b_scalar:
+                return impl_indices_empty_b_scalar
+            elif indices_scalar and b_scalar:
+                return impl_scalar_scalar
+            else:
+                return impl_generic
 
     def _install_ufunc_reduce(self, template) -> None:
         at = types.Function(template)
@@ -295,17 +497,18 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 msg = 'The first argument "array" must be array-like'
                 raise errors.NumbaTypeError(msg)
 
-            axis_int = isinstance(axis, types.Integer)
             axis_int_tuple = isinstance(axis, types.UniTuple) and \
                 isinstance(axis.dtype, types.Integer)
             axis_empty_tuple = isinstance(axis, types.Tuple) and len(axis) == 0
             axis_none = cgutils.is_nonelike(axis)
-            axis_tuple_size = len(axis) if axis_int_tuple else 0
 
-            if self.ufunc.identity is None and not (
-                    (axis_int_tuple and axis_tuple_size == 1) or
-                    axis_empty_tuple or axis_int or axis_none):
-                msg = (f"reduction operation '{self.ufunc.__name__}' is not "
+            identity_none = self.ufunc.identity is None
+            ufunc_name = self.ufunc.__name__
+
+            # In NumPy, a ufunc is reorderable if its identity type is **not**
+            # PyUfunc_None.
+            if not self.reorderable and axis_int_tuple and len(axis) > 1:
+                msg = (f"reduction operation '{ufunc_name}' is not "
                        "reorderable, so at most one axis may be specified")
                 raise errors.NumbaTypeError(msg)
 
@@ -429,6 +632,11 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 return idx, e
 
             def impl_1d(ufunc, array, axis=0, dtype=None, initial=None):
+                if identity_none and initial is None and len(array) == 0:
+                    msg = ('zero-size array to reduction operation '
+                           f'{ufunc_name} which has no identity')
+                    raise ValueError(msg)
+
                 start = 0
                 if init_none and id_none:
                     start = 1
@@ -456,6 +664,11 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
 
                 if axis < 0 or axis >= array.ndim:
                     raise ValueError("Invalid axis")
+
+                if identity_none and initial is None and array.shape[axis] == 0:
+                    msg = ('zero-size array to reduction operation '
+                           f'{ufunc_name} which has no identity')
+                    raise ValueError(msg)
 
                 # create result array
                 shape = tuple_slice(array.shape, axis)
@@ -564,8 +777,27 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
                 # axis is default value (0) or an integer
                 # ufunc(array, axis=0)
                 return impl_nd_axis_int
-            # elif array.ndim == 1:
-            #     return impl_1d
+
+    def at(self, a, indices, b=None):
+        # dynamic compile ufunc.at
+        args = (a,) if cgutils.is_nonelike(b) else (a, b)
+        argtys = (typeof(arg) for arg in args)
+        ewise_types = tuple(arg.dtype if isinstance(arg, types.Array) else arg
+                            for arg in argtys)
+
+        if self.find_ewise_function(ewise_types) == (None, None):
+            # cannot find a matching function and compilation is disabled
+            if self._frozen:
+                msg = "compilation disabled for %s.at(...)" % (self,)
+                raise RuntimeError(msg)
+
+            self._compile_for_args(*args)
+
+        # all good, just dispatch to the function
+        if cgutils.is_nonelike(b):
+            return super().at(a, indices)
+        else:
+            return super().at(*(a, indices, b))
 
     def _install_type(self, typingctx=None):
         """Constructs and installs a typing class for a DUFunc object in the
@@ -642,24 +874,6 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
             raise NotImplementedError("typing gufuncs (nout > 1)")
         outtys.extend(argtys)
         return signature(*outtys)
-
-    def _install_cg(self, targetctx=None):
-        """
-        Install an implementation function for a DUFunc object in the
-        given target context.  If no target context is given, then
-        _install_cg() installs into the target context of the
-        dispatcher object (should be same default context used by
-        jit() and njit()).
-        """
-        if targetctx is None:
-            targetctx = self._dispatcher.targetdescr.target_context
-        _any = types.Any
-        _arr = types.Array
-        # Either all outputs are explicit or none of them are
-        sig0 = (_any,) * self.ufunc.nin + (_arr,) * self.ufunc.nout
-        sig1 = (_any,) * self.ufunc.nin
-        targetctx.insert_func_defn(
-            [(self._lower_me, self, sig) for sig in (sig0, sig1)])
 
 
 array_analysis.MAP_TYPES.append(DUFunc)

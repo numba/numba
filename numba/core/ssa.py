@@ -17,6 +17,7 @@ from collections import defaultdict
 
 from numba import config
 from numba.core import ir, ir_utils, errors
+from numba.core.utils import OrderedSet
 from numba.core.analysis import compute_cfg_from_blocks
 
 
@@ -154,8 +155,10 @@ def _find_defs_violators(blocks, cfg):
     states = dict(defs=defs, uses=uses)
     _run_block_analysis(blocks, states, _GatherDefsHandler())
     _logger.debug("defs %s", pformat(defs))
-    # Gather violators by number of definitions
-    violators = {k for k, vs in defs.items() if len(vs) > 1}
+    # Gather violators by number of definitions.
+    # The violators are added by the order that they are seen and the algorithm
+    # scan from the first to the last basic-block as they occur in bytecode.
+    violators = OrderedSet([k for k, vs in defs.items() if len(vs) > 1])
     # Gather violators by uses not dominated by the one def
     doms = cfg.dominators()
     for k, use_blocks in uses.items():

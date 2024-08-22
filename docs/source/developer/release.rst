@@ -51,18 +51,46 @@ of cherry-picks, the recipe is therefore slightly different.
 Generating Release Notes
 ------------------------
 
-The script ``maint/gitlog2changelog.py`` is used to generate release notes. To
-prepare to use it:
+The Numba release notes consist of two parts and there are two tools which need
+to be invoked.
+
+* Release summary and overview of noteworthy items: use ``towncrier``
+* Pull-request and author list: use ``maint/gitlog2changelog.py``
+
+
+Using ``towncrier``
+...................
+
+Before each release, generate the changelog using Towncrier. 
+This will collect all news fragments, combine them, and output
+the result to a single changelog file. During the changelog creation 
+user is asked if the existing news fragments are to be deleted. 
+In case of release notes generation, they are to be deleted so 
+that they aren't accidentally included in post-release changelog creation. 
+
+`towncrier build --version=0.xx.x`
+
+
+Using ``maint/gitlog2changelog.py``
+...................................
+
+The script ``maint/gitlog2changelog.py`` is used to generate the list of
+pull-requests and authors. To prepare to use it:
 
 * Install dependencies: ``conda install docopt pygithub gitpython``.
 * Generate a fine-grained Personal Access Token on Github with read access to
   public repositories. This can be done in
   `Github Personal Access Tokens settings
   <https://github.com/settings/tokens?type=beta>`_.
-* Establish the base commit for the changelog. This is the common commit between
-  ``main`` and the last release branch, which can be determined by running ``git
-  merge-base main <branch>``. For example, ``branch`` may be ``release0.58`` if
-  generating the release notes for the 0.59 release.
+* Establish the base commit for the changelog. There are two known approaches
+  here:
+
+  * Finding a base-commit using ``git``. This is the common commit between
+    ``main`` and the last release branch, which can be determined by running
+    ``git merge-base main <branch>``. For example, ``branch`` may be
+    ``release0.58`` if generating the release notes for the 0.59 release.
+  * Using the development commit for the release. For example for the
+    `0.59.0rc1` release this would be `0.59.0dev0`.
 
 The script can then be invoked in the root of the repository with:
 
@@ -96,3 +124,14 @@ like:
    * `DrTodd13 <https://github.com/DrTodd13>`_
 
    <... some output omitted ...>
+
+Note that, the list may contain duplicates and thus you need to manually check
+and eliminate these duplictes! The duplicates are commonly the result of
+pull-requests that have been commited to the `main` branch and have then been
+cherry picked to a `release` branch. This can happen when issues are fixed for
+release candidates or when resolved issues are backported for patch releases.
+
+Note also, that you must manually add the pull-request for the changelog itself
+once it has been opened. This must be done after opening the pull-request
+itself, since the link and number for the pull-request will not exists
+beforehand.

@@ -720,6 +720,12 @@ class InternalTargetMismatchError(InternalError):
         super().__init__(msg)
 
 
+class NonexistentTargetError(InternalError):
+    """For signalling that a target that does not exist was requested.
+    """
+    pass
+
+
 class RequireLiteralValue(TypingError):
     """
     For signalling that a function's typing requires a constant value for

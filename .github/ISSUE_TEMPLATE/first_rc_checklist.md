@@ -14,6 +14,7 @@ labels: task
 * [ ] Check Numba's version support table documentation. Update via PR if
       needed.
 * [ ] Review deprecation schedule and notices. Make PRs if need be.
+* [ ] Create changelog using instructions at: docs/source/developer/release.rst
 * [ ] Merge change log changes.
     - [ ] "PR with changelog entries".
 * [ ] Create X.Y release branch.
