@@ -613,7 +613,8 @@ _implement_bitwise_operators()
 
 
 def real_add_impl(context, builder, sig, args):
-    new_args = [context.cast(builder, v, t, sig.return_type) for v, t in zip(args, sig.args)]
+    new_args = [context.cast(builder, v, t, sig.return_type)
+                for v, t in zip(args, sig.args)]
     res = builder.fadd(*new_args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 

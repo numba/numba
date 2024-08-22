@@ -9,7 +9,7 @@ from numba.core.types.new_scalars.scalars \
     import (Integer, IntegerLiteral, Boolean,
             BooleanLiteral, Float, Complex,
             parse_integer_bitwidth, parse_integer_signed)
-from numba.core.types.new_scalars.python_types import PythonFloat
+from numba.core.types.new_scalars.python_types import PythonFloat, PythonComplex
 from functools import total_ordering
 from numba.core.typeconv import Conversion
 
@@ -145,7 +145,7 @@ class NumPyFloat64(NumPyFloat, PythonFloat):
 @total_ordering
 class NumPyComplex(Complex):
     def __init__(self, name, underlying_float, **kwargs):
-        super(NumPyComplex, self).__init__(name, **kwargs)
+        super(Complex, self).__init__(name, **kwargs)
         self.underlying_float = underlying_float
         # Determine bitwidth
         assert self.name.startswith('np_complex')
@@ -170,7 +170,7 @@ class NumPyComplex64(NumPyComplex):
                                              underlying_float)
 
 
-class NumPyComplex128(NumPyComplex):
+class NumPyComplex128(NumPyComplex, PythonComplex):
     def __init__(self, underlying_float):
         super(NumPyComplex128, self).__init__('np_complex128',
                                               underlying_float)

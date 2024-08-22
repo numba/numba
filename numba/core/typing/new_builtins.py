@@ -163,26 +163,9 @@ def ol_is_not_NotImplemented(a, b, /):
         return ol_is_not_NotImplemented
 
 
-def bool_add_bool(x, y):
-    return NotImplemented
-
-
-def int_add_int(x, y):
-    return NotImplemented
-
-
-def float_add_float(x, y):
-    return NotImplemented
-
-
-def complex_add_complex(x, y):
-    return NotImplemented
-
-
 @intrinsic
-def intrin_bool_add_bool(tyctx, boolxty, boolyty):
-    assert boolxty == boolyty
-    sig = types.py_int(boolxty, boolyty)
+def add_as_int(tyctx, xty, yty):
+    sig = types.py_int(xty, yty)
 
     def codegen(cgctx, builder, sig, llargs):
         new_args = [cgctx.cast(builder, v, t, sig.return_type)
@@ -193,75 +176,52 @@ def intrin_bool_add_bool(tyctx, boolxty, boolyty):
 
 
 @intrinsic
-def intrin_int_add_int(tyctx, intxty, intyty):
-    assert intxty == intyty
-    sig = intxty(intxty, intxty)
+def add_as_float(tyctx, xty, yty):
+    sig = types.py_float(xty, yty)
 
     def codegen(cgctx, builder, sig, llargs):
-        return builder.add(*llargs)
-
+        new_args = [cgctx.cast(builder, v, t, sig.return_type)
+                    for v, t in zip(llargs, sig.args)]
+        return builder.fadd(*new_args)
     return sig, codegen
 
 
 @intrinsic
-def intrin_float_add_float(tyctx, floatxty, floatyty):
-    assert floatxty == floatyty, f"{floatxty} != {floatyty}"
-    sig = floatxty(floatxty, floatyty)
-
-    def codegen(cgctx, builder, sig, llargs):
-        return builder.fadd(*llargs)
-    return sig, codegen
-
-
-@intrinsic
-def intrin_complex_add_complex(tyctx, compxty, compyty):
-    assert compxty == compyty
-    sig = compxty(compxty, compyty)
+def add_as_complex(tyctx, xty, yty):
+    sig = types.py_complex(xty, yty)
 
     def codegen(context, builder, sig, args):
         [cx, cy] = args
-        ty = sig.args[0]
-        x = context.make_complex(builder, ty, value=cx)
-        y = context.make_complex(builder, ty, value=cy)
+        ty = sig.return_type
         z = context.make_complex(builder, ty)
-        z.real = builder.fadd(x.real, y.real)
-        z.imag = builder.fadd(x.imag, y.imag)
+        if isinstance(sig.args[0], types.Complex):
+            x = context.make_complex(builder, ty, value=cx)
+            x_real = x.real
+            x_imag = x.imag
+        else:
+            x_real = context.cast(builder, cx, sig.args[0], ty.underlying_float)
+            x_imag = None
+
+        if isinstance(sig.args[1], types.Complex):
+            y = context.make_complex(builder, ty, value=cy)
+            y_real = y.real
+            y_imag = y.imag
+        else:
+            y_real = context.cast(builder, cy, sig.args[1], ty.underlying_float)
+            y_imag = None
+
+        z.real = builder.fadd(x_real, y_real)
+        if x_imag and y_imag:
+            z.imag = builder.fadd(x_imag, y_imag)
+        elif x_imag:
+            z.imag = x_imag
+        elif y_imag:
+            z.imag = y_imag
+
         res = z._getvalue()
         return res
 
     return sig, codegen
-
-
-@overload(bool_add_bool)
-def ol_bool_add_bool(x, y):
-    if x == y:
-        def impl(x, y):
-            return intrin_bool_add_bool(x, y)
-        return impl
-
-
-@overload(int_add_int)
-def ol_int_add_int(x, y):
-    if x == y:
-        def impl(x, y):
-            return intrin_int_add_int(x, y)
-        return impl
-
-
-@overload(float_add_float)
-def ol_float_add_float(x, y):
-    if x == y:
-        def impl(x, y):
-            return intrin_float_add_float(x, y)
-        return impl
-
-
-@overload(complex_add_complex)
-def ol_complex_add_complex(x, y):
-    if x == y:
-        def impl(x, y):
-            return intrin_complex_add_complex(x, y)
-        return impl
 
 
 @overload_method(types.PythonBoolean, "__bool__")
@@ -359,10 +319,8 @@ def np_complex128__complex__(self):
 @overload_method(types.PythonBoolean, "__radd__")
 def py_bool__add__(self, other):
     def impl(self, other):
-        if isinstance(other, bool):
-            return bool_add_bool(self, bool(other))
-        elif isinstance(other, int):
-            return int_add_int(int(self), int(other))
+        if isinstance(other, (bool, int)):
+            return add_as_int(self, other)
         else:
             return NotImplemented
     return impl
@@ -373,7 +331,7 @@ def py_bool__add__(self, other):
 def py_int__add__(self, other):
     def impl(self, other):
         if isinstance(other, (int, bool)):
-            return int_add_int(self, int(other))
+            return add_as_int(self, other)
         else:
             return NotImplemented
     return impl
@@ -384,8 +342,7 @@ def py_int__add__(self, other):
 def py_float__add__(self, other):
     def impl(self, other):
         if isinstance(other, (bool, int, float)):
-            # Cast is required in case the other is a NumPy float
-            return float_add_float(self, float(other))
+            return add_as_float(self, other)
         else:
             return NotImplemented
     return impl
@@ -396,8 +353,7 @@ def py_float__add__(self, other):
 def py_complex__add__(self, other):
     def impl(self, other):
         if isinstance(other, (bool, int, float, complex)):
-            # Cast is required in case the other is a NumPy complex
-            return complex_add_complex(self, complex(other))
+            return add_as_complex(self, other)
         else:
             return NotImplemented
     return impl
@@ -430,16 +386,6 @@ binop_cache = {
 }
 
 
-@intrinsic
-def np_bool_add_bool(tyctx, boolxty, boolyty):
-    sig = types.np_bool_(boolxty, boolyty)
-
-    def codegen(cgctx, builder, sig, llargs):
-        return builder.or_(*llargs)
-
-    return sig, codegen
-
-
 def find_np_res_type(op, op_cache, argtys):
     if argtys in op_cache[op]:
         return op_cache[op][argtys]
@@ -456,6 +402,30 @@ def find_np_res_type(op, op_cache, argtys):
     return res_val
 
 
+def np_add_helper_func(final_ty, current, other):
+    if final_ty is NotImplemented:
+        def impl(self, other):
+            return NotImplemented
+        return impl
+
+    if 'bool' in final_ty.name:
+        add_func = add_as_int
+    elif 'int' in final_ty.name:
+        add_func = add_as_int
+    elif 'float' in final_ty.name:
+        add_func = add_as_float
+    elif 'complex' in final_ty.name:
+        add_func = add_as_complex
+    else:
+        raise TypeError("Addition function not defined",
+                        f" for {current} and {other}")
+
+    # evaluate type
+    def impl(self, other):
+        return final_ty(add_func(self, other))
+    return impl
+
+
 @overload_method(types.NumPyBoolean, "__add__")
 @overload_method(types.NumPyInteger, "__add__")
 @overload_method(types.NumPyFloat16, "__add__")
@@ -465,27 +435,7 @@ def find_np_res_type(op, op_cache, argtys):
 @overload_method(types.NumPyComplex128, "__add__")
 def np__add__(self, other):
     final_ty = find_np_res_type("__add__", binop_cache, (self, other))
-
-    if final_ty is NotImplemented:
-        def impl(self, other):
-            return NotImplemented
-        return impl
-
-    if 'bool' in final_ty.name:
-        add_func = np_bool_add_bool
-    elif 'int' in final_ty.name:
-        add_func = int_add_int
-    elif 'float' in final_ty.name:
-        add_func = float_add_float
-    elif 'complex' in final_ty.name:
-        add_func = complex_add_complex
-    else:
-        raise TypeError(f"Addition function not defined for {self} and {other}")
-
-    # evaluate type
-    def impl(self, other):
-        return add_func(final_ty(self), final_ty(other))
-    return impl
+    return np_add_helper_func(final_ty, self, other)
 
 
 @overload_method(types.NumPyBoolean, "__radd__")
@@ -497,27 +447,7 @@ def np__add__(self, other):
 @overload_method(types.NumPyComplex128, "__radd__")
 def np__radd__(self, other):
     final_ty = find_np_res_type("__radd__", binop_cache, (self, other))
-
-    if final_ty is NotImplemented:
-        def impl(self, other):
-            return NotImplemented
-        return impl
-
-    if 'bool' in final_ty.name:
-        add_func = np_bool_add_bool
-    elif 'int' in final_ty.name:
-        add_func = int_add_int
-    elif 'float' in final_ty.name:
-        add_func = float_add_float
-    elif 'complex' in final_ty.name:
-        add_func = complex_add_complex
-    else:
-        raise TypeError(f"Addition function not defined for {self} and {other}")
-
-    # evaluate type
-    def impl(self, other):
-        return add_func(final_ty(self), final_ty(other))
-    return impl
+    return np_add_helper_func(final_ty, self, other)
 
 
 def generate_binop(op_func, slot, rslot, opchar):
