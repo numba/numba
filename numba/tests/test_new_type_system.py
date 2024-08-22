@@ -71,15 +71,16 @@ class TestDunderMethods(TestCase):
             return a.__add__(b)
 
         for x, y in itertools.product(self.type_cases, self.type_cases):
-            res = foo(x, y)
-            py_res = foo.py_func(x, y)
+            with self.subTest((x, y)): # for clearer failures
+                res = foo(x, y)
+                py_res = foo.py_func(x, y)
 
-            self.assertEqual(res, py_res, (
-                f"Failed for {x} and {y};" +
-                f" gave answer {res} should be {py_res}"))
-            self.assertIs(type(res), type(py_res), (
-                f"Failed for type {type(x)} and {type(y)};" +
-                f" gave answer {type(res)} should be {type(py_res)}"))
+                self.assertEqual(res, py_res, (
+                    f"Failed for {x} and {y};" +
+                    f" gave answer {res} should be {py_res}"))
+                self.assertIs(type(res), type(py_res), (
+                    f"Failed for type {type(x)} and {type(y)};" +
+                    f" gave answer {type(res)} should be {type(py_res)}"))
 
     def test_dunder_radd(self):
         @njit
@@ -87,15 +88,16 @@ class TestDunderMethods(TestCase):
             return a.__radd__(b)
 
         for x, y in itertools.product(self.type_cases, self.type_cases):
-            res = foo(x, y)
-            py_res = foo.py_func(x, y)
+            with self.subTest((x, y)): # for clearer failures
+                res = foo(x, y)
+                py_res = foo.py_func(x, y)
 
-            self.assertEqual(res, py_res, (
-                f"Failed for {x} and {y};" +
-                f" gave answer {res} should be {py_res}"))
-            self.assertIs(type(res), type(py_res), (
-                f"Failed for type {type(x)} and {type(y)};" +
-                f" gave answer {type(res)} should be {type(py_res)}"))
+                self.assertEqual(res, py_res, (
+                    f"Failed for {x} and {y};" +
+                    f" gave answer {res} should be {py_res}"))
+                self.assertIs(type(res), type(py_res), (
+                    f"Failed for type {type(x)} and {type(y)};" +
+                    f" gave answer {type(res)} should be {type(py_res)}"))
 
     def test_add(self):
         @njit

@@ -162,15 +162,21 @@ def ol_is_not_NotImplemented(a, b, /):
             return pred
         return ol_is_not_NotImplemented
 
+def binop_compat(sig):
+    # Ensure types are the same
+    for t in sig.args:
+        if t != sig.return_type:
+            raise errors.TypingError(f"{t} != {sig.return_type} in {sig}")
+
 
 @intrinsic
 def add_as_int(tyctx, xty, yty):
     sig = types.py_int(xty, yty)
 
     def codegen(cgctx, builder, sig, llargs):
-        new_args = [cgctx.cast(builder, v, t, sig.return_type)
-                    for v, t in zip(llargs, sig.args)]
-        return builder.add(*new_args)
+        binop_compat(sig)
+        # These intrinsics should not cast
+        return builder.add(*llargs)
 
     return sig, codegen
 
@@ -180,9 +186,8 @@ def add_as_float(tyctx, xty, yty):
     sig = types.py_float(xty, yty)
 
     def codegen(cgctx, builder, sig, llargs):
-        new_args = [cgctx.cast(builder, v, t, sig.return_type)
-                    for v, t in zip(llargs, sig.args)]
-        return builder.fadd(*new_args)
+        binop_compat(sig)
+        return builder.fadd(*llargs)
     return sig, codegen
 
 
@@ -191,6 +196,7 @@ def add_as_complex(tyctx, xty, yty):
     sig = types.py_complex(xty, yty)
 
     def codegen(context, builder, sig, args):
+        binop_compat(sig)
         [cx, cy] = args
         ty = sig.return_type
         z = context.make_complex(builder, ty)
@@ -199,6 +205,7 @@ def add_as_complex(tyctx, xty, yty):
             x_real = x.real
             x_imag = x.imag
         else:
+            assert False
             x_real = context.cast(builder, cx, sig.args[0], ty.underlying_float)
             x_imag = None
 
@@ -207,6 +214,7 @@ def add_as_complex(tyctx, xty, yty):
             y_real = y.real
             y_imag = y.imag
         else:
+            assert False
             y_real = context.cast(builder, cy, sig.args[1], ty.underlying_float)
             y_imag = None
 
@@ -315,14 +323,51 @@ def np_complex128__complex__(self):
     return impl
 
 
+
+@intrinsic
+def as_py_int(typingctx, ival):
+    # An internal way to cast
+    if isinstance(ival, (types.PythonBoolean, types.PythonInteger)):
+        def impl(context, builder, sig, args):
+            # In CPython, all subclass of int (incl bool) have the same data
+            # model. For Numba, we assume they can all be casted in lowlevel to
+            # repr of py_int
+            return context.cast(builder, args[0], sig.args[0], sig.return_type)
+        return types.py_int(ival), impl
+    else:
+        raise errors.NumbaNotImplementedError(ival)
+
+
+@intrinsic
+def as_py_float(typingctx, ival):
+    # Corresponds to https://github.com/python/cpython/blob/297f2e093ec95800ae2184330b8408c875523467/Objects/floatobject.c#L314
+    if isinstance(ival, (types.PythonBoolean, types.PythonInteger, types.PythonFloat)):
+        def impl(context, builder, sig, args):
+            return context.cast(builder, args[0], sig.args[0], sig.return_type)
+        return types.py_float(ival), impl
+    else:
+        raise errors.NumbaNotImplementedError(ival)
+
+
+@intrinsic
+def as_py_complex(typingctx, ival):
+    # Corresponds to https://github.com/python/cpython/blob/297f2e093ec95800ae2184330b8408c875523467/Objects/complexobject.c#L475
+    if isinstance(ival, (types.PythonBoolean, types.PythonInteger, types.PythonFloat, types.PythonComplex)):
+        def impl(context, builder, sig, args):
+            return context.cast(builder, args[0], sig.args[0], sig.return_type)
+        return types.py_complex(ival), impl
+    else:
+
+        raise errors.NumbaNotImplementedError(ival)
+
+
 @overload_method(types.PythonBoolean, "__add__")
 @overload_method(types.PythonBoolean, "__radd__")
 def py_bool__add__(self, other):
     def impl(self, other):
-        if isinstance(other, (bool, int)):
-            return add_as_int(self, other)
-        else:
-            return NotImplemented
+        # Defer to py_int implementation.
+        # In CPython, PyBool is a subclass of PyLong.
+        return as_py_int(self).__add__(other)
     return impl
 
 
@@ -330,8 +375,8 @@ def py_bool__add__(self, other):
 @overload_method(types.PythonInteger, "__radd__")
 def py_int__add__(self, other):
     def impl(self, other):
-        if isinstance(other, (int, bool)):
-            return add_as_int(self, other)
+        if isinstance(other, (bool, int)):
+            return add_as_int(self, as_py_int(other))
         else:
             return NotImplemented
     return impl
@@ -342,7 +387,7 @@ def py_int__add__(self, other):
 def py_float__add__(self, other):
     def impl(self, other):
         if isinstance(other, (bool, int, float)):
-            return add_as_float(self, other)
+            return add_as_float(self, as_py_float(other))
         else:
             return NotImplemented
     return impl
@@ -353,7 +398,7 @@ def py_float__add__(self, other):
 def py_complex__add__(self, other):
     def impl(self, other):
         if isinstance(other, (bool, int, float, complex)):
-            return add_as_complex(self, other)
+            return add_as_complex(self, as_py_complex(other))
         else:
             return NotImplemented
     return impl
