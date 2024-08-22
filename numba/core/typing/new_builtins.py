@@ -3,7 +3,7 @@ import itertools
 import numpy as np
 import operator
 
-from numba.core import types, errors, config
+from numba.core import types, errors, config, cgutils
 from numba import prange
 from numba.parfors.parfor import internal_prange
 
@@ -398,32 +398,79 @@ def find_np_res_type(op, op_cache, argtys):
     res_val = getattr(argvals[0], op)(*argvals[1:])
     if res_val is not NotImplemented:
         res_val = FROM_DTYPE[res_val.dtype]
+    else:
+        res_val = types.not_implemented_type
     op_cache[op][argtys] = res_val
     return res_val
 
 
-def np_add_helper_func(final_ty, current, other):
-    if final_ty is NotImplemented:
-        def impl(self, other):
-            return NotImplemented
-        return impl
+def get_np_add_codegen():
+    def codegen(context, builder, sig, args):
+        if isinstance(sig.return_type, types.Complex):
+            [cx, cy] = args
+            ty = sig.return_type
+            z = context.make_complex(builder, ty)
+            if isinstance(sig.args[0], types.Complex):
+                x = context.make_complex(builder, ty, value=cx)
+                x_real = x.real
+                x_imag = x.imag
+            else:
+                x_real = context.cast(builder, cx, sig.args[0],
+                                      ty.underlying_float)
+                x_imag = None
 
-    if 'bool' in final_ty.name:
-        add_func = add_as_int
-    elif 'int' in final_ty.name:
-        add_func = add_as_int
-    elif 'float' in final_ty.name:
-        add_func = add_as_float
-    elif 'complex' in final_ty.name:
-        add_func = add_as_complex
-    else:
-        raise TypeError("Addition function not defined",
-                        f" for {current} and {other}")
+            if isinstance(sig.args[1], types.Complex):
+                y = context.make_complex(builder, ty, value=cy)
+                y_real = y.real
+                y_imag = y.imag
+            else:
+                y_real = context.cast(builder, cy, sig.args[1],
+                                      ty.underlying_float)
+                y_imag = None
 
-    # evaluate type
-    def impl(self, other):
-        return final_ty(add_func(self, other))
-    return impl
+            z.real = builder.fadd(x_real, y_real)
+            if x_imag and y_imag:
+                z.imag = builder.fadd(x_imag, y_imag)
+            elif x_imag:
+                z.imag = x_imag
+            elif y_imag:
+                z.imag = y_imag
+
+            res = z._getvalue()
+            return res
+        elif sig.return_type == types.np_bool_:
+            new_args = [context.cast(builder, v, t, sig.return_type)
+                        for v, t in zip(args, sig.args)]
+            return builder.and_(*new_args)
+        elif sig.return_type in types.np_integer_domain:
+            new_args = [context.cast(builder, v, t, sig.return_type)
+                        for v, t in zip(args, sig.args)]
+            return builder.add(*new_args)
+        elif sig.return_type in (types.np_real_domain | {types.np_float16}):
+            new_args = [context.cast(builder, v, t, sig.return_type)
+                        for v, t in zip(args, sig.args)]
+            return builder.fadd(*new_args)
+        else:
+            py_api = context.get_python_api(builder)
+            ni_struct = py_api.get_c_object("_Py_NotImplementedStruct")
+            py_api.incref(ni_struct)
+            return ni_struct
+
+    return codegen
+
+
+@intrinsic
+def np_add_intrin(tyctx, xty, yty):
+    final_ty = find_np_res_type("__add__", binop_cache, (xty, yty))
+    sig = final_ty(xty, yty)
+    return sig, get_np_add_codegen()
+
+
+@intrinsic
+def np_radd_intrin(tyctx, xty, yty):
+    final_ty = find_np_res_type("__radd__", binop_cache, (xty, yty))
+    sig = final_ty(xty, yty)
+    return sig, get_np_add_codegen()
 
 
 @overload_method(types.NumPyBoolean, "__add__")
@@ -434,8 +481,9 @@ def np_add_helper_func(final_ty, current, other):
 @overload_method(types.NumPyComplex64, "__add__")
 @overload_method(types.NumPyComplex128, "__add__")
 def np__add__(self, other):
-    final_ty = find_np_res_type("__add__", binop_cache, (self, other))
-    return np_add_helper_func(final_ty, self, other)
+    def impl(self, other):
+        return np_add_intrin(self, other)
+    return impl
 
 
 @overload_method(types.NumPyBoolean, "__radd__")
@@ -446,8 +494,9 @@ def np__add__(self, other):
 @overload_method(types.NumPyComplex64, "__radd__")
 @overload_method(types.NumPyComplex128, "__radd__")
 def np__radd__(self, other):
-    final_ty = find_np_res_type("__radd__", binop_cache, (self, other))
-    return np_add_helper_func(final_ty, self, other)
+    def impl(self, other):
+        return np_radd_intrin(self, other)
+    return impl
 
 
 def generate_binop(op_func, slot, rslot, opchar):
