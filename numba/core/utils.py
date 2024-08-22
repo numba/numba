@@ -13,6 +13,7 @@ import warnings
 import threading
 import contextlib
 import typing as _tp
+from pprint import pformat
 
 from types import ModuleType
 from importlib import import_module
@@ -797,3 +798,12 @@ def dump_llvm(fndesc, module):
     else:
         print(module)
     print('=' * 80)
+
+
+class _lazy_pformat(object):
+    def __init__(self, *args, **kwargs):
+        self.args = args
+        self.kwargs = kwargs
+
+    def __str__(self):
+        return pformat(*self.args, **self.kwargs)
