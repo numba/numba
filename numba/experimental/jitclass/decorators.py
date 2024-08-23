@@ -13,20 +13,20 @@ if pt.TYPE_CHECKING:
 
 
 @pt.overload
-def jitmethod(
-    func_or_spec: pt.Optional[FuncSpecType] = None,
-    spec: pt.Optional[FuncSpecType] = None,
-    **njit_options: bool
-) -> pt.Callable[[C], JitMethod[C]]:
-    ...
-
-
-@pt.overload
 def jitmethod(  # noqa: F811
     func_or_spec: C,
     spec: pt.Optional[FuncSpecType] = None,
     **njit_options: bool
 ) -> JitMethod[C]:
+    ...
+
+
+@pt.overload
+def jitmethod(
+    func_or_spec: pt.Optional[FuncSpecType] = None,
+    spec: pt.Optional[FuncSpecType] = None,
+    **njit_options: bool
+) -> pt.Callable[[C], JitMethod[C]]:
     ...
 
 
