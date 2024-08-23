@@ -388,7 +388,6 @@ class CompilerBase(object):
     """
     Stores and manages states for the compiler
     """
-    _inflight_compilation = []
 
     def __init__(self, typingctx, targetctx, library, args, return_type, flags,
                  locals):
@@ -459,35 +458,14 @@ class CompilerBase(object):
         """
         Populate and run compiler pipeline
         """
-
-        from contextlib import ExitStack
-        raii = ExitStack()
-        with ConfigStack().enter(self.state.flags.copy()), raii:
+        with ConfigStack().enter(self.state.flags.copy()):
             pms = self.define_pipelines()
-            func_name = "%s.%s" % (self.state.func_id.modname,
-                                    self.state.func_id.func_qualname)
-            args = self.state.args
-
-            key = (self.state.func_id.func_qualname, self.state.args)
-            # print(key)
-            # print(len(self._inflight_compilation))
-            if key in self._inflight_compilation:
-                # A implementation bug may end up in here.
-                # See changes in templates.py that fixes it.
-                print("CYCLE", key)
-                raise CompilerError(f"cycle on {key}")
-            else:
-                self._inflight_compilation.append(key)
-                @raii.push
-                def cleanup(exc, *args):
-                    if exc is not None:
-                        # For debug
-                        print("FAILED", key)
-                    self._inflight_compilation.pop()
-
             for pm in pms:
                 pipeline_name = pm.pipeline_name
-                event("Pipeline: %s for %s | %s" % (pipeline_name, func_name, args))
+                func_name = "%s.%s" % (self.state.func_id.modname,
+                                       self.state.func_id.func_qualname)
+                event("Pipeline: %s for %s" % (pipeline_name, func_name))
+
                 self.state.metadata['pipeline_times'] = {pipeline_name:
                                                          pm.exec_times}
                 is_final_pipeline = pm == pms[-1]
