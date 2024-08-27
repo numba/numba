@@ -327,6 +327,8 @@ intermediate variables, it will label every variable as type ``pyobject`` and
 fall back to object mode.  Type inference can fail when unsupported Python
 types, language features, or functions are used in the function body.
 
+.. note:: As of Numba 0.59, object mode fall back will only occur when  
+          :term:`loop-lifting` is enabled.
 
 .. _`rewrite-typed-ir`:
 

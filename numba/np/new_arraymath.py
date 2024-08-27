@@ -244,9 +244,9 @@ def gen_sum_axis_impl(is_axis_const, const_axis_val, op, zero):
     return inner
 
 
-@lower_builtin(np.sum, types.Array, types.intp, types.DTypeSpec)
+@lower_builtin(np.sum, types.Array, types.np_intp, types.DTypeSpec)
 @lower_builtin(np.sum, types.Array, types.IntegerLiteral, types.DTypeSpec)
-@lower_builtin("array.sum", types.Array, types.intp, types.DTypeSpec)
+@lower_builtin("array.sum", types.Array, types.np_intp, types.DTypeSpec)
 @lower_builtin("array.sum", types.Array, types.IntegerLiteral, types.DTypeSpec)
 def array_sum_axis_dtype(context, builder, sig, args):
     retty = sig.return_type
@@ -1422,7 +1422,6 @@ def _early_return_impl(val):
     return impl
 
 
-@overload_method(types.Array, 'ptp')
 @overload(np.ptp)
 def np_ptp(a):
 
@@ -1451,8 +1450,12 @@ def np_ptp(a):
     return np_ptp_impl
 
 
+if numpy_version < (2, 0):
+    overload_method(types.Array, 'ptp')(np_ptp)
+
 #----------------------------------------------------------------------------
 # Median and partitioning
+
 
 @register_jitable
 def nan_aware_less_than(a, b):
@@ -2898,7 +2901,7 @@ def np_corrcoef(x, y=None, rowvar=True):
     y_dt = determine_dtype(y)
     dtype = np.result_type(x_dt, y_dt, np.float64)
 
-    if dtype == np.complex_:
+    if dtype == np.complex128:
         clip_fn = _clip_complex
     else:
         clip_fn = _clip_corr
@@ -3140,7 +3143,6 @@ def round_ndigits(x, ndigits):
 
 @overload(np.around)
 @overload(np.round)
-@overload(np.round_)
 def impl_np_round(a, decimals=0, out=None):
     if not type_can_asarray(a):
         raise TypingError('The argument "a" must be array-like')
@@ -3194,6 +3196,10 @@ def impl_np_round(a, decimals=0, out=None):
                     out[index] = np.round(val, decimals)
                 return out
             return impl
+
+
+if numpy_version < (2, 0):
+    overload(np.round_)(impl_np_round)
 
 
 @overload(np.sinc)
@@ -3742,46 +3748,38 @@ def _less_than(a, b):
     return a < b
 
 
-def _searchsorted(func_1, func_2):
+@register_jitable
+def _less_then_datetime64(a, b):
+    # Original numpy code is at:
+    # https://github.com/numpy/numpy/blob/3dad50936a8dc534a81a545365f69ee9ab162ffe/numpy/_core/src/npysort/npysort_common.h#L334-L346
+    if np.isnat(a):
+        return 0
+
+    if np.isnat(b):
+        return 1
+
+    return a < b
+
+
+@register_jitable
+def _less_then_or_equal_datetime64(a, b):
+    return not _less_then_datetime64(b, a)
+
+
+def _searchsorted(cmp):
     # a facsimile of:
     # https://github.com/numpy/numpy/blob/4f84d719657eb455a35fcdf9e75b83eb1f97024a/numpy/core/src/npysort/binsearch.cpp#L61  # noqa: E501
 
-    def impl(a, v):
-        min_idx = 0
-        max_idx = len(a)
-
-        out = np.empty(v.size, np.intp)
-
-        last_key_val = v.flat[0]
-
-        for i in range(v.size):
-            key_val = v.flat[i]
-
-            if func_1(last_key_val, key_val):
-                max_idx = len(a)
+    def impl(a, key_val, min_idx, max_idx):
+        while min_idx < max_idx:
+            # to avoid overflow
+            mid_idx = min_idx + ((max_idx - min_idx) >> 1)
+            mid_val = a[mid_idx]
+            if cmp(mid_val, key_val):
+                min_idx = mid_idx + 1
             else:
-                min_idx = 0
-                if max_idx < len(a):
-                    max_idx += 1
-                else:
-                    max_idx = len(a)
-
-            last_key_val = key_val
-
-            while min_idx < max_idx:
-                # to avoid overflow
-                mid_idx = min_idx + ((max_idx - min_idx) >> 1)
-
-                mid_val = a[mid_idx]
-
-                if func_2(mid_val, key_val):
-                    min_idx = mid_idx + 1
-                else:
-                    max_idx = mid_idx
-
-            out[i] = min_idx
-
-        return out.reshape(v.shape)
+                max_idx = mid_idx
+        return min_idx, max_idx
 
     return impl
 
@@ -3792,21 +3790,29 @@ VALID_SEARCHSORTED_SIDES = frozenset({'left', 'right'})
 def make_searchsorted_implementation(np_dtype, side):
     assert side in VALID_SEARCHSORTED_SIDES
 
-    lt = _less_than
-    le = _less_than_or_equal
+    if np_dtype.char in 'mM':
+        # is datetime
+        lt = _less_then_datetime64
+        le = _less_then_or_equal_datetime64
+    else:
+        lt = _less_than
+        le = _less_than_or_equal
 
     if side == 'left':
-        _impl = _searchsorted(lt, lt)
+        _impl = _searchsorted(lt)
+        _cmp = lt
     else:
         if np.issubdtype(np_dtype, np.inexact) and numpy_version < (1, 23):
             # change in behaviour for inexact types
             # introduced by:
             # https://github.com/numpy/numpy/pull/21867
-            _impl = _searchsorted(lt, le)
+            _impl = _searchsorted(le)
+            _cmp = lt
         else:
-            _impl = _searchsorted(le, le)
+            _impl = _searchsorted(le)
+            _cmp = le
 
-    return register_jitable(_impl)
+    return register_jitable(_impl), register_jitable(_cmp)
 
 
 @overload(np.searchsorted)
@@ -3824,18 +3830,40 @@ def searchsorted(a, v, side='left'):
         v_dt = as_dtype(v)
 
     np_dt = np.promote_types(as_dtype(a.dtype), v_dt)
-    _impl = make_searchsorted_implementation(np_dt, side_val)
+    _impl, _cmp = make_searchsorted_implementation(np_dt, side_val)
 
     if isinstance(v, types.Array):
         def impl(a, v, side='left'):
-            return _impl(a, v)
+            out = np.empty(v.size, dtype=np.intp)
+            last_key_val = v.flat[0]
+            min_idx = 0
+            max_idx = len(a)
+
+            for i in range(v.size):
+                key_val = v.flat[i]
+
+                if _cmp(last_key_val, key_val):
+                    max_idx = len(a)
+                else:
+                    min_idx = 0
+                    if max_idx < len(a):
+                        max_idx += 1
+                    else:
+                        max_idx = len(a)
+
+                last_key_val = key_val
+                min_idx, max_idx = _impl(a, key_val, min_idx, max_idx)
+                out[i] = min_idx
+
+            return out.reshape(v.shape)
     elif isinstance(v, types.Sequence):
         def impl(a, v, side='left'):
-            return _impl(a, np.array(v))
+            v = np.asarray(v)
+            return np.searchsorted(a, v, side=side)
     else:  # presumably `v` is scalar
         def impl(a, v, side='left'):
-            return _impl(a, np.array([v]))[0]
-
+            r, _ = _impl(a, v, 0, len(a))
+            return r
     return impl
 
 
@@ -4275,7 +4303,6 @@ def np_asarray(a, dtype=None):
     if not type_can_asarray(a):
         return None
 
-    impl = None
     if isinstance(a, types.Array):
         if is_nonelike(dtype) or a.dtype == dtype.dtype:
             def impl(a, dtype=None):
@@ -4318,23 +4345,26 @@ def np_asarray(a, dtype=None):
 
         def impl(a, dtype=None):
             return arr.copy()
-
-    return impl
-
-
-@overload(np.asfarray)
-def np_asfarray(a, dtype=np.float64):
-    # convert numba dtype types into NumPy dtype
-    if isinstance(dtype, types.Type):
-        dtype = as_dtype(dtype)
-    if not np.issubdtype(dtype, np.inexact):
-        dx = types.float64
     else:
-        dx = dtype
+        impl = None
 
-    def impl(a, dtype=np.float64):
-        return np.asarray(a, dx)
     return impl
+
+
+if numpy_version < (2, 0):
+    @overload(np.asfarray)
+    def np_asfarray(a, dtype=np.float64):
+        # convert numba dtype types into NumPy dtype
+        if isinstance(dtype, types.Type):
+            dtype = as_dtype(dtype)
+        if not np.issubdtype(dtype, np.inexact):
+            dx = types.float64
+        else:
+            dx = dtype
+
+        def impl(a, dtype=np.float64):
+            return np.asarray(a, dx)
+        return impl
 
 
 @overload(np.extract)
@@ -4567,9 +4597,9 @@ def window_generator(func):
         def window_impl(M):
 
             if M < 1:
-                return np.array((), dtype=np.float_)
+                return np.array((), dtype=np.float64)
             if M == 1:
-                return np.ones(1, dtype=np.float_)
+                return np.ones(1, dtype=np.float64)
             return func(M)
 
         return window_impl
@@ -4670,8 +4700,8 @@ def _i0(x):
 
 @register_jitable
 def _i0n(n, alpha, beta):
-    y = np.empty_like(n, dtype=np.float_)
-    t = _i0(np.float_(beta))
+    y = np.empty_like(n, dtype=np.float64)
+    t = _i0(np.float64(beta))
     for i in range(len(y)):
         y[i] = _i0(beta * np.sqrt(1 - ((n[i] - alpha) / alpha)**2.0)) / t
 
@@ -4688,9 +4718,9 @@ def np_kaiser(M, beta):
 
     def np_kaiser_impl(M, beta):
         if M < 1:
-            return np.array((), dtype=np.float_)
+            return np.array((), dtype=np.float64)
         if M == 1:
-            return np.ones(1, dtype=np.float_)
+            return np.ones(1, dtype=np.float64)
 
         n = np.arange(0, M)
         alpha = (M - 1) / 2.0

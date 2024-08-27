@@ -2,6 +2,8 @@
 Unspecified error handling tests
 """
 
+import sys
+import subprocess
 import numpy as np
 import os
 import warnings
@@ -469,12 +471,56 @@ class TestCapturedErrorHandling(SerialMixin, TestCase):
                     expected = "object has no attribute 'some_invalid_attr'"
                     self.assertIn(expected, str(raises.exception))
 
-    @TestCase.run_test_in_subprocess(
-        envvars={"NUMBA_CAPTURED_ERRORS": "old_style"},
-    )
-    def test_old_style_deprecation(self):
+    def _run_in_separate_process(self, runcode, env):
+        # Run code in separate process with -Wall and specific env-vars
+        code = f"""if 1:
+            {runcode}\n
+            """
+        # On windows, missing the base environment variable can cause
+        # Fatal Python error: _Py_HashRandomization_Init: failed to get random
+        #                     numbers to initialize Python
+        proc_env = os.environ.copy()
+        proc_env.update(env)
+        popen = subprocess.Popen([sys.executable, "-Wall", "-c", code],
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE,
+                                 env=proc_env)
+
+        out, err = popen.communicate()
+        if popen.returncode != 0:
+            raise AssertionError("process failed with code %s: stderr follows"
+                                 "\n%s\n" % (popen.returncode, err.decode()))
+        return out, err
+
+    def test_old_style_deprecation_on_import(self):
+        from numba.core.config import _old_style_deprecation_msg
+
+        code = """
+        import numba
+        """
+        # Check that the deprecated message is shown
+        # if NUMBA_CAPTURED_ERRORS=old_style
+        env = {"NUMBA_CAPTURED_ERRORS": "old_style"}
+        _out, err = self._run_in_separate_process(code, env)
+        self.assertIn(_old_style_deprecation_msg, err.decode())
+
+        # Check that the deprecated message is NOT shown
+        # if NUMBA_CAPTURED_ERRORS is unset
+        env = {"NUMBA_CAPTURED_ERRORS": ""}
+        _out, err = self._run_in_separate_process(code, env)
+        # Check that the deprecated message is not shown
+        self.assertNotIn("NumbaPendingDeprecationWarning", err.decode())
+
+        # Check that the deprecated message is NOT shown
+        # if NUMBA_CAPTURED_ERRORS=new_style
+        env = {"NUMBA_CAPTURED_ERRORS": "new_style"}
+        _out, err = self._run_in_separate_process(code, env)
+        # Check that the deprecated message is not shown
+        self.assertNotIn("NumbaPendingDeprecationWarning", err.decode())
+
+    def _test_old_style_deprecation(self):
         # Verify that old_style error raise the correct deprecation warning
-        warnings.simplefilter("always", errors.NumbaPendingDeprecationWarning)
+        warnings.simplefilter("always", errors.NumbaDeprecationWarning)
 
         def bar(x):
             pass
@@ -483,7 +529,7 @@ class TestCapturedErrorHandling(SerialMixin, TestCase):
         def ol_bar(x):
             raise AttributeError("Invalid attribute")
 
-        with self.assertWarns(errors.NumbaPendingDeprecationWarning) as warns:
+        with self.assertWarns(errors.NumbaDeprecationWarning) as warns:
             with self.assertRaises(errors.TypingError):
                 @njit('void(int64)')
                 def foo(x):
@@ -495,12 +541,17 @@ class TestCapturedErrorHandling(SerialMixin, TestCase):
                 str(warns.warnings[0].message),
             )
 
+    # Check deprecation warning when NUMBA_CAPTURED_ERRORS=old_style
+    test_old_style_deprecation = TestCase.run_test_in_subprocess(
+        envvars={"NUMBA_CAPTURED_ERRORS": "old_style"},
+    )(_test_old_style_deprecation)
+
     @TestCase.run_test_in_subprocess(
         envvars={"NUMBA_CAPTURED_ERRORS": "old_style"},
     )
     def test_old_style_no_deprecation(self):
         # Verify that old_style error with NumbaError does not raise warnings
-        warnings.simplefilter("always", errors.NumbaPendingDeprecationWarning)
+        warnings.simplefilter("always", errors.NumbaDeprecationWarning)
 
         def bar(x):
             pass
@@ -518,12 +569,9 @@ class TestCapturedErrorHandling(SerialMixin, TestCase):
             self.assertEqual(len(warns), 0,
                              msg="There should not be any warnings")
 
-    @TestCase.run_test_in_subprocess(
-        envvars={"NUMBA_CAPTURED_ERRORS": "new_style"},
-    )
-    def test_new_style_no_warnings(self):
+    def _test_new_style_no_warnings(self):
         # Verify that new_style error raise no warnings
-        warnings.simplefilter("always", errors.NumbaPendingDeprecationWarning)
+        warnings.simplefilter("always", errors.NumbaDeprecationWarning)
 
         def bar(x):
             pass
@@ -540,6 +588,16 @@ class TestCapturedErrorHandling(SerialMixin, TestCase):
             # There should not be any warnings
             self.assertEqual(len(warns), 0,
                              msg="There should not be any warnings")
+
+    test_new_style_no_warnings = TestCase.run_test_in_subprocess(
+        envvars={"NUMBA_CAPTURED_ERRORS": "new_style"},
+    )(_test_new_style_no_warnings)
+
+    # Check deprecation warning when NUMBA_CAPTURED_ERRORS=default
+    # ("default" means "old_style")
+    test_default_new_style_no_deprecation = TestCase.run_test_in_subprocess(
+        envvars={"NUMBA_CAPTURED_ERRORS": "default"},
+    )(_test_new_style_no_warnings)
 
 
 if __name__ == '__main__':

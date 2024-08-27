@@ -1760,7 +1760,8 @@ class TestNpStack(MemoryLeakMixin, TestCase):
         # Since np.row_stack is an alias for np.vstack, it does not need a
         # separate Numba implementation. For every test for np.vstack, the same
         # test for np.row_stack has been added.
-        for pyfunc in (np_vstack, np_row_stack):
+        functions = [np_vstack, np_row_stack]
+        for pyfunc in functions:
             cfunc = nrtjit(pyfunc)
 
             self.check_xxstack(pyfunc, cfunc)

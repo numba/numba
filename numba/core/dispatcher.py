@@ -8,6 +8,7 @@ import types as pytypes
 import uuid
 import weakref
 from contextlib import ExitStack
+from abc import abstractmethod
 
 from numba import _dispatcher
 from numba.core import (
@@ -20,52 +21,7 @@ from numba.core.typing.typeof import Purpose, typeof
 from numba.core.bytecode import get_code_object
 from numba.core.caching import NullCache, FunctionCache
 from numba.core import entrypoints
-from numba.core.retarget import BaseRetarget
 import numba.core.event as ev
-
-
-class _RetargetStack(utils.ThreadLocalStack, stack_name="retarget"):
-    def push(self, state):
-        super().push(state)
-        _dispatcher.set_use_tls_target_stack(len(self) > 0)
-
-    def pop(self):
-        super().pop()
-        _dispatcher.set_use_tls_target_stack(len(self) > 0)
-
-
-class TargetConfigurationStack:
-    """The target configuration stack.
-
-    Uses the BORG pattern and stores states in threadlocal storage.
-
-    WARNING: features associated with this class are experimental. The API
-    may change without notice.
-    """
-
-    def __init__(self):
-        self._stack = _RetargetStack()
-
-    def get(self):
-        """Get the current target from the top of the stack.
-
-        May raise IndexError if the stack is empty. Users should check the size
-        of the stack beforehand.
-        """
-        return self._stack.top()
-
-    def __len__(self):
-        """Size of the stack
-        """
-        return len(self._stack)
-
-    @classmethod
-    def switch_target(cls, retarget: BaseRetarget):
-        """Returns a contextmanager that pushes a new retarget handler,
-        an instance of `numba.core.retarget.BaseRetarget`, onto the
-        target-config stack for the duration of the context-manager.
-        """
-        return cls()._stack.enter(retarget)
 
 
 class OmittedArg(object):
@@ -113,8 +69,7 @@ class _FunctionCompiler(object):
 
         def stararg_handler(index, param, values):
             return types.StarArgTuple(values)
-        # For now, we take argument values from the @jit function, even
-        # in the case of generated jit.
+        # For now, we take argument values from the @jit function
         args = fold_arguments(self.pysig, args, kws,
                               normal_handler,
                               default_handler,
@@ -797,15 +752,11 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
     class attribute.
     """
     _fold_args = True
-    _impl_kinds = {
-        'direct': _FunctionCompiler,
-        'generated': _GeneratedFunctionCompiler,
-    }
 
     __numba__ = 'py_func'
 
     def __init__(self, py_func, locals={}, targetoptions={},
-                 impl_kind='direct', pipeline_class=compiler.Compiler):
+                 pipeline_class=compiler.Compiler):
         """
         Parameters
         ----------
@@ -815,8 +766,6 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
             the types deduced by the type inference engine.
         targetoptions: dict, optional
             Target-specific config options.
-        impl_kind: str
-            Select the compiler mode for `@jit` and `@generated_jit`
         pipeline_class: type numba.compiler.CompilerBase
             The compiler pipeline type.
         """
@@ -835,8 +784,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         self.targetoptions = targetoptions
         self.locals = locals
         self._cache = NullCache()
-        compiler_class = self._impl_kinds[impl_kind]
-        self._impl_kind = impl_kind
+        compiler_class = _FunctionCompiler
         self._compiler = compiler_class(py_func, self.targetdescr,
                                         targetoptions, locals, pipeline_class)
         self._cache_hits = collections.Counter()
@@ -844,9 +792,6 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
 
         self._type = types.Dispatcher(self)
         self.typingctx.insert_global(self, self._type)
-
-        # Remember target restriction
-        self._required_target_backend = targetoptions.get('target_backend')
 
     def dump(self, tab=''):
         print(f'{tab}DUMP {type(self).__name__}[{self.py_func.__name__}'
@@ -887,13 +832,12 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
             py_func=self.py_func,
             locals=self.locals,
             targetoptions=self.targetoptions,
-            impl_kind=self._impl_kind,
             can_compile=self._can_compile,
             sigs=sigs,
         )
 
     @classmethod
-    def _rebuild(cls, uuid, py_func, locals, targetoptions, impl_kind,
+    def _rebuild(cls, uuid, py_func, locals, targetoptions,
                  can_compile, sigs):
         """
         Rebuild an Dispatcher instance after it was __reduce__'d.
@@ -904,7 +848,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
             return cls._memo[uuid]
         except KeyError:
             pass
-        self = cls(py_func, locals, targetoptions, impl_kind)
+        self = cls(py_func, locals, targetoptions)
         # Make sure this deserialization will be merged with subsequent ones
         self._set_uuid(uuid)
         for sig in sigs:
@@ -913,10 +857,6 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         return self
 
     def compile(self, sig):
-        disp = self._get_dispatcher_for_current_target()
-        if disp is not self:
-            return disp.compile(sig)
-
         with ExitStack() as scope:
             cres = None
 
@@ -1057,34 +997,6 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
             cres = tuple(self.overloads.values())[0]
             return types.FunctionType(cres.signature)
 
-    def _get_retarget_dispatcher(self):
-        """Returns a dispatcher for the retarget request.
-        """
-        # Check TLS target configuration
-        tc = TargetConfigurationStack()
-        retarget = tc.get()
-        retarget.check_compatible(self)
-        disp = retarget.retarget(self)
-        return disp
-
-    def _get_dispatcher_for_current_target(self):
-        """Returns a dispatcher for the current target registered in
-        `TargetConfigurationStack`. `self` is returned if no target is
-        specified.
-        """
-        tc = TargetConfigurationStack()
-        if tc:
-            return self._get_retarget_dispatcher()
-        else:
-            return self
-
-    def _call_tls_target(self, *args, **kwargs):
-        """This is called when the C dispatcher logic sees a retarget request.
-        """
-        disp = self._get_retarget_dispatcher()
-        # Call the new dispatcher
-        return disp(*args, **kwargs)
-
 
 class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
     """
@@ -1162,7 +1074,135 @@ class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         """
         pass
 
+    @abstractmethod
     def compile(self, sig):
+        """Lifted code should implement a compilation method that will return
+        a CompileResult.entry_point for the given signature."""
+        pass
+
+    def _get_dispatcher_for_current_target(self):
+        # Lifted code does not honor the target switch currently.
+        # No work has been done to check if this can be allowed.
+        return self
+
+
+class LiftedLoop(LiftedCode):
+    def _pre_compile(self, args, return_type, flags):
+        assert not flags.enable_looplift, "Enable looplift flags is on"
+
+    def compile(self, sig):
+        with ExitStack() as scope:
+            cres = None
+
+            def cb_compiler(dur):
+                if cres is not None:
+                    self._callback_add_compiler_timer(dur, cres)
+
+            def cb_llvm(dur):
+                if cres is not None:
+                    self._callback_add_llvm_timer(dur, cres)
+
+            scope.enter_context(ev.install_timer("numba:compiler_lock",
+                                                 cb_compiler))
+            scope.enter_context(ev.install_timer("numba:llvm_lock", cb_llvm))
+            scope.enter_context(global_compiler_lock)
+
+            # Use counter to track recursion compilation depth
+            with self._compiling_counter:
+                # XXX this is mostly duplicated from Dispatcher.
+                flags = self.flags
+                args, return_type = sigutils.normalize_signature(sig)
+
+                # Don't recompile if signature already exists
+                # (e.g. if another thread compiled it before we got the lock)
+                existing = self.overloads.get(tuple(args))
+                if existing is not None:
+                    return existing.entry_point
+
+                self._pre_compile(args, return_type, flags)
+
+                # copy the flags, use nopython first
+                npm_loop_flags = flags.copy()
+                npm_loop_flags.force_pyobject = False
+
+                pyobject_loop_flags = flags.copy()
+                pyobject_loop_flags.force_pyobject = True
+
+                # Clone IR to avoid (some of the) mutation in the rewrite pass
+                cloned_func_ir = self.func_ir.copy()
+
+                ev_details = dict(
+                    dispatcher=self,
+                    args=args,
+                    return_type=return_type,
+                )
+                with ev.trigger_event("numba:compile", data=ev_details):
+                    # this emulates "object mode fall-back", try nopython, if it
+                    # fails, then try again in object mode.
+                    try:
+                        cres = compiler.compile_ir(typingctx=self.typingctx,
+                                                   targetctx=self.targetctx,
+                                                   func_ir=cloned_func_ir,
+                                                   args=args,
+                                                   return_type=return_type,
+                                                   flags=npm_loop_flags,
+                                                   locals=self.locals,
+                                                   lifted=(),
+                                                   lifted_from=self.lifted_from,
+                                                   is_lifted_loop=True,)
+                    except errors.TypingError:
+                        cres = compiler.compile_ir(typingctx=self.typingctx,
+                                                   targetctx=self.targetctx,
+                                                   func_ir=cloned_func_ir,
+                                                   args=args,
+                                                   return_type=return_type,
+                                                   flags=pyobject_loop_flags,
+                                                   locals=self.locals,
+                                                   lifted=(),
+                                                   lifted_from=self.lifted_from,
+                                                   is_lifted_loop=True,)
+                    # Check typing error if object mode is used
+                    if (cres.typing_error is not None):
+                        raise cres.typing_error
+                    self.add_overload(cres)
+                return cres.entry_point
+
+
+class LiftedWith(LiftedCode):
+
+    can_cache = True
+
+    def _reduce_extras(self):
+        return dict(output_types=self.output_types)
+
+    @property
+    def _numba_type_(self):
+        return types.Dispatcher(self)
+
+    def get_call_template(self, args, kws):
+        """
+        Get a typing.ConcreteTemplate for this dispatcher and the given
+        *args* and *kws* types.  This enables the resolving of the return type.
+
+        A (template, pysig, args, kws) tuple is returned.
+        """
+        # Ensure an overload is available
+        if self._can_compile:
+            self.compile(tuple(args))
+
+        pysig = None
+        # Create function type for typing
+        func_name = self.py_func.__name__
+        name = "CallTemplate({0})".format(func_name)
+        # The `key` isn't really used except for diagnosis here,
+        # so avoid keeping a reference to `cfunc`.
+        call_template = typing.make_concrete_template(
+            name, key=func_name, signatures=self.nopython_signatures)
+        return call_template, pysig, args, kws
+
+    def compile(self, sig):
+        # this is similar to LiftedLoop's compile but does not have the
+        # "fallback" to object mode part.
         with ExitStack() as scope:
             cres = None
 
@@ -1218,49 +1258,6 @@ class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
                         raise cres.typing_error
                     self.add_overload(cres)
                 return cres.entry_point
-
-    def _get_dispatcher_for_current_target(self):
-        # Lifted code does not honor the target switch currently.
-        # No work has been done to check if this can be allowed.
-        return self
-
-
-class LiftedLoop(LiftedCode):
-    def _pre_compile(self, args, return_type, flags):
-        assert not flags.enable_looplift, "Enable looplift flags is on"
-
-
-class LiftedWith(LiftedCode):
-
-    can_cache = True
-
-    def _reduce_extras(self):
-        return dict(output_types=self.output_types)
-
-    @property
-    def _numba_type_(self):
-        return types.Dispatcher(self)
-
-    def get_call_template(self, args, kws):
-        """
-        Get a typing.ConcreteTemplate for this dispatcher and the given
-        *args* and *kws* types.  This enables the resolving of the return type.
-
-        A (template, pysig, args, kws) tuple is returned.
-        """
-        # Ensure an overload is available
-        if self._can_compile:
-            self.compile(tuple(args))
-
-        pysig = None
-        # Create function type for typing
-        func_name = self.py_func.__name__
-        name = "CallTemplate({0})".format(func_name)
-        # The `key` isn't really used except for diagnosis here,
-        # so avoid keeping a reference to `cfunc`.
-        call_template = typing.make_concrete_template(
-            name, key=func_name, signatures=self.nopython_signatures)
-        return call_template, pysig, args, kws
 
 
 class ObjModeLiftedWith(LiftedWith):
@@ -1324,7 +1321,13 @@ class ObjModeLiftedWith(LiftedWith):
         return super().compile(sig)
 
 
-# Initialize typeof machinery
-_dispatcher.typeof_init(
-    OmittedArg,
-    dict((str(t), t._code) for t in types.number_domain))
+if config.USE_LEGACY_TYPE_SYSTEM: # Old type system
+    # Initialize typeof machinery
+    _dispatcher.typeof_init(
+        OmittedArg,
+        dict((str(t), t._code) for t in types.number_domain))
+else: # New type system
+    # Initialize typeof machinery
+    _dispatcher.typeof_init(
+        OmittedArg,
+        dict((str(t).split('_')[-1], t._code) for t in types.np_number_domain))

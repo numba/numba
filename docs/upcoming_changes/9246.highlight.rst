@@ -1,4 +1,0 @@
-Python 3.12 Support
-"""""""""""""""""""
-
-Support is added for Python 3.12.

@@ -1,7 +1,11 @@
 
 name: Check Release Notes
 on:
-  pull_request: {}
+  pull_request: 
+    types: [labeled, unlabeled, opened, reopened, synchronized]
+
+env:
+  GITHUB_PR_NUMBER: ${{github.event.pull_request.number}}
 
 jobs:
   check:
@@ -18,10 +22,11 @@ jobs:
           python-version: 3.9
       - name: Install towncrier
         run: |
-          python3 -m pip install towncrier==23.6 "importlib_resources<6"
+          python3 -m pip install towncrier==23.6 "importlib_resources<6" rstcheck
       - name: Run towncrier
         run: |
           git fetch --no-tags origin +refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}
           towncrier check --compare-with remotes/origin/${BASE_BRANCH}
+          python maint/towncrier_rst_validator.py --pull_request_id $GITHUB_PR_NUMBER
     env:
       BASE_BRANCH: ${{ github.base_ref }}

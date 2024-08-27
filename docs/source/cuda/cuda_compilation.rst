@@ -4,30 +4,42 @@
 Compiling Python functions for use with other languages
 =======================================================
 
-Numba can compile Python code to PTX so that Python functions can be
+Numba can compile Python code to PTX or LTO-IR so that Python functions can be
 incorporated into CUDA code written in other languages (e.g. C/C++).  It is
 commonly used to support User-Defined Functions written in Python within the
 context of a library or application.
 
-The main API for compiling Python to PTX can be used without a GPU present, as
-it uses no driver functions and avoids initializing CUDA in the process. It is
-invoked through the following function:
+The compilation API can be used without a GPU present, as it uses no driver
+functions and avoids initializing CUDA in the process. It is invoked through
+the following function:
+
+.. autofunction:: numba.cuda.compile
+   :noindex:
+
+If a device is available and compiled code for the compute capability of the
+current device is required (for example when building a JIT compilation
+workflow using Numba), the ``compile_for_current_device`` function can be used:
+
+.. autofunction:: numba.cuda.compile_for_current_device
+   :noindex:
+
+Most users should use the two functions described above; for backwards
+compatibility with existing use cases, the following functions are also
+provided:
 
 .. autofunction:: numba.cuda.compile_ptx
    :noindex:
-
-If a device is available and PTX for the compute capability of the current
-device is required (for example when building a JIT compilation workflow using
-Numba), the ``compile_ptx_for_current_device`` function can be used:
 
 .. autofunction:: numba.cuda.compile_ptx_for_current_device
    :noindex:
 
 
+.. _cuda-using-the-c-abi:
+
 Using the C ABI
 ---------------
 
-Numba compiles functions with its ABI by default - this is as described in
+Numba internally uses its own ABI - this is as described in
 :ref:`device-function-abi`, without the ``extern "C"`` modifier. Calling Numba
 ABI device functions requires three issues to be addressed:
 
@@ -40,21 +52,27 @@ ABI device functions requires three issues to be addressed:
   of the return value of the function. For use of Numba-compiled functions
   outside of Numba, this can generally be ignored.
 
-A simple way to address all these issues is to compile device functions with the
-C ABI instead. This results in the following:
+A simple way to address all these issues is to compile device functions with
+the C ABI instead. This results in the following:
 
-- The name of the compiled device function in PTX can be controlled. By default
-  it will match the name of the function in Python, so it is easy to determine.
-  This is the function's ``__name__``, rather than ``__qualname__``, because
-  ``__qualname__`` encodes additional scoping information that would make the
-  function name hard to predict, and in a lot of cases, an illegal identifier
-  in C.
+- The name of the device function in the compiled code can be controlled. By
+  default it will match the name of the function in Python, so it is easy to
+  determine.  This is the function's ``__name__``, rather than
+  ``__qualname__``, because ``__qualname__`` encodes additional scoping
+  information that would make the function name hard to predict, and in a lot
+  of cases, an illegal identifier in C.
 - The returned value of the Python code is placed in the return value of the
   compiled function.
 - Status codes are ignored / unreported, so they do not need to be handled.
 
 If the name of the compiled function needs to be specified, it can be controlled
 by passing the name in the ``abi_info`` dict, under the key ``'abi_name'``.
+
+Compilation with the C ABI is the default when using the :func:`compile` and
+:func:`compile_for_current_device` functions. The :func:`compile_ptx` and
+:func:`compile_ptx_for_current_device` functions default to the Numba ABI in
+order to maintain compatibility with existing use cases.
+
 
 C and Numba ABI examples
 ------------------------

@@ -428,9 +428,10 @@ UNICODE_COUNT_EXAMPLES = [
 
 class TestUnicode(BaseTest):
 
-    def test_literal(self, flags=no_pyobj_flags):
+    def test_literal(self):
         pyfunc = literal_usecase
-        self.run_nullary_func(pyfunc, flags=flags)
+        cfunc = njit(literal_usecase)
+        self.assertPreciseEqual(pyfunc(), cfunc())
 
     def test_passthrough(self, flags=no_pyobj_flags):
         pyfunc = passthrough_usecase
@@ -2666,11 +2667,11 @@ class TestUnicodeAuxillary(BaseTest):
         """
         # requires formatting (FORMAT_VALUE) and concatenation (BUILD_STRINGS)
         def impl1(a):
-            return f"AA_{a+3}_B"
+            return f"AA_{a + 3}_B"
 
         # does not require concatenation
         def impl2(a):
-            return f"{a+2}"
+            return f"{a + 2}"
 
         # no expression
         def impl3(a):
