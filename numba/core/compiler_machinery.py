@@ -2,7 +2,6 @@ import timeit
 from abc import abstractmethod, ABCMeta
 from collections import namedtuple, OrderedDict
 import inspect
-from pprint import pformat
 
 
 from numba.core.compiler_lock import global_compiler_lock
