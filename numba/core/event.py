@@ -44,7 +44,7 @@ from timeit import default_timer as timer
 from contextlib import contextmanager, ExitStack
 from collections import defaultdict
 
-from numba.core import config
+from numba.core import config, utils
 
 
 class EventStatus(enum.Enum):
@@ -465,6 +465,13 @@ def _prepare_chrome_trace_data(listener: RecordingListener):
     return evs
 
 
+class _LazyJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, utils._lazy_pformat):
+            return str(obj)
+        return super().default(obj)
+
+
 def _setup_chrome_trace_exit_handler():
     """Setup a RecordingListener and an exit handler to write the captured
     events to file.
@@ -478,7 +485,7 @@ def _setup_chrome_trace_exit_handler():
         # The following output file is not multi-process safe.
         evs = _prepare_chrome_trace_data(listener)
         with open(filename, "w") as out:
-            json.dump(evs, out)
+            json.dump(evs, out, cls=_LazyJSONEncoder)
 
 
 if config.CHROME_TRACE:
