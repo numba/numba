@@ -497,43 +497,35 @@ def np_setdiff1d_3(a, b, assume_unique=False):
 
 
 def np_in1d_2(a, b):
-    return np.in1d(a, b, kind="sort")
+    return np.in1d(a, b)
 
 
 def np_in1d_3a(a, b, assume_unique=False):
-    return np.in1d(a, b, assume_unique=assume_unique, kind="sort")
+    return np.in1d(a, b, assume_unique=assume_unique)
 
 
 def np_in1d_3b(a, b, invert=False):
-    return np.in1d(a, b, invert=invert, kind="sort")
+    return np.in1d(a, b, invert=invert)
 
 
 def np_in1d_4(a, b, assume_unique=False, invert=False):
-    return np.in1d(a, b, assume_unique, invert, kind="sort")
-
-
-def np_in1d_5(a, b, assume_unique=False, invert=False, kind=None):
-    return np.in1d(a, b, assume_unique, invert, kind=kind)
+    return np.in1d(a, b, assume_unique, invert)
 
 
 def np_isin_2(a, b):
-    return np.isin(a, b, kind="sort")
+    return np.isin(a, b)
 
 
 def np_isin_3a(a, b, assume_unique=False):
-    return np.isin(a, b, assume_unique=assume_unique, kind="sort")
+    return np.isin(a, b, assume_unique=assume_unique)
 
 
 def np_isin_3b(a, b, invert=False):
-    return np.isin(a, b, invert=invert, kind="sort")
+    return np.isin(a, b, invert=invert)
 
 
 def np_isin_4(a, b, assume_unique=False, invert=False):
-    return np.isin(a, b, assume_unique, invert, kind="sort")
-
-
-def np_isin_5(a, b, assume_unique=False, invert=False, kind=None):
-    return np.isin(a, b, assume_unique, invert, kind=kind)
+    return np.isin(a, b, assume_unique, invert)
 
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
@@ -6282,6 +6274,26 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertIn('The argument "k" must be an integer',
                       str(raises.exception))
 
+    @staticmethod
+    def _setxor_arrays():
+        yield (List.empty_list(types.float64),
+               List.empty_list(types.float64))  # two empty arrays
+        yield [1], List.empty_list(types.float64)  # empty right
+        yield List.empty_list(types.float64), [1]  # empty left
+        yield [1], [2]  # singletons - xor == union
+        yield [1], [1]  # singletons - xor == nothing
+        yield [1, 2], [1]
+        yield [1, 2, 2], [2, 2]
+        yield [1, 2, 2], [2, 2, 3]
+        yield [1, 2], [2, 1]
+        yield [1, 2, 3], [1, 2, 3]
+        yield [2, 3, 4, 0], [1, 3]
+        # from numpy:
+        # https://github.com/numpy/numpy/blob/b0371ef240560e78b651a5d7c9407ae3212a3d56/numpy/lib/tests/test_arraysetops.py#L86 # noqa: E501
+        yield [5, 7, 1, 2], [2, 4, 3, 1, 5]
+        yield [1, 2, 3], [6, 5, 4]
+        yield [1, 8, 2, 3], [1, 2, 3, 4, 5, 6]
+
     def test_setxor1d_2(self):
         np_pyfunc = np_setxor1d_2
         np_nbfunc = njit(np_pyfunc)
@@ -6295,26 +6307,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = np_nbfunc(ar1, ar2)
             self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
 
-        def arrays():
-            yield (List.empty_list(types.float64),
-                   List.empty_list(types.float64))  # two empty arrays
-            yield [1], List.empty_list(types.float64)  # empty right
-            yield List.empty_list(types.float64), [1]  # empty left
-            yield [1], [2]  # singletons - xor == union
-            yield [1], [1]  # singletons - xor == nothing
-            yield [1, 2], [1]
-            yield [1, 2, 2], [2, 2]
-            yield [1, 2, 2], [2, 2, 3]
-            yield [1, 2], [2, 1]
-            yield [1, 2, 3], [1, 2, 3]
-            yield [2, 3, 4, 0], [1, 3]
-            # from numpy:
-            # https://github.com/numpy/numpy/blob/b0371ef240560e78b651a5d7c9407ae3212a3d56/numpy/lib/tests/test_arraysetops.py#L86 # noqa: E501
-            yield [5, 7, 1, 2], [2, 4, 3, 1, 5]
-            yield [1, 2, 3], [6, 5, 4]
-            yield [1, 8, 2, 3], [1, 2, 3, 4, 5, 6]
-
-        for a, b in arrays():
+        for a, b in self._setxor_arrays():
             check(a, b)
 
     def test_setxor1d_3(self):
@@ -6330,26 +6323,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = np_nbfunc(ar1, ar2, assume_unique)
             self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
 
-        def arrays():
-            yield (List.empty_list(types.float64),
-                   List.empty_list(types.float64))  # two empty arrays
-            yield [1], List.empty_list(types.float64)  # empty right
-            yield List.empty_list(types.float64), [1]  # empty left
-            yield [1], [2]  # singletons - xor == union
-            yield [1], [1]  # singletons - xor == nothing
-            yield [1, 2], [1]
-            yield [1, 2, 2], [2, 2]
-            yield [1, 2, 2], [2, 2, 3]
-            yield [1, 2], [2, 1]
-            yield [1, 2, 3], [1, 2, 3]
-            yield [2, 3, 4, 0], [1, 3]
-            # from numpy:
-            # https://github.com/numpy/numpy/blob/b0371ef240560e78b651a5d7c9407ae3212a3d56/numpy/lib/tests/test_arraysetops.py#L86 # noqa: E501
-            yield [5, 7, 1, 2], [2, 4, 3, 1, 5]
-            yield [1, 2, 3], [6, 5, 4]
-            yield [1, 8, 2, 3], [1, 2, 3, 4, 5, 6]
-
-        for a, b in arrays():
+        for a, b in self._setxor_arrays():
             check(a, b)
             if len(np.unique(a)) == len(a) and len(np.unique(b)) == len(b):
                 check(a, b, True)
@@ -6368,6 +6342,27 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError):
             np_nbfunc(a, "foo", True)
 
+    @staticmethod
+    def _setdiff_arrays():
+        yield (List.empty_list(types.float64),
+               List.empty_list(types.float64))  # two empty arrays
+        yield [1], List.empty_list(types.float64)  # empty right
+        yield List.empty_list(types.float64), [1]  # empty left
+        yield [1], [2]  # singletons - diff == [1]
+        yield [1], [1]  # singletons - diff == nothing
+        yield [1, 2], [1]
+        yield [1, 2, 2], [2, 2]
+        yield [1, 2, 2], [2, 2, 3]
+        yield [1, 2], [2, 1]
+        yield [1, 2, 3], [1, 2, 3]
+        yield [2, 3, 4, 0], [1, 3]
+
+        # https://github.com/numpy/numpy/blob/b0371ef240560e78b651a5d7c9407ae3212a3d56/numpy/lib/tests/test_arraysetops.py#L558 # noqa: E501
+        yield (np.array([6, 5, 4, 7, 1, 2, 7, 4]),
+               np.array([2, 4, 3, 3, 2, 1, 5]))
+        yield np.arange(21), np.arange(19)
+        yield np.array([3, 2, 1]), np.array([7, 5, 2])
+
     def test_setdiff1d_2(self):
         np_pyfunc = np_setdiff1d_2
         np_nbfunc = njit(np_pyfunc)
@@ -6381,27 +6376,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = np_nbfunc(ar1, ar2)
             self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
 
-        def arrays():
-            yield (List.empty_list(types.float64),
-                   List.empty_list(types.float64))  # two empty arrays
-            yield [1], List.empty_list(types.float64)  # empty right
-            yield List.empty_list(types.float64), [1]  # empty left
-            yield [1], [2]  # singletons - diff == [1]
-            yield [1], [1]  # singletons - diff == nothing
-            yield [1, 2], [1]
-            yield [1, 2, 2], [2, 2]
-            yield [1, 2, 2], [2, 2, 3]
-            yield [1, 2], [2, 1]
-            yield [1, 2, 3], [1, 2, 3]
-            yield [2, 3, 4, 0], [1, 3]
-
-            # https://github.com/numpy/numpy/blob/b0371ef240560e78b651a5d7c9407ae3212a3d56/numpy/lib/tests/test_arraysetops.py#L558 # noqa: E501
-            yield (np.array([6, 5, 4, 7, 1, 2, 7, 4]),
-                   np.array([2, 4, 3, 3, 2, 1, 5]))
-            yield np.arange(21), np.arange(19)
-            yield np.array([3, 2, 1]), np.array([7, 5, 2])
-
-        for a, b in arrays():
+        for a, b in self._setdiff_arrays():
             check(a, b)
 
     def test_setdiff1d_3(self):
@@ -6417,27 +6392,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = np_nbfunc(ar1, ar2, assume_unique)
             self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
 
-        def arrays():
-            yield (List.empty_list(types.float64),
-                   List.empty_list(types.float64))  # two empty arrays
-            yield [1], List.empty_list(types.float64)  # empty right
-            yield List.empty_list(types.float64), [1]  # empty left
-            yield [1], [2]  # singletons - diff == [1]
-            yield [1], [1]  # singletons - diff == nothing
-            yield [1, 2], [1]
-            yield [1, 2, 2], [2, 2]
-            yield [1, 2, 2], [2, 2, 3]
-            yield [1, 2], [2, 1]
-            yield [1, 2, 3], [1, 2, 3]
-            yield [2, 3, 4, 0], [1, 3]
-
-            # https://github.com/numpy/numpy/blob/b0371ef240560e78b651a5d7c9407ae3212a3d56/numpy/lib/tests/test_arraysetops.py#L558 # noqa: E501
-            yield (np.array([6, 5, 4, 7, 1, 2, 7, 4]),
-                   np.array([2, 4, 3, 3, 2, 1, 5]))
-            yield np.arange(21), np.arange(19)
-            yield np.array([3, 2, 1]), np.array([7, 5, 2])
-
-        for a, b in arrays():
+        for a, b in self._setdiff_arrays():
             check(a, b)
             if len(np.unique(a)) == len(a) and len(np.unique(b)) == len(b):
                 check(a, b, True)
@@ -6456,6 +6411,23 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError):
             np_nbfunc(a, "foo", True)
 
+    @staticmethod
+    def _in1d_arrays():
+        yield (List.empty_list(types.float64),
+               List.empty_list(types.float64))  # two empty arrays
+        yield [1], List.empty_list(types.float64)  # empty right
+        yield List.empty_list(types.float64), [1]  # empty left
+        yield [1], [2]  # singletons - False
+        yield [1], [1]  # singletons - True
+        yield [1, 2], [1]
+        yield [1, 2, 2], [2, 2]
+        yield [1, 2, 2], [2, 2, 3]
+        yield [1, 2], [2, 1]
+        yield [1, 2, 3], [1, 2, 3]
+        yield [2, 3, 4, 0], [3, 1]
+        yield [2, 3], np.arange(20)  # Test the "sorting" method.
+        yield [2, 3], np.tile(np.arange(5), 4)
+
     def test_in1d_2(self):
         np_pyfunc = np_in1d_2
         np_nbfunc = njit(np_pyfunc)
@@ -6469,23 +6441,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = np_nbfunc(ar1, ar2)
             self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
 
-        def arrays():
-            yield (List.empty_list(types.float64),
-                   List.empty_list(types.float64))  # two empty arrays
-            yield [1], List.empty_list(types.float64)  # empty right
-            yield List.empty_list(types.float64), [1]  # empty left
-            yield [1], [2]  # singletons - False
-            yield [1], [1]  # singletons - True
-            yield [1, 2], [1]
-            yield [1, 2, 2], [2, 2]
-            yield [1, 2, 2], [2, 2, 3]
-            yield [1, 2], [2, 1]
-            yield [1, 2, 3], [1, 2, 3]
-            yield [2, 3, 4, 0], [3, 1]
-            yield [2, 3], np.arange(20)  # Test the "sorting" method.
-            yield [2, 3], np.tile(np.arange(5), 4)
-
-        for a, b in arrays():
+        for a, b in self._in1d_arrays():
             check(a, b)
 
     def test_in1d_3a(self):
@@ -6501,23 +6457,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = np_nbfunc(ar1, ar2, assume_unique)
             self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
 
-        def arrays():
-            yield (List.empty_list(types.float64),
-                   List.empty_list(types.float64))  # two empty arrays
-            yield [1], List.empty_list(types.float64)  # empty right
-            yield List.empty_list(types.float64), [1]  # empty left
-            yield [1], [2]  # singletons - False
-            yield [1], [1]  # singletons - True
-            yield [1, 2], [1]
-            yield [1, 2, 2], [2, 2]
-            yield [1, 2, 2], [2, 2, 3]
-            yield [1, 2], [2, 1]
-            yield [1, 2, 3], [1, 2, 3]
-            yield [2, 3, 4, 0], [3, 1]
-            yield [2, 3], np.arange(20)  # Test the "sorting" method.
-            yield [2, 3], np.tile(np.arange(5), 4)
-
-        for a, b in arrays():
+        for a, b in self._in1d_arrays():
             check(a, b)
             if len(np.unique(a)) == len(a) and len(np.unique(b)) == len(b):
                 check(a, b, assume_unique=True)
@@ -6535,23 +6475,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = np_nbfunc(ar1, ar2, invert)
             self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
 
-        def arrays():
-            yield (List.empty_list(types.float64),
-                   List.empty_list(types.float64)) # two empty arrays
-            yield [1], List.empty_list(types.float64)  # empty right
-            yield List.empty_list(types.float64), [1]  # empty left
-            yield [1], [2]  # singletons - False
-            yield [1], [1]  # singletons - True
-            yield [1, 2], [1]
-            yield [1, 2, 2], [2, 2]
-            yield [1, 2, 2], [2, 2, 3]
-            yield [1, 2], [2, 1]
-            yield [1, 2, 3], [1, 2, 3]
-            yield [2, 3, 4, 0], [3, 1]
-            yield [2, 3], np.arange(20)  # Test the "sorting" method.
-            yield [2, 3], np.tile(np.arange(5), 4)
-
-        for a, b in arrays():
+        for a, b in self._in1d_arrays():
             check(a, b, invert=False)
             check(a, b, invert=True)
 
@@ -6568,23 +6492,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = np_nbfunc(ar1, ar2, assume_unique, invert)
             self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
 
-        def arrays():
-            yield (List.empty_list(types.float64),
-                   List.empty_list(types.float64))  # two empty arrays
-            yield [1], List.empty_list(types.float64)  # empty right
-            yield List.empty_list(types.float64), [1]  # empty left
-            yield [1], [2]  # singletons - False
-            yield [1], [1]  # singletons - True
-            yield [1, 2], [1]
-            yield [1, 2, 2], [2, 2]
-            yield [1, 2, 2], [2, 2, 3]
-            yield [1, 2], [2, 1]
-            yield [1, 2, 3], [1, 2, 3]
-            yield [2, 3, 4, 0], [3, 1]
-            yield [2, 3], np.arange(20)  # Test the "sorting" method.
-            yield [2, 3], np.tile(np.arange(5), 4)
-
-        for a, b in arrays():
+        for a, b in self._in1d_arrays():
             check(a, b, invert=False)
             check(a, b, invert=True)
             if len(np.unique(a)) == len(a) and len(np.unique(b)) == len(b):
@@ -6592,33 +6500,32 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 check(a, b, assume_unique=True, invert=True)
 
     def test_in1d_errors(self):
-        np_pyfunc = np_in1d_5
+        np_pyfunc = np_in1d_4
         np_nbfunc = njit(np_pyfunc)
 
         a = np.array([1])
         b = np.array([2])
-        x = np_nbfunc(a, b, kind="sort")
+        x = np_nbfunc(a, b)
         self.assertPreciseEqual(x, np.array([False]))
 
         self.disable_leak_check()
         with self.assertRaises(TypingError):
-            np_nbfunc(a, b, "foo", False, "sort")
+            np_nbfunc(a, b, "foo", False)
         with self.assertRaises(TypingError):
-            np_nbfunc(a, b, False, "foo", "sort")
+            np_nbfunc(a, b, False, "foo")
         with self.assertRaises(TypingError):
-            np_nbfunc("foo", b, True, False, "sort")
+            np_nbfunc("foo", b, True, False)
         with self.assertRaises(TypingError):
-            np_nbfunc(a, "foo", True, False, "sort")
-        with self.assertRaises(TypingError):
-            np_nbfunc(a, b, True, False)
-        with self.assertRaises(TypingError):
-            np_nbfunc(a, b, True, False, None)
+            np_nbfunc(a, "foo", True, False)
 
         @njit()
-        def table_in1d(a, b):
-            return np.in1d(a, b, kind="table")
-        with self.assertRaises(ValueError):
-            table_in1d(a, b)
+        def np_in1d_kind(a, b, kind):
+            return np.in1d(a, b, kind=kind)
+
+        with self.assertRaises(TypingError):
+            np_in1d_kind(a, b, kind=None)
+        with self.assertRaises(TypingError):
+            np_in1d_kind(a, b, kind="table")
 
     @staticmethod
     def _isin_arrays():
@@ -6796,33 +6703,32 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 check(a, b, assume_unique=True, invert=True)
 
     def test_isin_errors(self):
-        np_pyfunc = np_isin_5
+        np_pyfunc = np_isin_4
         np_nbfunc = njit(np_pyfunc)
 
         a = np.array([1])
         b = np.array([2])
-        x = np_nbfunc(a, b, kind="sort")
+        x = np_nbfunc(a, b)
         self.assertPreciseEqual(x, np.array([False]))
 
         self.disable_leak_check()
         with self.assertRaises(TypingError):
-            np_nbfunc(a, b, "foo", False, "sort")
+            np_nbfunc(a, b, "foo", False)
         with self.assertRaises(TypingError):
-            np_nbfunc(a, b, False, "foo", "sort")
+            np_nbfunc(a, b, False, "foo")
         with self.assertRaises(TypingError):
-            np_nbfunc("foo", b, True, False, "sort")
+            np_nbfunc("foo", b, True, False)
         with self.assertRaises(TypingError):
-            np_nbfunc(a, "foo", True, False, "sort")
-        with self.assertRaises(TypingError):
-            np_nbfunc(a, b, True, False)
-        with self.assertRaises(TypingError):
-            np_nbfunc(a, b, True, False, None)
+            np_nbfunc(a, "foo", True, False)
 
         @njit()
-        def table_isin(a, b):
-            return np.isin(a, b, kind="table")
-        with self.assertRaises(ValueError):
-            table_isin(a, b)
+        def np_isin_kind(a, b, kind):
+            return np.isin(a, b, kind=kind)
+
+        with self.assertRaises(TypingError):
+            np_isin_kind(a, b,  kind=None)
+        with self.assertRaises(TypingError):
+            np_isin_kind(a, b, kind="table")
 
     def test_setops_manyways(self):
         # https://github.com/numpy/numpy/blob/b0371ef240560e78b651a5d7c9407ae3212a3d56/numpy/lib/tests/test_arraysetops.py#L588 # noqa: E501

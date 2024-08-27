@@ -4895,27 +4895,22 @@ def jit_np_setdiff1d(ar1, ar2, assume_unique=False):
         else:
             ar1 = np.unique(ar1)
             ar2 = np.unique(ar2)
-        return ar1[np.in1d(ar1, ar2,
-                           assume_unique=True, invert=True, kind="sort")]
+        return ar1[np.in1d(ar1, ar2, assume_unique=True, invert=True)]
 
     return np_setdiff1d_impl
 
 
 @overload(np.in1d)
-def jit_np_in1d(ar1, ar2, assume_unique=False, invert=False, kind=None):
+def jit_np_in1d(ar1, ar2, assume_unique=False, invert=False):
     if not (type_can_asarray(ar1) or type_can_asarray(ar2)):
         raise TypingError('in1d: first two args must be array-like')
     if not isinstance(assume_unique, (types.Boolean, bool)):
         raise TypingError('in1d: Argument "assume_unique" must be boolean')
     if not isinstance(invert, (types.Boolean, bool)):
         raise TypingError('in1d: Argument "invert" must be boolean')
-    if not isinstance(kind, (types.UnicodeType, str, types.StringLiteral)):
-        raise TypingError('in1d: Only kind="sort" is supported')
 
-    def np_in1d_impl(ar1, ar2, assume_unique=False, invert=False, kind=None):
+    def np_in1d_impl(ar1, ar2, assume_unique=False, invert=False):
         # https://github.com/numpy/numpy/blob/03b62604eead0f7d279a5a4c094743eb29647368/numpy/lib/arraysetops.py#L525 # noqa: E501
-        if kind != "sort":
-            raise ValueError('in1d: Only kind="sort" is supported')
 
         # Ravel both arrays, behavior for the first array could be different
         ar1 = np.asarray(ar1).ravel()
@@ -4975,26 +4970,19 @@ def jit_np_in1d(ar1, ar2, assume_unique=False, invert=False, kind=None):
 
 
 @overload(np.isin)
-def jit_np_isin(element, test_elements, assume_unique=False, invert=False,
-                kind=None):
+def jit_np_isin(element, test_elements, assume_unique=False, invert=False):
     if not (type_can_asarray(element) or type_can_asarray(test_elements)):
         raise TypingError('isin: first two args must be array-like')
     if not (isinstance(assume_unique, (types.Boolean, bool))):
         raise TypingError('isin: Argument "assume_unique" must be boolean')
     if not (isinstance(invert, (types.Boolean, bool))):
         raise TypingError('isin: Argument "invert" must be boolean')
-    if not isinstance(kind, (types.UnicodeType, str, types.StringLiteral)):
-        raise TypingError('isin: Only kind="sort" is supported')
 
     # https://github.com/numpy/numpy/blob/03b62604eead0f7d279a5a4c094743eb29647368/numpy/lib/arraysetops.py#L889 # noqa: E501
-    def np_isin_impl(element, test_elements, assume_unique=False, invert=False,
-                     kind=None):
-
-        if kind != "sort":
-            raise ValueError('isin: Only kind="sort" is supported')
+    def np_isin_impl(element, test_elements, assume_unique=False, invert=False):
 
         element = np.asarray(element)
         return np.in1d(element, test_elements, assume_unique=assume_unique,
-                       invert=invert, kind="sort").reshape(element.shape)
+                       invert=invert).reshape(element.shape)
 
     return np_isin_impl

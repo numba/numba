@@ -515,7 +515,7 @@ The following top-level functions are supported:
 * :func:`numpy.kaiser`
 * :func:`numpy.iscomplex`
 * :func:`numpy.iscomplexobj`
-* :func:`numpy.isin` (only ``kind="sort"`` is supported)
+* :func:`numpy.isin` (matching pre-1.24 behaviour without the ``kind`` keyword)
 * :func:`numpy.isneginf`
 * :func:`numpy.isposinf`
 * :func:`numpy.isreal`
@@ -523,7 +523,7 @@ The following top-level functions are supported:
 * :func:`numpy.isscalar`
 * :func:`numpy.interp` (only the 3 first arguments)
 * :func:`numpy.intersect1d` (only 3 first arguments: ``ar1``, ``ar2``, and ``assume_unique``)
-* :func:`numpy.in1d` (only ``kind="sort"`` is supported)
+* :func:`numpy.in1d` (matching pre-1.24 behaviour without the ``kind`` keyword)
 * :func:`numpy.linspace` (only the 3-argument form)
 * :func:`numpy.logspace` (only the 3 first arguments)
 * :func:`numpy.nan_to_num` (only the 3 first arguments)
