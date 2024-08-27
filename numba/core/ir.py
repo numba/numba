@@ -10,6 +10,7 @@ import operator
 from types import FunctionType, BuiltinFunctionType
 from functools import total_ordering
 from io import StringIO
+import typing as pt
 
 from numba.core import errors, config
 from numba.core.utils import (BINOPS_TO_OPERATORS, INPLACE_BINOPS_TO_OPERATORS,
@@ -309,13 +310,13 @@ class Inst(EqualityCheckMixin, AbstractRHS):
     Base class for all IR instructions.
     """
 
-    def list_vars(self):
+    def list_vars(self) -> pt.List["Var"]:
         """
         List the variables used (read or written) by the instruction.
         """
         raise NotImplementedError
 
-    def _rec_list_vars(self, val):
+    def _rec_list_vars(self, val) -> pt.List["Var"]:
         """
         A recursive helper used to implement list_vars() in subclasses.
         """
@@ -348,7 +349,8 @@ class Stmt(Inst):
     # Whether this statement exits the function.
     is_exit = False
 
-    def list_vars(self):
+    @pt.override
+    def list_vars(self) -> pt.List["Var"]:
         return self._rec_list_vars(self.__dict__)
 
 
@@ -374,26 +376,26 @@ class Expr(Inst):
     statement).
     """
 
-    def __init__(self, op, loc, **kws):
+    def __init__(self, op: str, loc: Loc, **kws):
         assert isinstance(op, str)
         assert isinstance(loc, Loc)
         self.op = op
         self.loc = loc
         self._kws = kws
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str):
         if name.startswith('_'):
-            return Inst.__getattr__(self, name)
+            return Inst.__getattr__(self, name)  # type: ignore
         return self._kws[name]
 
-    def __setattr__(self, name, value):
+    def __setattr__(self, name: str, value):
         if name in ('op', 'loc', '_kws'):
             self.__dict__[name] = value
         else:
             self._kws[name] = value
 
     @classmethod
-    def binop(cls, fn, lhs, rhs, loc):
+    def binop(cls, fn: BuiltinFunctionType, lhs: "Var", rhs: "Var", loc: Loc):
         assert isinstance(fn, BuiltinFunctionType)
         assert isinstance(lhs, Var)
         assert isinstance(rhs, Var)
@@ -403,7 +405,7 @@ class Expr(Inst):
                    static_lhs=UNDEFINED, static_rhs=UNDEFINED)
 
     @classmethod
-    def inplace_binop(cls, fn, immutable_fn, lhs, rhs, loc):
+    def inplace_binop(cls, fn: BuiltinFunctionType, immutable_fn: BuiltinFunctionType, lhs: "Var", rhs: "Var", loc: Loc):
         assert isinstance(fn, BuiltinFunctionType)
         assert isinstance(immutable_fn, BuiltinFunctionType)
         assert isinstance(lhs, Var)
@@ -415,7 +417,7 @@ class Expr(Inst):
                    static_lhs=UNDEFINED, static_rhs=UNDEFINED)
 
     @classmethod
-    def unary(cls, fn, value, loc):
+    def unary(cls, fn: pt.Union[str, "Var", FunctionType], value, loc: Loc):
         assert isinstance(value, (str, Var, FunctionType))
         assert isinstance(loc, Loc)
         op = 'unary'
@@ -423,7 +425,7 @@ class Expr(Inst):
         return cls(op=op, loc=loc, fn=fn, value=value)
 
     @classmethod
-    def call(cls, func, args, kws, loc, vararg=None, varkwarg=None, target=None):
+    def call(cls, func: "Var", args, kws, loc: Loc, vararg=None, varkwarg=None, target=None):
         assert isinstance(func, Var)
         assert isinstance(loc, Loc)
         op = 'call'
@@ -431,59 +433,59 @@ class Expr(Inst):
                    vararg=vararg, varkwarg=varkwarg, target=target)
 
     @classmethod
-    def build_tuple(cls, items, loc):
+    def build_tuple(cls, items, loc: Loc):
         assert isinstance(loc, Loc)
         op = 'build_tuple'
         return cls(op=op, loc=loc, items=items)
 
     @classmethod
-    def build_list(cls, items, loc):
+    def build_list(cls, items, loc: Loc):
         assert isinstance(loc, Loc)
         op = 'build_list'
         return cls(op=op, loc=loc, items=items)
 
     @classmethod
-    def build_set(cls, items, loc):
+    def build_set(cls, items, loc: Loc):
         assert isinstance(loc, Loc)
         op = 'build_set'
         return cls(op=op, loc=loc, items=items)
 
     @classmethod
-    def build_map(cls, items, size, literal_value, value_indexes, loc):
+    def build_map(cls, items, size, literal_value, value_indexes, loc: Loc):
         assert isinstance(loc, Loc)
         op = 'build_map'
         return cls(op=op, loc=loc, items=items, size=size,
                    literal_value=literal_value, value_indexes=value_indexes)
 
     @classmethod
-    def pair_first(cls, value, loc):
+    def pair_first(cls, value: "Var", loc: Loc):
         assert isinstance(value, Var)
         op = 'pair_first'
         return cls(op=op, loc=loc, value=value)
 
     @classmethod
-    def pair_second(cls, value, loc):
+    def pair_second(cls, value: "Var", loc: Loc):
         assert isinstance(value, Var)
         assert isinstance(loc, Loc)
         op = 'pair_second'
         return cls(op=op, loc=loc, value=value)
 
     @classmethod
-    def getiter(cls, value, loc):
+    def getiter(cls, value: "Var", loc: Loc):
         assert isinstance(value, Var)
         assert isinstance(loc, Loc)
         op = 'getiter'
         return cls(op=op, loc=loc, value=value)
 
     @classmethod
-    def iternext(cls, value, loc):
+    def iternext(cls, value: "Var", loc: Loc):
         assert isinstance(value, Var)
         assert isinstance(loc, Loc)
         op = 'iternext'
         return cls(op=op, loc=loc, value=value)
 
     @classmethod
-    def exhaust_iter(cls, value, count, loc):
+    def exhaust_iter(cls, value: "Var", count: int, loc: Loc):
         assert isinstance(value, Var)
         assert isinstance(count, int)
         assert isinstance(loc, Loc)
@@ -491,7 +493,7 @@ class Expr(Inst):
         return cls(op=op, loc=loc, value=value, count=count)
 
     @classmethod
-    def getattr(cls, value, attr, loc):
+    def getattr(cls, value: "Var", attr: str, loc: Loc):
         assert isinstance(value, Var)
         assert isinstance(attr, str)
         assert isinstance(loc, Loc)
@@ -499,7 +501,7 @@ class Expr(Inst):
         return cls(op=op, loc=loc, value=value, attr=attr)
 
     @classmethod
-    def getitem(cls, value, index, loc):
+    def getitem(cls, value: "Var", index: "Var", loc: Loc):
         assert isinstance(value, Var)
         assert isinstance(index, Var)
         assert isinstance(loc, Loc)
@@ -508,7 +510,7 @@ class Expr(Inst):
         return cls(op=op, loc=loc, value=value, index=index, fn=fn)
 
     @classmethod
-    def typed_getitem(cls, value, dtype, index, loc):
+    def typed_getitem(cls, value: "Var", dtype, index, loc: Loc):
         assert isinstance(value, Var)
         assert isinstance(loc, Loc)
         op = 'typed_getitem'
@@ -516,7 +518,7 @@ class Expr(Inst):
                    index=index)
 
     @classmethod
-    def static_getitem(cls, value, index, index_var, loc):
+    def static_getitem(cls, value: "Var", index, index_var: pt.Optional["Var"], loc: Loc):
         assert isinstance(value, Var)
         assert index_var is None or isinstance(index_var, Var)
         assert isinstance(loc, Loc)
@@ -526,7 +528,7 @@ class Expr(Inst):
                    index_var=index_var, fn=fn)
 
     @classmethod
-    def cast(cls, value, loc):
+    def cast(cls, value: "Var", loc: Loc):
         """
         A node for implicit casting at the return statement
         """
@@ -536,14 +538,14 @@ class Expr(Inst):
         return cls(op=op, value=value, loc=loc)
 
     @classmethod
-    def phi(cls, loc):
+    def phi(cls, loc: Loc):
         """Phi node
         """
         assert isinstance(loc, Loc)
         return cls(op='phi', incoming_values=[], incoming_blocks=[], loc=loc)
 
     @classmethod
-    def make_function(cls, name, code, closure, defaults, loc):
+    def make_function(cls, name, code, closure, defaults, loc: Loc):
         """
         A node for making a function object.
         """
@@ -552,7 +554,7 @@ class Expr(Inst):
         return cls(op=op, name=name, code=code, closure=closure, defaults=defaults, loc=loc)
 
     @classmethod
-    def null(cls, loc):
+    def null(cls, loc: Loc):
         """
         A node for null value.
 
@@ -564,7 +566,7 @@ class Expr(Inst):
         return cls(op=op, loc=loc)
 
     @classmethod
-    def undef(cls, loc):
+    def undef(cls, loc: Loc):
         """
         A node for undefined value specifically from LOAD_FAST_AND_CLEAR opcode.
         """
@@ -573,7 +575,7 @@ class Expr(Inst):
         return cls(op=op, loc=loc)
 
     @classmethod
-    def dummy(cls, op, info, loc):
+    def dummy(cls, op: str, info, loc: Loc):
         """
         A node for a dummy value.
 
@@ -605,7 +607,48 @@ class Expr(Inst):
             args = ('%s=%s' % (k, v) for k, v in pres_order)
             return '%s(%s)' % (self.op, ', '.join(args))
 
+    @pt.override
     def list_vars(self):
+        # No variable operations
+        if self.op in ("null", "undef"):
+            return []
+
+        # 1-Var operations
+        elif self.op in ("pair_first", "pair_second", "getiter", "iternext", "exhaust_iter", "getattr", "cast"):
+            return [self._kws["value"]]
+        # Unary operations have an optional input var
+        elif self.op == "unary":
+            val = self._kws["value"]
+            return [] if val is None else [val]
+
+        # 2-Var operations
+        if self.op in ("binop", "inplace_binop"):
+            return [self._kws["lhs"], self._kws["rhs"]]
+        elif self.op == "getitem":
+            return [self._kws["value"], self._kws["index"]]
+
+        # Multi-var operations
+        elif self.op == "call":
+            out = [self._kws["func"]] + list(self._kws["args"]) + [x[1] for x in self._kws["kws"]]
+            if self._kws["vararg"]:
+                out.append(self._kws["vararg"])
+            if self._kws["varkwarg"]:
+                out.append(self._kws["varkwarg"])
+            return out
+        elif self.op in ("build_tuple", "build_list", "build_set"):
+            return self._kws["items"]
+        elif self.op == "static_getitem":
+            out = [self._kws["value"]]
+            index_var = self._kws["index_var"]
+            if index_var is not None:
+                out.append(index_var)
+            return out
+        # Phi input values to "merge" are a list of variables
+        elif self.op == "phi":
+            return self._kws["incoming_values"]
+
+        # Following cases are complex enough to use the recursive helper
+        # build_map, typed_getitem, make_function, dummy
         return self._rec_list_vars(self._kws)
 
     def infer_constant(self):
@@ -617,7 +660,7 @@ class SetItem(Stmt):
     target[index] = value
     """
 
-    def __init__(self, target, index, value, loc):
+    def __init__(self, target: "Var", index: "Var", value: "Var", loc: Loc) -> None:
         assert isinstance(target, Var)
         assert isinstance(index, Var)
         assert isinstance(value, Var)
@@ -630,13 +673,17 @@ class SetItem(Stmt):
     def __repr__(self):
         return '%s[%s] = %s' % (self.target, self.index, self.value)
 
+    @pt.override
+    def list_vars(self) -> pt.List["Var"]:
+        return [self.target, self.index, self.value]
+
 
 class StaticSetItem(Stmt):
     """
     target[constant index] = value
     """
 
-    def __init__(self, target, index, index_var, value, loc):
+    def __init__(self, target: "Var", index, index_var: "Var", value: "Var", loc: Loc) -> None:
         assert isinstance(target, Var)
         assert not isinstance(index, Var)
         assert isinstance(index_var, Var)
@@ -651,13 +698,17 @@ class StaticSetItem(Stmt):
     def __repr__(self):
         return '%s[%r] = %s' % (self.target, self.index, self.value)
 
+    @pt.override
+    def list_vars(self) -> pt.List["Var"]:
+        return [self.target, self.index_var, self.value]
+
 
 class DelItem(Stmt):
     """
     del target[index]
     """
 
-    def __init__(self, target, index, loc):
+    def __init__(self, target: "Var", index: "Var", loc: Loc) -> None:
         assert isinstance(target, Var)
         assert isinstance(index, Var)
         assert isinstance(loc, Loc)
@@ -668,9 +719,13 @@ class DelItem(Stmt):
     def __repr__(self):
         return 'del %s[%s]' % (self.target, self.index)
 
+    @pt.override
+    def list_vars(self) -> pt.List["Var"]:
+        return [self.target, self.index]
+
 
 class SetAttr(Stmt):
-    def __init__(self, target, attr, value, loc):
+    def __init__(self, target: "Var", attr: str, value: "Var", loc: Loc) -> None:
         assert isinstance(target, Var)
         assert isinstance(attr, str)
         assert isinstance(value, Var)
@@ -683,9 +738,13 @@ class SetAttr(Stmt):
     def __repr__(self):
         return '(%s).%s = %s' % (self.target, self.attr, self.value)
 
+    @pt.override
+    def list_vars(self) -> pt.List["Var"]:
+        return [self.target, self.value]
+
 
 class DelAttr(Stmt):
-    def __init__(self, target, attr, loc):
+    def __init__(self, target: "Var", attr: str, loc: Loc):
         assert isinstance(target, Var)
         assert isinstance(attr, str)
         assert isinstance(loc, Loc)
@@ -696,9 +755,13 @@ class DelAttr(Stmt):
     def __repr__(self):
         return 'del (%s).%s' % (self.target, self.attr)
 
+    @pt.override
+    def list_vars(self) -> pt.List["Var"]:
+        return [self.target]
+    
 
 class StoreMap(Stmt):
-    def __init__(self, dct, key, value, loc):
+    def __init__(self, dct: "Var", key: "Var", value: "Var", loc: Loc):
         assert isinstance(dct, Var)
         assert isinstance(key, Var)
         assert isinstance(value, Var)
@@ -711,9 +774,13 @@ class StoreMap(Stmt):
     def __repr__(self):
         return '%s[%s] = %s' % (self.dct, self.key, self.value)
 
+    @pt.override
+    def list_vars(self) -> pt.List["Var"]:
+        return [self.dct, self.key, self.value]
+
 
 class Del(Stmt):
-    def __init__(self, value, loc):
+    def __init__(self, value: str, loc: Loc):
         assert isinstance(value, str)
         assert isinstance(loc, Loc)
         self.value = value
@@ -722,11 +789,15 @@ class Del(Stmt):
     def __str__(self):
         return "del %s" % self.value
 
+    @pt.override
+    def list_vars(self) -> pt.List["Var"]:
+        return []
+
 
 class Raise(Terminator):
     is_exit = True
 
-    def __init__(self, exception, loc):
+    def __init__(self, exception: pt.Optional["Var"], loc: Loc):
         assert exception is None or isinstance(exception, Var)
         assert isinstance(loc, Loc)
         self.exception = exception
@@ -738,6 +809,10 @@ class Raise(Terminator):
     def get_targets(self):
         return []
 
+    @pt.override
+    def list_vars(self) -> pt.List["Var"]:
+        return [] if self.exception is None else [self.exception]
+
 
 class StaticRaise(Terminator):
     """
@@ -747,7 +822,7 @@ class StaticRaise(Terminator):
     """
     is_exit = True
 
-    def __init__(self, exc_class, exc_args, loc):
+    def __init__(self, exc_class, exc_args, loc: "Loc"):
         assert exc_class is None or isinstance(exc_class, type)
         assert isinstance(loc, Loc)
         assert exc_args is None or isinstance(exc_args, tuple)
@@ -767,6 +842,10 @@ class StaticRaise(Terminator):
     def get_targets(self):
         return []
 
+    @pt.override
+    def list_vars(self) -> pt.List["Var"]:
+        return []
+
 
 class DynamicRaise(Terminator):
     """
@@ -776,7 +855,7 @@ class DynamicRaise(Terminator):
     """
     is_exit = True
 
-    def __init__(self, exc_class, exc_args, loc):
+    def __init__(self, exc_class, exc_args, loc: "Loc"):
         assert exc_class is None or isinstance(exc_class, type)
         assert isinstance(loc, Loc)
         assert exc_args is None or isinstance(exc_args, tuple)
@@ -796,12 +875,14 @@ class DynamicRaise(Terminator):
     def get_targets(self):
         return []
 
+    # Reuse parent's list_vars method in dynamic cases
+
 
 class TryRaise(Stmt):
     """A raise statement inside a try-block
     Similar to ``Raise`` but does not terminate.
     """
-    def __init__(self, exception, loc):
+    def __init__(self, exception: pt.Optional["Var"], loc: "Loc"):
         assert exception is None or isinstance(exception, Var)
         assert isinstance(loc, Loc)
         self.exception = exception
@@ -810,12 +891,16 @@ class TryRaise(Stmt):
     def __str__(self):
         return "try_raise %s" % self.exception
 
+    @pt.override
+    def list_vars(self) -> pt.List["Var"]:
+        return [] if self.exception is None else [self.exception]
+
 
 class StaticTryRaise(Stmt):
     """A raise statement inside a try-block.
     Similar to ``StaticRaise`` but does not terminate.
     """
-    def __init__(self, exc_class, exc_args, loc):
+    def __init__(self, exc_class, exc_args, loc: "Loc"):
         assert exc_class is None or isinstance(exc_class, type)
         assert isinstance(loc, Loc)
         assert exc_args is None or isinstance(exc_args, tuple)
@@ -832,12 +917,16 @@ class StaticTryRaise(Stmt):
             args = ", ".join(map(repr, self.exc_args))
             return f"static_try_raise {self.exc_class}({args})"
 
+    @pt.override
+    def list_vars(self) -> pt.List["Var"]:
+        return []
+
 
 class DynamicTryRaise(Stmt):
     """A raise statement inside a try-block.
     Similar to ``DynamicRaise`` but does not terminate.
     """
-    def __init__(self, exc_class, exc_args, loc):
+    def __init__(self, exc_class, exc_args, loc: "Loc"):
         assert exc_class is None or isinstance(exc_class, type)
         assert isinstance(loc, Loc)
         assert exc_args is None or isinstance(exc_args, tuple)
@@ -854,6 +943,9 @@ class DynamicTryRaise(Stmt):
             args = ", ".join(map(repr, self.exc_args))
             return f"dynamic_try_raise {self.exc_class}({args})"
 
+    # Reuse parent's list_vars method in dynamic cases
+
+
 
 class Return(Terminator):
     """
@@ -861,7 +953,7 @@ class Return(Terminator):
     """
     is_exit = True
 
-    def __init__(self, value, loc):
+    def __init__(self, value: "Var", loc: "Loc"):
         assert isinstance(value, Var), type(value)
         assert isinstance(loc, Loc)
         self.value = value
@@ -873,13 +965,17 @@ class Return(Terminator):
     def get_targets(self):
         return []
 
+    @pt.override
+    def list_vars(self) -> pt.List["Var"]:
+        return [self.value]
+
 
 class Jump(Terminator):
     """
     Unconditional branch.
     """
 
-    def __init__(self, target, loc):
+    def __init__(self, target, loc: "Loc"):
         assert isinstance(loc, Loc)
         self.target = target
         self.loc = loc
@@ -890,13 +986,17 @@ class Jump(Terminator):
     def get_targets(self):
         return [self.target]
 
+    @pt.override
+    def list_vars(self) -> pt.List["Var"]:
+        return []
+
 
 class Branch(Terminator):
     """
     Conditional branch.
     """
 
-    def __init__(self, cond, truebr, falsebr, loc):
+    def __init__(self, cond: "Var", truebr, falsebr, loc: Loc):
         assert isinstance(cond, Var)
         assert isinstance(loc, Loc)
         self.cond = cond
@@ -910,12 +1010,16 @@ class Branch(Terminator):
     def get_targets(self):
         return [self.truebr, self.falsebr]
 
+    @pt.override
+    def list_vars(self) -> pt.List["Var"]:
+        return [self.cond]
+
 
 class Assign(Stmt):
     """
     Assign to a variable.
     """
-    def __init__(self, value, target, loc):
+    def __init__(self, value: AbstractRHS, target: "Var", loc: "Loc"):
         assert isinstance(value, AbstractRHS)
         assert isinstance(target, Var)
         assert isinstance(loc, Loc)
@@ -926,12 +1030,18 @@ class Assign(Stmt):
     def __str__(self):
         return '%s = %s' % (self.target, self.value)
 
+    @pt.override
+    def list_vars(self) -> pt.List["Var"]:
+        inner_vars = [self.target]
+        inner_vars.extend(self._rec_list_vars(self.value))
+        return inner_vars
+
 
 class Print(Stmt):
     """
     Print some values.
     """
-    def __init__(self, args, vararg, loc):
+    def __init__(self, args: pt.Iterable["Var"], vararg, loc: "Loc"):
         assert all(isinstance(x, Var) for x in args)
         assert vararg is None or isinstance(vararg, Var)
         assert isinstance(loc, Loc)
@@ -944,9 +1054,16 @@ class Print(Stmt):
     def __str__(self):
         return 'print(%s)' % ', '.join(str(v) for v in self.args)
 
+    @pt.override
+    def list_vars(self) -> pt.List["Var"]:
+        inner_vars = list(self.args)
+        if self.vararg is not None:
+            inner_vars.append(self.vararg)
+        return inner_vars
+
 
 class Yield(Inst):
-    def __init__(self, value, loc, index):
+    def __init__(self, value: "Var", loc: "Loc", index):
         assert isinstance(value, Var)
         assert isinstance(loc, Loc)
         self.value = value
@@ -956,14 +1073,15 @@ class Yield(Inst):
     def __str__(self):
         return 'yield %s' % (self.value,)
 
-    def list_vars(self):
+    @pt.override
+    def list_vars(self) -> pt.List["Var"]:
         return [self.value]
 
 
 class EnterWith(Stmt):
     """Enter a "with" context
     """
-    def __init__(self, contextmanager, begin, end, loc):
+    def __init__(self, contextmanager: "Var", begin, end, loc: "Loc"):
         """
         Parameters
         ----------
@@ -983,18 +1101,23 @@ class EnterWith(Stmt):
     def __str__(self):
         return 'enter_with {}'.format(self.contextmanager)
 
-    def list_vars(self):
+    @pt.override
+    def list_vars(self) -> pt.List["Var"]:
         return [self.contextmanager]
 
 
 class PopBlock(Stmt):
     """Marker statement for a pop block op code"""
-    def __init__(self, loc):
+    def __init__(self, loc: "Loc") -> None:
         assert isinstance(loc, Loc)
         self.loc = loc
 
     def __str__(self):
         return 'pop_block'
+
+    @pt.override
+    def list_vars(self) -> pt.List["Var"]:
+        return []
 
 
 class Arg(EqualityCheckMixin, AbstractRHS):
