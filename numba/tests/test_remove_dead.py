@@ -348,7 +348,7 @@ class TestSSADeadBranchPrune(TestCase):
             idx = smth > weights
             weights = weights[idx]
 
-            return default*weights
+            return default * weights
 
         self.assertIsNone(compute(smth=1, weights=None))
         kwargs = dict(smth=1, weights=np.arange(5), default=np.zeros(1))
