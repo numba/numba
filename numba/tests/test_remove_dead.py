@@ -318,6 +318,7 @@ class TestSSADeadBranchPrune(TestCase):
                 return x + y_
 
         self.assertEqual(foo(3, None), foo_manual_ssa(3, None))
+        self.assertEqual(foo(3, 10), foo_manual_ssa(3, 10))
 
     def test_issue_6541(self):
         @njit
@@ -334,6 +335,9 @@ class TestSSADeadBranchPrune(TestCase):
         out = np.arange(3, dtype='i8')
         got = f(np.array([3, 1, 2]), out=out)
         self.assertIs(got, out)
+        self.assertPreciseEqual(got, expected)
+        out = None
+        got = f(np.array([3, 1, 2]), out=out)
         self.assertPreciseEqual(got, expected)
 
     def test_issue_7482(self):
