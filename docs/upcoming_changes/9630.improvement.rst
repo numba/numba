@@ -2,7 +2,7 @@ Allow caching of Numba functions within Zip files
 -------------------------------------------------
 
 This change enables numba functions imported from a file within a zip archive to
-be cached, by recognizing a zip file and using a user-wide cache directory
+be cached, by recognizing a Zip file and using a user-wide cache directory
 for the cache. Previously, numba would fail.
 
 For context, Zip archives are a supported-but-less-common way to distribute
