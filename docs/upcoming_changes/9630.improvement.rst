@@ -1,4 +1,4 @@
-Allow caching of numba functions within zip files
+Allow caching of Numba functions within Zip files
 -------------------------------------------------
 
 This change enables numba functions imported from a file within a zip archive to
