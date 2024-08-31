@@ -1171,26 +1171,46 @@ def dprint_func_ir(func_ir, title, blocks=None):
 
 def find_topo_order(blocks, cfg = None):
     """find topological order of blocks such that true branches are visited
-    first (e.g. for_break test in test_dataflow).
+    first (e.g. for_break test in test_dataflow). This is written as an iterative
+    implementation of post order traversal to avoid recursion limit issues.
     """
     if cfg is None:
         cfg = compute_cfg_from_blocks(blocks)
-    post_order = []
-    seen = set()
 
-    def _dfs_rec(node):
-        if node not in seen:
+    post_order = []
+    # Has the node already added its children?
+    seen = set()
+    # Has the node already been pushed to post order?
+    visited = set()
+    stack = [cfg.entry_point()]
+
+    while len(stack) > 0:
+        node = stack[-1]
+        if node not in visited and node not in seen:
+            # We haven't added a node or its children.
             seen.add(node)
             succs = cfg._succs[node]
             last_inst = blocks[node].body[-1]
             if isinstance(last_inst, ir.Branch):
-                succs = [last_inst.falsebr, last_inst.truebr]
+                succs = [last_inst.truebr, last_inst.falsebr]
             for dest in succs:
                 if (node, dest) not in cfg._back_edges:
-                    _dfs_rec(dest)
-            post_order.append(node)
+                    if dest not in seen:
+                        stack.append(dest)
+        else:
+            # This node has already added its children. We either need
+            # to visit the node or it has been added multiple times in
+            # which case we should just skip the node.
+            node = stack.pop()
+            if node not in visited:
+                post_order.append(node)
+                visited.add(node)
+            if node in seen:
+                # Remove the node from seen if it exists to limit the memory
+                # usage to 1 entry per node. Otherwise the memory requirement
+                # can double the recursive version.
+                seen.remove(node)
 
-    _dfs_rec(cfg.entry_point())
     post_order.reverse()
     return post_order
 
