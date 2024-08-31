@@ -357,6 +357,22 @@ def np_trapz_x_dx(y, x, dx):
     return np.trapz(y, x, dx)
 
 
+def np_trapezoid(y):
+    return np.trapezoid(y)
+
+
+def np_trapezoid_x(y, x):
+    return np.trapezoid(y, x)
+
+
+def np_trapezoid_dx(y, dx):
+    return np.trapezoid(y, dx=dx)
+
+
+def np_trapezoid_x_dx(y, x, dx):
+    return np.trapezoid(y, x, dx)
+
+
 def np_allclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     return np.allclose(a, b, rtol, atol, equal_nan)
 
@@ -3895,8 +3911,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cond = np.array([True, False, True, False, False, True, False])
         _check(cond, a)
 
-    def test_np_trapz_basic(self):
-        pyfunc = np_trapz
+    @unittest.skipUnless(IS_NUMPY_2, "New in numpy 2.0+")
+    def test_np_trapezoid_basic(self):
+        self.test_np_trapz_basic(pyfunc=np_trapezoid)
+
+    def test_np_trapz_basic(self, pyfunc=np_trapz):
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc)
 
@@ -3930,8 +3949,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         y = (True, False, True)
         _check({'y': y})
 
-    def test_np_trapz_x_basic(self):
-        pyfunc = np_trapz_x
+    @unittest.skipUnless(IS_NUMPY_2, "New in numpy 2.0+")
+    def test_np_trapezoid_x_basic(self):
+        self.test_np_trapz_x_basic(pyfunc=np_trapezoid_x)
+
+    def test_np_trapz_x_basic(self, pyfunc=np_trapz_x):
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc)
 
@@ -3989,10 +4011,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x = np.array([1 + 1j, 1 + 2j])
         _check({'y': y, 'x': x})
 
+    @unittest.skipUnless(IS_NUMPY_2, "New in numpy 2.0+")
+    def test_trapezoid_numpy_questionable(self):
+        self.test_trapz_numpy_questionable(pyfunc=np_trapezoid)
+
     @unittest.skip('NumPy behaviour questionable')
-    def test_trapz_numpy_questionable(self):
+    def test_trapz_numpy_questionable(self, pyfunc=np_trapz):
         # https://github.com/numpy/numpy/issues/12858
-        pyfunc = np_trapz
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc)
 
@@ -4004,8 +4029,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         y = np.array([True, False, True, True])
         _check({'y': y})
 
-    def test_np_trapz_dx_basic(self):
-        pyfunc = np_trapz_dx
+    @unittest.skipUnless(IS_NUMPY_2, "New in numpy 2.0+")
+    def test_np_trapezoid_dx_basic(self):
+        self.test_np_trapz_dx_basic(pyfunc=np_trapezoid_dx)
+
+    def test_np_trapz_dx_basic(self, pyfunc=np_trapz_dx):
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc)
 
@@ -4050,8 +4078,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         dx = np.array([5])
         _check({'y': y, 'dx': dx})
 
-    def test_np_trapz_x_dx_basic(self):
-        pyfunc = np_trapz_x_dx
+    @unittest.skipUnless(IS_NUMPY_2, "New in numpy 2.0+")
+    def test_np_trapezoid_x_dx_basic(self):
+        self.test_np_trapz_x_dx_basic(pyfunc=np_trapezoid_x_dx)
+
+    def test_np_trapz_x_dx_basic(self, pyfunc=np_trapz_x_dx):
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc)
 
@@ -4075,8 +4106,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             x[2, 2, 2] = np.nan
             _check({'y': y, 'x': x, 'dx': dx})
 
-    def test_np_trapz_x_dx_exceptions(self):
-        pyfunc = np_trapz_x_dx
+    @unittest.skipUnless(IS_NUMPY_2, "New in numpy 2.0+")
+    def test_np_trapezoid_x_dx_exceptions(self):
+        self.test_np_trapz_x_dx_exceptions(pyfunc=np_trapezoid_x_dx)
+
+    def test_np_trapz_x_dx_exceptions(self, pyfunc=np_trapz_x_dx):
         cfunc = jit(nopython=True)(pyfunc)
 
         # Exceptions leak references

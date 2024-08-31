@@ -556,6 +556,7 @@ The following top-level functions are supported:
 * :func:`numpy.take` (only the 2 first arguments)
 * :func:`numpy.take_along_axis` (the axis argument must be a literal value)
 * :func:`numpy.transpose`
+* :func:`numpy.trapezoid` (only the 3 first arguments)
 * :func:`numpy.trapz` (only the 3 first arguments)
 * :func:`numpy.tri` (only the 3 first arguments; third argument ``k`` must be an integer)
 * :func:`numpy.tril` (second argument ``k`` must be an integer)
@@ -631,7 +632,7 @@ Numba supports :py:class:`numpy.random.Generator()` objects. As of version 0.56,
 individual NumPy :py:class:`Generator` objects into Numba functions and use their
 methods inside the functions. The same algorithms are used as NumPy for
 random number generation hence maintaining parity between the random
-number generated using NumPy and Numba under identical arguments 
+number generated using NumPy and Numba under identical arguments
 (also the same documentation notes as NumPy :py:class:`Generator` methods apply).
 The current Numba support for :py:class:`Generator` is not thread-safe, hence we
 do not recommend using :py:class:`Generator` methods in methods with parallel

@@ -2236,6 +2236,11 @@ def np_trapz(y, x=None, dx=1.0):
     return impl
 
 
+# numpy 2.0 rename np.trapz to np.trapezoid
+if numpy_version >= (2, 0):
+    overload(np.trapezoid)(np_trapz)
+
+
 @register_jitable
 def _np_vander(x, N, increasing, out):
     """
