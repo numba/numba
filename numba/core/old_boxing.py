@@ -1119,7 +1119,14 @@ def box_literal(typ, val, c):
     # which we can directly return.
     retval = typ.literal_value
     # Serialize the value into the IR
-    return c.pyapi.unserialize(c.pyapi.serialize_object(retval))
+    # Some literals may not be hashable (i.e. slice, list),
+    # so we provide a wrapper around the literal type as a key.
+    try:
+        hash(retval)
+        key = None
+    except TypeError:
+        key = types.LiteralKeyWrapper(retval)
+    return c.pyapi.unserialize(c.pyapi.serialize_object(retval, key=key))
 
 
 @box(types.MemInfoPointer)
@@ -1196,7 +1203,7 @@ def unbox_numpy_random_bitgenerator(typ, obj, c):
         interface_state = object_getattr_safely(ctypes_binding, 'state')
         with cgutils.early_exit_if_null(c.builder, stack, interface_state):
             handle_failure()
-    
+
         interface_state_value = object_getattr_safely(
             interface_state, 'value')
         with cgutils.early_exit_if_null(c.builder, stack, interface_state_value):
@@ -1277,7 +1284,7 @@ def unbox_numpy_random_generator(typ, obj, c):
     * ('meminfo', types.MemInfoPointer(types.voidptr)): The information about the memory
         stored at the pointer (to the original Generator PyObject). This is useful for
         keeping track of reference counts within the Python runtime. Helps prevent cases
-        where deletion happens in Python runtime without NRT being awareness of it. 
+        where deletion happens in Python runtime without NRT being awareness of it.
     """
     is_error_ptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
 
