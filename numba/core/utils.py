@@ -807,3 +807,10 @@ class _lazy_pformat(object):
 
     def __str__(self):
         return pformat(*self.args, **self.kwargs)
+
+
+class _LazyJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, _lazy_pformat):
+            return str(obj)
+        return super().default(obj)
