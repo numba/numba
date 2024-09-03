@@ -1,10 +1,10 @@
 import platform
 import numpy as np
 from numba import types
-from unittest import TestCase, skipIf
-from numba.tests.support import override_env_config
-from numba.core.compiler import compile_isolated, Flags
-from numba.core.cpu_options import FastMathOptions
+import unittest
+from numba import njit
+from numba.core import config
+from numba.tests.support import TestCase
 
 _DEBUG = False
 if _DEBUG:
@@ -13,21 +13,25 @@ if _DEBUG:
     llvm.set_option("", "--debug-only=loop-vectorize")
 
 
-@skipIf(platform.machine() != 'x86_64', 'x86_64 only test')
+_skylake_env = {
+    "NUMBA_CPU_NAME": "skylake-avx512",
+    "NUMBA_CPU_FEATURES": "",
+}
+
+
+@unittest.skipIf(platform.machine() != 'x86_64', 'x86_64 only test')
 class TestVectorization(TestCase):
     """
     Tests to assert that code which should vectorize does indeed vectorize
     """
     def gen_ir(self, func, args_tuple, fastmath=False):
-        with override_env_config(
-            "NUMBA_CPU_NAME", "skylake-avx512"
-        ), override_env_config("NUMBA_CPU_FEATURES", ""):
-            _flags = Flags()
-            _flags.fastmath = FastMathOptions(fastmath)
-            _flags.nrt = True
-            jitted = compile_isolated(func, args_tuple, flags=_flags)
-            return jitted.library.get_llvm_str()
+        self.assertEqual(config.CPU_NAME, "skylake-avx512")
+        self.assertEqual(config.CPU_FEATURES, "")
 
+        jitted = njit(args_tuple, fastmath=fastmath)(func)
+        return jitted.inspect_llvm(args_tuple)
+
+    @TestCase.run_test_in_subprocess(envvars=_skylake_env)
     def test_nditer_loop(self):
         # see https://github.com/numba/numba/issues/5033
         def do_sum(x):
@@ -40,6 +44,11 @@ class TestVectorization(TestCase):
         self.assertIn("vector.body", llvm_ir)
         self.assertIn("llvm.loop.isvectorized", llvm_ir)
 
+    # SLP is off by default due to miscompilations, see #8705. Put this into a
+    # subprocess to isolate any potential issues.
+    @TestCase.run_test_in_subprocess(
+        envvars={'NUMBA_SLP_VECTORIZE': '1', **_skylake_env},
+    )
     def test_slp(self):
         # Sample translated from:
         # https://www.llvm.org/docs/Vectorizers.html#the-slp-vectorizer
@@ -54,6 +63,7 @@ class TestVectorization(TestCase):
         llvm_ir = self.gen_ir(foo, ((ty,) * 4 + (ty[::1],)), fastmath=True)
         self.assertIn("2 x double", llvm_ir)
 
+    @TestCase.run_test_in_subprocess(envvars=_skylake_env)
     def test_instcombine_effect(self):
         # Without instcombine running ahead of refprune, the IR has refops that
         # are trivially prunable (same BB) but the arguments are obfuscated
@@ -71,3 +81,7 @@ class TestVectorization(TestCase):
                               fastmath=True)
         self.assertIn("vector.body", llvm_ir)
         self.assertIn("llvm.loop.isvectorized", llvm_ir)
+
+
+if __name__ == '__main__':
+    unittest.main()

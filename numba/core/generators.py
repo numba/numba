@@ -2,7 +2,8 @@
 Support for lowering generators.
 """
 
-from llvmlite.llvmpy.core import Constant, Type, Builder
+import llvmlite.ir
+from llvmlite.ir import Constant, IRBuilder
 
 from numba.core import types, config, cgutils
 from numba.core.funcdesc import FunctionDescriptor
@@ -53,8 +54,8 @@ class BaseGeneratorLower(object):
         self.context = lower.context
         self.fndesc = lower.fndesc
         self.library = lower.library
-        self.call_conv = lower.call_conv
         self.func_ir = lower.func_ir
+        self.lower = lower
 
         self.geninfo = lower.generator_info
         self.gentype = self.get_generator_type()
@@ -64,6 +65,10 @@ class BaseGeneratorLower(object):
         self.arg_packer = self.context.get_data_packer(self.fndesc.argtypes)
 
         self.resume_blocks = {}
+
+    @property
+    def call_conv(self):
+        return self.lower.call_conv
 
     def get_args_ptr(self, builder, genptr):
         return cgutils.gep_inbounds(builder, genptr, 0, 1)
@@ -113,7 +118,7 @@ class BaseGeneratorLower(object):
         argsval = self.arg_packer.as_data(builder, lower.fnargs)
 
         # Zero initialize states
-        statesval = Constant.null(statesty)
+        statesval = Constant(statesty, None)
         gen_struct = cgutils.make_anonymous_struct(builder,
                                                    [resume_index, argsval,
                                                     statesval],
@@ -175,12 +180,12 @@ class BaseGeneratorLower(object):
         """
         Lower the generator's finalizer.
         """
-        fnty = Type.function(Type.void(),
-                             [self.context.get_value_type(self.gentype)])
+        fnty = llvmlite.ir.FunctionType(llvmlite.ir.VoidType(),
+                                        [self.context.get_value_type(self.gentype)])
         function = cgutils.get_or_insert_function(
             lower.module, fnty, self.gendesc.llvm_finalizer_name)
         entry_block = function.append_basic_block('entry')
-        builder = Builder(entry_block)
+        builder = IRBuilder(entry_block)
 
         genptrty = self.context.get_value_type(self.gentype)
         genptr = builder.bitcast(function.args[0], genptrty)
@@ -190,7 +195,7 @@ class BaseGeneratorLower(object):
         """
         Emit a StopIteration at generator end and mark the generator exhausted.
         """
-        indexval = Constant.int(self.resume_index_ptr.type.pointee, -1)
+        indexval = Constant(self.resume_index_ptr.type.pointee, -1)
         lower.builder.store(indexval, self.resume_index_ptr)
         self.call_conv.return_stop_iteration(lower.builder)
 
@@ -262,7 +267,7 @@ class PyGeneratorLower(BaseGeneratorLower):
         NULL-initialize all generator state variables, to avoid spurious
         decref's on cleanup.
         """
-        lower.builder.store(Constant.null(self.gen_state_ptr.type.pointee),
+        lower.builder.store(Constant(self.gen_state_ptr.type.pointee, None),
                             self.gen_state_ptr)
 
     def lower_finalize_func_body(self, builder, genptr):
@@ -278,7 +283,7 @@ class PyGeneratorLower(BaseGeneratorLower):
         # (note function arguments are saved in state variables,
         #  so they don't need a separate cleanup step)
         need_cleanup = builder.icmp_signed(
-            '>', resume_index, Constant.int(resume_index.type, 0))
+            '>', resume_index, Constant(resume_index.type, 0))
 
         with cgutils.if_unlikely(builder, need_cleanup):
             # Decref all live vars (some may be NULL)
@@ -333,8 +338,8 @@ class LowerYield(object):
 
             self.context.pack_value(self.builder, ty, val, state_slot)
         # Save resume index
-        indexval = Constant.int(self.resume_index_ptr.type.pointee,
-                                self.inst.index)
+        indexval = Constant(self.resume_index_ptr.type.pointee,
+                            self.inst.index)
         self.builder.store(indexval, self.resume_index_ptr)
         self.lower.debug_print("# generator suspend end")
 

@@ -4,25 +4,21 @@
 #
 
 import numpy
+import math
 
 import types as pytypes
 import collections
-import operator
 import warnings
-
-from llvmlite import ir as lir
 
 import numba
 from numba.core.extending import _Intrinsic
-from numba.core import types, utils, typing, ir, analysis, postproc, rewrites, config, cgutils
-from numba.core.typing.templates import (signature, infer_global,
-                                         AbstractTemplate)
-from numba.core.imputils import impl_ret_untracked
+from numba.core import types, typing, ir, analysis, postproc, rewrites, config
+from numba.core.typing.templates import signature
 from numba.core.analysis import (compute_live_map, compute_use_defs,
                             compute_cfg_from_blocks)
 from numba.core.errors import (TypingError, UnsupportedError,
-                               NumbaPendingDeprecationWarning, NumbaWarning,
-                               feedback_details, CompilerError)
+                               NumbaPendingDeprecationWarning,
+                               CompilerError)
 
 import copy
 
@@ -96,6 +92,20 @@ def mk_alloc(typingctx, typemap, calltypes, lhs, size_var, dtype, scope, loc,
             out.append(tuple_assign)
             size_var = tuple_var
             size_typ = types.containers.UniTuple(types.intp, ndims)
+    if hasattr(lhs_typ, "__allocate__"):
+        return lhs_typ.__allocate__(
+            typingctx,
+            typemap,
+            calltypes,
+            lhs,
+            size_var,
+            dtype,
+            scope,
+            loc,
+            lhs_typ,
+            size_typ,
+            out,
+        )
     # g_np_var = Global(numpy)
     g_np_var = ir.Var(scope, mk_unique_var("$np_g_var"), loc)
     if typemap:
@@ -212,8 +222,11 @@ def mk_range_block(typemap, start, stop, step, calltypes, scope, loc):
     range_call_assign = ir.Assign(range_call, range_call_var, loc)
     # iter_var = getiter(range_call_var)
     iter_call = ir.Expr.getiter(range_call_var, loc)
-    calltypes[iter_call] = signature(types.range_iter64_type,
-                                     types.range_state64_type)
+    if config.USE_LEGACY_TYPE_SYSTEM:
+        calltype_sig = signature(types.range_iter64_type, types.range_state64_type)
+    else:
+        calltype_sig = signature(types.range_iter_type, types.range_state_type)
+    calltypes[iter_call] = calltype_sig
     iter_var = ir.Var(scope, mk_unique_var("$iter_var"), loc)
     typemap[iter_var.name] = types.iterators.RangeIteratorType(types.intp)
     iter_call_assign = ir.Assign(iter_call, iter_var, loc)
@@ -285,11 +298,15 @@ def mk_loop_header(typemap, phi_var, calltypes, scope, loc):
     typemap[iternext_var.name] = types.containers.Pair(
         types.intp, types.boolean)
     iternext_call = ir.Expr.iternext(phi_var, loc)
+    if config.USE_LEGACY_TYPE_SYSTEM:
+        range_iter_type = types.range_iter64_type
+    else:
+        range_iter_type = types.range_iter_type
     calltypes[iternext_call] = signature(
         types.containers.Pair(
             types.intp,
             types.boolean),
-        types.range_iter64_type)
+        range_iter_type)
     iternext_assign = ir.Assign(iternext_call, iternext_var, loc)
     # pair_first_var = pair_first(iternext_var)
     pair_first_var = ir.Var(scope, mk_unique_var("$pair_first_var"), loc)
@@ -734,7 +751,11 @@ def has_no_side_effect(rhs, lives, call_table):
             call_list == [array_analysis.wrap_index] or
             call_list == [prange] or
             call_list == ['prange', numba] or
-            call_list == [parfor.internal_prange]):
+            call_list == ['pndindex', numba] or
+            call_list == [parfor.internal_prange] or
+            call_list == ['ceil', math] or
+            call_list == [max] or
+            call_list == [int]):
             return True
         elif (isinstance(call_list[0], _Intrinsic) and
               (call_list[0]._name == 'empty_inferred' or
@@ -774,7 +795,10 @@ def is_pure(rhs, lives, call_table):
             call_list = call_table[func_name]
             if (call_list == [slice] or
                 call_list == ['log', numpy] or
-                call_list == ['empty', numpy]):
+                call_list == ['empty', numpy] or
+                call_list == ['ceil', math] or
+                call_list == [max] or
+                call_list == [int]):
                 return True
             for f in is_pure_extensions:
                 if f(rhs, lives, call_list):
@@ -1846,11 +1870,14 @@ def gen_np_call(func_as_str, func, lhs, args, typingctx, typemap, calltypes):
     np_assign = ir.Assign(np_call, lhs, loc)
     return [g_np_assign, attr_assign, np_assign]
 
+def dump_block(label, block):
+    print(label, ":")
+    for stmt in block.body:
+        print("    ", stmt)
+
 def dump_blocks(blocks):
     for label, block in blocks.items():
-        print(label, ":")
-        for stmt in block.body:
-            print("    ", stmt)
+        dump_block(label, block)
 
 def is_operator_or_getitem(expr):
     """true if expr is unary or binary operator or getitem"""
@@ -1925,7 +1952,7 @@ def is_namedtuple_class(c):
 
 def fill_block_with_call(newblock, callee, label_next, inputs, outputs):
     """Fill *newblock* to call *callee* with arguments listed in *inputs*.
-    The returned values are unwraped into variables in *outputs*.
+    The returned values are unwrapped into variables in *outputs*.
     The block would then jump to *label_next*.
     """
     scope = newblock.scope
@@ -1989,16 +2016,16 @@ def fill_callee_epilogue(block, outputs):
     return block
 
 
-def find_global_value(func_ir, var):
+def find_outer_value(func_ir, var):
     """Check if a variable is a global value, and return the value,
     or raise GuardException otherwise.
     """
     dfn = get_definition(func_ir, var)
-    if isinstance(dfn, ir.Global):
+    if isinstance(dfn, (ir.Global, ir.FreeVar)):
         return dfn.value
 
     if isinstance(dfn, ir.Expr) and dfn.op == 'getattr':
-        prev_val = find_global_value(func_ir, dfn.value)
+        prev_val = find_outer_value(func_ir, dfn.value)
         try:
             val = getattr(prev_val, dfn.attr)
             return val
@@ -2124,9 +2151,9 @@ def raise_on_unsupported_feature(func_ir, typemap):
                "in a function is unsupported (strange things happen!), use "
                "numba.gdb_breakpoint() to create additional breakpoints "
                "instead.\n\nRelevant documentation is available here:\n"
-               "https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html"
-               "/troubleshoot.html#using-numba-s-direct-gdb-bindings-in-"
-               "nopython-mode\n\nConflicting calls found at:\n %s")
+               "https://numba.readthedocs.io/en/stable/user/troubleshoot.html"
+               "#using-numba-s-direct-gdb-bindings-in-nopython-mode\n\n"
+               "Conflicting calls found at:\n %s")
         buf = '\n'.join([x.strformat() for x in gdb_calls])
         raise UnsupportedError(msg % buf)
 
@@ -2142,7 +2169,7 @@ def warn_deprecated(func_ir, typemap):
                 arg = name.split('.')[1]
                 fname = func_ir.func_id.func_qualname
                 tyname = 'list' if isinstance(ty, types.List) else 'set'
-                url = ("https://numba.pydata.org/numba-doc/latest/reference/"
+                url = ("https://numba.readthedocs.io/en/stable/reference/"
                        "deprecation.html#deprecation-of-reflection-for-list-and"
                        "-set-types")
                 msg = ("\nEncountered the use of a type that is scheduled for "
@@ -2215,7 +2242,7 @@ def legalize_single_scope(blocks):
     return len({blk.scope for blk in blocks.values()}) == 1
 
 
-def check_and_legalize_ir(func_ir):
+def check_and_legalize_ir(func_ir, flags: "numba.core.compiler.Flags"):
     """
     This checks that the IR presented is legal
     """
@@ -2223,8 +2250,7 @@ def check_and_legalize_ir(func_ir):
     enforce_no_dels(func_ir)
     # postprocess and emit ir.Dels
     post_proc = postproc.PostProcessor(func_ir)
-    post_proc.run(True, extend_lifetimes=config.EXTEND_VARIABLE_LIFETIMES)
-
+    post_proc.run(True, extend_lifetimes=flags.dbg_extend_lifetimes)
 
 def convert_code_obj_to_function(code_obj, caller_ir):
     """
@@ -2251,7 +2277,7 @@ def convert_code_obj_to_function(code_obj, caller_ir):
             freevars.append(freevar_def.value)
         else:
             msg = ("Cannot capture the non-constant value associated with "
-                   "variable '%s' in a function that will escape." % x)
+                   "variable '%s' in a function that may escape." % x)
             raise TypingError(msg, loc=code_obj.loc)
 
     func_env = "\n".join(["\tc_%d = %s" % (i, x) for i, x in enumerate(freevars)])

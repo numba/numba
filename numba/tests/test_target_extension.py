@@ -7,12 +7,13 @@ in testing."""
 
 import unittest
 from numba.tests.support import TestCase
-import contextlib
 import ctypes
 import operator
+from functools import cached_property
 import numpy as np
 from numba import njit, types
-from numba.extending import overload, intrinsic, overload_classmethod
+from numba.extending import (overload, overload_attribute,
+                             overload_classmethod, intrinsic)
 from numba.core.target_extension import (
     JitDecorator,
     target_registry,
@@ -28,11 +29,11 @@ from numba.core.descriptors import TargetDescriptor
 from numba.core import cpu, typing, cgutils
 from numba.core.base import BaseContext
 from numba.core.compiler_lock import global_compiler_lock
-from numba.core.utils import cached_property
 from numba.core import callconv
 from numba.core.codegen import CPUCodegen, JITCodeLibrary
 from numba.core.callwrapper import PyCallWrapper
 from numba.core.imputils import RegistryLoader, Registry
+from numba.core.typing.typeof import typeof
 from numba import _dynfunc
 import llvmlite.binding as ll
 from llvmlite import ir as llir
@@ -245,33 +246,16 @@ class DPUContext(BaseContext):
         return cfunc
 
 
-# Nested contexts to help with isolatings bits of compilations
-class _NestedContext(object):
-    _typing_context = None
-    _target_context = None
-
-    @contextlib.contextmanager
-    def nested(self, typing_context, target_context):
-        old_nested = self._typing_context, self._target_context
-        try:
-            self._typing_context = typing_context
-            self._target_context = target_context
-            yield
-        finally:
-            self._typing_context, self._target_context = old_nested
-
-
 # Implement a DPU TargetDescriptor, this one borrows bits from the CPU
 class DPUTarget(TargetDescriptor):
     options = cpu.CPUTargetOptions
-    _nested = _NestedContext()
 
-    @utils.cached_property
+    @cached_property
     def _toplevel_target_context(self):
         # Lazily-initialized top-level target context, for all threads
         return DPUContext(self.typing_context, self._target_name)
 
-    @utils.cached_property
+    @cached_property
     def _toplevel_typing_context(self):
         # Lazily-initialized top-level typing context, for all threads
         return typing.Context()
@@ -281,29 +265,14 @@ class DPUTarget(TargetDescriptor):
         """
         The target context for DPU targets.
         """
-        nested = self._nested._target_context
-        if nested is not None:
-            return nested
-        else:
-            return self._toplevel_target_context
+        return self._toplevel_target_context
 
     @property
     def typing_context(self):
         """
         The typing context for CPU targets.
         """
-        nested = self._nested._typing_context
-        if nested is not None:
-            return nested
-        else:
-            return self._toplevel_typing_context
-
-    def nested_context(self, typing_context, target_context):
-        """
-        A context manager temporarily replacing the contexts with the
-        given ones, for the current thread of execution.
-        """
-        return self._nested.nested(typing_context, target_context)
+        return self._toplevel_typing_context
 
 
 # Create a DPU target instance
@@ -313,6 +282,10 @@ dpu_target = DPUTarget("dpu")
 # Declare a dispatcher for the DPU target
 class DPUDispatcher(Dispatcher):
     targetdescr = dpu_target
+
+    def compile(self, sig):
+        with target_override('dpu'):
+            return super().compile(sig)
 
 
 # Register a dispatcher for the DPU target, a lot of the code uses this
@@ -545,7 +518,7 @@ class TestTargetHierarchySelection(TestCase):
 
     def test_invalid_target_jit(self):
 
-        with self.assertRaises(errors.NumbaValueError) as raises:
+        with self.assertRaises(errors.NonexistentTargetError) as raises:
             @njit(_target='invalid_silicon')
             def foo():
                 pass
@@ -562,7 +535,7 @@ class TestTargetHierarchySelection(TestCase):
 
         # This is a typing error at present as it fails during typing when the
         # overloads are walked.
-        with self.assertRaises(errors.TypingError) as raises:
+        with self.assertRaises(errors.NonexistentTargetError) as raises:
             @overload(bar, target='invalid_silicon')
             def ol_bar():
                 return lambda : None
@@ -736,6 +709,32 @@ class TestTargetHierarchySelection(TestCase):
             r = foo()
         from numba.core.runtime import nrt
         self.assertIsInstance(r, nrt.MemInfo)
+
+    def test_overload_attribute_target(self):
+        MyDummy, MyDummyType = self.make_dummy_type()
+        mydummy_type = typeof(MyDummy())
+
+        @overload_attribute(MyDummyType, 'dpu_only', target='dpu')
+        def ov_dummy_dpu_attr(obj):
+            def imp(obj):
+                return 42
+
+            return imp
+
+        # Ensure that we cannot use the DPU target-specific attribute on the
+        # CPU, and that an appropriate typing error is raised
+        with self.assertRaisesRegex(errors.TypingError,
+                                    "Unknown attribute 'dpu_only'"):
+            @njit(types.int64(mydummy_type))
+            def illegal_target_attr_use(x):
+                return x.dpu_only
+
+        # Ensure that the DPU target-specific attribute is usable and works
+        # correctly when the target is DPU - note eager compilation via
+        # signature
+        @djit(types.void(types.int64[::1], mydummy_type))
+        def cuda_target_attr_use(res, dummy):
+            res[0] = dummy.dpu_only
 
 
 class TestTargetOffload(TestCase):

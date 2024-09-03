@@ -7,13 +7,16 @@ from numba.core.transforms import find_setupwiths, with_lifting
 from numba.core.withcontexts import bypass_context, call_context, objmode_context
 from numba.core.bytecode import FunctionIdentity, ByteCode
 from numba.core.interpreter import Interpreter
-from numba.core import typing, errors, cpu
+from numba.core import errors
 from numba.core.registry import cpu_target
 from numba.core.compiler import compile_ir, DEFAULT_FLAGS
 from numba import njit, typeof, objmode, types
 from numba.core.extending import overload
 from numba.tests.support import (MemoryLeak, TestCase, captured_stdout,
-                                 skip_unless_scipy)
+                                 skip_unless_scipy, linux_only,
+                                 strace_supported, strace,
+                                 expected_failure_py311,
+                                 expected_failure_py312)
 from numba.core.utils import PYVERSION
 from numba.experimental import jitclass
 import unittest
@@ -187,8 +190,8 @@ class TestWithFinding(TestCase):
 class BaseTestWithLifting(TestCase):
     def setUp(self):
         super(BaseTestWithLifting, self).setUp()
-        self.typingctx = typing.Context()
-        self.targetctx = cpu.CPUContext(self.typingctx)
+        self.typingctx = cpu_target.typing_context
+        self.targetctx = cpu_target.target_context
         self.flags = DEFAULT_FLAGS
 
     def check_extracted_with(self, func, expect_count, expected_stdout):
@@ -209,10 +212,8 @@ class BaseTestWithLifting(TestCase):
         typingctx = self.typingctx
         targetctx = self.targetctx
         flags = self.flags
-        # Register the contexts in case for nested @jit or @overload calls
-        with cpu_target.nested_context(typingctx, targetctx):
-            return compile_ir(typingctx, targetctx, the_ir, args,
-                              return_type, flags, locals={})
+        return compile_ir(typingctx, targetctx, the_ir, args,
+                            return_type, flags, locals={})
 
 
 class TestLiftByPass(BaseTestWithLifting):
@@ -277,9 +278,8 @@ class TestLiftCall(BaseTestWithLifting):
         msg = ("compiler re-entrant to the same function signature")
         self.assertIn(msg, str(raises.exception))
 
-    # 3.7 fails to interpret the bytecode for this example
-    @unittest.skipIf(PYVERSION <= (3, 8),
-                     "unsupported on py3.8 and before")
+    @expected_failure_py311
+    @expected_failure_py312
     def test_liftcall5(self):
         self.check_extracted_with(liftcall5, expect_count=1,
                                   expected_stdout="0\n1\n2\n3\n4\n5\nA\n")
@@ -540,7 +540,7 @@ class TestLiftObj(MemoryLeak, TestCase):
             njit(foo)(123)
         # Check that an error occurred in with-lifting in objmode
         pat = ("During: resolving callee type: "
-               "type\(ObjModeLiftedWith\(<.*>\)\)")
+               r"type\(ObjModeLiftedWith\(<.*>\)\)")
         self.assertRegex(str(raises.exception), pat)
 
     def test_case07_mystery_key_error(self):
@@ -658,44 +658,14 @@ class TestLiftObj(MemoryLeak, TestCase):
         x = np.array([1, 2, 3])
         self.assert_equal_return_and_stdout(foo, x)
 
-    def test_case13_branch_to_objmode_ctx(self):
-        # Checks for warning in dataflow.py due to mishandled stack offset
-        # dataflow.py:57: RuntimeWarning: inconsistent stack offset ...
-        def foo(x, wobj):
-            if wobj:
-                with objmode_context(y='int64[:]'):
-                    y = (x + 1).astype('int64')
-            else:
-                y = x + 2
-
-            return x + y
-
-        x = np.array([1, 2, 3], dtype='int64')
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always", RuntimeWarning)
-            self.assert_equal_return_and_stdout(foo, x, True)
-        # Assert no warnings from dataflow.py
-        for each in w:
-            self.assertFalse(each.filename.endswith('dataflow.py'),
-                             msg='there were warnings in dataflow.py')
-
     def test_case14_return_direct_from_objmode_ctx(self):
         def foo(x):
             with objmode_context(x='int64[:]'):
                 x += 1
                 return x
 
-        if PYVERSION <= (3,8):
-            # 3.8 and below don't support return inside with
-            with self.assertRaises(errors.CompilerError) as raises:
-                cfoo = njit(foo)
-                cfoo(np.array([1, 2, 3]))
-            msg = "unsupported control flow: due to return statements inside with block"
-            self.assertIn(msg, str(raises.exception))
-        else:
-            result = foo(np.array([1, 2, 3]))
-            np.testing.assert_array_equal(np.array([2, 3, 4]), result)
+        result = foo(np.array([1, 2, 3]))
+        np.testing.assert_array_equal(np.array([2, 3, 4]), result)
 
     # No easy way to handle this yet.
     @unittest.expectedFailure
@@ -747,6 +717,8 @@ class TestLiftObj(MemoryLeak, TestCase):
         fn = njit(lambda z: z + 5)
         self.assert_equal_return_and_stdout(foo, fn, x)
 
+    @expected_failure_py311
+    @expected_failure_py312
     def test_case19_recursion(self):
         def foo(x):
             with objmode_context():
@@ -757,12 +729,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         with self.assertRaises((errors.TypingError, errors.CompilerError)) as raises:
             cfoo = njit(foo)
             cfoo(np.array([1, 2, 3]))
-        if PYVERSION <= (3, 7):
-            # 3.7 and below can't handle the return
-            msg = "unsupported control flow: due to return statements inside with block"
-        else:
-            # above can't handle the recursion
-            msg = "Untyped global name 'foo'"
+        msg = "Untyped global name 'foo'"
         self.assertIn(msg, str(raises.exception))
 
     @unittest.expectedFailure
@@ -847,7 +814,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         with self.assertRaisesRegex(
             errors.CompilerError,
             ("Error handling objmode argument 'val'. "
-             "Global 'gv_type2' is not defined\.")
+             r"Global 'gv_type2' is not defined.")
         ):
             global_var()
 
@@ -1099,8 +1066,6 @@ class TestLiftObj(MemoryLeak, TestCase):
 
         with self.assertRaises(TypeError) as raises:
             test4()
-        # Note: in python3.6, the Generic[T] on typedlist is causing it to
-        #       format differently.
         self.assertRegex(
             str(raises.exception),
             (r"can't unbox a <class 'list'> "
@@ -1211,6 +1176,38 @@ class TestBogusContext(BaseTestWithLifting):
         msg = ("The 'with (context manager) as (variable):' construct is not "
                "supported.")
         self.assertIn(msg, excstr)
+
+
+class TestMisc(TestCase):
+    # Tests for miscellaneous objmode issues. Run serially.
+
+    _numba_parallel_test_ = False
+
+    @linux_only
+    @TestCase.run_test_in_subprocess
+    def test_no_fork_in_compilation(self):
+        # Checks that there is no fork/clone/execve during compilation, see
+        # issue #7881. This needs running in a subprocess as the offending fork
+        # call that triggered #7881 occurs on the first call to uuid1 as it's
+        # part if the initialisation process for that function (gets hardware
+        # address of machine).
+
+        if not strace_supported():
+            # Needs strace support.
+            self.skipTest("strace support missing")
+
+        def force_compile():
+            @njit('void()') # force compilation
+            def f():
+                with numba.objmode():
+                    pass
+
+        # capture these syscalls:
+        syscalls = ['fork', 'clone', 'execve']
+
+        # check that compilation does not trigger fork, clone or execve
+        strace_data = strace(force_compile, syscalls)
+        self.assertFalse(strace_data)
 
 
 if __name__ == '__main__':

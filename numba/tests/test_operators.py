@@ -1,24 +1,20 @@
 import copy
 import itertools
 import operator
-import sys
-import warnings
+import unittest
 
 import numpy as np
 
-import unittest
-from numba.core.compiler import compile_isolated, Flags
-from numba import jit
-from numba.core import types, utils, errors, typeinfer
+from numba import jit, njit
+from numba.core import types, utils, errors
 from numba.core.types.functions import _header_lead
 from numba.tests.support import TestCase, tag, needs_blas
 from numba.tests.matmul_usecase import (matmul_usecase, imatmul_usecase,
                                         DumbMatrix,)
 
-Noflags = Flags()
+Noflags = {'nopython': True}
 
-force_pyobj_flags = Flags()
-force_pyobj_flags.force_pyobject = True
+force_pyobj_flags = {'forceobj': True}
 
 
 def make_static_power(exp):
@@ -387,8 +383,7 @@ class TestOperators(TestCase):
     def run_test_ints(self, pyfunc, x_operands, y_operands, types_list,
                       flags=force_pyobj_flags):
         for arg_types in types_list:
-            cr = compile_isolated(pyfunc, arg_types, flags=flags)
-            cfunc = cr.entry_point
+            cfunc = jit(arg_types, **flags)(pyfunc)
             for x, y in itertools.product(x_operands, y_operands):
                 # For inplace ops, we check that the first operand
                 # was correctly mutated.
@@ -408,8 +403,7 @@ class TestOperators(TestCase):
     def run_test_floats(self, pyfunc, x_operands, y_operands, types_list,
                         flags=force_pyobj_flags):
         for arg_types in types_list:
-            cr = compile_isolated(pyfunc, arg_types, flags=flags)
-            cfunc = cr.entry_point
+            cfunc = jit(arg_types, **flags)(pyfunc)
             for x, y in itertools.product(x_operands, y_operands):
                 # For inplace ops, we check that the first operand
                 # was correctly mutated.
@@ -439,8 +433,7 @@ class TestOperators(TestCase):
         if not ordered:
             types_list = types_list + self.compare_unordered_types
         for typ in types_list:
-            cr = compile_isolated(pyfunc, (typ, typ), flags=flags)
-            cfunc = cr.entry_point
+            cfunc = jit((typ, typ), **flags)(pyfunc)
             for x, y in itertools.product(ops, ops):
                 x = self.coerce_operand(x, typ)
                 y = self.coerce_operand(y, typ)
@@ -500,8 +493,7 @@ class TestOperators(TestCase):
         self.test_ne_scalar(flags=Noflags)
 
     def test_is_ellipsis(self):
-        cres = compile_isolated(self.op.is_usecase, (types.ellipsis, types.ellipsis))
-        cfunc = cres.entry_point
+        cfunc = njit((types.ellipsis, types.ellipsis))(self.op.is_usecase)
         self.assertTrue(cfunc(Ellipsis, Ellipsis))
 
     def test_is_void_ptr(self):
@@ -635,8 +627,7 @@ class TestOperators(TestCase):
         if allow_complex:
             arg_types.append(types.complex128)
         for tp in arg_types:
-            cr = compile_isolated(pyfunc, (tp, tp), flags=flags)
-            cfunc = cr.entry_point
+            cfunc = jit((tp, tp), **flags)(pyfunc)
             with self.assertRaises(ZeroDivisionError) as cm:
                 cfunc(1, 0)
             # Test exception message if not in object mode
@@ -770,11 +761,24 @@ class TestOperators(TestCase):
 
     def test_mod_complex(self, flags=force_pyobj_flags):
         pyfunc = self.op.mod_usecase
-        with self.assertTypingError():
-            cres = compile_isolated(pyfunc, (types.complex64, types.complex64))
+        cres = jit((types.complex64, types.complex64), **flags)(pyfunc)
+        with self.assertRaises(TypeError) as raises:
+            cres(4j, 2j)
+
+        # error message depends on Python version.
+        if utils.PYVERSION in ((3, 9),):
+            msg = "can't mod complex numbers"
+        elif utils.PYVERSION in ((3, 10), (3, 11), (3, 12)):
+            msg = "unsupported operand type(s) for %"
+        else:
+            raise NotImplementedError(utils.PYVERSION)
+
+        self.assertIn(msg, str(raises.exception))
 
     def test_mod_complex_npm(self):
-        self.test_mod_complex(flags=Noflags)
+        pyfunc = self.op.mod_usecase
+        with self.assertTypingError():
+            njit((types.complex64, types.complex64))(pyfunc)
 
     #
     # Matrix multiplication
@@ -783,8 +787,7 @@ class TestOperators(TestCase):
 
     def check_matmul_objmode(self, pyfunc, inplace):
         # Use dummy objects, to work with any NumPy / SciPy version
-        cres = compile_isolated(pyfunc, (), flags=force_pyobj_flags)
-        cfunc = cres.entry_point
+        cfunc = jit((), **force_pyobj_flags)(pyfunc)
         a = DumbMatrix(3)
         b = DumbMatrix(4)
         got = cfunc(a, b)
@@ -804,8 +807,7 @@ class TestOperators(TestCase):
     @needs_blas
     def check_matmul_npm(self, pyfunc):
         arrty = types.Array(types.float32, 1, 'C')
-        cres = compile_isolated(pyfunc, (arrty, arrty), flags=Noflags)
-        cfunc = cres.entry_point
+        cfunc = njit((arrty, arrty))(pyfunc)
         a = np.float32([1, 2])
         b = np.float32([3, 4])
         got = cfunc(a, b)
@@ -989,8 +991,7 @@ class TestOperators(TestCase):
         values = list(map(np.bool_, values))
 
         pyfunc = self.op.bitwise_not_usecase
-        cres = compile_isolated(pyfunc, (types.boolean,), flags=flags)
-        cfunc = cres.entry_point
+        cfunc = jit((types.boolean,), **flags)(pyfunc)
         for val in values:
             self.assertPreciseEqual(pyfunc(val), cfunc(val))
 
@@ -1004,7 +1005,7 @@ class TestOperators(TestCase):
         def assert_reject_compile(pyfunc, argtypes, opname):
             msg = 'expecting TypingError when compiling {}'.format(pyfunc)
             with self.assertRaises(errors.TypingError, msg=msg) as raises:
-                compile_isolated(pyfunc, argtypes)
+                njit(argtypes)(pyfunc)
             # check error message
             fmt = _header_lead + ' {}'
             expecting = fmt.format(opname
@@ -1042,8 +1043,7 @@ class TestOperators(TestCase):
             3.4j,
         ]
 
-        cres = compile_isolated(pyfunc, (), flags=force_pyobj_flags)
-        cfunc = cres.entry_point
+        cfunc = jit((), **force_pyobj_flags)(pyfunc)
         for val in values:
             self.assertEqual(pyfunc(val), cfunc(val))
 
@@ -1065,9 +1065,9 @@ class TestOperators(TestCase):
             3.4j,
         ]
         for ty, val in zip(argtys, values):
-            cres = compile_isolated(pyfunc, [ty])
-            self.assertEqual(cres.signature.return_type, types.boolean)
-            cfunc = cres.entry_point
+            cfunc = njit((ty,))(pyfunc)
+            self.assertEqual(cfunc.nopython_signatures[0].return_type,
+                             types.boolean)
             self.assertEqual(pyfunc(val), cfunc(val))
 
     # XXX test_negate should check for negative and positive zeros and infinities
@@ -1096,8 +1096,7 @@ class TestOperators(TestCase):
             False,
         ]
         for ty, val in zip(argtys, values):
-            cres = compile_isolated(pyfunc, [ty])
-            cfunc = cres.entry_point
+            cfunc = njit((ty,))(pyfunc)
             self.assertAlmostEqual(pyfunc(val), cfunc(val))
 
 
@@ -1112,8 +1111,7 @@ class TestOperators(TestCase):
             True,
             False,
         ]
-        cres = compile_isolated(pyfunc, (), flags=force_pyobj_flags)
-        cfunc = cres.entry_point
+        cfunc = jit((), **force_pyobj_flags)(pyfunc)
         for val in values:
             self.assertEqual(pyfunc(val), cfunc(val))
 
@@ -1141,8 +1139,7 @@ class TestOperators(TestCase):
             False
         ]
         for ty, val in zip(argtys, values):
-            cres = compile_isolated(pyfunc, [ty])
-            cfunc = cres.entry_point
+            cfunc = njit((ty,))(pyfunc)
             self.assertAlmostEqual(pyfunc(val), cfunc(val))
 
     def test_unary_positive(self):
@@ -1156,16 +1153,13 @@ class TestOperators(TestCase):
             True,
             False,
         ]
-        cres = compile_isolated(pyfunc, (), flags=force_pyobj_flags)
-        cfunc = cres.entry_point
+        cfunc = jit((), **force_pyobj_flags)(pyfunc)
         for val in values:
             self.assertEqual(pyfunc(val), cfunc(val))
 
     def _check_in(self, pyfunc, flags):
         dtype = types.int64
-        cres = compile_isolated(pyfunc, (dtype, types.UniTuple(dtype, 3)),
-                                flags=flags)
-        cfunc = cres.entry_point
+        cfunc = jit((dtype, types.UniTuple(dtype, 3)), **flags)(pyfunc)
         for i in (3, 4, 5, 6, 42):
             tup = (3, 42, 5)
             self.assertPreciseEqual(pyfunc(i, tup), cfunc(i, tup))
@@ -1220,6 +1214,10 @@ class TestMixedInts(TestCase):
     unsigned_pairs = [(u, v) for u, v in type_pairs
                       if not (u.signed or v.signed)]
 
+    def int_in_dtype_range(self, val, tp):
+        tp_info = np.iinfo(tp.key)
+        return tp_info.min <= val <= tp_info.max
+
     def get_numpy_signed_upcast(self, *vals):
         bitwidth = max(v.dtype.itemsize * 8 for v in vals)
         bitwidth = max(bitwidth, types.intp.bitwidth)
@@ -1248,11 +1246,14 @@ class TestMixedInts(TestCase):
         return control_unsigned
 
     def run_binary(self, pyfunc, control_func, operands, types,
-                   expected_type=int, **assertPreciseEqualArgs):
+                   expected_type=int, force_type=lambda x: x,
+                   **assertPreciseEqualArgs):
         for xt, yt in types:
-            cr = compile_isolated(pyfunc, (xt, yt), flags=Noflags)
-            cfunc = cr.entry_point
+            cfunc = njit((xt, yt))(pyfunc)
             for x, y in itertools.product(operands, operands):
+                # Check if xt and yt are values with range of dtype x and y
+                if not self.int_in_dtype_range(x, xt) or not self.int_in_dtype_range(y, yt):
+                    continue
                 # Get Numpy typed scalars for the given types and values
                 x = self.get_typed_int(xt, x)
                 y = self.get_typed_int(yt, y)
@@ -1261,15 +1262,17 @@ class TestMixedInts(TestCase):
                 self.assertIsInstance(got, expected_type)
                 msg = ("mismatch for (%r, %r) with types %s"
                        % (x, y, (xt, yt)))
+                got, expected = force_type(got), force_type(expected)
                 self.assertPreciseEqual(got, expected, msg=msg,
                                         **assertPreciseEqualArgs)
 
     def run_unary(self, pyfunc, control_func, operands, types,
                   expected_type=int):
         for xt in types:
-            cr = compile_isolated(pyfunc, (xt,), flags=Noflags)
-            cfunc = cr.entry_point
+            cfunc = njit((xt,))(pyfunc)
             for x in operands:
+                if not self.int_in_dtype_range(x, xt):
+                    continue
                 x = self.get_typed_int(xt, x)
                 expected = control_func(x)
                 got = cfunc(x)
@@ -1280,11 +1283,16 @@ class TestMixedInts(TestCase):
                         % (x, xt, got, expected))
 
     def run_arith_binop(self, pyfunc, opname, samples,
-                        expected_type=int):
+                        expected_type=int, force_type=lambda x: x,
+                        **assertPreciseEqualArgs):
         self.run_binary(pyfunc, self.get_control_signed(opname),
-                        samples, self.signed_pairs, expected_type)
+                        samples, self.signed_pairs, expected_type,
+                        force_type=force_type,
+                        **assertPreciseEqualArgs)
         self.run_binary(pyfunc, self.get_control_unsigned(opname),
-                        samples, self.unsigned_pairs, expected_type)
+                        samples, self.unsigned_pairs, expected_type,
+                        force_type=force_type,
+                        **assertPreciseEqualArgs)
 
     def test_add(self):
         self.run_arith_binop(self.op.add_usecase, 'add', self.int_samples)
@@ -1304,11 +1312,14 @@ class TestMixedInts(TestCase):
         self.run_arith_binop(self.op.mod_usecase, 'mod', samples)
 
     def test_pow(self):
+        extra_cast = {}
+        if utils.PYVERSION == (3, 11):
+            extra_cast["force_type"] = float
         pyfunc = self.op.pow_usecase
         # Only test with positive values, as otherwise trying to write the
         # control function in terms of Python or Numpy power turns out insane.
         samples = [x for x in self.int_samples if x >= 0]
-        self.run_arith_binop(pyfunc, 'pow', samples)
+        self.run_arith_binop(pyfunc, 'pow', samples, **extra_cast)
 
         # Now test all non-zero values, but only with signed types
         def control_signed(a, b):
@@ -1325,7 +1336,7 @@ class TestMixedInts(TestCase):
         signed_pairs = [(u, v) for u, v in self.type_pairs
                         if u.signed and v.signed]
         self.run_binary(pyfunc, control_signed,
-                        samples, signed_pairs)
+                        samples, signed_pairs, **extra_cast)
 
     def test_truediv(self):
 
@@ -1363,13 +1374,14 @@ class TestMixedInts(TestCase):
         samples = self.int_samples
 
         def check(xt, yt, control_func):
-            cr = compile_isolated(pyfunc, (xt, yt), flags=Noflags)
-            cfunc = cr.entry_point
+            cfunc = njit((xt, yt))(pyfunc)
             for x in samples:
                 # Avoid shifting by more than the shiftand's bitwidth, as
                 # we would hit undefined behaviour.
                 maxshift = xt.bitwidth - 1
                 for y in (0, 1, 3, 5, maxshift - 1, maxshift):
+                    if not self.int_in_dtype_range(x, xt) or not self.int_in_dtype_range(y, yt):
+                        continue
                     # Get Numpy typed scalars for the given types and values
                     x = self.get_typed_int(xt, x)
                     y = self.get_typed_int(yt, y)
@@ -1594,6 +1606,15 @@ class TestBooleanLiteralOperators(TestCase):
         def test_impl():
             a, b = False, True
             return (bool(a), bool(b))
+
+        cfunc = jit(nopython=True)(test_impl)
+        self.assertEqual(test_impl(), cfunc())
+
+    def test_bool_to_str(self):
+
+        def test_impl():
+            a, b = False, True
+            return (str(a), str(b))
 
         cfunc = jit(nopython=True)(test_impl)
         self.assertEqual(test_impl(), cfunc())

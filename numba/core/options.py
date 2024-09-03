@@ -79,6 +79,7 @@ class DefaultOptions:
     debug = _mapping("debuginfo")
     boundscheck = _mapping("boundscheck")
     nogil = _mapping("release_gil")
+    writable_args = _mapping("writable_args")
 
     no_rewrites = _mapping("no_rewrites")
     no_cpython_wrapper = _mapping("no_cpython_wrapper")
@@ -90,7 +91,8 @@ class DefaultOptions:
     inline = _mapping("inline")
     forceinline = _mapping("forceinline")
 
-    target_backend = _mapping("target_backend")
+    _dbg_extend_lifetimes = _mapping("dbg_extend_lifetimes")
+    _dbg_optnone = _mapping("dbg_optnone")
 
 
 def include_default_options(*args):

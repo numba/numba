@@ -18,28 +18,12 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, Fixup
 from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                            NopythonRewrites, PreParforPass, ParforPass,
                            DumpParforDiagnostics, NativeLowering,
-                           IRLegalization, NoPythonBackend, NativeLowering)
+                           NativeParforLowering, IRLegalization,
+                           NoPythonBackend, NativeLowering,
+                           ParforFusionPass, ParforPreLoweringPass)
 
 from numba.core.compiler_machinery import FunctionPass, PassManager, register_pass
 import unittest
-
-@jit((types.int32,), nopython=True)
-def inner(a):
-    return a + 1
-
-@jit((types.int32,), nopython=True)
-def more(a):
-    return inner(inner(a))
-
-def outer_simple(a):
-    return inner(a) * 2
-
-def outer_multiple(a):
-    return inner(a) * more(a)
-
-@njit
-def __dummy__():
-    return
 
 @register_pass(analysis_only=False, mutates_CFG=True)
 class InlineTestPass(FunctionPass):
@@ -56,8 +40,7 @@ class InlineTestPass(FunctionPass):
             if guard(find_callname,state.func_ir, stmt.value) is not None:
                 inline_closure_call(state.func_ir, {}, block, i, lambda: None,
                                     state.typingctx, state.targetctx, (),
-                                    state.type_annotation.typemap,
-                                    state.type_annotation.calltypes)
+                                    state.typemap, state.calltypes)
                 break
         # also fix up the IR
         post_proc = postproc.PostProcessor(state.func_ir)
@@ -82,7 +65,6 @@ def gen_pipeline(state, test_pass):
                     "inline calls to locally defined closures")
         # typing
         pm.add_pass(NopythonTypeInference, "nopython frontend")
-        pm.add_pass(AnnotateTypes, "annotate types")
 
         if state.flags.auto_parallel.enabled:
             pm.add_pass(PreParforPass, "Preprocessing for parfors")
@@ -90,16 +72,21 @@ def gen_pipeline(state, test_pass):
             pm.add_pass(NopythonRewrites, "nopython rewrites")
         if state.flags.auto_parallel.enabled:
             pm.add_pass(ParforPass, "convert to parfors")
+            pm.add_pass(ParforFusionPass, "fuse parfors")
+            pm.add_pass(ParforPreLoweringPass, "parfor prelowering")
 
         pm.add_pass(test_pass, "inline test")
 
         # legalise
         pm.add_pass(IRLegalization, "ensure IR is legal prior to lowering")
-
+        pm.add_pass(AnnotateTypes, "annotate types")
         pm.add_pass(PreserveIR, "preserve IR")
 
         # lower
-        pm.add_pass(NativeLowering, "native lowering")
+        if state.flags.auto_parallel.enabled:
+            pm.add_pass(NativeParforLowering, "native parfor lowering")
+        else:
+            pm.add_pass(NativeLowering, "native lowering")
         pm.add_pass(NoPythonBackend, "nopython mode backend")
         pm.add_pass(DumpParforDiagnostics, "dump parfor diagnostics")
         return pm
@@ -138,6 +125,9 @@ class TestInlining(TestCase):
                           msg='unexpected {}'.format(pat))
 
     def test_inner_function(self):
+        from numba.tests.inlining_usecases import outer_simple, \
+            __name__ as prefix
+
         with override_config('DUMP_ASSEMBLY', True):
             with captured_stdout() as out:
                 cfunc = jit((types.int32,), nopython=True)(outer_simple)
@@ -145,11 +135,12 @@ class TestInlining(TestCase):
         # Check the inner function was elided from the output (which also
         # guarantees it was inlined into the outer function).
         asm = out.getvalue()
-        prefix = __name__
         self.assert_has_pattern('%s.outer_simple' % prefix, asm)
         self.assert_not_has_pattern('%s.inner' % prefix, asm)
 
     def test_multiple_inner_functions(self):
+        from numba.tests.inlining_usecases import outer_multiple, \
+            __name__ as prefix
         # Same with multiple inner functions, and multiple calls to
         # the same inner function (inner()).  This checks that linking in
         # the same library/module twice doesn't produce linker errors.
@@ -158,13 +149,13 @@ class TestInlining(TestCase):
                 cfunc = jit((types.int32,), nopython=True)(outer_multiple)
         self.assertPreciseEqual(cfunc(1), 6)
         asm = out.getvalue()
-        prefix = __name__
         self.assert_has_pattern('%s.outer_multiple' % prefix, asm)
         self.assert_not_has_pattern('%s.more' % prefix, asm)
         self.assert_not_has_pattern('%s.inner' % prefix, asm)
 
     @skip_parfors_unsupported
     def test_inline_call_after_parfor(self):
+        from numba.tests.inlining_usecases import __dummy__
         # replace the call to make sure inlining doesn't cause label conflict
         # with parfor body
         def test_impl(A):
@@ -261,8 +252,8 @@ class TestInlining(TestCase):
                             is not None):
                         inline_closure_call(state.func_ir, {}, block, i,
                             foo.py_func, state.typingctx, state.targetctx,
-                            (state.type_annotation.typemap[stmt.value.args[0].name],),
-                            state.type_annotation.typemap, state.calltypes)
+                            (state.typemap[stmt.value.args[0].name],),
+                             state.typemap, state.calltypes)
                         break
                 return True
 

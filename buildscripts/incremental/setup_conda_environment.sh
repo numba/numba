@@ -9,11 +9,6 @@ conda config --set remote_connect_timeout_secs 30.15
 conda config --set remote_max_retries 10
 conda config --set remote_read_timeout_secs 120.2
 conda config --set show_channel_urls true
-if [[ $(uname) == Linux ]]; then
-    if [[ "$CONDA_SUBDIR" != "linux-32" && "$BITS32" != "yes" ]] ; then
-        conda config --set restore_free_channel true
-    fi
-fi
 conda info
 conda config --show
 
@@ -38,17 +33,8 @@ conda list
 # Create a base env first and then add to it...
 # NOTE: gitpython is needed for CI testing to do the test slicing
 # NOTE: pyyaml is used to ensure that the Azure CI config is valid
-# NOTE: 32 bit linux... do not install NumPy, there's no conda package for >1.15
-# so it has to come from pip later
-# If it's Python 3.10, we get everything except for the interpreter and
-# compilers via pip from PyPi
-if [[ "$PYTHON" == "3.10" ]] ; then
-    conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON
-elif [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]] ; then
-    conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON pip gitpython pyyaml
-else
-    conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml
-fi
+
+conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml
 
 # Activate first
 set +v
@@ -56,62 +42,53 @@ source activate $CONDA_ENV
 set -v
 
 # Install optional packages into activated env
-
 echo "PYTHON=$PYTHON"
 echo "VANILLA_INSTALL=$VANILLA_INSTALL"
-if [[ "$PYTHON" != "3.10" && "$VANILLA_INSTALL" != "yes" ]]; then
-    # Scipy, CFFI, jinja2, IPython, and pygments are optional dependencies,
-    # but exercised in the test suite.
+if [ "${VANILLA_INSTALL}" != "yes" ]; then
+    # Scipy, CFFI, jinja2, IPython and pygments are optional
+    # dependencies, but exercised in the test suite
     # pexpect is used to run the gdb tests.
     # ipykernel is used for testing ipython behaviours.
-    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipykernel pygments pexpect
-    # Only install scipy on 64bit, else it'll pull in NumPy, 32bit linux needs
-    # to get scipy from pip
-    if [[ "$CONDA_SUBDIR" != "linux-32" && "$BITS32" != "yes" ]] ; then
-        $CONDA_INSTALL ${EXTRA_CHANNELS} scipy
+    if [ $PYTHON \< "3.12" ]; then
+        $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipykernel scipy pygments pexpect
+    else
+        # At the time of writing `ipykernel` was not available for Python 3.12
+        $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython scipy pygments pexpect
     fi
 fi
 
-# Install the compiler toolchain
+# Install the compiler toolchain and gdb (if available)
 if [[ $(uname) == Linux ]]; then
-    if [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]] ; then
-        $CONDA_INSTALL gcc_linux-32 gxx_linux-32
+    if [ $PYTHON \< "3.12" ]; then
+        $CONDA_INSTALL gcc_linux-64 gxx_linux-64 gdb gdb-pretty-printer
     else
+        # At the time of writing gdb and gdb-pretty-printer were not available
+        # for 3.12.
         $CONDA_INSTALL gcc_linux-64 gxx_linux-64
     fi
 elif  [[ $(uname) == Darwin ]]; then
     $CONDA_INSTALL clang_osx-64 clangxx_osx-64
-    # Install llvm-openmp and intel-openmp on OSX too
-    $CONDA_INSTALL llvm-openmp intel-openmp
+    # Install llvm-openmp on OSX for headers during build and runtime during
+    # testing
+    $CONDA_INSTALL llvm-openmp
 fi
 
-# `pip install` all the dependencies on Python 3.10
-if [[ "$PYTHON" == "3.10" ]] ; then
-    $PIP_INSTALL -U pip
-    pip --version
-    $PIP_INSTALL gitpython pyyaml cffi jinja2 ipython ipykernel pygments pexpect scipy numpy
-# If on 32bit linux, now pip install NumPy (no conda package), SciPy is broken?!
-elif [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]] ; then
-    $PIP_INSTALL numpy==$NUMPY
-fi
-
-# Install latest llvmlite build
-$CONDA_INSTALL -c numba/label/dev llvmlite
-
+# Install latest correct build
+$CONDA_INSTALL -c numba/label/dev llvmlite=0.44
 
 # Install dependencies for building the documentation
-if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx=2.4.4 docutils=0.17 sphinx_rtd_theme pygments numpydoc; fi
+if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx docutils sphinx_rtd_theme pygments numpydoc; fi
 if [ "$BUILD_DOC" == "yes" ]; then $PIP_INSTALL rstcheck; fi
-# Install dependencies for code coverage (codecov.io)
-if [ "$RUN_COVERAGE" == "yes" ]; then $PIP_INSTALL codecov; fi
+# Install dependencies for code coverage
+if [ "$RUN_COVERAGE" == "yes" ]; then $CONDA_INSTALL coverage; fi
 # Install SVML
 if [ "$TEST_SVML" == "yes" ]; then $CONDA_INSTALL -c numba icc_rt; fi
 # Install Intel TBB parallel backend
-if [ "$TEST_THREADING" == "tbb" ]; then $CONDA_INSTALL -c numba tbb=2021 tbb-devel; fi
-# Install pickle5
-if [ "$TEST_PICKLE5" == "yes" ]; then $PIP_INSTALL pickle5; fi
+if [ "$TEST_THREADING" == "tbb" ]; then $CONDA_INSTALL "tbb>=2021.6" "tbb-devel>=2021.6"; fi
 # Install typeguard
-if [ "$RUN_TYPEGUARD" == "yes" ]; then $CONDA_INSTALL conda-forge::typeguard; fi
+if [ "$RUN_TYPEGUARD" == "yes" ]; then $CONDA_INSTALL typeguard; fi
+# Install RVSDG
+if [ "$TEST_RVSDG" == "yes" ]; then $PIP_INSTALL numba-rvsdg; fi
 
 # environment dump for debug
 # echo "DEBUG ENV:"

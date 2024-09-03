@@ -14,7 +14,7 @@ import numpy as np
 from numba import njit, literally
 from numba import int32, int64, float32, float64
 from numba import typeof
-from numba.typed import Dict, dictobject
+from numba.typed import Dict, dictobject, List
 from numba.typed.typedobjectutils import _sentry_safe_cast
 from numba.core.errors import TypingError
 from numba.core import types
@@ -357,6 +357,26 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             keys,
         )
 
+    def test_dict_keys_len(self):
+        """
+        Exercise len(dict.keys())
+        """
+        @njit
+        def foo(keys, vals):
+            d = dictobject.new_dict(int32, float64)
+            # insertion
+            for k, v in zip(keys, vals):
+                d[k] = v
+            return len(d.keys())
+
+        keys = [1, 2, 3]
+        vals = [0.1, 0.2, 0.3]
+
+        self.assertEqual(
+            foo(keys, vals),
+            len(keys),
+        )
+
     def test_dict_values(self):
         """
         Exercise dict.values
@@ -378,6 +398,45 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         self.assertEqual(
             foo(keys, vals),
             vals,
+        )
+
+    def test_dict_values_len(self):
+        """
+        Exercise len(dict.values())
+        """
+        @njit
+        def foo(keys, vals):
+            d = dictobject.new_dict(int32, float64)
+            # insertion
+            for k, v in zip(keys, vals):
+                d[k] = v
+            return len(d.values())
+
+        keys = [1, 2, 3]
+        vals = [0.1, 0.2, 0.3]
+
+        self.assertEqual(
+            foo(keys, vals),
+            len(vals),
+        )
+
+    def test_dict_items_len(self):
+        """
+        Exercise len(dict.items())
+        """
+        @njit
+        def foo(keys, vals):
+            d = dictobject.new_dict(int32, float64)
+            # insertion
+            for k, v in zip(keys, vals):
+                d[k] = v
+            return len(d.items())
+
+        keys = [1, 2, 3]
+        vals = [0.1, 0.2, 0.3]
+        self.assertPreciseEqual(
+            foo(keys, vals),
+            len(vals),
         )
 
     def test_dict_iter(self):
@@ -948,6 +1007,47 @@ class TestDictObject(MemoryLeakMixin, TestCase):
 
         self.assertTrue(foo())
 
+    def test_dict_update(self):
+        """
+        Tests dict.update works with various dictionaries.
+        """
+        n = 10
+
+        def f1(n):
+            """
+            Test update with a regular dictionary.
+            """
+            d1 = {i: i + 1 for i in range(n)}
+            d2 = {3 * i: i for i in range(n)}
+            d1.update(d2)
+            return d1
+
+        py_func = f1
+        cfunc = njit()(f1)
+        a = py_func(n)
+        b = cfunc(n)
+        self.assertEqual(a, b)
+
+        def f2(n):
+            """
+            Test update where one of the dictionaries
+            is created as a Python literal.
+            """
+            d1 = {
+                1: 2,
+                3: 4,
+                5: 6
+            }
+            d2 = {3 * i: i for i in range(n)}
+            d1.update(d2)
+            return d1
+
+        py_func = f2
+        cfunc = njit()(f2)
+        a = py_func(n)
+        b = cfunc(n)
+        self.assertEqual(a, b)
+
 
 class TestDictTypeCasting(TestCase):
     def check_good(self, fromty, toty):
@@ -1053,6 +1153,15 @@ class TestTypedDict(MemoryLeakMixin, TestCase):
         val = consumer(d)
         self.assertEqual(val, 1.23)
 
+    def test_gh7908(self):
+        d = Dict.empty(
+            key_type=types.Tuple([types.uint32,
+                                  types.uint32]),
+            value_type=int64)
+
+        d[(1, 1)] = 12345
+        self.assertEqual(d[(1, 1)], d.get((1, 1)))
+
     def check_stringify(self, strfn, prefix=False):
         nbd = Dict.empty(int32, int32)
         d = {}
@@ -1075,6 +1184,138 @@ class TestTypedDict(MemoryLeakMixin, TestCase):
 
     def test_str(self):
         self.check_stringify(str)
+
+
+class DictIterableCtor:
+
+    def test_iterable_type_constructor(self):
+        # https://docs.python.org/3/library/stdtypes.html#dict
+        @njit
+        def func1(a, b):
+            d = Dict(zip(a, b))
+            return d
+
+        @njit
+        def func2(a_, b):
+            a = range(3)
+            return Dict(zip(a, b))
+
+        @njit
+        def func3(a_, b):
+            a = [0, 1, 2]
+            return Dict(zip(a, b))
+
+        @njit
+        def func4(a, b):
+            c = zip(a, b)
+            return Dict(zip(a, zip(c, a)))
+
+        @njit
+        def func5(a, b):
+            return Dict(zip(zip(a, b), b))
+
+        @njit
+        def func6(items):
+            return Dict(items)
+
+        @njit
+        def func7(k, v):
+            return Dict({k: v})  # mapping - not supported
+
+        @njit
+        def func8(k, v):
+            d = Dict()
+            d[k] = v
+            return d
+
+        def _get_dict(py_dict):
+            d = Dict()
+            for k, v in py_dict.items():
+                d[k] = v
+            return d
+
+        vals = (
+            (func1, [(0, 1, 2), 'abc'], _get_dict({0: 'a', 1: 'b', 2: 'c'})),
+            (func2, [(0, 1, 2), 'abc'], _get_dict({0: 'a', 1: 'b', 2: 'c'})),
+            (func3, [(0, 1, 2), 'abc'], _get_dict({0: 'a', 1: 'b', 2: 'c'})),
+            (func4, [(0, 1, 2), 'abc'], _get_dict(
+                {0: ((0, 'a'), 0), 1: ((1, 'b'), 1), 2: ((2, 'c'), 2)})),
+            (func5, [(0, 1, 2), 'abc'], _get_dict(
+                {(0, 'a'): 'a', (1, 'b'): 'b', (2, 'c'): 'c'})),
+            # (func6, [(),], Dict({})),
+            (func6, [((1, 'a'), (3, 'b')),], _get_dict({1: 'a', 3: 'b'})),
+            (func1, ['key', _get_dict({1: 'abc'})], _get_dict({'k': 1})),
+            (func8, ['key', _get_dict({1: 'abc'})], _get_dict(
+                {'key': _get_dict({1: 'abc'})})),
+            (func8, ['key', List([1, 2, 3])], _get_dict(
+                {'key': List([1, 2, 3])})),
+        )
+
+        for func, args, expected in vals:
+            if self.jit_enabled:
+                got = func(*args)
+            else:
+                got = func.py_func(*args)
+            self.assertPreciseEqual(expected, got)
+
+
+class TestDictIterableCtorJit(TestCase, DictIterableCtor):
+
+    def setUp(self):
+        self.jit_enabled = True
+
+    def test_exception_no_iterable_arg(self):
+        @njit
+        def ctor():
+            return Dict(3)
+
+        msg = ".*No implementation of function.*"
+        with self.assertRaisesRegex(TypingError, msg):
+            ctor()
+
+    def test_exception_dict_mapping(self):
+        @njit
+        def ctor():
+            return Dict({1: 2, 3: 4})
+
+        msg = ".*No implementation of function.*"
+        with self.assertRaisesRegex(TypingError, msg):
+            ctor()
+
+    def test_exception_setitem(self):
+        @njit
+        def ctor():
+            return Dict(((1, 'a'), (2, 'b', 3)))
+
+        msg = ".*No implementation of function.*"
+        with self.assertRaisesRegex(TypingError, msg):
+            ctor()
+
+
+class TestDictIterableCtorNoJit(TestCase, DictIterableCtor):
+
+    def setUp(self):
+        self.jit_enabled = False
+
+    def test_exception_nargs(self):
+        msg = 'Dict expect at most 1 argument, got 2'
+        with self.assertRaisesRegex(TypingError, msg):
+            Dict(1, 2)
+
+    def test_exception_mapping_ctor(self):
+        msg = r'.*dict\(mapping\) is not supported.*'  # noqa: W605
+        with self.assertRaisesRegex(TypingError, msg):
+            Dict({1: 2})
+
+    def test_exception_non_iterable_arg(self):
+        msg = '.*object is not iterable.*'
+        with self.assertRaisesRegex(TypingError, msg):
+            Dict(3)
+
+    def test_exception_setitem(self):
+        msg = ".*dictionary update sequence element #1 has length 3.*"
+        with self.assertRaisesRegex(ValueError, msg):
+            Dict(((1, 'a'), (2, 'b', 3)))
 
 
 class TestDictRefctTypes(MemoryLeakMixin, TestCase):
@@ -2292,6 +2533,28 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
             return len(d)
 
         self.assertPreciseEqual(bar(), bar.py_func())
+
+    def test_update_error(self):
+        # Tests that dict.update produces a reasonable
+        # error with a LiteralStrKeyDict input.
+        @njit
+        def foo():
+
+            d1 = {
+                'a': 2,
+                'b': 4,
+                'c': 'a'
+            }
+            d1.update({'x': 3})
+            return d1
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+
+        self.assertIn(
+            "Cannot mutate a literal dictionary",
+            str(raises.exception)
+        )
 
 
 if __name__ == '__main__':

@@ -3,7 +3,7 @@ import operator
 import numpy as np
 from llvmlite import ir
 
-from numba.core import types, cgutils
+from numba.core import types, cgutils, config
 from numba.core.extending import (overload, intrinsic, overload_method,
                                   lower_cast, register_jitable)
 from numba.core.cgutils import is_nonelike
@@ -18,7 +18,10 @@ from numba.cpython import unicode
 
 s1_dtype = np.dtype('S1')
 assert s1_dtype.itemsize == 1
-bytes_type = types.Bytes(types.uint8, 1, "C", readonly=True)
+if config.USE_LEGACY_TYPE_SYSTEM:
+    bytes_type = types.Bytes(types.uint8, 1, "C", readonly=True)
+else:
+    bytes_type = types.Bytes(types.c_uint8, 1, "C", readonly=True)
 
 # Currently, NumPy supports only UTF-32 arrays but this may change in
 # future and the approach used here for supporting str arrays may need
@@ -597,21 +600,21 @@ def charseq_to_str_mth(s):
     return tostr_impl
 
 
-@overload(str)
+@overload_method(types.UnicodeCharSeq, "__str__")
 def charseq_str(s):
-    if isinstance(s, types.UnicodeCharSeq):
-        get_code = _get_code_impl(s)
+    get_code = _get_code_impl(s)
 
-        def str_impl(s):
-            n = len(s)
-            kind = s._get_kind()
-            is_ascii = kind == 1 and s.isascii()
-            result = unicode._empty_string(kind, n, is_ascii)
-            for i in range(n):
-                code = get_code(s, i)
-                unicode._set_code_point(result, i, code)
-            return result
-        return str_impl
+    def str_impl(s):
+        n = len(s)
+        kind = s._get_kind()
+        is_ascii = kind == 1 and s.isascii()
+        result = unicode._empty_string(kind, n, is_ascii)
+        for i in range(n):
+            code = get_code(s, i)
+            unicode._set_code_point(result, i, code)
+        return result
+
+    return str_impl
 
 
 @overload(bytes)

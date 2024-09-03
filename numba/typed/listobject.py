@@ -17,7 +17,7 @@ from numba.core.extending import (
     lower_builtin,
 )
 from numba.core.imputils import iternext_impl
-from numba.core import types, cgutils
+from numba.core import types, cgutils, config
 from numba.core.types import (
     ListType,
     ListTypeIterableType,
@@ -44,9 +44,14 @@ ll_bytes = cgutils.voidptr_t
 
 _meminfo_listptr = types.MemInfoPointer(types.voidptr)
 
-INDEXTY = types.intp
+if config.USE_LEGACY_TYPE_SYSTEM:
+    INDEXTY = types.intp
 
-index_types = types.integer_domain
+    index_types = types.integer_domain
+else:
+    INDEXTY = types.py_int
+
+    index_types = types.py_integer_domain
 
 DEFAULT_ALLOCATED = 0
 
@@ -764,9 +769,9 @@ def impl_getitem(l, index):
     if index in index_types:
         if IS_NOT_NONE:
             def integer_non_none_impl(l, index):
-                index = handle_index(l, index)
                 castedindex = _cast(index, indexty)
-                status, item = _list_getitem(l, castedindex)
+                handledindex = handle_index(l, castedindex)
+                status, item = _list_getitem(l, handledindex)
                 if status == ListStatus.LIST_OK:
                     return _nonoptional(item)
                 else:
@@ -1134,7 +1139,7 @@ def impl_insert(l, index, item):
                 l.append(l[0])
                 # reverse iterate over the list and shift all elements
                 i = len(l) - 1
-                while(i > index):
+                while (i > index):
                     l[i] = l[i - 1]
                     i -= 1
                 # finally, insert the item
@@ -1307,6 +1312,13 @@ def ol_getitem_unchecked(lst, index):
         _, item = _list_getitem(lst, castedindex)
         return _nonoptional(item)
     return impl
+
+
+@overload_attribute(types.ListType, '__hash__')
+def ol_list_hash(lst):
+    if not isinstance(lst, types.ListType):
+        return
+    return lambda lst: None
 
 
 @overload_attribute(types.ListType, '_dtype')

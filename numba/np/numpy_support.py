@@ -4,7 +4,7 @@ import re
 
 import numpy as np
 
-from numba.core import errors, types
+from numba.core import errors, types, config
 from numba.core.typing.templates import signature
 from numba.np import npdatetime_helpers
 from numba.core.errors import TypingError
@@ -16,26 +16,49 @@ from numba.core.cgutils import is_nonelike   # noqa: F401
 numpy_version = tuple(map(int, np.__version__.split('.')[:2]))
 
 
-FROM_DTYPE = {
-    np.dtype('bool'): types.boolean,
-    np.dtype('int8'): types.int8,
-    np.dtype('int16'): types.int16,
-    np.dtype('int32'): types.int32,
-    np.dtype('int64'): types.int64,
+if config.USE_LEGACY_TYPE_SYSTEM:
+    FROM_DTYPE = {
+        np.dtype('bool'): types.boolean,
+        np.dtype('int8'): types.int8,
+        np.dtype('int16'): types.int16,
+        np.dtype('int32'): types.int32,
+        np.dtype('int64'): types.int64,
 
-    np.dtype('uint8'): types.uint8,
-    np.dtype('uint16'): types.uint16,
-    np.dtype('uint32'): types.uint32,
-    np.dtype('uint64'): types.uint64,
+        np.dtype('uint8'): types.uint8,
+        np.dtype('uint16'): types.uint16,
+        np.dtype('uint32'): types.uint32,
+        np.dtype('uint64'): types.uint64,
 
-    np.dtype('float32'): types.float32,
-    np.dtype('float64'): types.float64,
-    np.dtype('float16'): types.float16,
-    np.dtype('complex64'): types.complex64,
-    np.dtype('complex128'): types.complex128,
+        np.dtype('float32'): types.float32,
+        np.dtype('float64'): types.float64,
+        np.dtype('float16'): types.float16,
+        np.dtype('complex64'): types.complex64,
+        np.dtype('complex128'): types.complex128,
 
-    np.dtype(object): types.pyobject,
-}
+        np.dtype(object): types.pyobject,
+    }
+else:
+    FROM_DTYPE = {
+        np.dtype('bool'): types.np_bool_,
+        np.dtype('int8'): types.np_int8,
+        np.dtype('int16'): types.np_int16,
+        np.dtype('int32'): types.np_int32,
+        np.dtype('int64'): types.np_int64,
+
+        np.dtype('uint8'): types.np_uint8,
+        np.dtype('uint16'): types.np_uint16,
+        np.dtype('uint32'): types.np_uint32,
+        np.dtype('uint64'): types.np_uint64,
+
+        np.dtype('float32'): types.np_float32,
+        np.dtype('float64'): types.np_float64,
+        np.dtype('float16'): types.np_float16,
+        np.dtype('complex64'): types.np_complex64,
+        np.dtype('complex128'): types.np_complex128,
+
+        np.dtype(object): types.pyobject,
+    }
+
 
 re_typestr = re.compile(r'[<>=\|]([a-z])(\d+)?$', re.I)
 re_datetimestr = re.compile(r'[<>=\|]([mM])8?(\[([a-z]+)\])?$', re.I)
@@ -88,7 +111,7 @@ def from_dtype(dtype):
     Return a Numba Type instance corresponding to the given Numpy *dtype*.
     NotImplementedError is raised on unsupported Numpy dtypes.
     """
-    if type(dtype) == type and issubclass(dtype, np.generic):
+    if type(dtype) is type and issubclass(dtype, np.generic):
         dtype = np.dtype(dtype)
     elif getattr(dtype, "fields", None) is not None:
         return from_struct_dtype(dtype)
@@ -130,7 +153,7 @@ def as_dtype(nbtype):
     nbtype = types.unliteral(nbtype)
     if isinstance(nbtype, (types.Complex, types.Integer, types.Float)):
         return np.dtype(str(nbtype))
-    if nbtype is types.bool_:
+    if isinstance(nbtype, (types.Boolean)):
         return np.dtype('?')
     if isinstance(nbtype, (types.NPDatetime, types.NPTimedelta)):
         letter = _as_dtype_letters[type(nbtype)]
@@ -368,7 +391,7 @@ def ufunc_find_matching_loop(ufunc, arg_types):
     # Separate logical input from explicit output arguments
     input_types = arg_types[:ufunc.nin]
     output_types = arg_types[ufunc.nin:]
-    assert(len(input_types) == ufunc.nin)
+    assert (len(input_types) == ufunc.nin)
 
     try:
         np_input_types = [as_dtype(x) for x in input_types]
@@ -622,7 +645,7 @@ def carray(ptr, shape, dtype=None):
     else:
         raise TypeError("expected a ctypes pointer, got %r" % (ptr,))
 
-    nbytes = dtype.itemsize * np.product(shape, dtype=np.intp)
+    nbytes = dtype.itemsize * np.prod(shape, dtype=np.intp)
     return _get_array_from_ptr(p, nbytes, dtype).reshape(shape)
 
 
@@ -714,7 +737,59 @@ def type_can_asarray(arr):
     return isinstance(arr, ok)
 
 
+def type_is_scalar(typ):
+    """ Returns True if the type of 'typ' is a scalar type, according to
+    NumPy rules. False otherwise.
+    https://numpy.org/doc/stable/reference/arrays.scalars.html#built-in-scalar-types
+    """
+
+    ok = (types.Boolean, types.Number, types.UnicodeType, types.StringLiteral,
+          types.NPTimedelta, types.NPDatetime)
+    return isinstance(typ, ok)
+
+
 def check_is_integer(v, name):
     """Raises TypingError if the value is not an integer."""
     if not isinstance(v, (int, types.Integer)):
         raise TypingError('{} must be an integer'.format(name))
+
+
+def lt_floats(a, b):
+    # Adapted from NumPy commit 717c7acf which introduced the behavior of
+    # putting NaNs at the end.
+    # The code is later moved to numpy/core/src/npysort/npysort_common.h
+    # This info is gathered as of NumPy commit d8c09c50
+    return a < b or (np.isnan(b) and not np.isnan(a))
+
+
+def lt_complex(a, b):
+    if np.isnan(a.real):
+        if np.isnan(b.real):
+            if np.isnan(a.imag):
+                return False
+            else:
+                if np.isnan(b.imag):
+                    return True
+                else:
+                    return a.imag < b.imag
+        else:
+            return False
+
+    else:
+        if np.isnan(b.real):
+            return True
+        else:
+            if np.isnan(a.imag):
+                if np.isnan(b.imag):
+                    return a.real < b.real
+                else:
+                    return False
+            else:
+                if np.isnan(b.imag):
+                    return True
+                else:
+                    if a.real < b.real:
+                        return True
+                    elif a.real == b.real:
+                        return a.imag < b.imag
+                    return False

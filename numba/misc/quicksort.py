@@ -2,7 +2,7 @@ import collections
 
 import numpy as np
 
-from numba.core import types
+from numba.core import types, config
 
 
 QuicksortImplementation = collections.namedtuple(
@@ -24,9 +24,12 @@ SMALL_QUICKSORT = 15
 MAX_STACK = 100
 
 
-def make_quicksort_impl(wrap, lt=None, is_argsort=False, is_list=False):
+def make_quicksort_impl(wrap, lt=None, is_argsort=False, is_list=False, is_np_array=False):
 
-    intp = types.intp
+    if config.USE_LEGACY_TYPE_SYSTEM:
+        intp = types.intp
+    else:
+        intp = types.py_int
     zero = intp(0)
 
     # Two subroutines to make the core algorithm generic wrt. argsort
@@ -162,7 +165,7 @@ def make_quicksort_impl(wrap, lt=None, is_argsort=False, is_list=False):
         return lt, gt
 
     @wrap
-    def run_quicksort(A):
+    def run_quicksort1(A):
         R = make_res(A)
 
         if len(A) < 2:
@@ -195,6 +198,20 @@ def make_quicksort_impl(wrap, lt=None, is_argsort=False, is_list=False):
             insertion_sort(A, R, low, high)
 
         return R
+
+    if is_np_array:
+        @wrap
+        def run_quicksort(A):
+            if A.ndim == 1:
+                return run_quicksort1(A)
+            else:
+                for idx in np.ndindex(A.shape[:-1]):
+                    run_quicksort1(A[idx])
+                return A
+    else:
+        @wrap
+        def run_quicksort(A):
+            return run_quicksort1(A)
 
     # Unused quicksort implementation based on 3-way partitioning; the
     # partitioning scheme turns out exhibiting bad behaviour on sorted arrays.

@@ -2,8 +2,9 @@ import re
 from io import StringIO
 
 import numba
-from numba.core.compiler import compile_isolated, Flags
 from numba.core import types
+from numba import jit, njit
+from numba.tests.support import override_config, TestCase
 import unittest
 
 try:
@@ -18,8 +19,9 @@ except ImportError:
 
 
 @unittest.skipIf(jinja2 is None, "please install the 'jinja2' package")
-class TestAnnotation(unittest.TestCase):
+class TestAnnotation(TestCase):
 
+    @TestCase.run_test_in_subprocess # annotations compound per module
     def test_exercise_code_path(self):
         """
         Ensures template.html is available
@@ -31,7 +33,8 @@ class TestAnnotation(unittest.TestCase):
                 s += i
             return s
 
-        cres = compile_isolated(foo, [types.int32, types.int32])
+        cfunc = njit((types.int32, types.int32))(foo)
+        cres = cfunc.overloads[cfunc.signatures[0]]
         ta = cres.type_annotation
 
         buf = StringIO()
@@ -40,6 +43,7 @@ class TestAnnotation(unittest.TestCase):
         buf.close()
         self.assertIn("foo", output)
 
+    @TestCase.run_test_in_subprocess # annotations compound per module
     def test_exercise_code_path_with_lifted_loop(self):
         """
         Ensures that lifted loops are handled correctly in obj mode
@@ -59,10 +63,8 @@ class TestAnnotation(unittest.TestCase):
             return h
 
         # compile into an isolated context
-        flags = Flags()
-        flags.enable_pyobject = True
-        flags.enable_looplift = True
-        cres = compile_isolated(foo, [types.intp], flags=flags)
+        cfunc = jit((types.intp,), forceobj=True, looplift=True)(foo)
+        cres = cfunc.overloads[cfunc.signatures[0]]
 
         ta = cres.type_annotation
 
@@ -74,11 +76,12 @@ class TestAnnotation(unittest.TestCase):
         self.assertIn("foo", output)
         self.assertIn("LiftedLoop", output)
 
+    @TestCase.run_test_in_subprocess # annotations compound per module
     def test_html_output_with_lifted_loop(self):
         """
         Test some format and behavior of the html annotation with lifted loop
         """
-        @numba.jit
+        @numba.jit(forceobj=True)
         def udt(x):
             object()  # to force object mode
             z = 0
@@ -143,41 +146,106 @@ class TestAnnotation(unittest.TestCase):
 
         foo(1, 2)
         # Exercise the method
-        obj = foo.inspect_types(pretty=True)
+        foo.inspect_types(pretty=True)
 
         # Exercise but supply a not None file kwarg, this is invalid
         with self.assertRaises(ValueError) as raises:
-            obj = foo.inspect_types(pretty=True, file='should be None')
-        self.assertIn('`file` must be None if `pretty=True`', str(raises.exception))
+            foo.inspect_types(pretty=True, file='should be None')
+        self.assertIn('`file` must be None if `pretty=True`',
+                      str(raises.exception))
 
 
 class TestTypeAnnotation(unittest.TestCase):
+
+    def findpatloc(self, lines, pat):
+        for i, ln in enumerate(lines):
+            if pat in ln:
+                return i
+        raise ValueError("can't find {!r}".format(pat))
+
+    def getlines(self, func):
+        strbuf = StringIO()
+        func.inspect_types(strbuf)
+        return strbuf.getvalue().splitlines()
+
     def test_delete(self):
         @numba.njit
         def foo(appleorange, berrycherry):
             return appleorange + berrycherry
 
         foo(1, 2)
-        # Exercise the method
-        strbuf = StringIO()
-        foo.inspect_types(strbuf)
+
+        lines = self.getlines(foo)
+
         # Ensure deletion show up after their use
-        lines = strbuf.getvalue().splitlines()
+        sa = self.findpatloc(lines, 'appleorange = arg(0, name=appleorange)')
+        sb = self.findpatloc(lines, 'berrycherry = arg(1, name=berrycherry)')
 
-        def findpatloc(pat):
-            for i, ln in enumerate(lines):
-                if pat in ln:
-                    return i
-            raise ValueError("can't find {!r}".format(pat))
-
-        sa = findpatloc('appleorange = arg(0, name=appleorange)')
-        sb = findpatloc('berrycherry = arg(1, name=berrycherry)')
-
-        ea = findpatloc('del appleorange')
-        eb = findpatloc('del berrycherry')
+        ea = self.findpatloc(lines, 'del appleorange')
+        eb = self.findpatloc(lines, 'del berrycherry')
 
         self.assertLess(sa, ea)
         self.assertLess(sb, eb)
+
+    def _lifetimes_impl(self, extend):
+        with override_config('EXTEND_VARIABLE_LIFETIMES', extend):
+            @njit
+            def foo(a):
+                b = a
+                return b
+            x = 10
+            b = foo(x)
+            self.assertEqual(b, x)
+
+        lines = self.getlines(foo)
+
+        sa = self.findpatloc(lines, 'a = arg(0, name=a)')
+        sb = self.findpatloc(lines, 'b = a')
+
+        cast_ret = self.findpatloc(lines, 'cast(value=b)')
+
+        dela = self.findpatloc(lines, 'del a')
+        delb = self.findpatloc(lines, 'del b')
+
+        return sa, sb, cast_ret, dela, delb
+
+    def test_delete_standard_lifetimes(self):
+        # without extended lifetimes, dels occur as soon as dead
+        #
+        # label 0
+        #   a = arg(0, name=a)  :: int64
+        #   b = a  :: int64
+        #   del a
+        #   $8return_value.2 = cast(value=b)  :: int64
+        #   del b
+        #   return $8return_value.2
+
+        sa, sb, cast_ret, dela, delb = self._lifetimes_impl(extend=0)
+
+        self.assertLess(sa, dela)
+        self.assertLess(sb, delb)
+        # del a is before cast and del b is after
+        self.assertLess(dela, cast_ret)
+        self.assertGreater(delb, cast_ret)
+
+    def test_delete_extended_lifetimes(self):
+        # with extended lifetimes, dels are last in block:
+        #
+        # label 0
+        #   a = arg(0, name=a)  :: int64
+        #   b = a  :: int64
+        #   $8return_value.2 = cast(value=b)  :: int64
+        #   del a
+        #   del b
+        #   return $8return_value.2
+
+        sa, sb, cast_ret, dela, delb = self._lifetimes_impl(extend=1)
+
+        self.assertLess(sa, dela)
+        self.assertLess(sb, delb)
+        # dels are after the cast
+        self.assertGreater(dela, cast_ret)
+        self.assertGreater(delb, cast_ret)
 
 
 if __name__ == '__main__':

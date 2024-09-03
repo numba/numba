@@ -85,7 +85,7 @@ def _type_map():
             ffi.typeof('uint32_t') :            types.uintc,
             ffi.typeof('int64_t') :             types.longlong,
             ffi.typeof('uint64_t') :            types.ulonglong,
-            ffi.typeof('float') :               types.float_,
+            ffi.typeof('float') :               types.float32,
             ffi.typeof('double') :              types.double,
             ffi.typeof('ssize_t') :             types.intp,
             ffi.typeof('size_t') :              types.uintp,
@@ -146,7 +146,7 @@ def map_struct_to_record_dtype(cffi_type):
     }
     is_aligned = True
     for k, v in cffi_type.fields:
-        # guard unsupport values
+        # guard unsupported values
         if v.bitshift != -1:
             msg = "field {!r} has bitshift, this is not supported"
             raise ValueError(msg.format(k))

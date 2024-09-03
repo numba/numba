@@ -6,21 +6,13 @@ import sys
 import ctypes as ct
 import numpy as np
 
-from numba.core.compiler import compile_isolated, Flags
 from numba import jit, typeof, njit, literal_unroll, literally
 import unittest
-from numba import testing
-from numba.core import types, utils, errors
-from numba.tests.support import TestCase, MemoryLeakMixin, tag
+from numba.core import types, errors
+from numba.tests.support import TestCase, MemoryLeakMixin
 from numba.experimental import jitclass
 from numba.core.extending import overload
 
-
-enable_pyobj_flags = Flags()
-enable_pyobj_flags.enable_pyobject = True
-
-force_pyobj_flags = Flags()
-force_pyobj_flags.force_pyobject = True
 
 Point = namedtuple('Point', ('a', 'b'))
 
@@ -312,6 +304,10 @@ def list_mul(n, v):
     a = list(range(n))
     return a * v
 
+def list_mul2(n, v):
+    a = list(range(n))
+    return v * a
+
 def list_mul_inplace(n, v):
     a = list(range(n))
     a *= v
@@ -384,15 +380,13 @@ class TestLists(MemoryLeakMixin, TestCase):
 
     def test_create_list(self):
         pyfunc = create_list
-        cr = compile_isolated(pyfunc, (types.int32, types.int32, types.int32))
-        cfunc = cr.entry_point
+        cfunc = njit((types.int32, types.int32, types.int32))(pyfunc)
         self.assertEqual(cfunc(1, 2, 3), pyfunc(1, 2, 3))
 
     def test_create_nested_list(self):
         pyfunc = create_nested_list
-        cr = compile_isolated(pyfunc, (types.int32, types.int32, types.int32,
-                                       types.int32, types.int32, types.int32))
-        cfunc = cr.entry_point
+        cfunc = njit((types.int32, types.int32, types.int32,
+                      types.int32, types.int32, types.int32))(pyfunc)
         self.assertEqual(cfunc(1, 2, 3, 4, 5, 6), pyfunc(1, 2, 3, 4, 5, 6))
 
     def check_unary_with_size(self, pyfunc, precise=True):
@@ -593,6 +587,20 @@ class TestLists(MemoryLeakMixin, TestCase):
             for start, stop in itertools.product(indices, indices):
                 self.check_index_result(pyfunc, cfunc, (16, v, start, stop))
 
+    def test_index_exception1(self):
+        pyfunc = list_index3
+        cfunc = jit(nopython=True)(pyfunc)
+        msg = 'arg "start" must be an Integer.'
+        with self.assertRaisesRegex(errors.TypingError, msg):
+            cfunc(10, 0, 'invalid', 5)
+
+    def test_index_exception2(self):
+        pyfunc = list_index3
+        cfunc = jit(nopython=True)(pyfunc)
+        msg = 'arg "stop" must be an Integer.'
+        with self.assertRaisesRegex(errors.TypingError, msg):
+            cfunc(10, 0, 0, 'invalid')
+
     def test_remove(self):
         pyfunc = list_remove
         cfunc = jit(nopython=True)(pyfunc)
@@ -655,6 +663,9 @@ class TestLists(MemoryLeakMixin, TestCase):
 
     def test_mul(self):
         self.check_mul(list_mul)
+
+    def test_mul2(self):
+        self.check_mul(list_mul2)
 
     def test_mul_inplace(self):
         self.check_mul(list_mul_inplace)
@@ -750,7 +761,7 @@ class TestUnboxing(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypeError) as raises:
             yield
         if msg is not None:
-            self.assertRegexpMatches(str(raises.exception), msg)
+            self.assertRegex(str(raises.exception), msg)
 
     def check_unary(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
@@ -861,7 +872,7 @@ class TestListReflection(MemoryLeakMixin, TestCase):
         got = cfunc(clist, clist)
         self.assertPreciseEqual(expected, got)
         self.assertPreciseEqual(pylist, clist)
-        self.assertPreciseEqual(sys.getrefcount(pylist), sys.getrefcount(clist))
+        self.assertRefCountEqual(pylist, clist)
 
     def test_reflect_clean(self):
         """

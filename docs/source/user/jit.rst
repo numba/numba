@@ -132,13 +132,12 @@ A number of keyword-only arguments can be passed to the ``@jit`` decorator.
 ------------
 
 Numba has two compilation modes: :term:`nopython mode` and
-:term:`object mode`.  The former produces much faster code, but has
-limitations that can force Numba to fall back to the latter.  To prevent
-Numba from falling back, and instead raise an error, pass ``nopython=True``.
+:term:`object mode`.  :term:`Nopython mode` is the default and it produces much
+faster code, but has limitations.
 
 ::
 
-   @jit(nopython=True)
+   @jit  # same as @jit(nopython=True) or @njit since Numba 0.59
    def f(x, y):
        return x + y
 
@@ -182,6 +181,25 @@ a file-based cache.  This is done by passing ``cache=True``::
    @jit(cache=True)
    def f(x, y):
        return x + y
+
+
+
+.. note::
+    Caching of compiled functions has several known limitations:
+
+    - The caching of compiled functions is not performed on a
+      function-by-function basis. The cached function is the the main jit
+      function, and all secondary functions (those called by the main
+      function) are incorporated in the cache of the main function.
+    - Cache invalidation fails to recognize changes in functions defined in a
+      different file. This means that when a main jit function calls
+      functions that were imported from a different module, a change in those
+      other modules will not be detected and the cache will not be updated.
+      This carries the risk that "old" function code might be used in the
+      calculations.
+    - Global variables are treated as constants. The cache will remember the value
+      of the global variable at compilation time. On cache load, the cached
+      function will not rebind to the new value of the global variable.
 
 .. _parallel_jit_option:
 

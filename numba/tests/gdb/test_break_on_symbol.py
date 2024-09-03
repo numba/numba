@@ -18,7 +18,7 @@ class Test(TestCase):
         foo(120)
         sz = types.intp.bitwidth
         driver = GdbMIDriver(__file__)
-        driver.set_breakpoint(symbol="__main__::foo_241")
+        driver.set_breakpoint(symbol="__main__::foo")
         driver.run() # will hit cpython symbol match
         driver.check_hit_breakpoint(number=1)
         driver.cont() # will hit njit symbol match

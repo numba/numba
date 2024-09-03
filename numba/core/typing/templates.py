@@ -9,14 +9,13 @@ import inspect
 import os.path
 from collections import namedtuple
 from collections.abc import Sequence
-from types import MethodType, FunctionType
+from types import MethodType, FunctionType, MappingProxyType
 
 import numba
 from numba.core import types, utils, targetconfig
 from numba.core.errors import (
     TypingError,
     InternalError,
-    InternalTargetMismatchError,
 )
 from numba.core.cpu_options import InlineOptions
 
@@ -673,7 +672,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             # needs to exist for type resolution
 
             # NOTE: If lowering is failing on a `_EmptyImplementationEntry`,
-            #       the inliner has failed to inline this entry corretly.
+            #       the inliner has failed to inline this entry correctly.
             impl_init = _EmptyImplementationEntry('always inlined')
             self._compiled_overloads[sig.args] = impl_init
             if not self._inline.is_always_inline:
@@ -716,37 +715,30 @@ class _OverloadFunctionTemplate(AbstractTemplate):
     def _get_jit_decorator(self):
         """Gets a jit decorator suitable for the current target"""
 
-        jitter_str = self.metadata.get('target', None)
-        if jitter_str is None:
-            from numba import jit
-            # There is no target requested, use default, this preserves
-            # original behaviour
-            jitter = lambda *args, **kwargs: jit(*args, nopython=True, **kwargs)
-        else:
-            from numba.core.target_extension import (target_registry,
-                                                     get_local_target,
-                                                     jit_registry)
+        from numba.core.target_extension import (target_registry,
+                                                 get_local_target,
+                                                 jit_registry)
 
-            # target has been requested, see what it is...
-            jitter = jit_registry.get(jitter_str, None)
+        jitter_str = self.metadata.get('target', 'generic')
+        jitter = jit_registry.get(jitter_str, None)
 
-            if jitter is None:
-                # No JIT known for target string, see if something is
-                # registered for the string and report if not.
-                target_class = target_registry.get(jitter_str, None)
-                if target_class is None:
-                    msg = ("Unknown target '{}', has it been ",
-                           "registered?")
-                    raise ValueError(msg.format(jitter_str))
+        if jitter is None:
+            # No JIT known for target string, see if something is
+            # registered for the string and report if not.
+            target_class = target_registry.get(jitter_str, None)
+            if target_class is None:
+                msg = ("Unknown target '{}', has it been ",
+                       "registered?")
+                raise ValueError(msg.format(jitter_str))
 
-                target_hw = get_local_target(self.context)
+            target_hw = get_local_target(self.context)
 
-                # check that the requested target is in the hierarchy for the
-                # current frame's target.
-                if not issubclass(target_hw, target_class):
-                    msg = "No overloads exist for the requested target: {}."
+            # check that the requested target is in the hierarchy for the
+            # current frame's target.
+            if not issubclass(target_hw, target_class):
+                msg = "No overloads exist for the requested target: {}."
 
-                jitter = jit_registry[target_hw]
+            jitter = jit_registry[target_hw]
 
         if jitter is None:
             raise ValueError("Cannot find a suitable jit decorator")
@@ -809,7 +801,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
 
         # Check type of pyfunc
         if not isinstance(pyfunc, FunctionType):
-            msg = ("Implementator function returned by `@overload` "
+            msg = ("Implementation function returned by `@overload` "
                    "has an unexpected type.  Got {}")
             raise AssertionError(msg.format(pyfunc))
 
@@ -1006,15 +998,18 @@ class _IntrinsicTemplate(_TemplateTargetHelperMixin, AbstractTemplate):
         return info
 
 
-def make_intrinsic_template(handle, defn, name, kwargs):
+def make_intrinsic_template(handle, defn, name, *, prefer_literal=False,
+                            kwargs=None):
     """
     Make a template class for a intrinsic handle *handle* defined by the
     function *defn*.  The *name* is used for naming the new template class.
     """
+    kwargs = MappingProxyType({} if kwargs is None else kwargs)
     base = _IntrinsicTemplate
     name = "_IntrinsicTemplate_%s" % (name)
     dct = dict(key=handle, _definition_func=staticmethod(defn),
-               _impl_cache={}, _overload_cache={}, metadata=kwargs)
+               _impl_cache={}, _overload_cache={},
+               prefer_literal=prefer_literal, metadata=kwargs)
     return type(base)(name, (base,), dct)
 
 
@@ -1100,30 +1095,26 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
         """
         attr = self._attr
 
-        try:
-            registry = self._get_target_registry('method')
-        except InternalTargetMismatchError:
-            # Target mismatch. Do not register attribute lookup here.
-            pass
-        else:
-            lower_builtin = registry.lower
+        registry = self._get_target_registry('method')
 
-            @lower_builtin((self.key, attr), self.key, types.VarArg(types.Any))
-            def method_impl(context, builder, sig, args):
-                typ = sig.args[0]
-                typing_context = context.typing_context
-                fnty = self._get_function_type(typing_context, typ)
-                sig = self._get_signature(typing_context, fnty, sig.args, {})
-                call = context.get_function(fnty, sig)
-                # Link dependent library
-                context.add_linking_libs(getattr(call, 'libs', ()))
-                return call(builder, args)
+        @registry.lower((self.key, attr), self.key, types.VarArg(types.Any))
+        def method_impl(context, builder, sig, args):
+            typ = sig.args[0]
+            typing_context = context.typing_context
+            fnty = self._get_function_type(typing_context, typ)
+            sig = self._get_signature(typing_context, fnty, sig.args, {})
+            call = context.get_function(fnty, sig)
+            # Link dependent library
+            context.add_linking_libs(getattr(call, 'libs', ()))
+            return call(builder, args)
 
     def _resolve(self, typ, attr):
         if self._attr != attr:
             return None
 
         if isinstance(typ, types.TypeRef):
+            assert typ == self.key
+        elif isinstance(typ, types.Callable):
             assert typ == self.key
         else:
             assert isinstance(typ, self.key)
@@ -1145,10 +1136,26 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
                 if sig is not None:
                     return sig.as_method()
 
+            def get_template_info(self):
+                basepath = os.path.dirname(os.path.dirname(numba.__file__))
+                impl = self._overload_func
+                code, firstlineno, path = self.get_source_code_info(impl)
+                sig = str(utils.pysignature(impl))
+                info = {
+                    'kind': "overload_method",
+                    'name': getattr(impl, '__qualname__', impl.__name__),
+                    'sig': sig,
+                    'filename': utils.safe_relpath(path, start=basepath),
+                    'lines': (firstlineno, firstlineno + len(code) - 1),
+                    'docstring': impl.__doc__
+                }
+
+                return info
+
         return types.BoundFunction(MethodTemplate, typ)
 
 
-def make_overload_attribute_template(typ, attr, overload_func, inline,
+def make_overload_attribute_template(typ, attr, overload_func, inline='never',
                                      prefer_literal=False,
                                      base=_OverloadAttributeTemplate,
                                      **kwargs):

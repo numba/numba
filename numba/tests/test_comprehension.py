@@ -6,11 +6,11 @@ import operator
 import numpy as np
 import numpy
 
-from numba.core.compiler import compile_isolated
-from numba import jit, typed
+from numba import jit, njit, typed
 from numba.core import types, utils
 from numba.core.errors import TypingError, LoweringError
 from numba.core.types.functions import _header_lead
+from numba.np.numpy_support import numpy_version
 from numba.tests.support import tag, _32bit, captured_stdout
 
 
@@ -31,8 +31,7 @@ class TestListComprehension(TestCase):
 
     def test_comp_list(self):
         pyfunc = comp_list
-        cres = compile_isolated(pyfunc, [types.intp])
-        cfunc = cres.entry_point
+        cfunc = njit((types.intp,))(pyfunc)
         self.assertEqual(cfunc(5), pyfunc(5))
         self.assertEqual(cfunc(0), pyfunc(0))
         self.assertEqual(cfunc(-1), pyfunc(-1))
@@ -360,6 +359,9 @@ class TestArrayComprehension(unittest.TestCase):
         self.check(comp_nest_with_array_conditional, 5,
                    assert_allocate_list=True)
 
+    @unittest.skipUnless(numpy_version < (1, 24),
+                         'Setting an array element with a sequence is removed '
+                         'in NumPy 1.24')
     def test_comp_nest_with_dependency(self):
         def comp_nest_with_dependency(n):
             l = np.array([[i * j for j in range(i+1)] for i in range(n)])
@@ -494,7 +496,7 @@ class TestArrayComprehension(unittest.TestCase):
         # For a large enough array, the chances of shuffle to not move any
         # element is tiny enough.
         self.assertNotEqual(got, expect)
-        self.assertRegexpMatches(got, r'\[(\s*\d+)+\]')
+        self.assertRegex(got, r'\[(\s*\d+)+\]')
 
     def test_empty_list_not_removed(self):
         # see issue #3724

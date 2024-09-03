@@ -80,27 +80,29 @@ platform.  In this case, please prepend ``[WIP]`` to your pull request's title.
 Build environment
 '''''''''''''''''
 
-Numba has a number of dependencies (mostly `NumPy <http://www.numpy.org/>`_
-and `llvmlite <https://github.com/numba/llvmlite>`_) with non-trivial build
+Numba has a number of dependencies (mostly `NumPy <http://www.numpy.org/>`_ and
+`llvmlite <https://github.com/numba/llvmlite>`_) with non-trivial build
 instructions.  Unless you want to build those dependencies yourself, we
-recommend you use `conda <http://conda.pydata.org/miniconda.html>`_ to
-create a dedicated development environment and install precompiled versions
-of those dependencies there.
+recommend you use `conda <http://conda.pydata.org/miniconda.html>`_ to create a
+dedicated development environment and install precompiled versions of those
+dependencies there. Read more about the Numba dependencies here:
+`numba-source-install-check`.
 
-First add the Anaconda Cloud ``numba`` channel so as to get development builds
-of the llvmlite library::
+When working with a source checkout of Numba you will also need a development
+build of llvmlite. These are available from the ``numba/label/dev`` channel on
+`anaconda.org <https://anaconda.org/numba/llvmlite>`_.
 
-   $ conda config --add channels numba
+To create an environment with the required dependencies, noting the use of the 
+double-colon syntax (``numba/label/dev::llvmlite``) to install the latest
+development version of the llvmlite library::
 
-Then create an environment with the right dependencies::
-
-   $ conda create -n numbaenv python=3.8 llvmlite numpy scipy jinja2 cffi
+   $ conda create -n numbaenv python=3.10 numba/label/dev::llvmlite numpy scipy jinja2 cffi
 
 .. note::
-   This installs an environment based on Python 3.8, but you can of course
+   This installs an environment based on Python 3.10, but you can of course
    choose another version supported by Numba.  To test additional features,
-   you may also need to install ``tbb`` and/or ``llvm-openmp`` and
-   ``intel-openmp``.
+   you may also need to install ``tbb`` and/or ``llvm-openmp``. Check the
+   dependency list above for details.
 
 To activate the environment for the current shell session::
 
@@ -114,13 +116,12 @@ Once the environment is activated, you have a dedicated Python with the
 required dependencies::
 
     $ python
-    Python 3.8.5 (default, Sep  4 2020, 07:30:14) 
-    [GCC 7.3.0] :: Anaconda, Inc. on linux
+    Python 3.10.3 (main, Mar 28 2022, 04:26:28) [Clang 12.0.0 ] on darwin
     Type "help", "copyright", "credits" or "license" for more information.
 
     >>> import llvmlite
     >>> llvmlite.__version__
-    '0.35.0'
+    0.39.0dev0+61.gf27ac6f
 
 
 Building Numba
@@ -129,7 +130,7 @@ Building Numba
 For a convenient development workflow, we recommend you build Numba inside
 its source checkout::
 
-   $ git clone git://github.com/numba/numba.git
+   $ git clone git@github.com:numba/numba.git
    $ cd numba
    $ python setup.py build_ext --inplace
 
@@ -149,6 +150,8 @@ arguments:
 Note that Numba's CI and the conda recipe for Linux build with the ``--werror``
 and ``--wall`` flags, so any contributions that change the CPython extensions
 should be tested with these flags too.
+
+.. _running-tests:
 
 Running tests
 '''''''''''''
@@ -211,6 +214,32 @@ instead. For example::
     $ NUMBA_USE_TYPEGUARD=1 python runtests.py
 
 
+See also: :ref:`Debugging the Test Suite <developer-testsuite>`
+
+
+Running coverage
+''''''''''''''''
+
+Coverage reports can be produced using `coverage.py
+<https://coverage.readthedocs.io/en/stable/index.html>`_. To record coverage
+info for the test suite, run::
+
+    coverage run -m numba.runtests <runtests args>
+
+Next, combine coverage files (potentially for multiple runs) with::
+
+    coverage combine
+
+The combined output can be transformed into various report formats - see the
+`coverage CLI usage reference
+<https://coverage.readthedocs.io/en/stable/cmd.html#command-line-usage>`_.
+For example, to produce an HTML report, run::
+
+    coverage html
+
+Following this command, the report can be viewed by opening ``htmlcov/index.html``.
+
+
 Development rules
 -----------------
 
@@ -226,8 +255,29 @@ A code review should try to assess the following criteria:
 * general design and correctness
 * code structure and maintainability
 * coding conventions
-* docstrings, comments
+* docstrings, comments and release notes (if necessary)
 * test coverage
+
+
+Policy on large scale changes to code formatting
+''''''''''''''''''''''''''''''''''''''''''''''''
+
+Please note that pull requests making large scale changes to format the code
+base are in general not accepted. Such changes often increase the likelihood of
+merge conflicts for other pull requests, which inevitably take time and
+resources to resolve. They also require a lot of effort to check as Numba aims
+to compile code that is valid even if it is not ideal. For example, in a test of
+``operator.eq``::
+
+    if x == None: # Valid code, even if the recommended form is `if x is None:`
+
+This tests Numba's compilation of comparison with ``None``, and therefore
+should not be changed, even though most style checkers will suggest it should.
+
+This policy has been adopted by the core developers so as to try and make best
+use of limited resources. Whilst it would be great to have an extremely tidy
+code base, priority is given to fixes and features over code formatting changes.
+
 
 Coding conventions
 ''''''''''''''''''
@@ -266,7 +316,7 @@ circumstances should ``type: ignore`` comments be used.
 
 If you are contributing a new feature, we encourage you to use type hints, even if the file is not currently in the
 checklist. If you want to contribute type hints to enable a new file to be in the checklist, please add the file to the
-``files`` variable in ``mypy.ini``, and decide what level of compliance you are targetting. Level 3 is basic static
+``files`` variable in ``mypy.ini``, and decide what level of compliance you are targeting. Level 3 is basic static
 checks, while levels 2 and 1 represent stricter checking. The levels are described in details in ``mypy.ini``.
 
 There is potential for confusion between the Numba module ``typing`` and Python built-in module ``typing`` used for type
@@ -274,10 +324,18 @@ hints, as well as between Numba types---such as ``Dict`` or ``Literal``---and ``
 To mitigate the risk of confusion we use a naming convention by which objects of the built-in ``typing`` module are
 imported with an ``pt`` prefix. For example, ``typing.Dict`` is imported as ``from typing import Dict as ptDict``.
 
+Release Notes
+'''''''''''''
+
+Pull Requests that add significant user-facing modifications may need to be mentioned in the release notes.
+To add a release note, a short ``.rst`` file needs creating containing a summary of the change and it needs to be placed in 
+``docs/upcoming_changes``. The file ``docs/upcoming_changes/README.rst`` details the format
+and file naming conventions.
+
 Stability
 '''''''''
 
-The repository's ``master`` branch is expected to be stable at all times.
+The repository's ``main`` branch is expected to be stable at all times.
 This translates into the fact that the test suite passes without errors
 on all supported platforms (see below).  This also means that a pull request
 also needs to pass the test suite before it is merged in.
@@ -287,7 +345,7 @@ also needs to pass the test suite before it is merged in.
 Platform support
 ''''''''''''''''
 
-Every commit to the master branch is automatically tested on all of the
+Every commit to the main branch is automatically tested on all of the
 platforms Numba supports. This includes ARMv8, POWER8, and NVIDIA GPUs.
 The build system however is internal to Anaconda, so we also use
 `Azure <https://dev.azure.com/numba/numba/_build>`_ to provide public continuous
@@ -408,61 +466,33 @@ The Numba documentation is split over two repositories:
   `Numba repository <https://github.com/numba/numba>`_.
 
 * The `Numba homepage <https://numba.pydata.org>`_ has its sources in a
-  separate repository at https://github.com/numba/numba-webpage
+  separate repository at https://github.com/numba/numba.github.com.
 
 
 Main documentation
 ''''''''''''''''''
 
 This documentation is under the ``docs`` directory of the `Numba repository`_.
-It is built with `Sphinx <http://sphinx-doc.org/>`_ and
-`numpydoc <https://numpydoc.readthedocs.io/>`_, which are available using
-conda or pip; i.e. ``conda install sphinx numpydoc``.
+It is built with `Sphinx <http://sphinx-doc.org/>`_, `numpydoc
+<https://numpydoc.readthedocs.io/>`_ and the
+`sphinx-rtd-theme <https://sphinx-rtd-theme.readthedocs.io/en/stable/>`_.
 
-To build the documentation, you need the bootstrap theme::
+To install all dependencies for building the documentation, use::
 
-   $ pip install sphinx_bootstrap_theme
+   $ conda install sphinx numpydoc sphinx_rtd_theme
 
 You can edit the source files under ``docs/source/``, after which you can
-build and check the documentation::
+build and check the documentation under ``docs/``::
 
    $ make html
    $ open _build/html/index.html
-
-Core developers can upload this documentation to the Numba website
-at https://numba.pydata.org by using the ``gh-pages.py`` script under ``docs``::
-
-   $ python gh-pages.py version  # version can be 'dev' or '0.16' etc
-
-then verify the repository under the ``gh-pages`` directory and use
-``git push``.
 
 Web site homepage
 '''''''''''''''''
 
 The Numba homepage on https://numba.pydata.org can be fetched from here:
-https://github.com/numba/numba-webpage
-
-After pushing documentation to a new version, core developers will want to
-update the website.  Some notable files:
-
-* ``index.rst``       # Update main page
-* ``_templates/sidebar_versions.html``    # Update sidebar links
-* ``doc.rst``         # Update after adding a new version for numba docs
-* ``download.rst``    # Updata after uploading new numba version to pypi
-
-After updating run::
-
-   $ make html
-
-and check out ``_build/html/index.html``.  To push updates to the Web site::
-
-   $ python _scripts/gh-pages.py
-
-then verify the repository under the ``gh-pages`` directory.  Make sure the
-``CNAME`` file is present and contains a single line for ``numba.pydata.org``.
-Finally, use ``git push`` to update the website.
+https://github.com/numba/numba.github.com
 
 
 .. _typeguard: https://typeguard.readthedocs.io/en/latest/
-.. _runtests.py: https://github.com/numba/numba/blob/master/runtests.py
+.. _runtests.py: https://github.com/numba/numba/blob/main/runtests.py

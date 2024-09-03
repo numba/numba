@@ -3,15 +3,13 @@ import itertools
 import math
 import random
 import sys
+import unittest
 
 import numpy as np
 
-from numba.core.compiler import compile_isolated, Flags
 from numba import jit, njit
-from numba.core import types, utils, errors
-import unittest
-from numba import testing
-from numba.tests.support import TestCase, MemoryLeakMixin, tag
+from numba.core import utils, errors
+from numba.tests.support import TestCase, MemoryLeakMixin
 
 from numba.misc.quicksort import make_py_quicksort, make_jit_quicksort
 from numba.misc.mergesort import make_jit_mergesort
@@ -401,7 +399,7 @@ class BaseTimsortTest(BaseSortingTest):
         # First check with i == len(stack) - 2
         keys = self.array_factory(orig_keys)
         ms = self.merge_init(keys)
-        # Push sentinel on stack, to check it was't touched
+        # Push sentinel on stack, to check it wasn't touched
         ms = self.timsort.merge_append(ms, stack_sentinel)
         i = ms.n
         ms = self.timsort.merge_append(ms, MergeRun(ssa, na))
@@ -412,7 +410,7 @@ class BaseTimsortTest(BaseSortingTest):
         # Now check with i == len(stack) - 3
         keys = self.array_factory(orig_keys)
         ms = self.merge_init(keys)
-        # Push sentinel on stack, to check it was't touched
+        # Push sentinel on stack, to check it wasn't touched
         ms = self.timsort.merge_append(ms, stack_sentinel)
         i = ms.n
         ms = self.timsort.merge_append(ms, MergeRun(ssa, na))
@@ -715,6 +713,103 @@ class TestQuicksortArrays(BaseQuicksortTest, TestCase):
     def array_factory(self, lst):
         return np.array(lst, dtype=np.float64)
 
+class TestQuicksortMultidimensionalArrays(BaseSortingTest, TestCase):
+
+    quicksort = make_jit_quicksort(is_np_array=True)
+    make_quicksort = staticmethod(make_jit_quicksort)
+
+    def assertSorted(self, orig, result):
+        self.assertEqual(orig.shape, result.shape)
+        self.assertPreciseEqual(orig, result)
+
+    def array_factory(self, lst, shape=None):
+        array = np.array(lst, dtype=np.float64)
+        if shape is None:
+            return array.reshape(-1, array.shape[0])
+        else:
+            return array.reshape(shape)
+
+    def get_shapes(self, n):
+        shapes = []
+        if n == 1:
+            return shapes
+
+        for i in range(2, int(math.sqrt(n)) + 1):
+            if n % i == 0:
+                shapes.append((n // i, i))
+                shapes.append((i, n // i))
+                _shapes = self.get_shapes(n // i)
+                for _shape in _shapes:
+                    shapes.append((i,) + _shape)
+                    shapes.append(_shape + (i,))
+
+        return shapes
+
+    def test_run_quicksort(self):
+        f = self.quicksort.run_quicksort
+
+        for size_factor in (1, 5):
+            # Make lists to be sorted from two chunks of different kinds.
+            sizes = (15, 20)
+
+            all_lists = [self.make_sample_lists(n * size_factor) for n in sizes]
+            for chunks in itertools.product(*all_lists):
+                orig_keys = sum(chunks, [])
+                shape_list = self.get_shapes(len(orig_keys))
+                shape_list.append(None)
+                for shape in shape_list:
+                    keys = self.array_factory(orig_keys, shape=shape)
+                    keys_copy = self.array_factory(orig_keys, shape=shape)
+                    f(keys)
+                    keys_copy.sort()
+                    # The list is now sorted
+                    self.assertSorted(keys_copy, keys)
+
+    def test_run_quicksort_lt(self):
+        def lt(a, b):
+            return a > b
+
+        f = self.make_quicksort(lt=lt, is_np_array=True).run_quicksort
+
+        for size_factor in (1, 5):
+            # Make lists to be sorted from two chunks of different kinds.
+            sizes = (15, 20)
+
+            all_lists = [self.make_sample_lists(n * size_factor) for n in sizes]
+            for chunks in itertools.product(*all_lists):
+                orig_keys = sum(chunks, [])
+                shape_list = self.get_shapes(len(orig_keys))
+                shape_list.append(None)
+                for shape in shape_list:
+                    keys = self.array_factory(orig_keys, shape=shape)
+                    keys_copy = -self.array_factory(orig_keys, shape=shape)
+                    f(keys)
+                    # The list is now rev-sorted
+                    keys_copy.sort()
+                    keys_copy = -keys_copy
+                    self.assertSorted(keys_copy, keys)
+
+        # An imperfect comparison function, as LT(a, b) does not imply not LT(b, a).
+        # The sort should handle it gracefully.
+        def lt_floats(a, b):
+            return math.isnan(b) or a < b
+
+        f = self.make_quicksort(lt=lt_floats, is_np_array=True).run_quicksort
+
+        np.random.seed(42)
+        for size in (5, 20, 50, 500):
+            orig = np.random.random(size=size) * 100
+            orig[np.random.random(size=size) < 0.1] = float('nan')
+            orig_keys = list(orig)
+            shape_list = self.get_shapes(len(orig_keys))
+            shape_list.append(None)
+            for shape in shape_list:
+                keys = self.array_factory(orig_keys, shape=shape)
+                keys_copy = self.array_factory(orig_keys, shape=shape)
+                f(keys)
+                keys_copy.sort()
+                # Non-NaNs are sorted at the front
+                self.assertSorted(keys_copy, keys)
 
 class TestNumpySort(TestCase):
 
@@ -732,6 +827,11 @@ class TestNumpySort(TestCase):
         for size in (5, 20, 50, 500):
             orig = np.random.random(size=size) * 100
             orig[np.random.random(size=size) < 0.1] = float('nan')
+            yield orig
+        # 90% of values are NaNs.
+        for size in (50, 500):
+            orig = np.random.random(size=size) * 100
+            orig[np.random.random(size=size) < 0.9] = float('nan')
             yield orig
 
     def has_duplicates(self, arr):
@@ -786,6 +886,16 @@ class TestNumpySort(TestCase):
         for orig in self.float_arrays():
             self.check_sort_inplace(pyfunc, cfunc, orig)
 
+    def test_array_sort_complex(self):
+        pyfunc = sort_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for real in self.float_arrays():
+            imag = real[::]
+            np.random.shuffle(imag)
+            orig = np.array([complex(*x) for x in zip(real, imag)])
+            self.check_sort_inplace(pyfunc, cfunc, orig)
+
     def test_np_sort_int(self):
         pyfunc = np_sort_usecase
         cfunc = jit(nopython=True)(pyfunc)
@@ -800,6 +910,18 @@ class TestNumpySort(TestCase):
         for size in (5, 20, 50, 500):
             orig = np.random.random(size=size) * 100
             orig[np.random.random(size=size) < 0.1] = float('nan')
+            self.check_sort_copy(pyfunc, cfunc, orig)
+
+    def test_np_sort_complex(self):
+        pyfunc = np_sort_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for size in (5, 20, 50, 500):
+            real = np.random.random(size=size) * 100
+            imag = np.random.random(size=size) * 100
+            real[np.random.random(size=size) < 0.1] = float('nan')
+            imag[np.random.random(size=size) < 0.1] = float('nan')
+            orig = np.array([complex(*x) for x in zip(real, imag)])
             self.check_sort_copy(pyfunc, cfunc, orig)
 
     def test_argsort_int(self):
@@ -832,7 +954,7 @@ class TestNumpySort(TestCase):
         check(argsort_usecase)
         check(np_argsort_usecase)
 
-    def test_argsort_float(self):
+    def test_argsort_float_supplemental(self):
         def check(pyfunc, is_stable):
             cfunc = jit(nopython=True)(pyfunc)
             for orig in self.float_arrays():
@@ -843,6 +965,39 @@ class TestNumpySort(TestCase):
         check(np_argsort_kind_usecase, is_stable=True)
         check(argsort_kind_usecase, is_stable=False)
         check(np_argsort_kind_usecase, is_stable=False)
+
+    def test_argsort_complex(self):
+        def check(pyfunc):
+            cfunc = jit(nopython=True)(pyfunc)
+            for real in self.float_arrays():
+                imag = real[::]
+                np.random.shuffle(imag)
+                orig = np.array([complex(*x) for x in zip(real, imag)])
+                self.check_argsort(pyfunc, cfunc, orig)
+
+        check(argsort_usecase)
+        check(np_argsort_usecase)
+
+    def test_argsort_complex_supplemental(self):
+        def check(pyfunc, is_stable):
+            cfunc = jit(nopython=True)(pyfunc)
+            for real in self.float_arrays():
+                imag = real[::]
+                np.random.shuffle(imag)
+                orig = np.array([complex(*x) for x in zip(real, imag)])
+                self.check_argsort(pyfunc, cfunc, orig,
+                                   dict(is_stable=is_stable))
+
+        check(argsort_kind_usecase, is_stable=True)
+        check(np_argsort_kind_usecase, is_stable=True)
+        check(argsort_kind_usecase, is_stable=False)
+        check(np_argsort_kind_usecase, is_stable=False)
+
+    def test_bad_array(self):
+        cfunc = jit(nopython=True)(np_sort_usecase)
+        msg = '.*Argument "a" must be array-like.*'
+        with self.assertRaisesRegex(errors.TypingError, msg) as raises:
+            cfunc(None)
 
 
 class TestPythonSort(TestCase):

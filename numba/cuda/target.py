@@ -1,17 +1,19 @@
 import re
+from functools import cached_property
 import llvmlite.binding as ll
 from llvmlite import ir
 
-from numba.core import (typing, types, dispatcher, debuginfo, itanium_mangler,
-                        cgutils)
-from numba.core.utils import cached_property
+from numba.core import (cgutils, config, debuginfo, itanium_mangler, types,
+                        typing, utils)
+from numba.core.dispatcher import Dispatcher
 from numba.core.base import BaseContext
-from numba.core.callconv import MinimalCallConv
+from numba.core.callconv import BaseCallConv, MinimalCallConv
 from numba.core.typing import cmathdecl
+from numba.core import datamodel
 
 from .cudadrv import nvvm
-from numba.cuda import codegen, nvvmutils
-
+from numba.cuda import codegen, nvvmutils, ufuncs
+from numba.cuda.models import cuda_data_manager
 
 # -----------------------------------------------------------------------------
 # Typing
@@ -19,16 +21,22 @@ from numba.cuda import codegen, nvvmutils
 
 class CUDATypingContext(typing.BaseContext):
     def load_additional_registries(self):
-        from . import cudadecl, cudamath, libdevicedecl
+        from . import cudadecl, cudamath, libdevicedecl, vector_types
+        from numba.core.typing import enumdecl, cffi_utils
 
         self.install_registry(cudadecl.registry)
+        self.install_registry(cffi_utils.registry)
         self.install_registry(cudamath.registry)
         self.install_registry(cmathdecl.registry)
         self.install_registry(libdevicedecl.registry)
+        self.install_registry(enumdecl.registry)
+        self.install_registry(vector_types.typing_registry)
 
     def resolve_value_type(self, val):
-        # treat dispatcher object as another device function
-        if isinstance(val, dispatcher.Dispatcher):
+        # treat other dispatcher object as another device function
+        from numba.cuda.dispatcher import CUDADispatcher
+        if (isinstance(val, Dispatcher) and not
+                isinstance(val, CUDADispatcher)):
             try:
                 # use cached device function
                 val = val.__dispatcher
@@ -40,9 +48,7 @@ class CUDATypingContext(typing.BaseContext):
                 targetoptions['device'] = True
                 targetoptions['debug'] = targetoptions.get('debug', False)
                 targetoptions['opt'] = targetoptions.get('opt', True)
-                sigs = None
-                from .compiler import Dispatcher
-                disp = Dispatcher(val, sigs, targetoptions)
+                disp = CUDADispatcher(val.py_func, targetoptions)
                 # cache the device function for future use and to avoid
                 # duplicated copy of the same function.
                 val.__dispatcher = disp
@@ -64,13 +70,13 @@ class CUDATargetContext(BaseContext):
 
     def __init__(self, typingctx, target='cuda'):
         super().__init__(typingctx, target)
+        self.data_model_manager = cuda_data_manager.chain(
+            datamodel.default_manager
+        )
 
     @property
     def DIBuilder(self):
-        if nvvm.NVVM().is_nvvm70:
-            return debuginfo.DIBuilder
-        else:
-            return debuginfo.NvvmDIBuilder
+        return debuginfo.DIBuilder
 
     @property
     def enable_boundscheck(self):
@@ -83,29 +89,39 @@ class CUDATargetContext(BaseContext):
 
     def init(self):
         self._internal_codegen = codegen.JITCUDACodegen("numba.cuda.jit")
-        self._target_data = ll.create_target_data(nvvm.default_data_layout)
+        self._target_data = None
 
     def load_additional_registries(self):
         # side effect of import needed for numba.cpython.*, the builtins
         # registry is updated at import time.
         from numba.cpython import numbers, tupleobj, slicing # noqa: F401
-        from numba.cpython import rangeobj, iterators # noqa: F401
+        from numba.cpython import rangeobj, iterators, enumimpl # noqa: F401
         from numba.cpython import unicode, charseq # noqa: F401
         from numba.cpython import cmathimpl
+        from numba.misc import cffiimpl
         from numba.np import arrayobj # noqa: F401
         from numba.np import npdatetime # noqa: F401
-        from . import cudaimpl, printimpl, libdeviceimpl, mathimpl
+        from . import (
+            cudaimpl, printimpl, libdeviceimpl, mathimpl, vector_types
+        )
+        # fix for #8940
+        from numba.np.unsafe import ndarray # noqa F401
+
         self.install_registry(cudaimpl.registry)
+        self.install_registry(cffiimpl.registry)
         self.install_registry(printimpl.registry)
         self.install_registry(libdeviceimpl.registry)
         self.install_registry(cmathimpl.registry)
         self.install_registry(mathimpl.registry)
+        self.install_registry(vector_types.impl_registry)
 
     def codegen(self):
         return self._internal_codegen
 
     @property
     def target_data(self):
+        if self._target_data is None:
+            self._target_data = ll.create_target_data(nvvm.NVVM().data_layout)
         return self._target_data
 
     @cached_property
@@ -126,10 +142,11 @@ class CUDATargetContext(BaseContext):
     def call_conv(self):
         return CUDACallConv(self)
 
-    def mangler(self, name, argtypes, *, abi_tags=()):
-        return itanium_mangler.mangle(name, argtypes, abi_tags=abi_tags)
+    def mangler(self, name, argtypes, *, abi_tags=(), uid=None):
+        return itanium_mangler.mangle(name, argtypes, abi_tags=abi_tags,
+                                      uid=uid)
 
-    def prepare_cuda_kernel(self, codelib, fndesc, debug,
+    def prepare_cuda_kernel(self, codelib, fndesc, debug, lineinfo,
                             nvvm_options, filename, linenum,
                             max_registers=None):
         """
@@ -146,6 +163,7 @@ class CUDATargetContext(BaseContext):
                        in a kernel call.
         fndesc:        The FunctionDescriptor of the source function.
         debug:         Whether to compile with debug.
+        lineinfo:      Whether to emit line info.
         nvvm_options:  Dict of NVVM options used when compiling the new library.
         filename:      The source filename that the function is contained in.
         linenum:       The source line that the function is on.
@@ -160,11 +178,12 @@ class CUDATargetContext(BaseContext):
                                                 max_registers=max_registers)
         library.add_linking_library(codelib)
         wrapper = self.generate_kernel_wrapper(library, fndesc, kernel_name,
-                                               debug, filename, linenum)
+                                               debug, lineinfo, filename,
+                                               linenum)
         return library, wrapper
 
     def generate_kernel_wrapper(self, library, fndesc, kernel_name, debug,
-                                filename, linenum):
+                                lineinfo, filename, linenum):
         """
         Generate the kernel wrapper in the given ``library``.
         The function being wrapped is described by ``fndesc``.
@@ -185,10 +204,12 @@ class CUDATargetContext(BaseContext):
         wrapfn = ir.Function(wrapper_module, wrapfnty, prefixed)
         builder = ir.IRBuilder(wrapfn.append_basic_block(''))
 
-        if debug:
-            debuginfo = self.DIBuilder(
-                module=wrapper_module, filepath=filename, cgctx=self,
-            )
+        if debug or lineinfo:
+            directives_only = lineinfo and not debug
+            debuginfo = self.DIBuilder(module=wrapper_module,
+                                       filepath=filename,
+                                       cgctx=self,
+                                       directives_only=directives_only)
             debuginfo.mark_subprogram(
                 wrapfn, kernel_name, fndesc.args, argtypes, linenum,
             )
@@ -225,18 +246,9 @@ class CUDATargetContext(BaseContext):
                 # Use atomic cmpxchg to prevent rewriting the error status
                 # Only the first error is recorded
 
-                if nvvm.NVVM().is_nvvm70:
-                    xchg = builder.cmpxchg(gv_exc, old, status.code,
-                                           'monotonic', 'monotonic')
-                    changed = builder.extract_value(xchg, 1)
-                else:
-                    casfnty = ir.FunctionType(old.type, [gv_exc.type, old.type,
-                                                         old.type])
-
-                    cas_hack = "___numba_atomic_i32_cas_hack"
-                    casfn = ir.Function(wrapper_module, casfnty, name=cas_hack)
-                    xchg = builder.call(casfn, [gv_exc, old, status.code])
-                    changed = builder.icmp_unsigned('==', xchg, old)
+                xchg = builder.cmpxchg(gv_exc, old, status.code,
+                                       'monotonic', 'monotonic')
+                changed = builder.extract_value(xchg, 1)
 
                 # If the xchange is successful, save the thread ID.
                 sreg = nvvmutils.SRegBuilder(builder)
@@ -253,11 +265,14 @@ class CUDATargetContext(BaseContext):
 
         nvvm.set_cuda_kernel(wrapfn)
         library.add_ir_module(wrapper_module)
-        if debug:
+        if debug or lineinfo:
             debuginfo.finalize()
         library.finalize()
-        wrapfn = library.get_function(wrapfn.name)
-        return wrapfn
+
+        if config.DUMP_LLVM:
+            utils.dump_llvm(fndesc, wrapper_module)
+
+        return library.get_function(wrapfn.name)
 
     def make_constant_array(self, builder, aryty, arr):
         """
@@ -287,9 +302,8 @@ class CUDATargetContext(BaseContext):
         gv.align = 2 ** (align - 1).bit_length()
 
         # Convert to generic address-space
-        conv = nvvmutils.insert_addrspace_conv(lmod, ir.IntType(8), addrspace)
-        addrspaceptr = gv.bitcast(ir.PointerType(ir.IntType(8), addrspace))
-        genptr = builder.call(conv, [addrspaceptr])
+        ptrty = ir.PointerType(ir.IntType(8))
+        genptr = builder.addrspacecast(gv, ptrty, 'generic')
 
         # Create array object
         ary = self.make_array(aryty)(self, builder)
@@ -334,17 +348,8 @@ class CUDATargetContext(BaseContext):
         """
         lmod = builder.module
         gv = self.insert_const_string(lmod, string)
-        return self.insert_addrspace_conv(builder, gv,
-                                          nvvm.ADDRSPACE_CONSTANT)
-
-    def insert_addrspace_conv(self, builder, ptr, addrspace):
-        """
-        Perform addrspace conversion according to the NVVM spec
-        """
-        lmod = builder.module
-        base_type = ptr.type.pointee
-        conv = nvvmutils.insert_addrspace_conv(lmod, base_type, addrspace)
-        return builder.call(conv, [ptr])
+        charptrty = ir.PointerType(ir.IntType(8))
+        return builder.addrspacecast(gv, charptrty, 'generic')
 
     def optimize_function(self, func):
         """Run O1 function passes
@@ -359,6 +364,77 @@ class CUDATargetContext(BaseContext):
         # fpm.run(func)
         # fpm.finalize()
 
+    def get_ufunc_info(self, ufunc_key):
+        return ufuncs.get_ufunc_info(ufunc_key)
+
 
 class CUDACallConv(MinimalCallConv):
     pass
+
+
+class CUDACABICallConv(BaseCallConv):
+    """
+    Calling convention aimed at matching the CUDA C/C++ ABI. The implemented
+    function signature is:
+
+        <Python return type> (<Python arguments>)
+
+    Exceptions are unsupported in this convention.
+    """
+
+    def _make_call_helper(self, builder):
+        # Call helpers are used to help report exceptions back to Python, so
+        # none is required here.
+        return None
+
+    def return_value(self, builder, retval):
+        return builder.ret(retval)
+
+    def return_user_exc(self, builder, exc, exc_args=None, loc=None,
+                        func_name=None):
+        msg = "Python exceptions are unsupported in the CUDA C/C++ ABI"
+        raise NotImplementedError(msg)
+
+    def return_status_propagate(self, builder, status):
+        msg = "Return status is unsupported in the CUDA C/C++ ABI"
+        raise NotImplementedError(msg)
+
+    def get_function_type(self, restype, argtypes):
+        """
+        Get the LLVM IR Function type for *restype* and *argtypes*.
+        """
+        arginfo = self._get_arg_packer(argtypes)
+        argtypes = list(arginfo.argument_types)
+        fnty = ir.FunctionType(self.get_return_type(restype), argtypes)
+        return fnty
+
+    def decorate_function(self, fn, args, fe_argtypes, noalias=False):
+        """
+        Set names and attributes of function arguments.
+        """
+        assert not noalias
+        arginfo = self._get_arg_packer(fe_argtypes)
+        arginfo.assign_names(self.get_arguments(fn),
+                             ['arg.' + a for a in args])
+
+    def get_arguments(self, func):
+        """
+        Get the Python-level arguments of LLVM *func*.
+        """
+        return func.args
+
+    def call_function(self, builder, callee, resty, argtys, args):
+        """
+        Call the Numba-compiled *callee*.
+        """
+        arginfo = self._get_arg_packer(argtys)
+        realargs = arginfo.as_arguments(builder, args)
+        code = builder.call(callee, realargs)
+        # No status required as we don't support exceptions or a distinct None
+        # value in a C ABI.
+        status = None
+        out = self.context.get_returned_value(builder, resty, code)
+        return status, out
+
+    def get_return_type(self, ty):
+        return self.context.data_model_manager[ty].get_return_type()

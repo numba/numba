@@ -1,12 +1,13 @@
+import collections
 import itertools
 
 import numpy as np
 
 import unittest
-from numba import jit, typeof
+from numba import jit, typeof, njit
 from numba.core import types
 from numba.core.errors import TypingError
-from numba.tests.support import MemoryLeakMixin, TestCase, tag
+from numba.tests.support import MemoryLeakMixin, TestCase
 
 
 def getitem_usecase(a, b):
@@ -231,6 +232,11 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
             for ind in test_indices:
                 check(A, ind)
 
+        # https://github.com/numpy/numpy/blob/main/numpy/_core/tests/test_numeric.py#L319-L325
+        indices = [1, 2, 4]
+        a = np.array([1, 2, 3, 4, 5])
+        check(a, indices)
+
         #check illegal access raises
         szA = A.size
         illegal_indices = [szA, -szA - 1, np.array(szA), np.array(-szA - 1),
@@ -243,18 +249,298 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError):
             cfunc(A, [1.7])
 
-        # check unsupported arg raises
-        with self.assertRaises(TypingError):
-            take_kws = jit(nopython=True)(np_take_kws)
-            take_kws(A, 1, 1)
-
-        # check kwarg unsupported raises
-        with self.assertRaises(TypingError):
-            take_kws = jit(nopython=True)(np_take_kws)
-            take_kws(A, 1, axis=1)
-
         #exceptions leak refs
         self.disable_leak_check()
+
+    def test_np_take_axis(self):
+        pyfunc = np_take_kws
+        cfunc = jit(nopython=True)(pyfunc)
+
+        nt = collections.namedtuple('inputs', ['arrays', 'indices', 'axis'])
+
+        triples = (
+            nt(
+                arrays=(
+                    np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]]),
+                ),
+                indices=(
+                    np.array([0, 2, 1]),
+                    np.array([1, 2, 1, 2, 1]),
+                    np.array([0]),
+                    1,
+                    (0,),
+                    (0, 1),
+                ),
+                axis=(0, 1, -1),
+            ),
+            nt(
+                arrays=(
+                    np.arange(5),
+                    np.array([123]),
+                ),
+                indices=(
+                    0,
+                    (0,),
+                    np.asarray([0])
+                ),
+                axis=(0,)
+            ),
+            nt(
+                arrays=(
+                    np.ones((10, 1, 11, 1, 12, 1, 13)),
+                ),
+                indices=(
+                    0,
+                ),
+                axis=(1, 3, 5)
+            ),
+        )
+
+        for arrays, indices, axis in triples:
+            for array in arrays:
+                for indice in indices:
+                    for ax in axis:
+                        expected = np.take(array, indice, axis=ax)
+                        got = cfunc(array, indice, axis=ax)
+                        self.assertPreciseEqual(expected, got)
+
+
+    def test_np_take_axis_exception(self):
+        cfunc = jit(nopython=True)(np_take_kws)
+        arr = np.arange(9).reshape(3, 3)
+        msg = 'axis 2 is out of bounds for array of dimension 2'
+        indices = np.array([0, 1, 2])
+        with self.assertRaisesRegex(ValueError, msg):
+            cfunc(arr, indices, axis=2)
+
+        self.disable_leak_check()
+
+    def test_newaxis(self):
+        @njit
+        def np_new_axis_getitem(a, idx):
+            return a[idx]
+
+        @njit
+        def np_new_axis_setitem(a, idx, item):
+            a[idx] = item
+            return a
+
+        a = np.arange(4 * 5 * 6 * 7).reshape((4, 5, 6, 7))
+        idx_cases = [
+            (slice(None), np.newaxis),
+            (np.newaxis, slice(None)),
+            (slice(1), np.newaxis, np.array([1, 2, 1])),
+            (np.newaxis, np.array([1, 2, 1]), slice(None)),
+            (slice(1), Ellipsis, np.newaxis, np.array([1, 2, 1])),
+            (np.array([1, 2, 1]), np.newaxis, Ellipsis),
+            (np.newaxis, slice(1), np.newaxis, np.array([1, 2, 1])),
+            (np.array([1, 2, 1]), Ellipsis, None, np.newaxis),
+            (np.newaxis, slice(1), Ellipsis, np.newaxis, np.array([1, 2, 1])),
+            (np.array([1, 2, 1]), np.newaxis, np.newaxis, Ellipsis),
+            (np.newaxis, np.array([1, 2, 1]), np.newaxis, Ellipsis),
+            (slice(3), np.array([1, 2, 1]), np.newaxis, None),
+            (np.newaxis, np.array([1, 2, 1]), Ellipsis, None),
+        ]
+        pyfunc_getitem = np_new_axis_getitem.py_func
+        cfunc_getitem = np_new_axis_getitem
+
+        pyfunc_setitem = np_new_axis_setitem.py_func
+        cfunc_setitem = np_new_axis_setitem
+
+        for idx in idx_cases:
+            expected = pyfunc_getitem(a, idx)
+            got = cfunc_getitem(a, idx)
+            np.testing.assert_equal(expected, got)
+
+            a_empty = np.zeros_like(a)
+            item = a[idx]
+
+            expected = pyfunc_setitem(a_empty.copy(), idx, item)
+            got = cfunc_setitem(a_empty.copy(), idx, item)
+            np.testing.assert_equal(expected, got)
+
+
+class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
+    # Every case has exactly one, one-dimensional array,
+    # otherwise it's not fancy indexing.
+    shape = (5, 6, 7, 8, 9, 10)
+    indexing_cases = [
+        # Slices + Integers
+        (slice(4, 5), 3, np.array([0, 1, 3, 4, 2]), 1),
+        (3, np.array([0,1,3,4,2]), slice(None), slice(4)),
+
+        # Ellipsis + Integers
+        (Ellipsis, 1, np.array([0,1,3,4,2])),
+        (np.array([0,1,3,4,2]), 3, Ellipsis),
+
+        # Ellipsis + Slices + Integers
+        (Ellipsis, 1, np.array([0,1,3,4,2]), 3, slice(1,5)),
+        (np.array([0,1,3,4,2]), 3, Ellipsis, slice(1,5)),
+
+        # Boolean Arrays + Integers
+        (slice(4, 5), 3,
+         np.array([True, False, True, False, True, False, False]),
+         1),
+        (3, np.array([True, False, True, False, True, False]),
+         slice(None), slice(4)),
+    ]
+
+    def setUp(self):
+        super().setUp()
+        self.rng = np.random.default_rng(1)
+
+    def generate_random_indices(self):
+        N = min(self.shape)
+        slice_choices = [slice(None, None, None),
+            slice(1, N - 1, None),
+            slice(0, None, 2),
+            slice(N - 1, None, -2),
+            slice(-N + 1, -1, None),
+            slice(-1, -N, -2),
+            slice(0, N - 1, None),
+            slice(-1, -N, -2)
+        ]
+        integer_choices = list(np.arange(N))
+
+        indices = []
+
+        # Generate K random slice cases. The value of K is arbitrary, the intent is
+        # to create plenty of variation.
+        K = 20 
+        for _ in range(K):
+            array_idx = self.rng.integers(0, 5, size=15)
+            # Randomly select 4 slices from our list
+            curr_idx = self.rng.choice(slice_choices, size=4).tolist()
+            # Replace one of the slice with the array index
+            _array_idx = self.rng.choice(4)
+            curr_idx[_array_idx] = array_idx
+            indices.append(tuple(curr_idx))
+        # Generate K random integer cases 
+        for _ in range(K):
+            array_idx = self.rng.integers(0, 5, size=15)
+            # Randomly select 4 integers from our list
+            curr_idx = self.rng.choice(integer_choices, size=4).tolist()
+            # Replace one of the slice with the array index
+            _array_idx = self.rng.choice(4)
+            curr_idx[_array_idx] = array_idx
+            indices.append(tuple(curr_idx))
+
+        # Generate K random ellipsis cases
+        for _ in range(K):
+            array_idx = self.rng.integers(0, 5, size=15)
+            # Randomly select 4 slices from our list
+            curr_idx = self.rng.choice(slice_choices, size=4).tolist()
+            # Generate two seperate random indices, replace one with
+            # array and second with Ellipsis
+            _array_idx = self.rng.choice(4, size=2, replace=False)
+            curr_idx[_array_idx[0]] = array_idx
+            curr_idx[_array_idx[1]] = Ellipsis
+            indices.append(tuple(curr_idx))
+
+        # Generate K random boolean cases
+        for _ in range(K):
+            array_idx = self.rng.integers(0, 5, size=15)
+            # Randomly select 4 slices from our list
+            curr_idx = self.rng.choice(slice_choices, size=4).tolist()
+            # Replace one of the slice with the boolean array index
+            _array_idx = self.rng.choice(4)
+            bool_arr_shape = self.shape[_array_idx]
+            curr_idx[_array_idx] = np.array(
+                self.rng.choice(2, size=bool_arr_shape),
+                dtype=bool
+            )
+            indices.append(tuple(curr_idx))
+
+        return indices
+
+    def check_getitem_indices(self, arr_shape, index):
+        @njit
+        def numba_get_item(array, idx):
+            return array[idx]
+
+        arr = np.random.randint(0, 11, size=arr_shape)
+        get_item = numba_get_item.py_func
+        orig_base = arr.base or arr
+
+        expected = get_item(arr, index)
+        got = numba_get_item(arr, index)
+        # Sanity check: In advanced indexing, the result is always a copy.
+        self.assertIsNot(expected.base, orig_base)
+
+        # Note: Numba may not return the same array strides and
+        # contiguity as NumPy
+        self.assertEqual(got.shape, expected.shape)
+        self.assertEqual(got.dtype, expected.dtype)
+        np.testing.assert_equal(got, expected)
+
+        # Check a copy was *really* returned by Numba
+        self.assertFalse(np.may_share_memory(got, expected))
+
+    def check_setitem_indices(self, arr_shape, index):
+        @njit
+        def set_item(array, idx, item):
+            array[idx] = item
+
+        arr = np.random.randint(0, 11, size=arr_shape)
+        src = arr[index]
+        expected = np.zeros_like(arr)
+        got = np.zeros_like(arr)
+
+        set_item.py_func(expected, index, src)
+        set_item(got, index, src)
+
+        # Note: Numba may not return the same array strides and
+        # contiguity as NumPy
+        self.assertEqual(got.shape, expected.shape)
+        self.assertEqual(got.dtype, expected.dtype)
+
+        np.testing.assert_equal(got, expected)
+
+    def test_getitem(self):
+        # Cases with a combination of integers + other objects
+        indices = self.indexing_cases.copy()
+
+        # Cases with permutations of either integers or objects
+        indices += self.generate_random_indices()
+
+        for idx in indices:
+            with self.subTest(idx=idx):
+                self.check_getitem_indices(self.shape, idx)
+
+    def test_setitem(self):
+        # Cases with a combination of integers + other objects
+        indices = self.indexing_cases.copy()
+
+        # Cases with permutations of either integers or objects
+        indices += self.generate_random_indices()
+
+        for idx in indices:
+            with self.subTest(idx=idx):
+                self.check_setitem_indices(self.shape, idx)
+
+    def test_unsupported_condition_exceptions(self):
+        err_idx_cases = [
+            # Cases with multi-dimensional indexing array
+            ('Multi-dimensional indices are not supported.',
+             (0, 3, np.array([[1, 2], [2, 3]]))),
+            # Cases with more than one indexing array
+            ('Using more than one non-scalar array index is unsupported.',
+             (0, 3, np.array([1, 2]), np.array([1, 2]))),
+            # Cases with more than one indexing subspace
+            # (The subspaces here are separated by slice(None))
+            ("Using more than one indexing subspace is unsupported." + \
+             " An indexing subspace is a group of one or more consecutive" + \
+             " indices comprising integer or array types.",
+             (0, np.array([1, 2]), slice(None), 3, 4))
+        ]
+        
+        for err, idx in err_idx_cases:
+            with self.assertRaises(TypingError) as raises:
+                self.check_getitem_indices(self.shape, idx)
+            self.assertIn(
+                err,
+                str(raises.exception)
+            )
 
 
 if __name__ == '__main__':

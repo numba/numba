@@ -1,5 +1,6 @@
 import collections
 import warnings
+from functools import cached_property
 
 from llvmlite import ir
 
@@ -57,6 +58,9 @@ class UnicodeCharSeq(Type):
             # on.
             return Conversion.safe
 
+    def __repr__(self):
+        return f"UnicodeCharSeq({self.count})"
+
 
 _RecordField = collections.namedtuple(
     '_RecordField',
@@ -94,7 +98,10 @@ class Record(Type):
             if not isinstance(ty, (Number, NestedArray)):
                 msg = "Only Number and NestedArray types are supported, found: {}. "
                 raise TypeError(msg.format(ty))
-            datatype = ctx.get_data_type(ty)
+            if isinstance(ty, NestedArray):
+                datatype = ctx.data_model_manager[ty].as_storage_type()
+            else:
+                datatype = ctx.get_data_type(ty)
             lltypes.append(datatype)
             size = ctx.get_abi_sizeof(datatype)
             align = ctx.get_abi_alignment(datatype)
@@ -130,6 +137,8 @@ class Record(Type):
         desc = ','.join(descbuf)
         name = 'Record({};{};{})'.format(desc, self.size, self.aligned)
         super(Record, self).__init__(name)
+
+        self.bitwidth = self.dtype.itemsize * 8
 
     @classmethod
     def _normalize_fields(cls, fields):
@@ -229,6 +238,18 @@ class Record(Type):
                           category=NumbaExperimentalFeatureWarning)
             return Conversion.safe
 
+    def __repr__(self):
+        fields = [f"('{f_name}', " +
+                  f"{{'type': {repr(f_info.type)}, " +
+                  f"'offset': {f_info.offset}, " +
+                  f"'alignment': {f_info.alignment}, " +
+                  f"'title': {f_info.title}, " +
+                  f"}}" +
+                  ")"
+                  for f_name, f_info in self.fields.items()
+                  ]
+        fields = "[" + ", ".join(fields) + "]"
+        return f"Record({fields}, {self.size}, {self.aligned})"
 
 class DType(DTypeSpec, Opaque):
     """
@@ -346,7 +367,7 @@ class NumpyNdIterType(IteratorType):
         else:
             return views[0]
 
-    @utils.cached_property
+    @cached_property
     def indexers(self):
         """
         A list of (kind, start_dim, end_dim, indices) where:
@@ -377,7 +398,7 @@ class NumpyNdIterType(IteratorType):
             d.setdefault(indexer, []).append(i)
         return list(k + (v,) for k, v in d.items())
 
-    @utils.cached_property
+    @cached_property
     def need_shaped_indexing(self):
         """
         Whether iterating on this iterator requires keeping track of
@@ -427,6 +448,9 @@ class Array(Buffer):
         if (not aligned or
             (isinstance(dtype, Record) and not dtype.aligned)):
             self.aligned = False
+        if isinstance(dtype, NestedArray):
+            ndim += dtype.ndim
+            dtype = dtype.dtype
         if name is None:
             type_name = "array"
             if not self.mutable:
@@ -496,6 +520,11 @@ class Array(Buffer):
         """
         return np.ndarray
 
+    def __repr__(self):
+        return (
+            f"Array({repr(self.dtype)}, {self.ndim}, '{self.layout}', "
+            f"{not self.mutable}, aligned={self.aligned})"
+                )
 
 class ArrayCTypes(Type):
     """
@@ -553,6 +582,10 @@ class NestedArray(Array):
     """
 
     def __init__(self, dtype, shape):
+        if isinstance(dtype, NestedArray):
+            tmp = Array(dtype.dtype, dtype.ndim, 'C')
+            shape += dtype.shape
+            dtype = tmp.dtype
         assert dtype.bitwidth % 8 == 0, \
             "Dtype bitwidth must be a multiple of bytes"
         self._shape = shape
@@ -587,3 +620,30 @@ class NestedArray(Array):
     @property
     def key(self):
         return self.dtype, self.shape
+
+    def __repr__(self):
+        return f"NestedArray({repr(self.dtype)}, {self.shape})"
+
+
+class NumPyRandomBitGeneratorType(Type):
+    def __init__(self, *args, **kwargs):
+        super(NumPyRandomBitGeneratorType, self).__init__(*args, **kwargs)
+        self.name = 'NumPyRandomBitGeneratorType'
+
+
+class NumPyRandomGeneratorType(Type):
+    def __init__(self, *args, **kwargs):
+        super(NumPyRandomGeneratorType, self).__init__(*args, **kwargs)
+        self.name = 'NumPyRandomGeneratorType'
+
+
+class PolynomialType(Type):
+    def __init__(self, coef, domain=None, window=None, n_args=1):
+        super(PolynomialType, self).__init__(name=f'PolynomialType({coef}, {domain}, {domain}, {n_args})')
+        self.coef = coef
+        self.domain = domain
+        self.window = window
+        # We use n_args to keep track of the number of arguments in the
+        # constructor, since the types of domain and window arguments depend on
+        # that and we need that information when boxing
+        self.n_args = n_args

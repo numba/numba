@@ -10,15 +10,14 @@
 # ------------------------------------------------------------------------------
 # Information for github
 # ------------------------------------------------------------------------------
-# These people are the default "owners" for everything in the repo unless a
-# later match is made, they will automatically be requested to review PRs.
-* @sklam @stuartarchibald @esc
-
 # Owners of specific parts of the code, will be requested to review if a PR
 # touches code in the matched pattern
 /numba/cuda/ @gmarkall
 /numba/parfors/ @DrTodd13
 /numba/stencils/ @DrTodd13
+/numba/core/byteflow.py @sklam
+/numba/core/typeinfer.py @sklam
+/numba/core/interpreter.py @sklam
 
 # ------------------------------------------------------------------------------
 # Information for contributors

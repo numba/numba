@@ -48,7 +48,7 @@ The accommodation of ``PYTHONHASHSEED``
 ---------------------------------------
 
 The ``PYTHONHASHSEED`` environment variable can be used to seed the CPython
-hashing algorithms for e.g. the purposes of reproduciblity. The Numba hashing
+hashing algorithms for e.g. the purposes of reproducibility. The Numba hashing
 implementation directly reads the CPython hashing algorithms' internal state and
 as a result the influence of ``PYTHONHASHSEED`` is replicated in Numba's
 hashing implementations.

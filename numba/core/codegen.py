@@ -6,13 +6,12 @@ import ctypes
 import html
 import textwrap
 
-import llvmlite.llvmpy.core as lc
-import llvmlite.llvmpy.passes as lp
 import llvmlite.binding as ll
 import llvmlite.ir as llvmir
 
 from abc import abstractmethod, ABCMeta
 from numba.core import utils, config, cgutils
+from numba.core.llvm_bindings import create_pass_manager_builder
 from numba.core.runtime.nrtopt import remove_redundant_nrt_refct
 from numba.core.runtime import rtsys
 from numba.core.compiler_lock import require_global_compiler_lock
@@ -203,7 +202,7 @@ class _CFG(object):
             # when trying to render to pdf
             cmax = 200
             if len(fname) > cmax:
-                wstr = (f'CFG output filname "{fname}" exceeds maximum '
+                wstr = (f'CFG output filename "{fname}" exceeds maximum '
                         f'supported length, it will be truncated.')
                 warnings.warn(wstr, NumbaInvalidConfigWarning)
                 fname = fname[:cmax]
@@ -235,7 +234,7 @@ class _CFG(object):
         nrt_meminfo = re.compile("@NRT_MemInfo")
         ll_intrin_calls = re.compile(r".*call.*@llvm\..*")
         ll_function_call = re.compile(r".*call.*@.*")
-        ll_raise = re.compile(r"ret i32.*\!ret_is_raise.*")
+        ll_raise = re.compile(r"store .*\!numba_exception_output.*")
         ll_return = re.compile("ret i32 [^1],?.*")
 
         # wrapper function for line wrapping LLVM lines
@@ -669,18 +668,26 @@ class CPUCodeLibrary(CodeLibrary):
         """
         Internal: optimize this library's final module.
         """
+
+        mpm_cheap = self._codegen._module_pass_manager(loop_vectorize=self._codegen._loopvect,
+                                   slp_vectorize=False,
+                                   opt=self._codegen._opt_level,
+                                   cost="cheap")
+
+        mpm_full = self._codegen._module_pass_manager()
+
         cheap_name = "Module passes (cheap optimization for refprune)"
         with self._recorded_timings.record(cheap_name):
             # A cheaper optimisation pass is run first to try and get as many
             # refops into the same function as possible via inlining
-            self._codegen._mpm_cheap.run(self._final_module)
+            mpm_cheap.run(self._final_module)
         # Refop pruning is then run on the heavily inlined function
         if not config.LLVM_REFPRUNE_PASS:
             self._final_module = remove_redundant_nrt_refct(self._final_module)
         full_name = "Module passes (full optimization)"
         with self._recorded_timings.record(full_name):
             # The full optimisation suite is then run on the refop pruned IR
-            self._codegen._mpm_full.run(self._final_module)
+            mpm_full.run(self._final_module)
 
     def _get_module_for_linking(self):
         """
@@ -1179,7 +1186,8 @@ class CPUCodegen(Codegen):
         self._tm_features = self._customize_tm_features()
         self._customize_tm_options(tm_options)
         tm = target.create_target_machine(**tm_options)
-        engine = ll.create_mcjit_compiler(llvm_module, tm)
+        use_lmm = config.USE_LLVMLITE_MEMORY_MANAGER
+        engine = ll.create_mcjit_compiler(llvm_module, tm, use_lmm=use_lmm)
 
         if config.ENABLE_PROFILING:
             engine.enable_jit_events()
@@ -1188,11 +1196,24 @@ class CPUCodegen(Codegen):
         self._engine = JitEngine(engine)
         self._target_data = engine.target_data
         self._data_layout = str(self._target_data)
-        self._mpm_cheap = self._module_pass_manager(loop_vectorize=False,
-                                                    slp_vectorize=False,
-                                                    opt=0,
-                                                    cost="cheap")
-        self._mpm_full = self._module_pass_manager()
+
+        if config.OPT.is_opt_max:
+            # If the OPT level is set to 'max' then the user is requesting that
+            # compilation time is traded for potential performance gain. This
+            # currently manifests as running the "cheap" pass at -O3
+            # optimisation level with loop-vectorization enabled. There's no
+            # guarantee that this will increase runtime performance, it may
+            # detriment it, this is here to give the user an easily accessible
+            # option to try.
+            self._loopvect = True
+            self._opt_level = 3
+        else:
+            # The default behaviour is to do an opt=0 pass to try and inline as
+            # much as possible with the cheapest cost of doing so. This is so
+            # that the ref-op pruner pass that runs after the cheap pass will
+            # have the largest possible scope for working on pruning references.
+            self._loopvect = False
+            self._opt_level = 0
 
         self._engine.set_object_cache(self._library_class._object_compiled_hook,
                                       self._library_class._object_getbuffer_hook)
@@ -1206,6 +1227,7 @@ class CPUCodegen(Codegen):
 
     def _module_pass_manager(self, **kwargs):
         pm = ll.create_module_pass_manager()
+        pm.add_target_library_info(ll.get_process_triple())
         self._tm.add_analysis_passes(pm)
         cost = kwargs.pop("cost", None)
         with self._pass_manager_builder(**kwargs) as pmb:
@@ -1216,20 +1238,17 @@ class CPUCodegen(Codegen):
             # This knocks loops into rotated form early to reduce the likelihood
             # of vectorization failing due to unknown PHI nodes.
             pm.add_loop_rotate_pass()
-            # LLVM 11 added LFTR to the IV Simplification pass, this interacted
-            # badly with the existing use of the InstructionCombiner here and
-            # ended up with PHI nodes that prevented vectorization from
-            # working. The desired vectorization effects can be achieved
-            # with this in LLVM 11 (and also < 11) but at a potentially
-            # slightly higher cost:
-            pm.add_licm_pass()
-            pm.add_cfg_simplification_pass()
+            # These passes are required to get SVML to vectorize tests
+            pm.add_instruction_combining_pass()
+            pm.add_jump_threading_pass()
+
         if config.LLVM_REFPRUNE_PASS:
             pm.add_refprune_pass(_parse_refprune_flags())
         return pm
 
     def _function_pass_manager(self, llvm_module, **kwargs):
         pm = ll.create_function_pass_manager(llvm_module)
+        pm.add_target_library_info(llvm_module.triple)
         self._tm.add_analysis_passes(pm)
         with self._pass_manager_builder(**kwargs) as pmb:
             pmb.populate(pm)
@@ -1250,10 +1269,10 @@ class CPUCodegen(Codegen):
         loop_vectorize = kwargs.pop('loop_vectorize', config.LOOP_VECTORIZE)
         slp_vectorize = kwargs.pop('slp_vectorize', config.SLP_VECTORIZE)
 
-        pmb = lp.create_pass_manager_builder(opt=opt_level,
-                                             loop_vectorize=loop_vectorize,
-                                             slp_vectorize=slp_vectorize,
-                                             **kwargs)
+        pmb = create_pass_manager_builder(opt=opt_level,
+                                          loop_vectorize=loop_vectorize,
+                                          slp_vectorize=slp_vectorize,
+                                          **kwargs)
 
         return pmb
 
@@ -1282,7 +1301,7 @@ class CPUCodegen(Codegen):
             raise RuntimeError(
                 "LLVM will produce incorrect floating-point code "
                 "in the current locale %s.\nPlease read "
-                "https://numba.pydata.org/numba-doc/latest/user/faq.html#llvm-locale-bug "
+                "https://numba.readthedocs.io/en/stable/user/faq.html#llvm-locale-bug "
                 "for more information."
                 % (loc,))
         raise AssertionError("Unexpected IR:\n%s\n" % (ir_out,))

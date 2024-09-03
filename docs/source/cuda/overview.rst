@@ -37,24 +37,41 @@ Requirements
 Supported GPUs
 --------------
 
-Numba supports CUDA-enabled GPU with compute capability 3.0 or above with an
-up-to-data Nvidia driver.
+Numba supports CUDA-enabled GPUs with Compute Capability 3.5 or greater.
+Support for devices with Compute Capability less than 5.0 is deprecated, and
+will be removed in a future Numba release.
+
+Devices with Compute Capability 5.0 or greater include (but are not limited to):
+
+- Embedded platforms: NVIDIA Jetson Nano, Jetson Orin Nano, TX1, TX2, Xavier
+  NX, AGX Xavier, AGX Orin.
+- Desktop / Server GPUs: All GPUs with Maxwell microarchitecture or later. E.g.
+  GTX 9 / 10 / 16 series, RTX 20 / 30 / 40 series, Quadro / Tesla M / P / V /
+  RTX series, RTX A series, RTX Ada / SFF, A / L series, H100.
+- Laptop GPUs: All GPUs with Maxwell microarchitecture or later. E.g. MX series,
+  Quadro M / P / T series (mobile), RTX 20 / 30 series (mobile), RTX A series
+  (mobile).
 
 Software
 --------
 
-Numba aims to support CUDA Toolkit versions released within the last 3 years. At
-the present time, you will need the CUDA toolkit version 9.2 or later installed.
+Numba aims to support CUDA Toolkit versions released within the last 3 years.
+Presently 11.2 is the minimum required toolkit version. An NVIDIA driver
+sufficient for the toolkit version is also required (see also
+:ref:`minor-version-compatibility`).
 
-CUDA is supported on 64-bit Linux and Windows. 32-bit platforms, and macOS are
-unsupported.
+Conda users can install the CUDA Toolkit into a conda environment.
 
-If you are using Conda, you can install the CUDA toolkit with::
+For CUDA 12, ``cuda-nvcc`` and ``cuda-nvrtc`` are required::
 
-   $ conda install cudatoolkit
+    $ conda install -c conda-forge cuda-nvcc cuda-nvrtc "cuda-version>=12.0"
+
+For CUDA 11, ``cudatoolkit`` is required::
+
+    $ conda install -c conda-forge cudatoolkit "cuda-version>=11.2,<12.0"
 
 If you are not using Conda or if you want to use a different version of CUDA
-toolkit, the following describe how Numba searches for a CUDA toolkit
+toolkit, the following describes how Numba searches for a CUDA toolkit
 installation.
 
 .. _cuda-bindings:
@@ -64,12 +81,14 @@ CUDA Bindings
 
 Numba supports interacting with the CUDA Driver API via the `NVIDIA CUDA Python
 bindings <https://nvidia.github.io/cuda-python/>`_ and its own ctypes-based
-binding. The ctypes-based binding is presently the default as Per-Thread
-Default Streams and the profiler APIs are not supported with the NVIDIA
-bindings, but otherwise functionality is equivalent between the two. You can
-install the NVIDIA bindings with::
+bindings. Functionality is equivalent between the two bindings. The
+ctypes-based bindings are presently the default, but the NVIDIA bindings will
+be used by default (if they are available in the environment) in a future Numba
+release.
 
-   $ conda install nvidia::cuda-python
+You can install the NVIDIA bindings with::
+
+   $ conda install -c conda-forge cuda-python
 
 if you are using Conda, or::
 
@@ -87,23 +106,21 @@ Setting CUDA Installation Path
 
 Numba searches for a CUDA toolkit installation in the following order:
 
-1. Conda installed `cudatoolkit` package.
+1. Conda installed CUDA Toolkit packages
 2. Environment variable ``CUDA_HOME``, which points to the directory of the
-   installed CUDA toolkit (i.e. ``/home/user/cuda-10``)
+   installed CUDA toolkit (i.e. ``/home/user/cuda-12``)
 3. System-wide installation at exactly ``/usr/local/cuda`` on Linux platforms.
-   Versioned installation paths (i.e. ``/usr/local/cuda-10.0``) are intentionally
+   Versioned installation paths (i.e. ``/usr/local/cuda-12.0``) are intentionally
    ignored.  Users can use ``CUDA_HOME`` to select specific versions.
 
 In addition to the CUDA toolkit libraries, which can be installed by conda into
 an environment or installed system-wide by the `CUDA SDK installer
-<(https://developer.nvidia.com/cuda-downloads)>`_, the CUDA target in Numba
+<https://developer.nvidia.com/cuda-downloads>`_, the CUDA target in Numba
 also requires an up-to-date NVIDIA graphics driver.  Updated graphics drivers
 are also installed by the CUDA SDK installer, so there is no need to do both.
-Note that on macOS, the CUDA SDK must be installed to get the required driver,
-and the driver is only supported on macOS prior to 10.14 (Mojave).  If the
-``libcuda`` library is in a non-standard location, users can set environment
-variable ``NUMBA_CUDA_DRIVER`` to the file path (not the directory path) of the
-shared library file.
+If the ``libcuda`` library is in a non-standard location, users can set
+environment variable ``NUMBA_CUDA_DRIVER`` to the file path (not the directory
+path) of the shared library file.
 
 
 Missing CUDA Features

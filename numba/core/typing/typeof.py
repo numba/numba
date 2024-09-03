@@ -4,9 +4,11 @@ import ctypes
 import enum
 
 import numpy as np
+from numpy.random.bit_generator import BitGenerator
 
-from numba.core import types, utils, errors
+from numba.core import types, utils, errors, config
 from numba.np import numpy_support
+
 
 # terminal color markup
 _termcolor = errors.termcolor()
@@ -45,6 +47,10 @@ def typeof_impl(val, c):
     if tp is not None:
         return tp
 
+    tp = getattr(val, "_numba_type_", None)
+    if tp is not None:
+        return tp
+
     # cffi is handled here as it does not expose a public base class
     # for exported functions or CompiledFFI instances.
     from numba.core.typing import cffi_utils
@@ -54,7 +60,7 @@ def typeof_impl(val, c):
         if cffi_utils.is_ffi_instance(val):
             return types.ffi
 
-    return getattr(val, "_numba_type_", None)
+    return None
 
 
 def _typeof_buffer(val, c):
@@ -106,34 +112,50 @@ def _typeof_type(val, c):
         return types.TypeRef(types.ListType)
 
 
-@typeof_impl.register(bool)
-def _typeof_bool(val, c):
-    return types.boolean
+if config.USE_LEGACY_TYPE_SYSTEM:
+    @typeof_impl.register(bool)
+    def _typeof_bool(val, c):
+        return types.boolean
 
+    @typeof_impl.register(float)
+    def _typeof_float(val, c):
+        return types.float64
 
-@typeof_impl.register(float)
-def _typeof_float(val, c):
-    return types.float64
+    @typeof_impl.register(complex)
+    def _typeof_complex(val, c):
+        return types.complex128
 
+    @typeof_impl.register(int)
+    def _typeof_int(val, c):
+        # As in _typeof.c
+        nbits = utils.bit_length(val)
+        if nbits < 32:
+            typ = types.intp
+        elif nbits < 64:
+            typ = types.int64
+        elif nbits == 64 and val >= 0:
+            typ = types.uint64
+        else:
+            raise ValueError("Int value is too large: %s" % val)
+        return typ
+else:
+    @typeof_impl.register(bool)
+    def _typeof_bool(val, c):
+        return types.py_bool
 
-@typeof_impl.register(complex)
-def _typeof_complex(val, c):
-    return types.complex128
+    @typeof_impl.register(float)
+    def _typeof_float(val, c):
+        return types.py_float
 
+    @typeof_impl.register(complex)
+    def _typeof_complex(val, c):
+        return types.py_complex
 
-@typeof_impl.register(int)
-def _typeof_int(val, c):
-    # As in _typeof.c
-    nbits = utils.bit_length(val)
-    if nbits < 32:
-        typ = types.intp
-    elif nbits < 64:
-        typ = types.int64
-    elif nbits == 64 and val >= 0:
-        typ = types.uint64
-    else:
-        raise ValueError("Int value is too large: %s" % val)
-    return typ
+    @typeof_impl.register(int)
+    def _typeof_int(val, c):
+        # As in _typeof.c
+        typ = types.py_int
+        return typ
 
 
 @typeof_impl.register(np.generic)
@@ -233,6 +255,9 @@ def _typeof_dtype(val, c):
 
 @typeof_impl.register(np.ndarray)
 def _typeof_ndarray(val, c):
+    if isinstance(val, np.ma.MaskedArray):
+        msg = "Unsupported array type: numpy.ma.MaskedArray."
+        raise errors.NumbaTypeError(msg)
     try:
         dtype = numpy_support.from_dtype(val.dtype)
     except errors.NumbaNotImplementedError:
@@ -265,3 +290,21 @@ def _typeof_nb_type(val, c):
         return types.NumberClass(val)
     else:
         return types.TypeRef(val)
+
+
+@typeof_impl.register(BitGenerator)
+def typeof_numpy_random_bitgen(val, c):
+    return types.NumPyRandomBitGeneratorType(val)
+
+
+@typeof_impl.register(np.random.Generator)
+def typeof_random_generator(val, c):
+    return types.NumPyRandomGeneratorType(val)
+
+
+@typeof_impl.register(np.polynomial.polynomial.Polynomial)
+def typeof_numpy_polynomial(val, c):
+    coef = typeof(val.coef)
+    domain = typeof(val.domain)
+    window = typeof(val.window)
+    return types.PolynomialType(coef, domain, window)

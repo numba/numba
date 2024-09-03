@@ -265,7 +265,7 @@ def find_top_level_loops(cfg):
 
 def _fix_loop_exit(cfg, loop):
     """
-    Fixes loop.exits for Py3.8 bytecode CFG changes.
+    Fixes loop.exits for Py3.8+ bytecode CFG changes.
     This is to handle `break` inside loops.
     """
     # Computes the common postdoms of exit nodes
@@ -309,7 +309,7 @@ def dead_branch_prune(func_ir, called_args):
             if isinstance(branch_or_jump, ir.Branch):
                 branch = branch_or_jump
                 pred = guard(get_definition, func_ir, branch.cond.name)
-                if pred is not None and pred.op == "call":
+                if pred is not None and getattr(pred, "op", None) == "call":
                     function = guard(get_definition, func_ir, pred.func)
                     if (function is not None and
                         isinstance(function, ir.Global) and
@@ -447,7 +447,7 @@ def dead_branch_prune(func_ir, called_args):
             if len(const_conds) == 2:
                 # prune the branch, switch the branch for an unconditional jump
                 prune_stat, taken = prune(branch, condition, blk, *const_conds)
-                if(prune_stat):
+                if (prune_stat):
                     # add the condition to the list of nullified conditions
                     nullified_conditions.append(nullified(condition, taken,
                                                           True))
@@ -464,7 +464,7 @@ def dead_branch_prune(func_ir, called_args):
 
             if not isinstance(resolved_const, Unknown):
                 prune_stat, taken = prune_by_predicate(branch, condition, blk)
-                if(prune_stat):
+                if (prune_stat):
                     # add the condition to the list of nullified conditions
                     nullified_conditions.append(nullified(condition, taken,
                                                           False))
@@ -627,6 +627,11 @@ def rewrite_semantic_constants(func_ir, called_args):
                     argty = called_args[arg_def.index]
                     if isinstance(argty, types.BaseTuple):
                         rewrite_statement(func_ir, stmt, argty.count)
+                elif (isinstance(arg_def, ir.Expr) and
+                      arg_def.op == 'typed_getitem'):
+                    argty = arg_def.dtype
+                    if isinstance(argty, types.BaseTuple):
+                        rewrite_statement(func_ir, stmt, argty.count)
 
     from numba.core.ir_utils import get_definition, guard
     for blk in func_ir.blocks.values():
@@ -689,3 +694,29 @@ def find_literally_calls(func_ir, argtypes):
         if not isinstance(query_arg, (types.Literal, types.InitialValue)):
             loc = first_loc[pos]
             raise errors.ForceLiteralArg(marked_args, loc=loc)
+
+
+ir_extension_use_alloca = {}
+
+
+def must_use_alloca(blocks):
+    """
+    Analyzes a dictionary of blocks to find variables that must be
+    stack allocated with alloca.  For each statement in the blocks,
+    determine if that statement requires certain variables to be
+    stack allocated.  This function uses the extension point
+    ir_extension_use_alloca to allow other IR node types like parfors
+    to register to be processed by this analysis function.  At the
+    moment, parfors are the only IR node types that may require
+    something to be stack allocated.
+    """
+    use_alloca_vars = set()
+
+    for ir_block in blocks.values():
+        for stmt in ir_block.body:
+            if type(stmt) in ir_extension_use_alloca:
+                func = ir_extension_use_alloca[type(stmt)]
+                func(stmt, use_alloca_vars)
+                continue
+
+    return use_alloca_vars

@@ -24,9 +24,8 @@ pipelines. For convenience these three pipelines are defined in
 respectively.
 
 To use a custom subclass of ``CompilerBase``, supply it as the
-``pipeline_class`` keyword argument to the ``@jit`` and ``@generated_jit``
-decorators.  By doing so, the effect of the custom pipeline is limited to the
-function being decorated.
+``pipeline_class`` keyword argument to the ``@jit`` decorator.  By doing so, the
+effect of the custom pipeline is limited to the function being decorated.
 
 Implementing a compiler pass
 ----------------------------

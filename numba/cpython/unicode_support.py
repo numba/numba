@@ -6,10 +6,11 @@ same name in CPython.
 """
 from collections import namedtuple
 from enum import IntEnum
-import numpy as np
-import llvmlite.llvmpy.core as lc
 
-from numba.core import types, cgutils
+import llvmlite.ir
+import numpy as np
+
+from numba.core import types, cgutils, config
 from numba.core.imputils import (impl_ret_untracked)
 
 from numba.core.extending import overload, intrinsic, register_jitable
@@ -22,7 +23,10 @@ typerecord = namedtuple('typerecord',
 
 # The Py_UCS4 type from CPython:
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/unicodeobject.h#L112    # noqa: E501
-_Py_UCS4 = types.uint32
+if config.USE_LEGACY_TYPE_SYSTEM:
+    _Py_UCS4 = types.uint32
+else:
+    _Py_UCS4 = types.c_uint32
 
 # ------------------------------------------------------------------------------
 # Start code related to/from CPython's unicodectype impl
@@ -95,7 +99,7 @@ def _gettyperecord_impl(typingctx, codepoint):
         ll_uchar_ptr = ll_uchar.as_pointer()
         ll_ushort = context.get_value_type(types.ushort)
         ll_ushort_ptr = ll_ushort.as_pointer()
-        fnty = lc.Type.function(ll_void, [
+        fnty = llvmlite.ir.FunctionType(ll_void, [
             ll_Py_UCS4,    # code
             ll_intc_ptr,   # upper
             ll_intc_ptr,   # lower
@@ -164,7 +168,7 @@ def _PyUnicode_ExtendedCase(typingctx, index):
     def details(context, builder, signature, args):
         ll_Py_UCS4 = context.get_value_type(_Py_UCS4)
         ll_intc = context.get_value_type(types.intc)
-        fnty = lc.Type.function(ll_Py_UCS4, [ll_intc])
+        fnty = llvmlite.ir.FunctionType(ll_Py_UCS4, [ll_intc])
         fn = cgutils.get_or_insert_function(
             builder.module,
             fnty, name="numba_get_PyUnicode_ExtendedCase")

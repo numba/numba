@@ -17,6 +17,7 @@ from collections import defaultdict
 
 from numba import config
 from numba.core import ir, ir_utils, errors
+from numba.core.utils import OrderedSet
 from numba.core.analysis import compute_cfg_from_blocks
 
 
@@ -54,7 +55,7 @@ def _run_ssa(blocks):
     cfg = compute_cfg_from_blocks(blocks)
     df_plus = _iterated_domfronts(cfg)
     # Find SSA violators
-    violators = _find_defs_violators(blocks)
+    violators = _find_defs_violators(blocks, cfg)
     # Make cache for .list_vars()
     cache_list_vars = _CacheListVars()
 
@@ -142,7 +143,7 @@ def _get_scope(blocks):
     return first.scope
 
 
-def _find_defs_violators(blocks):
+def _find_defs_violators(blocks, cfg):
     """
     Returns
     -------
@@ -150,9 +151,24 @@ def _find_defs_violators(blocks):
         The SSA violators in a dictionary of variable names.
     """
     defs = defaultdict(list)
-    _run_block_analysis(blocks, defs, _GatherDefsHandler())
+    uses = defaultdict(set)
+    states = dict(defs=defs, uses=uses)
+    _run_block_analysis(blocks, states, _GatherDefsHandler())
     _logger.debug("defs %s", pformat(defs))
-    violators = {k for k, vs in defs.items() if len(vs) > 1}
+    # Gather violators by number of definitions.
+    # The violators are added by the order that they are seen and the algorithm
+    # scan from the first to the last basic-block as they occur in bytecode.
+    violators = OrderedSet([k for k, vs in defs.items() if len(vs) > 1])
+    # Gather violators by uses not dominated by the one def
+    doms = cfg.dominators()
+    for k, use_blocks in uses.items():
+        if k not in violators:
+            for label in use_blocks:
+                dom = doms[label]
+                def_labels = {label for _assign, label in defs[k] }
+                if not def_labels.intersection(dom):
+                    violators.add(k)
+                    break
     _logger.debug("SSA violators %s", pformat(violators))
     return violators
 
@@ -160,6 +176,7 @@ def _find_defs_violators(blocks):
 def _run_block_analysis(blocks, states, handler):
     for label, blk in blocks.items():
         _logger.debug("==== SSA block analysis pass on %s", label)
+        states['label'] = label
         for _ in _run_ssa_block_pass(states, blk, handler):
             pass
 
@@ -241,12 +258,28 @@ class _BaseHandler:
 
 
 class _GatherDefsHandler(_BaseHandler):
-    """Find all defs
+    """Find all defs and uses of variable in each block
 
-    ``states`` is a Mapping[str, List[ir.Assign]]
+    ``states["label"]`` is a int; label of the current block
+    ``states["defs"]`` is a Mapping[str, List[Tuple[ir.Assign, int]]]:
+        - a mapping of the name of the assignee variable to the assignment
+          IR node and the block label.
+    ``states["uses"]`` is a Mapping[Set[int]]
     """
     def on_assign(self, states, assign):
-        states[assign.target.name].append(assign)
+        # keep track of assignment and the block
+        states["defs"][assign.target.name].append((assign, states["label"]))
+        # keep track of uses
+        for var in assign.list_vars():
+            k = var.name
+            if k != assign.target.name:
+                states["uses"][k].add(states["label"])
+
+    def on_other(self, states, stmt):
+        # keep track of uses
+        for var in stmt.list_vars():
+            k = var.name
+            states["uses"][k].add(states["label"])
 
 
 class UndefinedVariable:

@@ -53,6 +53,11 @@ class TypeVar(object):
 
     def add_type(self, tp, loc):
         assert isinstance(tp, types.Type), type(tp)
+        # Special case for _undef_var.
+        # If the typevar is the _undef_var, use the incoming type directly.
+        if self.type is types._undef_var:
+            self.type = tp
+            return self.type
 
         if self.locked:
             if tp != self.type:
@@ -606,14 +611,14 @@ class CallConstraint(object):
                             else self.args)
             folded = e.fold_arguments(folding_args, self.kws)
             requested = set()
-            unsatisified = set()
+            unsatisfied = set()
             for idx in e.requested_args:
                 maybe_arg = typeinfer.func_ir.get_definition(folded[idx])
                 if isinstance(maybe_arg, ir.Arg):
                     requested.add(maybe_arg.index)
                 else:
-                    unsatisified.add(idx)
-            if unsatisified:
+                    unsatisfied.add(idx)
+            if unsatisfied:
                 raise TypingError("Cannot request literal type.", loc=self.loc)
             elif requested:
                 raise ForceLiteralArg(requested, loc=self.loc)
@@ -1155,7 +1160,7 @@ precise type that can be inferred from the other variables. Whilst sometimes
 the type of empty lists can be inferred, this is not always the case, see this
 documentation for help:
 
-https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-untyped-list-problem
+https://numba.readthedocs.io/en/stable/user/troubleshoot.html#my-code-has-an-untyped-list-problem
 """
             if offender is not None:
                 # This block deals with imprecise lists
@@ -1246,6 +1251,17 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
         if self.generator_info:
             retty = self.get_generator_type(typdict, retty,
                                             raise_errors=raise_errors)
+
+        def check_undef_var_in_calls():
+            # Check for undefined variables in the call arguments.
+            for callnode, calltype in self.calltypes.items():
+                if calltype is not None:
+                    for i, v in enumerate(calltype.args, start=1):
+                        if v is types._undef_var:
+                            m = f"undefined variable used in call argument #{i}"
+                            raise TypingError(m, loc=callnode.loc)
+
+        check_undef_var_in_calls()
 
         self.debug.unify_finished(typdict, retty, fntys)
 
@@ -1373,7 +1389,11 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
         rettypes = set()
         for var in self._get_return_vars():
             rettypes.add(typemap[var.name])
-        return self._unify_return_types(rettypes)
+        retty = self._unify_return_types(rettypes)
+        # Check return value is not undefined
+        if retty is types._undef_var:
+            raise TypingError("return value is undefined")
+        return retty
 
     def get_state_token(self):
         """The algorithm is monotonic.  It can only grow or "refine" the
@@ -1397,6 +1417,8 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
         elif isinstance(inst, ir.StoreMap):
             self.typeof_storemap(inst)
         elif isinstance(inst, (ir.Jump, ir.Branch, ir.Return, ir.Del)):
+            pass
+        elif isinstance(inst, (ir.DynamicRaise, ir.DynamicTryRaise)):
             pass
         elif isinstance(inst, (ir.StaticRaise, ir.StaticTryRaise)):
             pass
@@ -1532,13 +1554,13 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
                 sig = self.context.resolve_function_type(fnty.dispatcher_type,
                                                          pos_args, kw_args)
                 fndesc = disp.overloads[args].fndesc
-                fnty.overloads[args] = qualifying_prefix(fndesc.modname,
-                                                         fndesc.unique_name)
+                qual = qualifying_prefix(fndesc.modname, fndesc.qualname)
+                fnty.add_overloads(args, qual, fndesc.uid)
                 return sig
 
             fnid = frame.func_id
-            fnty.overloads[args] = qualifying_prefix(fnid.modname,
-                                                     fnid.unique_name)
+            qual = qualifying_prefix(fnid.modname, fnid.func_qualname)
+            fnty.add_overloads(args, qual, fnid.unique_id)
             # Resume propagation in parent frame
             return_type = frame.typeinfer.return_types_from_partial()
             # No known return type
@@ -1726,6 +1748,9 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
         elif expr.op == 'make_function':
             self.lock_type(target.name, types.MakeFunctionLiteral(expr),
                            loc=inst.loc, literal_value=expr)
+
+        elif expr.op == 'undef':
+            self.add_type(target.name, types._undef_var, loc=inst.loc)
 
         else:
             msg = "Unsupported op-code encountered: %s" % expr

@@ -8,25 +8,26 @@ import sys
 import itertools
 from collections import namedtuple
 
-from llvmlite.llvmpy import core as lc
+import llvmlite.ir as ir
 
 import numpy as np
 import operator
 
 from numba.np import arrayobj, ufunc_db, numpy_support
-from numba.core.imputils import Registry, impl_ret_new_ref, force_error_model
-from numba.core import typing, types, utils, cgutils, callconv
+from numba.np.ufunc.sigparse import parse_signature
+from numba.core.imputils import (Registry, impl_ret_new_ref, force_error_model,
+                                 impl_ret_borrowed)
+from numba.core import typing, types, utils, cgutils, callconv, config
 from numba.np.numpy_support import (
     ufunc_find_matching_loop, select_array_wrapper, from_dtype, _ufunc_loop_sig
 )
+from numba.np.arrayobj import _getitem_array_generic
 from numba.core.typing import npydecl
 from numba.core.extending import overload, intrinsic
 
 from numba.core import errors
-from numba.cpython import builtins
 
 registry = Registry('npyimpl')
-lower = registry.lower
 
 
 ########################################################################
@@ -71,9 +72,9 @@ class _ScalarHelper(object):
         self.val = val
         self.base_type = ty
         intpty = ctxt.get_value_type(types.intp)
-        self.shape = [lc.Constant.int(intpty, 1)]
+        self.shape = [ir.Constant(intpty, 1)]
 
-        lty = ctxt.get_data_type(ty) if ty != types.boolean else lc.Type.int(1)
+        lty = ctxt.get_data_type(ty) if ty != types.boolean else ir.IntType(1)
         self._ptr = cgutils.alloca_once(bld, lty)
 
     def create_iter_indices(self):
@@ -95,14 +96,14 @@ class _ArrayIndexingHelper(namedtuple('_ArrayIndexingHelper',
     def update_indices(self, loop_indices, name):
         bld = self.array.builder
         intpty = self.array.context.get_value_type(types.intp)
-        ONE = lc.Constant.int(lc.Type.int(intpty.width), 1)
+        ONE = ir.Constant(ir.IntType(intpty.width), 1)
 
         # we are only interested in as many inner dimensions as dimensions
         # the indexed array has (the outer dimensions are broadcast, so
         # ignoring the outer indices produces the desired result.
         indices = loop_indices[len(loop_indices) - len(self.indices):]
         for src, dst, dim in zip(indices, self.indices, self.array.shape):
-            cond = bld.icmp(lc.ICMP_UGT, dim, ONE)
+            cond = bld.icmp_unsigned('>', dim, ONE)
             with bld.if_then(cond):
                 bld.store(src, dst)
 
@@ -127,11 +128,11 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder',
     """
     def create_iter_indices(self):
         intpty = self.context.get_value_type(types.intp)
-        ZERO = lc.Constant.int(lc.Type.int(intpty.width), 0)
+        ZERO = ir.Constant(ir.IntType(intpty.width), 0)
 
         indices = []
         for i in range(self.ndim):
-            x = cgutils.alloca_once(self.builder, lc.Type.int(intpty.width))
+            x = cgutils.alloca_once(self.builder, ir.IntType(intpty.width))
             self.builder.store(ZERO, x)
             indices.append(x)
         return _ArrayIndexingHelper(self, indices)
@@ -156,6 +157,147 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder',
         store_value = ctx.get_value_as_data(bld, self.base_type, value)
         assert ctx.get_data_type(self.base_type) == store_value.type
         bld.store(store_value, self._load_effective_address(indices))
+
+
+class _ArrayGUHelper(namedtuple('_ArrayHelper', ('context', 'builder',
+                                                 'shape', 'strides', 'data',
+                                                 'layout', 'base_type', 'ndim',
+                                                 'inner_arr_ty', 'is_input_arg'))):
+    """Helper class to handle array arguments/result.
+    It provides methods to generate code loading/storing specific
+    items as well as support code for handling indices.
+
+    Contrary to _ArrayHelper, this class can create a view to a subarray
+    """
+    def create_iter_indices(self):
+        intpty = self.context.get_value_type(types.intp)
+        ZERO = ir.Constant(ir.IntType(intpty.width), 0)
+
+        indices = []
+        for i in range(self.ndim - self.inner_arr_ty.ndim):
+            x = cgutils.alloca_once(self.builder, ir.IntType(intpty.width))
+            self.builder.store(ZERO, x)
+            indices.append(x)
+        return _ArrayIndexingHelper(self, indices)
+
+    def _load_effective_address(self, indices):
+        context = self.context
+        builder = self.builder
+        arr_ty = types.Array(self.base_type, self.ndim, self.layout)
+        arr = context.make_array(arr_ty)(context, builder, self.data)
+
+        return cgutils.get_item_pointer2(context,
+                                         builder,
+                                         data=arr.data,
+                                         shape=self.shape,
+                                         strides=self.strides,
+                                         layout=self.layout,
+                                         inds=indices)
+
+    def load_data(self, indices):
+        context, builder = self.context, self.builder
+
+        if self.inner_arr_ty.ndim == 0 and self.is_input_arg:
+            # scalar case for input arguments
+            model = context.data_model_manager[self.base_type]
+            ptr = self._load_effective_address(indices)
+            return model.load_from_data_pointer(builder, ptr)
+        elif self.inner_arr_ty.ndim == 0 and not self.is_input_arg:
+            # Output arrays are handled as 1d with shape=(1,) when its
+            # signature represents a scalar. For instance: "(n),(m) -> ()"
+            intpty = context.get_value_type(types.intp)
+            one = intpty(1)
+
+            fromty = types.Array(self.base_type, self.ndim, self.layout)
+            toty = types.Array(self.base_type, 1, self.layout)
+            itemsize = intpty(arrayobj.get_itemsize(context, fromty))
+
+            # create a view from the original ndarray to a 1d array
+            arr_from = self.context.make_array(fromty)(context,
+                                                       builder,
+                                                       self.data)
+            arr_to = self.context.make_array(toty)(context, builder)
+            arrayobj.populate_array(
+                arr_to,
+                data=self._load_effective_address(indices),
+                shape=cgutils.pack_array(builder, [one]),
+                strides=cgutils.pack_array(builder, [itemsize]),
+                itemsize=arr_from.itemsize,
+                meminfo=arr_from.meminfo,
+                parent=arr_from.parent)
+            return arr_to._getvalue()
+        else:
+            # generic case
+            # getitem n-dim array -> m-dim array, where N > M
+            index_types = (types.int64,) * (self.ndim - self.inner_arr_ty.ndim)
+            arrty = types.Array(self.base_type, self.ndim, self.layout)
+            arr = self.context.make_array(arrty)(context, builder, self.data)
+            res = _getitem_array_generic(context, builder,
+                                         self.inner_arr_ty, arrty, arr,
+                                         index_types, indices)
+            return impl_ret_borrowed(context, builder, self.inner_arr_ty, res)
+
+    def guard_shape(self, loopshape):
+        inner_ndim = self.inner_arr_ty.ndim
+        def raise_impl(loop_shape, array_shape):
+            # This would in fact be a test for broadcasting.
+            # Broadcast would fail if, ignoring the core dimensions, the
+            # remaining ones are different than indices given by loop shape.
+
+            remaining = len(array_shape) - inner_ndim
+            _raise = (remaining > len(loop_shape))
+            if not _raise:
+                for i in range(remaining):
+                    _raise |= (array_shape[i] != loop_shape[i])
+            if _raise:
+                # Ideally we should call `np.broadcast_shapes` with loop and
+                # array shapes. But since broadcasting is not supported here,
+                # we just raise an error
+                # TODO: check why raising a dynamic exception here fails
+                raise ValueError('Loop and array shapes are incompatible')
+
+        context, builder = self.context, self.builder
+        sig = types.none(
+            types.UniTuple(types.intp, len(loopshape)),
+            types.UniTuple(types.intp, len(self.shape)),
+        )
+        tup = (context.make_tuple(builder, sig.args[0], loopshape),
+               context.make_tuple(builder, sig.args[1], self.shape))
+        context.compile_internal(builder, raise_impl, sig, tup)
+
+    def guard_match_core_dims(self, other: '_ArrayGUHelper', ndims: int):
+        # arguments with the same signature should match their core dimensions
+        #
+        # @guvectorize('(n,m), (n,m) -> (n)')
+        # def foo(x, y, res):
+        #     ...
+        #
+        # x and y should have the same core (2D) dimensions
+        def raise_impl(self_shape, other_shape):
+            same = True
+            a, b = len(self_shape) - ndims, len(other_shape) - ndims
+            for i in range(ndims):
+                same &= self_shape[a + i] == other_shape[b + i]
+            if not same:
+                # NumPy raises the following:
+                # ValueError: gufunc: Input operand 1 has a mismatch in its
+                # core dimension 0, with gufunc signature (n),(n) -> ()
+                # (size 3 is different from 2)
+                # But since we cannot raise a dynamic exception here, we just
+                # (try) something meaninful
+                msg = ('Operand has a mismatch in one of its core dimensions. '
+                       'Please, check if all arguments to a @guvectorize '
+                       'function have the same core dimensions.')
+                raise ValueError(msg)
+
+        context, builder = self.context, self.builder
+        sig = types.none(
+            types.UniTuple(types.intp, len(self.shape)),
+            types.UniTuple(types.intp, len(other.shape)),
+        )
+        tup = (context.make_tuple(builder, sig.args[0], self.shape),
+               context.make_tuple(builder, sig.args[1], other.shape),)
+        context.compile_internal(builder, raise_impl, sig, tup)
 
 
 def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
@@ -185,8 +327,13 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
                                   str(tyinp)))
 
 
-_broadcast_onto_sig = types.intp(types.intp, types.CPointer(types.intp),
-                                 types.intp, types.CPointer(types.intp))
+if config.USE_LEGACY_TYPE_SYSTEM:
+    _broadcast_onto_sig = types.intp(types.intp, types.CPointer(types.intp),
+                                    types.intp, types.CPointer(types.intp))
+else:
+    _broadcast_onto_sig = types.np_intp(types.np_intp, types.CPointer(types.np_intp),
+                                    types.np_intp, types.CPointer(types.np_intp))
+
 def _broadcast_onto(src_ndim, src_shape, dest_ndim, dest_shape):
     '''Low-level utility function used in calculating a shape for
     an implicit output array.  This function assumes that the
@@ -269,7 +416,7 @@ def _build_array(context, builder, array_ty, input_types, inputs):
             builder, _broadcast_onto, _broadcast_onto_sig,
             [arg_ndim, src_shape, dest_ndim, dest_shape])
         with cgutils.if_unlikely(builder,
-                                 builder.icmp(lc.ICMP_SLT, arg_result, ONE)):
+                                 builder.icmp_signed('<', arg_result, ONE)):
             msg = "unable to broadcast argument %d to output array" % (
                 arg_number,)
 
@@ -361,7 +508,7 @@ def numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
             else:
                 output = _prepare_argument(
                     context, builder,
-                    lc.Constant.null(context.get_value_type(ret_ty)), ret_ty)
+                    ir.Constant(context.get_value_type(ret_ty), None), ret_ty)
             arguments.append(output)
         elif context.enable_nrt:
             # Incref the output
@@ -383,7 +530,23 @@ def numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
     # assume outputs are all the same size, which numpy requires
 
     loopshape = outputs[0].shape
-    with cgutils.loop_nest(builder, loopshape, intp=intpty) as loop_indices:
+
+    # count the number of C and F layout arrays, respectively
+    input_layouts = [inp.layout for inp in inputs
+                     if isinstance(inp, _ArrayHelper)]
+    num_c_layout = len([x for x in input_layouts if x == 'C'])
+    num_f_layout = len([x for x in input_layouts if x == 'F'])
+
+    # Only choose F iteration order if more arrays are in F layout.
+    # Default to C order otherwise.
+    # This is a best effort for performance. NumPy has more fancy logic that
+    # uses array iterators in non-trivial cases.
+    if num_f_layout > num_c_layout:
+        order = 'F'
+    else:
+        order = 'C'
+
+    with cgutils.loop_nest(builder, loopshape, intp=intpty, order=order) as loop_indices:
         vals_in = []
         for i, (index, arg) in enumerate(zip(indices, inputs)):
             index.update_indices(loop_indices, i)
@@ -395,6 +558,82 @@ def numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
 
     out = _pack_output_values(ufunc, context, builder, sig.return_type, [o.return_val for o in outputs])
     return impl_ret_new_ref(context, builder, sig.return_type, out)
+
+
+def numpy_gufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
+    arguments = []
+    expected_ndims = kernel_class.dufunc.expected_ndims()
+    expected_ndims = expected_ndims[0] + expected_ndims[1]
+    is_input = [True] * ufunc.nin + [False] * ufunc.nout
+    for arg, ty, exp_ndim, is_inp in zip(args, sig.args, expected_ndims, is_input):  # noqa: E501
+        if isinstance(ty, types.ArrayCompatible):
+            # Create an array helper that iteration returns a subarray
+            # with ndim specified by "exp_ndim"
+            arr = context.make_array(ty)(context, builder, arg)
+            shape = cgutils.unpack_tuple(builder, arr.shape, ty.ndim)
+            strides = cgutils.unpack_tuple(builder, arr.strides, ty.ndim)
+            inner_arr_ty = ty.copy(ndim=exp_ndim)
+            ndim = ty.ndim
+            layout = ty.layout
+            base_type = ty.dtype
+            array_helper = _ArrayGUHelper(context, builder,
+                                          shape, strides, arg,
+                                          layout, base_type, ndim,
+                                          inner_arr_ty, is_inp)
+            arguments.append(array_helper)
+        else:
+            scalar_helper = _ScalarHelper(context, builder, arg, ty)
+            arguments.append(scalar_helper)
+    kernel = kernel_class(context, builder, sig)
+
+    layouts = [arg.layout for arg in arguments
+               if isinstance(arg, _ArrayGUHelper)]
+    num_c_layout = len([x for x in layouts if x == 'C'])
+    num_f_layout = len([x for x in layouts if x == 'F'])
+
+    # Only choose F iteration order if more arrays are in F layout.
+    # Default to C order otherwise.
+    # This is a best effort for performance. NumPy has more fancy logic that
+    # uses array iterators in non-trivial cases.
+    if num_f_layout > num_c_layout:
+        order = 'F'
+    else:
+        order = 'C'
+
+    outputs = arguments[ufunc.nin:]
+    intpty = context.get_value_type(types.intp)
+    indices = [inp.create_iter_indices() for inp in arguments]
+    loopshape_ndim = outputs[0].ndim - outputs[0].inner_arr_ty.ndim
+    loopshape = outputs[0].shape[ : loopshape_ndim]
+
+    _sig = parse_signature(ufunc.gufunc_builder.signature)
+    for (idx_a, sig_a), (idx_b, sig_b) in itertools.combinations(
+            zip(range(len(arguments)),
+            _sig[0] + _sig[1]),
+            r = 2
+    ):
+        # For each pair of arguments, both inputs and outputs, must match their
+        # inner dimensions if their signatures are the same.
+        arg_a, arg_b = arguments[idx_a], arguments[idx_b]
+        if sig_a == sig_b and \
+                all(isinstance(x, _ArrayGUHelper) for x in (arg_a, arg_b)):
+            arg_a, arg_b = arguments[idx_a], arguments[idx_b]
+            arg_a.guard_match_core_dims(arg_b, len(sig_a))
+
+    for arg in arguments[:ufunc.nin]:
+        if isinstance(arg, _ArrayGUHelper):
+            arg.guard_shape(loopshape)
+
+    with cgutils.loop_nest(builder,
+                           loopshape,
+                           intp=intpty,
+                           order=order) as loop_indices:
+        vals_in = []
+        for i, (index, arg) in enumerate(zip(indices, arguments)):
+            index.update_indices(loop_indices, i)
+            vals_in.append(arg.load_data(index.as_values()))
+
+        kernel.generate(*vals_in)
 
 
 # Kernels are the code to be executed inside the multidimensional loop.
@@ -423,6 +662,29 @@ class _Kernel(object):
             # let the regular cast do the rest...
 
         return self.context.cast(self.builder, val, fromty, toty)
+
+    def generate(self, *args):
+        isig = self.inner_sig
+        osig = self.outer_sig
+        cast_args = [self.cast(val, inty, outty)
+                     for val, inty, outty in
+                     zip(args, osig.args, isig.args)]
+        if self.cres.objectmode:
+            func_type = self.context.call_conv.get_function_type(
+                types.pyobject, [types.pyobject] * len(isig.args))
+        else:
+            func_type = self.context.call_conv.get_function_type(
+                isig.return_type, isig.args)
+        module = self.builder.block.function.module
+        entry_point = cgutils.get_or_insert_function(
+            module, func_type,
+            self.cres.fndesc.llvm_func_name)
+        entry_point.attributes.add("alwaysinline")
+
+        _, res = self.context.call_conv.call_function(
+            self.builder, entry_point, isig.return_type, isig.args,
+            cast_args)
+        return self.cast(res, isig.return_type, osig.return_type)
 
 
 def _ufunc_db_function(ufunc):
@@ -478,7 +740,7 @@ def _ufunc_db_function(ufunc):
 ################################################################################
 # Helper functions that register the ufuncs
 
-def register_ufunc_kernel(ufunc, kernel):
+def register_ufunc_kernel(ufunc, kernel, lower):
     def do_ufunc(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel)
 
@@ -493,7 +755,8 @@ def register_ufunc_kernel(ufunc, kernel):
     return kernel
 
 
-def register_unary_operator_kernel(operator, ufunc, kernel, inplace=False):
+def register_unary_operator_kernel(operator, ufunc, kernel, lower,
+                                   inplace=False):
     assert not inplace  # are there any inplace unary operators?
     def lower_unary_operator(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel)
@@ -501,7 +764,7 @@ def register_unary_operator_kernel(operator, ufunc, kernel, inplace=False):
     lower(operator, _arr_kind)(lower_unary_operator)
 
 
-def register_binary_operator_kernel(op, ufunc, kernel, inplace=False):
+def register_binary_operator_kernel(op, ufunc, kernel, lower, inplace=False):
     def lower_binary_operator(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel)
 
@@ -526,7 +789,7 @@ def register_binary_operator_kernel(op, ufunc, kernel, inplace=False):
 ################################################################################
 # Use the contents of ufunc_db to initialize the supported ufuncs
 
-@lower(operator.pos, types.Array)
+@registry.lower(operator.pos, types.Array)
 def array_positive_impl(context, builder, sig, args):
     '''Lowering function for +(array) expressions.  Defined here
     (numba.targets.npyimpl) since the remaining array-operator
@@ -541,11 +804,11 @@ def array_positive_impl(context, builder, sig, args):
                               _UnaryPositiveKernel)
 
 
-def _register_ufuncs():
+def register_ufuncs(ufuncs, lower):
     kernels = {}
-    # NOTE: Assuming ufunc implementation for the CPUContext.
-    for ufunc in ufunc_db.get_ufuncs():
-        kernels[ufunc] = register_ufunc_kernel(ufunc, _ufunc_db_function(ufunc))
+    for ufunc in ufuncs:
+        db_func = _ufunc_db_function(ufunc)
+        kernels[ufunc] = register_ufunc_kernel(ufunc, db_func, lower)
 
     for _op_map in (npydecl.NumpyRulesUnaryArrayOperator._op_map,
                     npydecl.NumpyRulesArrayOperator._op_map,
@@ -554,9 +817,9 @@ def _register_ufuncs():
             ufunc = getattr(np, ufunc_name)
             kernel = kernels[ufunc]
             if ufunc.nin == 1:
-                register_unary_operator_kernel(operator, ufunc, kernel)
+                register_unary_operator_kernel(operator, ufunc, kernel, lower)
             elif ufunc.nin == 2:
-                register_binary_operator_kernel(operator, ufunc, kernel)
+                register_binary_operator_kernel(operator, ufunc, kernel, lower)
             else:
                 raise RuntimeError("There shouldn't be any non-unary or binary operators")
 
@@ -566,14 +829,16 @@ def _register_ufuncs():
             ufunc = getattr(np, ufunc_name)
             kernel = kernels[ufunc]
             if ufunc.nin == 1:
-                register_unary_operator_kernel(operator, ufunc, kernel, inplace=True)
+                register_unary_operator_kernel(operator, ufunc, kernel, lower,
+                                               inplace=True)
             elif ufunc.nin == 2:
-                register_binary_operator_kernel(operator, ufunc, kernel, inplace=True)
+                register_binary_operator_kernel(operator, ufunc, kernel, lower,
+                                                inplace=True)
             else:
                 raise RuntimeError("There shouldn't be any non-unary or binary operators")
 
 
-_register_ufuncs()
+register_ufuncs(ufunc_db.get_ufuncs(), registry.lower)
 
 
 @intrinsic

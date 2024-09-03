@@ -8,13 +8,15 @@ import subprocess
 import sys
 import threading
 import itertools
+from textwrap import dedent
 
 import numpy as np
 
 import unittest
-from numba import jit, _helperlib
+
+import numba
+from numba import jit, _helperlib, njit
 from numba.core import types
-from numba.core.compiler import compile_isolated
 from numba.tests.support import TestCase, compile_function, tag
 from numba.core.errors import TypingError
 
@@ -69,6 +71,12 @@ def numpy_dirichlet(alpha, size):
 def numpy_dirichlet_default(alpha):
     return np.random.dirichlet(alpha)
 
+def numpy_noncentral_chisquare(df, nonc, size):
+    return np.random.noncentral_chisquare(df, nonc, size=size)
+
+def numpy_noncentral_chisquare_default(df, nonc):
+    return np.random.noncentral_chisquare(df, nonc)
+
 def numpy_check_rand(seed, a, b):
     np.random.seed(seed)
     expected = np.random.random((a, b))
@@ -87,6 +95,16 @@ def jit_with_args(name, argstring):
     code = """def func(%(argstring)s):
         return %(name)s(%(argstring)s)
 """ % locals()
+    pyfunc = compile_function("func", code, globals())
+    return jit(nopython=True)(pyfunc)
+
+def jit_with_kwargs(name, kwarg_list):
+    # Similar to jit_with_args, but uses keyword arguments
+    call_args_with_kwargs = ','.join([f'{kw}={kw}' for kw in kwarg_list])
+    signature = ','.join(kwarg_list)
+    code = f"""def func({signature}):
+        return {name}({call_args_with_kwargs})
+"""
     pyfunc = compile_function("func", code, globals())
     return jit(nopython=True)(pyfunc)
 
@@ -246,7 +264,7 @@ class TestRandom(BaseTest):
         """
         Check seed()- and random()-like functions.
         """
-        # Our seed() mimicks Numpy's.
+        # Our seed() mimics NumPy's.
         r = np.random.RandomState()
         for i in [0, 1, 125, 2**32 - 1]:
             # Need to cast to a C-sized int (for Numpy <= 1.7)
@@ -268,7 +286,7 @@ class TestRandom(BaseTest):
         self._check_random_seed(numpy_seed, jit_nullary("np.random.rand"))
 
     def _check_random_sized(self, seedfunc, randomfunc):
-        # Our seed() mimicks Numpy's.
+        # Our seed() mimics NumPy's.
         r = np.random.RandomState()
         for i in [0, 1, 125, 2**32 - 1]:
             # Need to cast to a C-sized int (for Numpy <= 1.7)
@@ -327,6 +345,16 @@ class TestRandom(BaseTest):
                          for i in range(niters)]
             self.assertPreciseEqual(results, pyresults, prec=prec, ulps=ulps,
                                     msg="for arguments %s" % (args,))
+
+    def _check_dist_kwargs(self, func, pyfunc, kwargslist, niters=3,
+                           prec='double', ulps=12, pydtype=None):
+        assert len(kwargslist)
+        for kwargs in kwargslist:
+            results = [func(**kwargs) for i in range(niters)]
+            pyresults = [(pyfunc(**kwargs, dtype=pydtype) if pydtype else pyfunc(**kwargs))
+                         for i in range(niters)]
+            self.assertPreciseEqual(results, pyresults, prec=prec, ulps=ulps,
+                                    msg="for arguments %s" % (kwargs,))
 
     def _check_gauss(self, func2, func1, func0, ptr):
         """
@@ -429,20 +457,19 @@ class TestRandom(BaseTest):
 
     def test_random_randrange(self):
         for tp, max_width in [(types.int64, 2**63), (types.int32, 2**31)]:
-            cr1 = compile_isolated(random_randrange1, (tp,))
-            cr2 = compile_isolated(random_randrange2, (tp, tp))
-            cr3 = compile_isolated(random_randrange3, (tp, tp, tp))
-            self._check_randrange(cr1.entry_point, cr2.entry_point,
-                                  cr3.entry_point, get_py_state_ptr(),
+            cf1 = njit((tp,))(random_randrange1)
+            cf2 = njit((tp, tp,),)(random_randrange2)
+            cf3 = njit((tp, tp, tp,))(random_randrange3)
+            self._check_randrange(cf1, cf2, cf3, get_py_state_ptr(),
                                   max_width, False)
 
     def test_numpy_randint(self):
         for tp, np_tp, max_width in [(types.int64, np.int64, 2**63),
                                      (types.int32, np.int32, 2**31)]:
-            cr1 = compile_isolated(numpy_randint1, (tp,))
-            cr2 = compile_isolated(numpy_randint2, (tp, tp))
-            self._check_randrange(cr1.entry_point, cr2.entry_point,
-                                  None, get_np_state_ptr(), max_width, True, np_tp)
+            cf1 = njit((tp,))(numpy_randint1)
+            cf2 = njit((tp, tp,))(numpy_randint2)
+            self._check_randrange(cf1, cf2, None, get_np_state_ptr(), max_width,
+                                  True, np_tp)
 
     def _check_randint(self, func, ptr, max_width):
         """
@@ -465,8 +492,8 @@ class TestRandom(BaseTest):
 
     def test_random_randint(self):
         for tp, max_width in [(types.int64, 2**63), (types.int32, 2**31)]:
-            cr = compile_isolated(random_randint, (tp, tp))
-            self._check_randint(cr.entry_point, get_py_state_ptr(), max_width)
+            cf = njit((tp, tp,))(random_randint)
+            self._check_randint(cf, get_py_state_ptr(), max_width)
 
     def _check_uniform(self, func, ptr):
         """
@@ -477,11 +504,44 @@ class TestRandom(BaseTest):
         self._check_dist(func, r.uniform,
                          [(1.5, 1e6), (-2.5, 1e3), (1.5, -2.5)])
 
+    def _check_any_distrib_kwargs(self, func, ptr, distrib, paramlist):
+        """
+        Check any numpy distribution function. Does Numba use the same keyword
+        argument names as Numpy?
+        And given a fixed seed, do they both return the same samples?
+        """
+        # Our implementation follows Numpy's (not Python's)
+        r = self._follow_numpy(ptr)
+        distrib_method_of_numpy = getattr(r, distrib)
+        self._check_dist_kwargs(func, distrib_method_of_numpy, paramlist)
+
+
     def test_random_uniform(self):
         self._check_uniform(jit_binary("random.uniform"), get_py_state_ptr())
 
     def test_numpy_uniform(self):
         self._check_uniform(jit_binary("np.random.uniform"), get_np_state_ptr())
+
+    def test_numpy_uniform_kwargs(self):
+        self._check_any_distrib_kwargs(
+            jit_with_kwargs("np.random.uniform", ['low', 'high']),
+            get_np_state_ptr(),
+            'uniform',
+            paramlist=[{'low': 1.5, 'high': 1e6},
+                       {'low': -2.5, 'high': 1e3},
+                       {'low': 1.5, 'high': -2.5}])
+
+    def test_numpy_uniform_empty_size(self):
+        self._check_any_distrib_kwargs(
+            jit_with_kwargs("np.random.uniform", ['low', 'high', 'size']),
+            get_np_state_ptr(),
+            'uniform',
+            paramlist=[{'low': 1.5, 'high': 1e6, 'size': ()},
+                       {'low': -2.5, 'high': 1e3, 'size': ()},
+                       {'low': 1.5, 'high': -2.5, 'size': ()},
+                       {'low': 1.5, 'high': 1e6, 'size': None},
+                       {'low': -2.5, 'high': 1e3, 'size': None},
+                       {'low': 1.5, 'high': -2.5, 'size': None},])
 
     def _check_triangular(self, func2, func3, ptr):
         """
@@ -707,6 +767,15 @@ class TestRandom(BaseTest):
         r = self._follow_numpy(get_np_state_ptr())
         self._check_dist(gumbel, r.gumbel, [(0.0, 1.0), (-1.5, 3.5)])
 
+    def test_numpy_gumbel_kwargs(self):
+        self._check_any_distrib_kwargs(
+            jit_with_kwargs("np.random.gumbel", ['loc', 'scale']),
+            get_np_state_ptr(),
+            distrib="gumbel",
+            paramlist=[{'loc': 0.0, 'scale': 1.0},
+                       {'loc': -1.5, 'scale': 3.5}])
+
+
     def test_numpy_hypergeometric(self):
         # Our implementation follows Numpy's up to nsamples = 10.
         hg = jit_ternary("np.random.hypergeometric")
@@ -828,6 +897,18 @@ class TestRandom(BaseTest):
         self.assertRaises(ValueError, wald, 1.0, 0.0)
         self.assertRaises(ValueError, wald, 1.0, -0.1)
 
+    def test_numpy_wald_kwargs(self):
+        numba_version = jit_with_kwargs("np.random.wald", ['mean', 'scale'])
+        self._check_any_distrib_kwargs(numba_version,
+                                       get_np_state_ptr(),
+                                       distrib="wald",
+                                       paramlist=[{'mean': 1.0, 'scale': 1.0},
+                                                  {'mean': 2.0, 'scale': 5.0}])
+        self.assertRaises(ValueError, numba_version, 0.0, 1.0)
+        self.assertRaises(ValueError, numba_version, -0.1, 1.0)
+        self.assertRaises(ValueError, numba_version, 1.0, 0.0)
+        self.assertRaises(ValueError, numba_version, 1.0, -0.1)
+
     def test_numpy_zipf(self):
         r = self._follow_numpy(get_np_state_ptr())
         zipf = jit_unary("np.random.zipf")
@@ -948,6 +1029,73 @@ class TestRandomArrays(BaseTest):
                 and got.dtype == np.dtype('int64')):
                 expected = expected.astype(got.dtype)
             self.assertPreciseEqual(expected, got, prec='double', ulps=5)
+        args = scalar_args + (None,)
+        expected = pyfunc(*args)
+        got = cfunc(*args)
+        self.assertPreciseEqual(expected, got, prec='double', ulps=5)
+
+    def _check_array_dist_gamma(self, funcname,  scalar_args, extra_pyfunc_args):
+        """
+        Check returning an array according to a given gamma distribution,
+        where we use CPython's implementation rather than NumPy's.
+        """
+        cfunc = self._compile_array_dist(funcname, len(scalar_args) + 1)
+        r = self._follow_cpython(get_np_state_ptr())
+        pyfunc = getattr(r, "gammavariate")
+        pyfunc_args = scalar_args + extra_pyfunc_args
+        pyrandom = lambda *_args: pyfunc(*pyfunc_args)
+
+        args = scalar_args + (None,)
+        expected = pyrandom()
+        got = cfunc(*args)
+        self.assertPreciseEqual(expected, got, prec='double', ulps=5)
+        for size in (8, (2, 3)):
+            args = scalar_args + (size,)
+            expected = np.empty(size)
+            expected_flat = expected.flat
+            for idx in range(expected.size):
+                expected_flat[idx] = pyrandom()
+            got = cfunc(*args)
+            self.assertPreciseEqual(expected, got, prec='double', ulps=5)
+
+    def _check_array_dist_self(self, funcname, scalar_args):
+        """
+        Check function returning an array against its scalar implementation.
+        Because we use the CPython gamma distribution rather than the NumPy one,
+        distributions which use the gamma distribution vary in ways that are
+        difficult to compare. Instead, we compile both the array and scalar
+        versions and check that the array is filled with the same values as
+        we would expect from the scalar version.
+        """
+        @numba.njit
+        def reset():
+            np.random.seed(1234)
+
+        array_func = self._compile_array_dist(funcname, len(scalar_args) + 1)
+
+        qualname = "np.random.%s" % (funcname,)
+        argstring = ', '.join('abcd'[:len(scalar_args)])
+        scalar_func = jit_with_args(qualname, argstring)
+
+        for size in (8, (2, 3)):
+            args = scalar_args + (size,)
+            reset()
+            got = array_func(*args)
+            reset()
+            # We're just going to go with whatever type the array version
+            # gives us and hope it's not Boolean or something useless.
+            expected = np.empty(size, dtype=got.dtype)
+            flat = expected.flat
+            for idx in range(expected.size):
+                flat[idx] = scalar_func(*scalar_args)
+            self.assertPreciseEqual(expected, got, prec='double', ulps=5)
+
+        reset()
+        args = scalar_args + (None,)
+        expected = scalar_func(*scalar_args)
+        reset()
+        got = array_func(*args)
+        self.assertPreciseEqual(expected, got, prec='double', ulps=5)
 
     def test_numpy_randint(self):
         cfunc = self._compile_array_dist("randint", 3)
@@ -985,14 +1133,32 @@ class TestRandomArrays(BaseTest):
     # Sanity-check various distributions.  For convenience, we only check
     # those distributions that produce the exact same values as Numpy's.
 
+    def test_numpy_beta(self):
+        self._check_array_dist_self("beta", (0.5, 2.5))
+
     def test_numpy_binomial(self):
         self._check_array_dist("binomial", (20, 0.5))
+
+    def test_numpy_chisquare(self):
+        self._check_array_dist_self("chisquare", (1.5,))
 
     def test_numpy_exponential(self):
         self._check_array_dist("exponential", (1.5,))
 
+    def test_numpy_f(self):
+        self._check_array_dist_self("f", (0.5, 1.5))
+
+    def test_numpy_gamma(self):
+        self._check_array_dist_gamma("gamma", (2.0, 1.0), ())
+
+    def test_numpy_geometric(self):
+        self._check_array_dist("geometric", (1.0,))
+
     def test_numpy_gumbel(self):
         self._check_array_dist("gumbel", (1.5, 0.5))
+
+    def test_numpy_hypergeometric(self):
+        self._check_array_dist("hypergeometric", (1000, 5000, 10))
 
     def test_numpy_laplace(self):
         self._check_array_dist("laplace", (1.5, 0.5))
@@ -1008,6 +1174,9 @@ class TestRandomArrays(BaseTest):
 
     def test_numpy_normal(self):
         self._check_array_dist("normal", (0.5, 2.0))
+
+    def test_numpy_pareto(self):
+        self._check_array_dist("pareto", (0.5,))
 
     def test_numpy_poisson(self):
         self._check_array_dist("poisson", (0.8,))
@@ -1036,14 +1205,23 @@ class TestRandomArrays(BaseTest):
     def test_numpy_standard_exponential(self):
         self._check_array_dist("standard_exponential", ())
 
+    def test_numpy_standard_gamma(self):
+        self._check_array_dist_gamma("standard_gamma", (2.0,), (1.0,))
+
     def test_numpy_standard_normal(self):
         self._check_array_dist("standard_normal", ())
+
+    def test_numpy_triangular(self):
+        self._check_array_dist("triangular", (1.5, 2.2, 3.5))
 
     def test_numpy_uniform(self):
         self._check_array_dist("uniform", (0.1, 0.4))
 
     def test_numpy_wald(self):
         self._check_array_dist("wald", (0.1, 0.4))
+
+    def test_numpy_vonmises(self):
+        self._check_array_dist_self("vonmises", (0.5, 2.5))
 
     def test_numpy_zipf(self):
         self._check_array_dist("zipf", (2.5,))
@@ -1374,6 +1552,88 @@ class TestRandomDirichlet(BaseTest):
                 str(raises.exception),
             )
 
+class TestRandomNoncentralChiSquare(BaseTest):
+
+    def _check_sample(self, size, sample):
+
+        # Check output structure
+        if size is not None:
+            self.assertIsInstance(sample, np.ndarray)
+            self.assertEqual(sample.dtype, np.float64)
+            
+            if isinstance(size, int):
+                self.assertEqual(sample.shape, (size,))
+            else:
+                self.assertEqual(sample.shape, size)
+        else:
+             self.assertIsInstance(sample, float)
+
+        # Check statistical properties
+        for val in np.nditer(sample):
+            self.assertGreaterEqual(val, 0)
+
+    def test_noncentral_chisquare_default(self):
+        """
+        Test noncentral_chisquare(df, nonc, size=None)
+        """
+        cfunc = jit(nopython=True)(numpy_noncentral_chisquare_default)
+        inputs = (
+            (0.5, 1), # test branch when df < 1
+            (1, 5),
+            (5, 1),
+            (100000, 1),
+            (1, 10000),
+        )
+        for df, nonc in inputs:
+            res = cfunc(df, nonc)
+            self._check_sample(None, res)
+            res = cfunc(df, np.nan) # test branch when nonc is nan
+            self.assertTrue(np.isnan(res))
+
+
+    def test_noncentral_chisquare(self):
+        """
+        Test noncentral_chisquare(df, nonc, size)
+        """
+        cfunc = jit(nopython=True)(numpy_noncentral_chisquare)
+        sizes = (None, 10, (10,), (10, 10))
+        inputs = (
+            (0.5, 1),
+            (1, 5),
+            (5, 1),
+            (100000, 1),
+            (1, 10000),
+        )
+
+        for (df, nonc), size in itertools.product(inputs, sizes):
+            res = cfunc(df, nonc, size)
+            self._check_sample(size, res)
+            res = cfunc(df, np.nan, size) # test branch when nonc is nan
+            self.assertTrue(np.isnan(res).all())
+
+    def test_noncentral_chisquare_exceptions(self):
+        cfunc = jit(nopython=True)(numpy_noncentral_chisquare)
+        df, nonc = 0, 1
+        with self.assertRaises(ValueError) as raises:
+            cfunc(df, nonc, 1)
+        self.assertIn("df <= 0", str(raises.exception))
+        
+        df, nonc = 1, -1
+        with self.assertRaises(ValueError) as raises:
+            cfunc(df, nonc, 1)
+        self.assertIn("nonc < 0", str(raises.exception))        
+
+        df, nonc = 1, 1
+        sizes = (True, 3j, 1.5, (1.5, 1), (3j, 1), (3j, 3j), (np.int8(3), np.int64(7)))
+        for size in sizes:
+            with self.assertRaises(TypingError) as raises:
+                cfunc(df, nonc, size)
+            self.assertIn(
+                "np.random.noncentral_chisquare(): size should be int or "
+                "tuple of ints or None, got",
+                str(raises.exception),
+            )
+
 @jit(nopython=True, nogil=True)
 def py_extract_randomness(seed, out):
     if seed != 0:
@@ -1423,7 +1683,7 @@ class ConcurrencyBaseTest(TestCase):
 
     def check_several_outputs(self, results, same_expected):
         # Outputs should have the expected statistical properties
-        # (an unitialized PRNG or a PRNG whose internal state was
+        # (an uninitialized PRNG or a PRNG whose internal state was
         #  corrupted by a race condition could produce bogus randomness)
         for out in results:
             self.check_output(out)
@@ -1583,6 +1843,122 @@ class TestProcesses(ConcurrencyBaseTest):
 
     def test_np_implicit_initialization(self):
         self.check_implicit_initialization(np_extract_randomness)
+
+
+class TestNumPyRandomAPI(TestCase):
+    API_CALL_TESTS = {"np.random.beta": {'a': 1., 'b': 2., 'size': 3},
+                      "np.random.binomial": {'n': 1, 'p': 0.3, 'size': 3},
+                      "np.random.chisquare": {'df': 2., 'size': 3},
+                      "np.random.choice": {'a': 2, 'size': 3},
+                      "np.random.dirichlet": {'alpha': (2,), 'size': 3},
+                      "np.random.exponential": {'scale': 1., 'size': 3},
+                      "np.random.f": {'dfnum': 1., 'dfden': 2., 'size': 3},
+                      "np.random.gamma": {'shape': 2, 'scale': 2.0, 'size': 3},
+                      "np.random.geometric": {'p': 1., 'size': 3},
+                      "np.random.gumbel": {'loc': 0., 'scale': 1., 'size': 3},
+                      "np.random.hypergeometric": {'ngood': 1, 'nbad': 1,
+                                                   'nsample': 1, 'size': 3},
+                      "np.random.laplace": {'loc': 0., 'scale': 1., 'size': 3},
+                      "np.random.logistic": {'loc': 0., 'scale': 1., 'size': 3},
+                      "np.random.lognormal": {'mean': 0., 'sigma': 1., 'size': 3},
+                      "np.random.logseries": {'p': 0.5, 'size': 3},
+                      "np.random.multinomial": {'n': 1, 'pvals': (1,), 'size': 3},
+                      "np.random.negative_binomial": {'n': 1, 'p': 0.5},
+                      "np.random.noncentral_chisquare": {'df': 1., 'nonc': 1.,
+                                                         'size': 3},
+                      "np.random.normal": {'loc': 0., 'scale': 1., 'size': 3},
+                      "np.random.pareto": {'a': 2., 'size': 3},
+                      # NOTE: The NumPy impl of permutation "takes no keyword
+                      # arguments".
+                      # "np.random.permutation": {'x': (1, 2, 3)},
+                      "np.random.poisson": {'lam': 1., 'size': 3},
+                      "np.random.power": {'a': 2., 'size': 3},
+                      # NOTE: The NumPy impl of rand essentially takes *args so kwargs
+                      # are unsupported.
+                      # "np.random.rand": {'d0': 1, 'd1': 2, ...}}
+                      "np.random.randint": {'low': 1, 'high': 2, 'size': 3},
+                      # NOTE: The NumPy impl of randn essentially takes *args so
+                      # kwargs are unsupported.
+                      # "np.random.randn":  {'d0': 1, 'd1': 2, ...}}
+                      "np.random.random": {'size': 3},
+                      "np.random.random_sample": {'size': 3},
+                      "np.random.ranf": {'size': 3},
+                      "np.random.rayleigh": {'scale': 1., 'size': 3},
+                      "np.random.sample": {'size': 3},
+                      "np.random.seed": {'seed': 4},
+                      # NOTE: The NumPy impl of shuffle "takes no keyword arguments".
+                      # "np.random.shuffle"
+                      "np.random.standard_cauchy": {'size': 3},
+                      "np.random.standard_exponential": {'size': 3},
+                      "np.random.standard_gamma": {'shape': 2., 'size': 3},
+                      "np.random.standard_normal": {'size': 3},
+                      "np.random.standard_t": {'df': 2., 'size': 3},
+                      "np.random.triangular": {'left': 1., 'mode': 2., 'right': 3.,
+                                               'size': 3},
+                      "np.random.uniform": {'low': 1., 'high': 2., 'size': 3},
+                      "np.random.vonmises": {'mu': 1., 'kappa': 2., 'size': 3},
+                      "np.random.wald": {'mean': 1., 'scale': 2., 'size': 3},
+                      "np.random.weibull": {'a': 1., 'size': 3},
+                      "np.random.zipf": {'a': 2., 'size': 3},}
+
+    def test_call_by_name(self):
+        # Checks that the NumPy impls in Numba can be used via call-by-name
+        # args, see issue numba#9053.
+        #
+        # Checking call-by-name has to be done somewhat manually as the NumPy
+        # numpy.random.* functions do not have signatures, see numpy#8734.
+
+        # Herein, it doesn't matter what the values are, the names and types
+        # just have to make sense.
+        
+        for fn, args in self.API_CALL_TESTS.items():
+            argstr = ', '.join([f'{k}={v}' for k, v in args.items()])
+            template = dedent(f"""
+                def foo():
+                    return {fn}({argstr})
+                """)
+            l = {}
+            exec(template, {'np': np}, l)
+            # The answer doesn't matter, these are tested in the tests above,
+            # the purpose of this test is to ensure that the code compiles with
+            # the args presented via name, i.e. the overloads are defined
+            # correctly with respect to the public API of the function.
+            func = l['foo']
+            func()
+            njit(func).compile(())
+
+    def test_call_distributions_with_empty_size(self):
+        # Check that the distributions can be called with size=() as per the
+        # NumPy API, see issue numba#8975.
+        for fn, args in self.API_CALL_TESTS.items():
+            if 'size' not in args:
+                continue
+            
+            args['size'] = ()
+            argstr = ', '.join([f'{k}={v}' for k, v in args.items()])
+            template = dedent(f"""
+                def foo():
+                    return {fn}({argstr})
+                """)
+            l = {}
+            exec(template, {'np': np}, l)
+
+            # Store result obtained by calling the np and nb functions.
+            # We are not interested by the values, they were tested above
+            # but we want to ensure that the function compiles, and that 
+            # the shapes and types are the same between numpy and numba.
+            func = l['foo']
+            np_val = func()
+
+            nb_func = njit(func).compile(())
+            nb_val = nb_func()
+
+            if isinstance(nb_val, np.ndarray):
+                self.assertEqual(nb_val.shape, np_val.shape)
+            else:
+                self.assertIsInstance(nb_val, np_val.__class__)
+
+
 
 
 if __name__ == "__main__":

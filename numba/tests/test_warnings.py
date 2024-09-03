@@ -6,7 +6,12 @@ import numpy as np
 
 import unittest
 from numba import jit
-from numba.core.errors import NumbaWarning, deprecated, NumbaDeprecationWarning
+from numba.core.errors import (
+    NumbaWarning,
+    deprecated,
+    NumbaDeprecationWarning,
+    NumbaPendingDeprecationWarning,
+)
 from numba.core import errors
 from numba.tests.support import ignore_internal_warnings
 
@@ -20,56 +25,12 @@ class TestBuiltins(unittest.TestCase):
         self.assertEqual(w.category, NumbaDeprecationWarning)
         self.assertIn(msg, str(w.message))
 
-    def test_type_infer_warning(self):
-        def add(x, y):
-            a = {} # noqa dead
-            return x + y
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always', NumbaWarning)
-            ignore_internal_warnings()
-
-            cfunc = jit(add)
-            cfunc(1, 2)
-
-            self.assertEqual(len(w), 3)
-            # Type inference failure
-            self.assertEqual(w[0].category, NumbaWarning)
-            self.assertIn('type inference', str(w[0].message))
-
-            # Object mode
-            self.assertEqual(w[1].category, NumbaWarning)
-            self.assertIn('object mode', str(w[1].message))
-
-            # check objmode deprecation warning
-            self.check_objmode_deprecation_warning(w[2])
-
-    def test_return_type_warning(self):
-        y = np.ones(4, dtype=np.float32)
-
-        def return_external_array():
-            return y
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always', NumbaWarning)
-            ignore_internal_warnings()
-
-            cfunc = jit(_nrt=False)(return_external_array)
-            cfunc()
-
-            self.assertEqual(len(w), 3)
-
-            # Legal return value failure
-            self.assertEqual(w[0].category, NumbaWarning)
-            self.assertIn('return type', str(w[0].message))
-
-            # Object mode fall-back
-            self.assertEqual(w[1].category, NumbaWarning)
-            self.assertIn('object mode without forceobj=True',
-                          str(w[1].message))
-
-            # check objmode deprecation warning
-            self.check_objmode_deprecation_warning(w[2])
+    def check_nopython_kwarg_missing_warning(self, w):
+        # nopython default is scheduled to change when objmode fall-back is
+        # removed, check warning.
+        msg = ("The \'nopython\' keyword argument was not supplied")
+        self.assertEqual(w.category, NumbaDeprecationWarning)
+        self.assertIn(msg, str(w.message))
 
     def test_return_type_warning_with_nrt(self):
         """
@@ -84,7 +45,7 @@ class TestBuiltins(unittest.TestCase):
             warnings.simplefilter('always', NumbaWarning)
             ignore_internal_warnings()
 
-            cfunc = jit(return_external_array)
+            cfunc = jit(nopython=True)(return_external_array)
             cfunc()
             # No more warning
             self.assertEqual(len(w), 0)
@@ -102,45 +63,6 @@ class TestBuiltins(unittest.TestCase):
             cfunc(1, 2)
 
             self.assertEqual(len(w), 0)
-
-    def test_loop_lift_warn(self):
-        def do_loop(x):
-            a = {} # noqa dead
-            for i in range(x.shape[0]):
-                x[i] *= 2
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always', NumbaWarning)
-            ignore_internal_warnings()
-
-            x = np.ones(4, dtype=np.float32)
-            cfunc = jit(do_loop)
-            cfunc(x)
-
-            msg = '\n'.join(f"----------\n{x.message}" for x in w)
-
-            self.assertEqual(len(w), 4, msg=msg)
-
-            # Type inference failure (1st pass, in npm, fall-back to objmode
-            # with looplift)
-            self.assertEqual(w[0].category, NumbaWarning)
-            self.assertIn('type inference', str(w[0].message))
-            self.assertIn('WITH looplifting', str(w[0].message))
-
-            # Type inference failure (2nd pass, objmode with lifted loops,
-            # loop found but still failed, fall back to objmode no looplift)
-            self.assertEqual(w[1].category, NumbaWarning)
-            self.assertIn('type inference', str(w[1].message))
-            self.assertIn('WITHOUT looplifting', str(w[1].message))
-
-            # States compilation outcome
-            self.assertEqual(w[2].category, NumbaWarning)
-            self.assertIn('compiled in object mode without forceobj=True',
-                          str(w[2].message))
-            self.assertIn('but has lifted loops', str(w[2].message))
-
-            # check objmode deprecation warning
-            self.check_objmode_deprecation_warning(w[3])
 
     def test_deprecated(self):
         @deprecated('foo')
@@ -216,6 +138,49 @@ class TestBuiltins(unittest.TestCase):
         popen = subprocess.Popen([sys.executable, "-c", parallel_code], env=env)
         out, err = popen.communicate()
         self.assertEqual(popen.returncode, not_found_ret_code)
+
+    def test_filter_deprecation_warnings(self):
+        # Filter on base classes of deprecation warnings should apply to Numba's
+        # deprecation warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')
+            warnings.simplefilter('ignore', category=DeprecationWarning)
+            warnings.simplefilter('ignore', category=PendingDeprecationWarning)
+            warnings.warn(DeprecationWarning("this is ignored"))
+            warnings.warn(PendingDeprecationWarning("this is ignored"))
+            warnings.warn(NumbaDeprecationWarning("this is ignored"))
+            warnings.warn(NumbaPendingDeprecationWarning("this is ignored"))
+            with self.assertRaises(NumbaWarning):
+                warnings.warn(NumbaWarning("this is not ignored"))
+
+    def test_filter_ignore_numba_deprecation_only(self):
+        # Make a filter that ignores Numba's deprecation warnings but raises on
+        # other deprecation warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter('error', category=DeprecationWarning)
+            warnings.simplefilter('error', category=PendingDeprecationWarning)
+            warnings.simplefilter('ignore', category=NumbaDeprecationWarning)
+            warnings.simplefilter('ignore',
+                                  category=NumbaPendingDeprecationWarning)
+
+            with self.assertRaises(DeprecationWarning):
+                warnings.warn(DeprecationWarning("this is not ignored"))
+            with self.assertRaises(PendingDeprecationWarning):
+                warnings.warn(PendingDeprecationWarning("this is not ignored"))
+
+            warnings.warn(NumbaDeprecationWarning("this is ignored"))
+            warnings.warn(NumbaPendingDeprecationWarning("this is ignored"))
+
+            # now make it so that Numba deprecation warnings are raising
+            warnings.simplefilter('error', category=NumbaDeprecationWarning)
+            warnings.simplefilter('error',
+                                  category=NumbaPendingDeprecationWarning)
+
+            with self.assertRaises(DeprecationWarning):
+                warnings.warn(NumbaDeprecationWarning("this is not ignored"))
+            with self.assertRaises(PendingDeprecationWarning):
+                warnings.warn(NumbaPendingDeprecationWarning(
+                    "this is not ignored"))
 
 
 if __name__ == '__main__':

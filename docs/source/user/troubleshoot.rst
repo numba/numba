@@ -210,158 +210,17 @@ used to instruct the typing mechanism::
         tmp = [np.complex64(x) for x in range(0)]
         return (tmp, x) # the type of `tmp` is known, but it is still empty
 
-The compiled code is too slow
-=============================
 
-The most common reason for slowness of a compiled JIT function is that
-compiling in :term:`nopython mode` has failed and the Numba compiler has
-fallen back to :term:`object mode`.  :term:`object mode` currently provides
-little to no speedup compared to regular Python interpretation, and its
-main point is to allow an internal optimization known as
-:term:`loop-lifting`: this optimization will allow to compile inner
-loops in :term:`nopython mode` regardless of what code surrounds those
-inner loops.
+`Object mode` or ``@jit(forceobj=True)`` is too slow
+====================================================
 
-To find out if type inference succeeded on your function, you can use
-the :meth:`~Dispatcher.inspect_types` method on the compiled function.
-
-For example, let's take the following function::
-
-   @jit
-   def f(a, b):
-       s = a + float(b)
-       return s
-
-When called with numbers, this function should be fast as Numba is able
-to convert number types to floating-point numbers.  Let's see::
-
-   >>> f(1, 2)
-   3.0
-   >>> f.inspect_types()
-   f (int64, int64)
-   --------------------------------------------------------------------------------
-   # --- LINE 7 ---
-
-   @jit
-
-   # --- LINE 8 ---
-
-   def f(a, b):
-
-       # --- LINE 9 ---
-       # label 0
-       #   a.1 = a  :: int64
-       #   del a
-       #   b.1 = b  :: int64
-       #   del b
-       #   $0.2 = global(float: <class 'float'>)  :: Function(<class 'float'>)
-       #   $0.4 = call $0.2(b.1, )  :: (int64,) -> float64
-       #   del b.1
-       #   del $0.2
-       #   $0.5 = a.1 + $0.4  :: float64
-       #   del a.1
-       #   del $0.4
-       #   s = $0.5  :: float64
-       #   del $0.5
-
-       s = a + float(b)
-
-       # --- LINE 10 ---
-       #   $0.7 = cast(value=s)  :: float64
-       #   del s
-       #   return $0.7
-
-       return s
-
-Without trying to understand too much of the Numba intermediate representation,
-it is still visible that all variables and temporary values have had their
-types inferred properly: for example *a* has the type ``int64``, *$0.5* has
-the type ``float64``, etc.
-
-However, if *b* is passed as a string, compilation will fall back on object
-mode as the float() constructor with a string is currently not supported
-by Numba::
-
-   >>> f(1, "2")
-   3.0
-   >>> f.inspect_types()
-   [... snip annotations for other signatures, see above ...]
-   ================================================================================
-   f (int64, str)
-   --------------------------------------------------------------------------------
-   # --- LINE 7 ---
-
-   @jit
-
-   # --- LINE 8 ---
-
-   def f(a, b):
-
-       # --- LINE 9 ---
-       # label 0
-       #   a.1 = a  :: pyobject
-       #   del a
-       #   b.1 = b  :: pyobject
-       #   del b
-       #   $0.2 = global(float: <class 'float'>)  :: pyobject
-       #   $0.4 = call $0.2(b.1, )  :: pyobject
-       #   del b.1
-       #   del $0.2
-       #   $0.5 = a.1 + $0.4  :: pyobject
-       #   del a.1
-       #   del $0.4
-       #   s = $0.5  :: pyobject
-       #   del $0.5
-
-       s = a + float(b)
-
-       # --- LINE 10 ---
-       #   $0.7 = cast(value=s)  :: pyobject
-       #   del s
-       #   return $0.7
-
-       return s
-
-Here we see that all variables end up typed as ``pyobject``.  This means
-that the function was compiled in object mode and values are passed
-around as generic Python objects, without Numba trying to look into them
-to reason about their raw values.  This is a situation you want to avoid
-when caring about the speed of your code.
-
-If a function fails to compile in ``nopython`` mode warnings will be emitted
-with explanation as to why compilation failed. For example with the ``f()``
-function above (slightly edited for documentation purposes)::
-
-    >>> f(1, 2)
-    3.0
-    >>> f(1, "2")
-    example.py:7: NumbaWarning:
-    Compilation is falling back to object mode WITH looplifting enabled because Function "f" failed type inference due to: Invalid use of Function(<class 'float'>) with argument(s) of type(s): (unicode_type)
-    * parameterized
-    In definition 0:
-        TypeError: float() only support for numbers
-        raised from <path>/numba/typing/builtins.py:880
-    In definition 1:
-        TypeError: float() only support for numbers
-        raised from <path>/numba/typing/builtins.py:880
-    This error is usually caused by passing an argument of a type that is unsupported by the named function.
-    [1] During: resolving callee type: Function(<class 'float'>)
-    [2] During: typing of call at example.py (9)
-
-
-    File "example.py", line 9:
-    def f(a, b):
-        s = a + float(b)
-        ^
-
-    <path>/numba/compiler.py:722: NumbaWarning: Function "f" was compiled in object mode without forceobj=True.
-
-    File "example.py", line 8:
-    @jit
-    def f(a, b):
-    ^
-
-    3.0
+:term:`object mode` provides little to no speedup compared to regular Python 
+interpretation, its main point is to allow an internal optimization known as  
+:term:`loop-lifting`. This optimization will allow compilation of inner  
+loops in :term:`nopython mode` regardless of what code surrounds those  
+inner loops. The compilation of inner loops can still fallback to  
+:term:`object mode` if they use types or operations that  
+:term:`nopython mode` does not support. 
 
 
 Disabling JIT compilation
@@ -371,7 +230,7 @@ In order to debug code, it is possible to disable JIT compilation, which makes
 the ``jit`` decorator (and the ``njit`` decorator) act as if
 they perform no operation, and the invocation of decorated functions calls the
 original Python function instead of a compiled version. This can be toggled by
-setting the :envvar:`NUMBA_DISABLE_JIT` enviroment variable to ``1``.
+setting the :envvar:`NUMBA_DISABLE_JIT` environment variable to ``1``.
 
 When this mode is enabled, the ``vectorize`` and ``guvectorize`` decorators will
 still result in compilation of a ufunc, as there is no straightforward pure
@@ -403,12 +262,42 @@ debug info is available:
   * Other types are shown as a structure based on Numba's memory model
     representation of the type.
 
+Further, the Numba ``gdb`` printing extension can be loaded into ``gdb`` (if the
+``gdb`` has Python support) to permit the printing of variables as they would be
+in native Python. The extension does this by reinterpreting Numba's memory model
+representations as Python types. Information about the ``gdb`` installation that
+Numba is using, including the path to load the ``gdb`` printing extension, can
+be displayed by using the ``numba -g`` command. For best results ensure that the
+Python that ``gdb`` is using has a NumPy module accessible. An example output
+of the ``gdb`` information follows:
+
+.. code-block:: none
+  :emphasize-lines: 1
+
+    $ numba -g
+    GDB info:
+    --------------------------------------------------------------------------------
+    Binary location                               : <some path>/gdb
+    Print extension location                      : <some python path>/numba/misc/gdb_print_extension.py
+    Python version                                : 3.8
+    NumPy version                                 : 1.20.0
+    Numba printing extension supported            : True
+
+    To load the Numba gdb printing extension, execute the following from the gdb prompt:
+
+    source <some python path>/numba/misc/gdb_print_extension.py
+
+    --------------------------------------------------------------------------------
+
 Known issues:
 
 * Stepping depends heavily on optimization level. At full optimization
   (equivalent to O3), most of the variables are optimized out. It is often
-  beneficial to use the environment variable :envvar:`NUMBA_OPT` to adjust the
-  optimization level and :envvar:`NUMBA_EXTEND_VARIABLE_LIFETIMES` to extend
+  beneficial to use the jit option ``_dbg_optnone=True`` 
+  or the environment variable :envvar:`NUMBA_OPT` to adjust the 
+  optimization level and the jit option ``_dbg_extend_lifetimes=True`` 
+  (which is on by default if ``debug=True``) or
+  :envvar:`NUMBA_EXTEND_VARIABLE_LIFETIMES` to extend
   the lifetime of variables to the end of their scope so as to get a debugging
   experience closer to the semantics of Python execution.
 
@@ -432,6 +321,21 @@ Internal details:
   ``x``, ``x.1`` and ``x.2``.)
 
 * When debug is enabled, inlining of functions at LLVM IR level is disabled.
+
+JIT options for debug
+---------------------
+
+* ``debug`` (bool). Set to ``True`` to enable debug info. Defaults to ``False``.
+* ``_dbg_optnone`` (bool). Set to ``True`` to disable all LLVM optimization passes 
+  on the function. Defaults to ``False``. See :envvar:`NUMBA_OPT` for a global setting
+  to disable optimization.
+* ``_dbg_extend_lifetimes`` (bool). Set to ``True`` to extend the lifetime of
+  objects such that they more closely follow the semantics of Python.
+  Automatically set to ``True`` when 
+  ``debug=True``; otherwise, defaults to ``False``. Users can explicitly set this option 
+  to ``False`` to retain the normal execution semantics of compiled code.
+  See :envvar:`NUMBA_EXTEND_VARIABLE_LIFETIMES` for a global option to extend object 
+  lifetimes.
 
 Example debug usage
 -------------------
@@ -496,6 +400,55 @@ In the terminal:
     (gdb) bt
     #0  __main__::foo_241[abi:c8tJTC_2fWgEeGLSgydRTQUgiqKEZ6gEoDvQJmaQIA](long long) (a=123) at test1.py:8
     #1  0x00007ffff06439fa in cpython::__main__::foo_241[abi:c8tJTC_2fWgEeGLSgydRTQUgiqKEZ6gEoDvQJmaQIA](long long) ()
+
+
+Another example follows that makes use of the Numba ``gdb`` printing extension
+mentioned above, note the change in the print format once the extension is
+loaded with ``source`` :
+
+The Python source:
+
+.. code-block:: python
+  :linenos:
+
+    from numba import njit
+    import numpy as np
+
+    @njit(debug=True)
+    def foo(n):
+        x = np.arange(n)
+        y = (x[0], x[-1])
+        return x, y
+
+    foo(4)
+
+In the terminal:
+
+.. code-block:: none
+  :emphasize-lines: 1, 3, 4, 7, 12, 14, 16, 17, 20
+
+    $ NUMBA_OPT=0 NUMBA_EXTEND_VARIABLE_LIFETIMES=1 gdb -q python
+    Reading symbols from python...
+    (gdb) set breakpoint pending on
+    (gdb) break test2.py:8
+    No source file named test2.py.
+    Breakpoint 1 (test2.py:8) pending.
+    (gdb) run test2.py
+    Starting program: <path>/bin/python test2.py
+    ...
+    Breakpoint 1, __main__::foo_241[abi:c8tJTC_2fWgEeGLSgydRTQUgiqKEZ6gEoDvQJmaQIA](long long) (n=4) at test2.py:8
+    8           return x, y
+    (gdb) print x
+    $1 = {meminfo = 0x55555688f470 "\001", parent = 0x0, nitems = 4, itemsize = 8, data = 0x55555688f4a0, shape = {4}, strides = {8}}
+    (gdb) print y
+    $2 = {0, 3}
+    (gdb) source numba/misc/gdb_print_extension.py
+    (gdb) print x
+    $3 =
+    [0 1 2 3]
+    (gdb) print y
+    $4 = (0, 3)
+
 
 
 Globally override debug setting
@@ -703,7 +656,7 @@ the line in which the access violation occurred is printed.
 
 Continuing the example as a debugging session demonstration, first ``index``
 can be printed, and it is evidently 1e9. Printing ``c`` shows that it is a
-structure, so the type needs looking up and it can be seen that is it an
+structure, so the type needs looking up and it can be seen that it is an
 ``array(float64, 1d, C)`` type. Given the segfault came from an invalid access
 it would be informative to check the number of items in the array and compare
 that to the index requested. Inspecting the ``nitems`` member of the structure
@@ -780,12 +733,13 @@ breakpoint was hit, and after a ``continue`` was issued, it broke again at line
 Debugging in parallel regions
 -----------------------------
 
-The follow example is quite involved, it executes with ``gdb`` instrumentation
-from the outset as per the example above, but it also uses threads and makes use
-of the breakpoint functionality. Further, the last iteration of the parallel
-section calls the function ``work``, which is actually just a binding to
-``glibc``'s ``free(3)`` in this case, but could equally be some involved
-function that is presenting a segfault for unknown reasons.
+The following example is quite involved, it executes with ``gdb``
+instrumentation from the outset as per the example above, but it also uses
+threads and makes use of the breakpoint functionality. Further, the last
+iteration of the parallel section calls the function ``work``, which is
+actually just a binding to ``glibc``'s ``free(3)`` in this case, but could
+equally be some involved function that is presenting a segfault for unknown
+reasons.
 
 .. code-block:: python
   :linenos:

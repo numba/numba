@@ -53,8 +53,10 @@ def type_callable(func):
 
 
 # By default, an *overload* does not have a cpython wrapper because it is not
-# callable from python.
-_overload_default_jit_options = {'no_cpython_wrapper': True}
+# callable from python. It also has `nopython=True`, this has been default since
+# its inception!
+_overload_default_jit_options = {'no_cpython_wrapper': True,
+                                 'nopython':True}
 
 
 def overload(func, jit_options={}, strict=True, inline='never',
@@ -188,7 +190,7 @@ def overload_attribute(typ, attr, **kwargs):
     def decorate(overload_func):
         template = make_overload_attribute_template(
             typ, attr, overload_func,
-            inline=kwargs.get('inline', 'never'),
+            **kwargs
         )
         infer_getattr(template)
         overload(overload_func, **kwargs)(overload_func)
@@ -320,10 +322,11 @@ class _Intrinsic(ReduceMixin):
 
     __uuid = None
 
-    def __init__(self, name, defn, **kwargs):
+    def __init__(self, name, defn, prefer_literal=False, **kwargs):
         self._ctor_kwargs = kwargs
         self._name = name
         self._defn = defn
+        self._prefer_literal = prefer_literal
         functools.update_wrapper(self, defn)
 
     @property
@@ -352,7 +355,8 @@ class _Intrinsic(ReduceMixin):
                                                  infer_global)
 
         template = make_intrinsic_template(self, self._defn, self._name,
-                                           self._ctor_kwargs)
+                                           prefer_literal=self._prefer_literal,
+                                           kwargs=self._ctor_kwargs)
         infer(template)
         infer_global(self, types.Function(template))
 

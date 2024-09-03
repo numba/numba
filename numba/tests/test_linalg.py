@@ -11,7 +11,7 @@ import numpy as np
 from numba import jit, njit, typeof
 from numba.core import errors
 from numba.tests.support import (TestCase, tag, needs_lapack, needs_blas,
-                                 _is_armv7l)
+                                 _is_armv7l, EnableNRTStatsMixin)
 from .matmul_usecase import matmul_usecase
 import unittest
 
@@ -28,7 +28,7 @@ def vdot(a, b):
     return np.vdot(a, b)
 
 
-class TestProduct(TestCase):
+class TestProduct(EnableNRTStatsMixin, TestCase):
     """
     Tests for dot products.
     """
@@ -38,6 +38,7 @@ class TestProduct(TestCase):
     def setUp(self):
         # Collect leftovers from previous test cases before checking for leaks
         gc.collect()
+        super(TestProduct, self).setUp()
 
     def sample_vector(self, n, dtype):
         # Be careful to generate only exactly representable float values,
@@ -414,7 +415,7 @@ def kron_matrix(a, b):
     return np.kron(a, b)
 
 
-class TestLinalgBase(TestCase):
+class TestLinalgBase(EnableNRTStatsMixin, TestCase):
     """
     Provides setUp and common data/error modes for testing np.linalg functions.
     """
@@ -425,6 +426,7 @@ class TestLinalgBase(TestCase):
     def setUp(self):
         # Collect leftovers from previous test cases before checking for leaks
         gc.collect()
+        super(TestLinalgBase, self).setUp()
 
     def sample_vector(self, n, dtype):
         # Be careful to generate only exactly representable float values,
@@ -1122,6 +1124,32 @@ class TestLinalgSvd(TestLinalgBase):
     Tests for np.linalg.svd.
     """
 
+    # This checks that A ~= U*S*V**H, i.e. SV decomposition ties out.  This is
+    # required as NumPy uses only double precision LAPACK routines and
+    # computation of SVD is numerically sensitive. Numba uses type-specific
+    # routines and therefore sometimes comes out with a different answer to
+    # NumPy (orthonormal bases are not unique, etc.).
+
+    def check_reconstruction(self, a, got, expected):
+        u, sv, vt = got
+
+        # Check they are dimensionally correct
+        for k in range(len(expected)):
+            self.assertEqual(got[k].shape, expected[k].shape)
+
+        # Columns in u and rows in vt dictates the working size of s
+        s = np.zeros((u.shape[1], vt.shape[0]))
+        np.fill_diagonal(s, sv)
+
+        rec = np.dot(np.dot(u, s), vt)
+        resolution = np.finfo(a.dtype).resolution
+        np.testing.assert_allclose(
+            a,
+            rec,
+            rtol=10 * resolution,
+            atol=100 * resolution  # zeros tend to be fuzzy
+        )
+
     @needs_lapack
     def test_linalg_svd(self):
         """
@@ -1150,34 +1178,8 @@ class TestLinalgSvd(TestLinalgBase):
                     # plain match failed, test by reconstruction
                     use_reconstruction = True
 
-            # if plain match fails then reconstruction is used.
-            # this checks that A ~= U*S*V**H
-            # i.e. SV decomposition ties out
-            # this is required as numpy uses only double precision lapack
-            # routines and computation of svd is numerically
-            # sensitive, numba using the type specific routines therefore
-            # sometimes comes out with a different answer (orthonormal bases
-            # are not unique etc.).
             if use_reconstruction:
-                u, sv, vt = got
-
-                # check they are dimensionally correct
-                for k in range(len(expected)):
-                    self.assertEqual(got[k].shape, expected[k].shape)
-
-                # regardless of full_matrices cols in u and rows in vt
-                # dictates the working size of s
-                s = np.zeros((u.shape[1], vt.shape[0]))
-                np.fill_diagonal(s, sv)
-
-                rec = np.dot(np.dot(u, s), vt)
-                resolution = np.finfo(a.dtype).resolution
-                np.testing.assert_allclose(
-                    a,
-                    rec,
-                    rtol=10 * resolution,
-                    atol=100 * resolution  # zeros tend to be fuzzy
-                )
+                self.check_reconstruction(a, got, expected)
 
             # Ensure proper resource management
             with self.assertNoNRTLeak():
@@ -1238,8 +1240,11 @@ class TestLinalgSvd(TestLinalgBase):
         got = func(X, False)
         np.testing.assert_allclose(X, X_orig)
 
-        for e_a, g_a in zip(expected, got):
-            np.testing.assert_allclose(e_a, g_a)
+        try:
+            for e_a, g_a in zip(expected, got):
+                np.testing.assert_allclose(e_a, g_a)
+        except AssertionError:
+            self.check_reconstruction(X, got, expected)
 
 
 class TestLinalgQr(TestLinalgBase):
@@ -2419,7 +2424,7 @@ class TestLinalgMatrixPower(TestLinalgBase):
             # check that the computed results are contig and in the same way
             self.assert_contig_sanity(got, "C")
 
-            res = 5 * np.finfo(a.dtype).resolution
+            res = 7 * np.finfo(a.dtype).resolution
             np.testing.assert_allclose(got, expected, rtol=res, atol=res)
 
             # Ensure proper resource management
