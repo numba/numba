@@ -558,14 +558,14 @@ class UnicodeIteratorType(SimpleIteratorType):
 
 class LiteralKeyWrapper:
     """
-       This class isn't a type, but is instead a wrapper
-       used for hashing literal values that can't be hashed
-       (for example the lowering dictionary).
+    This class isn't a type, but is instead a wrapper
+    used for hashing literal values that can't be hashed
+    (for example the lowering dictionary).
 
-       It assumes a literal type exists for the given type and
-       reuses that hash implementation as its implementation. This
-       class is used so there won't be a conflict when loading from
-       a dictionary.
+    It assumes a literal type exists for the given type and
+    reuses that hash implementation as its implementation. This
+    class is used so there won't be a conflict when loading from
+    a dictionary.
     """
 
     def __init__(self, literal_value):
@@ -578,8 +578,8 @@ class LiteralKeyWrapper:
 
     def __eq__(self, other):
         """
-            Treat two LiteralKeys as equal if they have the same
-            type literal and the literal values are the same.
+        Treat two LiteralKeys as equal if they have the same
+        type literal and the literal values are the same.
         """
         return (
             isinstance(other, LiteralKeyWrapper)
