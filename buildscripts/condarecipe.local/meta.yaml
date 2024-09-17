@@ -38,7 +38,7 @@ requirements:
     # NOTE: ppc64le and aarch64 are pending testing so excluded for now.
     - tbb-devel >=2021.6       # [not (aarch64 or ppc64le)]
   run:
-    - python >=3.9
+    - python >=3.10
     # NumPy 1.22.0, 1.22.1, 1.22.2 are all broken for ufuncs, see #7756
     - numpy >=1.22.3
     # On channel https://anaconda.org/numba/
