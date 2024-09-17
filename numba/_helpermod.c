@@ -267,7 +267,7 @@ MOD_INIT(_helperlib) {
     PyModule_AddIntConstant(m, "py_unicode_2byte_kind", PyUnicode_2BYTE_KIND);
     PyModule_AddIntConstant(m, "py_unicode_4byte_kind", PyUnicode_4BYTE_KIND);
 #if (PY_MAJOR_VERSION == 3)
-#if ((PY_MINOR_VERSION == 9) || (PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11))
+#if ((PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11))
     PyModule_AddIntConstant(m, "py_unicode_wchar_kind", PyUnicode_WCHAR_KIND);
 #endif
 #endif
