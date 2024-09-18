@@ -19,7 +19,7 @@ except ImportError:
         pass
 
 
-min_python_version = "3."
+min_python_version = "3.10"
 max_python_version = "3.13"  # exclusive
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.22"
