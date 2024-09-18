@@ -260,14 +260,10 @@ class TestBranchPrune(TestBranchPruneBase, SerialMixin):
                 y = -3
             return y
 
-        if utils.PYVERSION >= (3, 10):
-            # Python 3.10 creates a block with a NOP in it for the `pass` which
-            # means it gets pruned.
-            self.assert_prune(impl, (types.NoneType('none'),), [False, None],
-                              None)
-        else:
-            self.assert_prune(impl, (types.NoneType('none'),), [None, None],
-                              None)
+        # Python 3.10 creates a block with a NOP in it for the `pass` which
+        # means it gets pruned.
+        self.assert_prune(impl, (types.NoneType('none'),), [False, None],
+                            None)
 
         self.assert_prune(impl, (types.IntegerLiteral(10),), [True, None], 10)
 
