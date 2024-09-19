@@ -16,7 +16,7 @@ from numba import literal_unroll
 from numba.core.extending import (
     overload, overload_method, intrinsic, register_jitable)
 from numba.core import errors
-from numba.core import types, utils
+from numba.core import types
 from numba.core.unsafe.bytes import grab_byte, grab_uint64_t
 from numba.cpython.randomimpl import (const_int, get_next_int, get_next_int32,
                                       get_state_ptr)

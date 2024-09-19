@@ -1,8 +1,6 @@
 import logging
 import warnings
 
-from numba.core.config import PYVERSION
-
 from importlib import metadata as importlib_metadata
 
 

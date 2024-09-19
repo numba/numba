@@ -5,7 +5,6 @@ from numba import jit
 from numba.core.controlflow import CFGraph, ControlFlowAnalysis
 from numba.core import types
 from numba.core.bytecode import FunctionIdentity, ByteCode, _fix_LOAD_GLOBAL_arg
-from numba.core.utils import PYVERSION
 from numba.tests.support import TestCase
 
 enable_pyobj_flags = {}
@@ -1136,7 +1135,6 @@ class TestRealCodeDomFront(TestCase):
             return c
 
         cfa, blkpts = self.get_cfa_and_namedblocks(foo)
-        idoms = cfa.graph.immediate_dominators()
 
         # Py3.10 turns while loop into if(...) { do {...} while(...) }.
         # Also, `SET_BLOCK_B0` is duplicated. As a result, the second B0
@@ -1162,7 +1160,6 @@ class TestRealCodeDomFront(TestCase):
             SET_BLOCK_G                     # noqa: F821
 
         cfa, blkpts = self.get_cfa_and_namedblocks(foo)
-        idoms = cfa.graph.immediate_dominators()
         self.assertEqual(blkpts['D0'], blkpts['C1'])
 
         # Py3.10 changes while loop into if-do-while

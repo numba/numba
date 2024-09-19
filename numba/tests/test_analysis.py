@@ -5,7 +5,7 @@ import types as pytypes
 import numpy as np
 from numba.core.compiler import run_frontend, Flags, StateDict
 from numba import jit, njit, literal_unroll
-from numba.core import types, errors, ir, rewrites, ir_utils, utils, cpu
+from numba.core import types, errors, ir, rewrites, ir_utils, cpu
 from numba.core import postproc
 from numba.core.inline_closurecall import InlineClosureCallPass
 from numba.tests.support import (TestCase, MemoryLeakMixin, SerialMixin,
@@ -263,7 +263,7 @@ class TestBranchPrune(TestBranchPruneBase, SerialMixin):
         # Python 3.10 creates a block with a NOP in it for the `pass` which
         # means it gets pruned.
         self.assert_prune(impl, (types.NoneType('none'),), [False, None],
-                            None)
+                          None)
 
         self.assert_prune(impl, (types.IntegerLiteral(10),), [True, None], 10)
 
