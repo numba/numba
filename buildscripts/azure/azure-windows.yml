@@ -58,12 +58,5 @@ jobs:
         call activate %CONDA_ENV%
         set NUMBA_ENABLE_CUDASIM=1
         echo "Running shard of discovered tests: %TEST_START_INDEX%:%TEST_COUNT%"
-        python runtests.py -m 2 -b -j "%TEST_START_INDEX%:%TEST_COUNT%"  --exclude-tags='long_running' --junit -- numba.tests
+        python runtests.py -m 2 -b -j "%TEST_START_INDEX%:%TEST_COUNT%"  --exclude-tags='long_running'  -- numba.tests
       displayName: 'Test shard of test files'
-
-    - task: PublishTestResults@2
-      condition: succeededOrFailed()
-      displayName: Publish Test Results
-      inputs:
-        testResultsFiles: 'junit_numba_*.xml'
-        mergeTestResults: true
