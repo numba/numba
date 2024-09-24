@@ -515,13 +515,15 @@ The following top-level functions are supported:
 * :func:`numpy.kaiser`
 * :func:`numpy.iscomplex`
 * :func:`numpy.iscomplexobj`
+* :func:`numpy.isin` (matching pre-1.24 behaviour without the ``kind`` keyword)
 * :func:`numpy.isneginf`
 * :func:`numpy.isposinf`
 * :func:`numpy.isreal`
 * :func:`numpy.isrealobj`
 * :func:`numpy.isscalar`
 * :func:`numpy.interp` (only the 3 first arguments)
-* :func:`numpy.intersect1d` (only first 2 arguments, ar1 and ar2)
+* :func:`numpy.intersect1d` (only 3 first arguments: ``ar1``, ``ar2``, and ``assume_unique``)
+* :func:`numpy.in1d` (matching pre-1.24 behaviour without the ``kind`` keyword)
 * :func:`numpy.linspace` (only the 3-argument form)
 * :func:`numpy.logspace` (only the 3 first arguments)
 * :func:`numpy.nan_to_num` (only the 3 first arguments)
@@ -546,6 +548,8 @@ The following top-level functions are supported:
 * :func:`numpy.select` (only using homogeneous lists or tuples for the first
   two arguments, condlist and choicelist). Additionally, these two arguments
   can only contain arrays (unlike NumPy that also accepts tuples).
+* :func:`numpy.setxor1d`
+* :func:`numpy.setdiff1d`
 * :func:`numpy.shape`
 * :func:`numpy.sinc`
 * :func:`numpy.sort` (no optional arguments, quicksort accepts
