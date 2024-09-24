@@ -1311,11 +1311,18 @@ def rename_labels(blocks):
     # update target labels in jumps/branches
     for b in blocks.values():
         term = b.terminator
+        # create new IR nodes instead of mutating the existing one as copies of
+        # the IR may also refer to the same nodes!
         if isinstance(term, ir.Jump):
-            term.target = label_map[term.target]
+            b.body[-1] = ir.Jump(label_map[term.target], term.loc)
         if isinstance(term, ir.Branch):
-            term.truebr = label_map[term.truebr]
-            term.falsebr = label_map[term.falsebr]
+            b.body[-1] = ir.Branch(term.cond,
+                                   label_map[term.truebr],
+                                   label_map[term.falsebr],
+                                   term.loc)
+
+
+
     # update blocks dictionary keys
     new_blocks = {}
     for k, b in blocks.items():
