@@ -98,7 +98,6 @@ class PythonFloat(Float):
     def __init__(self, *args, **kws):
         super(PythonFloat, self).__init__(*args, **kws)
         # Determine bitwidth
-        assert self.name.startswith('py_float')
         bitwidth = 64
         self.bitwidth = bitwidth
 

@@ -13,6 +13,6 @@ from numba.core.types.new_scalars.machine_types import (
     MachineBooleanLiteral, MachineIntegerLiteral
 )
 from numba.core.types.new_scalars.numpy_types import (
-    NumPyBoolean, NumPyInteger, NumPyFloat, NumPyComplex,
-    NumPyBooleanLiteral, NumPyIntegerLiteral
+    NumPyBoolean, NumPyInteger, NumPyFloat16, NumPyFloat32, NumPyFloat64,
+    NumPyComplex64, NumPyComplex128, NumPyBooleanLiteral, NumPyIntegerLiteral
 )

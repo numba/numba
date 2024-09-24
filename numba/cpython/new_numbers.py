@@ -613,7 +613,9 @@ _implement_bitwise_operators()
 
 
 def real_add_impl(context, builder, sig, args):
-    res = builder.fadd(*args)
+    new_args = [context.cast(builder, v, t, sig.return_type)
+                for v, t in zip(args, sig.args)]
+    res = builder.fadd(*new_args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
@@ -742,9 +744,7 @@ def real_divmod_func_body(context, builder, vx, wx):
     div_istrue = builder.fcmp_ordered('!=', div, ZERO)
 
     with builder.if_then(div_istrue):
-        realtypemap = {'float': types.float32,
-                       'double': types.float64}
-        realtype = realtypemap[str(wx.type)]
+        realtype = types.py_float
         floorfn = context.get_function(math.floor,
                                        typing.signature(realtype, realtype))
         floordiv = floorfn(builder, [div])
@@ -1340,7 +1340,7 @@ def any_to_boolean(context, builder, fromty, toty, val):
 def boolean_to_any(context, builder, fromty, toty, val):
     # Casting from boolean to anything first casts to int32
     asint = builder.zext(val, ir.IntType(32))
-    return context.cast(builder, asint, types.int32, toty)
+    return context.cast(builder, asint, types.c_int32, toty)
 
 @lower_cast(types.IntegerLiteral, types.Boolean)
 @lower_cast(types.BooleanLiteral, types.Boolean)

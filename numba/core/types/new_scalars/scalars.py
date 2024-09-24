@@ -10,7 +10,7 @@ from numba.np import npdatetime_helpers
 
 
 class Boolean(Hashable):
-    pass
+    signed = False
 
 def parse_integer_bitwidth(name):
     bitwidth = int(re.findall(r'\d+', name)[-1])
@@ -18,7 +18,7 @@ def parse_integer_bitwidth(name):
 
 
 def parse_integer_signed(name):
-    signed = name.startswith('int')
+    signed = not 'uint' in name
     return signed
 
 
@@ -35,11 +35,11 @@ class BooleanLiteral(Literal, Boolean):
 
 
 class Float(Number):
-    pass
+    signed = True
 
 
 class Complex(Number):
-    pass
+    signed = True
 
 
 class _NPDatetimeBase(Type):

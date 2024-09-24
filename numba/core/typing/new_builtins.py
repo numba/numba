@@ -3,7 +3,7 @@ import itertools
 import numpy as np
 import operator
 
-from numba.core import types, errors, config
+from numba.core import types, errors, config, cgutils
 from numba import prange
 from numba.parfors.parfor import internal_prange
 
@@ -14,8 +14,11 @@ from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
 
 
 from numba.core.extending import (
-    typeof_impl, type_callable, models, register_model, make_attribute_wrapper,
-    )
+    typeof_impl, type_callable, models, register_model,
+    make_attribute_wrapper, overload, intrinsic, overload_method
+)
+
+register_model(types.NotImplementedType)(models.OpaqueModel)
 
 
 @infer_global(print)
@@ -128,52 +131,482 @@ class PairSecond(AbstractTemplate):
             return signature(pair.second_type, pair)
 
 
-def choose_result_bitwidth(*inputs):
-    return max(tp.bitwidth for tp in inputs)
-
-def choose_result_int(*inputs):
-    """
-    Choose the integer result type for an operation on integer inputs,
-    according to the integer typing NBEP. In accordance with the new
-    type system.
-    """
-    bitwidth = choose_result_bitwidth(*inputs)
-    signed = any(tp.signed for tp in inputs)
-
-    # If any integer is a NumPy integer, promotion should be to the
-    # respective NumPy type.
-    if any('np' in tp.name for tp in inputs):
-        return types.NumPyInteger.from_bitwidth(bitwidth, signed)
-
-    return types.py_int
-
-all_ints = (
-    sorted(set((types.py_int, types.py_int))) +
-    sorted(set((types.np_int32, types.np_int64))) +
-    sorted(set((types.np_uint32, types.np_uint64)))
-    )
-integer_binop_cases = tuple(
-    signature(choose_result_int(op1, op2), op1, op2)
-    for op1, op2 in itertools.product(all_ints, all_ints)
-    )
-
 class BinOp(ConcreteTemplate):
-    cases = list(integer_binop_cases)
-
-    cases += [signature(op, op, op) for op in sorted(types.py_real_domain)]
-    cases += [signature(op, op, op) for op in sorted(types.py_complex_domain)]
-    cases += [signature(op, op, op) for op in sorted(types.np_real_domain)]
-    cases += [signature(op, op, op) for op in sorted(types.np_complex_domain)]
+    cases = []
 
 
-@infer_global(operator.add)
-class BinOpAdd(BinOp):
-    pass
+@overload(operator.is_)
+def ol_is_NotImplemented(a, b, /):
+    a_is_notimplemented_ty = isinstance(a, types.NotImplementedType)
+    b_is_notimplemented_ty = isinstance(b, types.NotImplementedType)
+
+    # only use this overload if at least one of the types is NotImplementedType
+    if a_is_notimplemented_ty or b_is_notimplemented_ty:
+        pred = a_is_notimplemented_ty and b_is_notimplemented_ty
+
+        def ol_is_NotImplemented(a, b, /):
+            return pred
+        return ol_is_NotImplemented
 
 
-@infer_global(operator.iadd)
-class BinOpAdd(BinOp):
-    pass
+@overload(operator.is_not)
+def ol_is_not_NotImplemented(a, b, /):
+    a_is_notimplemented_ty = isinstance(a, types.NotImplementedType)
+    b_is_notimplemented_ty = isinstance(b, types.NotImplementedType)
+
+    # only use this overload if at least one of the types is NotImplementedType
+    if a_is_notimplemented_ty or b_is_notimplemented_ty:
+        pred = not (a_is_notimplemented_ty and b_is_notimplemented_ty)
+
+        def ol_is_not_NotImplemented(a, b, /):
+            return pred
+        return ol_is_not_NotImplemented
+
+def binop_compat(sig):
+    # Ensure types are the same
+    for t in sig.args:
+        if t != sig.return_type:
+            raise errors.TypingError(f"{t} != {sig.return_type} in {sig}")
+
+
+@intrinsic
+def add_as_int(tyctx, xty, yty):
+    sig = types.py_int(xty, yty)
+
+    def codegen(cgctx, builder, sig, llargs):
+        binop_compat(sig)
+        # These intrinsics should not cast
+        return builder.add(*llargs)
+
+    return sig, codegen
+
+
+@intrinsic
+def add_as_float(tyctx, xty, yty):
+    sig = types.py_float(xty, yty)
+
+    def codegen(cgctx, builder, sig, llargs):
+        binop_compat(sig)
+        return builder.fadd(*llargs)
+    return sig, codegen
+
+
+@intrinsic
+def add_as_complex(tyctx, xty, yty):
+    sig = types.py_complex(xty, yty)
+
+    def codegen(context, builder, sig, args):
+        binop_compat(sig)
+        [cx, cy] = args
+        ty = sig.return_type
+        z = context.make_complex(builder, ty)
+        if isinstance(sig.args[0], types.Complex):
+            x = context.make_complex(builder, ty, value=cx)
+            x_real = x.real
+            x_imag = x.imag
+        else:
+            assert False
+            x_real = context.cast(builder, cx, sig.args[0], ty.underlying_float)
+            x_imag = None
+
+        if isinstance(sig.args[1], types.Complex):
+            y = context.make_complex(builder, ty, value=cy)
+            y_real = y.real
+            y_imag = y.imag
+        else:
+            assert False
+            y_real = context.cast(builder, cy, sig.args[1], ty.underlying_float)
+            y_imag = None
+
+        z.real = builder.fadd(x_real, y_real)
+        if x_imag and y_imag:
+            z.imag = builder.fadd(x_imag, y_imag)
+        elif x_imag:
+            z.imag = x_imag
+        elif y_imag:
+            z.imag = y_imag
+
+        res = z._getvalue()
+        return res
+
+    return sig, codegen
+
+
+@overload_method(types.PythonBoolean, "__bool__")
+def py_bool__bool__(self):
+    def impl(self):
+        return self
+    return impl
+
+
+@overload_method(types.PythonBoolean, "__int__")
+def py_bool__int__(self):
+    def impl(self):
+        return types.py_int(self)
+    return impl
+
+
+@overload_method(types.PythonBoolean, "__float__")
+def py_bool__float__(self):
+    def impl(self):
+        return types.py_float(self)
+    return impl
+
+
+@overload_method(types.PythonInteger, "__bool__")
+def py_int__bool__(self):
+    def impl(self):
+        return types.py_bool(self)
+    return impl
+
+
+@overload_method(types.PythonInteger, "__int__")
+def py_int__int__(self):
+    def impl(self):
+        return self
+    return impl
+
+
+@overload_method(types.PythonInteger, "__float__")
+def py_int__float__(self):
+    def impl(self):
+        return types.py_float(self)
+    return impl
+
+
+@overload_method(types.PythonFloat, "__bool__")
+def py_float__bool__(self):
+    def impl(self):
+        return types.py_bool(self)
+    return impl
+
+
+@overload_method(types.PythonFloat, "__int__")
+def py_float__int__(self):
+    def impl(self):
+        return types.py_int(self)
+    return impl
+
+
+@overload_method(types.PythonFloat, "__float__")
+def py_float__float__(self):
+    def impl(self):
+        return self
+    return impl
+
+
+@overload_method(types.PythonComplex, "__complex__")
+def py_complex__complex__(self):
+    def impl(self):
+        return self
+    return impl
+
+
+@overload_method(types.NumPyFloat64, "__float__")
+def np_float64__float__(self):
+    def impl(self):
+        return types.py_float(self)
+    return impl
+
+
+@overload_method(types.NumPyFloat64, "__complex__")
+def np_float64__complex__(self):
+    def impl(self):
+        return types.py_complex(self)
+    return impl
+
+
+@overload_method(types.NumPyComplex128, "__complex__")
+def np_complex128__complex__(self):
+    def impl(self):
+        return types.py_complex(self)
+    return impl
+
+
+
+@intrinsic
+def as_py_int(typingctx, ival):
+    # An internal way to cast
+    if isinstance(ival, (types.PythonBoolean, types.PythonInteger)):
+        def impl(context, builder, sig, args):
+            # In CPython, all subclass of int (incl bool) have the same data
+            # model. For Numba, we assume they can all be casted in lowlevel to
+            # repr of py_int
+            return context.cast(builder, args[0], sig.args[0], sig.return_type)
+        return types.py_int(ival), impl
+    else:
+        raise errors.NumbaNotImplementedError(ival)
+
+
+@intrinsic
+def as_py_float(typingctx, ival):
+    # Corresponds to https://github.com/python/cpython/blob/297f2e093ec95800ae2184330b8408c875523467/Objects/floatobject.c#L314
+    if isinstance(ival, (types.PythonBoolean, types.PythonInteger, types.PythonFloat)):
+        def impl(context, builder, sig, args):
+            return context.cast(builder, args[0], sig.args[0], sig.return_type)
+        return types.py_float(ival), impl
+    else:
+        raise errors.NumbaNotImplementedError(ival)
+
+
+@intrinsic
+def as_py_complex(typingctx, ival):
+    # Corresponds to https://github.com/python/cpython/blob/297f2e093ec95800ae2184330b8408c875523467/Objects/complexobject.c#L475
+    if isinstance(ival, (types.PythonBoolean, types.PythonInteger, types.PythonFloat, types.PythonComplex)):
+        def impl(context, builder, sig, args):
+            return context.cast(builder, args[0], sig.args[0], sig.return_type)
+        return types.py_complex(ival), impl
+    else:
+
+        raise errors.NumbaNotImplementedError(ival)
+
+
+@overload_method(types.PythonBoolean, "__add__")
+@overload_method(types.PythonBoolean, "__radd__")
+def py_bool__add__(self, other):
+    def impl(self, other):
+        # Defer to py_int implementation.
+        # In CPython, PyBool is a subclass of PyLong.
+        return as_py_int(self).__add__(other)
+    return impl
+
+
+@overload_method(types.PythonInteger, "__add__")
+@overload_method(types.PythonInteger, "__radd__")
+def py_int__add__(self, other):
+    def impl(self, other):
+        if isinstance(other, (bool, int)):
+            return add_as_int(self, as_py_int(other))
+        else:
+            return NotImplemented
+    return impl
+
+
+@overload_method(types.PythonFloat, "__add__")
+@overload_method(types.PythonFloat, "__radd__")
+def py_float__add__(self, other):
+    def impl(self, other):
+        if isinstance(other, (bool, int, float)):
+            return add_as_float(self, as_py_float(other))
+        else:
+            return NotImplemented
+    return impl
+
+
+@overload_method(types.PythonComplex, "__add__")
+@overload_method(types.PythonComplex, "__radd__")
+def py_complex__add__(self, other):
+    def impl(self, other):
+        if isinstance(other, (bool, int, float, complex)):
+            return add_as_complex(self, as_py_complex(other))
+        else:
+            return NotImplemented
+    return impl
+
+
+FROM_DTYPE = {
+    np.dtype('bool'): types.np_bool_,
+    np.dtype('int8'): types.np_int8,
+    np.dtype('int16'): types.np_int16,
+    np.dtype('int32'): types.np_int32,
+    np.dtype('int64'): types.np_int64,
+
+    np.dtype('uint8'): types.np_uint8,
+    np.dtype('uint16'): types.np_uint16,
+    np.dtype('uint32'): types.np_uint32,
+    np.dtype('uint64'): types.np_uint64,
+
+    np.dtype('float32'): types.np_float32,
+    np.dtype('float64'): types.np_float64,
+    np.dtype('float16'): types.np_float16,
+    np.dtype('complex64'): types.np_complex64,
+    np.dtype('complex128'): types.np_complex128,
+
+    np.dtype(object): types.pyobject,
+}
+
+binop_cache = {
+    "__add__": {},
+    "__radd__": {}
+}
+
+
+def find_np_res_type(op, op_cache, argtys):
+    if argtys in op_cache[op]:
+        return op_cache[op][argtys]
+
+    try:
+        argvals = [argty.cast_python_value(0) for argty in argtys]
+    except NotImplementedError:
+        e = errors.NumbaTypeError(f"cast_python_value({argtys})")
+        raise e
+    res_val = getattr(argvals[0], op)(*argvals[1:])
+    if res_val is not NotImplemented:
+        res_val = FROM_DTYPE[res_val.dtype]
+    else:
+        res_val = types.not_implemented_type
+    op_cache[op][argtys] = res_val
+    return res_val
+
+
+def get_np_add_codegen():
+    def codegen(context, builder, sig, args):
+        if isinstance(sig.return_type, types.Complex):
+            [cx, cy] = args
+            ty = sig.return_type
+            z = context.make_complex(builder, ty)
+            if isinstance(sig.args[0], types.Complex):
+                x = context.make_complex(builder, ty, value=cx)
+                x_real = x.real
+                x_imag = x.imag
+            else:
+                x_real = context.cast(builder, cx, sig.args[0],
+                                      ty.underlying_float)
+                x_imag = None
+
+            if isinstance(sig.args[1], types.Complex):
+                y = context.make_complex(builder, ty, value=cy)
+                y_real = y.real
+                y_imag = y.imag
+            else:
+                y_real = context.cast(builder, cy, sig.args[1],
+                                      ty.underlying_float)
+                y_imag = None
+
+            z.real = builder.fadd(x_real, y_real)
+            if x_imag and y_imag:
+                z.imag = builder.fadd(x_imag, y_imag)
+            elif x_imag:
+                z.imag = x_imag
+            elif y_imag:
+                z.imag = y_imag
+
+            res = z._getvalue()
+            return res
+        elif sig.return_type == types.np_bool_:
+            new_args = [context.cast(builder, v, t, sig.return_type)
+                        for v, t in zip(args, sig.args)]
+            return builder.and_(*new_args)
+        elif sig.return_type in types.np_integer_domain:
+            new_args = [context.cast(builder, v, t, sig.return_type)
+                        for v, t in zip(args, sig.args)]
+            return builder.add(*new_args)
+        elif sig.return_type in (types.np_real_domain | {types.np_float16}):
+            new_args = [context.cast(builder, v, t, sig.return_type)
+                        for v, t in zip(args, sig.args)]
+            return builder.fadd(*new_args)
+        else:
+            py_api = context.get_python_api(builder)
+            ni_struct = py_api.get_c_object("_Py_NotImplementedStruct")
+            py_api.incref(ni_struct)
+            return ni_struct
+
+    return codegen
+
+
+@intrinsic
+def np_add_intrin(tyctx, xty, yty):
+    final_ty = find_np_res_type("__add__", binop_cache, (xty, yty))
+    sig = final_ty(xty, yty)
+    return sig, get_np_add_codegen()
+
+
+@intrinsic
+def np_radd_intrin(tyctx, xty, yty):
+    final_ty = find_np_res_type("__radd__", binop_cache, (xty, yty))
+    sig = final_ty(xty, yty)
+    return sig, get_np_add_codegen()
+
+
+@overload_method(types.NumPyBoolean, "__add__")
+@overload_method(types.NumPyInteger, "__add__")
+@overload_method(types.NumPyFloat16, "__add__")
+@overload_method(types.NumPyFloat32, "__add__")
+@overload_method(types.NumPyFloat64, "__add__")
+@overload_method(types.NumPyComplex64, "__add__")
+@overload_method(types.NumPyComplex128, "__add__")
+def np__add__(self, other):
+    def impl(self, other):
+        return np_add_intrin(self, other)
+    return impl
+
+
+@overload_method(types.NumPyBoolean, "__radd__")
+@overload_method(types.NumPyInteger, "__radd__")
+@overload_method(types.NumPyFloat16, "__radd__")
+@overload_method(types.NumPyFloat32, "__radd__")
+@overload_method(types.NumPyFloat64, "__radd__")
+@overload_method(types.NumPyComplex64, "__radd__")
+@overload_method(types.NumPyComplex128, "__radd__")
+def np__radd__(self, other):
+    def impl(self, other):
+        return np_radd_intrin(self, other)
+    return impl
+
+
+def generate_binop(op_func, slot, rslot, opchar):
+
+    # based loosely on:
+    # https://github.com/python/cpython/blob/1a1e013a4a526546c373afd887f2e25eecc984ad/Objects/abstract.c#L916-L977
+    def binary_op(v, w):
+        pass
+
+    @overload(binary_op)
+    def ol_binary_op_number(v, w):
+        try:
+            is_subclass = issubclass(
+                type(w.cast_python_value(0)),
+                type(v.cast_python_value(0))
+            )
+        except NotImplementedError:
+            is_subclass = False
+
+        def impl(v, w):
+            if is_subclass:
+                if hasattr(w, rslot):
+                    ret = getattr(w, rslot)(v)
+                    if ret is not NotImplemented:
+                        return ret
+
+            if hasattr(v, slot):
+                ret = getattr(v, slot)(w)
+                if ret is not NotImplemented:
+                    return ret
+
+            if hasattr(w, rslot):
+                ret = getattr(w, rslot)(v)
+                if ret is not NotImplemented:
+                    return ret
+
+            return NotImplemented
+        return impl
+
+    def raise_error():
+        pass
+
+    @overload(raise_error)
+    def ol_raise_error(v, w):
+        # this refers to numba types but should probably be mapped back to the
+        # types in python
+        msg = f"unsupported operand type(s) for {opchar}: {v} and {w}"
+
+        def impl(v, w):
+            raise TypeError(msg)
+        return impl
+
+    @overload(op_func)
+    def binary_op_impl(v, w):
+        def impl(v, w):
+            result = binary_op(v, w)
+            if result is NotImplemented:
+                raise_error(v, w)
+            else:
+                return result
+
+        return impl
+
+
+generate_binop(operator.add, "__add__", "__radd__", "+")
 
 
 @infer_global(operator.sub)
@@ -198,76 +631,51 @@ class BinOpMul(BinOp):
 
 @infer_global(operator.mod)
 class BinOpMod(ConcreteTemplate):
-    cases = list(integer_binop_cases)
-    cases += [signature(op, op, op) for op in sorted(types.np_real_domain)]
+    cases = []
 
 
 @infer_global(operator.imod)
 class BinOpMod(ConcreteTemplate):
-    cases = list(integer_binop_cases)
-    cases += [signature(op, op, op) for op in sorted(types.np_real_domain)]
+    cases = []
 
 
 @infer_global(operator.truediv)
 class BinOpTrueDiv(ConcreteTemplate):
-    cases = [signature(types.np_float64, op1, op2)
-             for op1, op2 in itertools.product(all_ints, all_ints)]
-    cases += [signature(op, op, op) for op in sorted(types.np_real_domain)]
-    cases += [signature(op, op, op) for op in sorted(types.np_complex_domain)]
+    cases = []
 
 
 @infer_global(operator.itruediv)
 class BinOpTrueDiv(ConcreteTemplate):
-    cases = [signature(types.np_float64, op1, op2)
-             for op1, op2 in itertools.product(all_ints, all_ints)]
-    cases += [signature(op, op, op) for op in sorted(types.np_real_domain)]
-    cases += [signature(op, op, op) for op in sorted(types.np_complex_domain)]
+    cases = []
 
 
 @infer_global(operator.floordiv)
 class BinOpFloorDiv(ConcreteTemplate):
-    cases = list(integer_binop_cases)
-    cases += [signature(op, op, op) for op in sorted(types.np_real_domain)]
+    cases = []
 
 
 @infer_global(operator.ifloordiv)
 class BinOpFloorDiv(ConcreteTemplate):
-    cases = list(integer_binop_cases)
-    cases += [signature(op, op, op) for op in sorted(types.np_real_domain)]
+    cases = []
 
 
 @infer_global(divmod)
 class DivMod(ConcreteTemplate):
-    _tys = all_ints + sorted(types.np_real_domain)
+    # This probably needs a mixture
+    _tys = ({types.py_int, types.py_float} |
+            types.np_number_domain |
+            types.np_real_domain)
     cases = [signature(types.UniTuple(ty, 2), ty, ty) for ty in _tys]
 
 
 @infer_global(operator.pow)
 class BinOpPower(ConcreteTemplate):
-    cases = list(integer_binop_cases)
-    # Ensure that float32 ** int doesn't go through DP computations
-    cases += [signature(types.np_float32, types.np_float32, op)
-              for op in (types.np_int32, types.np_int64, types.np_uint64)]
-    cases += [signature(types.np_float64, types.np_float64, op)
-              for op in (types.np_int32, types.np_int64, types.np_uint64)]
-    cases += [signature(op, op, op)
-              for op in sorted(types.np_real_domain)]
-    cases += [signature(op, op, op)
-              for op in sorted(types.np_complex_domain)]
+    cases = []
 
 
 @infer_global(operator.ipow)
 class BinOpPower(ConcreteTemplate):
-    cases = list(integer_binop_cases)
-    # Ensure that float32 ** int doesn't go through DP computations
-    cases += [signature(types.np_float32, types.np_float32, op)
-              for op in (types.np_int32, types.np_int64, types.np_uint64)]
-    cases += [signature(types.np_float64, types.np_float64, op)
-              for op in (types.np_int32, types.np_int64, types.np_uint64)]
-    cases += [signature(op, op, op)
-              for op in sorted(types.np_real_domain)]
-    cases += [signature(op, op, op)
-              for op in sorted(types.np_complex_domain)]
+    cases = []
 
 
 @infer_global(pow)
@@ -312,9 +720,7 @@ class BitwiseRightShift(BitwiseShiftOperation):
 
 
 class BitwiseLogicOperation(BinOp):
-    cases = [signature(types.py_bool, types.py_bool, types.py_bool)]
-    cases += [signature(types.np_bool_, types.np_bool_, types.np_bool_)]
-    cases += list(integer_binop_cases)
+    cases = []
     unsafe_casting = False
 
 
@@ -360,19 +766,19 @@ class BitwiseInvert(ConcreteTemplate):
     cases = [signature(types.py_bool, types.py_bool)]
     cases = [signature(types.np_bool_, types.np_bool_)]
 
-    cases += [signature(choose_result_int(op), op) for op in sorted(types.np_unsigned_domain)]
+    cases += [signature(op, op) for op in sorted(types.np_unsigned_domain)]
 
-    cases += [signature(choose_result_int(op), op) for op in sorted(types.py_signed_domain)]
-    cases += [signature(choose_result_int(op), op) for op in sorted(types.np_signed_domain)]
-
+    cases += [signature(op, op) for op in sorted(types.py_signed_domain)]
+    cases += [signature(op, op) for op in sorted(types.np_signed_domain)]
 
     unsafe_casting = False
 
 
 class UnaryOp(ConcreteTemplate):
-    cases = [signature(choose_result_int(op), op) for op in sorted(types.np_unsigned_domain)]
-    cases += [signature(choose_result_int(op), op) for op in sorted(types.py_signed_domain)]
-    cases += [signature(choose_result_int(op), op) for op in sorted(types.np_signed_domain)]
+    cases = [signature(op, op) for op in sorted(types.np_unsigned_domain)]
+
+    cases += [signature(op, op) for op in sorted(types.py_signed_domain)]
+    cases += [signature(op, op) for op in sorted(types.np_signed_domain)]
 
     cases += [signature(op, op) for op in sorted(types.py_real_domain)]
     cases += [signature(op, op) for op in sorted(types.np_real_domain)]
@@ -396,11 +802,7 @@ class UnaryPositive(UnaryOp):
 
 @infer_global(operator.not_)
 class UnaryNot(ConcreteTemplate):
-    cases = [signature(types.np_bool_, types.np_bool_)]
-    cases += [signature(types.np_bool_, op) for op in sorted(types.np_signed_domain)]
-    cases += [signature(types.np_bool_, op) for op in sorted(types.np_unsigned_domain)]
-    cases += [signature(types.np_bool_, op) for op in sorted(types.np_real_domain)]
-    cases += [signature(types.np_bool_, op) for op in sorted(types.np_complex_domain)]
+    cases = []
 
 
 class OrderedCmpOp(ConcreteTemplate):
@@ -521,6 +923,8 @@ class TupleAdd(AbstractTemplate):
 
 class CmpOpIdentity(AbstractTemplate):
     def generic(self, args, kws):
+        if "NotImplemented" in [str(x) for x in args]:
+            return None
         [lhs, rhs] = args
         return signature(types.py_bool, lhs, rhs)
 
@@ -994,10 +1398,12 @@ class Float(AbstractTemplate):
 
         [arg] = args
 
-        if arg not in types.py_number_domain or arg not in types.np_number_domain:
+        if arg not in (types.py_number_domain |
+                       types.np_number_domain |
+                       frozenset([types.py_bool, types. np_bool])):
             raise errors.NumbaTypeError("float() only support for numbers")
 
-        if arg in types.py_complex_domain or arg in types.np_complex_domain:
+        if arg in (types.py_complex_domain | types.np_complex_domain):
             raise errors.NumbaTypeError("float() does not support complex")
 
         return signature(types.py_float, arg)
@@ -1009,7 +1415,9 @@ class Complex(AbstractTemplate):
 
     def generic(self, args, kws):
         assert not kws
-        number_domain = types.py_number_domain | types.np_number_domain
+        number_domain = (types.py_number_domain |
+                         types.np_number_domain |
+                         frozenset([types.py_bool, types.np_bool]))
 
         if len(args) == 1:
             [arg] = args
