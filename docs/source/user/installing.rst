@@ -202,7 +202,6 @@ vary with target operating system and hardware. The following lists them all
     Numba's threading backend
   * ``tbb-devel`` - provides TBB headers/libraries for compiling TBB support
     into Numba's threading backend (version >= 2021.6 required).
-  * ``importlib_metadata`` (for Python versions < 3.9)
 
 * Optional runtime are:
 
