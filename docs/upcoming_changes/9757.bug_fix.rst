@@ -1,0 +1,6 @@
+Fix excessive memory use/poor memory behaviour in the dispatcher for non-fingerprintable types.
+-----------------------------------------------------------------------------------------------
+
+In the case of repeated dispatch on non-fingerprintable types, the dispatcher
+now uses memory in proportion to the number of unique types seen opposed to in
+proportion to the number of types in total.
