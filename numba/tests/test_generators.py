@@ -649,6 +649,110 @@ class TestGeneratorWithNRT(MemoryLeakMixin, TestCase):
 
         self.assertEqual(main(), magic)
 
+    def test_issue_8800(self):
+        def py_gen():
+            z = np.zeros(shape=(3,), dtype=np.int32)
+            for i in range(3):
+                z[i] = 1
+                yield z
+
+        c_gen = jit(nopython=True)(py_gen)
+
+        py_res = [arr.copy() for arr in py_gen()]
+        c_res = [arr.copy() for arr in c_gen()]
+
+        self.assertEqual(len(py_res), len(c_res))
+        for py_arr, c_arr in zip(py_res, c_res):
+            np.testing.assert_equal(py_arr, c_arr)
+
+    def test_issue_9735(self):
+        def py_gen():
+            y = [42, 61]
+            yield y
+            yield y
+            y.pop()
+
+        c_gen = jit(nopython=True)(py_gen)
+
+        py_res = [lst.copy() for lst in py_gen()]
+        c_res = [lst.copy() for lst in c_gen()]
+
+        self.assertEqual(py_res, c_res)
+
+    def test_issue_9735_leak(self):
+        def py_gen():
+            y = [42, 61]
+            yield (y,)[0]
+            yield (y,)[0]
+            y.pop()
+
+        c_gen = jit(nopython=True)(py_gen)
+
+        py_res = [lst.copy() for lst in py_gen()]
+        c_res = [lst.copy() for lst in c_gen()]
+
+        self.assertEqual(py_res, c_res)
+
+    def test_never_boxed(self):
+        def py_gen(nr):
+            x = np.arange(nr, dtype=np.uint32)
+            yield x
+            yield x
+            yield x
+            x[:] = nr
+
+        c_gen = jit(nopython=True)(py_gen)
+
+        def py_driver(nr):
+            out = np.empty((3, nr), dtype=np.uint32)
+            for i, x in enumerate(py_gen(nr)):
+                out[i, :] = x
+            return out
+
+        @jit(nopython=True)
+        def c_driver(nr):
+            out = np.empty((3, nr), dtype=np.uint32)
+            for i, x in enumerate(c_gen(nr)):
+                out[i, :] = x
+            return out
+
+        n = 4
+        py_res = py_driver(n)
+        c_res = c_driver(n)
+
+        np.testing.assert_equal(py_res, c_res)
+
+    def test_arg_never_boxed(self):
+        def py_gen(arg):
+            nr = arg.shape[0]
+            yield arg
+            yield arg
+            yield arg
+            arg[:] = nr
+
+        c_gen = jit(nopython=True)(py_gen)
+
+        def py_driver(nr):
+            out = np.empty((3, nr), dtype=np.uint32)
+            arr = np.arange(nr, dtype=np.uint32)
+            for i, x in enumerate(py_gen(arr)):
+                out[i, :] = x
+            return out
+
+        @jit(nopython=True)
+        def c_driver(nr):
+            out = np.empty((3, nr), dtype=np.uint32)
+            arr = np.arange(nr, dtype=np.uint32)
+            for i, x in enumerate(c_gen(arr)):
+                out[i, :] = x
+            return out
+
+        n = 4
+        py_res = py_driver(n)
+        c_res = c_driver(n)
+
+        np.testing.assert_equal(py_res, c_res)
+
 
 class TestGeneratorModel(test_factory()):
     fe_type = types.Generator(gen_func=None, yield_type=types.int32,
