@@ -131,9 +131,13 @@ python -m numba.runtests -l
 # directive in .coveragerc
 echo "INFO: Running shard of discovered tests: ($TEST_START_INDEX:$TEST_COUNT)"
 if [ "$RUN_COVERAGE" == "yes" ]; then
+    echo "INFO: Running with coverage"
     export PYTHONPATH=.
     coverage erase
     $SEGVCATCH coverage run runtests.py -b -j "$TEST_START_INDEX:$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS --junit -- numba.tests
+    echo "INFO: Post-process coverage"
+    coverage combine
+    coverage xml -o cov.xml
 elif [ "$RUN_TYPEGUARD" == "yes" ]; then
     echo "INFO: Running with typeguard"
     NUMBA_USE_TYPEGUARD=1 NUMBA_ENABLE_CUDASIM=1 PYTHONWARNINGS="ignore:::typeguard" $SEGVCATCH python runtests.py -b -j "$TEST_START_INDEX:$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS --junit -- numba.tests

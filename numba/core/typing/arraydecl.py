@@ -778,7 +778,7 @@ def sum_expand(self, args, kws):
         # There is an axis parameter, either arg or kwarg
         if self.this.ndim == 1:
             # 1d reduces to a scalar
-            return_type = self.this.dtype
+            return_type = _expand_integer(self.this.dtype)
         else:
             # the return type of this summation is  an array of dimension one
             # less than the input array.

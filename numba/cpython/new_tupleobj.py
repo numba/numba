@@ -288,10 +288,10 @@ def getitem_typed(context, builder, sig, args):
         return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
-@lower_builtin(operator.getitem, types.UniTuple, types.py_intp)
+@lower_builtin(operator.getitem, types.UniTuple, types.py_int)
 @lower_builtin(operator.getitem, types.UniTuple, types.np_intp)
 @lower_builtin(operator.getitem, types.UniTuple, types.np_uintp)
-@lower_builtin(operator.getitem, types.NamedUniTuple, types.py_intp)
+@lower_builtin(operator.getitem, types.NamedUniTuple, types.py_int)
 @lower_builtin(operator.getitem, types.NamedUniTuple, types.np_intp)
 @lower_builtin(operator.getitem, types.NamedUniTuple, types.np_uintp)
 def getitem_unituple(context, builder, sig, args):

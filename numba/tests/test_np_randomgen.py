@@ -3,6 +3,7 @@ import numpy as np
 import sys
 import itertools
 import gc
+import re
 
 from numba import types
 from numba.tests.support import TestCase, MemoryLeakMixin
@@ -54,12 +55,18 @@ class TestHelperFuncs(TestCase):
         numba_func = numba.njit(cache=True)(py_func)
         with self.assertRaises(TypingError) as raises:
             numba_func(rng)
-        self.assertIn(
-            'Argument loc is not one of the expected type(s): '
-            + '[<class \'numba.core.types.old_scalars.Float\'>, '
-            + '<class \'numba.core.types.old_scalars.Integer\'>, '
-            + '<class \'int\'>, <class \'float\'>]',
-            str(raises.exception)
+
+        expected_pattern = (
+            r"Argument loc is not one of the expected type\(s\): "
+            r"\[<class 'numba.core.types.*.Float'>, "
+            r"<class 'numba.core.types.*.Integer'>, "
+            r"<class 'int'>, <class 'float'>\]"
+        )
+
+        self.assertTrue(
+            re.search(expected_pattern, str(raises.exception)) is not None,
+            "Expected pattern not found in exception message." +
+            f" Found {str(raises.exception)}"
         )
 
     def test_integers_arg_check(self):

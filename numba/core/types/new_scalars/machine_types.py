@@ -26,9 +26,6 @@ class MachineInteger(Integer):
         name = ('int%d' if signed else 'uint%d') % bitwidth
         return cls(name)
 
-    def cast_python_value(self, value):
-        return int(value)
-
     def __lt__(self, other):
         if self.__class__ is not other.__class__:
             return NotImplemented
@@ -60,7 +57,7 @@ class MachineInteger(Integer):
 class MachineIntegerLiteral(IntegerLiteral, MachineInteger):
     def __init__(self, value):
         self._literal_init(value)
-        name = 'Literal[int]({})'.format(value)
+        name = 'Literal[machine_int]({})'.format(value)
         basetype = self.literal_type
         MachineInteger.__init__(self,
                                 name=name,
@@ -74,20 +71,16 @@ class MachineIntegerLiteral(IntegerLiteral, MachineInteger):
 
 
 class MachineBoolean(Boolean):
-    def cast_python_value(self, value):
-        return bool(value)
+    pass
 
 
 class MachineBooleanLiteral(BooleanLiteral, MachineBoolean):
 
     def __init__(self, value):
         self._literal_init(value)
-        name = 'Literal[bool]({})'.format(value)
+        name = 'Literal[machine_bool]({})'.format(value)
         MachineBoolean.__init__(self,
                                 name=name)
-
-    def cast_python_value(self, value):
-        return float(value)
 
     def can_convert_to(self, typingctx, other):
         conv = typingctx.can_convert(self.literal_type, other)
@@ -119,9 +112,6 @@ class MachineComplex(Complex):
         assert self.name.startswith('c_complex')
         bitwidth = int(self.name[10:])
         self.bitwidth = bitwidth
-
-    def cast_python_value(self, value):
-        return complex(value)
 
     def __lt__(self, other):
         if self.__class__ is not other.__class__:

@@ -26,8 +26,8 @@ def _ensure_critical_deps():
 
     PYVERSION = sys.version_info[:2]
 
-    if PYVERSION < (3, 9):
-        msg = ("Numba needs Python 3.9 or greater. Got Python "
+    if PYVERSION < (3, 10):
+        msg = ("Numba needs Python 3.10 or greater. Got Python "
                f"{PYVERSION[0]}.{PYVERSION[1]}.")
         raise ImportError(msg)
 

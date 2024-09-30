@@ -64,7 +64,7 @@ from numba.cpython.unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4,
                                            _PyUnicode_IsDecimalDigit)
 from numba.cpython import slicing
 
-if PYVERSION in ((3, 9), (3, 10), (3, 11)):
+if PYVERSION in ((3, 10), (3, 11)):
     from numba.core.pythonapi import PY_UNICODE_WCHAR_KIND
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L84-L85    # noqa: E501
@@ -74,7 +74,7 @@ _MAX_UNICODE = 0x10ffff
 if config.USE_LEGACY_TYPE_SYSTEM:
     _BLOOM_WIDTH = types.intp.bitwidth
 else:
-    _BLOOM_WIDTH = types.py_intp.bitwidth
+    _BLOOM_WIDTH = types.py_int.bitwidth
 
 # DATA MODEL
 
@@ -367,7 +367,7 @@ if PYVERSION in ((3, 12), (3, 13)):
         else:
             raise AssertionError(
                 "Unexpected unicode representation in _pick_kind")
-elif PYVERSION in ((3, 9), (3, 10), (3, 11)):
+elif PYVERSION in ((3, 10), (3, 11)):
     @register_jitable
     def _pick_kind(kind1, kind2):
         if (kind1 == PY_UNICODE_WCHAR_KIND or kind2 == PY_UNICODE_WCHAR_KIND):
@@ -407,7 +407,7 @@ if PYVERSION in ((3, 12), (3, 13)):
             return 4
         else:
             raise AssertionError("Unexpected unicode encoding encountered")
-elif PYVERSION in ((3, 9), (3, 10), (3, 11)):
+elif PYVERSION in ((3, 10), (3, 11)):
     @register_jitable
     def _kind_to_byte_width(kind):
         if kind == PY_UNICODE_1BYTE_KIND:

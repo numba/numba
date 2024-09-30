@@ -19,7 +19,7 @@ except ImportError:
         pass
 
 
-min_python_version = "3.9"
+min_python_version = "3.10"
 max_python_version = "3.14"  # exclusive
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.22"
@@ -387,7 +387,6 @@ metadata = dict(
         "Operating System :: OS Independent",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",

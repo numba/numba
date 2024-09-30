@@ -17,7 +17,7 @@ from numba.core.utils import PYVERSION
 PY_UNICODE_1BYTE_KIND = _helperlib.py_unicode_1byte_kind
 PY_UNICODE_2BYTE_KIND = _helperlib.py_unicode_2byte_kind
 PY_UNICODE_4BYTE_KIND = _helperlib.py_unicode_4byte_kind
-if PYVERSION in ((3, 9), (3, 10), (3, 11)):
+if PYVERSION in ((3, 10), (3, 11)):
     PY_UNICODE_WCHAR_KIND = _helperlib.py_unicode_wchar_kind
 
 
@@ -192,7 +192,7 @@ class PythonAPI(object):
         if config.USE_LEGACY_TYPE_SYSTEM:
             self.py_ssize_t = self.context.get_value_type(types.intp)
         else:
-            self.py_ssize_t = self.context.get_value_type(types.py_intp)
+            self.py_ssize_t = self.context.get_value_type(types.c_intp)
         self.cstring = ir.PointerType(ir.IntType(8))
         self.gil_state = ir.IntType(_helperlib.py_gil_state_size * 8)
         self.py_buffer_t = ir.ArrayType(ir.IntType(8), _helperlib.py_buffer_size)
