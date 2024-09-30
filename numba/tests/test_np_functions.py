@@ -783,6 +783,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.array([]), None
             yield np.zeros(10), None
             yield np.arange(10), None
+            yield np.ones(10, dtype=np.bool_), 0
             yield np.arange(3 * 4 * 5).reshape(3, 4, 5), None
             yield np.arange(3 * 4).reshape(3, 4), 0
             yield np.arange(3 * 4).reshape(3, 4), 1
@@ -6277,7 +6278,7 @@ class TestRegistryImports(TestCase):
         result, error = run_in_subprocess(code)
         # Assert that the bytestring "OK" was printed to stdout
         self.assertEqual(b"OK", result.strip())
-        self.assertEqual(b"", error.strip())
+        self.assertEqual(b"", error.strip(), msg=f"--ERROR--\n{error}\n")
 
 
 if __name__ == '__main__':

@@ -168,7 +168,7 @@ if config.USE_LEGACY_TYPE_SYSTEM:
     }
 else:
     range_impl_map = {
-        types.py_int64 : (types.range_state64_type, types.range_iter64_type),
+        types.py_int: (types.range_state_type, types.range_iter_type),
     }
 
 for int_type, state_types in range_impl_map.items():

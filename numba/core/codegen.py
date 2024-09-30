@@ -668,18 +668,26 @@ class CPUCodeLibrary(CodeLibrary):
         """
         Internal: optimize this library's final module.
         """
+
+        mpm_cheap = self._codegen._module_pass_manager(loop_vectorize=self._codegen._loopvect,
+                                   slp_vectorize=False,
+                                   opt=self._codegen._opt_level,
+                                   cost="cheap")
+
+        mpm_full = self._codegen._module_pass_manager()
+
         cheap_name = "Module passes (cheap optimization for refprune)"
         with self._recorded_timings.record(cheap_name):
             # A cheaper optimisation pass is run first to try and get as many
             # refops into the same function as possible via inlining
-            self._codegen._mpm_cheap.run(self._final_module)
+            mpm_cheap.run(self._final_module)
         # Refop pruning is then run on the heavily inlined function
         if not config.LLVM_REFPRUNE_PASS:
             self._final_module = remove_redundant_nrt_refct(self._final_module)
         full_name = "Module passes (full optimization)"
         with self._recorded_timings.record(full_name):
             # The full optimisation suite is then run on the refop pruned IR
-            self._codegen._mpm_full.run(self._final_module)
+            mpm_full.run(self._final_module)
 
     def _get_module_for_linking(self):
         """
@@ -1197,22 +1205,15 @@ class CPUCodegen(Codegen):
             # guarantee that this will increase runtime performance, it may
             # detriment it, this is here to give the user an easily accessible
             # option to try.
-            loopvect = True
-            opt_level = 3
+            self._loopvect = True
+            self._opt_level = 3
         else:
             # The default behaviour is to do an opt=0 pass to try and inline as
             # much as possible with the cheapest cost of doing so. This is so
             # that the ref-op pruner pass that runs after the cheap pass will
             # have the largest possible scope for working on pruning references.
-            loopvect = False
-            opt_level = 0
-
-        self._mpm_cheap = self._module_pass_manager(loop_vectorize=loopvect,
-                                                    slp_vectorize=False,
-                                                    opt=opt_level,
-                                                    cost="cheap")
-
-        self._mpm_full = self._module_pass_manager()
+            self._loopvect = False
+            self._opt_level = 0
 
         self._engine.set_object_cache(self._library_class._object_compiled_hook,
                                       self._library_class._object_getbuffer_hook)

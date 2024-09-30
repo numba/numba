@@ -1,0 +1,8 @@
+Improvements in how Pass Manager objects are created for optimizations
+----------------------------------------------------------------------
+
+Move creation of ``ModulePassManager`` object to ``_optimize_final_module``
+function, preventing the usage of the same pass manager object for
+compiling multiple Python functions. This would allow for better control
+while optimizing unrelated modules and possibly under different settings
+(degree of vectorization, optimization level, etc.).

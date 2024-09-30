@@ -24,8 +24,8 @@ requirements:
   # build and run dependencies are duplicated to avoid setuptools issues
   # when we also set install_requires in setup.py
   build:
-    - {{ compiler('c') }}      # [not aarch64]
-    - {{ compiler('cxx') }}    # [not aarch64]
+    - {{ compiler('c') }}
+    - {{ compiler('cxx') }}
     # OpenMP headers from llvm needed for OSX.
     - llvm-openmp              # [osx]
   host:
@@ -38,7 +38,7 @@ requirements:
     # NOTE: ppc64le and aarch64 are pending testing so excluded for now.
     - tbb-devel >=2021.6       # [not (aarch64 or ppc64le)]
   run:
-    - python >=3.9
+    - python >=3.10
     # NumPy 1.22.0, 1.22.1, 1.22.2 are all broken for ufuncs, see #7756
     - numpy >=1.22.3
     # On channel https://anaconda.org/numba/

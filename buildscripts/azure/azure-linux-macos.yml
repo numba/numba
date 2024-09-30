@@ -49,6 +49,12 @@ jobs:
         export PATH=$HOME/miniconda3/bin:$PATH
         buildscripts/incremental/test.sh
       displayName: 'Test'
+    
+    - task: PublishCodeCoverageResults@2
+      condition: eq(variables['RUN_COVERAGE'], 'yes')
+      inputs:
+        codeCoverageTool: Cobertura
+        summaryFileLocation: '$(System.DefaultWorkingDirectory)/**/cov.xml'
 
     - task: PublishTestResults@2
       condition: succeededOrFailed()

@@ -1,5 +1,5 @@
-Added initial implementation for a new type system.
----------------------------------------------------
+Add initial implementation for a new type system.
+=================================================
 
 This adds a new type system that will allow Numba to
 differentiate between Python and NumPy scalars.

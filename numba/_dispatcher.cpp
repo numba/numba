@@ -659,7 +659,7 @@ int search_new_conversions(PyObject *dispatcher, PyObject *args, PyObject *kws)
 }
 
 
-#if (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 9) || (PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11))
+#if (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11))
 
 /* A custom, fast, inlinable version of PyCFunction_Call() */
 static PyObject *
@@ -720,8 +720,8 @@ call_cfunc(PyObject *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyObj
         PyObject *builtins = PyEval_GetBuiltins();
         PyFrameObject *frame = NULL;
         PyObject *result = NULL;
-#if (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 9) || (PY_MINOR_VERSION == 10))
-        // Only used in 3.9 and 3.10, to help with saving/restoring exception state
+#if (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 10))
+        // Only used in 3.10, to help with saving/restoring exception state
         PyObject *pyexc = NULL;
         PyObject *err_type = NULL;
         PyObject *err_value = NULL;

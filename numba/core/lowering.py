@@ -16,6 +16,7 @@ from numba.core.funcdesc import default_mangler
 from numba.core.environment import Environment
 from numba.core.analysis import compute_use_defs, must_use_alloca
 from numba.misc.firstlinefinder import get_func_body_first_lineno
+from numba.misc.coverage_support import get_registered_loc_notify
 
 
 _VarArgItem = namedtuple("_VarArgItem", ("vararg", "index"))
@@ -68,6 +69,9 @@ class BaseLower(object):
                                       filepath=func_ir.loc.filename,
                                       cgctx=context,
                                       directives_only=directives_only)
+
+        # Loc notify objects
+        self._loc_notify_registry = get_registered_loc_notify()
 
         # Subclass initialization
         self.init()
@@ -139,6 +143,8 @@ class BaseLower(object):
         Called after all blocks are lowered
         """
         self.debuginfo.finalize()
+        for notify in self._loc_notify_registry:
+            notify.close()
 
     def pre_block(self, block):
         """
@@ -307,6 +313,13 @@ class BaseLower(object):
     def typeof(self, varname):
         return self.fndesc.typemap[varname]
 
+    def notify_loc(self, loc: ir.Loc) -> None:
+        """Called when a new instruction with the given `loc` is about to be
+        lowered.
+        """
+        for notify_obj in self._loc_notify_registry:
+            notify_obj.notify(loc)
+
     def debug_print(self, msg):
         if config.DEBUG_JIT:
             self.context.debug_print(
@@ -442,6 +455,7 @@ class Lower(BaseLower):
     def lower_inst(self, inst):
         # Set debug location for all subsequent LL instructions
         self.debuginfo.mark_location(self.builder, self.loc.line)
+        self.notify_loc(self.loc)
         self.debug_print(str(inst))
         if isinstance(inst, ir.Assign):
             ty = self.typeof(inst.target.name)
