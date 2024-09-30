@@ -394,8 +394,10 @@ def random_geometric(bitgen, p):
 def random_zipf(bitgen, a):
     am1 = a - 1.0
     b = pow(2.0, am1)
+    Umin = pow(INT64_MAX, -am1)
     while 1:
-        U = 1.0 - next_double(bitgen)
+        U01 = next_double(bitgen)
+        U = U01*Umin + (1 - U01)
         V = next_double(bitgen)
         X = np.floor(pow(U, -1.0 / am1))
         if (X > INT64_MAX or X < 1.0):
