@@ -2170,9 +2170,9 @@ def array_reshape_vararg(context, builder, sig, args):
 
 
 @overload(np.reshape)
-def np_reshape(a, newshape):
-    def np_reshape_impl(a, newshape):
-        return a.reshape(newshape)
+def np_reshape(a, shape):
+    def np_reshape_impl(a, shape):
+        return a.reshape(shape)
     return np_reshape_impl
 
 
