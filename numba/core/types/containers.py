@@ -419,8 +419,6 @@ class List(MutableSequence, InitialValue):
     Type class for (arbitrary-sized) homogeneous lists.
     """
 
-    mutable = True
-
     def __init__(self, dtype, reflected=False, initial_value=None):
         dtype = unliteral(dtype)
         self.dtype = dtype
