@@ -29,4 +29,7 @@
         PyObject_SetAttrString(m, #name, tmp); \
         Py_DECREF(tmp); } while (0)
 
+
+#define NB_SUPPORTED_PYTHON_MINOR ((PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11) || (PY_MINOR_VERSION == 12) || (PY_MINOR_VERSION == 13))
+
 #endif /* NUMBA_PY_MODULE_H_ */
