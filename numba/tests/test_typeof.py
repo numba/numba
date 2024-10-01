@@ -10,6 +10,7 @@ import typing as py_typing
 import numpy as np
 
 import unittest
+from numba import jit
 from numba.core import types
 from numba.core.errors import NumbaValueError, NumbaTypeError
 from numba.misc.special import typeof
@@ -569,6 +570,26 @@ class TestFingerprint(TestCase):
         for i in range(1000):
             t = (t,)
         s = compute_fingerprint(t)
+
+
+class TestTypeOfMemCpy(TestCase):
+
+    def test_memcpy_typeof_buffer(self):
+        # https://github.com/numba/numba/issues/9097
+        # bug is fixed if the code below compiles
+
+        longname = 1024 * "a"
+
+        AType = namedtuple("AType", longname)
+        BType = namedtuple("BType", longname)
+
+        args = (AType(1), BType(1))
+
+        @jit(types.void(*(typeof(x) for x in args)))
+        def foo(arg1, arg2):
+            pass
+
+        foo(*args)
 
 
 if __name__ == '__main__':
