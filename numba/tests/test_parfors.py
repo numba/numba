@@ -3570,7 +3570,7 @@ class TestPrangeBase(TestParforsBase):
             if utils.PYVERSION in ((3, 11), (3, 12)):
                 # this is the inverse of _fix_LOAD_GLOBAL_arg
                 prange_idx = 1 + (prange_idx << 1)
-            elif utils.PYVERSION in ((3, 9), (3, 10)):
+            elif utils.PYVERSION in ((3, 10),):
                 pass
             else:
                 raise NotImplementedError(utils.PYVERSION)

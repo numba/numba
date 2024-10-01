@@ -17,7 +17,7 @@ from numba.core.utils import PYVERSION
 PY_UNICODE_1BYTE_KIND = _helperlib.py_unicode_1byte_kind
 PY_UNICODE_2BYTE_KIND = _helperlib.py_unicode_2byte_kind
 PY_UNICODE_4BYTE_KIND = _helperlib.py_unicode_4byte_kind
-if PYVERSION in ((3, 9), (3, 10), (3, 11)):
+if PYVERSION in ((3, 10), (3, 11)):
     PY_UNICODE_WCHAR_KIND = _helperlib.py_unicode_wchar_kind
 
 

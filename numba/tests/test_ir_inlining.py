@@ -448,8 +448,6 @@ class TestFunctionInlining(MemoryLeakMixin, InliningBase):
             bc = 39
         elif utils.PYVERSION in ((3, 10), (3, 11)):
             bc = 35
-        elif utils.PYVERSION in ((3, 9),):
-            bc = 33
         else:
             raise NotImplementedError(utils.PYVERSION)
 
