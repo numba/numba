@@ -8,7 +8,7 @@ jobs:
     vmImage: ${{ parameters.vmImage }}
   strategy:
     matrix:
-      py39_np122:
+      py310_np122:
         PYTHON: '3.10'
         NUMPY: '1.22'
         CONDA_ENV: 'testenv'
