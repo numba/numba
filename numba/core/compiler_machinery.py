@@ -2,7 +2,6 @@ import timeit
 from abc import abstractmethod, ABCMeta
 from collections import namedtuple, OrderedDict
 import inspect
-from pprint import pformat
 
 
 from numba.core.compiler_lock import global_compiler_lock
@@ -300,7 +299,7 @@ class PassManager(object):
             name=f"{pss.name()} [{qualname}]",
             qualname=qualname,
             module=internal_state.func_id.modname,
-            flags=pformat(internal_state.flags.values()),
+            flags=utils._lazy_pformat(internal_state.flags.values()),
             args=str(internal_state.args),
             return_type=str(internal_state.return_type),
         )

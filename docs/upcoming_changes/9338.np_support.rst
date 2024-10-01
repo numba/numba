@@ -1,0 +1,6 @@
+Added support for np.setdiff1d(), np.setxor1d(), and np.in1d() functions, as well as argument assume_unique in np.intersect1d()
+===============================================================================================================================
+
+Support is added for: ``numpy.setdiff1d()``, ``np.setxor1d()``, ``np.in1d()``, and ``np.isin()``; and the argument ``assume_unique`` in ``np.intersect1d()``.
+For ``np.in1d()``, and ``np.isin()``, the keyword ``kind`` is *not* supported, and the behaviour reflects that of NumPy prior to version 1.24.
+This is equivalent to setting ``kind="sort"`` in NumPy 1.24 and later.
