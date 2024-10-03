@@ -1,0 +1,4 @@
+Support math.nextafter in CUDA
+------------------------------
+
+CUDA target now supports ``math.nextafter`` for FP32 and FP64, FP16 still missing.
