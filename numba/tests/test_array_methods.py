@@ -487,7 +487,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # neither F or C contiguous
         not_f_or_c_arr = np.zeros((4, 4)).T[::2, ::2]
 
-        check_maybe_error = check
+        check_maybe_error = check_err_noncontig_last_axis
 
         check(f_arr, np.int8)
         check(not_f_or_c_arr, np.uint64)
