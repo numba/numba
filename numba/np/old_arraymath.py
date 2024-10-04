@@ -3306,7 +3306,10 @@ def array_nonzero(context, builder, sig, args):
                 # For a 0-d array, store 0 in the unique output array
                 indices = (zero,)
                 if numpy_version >= (2, 1):
-                    raise ValueError("Calling nonzero on 0d arrays is not allowed. Use np.atleast_1d(scalar).nonzero() instead.")
+                    raise ValueError(
+                        "Calling nonzero on 0d arrays is not allowed."
+                        " Use np.atleast_1d(scalar).nonzero() instead."
+                    )
             cur = builder.load(index)
             for i in range(nouts):
                 ptr = cgutils.get_item_pointer2(context, builder, out_datas[i],

@@ -397,7 +397,7 @@ def random_zipf(bitgen, a):
     Umin = pow(INT64_MAX, -am1)
     while 1:
         U01 = next_double(bitgen)
-        U = U01*Umin + (1 - U01)
+        U = U01 * Umin + (1 - U01)
         V = next_double(bitgen)
         X = np.floor(pow(U, -1.0 / am1))
         if (X > INT64_MAX or X < 1.0):
