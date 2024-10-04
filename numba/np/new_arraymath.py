@@ -6,7 +6,6 @@ Implementation of math operations on Array objects.
 import math
 from collections import namedtuple
 import operator
-import warnings
 
 import llvmlite.ir
 import numpy as np
@@ -25,7 +24,7 @@ from numba.np.linalg import ensure_blas
 from numba.core.extending import intrinsic
 from numba.core.errors import (RequireLiteralValue, TypingError,
                                NumbaValueError, NumbaNotImplementedError,
-                               NumbaTypeError, NumbaDeprecationWarning)
+                               NumbaTypeError)
 from numba.cpython.unsafe.tuple import tuple_setitem
 
 
