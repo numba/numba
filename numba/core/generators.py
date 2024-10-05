@@ -335,10 +335,6 @@ class LowerYield(object):
             # IncRef newly stored value
             if self.context.enable_nrt:
                 self.context.nrt.incref(self.builder, ty, val)
-                # extra incref if we are yielding this variable, as a reference
-                # will be stolen when boxing
-                if name == self.yp.inst.value.name:
-                    self.context.nrt.incref(self.builder, ty, val)
 
             self.context.pack_value(self.builder, ty, val, state_slot)
         # Save resume index

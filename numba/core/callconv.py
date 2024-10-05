@@ -26,6 +26,8 @@ Status = namedtuple("Status",
                      "is_error",
                      # If the generator exited with StopIteration
                      "is_stop_iteration",
+                     # If the generator yielded a live variable
+                     "is_live_var",
                      # If the function errored with an already set exception
                      "is_python_exc",
                      # If the function errored with a user exception
@@ -49,6 +51,7 @@ RETCODE_EXC = _const_int(-1)
 RETCODE_NONE = _const_int(-2)
 # StopIteration
 RETCODE_STOPIT = _const_int(-3)
+RETCODE_LIVE = _const_int(-4)
 
 FIRST_USEREXC = 1
 
@@ -182,12 +185,13 @@ class MinimalCallConv(BaseCallConv):
     def _make_call_helper(self, builder):
         return _MinimalCallHelper()
 
-    def return_value(self, builder, retval):
+    def return_value(self, builder, retval, is_live_var=False):
         retptr = builder.function.args[0]
         assert retval.type == retptr.type.pointee, \
             (str(retval.type), str(retptr.type.pointee))
         builder.store(retval, retptr)
-        self._return_errcode_raw(builder, RETCODE_OK)
+        self._return_errcode_raw(builder,
+                                 RETCODE_LIVE if is_live_var else RETCODE_OK)
 
     def return_user_exc(self, builder, exc, exc_args=None, loc=None,
                         func_name=None):
@@ -229,7 +233,8 @@ class MinimalCallConv(BaseCallConv):
         """
         norm = builder.icmp_signed('==', code, RETCODE_OK)
         none = builder.icmp_signed('==', code, RETCODE_NONE)
-        ok = builder.or_(norm, none)
+        live = builder.icmp_signed('==', code, RETCODE_LIVE)
+        ok = builder.or_(builder.or_(norm, none), live)
         err = builder.not_(ok)
         exc = builder.icmp_signed('==', code, RETCODE_EXC)
         is_stop_iteration = builder.icmp_signed('==', code, RETCODE_STOPIT)
@@ -242,6 +247,7 @@ class MinimalCallConv(BaseCallConv):
                         is_none=none,
                         is_user_exc=is_user_exc,
                         is_stop_iteration=is_stop_iteration,
+                        is_live_var=live,
                         excinfoptr=None)
         return status
 
@@ -370,12 +376,13 @@ class CPUCallConv(BaseCallConv):
     def _make_call_helper(self, builder):
         return None
 
-    def return_value(self, builder, retval):
+    def return_value(self, builder, retval, is_live_var=False):
         retptr = self._get_return_argument(builder.function)
         assert retval.type == retptr.type.pointee, \
             (str(retval.type), str(retptr.type.pointee))
         builder.store(retval, retptr)
-        self._return_errcode_raw(builder, RETCODE_OK)
+        self._return_errcode_raw(builder,
+                                 RETCODE_LIVE if is_live_var else RETCODE_OK)
 
     def build_excinfo_struct(self, exc, exc_args, loc, func_name):
         # Build excinfo struct
@@ -784,8 +791,9 @@ class CPUCallConv(BaseCallConv):
         norm = builder.icmp_signed('==', code, RETCODE_OK)
         none = builder.icmp_signed('==', code, RETCODE_NONE)
         exc = builder.icmp_signed('==', code, RETCODE_EXC)
+        live = builder.icmp_signed('==', code, RETCODE_LIVE)
         is_stop_iteration = builder.icmp_signed('==', code, RETCODE_STOPIT)
-        ok = builder.or_(norm, none)
+        ok = builder.or_(builder.or_(norm, none), live)
         err = builder.not_(ok)
         is_user_exc = builder.icmp_signed('>=', code, RETCODE_USEREXC)
         excinfoptr = builder.select(is_user_exc, excinfoptr,
@@ -798,6 +806,7 @@ class CPUCallConv(BaseCallConv):
                         is_none=none,
                         is_user_exc=is_user_exc,
                         is_stop_iteration=is_stop_iteration,
+                        is_live_var=live,
                         excinfoptr=excinfoptr)
         return status
 

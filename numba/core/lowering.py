@@ -730,7 +730,8 @@ class Lower(BaseLower):
         )
 
         # return
-        self.call_conv.return_value(self.builder, retval)
+        self.call_conv.return_value(self.builder, retval,
+                                    is_live_var=inst.value.name in yp.live_vars)
 
         # Resumption point
         y.lower_yield_resume()
