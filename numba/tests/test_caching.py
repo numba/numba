@@ -1,23 +1,28 @@
+import importlib
 import inspect
-import llvmlite.binding as ll
 import multiprocessing
-import numpy as np
 import os
-import stat
 import shutil
+import stat
 import subprocess
 import sys
 import traceback
 import unittest
 import warnings
+import zipfile
+from pathlib import Path
+
+import llvmlite.binding as ll
+import numpy as np
+
 from numba import njit
 from numba.core import codegen
-from numba.core.caching import _UserWideCacheLocator
+from numba.core.caching import _UserWideCacheLocator, _ZipCacheLocator
 from numba.core.errors import NumbaWarning
 from numba.parfors import parfor
 from numba.tests.support import (
-    TestCase,
     SerialMixin,
+    TestCase,
     capture_cache_log,
     import_dynamic,
     override_config,
@@ -700,6 +705,92 @@ class TestCache(DispatcherCacheUsecasesTest):
         # Run a second time and check caching
         err = execute_with_input()
         self.assertIn("cache hits = 1", err.strip())
+
+
+class TestCacheZip(DispatcherCacheUsecasesTest):
+
+    def setUp(self):
+        super().setUp()
+
+        # Create a simple Python module to be zipped
+        mod_content = """
+from numba import jit
+
+@jit(cache=True)
+def add(x, y):
+    return x + y
+"""
+        mod_filename = "test_module.py"
+        zip_filename = "test_archive.zip"
+
+        # Create a zip file containing the module
+        zip_path = os.path.join(self.tempdir, zip_filename)
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr(mod_filename, mod_content)
+
+        # Add the zip file to sys.path
+        sys.path.insert(0, zip_path)
+        self.modname = "test_module"
+
+    def tearDown(self):
+        # Clean up: remove the zip file from sys.path
+        sys.path.pop(0)
+        # Remove the module from sys.modules to clean up
+        sys.modules.pop("test_module", None)
+
+    def test_zip_caching(self):
+        # (note that `self.import_module()` fails because its checks are
+        # incompatible
+        # with the zip file, so we just use normal imports here)
+
+        # First import and call
+        import test_module  # type: ignore
+
+        result1 = test_module.add(2, 3)
+        self.assertEqual(result1, 5)
+        self.check_hits(test_module.add, 0, 1)
+
+        # Record the initial cache hits
+        self.check_hits(test_module.add, 0)
+
+        # Remove the module and reimport
+        del sys.modules["test_module"]
+        importlib.invalidate_caches()
+        import test_module  # type: ignore
+
+        # Second call: should use the cache
+        result2 = test_module.add(2, 3)
+        self.assertEqual(result2, 5)
+
+        # Check if the cache was hit
+        self.check_hits(test_module.add, 1)
+
+
+class TestCacheZipLib(DispatcherCacheUsecasesTest):
+    """
+    ZipCache tests that don't require the setup/teardown from `TestCacheZip`
+    """
+    def test_zip_locator_creation(self):
+
+        def mock_func():
+            pass
+
+        zip_path = "/path/to/archive.zip/module.py"
+
+        locator = _ZipCacheLocator.from_function(mock_func, zip_path)
+        self.assertIsNotNone(locator)
+        self.assertEqual(locator._zip_path, str(Path("/path/to/archive.zip")))
+        self.assertEqual(locator._internal_path, "module.py")
+
+    def test_zip_locator_non_zip_path(self):
+
+        def mock_func():
+            pass
+
+        non_zip_path = "/path/to/module.py"
+
+        locator = _ZipCacheLocator.from_function(mock_func, non_zip_path)
+        self.assertIsNone(locator)
 
 
 @skip_parfors_unsupported

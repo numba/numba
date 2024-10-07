@@ -1,0 +1,5 @@
+Use of dead branch pruning improved
+-----------------------------------
+
+Dead-branch pruning use is improved to support cases when the predicate
+expression is dependent on a variable that later changes type.

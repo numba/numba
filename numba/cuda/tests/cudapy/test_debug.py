@@ -51,7 +51,7 @@ class TestDebugOutput(CUDATestCase):
         if PYVERSION in ((3, 11), (3, 12)):
             # binop with arg=0 is binary add, see CPython dis.py and opcode.py
             self.assertIn('BINARY_OP(arg=0', out)
-        elif PYVERSION in ((3, 9), (3, 10)):
+        elif PYVERSION in ((3, 10),):
             self.assertIn('BINARY_ADD', out)
         else:
             raise NotImplementedError(PYVERSION)

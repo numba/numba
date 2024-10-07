@@ -44,7 +44,7 @@ from timeit import default_timer as timer
 from contextlib import contextmanager, ExitStack
 from collections import defaultdict
 
-from numba.core import config
+from numba.core import config, utils
 
 
 class EventStatus(enum.Enum):
@@ -478,7 +478,7 @@ def _setup_chrome_trace_exit_handler():
         # The following output file is not multi-process safe.
         evs = _prepare_chrome_trace_data(listener)
         with open(filename, "w") as out:
-            json.dump(evs, out)
+            json.dump(evs, out, cls=utils._LazyJSONEncoder)
 
 
 if config.CHROME_TRACE:

@@ -22,7 +22,7 @@ class TestTypes(TestCase):
             1.2,
             (1 + 2j),
             True,
-            # Numpy types
+            # NumPy types
             np.int32(1),
             np.float64(1.2),
             np.complex64(1 + 2j),

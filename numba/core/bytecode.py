@@ -13,7 +13,7 @@ if PYVERSION in ((3, 12), ):
     from opcode import _inline_cache_entries
     # Instruction/opcode length in bytes
     INSTR_LEN = 2
-elif PYVERSION in ((3, 9), (3, 10), (3, 11)):
+elif PYVERSION in ((3, 10), (3, 11)):
     pass
 else:
     raise NotImplementedError(PYVERSION)
@@ -116,7 +116,7 @@ class ByteCodeInst(object):
                                          "POP_JUMP_BACKWARD_IF_NONE",
                                          "POP_JUMP_BACKWARD_IF_NOT_NONE",)):
                 return self.offset - (self.arg - 1) * 2
-        elif PYVERSION in ((3, 9), (3, 10)):
+        elif PYVERSION in ((3, 10),):
             pass
         else:
             raise NotImplementedError(PYVERSION)
@@ -127,12 +127,6 @@ class ByteCodeInst(object):
             else:
                 assert self.opcode in JABS_OPS
                 return self.arg * 2 - 2
-        elif PYVERSION in ((3, 9),):
-            if self.opcode in JREL_OPS:
-                return self.next + self.arg
-            else:
-                assert self.opcode in JABS_OPS
-                return self.arg
         else:
             raise NotImplementedError(PYVERSION)
 
@@ -182,7 +176,7 @@ def _unpack_opargs(code):
                 # The number of cache slots is specific to each opcode and can
                 # be looked up in the _inline_cache_entries dictionary.
                 i += _inline_cache_entries[op] * INSTR_LEN
-            elif PYVERSION in ((3, 9), (3, 10), (3, 11)):
+            elif PYVERSION in ((3, 10), (3, 11)):
                 pass
             else:
                 raise NotImplementedError(PYVERSION)
@@ -206,7 +200,7 @@ def _unpack_opargs(code):
                 # The number of cache slots is specific to each opcode and can
                 # be looked up in the _inline_cache_entries dictionary.
                 i += _inline_cache_entries[op] * INSTR_LEN
-            elif PYVERSION in ((3, 9), (3, 10), (3, 11)):
+            elif PYVERSION in ((3, 10), (3, 11)):
                 pass
             else:
                 raise NotImplementedError(PYVERSION)
@@ -365,7 +359,7 @@ class _ByteCode(object):
 def _fix_LOAD_GLOBAL_arg(arg):
     if PYVERSION in ((3, 11), (3, 12)):
         return arg >> 1
-    elif PYVERSION in ((3, 9), (3, 10)):
+    elif PYVERSION in ((3, 10),):
         return arg
     else:
         raise NotImplementedError(PYVERSION)

@@ -860,7 +860,7 @@ static void traceback_add(const char *funcname, const char *filename, int lineno
 #if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 12) /* 3.12 */
 error:
     _PyErr_ChainExceptions1(exc);
-#elif (PY_MAJOR_VERSION == 3) && ((PY_MINOR_VERSION == 9) || (PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11)) /* 3.11 and below */
+#elif (PY_MAJOR_VERSION == 3) && ((PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11)) /* 3.11 and below */
 error:
     _PyErr_ChainExceptions(exc, val, tb);
 #else
@@ -907,7 +907,7 @@ int reraise_exc_is_none(void) {
 
 #if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 11)
     PyErr_GetExcInfo(&type, &value, &tb);
-#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 8)
+#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 10)
     PyThreadState *tstate = PyThreadState_GET();
     _PyErr_StackItem *tstate_exc = tstate->exc_info;
     type = tstate_exc->exc_type;

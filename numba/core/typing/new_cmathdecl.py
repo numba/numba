@@ -9,6 +9,13 @@ infer_global = registry.register_global
 
 # TODO: support non-complex arguments (floats and ints)
 
+# TODO: New Type System
+# These functions are part of the Python standard library
+#  and (without checking) probably accept anything which
+#  is "number"-like i.e. has a __float__, __int__, or
+#  __index__
+# This needs fixing in the new type system
+
 
 @infer_global(cmath.acos)
 @infer_global(cmath.asin)
@@ -21,14 +28,13 @@ infer_global = registry.register_global
 @infer_global(cmath.sqrt)
 @infer_global(cmath.tan)
 class CMath_unary(ConcreteTemplate):
-    cases = [signature(tp, tp) for tp in sorted(types.np_complex_domain)]
+    cases = []
 
 
 @infer_global(cmath.isinf)
 @infer_global(cmath.isnan)
 class CMath_predicate(ConcreteTemplate):
-    cases = [signature(types.np_bool_, tp) for tp in
-             sorted(types.np_complex_domain)]
+    cases = []
 
 
 @infer_global(cmath.isfinite)
@@ -39,6 +45,6 @@ class CMath_isfinite(CMath_predicate):
 @infer_global(cmath.log)
 class Cmath_log(ConcreteTemplate):
     # unary cmath.log()
-    cases = [signature(tp, tp) for tp in sorted(types.np_complex_domain)]
+    cases = []
     # binary cmath.log()
-    cases += [signature(tp, tp, tp) for tp in sorted(types.np_complex_domain)]
+    cases += []

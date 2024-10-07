@@ -2236,6 +2236,11 @@ def np_trapz(y, x=None, dx=1.0):
     return impl
 
 
+# numpy 2.0 rename np.trapz to np.trapezoid
+if numpy_version >= (2, 0):
+    overload(np.trapezoid)(np_trapz)
+
+
 @register_jitable
 def _np_vander(x, N, increasing, out):
     """
@@ -3590,19 +3595,26 @@ def np_array_equal(a1, a2):
 
 
 @overload(np.intersect1d)
-def jit_np_intersect1d(ar1, ar2):
-    # Not implemented to support assume_unique or return_indices
+def jit_np_intersect1d(ar1, ar2, assume_unique=False):
+    # Not implemented to support return_indices
     # https://github.com/numpy/numpy/blob/v1.19.0/numpy/lib
     # /arraysetops.py#L347-L441
     if not (type_can_asarray(ar1) or type_can_asarray(ar2)):
         raise TypingError('intersect1d: first two args must be array-like')
+    if not isinstance(assume_unique, (types.Boolean, bool)):
+        raise TypingError('intersect1d: '
+                          'argument "assume_unique" must be boolean')
 
-    def np_intersects1d_impl(ar1, ar2):
+    def np_intersects1d_impl(ar1, ar2, assume_unique=False):
         ar1 = np.asarray(ar1)
         ar2 = np.asarray(ar2)
 
-        ar1 = np.unique(ar1)
-        ar2 = np.unique(ar2)
+        if not assume_unique:
+            ar1 = np.unique(ar1)
+            ar2 = np.unique(ar2)
+        else:
+            ar1 = ar1.ravel()
+            ar2 = ar2.ravel()
 
         aux = np.concatenate((ar1, ar2))
         aux.sort()
@@ -4866,3 +4878,146 @@ def np_trim_zeros(filt, trim='fb'):
         return a_[first:last]
 
     return impl
+
+
+@overload(np.setxor1d)
+def jit_np_setxor1d(ar1, ar2, assume_unique=False):
+    if not (type_can_asarray(ar1) or type_can_asarray(ar2)):
+        raise TypingError('setxor1d: first two args must be array-like')
+    if not (isinstance(assume_unique, (types.Boolean, bool))):
+        raise TypingError('setxor1d: Argument "assume_unique" must be boolean')
+
+    # https://github.com/numpy/numpy/blob/03b62604eead0f7d279a5a4c094743eb29647368/numpy/lib/arraysetops.py#L477 # noqa: E501
+    def np_setxor1d_impl(ar1, ar2, assume_unique=False):
+        a = np.asarray(ar1)
+        b = np.asarray(ar2)
+
+        if not assume_unique:
+            a = np.unique(a)
+            b = np.unique(b)
+        else:
+            a = a.ravel()
+            b = b.ravel()
+
+        # Implementation very similar to np_intersect1d_impl:
+        # We want union minus the intersect
+        aux = np.concatenate((a, b))
+        aux.sort()
+
+        flag = np.empty(aux.shape[0] + 1, dtype=np.bool_)
+        flag[0] = True
+        flag[-1] = True
+        flag[1:-1] = aux[1:] != aux[:-1]
+        return aux[flag[1:] & flag[:-1]]
+
+    return np_setxor1d_impl
+
+
+@overload(np.setdiff1d)
+def jit_np_setdiff1d(ar1, ar2, assume_unique=False):
+    if not (type_can_asarray(ar1) or type_can_asarray(ar2)):
+        raise TypingError('setdiff1d: first two args must be array-like')
+    if not (isinstance(assume_unique, (types.Boolean, bool))):
+        raise TypingError('setdiff1d: Argument "assume_unique" must be boolean')
+
+    # https://github.com/numpy/numpy/blob/03b62604eead0f7d279a5a4c094743eb29647368/numpy/lib/arraysetops.py#L940 # noqa: E501
+    def np_setdiff1d_impl(ar1, ar2, assume_unique=False):
+        ar1 = np.asarray(ar1)
+        ar2 = np.asarray(ar2)
+        if assume_unique:
+            ar1 = ar1.ravel()
+            ar2 = ar2.ravel()
+        else:
+            ar1 = np.unique(ar1)
+            ar2 = np.unique(ar2)
+        return ar1[np.in1d(ar1, ar2, assume_unique=True, invert=True)]
+
+    return np_setdiff1d_impl
+
+
+@overload(np.in1d)
+def jit_np_in1d(ar1, ar2, assume_unique=False, invert=False):
+    if not (type_can_asarray(ar1) or type_can_asarray(ar2)):
+        raise TypingError('in1d: first two args must be array-like')
+    if not isinstance(assume_unique, (types.Boolean, bool)):
+        raise TypingError('in1d: Argument "assume_unique" must be boolean')
+    if not isinstance(invert, (types.Boolean, bool)):
+        raise TypingError('in1d: Argument "invert" must be boolean')
+
+    def np_in1d_impl(ar1, ar2, assume_unique=False, invert=False):
+        # https://github.com/numpy/numpy/blob/03b62604eead0f7d279a5a4c094743eb29647368/numpy/lib/arraysetops.py#L525 # noqa: E501
+
+        # Ravel both arrays, behavior for the first array could be different
+        ar1 = np.asarray(ar1).ravel()
+        ar2 = np.asarray(ar2).ravel()
+
+        # This code is run when it would make the code significantly faster
+        # Sorting is also not guaranteed to work on objects but numba does
+        # not support object arrays.
+        if len(ar2) < 10 * len(ar1) ** 0.145:
+            if invert:
+                mask = np.ones(len(ar1), dtype=np.bool_)
+                for a in ar2:
+                    mask &= (ar1 != a)
+            else:
+                mask = np.zeros(len(ar1), dtype=np.bool_)
+                for a in ar2:
+                    mask |= (ar1 == a)
+            return mask
+
+        # Otherwise use sorting
+        if not assume_unique:
+            # Equivalent to ar1, inv_idx = np.unique(ar1, return_inverse=True)
+            # https://github.com/numpy/numpy/blob/03b62604eead0f7d279a5a4c094743eb29647368/numpy/lib/arraysetops.py#L358C8-L358C8 # noqa: E501
+            order1 = np.argsort(ar1)
+            aux = ar1[order1]
+            mask = np.empty(aux.shape, dtype=np.bool_)
+            mask[:1] = True
+            mask[1:] = aux[1:] != aux[:-1]
+            ar1 = aux[mask]
+            imask = np.cumsum(mask) - 1
+            inv_idx = np.empty(mask.shape, dtype=np.intp)
+            inv_idx[order1] = imask
+            ar2 = np.unique(ar2)
+
+        ar = np.concatenate((ar1, ar2))
+        # We need this to be a stable sort, so always use 'mergesort'
+        # here. The values from the first array should always come before
+        # the values from the second array.
+        order = ar.argsort(kind='mergesort')
+        sar = ar[order]
+        flag = np.empty(sar.size, np.bool_)
+        if invert:
+            flag[:-1] = (sar[1:] != sar[:-1])
+        else:
+            flag[:-1] = (sar[1:] == sar[:-1])
+        flag[-1:] = invert
+        ret = np.empty(ar.shape, dtype=np.bool_)
+        ret[order] = flag
+
+        # return ret[:len(ar1)]
+        if assume_unique:
+            return ret[:len(ar1)]
+        else:
+            return ret[inv_idx]
+
+    return np_in1d_impl
+
+
+@overload(np.isin)
+def jit_np_isin(element, test_elements, assume_unique=False, invert=False):
+    if not (type_can_asarray(element) or type_can_asarray(test_elements)):
+        raise TypingError('isin: first two args must be array-like')
+    if not (isinstance(assume_unique, (types.Boolean, bool))):
+        raise TypingError('isin: Argument "assume_unique" must be boolean')
+    if not (isinstance(invert, (types.Boolean, bool))):
+        raise TypingError('isin: Argument "invert" must be boolean')
+
+    # https://github.com/numpy/numpy/blob/03b62604eead0f7d279a5a4c094743eb29647368/numpy/lib/arraysetops.py#L889 # noqa: E501
+    def np_isin_impl(element, test_elements, assume_unique=False, invert=False):
+
+        element = np.asarray(element)
+        return np.in1d(element, test_elements, assume_unique=assume_unique,
+                       invert=invert).reshape(element.shape)
+
+    return np_isin_impl

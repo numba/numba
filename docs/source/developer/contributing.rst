@@ -214,9 +214,6 @@ instead. For example::
     $ NUMBA_USE_TYPEGUARD=1 python runtests.py
 
 
-See also: :ref:`Debugging the Test Suite <developer-testsuite>`
-
-
 Running coverage
 ''''''''''''''''
 

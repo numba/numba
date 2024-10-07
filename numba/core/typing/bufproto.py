@@ -18,10 +18,13 @@ if config.USE_LEGACY_TYPE_SYSTEM: # Old type system
         }
 else: # New type system
     _pep3118_scalar_map = {
-        'f': types.np_float32,
-        'd': types.np_float64,
-        'Zf': types.np_complex64,
-        'Zd': types.np_complex128,
+        # TODO: FIXME We need to modify the following Map to use Python Types.
+        # However currently here's nothing in Python types that maps
+        # to a float32 or a complex64
+        # 'f': types.np_float32,
+        'd': types.py_float, # 64-bit float
+        # 'Zf': types.np_complex64,
+        'Zd': types.py_complex, # 128-bit complex
         }
 
 _type_map = {

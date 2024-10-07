@@ -9,11 +9,10 @@ from llvmlite import ir
 from llvmlite.ir import Constant
 
 from numba.core.imputils import (lower_builtin, lower_getattr,
-                                    lower_getattr_generic, lower_cast,
-                                    lower_constant, impl_ret_borrowed,
-                                    impl_ret_untracked)
-from numba.core import typing, types, utils, errors, cgutils, optional, config
-from numba.core.extending import intrinsic, overload_method
+                                 lower_cast, lower_constant,
+                                 impl_ret_untracked)
+from numba.core import typing, types, errors, cgutils
+from numba.core.extending import overload_method
 from numba.cpython.unsafe.numbers import viewer
 
 def _int_arith_flags(rettype):
@@ -538,14 +537,14 @@ def bool_unary_positive_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-lower_builtin(operator.eq, types.np_bool_, types.np_bool_)(int_eq_impl)
-lower_builtin(operator.ne, types.np_bool_, types.np_bool_)(int_ne_impl)
-lower_builtin(operator.lt, types.np_bool_, types.np_bool_)(int_ult_impl)
-lower_builtin(operator.le, types.np_bool_, types.np_bool_)(int_ule_impl)
-lower_builtin(operator.gt, types.np_bool_, types.np_bool_)(int_ugt_impl)
-lower_builtin(operator.ge, types.np_bool_, types.np_bool_)(int_uge_impl)
-lower_builtin(operator.neg, types.np_bool_)(bool_negate_impl)
-lower_builtin(operator.pos, types.np_bool_)(bool_unary_positive_impl)
+lower_builtin(operator.eq, types.py_bool, types.py_bool)(int_eq_impl)
+lower_builtin(operator.ne, types.py_bool, types.py_bool)(int_ne_impl)
+lower_builtin(operator.lt, types.py_bool, types.py_bool)(int_ult_impl)
+lower_builtin(operator.le, types.py_bool, types.py_bool)(int_ule_impl)
+lower_builtin(operator.gt, types.py_bool, types.py_bool)(int_ugt_impl)
+lower_builtin(operator.ge, types.py_bool, types.py_bool)(int_uge_impl)
+lower_builtin(operator.neg, types.py_bool)(bool_negate_impl)
+lower_builtin(operator.pos, types.py_bool)(bool_unary_positive_impl)
 
 
 def _implement_integer_operators():

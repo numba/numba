@@ -681,6 +681,9 @@ class DefaultPassBuilder(object):
         if state.flags.enable_ssa:
             pm.add_pass(ReconstructSSA, "ssa")
 
+        if not state.flags.no_rewrites:
+            pm.add_pass(DeadBranchPrune, "dead branch pruning")
+
         pm.add_pass(LiteralPropagationSubPipelinePass, "Literal propagation")
 
         pm.finalize()
