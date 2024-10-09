@@ -1812,7 +1812,5 @@ class TestArrayComparisons(TestCase):
     # Other comparison operators ('==', etc.) are tested in test_ufuncs
 
 
-# if __name__ == '__main__':
-#     unittest.main()
-x = TestArrayMethods()
-x.test_arange_1_arg()
+if __name__ == '__main__':
+    unittest.main()

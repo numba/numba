@@ -586,8 +586,8 @@ def np_complex_sign_impl(context, builder, sig, args):
     # but implemented via selects, balancing the 4 cases.
     _check_arity_and_homogeneity(sig, args, 1)
 
-    if numpy_version >= (2, 1):
-        # NumPy >= 2.1.0
+    if numpy_version >= (2, 0):
+        # NumPy >= 2.0.0
         def complex_sign(z):
             abs = math.hypot(z.real, z.imag)
             if abs == 0:
