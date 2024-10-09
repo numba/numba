@@ -152,6 +152,8 @@ def _ensure_llvm():
     import warnings
     import llvmlite
 
+    llvmlite.opaque_pointers_enabled = True
+
     # Only look at the the major, minor and bugfix version numbers.
     # Ignore other stuffs
     regex = re.compile(r'(\d+)\.(\d+).(\d+)')
