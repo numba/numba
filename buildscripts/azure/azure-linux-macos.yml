@@ -47,6 +47,5 @@ jobs:
     - script: |
         set -e
         export PATH=$HOME/miniconda3/bin:$PATH
-        export LLVMLITE_ENABLE_OPAQUE_POINTERS=1
         buildscripts/incremental/test.sh
       displayName: 'Test'
