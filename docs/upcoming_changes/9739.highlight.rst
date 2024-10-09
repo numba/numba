@@ -1,4 +1,4 @@
-Updated the minimum supported NumPy to 1.24
--------------------------------------------
+Update the minimum supported NumPy version to 1.24
+--------------------------------------------------
 
-This release updates the minimum official supported version for NumPy to 1.24 and later.
+This release updates the minimum supported version of NumPy to 1.24.
