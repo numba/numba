@@ -1,0 +1,6 @@
+Fixed numerical error and infinite loop bug in ``numpy.random.Generator.binomial``.
+-----------------------------------------------------------------------------------
+
+A bug impacting the correctness of numerical results is fixed alongside an issue
+which led to executing an infinite loop under specific circumstances most easily
+triggered by the aforementioned correctness bug.
