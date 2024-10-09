@@ -312,6 +312,10 @@ class _EnvReloader(object):
         # Contains path to the directory
         CACHE_DIR = _readenv("NUMBA_CACHE_DIR", str, "")
 
+        # Override cache= parameter in decorators
+        # Can be set to always (force cache=True) or never (force cache=False)
+        CACHE_OVERRIDE = _readenv("NUMBA_CACHE_OVERRIDE", str, "")
+
         # Enable tracing support
         TRACE = _readenv("NUMBA_TRACE", int, 0)
 

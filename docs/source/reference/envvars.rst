@@ -470,6 +470,16 @@ Options for the compilation cache.
     Also see :ref:`docs on cache sharing <cache-sharing>` and
     :ref:`docs on cache clearing <cache-clearing>`
 
+.. envvar:: NUMBA_CACHE_OVERRIDE
+
+   Override the `cache` parameter to the Numba compilation decorators
+   (:func:`~numba.jit`, :func:`~numba.njit`, :func:`~numba.cfunc`,
+   :func:`numba.cuda.jit`). If defined, this should be set to one of the
+   following values:
+
+   * ``always``: always cache compiled code.
+   * ``never``: never cache compiled code.
+
 
 .. _numba-envvars-gpu-support:
 
