@@ -1,3 +1,5 @@
+.devenv/*
+.direnv/*
 *.pyc
 *.o
 *.so
