@@ -23,7 +23,7 @@ conda list
 @rem CFFI, jinja2 and IPython are optional dependencies, but exercised in the test suite
 conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip jinja2 ipython gitpython pyyaml
 @rem Install SciPy only if NumPy is not 2.1
-if "%NUMPY%" != "2.1" (%CONDA_INSTALL% scipy)
+if "%NUMPY%" neq "2.1" (%CONDA_INSTALL% scipy)
 
 call activate %CONDA_ENV%
 @rem Install latest llvmlite build
