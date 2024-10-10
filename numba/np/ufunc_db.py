@@ -629,6 +629,10 @@ def _fill_ufunc_db(ufunc_db):
             'l->l': numbers.identity_impl,
             'L->L': numbers.identity_impl,
         })
+        if IS_WIN32:
+            ufunc_db[np.trunc].update({
+                'Q->Q': numbers.identity_impl,
+            })
 
     ufunc_db[np.fabs] = {
         'f->f': npyfuncs.np_real_fabs_impl,
