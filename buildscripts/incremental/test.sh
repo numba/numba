@@ -141,9 +141,3 @@ elif [ "$RUN_TYPEGUARD" == "yes" ]; then
 else
     NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -j "$TEST_START_INDEX:$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
 fi
-
-# Now run with RVSDG enabled for a subset of tests
-if [[ "$TEST_RVSDG" == "yes" ]]; then
-    echo "Running RVSDG tests..."
-    NUMBA_USE_RVSDG_FRONTEND=1 NUMBA_CAPTURED_ERRORS=new_style NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -m $TEST_NPROCS -- numba.tests.test_usecases
-fi
