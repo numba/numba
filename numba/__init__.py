@@ -2,10 +2,13 @@
 Expose top-level symbols that are safe for import *
 """
 
+import os
 import platform
 import re
 import sys
 import warnings
+
+os.environ['LLVMLITE_ENABLE_OPAQUE_POINTERS'] = 1
 
 
 # ---------------------- WARNING WARNING WARNING ----------------------------
@@ -151,8 +154,6 @@ def _ensure_llvm():
     """
     import warnings
     import llvmlite
-
-    llvmlite.opaque_pointers_enabled = True
 
     # Only look at the the major, minor and bugfix version numbers.
     # Ignore other stuffs
