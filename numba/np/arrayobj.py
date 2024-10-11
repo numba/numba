@@ -2175,7 +2175,7 @@ def array_reshape_vararg(context, builder, sig, args):
     return array_reshape(context, builder, new_sig, new_args)
 
 
-if numpy_version < (2, 0):
+if numpy_version < (2, 1):
     @overload(np.reshape)
     def np_reshape(a, newshape):
         def np_reshape_impl(a, newshape):

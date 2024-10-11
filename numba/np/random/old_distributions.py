@@ -391,7 +391,7 @@ def random_geometric(bitgen, p):
         return random_geometric_inversion(bitgen, p)
 
 
-if numpy_version < (2, 0):
+if numpy_version < (2, 1):
     @register_jitable
     def random_zipf(bitgen, a):
         am1 = a - 1.0
