@@ -8,7 +8,7 @@ import re
 import sys
 import warnings
 
-os.environ['LLVMLITE_ENABLE_OPAQUE_POINTERS'] = 1
+os.environ['LLVMLITE_ENABLE_OPAQUE_POINTERS'] = "1"
 
 
 # ---------------------- WARNING WARNING WARNING ----------------------------
