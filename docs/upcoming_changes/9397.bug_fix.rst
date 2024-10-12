@@ -1,0 +1,5 @@
+Fix parfor hoisting.
+--------------------
+
+Traverse blocks in the right order so that getattrs will precede calls
+so that the object of the getattr can be marked as multiply defined.
