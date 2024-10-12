@@ -707,11 +707,11 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
         Create a new instance of this dispatcher specialized for the given
         *args*.
         '''
-        cc = get_current_device().compute_capability
-        argtypes = tuple(
-            [self.typingctx.resolve_argument_type(a) for a in args])
         if self.specialized:
             raise RuntimeError('Dispatcher already specialized')
+
+        cc = get_current_device().compute_capability
+        argtypes = tuple(self.typeof_pyval(a) for a in args)
 
         specialization = self.specializations.get((cc, argtypes))
         if specialization:
