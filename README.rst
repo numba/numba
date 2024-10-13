@@ -53,7 +53,7 @@ Please have a look and the demo notebooks via the mybinder service:
 https://mybinder.org/v2/gh/numba/numba-examples/master?filepath=notebooks
 
 Contact
-=======
+========
 
 Numba has a discourse forum for discussions:
 
