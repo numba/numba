@@ -111,7 +111,7 @@ class _CacheLocator(metaclass=ABCMeta):
             # https://github.com/python/cpython/issues/66305
             tmpfile = tempfile.mktemp(dir=path)
             open(tmpfile, mode="wb").close()
-            os.remove(filename)
+            os.remove(tmpfile)
         else:
             # on other operating systems it's safer to rely on
             # TemporaryFile.
