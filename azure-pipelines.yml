@@ -70,15 +70,11 @@ jobs:
         NUMPY: '1.26'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 8
-      # RVSDG tests
-      py311_np126_rvsdg:
+      py311_np126_2:
         PYTHON: '3.11'
         NUMPY: '1.26'
-        RUN_MYPY: yes
-        RUN_FLAKE8: yes
         CONDA_ENV: azure_ci
-        TEST_RVSDG: yes
-        TEST_START_INDEX: 9   # Not used by test script
+        TEST_START_INDEX: 9
       py311_np125_svml:
         PYTHON: '3.11'
         NUMPY: '1.25'
