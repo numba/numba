@@ -73,8 +73,8 @@ def _specialize_box(typ):
     This function caches the result to avoid code bloat.
     """
     # Check cache
-    if typ in _cache_specialized_box:
-        return _cache_specialized_box[typ]
+    if typ.name in _cache_specialized_box:
+        return _cache_specialized_box[typ.name]
     dct = {'__slots__': (),
            '_numba_type_': typ,
            '__doc__': typ.class_type.class_doc,
@@ -176,7 +176,7 @@ def _specialize_box(typ):
     # Create subclass
     subcls = type(typ.classname, (_box.Box,), dct)
     # Store to cache
-    _cache_specialized_box[typ] = subcls
+    _cache_specialized_box[typ.name] = subcls
 
     # Pre-compile attribute getter.
     # Note: This must be done after the "box" class is created because
@@ -203,18 +203,15 @@ def _box_class_instance(typ, val, c):
     meminfo, dataptr = cgutils.unpack_tuple(c.builder, val)
 
     # Create Box instance
-    box_subclassed = _specialize_box(typ)
-    # Note: the ``box_subclassed`` is kept alive by the cache
-    voidptr_boxcls = c.context.add_dynamic_addr(
-        c.builder,
-        id(box_subclassed),
-        info="box_class_instance",
-    )
-    box_cls = c.builder.bitcast(voidptr_boxcls, c.pyapi.pyobj)
-
+    modname = c.context.insert_const_string(
+        c.builder.module, 'numba.experimental.jitclass.boxing')
+    jitclass_boxing_mod = c.pyapi.import_module_noblock(modname)
+    box_subclass_cache = c.pyapi.object_getattr_string(
+        jitclass_boxing_mod, '_cache_specialized_box')
+    box_cls = c.pyapi.dict_getitem_string(box_subclass_cache, typ.name)
     box = c.pyapi.call_function_objargs(box_cls, ())
-
     # Initialize Box instance
+
     llvoidptr = ir.IntType(8).as_pointer()
     addr_meminfo = c.builder.bitcast(meminfo, llvoidptr)
     addr_data = c.builder.bitcast(dataptr, llvoidptr)

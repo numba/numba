@@ -556,12 +556,15 @@ class IndexDataCacheFile(object):
             return {}
         stamp, overloads = pickle.loads(data)
         _cache_log("[cache] index loaded from %r", self._index_path)
-        if stamp != self._source_stamp:
-            # Cache is not fresh.  Stale data files will be eventually
-            # overwritten, since they are numbered in incrementing order.
-            return {}
-        else:
-            return overloads
+
+        ## temporary disabled for developing
+        # if stamp != self._source_stamp:
+        #     # Cache is not fresh.  Stale data files will be eventually
+        #     # overwritten, since they are numbered in incrementing order.
+        #     return {}
+        # else:
+        #     return overloads
+        return overloads
 
     def _save_index(self, overloads):
         data = self._source_stamp, overloads
@@ -730,10 +733,13 @@ class Cache(_Cache):
         """
         codebytes = self._py_func.__code__.co_code
         if self._py_func.__closure__ is not None:
-            cvars = tuple([x.cell_contents for x in self._py_func.__closure__])
-            # Note: cloudpickle serializes a function differently depending
-            #       on how the process is launched; e.g. multiprocessing.Process
-            cvarbytes = dumps(cvars)
+            lst = []
+            for x in self._py_func.__closure__:
+                if hasattr(x.cell_contents, "_identity_"):
+                    lst.append(x.cell_contents._identity_)
+                else:
+                    lst.append(x.cell_contents)
+            cvarbytes = dumps(tuple(lst))
         else:
             cvarbytes = b''
 

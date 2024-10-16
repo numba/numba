@@ -78,7 +78,7 @@ def _getargs(fn_sig):
     return args
 
 
-@disable_pickling
+
 class JitClassType(type):
     """
     The type of any jitclass.
