@@ -208,6 +208,7 @@ def _box_class_instance(typ, val, c):
     jitclass_boxing_mod = c.pyapi.import_module_noblock(modname)
     box_subclass_cache = c.pyapi.object_getattr_string(
         jitclass_boxing_mod, '_cache_specialized_box')
+    # This ref is borrowed, no need to decref
     box_cls = c.pyapi.dict_getitem_string(box_subclass_cache, typ.name)
     box = c.pyapi.call_function_objargs(box_cls, ())
     # Initialize Box instance
@@ -225,6 +226,8 @@ def _box_class_instance(typ, val, c):
 
     set_member(_box.box_meminfoptr_offset, addr_meminfo)
     set_member(_box.box_dataptr_offset, addr_data)
+    c.pyapi.decref(jitclass_boxing_mod)
+    c.pyapi.decref(box_subclass_cache)
     return box
 
 

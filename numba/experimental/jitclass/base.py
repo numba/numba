@@ -78,7 +78,6 @@ def _getargs(fn_sig):
     return args
 
 
-
 class JitClassType(type):
     """
     The type of any jitclass.
@@ -157,7 +156,7 @@ def _add_linking_libs(context, call):
         context.add_linking_libs(libs)
 
 
-def register_class_type(cls, spec, class_ctor, builder):
+def register_class_type(cls, spec, class_ctor, builder, **kwargs):
     """
     Internal function to create a jitclass.
 
@@ -216,19 +215,19 @@ def register_class_type(cls, spec, class_ctor, builder):
         if v.fdel is not None:
             raise TypeError("deleter is not supported: {0}".format(k))
 
-    jit_methods = {k: njit(v) for k, v in methods.items()}
+    jit_methods = {k: njit(v, **kwargs) for k, v in methods.items()}
 
     jit_props = {}
     for k, v in props.items():
         dct = {}
         if v.fget:
-            dct['get'] = njit(v.fget)
+            dct['get'] = njit(v.fget, **kwargs)
         if v.fset:
-            dct['set'] = njit(v.fset)
+            dct['set'] = njit(v.fset, **kwargs)
         jit_props[k] = dct
 
     jit_static_methods = {
-        k: njit(v.__func__) for k, v in static_methods.items()}
+        k: njit(v.__func__, **kwargs) for k, v in static_methods.items()}
 
     # Instantiate class type
     class_type = class_ctor(
