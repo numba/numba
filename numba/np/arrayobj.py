@@ -2752,17 +2752,11 @@ def array_view(context, builder, sig, args):
         else:
             setattr(ret, k, val)
 
-    if numpy_version >= (1, 23):
-        # NumPy 1.23+ bans views using a dtype that is a different size to that
-        # of the array when the last axis is not contiguous. For example, this
-        # manifests at runtime when a dtype size altering view is requested
-        # on a Fortran ordered array.
-
-        tyctx = context.typing_context
-        fnty = tyctx.resolve_value_type(_compatible_view)
-        _compatible_view_sig = fnty.get_call_type(tyctx, (*sig.args,), {})
-        impl = context.get_function(fnty, _compatible_view_sig)
-        impl(builder, args)
+    tyctx = context.typing_context
+    fnty = tyctx.resolve_value_type(_compatible_view)
+    _compatible_view_sig = fnty.get_call_type(tyctx, (*sig.args,), {})
+    impl = context.get_function(fnty, _compatible_view_sig)
+    impl(builder, args)
 
     ok = _change_dtype(context, builder, aryty, retty, ret)
     fail = builder.icmp_unsigned('==', ok, Constant(ok.type, 0))
