@@ -1,0 +1,8 @@
+Removal of experimental RVSDG frontend
+--------------------------------------
+
+The experimental RVSDG frontend has been removed from the main Numba codebase. 
+This strategic decision allows for more focused and independent development of 
+the RVSDG frontend as a reusable component. Future development and 
+updates will be available at https://github.com/numba/numba-rvsdg and other new 
+repositories as they are developed.
