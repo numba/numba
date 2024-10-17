@@ -15,6 +15,7 @@ import sys
 import tempfile
 import uuid
 import warnings
+import re
 
 from numba.misc.appdirs import AppDirs
 import zipfile
@@ -226,7 +227,12 @@ class _InTreeCacheLocator(_CacheLocator):
         source = inspect.getsource(py_func)
         if isinstance(source, bytes):
             source = source
-        else:
+        else:   
+            # Remove docstrings and comments
+            source = re.sub(r'""".*?"""', '', source, flags=re.DOTALL)
+            source = re.sub(r"'''.*?'''", '', source, flags=re.DOTALL)
+            source = re.sub(r'\s*#.*$', '', source, flags=re.MULTILINE)
+            source = re.sub(r'\n\s*\n', '\n', source)
             source = source.encode('utf-8')
         self._source_stamp = hashlib.sha256(source).hexdigest()
         self._cache_path = os.path.join(
