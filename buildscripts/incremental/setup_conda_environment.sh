@@ -56,7 +56,7 @@ if [ "${VANILLA_INSTALL}" != "yes" ]; then
         $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython pygments pexpect
     fi
 
-    if [ $NUMPY \< "2.1" ]; then
+    if [ $NUMPY \< "2.0" ]; then
         $CONDA_INSTALL ${EXTRA_CHANNELS} scipy
     fi
 fi
