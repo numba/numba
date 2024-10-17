@@ -1129,7 +1129,8 @@ class LiftedLoop(LiftedCode):
                 pyobject_loop_flags.force_pyobject = True
 
                 # Clone IR to avoid (some of the) mutation in the rewrite pass
-                cloned_func_ir = self.func_ir.copy()
+                cloned_func_ir_npm = self.func_ir.copy()
+                cloned_func_ir_fbk = self.func_ir.copy()
 
                 ev_details = dict(
                     dispatcher=self,
@@ -1142,7 +1143,7 @@ class LiftedLoop(LiftedCode):
                     try:
                         cres = compiler.compile_ir(typingctx=self.typingctx,
                                                    targetctx=self.targetctx,
-                                                   func_ir=cloned_func_ir,
+                                                   func_ir=cloned_func_ir_npm,
                                                    args=args,
                                                    return_type=return_type,
                                                    flags=npm_loop_flags,
@@ -1153,7 +1154,7 @@ class LiftedLoop(LiftedCode):
                     except errors.TypingError:
                         cres = compiler.compile_ir(typingctx=self.typingctx,
                                                    targetctx=self.targetctx,
-                                                   func_ir=cloned_func_ir,
+                                                   func_ir=cloned_func_ir_fbk,
                                                    args=args,
                                                    return_type=return_type,
                                                    flags=pyobject_loop_flags,
