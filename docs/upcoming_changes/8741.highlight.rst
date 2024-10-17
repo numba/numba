@@ -1,0 +1,10 @@
+Added initial typed set implementation
+--------------------------------------
+
+Initial support for typed sets has now been added. The following set methods are currently supported:
+
+- ``len(set())``
+- ``set().add()``
+- ``set().discard()``
+- ``set().__contains__()``
+- ``set().__iter__()``
