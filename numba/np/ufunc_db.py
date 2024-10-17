@@ -594,12 +594,9 @@ def _fill_ufunc_db(ufunc_db):
             'I->I': numbers.identity_impl,
             'l->l': numbers.identity_impl,
             'L->L': numbers.identity_impl,
+            'q->q': numbers.identity_impl,
+            'Q->Q': numbers.identity_impl,
         })
-        if IS_WIN32:
-            ufunc_db[np.floor].update({
-                'q->q': numbers.identity_impl,
-                'Q->Q': numbers.identity_impl,
-            })
 
     ufunc_db[np.ceil] = {
         'f->f': npyfuncs.np_real_ceil_impl,
@@ -616,12 +613,9 @@ def _fill_ufunc_db(ufunc_db):
             'I->I': numbers.identity_impl,
             'l->l': numbers.identity_impl,
             'L->L': numbers.identity_impl,
+            'q->q': numbers.identity_impl,
+            'Q->Q': numbers.identity_impl,
         })
-        if IS_WIN32:
-            ufunc_db[np.ceil].update({
-                'q->q': numbers.identity_impl,
-                'Q->Q': numbers.identity_impl,
-            })
 
     ufunc_db[np.trunc] = {
         'f->f': npyfuncs.np_real_trunc_impl,
@@ -638,12 +632,9 @@ def _fill_ufunc_db(ufunc_db):
             'I->I': numbers.identity_impl,
             'l->l': numbers.identity_impl,
             'L->L': numbers.identity_impl,
+            'q->q': numbers.identity_impl,
+            'Q->Q': numbers.identity_impl,
         })
-        if IS_WIN32:
-            ufunc_db[np.trunc].update({
-                'q->q': numbers.identity_impl,
-                'Q->Q': numbers.identity_impl,
-            })
 
     ufunc_db[np.fabs] = {
         'f->f': npyfuncs.np_real_fabs_impl,
