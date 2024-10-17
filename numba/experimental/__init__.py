@@ -1,1 +1,2 @@
-from .jitclass import jitclass
+from .jitclass import jitclass, jitmethod
+

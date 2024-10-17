@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import dataclasses
 import inspect
 import operator
 import types as pytypes
@@ -9,11 +12,32 @@ from llvmlite import ir as llvmir
 from numba import njit
 from numba.core import cgutils, errors, imputils, types, utils
 from numba.core.datamodel import default_manager, models
+from numba.core.extending import is_jitted
 from numba.core.registry import cpu_target
 from numba.core.typing import templates
 from numba.core.typing.asnumbatype import as_numba_type
 from numba.core.serialize import disable_pickling
 from numba.experimental.jitclass import _box
+from numba.type_hints import ClassSpecType
+
+C = pt.TypeVar("C", bound=pt.Callable)
+T = pt.TypeVar("T", bound=pt.Type)
+
+
+@dataclasses.dataclass
+class JitMethod(pt.Generic[C]):
+    """
+    Container class to defer compilation until we can determine the jitclass
+    njit options
+    """
+    implementation: C
+    njit_options: dict[str, bool]
+
+    def __call__(self, *args, **kwargs):
+        raise RuntimeError(
+            "Jit methods must not be called without first being compiled! "
+            "Your class is probably missing a ``jitclass`` decorator!"
+        )
 
 ##############################################################################
 # Data model
@@ -83,7 +107,7 @@ class JitClassType(type):
     """
     The type of any jitclass.
     """
-    def __new__(cls, name, bases, dct):
+    def __new__(cls, name: str, bases, dct):
         if len(bases) != 1:
             raise TypeError("must have exactly one base class")
         [base] = bases
@@ -157,7 +181,11 @@ def _add_linking_libs(context, call):
         context.add_linking_libs(libs)
 
 
-def register_class_type(cls, spec, class_ctor, builder):
+def register_class_type(
+    cls: T, spec: pt.Optional[ClassSpecType],
+    class_ctor: pt.Type[types.ClassType],
+    builder: pt.Type[ClassBuilder], njit_options: dict[str, bool]
+) -> T:
     """
     Internal function to create a jitclass.
 
@@ -167,12 +195,14 @@ def register_class_type(cls, spec, class_ctor, builder):
     spec: the structural specification contains the field types.
     class_ctor: the numba type to represent the jitclass
     builder: the internal jitclass builder
+    njit_options: options to pass to njit when a non-jitted member is found.
     """
     # Normalize spec
     if spec is None:
         spec = OrderedDict()
     elif isinstance(spec, Sequence):
         spec = OrderedDict(spec)
+    pt.cast(OrderedDict[str, pt.Type], spec)
 
     # Extend spec with class annotations.
     for attr, py_type in pt.get_type_hints(cls).items():
@@ -185,13 +215,17 @@ def register_class_type(cls, spec, class_ctor, builder):
     spec = _fix_up_private_attr(cls.__name__, spec)
 
     # Copy methods from base classes
-    clsdct = {}
+    clsdct: dict[str, pt.Any] = {}
     for basecls in reversed(inspect.getmro(cls)):
         clsdct.update(basecls.__dict__)
 
-    methods, props, static_methods, others = {}, {}, {}, {}
+    pre_jitted_methods, methods, props, static_methods, others = (
+        {}, {}, {}, {}, {}
+    )
     for k, v in clsdct.items():
-        if isinstance(v, pytypes.FunctionType):
+        if isinstance(v, JitMethod):
+            pre_jitted_methods[k] = v
+        elif isinstance(v, pytypes.FunctionType):
             methods[k] = v
         elif isinstance(v, property):
             props[k] = v
@@ -216,19 +250,30 @@ def register_class_type(cls, spec, class_ctor, builder):
         if v.fdel is not None:
             raise TypeError("deleter is not supported: {0}".format(k))
 
-    jit_methods = {k: njit(v) for k, v in methods.items()}
+    def _njit_if_needed(f: C, opts: dict[str, bool] = njit_options) -> C:
+        if is_jitted(f):
+            return f
+        else:
+            return pt.cast(C, njit(**opts)(f))
+
+    jit_methods = {
+        k: _njit_if_needed(v) for k, v in methods.items()
+    } | {
+        k: _njit_if_needed(v.implementation, njit_options | v.njit_options)
+        for k, v in pre_jitted_methods.items()
+    }
 
     jit_props = {}
     for k, v in props.items():
         dct = {}
         if v.fget:
-            dct['get'] = njit(v.fget)
+            dct['get'] = _njit_if_needed(v.fget)
         if v.fset:
-            dct['set'] = njit(v.fset)
+            dct['set'] = _njit_if_needed(v.fset)
         jit_props[k] = dct
 
     jit_static_methods = {
-        k: njit(v.__func__) for k, v in static_methods.items()}
+        k: _njit_if_needed(v.__func__) for k, v in static_methods.items()}
 
     # Instantiate class type
     class_type = class_ctor(
@@ -241,7 +286,7 @@ def register_class_type(cls, spec, class_ctor, builder):
 
     jit_class_dct = dict(class_type=class_type, __doc__=docstring)
     jit_class_dct.update(jit_static_methods)
-    cls = JitClassType(cls.__name__, (cls,), jit_class_dct)
+    cls = pt.cast(T, JitClassType(cls.__name__, (cls,), jit_class_dct))
 
     # Register resolution of the class object
     typingctx = cpu_target.typing_context

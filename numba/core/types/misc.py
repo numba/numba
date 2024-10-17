@@ -1,3 +1,5 @@
+import hashlib
+
 from numba.core.types.abstract import Callable, Literal, Type, Hashable
 from numba.core.types.common import (Dummy, IterableType, Opaque,
                                      SimpleIteratorType)
@@ -5,6 +7,7 @@ from numba.core.typeconv import Conversion
 from numba.core.errors import TypingError, LiteralTypingError
 from numba.core.ir import UndefinedType
 from numba.core.utils import get_hashable_key
+from numba.misc.inspection import find_class_source
 
 
 class PyObject(Dummy):
@@ -433,8 +436,14 @@ class ClassType(Callable, Opaque):
         self.jit_static_methods = jit_static_methods
         self.struct = struct
         fielddesc = ','.join("{0}:{1}".format(k, v) for k, v in struct.items())
-        name = "{0}.{1}#{2:x}<{3}>".format(self.name_prefix, self.class_name,
-                                           id(self), fielddesc)
+        try:
+            source_hash = hashlib.md5(
+                find_class_source(class_def).encode()
+            ).hexdigest()
+        except OSError:
+            source_hash = str(id(self))
+        name = "{0}.{1}#{2}<{3}>".format(self.name_prefix, self.class_name,
+                                         source_hash, fielddesc)
         super(ClassType, self).__init__(name)
 
     def get_call_type(self, context, args, kws):

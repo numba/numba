@@ -1,7 +1,87 @@
+from __future__ import annotations
+
+import typing as pt
+
 from numba.core import types, config
+from numba.type_hints import ClassSpecType, FuncSpecType
+
+C = pt.TypeVar("C", bound=pt.Callable)
+T = pt.TypeVar("T", bound=pt.Type)
+
+if pt.TYPE_CHECKING:
+    from numba.experimental.jitclass.base import JitMethod
 
 
-def jitclass(cls_or_spec=None, spec=None):
+@pt.overload
+def jitmethod(  # noqa: F811
+    func_or_spec: C,
+    spec: pt.Optional[FuncSpecType] = None,
+    **njit_options: bool
+) -> JitMethod[C]:
+    ...
+
+
+@pt.overload
+def jitmethod(
+    func_or_spec: pt.Optional[FuncSpecType] = None,
+    spec: pt.Optional[FuncSpecType] = None,
+    **njit_options: bool
+) -> pt.Callable[[C], JitMethod[C]]:
+    ...
+
+
+def jitmethod(  # noqa: F811
+    func_or_spec: pt.Union[C, FuncSpecType, None] = None,
+    spec: pt.Optional[FuncSpecType] = None,
+    **njit_options: bool,
+) -> pt.Union[JitMethod[C], pt.Callable[[C], JitMethod[C]]]:
+    """"""
+    if (
+        func_or_spec is not None
+        and spec is None
+        and not callable(func_or_spec)
+    ):
+        # Used like
+        # @jitmethod([("x", intp)])
+        # def foo():
+        #     ...
+        spec = pt.cast(pt.Optional[FuncSpecType], func_or_spec)
+        func_or_spec = None
+
+    def wrap(func: C) -> JitMethod[C]:
+        from numba.experimental.jitclass.base import JitMethod
+
+        return JitMethod(implementation=func, njit_options=njit_options)
+
+    if func_or_spec is None:
+        return wrap
+    else:
+        return wrap(pt.cast(C, func_or_spec))
+
+
+@pt.overload
+def jitclass(  # noqa: F811
+    cls_or_spec: pt.Optional[ClassSpecType] = None,
+    spec: pt.Optional[ClassSpecType] = None,
+    **njit_options: bool
+) -> pt.Callable[[T], T]:
+    ...
+
+
+@pt.overload
+def jitclass(  # noqa: F811
+    cls_or_spec: T,
+    spec: pt.Optional[ClassSpecType] = None,
+    **njit_options: bool
+) -> T:
+    ...
+
+
+def jitclass(  # noqa: F811
+    cls_or_spec: pt.Union[T, ClassSpecType, None] = None,
+    spec: pt.Optional[ClassSpecType] = None,
+    **njit_options: bool
+) -> pt.Union[T, pt.Callable[[T], T]]:
     """
     A function for creating a jitclass.
     Can be used as a decorator or function.
@@ -58,9 +138,11 @@ def jitclass(cls_or_spec=None, spec=None):
     ``JitClassType``).
     """
 
-    if (cls_or_spec is not None and
-        spec is None and
-            not isinstance(cls_or_spec, type)):
+    if (
+        cls_or_spec is not None
+        and spec is None
+        and not isinstance(cls_or_spec, type)
+    ):
         # Used like
         # @jitclass([("x", intp)])
         # class Foo:
@@ -68,21 +150,25 @@ def jitclass(cls_or_spec=None, spec=None):
         spec = cls_or_spec
         cls_or_spec = None
 
-    def wrap(cls):
-        if config.DISABLE_JIT:
+    def wrap(cls: T) -> T:
+        if config.DISABLE_JIT:  # type: ignore[attr-defined]
             return cls
         else:
-            from numba.experimental.jitclass.base import (register_class_type,
-                                                          ClassBuilder)
-            cls_jitted = register_class_type(cls, spec, types.ClassType,
-                                             ClassBuilder)
+            from numba.experimental.jitclass.base import (
+                register_class_type,
+                ClassBuilder,
+            )
+
+            cls_jitted = register_class_type(
+                cls, spec, types.ClassType, ClassBuilder, njit_options
+            )
 
             # Preserve the module name of the original class
             cls_jitted.__module__ = cls.__module__
 
-            return cls_jitted
+            return pt.cast(T, cls_jitted)
 
     if cls_or_spec is None:
         return wrap
     else:
-        return wrap(cls_or_spec)
+        return wrap(pt.cast(T, cls_or_spec))
