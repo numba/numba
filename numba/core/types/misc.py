@@ -433,8 +433,7 @@ class ClassType(Callable, Opaque):
         self.jit_static_methods = jit_static_methods
         self.struct = struct
         fielddesc = ','.join("{0}:{1}".format(k, v) for k, v in struct.items())
-        name = "{0}.{1}#{2:x}<{3}>".format(self.name_prefix, self.class_name,
-                                           id(self), fielddesc)
+        name = "{0}.{1}<{2}>".format(self.name_prefix, self.class_name, fielddesc)
         super(ClassType, self).__init__(name)
 
     def get_call_type(self, context, args, kws):
@@ -475,7 +474,7 @@ class DeferredType(Type):
 
     def __init__(self):
         self._define = None
-        name = "{0}#{1}".format(type(self).__name__, id(self))
+        name = "{0}".format(type(self).__name__)
         super(DeferredType, self).__init__(name)
 
     def get(self):

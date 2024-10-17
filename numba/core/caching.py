@@ -15,6 +15,7 @@ import sys
 import tempfile
 import uuid
 import warnings
+import re
 
 from numba.misc.appdirs import AppDirs
 import zipfile
@@ -191,6 +192,7 @@ class _UserProvidedCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
     A locator that always point to the user provided directory in
     `numba.config.CACHE_DIR`
     """
+
     def __init__(self, py_func, py_file):
         self._py_file = py_file
         self._lineno = py_func.__code__.co_firstlineno
@@ -208,19 +210,56 @@ class _UserProvidedCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
         return parent.from_function(py_func, py_file)
 
 
-class _InTreeCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
+class _InTreeCacheLocator(_CacheLocator):
     """
     A locator for functions backed by a regular Python module with a
     writable __pycache__ directory.
     """
 
+    # def __init__(self, py_func, py_file):
+    #     self._py_file = py_file
+    #     self._lineno = py_func.__code__.co_firstlineno
+    #     self._cache_path = os.path.join(os.path.dirname(self._py_file), '__pycache__')
     def __init__(self, py_func, py_file):
         self._py_file = py_file
-        self._lineno = py_func.__code__.co_firstlineno
-        self._cache_path = os.path.join(os.path.dirname(self._py_file), '__pycache__')
+        # Note IPython enhances the linecache module to be able to
+        # inspect source code of functions defined on the interactive prompt.
+        source = inspect.getsource(py_func)
+        if isinstance(source, bytes):
+            source = source
+        else:   
+            # Remove docstrings and comments
+            source = re.sub(r'""".*?"""', '', source, flags=re.DOTALL)
+            source = re.sub(r"'''.*?'''", '', source, flags=re.DOTALL)
+            source = re.sub(r'\s*#.*$', '', source, flags=re.MULTILINE)
+            source = re.sub(r'\n\s*\n', '\n', source)
+            source = source.encode('utf-8')
+        self._source_stamp = hashlib.sha256(source).hexdigest()
+        self._cache_path = os.path.join(
+            os.path.dirname(self._py_file), '__pycache__')
 
     def get_cache_path(self):
         return self._cache_path
+
+    def get_source_stamp(self):
+        return self._source_stamp
+
+    def get_disambiguator(self):
+        # Use the first 10 characters of the source hash as disambiguator
+        return self._source_stamp[:10]
+
+    @classmethod
+    def from_function(cls, py_func, py_file):
+        if not os.path.exists(py_file):
+            # Perhaps a placeholder (e.g. "<ipython-XXX>")
+            return
+        self = cls(py_func, py_file)
+        try:
+            self.ensure_cache_path()
+        except OSError:
+            # Cannot ensure the cache directory exists or is writable
+            return
+        return self
 
 
 class _UserWideCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
@@ -349,6 +388,7 @@ class _ZipCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
         if ".zip" not in py_file:
             return None
         return cls(py_func, py_file)
+
 
 class CacheImpl(metaclass=ABCMeta):
     """
@@ -494,6 +534,7 @@ class IndexDataCacheFile(object):
     """
     Implements the logic for the index file and data file used by a cache.
     """
+
     def __init__(self, cache_path, filename_base, source_stamp):
         self._cache_path = cache_path
         self._index_name = '%s.nbi' % (filename_base,)
@@ -556,6 +597,7 @@ class IndexDataCacheFile(object):
             return {}
         stamp, overloads = pickle.loads(data)
         _cache_log("[cache] index loaded from %r", self._index_path)
+
         if stamp != self._source_stamp:
             # Cache is not fresh.  Stale data files will be eventually
             # overwritten, since they are numbered in incrementing order.
@@ -730,10 +772,13 @@ class Cache(_Cache):
         """
         codebytes = self._py_func.__code__.co_code
         if self._py_func.__closure__ is not None:
-            cvars = tuple([x.cell_contents for x in self._py_func.__closure__])
-            # Note: cloudpickle serializes a function differently depending
-            #       on how the process is launched; e.g. multiprocessing.Process
-            cvarbytes = dumps(cvars)
+            lst = []
+            for x in self._py_func.__closure__:
+                if hasattr(x.cell_contents, "_identity_"):
+                    lst.append(x.cell_contents._identity_)
+                else:
+                    lst.append(x.cell_contents)
+            cvarbytes = dumps(tuple(lst))
         else:
             cvarbytes = b''
 
@@ -774,4 +819,3 @@ def make_library_cache(prefix):
         _impl_class = CustomCodeLibraryCacheImpl
 
     return LibraryCache
-
