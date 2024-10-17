@@ -760,12 +760,19 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check_arr(arr.reshape((2, 3, 4)))
         check_arr(arr.reshape((2, 3, 4)).T)
         check_arr(arr.reshape((2, 3, 4))[::2])
-        for v in (0.0, 1.5, float('nan')):
-            arr = np.array([v]).reshape(())
-            check_arr(arr)
 
         arr = np.array(["Hello", "", "world"])
         check_arr(arr)
+
+        for v in (0.0, 1.5, float('nan')):
+            arr = np.array([v]).reshape(())
+            if numpy_version < (2, 1):
+                check_arr(arr)
+            else:
+                with self.assertRaises(ValueError) as raises:
+                    njit((typeof(arr),))(pyfunc)
+                self.assertEqual(str(raises.exception),
+                                 "Calling nonzero on 0d arrays is not allowed. Use np.atleast_1d(scalar).nonzero() instead.")
 
     def test_array_nonzero(self):
         self.check_nonzero(array_nonzero)
