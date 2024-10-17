@@ -17,7 +17,7 @@ from numba.core.imputils import (Registry, impl_ret_untracked,
 from numba.core.typing import signature
 from numba.core import types, cgutils
 from numba.core.errors import NumbaTypeError
-from numba.np.random._constants import INT64_MAX
+from numba.np.random._constants import LONG_MAX
 
 registry = Registry('randomimpl')
 lower = registry.lower
@@ -1899,7 +1899,7 @@ def zipf_impl(a):
                 V = np.random.random()
                 X = int(math.floor(U ** (-1.0 / am1)))
                 
-                if (X > INT64_MAX or X < 1.0):
+                if (X > LONG_MAX or X < 1.0):
                     continue
 
                 T = (1.0 + 1.0 / X) ** am1
