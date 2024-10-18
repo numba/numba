@@ -429,14 +429,6 @@ Compilation options
 
    *Default value:* None (Use the default for the system)
 
-.. envvar:: NUMBA_USE_RVSDG_FRONTEND
-
-   Turns on the experimental RVSDG frontend. It depends on the ``numba-rvsdg`` 
-   package and only supports Python 3.11 partially. 
-   This option will be removed when the RVSDG frontend fully replaces the 
-   old frontend.
-
-   *Default value:* 0 (Off)
 
 .. _numba-envvars-caching:
 
