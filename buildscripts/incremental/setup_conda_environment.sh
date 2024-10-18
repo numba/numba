@@ -50,10 +50,14 @@ if [ "${VANILLA_INSTALL}" != "yes" ]; then
     # pexpect is used to run the gdb tests.
     # ipykernel is used for testing ipython behaviours.
     if [ $PYTHON \< "3.12" ]; then
-        $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipykernel scipy pygments pexpect
+        $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipykernel pygments pexpect
     else
         # At the time of writing `ipykernel` was not available for Python 3.12
-        $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython scipy pygments pexpect
+        $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython pygments pexpect
+    fi
+
+    if [ $NUMPY \< "2.0" ]; then
+        $CONDA_INSTALL ${EXTRA_CHANNELS} scipy
     fi
 fi
 
