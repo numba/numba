@@ -7,11 +7,15 @@ conda activate $CONDA_ENV
 set -v -e
 
 # Build numba extensions without silencing compile errors
-if [[ "$(uname -s)" == *"Linux"* ]] && [[ "$(uname -p)" == *"86"* ]]; then
-    EXTRA_BUILD_EXT_FLAGS="--werror --wall"
-else
-    EXTRA_BUILD_EXT_FLAGS=""
-fi
+# if [[ "$(uname -s)" == *"Linux"* ]] && [[ "$(uname -p)" == *"86"* ]]; then
+#     EXTRA_BUILD_EXT_FLAGS="--werror --wall"
+# else
+#     EXTRA_BUILD_EXT_FLAGS=""
+# fi
+
+# workaround for cc1: error: command-line option '-std=c++11' is valid for C++/ObjC++ but not for C [-Werror]
+# due to numba/_monitoring.c 
+EXTRA_BUILD_EXT_FLAGS="--wall"
 
 if [[ $(uname) == "Darwin" ]]; then
     # The following is suggested in https://docs.conda.io/projects/conda-build/en/latest/resources/compiler-tools.html?highlight=SDK#macos-sdk

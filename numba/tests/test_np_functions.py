@@ -6807,8 +6807,9 @@ def foo():
         tystr = ty.__name__
         basestr = basefunc.__name__
         funcstr = self.template % (tystr, basestr)
-        eval(compile(funcstr, '<string>', 'exec'))
-        return locals()['foo']
+        dct = {}
+        exec(compile(funcstr, '<string>', 'exec'), globals(), dct)
+        return dct['foo']
 
     def test_finfo(self):
         types = [np.float32, np.float64, np.complex64, np.complex128]

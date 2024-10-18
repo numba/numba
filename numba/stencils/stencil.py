@@ -402,8 +402,9 @@ class StencilFunc(object):
         sig = signature(real_ret, *argtys_extra)
         dummy_text = ("def __numba_dummy_stencil({}{}):\n    pass\n".format(
                         ",".join(self.kernel_ir.arg_names), sig_extra))
-        exec(dummy_text) in globals(), locals()
-        dummy_func = eval("__numba_dummy_stencil")
+        dct = {}
+        exec(dummy_text, dct)
+        dummy_func = dct["__numba_dummy_stencil"]
         sig = sig.replace(pysig=utils.pysignature(dummy_func))
         self._targetctx.insert_func_defn([(self._lower_me, self, argtys_extra)])
         self._type_cache[argtys_extra] = (sig, result, typemap, calltypes)
@@ -659,8 +660,10 @@ class StencilFunc(object):
             print(func_text)
 
         # Force the new stencil function into existence.
-        exec(func_text) in globals(), locals()
-        stencil_func = eval(stencil_func_name)
+        dct = {}
+        dct.update(globals())
+        exec(func_text, dct)
+        stencil_func = dct[stencil_func_name]
         if sigret is not None:
             pysig = utils.pysignature(stencil_func)
             sigret.pysig = pysig
