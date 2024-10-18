@@ -12,17 +12,17 @@ jobs:
         PYTHON: '3.10'
         NUMPY: '1.24'
         CONDA_ENV: 'testenv'
-        TEST_START_INDEX: 16
+        TEST_START_INDEX: 17
       py312_np20:
         PYTHON: '3.12'
         NUMPY: '2.0'
         CONDA_ENV: 'testenv'
-        TEST_START_INDEX: 17
+        TEST_START_INDEX: 18
       py312_np21:
         PYTHON: '3.12'
         NUMPY: '2.1'
         CONDA_ENV: 'testenv'
-        TEST_START_INDEX: 18
+        TEST_START_INDEX: 19
 
   steps:
     - powershell: Write-Host "##vso[task.prependpath]$env:CONDA\Scripts"
