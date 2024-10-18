@@ -352,7 +352,7 @@ def _set_code_point(a, i, ch):
             "Unexpected unicode representation in _set_code_point")
 
 
-if PYVERSION in ((3, 12),):
+if PYVERSION in ((3, 12), (3, 13)):
     @register_jitable
     def _pick_kind(kind1, kind2):
         if kind1 == PY_UNICODE_1BYTE_KIND:
@@ -396,7 +396,7 @@ def _pick_ascii(is_ascii1, is_ascii2):
     return types.uint32(0)
 
 
-if PYVERSION in ((3, 12),):
+if PYVERSION in ((3, 12), (3, 13)):
     @register_jitable
     def _kind_to_byte_width(kind):
         if kind == PY_UNICODE_1BYTE_KIND:
@@ -2050,7 +2050,7 @@ def _is_upper(is_lower, is_upper, is_title):
     def impl(a):
         l = len(a)
         if l == 1:
-            return is_upper(_get_code_point(a, 0))
+            return is_upper(_get_code_point(a, 0)) != 0
         if l == 0:
             return False
         cased = False
