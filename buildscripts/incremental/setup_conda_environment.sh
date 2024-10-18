@@ -16,11 +16,10 @@ CONDA_INSTALL="conda install -q -y"
 PIP_INSTALL="pip install -q"
 
 
-EXTRA_CHANNELS=""
+EXTRA_CHANNELS="$EXTRA_CHANNELS"
 if [ "${USE_C3I_TEST_CHANNEL}" == "yes" ]; then
     EXTRA_CHANNELS="${EXTRA_CHANNELS} -c c3i_test"
 fi
-
 
 # Deactivate any environment
 source deactivate
@@ -51,9 +50,12 @@ if [ "${VANILLA_INSTALL}" != "yes" ]; then
     # ipykernel is used for testing ipython behaviours.
     if [ $PYTHON \< "3.12" ]; then
         $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipykernel pygments pexpect
-    else
+    elif [ $PYTHON \< "3.13" ]; then 
         # At the time of writing `ipykernel` was not available for Python 3.12
         $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython pygments pexpect
+    else
+        echo "no extra packages for 3.13"
+
     fi
 
     if [ $NUMPY \< "2.0" ]; then
@@ -93,7 +95,7 @@ if [ "$TEST_THREADING" == "tbb" ]; then $CONDA_INSTALL "tbb>=2021.6" "tbb-devel>
 if [ "$RUN_TYPEGUARD" == "yes" ]; then $CONDA_INSTALL typeguard; fi
 
 # environment dump for debug
-# echo "DEBUG ENV:"
-# echo "-------------------------------------------------------------------------"
-# conda env export
-# echo "-------------------------------------------------------------------------"
+echo "DEBUG ENV:"
+echo "-------------------------------------------------------------------------"
+conda env export
+echo "-------------------------------------------------------------------------"
