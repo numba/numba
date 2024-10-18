@@ -1224,6 +1224,40 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                 self.check_numpy_parity(dist_func, None,
                                         None, size, None, 0)
 
+    def test_binomial_specific_issues(self):
+        # The algorithm for "binomial" is quite involved. This test contains
+        # subtests for specific issues reported on the issue tracker.
+
+        # testing specific bugs found in binomial.
+        with self.subTest("infinite loop issue #9493"):
+            # This specific generator state caused a "hang" as noted in #9493
+
+            gen1 = np.random.default_rng(0)
+            gen2 = np.random.default_rng(0)
+
+            @numba.jit
+            def foo(gen):
+                return gen.binomial(700, 0.1, 100)
+
+            got = foo(gen1)
+            expected = foo.py_func(gen2)
+            self.assertPreciseEqual(got, expected)
+
+        with self.subTest("issue with midrange value branch #9493/#9734"):
+            # The use of 301 is specific to trigger use of random_binomial_btpe
+            # with an input state that caused incorrect values to be computed.
+
+            gen1 = np.random.default_rng(0)
+            gen2 = np.random.default_rng(0)
+
+            @numba.jit
+            def foo(gen):
+                return gen.binomial(301, 0.1, 100)
+
+            got = foo(gen1)
+            expected = foo.py_func(gen2)
+            self.assertPreciseEqual(got, expected)
+
 
 class TestGeneratorCaching(TestCase, SerialMixin):
     def test_randomgen_caching(self):
