@@ -11,8 +11,8 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "positional argument.")
 
 
-def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
-        opt=True, lineinfo=False, cache=False, **kws):
+def jit(func_or_sig=None, device=False, cache=False, extensions=None,
+        **options):
     """
     JIT compile a Python function for CUDA GPUs.
 
@@ -52,27 +52,42 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
     :type lineinfo: bool
     :param cache: If True, enables the file-based cache for this function.
     :type cache: bool
+    :param extensions: An optional list of kernel launch parameter handling
+                       extensions
+    :type extensions: list
     """
+
+    if config.CUDA_DEBUGINFO_DEFAULT and 'debug' not in options:
+        options['debug'] = True
+
+    link = options.get('link')
+    debug = options.get('debug')
+    opt = options.get('opt', True)
+    lineinfo = options.get('lineinfo')
+    fastmath = options.get('fastmath', False)
+
+    # Checks for erroneous options and combinations of options
 
     if link and config.ENABLE_CUDASIM:
         raise NotImplementedError('Cannot link PTX in the simulator')
 
-    if kws.get('boundscheck'):
+    if options.get('boundscheck'):
         raise NotImplementedError("bounds checking is not supported for CUDA")
 
-    if kws.get('argtypes') is not None:
+    if options.get('argtypes') is not None:
         msg = _msg_deprecated_signature_arg.format('argtypes')
         raise DeprecationError(msg)
-    if kws.get('restype') is not None:
+    if options.get('restype') is not None:
         msg = _msg_deprecated_signature_arg.format('restype')
         raise DeprecationError(msg)
-    if kws.get('bind') is not None:
+    if options.get('bind') is not None:
         msg = _msg_deprecated_signature_arg.format('bind')
         raise DeprecationError(msg)
 
-    debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
-    fastmath = kws.get('fastmath', False)
-    extensions = kws.get('extensions', [])
+    if device and link:
+        raise ValueError("link keyword invalid for device function")
+
+    # Checks for conditions that warrant a warning
 
     if debug and opt:
         msg = ("debug=True with opt=True (the default) "
@@ -85,9 +100,6 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
                "full debug info (this disables some optimizations), or "
                "lineinfo for line info only with code generation unaffected.")
         warn(NumbaInvalidConfigWarning(msg))
-
-    if device and kws.get('link'):
-        raise ValueError("link keyword invalid for device function")
 
     if sigutils.is_signature(func_or_sig):
         signatures = [func_or_sig]
@@ -105,16 +117,8 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
             return jitwrapper
 
         def _jit(func):
-            targetoptions = kws.copy()
-            targetoptions['debug'] = debug
-            targetoptions['lineinfo'] = lineinfo
-            targetoptions['link'] = link
-            targetoptions['opt'] = opt
-            targetoptions['fastmath'] = fastmath
-            targetoptions['device'] = device
-            targetoptions['extensions'] = extensions
-
-            disp = CUDADispatcher(func, targetoptions=targetoptions)
+            disp = CUDADispatcher(func, targetoptions=options, device=device,
+                                  extensions=extensions)
 
             if cache:
                 disp.enable_caching()
@@ -146,8 +150,8 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
                                           fastmath=fastmath)
             else:
                 def autojitwrapper(func):
-                    return jit(func, device=device, debug=debug, opt=opt,
-                               lineinfo=lineinfo, link=link, cache=cache, **kws)
+                    return jit(func, device=device, cache=cache,
+                               extensions=extensions, **options)
 
             return autojitwrapper
         # func_or_sig is a function
@@ -156,15 +160,8 @@ def jit(func_or_sig=None, device=False, inline=False, link=[], debug=None,
                 return FakeCUDAKernel(func_or_sig, device=device,
                                       fastmath=fastmath)
             else:
-                targetoptions = kws.copy()
-                targetoptions['debug'] = debug
-                targetoptions['lineinfo'] = lineinfo
-                targetoptions['opt'] = opt
-                targetoptions['link'] = link
-                targetoptions['fastmath'] = fastmath
-                targetoptions['device'] = device
-                targetoptions['extensions'] = extensions
-                disp = CUDADispatcher(func_or_sig, targetoptions=targetoptions)
+                disp = CUDADispatcher(func_or_sig, targetoptions=options,
+                                      device=device, extensions=extensions)
 
                 if cache:
                     disp.enable_caching()
