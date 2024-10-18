@@ -172,6 +172,9 @@ def np_frombuffer_allocated_dtype(shape):
 def identity_usecase(a, b):
     return (a is b), (a is not b)
 
+def array_tobytes(a):
+    return a.tobytes()
+
 def array_nonzero(a):
     return a.nonzero()
 
@@ -591,6 +594,12 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         self.assertIn('array.astype if dtype is a string it must be constant',
                       str(raises.exception))
 
+    def test_array_tobytes(self):
+        self.check_layout_dependent_func(
+            array_tobytes,
+            memoryaddr=lambda x: np.frombuffer(x, dtype=np.uint8).ctypes.data,
+        )
+
     def check_np_frombuffer(self, pyfunc):
 
         cfunc = njit(pyfunc)
@@ -658,15 +667,19 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         with self.assertRaisesRegex(TypingError, msg) as raises:
             func(None)
 
-    def check_layout_dependent_func(self, pyfunc, fac=np.arange):
-        def is_same(a, b):
-            return a.ctypes.data == b.ctypes.data
+    def check_layout_dependent_func(
+        self, pyfunc, fac=np.arange, memoryaddr=lambda x: x.ctypes.data
+    ):
         def check_arr(arr):
             cfunc = njit((typeof(arr),))(pyfunc)
             expected = pyfunc(arr)
             got = cfunc(arr)
             self.assertPreciseEqual(expected, got)
-            self.assertEqual(is_same(expected, arr), is_same(got, arr))
+            self.assertEqual(
+                arr.ctypes.data == memoryaddr(expected),
+                arr.ctypes.data == memoryaddr(got),
+            )
+
         arr = fac(24)
         check_arr(arr)
         check_arr(arr.reshape((3, 8)))
