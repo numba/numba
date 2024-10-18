@@ -19,6 +19,7 @@ from numba.np.random._constants import (wi_double, ki_double,
 from numba.np.random.generator_core import (next_double, next_float,
                                             next_uint32, next_uint64)
 from numba import float32, int64
+from numba.np.numpy_support import numpy_version
 # All of the following implementations are direct translations from:
 # https://github.com/numpy/numpy/blob/7cfef93c77599bd387ecc6a15d186c5a46024dac/numpy/random/src/distributions/distributions.c
 
@@ -390,20 +391,37 @@ def random_geometric(bitgen, p):
         return random_geometric_inversion(bitgen, p)
 
 
-@register_jitable
-def random_zipf(bitgen, a):
-    am1 = a - 1.0
-    b = pow(2.0, am1)
-    while 1:
-        U = 1.0 - next_double(bitgen)
-        V = next_double(bitgen)
-        X = np.floor(pow(U, -1.0 / am1))
-        if (X > INT64_MAX or X < 1.0):
-            continue
+if numpy_version < (2, 1):
+    @register_jitable
+    def random_zipf(bitgen, a):
+        am1 = a - 1.0
+        b = pow(2.0, am1)
+        while 1:
+            U = 1.0 - next_double(bitgen)
+            V = next_double(bitgen)
+            X = np.floor(pow(U, -1.0 / am1))
+            if (X > INT64_MAX or X < 1.0):
+                continue
+            T = pow(1.0 + 1.0 / X, am1)
+            if (V * X * (T - 1.0) / (b - 1.0) <= T / b):
+                return X
+else:
+    @register_jitable
+    def random_zipf(bitgen, a):
+        am1 = a - 1.0
+        b = pow(2.0, am1)
+        Umin = pow(INT64_MAX, -am1)
+        while 1:
+            U01 = next_double(bitgen)
+            U = U01 * Umin + (1 - U01)
+            V = next_double(bitgen)
+            X = np.floor(pow(U, -1.0 / am1))
+            if (X > INT64_MAX or X < 1.0):
+                continue
 
-        T = pow(1.0 + 1.0 / X, am1)
-        if (V * X * (T - 1.0) / (b - 1.0) <= T / b):
-            return X
+            T = pow(1.0 + 1.0 / X, am1)
+            if (V * X * (T - 1.0) / (b - 1.0) <= T / b):
+                return X
 
 
 @register_jitable
@@ -565,7 +583,7 @@ def random_binomial_btpe(bitgen, n, p):
     q = 1.0 - r
     fm = n * r + r
     m = int(np.floor(fm))
-    p1 = int(np.floor(2.195 * np.sqrt(n * r * q) - 4.6 * q) + 0.5)
+    p1 = np.floor(2.195 * np.sqrt(n * r * q) - 4.6 * q) + 0.5
     xm = m + 0.5
     xl = xm - p1
     xr = xm + p1
@@ -673,6 +691,8 @@ def random_binomial_btpe(bitgen, n, p):
                       / w2) / w / 66320.)):
                 case = 10
                 continue
+            case = 60
+            continue
         elif case == 60:
             if (p > 0.5):
                 y = n - y

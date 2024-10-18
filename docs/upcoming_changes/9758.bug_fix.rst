@@ -1,0 +1,5 @@
+Fix miscompile in branch pruning of SSA form IR.
+------------------------------------------------
+
+A miscompile occurring when a binop expression with constant arguments is used
+as a predicate in SSA form IR is now fixed.

@@ -209,7 +209,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         # but newer python uses a different name
         self.__code__ = self.func_code
         # a place to keep an active reference to the types of the active call
-        self._types_active_call = []
+        self._types_active_call = set()
         # Default argument values match the py_func
         self.__defaults__ = py_func.__defaults__
 
@@ -441,7 +441,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             # ignore the FULL_TRACEBACKS config, this needs reporting!
             raise e
         finally:
-            self._types_active_call = []
+            self._types_active_call.clear()
         return return_val
 
     def inspect_llvm(self, signature=None):
@@ -691,7 +691,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         else:
             if tp is None:
                 tp = types.pyobject
-        self._types_active_call.append(tp)
+        self._types_active_call.add(tp)
         return tp
 
     def _callback_add_timer(self, duration, cres, lock_name):
@@ -1129,7 +1129,8 @@ class LiftedLoop(LiftedCode):
                 pyobject_loop_flags.force_pyobject = True
 
                 # Clone IR to avoid (some of the) mutation in the rewrite pass
-                cloned_func_ir = self.func_ir.copy()
+                cloned_func_ir_npm = self.func_ir.copy()
+                cloned_func_ir_fbk = self.func_ir.copy()
 
                 ev_details = dict(
                     dispatcher=self,
@@ -1142,7 +1143,7 @@ class LiftedLoop(LiftedCode):
                     try:
                         cres = compiler.compile_ir(typingctx=self.typingctx,
                                                    targetctx=self.targetctx,
-                                                   func_ir=cloned_func_ir,
+                                                   func_ir=cloned_func_ir_npm,
                                                    args=args,
                                                    return_type=return_type,
                                                    flags=npm_loop_flags,
@@ -1153,7 +1154,7 @@ class LiftedLoop(LiftedCode):
                     except errors.TypingError:
                         cres = compiler.compile_ir(typingctx=self.typingctx,
                                                    targetctx=self.targetctx,
-                                                   func_ir=cloned_func_ir,
+                                                   func_ir=cloned_func_ir_fbk,
                                                    args=args,
                                                    return_type=return_type,
                                                    flags=pyobject_loop_flags,

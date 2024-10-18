@@ -1,0 +1,7 @@
+Fix 0.60.0 objectmode fallback regression due to bug in label renaming.
+-----------------------------------------------------------------------
+
+A regression in objectmode fallback introduced in Numba 0.60 is fixed. The issue
+relates to the "label renaming" code mutating the IR directly opposed to
+constructing new terminator nodes, the mutations would impact copies of the IR
+as present in objectmode fallback.

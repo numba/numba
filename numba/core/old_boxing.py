@@ -1196,7 +1196,7 @@ def unbox_numpy_random_bitgenerator(typ, obj, c):
         interface_state = object_getattr_safely(ctypes_binding, 'state')
         with cgutils.early_exit_if_null(c.builder, stack, interface_state):
             handle_failure()
-    
+
         interface_state_value = object_getattr_safely(
             interface_state, 'value')
         with cgutils.early_exit_if_null(c.builder, stack, interface_state_value):
@@ -1241,9 +1241,11 @@ def unbox_numpy_random_bitgenerator(typ, obj, c):
             args = c.pyapi.tuple_pack([interface_next_fn, ct_voidptr_ty])
             with cgutils.early_exit_if_null(c.builder, stack, args):
                 handle_failure()
+            extra_refs.append(args)
 
             # Call ctypes.cast()
             interface_next_fn_casted = c.pyapi.call(ct_cast, args)
+            extra_refs.append(interface_next_fn_casted)
 
             # Fetch the .value attr on the resulting ctypes.c_void_p for storage
             # in the function pointer slot.
@@ -1277,7 +1279,7 @@ def unbox_numpy_random_generator(typ, obj, c):
     * ('meminfo', types.MemInfoPointer(types.voidptr)): The information about the memory
         stored at the pointer (to the original Generator PyObject). This is useful for
         keeping track of reference counts within the Python runtime. Helps prevent cases
-        where deletion happens in Python runtime without NRT being awareness of it. 
+        where deletion happens in Python runtime without NRT being awareness of it.
     """
     is_error_ptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
 

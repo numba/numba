@@ -1,0 +1,4 @@
+Updated GHA versioning in towncrier script
+------------------------------------------
+
+Following recent updates in GitHub Actions, the version for the checkout action has been updated to v4 along with the version for setup-python GHA, which has been updated to v5.

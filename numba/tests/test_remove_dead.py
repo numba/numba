@@ -5,7 +5,7 @@
 
 import numba
 import numba.parfors.parfor
-from numba import njit
+from numba import njit, jit
 from numba.core import ir_utils
 from numba.core import types, ir,  compiler
 from numba.core.registry import cpu_target
@@ -399,6 +399,37 @@ class TestSSADeadBranchPrune(TestCase):
 
         self.assertEqual(make(), make(lambda x: x))
 
+    def test_issue_9742(self):
+        CONST = 32
+
+        @jit
+        def foo():
+            # This is a prune by value case, conditional is a compile time
+            # evaluatable constant.
+            conditional = CONST // 2
+            collect = []
+            while conditional:
+                collect.append(conditional)
+                conditional //= 2
+
+            return collect
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_issue_9742_variant(self):
+        CONST = 32
+
+        @jit
+        def foo():
+            collect = []
+            # This is a prune by value case, conditional is a compile time
+            # evaluatable constant.
+            x = CONST + 1
+            if x:
+                collect.append(x)
+            return collect
+
+        self.assertEqual(foo(), foo.py_func())
 
 
 if __name__ == "__main__":

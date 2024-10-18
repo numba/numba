@@ -1,0 +1,7 @@
+Fix Python reference leaks in unboxing of ``numpy.random.Generator`` instances.
+-------------------------------------------------------------------------------
+
+Some Python reference leaks in the unboxing of ``numpy.random.Generator``
+instances have been fixed. Note that it was actually the referenced
+``numpy.random.BitGenerator`` that was leaking on unboxing, but it is rare to
+use these objects themselves as arguments.

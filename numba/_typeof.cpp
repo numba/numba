@@ -110,8 +110,10 @@ string_writer_ensure(string_writer_t *w, size_t bytes)
     newsize = (w->allocated << 2) + 1;
     if (newsize < bytes)
         newsize = bytes;
-    if (w->buf == w->static_buf)
+    if (w->buf == w->static_buf) {
         w->buf = (char *) malloc(newsize);
+        memcpy(w->buf, w->static_buf, w->allocated);
+    }
     else
         w->buf = (char *) realloc(w->buf, newsize);
     if (w->buf) {

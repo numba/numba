@@ -1957,17 +1957,23 @@ def numpy_geomspace(start, stop, num=50):
                 raise ValueError('Geometric sequence cannot include zero')
             start = result_dtype(start)
             stop = result_dtype(stop)
-            both_imaginary = (start.real == 0) & (stop.real == 0)
-            both_negative = (np.sign(start) == -1) & (np.sign(stop) == -1)
-            out_sign = 1
-            if both_imaginary:
-                start = start.imag
-                stop = stop.imag
-                out_sign = 1j
-            if both_negative:
-                start = -start
-                stop = -stop
-                out_sign = -out_sign
+            if numpy_version < (2, 0):
+                both_imaginary = (start.real == 0) & (stop.real == 0)
+                both_negative = (np.sign(start) == -1) & (np.sign(stop) == -1)
+                out_sign = 1
+                if both_imaginary:
+                    start = start.imag
+                    stop = stop.imag
+                    out_sign = 1j
+                if both_negative:
+                    start = -start
+                    stop = -stop
+                    out_sign = -out_sign
+            else:
+                out_sign = np.sign(start)
+                start /= out_sign
+                stop /= out_sign
+
             logstart = np.log10(start)
             logstop = np.log10(stop)
             result = np.logspace(logstart, logstop, num)
@@ -2169,11 +2175,18 @@ def array_reshape_vararg(context, builder, sig, args):
     return array_reshape(context, builder, new_sig, new_args)
 
 
-@overload(np.reshape)
-def np_reshape(a, newshape):
-    def np_reshape_impl(a, newshape):
-        return a.reshape(newshape)
-    return np_reshape_impl
+if numpy_version < (2, 1):
+    @overload(np.reshape)
+    def np_reshape(a, newshape):
+        def np_reshape_impl(a, newshape):
+            return a.reshape(newshape)
+        return np_reshape_impl
+else:
+    @overload(np.reshape)
+    def np_reshape(a, shape):
+        def np_reshape_impl(a, shape):
+            return a.reshape(shape)
+        return np_reshape_impl
 
 
 @overload(np.resize)
@@ -2752,17 +2765,11 @@ def array_view(context, builder, sig, args):
         else:
             setattr(ret, k, val)
 
-    if numpy_version >= (1, 23):
-        # NumPy 1.23+ bans views using a dtype that is a different size to that
-        # of the array when the last axis is not contiguous. For example, this
-        # manifests at runtime when a dtype size altering view is requested
-        # on a Fortran ordered array.
-
-        tyctx = context.typing_context
-        fnty = tyctx.resolve_value_type(_compatible_view)
-        _compatible_view_sig = fnty.get_call_type(tyctx, (*sig.args,), {})
-        impl = context.get_function(fnty, _compatible_view_sig)
-        impl(builder, args)
+    tyctx = context.typing_context
+    fnty = tyctx.resolve_value_type(_compatible_view)
+    _compatible_view_sig = fnty.get_call_type(tyctx, (*sig.args,), {})
+    impl = context.get_function(fnty, _compatible_view_sig)
+    impl(builder, args)
 
     ok = _change_dtype(context, builder, aryty, retty, ret)
     fail = builder.icmp_unsigned('==', ok, Constant(ok.type, 0))

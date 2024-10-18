@@ -1,0 +1,5 @@
+``memcpy`` static buffer content into newly allocated buffer
+------------------------------------------------------------
+
+Fix a bug where the static buffer used to store typecode representation is not
+copied to the new allocated buffer as part of a realloc operation.

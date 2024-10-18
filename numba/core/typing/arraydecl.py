@@ -415,6 +415,11 @@ class ArrayAttribute(AttributeTemplate):
     def resolve_nonzero(self, ary, args, kws):
         assert not args
         assert not kws
+        if ary.ndim == 0 and numpy_version >= (2, 1):
+            raise ValueError(
+                "Calling nonzero on 0d arrays is not allowed."
+                " Use np.atleast_1d(scalar).nonzero() instead."
+            )
         # 0-dim arrays return one result array
         ndim = max(ary.ndim, 1)
         retty = types.UniTuple(types.Array(types.intp, 1, 'C'), ndim)
