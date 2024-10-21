@@ -369,6 +369,7 @@ class ClassInstanceType(Type):
     """
     mutable = True
     name_prefix = "instance"
+    _no_buf_from_reconstruct = True
 
     def __init__(self, class_type):
         self.class_type = class_type
@@ -422,6 +423,7 @@ class ClassType(Callable, Opaque):
     mutable = True
     name_prefix = "jitclass"
     instance_type_class = ClassInstanceType
+    _no_buf_from_reconstruct = True
 
     def __init__(self, class_def, ctor_template_cls, struct, jit_methods,
                  jit_props, jit_static_methods):
@@ -433,7 +435,8 @@ class ClassType(Callable, Opaque):
         self.jit_static_methods = jit_static_methods
         self.struct = struct
         fielddesc = ','.join("{0}:{1}".format(k, v) for k, v in struct.items())
-        name = "{0}.{1}<{2}>".format(self.name_prefix, self.class_name, fielddesc)
+        name = "{0}.{1}<{2}>".format(
+            self.name_prefix, self.class_name, fielddesc)
         super(ClassType, self).__init__(name)
 
     def get_call_type(self, context, args, kws):

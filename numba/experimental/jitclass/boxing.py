@@ -66,12 +66,13 @@ def _generate_method(name, func):
 _cache_specialized_box = {}
 
 
-def _specialize_box(typ):
+def _specialize_box(clstyp):
     """
     Create a subclass of Box that is specialized to the jitclass.
 
     This function caches the result to avoid code bloat.
     """
+    typ = clstyp.class_type.instance_type
     # Check cache
     if typ.name in _cache_specialized_box:
         return _cache_specialized_box[typ.name]
@@ -178,19 +179,21 @@ def _specialize_box(typ):
     # Store to cache
     _cache_specialized_box[typ.name] = subcls
 
+    # No need to precompile them as it results in possible early registry of ClassType or InstanceType reconstructed from pickle, thus with incorrect CPUDispatcher in jitted methods.
+
     # Pre-compile attribute getter.
     # Note: This must be done after the "box" class is created because
     #       compiling the getter requires the "box" class to be defined.
-    for k, v in dct.items():
-        if isinstance(v, property):
-            prop = getattr(subcls, k)
-            if prop.fget is not None:
-                fget = prop.fget
-                fast_fget = fget.compile((typ,))
-                fget.disable_compile()
-                setattr(subcls, k,
-                        property(fast_fget, prop.fset, prop.fdel,
-                                 doc=prop.__doc__))
+    # for k, v in dct.items():
+    #     if isinstance(v, property):
+    #         prop = getattr(subcls, k)
+    #         if prop.fget is not None:
+    #             fget = prop.fget
+    #             fast_fget = fget.compile((typ,))
+    #             fget.disable_compile()
+    #             setattr(subcls, k,
+    #                     property(fast_fget, prop.fset, prop.fdel,
+    #                              doc=prop.__doc__))
 
     return subcls
 

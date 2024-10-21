@@ -80,7 +80,7 @@ def jitclass(cls_or_spec=None, spec=None, **kwargs):
 
             # Preserve the module name of the original class
             cls_jitted.__module__ = cls.__module__
-            _specialize_box(cls_jitted.class_type.instance_type)
+            _specialize_box(cls_jitted)
             return cls_jitted
 
     if cls_or_spec is None:
