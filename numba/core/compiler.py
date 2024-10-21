@@ -22,7 +22,6 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode,
                                        CanonicalizeLoopEntry, LiteralUnroll,
                                        ReconstructSSA, RewriteDynamicRaises,
                                        LiteralPropagationSubPipelinePass,
-                                       RVSDGFrontend,
                                        )
 
 from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
@@ -638,17 +637,10 @@ class DefaultPassBuilder(object):
     def define_untyped_pipeline(state, name='untyped'):
         """Returns an untyped part of the nopython pipeline"""
         pm = PassManager(name)
-        if config.USE_RVSDG_FRONTEND:
-            if state.func_ir is None:
-                pm.add_pass(RVSDGFrontend, "rvsdg frontend")
-                pm.add_pass(FixupArgs, "fix up args")
-            pm.add_pass(IRProcessing, "processing IR")
-        else:
-            if state.func_ir is None:
-                pm.add_pass(TranslateByteCode, "analyzing bytecode")
-                pm.add_pass(FixupArgs, "fix up args")
-            pm.add_pass(IRProcessing, "processing IR")
-
+        if state.func_ir is None:
+            pm.add_pass(TranslateByteCode, "analyzing bytecode")
+            pm.add_pass(FixupArgs, "fix up args")
+        pm.add_pass(IRProcessing, "processing IR")
         pm.add_pass(WithLifting, "Handle with contexts")
 
         # inline closures early in case they are using nonlocal's
