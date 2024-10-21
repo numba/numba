@@ -195,7 +195,7 @@ def specialize_box(clstyp):
                         property(fast_fget, prop.fset, prop.fdel,
                                  doc=prop.__doc__))
 
-    return subcls
+    return clstyp
 
 
 ###############################################################################
