@@ -66,7 +66,7 @@ def _generate_method(name, func):
 _cache_specialized_box = {}
 
 
-def _specialize_box(clstyp):
+def specialize_box(clstyp):
     """
     Create a subclass of Box that is specialized to the jitclass.
 
@@ -184,16 +184,16 @@ def _specialize_box(clstyp):
     # Pre-compile attribute getter.
     # Note: This must be done after the "box" class is created because
     #       compiling the getter requires the "box" class to be defined.
-    # for k, v in dct.items():
-    #     if isinstance(v, property):
-    #         prop = getattr(subcls, k)
-    #         if prop.fget is not None:
-    #             fget = prop.fget
-    #             fast_fget = fget.compile((typ,))
-    #             fget.disable_compile()
-    #             setattr(subcls, k,
-    #                     property(fast_fget, prop.fset, prop.fdel,
-    #                              doc=prop.__doc__))
+    for k, v in dct.items():
+        if isinstance(v, property):
+            prop = getattr(subcls, k)
+            if prop.fget is not None:
+                fget = prop.fget
+                fast_fget = fget.compile((typ,))
+                fget.disable_compile()
+                setattr(subcls, k,
+                        property(fast_fget, prop.fset, prop.fdel,
+                                 doc=prop.__doc__))
 
     return subcls
 

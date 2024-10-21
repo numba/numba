@@ -58,8 +58,8 @@ class _TypeMetaclass(ABCMeta):
             return orig
         else:
             if reconstruct and hasattr(inst, '_no_buf_from_reconstruct'):
-                raise ValueError(f"Type {
-                                 inst} must be first created from source code, not from pickle reconstruction. Jit all classes related before calling.")
+                raise ValueError(f"Type {inst} must be first created from source code,"\
+                                 " not from pickle reconstruction. Jit and specialize all classes related before calling.")
             inst._code = _autoincr()
             _typecache[wr] = wr
             return inst

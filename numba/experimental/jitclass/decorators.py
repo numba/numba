@@ -1,5 +1,4 @@
 from numba.core import types, config
-from numba.experimental.jitclass.boxing import _specialize_box
 
 
 def jitclass(cls_or_spec=None, spec=None, **kwargs):
@@ -80,7 +79,7 @@ def jitclass(cls_or_spec=None, spec=None, **kwargs):
 
             # Preserve the module name of the original class
             cls_jitted.__module__ = cls.__module__
-            _specialize_box(cls_jitted)
+            # _specialize_box(cls_jitted)
             return cls_jitted
 
     if cls_or_spec is None:
