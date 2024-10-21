@@ -27,10 +27,7 @@
  *
  */
 
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 13)
-/* empty */
-
-#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 12) 
+#if (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 12) || (PY_MINOR_VERSION == 13))
 
 #ifndef Py_BUILD_CORE
     #define Py_BUILD_CORE 1
@@ -42,7 +39,10 @@
 #  undef HAVE_STD_ATOMIC
 #endif
 #undef _PyGC_FINALIZED
-#include "internal/pycore_atomic.h"
+
+#if (PY_MINOR_VERSION == 12)
+    #include "internal/pycore_atomic.h"
+#endif
 #include "internal/pycore_interp.h"
 #include "internal/pycore_pyerrors.h"
 #include "internal/pycore_instruments.h"
@@ -783,7 +783,7 @@ call_cfunc(PyObject *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyObj
     }
 }
 
-#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 12)
+#elif (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 12) || (PY_MINOR_VERSION == 13))
 
 // Python 3.12 has a completely new approach to tracing and profiling due to
 // the new `sys.monitoring` system.
@@ -1112,11 +1112,6 @@ call_cfunc(PyObject *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyObj
     }
     return pyresult;
 }
-#elif  (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 13)
-
-extern "C" 
-PyObject *
-call_cfunc(PyObject *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyObject *locals);
 #else
 #error "Python version is not supported."
 #endif

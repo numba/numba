@@ -158,10 +158,6 @@ def get_ext_modules():
         'numba/_hashtable.cpp',
         'numba/core/typeconv/typeconv.cpp',
     ]
-    if sys.version_info[:2] == (3, 13):
-        # Python 3.13 have problem with including internal/pycore_interp.h
-        # from C++, and other Python complain about std=c++11 for the C file.
-        dispatcher_sources.append('numba/_monitoring.c',)
     ext_dispatcher = Extension(name="numba._dispatcher",
                                sources=dispatcher_sources,
                                depends=["numba/_pymodule.h",
