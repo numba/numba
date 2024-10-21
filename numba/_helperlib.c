@@ -299,7 +299,7 @@ numba_recreate_record(void *pdata, int size, PyObject *dtype) {
         return NULL;
     }
 
-    numpy = PyImport_ImportModuleNoBlock("numpy");
+    numpy = PyImport_ImportModule("numpy");
     if (!numpy) goto CLEANUP;
 
     numpy_record = PyObject_GetAttrString(numpy, "record");
