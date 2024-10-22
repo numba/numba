@@ -17,8 +17,8 @@ Our supported platforms are:
 
   * Compute capabilities 3.5 and 3.7 are supported, but deprecated.
 * ARMv8 (64-bit little-endian, such as the NVIDIA Jetson)
-* \*Linux ppcle64, e.g. POWER8, POWER9 (unofficially supported)
-* \*BSD (unofficial support only)
+* Linux ppcle64, e.g. POWER8, POWER9 (unofficially supported)
+* BSD (unofficial support only)
 
 :ref:`numba-parallel` is only available on 64-bit platforms.
 
