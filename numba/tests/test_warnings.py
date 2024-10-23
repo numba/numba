@@ -117,7 +117,6 @@ class TestBuiltins(unittest.TestCase):
             import numba
             from numba.tests.support import ignore_internal_warnings
             with warnings.catch_warnings(record=True) as w:
-                warnings.simplefilter('always')
                 ignore_internal_warnings()
                 foo()
             for x in w:
