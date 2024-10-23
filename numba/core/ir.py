@@ -90,9 +90,12 @@ class Loc(object):
 
     def get_lines(self):
         if self.lines is None:
-
-            self.lines = linecache.getlines(self._get_path())
-
+            path = self._get_path()
+            # Avoid reading from dynamic string. They are most likely
+            # overridden. Problem started with Python 3.13. "<string>" seems
+            # to be something from multiprocessing.
+            lns = [] if path == "<string>" else linecache.getlines(path)
+            self.lines = lns
         return self.lines
 
     def _get_path(self):
