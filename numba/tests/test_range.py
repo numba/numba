@@ -39,6 +39,13 @@ def range_len2(a, b):
 
 def range_len3(a, b, c):
     return len(range(a, b, c))
+
+def range_reversed(n):
+    tmp = []
+    for r in reversed(range(n)):
+        tmp.append(r)
+    return tmp
+
 def range_iter_len1(a):
     return length_of_iterator(iter(range(a)))
 
@@ -84,6 +91,11 @@ class TestRange(unittest.TestCase):
         ]
         for args in arglist:
             self.assertEqual(cfunc(*args), pyfunc(*args))
+
+    def test_range_reversed(self):
+        pyfunc = range_reversed
+        cfunc = njit()(pyfunc)
+        self.assertTrue(cfunc(6), pyfunc(6))
 
     def test_range_len1(self):
         pyfunc = range_len1

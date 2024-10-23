@@ -245,3 +245,14 @@ def impl_contains(robj, val):
 
 for ix, attr in enumerate(('start', 'stop', 'step')):
     make_range_attr(index=ix, attribute=attr)
+
+
+@overload(reversed)
+def range_reverse(A):
+    """
+    reversed implementation for RangeType
+    """
+    if isinstance(A, types.RangeType):
+        def range_impl(A):
+            return range(A.start + (len(A) - 1) * A.step, A.start - A.step, -A.step)
+        return range_impl
