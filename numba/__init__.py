@@ -240,7 +240,7 @@ config.USING_SVML = _try_enable_svml()
 
 # Apply warning filter if configured
 if config.DISABLE_PERFORMANCE_WARNINGS:
-    warnings.simplefilter("ignore", errors.NumbaPerformanceWarning)
+    warnings.simplefilter('ignore', errors.NumbaPerformanceWarning)
 
 # ---------------------- WARNING WARNING WARNING ----------------------------
 # The following imports occur below here (SVML init) because somewhere in their
