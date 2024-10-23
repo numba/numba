@@ -1,0 +1,7 @@
+Fixed ``typed.List __repr__()`` to display ellipsis appropriately.
+------------------------------------------------------------------
+
+``typed.List __repr__()`` has been fixed to display the list elements
+without appending the ellipsis at the end, up until a maximum of 1000 elements.
+Previously, the list repr would append the ellipsis at the end of the list
+regardless of the number of elements in the list.
