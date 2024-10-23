@@ -1,7 +1,7 @@
 from numba.core import types, config
 
 
-def jitclass(cls_or_spec=None, spec=None):
+def jitclass(cls_or_spec=None, spec=None, **kwargs):
     """
     A function for creating a jitclass.
     Can be used as a decorator or function.
@@ -74,12 +74,15 @@ def jitclass(cls_or_spec=None, spec=None):
         else:
             from numba.experimental.jitclass.base import (register_class_type,
                                                           ClassBuilder)
+            from numba.experimental.jitclass.boxing import specialize_box
+            no_specialize_box_flag = kwargs.pop("no_specialize_box", False)
             cls_jitted = register_class_type(cls, spec, types.ClassType,
-                                             ClassBuilder)
+                                             ClassBuilder, **kwargs)
 
             # Preserve the module name of the original class
             cls_jitted.__module__ = cls.__module__
-
+            if not no_specialize_box_flag:
+                specialize_box(cls_jitted)
             return cls_jitted
 
     if cls_or_spec is None:
