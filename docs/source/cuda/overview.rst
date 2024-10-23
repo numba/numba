@@ -2,6 +2,18 @@
 Overview
 ========
 
+.. cuda-deprecated::
+
+.. _cuda-deprecation-status:
+
+CUDA Target Deprecation and maintenance status
+==============================================
+
+TBC
+
+Introduction
+============
+
 Numba supports CUDA GPU programming by directly compiling a restricted subset
 of Python code into CUDA kernels and device functions following the CUDA
 execution model.  Kernels written in Numba appear to have direct access

@@ -13,6 +13,9 @@
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
+from docutils import nodes
+from sphinx.util.docutils import SphinxDirective
+
 import sys
 import os
 
@@ -339,5 +342,25 @@ def _autogenerate():
 _autogenerate()
 
 
+# CUDA target deprecation notice
+
+cuda_deprecation_text = (
+    "The CUDA target built-in to Numba is deprecated, with further development "
+    "moved to the `NVIDIA numba-cuda "
+    "package <https://github.com/NVIDIA/numba-cuda>`_. Please see "
+    ":ref:`cuda-deprecation-status`."
+)
+
+
+class CudaDeprecated(SphinxDirective):
+    def run(self):
+        paragraph_node = nodes.admonition(classes=["warning"])
+        paragraph_node += nodes.title(text="CUDA Target deprecation notice")
+        parsed = self.parse_text_to_nodes(cuda_deprecation_text)
+        paragraph_node += parsed
+        return [paragraph_node]
+
+
 def setup(app):
     app.add_css_file('rtd-overrides.css')
+    app.add_directive('cuda-deprecated', CudaDeprecated)

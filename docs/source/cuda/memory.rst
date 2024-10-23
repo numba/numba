@@ -2,6 +2,8 @@
 Memory management
 =================
 
+.. cuda-deprecated::
+
 .. _cuda-device-memory:
 
 Data transfer
