@@ -532,6 +532,10 @@ class WarningsFixer(object):
 
 
 class NumbaError(Exception):
+    recoverable = True
+    """The attribute controls when an error be raised as a hard error.
+    NOTE: only applies to new_style error capturing.
+    """
 
     def __init__(self, msg, loc=None, highlighting=True):
         self.msg = msg
@@ -578,7 +582,12 @@ class UnsupportedError(NumbaError):
     """
     Numba does not have an implementation for this functionality.
     """
-    pass
+
+
+class UnsupportedBytecodeError(UnsupportedError):
+    """Unsupported bytecode is non-recoverable
+    """
+    recoverable = False
 
 
 class UnsupportedRewriteError(UnsupportedError):

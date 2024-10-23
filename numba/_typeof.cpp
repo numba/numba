@@ -16,6 +16,14 @@
     #include <numpy/npy_2_compat.h>
 #endif
 
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 13)
+    #ifndef Py_BUILD_CORE
+        #define Py_BUILD_CORE 1
+    #endif
+    #include "internal/pycore_setobject.h"  // _PySet_NextEntry()
+#endif
+
+
 /* Cached typecodes for basic scalar types */
 static int tc_int8;
 static int tc_int16;

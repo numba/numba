@@ -4,7 +4,7 @@ import sys
 import threading
 import unittest
 from unittest.mock import Mock, call
-from numba.tests.support import TestCase, skip_unless_py312
+from numba.tests.support import TestCase
 from numba import jit, objmode
 from numba.core.utils import PYVERSION
 from numba.core.serialize import _numba_unpickle
@@ -21,7 +21,7 @@ def generate_usecase():
     return foo, call_foo
 
 
-if PYVERSION == (3, 12):
+if PYVERSION in ((3, 12), (3, 13)):
     PY_START = sys.monitoring.events.PY_START
     PY_RETURN = sys.monitoring.events.PY_RETURN
     RAISE = sys.monitoring.events.RAISE
@@ -36,7 +36,7 @@ TOOL2MONITORTYPE = {0 : "Debugger",
                     5 : "Optimizer"}
 
 
-@skip_unless_py312
+@unittest.skipUnless(PYVERSION >= (3, 12), "needs Python 3.12+")
 class TestMonitoring(TestCase):
     # Tests the interaction of the Numba dispatcher with `sys.monitoring`.
     #
@@ -724,7 +724,7 @@ class TestMonitoring(TestCase):
         self.assertFalse(q2.qsize())
 
 
-@skip_unless_py312
+@unittest.skipUnless(PYVERSION >= (3, 12), "needs Python 3.12+")
 class TestMonitoringSelfTest(TestCase):
 
     def test_skipping_of_tests_if_monitoring_in_use(self):

@@ -202,7 +202,7 @@ def _lower_get_address(context, builder, func, sig, failure_mode,
     # caller.
 
     modname = context.insert_const_string(builder.module, __name__)
-    numba_mod = pyapi.import_module_noblock(modname)
+    numba_mod = pyapi.import_module(modname)
     numba_func = pyapi.object_getattr_string(numba_mod, function_name)
     pyapi.decref(numba_mod)
     sig_obj = pyapi.unserialize(pyapi.serialize_object(sig))

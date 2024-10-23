@@ -195,7 +195,7 @@ rnd_implicit_init(rnd_state_t *state)
     Py_buffer buf;
     PyGILState_STATE gilstate = PyGILState_Ensure();
 
-    module = PyImport_ImportModuleNoBlock("os");
+    module = PyImport_ImportModule("os");
     if (module == NULL)
         goto error;
     /* Read as many bytes as necessary to get the full entropy

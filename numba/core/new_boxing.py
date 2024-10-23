@@ -23,7 +23,7 @@ def box_np_scalars(typ, val, c, py_boxing_func, py_type):
     np_scalar = cgutils.alloca_once_value(c.builder, c.pyapi.borrow_none())
     with cgutils.if_likely(c.builder, cgutils.is_not_null(c.builder, py_scalar)):
         numpy_name = c.context.insert_const_string(c.builder.module, 'numpy')
-        numpy_module = c.pyapi.import_module_noblock(numpy_name)
+        numpy_module = c.pyapi.import_module(numpy_name)
         with cgutils.if_likely(c.builder, cgutils.is_not_null(c.builder, numpy_module)):
             type_str = typ.name.split('np_')[1]
             np_scalar_constructor = c.pyapi.object_getattr_string(numpy_module, type_str)
@@ -162,7 +162,7 @@ def box_np_complex(typ, val, c):
     np_scalar = cgutils.alloca_once_value(c.builder, c.pyapi.borrow_none())
     with cgutils.if_likely(c.builder, cgutils.is_not_null(c.builder, py_scalar)):
         numpy_name = c.context.insert_const_string(c.builder.module, 'numpy')
-        numpy_module = c.pyapi.import_module_noblock(numpy_name)
+        numpy_module = c.pyapi.import_module(numpy_name)
         type_str = typ.name.split('np_')[1]
         np_scalar_constructor = c.pyapi.object_getattr_string(numpy_module, type_str)
         with cgutils.if_likely(c.builder, cgutils.is_not_null(c.builder, np_scalar_constructor)):
@@ -706,7 +706,7 @@ class _NumbaTypeHelper(object):
     def __enter__(self):
         c = self.c
         numba_name = c.context.insert_const_string(c.builder.module, 'numba')
-        numba_mod = c.pyapi.import_module_noblock(numba_name)
+        numba_mod = c.pyapi.import_module(numba_name)
         typeof_fn = c.pyapi.object_getattr_string(numba_mod, 'typeof')
         self.typeof_fn = typeof_fn
         c.pyapi.decref(numba_mod)
@@ -1247,7 +1247,7 @@ def unbox_numpy_random_bitgenerator(typ, obj, c):
         interface_state = object_getattr_safely(ctypes_binding, 'state')
         with cgutils.early_exit_if_null(c.builder, stack, interface_state):
             handle_failure()
-    
+
         interface_state_value = object_getattr_safely(
             interface_state, 'value')
         with cgutils.early_exit_if_null(c.builder, stack, interface_state_value):
@@ -1264,7 +1264,7 @@ def unbox_numpy_random_bitgenerator(typ, obj, c):
         # store the results.
         # First find ctypes.cast, and ctypes.c_void_p
         ctypes_name = c.context.insert_const_string(c.builder.module, 'ctypes')
-        ctypes_module = c.pyapi.import_module_noblock(ctypes_name)
+        ctypes_module = c.pyapi.import_module(ctypes_name)
         extra_refs.append(ctypes_module)
         with cgutils.early_exit_if_null(c.builder, stack, ctypes_module):
             handle_failure()
@@ -1328,7 +1328,7 @@ def unbox_numpy_random_generator(typ, obj, c):
     * ('meminfo', types.MemInfoPointer(types.voidptr)): The information about the memory
         stored at the pointer (to the original Generator PyObject). This is useful for
         keeping track of reference counts within the Python runtime. Helps prevent cases
-        where deletion happens in Python runtime without NRT being awareness of it. 
+        where deletion happens in Python runtime without NRT being awareness of it.
     """
     is_error_ptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
 
