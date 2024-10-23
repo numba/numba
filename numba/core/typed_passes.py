@@ -325,8 +325,7 @@ class ParforPass(FunctionPass):
 
         if not has_parfor:
             # parfor calls the compiler chain again with a string
-            if not (config.DISABLE_PERFORMANCE_WARNINGS or
-                    state.func_ir.loc.filename == '<string>'):
+            if not state.func_ir.loc.filename == '<string>':
                 url = ("https://numba.readthedocs.io/en/stable/user/"
                        "parallel.html#diagnostics")
                 msg = ("\nThe keyword argument 'parallel=True' was specified "
