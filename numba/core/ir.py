@@ -90,9 +90,12 @@ class Loc(object):
 
     def get_lines(self):
         if self.lines is None:
-
-            self.lines = linecache.getlines(self._get_path())
-
+            path = self._get_path()
+            # Avoid reading from dynamic string. They are most likely
+            # overridden. Problem started with Python 3.13. "<string>" seems
+            # to be something from multiprocessing.
+            lns = [] if path == "<string>" else linecache.getlines(path)
+            self.lines = lns
         return self.lines
 
     def _get_path(self):
@@ -1496,7 +1499,7 @@ class FunctionIR(object):
         self.block_entry_vars = {}
 
     def derive(self, blocks, arg_count=None, arg_names=None,
-               force_non_generator=False):
+               force_non_generator=False, loc=None):
         """
         Derive a new function IR from this one, using the given blocks,
         and possibly modifying the argument count and generator flag.
@@ -1507,7 +1510,7 @@ class FunctionIR(object):
 
         new_ir = copy.copy(self)
         new_ir.blocks = blocks
-        new_ir.loc = firstblock.loc
+        new_ir.loc = firstblock.loc if loc is None else loc
         if force_non_generator:
             new_ir.is_generator = False
         if arg_count is not None:

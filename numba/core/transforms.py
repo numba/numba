@@ -191,12 +191,20 @@ def _loop_lift_modify_blocks(func_ir, loopinfo, blocks,
     loopblocks = dict((k, blocks[k].copy()) for k in loopblockkeys)
     # Modify the loop blocks
     _loop_lift_prepare_loop_func(loopinfo, loopblocks)
-
+    # Since Python 3.13, [END_FOR, POP_TOP] sequence becomes the start of the
+    # block causing the block to have line number of the start of previous loop.
+    # Fix this using the loc of the first getiter.
+    getiter_exprs = []
+    for blk in loopblocks.values():
+        getiter_exprs.extend(blk.find_exprs(op="getiter"))
+    first_getiter = min(getiter_exprs, key=lambda x: x.loc.line)
+    loop_loc = first_getiter.loc
     # Create a new IR for the lifted loop
     lifted_ir = func_ir.derive(blocks=loopblocks,
                                arg_names=tuple(loopinfo.inputs),
                                arg_count=len(loopinfo.inputs),
-                               force_non_generator=True)
+                               force_non_generator=True,
+                               loc=loop_loc)
     liftedloop = LiftedLoop(lifted_ir,
                             typingctx, targetctx, flags, locals)
 
