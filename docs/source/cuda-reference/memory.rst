@@ -1,6 +1,8 @@
 Memory Management
 =================
 
+.. cuda-deprecated::
+
 .. autofunction:: numba.cuda.to_device
 .. autofunction:: numba.cuda.device_array
 .. autofunction:: numba.cuda.device_array_like

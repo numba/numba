@@ -1,6 +1,8 @@
 Libdevice functions
 ===================
 
+.. cuda-deprecated::
+
 All wrapped libdevice functions are listed in this section. All functions in
 libdevice are wrapped, with the exception of ``__nv_nan`` and ``__nv_nanf``.
 These functions return a representation of a quiet NaN, but the argument they

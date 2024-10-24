@@ -3,6 +3,8 @@
 Writing CUDA Kernels
 ====================
 
+.. cuda-deprecated::
+
 Introduction
 ============
 

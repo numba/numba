@@ -1,6 +1,8 @@
 CUDA Host API
 =============
 
+.. cuda-deprecated::
+
 Device Management
 -----------------
 

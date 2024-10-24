@@ -1,6 +1,8 @@
 CUDA Ufuncs and Generalized Ufuncs
 ==================================
 
+.. cuda-deprecated::
+
 This page describes the CUDA ufunc-like object.
 
 To support the programming pattern of CUDA programs, CUDA Vectorize and

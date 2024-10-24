@@ -4,6 +4,8 @@
 Calling foreign functions from Python kernels
 =============================================
 
+.. cuda-deprecated::
+
 Python kernels can call device functions written in other languages. CUDA C/C++,
 PTX, and binary objects (cubins, fat binaries, etc.) are directly supported;
 sources in other languages must be compiled to PTX first. The constituent parts

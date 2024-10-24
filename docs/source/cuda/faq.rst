@@ -5,6 +5,8 @@
 CUDA Frequently Asked Questions
 =================================================
 
+.. cuda-deprecated::
+
 nvprof reports "No kernels were profiled"
 -----------------------------------------
 

@@ -2,6 +2,8 @@
 Sharing CUDA Memory
 ===================
 
+.. cuda-deprecated::
+
 .. _cuda-ipc-memory:
 
 Sharing between process

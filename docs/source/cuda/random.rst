@@ -4,6 +4,8 @@
 Random Number Generation
 ========================
 
+.. cuda-deprecated::
+
 Numba provides a random number generation algorithm that can be executed on
 the GPU.  Due to technical issues with how NVIDIA implemented cuRAND, however,
 Numba's GPU random number generator is not based on cuRAND.  Instead, Numba's

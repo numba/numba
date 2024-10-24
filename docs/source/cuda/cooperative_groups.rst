@@ -2,6 +2,8 @@
 Cooperative Groups
 ==================
 
+.. cuda-deprecated::
+
 Supported features
 ------------------
 

@@ -4,6 +4,8 @@
 External Memory Management (EMM) Plugin interface
 =================================================
 
+.. cuda-deprecated::
+
 The :ref:`CUDA Array Interface <cuda-array-interface>` enables sharing of data
 between different Python libraries that access CUDA devices. However, each
 library manages its own memory distinctly from the others. For example:

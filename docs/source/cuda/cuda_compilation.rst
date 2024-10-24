@@ -4,6 +4,8 @@
 Compiling Python functions for use with other languages
 =======================================================
 
+.. cuda-deprecated::
+
 Numba can compile Python code to PTX or LTO-IR so that Python functions can be
 incorporated into CUDA code written in other languages (e.g. C/C++).  It is
 commonly used to support User-Defined Functions written in Python within the

@@ -3,6 +3,8 @@
 CUDA Minor Version Compatibility
 ================================
 
+.. cuda-deprecated::
+
 CUDA `Minor Version Compatibility
 <https://docs.nvidia.com/deploy/cuda-compatibility/index.html#minor-version-compatibility>`_
 (MVC) enables the use of a newer CUDA Toolkit version than the CUDA version
