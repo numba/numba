@@ -14,6 +14,7 @@
 # serve to show the default.
 
 from docutils import nodes
+from docutils.statemachine import StringList, string2lines
 from sphinx.util.docutils import SphinxDirective
 
 import sys
@@ -342,7 +343,9 @@ def _autogenerate():
 _autogenerate()
 
 
-# CUDA target deprecation notice
+# CUDA target deprecation notice - can be included on any page by including:
+#
+# .. cuda-deprecated::
 
 cuda_deprecation_text = (
     "The CUDA target built-in to Numba is deprecated, with further development "
@@ -354,11 +357,21 @@ cuda_deprecation_text = (
 
 class CudaDeprecated(SphinxDirective):
     def run(self):
-        paragraph_node = nodes.admonition(classes=["warning"])
-        paragraph_node += nodes.title(text="CUDA Target deprecation notice")
-        parsed = self.parse_text_to_nodes(cuda_deprecation_text)
-        paragraph_node += parsed
-        return [paragraph_node]
+        # Generate a warning admonition to contain the deprecation notice
+        warning = nodes.admonition(classes=["warning"])
+        warning += nodes.title(text="CUDA Target deprecation notice")
+
+        # Parse CUDA deprecation text so that the link and reference get
+        # resolved eventually
+        dummy = nodes.Element()
+        dummy.document = self.state.document
+        lines = StringList(string2lines(cuda_deprecation_text))
+        self.state.nested_parse(lines, 0, dummy)
+
+        # Add the text into the body of the warning
+        warning += dummy.children
+
+        return [warning]
 
 
 def setup(app):
