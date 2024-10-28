@@ -433,7 +433,9 @@ class List(MutableSequence, pt.Generic[T]):
         # Check whether the code was invoked from IPython shell
         try:
             get_ipython
-            return '[{0}, ...]'.format(', '.join(buf[:1000]))
+            preview = ', '.join(buf[:1000])
+            suffix = ', ...' if len(buf) > 1000 else ''
+            return '[{0}{1}]'.format(preview, suffix)
         except (NameError, IndexError):
             return '[{0}]'.format(', '.join(buf))
 
