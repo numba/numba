@@ -397,13 +397,14 @@ class TraceRunner(object):
         state.push(state.make_temp())
         state.append(inst)
 
-    def op_FORMAT_SIMPLE(self, state, inst):
-        assert PYVERSION == (3, 13)
-        value = state.pop()
-        strvar = state.make_temp()
-        res = state.make_temp()
-        state.append(inst, value=value, res=res, strvar=strvar)
-        state.push(res)
+    if PYVERSION in ((3, 13)):
+        def op_FORMAT_SIMPLE(self, state, inst):
+            assert PYVERSION == (3, 13)
+            value = state.pop()
+            strvar = state.make_temp()
+            res = state.make_temp()
+            state.append(inst, value=value, res=res, strvar=strvar)
+            state.push(res)
 
     def op_FORMAT_VALUE(self, state, inst):
         """
