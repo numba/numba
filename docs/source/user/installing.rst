@@ -11,14 +11,14 @@ information<numba_support_info>` for details.
 Our supported platforms are:
 
 * Linux x86_64
-* Linux ppcle64 (POWER8, POWER9)
 * Windows 10 and later (64-bit)
 * OS X 10.9 and later (64-bit and unofficial support on M1/Arm64)
-* \*BSD (unofficial support only)
 * NVIDIA GPUs of compute capability 5.0 and later
 
   * Compute capabilities 3.5 and 3.7 are supported, but deprecated.
 * ARMv8 (64-bit little-endian, such as the NVIDIA Jetson)
+* Linux ppcle64, e.g. POWER8, POWER9 (unofficially supported)
+* BSD (unofficial support only)
 
 :ref:`numba-parallel` is only available on 64-bit platforms.
 
