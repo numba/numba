@@ -546,6 +546,7 @@ Schedule
 - In Numba 0.61: support for ``NUMBA_CAPTURED_ERRORS=old_style`` will be 
   removed.
 
+.. _cuda-target-deprecation-notice:
 
 Deprecation of the built-in CUDA target
 =======================================

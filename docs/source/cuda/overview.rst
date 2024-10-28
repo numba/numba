@@ -6,8 +6,8 @@ Overview
 
 .. _cuda-deprecation-status:
 
-CUDA Target Deprecation and maintenance status
-==============================================
+Built-in CUDA target deprecation and maintenance status
+=======================================================
 
 The CUDA target is now maintained in a separate package, `numba-cuda
 <https://nvidia.github.io/numba-cuda>`_. The built-in CUDA target is deprecated,
@@ -17,7 +17,7 @@ to it. New functionality and bug fixes will be implemented in the ``numba-cuda``
 package.
 
 Users are encouraged to install ``numba-cuda`` in addition to Numba when using
-the CUDA target.  No code changes are required - the ``numba-cuda`` package will
+the CUDA target. No code changes are required - the ``numba-cuda`` package will
 continue to implement functionality under the ``numba.cuda`` namespace. 
 
 To install ``numba-cuda`` with pip::
@@ -28,6 +28,8 @@ To install ``numba-cuda`` with conda::
 
    conda install conda-forge::numba-cuda
 
+For further information, see the :ref:`deprecation notice and schedule
+<cuda-target-deprecation-notice>`.
 
 Introduction
 ============
