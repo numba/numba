@@ -6,7 +6,6 @@ Numba-specific errors and warnings.
 import abc
 import contextlib
 import os
-import sys
 import warnings
 import numba.core.config
 import numpy as np

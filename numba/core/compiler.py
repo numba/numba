@@ -3,7 +3,7 @@ import copy
 import warnings
 from numba.core.tracing import event
 
-from numba.core import (utils, errors, interpreter, bytecode, postproc, config,
+from numba.core import (errors, interpreter, bytecode, postproc, config,
                         callconv, cpu)
 from numba.parfors.parfor import ParforDiagnostics
 from numba.core.errors import CompilerError
