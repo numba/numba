@@ -167,23 +167,6 @@ class ConstraintNetwork(object):
                         highlighting=False,
                     )
                     errors.append(utils.chain_exception(new_exc, e))
-                except Exception as e:
-                    if utils.use_old_style_errors():
-                        _logger.debug("captured error", exc_info=e)
-                        msg = ("Internal error at {con}.\n{err}\n"
-                               "Enable logging at debug level for details.")
-                        new_exc = TypingError(
-                            msg.format(con=constraint, err=str(e)),
-                            loc=constraint.loc,
-                            highlighting=False,
-                        )
-                        errors.append(utils.chain_exception(new_exc, e))
-                    elif utils.use_new_style_errors():
-                        raise e
-                    else:
-                        msg = ("Unknown CAPTURED_ERRORS style: "
-                               f"'{config.CAPTURED_ERRORS}'.")
-                        assert 0, msg
 
         return errors
 
