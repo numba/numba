@@ -397,7 +397,7 @@ class TraceRunner(object):
         state.push(state.make_temp())
         state.append(inst)
 
-    if PYVERSION in ((3, 13)):
+    if PYVERSION in ((3, 13),):
         def op_FORMAT_SIMPLE(self, state, inst):
             assert PYVERSION == (3, 13)
             value = state.pop()
