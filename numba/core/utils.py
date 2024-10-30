@@ -235,15 +235,11 @@ def use_old_style_errors():
 def handle_new_style_errors(e):
     """Handle new_style error by raising the exception immediately if they are
     non-recoverable.
-
-    Recoverable errors are any instances of ``NumbaError`` with ``.recoverable``
-    set to ``True`` (the default).
     """
     from numba.core import errors
 
     if use_new_style_errors():
-        if not (isinstance(e, errors.NumbaError)
-                and getattr(e, 'recoverable', False)):
+        if not isinstance(e, errors.NumbaError):
             raise e
 
 
