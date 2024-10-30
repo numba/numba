@@ -206,8 +206,6 @@ class BaseTest(TestCase):
 
         # Python 3.10 has a hash for nan based on the pointer to the PyObject
         # containing the nan, skip this input and use explicit test instead.
-        if utils.PYVERSION < (3, 10):
-            a.append(float('nan'))
 
         yield typ(a)
 
@@ -220,10 +218,7 @@ class BaseTest(TestCase):
                 a = real + typ(1j) * imag
                 # Python 3.10 has a hash for nan based on the pointer to the
                 # PyObject containing the nan, skip input that ends up as nan
-                if utils.PYVERSION >= (3, 10):
-                    if not np.any(np.isnan(a)):
-                        yield a
-                else:
+                if not np.any(np.isnan(a)):
                     yield a
 
 

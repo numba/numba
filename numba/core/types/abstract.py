@@ -370,6 +370,7 @@ class MutableSequence(Sequence):
     *dtype* attribute.
     """
 
+    mutable = True
 
 class ArrayCompatible(Type):
     """

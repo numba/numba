@@ -11,14 +11,14 @@ information<numba_support_info>` for details.
 Our supported platforms are:
 
 * Linux x86_64
-* Linux ppcle64 (POWER8, POWER9)
 * Windows 10 and later (64-bit)
 * OS X 10.9 and later (64-bit and unofficial support on M1/Arm64)
-* \*BSD (unofficial support only)
 * NVIDIA GPUs of compute capability 5.0 and later
 
   * Compute capabilities 3.5 and 3.7 are supported, but deprecated.
 * ARMv8 (64-bit little-endian, such as the NVIDIA Jetson)
+* Linux ppcle64, e.g. POWER8, POWER9 (unofficially supported)
+* BSD (unofficial support only)
 
 :ref:`numba-parallel` is only available on 64-bit platforms.
 
@@ -202,7 +202,6 @@ vary with target operating system and hardware. The following lists them all
     Numba's threading backend
   * ``tbb-devel`` - provides TBB headers/libraries for compiling TBB support
     into Numba's threading backend (version >= 2021.6 required).
-  * ``importlib_metadata`` (for Python versions < 3.9)
 
 * Optional runtime are:
 
@@ -267,6 +266,8 @@ information.
 +----------++--------------+---------------------------+---------------------------------------------+------------------------------+-------------------+-----------------------------+
 | Numba     | Release date | Python                    | NumPy                                       | llvmlite                     | LLVM              | TBB                         |
 +===========+==============+===========================+=============================================+==============================+===================+=============================+
+| 0.61.0    | UNRELEASED   | 3.10.x <= version < 3.13  | 1.24 <= version < 1.27 ; version == 2.0 †   | 0.43.x                       | 14.x              | 2021.6 <= version           |
++-----------+--------------+---------------------------+---------------------------------------------+------------------------------+-------------------+-----------------------------+
 | 0.60.0    | 2024-06-13   | 3.9.x <= version < 3.13   | 1.22 <= version < 1.27 ; version == 2.0 †   | 0.43.x                       | 14.x              | 2021.6 <= version           |
 +-----------+--------------+---------------------------+---------------------------------------------+------------------------------+-------------------+-----------------------------+
 | 0.59.1    | 2024-03-18   | 3.9.x <= version < 3.13   | 1.22 <= version < 1.27                      | 0.42.x                       | 14.x              | 2021.6 <= version           |

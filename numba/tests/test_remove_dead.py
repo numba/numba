@@ -5,7 +5,7 @@
 
 import numba
 import numba.parfors.parfor
-from numba import njit
+from numba import njit, jit
 from numba.core import ir_utils
 from numba.core import types, ir,  compiler
 from numba.core.registry import cpu_target
@@ -24,7 +24,7 @@ from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                            DumpParforDiagnostics, NativeLowering,
                            IRLegalization, NoPythonBackend, NativeLowering)
 import numpy as np
-from numba.tests.support import skip_parfors_unsupported, needs_blas
+from numba.tests.support import skip_parfors_unsupported, needs_blas, TestCase
 import unittest
 
 
@@ -56,7 +56,7 @@ def findLhsAssign(func_ir, var):
 
     return False
 
-class TestRemoveDead(unittest.TestCase):
+class TestRemoveDead(TestCase):
 
     _numba_parallel_test_ = False
 
@@ -293,6 +293,143 @@ class TestRemoveDead(unittest.TestCase):
         test_res = numba.jit(pipeline_class=TestPipeline)(func)()
         py_res = func()
         np.testing.assert_array_equal(test_res, py_res)
+
+
+class TestSSADeadBranchPrune(TestCase):
+    """
+    Test issues that required dead-branch-prune on SSA IR
+    """
+    def test_issue_9706(self):
+        @njit
+        def foo(x, y=None):
+            if y is not None:
+                return x + y
+            else:
+                y = x
+                return x + y
+
+        @njit
+        def foo_manual_ssa(x, y=None):
+            if y is not None:
+                return x + y
+            else:
+                # avoid changing type of `y`
+                y_ = x
+                return x + y_
+
+        self.assertEqual(foo(3, None), foo_manual_ssa(3, None))
+        self.assertEqual(foo(3, 10), foo_manual_ssa(3, 10))
+
+    def test_issue_6541(self):
+        @njit
+        def f(xs, out=None):
+            N, = xs.shape
+            if out is None:
+                out = np.arange(N)
+            else:
+                assert np.all((0 <= out) & (out < N))
+            out[:] = N
+            return out
+
+        expected = f(np.array([3, 1, 2]))
+        out = np.arange(3, dtype='i8')
+        got = f(np.array([3, 1, 2]), out=out)
+        self.assertIs(got, out)
+        self.assertPreciseEqual(got, expected)
+        out = None
+        got = f(np.array([3, 1, 2]), out=out)
+        self.assertPreciseEqual(got, expected)
+
+    def test_issue_7482(self):
+        @njit
+        def compute(smth, weights, default=0.0):
+            if weights is None:
+                return None
+
+            if len(weights) == 0:
+                return default
+
+            idx = smth > weights
+            weights = weights[idx]
+
+            return default * weights
+
+        self.assertIsNone(compute(smth=1, weights=None))
+        kwargs = dict(smth=1, weights=np.arange(5), default=np.zeros(1))
+        self.assertEqual(compute(**kwargs),
+                         compute.py_func(**kwargs))
+
+    def test_issue_5661(self):
+        @njit
+        def foo(a, b=None):
+            if b is None:
+                b = 1
+            elif b < a:
+                b += 1
+
+            return a + b
+
+        args_list = [
+            (1, 2),
+            (2, 1),
+            (1,),
+        ]
+        for args in args_list:
+            self.assertEqual(foo(*args), foo.py_func(*args))
+
+        # Variation
+        # https://github.com/numba/numba/issues/5661#issuecomment-697902475
+        def make(decor=njit):
+            @decor
+            def inner(state):
+                if state is None:
+                    state = 0
+                else:
+                    state += 1
+                return state
+
+            @decor
+            def fn():
+                state = None
+                for i in range(10):
+                    state = inner(state)
+                return state
+
+            return fn()
+
+        self.assertEqual(make(), make(lambda x: x))
+
+    def test_issue_9742(self):
+        CONST = 32
+
+        @jit
+        def foo():
+            # This is a prune by value case, conditional is a compile time
+            # evaluatable constant.
+            conditional = CONST // 2
+            collect = []
+            while conditional:
+                collect.append(conditional)
+                conditional //= 2
+
+            return collect
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_issue_9742_variant(self):
+        CONST = 32
+
+        @jit
+        def foo():
+            collect = []
+            # This is a prune by value case, conditional is a compile time
+            # evaluatable constant.
+            x = CONST + 1
+            if x:
+                collect.append(x)
+            return collect
+
+        self.assertEqual(foo(), foo.py_func())
 
 
 if __name__ == "__main__":

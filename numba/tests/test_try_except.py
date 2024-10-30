@@ -5,7 +5,6 @@ from itertools import product
 import numpy as np
 
 from numba import njit, typed, objmode, prange
-from numba.core.utils import PYVERSION
 from numba.core import ir_utils, ir
 from numba.core.errors import (
     UnsupportedError, CompilerError, NumbaPerformanceWarning, TypingError,
@@ -737,7 +736,6 @@ class TestTryExceptOtherControlFlow(TestCase):
             str(raises.exception),
         )
 
-    @unittest.skipIf(PYVERSION < (3, 9), "Python 3.9+ only")
     def test_reraise_opcode_unreachable(self):
         # The opcode RERAISE was added in python 3.9, there should be no
         # supported way to actually reach it. This test just checks that an

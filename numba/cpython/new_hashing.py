@@ -16,12 +16,10 @@ from numba import literal_unroll
 from numba.core.extending import (
     overload, overload_method, intrinsic, register_jitable)
 from numba.core import errors
-from numba.core import types, utils
+from numba.core import types
 from numba.core.unsafe.bytes import grab_byte, grab_uint64_t
 from numba.cpython.randomimpl import (const_int, get_next_int, get_next_int32,
                                       get_state_ptr)
-
-_py310_or_later = utils.PYVERSION >= (3, 10)
 
 # This is Py_hash_t, which is a Py_ssize_t, which has sizeof(size_t):
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Include/pyport.h#L91-L96    # noqa: E501
@@ -114,11 +112,8 @@ def _Py_HashDouble(v):
             # https://github.com/python/cpython/blob/2c4792264f9218692a1bd87398a60591f756b171/Python/pyhash.c#L102   # noqa: E501
             # Numba returns a pseudo-random number to reflect the spirit of the
             # change.
-            if _py310_or_later:
-                x = _prng_random_hash()
-                return process_return(x)
-            else:
-                return _PyHASH_NAN
+            x = _prng_random_hash()
+            return process_return(x)
 
     m, e = math.frexp(v)
 

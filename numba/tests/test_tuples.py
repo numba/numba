@@ -721,7 +721,6 @@ class TestTupleBuild(TestCase):
         # Heterogeneous
         check(lambda a: tuple(a), (4, 5.5))
 
-    @unittest.skipIf(utils.PYVERSION < (3, 9), "needs Python 3.9+")
     def test_unpack_with_predicate_fails(self):
         # this fails as the list_to_tuple/list_extend peephole bytecode
         # rewriting needed for Python 3.9+ cannot yet traverse the CFG.

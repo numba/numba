@@ -515,13 +515,15 @@ The following top-level functions are supported:
 * :func:`numpy.kaiser`
 * :func:`numpy.iscomplex`
 * :func:`numpy.iscomplexobj`
+* :func:`numpy.isin` (matching pre-1.24 behaviour without the ``kind`` keyword)
 * :func:`numpy.isneginf`
 * :func:`numpy.isposinf`
 * :func:`numpy.isreal`
 * :func:`numpy.isrealobj`
 * :func:`numpy.isscalar`
 * :func:`numpy.interp` (only the 3 first arguments)
-* :func:`numpy.intersect1d` (only first 2 arguments, ar1 and ar2)
+* :func:`numpy.intersect1d` (only 3 first arguments: ``ar1``, ``ar2``, and ``assume_unique``)
+* :func:`numpy.in1d` (matching pre-1.24 behaviour without the ``kind`` keyword)
 * :func:`numpy.linspace` (only the 3-argument form)
 * :func:`numpy.logspace` (only the 3 first arguments)
 * :func:`numpy.nan_to_num` (only the 3 first arguments)
@@ -546,6 +548,8 @@ The following top-level functions are supported:
 * :func:`numpy.select` (only using homogeneous lists or tuples for the first
   two arguments, condlist and choicelist). Additionally, these two arguments
   can only contain arrays (unlike NumPy that also accepts tuples).
+* :func:`numpy.setxor1d`
+* :func:`numpy.setdiff1d`
 * :func:`numpy.shape`
 * :func:`numpy.sinc`
 * :func:`numpy.sort` (no optional arguments, quicksort accepts
@@ -556,6 +560,7 @@ The following top-level functions are supported:
 * :func:`numpy.take` (only the 2 first arguments)
 * :func:`numpy.take_along_axis` (the axis argument must be a literal value)
 * :func:`numpy.transpose`
+* :func:`numpy.trapezoid` (only the 3 first arguments)
 * :func:`numpy.trapz` (only the 3 first arguments)
 * :func:`numpy.tri` (only the 3 first arguments; third argument ``k`` must be an integer)
 * :func:`numpy.tril` (second argument ``k`` must be an integer)
@@ -631,7 +636,7 @@ Numba supports :py:class:`numpy.random.Generator()` objects. As of version 0.56,
 individual NumPy :py:class:`Generator` objects into Numba functions and use their
 methods inside the functions. The same algorithms are used as NumPy for
 random number generation hence maintaining parity between the random
-number generated using NumPy and Numba under identical arguments 
+number generated using NumPy and Numba under identical arguments
 (also the same documentation notes as NumPy :py:class:`Generator` methods apply).
 The current Numba support for :py:class:`Generator` is not thread-safe, hence we
 do not recommend using :py:class:`Generator` methods in methods with parallel

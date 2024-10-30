@@ -1,4 +1,5 @@
 import numpy as np
+import ctypes
 
 # These constants are directly obtained from:
 # https://github.com/numpy/numpy/blob/caccd283941b0bade7b71056138ded5379b1625f/numpy/random/src/distributions/ziggurat_constants.h
@@ -1222,6 +1223,7 @@ UINT8_MAX = 255
 UINT16_MAX = 65535
 UINT32_MAX = 4294967295
 UINT64_MAX = 18446744073709551615
+LONG_MAX = (1 << ( 8 * ctypes.sizeof(ctypes.c_long) - 1)) - 1
 
 LS2PI = 0.91893853320467267
 TWELFTH = 0.083333333333333333333333

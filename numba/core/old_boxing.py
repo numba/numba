@@ -1248,9 +1248,11 @@ def unbox_numpy_random_bitgenerator(typ, obj, c):
             args = c.pyapi.tuple_pack([interface_next_fn, ct_voidptr_ty])
             with cgutils.early_exit_if_null(c.builder, stack, args):
                 handle_failure()
+            extra_refs.append(args)
 
             # Call ctypes.cast()
             interface_next_fn_casted = c.pyapi.call(ct_cast, args)
+            extra_refs.append(interface_next_fn_casted)
 
             # Fetch the .value attr on the resulting ctypes.c_void_p for storage
             # in the function pointer slot.
