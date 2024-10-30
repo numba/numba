@@ -3,7 +3,7 @@ import copy
 import warnings
 from numba.core.tracing import event
 
-from numba.core import (utils, errors, interpreter, bytecode, postproc, config,
+from numba.core import (errors, interpreter, bytecode, postproc, config,
                         callconv, cpu)
 from numba.parfors.parfor import ParforDiagnostics
 from numba.core.errors import CompilerError
@@ -477,8 +477,7 @@ class CompilerBase(object):
                     res = e.result
                     break
                 except Exception as e:
-                    if (utils.use_new_style_errors() and not
-                            isinstance(e, errors.NumbaError)):
+                    if not isinstance(e, errors.NumbaError):
                         raise e
 
                     self.state.status.fail_reason = e
