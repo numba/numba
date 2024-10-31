@@ -307,7 +307,8 @@ class BaseFunction(Callable):
                                     for k, v in kws.items()}
                         sig = temp.apply(nolitargs, nolitkws)
                 except Exception as e:
-                    utils.handle_new_style_errors(e)
+                    if not isinstance(e, errors.NumbaError):
+                        raise e
                     sig = None
                     failures.add_error(temp, False, e, uselit)
                 else:
@@ -396,8 +397,7 @@ class BoundFunction(Callable, Opaque):
                 try:
                     out = template.apply(args, kws)
                 except Exception as exc:
-                    if (utils.use_new_style_errors() and not
-                            isinstance(exc, errors.NumbaError)):
+                    if not isinstance(exc, errors.NumbaError):
                         raise exc
                     if isinstance(exc, errors.ForceLiteralArg):
                         raise exc

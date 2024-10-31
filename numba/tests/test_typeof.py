@@ -6,10 +6,13 @@ from collections import namedtuple
 import enum
 import mmap
 import typing as py_typing
+import random
+import string
 
 import numpy as np
 
 import unittest
+from numba import jit, _dispatcher
 from numba.core import types
 from numba.core.errors import NumbaValueError, NumbaTypeError
 from numba.misc.special import typeof
@@ -569,6 +572,29 @@ class TestFingerprint(TestCase):
         for i in range(1000):
             t = (t,)
         s = compute_fingerprint(t)
+
+
+class TestTypeOfMemCpy(TestCase):
+
+    def test_memcpy_typeof_buffer(self):
+        # https://github.com/numba/numba/issues/9097
+        # bug is fixed if the code below compiles
+        random.seed(0)
+        chars = string.ascii_letters
+        n = 256
+        field = "".join([chars[random.randint(0, len(chars) - 1)] for x in range(n)])
+        for i in range(1, n):
+            lfield = field[:i]
+            nt_ty = namedtuple("tuplename", lfield)
+            nt = nt_ty(1)
+            fp = _dispatcher.compute_fingerprint(nt)
+            nt_name = nt.__class__.__name__
+            expected = f"{nt_name}({lfield}i)"
+            self.assertEqual(
+                expected,
+                fp.decode(),
+                f"iteration {i} failed, {expected} != {fp.decode()}"
+            )
 
 
 if __name__ == '__main__':

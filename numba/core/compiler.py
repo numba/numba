@@ -3,7 +3,7 @@ import copy
 import warnings
 from numba.core.tracing import event
 
-from numba.core import (utils, errors, interpreter, bytecode, postproc, config,
+from numba.core import (errors, interpreter, bytecode, postproc, config,
                         callconv, cpu)
 from numba.parfors.parfor import ParforDiagnostics
 from numba.core.errors import CompilerError
@@ -22,7 +22,6 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode,
                                        CanonicalizeLoopEntry, LiteralUnroll,
                                        ReconstructSSA, RewriteDynamicRaises,
                                        LiteralPropagationSubPipelinePass,
-                                       RVSDGFrontend,
                                        )
 
 from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
@@ -478,7 +477,8 @@ class CompilerBase(object):
                     res = e.result
                     break
                 except Exception as e:
-                    utils.handle_new_style_errors(e)
+                    if not isinstance(e, errors.NumbaError):
+                        raise e
                     self.state.status.fail_reason = e
                     if is_final_pipeline:
                         raise e
@@ -635,17 +635,10 @@ class DefaultPassBuilder(object):
     def define_untyped_pipeline(state, name='untyped'):
         """Returns an untyped part of the nopython pipeline"""
         pm = PassManager(name)
-        if config.USE_RVSDG_FRONTEND:
-            if state.func_ir is None:
-                pm.add_pass(RVSDGFrontend, "rvsdg frontend")
-                pm.add_pass(FixupArgs, "fix up args")
-            pm.add_pass(IRProcessing, "processing IR")
-        else:
-            if state.func_ir is None:
-                pm.add_pass(TranslateByteCode, "analyzing bytecode")
-                pm.add_pass(FixupArgs, "fix up args")
-            pm.add_pass(IRProcessing, "processing IR")
-
+        if state.func_ir is None:
+            pm.add_pass(TranslateByteCode, "analyzing bytecode")
+            pm.add_pass(FixupArgs, "fix up args")
+        pm.add_pass(IRProcessing, "processing IR")
         pm.add_pass(WithLifting, "Handle with contexts")
 
         # inline closures early in case they are using nonlocal's

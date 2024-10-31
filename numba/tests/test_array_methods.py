@@ -457,19 +457,10 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         dt2 = np.dtype([('u', np.int16), ('v', np.int8)])
         dt3 = np.dtype([('x', np.int16), ('y', np.int16)])
 
-        # The checking routines are much more specific from NumPy 1.23 onwards
-        # as the granularity of error reporing is improved in Numba to match
-        # that of NumPy.
-        if numpy_version >= (1, 23):
-            check_error_larger_dt = check_err_larger_dtype
-            check_error_smaller_dt = check_err_smaller_dtype
-            check_error_noncontig = check_err_noncontig_last_axis
-            check_error_0d = check_err_0d
-        else:
-            check_error_larger_dt = check_err
-            check_error_smaller_dt = check_err
-            check_error_noncontig = check_err
-            check_error_0d = check_err
+        check_error_larger_dt = check_err_larger_dtype
+        check_error_smaller_dt = check_err_smaller_dtype
+        check_error_noncontig = check_err_noncontig_last_axis
+        check_error_0d = check_err_0d
 
         # C-contiguous
         arr = np.arange(24, dtype=np.int8)
@@ -496,12 +487,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # neither F or C contiguous
         not_f_or_c_arr = np.zeros((4, 4)).T[::2, ::2]
 
-        # NumPy 1.23 does not allow views with different size dtype for
-        # non-contiguous last axis.
-        if numpy_version >= (1, 23):
-            check_maybe_error = check_err_noncontig_last_axis
-        else:
-            check_maybe_error = check
+        check_maybe_error = check_err_noncontig_last_axis
 
         check(f_arr, np.int8)
         check(not_f_or_c_arr, np.uint64)
@@ -774,12 +760,19 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check_arr(arr.reshape((2, 3, 4)))
         check_arr(arr.reshape((2, 3, 4)).T)
         check_arr(arr.reshape((2, 3, 4))[::2])
-        for v in (0.0, 1.5, float('nan')):
-            arr = np.array([v]).reshape(())
-            check_arr(arr)
 
         arr = np.array(["Hello", "", "world"])
         check_arr(arr)
+
+        for v in (0.0, 1.5, float('nan')):
+            arr = np.array([v]).reshape(())
+            if numpy_version < (2, 1):
+                check_arr(arr)
+            else:
+                with self.assertRaises(ValueError) as raises:
+                    njit((typeof(arr),))(pyfunc)
+                self.assertEqual(str(raises.exception),
+                                 "Calling nonzero on 0d arrays is not allowed. Use np.atleast_1d(scalar).nonzero() instead.")
 
     def test_array_nonzero(self):
         self.check_nonzero(array_nonzero)

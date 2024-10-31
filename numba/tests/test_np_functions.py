@@ -5,7 +5,6 @@ import math
 import platform
 from functools import partial
 from itertools import product
-import warnings
 from textwrap import dedent
 
 import numpy as np
@@ -14,7 +13,7 @@ from numba import jit, njit, typeof
 from numba.core import types
 from numba.typed import List, Dict
 from numba.np.numpy_support import numpy_version
-from numba.core.errors import (TypingError, NumbaDeprecationWarning)
+from numba.core.errors import TypingError
 from numba.core.config import IS_32BITS
 from numba.core.utils import pysignature
 from numba.np.extensions import cross2d
@@ -6812,13 +6811,6 @@ def foo():
         exec(compile(funcstr, '<string>', 'exec'), globals(), dct)
         return dct['foo']
 
-    @unittest.skipIf(numpy_version >= (1, 24), "NumPy < 1.24 required")
-    def test_MachAr(self):
-        attrs = ('ibeta', 'it', 'machep', 'eps', 'negep', 'epsneg', 'iexp',
-                 'minexp', 'xmin', 'maxexp', 'xmax', 'irnd', 'ngrd',
-                 'epsilon', 'tiny', 'huge', 'precision', 'resolution',)
-        self.check(machar, attrs)
-
     def test_finfo(self):
         types = [np.float32, np.float64, np.complex64, np.complex128]
         attrs = ('eps', 'epsneg', 'iexp', 'machep', 'max', 'maxexp', 'negep',
@@ -6854,26 +6846,6 @@ def foo():
         with self.assertTypingError():
             cfunc = jit(nopython=True)(iinfo)
             cfunc(np.float64(7))
-
-    @unittest.skipUnless(numpy_version < (1, 24), "Needs NumPy < 1.24")
-    @TestCase.run_test_in_subprocess
-    def test_np_MachAr_deprecation_np122(self):
-        # Tests that Numba is replaying the NumPy 1.22 deprecation warning
-        # raised on the getattr of 'MachAr' on the NumPy module.
-        # Needs to be run in a subprocess as the warning is generated from the
-        # typing part of the `np.MachAr` overload, which may already have been
-        # executed for the given types and so an empty in memory cache is
-        # needed.
-        msg = r'.*`np.MachAr` is deprecated \(NumPy 1.22\)'
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('ignore')  # override warning behavior
-            warnings.filterwarnings("always", message=msg,
-                                    category=NumbaDeprecationWarning,)
-            f = njit(lambda : np.MachAr().eps)
-            f()
-
-        self.assertEqual(len(w), 1)
-        self.assertIn('`np.MachAr` is deprecated', str(w[0]))
 
 
 class TestRegistryImports(TestCase):

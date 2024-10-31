@@ -583,16 +583,58 @@ def _fill_ufunc_db(ufunc_db):
         'f->f': npyfuncs.np_real_floor_impl,
         'd->d': npyfuncs.np_real_floor_impl,
     }
+    if numpy_version >= (2, 1):
+        ufunc_db[np.floor].update({
+            '?->?': numbers.identity_impl,
+            'b->b': numbers.identity_impl,
+            'B->B': numbers.identity_impl,
+            'h->h': numbers.identity_impl,
+            'H->H': numbers.identity_impl,
+            'i->i': numbers.identity_impl,
+            'I->I': numbers.identity_impl,
+            'l->l': numbers.identity_impl,
+            'L->L': numbers.identity_impl,
+            'q->q': numbers.identity_impl,
+            'Q->Q': numbers.identity_impl,
+        })
 
     ufunc_db[np.ceil] = {
         'f->f': npyfuncs.np_real_ceil_impl,
         'd->d': npyfuncs.np_real_ceil_impl,
     }
+    if numpy_version >= (2, 1):
+        ufunc_db[np.ceil].update({
+            '?->?': numbers.identity_impl,
+            'b->b': numbers.identity_impl,
+            'B->B': numbers.identity_impl,
+            'h->h': numbers.identity_impl,
+            'H->H': numbers.identity_impl,
+            'i->i': numbers.identity_impl,
+            'I->I': numbers.identity_impl,
+            'l->l': numbers.identity_impl,
+            'L->L': numbers.identity_impl,
+            'q->q': numbers.identity_impl,
+            'Q->Q': numbers.identity_impl,
+        })
 
     ufunc_db[np.trunc] = {
         'f->f': npyfuncs.np_real_trunc_impl,
         'd->d': npyfuncs.np_real_trunc_impl,
     }
+    if numpy_version >= (2, 1):
+        ufunc_db[np.trunc].update({
+            '?->?': numbers.identity_impl,
+            'b->b': numbers.identity_impl,
+            'B->B': numbers.identity_impl,
+            'h->h': numbers.identity_impl,
+            'H->H': numbers.identity_impl,
+            'i->i': numbers.identity_impl,
+            'I->I': numbers.identity_impl,
+            'l->l': numbers.identity_impl,
+            'L->L': numbers.identity_impl,
+            'q->q': numbers.identity_impl,
+            'Q->Q': numbers.identity_impl,
+        })
 
     ufunc_db[np.fabs] = {
         'f->f': npyfuncs.np_real_fabs_impl,

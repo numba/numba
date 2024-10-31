@@ -39,8 +39,7 @@ requirements:
     - tbb-devel >=2021.6       # [not (aarch64 or ppc64le)]
   run:
     - python >=3.10
-    # NumPy 1.22.0, 1.22.1, 1.22.2 are all broken for ufuncs, see #7756
-    - numpy >=1.22.3
+    - numpy >=1.24
     # On channel https://anaconda.org/numba/
     - llvmlite >=0.44.0dev0,<0.44
   run_constrained:
@@ -61,8 +60,6 @@ requirements:
     - scipy >=1.0
     # CUDA Python 11.6 or later
     - cuda-python >=11.6
-    # numba-rvsdg
-    - numba-rvsdg 0.0.*      # [py==311]
 
 test:
   requires:

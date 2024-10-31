@@ -1,0 +1,6 @@
+``find_topo_sort`` reliablilty improvement
+--------------------------------------
+
+Improves the reliability of the ``find_topo_sort`` function for complex CFGs
+(typically through generated code) by replacing the recursive post order traversal
+with an iterative one. This removes a risk of hitting the Python recursion limit.
