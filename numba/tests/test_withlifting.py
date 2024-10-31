@@ -1172,7 +1172,7 @@ class TestBogusContext(BaseTestWithLifting):
             with open('') as f:
                 pass
 
-        with self.assertRaises(errors.UnsupportedError) as raises:
+        with self.assertRaises(errors.UnsupportedBytecodeError) as raises:
             foo()
 
         excstr = str(raises.exception)

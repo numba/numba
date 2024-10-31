@@ -7,7 +7,8 @@ import numpy as np
 from numba import njit, typed, objmode, prange
 from numba.core import ir_utils, ir
 from numba.core.errors import (
-    UnsupportedError, CompilerError, NumbaPerformanceWarning, TypingError,
+    CompilerError, NumbaPerformanceWarning, TypingError,
+    UnsupportedBytecodeError,
 )
 from numba.tests.support import (
     TestCase, unittest, captured_stdout, MemoryLeakMixin,
@@ -371,7 +372,7 @@ class TestTryBareExcept(TestCase):
             except:    # noqa: E722
                 raise
 
-        with self.assertRaises(UnsupportedError) as raises:
+        with self.assertRaises(UnsupportedBytecodeError) as raises:
             udt()
         self.assertIn(
             "The re-raising of an exception is not yet supported.",
@@ -458,7 +459,7 @@ class TestTryExceptCaught(TestCase):
                 return r
             return r
 
-        with self.assertRaises(UnsupportedError) as raises:
+        with self.assertRaises(UnsupportedBytecodeError) as raises:
             udt(True)
         self.assertIn(
             "Exception object cannot be stored into variable (e)",
@@ -473,7 +474,7 @@ class TestTryExceptCaught(TestCase):
             except Exception:
                 raise
 
-        with self.assertRaises(UnsupportedError) as raises:
+        with self.assertRaises(UnsupportedBytecodeError) as raises:
             udt()
         self.assertIn(
             "The re-raising of an exception is not yet supported.",
@@ -491,7 +492,7 @@ class TestTryExceptCaught(TestCase):
                 except Exception:
                     raise
 
-        with self.assertRaises(UnsupportedError) as raises:
+        with self.assertRaises(UnsupportedBytecodeError) as raises:
             udt()
         self.assertIn(
             "The re-raising of an exception is not yet supported.",
