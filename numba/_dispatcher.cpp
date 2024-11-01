@@ -1619,6 +1619,8 @@ static PyTypeObject DispatcherType = {
 /* END WARNING*/
 };
 
+
+#if (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 12) || (PY_MINOR_VERSION == 13))
 static
 bool is_sysmon_enabled(PyObject * self) {
     if (PyObject_IsInstance(self, (PyObject*)&DispatcherType)) {
@@ -1627,6 +1629,7 @@ bool is_sysmon_enabled(PyObject * self) {
     }
     return false;
 }
+#endif
 
 static PyObject *compute_fingerprint(PyObject *self, PyObject *args)
 {
