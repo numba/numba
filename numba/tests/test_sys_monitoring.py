@@ -10,7 +10,14 @@ from numba.core.utils import PYVERSION
 from numba.core.serialize import _numba_unpickle
 
 
+def _enable_sysmon(disp):
+    """Decorator to enable sys.monitoring on the dispatcher"""
+    disp._enable_sysmon = True
+    return disp
+
+
 def generate_usecase():
+    @_enable_sysmon
     @jit('int64(int64)',)
     def foo(x):
         return x + 1
@@ -312,6 +319,7 @@ class TestMonitoring(TestCase):
                 if switch_on_event:
                     sys.monitoring.set_events(tool_id, event)
 
+            @_enable_sysmon
             @jit('int64(int64)')
             def foo(enable):
                 with objmode:
@@ -413,6 +421,7 @@ class TestMonitoring(TestCase):
 
         msg = 'exception raised'
 
+        @_enable_sysmon
         @jit('()')
         def foo():
             raise ValueError(msg)
@@ -482,6 +491,7 @@ class TestMonitoring(TestCase):
 
         msg = 'exception raised'
 
+        @_enable_sysmon
         @jit('()')
         def foo():
             raise StopIteration(msg)
@@ -592,6 +602,7 @@ class TestMonitoring(TestCase):
         class LocalException(Exception):
             pass
 
+        @_enable_sysmon
         @jit("()")
         def raising():
             raise LocalException(msg_execution)
@@ -651,6 +662,7 @@ class TestMonitoring(TestCase):
         class LocalException(Exception):
             pass
 
+        @_enable_sysmon
         @jit("()")
         def raising():
             raise LocalException(msg_execution)
