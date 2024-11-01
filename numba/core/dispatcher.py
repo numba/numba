@@ -231,6 +231,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
 
         self.doc = py_func.__doc__
         self._compiling_counter = CompilingCounter()
+        self._enable_sysmon = bool(config.SYS_MONITORING_DEFAULT)
         weakref.finalize(self, self._make_finalizer())
 
     def _compilation_chain_init_hook(self):

@@ -750,5 +750,35 @@ class TestMonitoringSelfTest(TestCase):
         self.assertIn("skipped=1", str(r))
 
 
+@unittest.skipUnless(PYVERSION >= (3, 12), "needs Python 3.12+")
+class TestMonitoringEnvVarControl(TestCase):
+    @TestCase.run_test_in_subprocess(
+        envvars={"NUMBA_SYS_MONITORING_DEFAULT": ''})
+    def test_default_off(self):
+        @jit
+        def foo(x):
+            return x + 1
+
+        self.assertFalse(foo._enable_sysmon)
+
+    @TestCase.run_test_in_subprocess(
+        envvars={"NUMBA_SYS_MONITORING_DEFAULT": '0'})
+    def test_override_off(self):
+        @jit
+        def foo(x):
+            return x + 1
+
+        self.assertFalse(foo._enable_sysmon)
+
+    @TestCase.run_test_in_subprocess(
+        envvars={"NUMBA_SYS_MONITORING_DEFAULT": '1'})
+    def test_override_on(self):
+        @jit
+        def foo(x):
+            return x + 1
+
+        self.assertTrue(foo._enable_sysmon)
+
+
 if __name__ == '__main__':
     unittest.main()

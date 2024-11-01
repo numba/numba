@@ -514,6 +514,10 @@ class _EnvReloader(object):
         NUMBA_NUM_THREADS = _NUMBA_NUM_THREADS
         del _NUMBA_NUM_THREADS
 
+        # sys.monitoring support
+        SYS_MONITORING_DEFAULT = _readenv("NUMBA_SYS_MONITORING_DEFAULT",
+                                          int, 0)
+
         # Profiling support
 
         # Indicates if a profiler detected. Only VTune can be detected for now
