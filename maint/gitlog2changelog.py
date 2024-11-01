@@ -57,6 +57,7 @@ if __name__ == '__main__':
             issue_id = match.groups()[0]
             ordered[issue_id] = "%s" % (x.message.splitlines()[2])
     print("Pull-Requests:\n")
+    missing_authors = set()
     for k in sorted(ordered.keys()):
         pull = get_pr(int(k))
         hyperlink = "`#%s <%s>`_" % (k, pull.html_url)
@@ -65,13 +66,23 @@ if __name__ == '__main__':
         for c in pull.get_commits():
             if c.author:
                 pr_authors.add(c.author)
+            else:
+                missing_authors.add((pull, c))
             if c.committer and c.committer.login != "web-flow":
                 pr_authors.add(c.committer)
+            else:
+                missing_authors.add((pull, c))
         print("* PR %s: %s (%s)" % (hyperlink, ordered[k],
                                     " ".join([hyperlink_user(u) for u in
                                               pr_authors])))
         for a in pr_authors:
             authors.add(a)
+    if missing_authors:
+        print("\n===========================WARNING=================================\n")
+        print("Following PR commits are missing authors and may need manual changes:\n")
+        for pull, commit in missing_authors:
+            print(f"* {commit} in PR #{pull.number}: {pull.title}")
+        print("\n===================================================================\n")
     if summary:
         print("\nTotal PRs: %s\n" % len(ordered))
     else:
