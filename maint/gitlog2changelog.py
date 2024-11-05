@@ -64,13 +64,14 @@ if __name__ == '__main__':
         # get all users for all commits
         pr_authors = set()
         for c in pull.get_commits():
-            if c.author:
+            author = c.author
+            if author:
                 pr_authors.add(c.author)
             else:
                 missing_authors.add((pull, c))
             if c.committer and c.committer.login != "web-flow":
                 pr_authors.add(c.committer)
-            else:
+            else if not author:
                 missing_authors.add((pull, c))
         print("* PR %s: %s (%s)" % (hyperlink, ordered[k],
                                     " ".join([hyperlink_user(u) for u in
