@@ -71,7 +71,7 @@ if __name__ == '__main__':
                 missing_authors.add((pull, c))
             if c.committer and c.committer.login != "web-flow":
                 pr_authors.add(c.committer)
-            else if not author:
+            elif not author:
                 missing_authors.add((pull, c))
         print("* PR %s: %s (%s)" % (hyperlink, ordered[k],
                                     " ".join([hyperlink_user(u) for u in
