@@ -499,8 +499,8 @@ Schedule
 Deprecation of old-style ``NUMBA_CAPTURED_ERRORS``
 ==================================================
 
-The use of ``NUMBA_CAPTURED_ERRORS=old_style`` environment variable is being 
-deprecated in Numba.
+The use of the ``NUMBA_CAPTURED_ERRORS`` environment variable is deprecated and
+removed.
 
 Reason for deprecation
 ----------------------
@@ -514,9 +514,7 @@ The new "new_style" option treats non-``NumbaError`` exceptions as hard errors,
 propagating them without capturing. This differentiates compilation errors from 
 unintended exceptions during compilation.
 
-The old style will eventually be removed in favor of the new behavior. Users 
-should migrate to setting ``NUMBA_CAPTURED_ERRORS='new_style'`` to opt-in to the 
-new exception handling. This will become the default in the future.
+The old style was removed in favor of the new behavior.
 
 Impact
 ------
@@ -527,9 +525,6 @@ functionality.
 Recommendations
 ---------------
 
-- Projects that extends Numba should set 
-  ``NUMBA_CAPTURED_ERRORS='new_style'`` for testing to find all places where 
-  non-``NumbaError`` exceptions are raised during compilation.
 - Modify any code that raises a non-``NumbaError`` to indicate a compilation
   error to raise a subclass of ``NumbaError`` instead. For example, instead of
   raising a ``TypeError``, raise a ``numba.core.errors.NumbaTypeError``.
@@ -538,11 +533,9 @@ Recommendations
 Schedule
 --------
 
-- In Numba 0.58: ``NUMBA_CAPTURED_ERRORS=old_style`` is deprecated. Warnings 
+- In Numba 0.58: ``NUMBA_CAPTURED_ERRORS=old_style`` was deprecated. Warnings
   will be raised when `old_style` error capturing is used.
 - In Numba 0.59: explicitly setting ``NUMBA_CAPTURED_ERRORS=old_style`` will 
   raise deprecation warnings.
-- In Numba 0.60: ``NUMBA_CAPTURED_ERRORS=new_style`` becomes the default.
-- In Numba 0.61: support for ``NUMBA_CAPTURED_ERRORS=old_style`` will be 
-  removed.
-
+- In Numba 0.60: ``NUMBA_CAPTURED_ERRORS=new_style`` became the default.
+- In Numba 0.61: support for ``NUMBA_CAPTURED_ERRORS=old_style`` was removed.

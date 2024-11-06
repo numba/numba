@@ -397,6 +397,11 @@ def int_abs_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
+def identity_impl(context, builder, sig, args):
+    [x] = args
+    return impl_ret_untracked(context, builder, sig.return_type, x)
+
+
 def uint_abs_impl(context, builder, sig, args):
     [x] = args
     return impl_ret_untracked(context, builder, sig.return_type, x)

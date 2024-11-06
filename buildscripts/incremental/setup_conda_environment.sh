@@ -50,10 +50,14 @@ if [ "${VANILLA_INSTALL}" != "yes" ]; then
     # pexpect is used to run the gdb tests.
     # ipykernel is used for testing ipython behaviours.
     if [ $PYTHON \< "3.12" ]; then
-        $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipykernel scipy pygments pexpect
+        $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipykernel pygments pexpect
     else
         # At the time of writing `ipykernel` was not available for Python 3.12
-        $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython scipy pygments pexpect
+        $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython pygments pexpect
+    fi
+
+    if [ $NUMPY \< "2.0" ]; then
+        $CONDA_INSTALL ${EXTRA_CHANNELS} scipy
     fi
 fi
 
@@ -87,8 +91,6 @@ if [ "$TEST_SVML" == "yes" ]; then $CONDA_INSTALL -c numba icc_rt; fi
 if [ "$TEST_THREADING" == "tbb" ]; then $CONDA_INSTALL "tbb>=2021.6" "tbb-devel>=2021.6"; fi
 # Install typeguard
 if [ "$RUN_TYPEGUARD" == "yes" ]; then $CONDA_INSTALL typeguard; fi
-# Install RVSDG
-if [ "$TEST_RVSDG" == "yes" ]; then $PIP_INSTALL numba-rvsdg; fi
 
 # environment dump for debug
 # echo "DEBUG ENV:"
