@@ -1278,9 +1278,6 @@ class TraceRunner(object):
     elif PYVERSION in ((3, 10), (3, 11), (3, 12)):
 
         def op_CALL_FUNCTION_EX(self, state, inst):
-            if inst.arg & 1 and PYVERSION < (3, 10):
-                errmsg = "CALL_FUNCTION_EX with **kwargs not supported"
-                raise UnsupportedBytecodeError(errmsg)
             if inst.arg & 1:
                 varkwarg = state.pop()
             else:
