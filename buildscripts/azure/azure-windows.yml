@@ -18,8 +18,8 @@ jobs:
         NUMPY: '2.0'
         CONDA_ENV: 'testenv'
         TEST_START_INDEX: 18
-      py312_np21:
-        PYTHON: '3.12'
+      py313_np21:
+        PYTHON: '3.13'
         NUMPY: '2.1'
         CONDA_ENV: 'testenv'
         TEST_START_INDEX: 19
