@@ -112,7 +112,6 @@ jobs:
         PYTHON: '3.13'
         NUMPY: '2.1'
         CONDA_ENV: azure_ci
-        EXTRA_CHANNELS: -c ad-testing/label/py313
         TEST_START_INDEX: 16
 
 - template: buildscripts/azure/azure-windows.yml
