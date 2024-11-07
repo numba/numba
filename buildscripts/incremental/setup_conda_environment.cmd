@@ -20,7 +20,7 @@ set PIP_INSTALL=pip install -q
 call deactivate
 @rem Display root environment (for debugging)
 conda list
-if %PYTHON% neq "3.13" (
+if "%PYTHON%" neq "3.13" (
     @rem CFFI, jinja2 and IPython are optional dependencies, but exercised in the test suite
     conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip jinja2 ipython gitpython pyyaml
 ) else (
