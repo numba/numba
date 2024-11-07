@@ -403,6 +403,8 @@ public:
     PyObject_HEAD
     /* Whether compilation of new overloads is permitted */
     char can_compile;
+    /* Enable sys.monitoring (since Python 3.12+) */
+    char enable_sysmon;
     /* Whether fallback to object mode is permitted */
     char can_fallback;
     /* Whether types must match exactly when resolving overloads.
@@ -532,6 +534,7 @@ Dispatcher_init(Dispatcher *self, PyObject *args, PyObject *kwds)
     self->tm = static_cast<TypeManager*>(tmaddr);
     self->argct = argct;
     self->can_compile = 1;
+    self->enable_sysmon = 0;  // default to turn off sys.monitoring
     self->can_fallback = can_fallback;
     self->fallbackdef = NULL;
     self->has_stararg = has_stararg;
@@ -675,7 +678,7 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
 
 #if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 11)
     /*
-     * On Python 3.11, _PyEval_EvalFrameDefault stops using PyTraceInfo since 
+     * On Python 3.11, _PyEval_EvalFrameDefault stops using PyTraceInfo since
      * it's now baked into ThreadState.
      * https://github.com/python/cpython/pull/26623
      */
@@ -1043,6 +1046,9 @@ int static inline invoke_monitoring_PY_UNWIND(PyThreadState * tstate, Dispatcher
     return invoke_monitoring(tstate, PY_MONITORING_EVENT_PY_UNWIND, self, exception);
 }
 
+/* forward declaration */
+bool static is_sysmon_enabled(Dispatcher *self);
+
 /* A custom, fast, inlinable version of PyCFunction_Call() */
 static PyObject *
 call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyObject *locals)
@@ -1051,18 +1057,19 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
     PyThreadState *tstate = NULL;
     PyObject * pyresult = NULL;
     PyObject * pyexception = NULL;
+    const bool enabled_sysmon = is_sysmon_enabled(self);
 
     assert(PyCFunction_Check(cfunc));
     assert(PyCFunction_GET_FLAGS(cfunc) == (METH_VARARGS | METH_KEYWORDS));
     fn = (PyCFunctionWithKeywords) PyCFunction_GET_FUNCTION(cfunc);
     tstate = PyThreadState_GET();
     // issue PY_START if event is set
-    if(invoke_monitoring_PY_START(tstate, self) != 0){
+    if(enabled_sysmon && invoke_monitoring_PY_START(tstate, self) != 0){
         return NULL;
     }
     // make call
     pyresult = fn(PyCFunction_GET_SELF(cfunc), args, kws);
-    if (pyresult == NULL) {
+    if (enabled_sysmon && pyresult == NULL) {
         // pyresult == NULL, which means the Numba function raised an exception
         // which is now pending.
         //
@@ -1107,7 +1114,7 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
         return NULL;
     }
     // issue PY_RETURN if event is set
-    if(invoke_monitoring_PY_RETURN(tstate, self, pyresult) != 0){
+    if(enabled_sysmon && invoke_monitoring_PY_RETURN(tstate, self, pyresult) != 0){
         return NULL;
     }
     return pyresult;
@@ -1538,6 +1545,7 @@ static PyMethodDef Dispatcher_methods[] = {
 
 static PyMemberDef Dispatcher_members[] = {
     {(char*)"_can_compile", T_BOOL, offsetof(Dispatcher, can_compile), 0, NULL },
+    {(char*)"_enable_sysmon", T_BOOL, offsetof(Dispatcher, enable_sysmon), 0, NULL },
     {NULL}  /* Sentinel */
 };
 
@@ -1611,6 +1619,13 @@ static PyTypeObject DispatcherType = {
 /* END WARNING*/
 };
 
+
+#if (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 12) || (PY_MINOR_VERSION == 13))
+static
+bool is_sysmon_enabled(Dispatcher * self) {
+    return self->enable_sysmon;
+}
+#endif
 
 static PyObject *compute_fingerprint(PyObject *self, PyObject *args)
 {

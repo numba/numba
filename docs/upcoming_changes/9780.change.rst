@@ -1,0 +1,11 @@
+Disabling ``sys.monitoring`` support by default
+-----------------------------------------------
+
+The ``sys.monitoring`` support is disabled by default due to compatibility issues 
+with native code. In Python 3.12, the implementation and documentation lacks 
+clarity on native code support, which led to tools making incorrect assumptions 
+about Python frames and code objects. While Python 3.13 improves this situation, 
+many tools have not yet adapted to these changes. Consequently, tools may crash 
+when monitoring Numba-compiled functions. To address this, Numba disables 
+``sys.monitoring`` by default. Users can opt-in by setting the environment 
+variable ``NUMBA_ENABLE_SYS_MONITORING``.
