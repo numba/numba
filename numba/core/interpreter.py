@@ -2233,7 +2233,7 @@ class Interpreter(object):
         srcname = self.code_locals[inst.arg]
         self.store(value=self.get(srcname), name=res)
 
-    if PYVERSION == (3, 13):
+    if PYVERSION in ((3, 13), ):
         def op_LOAD_FAST(self, inst, res, as_load_deref=False):
             if as_load_deref:
                 self.op_LOAD_DEREF(inst, res)
@@ -2275,8 +2275,10 @@ class Interpreter(object):
             dstname = self.code_locals[oparg2]
             self.store(value=self.get(value2), name=dstname)
 
+    elif PYVERSION in ((3, 10), (3, 11), (3, 12)):
+        pass
     else:
-        assert PYVERSION < (3, 13)
+        raise NotImplementedError(PYVERSION)
 
     if PYVERSION in ((3, 12), (3, 13)):
         op_LOAD_FAST_CHECK = op_LOAD_FAST
@@ -2985,8 +2987,10 @@ class Interpreter(object):
         def op_TO_BOOL(self, inst, val, res):
             self.store(self.get(val), res) # TODO: just a lazy hack
 
-    elif PYVERSION < (3, 13):
+    elif PYVERSION in ((3, 10), (3, 11), (3, 12)):
         pass
+    else:
+        raise NotImplementedError(PYVERSION)
 
     def op_COMPARE_OP(self, inst, lhs, rhs, res):
         if PYVERSION in ((3, 13),):

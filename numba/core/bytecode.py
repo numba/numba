@@ -158,63 +158,6 @@ NO_ARG_LEN = 1
 OPCODE_NOP = dis.opname.index('NOP')
 
 
-# Adapted from Lib/dis.py
-def _unpack_opargs_pre_3_13(code):
-    """
-    Returns a 4-int-tuple of
-    (bytecode offset, opcode, argument, offset of next bytecode).
-    """
-    extended_arg = 0
-    n = len(code)
-    offset = i = 0
-    while i < n:
-        op = code[i]
-        i += CODE_LEN
-        if op >= HAVE_ARGUMENT:
-            arg = code[i] | extended_arg
-            for j in range(ARG_LEN):
-                arg |= code[i + j] << (8 * j)
-            i += ARG_LEN
-            if PYVERSION in ((3, 12),):
-                # Python 3.12 introduced cache slots. We need to account for
-                # cache slots when we determine the offset of the next opcode.
-                # The number of cache slots is specific to each opcode and can
-                # be looked up in the _inline_cache_entries dictionary.
-                i += _inline_cache_entries[op] * INSTR_LEN
-            elif PYVERSION in ((3, 10), (3, 11)):
-                pass
-            else:
-                raise NotImplementedError(PYVERSION)
-            if op == EXTENDED_ARG:
-                # This is a deviation from what dis does...
-                # In python 3.11 it seems like EXTENDED_ARGs appear more often
-                # and are also used as jump targets. So as to not have to do
-                # "book keeping" for where EXTENDED_ARGs have been "skipped"
-                # they are replaced with NOPs so as to provide a legal jump
-                # target and also ensure that the bytecode offsets are correct.
-                yield (offset, OPCODE_NOP, arg, i)
-                extended_arg = arg << 8 * ARG_LEN
-                offset = i
-                continue
-        else:
-            arg = None
-            i += NO_ARG_LEN
-            if PYVERSION in ((3, 12),):
-                # Python 3.12 introduced cache slots. We need to account for
-                # cache slots when we determine the offset of the next opcode.
-                # The number of cache slots is specific to each opcode and can
-                # be looked up in the _inline_cache_entries dictionary.
-                i += _inline_cache_entries[op] * INSTR_LEN
-            elif PYVERSION in ((3, 10), (3, 11)):
-                pass
-            else:
-                raise NotImplementedError(PYVERSION)
-
-        extended_arg = 0
-        yield (offset, op, arg, i)
-        offset = i  # Mark inst offset at first extended
-
-
 if PYVERSION in ((3, 13),):
 
     def _unpack_opargs(code):
@@ -228,8 +171,68 @@ if PYVERSION in ((3, 13),):
                 next_offset = len(code)
             yield (start_offset, op, arg, next_offset)
 
+elif PYVERSION in ((3, 10), (3, 11), (3, 12)):
+
+    # Adapted from Lib/dis.py
+    def _unpack_opargs(code):
+        """
+        Returns a 4-int-tuple of
+        (bytecode offset, opcode, argument, offset of next bytecode).
+        """
+        extended_arg = 0
+        n = len(code)
+        offset = i = 0
+        while i < n:
+            op = code[i]
+            i += CODE_LEN
+            if op >= HAVE_ARGUMENT:
+                arg = code[i] | extended_arg
+                for j in range(ARG_LEN):
+                    arg |= code[i + j] << (8 * j)
+                i += ARG_LEN
+                if PYVERSION in ((3, 12),):
+                    # Python 3.12 introduced cache slots. We need to account for
+                    # cache slots when we determine the offset of the next
+                    # opcode. The number of cache slots is specific to each
+                    # opcode and can be looked up in the _inline_cache_entries
+                    # dictionary.
+                    i += _inline_cache_entries[op] * INSTR_LEN
+                elif PYVERSION in ((3, 10), (3, 11)):
+                    pass
+                else:
+                    raise NotImplementedError(PYVERSION)
+                if op == EXTENDED_ARG:
+                    # This is a deviation from what dis does...
+                    # In python 3.11 it seems like EXTENDED_ARGs appear more
+                    # often and are also used as jump targets. So as to not have
+                    # to do "book keeping" for where EXTENDED_ARGs have been
+                    # "skipped" they are replaced with NOPs so as to provide a
+                    # legal jump target and also ensure that the bytecode
+                    # offsets are correct.
+                    yield (offset, OPCODE_NOP, arg, i)
+                    extended_arg = arg << 8 * ARG_LEN
+                    offset = i
+                    continue
+            else:
+                arg = None
+                i += NO_ARG_LEN
+                if PYVERSION in ((3, 12),):
+                    # Python 3.12 introduced cache slots. We need to account for
+                    # cache slots when we determine the offset of the next
+                    # opcode. The number of cache slots is specific to each
+                    # opcode and can be looked up in the _inline_cache_entries
+                    # dictionary.
+                    i += _inline_cache_entries[op] * INSTR_LEN
+                elif PYVERSION in ((3, 10), (3, 11)):
+                    pass
+                else:
+                    raise NotImplementedError(PYVERSION)
+
+            extended_arg = 0
+            yield (offset, op, arg, i)
+            offset = i  # Mark inst offset at first extended
 else:
-    _unpack_opargs = _unpack_opargs_pre_3_13
+    raise NotImplementedError(PYVERSION)
 
 
 def _patched_opargs(bc_stream):
@@ -528,7 +531,7 @@ class ByteCodePy312(ByteCodePy311):
                 if not next_inst.opname == "FOR_ITER":
                     continue
 
-                if PYVERSION == (3, 13):
+                if PYVERSION in ((3, 13),):
                     # Check end of pattern, two instructions.
                     # Check for the corresponding END_FOR, exception table end
                     # is non-inclusive, so subtract one.
@@ -543,8 +546,7 @@ class ByteCodePy312(ByteCodePy311):
                     next_inst = self.table[self.ordered_offsets[index]]
                     if not next_inst.opname == "SWAP" and next_inst.arg == 2:
                         continue
-                else:
-                    assert PYVERSION < (3, 13)
+                elif PYVERSION in ((3, 10), (3, 11), (3, 12)):
                     # Check end of pattern, two instructions.
                     # Check for the corresponding END_FOR, exception table end
                     # is non-inclusive, so subtract one.
@@ -556,6 +558,8 @@ class ByteCodePy312(ByteCodePy311):
                     next_inst = self.table[self.ordered_offsets[index]]
                     if not next_inst.opname == "SWAP" and next_inst.arg == 2:
                         continue
+                else:
+                    raise NotImplementedError(PYVERSION)
                 # If all conditions are met that means this exception entry
                 # is for a list/dict/set comprehension and can be removed.
                 # Also if there exist exception entries above and below this
@@ -568,7 +572,7 @@ class ByteCodePy312(ByteCodePy311):
 
 if PYVERSION == (3, 11):
     ByteCode = ByteCodePy311
-elif PYVERSION == (3, 12) or PYVERSION == (3, 13):
+elif PYVERSION in ((3, 12), (3, 13),):
     ByteCode = ByteCodePy312
 elif PYVERSION < (3, 11):
     ByteCode = _ByteCode
