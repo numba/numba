@@ -663,7 +663,7 @@ int search_new_conversions(PyObject *dispatcher, PyObject *args, PyObject *kws)
 
 /* A custom, fast, inlinable version of PyCFunction_Call() */
 static PyObject *
-call_cfunc(PyObject *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyObject *locals)
+call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyObject *locals)
 {
     PyCFunctionWithKeywords fn;
     PyThreadState *tstate;
@@ -805,7 +805,7 @@ static inline int msb(uint8_t bits) {
 }
 
 
-static int invoke_monitoring(PyThreadState * tstate, int event, PyObject *self, PyObject* retval)
+static int invoke_monitoring(PyThreadState * tstate, int event, Dispatcher *self, PyObject* retval)
 {
     // This will invoke monitoring tools (if present) for the event `event`.
     //
@@ -1024,28 +1024,28 @@ static int invoke_monitoring(PyThreadState * tstate, int event, PyObject *self, 
 }
 
 /* invoke monitoring for PY_START if it is set */
-int static inline invoke_monitoring_PY_START(PyThreadState * tstate, PyObject *self) {
+int static inline invoke_monitoring_PY_START(PyThreadState * tstate, Dispatcher *self) {
     return invoke_monitoring(tstate, PY_MONITORING_EVENT_PY_START, self, NULL);
 }
 
 /* invoke monitoring for PY_RETURN if it is set */
-int static inline invoke_monitoring_PY_RETURN(PyThreadState * tstate, PyObject *self, PyObject * retval) {
+int static inline invoke_monitoring_PY_RETURN(PyThreadState * tstate, Dispatcher *self, PyObject * retval) {
     return invoke_monitoring(tstate, PY_MONITORING_EVENT_PY_RETURN, self, retval);
 }
 
 /* invoke monitoring for RAISE if it is set */
-int static inline invoke_monitoring_RAISE(PyThreadState * tstate, PyObject *self, PyObject * exception) {
+int static inline invoke_monitoring_RAISE(PyThreadState * tstate, Dispatcher *self, PyObject * exception) {
     return invoke_monitoring(tstate, PY_MONITORING_EVENT_RAISE, self, exception);
 }
 
 /* invoke monitoring for PY_UNWIND if it is set */
-int static inline invoke_monitoring_PY_UNWIND(PyThreadState * tstate, PyObject *self, PyObject * exception) {
+int static inline invoke_monitoring_PY_UNWIND(PyThreadState * tstate, Dispatcher *self, PyObject * exception) {
     return invoke_monitoring(tstate, PY_MONITORING_EVENT_PY_UNWIND, self, exception);
 }
 
 /* A custom, fast, inlinable version of PyCFunction_Call() */
 static PyObject *
-call_cfunc(PyObject *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyObject *locals)
+call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyObject *locals)
 {
     PyCFunctionWithKeywords fn = NULL;
     PyThreadState *tstate = NULL;
@@ -1137,7 +1137,7 @@ compile_and_invoke(Dispatcher *self, PyObject *args, PyObject *kws, PyObject *lo
         return NULL;
 
     if (PyObject_TypeCheck(cfunc, &PyCFunction_Type)) {
-        retval = call_cfunc((PyObject*)self, cfunc, args, kws, locals);
+        retval = call_cfunc(self, cfunc, args, kws, locals);
     } else {
         /* Re-enter interpreter */
         retval = PyObject_Call(cfunc, args, kws);
@@ -1363,14 +1363,14 @@ Dispatcher_call(Dispatcher *self, PyObject *args, PyObject *kws)
     }
     if (matches == 1) {
         /* Definition is found */
-        retval = call_cfunc((PyObject*)self, cfunc, args, kws, locals);
+        retval = call_cfunc(self, cfunc, args, kws, locals);
     } else if (matches == 0) {
         /* No matching definition */
         if (self->can_compile) {
             retval = compile_and_invoke(self, args, kws, locals);
         } else if (self->fallbackdef) {
             /* Have object fallback */
-            retval = call_cfunc((PyObject*)self, self->fallbackdef, args, kws, locals);
+            retval = call_cfunc(self, self->fallbackdef, args, kws, locals);
         } else {
             /* Raise TypeError */
             explain_matching_error((PyObject *) self, args, kws);
@@ -1487,7 +1487,7 @@ Dispatcher_cuda_call(Dispatcher *self, PyObject *args, PyObject *kws)
             retval = cuda_compile_only(self, args, kws, locals);
         } else if (self->fallbackdef) {
             /* Have object fallback */
-            retval = call_cfunc((PyObject*)self, self->fallbackdef, args, kws, locals);
+            retval = call_cfunc(self, self->fallbackdef, args, kws, locals);
         } else {
             /* Raise TypeError */
             explain_matching_error((PyObject *) self, args, kws);
