@@ -678,7 +678,7 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
 
 #if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 11)
     /*
-     * On Python 3.11, _PyEval_EvalFrameDefault stops using PyTraceInfo since 
+     * On Python 3.11, _PyEval_EvalFrameDefault stops using PyTraceInfo since
      * it's now baked into ThreadState.
      * https://github.com/python/cpython/pull/26623
      */
@@ -897,7 +897,7 @@ static int invoke_monitoring(PyThreadState * tstate, int event, Dispatcher *self
     // https://github.com/python/cpython/blob/0ab2384c5f56625e99bb35417cadddfe24d347e1/Python/instrumentation.c#L945-L1008
     // https://github.com/python/cpython/blob/0ab2384c5f56625e99bb35417cadddfe24d347e1/Python/instrumentation.c#L1010-L1026
     // https://github.com/python/cpython/blob/0ab2384c5f56625e99bb35417cadddfe24d347e1/Python/instrumentation.c#L839-L861
-    
+
     // TODO: check this, call_instrumentation_vector has this at the top.
     if (tstate->tracing){
         return 0;
@@ -1047,7 +1047,7 @@ int static inline invoke_monitoring_PY_UNWIND(PyThreadState * tstate, Dispatcher
 }
 
 /* forward declaration */
-bool static is_sysmon_enabled(Dispatcher * self); 
+bool static is_sysmon_enabled(Dispatcher *self);
 
 /* A custom, fast, inlinable version of PyCFunction_Call() */
 static PyObject *

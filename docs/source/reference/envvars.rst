@@ -164,11 +164,12 @@ These variables influence what is printed out during compilation of
 
 .. envvar:: NUMBA_ENABLE_SYS_MONITORING
 
-   Controls support for Python's ``sys.monitoring`` feature in Numba. 
-   Disabled by default. When enabled, allows profiling tools that use 
-   ``sys.monitoring`` to work with  Numba code. Currently tested with 
-   ``cProfile``, other monitoring tools may work but are not guaranteed.
-   
+   Controls support for Python's ``sys.monitoring`` feature in Numba.
+   Disabled (set to zero) by default. When enabled (set to non-zero), allows
+   profiling tools that use ``sys.monitoring`` to work with Numba code.
+   Currently tested with ``cProfile``, other monitoring tools may work but are
+   not guaranteed.
+
    Only available for Python 3.12 and above. Otherwise, it has no effect.
 
 .. envvar:: NUMBA_ENABLE_PROFILING
