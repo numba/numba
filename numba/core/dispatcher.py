@@ -683,8 +683,6 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         This is called from numba._dispatcher as a fallback if the native code
         cannot decide the type.
         """
-        # Not going through the resolve_argument_type() indirection
-        # can save a couple µs.
         try:
             tp = typeof(val, Purpose.argument)
         except ValueError:
