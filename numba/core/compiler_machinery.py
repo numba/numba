@@ -303,7 +303,8 @@ class PassManager(object):
             args=str(internal_state.args),
             return_type=str(internal_state.return_type),
         )
-        with ev.trigger_event("numba:run_pass", data=ev_details):
+        errctx = errors.new_error_context(f"Pass {pss.name()}")
+        with ev.trigger_event("numba:run_pass", data=ev_details), errctx:
             with SimpleTimer() as init_time:
                 mutated |= check(pss.run_initialization, internal_state)
             with SimpleTimer() as pass_time:

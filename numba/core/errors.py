@@ -531,7 +531,6 @@ class WarningsFixer(object):
 
 
 class NumbaError(Exception):
-
     def __init__(self, msg, loc=None, highlighting=True):
         self.msg = msg
         self.loc = loc
@@ -577,7 +576,13 @@ class UnsupportedError(NumbaError):
     """
     Numba does not have an implementation for this functionality.
     """
-    pass
+
+
+class UnsupportedBytecodeError(Exception):
+    """Unsupported bytecode is non-recoverable
+    """
+    def __init__(self, msg, loc=None):
+        super().__init__(f"{msg}. Raised from {loc}")
 
 
 class UnsupportedRewriteError(UnsupportedError):

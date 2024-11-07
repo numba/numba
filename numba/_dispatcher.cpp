@@ -27,7 +27,7 @@
  *
  */
 
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 12)
+#if (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 12) || (PY_MINOR_VERSION == 13))
 
 #ifndef Py_BUILD_CORE
     #define Py_BUILD_CORE 1
@@ -39,7 +39,10 @@
 #  undef HAVE_STD_ATOMIC
 #endif
 #undef _PyGC_FINALIZED
-#include "internal/pycore_atomic.h"
+
+#if (PY_MINOR_VERSION == 12)
+    #include "internal/pycore_atomic.h"
+#endif
 #include "internal/pycore_interp.h"
 #include "internal/pycore_pyerrors.h"
 #include "internal/pycore_instruments.h"
@@ -780,7 +783,7 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
     }
 }
 
-#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 12)
+#elif (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 12) || (PY_MINOR_VERSION == 13))
 
 // Python 3.12 has a completely new approach to tracing and profiling due to
 // the new `sys.monitoring` system.
@@ -1599,7 +1602,7 @@ static PyTypeObject DispatcherType = {
 /* WARNING: Do not remove this, only modify it! It is a version guard to
  * act as a reminder to update this struct on Python version update! */
 #if (PY_MAJOR_VERSION == 3)
-#if ! ((PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11) || (PY_MINOR_VERSION == 12))
+#if ! (NB_SUPPORTED_PYTHON_MINOR)
 #error "Python minor version is not supported."
 #endif
 #else

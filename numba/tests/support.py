@@ -116,11 +116,20 @@ def expected_failure_py311(fn):
     else:
         return fn
 
+
 def expected_failure_py312(fn):
     if utils.PYVERSION == (3, 12):
         return unittest.expectedFailure(fn)
     else:
         return fn
+
+
+def expected_failure_py313(fn):
+    if utils.PYVERSION == (3, 13):
+        return unittest.expectedFailure(fn)
+    else:
+        return fn
+
 
 def expected_failure_np2(fn):
     if numpy_support.numpy_version == (2, 0):
