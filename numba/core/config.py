@@ -515,8 +515,8 @@ class _EnvReloader(object):
         del _NUMBA_NUM_THREADS
 
         # sys.monitoring support
-        SYS_MONITORING_DEFAULT = _readenv("NUMBA_SYS_MONITORING_DEFAULT",
-                                          int, 0)
+        ENABLE_SYS_MONITORING = _readenv("NUMBA_ENABLE_SYS_MONITORING",
+                                         int, 0)
 
         # Profiling support
 

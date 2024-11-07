@@ -753,7 +753,7 @@ class TestMonitoringSelfTest(TestCase):
 @unittest.skipUnless(PYVERSION >= (3, 12), "needs Python 3.12+")
 class TestMonitoringEnvVarControl(TestCase):
     @TestCase.run_test_in_subprocess(
-        envvars={"NUMBA_SYS_MONITORING_DEFAULT": ''})
+        envvars={"NUMBA_ENABLE_SYS_MONITORING": ''})
     def test_default_off(self):
         @jit
         def foo(x):
@@ -762,7 +762,7 @@ class TestMonitoringEnvVarControl(TestCase):
         self.assertFalse(foo._enable_sysmon)
 
     @TestCase.run_test_in_subprocess(
-        envvars={"NUMBA_SYS_MONITORING_DEFAULT": '0'})
+        envvars={"NUMBA_ENABLE_SYS_MONITORING": '0'})
     def test_override_off(self):
         @jit
         def foo(x):
@@ -771,7 +771,7 @@ class TestMonitoringEnvVarControl(TestCase):
         self.assertFalse(foo._enable_sysmon)
 
     @TestCase.run_test_in_subprocess(
-        envvars={"NUMBA_SYS_MONITORING_DEFAULT": '1'})
+        envvars={"NUMBA_ENABLE_SYS_MONITORING": '1'})
     def test_override_on(self):
         @jit
         def foo(x):

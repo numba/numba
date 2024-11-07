@@ -162,7 +162,7 @@ These variables influence what is printed out during compilation of
    If set to non-zero, print out debugging information about type inference.
 
 
-.. envvar:: NUMBA_SYS_MONITORING_DEFAULT
+.. envvar:: NUMBA_ENABLE_SYS_MONITORING
 
    Controls support for Python's ``sys.monitoring`` feature in Numba. 
    Disabled by default. When enabled, allows profiling tools that use 
