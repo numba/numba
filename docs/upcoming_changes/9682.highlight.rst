@@ -1,4 +1,4 @@
 Python 3.13 support
 -------------------
 
-Python 3.13 support is added. 
+Support for Python 3.13 is added. Note that this does not include support for free-threading.

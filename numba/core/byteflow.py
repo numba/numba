@@ -517,7 +517,7 @@ class TraceRunner(object):
 
     def op_LOAD_FAST(self, state, inst):
         assert PYVERSION <= (3, 13)
-        if PYVERSION in [(3, 13)]:
+        if PYVERSION in ((3, 13), ):
             try:
                 name = state.get_varname(inst)
             except IndexError:   # oparg is out of range
@@ -570,8 +570,10 @@ class TraceRunner(object):
             value2 = state.pop()
             state.append(inst, value1=value1, value2=value2)
 
+    elif PYVERSION in ((3, 10), (3, 11), (3, 12)):
+        pass
     else:
-        assert PYVERSION < (3, 13)
+        raise NotImplementedError(PYVERSION)
 
     if PYVERSION in ((3, 12), (3, 13)):
         op_LOAD_FAST_CHECK = op_LOAD_FAST
@@ -1251,8 +1253,10 @@ class TraceRunner(object):
                          res=res)
             state.push(res)
 
+    elif PYVERSION in ((3, 10), (3, 11), (3, 12)):
+        pass
     else:
-        assert PYVERSION < (3, 13)
+        raise NotImplementedError(PYVERSION)
 
     if PYVERSION in ((3, 13),):
         def op_CALL_FUNCTION_EX(self, state, inst):
@@ -1271,7 +1275,7 @@ class TraceRunner(object):
                          res=res)
             state.push(res)
 
-    elif PYVERSION < (3, 13):
+    elif PYVERSION in ((3, 10), (3, 11), (3, 12)):
 
         def op_CALL_FUNCTION_EX(self, state, inst):
             if inst.arg & 1 and PYVERSION < (3, 10):
@@ -1284,7 +1288,7 @@ class TraceRunner(object):
             vararg = state.pop()
             func = state.pop()
 
-            if PYVERSION in ((3, 11), (3, 12), (3, 13)):
+            if PYVERSION in ((3, 11), (3, 12)):
                 if _is_null_temp_reg(state.peek(1)):
                     state.pop() # pop NULL, it's not used
             elif PYVERSION in ((3, 10),):
@@ -1624,7 +1628,7 @@ class TraceRunner(object):
             raise NotImplementedError(PYVERSION)
         code = state.pop()
         closure = annotations = kwdefaults = defaults = None
-        if PYVERSION == (3, 13):
+        if PYVERSION in ((3, 13), ):
             assert inst.arg is None
             # SET_FUNCTION_ATTRIBUTE is responsible for setting
             # closure, annotations, kwdefaults and defaults.
@@ -1651,7 +1655,7 @@ class TraceRunner(object):
         state.push(res)
 
     def op_SET_FUNCTION_ATTRIBUTE(self, state, inst):
-        assert PYVERSION >= (3, 13)
+        assert PYVERSION in ((3, 13), )
         make_func_stack = state.pop()
         data = state.pop()
         if inst.arg == 0x1:
@@ -2107,9 +2111,9 @@ class StatePy313(StatePy311):
         return self._make_func_attrs[make_func_res]
 
 
-if PYVERSION >= (3, 13):
+if PYVERSION in ((3, 13), ):
     State = StatePy313
-elif PYVERSION >= (3, 11):
+elif PYVERSION in ((3, 11), (3, 12)):
     State = StatePy311
 elif PYVERSION < (3, 11):
     State = _State
@@ -2145,11 +2149,12 @@ def adapt_state_infos(state):
         if inst.opname == "MAKE_FUNCTION":
             data.update(state.get_function_attributes(data['res']))
         return offset, data
-    if PYVERSION == (3, 13):
+    if PYVERSION in ((3, 13), ):
         insts = tuple(map(process_function_attributes, state.instructions))
-    else:
-        assert PYVERSION < (3, 13)
+    elif PYVERSION in ((3, 10), (3, 11), (3, 12)):
         insts = tuple(state.instructions)
+    else:
+        raise NotImplementedError(PYVERSION)
     return AdaptBlockInfo(
         insts=insts,
         outgoing_phis=state.outgoing_phis,

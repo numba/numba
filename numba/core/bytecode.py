@@ -568,7 +568,7 @@ class ByteCodePy312(ByteCodePy311):
 
 if PYVERSION == (3, 11):
     ByteCode = ByteCodePy311
-elif PYVERSION == (3, 12) or PYVERSION == (3, 13):
+elif PYVERSION in ((3, 12), (3, 13),):
     ByteCode = ByteCodePy312
 elif PYVERSION < (3, 11):
     ByteCode = _ByteCode
