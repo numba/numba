@@ -1047,7 +1047,7 @@ int static inline invoke_monitoring_PY_UNWIND(PyThreadState * tstate, Dispatcher
 }
 
 /* forward declaration */
-bool static is_sysmon_enabled(PyObject * self); 
+bool static is_sysmon_enabled(Dispatcher * self); 
 
 /* A custom, fast, inlinable version of PyCFunction_Call() */
 static PyObject *
@@ -1622,12 +1622,9 @@ static PyTypeObject DispatcherType = {
 
 #if (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 12) || (PY_MINOR_VERSION == 13))
 static
-bool is_sysmon_enabled(PyObject * self) {
-    if (PyObject_IsInstance(self, (PyObject*)&DispatcherType)) {
-        Dispatcher* disp = (Dispatcher*)self;
-        return disp->enable_sysmon;
-    }
-    return false;
+bool is_sysmon_enabled(Dispatcher * self) {
+    Dispatcher* disp = (Dispatcher*)self;
+    return disp->enable_sysmon;
 }
 #endif
 
