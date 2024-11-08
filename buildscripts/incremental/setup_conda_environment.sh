@@ -12,15 +12,6 @@ conda config --set show_channel_urls true
 conda info
 conda config --show
 
-# Add these lines after the conda config commands at the start
-if [[ $(uname) == Darwin ]]; then
-    conda config --set MACOSX_DEPLOYMENT_TARGET 11.0
-    # Create .condarc in the home directory
-    cat >> ~/.condarc << EOF
-build:
-  macos_target: "11.0"
-EOF
-fi
 
 CONDA_INSTALL="conda install -q -y"
 PIP_INSTALL="pip install -q"
