@@ -12,6 +12,16 @@ conda config --set show_channel_urls true
 conda info
 conda config --show
 
+# Add these lines after the conda config commands at the start
+if [[ $(uname) == Darwin ]]; then
+    conda config --set MACOSX_DEPLOYMENT_TARGET 11.0
+    # Create .condarc in the home directory
+    cat >> ~/.condarc << EOF
+build:
+  macos_target: "11.0"
+EOF
+fi
+
 CONDA_INSTALL="conda install -q -y"
 PIP_INSTALL="pip install -q"
 
@@ -73,9 +83,12 @@ if [[ $(uname) == Linux ]]; then
         $CONDA_INSTALL gcc_linux-64 gxx_linux-64
     fi
 elif  [[ $(uname) == Darwin ]]; then
-    # Set deployment target before installing compilers
+    # Set deployment target and host settings before installing compilers
     export CONDA_BUILD_SYSROOT=/Applications/Xcode_14.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
     export MACOSX_DEPLOYMENT_TARGET='11.0'
+    export CONDA_TOOLCHAIN_HOST=x86_64-apple-darwin20.0.0  # macOS 11.0
+    export CONDA_BUILD_HOST=x86_64-apple-darwin20.0.0
+    
     $CONDA_INSTALL clang_osx-64 clangxx_osx-64
     # Install llvm-openmp on OSX for headers during build and runtime during
     # testing
