@@ -15,6 +15,11 @@ jobs:
     - task: Xcode@5
       inputs:
         version: '14.2'
+        xcodeVersion: '14.2'
+        packageApp: false
+        actions: ''
+        workingDirectory: ''
+        scheme: ''
       condition: eq('${{ parameters.name }}', 'macOS')
       displayName: 'Set macOS build environment (Xcode 14.2)'
 
