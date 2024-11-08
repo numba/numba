@@ -85,6 +85,12 @@ elif  [[ $(uname) == Darwin ]]; then
     export CC="/Users/runner/miniconda3/envs/azure_ci/bin/clang"
     export CXX="/Users/runner/miniconda3/envs/azure_ci/bin/clang++"
     
+    # Override conda's toolchain settings
+    export CONDA_BUILD_HOST="x86_64-apple-darwin20.0.0"  # macOS 11.0
+    export host_alias="x86_64-apple-darwin20.0.0"
+    export build_alias="x86_64-apple-darwin20.0.0"
+    export BUILD="x86_64-apple-darwin20.0.0"
+    
     # Set target architecture and SDK
     export CONDA_BUILD_SYSROOT="/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
     export MACOSX_DEPLOYMENT_TARGET=11.0
@@ -101,6 +107,10 @@ elif  [[ $(uname) == Darwin ]]; then
     echo "=== Compiler Debug Information ==="
     echo "CC: $CC"
     echo "CXX: $CXX"
+    echo "CONDA_BUILD_HOST: $CONDA_BUILD_HOST"
+    echo "host_alias: $host_alias"
+    echo "build_alias: $build_alias"
+    echo "BUILD: $BUILD"
     echo "SDKROOT: $CONDA_BUILD_SYSROOT"
     echo "MACOSX_DEPLOYMENT_TARGET: $MACOSX_DEPLOYMENT_TARGET"
     echo "LDFLAGS: $LDFLAGS"
