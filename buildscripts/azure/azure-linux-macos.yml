@@ -13,9 +13,15 @@ jobs:
 
   steps:
     - bash: |
-        sudo xcode-select -s /Applications/Xcode_14.2.app/Contents/Developer
+        ls -la /Applications/Xcode*
+        xcode-select -p
       condition: eq('${{ parameters.name }}', 'macOS')
-      displayName: 'Set macOS build environment (Xcode 14.2)'
+      displayName: 'Check available Xcode versions'
+
+    - bash: |
+        sudo xcode-select -s /Applications/Xcode_6.4.app/Contents/Developer
+      condition: eq('${{ parameters.name }}', 'macOS')
+      displayName: 'Set macOS build environment (Xcode 6.4)'
 
     - script: |
         set -e
