@@ -13,12 +13,6 @@ jobs:
 
   steps:
     - bash: |
-        ls -la /Applications/Xcode*
-        xcode-select -p
-      condition: eq('${{ parameters.name }}', 'macOS')
-      displayName: 'Check available Xcode versions'
-
-    - bash: |
         sudo xcode-select -s /Library/Developer/CommandLineTools
       condition: eq('${{ parameters.name }}', 'macOS')
       displayName: 'Set macOS build environment'

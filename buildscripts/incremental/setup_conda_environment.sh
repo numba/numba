@@ -74,20 +74,42 @@ if [[ $(uname) == Linux ]]; then
         $CONDA_INSTALL gcc_linux-64 gxx_linux-64
     fi
 elif  [[ $(uname) == Darwin ]]; then
-    # Set deployment target and host settings before installing compilers
-    export CONDA_BUILD_SYSROOT=/Applications/Xcode_14.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
-    export MACOSX_DEPLOYMENT_TARGET='11.0'
-    export CONDA_TOOLCHAIN_HOST=x86_64-apple-darwin20.0.0  # macOS 11.0
-    export CONDA_BUILD_HOST=x86_64-apple-darwin20.0.0
+    # Install newer compiler toolchain
+    $CONDA_INSTALL -c conda-forge \
+        clang_osx-64>=14.0 \
+        clangxx_osx-64>=14.0 \
+        compiler-rt>=14.0 \
+        llvm-openmp>=14.0
+
+    # Set up compiler environment
+    export CC="/Users/runner/miniconda3/envs/azure_ci/bin/clang"
+    export CXX="/Users/runner/miniconda3/envs/azure_ci/bin/clang++"
     
-    $CONDA_INSTALL -c conda-forge clang_osx-64>=14.0 clangxx_osx-64>=14.0 llvm-openmp>=14.0
-    # Install llvm-openmp on OSX for headers during build and runtime during
-    # testing
-    
-    # Set compiler environment variables
-    export CC="clang"
-    export CXX="clang++"
+    # Set target architecture and SDK
     export CONDA_BUILD_SYSROOT="/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
+    export MACOSX_DEPLOYMENT_TARGET=11.0
+    
+    # Force use of the new compiler
+    export LDFLAGS="-Wl,-rpath,/Users/runner/miniconda3/envs/azure_ci/lib"
+    export CFLAGS="-isysroot $CONDA_BUILD_SYSROOT"
+    export CXXFLAGS="-isysroot $CONDA_BUILD_SYSROOT"
+    
+    # Remove any existing compiler settings that might interfere
+    conda env config vars unset CONDA_TOOLCHAIN_HOST CONDA_BUILD_HOST || true
+
+    # Debug output
+    echo "=== Compiler Debug Information ==="
+    echo "CC: $CC"
+    echo "CXX: $CXX"
+    echo "SDKROOT: $CONDA_BUILD_SYSROOT"
+    echo "MACOSX_DEPLOYMENT_TARGET: $MACOSX_DEPLOYMENT_TARGET"
+    echo "LDFLAGS: $LDFLAGS"
+    echo "CFLAGS: $CFLAGS"
+    echo "CXXFLAGS: $CXXFLAGS"
+    echo "Clang version: $($CC --version)"
+    echo "SDK path exists: $(ls -la $CONDA_BUILD_SYSROOT)"
+    echo "Conda env path: $CONDA_PREFIX"
+    echo "=== End Debug Information ==="
 fi
 
 # Install latest correct build
