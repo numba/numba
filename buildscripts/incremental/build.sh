@@ -15,7 +15,7 @@ fi
 
 if [[ $(uname) == "Darwin" ]]; then
     export MACOSX_DEPLOYMENT_TARGET='11.0'
-    export SDKROOT=/Applications/Xcode_14.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
+    export SDKROOT=$(xcrun --show-sdk-path)
 fi
 python setup.py build_ext -q --inplace --debug $EXTRA_BUILD_EXT_FLAGS --verbose
 # (note we don't install to avoid problems with extra long Windows paths
