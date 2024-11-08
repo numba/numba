@@ -73,6 +73,9 @@ if [[ $(uname) == Linux ]]; then
         $CONDA_INSTALL gcc_linux-64 gxx_linux-64
     fi
 elif  [[ $(uname) == Darwin ]]; then
+    # Set deployment target before installing compilers
+    export CONDA_BUILD_SYSROOT=/Applications/Xcode_14.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
+    export MACOSX_DEPLOYMENT_TARGET='11.0'
     $CONDA_INSTALL clang_osx-64 clangxx_osx-64
     # Install llvm-openmp on OSX for headers during build and runtime during
     # testing
