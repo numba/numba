@@ -14,7 +14,9 @@ else
 fi
 
 if [[ $(uname) == "Darwin" ]]; then
-    export MACOSX_DEPLOYMENT_TARGET='11.0'
+    # Use CommandLineTools SDK which has compatible TAPI format
+    export SDKROOT="/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk"
+    export MACOSX_DEPLOYMENT_TARGET=10.15
     # Determine architecture
     ARCH=$(uname -m)
     if [[ "$ARCH" == "arm64" ]]; then

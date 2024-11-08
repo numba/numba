@@ -19,9 +19,9 @@ jobs:
       displayName: 'Check available Xcode versions'
 
     - bash: |
-        sudo xcode-select -s /Applications/Xcode_14.1.app/Contents/Developer
+        sudo xcode-select -s /Library/Developer/CommandLineTools
       condition: eq('${{ parameters.name }}', 'macOS')
-      displayName: 'Set macOS build environment (Xcode 14.1)'
+      displayName: 'Set macOS build environment'
 
     - script: |
         set -e

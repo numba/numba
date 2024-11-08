@@ -2,11 +2,13 @@ trigger:
   batch: true
 
 variables:
-  # Change the following along with adding new TEST_START_INDEX.
   TEST_COUNT: 20
+  MACOS_MIN_VERSION: '10.15'
+  MACOS_SDK_PATH: '/Library/Developer/CommandLineTools/SDKs/MacOSX10.15.sdk'
+  CONDA_BUILD_CROSS_COMPILATION: "1"
+  _CONDA_PYTHON_SYSCONFIGDATA_NAME: "_sysconfigdata_x86_64_apple_darwin13_4_0"
 
 jobs:
-# Mac and Linux use the same template with different matrixes
 - template: buildscripts/azure/azure-linux-macos.yml
   parameters:
     name: macOS
@@ -18,6 +20,13 @@ jobs:
         CONDA_ENV: 'azure_ci'
         TEST_THREADING: 'tbb'
         TEST_START_INDEX: 0
+        CONDA_BUILD_SYSROOT: $(MACOS_SDK_PATH)
+        MACOSX_DEPLOYMENT_TARGET: $(MACOS_MIN_VERSION)
+        CONDA_TOOLCHAIN_HOST: "x86_64-apple-darwin13.4.0"
+        CONDA_BUILD_HOST: "x86_64-apple-darwin13.4.0"
+        SDKROOT: $(MACOS_SDK_PATH)
+        CFLAGS: "-isysroot $(MACOS_SDK_PATH) -mmacosx-version-min=$(MACOS_MIN_VERSION)"
+        LDFLAGS: "-isysroot $(MACOS_SDK_PATH) -mmacosx-version-min=$(MACOS_MIN_VERSION)"
       py312_np126:
         PYTHON: '3.12'
         NUMPY: '1.26'
