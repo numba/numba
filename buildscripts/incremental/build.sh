@@ -14,9 +14,15 @@ else
 fi
 
 if [[ $(uname) == "Darwin" ]]; then
-    # Use CommandLineTools SDK which has compatible TAPI format
-    export SDKROOT="/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk"
+    # Use specific SDK version
+    export SDKROOT="/Library/Developer/CommandLineTools/SDKs/MacOSX10.15.sdk"
     export MACOSX_DEPLOYMENT_TARGET=10.15
+    
+    # Ensure SDK exists
+    if [ ! -d "$SDKROOT" ]; then
+        echo "Error: Required SDK not found at $SDKROOT"
+        exit 1
+    fi
     # Determine architecture
     ARCH=$(uname -m)
     if [[ "$ARCH" == "arm64" ]]; then

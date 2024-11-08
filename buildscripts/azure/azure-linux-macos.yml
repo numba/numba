@@ -19,7 +19,12 @@ jobs:
       displayName: 'Check available Xcode versions'
 
     - bash: |
+        # Download and install specific SDK version
+        curl -L -o /tmp/Command_Line_Tools_macOS_10.15.pkg "https://download.developer.apple.com/Developer_Tools/Command_Line_Tools_macOS_10.15/Command_Line_Tools_macOS_10.15.pkg"
+        sudo installer -pkg /tmp/Command_Line_Tools_macOS_10.15.pkg -target /
         sudo xcode-select -s /Library/Developer/CommandLineTools
+        # Verify SDK path
+        ls -la /Library/Developer/CommandLineTools/SDKs/
       condition: eq('${{ parameters.name }}', 'macOS')
       displayName: 'Set macOS build environment'
 
