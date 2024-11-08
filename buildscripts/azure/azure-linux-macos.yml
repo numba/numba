@@ -12,14 +12,9 @@ jobs:
       ${{ insert }}: ${{ parameters.matrix }}
 
   steps:
-    - task: Xcode@5
-      inputs:
-        version: '14.2'
-        xcodeVersion: '14.2'
-        packageApp: false
-        actions: ''
-        workingDirectory: ''
-        scheme: ''
+    - bash: |
+        curl -sL https://raw.githubusercontent.com/maxim-lobanov/setup-xcode/v1/index.js > setup-xcode.js
+        node setup-xcode.js 14.2
       condition: eq('${{ parameters.name }}', 'macOS')
       displayName: 'Set macOS build environment (Xcode 14.2)'
 
