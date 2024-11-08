@@ -80,10 +80,14 @@ elif  [[ $(uname) == Darwin ]]; then
     export CONDA_TOOLCHAIN_HOST=x86_64-apple-darwin20.0.0  # macOS 11.0
     export CONDA_BUILD_HOST=x86_64-apple-darwin20.0.0
     
-    $CONDA_INSTALL clang_osx-64 clangxx_osx-64
+    $CONDA_INSTALL -c conda-forge clang_osx-64>=14.0 clangxx_osx-64>=14.0 llvm-openmp>=14.0
     # Install llvm-openmp on OSX for headers during build and runtime during
     # testing
-    $CONDA_INSTALL llvm-openmp
+    
+    # Set compiler environment variables
+    export CC="clang"
+    export CXX="clang++"
+    export CONDA_BUILD_SYSROOT="/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
 fi
 
 # Install latest correct build
