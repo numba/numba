@@ -14,44 +14,38 @@ else
 fi
 
 if [[ $(uname) == "Darwin" ]]; then
-    # Use CommandLineTools SDK which has compatible TAPI format
-    export SDKROOT="/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk"
+    # Set up compiler environment for macOS
+    export CC="/Users/runner/miniconda3/envs/azure_ci/bin/clang"
+    export CXX="/Users/runner/miniconda3/envs/azure_ci/bin/clang++"
+    export CONDA_BUILD_SYSROOT="/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk"
     export MACOSX_DEPLOYMENT_TARGET=10.15
+    export CPATH="/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include"
+    export LIBRARY_PATH="/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib"
+    export LDFLAGS="-Wl,-rpath,/Users/runner/miniconda3/envs/azure_ci/lib -L$LIBRARY_PATH"
+    export CFLAGS="-isysroot $CONDA_BUILD_SYSROOT -isystem $CPATH"
+    export CXXFLAGS="-isysroot $CONDA_BUILD_SYSROOT -isystem $CPATH"
+
+    # Debug output
+    echo "=== Compiler Settings ==="
+    echo "CC: $CC"
+    echo "CXX: $CXX"
+    echo "SDKROOT: $CONDA_BUILD_SYSROOT"
+    echo "CPATH: $CPATH"
+    echo "LIBRARY_PATH: $LIBRARY_PATH"
+    echo "Clang version: $($CC --version)"
+    echo "=== End Compiler Settings ==="
+
     # Determine architecture
     ARCH=$(uname -m)
     if [[ "$ARCH" == "arm64" ]]; then
         CONDA_SUBDIR=osx-arm64
-        # Bootstrap with ARM64 compiler
-        conda create -y -p ${PWD}/bootstrap clangxx_osx-arm64
-    else
-        CONDA_SUBDIR=osx-64
-        # Bootstrap with x86_64 compiler
-        conda create -y -p ${PWD}/bootstrap clangxx_osx-64
-    fi
-    # Use explicit SDK path if set, otherwise detect
-    if [ -z "$SDKROOT" ]; then
-        SDKPATH=$(xcrun --show-sdk-path)
-    else
-        SDKPATH=$SDKROOT
-    fi
-    # Set minimum deployment target if not already set
-    if [ -z "$MACOSX_DEPLOYMENT_TARGET" ]; then
-        export MACOSX_DEPLOYMENT_TARGET=11.0
-    fi
-    # Set Darwin target based on architecture
-    if [[ "$ARCH" == "arm64" ]]; then
         DARWIN_TARGET=arm64-apple-darwin20.0.0
     else
+        CONDA_SUBDIR=osx-64
         DARWIN_TARGET=x86_64-apple-darwin13.4.0
     fi
 fi
-if [ -n "$MACOSX_DEPLOYMENT_TARGET" ]; then
-    export MACOSX_DEPLOYMENT_TARGET  # Keep existing value
-fi
 
 python setup.py build_ext -q --inplace --debug $EXTRA_BUILD_EXT_FLAGS --verbose
-# (note we don't install to avoid problems with extra long Windows paths
-#  during distutils-dependent tests -- e.g. test_pycc)
-
 # Install numba locally for use in `numba -s` sys info tool at test time
 python -m pip install --no-deps -e .
