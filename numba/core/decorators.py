@@ -23,7 +23,7 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "positional argument.")
 
 
-def jit(signature_or_function=None, locals={}, cache=False,
+def jit(signature_or_function=None, locals=None, cache=False,
         pipeline_class=None, boundscheck=None, **options):
     """
     This decorator is used to compile a Python function into native code.
@@ -138,6 +138,8 @@ def jit(signature_or_function=None, locals={}, cache=False,
                 return x + y
 
     """
+    if locals is None:
+        locals = {}
     forceobj = options.get('forceobj', False)
     if 'argtypes' in options:
         raise DeprecationError(_msg_deprecated_signature_arg.format('argtypes'))
@@ -251,7 +253,7 @@ def njit(*args, **kws):
     return jit(*args, **kws)
 
 
-def cfunc(sig, locals={}, cache=False, pipeline_class=None, **options):
+def cfunc(sig, locals=None, cache=False, pipeline_class=None, **options):
     """
     This decorator is used to compile a Python function into a C callback
     usable with foreign C libraries.
@@ -262,6 +264,8 @@ def cfunc(sig, locals={}, cache=False, pipeline_class=None, **options):
             return a + b
 
     """
+    if locals is None:
+        locals = {}
     sig = sigutils.normalize_signature(sig)
 
     def wrapper(func):
