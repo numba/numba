@@ -452,7 +452,10 @@ class ArrayAttribute(AttributeTemplate):
                 if shape is None:
                     return
                 ndim = shape.count
-            retty = ary.copy(ndim=ndim)
+            if ary.ndim >= ndim:
+                retty = ary.copy(ndim=ndim)
+            else:
+                retty = ary.copy(ndim=ndim, layout='A')
             return signature(retty, shape)
 
         elif len(args) == 0:
@@ -464,8 +467,11 @@ class ArrayAttribute(AttributeTemplate):
             if any(not sentry_shape_scalar(a) for a in args):
                 raise TypeError("reshape({0}) is not supported".format(
                     ', '.join(map(str, args))))
+            if ary.ndim >= len(args):
+                retty = ary.copy(ndim=len(args))
+            else:
+                retty = ary.copy(ndim=len(args), layout='A')
 
-            retty = ary.copy(ndim=len(args))
             return signature(retty, *args)
 
     @bound_function("array.sort")
