@@ -2,11 +2,14 @@
 Define @jit and related decorators.
 """
 
+from __future__ import annotations
 
+from collections.abc import Callable
 import sys
 import warnings
 import inspect
 import logging
+import typing
 
 from numba.core.errors import DeprecationError, NumbaDeprecationWarning
 from numba.stencils.stencil import stencil
@@ -14,6 +17,9 @@ from numba.core import config, extending, sigutils, registry
 
 _logger = logging.getLogger(__name__)
 
+_F = typing.TypeVar("_F", bound=Callable)
+# TODO: Make it more specific
+_SignatureType = typing.Any
 
 # -----------------------------------------------------------------------------
 # Decorators
@@ -21,6 +27,14 @@ _logger = logging.getLogger(__name__)
 _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "Signatures should be passed as the first "
                                  "positional argument.")
+
+
+@typing.overload
+def jit(signature_or_function: _F) -> _F: ...
+
+
+@typing.overload
+def jit(signature_or_function: _SignatureType | None = ..., *args, **kwargs) -> Callable[[_F], _F]: ...
 
 
 def jit(signature_or_function=None, locals=None, cache=False,
@@ -236,6 +250,14 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
         return disp
 
     return wrapper
+
+
+@typing.overload
+def njit(signature_or_function: _F) -> _F: ...
+
+
+@typing.overload
+def njit(signature_or_function: _SignatureType | None = ..., *args, **kwargs) -> Callable[[_F], _F]: ...
 
 
 def njit(*args, **kws):
