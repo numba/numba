@@ -231,6 +231,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
 
         self.doc = py_func.__doc__
         self._compiling_counter = CompilingCounter()
+        self._enable_sysmon = bool(config.ENABLE_SYS_MONITORING)
         weakref.finalize(self, self._make_finalizer())
 
     def _compilation_chain_init_hook(self):
@@ -682,8 +683,6 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         This is called from numba._dispatcher as a fallback if the native code
         cannot decide the type.
         """
-        # Not going through the resolve_argument_type() indirection
-        # can save a couple µs.
         try:
             tp = typeof(val, Purpose.argument)
         except ValueError:

@@ -20,6 +20,7 @@ def generate_standard_dot_case():
             sum += a[i]*b[i]
         return sum
 
+    dot._enable_sysmon = True
     return dot, dot
 
 
@@ -33,6 +34,7 @@ def generate_raising_dot_case():
             sum += a[i]*b[i]
         raise ValueError("problem with dot")
 
+    raising_dot._enable_sysmon = True
 
     def call_raising_dot(a, b):
         try:

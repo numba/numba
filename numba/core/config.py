@@ -70,32 +70,6 @@ def _os_supports_avx():
             return False
 
 
-_old_style_deprecation_msg = (
-    "NUMBA_CAPTURED_ERRORS=old_style is deprecated. "
-    "It will be removed in the next release. See details at "
-    "https://numba.readthedocs.io/en/latest/reference/deprecation.html#deprecation-of-old-style-numba-captured-errors" # noqa: E501
-)
-
-
-# Choose how to handle captured errors
-def _validate_captured_errors_style(style_str):
-    # to prevent circular import
-    from numba.core.errors import NumbaDeprecationWarning
-
-    rendered_style = str(style_str)
-    if rendered_style not in ('new_style', 'old_style', 'default'):
-        msg = ("Invalid style in NUMBA_CAPTURED_ERRORS: "
-               f"{rendered_style}")
-        raise ValueError(msg)
-    else:
-        if rendered_style == 'default':
-            rendered_style = 'new_style'
-        elif rendered_style == 'old_style':
-            warnings.warn(_old_style_deprecation_msg,
-                          NumbaDeprecationWarning)
-        return rendered_style
-
-
 class _OptLevel(int):
     """This class holds the "optimisation level" set in `NUMBA_OPT`. As this env
     var can be an int or a string, but is almost always interpreted as an int,
@@ -430,10 +404,6 @@ class _EnvReloader(object):
         )
         THREADING_LAYER = _readenv("NUMBA_THREADING_LAYER", str, 'default')
 
-        CAPTURED_ERRORS = _readenv("NUMBA_CAPTURED_ERRORS",
-                                   _validate_captured_errors_style,
-                                   'new_style')
-
         # CUDA Configs
 
         # Whether to warn about kernel launches where a host array
@@ -543,6 +513,10 @@ class _EnvReloader(object):
 
         NUMBA_NUM_THREADS = _NUMBA_NUM_THREADS
         del _NUMBA_NUM_THREADS
+
+        # sys.monitoring support
+        ENABLE_SYS_MONITORING = _readenv("NUMBA_ENABLE_SYS_MONITORING",
+                                         int, 0)
 
         # Profiling support
 
