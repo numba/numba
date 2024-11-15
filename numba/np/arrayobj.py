@@ -6507,6 +6507,8 @@ def get_sort_func(kind, lt_impl, is_argsort=False):
                 lt=lt_impl,
                 is_argsort=is_argsort)
             func = sort.run_mergesort
+        else:
+            raise ValueError(f"Unsupported sorting kind: {kind}") 
         _sorts[key] = func
         return func
 
@@ -6520,29 +6522,37 @@ def lt_implementation(dtype):
         return default_lt
 
 
-@lower_builtin("array.sort", types.Array)
+@lower_builtin("array.sort", types.Array, types.StringLiteral)
 def array_sort(context, builder, sig, args):
-    arytype = sig.args[0]
+    arytype, kind = sig.args
 
-    sort_func = get_sort_func(kind='quicksort',
+    sort_func = get_sort_func(kind=kind.literal_value,
                               lt_impl=lt_implementation(arytype.dtype))
 
     def array_sort_impl(arr):
         # Note we clobber the return value
         sort_func(arr)
+        
+    innersig = sig.replace(args=sig.args[:1])
+    innerargs = args[:1]
 
-    return context.compile_internal(builder, array_sort_impl, sig, args)
+    return context.compile_internal(builder, array_sort_impl, 
+                                  innersig, 
+                                  innerargs)
 
 
 @overload(np.sort)
-def impl_np_sort(a):
+def impl_np_sort(a, kind='quicksort'):
     if not type_can_asarray(a):
         raise errors.TypingError('Argument "a" must '
-                                 'be array-like')
+                             'be array-like')
+    
+    if not isinstance(kind, types.StringLiteral):
+        raise errors.TypingError('"kind" must be a string literal')
 
-    def np_sort_impl(a):
+    def np_sort_impl(a, kind='quicksort'):
         res = a.copy()
-        res.sort()
+        res.sort(kind=kind)
         return res
     return np_sort_impl
 
