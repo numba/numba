@@ -1,0 +1,7 @@
+Fix regression in type-inference for star-arg arguments.
+--------------------------------------------------------
+
+A regression, that occurred between versions 0.59.0 and 0.60.0, in the
+type-inference associated with star-arg arguments has been fixed. The cause of
+the regression was the code for star-args handling in type-inference not being
+updated following the switch to use new-style error handling by default.
