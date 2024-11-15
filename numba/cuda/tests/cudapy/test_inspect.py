@@ -1,3 +1,5 @@
+import sys
+
 import numpy as np
 
 from io import StringIO
@@ -5,6 +7,16 @@ from numba import cuda, float32, float64, int32, intp
 from numba.cuda.testing import unittest, CUDATestCase
 from numba.cuda.testing import (skip_on_cudasim, skip_with_nvdisasm,
                                 skip_without_nvdisasm)
+
+
+# Skip test on win64 GPU machine due to buildfarm problem:
+#   Command '['nvdisasm', '-cfg', 'C:\...\Temp\tmpb5bm3zcl']' returned non-zero
+#   exit status 1.
+# Test works on the same machine when executed outside of buildfarm queue.
+skip_win64 = unittest.skipIf(
+    sys.platform.startswith('win'),
+    "test has problems on buildfarm windows GPU machine",
+)
 
 
 @skip_on_cudasim('Simulator does not generate code to be inspected')
@@ -106,6 +118,7 @@ class TestInspect(CUDATestCase):
         self.assertIn('BRA', sass)   # Branch
         self.assertIn('EXIT', sass)  # Exit program
 
+    @skip_win64
     @skip_without_nvdisasm('nvdisasm needed for inspect_sass()')
     def test_inspect_sass_eager(self):
         sig = (float32[::1], int32[::1])
@@ -118,6 +131,7 @@ class TestInspect(CUDATestCase):
 
         self._test_inspect_sass(add, 'add', add.inspect_sass(sig))
 
+    @skip_win64
     @skip_without_nvdisasm('nvdisasm needed for inspect_sass()')
     def test_inspect_sass_lazy(self):
         @cuda.jit(lineinfo=True)
@@ -145,6 +159,7 @@ class TestInspect(CUDATestCase):
 
         self.assertIn('nvdisasm has not been found', str(raises.exception))
 
+    @skip_win64
     @skip_without_nvdisasm('nvdisasm needed for inspect_sass_cfg()')
     def test_inspect_sass_cfg(self):
         sig = (float32[::1], int32[::1])
