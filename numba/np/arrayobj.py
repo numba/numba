@@ -6508,7 +6508,7 @@ def get_sort_func(kind, lt_impl, is_argsort=False):
                 is_argsort=is_argsort)
             func = sort.run_mergesort
         else:
-            raise ValueError(f"Unsupported sorting kind: {kind}") 
+            raise ValueError(f"Unsupported sorting kind: {kind}")
         _sorts[key] = func
         return func
 
@@ -6532,21 +6532,21 @@ def array_sort(context, builder, sig, args):
     def array_sort_impl(arr):
         # Note we clobber the return value
         sort_func(arr)
-        
+
     innersig = sig.replace(args=sig.args[:1])
     innerargs = args[:1]
 
-    return context.compile_internal(builder, array_sort_impl, 
-                                  innersig, 
-                                  innerargs)
+    return context.compile_internal(builder, array_sort_impl,
+                                    innersig,
+                                    innerargs)
 
 
 @overload(np.sort)
 def impl_np_sort(a, kind='quicksort'):
     if not type_can_asarray(a):
         raise errors.TypingError('Argument "a" must '
-                             'be array-like')
-    
+                                 'be array-like')
+
     if not isinstance(kind, types.StringLiteral):
         raise errors.TypingError('"kind" must be a string literal')
 
