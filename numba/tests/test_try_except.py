@@ -7,12 +7,13 @@ import numpy as np
 from numba import njit, typed, objmode, prange
 from numba.core import ir_utils, ir
 from numba.core.errors import (
-    UnsupportedError, CompilerError, NumbaPerformanceWarning, TypingError,
+    CompilerError, NumbaPerformanceWarning, TypingError,
+    UnsupportedBytecodeError,
 )
 from numba.tests.support import (
     TestCase, unittest, captured_stdout, MemoryLeakMixin,
     skip_parfors_unsupported, skip_unless_scipy, expected_failure_py311,
-    expected_failure_py312
+    expected_failure_py312, expected_failure_py313,
 )
 
 
@@ -371,7 +372,7 @@ class TestTryBareExcept(TestCase):
             except:    # noqa: E722
                 raise
 
-        with self.assertRaises(UnsupportedError) as raises:
+        with self.assertRaises(UnsupportedBytecodeError) as raises:
             udt()
         self.assertIn(
             "The re-raising of an exception is not yet supported.",
@@ -458,7 +459,7 @@ class TestTryExceptCaught(TestCase):
                 return r
             return r
 
-        with self.assertRaises(UnsupportedError) as raises:
+        with self.assertRaises(UnsupportedBytecodeError) as raises:
             udt(True)
         self.assertIn(
             "Exception object cannot be stored into variable (e)",
@@ -473,7 +474,7 @@ class TestTryExceptCaught(TestCase):
             except Exception:
                 raise
 
-        with self.assertRaises(UnsupportedError) as raises:
+        with self.assertRaises(UnsupportedBytecodeError) as raises:
             udt()
         self.assertIn(
             "The re-raising of an exception is not yet supported.",
@@ -491,7 +492,7 @@ class TestTryExceptCaught(TestCase):
                 except Exception:
                     raise
 
-        with self.assertRaises(UnsupportedError) as raises:
+        with self.assertRaises(UnsupportedBytecodeError) as raises:
             udt()
         self.assertIn(
             "The re-raising of an exception is not yet supported.",
@@ -691,6 +692,7 @@ class TestTryExceptOtherControlFlow(TestCase):
 
     @expected_failure_py311
     @expected_failure_py312
+    @expected_failure_py313
     def test_objmode(self):
         @njit
         def udt():
@@ -711,6 +713,7 @@ class TestTryExceptOtherControlFlow(TestCase):
 
     @expected_failure_py311
     @expected_failure_py312
+    @expected_failure_py313
     def test_objmode_output_type(self):
         def bar(x):
             return np.asarray(list(reversed(x.tolist())))
