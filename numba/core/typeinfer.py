@@ -518,14 +518,14 @@ def fold_arg_vars(typevars, args, vararg, kws):
             const_val = args[-1].literal_value
             # Is the constant value a tuple?
             if not isinstance(const_val, tuple):
-                raise TypeError(errmsg % (args[-1],))
+                raise TypingError(errmsg % (args[-1],))
             # Append the elements in the const tuple to the positional args
             pos_args += const_val
         # Handle non-constant
         elif not isinstance(args[-1], types.BaseTuple):
             # Unsuitable for *args
             # (Python is more lenient and accepts all iterables)
-            raise TypeError(errmsg % (args[-1],))
+            raise TypingError(errmsg % (args[-1],))
         else:
             # Append the elements in the tuple to the positional args
             pos_args += args[-1].types
