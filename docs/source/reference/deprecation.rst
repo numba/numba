@@ -539,3 +539,57 @@ Schedule
   raise deprecation warnings.
 - In Numba 0.60: ``NUMBA_CAPTURED_ERRORS=new_style`` became the default.
 - In Numba 0.61: support for ``NUMBA_CAPTURED_ERRORS=old_style`` was removed.
+
+.. _cuda-builtin-target-deprecation-notice:
+
+Deprecation of the built-in CUDA target
+=======================================
+
+The CUDA target is now maintained in a separate package, `numba-cuda
+<https://nvidia.github.io/numba-cuda>`_, and the built-in CUDA target is
+deprecated.
+
+Reason for deprecation
+----------------------
+
+Development of the CUDA target has been moved to the ``numba-cuda`` package to
+proceed independently of Numba development. See :ref:`cuda-deprecation-status`.
+
+Impact
+------
+
+The built-in CUDA target is still supported by Numba 0.61 and will continue to
+be provided through at least Numba 0.62, but new changes to the built-in target
+are not expected; bug fixes and new features will be added in ``numba-cuda``. No
+code changes are required to any code that uses the CUDA target.
+
+Recommendations
+---------------
+
+Users should install the ``numba-cuda`` package when using the CUDA target.
+
+To install ``numba-cuda`` with ``pip``::
+
+   pip install numba-cuda
+
+To install ``numba-cuda`` with ``conda``, for example from the ``conda-forge``
+channel::
+
+   conda install conda-forge::numba-cuda
+
+
+Maintainers of packages that use the CUDA target should add ``numba-cuda`` as a
+dependency in addition to ``numba``, or replace the ``numba`` dependency with
+``numba-cuda`` if the CUDA target is used exclusively.
+
+
+Schedule
+--------
+
+- In Numba 0.61: The built-in CUDA target is deprecated.
+- In Numba 0.62: Use of the CUDA target when the ``numba-cuda`` package is not
+  installed will cause the emission of a warning prompting the installation of
+  ``numba-cuda``.
+- In a future version of Numba no less than 0.63: The built-in CUDA target will
+  be removed, and use of the CUDA target in the absence of the ``numba-cuda``
+  package will raise an error.

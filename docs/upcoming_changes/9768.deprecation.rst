@@ -1,0 +1,7 @@
+Built-in CUDA target deprecation
+--------------------------------
+
+The CUDA target built in to Numba (under ``numba.cuda``) is deprecated in
+favour of further development in the NVIDIA ``numba-cuda`` package. Backward
+compatibility is maintained between ``numba-cuda`` and ``numba.cuda``, and no
+user code changes are needed.
