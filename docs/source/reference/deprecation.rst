@@ -540,7 +540,7 @@ Schedule
 - In Numba 0.60: ``NUMBA_CAPTURED_ERRORS=new_style`` became the default.
 - In Numba 0.61: support for ``NUMBA_CAPTURED_ERRORS=old_style`` was removed.
 
-.. _cuda-target-deprecation-notice:
+.. _cuda-builtin-target-deprecation-notice:
 
 Deprecation of the built-in CUDA target
 =======================================
@@ -552,8 +552,8 @@ deprecated.
 Reason for deprecation
 ----------------------
 
-Development of the CUDA target as been moved to the ``numba-cuda`` package to
-proceed independently of Numba development.
+Development of the CUDA target has been moved to the ``numba-cuda`` package to
+proceed independently of Numba development. See :ref:`cuda-deprecation-status`.
 
 Impact
 ------
@@ -568,17 +568,18 @@ Recommendations
 
 Users should install the ``numba-cuda`` package when using the CUDA target.
 
-To install ``numba-cuda`` with pip::
+To install ``numba-cuda`` with ``pip``::
 
    pip install numba-cuda
 
-To install ``numba-cuda`` with conda::
+To install ``numba-cuda`` with ``conda``, for example from the ``conda-forge``
+channel::
 
    conda install conda-forge::numba-cuda
 
 
 Maintainers of packages that use the CUDA target should add ``numba-cuda`` as a
-depenendency in addition to ``numba``, or replace the ``numba`` dependency with
+dependency in addition to ``numba``, or replace the ``numba`` dependency with
 ``numba-cuda`` if the CUDA target is used exclusively.
 
 

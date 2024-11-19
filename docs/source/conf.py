@@ -343,7 +343,8 @@ def _autogenerate():
 _autogenerate()
 
 
-# CUDA target deprecation notice - can be included on any page by including:
+# CUDA built-in target deprecation notice - can be included on any page by
+# including:
 #
 # .. cuda-deprecated::
 
@@ -359,7 +360,7 @@ class CudaDeprecated(SphinxDirective):
     def run(self):
         # Generate a warning admonition to contain the deprecation notice
         warning = nodes.admonition(classes=["warning"])
-        warning += nodes.title(text="CUDA Target deprecation notice")
+        warning += nodes.title(text="CUDA Built-in Target deprecation notice")
 
         # Parse CUDA deprecation text so that the link and reference get
         # resolved eventually
