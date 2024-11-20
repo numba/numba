@@ -1,6 +1,6 @@
 
-Version 0.61.0 (2024-11-25)
-===========================
+Version 0.61.0 (25 November 2024)
+=================================
 
 .. contents:: Table of Contents
    :depth: 2
@@ -18,7 +18,7 @@ Highlights
 ~~~~~~~~~~
 
 Add initial implementation for a new type system.
-=================================================
+-------------------------------------------------
 
 This adds a new type system that will allow Numba to
 differentiate between Python and NumPy scalars.
@@ -162,7 +162,7 @@ expression is dependent on a variable that later changes type.
 (`PR-#9711 <https://github.com/numba/numba/pull/9711>`__)
 
 ``find_topo_sort`` reliablilty improvement
---------------------------------------
+------------------------------------------
 
 Improves the reliability of the ``find_topo_sort`` function for complex CFGs
 (typically through generated code) by replacing the recursive post order traversal
@@ -175,7 +175,7 @@ NumPy Support
 ~~~~~~~~~~~~~
 
 Added support for np.setdiff1d(), np.setxor1d(), and np.in1d() functions, as well as argument assume_unique in np.intersect1d()
-===============================================================================================================================
+-------------------------------------------------------------------------------------------------------------------------------
 
 Support is added for: ``numpy.setdiff1d()``, ``np.setxor1d()``, ``np.in1d()``, and ``np.isin()``; and the argument ``assume_unique`` in ``np.intersect1d()``.
 For ``np.in1d()``, and ``np.isin()``, the keyword ``kind`` is *not* supported, and the behaviour reflects that of NumPy prior to version 1.24.
