@@ -1,5 +1,0 @@
-Removal of ``NUMBA_CAPTURED_ERRORS``
-------------------------------------
-
-The ``NUMBA_CAPTURED_ERRORS`` environment variable and ``CAPTURED_ERRORS``
-configuration variable have been removed, as per the deprecation schedule.
