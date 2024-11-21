@@ -14,15 +14,38 @@ else
 fi
 
 if [[ $(uname) == "Darwin" ]]; then
-    # The following is suggested in https://docs.conda.io/projects/conda-build/en/latest/resources/compiler-tools.html?highlight=SDK#macos-sdk
-    wget -q https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.10.sdk.tar.xz
-    shasum -c ./buildscripts/incremental/MacOSX10.10.sdk.checksum
-    tar -xf ./MacOSX10.10.sdk.tar.xz
-    export SDKROOT=`pwd`/MacOSX10.10.sdk
-fi
-python setup.py build_ext -q --inplace --debug $EXTRA_BUILD_EXT_FLAGS --verbose
-# (note we don't install to avoid problems with extra long Windows paths
-#  during distutils-dependent tests -- e.g. test_pycc)
+    # Set up compiler environment for macOS
+    export CC="/Users/runner/miniconda3/envs/azure_ci/bin/clang"
+    export CXX="/Users/runner/miniconda3/envs/azure_ci/bin/clang++"
+    export CONDA_BUILD_SYSROOT="/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk"
+    export MACOSX_DEPLOYMENT_TARGET=10.15
+    export CPATH="/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include"
+    export LIBRARY_PATH="/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib"
+    export LDFLAGS="-Wl,-rpath,/Users/runner/miniconda3/envs/azure_ci/lib -L$LIBRARY_PATH"
+    export CFLAGS="-isysroot $CONDA_BUILD_SYSROOT -isystem $CPATH"
+    export CXXFLAGS="-isysroot $CONDA_BUILD_SYSROOT -isystem $CPATH"
 
+    # Debug output
+    echo "=== Compiler Settings ==="
+    echo "CC: $CC"
+    echo "CXX: $CXX"
+    echo "SDKROOT: $CONDA_BUILD_SYSROOT"
+    echo "CPATH: $CPATH"
+    echo "LIBRARY_PATH: $LIBRARY_PATH"
+    echo "Clang version: $($CC --version)"
+    echo "=== End Compiler Settings ==="
+
+    # Determine architecture
+    ARCH=$(uname -m)
+    if [[ "$ARCH" == "arm64" ]]; then
+        CONDA_SUBDIR=osx-arm64
+        DARWIN_TARGET=arm64-apple-darwin20.0.0
+    else
+        CONDA_SUBDIR=osx-64
+        DARWIN_TARGET=x86_64-apple-darwin13.4.0
+    fi
+fi
+
+python setup.py build_ext -q --inplace --debug $EXTRA_BUILD_EXT_FLAGS --verbose
 # Install numba locally for use in `numba -s` sys info tool at test time
 python -m pip install --no-deps -e .
