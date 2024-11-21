@@ -1,7 +1,0 @@
-POWER Support Update
---------------------
-
-The Numba maintainers have not been actively testing or building packages for 
-the POWER architecture for some time. The code will be retained to ensure 
-compatibility with Linux distributions that may still support Power8, but POWER 
-support is now downgraded to unofficial status.
