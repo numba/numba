@@ -7,18 +7,18 @@ Version 0.61.0 (25 November 2024)
 
 This is a major Numba release. Numba now supports Python 3.13 as
 well as NumPy 2.1. The minimum supported Python and NumPy versions
-have been bumped to 3.10 and 1.24 repectively. The built-in CUDA
+have been bumped to 3.10 and 1.24 respectively. The built-in CUDA
 target ``numba.cuda`` is now deprecated and ``numba-cuda`` is the
 preferred place to get CUDA support from this release onwards.
-LLVM 15 is now supported as the default LLVM version. 
+LLVM 15 is now supported via llmlite 0.44.0 as the default LLVM version. 
 
 Please find a summary of all noteworthy items below.
 
 Highlights
 ~~~~~~~~~~
 
-Add initial implementation for a new type system.
--------------------------------------------------
+Add initial implementation for a new type system
+------------------------------------------------
 
 This adds a new type system that will allow Numba to
 differentiate between Python and NumPy scalars.
@@ -26,8 +26,8 @@ differentiate between Python and NumPy scalars.
 This has been achieved as follows:
 
 - Retain Numba's old type system as default.
-- Add a config flag `USE_LEGACY_TYPE_SYSTEM` set to `1` (on) by default.
-  Switching it to `0` (off) will activate new type system.
+- Add a config flag ``USE_LEGACY_TYPE_SYSTEM`` set to ``1`` (on) by default.
+  Switching it to ``0`` (off) will activate new type system.
 - Within the new type system, Python and NumPy scalars will be treated
   and returned separately as different entities through JIT compiled functions.
 
@@ -65,10 +65,10 @@ This release adds support for NumPy 2.1 (excluding the NEP-050 semantics).
 New Features
 ~~~~~~~~~~~~
 
-Schedule guvectorize'd functions over dask.distributed
-------------------------------------------------------
+Schedule guvectorize'd functions over ``dask.distributed``
+----------------------------------------------------------
 
-Functions decorated with `@guvectorize` can now be scheduled over distributed
+Functions decorated with ``@guvectorize`` can now be scheduled over distributed
 `Dask <https://www.dask.org/>`_ clusters.
 
 (`PR-#9495 <https://github.com/numba/numba/pull/9495>`__)
@@ -77,8 +77,8 @@ Added compile-time code coverage
 --------------------------------
 
 Support for emitting compile-time coverage data is added.
-This feature is automatically activated when running Python under ``coverage``. 
-It collects data during the compiler's lowering phase, showing source lines 
+This feature is automatically activated when running Python under ``coverage``.
+It collects data during the compiler's lowering phase, showing source lines
 compiled into LLVM-IR, excluding dead-code eliminated lines.
 
 (`PR-#9508 <https://github.com/numba/numba/pull/9508>`__)
@@ -143,12 +143,12 @@ while optimizing unrelated modules and possibly under different settings
 
 (`PR-#9670 <https://github.com/numba/numba/pull/9670>`__)
 
-Fixed ``typed.List __repr__()`` to display ellipsis appropriately.
-------------------------------------------------------------------
+Fixed ``typed.List __repr__()`` to display ellipsis appropriately
+-----------------------------------------------------------------
 
 ``typed.List __repr__()`` has been fixed to display the list elements
 without appending the ellipsis at the end, up until a maximum of 1000 elements.
-Previously, the list repr would append the ellipsis at the end of the list
+Previously, the list ``repr`` would append the ellipsis at the end of the list
 regardless of the number of elements in the list.
 
 (`PR-#9693 <https://github.com/numba/numba/pull/9693>`__)
@@ -161,7 +161,7 @@ expression is dependent on a variable that later changes type.
 
 (`PR-#9711 <https://github.com/numba/numba/pull/9711>`__)
 
-``find_topo_sort`` reliablilty improvement
+``find_topo_sort`` reliabililty improvement
 ------------------------------------------
 
 Improves the reliability of the ``find_topo_sort`` function for complex CFGs
@@ -174,8 +174,8 @@ with an iterative one. This removes a risk of hitting the Python recursion limit
 NumPy Support
 ~~~~~~~~~~~~~
 
-Added support for np.setdiff1d(), np.setxor1d(), and np.in1d() functions, as well as argument assume_unique in np.intersect1d()
--------------------------------------------------------------------------------------------------------------------------------
+Added support for ``np.setdiff1d()``, ``np.setxor1d()``, and ``np.in1d()`` functions, as well as argument ``assume_unique`` in ``np.intersect1d()``
+-------------------------------------------------------------------------------------------------------------------------------------------------
 
 Support is added for: ``numpy.setdiff1d()``, ``np.setxor1d()``, ``np.in1d()``, and ``np.isin()``; and the argument ``assume_unique`` in ``np.intersect1d()``.
 For ``np.in1d()``, and ``np.isin()``, the keyword ``kind`` is *not* supported, and the behaviour reflects that of NumPy prior to version 1.24.
@@ -183,10 +183,10 @@ This is equivalent to setting ``kind="sort"`` in NumPy 1.24 and later.
 
 (`PR-#9338 <https://github.com/numba/numba/pull/9338>`__)
 
-Support for np.trapezoid
-------------------------
+Support for ``np.trapezoid``
+----------------------------
 
-Add support for numpy 2.0 new function ``numpy.trapezoid``.
+Add support for NumPy 2.0 new function ``numpy.trapezoid``.
 
 (`PR-#9719 <https://github.com/numba/numba/pull/9719>`__)
 
@@ -198,12 +198,12 @@ Bug Fixes
 ------------------------------------------------------------
 
 Fix a bug where the static buffer used to store typecode representation is not
-copied to the new allocated buffer as part of a realloc operation.
+copied to the new allocated buffer as part of a ``realloc`` operation.
 
 (`PR-#9119 <https://github.com/numba/numba/pull/9119>`__)
 
-Fix parfor hoisting.
---------------------
+Fix parfor hoisting
+-------------------
 
 Traverse blocks in the right order so that getattrs will precede calls
 so that the object of the getattr can be marked as multiply defined.
@@ -240,8 +240,8 @@ bool type. This is now fixed.
 
 (`PR-#9705 <https://github.com/numba/numba/pull/9705>`__)
 
-Fixed numerical error and infinite loop bug in ``numpy.random.Generator.binomial``.
------------------------------------------------------------------------------------
+Fixed numerical error and infinite loop bug in ``numpy.random.Generator.binomial``
+----------------------------------------------------------------------------------
 
 A bug impacting the correctness of numerical results is fixed alongside an issue
 which led to executing an infinite loop under specific circumstances most easily
@@ -249,8 +249,8 @@ triggered by the aforementioned correctness bug.
 
 (`PR-#9747 <https://github.com/numba/numba/pull/9747>`__)
 
-Fix 0.60.0 objectmode fallback regression due to bug in label renaming.
------------------------------------------------------------------------
+Fix 0.60.0 objectmode fallback regression due to bug in label renaming
+----------------------------------------------------------------------
 
 A regression in objectmode fallback introduced in Numba 0.60 is fixed. The issue
 relates to the "label renaming" code mutating the IR directly opposed to
@@ -259,8 +259,8 @@ as present in objectmode fallback.
 
 (`PR-#9755 <https://github.com/numba/numba/pull/9755>`__)
 
-Fix Python reference leaks in unboxing of ``numpy.random.Generator`` instances.
--------------------------------------------------------------------------------
+Fix Python reference leaks in unboxing of ``numpy.random.Generator`` instances
+------------------------------------------------------------------------------
 
 Some Python reference leaks in the unboxing of ``numpy.random.Generator``
 instances have been fixed. Note that it was actually the referenced
@@ -269,8 +269,8 @@ use these objects themselves as arguments.
 
 (`PR-#9756 <https://github.com/numba/numba/pull/9756>`__)
 
-Fix excessive memory use/poor memory behaviour in the dispatcher for non-fingerprintable types.
------------------------------------------------------------------------------------------------
+Fix excessive memory use/poor memory behaviour in the dispatcher for non-fingerprintable types
+----------------------------------------------------------------------------------------------
 
 In the case of repeated dispatch on non-fingerprintable types, the dispatcher
 now uses memory in proportion to the number of unique types seen opposed to in
@@ -278,16 +278,16 @@ proportion to the number of types in total.
 
 (`PR-#9757 <https://github.com/numba/numba/pull/9757>`__)
 
-Fix miscompile in branch pruning of SSA form IR.
-------------------------------------------------
+Fix miscompile in branch pruning of SSA form IR
+-----------------------------------------------
 
 A miscompile occurring when a binop expression with constant arguments is used
 as a predicate in SSA form IR is now fixed.
 
 (`PR-#9758 <https://github.com/numba/numba/pull/9758>`__)
 
-Fix regression in type-inference for star-arg arguments.
---------------------------------------------------------
+Fix regression in type-inference for star-arg arguments
+-------------------------------------------------------
 
 A regression, that occurred between versions 0.59.0 and 0.60.0, in the
 type-inference associated with star-arg arguments has been fixed. The cause of
