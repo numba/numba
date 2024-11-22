@@ -114,6 +114,12 @@ def check_generator_cache():
 
 
 class TestCaching(SerialMixin, TestCase):
+    def setUp(self):
+        here = Path(__file__).parent
+        cache_dir = here / "__pycache__"
+        # Ensure that tests run with an empty __pycache__
+        self.addCleanup(shutil.rmtree, cache_dir)
+
     def run_test(self, func):
         func()
         res = run_in_new_process_caching(func)
