@@ -171,7 +171,9 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc, UfuncBase):
     # _internal.c:dufunc_init()
     __base_kwargs = set(('identity', '_keepalive', 'nin', 'nout'))
 
-    def __init__(self, py_func, identity=None, cache=False, targetoptions={}):
+    def __init__(self, py_func, identity=None, cache=False, targetoptions=None):
+        if targetoptions is None:
+            targetoptions = {}
         if is_jitted(py_func):
             py_func = py_func.py_func
         with ufuncbuilder._suppress_deprecation_warning_nopython_not_supplied():
