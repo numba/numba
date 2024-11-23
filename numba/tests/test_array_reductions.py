@@ -307,6 +307,9 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             got = cfunc(arr)
             self.assertPreciseEqual(got, expected)
 
+        # Empty array case
+        check(np.array[()])
+
         # Odd sizes
         def check_odd(a):
             check(a)
@@ -352,7 +355,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             yield a
             a[a % 4 >= 1] = 3.5
             yield a
-            yield np.array([]) #Empty array case
 
         self.check_median_basic(pyfunc, variations)
 
