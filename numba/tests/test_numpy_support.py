@@ -226,7 +226,7 @@ class TestArrayScalars(ValueTypingTestBase, TestCase):
         self.check_datetime_values(f)
         # datetime64s with a non-one factor shouldn't be supported
         t = np.datetime64('2014', '10Y')
-        with self.assertRaises(NotImplementedError):
+        with self.assertRaises(NumbaNotImplementedError):
             f(t)
 
     def test_timedelta_values(self):
@@ -237,7 +237,7 @@ class TestArrayScalars(ValueTypingTestBase, TestCase):
         self.check_timedelta_values(f)
         # timedelta64s with a non-one factor shouldn't be supported
         t = np.timedelta64(10, '10Y')
-        with self.assertRaises(NotImplementedError):
+        with self.assertRaises(NumbaNotImplementedError):
             f(t)
 
 
