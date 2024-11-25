@@ -687,12 +687,9 @@ class Cache(_Cache):
         key = self._index_key(sig, target_context.codegen())
         data = self._cache_file.load(key)
         if data is not None:
-            # target_context.refresh()
+            target_context.refresh()
             _cache_log('[cache] data is not None')
             data = self._impl.rebuild(target_context, data)
-        else:
-            # target_context.refresh()
-            _cache_log("[cache] no cache hit")
         return data
 
     def save_overload(self, sig, data):
