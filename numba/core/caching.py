@@ -676,7 +676,6 @@ class Cache(_Cache):
         using the *target_context*.
         """
         # Refresh the context to ensure it is initialized
-        # target_context.refresh()
         with self._guard_against_spurious_io_errors():
             return self._load_overload(sig, target_context)
         # None returned if the `with` block swallows an exception
@@ -687,7 +686,7 @@ class Cache(_Cache):
         key = self._index_key(sig, target_context.codegen())
         data = self._cache_file.load(key)
         if data is not None:
-            # target_context.refresh()
+            target_context.refresh()
             _cache_log('[cache] data is not None')
             data = self._impl.rebuild(target_context, data)
         return data

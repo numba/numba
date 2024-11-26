@@ -234,13 +234,6 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
             for fn in reload_init:
                 fn()
 
-        # if objectmode:
-        #     target_context.refresh()
-
-        targetoptions = fndesc.lookup_function().targetoptions
-        if objectmode or targetoptions.get('parallel', False):
-            target_context.refresh()
-
         library = target_context.codegen().unserialize_library(libdata)
         cfunc = target_context.get_executable(library, fndesc, env)
         cr = cls(target_context=target_context,
