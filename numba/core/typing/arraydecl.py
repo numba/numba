@@ -352,7 +352,7 @@ class ArrayAttribute(AttributeTemplate):
             if ty in types.number_domain:
                 # Guard against non integer type
                 if not isinstance(ty, types.Integer):
-                    raise TypeError("transpose() arg cannot be {0}".format(ty))
+                    raise NumbaTypeError("transpose() arg cannot be {0}".format(ty))
                 return True
             else:
                 return False
@@ -380,7 +380,7 @@ class ArrayAttribute(AttributeTemplate):
 
         else:
             if any(not sentry_shape_scalar(a) for a in args):
-                raise TypeError("transpose({0}) is not supported".format(
+                raise NumbaTypeError("transpose({0}) is not supported".format(
                     ', '.join(args)))
             assert ary.ndim == len(args)
             return signature(self.resolve_T(ary).copy(layout="A"), *args)
@@ -431,7 +431,7 @@ class ArrayAttribute(AttributeTemplate):
             if ty in types.number_domain:
                 # Guard against non integer type
                 if not isinstance(ty, types.Integer):
-                    raise TypeError("reshape() arg cannot be {0}".format(ty))
+                    raise NumbaTypeError("reshape() arg cannot be {0}".format(ty))
                 return True
             else:
                 return False
@@ -439,7 +439,7 @@ class ArrayAttribute(AttributeTemplate):
         assert not kws
         if ary.layout not in 'CF':
             # only work for contiguous array
-            raise TypeError("reshape() supports contiguous array only")
+            raise NumbaTypeError("reshape() supports contiguous array only")
 
         if len(args) == 1:
             # single arg
@@ -457,12 +457,12 @@ class ArrayAttribute(AttributeTemplate):
 
         elif len(args) == 0:
             # no arg
-            raise TypeError("reshape() take at least one arg")
+            raise NumbaTypeError("reshape() take at least one arg")
 
         else:
             # vararg case
             if any(not sentry_shape_scalar(a) for a in args):
-                raise TypeError("reshape({0}) is not supported".format(
+                raise NumbaTypeError("reshape({0}) is not supported".format(
                     ', '.join(map(str, args))))
 
             retty = ary.copy(ndim=len(args))
@@ -514,9 +514,9 @@ class ArrayAttribute(AttributeTemplate):
         if dtype is None:
             return
         if not self.context.can_convert(ary.dtype, dtype):
-            raise TypeError("astype(%s) not supported on %s: "
-                            "cannot convert from %s to %s"
-                            % (dtype, ary, ary.dtype, dtype))
+            raise NumbaTypeError("astype(%s) not supported on %s: "
+                                 "cannot convert from %s to %s"
+                                 % (dtype, ary, ary.dtype, dtype))
         layout = ary.layout if ary.layout in 'CF' else 'C'
         # reset the write bit irrespective of whether the cast type is the same
         # as the current dtype, this replicates numpy
