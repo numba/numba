@@ -355,7 +355,7 @@ class PassManager(object):
                 if isinstance(pass_inst, CompilerPass):
                     self._runPass(idx, pass_inst, state)
                 else:
-                    raise BaseException("Legacy pass in use")
+                    raise RuntimeError("Legacy pass in use")
             except _EarlyPipelineCompletion as e:
                 raise e
             except Exception as e:

@@ -1886,7 +1886,7 @@ def array_transpose_vararg(context, builder, sig, args):
 @overload(np.transpose)
 def numpy_transpose(a, axes=None):
     if isinstance(a, types.BaseTuple):
-        raise errors.UnsupportedError("np.transpose does not accept tuples")
+        raise errors.TypingError("np.transpose does not accept tuples")
 
     if axes is None:
         def np_transpose_impl(a, axes=None):
@@ -5971,7 +5971,8 @@ def np_concatenate_typer(typingctx, arrays, axis):
     dtype, ndim = _sequence_of_arrays(typingctx,
                                       "np.concatenate", arrays)
     if ndim == 0:
-        raise TypeError("zero-dimensional arrays cannot be concatenated")
+        msg = "zero-dimensional arrays cannot be concatenated"
+        raise errors.NumbaTypeError(msg)
 
     layout = _choose_concatenation_layout(arrays)
 
@@ -6007,8 +6008,8 @@ def _column_stack_dims(context, func_name, arrays):
     # column_stack() allows stacking 1-d and 2-d arrays together
     for a in arrays:
         if a.ndim < 1 or a.ndim > 2:
-            raise TypeError("np.column_stack() is only defined on "
-                            "1-d and 2-d arrays")
+            msg = "np.column_stack() is only defined on 1-d and 2-d arrays"
+            raise errors.NumbaTypeError(msg)
     return 2
 
 
@@ -6668,7 +6669,7 @@ def as_strided(x, shape=None, strides=None):
         # reshape(), possibly changing the original strides.  This is too
         # cumbersome to support right now, and a Web search shows all example
         # use cases of as_strided() pass explicit *strides*.
-        raise NotImplementedError("as_strided() strides argument is mandatory")
+        raise errors.TypingError("as_strided() strides argument cannot be None")
     else:
         @register_jitable
         def get_strides(x, strides):
