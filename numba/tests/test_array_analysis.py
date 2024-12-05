@@ -111,8 +111,10 @@ class ArrayAnalysisPass(FunctionPass):
 class ArrayAnalysisTester(Compiler):
 
     @classmethod
-    def mk_pipeline(cls, args, return_type=None, flags=None, locals={},
+    def mk_pipeline(cls, args, return_type=None, flags=None, locals=None,
                     library=None, typing_context=None, target_context=None):
+        if locals is None:
+            locals = {}
         if not flags:
             flags = Flags()
         flags.nrt = True
@@ -180,10 +182,14 @@ class TestArrayAnalysis(TestCase):
             outputs.append(output.getvalue())
         self.assertTrue(len(set(outputs)) == 1)  # assert all outputs are equal
 
-    def _compile_and_test(self, fn, arg_tys, asserts=[], equivs=[], idempotent=True):
+    def _compile_and_test(self, fn, arg_tys, asserts=None, equivs=None, idempotent=True):
         """
         Compile the given function and get its IR.
         """
+        if asserts is None:
+            asserts = []
+        if equivs is None:
+            equivs = []
         test_pipeline = ArrayAnalysisTester.mk_pipeline(arg_tys)
         test_idempotence = self.compare_ir if idempotent else lambda x:()
         analysis = test_pipeline.compile_to_ir(fn, test_idempotence)

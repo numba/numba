@@ -39,8 +39,12 @@ def intersperse(lst, item):
     return result
 
 
-def ghfile_role(name, rawtext, text, lineno, inliner, options={}, content=[]):
+def ghfile_role(name, rawtext, text, lineno, inliner, options=None, content=None):
     """ Emit hyperlink nodes for a given file in repomap. """
+    if options is None:
+        options = {}
+    if content is None:
+        content = []
     my_nodes = []
     if "{" in text:  # myfile.{c,h} - make two nodes
         # could have used regexes, but this will be fine..
