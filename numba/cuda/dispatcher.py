@@ -44,15 +44,7 @@ class _Kernel(serialize.ReduceMixin):
     '''
 
     @global_compiler_lock
-    def __init__(self, py_func, argtypes, link=None, debug=False,
-                 lineinfo=False, inline=False, fastmath=False, extensions=None,
-                 max_registers=None, opt=True, device=False):
-
-        if device:
-            raise RuntimeError('Cannot compile a device function as a kernel')
-
-        super().__init__()
-
+    def __init__(self, py_func, argtypes, extensions, targetoptions):
         # _DispatcherBase.nopython_signatures() expects this attribute to be
         # present, because it assumes an overload is a CompileResult. In the
         # CUDA target, _Kernel instances are stored instead, so we provide this
@@ -70,9 +62,14 @@ class _Kernel(serialize.ReduceMixin):
 
         self.py_func = py_func
         self.argtypes = argtypes
-        self.debug = debug
-        self.lineinfo = lineinfo
-        self.extensions = extensions or []
+        self.targetoptions = targetoptions
+        self.extensions = extensions
+        debug = targetoptions.get('debug')
+        lineinfo = targetoptions.get('lineinfo')
+        fastmath = targetoptions.get('fastmath')
+        opt = targetoptions.get('opt', True)
+        inline = targetoptions.get('inline')
+        max_registers = targetoptions.get('max_registers')
 
         nvvm_options = {
             'fastmath': fastmath,
@@ -80,8 +77,8 @@ class _Kernel(serialize.ReduceMixin):
         }
 
         cc = get_current_device().compute_capability
-        cres = compile_cuda(self.py_func, types.void, self.argtypes,
-                            debug=self.debug,
+        cres = compile_cuda(py_func, types.void, argtypes,
+                            debug=debug,
                             lineinfo=lineinfo,
                             inline=inline,
                             fastmath=fastmath,
@@ -96,8 +93,7 @@ class _Kernel(serialize.ReduceMixin):
                                                   filename, linenum,
                                                   max_registers)
 
-        if not link:
-            link = []
+        link = self.targetoptions.get('link', [])
 
         # A kernel needs cooperative launch if grid_sync is being used.
         self.cooperative = 'cudaCGGetIntrinsicHandle' in lib.get_asm_str()
@@ -157,7 +153,7 @@ class _Kernel(serialize.ReduceMixin):
 
     @classmethod
     def _rebuild(cls, cooperative, name, signature, codelibrary,
-                 debug, lineinfo, call_helper, extensions):
+                 call_helper, targetoptions, extensions):
         """
         Rebuild an instance.
         """
@@ -171,9 +167,8 @@ class _Kernel(serialize.ReduceMixin):
         instance.signature = signature
         instance._type_annotation = None
         instance._codelibrary = codelibrary
-        instance.debug = debug
-        instance.lineinfo = lineinfo
         instance.call_helper = call_helper
+        instance.targetoptions = targetoptions
         instance.extensions = extensions
         return instance
 
@@ -187,8 +182,9 @@ class _Kernel(serialize.ReduceMixin):
         """
         return dict(cooperative=self.cooperative, name=self.entry_name,
                     signature=self.signature, codelibrary=self._codelibrary,
-                    debug=self.debug, lineinfo=self.lineinfo,
-                    call_helper=self.call_helper, extensions=self.extensions)
+                    call_helper=self.call_helper,
+                    targetoptions=self.targetoptions,
+                    extensions=self.extensions)
 
     def bind(self):
         """
@@ -302,7 +298,7 @@ class _Kernel(serialize.ReduceMixin):
         # Prepare kernel
         cufunc = self._codelibrary.get_cufunc()
 
-        if self.debug:
+        if self.targetoptions.get('debug'):
             excname = cufunc.name + "__errcode__"
             excmem, excsz = cufunc.module.get_global_symbol(excname)
             assert excsz == ctypes.sizeof(ctypes.c_int)
@@ -332,7 +328,7 @@ class _Kernel(serialize.ReduceMixin):
                              kernelargs,
                              cooperative=self.cooperative)
 
-        if self.debug:
+        if self.targetoptions.get('debug'):
             driver.device_to_host(ctypes.addressof(excval), excmem, excsz)
             if excval.value != 0:
                 # An error occurred
@@ -591,7 +587,8 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
 
     targetdescr = cuda_target
 
-    def __init__(self, py_func, targetoptions, pipeline_class=CUDACompiler):
+    def __init__(self, py_func, targetoptions, device=False,
+                 extensions=None, pipeline_class=CUDACompiler):
         super().__init__(py_func, targetoptions=targetoptions,
                          pipeline_class=pipeline_class)
 
@@ -606,6 +603,12 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
         # If we produced specialized dispatchers, we cache them for each set of
         # argument types
         self.specializations = {}
+
+        # Is this intended to be used as a device function?
+        self._device = device
+
+        # Launch parameter handling extensions
+        self.extensions = extensions or []
 
     @property
     def _numba_type_(self):
@@ -645,27 +648,6 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
                  arguments."""
 
         return ForAll(self, ntasks, tpb=tpb, stream=stream, sharedmem=sharedmem)
-
-    @property
-    def extensions(self):
-        '''
-        A list of objects that must have a `prepare_args` function. When a
-        specialized kernel is called, each argument will be passed through
-        to the `prepare_args` (from the last object in this list to the
-        first). The arguments to `prepare_args` are:
-
-        - `ty` the numba type of the argument
-        - `val` the argument value itself
-        - `stream` the CUDA stream used for the current call to the kernel
-        - `retr` a list of zero-arg functions that you may want to append
-          post-call cleanup work to.
-
-        The `prepare_args` function must return a tuple `(ty, val)`, which
-        will be passed in turn to the next right-most `extension`. After all
-        the extensions have been called, the resulting `(ty, val)` will be
-        passed into Numba's default argument marshalling logic.
-        '''
-        return self.targetoptions.get('extensions')
 
     def __call__(self, *args, **kwargs):
         # An attempt to launch an unconfigured kernel
@@ -872,10 +854,11 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
                 debug = self.targetoptions.get('debug')
                 lineinfo = self.targetoptions.get('lineinfo')
                 inline = self.targetoptions.get('inline')
+                opt = self.targetoptions.get('opt', True)
                 fastmath = self.targetoptions.get('fastmath')
 
                 nvvm_options = {
-                    'opt': 3 if self.targetoptions.get('opt') else 0,
+                    'opt': 3 if opt else 0,
                     'fastmath': fastmath
                 }
 
@@ -907,6 +890,9 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
         Compile and bind to the current context a version of this kernel
         specialized for the given signature.
         '''
+        if self._device:
+            raise RuntimeError('Cannot compile a device function as a kernel')
+
         argtypes, return_type = sigutils.normalize_signature(sig)
         assert return_type is None or return_type == types.none
 
@@ -929,7 +915,8 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
             if not self._can_compile:
                 raise RuntimeError("Compilation disabled")
 
-            kernel = _Kernel(self.py_func, argtypes, **self.targetoptions)
+            kernel = _Kernel(self.py_func, argtypes, self.extensions,
+                             self.targetoptions)
             # We call bind to force codegen, so that there is a cubin to cache
             kernel.bind()
             self._cache.save_overload(sig, kernel)
@@ -947,14 +934,13 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
                  for all previously-encountered signatures.
 
         '''
-        device = self.targetoptions.get('device')
         if signature is not None:
-            if device:
+            if self._device:
                 return self.overloads[signature].library.get_llvm_str()
             else:
                 return self.overloads[signature].inspect_llvm()
         else:
-            if device:
+            if self._device:
                 return {sig: overload.library.get_llvm_str()
                         for sig, overload in self.overloads.items()}
             else:
@@ -971,14 +957,13 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
                  for all previously-encountered signatures.
         '''
         cc = get_current_device().compute_capability
-        device = self.targetoptions.get('device')
         if signature is not None:
-            if device:
+            if self._device:
                 return self.overloads[signature].library.get_asm_str(cc)
             else:
                 return self.overloads[signature].inspect_asm(cc)
         else:
-            if device:
+            if self._device:
                 return {sig: overload.library.get_asm_str(cc)
                         for sig, overload in self.overloads.items()}
             else:
@@ -1019,7 +1004,7 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
 
         Requires nvdisasm to be available on the PATH.
         '''
-        if self.targetoptions.get('device'):
+        if self._device:
             raise RuntimeError('Cannot inspect SASS of a device function')
 
         if signature is not None:
