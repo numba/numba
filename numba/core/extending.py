@@ -60,8 +60,14 @@ _overload_default_jit_options = {'no_cpython_wrapper': True,
                                  'nopython':True}
 
 
-def overload(func, jit_options=MappingProxyType({}), strict=True, inline='never',
-             prefer_literal=False, **kwargs):
+def overload(
+    func,
+    jit_options=MappingProxyType({}),
+    strict=True,
+    inline='never',
+    prefer_literal=False,
+    **kwargs,
+):
     """
     A decorator marking the decorated function as typing and implementing
     *func* in nopython mode.
