@@ -32,7 +32,7 @@ if "%NUMPY%" neq "2.1" (%CONDA_INSTALL% scipy)
 
 call activate %CONDA_ENV%
 @rem Install latest llvmlite build
-%CONDA_INSTALL% -c numba/label/dev llvmlite=0.44
+%CONDA_INSTALL% -c numba/label/dev llvmlite=0.45
 @rem Install dependencies for building the documentation
 if "%BUILD_DOC%" == "yes" (%CONDA_INSTALL% sphinx sphinx_rtd_theme pygments)
 @rem Install dependencies for code coverage (codecov.io)
