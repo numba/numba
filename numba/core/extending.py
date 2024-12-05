@@ -60,7 +60,7 @@ _overload_default_jit_options = {'no_cpython_wrapper': True,
                                  'nopython':True}
 
 
-def overload(func, jit_options={}, strict=True, inline='never',
+def overload(func, jit_options=MappingProxyType({}), strict=True, inline='never',
              prefer_literal=False, **kwargs):
     """
     A decorator marking the decorated function as typing and implementing
@@ -121,7 +121,7 @@ def overload(func, jit_options={}, strict=True, inline='never',
     from numba.core.typing.templates import make_overload_template, infer_global
 
     # set default options
-    jit_options = MappingProxyType(jit_options)
+    jit_options = dict(jit_options)
     opts = _overload_default_jit_options.copy()
     opts.update(jit_options)  # let user options override
 
