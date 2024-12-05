@@ -14,8 +14,7 @@ from numba.core.compiler_lock import global_compiler_lock
 
 from numba.core.registry import cpu_target
 from numba.core.runtime import nrtdynmod
-from numba.core import cgutils
-
+from numba.core import cgutils, cpu
 
 logger = logging.getLogger(__name__)
 
@@ -68,13 +67,14 @@ class ExportEntry(object):
     A simple record for exporting symbols.
     """
 
-    def __init__(self, symbol, signature, function):
+    def __init__(self, symbol, signature, function, fastmath=False):
         self.symbol = symbol
         self.signature = signature
+        self.fastmath = fastmath
         self.function = function
 
     def __repr__(self):
-        return "ExportEntry(%r, %r)" % (self.symbol, self.signature)
+        return "ExportEntry(%r, %r, %r)" % (self.symbol, self.signature, self.fastmath)
 
 
 class _ModuleCompiler(object):
@@ -156,6 +156,8 @@ class _ModuleCompiler(object):
             library.add_ir_module(nrt_module)
 
         for entry in self.export_entries:
+            if entry.fastmath:
+                flags.fastmath = cpu.FastMathOptions(True)
             cres = compile_extra(self.typing_context, self.context,
                                 entry.function,
                                 entry.signature.args,
