@@ -609,8 +609,7 @@ class MatMulTyperMixin(object):
         else:
             all_args = (a, b)
 
-        if not (config.DISABLE_PERFORMANCE_WARNINGS or
-                all(x.layout in 'CF' for x in (a, b))):
+        if not all(x.layout in 'CF' for x in (a, b)):
             msg = ("%s is faster on contiguous arrays, called on %s" %
                    (self.func_name, (a, b)))
             warnings.warn(NumbaPerformanceWarning(msg))
