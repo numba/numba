@@ -316,7 +316,7 @@ class _ObjModeContextType(WithContext):
                 "Objmode context failed.",
                 f"Argument {name!r} is declared as "
                 f"an unsupported type: {typ}.",
-                f"Reflected types are not supported.",
+                "Reflected types are not supported.",
             ]
             raise errors.CompilerError(" ".join(msgbuf), loc=loc)
 
