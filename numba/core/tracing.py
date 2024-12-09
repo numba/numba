@@ -2,7 +2,6 @@ import inspect
 import logging
 import sys
 import threading
-import types
 from functools import wraps
 from itertools import chain
 
@@ -10,7 +9,7 @@ from numba.core import config
 
 
 class TLS(threading.local):
-    """Use a subclass to properly initialize the TLS variables in all threads."""
+    """Use a subclass to properly initialize the TLS variables in all threads.""" # noqa: E501
 
     def __init__(self):
         self.tracing = False
@@ -116,7 +115,7 @@ def dotrace(*args, **kwds):
                             result = func(*args, **kwds)
                         finally:
                             tls.tracing = True
-                    except:
+                    except: # noqa: E722
                         type, value, traceback = sys.exc_info()
                         leave.append(" => exception thrown\n\traise ")
                         mname = type.__module__
@@ -144,19 +143,18 @@ def dotrace(*args, **kwds):
 
         # wrapper end
 
-        result = None
         rewrap = lambda x: x
         # Unwrap already wrapped functions
         # (to be rewrapped again later)
-        if type(func) == classmethod:
+        if isinstance(func, classmethod):
             rewrap = type(func)
             # Note: 'func.__func__' only works in Python 3
             func = func.__get__(True).__func__
-        elif type(func) == staticmethod:
+        elif isinstance(func, staticmethod):
             rewrap = type(func)
             # Note: 'func.__func__' only works in Python 3
             func = func.__get__(True)
-        elif type(func) == property:
+        elif isinstance(func, property):
             raise NotImplementedError
 
         spec = inspect.getfullargspec(func)
@@ -179,7 +177,7 @@ def dotrace(*args, **kwds):
 
     if callable(arg0) or type(arg0) in (classmethod, staticmethod):
         return decorator(arg0)
-    elif type(arg0) == property:
+    elif isinstance(arg0, property):
         # properties combine up to three functions: 'get', 'set', 'del',
         # so let's wrap them all.
         pget, pset, pdel = None, None, None
