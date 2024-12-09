@@ -12,6 +12,7 @@ conda config --set show_channel_urls true
 conda info
 conda config --show
 
+
 CONDA_INSTALL="conda install -q -y"
 PIP_INSTALL="pip install -q"
 
@@ -73,10 +74,13 @@ if [[ $(uname) == Linux ]]; then
         $CONDA_INSTALL gcc_linux-64 gxx_linux-64
     fi
 elif  [[ $(uname) == Darwin ]]; then
-    $CONDA_INSTALL clang_osx-64 clangxx_osx-64
-    # Install llvm-openmp on OSX for headers during build and runtime during
-    # testing
-    $CONDA_INSTALL llvm-openmp
+    # Install compiler toolchain
+    $CONDA_INSTALL -c conda-forge \
+        clang_osx-64>=14.0 \
+        clangxx_osx-64>=14.0 \
+        compiler-rt>=14.0 \
+        llvm-openmp>=14.0
+
 fi
 
 # Install latest correct build

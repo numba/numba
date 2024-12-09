@@ -64,6 +64,10 @@ extra_link_args = []
 install_name_tool_fixer = []
 if sys.platform == 'darwin':
     install_name_tool_fixer += ['-headerpad_max_install_names']
+    extra_link_args += [
+        '-isysroot', '/Applications/Xcode_14.1.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk',
+        '-mmacosx-version-min=11.0'
+    ]
 if platform.machine() == 'ppc64le':
     extra_link_args += ['-pthread']
 
