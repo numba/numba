@@ -23,11 +23,12 @@ jobs:
         NUMPY: '1.26'
         CONDA_ENV: 'azure_ci'
         TEST_START_INDEX: 1
-      py313_np21:
+      py313_np22:
         PYTHON: '3.13'
-        NUMPY: '2.1'
+        NUMPY: '2.2'
         CONDA_ENV: 'azure_ci'
         TEST_START_INDEX: 2
+        EXTRA_CHANNELS: -c conda-forge
 
 - template: buildscripts/azure/azure-linux-macos.yml
   parameters:
@@ -54,11 +55,12 @@ jobs:
         NUMPY: '1.26'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 5
-      py310_np21:
+      py310_np22:
         PYTHON: '3.10'
-        NUMPY: '2.1'
+        NUMPY: '2.2'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 6
+        EXTRA_CHANNELS: -c conda-forge
 
       py311_np124:
         PYTHON: '3.11'
@@ -75,11 +77,12 @@ jobs:
         NUMPY: '1.26'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 9
-      py311_np21:
+      py311_np22:
         PYTHON: '3.11'
-        NUMPY: '2.1'
+        NUMPY: '2.2'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 10
+        EXTRA_CHANNELS: -c conda-forge
       py311_np126_2:
         PYTHON: '3.11'
         NUMPY: '1.26'
@@ -102,17 +105,19 @@ jobs:
         NUMPY: '2.0'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 14
-      py312_np21:
+      py312_np22:
         PYTHON: '3.12'
-        NUMPY: '2.1'
+        NUMPY: '2.2'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 15
+        EXTRA_CHANNELS: -c conda-forge
 
-      py313_np21:
+      py313_np22:
         PYTHON: '3.13'
-        NUMPY: '2.1'
+        NUMPY: '2.2'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 16
+        EXTRA_CHANNELS: -c conda-forge
 
 - template: buildscripts/azure/azure-windows.yml
   parameters:

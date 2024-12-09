@@ -18,11 +18,12 @@ jobs:
         NUMPY: '2.0'
         CONDA_ENV: 'testenv'
         TEST_START_INDEX: 18
-      py313_np21:
+      py313_np22:
         PYTHON: '3.13'
-        NUMPY: '2.1'
+        NUMPY: '2.2'
         CONDA_ENV: 'testenv'
         TEST_START_INDEX: 19
+        EXTRA_CHANNELS: -c conda-forge
 
   steps:
     - powershell: Write-Host "##vso[task.prependpath]$env:CONDA\Scripts"
