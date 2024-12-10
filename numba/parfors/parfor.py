@@ -566,7 +566,9 @@ class Parfor(ir.Expr, ir.Stmt):
             flags,
             *,  #only specify the options below by keyword
             no_sequential_lowering=False,
-            races=set()):
+            races=None):
+        if races is None:
+            races = set()
         super(Parfor, self).__init__(
             op='parfor',
             loc=loc
@@ -1434,7 +1436,9 @@ class PreParforPass(object):
     implementations of numpy functions if available.
     """
     def __init__(self, func_ir, typemap, calltypes, typingctx, targetctx,
-                 options, swapped={}, replace_functions_map=None):
+                 options, swapped=None, replace_functions_map=None):
+        if swapped is None:
+            swapped = {}
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes

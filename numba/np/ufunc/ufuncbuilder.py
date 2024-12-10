@@ -76,7 +76,11 @@ class UFuncDispatcher(serialize.ReduceMixin):
     """
     targetdescr = ufunc_target
 
-    def __init__(self, py_func, locals={}, targetoptions={}):
+    def __init__(self, py_func, locals=None, targetoptions=None):
+        if locals is None:
+            locals = {}
+        if targetoptions is None:
+            targetoptions = {}
         self.py_func = py_func
         self.overloads = utils.UniqueDict()
         self.targetoptions = targetoptions
@@ -103,7 +107,9 @@ class UFuncDispatcher(serialize.ReduceMixin):
     def enable_caching(self):
         self.cache = FunctionCache(self.py_func)
 
-    def compile(self, sig, locals={}, **targetoptions):
+    def compile(self, sig, locals=None, **targetoptions):
+        if locals is None:
+            locals = {}
         locs = self.locals.copy()
         locs.update(locals)
 
@@ -270,7 +276,9 @@ class _BaseUFuncBuilder(object):
 
 class UFuncBuilder(_BaseUFuncBuilder):
 
-    def __init__(self, py_func, identity=None, cache=False, targetoptions={}):
+    def __init__(self, py_func, identity=None, cache=False, targetoptions=None):
+        if targetoptions is None:
+            targetoptions = {}
         if is_jitted(py_func):
             py_func = py_func.py_func
         self.py_func = py_func
@@ -338,7 +346,9 @@ class GUFuncBuilder(_BaseUFuncBuilder):
 
     # TODO handle scalar
     def __init__(self, py_func, signature, identity=None, cache=False,
-                 targetoptions={}, writable_args=()):
+                 targetoptions=None, writable_args=()):
+        if targetoptions is None:
+            targetoptions = {}
         self.py_func = py_func
         self.identity = parse_identity(identity)
         with _suppress_deprecation_warning_nopython_not_supplied():

@@ -3,6 +3,7 @@ import uuid
 import weakref
 import collections
 import functools
+from types import MappingProxyType
 
 import numba
 from numba.core import types, errors, utils, config
@@ -59,8 +60,14 @@ _overload_default_jit_options = {'no_cpython_wrapper': True,
                                  'nopython':True}
 
 
-def overload(func, jit_options={}, strict=True, inline='never',
-             prefer_literal=False, **kwargs):
+def overload(
+    func,
+    jit_options=MappingProxyType({}),
+    strict=True,
+    inline='never',
+    prefer_literal=False,
+    **kwargs,
+):
     """
     A decorator marking the decorated function as typing and implementing
     *func* in nopython mode.
@@ -120,6 +127,7 @@ def overload(func, jit_options={}, strict=True, inline='never',
     from numba.core.typing.templates import make_overload_template, infer_global
 
     # set default options
+    jit_options = dict(jit_options)
     opts = _overload_default_jit_options.copy()
     opts.update(jit_options)  # let user options override
 
