@@ -596,7 +596,8 @@ class ExternalFunctionPointer(BaseFunction):
                                                  signature)
         from numba.core.types import ffi_forced_object
         if sig.return_type == ffi_forced_object:
-            raise TypeError("Cannot return a pyobject from a external function")
+            msg = "Cannot return a pyobject from an external function"
+            raise errors.TypingError(msg)
         self.sig = sig
         self.requires_gil = any(a == ffi_forced_object for a in self.sig.args)
         self.get_pointer = get_pointer
@@ -607,7 +608,8 @@ class ExternalFunctionPointer(BaseFunction):
 
                 def generic(self, args, kws):
                     if kws:
-                        raise TypeError("does not support keyword arguments")
+                        msg = "does not support keyword arguments"
+                        raise errors.TypingError(msg)
                     # Make ffi_forced_object a bottom type to allow any type to
                     # be casted to it. This is the only place that support
                     # ffi_forced_object.

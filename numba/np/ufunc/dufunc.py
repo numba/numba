@@ -858,8 +858,8 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc, UfuncBase):
             # Matching element-wise signature was not found; must
             # compile.
             if self._frozen:
-                raise TypeError("cannot call %s with types %s"
-                                % (self, argtys))
+                raise errors.NumbaTypeError("cannot call %s with types %s"
+                                            % (self, argtys))
             self._compile_for_argtys(ewise_types)
             sig, cres = self.find_ewise_function(ewise_types)
             assert sig is not None
@@ -871,7 +871,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc, UfuncBase):
             else:
                 outtys = [sig.return_type]
         else:
-            raise NotImplementedError("typing gufuncs (nout > 1)")
+            raise errors.NumbaNotImplementedError("typing gufuncs (nout > 1)")
         outtys.extend(argtys)
         return signature(*outtys)
 
