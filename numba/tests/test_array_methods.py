@@ -769,10 +769,11 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             if numpy_version < (2, 1):
                 check_arr(arr)
             else:
-                with self.assertRaises(ValueError) as raises:
+                with self.assertRaises((ValueError, TypingError)) as raises:
                     njit((typeof(arr),))(pyfunc)
-                self.assertEqual(str(raises.exception),
-                                 "Calling nonzero on 0d arrays is not allowed. Use np.atleast_1d(scalar).nonzero() instead.")
+                msg = "Calling nonzero on 0d arrays is not allowed. Use " \
+                      "np.atleast_1d(scalar).nonzero() instead."
+                self.assertIn(msg, str(raises.exception))
 
     def test_array_nonzero(self):
         self.check_nonzero(array_nonzero)

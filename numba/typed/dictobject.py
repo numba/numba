@@ -31,7 +31,7 @@ from numba.core.types import (
     Type,
 )
 from numba.core.imputils import impl_ret_borrowed, RefType
-from numba.core.errors import TypingError, LoweringError
+from numba.core.errors import TypingError, LoweringError, NumbaTypeError
 from numba.core import typing
 from numba.typed.typedobjectutils import (_as_bytes, _cast, _nonoptional,
                                           _sentry_safe_cast_default,
@@ -661,7 +661,7 @@ def impl_new_dict(key, value, n_keys=0):
         not isinstance(key, Type),
         not isinstance(value, Type),
     ]):
-        raise TypeError("expecting *key* and *value* to be a numba Type")
+        raise NumbaTypeError("expecting *key* and *value* to be a Numba Type")
 
     keyty, valty = key, value
 
