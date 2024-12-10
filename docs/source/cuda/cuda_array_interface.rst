@@ -515,6 +515,7 @@ The following Python libraries have adopted the CUDA Array Interface:
 - `ArrayViews <https://github.com/xnd-project/arrayviews>`_
 - `JAX <https://jax.readthedocs.io/en/latest/index.html>`_
 - `PyCUDA <https://documen.tician.de/pycuda/tutorial.html#interoperability-with-other-libraries-using-the-cuda-array-interface>`_
+- `Paddle <https://www.paddlepaddle.org.cn/>`_
 - `DALI: the NVIDIA Data Loading Library <https://github.com/NVIDIA/DALI>`_ :
 
     - `TensorGPU objects
