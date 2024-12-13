@@ -13,7 +13,9 @@ labels: task
     - [ ] "remaining Pull-Requests from milestone".
 * [ ] Check Numba's version support table documentation. Update via PR if
       needed.
-* [ ] Review deprecation schedule and notices. Make PRs if need be.
+* [ ] Review deprecation schedule and notices. Make PRs if need be. (Note that
+  deprecation notices for features that have been removed are kept in the
+  documentation for two more releases)
 * [ ] Create changelog using instructions at: docs/source/developer/release.rst
 * [ ] Merge change log changes.
     - [ ] "PR with changelog entries".
@@ -41,6 +43,7 @@ labels: task
 
 ### Post Release:
 
+* [ ] Snapshot Build Farm config
 * [ ] Clean up `ci_artifacts` by moving files to sub-directories
 * [ ] Tag `X.Y+1.0dev0` to start new development cycle on `main`.
 * [ ] Update llvmlite dependency via PR to `main`, PR includes version updates
