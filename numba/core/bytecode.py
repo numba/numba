@@ -1,4 +1,5 @@
 from collections import namedtuple, OrderedDict
+import sys
 import dis
 import inspect
 import itertools
@@ -479,6 +480,10 @@ class ByteCodePy312(ByteCodePy311):
             END_FOR
             POP_TOP
             SWAP(2)
+
+            Update for Python 3.13.1, there's now a GET_ITER before FOR_ITER.
+            This patch the GET_ITER to NOP to minimize changes downstream
+            (e.g. array-comprehension).
         """
         def pop_and_merge_exceptions(entries: list,
                                      entry_to_remove: _ExceptionTableEntry):
@@ -505,11 +510,13 @@ class ByteCodePy312(ByteCodePy311):
                        if not e.start == entry_to_remove.target]
             return entries
 
+        change_to_nop = set()
         work_remaining = True
         while work_remaining:
             # Temporarily set work_remaining to False, if we find a pattern
             # then work is not complete, hence we set it again to True.
             work_remaining = False
+            current_nop_fixes = set()
             for entry in entries.copy():
                 # Check start of pattern, three instructions.
                 # Work out the index of the instruction.
@@ -528,6 +535,16 @@ class ByteCodePy312(ByteCodePy311):
                     continue
                 next_inst = self.table[self.ordered_offsets[index + 2]]
                 # Check if the SWAP is followed by a FOR_ITER
+                if sys.version_info >= (3, 13, 1):
+                    # BUT Python3.13.1 introduced an extra GET_ITER.
+                    # If we see a GET_ITER here, check if the next thing is a
+                    # FOR_ITER.
+                    if next_inst.opname == "GET_ITER":
+                        # Add the inst to potentially be replaced to NOP
+                        current_nop_fixes.add(next_inst)
+                        # Loop up next instruction.
+                        next_inst = self.table[self.ordered_offsets[index + 3]]
+
                 if not next_inst.opname == "FOR_ITER":
                     continue
 
@@ -567,6 +584,17 @@ class ByteCodePy312(ByteCodePy311):
                 # a single bigger exception block.
                 entries = pop_and_merge_exceptions(entries, entry)
                 work_remaining = True
+
+                # Commit NOP fixes since we confirmed the suspects belong to
+                # a comprehension code.
+                change_to_nop |= current_nop_fixes
+
+        # Complete fixes to NOPs
+        for inst in change_to_nop:
+            self.table[inst.offset] = ByteCodeInst(inst.offset,
+                                                   dis.opmap["NOP"],
+                                                   None,
+                                                   inst.next)
         return entries
 
 
