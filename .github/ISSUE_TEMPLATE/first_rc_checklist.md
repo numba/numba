@@ -16,7 +16,7 @@ labels: task
 * [ ] Review deprecation schedule and notices. Make PRs if need be. (Note that
   deprecation notices for features that have been removed are kept in the
   documentation for two more releases.)
-* [ ] Create changelog using instructions at: docs/source/developer/release.rst
+* [ ] Create changelog using instructions at: `docs/source/developer/release.rst`
 * [ ] Merge change log changes.
     - [ ] "PR with changelog entries".
 * [ ] Create X.Y release branch.
