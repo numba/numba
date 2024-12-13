@@ -1,5 +1,5 @@
 
-Version 0.61.0rc1 (25 November 2024)
+Version 0.61.0rc2 (16 December 2024)
 ====================================
 
 .. contents:: Table of Contents
@@ -296,6 +296,16 @@ updated following the switch to use new-style error handling by default.
 
 (`PR-#9799 <https://github.com/numba/numba/pull/9799>`__)
 
+Make Numba internally compliant under "new_style" error handling.
+-----------------------------------------------------------------
+
+Numba now uses ``new_style`` error handling by default with no alternative
+available. Numba's internal code is now compliant with this error handling
+style, this to continue to allow extension writers the ability to add further
+implementations of "overloads" without the compiler encountering "hard errors".
+
+(`PR-#9837 <https://github.com/numba/numba/pull/9837>`__)
+
 
 Changes
 ~~~~~~~
@@ -432,6 +442,8 @@ Pull-Requests:
 * PR `#9774 <https://github.com/numba/numba/pull/9774>`_: Test on gpuCI with supported NumPy and Python versions (`gmarkall <https://github.com/gmarkall>`_)
 * PR `#9780 <https://github.com/numba/numba/pull/9780>`_: Default to turn off `sys.monitoring` (`sklam <https://github.com/sklam>`_)
 * PR `#9799 <https://github.com/numba/numba/pull/9799>`_: Fix regression in exception handling against 0.60. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#9821 <https://github.com/numba/numba/pull/9821>`_: Add debug print to debug test_monitoring_multiple_threads failing on win-02 (`sklam <https://github.com/sklam>`_)
+* PR `#9837 <https://github.com/numba/numba/pull/9837>`_: Replace "hard-errors" with NumbaErrors. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 
 Authors:
 ~~~~~~~~
@@ -455,3 +467,4 @@ Authors:
 * `stuartarchibald <https://github.com/stuartarchibald>`_
 * `synapticarbors <https://github.com/synapticarbors>`_
 * `yashssh <https://github.com/yashssh>`_
+* `lericson <https://github.com/lericson>`_
