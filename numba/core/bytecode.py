@@ -1,5 +1,4 @@
 from collections import namedtuple, OrderedDict
-import sys
 import dis
 import inspect
 import itertools
@@ -535,15 +534,14 @@ class ByteCodePy312(ByteCodePy311):
                     continue
                 next_inst = self.table[self.ordered_offsets[index + 2]]
                 # Check if the SWAP is followed by a FOR_ITER
-                if sys.version_info >= (3, 13, 1):
-                    # BUT Python3.13.1 introduced an extra GET_ITER.
-                    # If we see a GET_ITER here, check if the next thing is a
-                    # FOR_ITER.
-                    if next_inst.opname == "GET_ITER":
-                        # Add the inst to potentially be replaced to NOP
-                        current_nop_fixes.add(next_inst)
-                        # Loop up next instruction.
-                        next_inst = self.table[self.ordered_offsets[index + 3]]
+                # BUT Python3.13.1 introduced an extra GET_ITER.
+                # If we see a GET_ITER here, check if the next thing is a
+                # FOR_ITER.
+                if next_inst.opname == "GET_ITER":
+                    # Add the inst to potentially be replaced to NOP
+                    current_nop_fixes.add(next_inst)
+                    # Loop up next instruction.
+                    next_inst = self.table[self.ordered_offsets[index + 3]]
 
                 if not next_inst.opname == "FOR_ITER":
                     continue
