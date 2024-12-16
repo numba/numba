@@ -27,6 +27,13 @@ def suspend_emission(builder):
 
 class AbstractDIBuilder(metaclass=abc.ABCMeta):
     @abc.abstractmethod
+    def mark_arg(self, builder, value, name, lltype, size, line,
+                 datamodel=None, argidx=None):
+        """Emit debug info for the initialization of an argument.
+        """
+        pass
+
+    @abc.abstractmethod
     def mark_variable(self, builder, allocavalue, name, lltype, size, line,
                       datamodel=None, argidx=None):
         """Emit debug info for the variable.
@@ -61,6 +68,10 @@ class AbstractDIBuilder(metaclass=abc.ABCMeta):
 class DummyDIBuilder(AbstractDIBuilder):
 
     def __init__(self, module, filepath, cgctx, directives_only):
+        pass
+
+    def mark_arg(self, builder, value, name, lltype, size, line,
+                 datamodel=None, argidx=None):
         pass
 
     def mark_variable(self, builder, allocavalue, name, lltype, size, line,
@@ -288,6 +299,29 @@ class DIBuilder(AbstractDIBuilder):
             })
 
         return mdtype
+
+    def mark_arg(self, builder, value, name, lltype, size, line,
+                 datamodel=None, argidx=None):
+
+        arg_index = 0 if argidx is None else argidx
+        m = self.module
+        fnty = ir.FunctionType(ir.VoidType(), [ir.MetaDataType()] * 3)
+        decl = cgutils.get_or_insert_function(m, fnty, 'llvm.dbg.value')
+
+        mdtype = self._var_type(lltype, size, datamodel=datamodel)
+        name = name.replace('.', '$')    # for gdb to work correctly
+        mdlocalvar = m.add_debug_info('DILocalVariable', {
+            'name': name,
+            'arg': arg_index,
+            'scope': self.subprograms[-1],
+            'file': self.difile,
+            'line': line,
+            'type': mdtype,
+        })
+        mdexpr = m.add_debug_info('DIExpression', {})
+
+        return builder.call(decl, [value, mdlocalvar, mdexpr])
+
 
     def mark_variable(self, builder, allocavalue, name, lltype, size, line,
                       datamodel=None, argidx=None):
