@@ -12,6 +12,11 @@ jobs:
       ${{ insert }}: ${{ parameters.matrix }}
 
   steps:
+    - bash: |
+        sudo xcode-select -s /Library/Developer/CommandLineTools
+      condition: eq('${{ parameters.name }}', 'macOS')
+      displayName: 'Set macOS build environment'
+
     - script: |
         set -e
         echo "Installing Miniconda"
