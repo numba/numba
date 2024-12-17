@@ -853,6 +853,12 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         for sig in sigs:
             self.compile(sig)
         self._can_compile = can_compile
+        print("--py_func---", hex(id(py_func)))
+        print("--py_func.__globals__---", hex(id(py_func.__globals__)))
+        print("____", py_func.__globals__.keys())
+        # print(self.py_func.__globals__.keys())
+        self.__globals__ = py_func.__globals__
+        #  breakpoint()
         return self
 
     def compile(self, sig):
