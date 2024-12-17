@@ -589,7 +589,7 @@ class BaseContext(object):
             elif conv == Conversion.exact:
                 pass
             else:
-                raise Exception("unreachable", conv)
+                raise AssertionError("unreachable", conv)
 
         return rate
 

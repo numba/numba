@@ -970,7 +970,7 @@ class BaseContext(object):
             if offset % align:
                 msg = "{rec}.{attr} of type {type} is not aligned".format(
                     rec=rectyp, attr=attr, type=elemty)
-                raise TypeError(msg)
+                raise errors.NumbaTypeError(msg)
 
     def get_helper_class(self, typ, kind='value'):
         """
