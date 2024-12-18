@@ -15,9 +15,6 @@ make_function(PyObject *self, PyObject *args)
         return NULL;
     }
 
-    puts("make function here");
-    _PyObject_Dump(fname);
-
     fnaddr = PyLong_AsVoidPtr(fnaddrobj);
     if (fnaddr == NULL && PyErr_Occurred())
         return NULL;

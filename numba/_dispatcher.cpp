@@ -4,7 +4,6 @@
 #include <ctime>
 #include <cassert>
 #include <vector>
-#include <iostream>
 
 #include "_typeof.h"
 #include "frameobject.h"
@@ -665,33 +664,6 @@ int search_new_conversions(PyObject *dispatcher, PyObject *args, PyObject *kws)
 
 #if (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11))
 
-typedef struct {
-    PyObject_HEAD
-    PyObject *globals;
-    /* Assorted "constants" that are needed at runtime to execute
-       the compiled function.  This can include frozen closure variables,
-       lifted loops, etc. */
-    PyObject *consts;
-} EnvironmentObject;
-
-
-#define CLOSURE_HEAD          \
-    PyObject_VAR_HEAD         \
-    EnvironmentObject *env;
-
-typedef struct {
-    CLOSURE_HEAD
-    /* The dynamically-filled method definition for the PyCFunction object
-       using this closure. */
-    PyMethodDef def;
-    /* Arbitrary object to keep alive during the closure's lifetime.
-       (put a tuple to put several objects alive).
-       In practice, this helps keep the LLVM module and its generated
-       code alive. */
-    PyObject *keepalive;
-    PyObject *weakreflist;
-} ClosureObject;
-
 /* A custom, fast, inlinable version of PyCFunction_Call() */
 static PyObject *
 call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyObject *locals)
@@ -703,37 +675,6 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
     assert(PyCFunction_GET_FLAGS(cfunc) == (METH_VARARGS | METH_KEYWORDS));
     fn = (PyCFunctionWithKeywords) PyCFunction_GET_FUNCTION(cfunc);
     tstate = PyThreadState_GET();
-
-    // EnvironmentObject *env = (EnvironmentObject*)PyCFunction_GET_SELF(cfunc);
-
-    ClosureObject *clo = (ClosureObject*)PyCFunction_GET_SELF(cfunc);
-    PyObject* globals = (PyObject*)clo->env->globals;
-    _PyObject_Dump((PyObject*)clo->env->globals);
-
-    // add "VALUE" to globals
-    // PyObject *value = PyLong_FromLong(42);
-    // PyDict_SetItemString(globals, "VALUE", value);
-    // Merge cloudpickle globals
-
-    // PyObject *pf_value = PyDict_GetItemString(globals, "pf");
-    // _PyObject_Dump(pf_value);
-   
-
-    _PyObject_Dump((PyObject*)PyCFunction_GET_SELF(cfunc));
-    PyObject *glb = PyObject_GetAttrString((PyObject*)self, "__globals__");
-    PyDict_Update(clo->env->globals, glb);
-    // _PyObject_Dump(glb);
-    // env->globals = clo->env->globals;// glb;
-
-        // object address  : 0x12f3d1da0
-        // object refcount : 3
-        // object type     : 0x1027027c0
-        // object type name: builtin_function_or_method
-        // object repr     : <built-in method func of _dynfunc._Closure object at 0x12f3b2740>
-
-    // env.globals = func.__globals__
-    // hack_cfunc_globals_into_(env);
-    // pyresult = fn((PyObject*)env, args, kws);
 
 #if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 11)
     /*

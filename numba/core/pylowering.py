@@ -458,7 +458,6 @@ class PyLower(BaseLower):
             2b) is it a module (for __main__ module)
         """
         moddict = self.get_module_dict()
-        # self.pyapi.object_dump(moddict)
         obj = self.pyapi.dict_getitem(moddict, self._freeze_string(name))
         self.incref(obj)  # obj is borrowed
 
