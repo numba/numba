@@ -150,7 +150,7 @@ class FunctionDescriptor(object):
         doc = func.__doc__ or ''
         args = tuple(func_ir.arg_names)
         kws = ()        # TODO
-        global_dict = None
+        global_dict = func_ir.func_id.func.__globals__
 
         # issue #9786: In cases where the module globals mismatch the
         # function's global dictionary (e.g. when using cloudpicke),
@@ -163,7 +163,8 @@ class FunctionDescriptor(object):
             modname = _dynamic_modname
             # Retain a reference to the dictionary of the function.
             # This disables caching, serialization and pickling.
-            global_dict = func_ir.func_id.func.__globals__
+        else:
+            global_dict = None
 
         unique_name = func_ir.func_id.unique_name
 
