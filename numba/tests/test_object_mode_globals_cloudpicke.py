@@ -5,7 +5,7 @@ import sys
 import unittest
 
 from numba.tests.support import temp_directory
-import cloudpickle
+from numba import cloudpickle
 
 
 class TestObjectMode(unittest.TestCase):
