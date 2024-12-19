@@ -15,7 +15,7 @@ class TestObjectMode(unittest.TestCase):
 
     source_text_file = """
 import numba
-import cloudpickle
+from numba import cloudpickle
 import os
 
 VALUE = 1
