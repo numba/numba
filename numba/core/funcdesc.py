@@ -135,7 +135,7 @@ class FunctionDescriptor(object):
         return "<function descriptor %r>" % (self.unique_name)
 
     @classmethod
-    def _get_function_info(cls, func_ir):
+    def _get_function_info(cls, func_ir, native):
         """
         Returns
         -------
@@ -150,21 +150,18 @@ class FunctionDescriptor(object):
         doc = func.__doc__ or ''
         args = tuple(func_ir.arg_names)
         kws = ()        # TODO
-        global_dict = func_ir.func_id.func.__globals__
 
-        # issue #9786: In cases where the module globals mismatch the
-        # function's global dictionary (e.g. when using cloudpicke),
-        # we want to use the function's globals.
-        if modname is None or (
-            func_ir.func_id.module is not None
-            and func_ir.func_id.module.__dict__ != global_dict
-        ):
+        # Attach function globals while running object mode to resolve
+        # issue #9586 mismatch between object mode globals and module
+        # globals.
+        global_dict = None if native else func_ir.func_id.func.__globals__
+
+        if modname is None:
             # Dynamically generated function.
             modname = _dynamic_modname
             # Retain a reference to the dictionary of the function.
             # This disables caching, serialization and pickling.
-        else:
-            global_dict = None
+            global_dict = func_ir.func_id.func.__globals__
 
         unique_name = func_ir.func_id.unique_name
 
@@ -175,7 +172,7 @@ class FunctionDescriptor(object):
                               calltypes, native, mangler=None,
                               inline=False, noalias=False, abi_tags=()):
         (qualname, unique_name, modname, doc, args, kws, global_dict,
-         ) = cls._get_function_info(func_ir)
+         ) = cls._get_function_info(func_ir, native)
 
         self = cls(native, modname, qualname, unique_name, doc,
                    typemap, restype, calltypes,
