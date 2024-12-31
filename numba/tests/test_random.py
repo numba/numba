@@ -829,12 +829,16 @@ class TestRandom(BaseTest):
 
     def test_numpy_poisson(self):
         r = self._follow_numpy(get_np_state_ptr())
-        poisson = jit_unary("np.random.poisson")
+        poisson0 = jit_unary("np.random.poisson")
+        poisson1 = jit_binary("np.random.poisson")
         # Our implementation follows Numpy's.
-        self._check_dist(poisson, r.poisson,
+        self._check_dist(poisson0, r.poisson,
                          [(0.0,), (0.5,), (2.0,), (10.0,), (900.5,)],
                          niters=50)
-        self.assertRaises(ValueError, poisson, -0.1)
+        self._check_dist(poisson1, r.poisson,
+                         [(0.0,5), (0.5, (10,10)), (2.0,(3,5,2)), (10.0,(2,3)), (900.5,(2,2,2,2))],
+                         niters=50)
+        self.assertRaises(ValueError, poisson0, -0.1)
 
     def test_numpy_negative_binomial(self):
         self._follow_numpy(get_np_state_ptr(), 0)
