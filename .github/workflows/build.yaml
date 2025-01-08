@@ -1,0 +1,138 @@
+name: Build Wheels
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+jobs:
+  build_sdist:
+    name: Build SDist
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux2014_x86_64
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build SDist
+        run: |
+          python3.10 setup.py sdist
+          ls dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  build_wheels:
+    name: Build wheels on ${{ matrix.os }} for Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x86_64
+          - os: ubuntu-latest
+            python: '3.9'
+            platform: manylinux2014_x86_64
+          - os: ubuntu-latest
+            python: '3.10'
+            platform: manylinux2014_x86_64
+          - os: ubuntu-latest
+            python: '3.11'
+            platform: manylinux2014_x86_64
+          - os: ubuntu-latest
+            python: '3.12'
+            platform: manylinux2014_x86_64
+            
+          # macOS x86_64
+          - os: macos-latest
+            python: '3.9'
+          - os: macos-latest
+            python: '3.10'
+          - os: macos-latest
+            python: '3.11'
+          - os: macos-latest
+            python: '3.12'
+            
+          # macOS arm64
+          - os: macos-14
+            python: '3.9'
+          - os: macos-14
+            python: '3.10'
+          - os: macos-14
+            python: '3.11'
+          - os: macos-14
+            python: '3.12'
+            
+          # Windows x64
+          - os: windows-latest
+            python: '3.9'
+          - os: windows-latest
+            python: '3.10'
+          - os: windows-latest
+            python: '3.11'
+          - os: windows-latest
+            python: '3.12'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install wheel setuptools twine
+          
+      # Linux-specific setup
+      - name: Setup Linux build environment
+        if: runner.os == 'Linux'
+        uses: docker://quay.io/pypa/manylinux2014_x86_64
+        with:
+          args: |
+            bash ./buildscripts/manylinux_2_17/build_llvmlite.sh \
+            https://repo.anaconda.com/miniconda/Miniconda3-py39_4.9.2-Linux-x86_64.sh \
+            cp${{ matrix.python }}-cp${{ matrix.python }}
+
+      # macOS-specific setup
+      - name: Setup macOS build environment
+        if: runner.os == 'macOS'
+        run: |
+          brew install llvm@14
+          export LLVM_CONFIG=$(brew --prefix llvm@14)/bin/llvm-config
+
+      # Windows-specific setup
+      - name: Setup Windows build environment
+        if: runner.os == 'Windows'
+        run: |
+          choco install llvm --version=14.0.6
+          echo "LLVM_CONFIG=C:\Program Files\LLVM\bin\llvm-config" >> $GITHUB_ENV
+
+      - name: Build wheel
+        run: python setup.py bdist_wheel
+
+      # macOS wheel fixing
+      - name: Fix macOS wheel
+        if: runner.os == 'macOS'
+        run: |
+          pip install delocate
+          delocate-wheel -v dist/*.whl
+
+      # Windows wheel validation
+      - name: Validate Windows wheel
+        if: runner.os == 'Windows'
+        run: |
+          pip install lief
+          python -c "import lief; import pathlib; [print(f'Checking {p}') for p in pathlib.Path('dist').rglob('*.dll')]"
+
+      - name: Check wheel
+        run: twine check dist/*.whl
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}-py${{ matrix.python }}
+          path: dist/*.whl
