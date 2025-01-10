@@ -91,7 +91,7 @@ def get_func_body_first_lineno(pyfunc):
             source = "".join(lines)
             offset = offset - 1
         except (OSError, TypeError):
-            return
+            return None
 
     tree = ast.parse(source)
     finder = FindDefFirstLine(co.co_name, co.co_firstlineno - offset)
@@ -100,4 +100,4 @@ def get_func_body_first_lineno(pyfunc):
         return finder.first_stmt_line + offset
     else:
         # No first line found.
-        return
+        return None
