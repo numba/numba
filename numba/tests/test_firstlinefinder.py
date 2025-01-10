@@ -1,4 +1,5 @@
 import unittest
+import linecache
 import inspect
 
 from numba import njit
@@ -78,6 +79,32 @@ class TestFirstLineFinder(TestCase):
         first_def_line = get_func_body_first_lineno(foo)
         # Cannot determine first line of string evaled functions
         self.assertIsNone(first_def_line)
+
+    def test_string_eval_linecache(self):
+        source = """def foo():
+            pass
+        """
+
+        # Modify the line cache in a similar manner to Jupyter, so that
+        # get_func_body_first_lineno can find the code using the fallback to
+        # inspect.getsourcelines()
+        filename = "<foo>"
+        timestamp = None
+        entry = (len(source), timestamp, source.splitlines(), filename)
+        linecache.cache[filename] = entry
+
+        # We need to compile the code so we can give it the fake filename used
+        # in the linecache
+        code = compile(source, filename, "exec")
+
+        globalns = {}
+        exec(code, globalns)
+        foo = globalns['foo']
+
+        # We should be able to determine the first line number even though the
+        # source does not exist on disk
+        first_def_line = get_func_body_first_lineno(foo)
+        self.assertEqual(first_def_line, 1)
 
     def test_single_line_function(self):
         @njit
