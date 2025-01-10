@@ -1481,7 +1481,7 @@ class Lower(BaseLower):
 
         raise NotImplementedError(expr)
 
-    def _alloca_var(self, name, fetype):
+    def _alloca_var(self, name, fetype, zfill_on_entry=True):
         """
         Ensure the given variable has an allocated stack slot (if needed).
         """
@@ -1493,7 +1493,7 @@ class Lower(BaseLower):
         if ((name not in self._singly_assigned_vars) or
                 self._disable_sroa_like_opt):
             # If not already defined, allocate it
-            ptr = self.alloca(name, fetype)
+            ptr = self.alloca(name, fetype, zfill_on_entry=zfill_on_entry)
             # Remember the pointer
             self.varmap[name] = ptr
 
@@ -1535,7 +1535,8 @@ class Lower(BaseLower):
         """
         fetype = self.typeof(name)
         # Define if not already
-        self._alloca_var(name, fetype)
+        zfill_on_entry = argidx is None
+        self._alloca_var(name, fetype, zfill_on_entry=zfill_on_entry)
 
         # Store variable
         if (name in self._singly_assigned_vars and
@@ -1600,17 +1601,19 @@ class Lower(BaseLower):
             # Zero-fill variable to avoid double frees on subsequent dels
             self.builder.store(Constant(ptr.type.pointee, None), ptr)
 
-    def alloca(self, name, type):
+    def alloca(self, name, type, zfill_on_entry=True):
         lltype = self.context.get_value_type(type)
         datamodel = self.context.data_model_manager[type]
-        return self.alloca_lltype(name, lltype, datamodel=datamodel)
+        return self.alloca_lltype(name, lltype, datamodel=datamodel,
+                                  zfill_on_entry=zfill_on_entry)
 
-    def alloca_lltype(self, name, lltype, datamodel=None):
+    def alloca_lltype(self, name, lltype, datamodel=None, zfill_on_entry=True):
         # Is user variable?
         is_uservar = not name.startswith('$')
         # Allocate space for variable
         aptr = cgutils.alloca_once(self.builder, lltype,
-                                   name=name, zfill=False)
+                                   name=name, zfill=False,
+                                   zfill_on_entry=zfill_on_entry)
 
         # Emit debug info for user variable
         if is_uservar:
