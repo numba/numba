@@ -96,4 +96,8 @@ def get_func_body_first_lineno(pyfunc):
     tree = ast.parse(source)
     finder = FindDefFirstLine(co.co_name, co.co_firstlineno - offset)
     finder.visit(tree)
-    return finder.first_stmt_line + offset
+    if finder.first_stmt_line:
+        return finder.first_stmt_line + offset
+    else:
+        # No first line found.
+        return
