@@ -3,5 +3,5 @@
 
 The ``KeyError`` raised from ``__getitem__`` for the ``numba.typed.Dict`` in
 case of an non-existing key now reports the value of the key. This behaviour is
-in-line with regular ``dict``s via CPython.
+in-line with the regular ``dict`` via CPython.
 
