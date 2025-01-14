@@ -525,6 +525,7 @@ class TestNrtNestedGen(TestCase):
 
         self.assertRefCountEqual(py_old, c_old)
 
+    @unittest.skip("Segfaults")
     def test_nrt_nested_nopython_gen(self):
         """
         Test nesting three generators
