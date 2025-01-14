@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 import atexit
 from functools import cache
 
-from numba.core import ir
+from numba.core import ir, config
 
 
 try:
@@ -38,6 +38,9 @@ def get_registered_loc_notify() -> Sequence["NotifyLocBase"]:
     """
     Returns a list of the registered NotifyLocBase instances.
     """
+    if not config.JIT_COVERAGE:
+        # Coverage disabled.
+        return []
     return list(filter(lambda x: x is not None,
                        (factory() for factory in _the_registry)))
 

@@ -568,6 +568,14 @@ class _EnvReloader(object):
             "NUMBA_LLVM_PASS_TIMINGS", int, 0,
         )
 
+        # Coverage support.
+
+        # JIT_COVERAGE (bool) controls whether the compiler report compiled
+        # lines to coverage tools. Defaults to off.
+        JIT_COVERAGE = _readenv(
+            "NUMBA_JIT_COVERAGE", int, 0,
+        )
+
         # Inject the configuration values into the module globals
         for name, value in locals().copy().items():
             if name.isupper():
