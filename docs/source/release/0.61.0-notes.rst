@@ -1,6 +1,6 @@
 
-Version 0.61.0rc2 (17 December 2024)
-====================================
+Version 0.61.0 (16 January 2025)
+================================
 
 .. contents:: Table of Contents
    :depth: 2
@@ -319,6 +319,14 @@ compatibility.
 Changes
 ~~~~~~~
 
+Add ``NUMBA_JIT_COVERAGE`` to control coverage support
+------------------------------------------------------
+
+The new ``NUMBA_JIT_COVERAGE`` environment variable enables or disables coverage
+support. Coverage is disabled by default.
+
+(`PR-#9887 <https://github.com/numba/numba/pull/9887>`__)
+
 Removal of experimental RVSDG frontend
 --------------------------------------
 
@@ -453,6 +461,7 @@ Pull-Requests:
 * PR `#9799 <https://github.com/numba/numba/pull/9799>`_: Fix regression in exception handling against 0.60. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#9821 <https://github.com/numba/numba/pull/9821>`_: Add debug print to debug test_monitoring_multiple_threads failing on win-02 (`sklam <https://github.com/sklam>`_)
 * PR `#9837 <https://github.com/numba/numba/pull/9837>`_: Replace "hard-errors" with NumbaErrors. (`stuartarchibald <https://github.com/stuartarchibald>`_ `lericson <https://github.com/lericson>`_ for `#9816 <https://github.com/numba/numba/pull/9816>`_)
+* PR `#9887 <https://github.com/numba/numba/pull/9887>`_: Add env-var NUMBA_JIT_COVERAGE to disable coverage (`sklam <https://github.com/sklam>`_)
 
 Authors:
 ~~~~~~~~
