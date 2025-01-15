@@ -230,7 +230,6 @@ class TestGenerators(MemoryLeakMixin, TestCase):
         cgen = cr(arr)
         self.check_generator(pygen, cgen)
 
-    @unittest.skip("Segfaults")
     def test_gen7(self):
         self.check_gen7(**nopython_flags)
 
