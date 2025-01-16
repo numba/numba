@@ -90,7 +90,7 @@ class TestFirstLineFinder(TestCase):
         # inspect.getsourcelines()
         filename = "<foo>"
         timestamp = None
-        entry = (len(source), timestamp, source.splitlines(), filename)
+        entry = (len(source), timestamp, source.splitlines(True), filename)
         linecache.cache[filename] = entry
 
         # We need to compile the code so we can give it the fake filename used
