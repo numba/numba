@@ -5,6 +5,7 @@ body.
 
 import ast
 import inspect
+import textwrap
 
 
 class FindDefFirstLine(ast.NodeVisitor):
@@ -93,7 +94,7 @@ def get_func_body_first_lineno(pyfunc):
         except (OSError, TypeError):
             return None
 
-    tree = ast.parse(source)
+    tree = ast.parse(textwrap.dedent(source))
     finder = FindDefFirstLine(co.co_name, co.co_firstlineno - offset)
     finder.visit(tree)
     if finder.first_stmt_line:
