@@ -104,7 +104,7 @@ class TestFirstLineFinder(TestCase):
         # We should be able to determine the first line number even though the
         # source does not exist on disk
         first_def_line = get_func_body_first_lineno(foo)
-        self.assertEqual(first_def_line, 1)
+        self.assertEqual(first_def_line, 2)
 
     def test_single_line_function(self):
         @njit
