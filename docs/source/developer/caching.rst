@@ -105,3 +105,33 @@ Related Environment Variables
 -----------------------------
 
 See :ref:`env-vars for caching <numba-envvars-caching>`.
+
+Cache Locators
+--------------
+
+Numba uses cache locators to determine where to store and find cached compiled
+functions. The following cache locators are available:
+
+**InTreeCacheLocator**
+    Stores cache files next to the source files in a ``__pycache__`` directory,
+    similar to how Python stores ``.pyc`` files.
+
+**InTreeCacheLocatorFsAgnostic**
+    A variant of ``InTreeCacheLocator`` that is agnostic to filesystem
+    differences, particularly timestamp precision. This locator floors
+    timestamps to seconds, making it suitable for environments where
+    filesystem timestamp precision may vary (e.g., when sharing cache across
+    different filesystems or systems).
+
+**UserWideCacheLocator**
+    Stores cache files in a user-wide application directory using the
+    ``appdirs`` package.
+
+**IPythonCacheLocator**
+    Stores cache files in an IPython-specific cache directory.
+
+**ZipCacheLocator**
+    Handles caching for functions defined in zip files.
+
+The order and selection of cache locators can be customized using the
+:envvar:`NUMBA_CACHE_LOCATOR_CLASSES` environment variable.
