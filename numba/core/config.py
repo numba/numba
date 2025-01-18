@@ -283,6 +283,11 @@ class _EnvReloader(object):
         # Contains path to the directory
         CACHE_DIR = _readenv("NUMBA_CACHE_DIR", str, "")
 
+        # Override default cache locators list including their order
+        # Comma separated list of locator class names,
+        # see _locator_classes in caching submodule
+        CACHE_LOCATOR_CLASSES = _readenv("NUMBA_CACHE_LOCATOR_CLASSES", str, "")
+
         # Enable tracing support
         TRACE = _readenv("NUMBA_TRACE", int, 0)
 
