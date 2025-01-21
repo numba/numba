@@ -9,6 +9,7 @@ import errno
 import hashlib
 import inspect
 import itertools
+from math import floor
 import os
 import pickle
 import sys
@@ -543,6 +544,13 @@ class IndexDataCacheFile(object):
         Load the cache index and return it as a dictionary (possibly
         empty if cache is empty or obsolete).
         """
+
+        def round_timestamp(stamp):
+            # _IPythonCacheLocator returns hexdigest instead of timestamp
+            if isinstance(stamp, str):
+                return stamp
+            return floor(stamp[0]), stamp[1]
+
         try:
             with open(self._index_path, "rb") as f:
                 version = pickle.load(f)
@@ -556,7 +564,9 @@ class IndexDataCacheFile(object):
             return {}
         stamp, overloads = pickle.loads(data)
         _cache_log("[cache] index loaded from %r", self._index_path)
-        if stamp != self._source_stamp:
+
+        # ignore millisecond precision while comparing timestamps
+        if round_timestamp(stamp) != round_timestamp(self._source_stamp):
             # Cache is not fresh.  Stale data files will be eventually
             # overwritten, since they are numbered in incrementing order.
             return {}
