@@ -1,6 +1,7 @@
-from subprocess import STDOUT, check_output
+from subprocess import STDOUT, check_output, CalledProcessError
 import argparse
 import os
+import sys
 
 manual_mode = False
 parser=argparse.ArgumentParser()
@@ -104,7 +105,12 @@ with open(file, "r") as f:
     print(f"\nPassed: File contents are valid\n")
 
 print(f"Validating RST")
-output = check_output(["rstcheck", file], stderr=STDOUT, encoding="utf-8")
-assert "Success! No issues detected." in output, \
-    "File is not a valid .rst file. Please check for errors using rstcheck"
-print(f"Passed: rstcheck passed")
+try:
+    output = check_output(["rstcheck", file], stderr=STDOUT, encoding="utf-8")
+except CalledProcessError as cpe:
+    print(f"Failed: rstcheck failed")
+    print(cpe.output)
+    sys.exit(cpe.returncode)
+else:
+    assert "Success! No issues detected." in output
+    print(f"Passed: rstcheck passed")
