@@ -13,17 +13,19 @@ labels: task
     - [ ] "remaining Pull-Requests from milestone".
 * [ ] Check Numba's version support table documentation. Update via PR if
       needed.
-* [ ] Review deprecation schedule and notices. Make PRs if need be.
-* [ ] Create changelog using instructions at: docs/source/developer/release.rst
+* [ ] Review deprecation schedule and notices. Make PRs if need be. (Note that
+  deprecation notices for features that have been removed are kept in the
+  documentation for two more releases.)
+* [ ] Create changelog using instructions at: `docs/source/developer/release.rst`
 * [ ] Merge change log changes.
     - [ ] "PR with changelog entries".
 * [ ] Create X.Y release branch.
 * [ ] Create PR against the release branch to make `numba/testing/main.py`
       to refer to `origin/releaseX.Y` instead of `origin/main`.
-* [ ] Dependency version pinning on release branch
+* [ ] Dependency version pinning on release branch:
   * [ ] Pin llvmlite to `0.A.*`.
-  * [ ] Pin NumPy if needed
-  * [ ] Pin TBB if needed
+  * [ ] Pin NumPy if needed.
+  * [ ] Pin TBB if needed.
 * [ ] Run the HEAD of the release branch through the build farm and confirm:
   * [ ] Build farm CPU testing has passed.
   * [ ] Build farm CUDA testing has passed.
@@ -41,7 +43,8 @@ labels: task
 
 ### Post Release:
 
-* [ ] Clean up `ci_artifacts` by moving files to sub-directories
+* [ ] Snapshot Build Farm config.
+* [ ] Clean up `ci_artifacts` by moving files to sub-directories.
 * [ ] Tag `X.Y+1.0dev0` to start new development cycle on `main`.
 * [ ] Update llvmlite dependency via PR to `main`, PR includes version updates
       to:

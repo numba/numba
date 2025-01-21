@@ -11,17 +11,17 @@ labels: task
 
 * [ ] Cherry-pick items from the X.Y.Z milestone into a cherry-pick PR.
 * [ ] Update the "version support table" in the documentation with the final
-  release date (FINAL ONLY) and add to cherry-pick PR
-* [ ] Update `CHANGE_LOG` on cherry-pick PR
-* [ ] Check if any dependency pinnings need an update (e.g. NumPy)
-* [ ] Approve cherry-pick PR
+  release date (FINAL ONLY) and add to cherry-pick PR.
+* [ ] Update `CHANGE_LOG` on cherry-pick PR.
+* [ ] Check if any dependency pinnings need an update (e.g. NumPy).
+* [ ] Approve cherry-pick PR.
 * [ ] Merge cherry-pick PR to X.Y release branch.
   * [ ] https://github.com/numba/numba/pull/XXXX
 * [ ] Review, merge and check execution of release notebook. (FINAL ONLY)
 * [ ] Run the HEAD of the release branch through the build farm and confirm:
   * [ ] Build farm CPU testing has passed.
-  * [ ] Build farm CUDA testing has passed
-  * [ ] Build farm wheel testing has passed
+  * [ ] Build farm CUDA testing has passed.
+  * [ ] Build farm wheel testing has passed.
 * [ ] Annotated tag X.Y.Z on release branch (no `v` prefix).
   `git tag -am "Version X.Y.Z" X.Y.Z`
 * [ ] Build and upload conda packages on buildfarm (check `upload`).
@@ -39,9 +39,9 @@ labels: task
 
 ### Post release
 
-* [ ] Cherry-pick change-log and version support table modifications to `main`
-* [ ] Snapshot Build Farm config
-* [ ] Clean up `ci_artifacts` by moving files to subdirectories
+* [ ] Cherry-pick change-log and version support table modifications to `main`.
+* [ ] Snapshot Build Farm config.
+* [ ] Clean up `ci_artifacts` by moving files to subdirectories.
 * [ ] Update release checklist template with any additional bullet points that
       may have arisen during the release.
 * [ ] Ping Anaconda Distro team to trigger a build for `defaults` (FINAL ONLY).
