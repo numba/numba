@@ -118,7 +118,8 @@ def jit(func_or_sig=None, device=False, inline=False, link=None, debug=None,
 
             disp = CUDADispatcher(func, targetoptions=targetoptions)
 
-            if cache:
+            override = config.CACHE_OVERRIDE.lower()
+            if override == "always" or (cache and override != "never"):
                 disp.enable_caching()
 
             for sig in signatures:
@@ -168,7 +169,8 @@ def jit(func_or_sig=None, device=False, inline=False, link=None, debug=None,
                 targetoptions['extensions'] = extensions
                 disp = CUDADispatcher(func_or_sig, targetoptions=targetoptions)
 
-                if cache:
+                override = config.CACHE_OVERRIDE.lower()
+                if override == "always" or (cache and override != "never"):
                     disp.enable_caching()
 
                 return disp
