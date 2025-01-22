@@ -271,6 +271,13 @@ These variables influence what is printed out during compilation of
 
    Dump the native assembly code of compiled functions.
 
+.. envvar:: NUMBA_USE_LLVM_LEGACY_PASS_MANAGER
+
+    Set to ``1`` to use the llvm's legacy pass manager instead;
+    e.g. ``NUMBA_USE_LLVM_LEGACY_PASS_MANAGER=1``.
+
+    *Default value*: ``0`` (Off)
+
 .. envvar:: NUMBA_LLVM_PASS_TIMINGS
 
     Set to ``1`` to enable recording of pass timings in LLVM;
