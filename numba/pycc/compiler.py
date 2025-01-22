@@ -19,7 +19,7 @@ from numba.core import cgutils
 
 logger = logging.getLogger(__name__)
 
-__all__ = ['Compiler']
+__all__ = []
 
 NULL = ir.Constant(lt._void_star, None)
 ZERO = ir.Constant(lt._int32, 0)
