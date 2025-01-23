@@ -17,7 +17,6 @@ labels: task
 * [ ] Approve cherry-pick PR.
 * [ ] Merge cherry-pick PR to X.Y release branch.
   * [ ] https://github.com/numba/numba/pull/XXXX
-* [ ] Review, merge and check execution of release notebook. (FINAL ONLY)
 * [ ] Run the HEAD of the release branch through the build farm and confirm:
   * [ ] Build farm CPU testing has passed.
   * [ ] Build farm CUDA testing has passed.

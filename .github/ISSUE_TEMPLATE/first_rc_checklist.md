@@ -24,7 +24,11 @@ labels: task
       to refer to `origin/releaseX.Y` instead of `origin/main`.
 * [ ] Dependency version pinning on release branch:
   * [ ] Pin llvmlite to `0.A.*`.
-  * [ ] Pin NumPy if needed.
+  * [ ] Pin NumPy if needed (see previous release for details).
+    * [ ] `buildscripts/condarecipe.local/meta.yaml`
+    * [ ] `numba/__init__.py`
+    * [ ] `setup.py`
+    * [ ] `docs/environment.yml`
   * [ ] Pin TBB if needed.
 * [ ] Run the HEAD of the release branch through the build farm and confirm:
   * [ ] Build farm CPU testing has passed.
