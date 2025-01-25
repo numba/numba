@@ -33,7 +33,6 @@ exclude =
     # Grandfather in existing failing files.  This list should shrink over time
     numba/stencils/stencil.py
     numba/core/transforms.py
-    numba/core/withcontexts.py
     numba/_version.py
     numba/core/ir_utils.py
     numba/core/pylowering.py
