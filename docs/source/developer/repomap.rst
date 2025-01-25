@@ -52,8 +52,6 @@ Documentation
 - :ghfile:`docs/source` - ReST source for Numba documentation
 - :ghfile:`docs/_static/` - Static CSS and image assets for Numba docs
 - :ghfile:`docs/make.bat` - Not used (remove?)
-- :ghfile:`docs/requirements.txt` - Pip package requirements for building docs
-  with Read the Docs.
 - :ghfile:`numba/scripts/generate_lower_listing.py` - Dump all registered
   implementations decorated with ``@lower*`` for reference
   documentation.  Currently misses implementations from the higher

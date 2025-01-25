@@ -26,7 +26,7 @@ from numba.core.types import (
     NoneType,
 )
 from numba.core.imputils import impl_ret_borrowed, RefType
-from numba.core.errors import TypingError
+from numba.core.errors import TypingError, NumbaTypeError
 from numba.core import typing
 from numba.typed.typedobjectutils import (_as_bytes, _cast, _nonoptional,
                                           _get_incref_decref,
@@ -389,7 +389,7 @@ def impl_new_list(item, allocated=DEFAULT_ALLOCATED):
 
     """
     if not isinstance(item, Type):
-        raise TypeError("expecting *item* to be a numba Type")
+        raise NumbaTypeError("expecting *item* to be a Numba Type")
 
     itemty = item
 

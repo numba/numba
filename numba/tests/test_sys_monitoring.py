@@ -732,8 +732,14 @@ class TestMonitoring(TestCase):
             t.join()
 
         # make sure there were no exceptions
-        self.assertFalse(q1.qsize())
-        self.assertFalse(q2.qsize())
+        def assert_empty_queue(q):
+            if q.qsize() != 0:
+                while not q.empty():
+                    print(q.get())
+                self.fail("queue supposed to be empty")
+
+        assert_empty_queue(q1)
+        assert_empty_queue(q2)
 
 
 @unittest.skipUnless(PYVERSION >= (3, 12), "needs Python 3.12+")

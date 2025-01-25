@@ -279,6 +279,11 @@ These variables influence what is printed out during compilation of
 
     *Default value*: ``0`` (Off)
 
+.. envvar:: NUMBA_JIT_COVERAGE
+
+   Set to ``1`` to enable coverage data reporting by the JIT compiler on 
+   compiled source lines. Default to ``0`` (Off).
+
 .. seealso::
    :ref:`numba-troubleshooting` and :ref:`architecture`.
 

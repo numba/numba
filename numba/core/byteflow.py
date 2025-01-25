@@ -1319,7 +1319,9 @@ class TraceRunner(object):
             try:
                 operand = CALL_INTRINSIC_1_Operand(inst.arg)
             except TypeError:
-                raise NotImplementedError(f"op_CALL_INTRINSIC_1({inst.arg})")
+                msg = f"op_CALL_INTRINSIC_1({inst.arg})"
+                loc = self.get_debug_loc(inst.lineno)
+                raise UnsupportedBytecodeError(msg, loc=loc)
             if operand == ci1op.INTRINSIC_STOPITERATION_ERROR:
                 state.append(inst, operand=operand)
                 state.terminate()

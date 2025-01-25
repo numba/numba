@@ -754,7 +754,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
 
     __numba__ = 'py_func'
 
-    def __init__(self, py_func, locals={}, targetoptions={},
+    def __init__(self, py_func, locals=None, targetoptions=None,
                  pipeline_class=compiler.Compiler):
         """
         Parameters
@@ -768,6 +768,10 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         pipeline_class: type numba.compiler.CompilerBase
             The compiler pipeline type.
         """
+        if locals is None:
+            locals = {}
+        if targetoptions is None:
+            targetoptions = {}
         self.typingctx = self.targetdescr.typing_context
         self.targetctx = self.targetdescr.target_context
 
