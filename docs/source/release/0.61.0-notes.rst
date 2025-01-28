@@ -314,7 +314,7 @@ processing. This change breaks Numba's comprehension support.
 This patch adds logic to ignore the new ``GET_ITER`` bytecode to maintain 
 compatibility. 
 
-(`PR-#9837 <https://github.com/numba/numba/pull/9848>`__)
+(`PR-#9848 <https://github.com/numba/numba/pull/9848>`__)
 
 Changes
 ~~~~~~~
