@@ -1,5 +1,0 @@
-Add ``NUMBA_JIT_COVERAGE`` to control coverage support
-------------------------------------------------------
-
-The new ``NUMBA_JIT_COVERAGE`` environment variable enables or disables coverage
-support. Coverage is disabled by default.
