@@ -46,138 +46,138 @@ class _Sequence(pt.Protocol[T_co]):
 DEFAULT_ALLOCATED = listobject.DEFAULT_ALLOCATED
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _make_list(itemty, allocated=DEFAULT_ALLOCATED):
     return listobject._as_meminfo(listobject.new_list(itemty,
                                                       allocated=allocated))
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _length(l):
     return len(l)
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _allocated(l):
     return l._allocated()
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _is_mutable(l):
     return l._is_mutable()
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _make_mutable(l):
     return l._make_mutable()
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _make_immutable(l):
     return l._make_immutable()
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _append(l, item):
     l.append(item)
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _setitem(l, i, item):
     l[i] = item
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _getitem(l, i):
     return l[i]
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _contains(l, item):
     return item in l
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _count(l, item):
     return l.count(item)
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _pop(l, i):
     return l.pop(i)
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _delitem(l, i):
     del l[i]
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _extend(l, iterable):
     return l.extend(iterable)
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _insert(l, i, item):
     l.insert(i, item)
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _remove(l, item):
     l.remove(item)
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _clear(l):
     l.clear()
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _reverse(l):
     l.reverse()
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _copy(l):
     return l.copy()
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _eq(t, o):
     return t == o
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _ne(t, o):
     return t != o
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _lt(t, o):
     return t < o
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _le(t, o):
     return t <= o
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _gt(t, o):
     return t > o
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _ge(t, o):
     return t >= o
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _index(l, item, start, end):
     return l.index(item, start, end)
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _sort(l, key, reverse):
     return l.sort(key, reverse)
 

@@ -5,7 +5,7 @@ from collections.abc import MutableMapping, Iterable, Mapping
 from numba.core.types import DictType
 from numba.core.imputils import numba_typeref_ctor
 from numba import njit, typeof
-from numba.core import types, errors, config, cgutils
+from numba.core import types, errors, config, cgutils, config
 from numba.core.extending import (
     overload,
     box,
@@ -18,58 +18,58 @@ from numba.typed import dictobject
 from numba.core.typing import signature
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _make_dict(keyty, valty, n_keys=0):
     return dictobject._as_meminfo(dictobject.new_dict(keyty, valty,
                                                       n_keys=n_keys))
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _length(d):
     return len(d)
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _setitem(d, key, value):
     d[key] = value
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _getitem(d, key):
     return d[key]
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _delitem(d, key):
     del d[key]
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _contains(d, key):
     return key in d
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _get(d, key, default):
     return d.get(key, default)
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _setdefault(d, key, default):
     return d.setdefault(key, default)
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _iter(d):
     return list(d.keys())
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _popitem(d):
     return d.popitem()
 
 
-@njit
+@njit(cache=config.INTERNAL_CACHING)
 def _copy(d):
     return d.copy()
 
@@ -238,7 +238,7 @@ class Dict(MutableMapping):
         return _copy(self)
 
 
-@overload_classmethod(types.DictType, 'empty')
+@overload_classmethod(types.DictType, 'empty', jit_options={"cache": config.INTERNAL_CACHING})
 def typeddict_empty(cls, key_type, value_type, n_keys=0):
     if cls.instance_type is not DictType:
         return
@@ -368,7 +368,7 @@ def typeddict_call(context):
     return typer
 
 
-@overload(numba_typeref_ctor)
+@overload(numba_typeref_ctor, jit_options={"cache": config.INTERNAL_CACHING})
 def impl_numba_typeref_ctor(cls, *args):
     """
     Defines lowering for ``Dict()`` and ``Dict(iterable)``.

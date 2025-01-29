@@ -307,6 +307,9 @@ class _EnvReloader(object):
         # Contains path to the directory
         CACHE_DIR = _readenv("NUMBA_CACHE_DIR", str, "")
 
+        # Cache all internal njit and overloads that are possible.
+        INTERNAL_CACHING = True if _readenv("NUMBA_INTERNAL_CACHING", int, 0) > 0 else False
+
         # Enable tracing support
         TRACE = _readenv("NUMBA_TRACE", int, 0)
 

@@ -21,7 +21,7 @@ from numba.core.extending import (
     make_attribute_wrapper,
 )
 from numba.core.imputils import iternext_impl, impl_ret_untracked
-from numba.core import types, cgutils
+from numba.core import types, cgutils, config
 from numba.core.types import (
     DictType,
     DictItemsIterableType,
@@ -650,7 +650,7 @@ def _make_dict(typingctx, keyty, valty, ptr):
     return sig, codegen
 
 
-@overload(new_dict)
+@overload(new_dict, jit_options={"cache": config.INTERNAL_CACHING})
 def impl_new_dict(key, value, n_keys=0):
     """Creates a new dictionary with *key* and *value* as the type
     of the dictionary key and value, respectively. *n_keys* is the
@@ -676,7 +676,7 @@ def impl_new_dict(key, value, n_keys=0):
     return imp
 
 
-@overload(len)
+@overload(len, jit_options={"cache": config.INTERNAL_CACHING})
 def impl_len(d):
     """len(dict)
     """
@@ -689,7 +689,7 @@ def impl_len(d):
     return impl
 
 
-@overload(len)
+@overload(len, jit_options={"cache": config.INTERNAL_CACHING})
 def impl_len_iters(d):
     """len(dict.keys()), len(dict.values()), len(dict.items())
     """
@@ -703,8 +703,8 @@ def impl_len_iters(d):
     return impl
 
 
-@overload_method(types.DictType, '__setitem__')
-@overload(operator.setitem)
+@overload_method(types.DictType, '__setitem__', jit_options={"cache": config.INTERNAL_CACHING})
+@overload(operator.setitem, jit_options={"cache": config.INTERNAL_CACHING})
 def impl_setitem(d, key, value):
     if not isinstance(d, types.DictType):
         return
@@ -739,7 +739,7 @@ def impl_setitem(d, key, value):
         return sig, impl
 
 
-@overload_method(types.DictType, 'get')
+@overload_method(types.DictType, 'get', jit_options={"cache": config.INTERNAL_CACHING})
 def impl_get(dct, key, default=None):
     if not isinstance(dct, types.DictType):
         return
@@ -757,14 +757,14 @@ def impl_get(dct, key, default=None):
     return impl
 
 
-@overload_attribute(types.DictType, '__hash__')
+@overload_attribute(types.DictType, '__hash__', jit_options={"cache": config.INTERNAL_CACHING})
 def impl_hash(dct):
     if not isinstance(dct, types.DictType):
         return
     return lambda dct: None
 
 
-@overload(operator.getitem)
+@overload(operator.getitem, jit_options={"cache": config.INTERNAL_CACHING})
 def impl_getitem(d, key):
     if not isinstance(d, types.DictType):
         return
@@ -784,7 +784,7 @@ def impl_getitem(d, key):
     return impl
 
 
-@overload_method(types.DictType, 'popitem')
+@overload_method(types.DictType, 'popitem', jit_options={"cache": config.INTERNAL_CACHING})
 def impl_popitem(d):
     if not isinstance(d, types.DictType):
         return
@@ -801,7 +801,7 @@ def impl_popitem(d):
     return impl
 
 
-@overload_method(types.DictType, 'pop')
+@overload_method(types.DictType, 'pop', jit_options={"cache": config.INTERNAL_CACHING})
 def impl_pop(dct, key, default=None):
     if not isinstance(dct, types.DictType):
         return
@@ -831,7 +831,7 @@ def impl_pop(dct, key, default=None):
     return impl
 
 
-@overload(operator.delitem)
+@overload(operator.delitem, jit_options={"cache": config.INTERNAL_CACHING})
 def impl_delitem(d, k):
     if not isinstance(d, types.DictType):
         return
@@ -841,7 +841,7 @@ def impl_delitem(d, k):
     return impl
 
 
-@overload(operator.contains)
+@overload(operator.contains, jit_options={"cache": config.INTERNAL_CACHING})
 def impl_contains(d, k):
     if not isinstance(d, types.DictType):
         return
@@ -855,7 +855,7 @@ def impl_contains(d, k):
     return impl
 
 
-@overload_method(types.DictType, 'clear')
+@overload_method(types.DictType, 'clear', jit_options={"cache": config.INTERNAL_CACHING})
 def impl_clear(d):
     if not isinstance(d, types.DictType):
         return
@@ -867,7 +867,7 @@ def impl_clear(d):
     return impl
 
 
-@overload_method(types.DictType, 'copy')
+@overload_method(types.DictType, 'copy', jit_options={"cache": config.INTERNAL_CACHING})
 def impl_copy(d):
     if not isinstance(d, types.DictType):
         return
@@ -883,7 +883,7 @@ def impl_copy(d):
     return impl
 
 
-@overload_method(types.DictType, 'setdefault')
+@overload_method(types.DictType, 'setdefault', jit_options={"cache": config.INTERNAL_CACHING})
 def impl_setdefault(dct, key, default=None):
     if not isinstance(dct, types.DictType):
         return
@@ -896,7 +896,7 @@ def impl_setdefault(dct, key, default=None):
     return impl
 
 
-@overload_method(types.DictType, 'items')
+@overload_method(types.DictType, 'items', jit_options={"cache": config.INTERNAL_CACHING})
 def impl_items(d):
     if not isinstance(d, types.DictType):
         return
@@ -908,7 +908,7 @@ def impl_items(d):
     return impl
 
 
-@overload_method(types.DictType, 'keys')
+@overload_method(types.DictType, 'keys', jit_options={"cache": config.INTERNAL_CACHING})
 def impl_keys(d):
     if not isinstance(d, types.DictType):
         return
@@ -919,7 +919,7 @@ def impl_keys(d):
     return impl
 
 
-@overload_method(types.DictType, 'values')
+@overload_method(types.DictType, 'values', jit_options={"cache": config.INTERNAL_CACHING})
 def impl_values(d):
     if not isinstance(d, types.DictType):
         return
@@ -930,7 +930,7 @@ def impl_values(d):
     return impl
 
 
-@overload_method(types.DictType, 'update')
+@overload_method(types.DictType, 'update', jit_options={"cache": config.INTERNAL_CACHING})
 def ol_dict_update(d, other):
     if not isinstance(d, types.DictType):
         return
@@ -943,7 +943,7 @@ def ol_dict_update(d, other):
     return impl
 
 
-@overload(operator.eq)
+@overload(operator.eq, jit_options={"cache": config.INTERNAL_CACHING})
 def impl_equal(da, db):
     if not isinstance(da, types.DictType):
         return
@@ -973,7 +973,7 @@ def impl_equal(da, db):
     return impl_type_matched
 
 
-@overload(operator.ne)
+@overload(operator.ne, jit_options={"cache": config.INTERNAL_CACHING})
 def impl_not_equal(da, db):
     if not isinstance(da, types.DictType):
         return
@@ -1191,7 +1191,7 @@ def _mixed_values_to_tuple(tyctx, d):
     return sig, impl
 
 
-@overload_method(types.LiteralStrKeyDict, 'values')
+@overload_method(types.LiteralStrKeyDict, 'values', jit_options={"cache": config.INTERNAL_CACHING})
 def literalstrkeydict_impl_values(d):
     # This requires faking a values() iterator simply as a tuple, creating a
     # type specialising iterator would be possible but horrendous and end up
@@ -1204,7 +1204,7 @@ def literalstrkeydict_impl_values(d):
     return impl
 
 
-@overload_method(types.LiteralStrKeyDict, 'keys')
+@overload_method(types.LiteralStrKeyDict, 'keys', jit_options={"cache": config.INTERNAL_CACHING})
 def literalstrkeydict_impl_keys(d):
     if not isinstance(d, types.LiteralStrKeyDict):
         return
@@ -1231,8 +1231,8 @@ def literalstrkeydict_impl_equals(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@overload(operator.getitem)
-@overload_method(types.LiteralStrKeyDict, 'get')
+@overload(operator.getitem, jit_options={"cache": config.INTERNAL_CACHING})
+@overload_method(types.LiteralStrKeyDict, 'get', jit_options={"cache": config.INTERNAL_CACHING})
 def literalstrkeydict_impl_get(dct, *args):
     if not isinstance(dct, types.LiteralStrKeyDict):
         return
@@ -1241,7 +1241,7 @@ def literalstrkeydict_impl_get(dct, *args):
     raise TypingError(msg)
 
 
-@overload_method(types.LiteralStrKeyDict, 'copy')
+@overload_method(types.LiteralStrKeyDict, 'copy', jit_options={"cache": config.INTERNAL_CACHING})
 def literalstrkeydict_impl_copy(d):
     if not isinstance(d, types.LiteralStrKeyDict):
         return
@@ -1281,7 +1281,7 @@ def _str_items_mixed_values_to_tuple(tyctx, d):
     return sig, impl
 
 
-@overload_method(types.LiteralStrKeyDict, 'items')
+@overload_method(types.LiteralStrKeyDict, 'items', jit_options={"cache": config.INTERNAL_CACHING})
 def literalstrkeydict_impl_items(d):
     if not isinstance(d, types.LiteralStrKeyDict):
         return
@@ -1291,7 +1291,7 @@ def literalstrkeydict_impl_items(d):
     return impl
 
 
-@overload(operator.contains)
+@overload(operator.contains, jit_options={"cache": config.INTERNAL_CACHING})
 def literalstrkeydict_impl_contains(d, k):
     if not isinstance(d, types.LiteralStrKeyDict):
         return
@@ -1304,7 +1304,7 @@ def literalstrkeydict_impl_contains(d, k):
     return impl
 
 
-@overload(len)
+@overload(len, jit_options={"cache": config.INTERNAL_CACHING})
 def literalstrkeydict_impl_len(d):
     if not isinstance(d, types.LiteralStrKeyDict):
         return
@@ -1312,25 +1312,25 @@ def literalstrkeydict_impl_len(d):
     return lambda d: l
 
 
-@overload(operator.setitem)
+@overload(operator.setitem, jit_options={"cache": config.INTERNAL_CACHING})
 def literalstrkeydict_banned_impl_setitem(d, key, value):
     if not isinstance(d, types.LiteralStrKeyDict):
         return
     raise TypingError("Cannot mutate a literal dictionary")
 
 
-@overload(operator.delitem)
+@overload(operator.delitem, jit_options={"cache": config.INTERNAL_CACHING})
 def literalstrkeydict_banned_impl_delitem(d, k):
     if not isinstance(d, types.LiteralStrKeyDict):
         return
     raise TypingError("Cannot mutate a literal dictionary")
 
 
-@overload_method(types.LiteralStrKeyDict, 'popitem')
-@overload_method(types.LiteralStrKeyDict, 'pop')
-@overload_method(types.LiteralStrKeyDict, 'clear')
-@overload_method(types.LiteralStrKeyDict, 'setdefault')
-@overload_method(types.LiteralStrKeyDict, 'update')
+@overload_method(types.LiteralStrKeyDict, 'popitem', jit_options={"cache": config.INTERNAL_CACHING})
+@overload_method(types.LiteralStrKeyDict, 'pop', jit_options={"cache": config.INTERNAL_CACHING})
+@overload_method(types.LiteralStrKeyDict, 'clear', jit_options={"cache": config.INTERNAL_CACHING})
+@overload_method(types.LiteralStrKeyDict, 'setdefault', jit_options={"cache": config.INTERNAL_CACHING})
+@overload_method(types.LiteralStrKeyDict, 'update', jit_options={"cache": config.INTERNAL_CACHING})
 def literalstrkeydict_banned_impl_mutators(d, *args):
     if not isinstance(d, types.LiteralStrKeyDict):
         return
