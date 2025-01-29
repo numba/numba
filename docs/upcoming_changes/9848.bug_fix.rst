@@ -1,7 +1,0 @@
-Fix for Python 3.13.1 comprehension bytecode change
----------------------------------------------------
-
-Python 3.13.1 introduces an extra ``GET_ITER`` bytecode in comprehension 
-processing. This change breaks Numba's comprehension support.
-This patch adds logic to ignore the new ``GET_ITER`` bytecode to maintain 
-compatibility. 
