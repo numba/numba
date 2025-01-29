@@ -46,7 +46,7 @@ if __name__ == "__main__":
     merge_commits = [
         x for x in all_commits if "Merge pull request" in x.message
     ]
-    prmatch = re.compile(f"^Merge pull request #([0-9]+) from.*")
+    prmatch = re.compile("^Merge pull request #([0-9]+) from.*")
     prs = {}
     authors = set()
     for x in merge_commits:
@@ -70,7 +70,7 @@ if __name__ == "__main__":
     oldchangelog = basepath / "CHANGE_LOG"
     newchangelogs = (basepath / "docs" / "source" / "release").glob("*.rst")
     for path in [oldchangelog, *newchangelogs]:
-        print('Checking', path)
+        print("Checking", path)
         with open(path) as fin:
             # Use regex to find all PR numbers in the file and remove them
             pr_re = re.compile(r"\#(\d+)")
