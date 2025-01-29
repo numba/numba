@@ -3,6 +3,7 @@ import numpy as np
 import sys
 import itertools
 import gc
+import re
 
 from numba import types
 from numba.tests.support import TestCase, MemoryLeakMixin
@@ -54,12 +55,18 @@ class TestHelperFuncs(TestCase):
         numba_func = numba.njit(cache=True)(py_func)
         with self.assertRaises(TypingError) as raises:
             numba_func(rng)
-        self.assertIn(
-            'Argument loc is not one of the expected type(s): '
-            + '[<class \'numba.core.types.scalars.Float\'>, '
-            + '<class \'numba.core.types.scalars.Integer\'>, '
-            + '<class \'int\'>, <class \'float\'>]',
-            str(raises.exception)
+
+        expected_pattern = (
+            r"Argument loc is not one of the expected type\(s\): "
+            r"\[<class 'numba.core.types.*.Float'>, "
+            r"<class 'numba.core.types.*.Integer'>, "
+            r"<class 'int'>, <class 'float'>\]"
+        )
+
+        self.assertTrue(
+            re.search(expected_pattern, str(raises.exception)) is not None,
+            "Expected pattern not found in exception message." +
+            f" Found {str(raises.exception)}"
         )
 
     def test_integers_arg_check(self):
@@ -1216,6 +1223,40 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                     x.binomial(n, p, size=size)
                 self.check_numpy_parity(dist_func, None,
                                         None, size, None, 0)
+
+    def test_binomial_specific_issues(self):
+        # The algorithm for "binomial" is quite involved. This test contains
+        # subtests for specific issues reported on the issue tracker.
+
+        # testing specific bugs found in binomial.
+        with self.subTest("infinite loop issue #9493"):
+            # This specific generator state caused a "hang" as noted in #9493
+
+            gen1 = np.random.default_rng(0)
+            gen2 = np.random.default_rng(0)
+
+            @numba.jit
+            def foo(gen):
+                return gen.binomial(700, 0.1, 100)
+
+            got = foo(gen1)
+            expected = foo.py_func(gen2)
+            self.assertPreciseEqual(got, expected)
+
+        with self.subTest("issue with midrange value branch #9493/#9734"):
+            # The use of 301 is specific to trigger use of random_binomial_btpe
+            # with an input state that caused incorrect values to be computed.
+
+            gen1 = np.random.default_rng(0)
+            gen2 = np.random.default_rng(0)
+
+            @numba.jit
+            def foo(gen):
+                return gen.binomial(301, 0.1, 100)
+
+            got = foo(gen1)
+            expected = foo.py_func(gen2)
+            self.assertPreciseEqual(got, expected)
 
 
 class TestGeneratorCaching(TestCase, SerialMixin):

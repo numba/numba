@@ -12,7 +12,9 @@ import weakref
 import warnings
 import threading
 import contextlib
+import json
 import typing as _tp
+from pprint import pformat
 
 from types import ModuleType
 from importlib import import_module
@@ -186,48 +188,6 @@ def shutting_down(globals=globals):
 # finalizer then register atexit to ensure this ordering.
 weakref.finalize(lambda: None, lambda: None)
 atexit.register(_at_shutdown)
-
-
-_old_style_deprecation_msg = (
-    "Code using Numba extension API maybe depending on 'old_style' "
-    "error-capturing, which is deprecated and will be replaced by 'new_style' "
-    "in the next release. See details at "
-    "https://numba.readthedocs.io/en/latest/reference/deprecation.html#deprecation-of-old-style-numba-captured-errors" # noqa: E501
-)
-
-
-def _warn_old_style():
-    from numba.core import errors  # to prevent circular import
-
-    exccls, _, tb = sys.exc_info()
-    # Warn only if the active exception is not a NumbaError
-    # and not a NumbaWarning which is raised if -Werror is set.
-    numba_errs = (errors.NumbaError, errors.NumbaWarning)
-    if exccls is not None and not issubclass(exccls, numba_errs):
-        tb_last = traceback.format_tb(tb)[-1]
-        msg = f"{_old_style_deprecation_msg}\nException origin:\n{tb_last}"
-        warnings.warn(msg,
-                      errors.NumbaDeprecationWarning)
-
-
-def use_new_style_errors():
-    """Returns True if new style errors are to be used, false otherwise"""
-    # This uses `config` so as to make sure it gets the current value from the
-    # module as e.g. some tests mutate the config with `override_config`.
-    res = config.CAPTURED_ERRORS == 'new_style'
-    if not res:
-        _warn_old_style()
-    return res
-
-
-def use_old_style_errors():
-    """Returns True if old style errors are to be used, false otherwise"""
-    # This uses `config` so as to make sure it gets the current value from the
-    # module as e.g. some tests mutate the config with `override_config`.
-    res = config.CAPTURED_ERRORS == 'old_style'
-    if res:
-        _warn_old_style()
-    return res
 
 
 class ThreadLocalStack:
@@ -797,3 +757,19 @@ def dump_llvm(fndesc, module):
     else:
         print(module)
     print('=' * 80)
+
+
+class _lazy_pformat(object):
+    def __init__(self, *args, **kwargs):
+        self.args = args
+        self.kwargs = kwargs
+
+    def __str__(self):
+        return pformat(*self.args, **self.kwargs)
+
+
+class _LazyJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, _lazy_pformat):
+            return str(obj)
+        return super().default(obj)

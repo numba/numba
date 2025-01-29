@@ -3327,6 +3327,23 @@ class TestParforsMisc(TestParforsBase):
 
         self.assertEqual(foo(), foo.py_func())
 
+    def test_issue_9678_build_map(self):
+        def issue_9678(num_nodes):
+            out = 0
+            for inode_uint in numba.prange(num_nodes):
+                inode = numba.int64(inode_uint)
+                p = {inode: 0.0}   # mainly this build_map bytecode here
+                for _ in range(5):
+                    p[inode] += 1  # and here
+                out += p[inode]
+            return out
+
+        num_nodes = 12
+        issue_9678_serial = numba.jit(parallel=False)(issue_9678)
+        issue_9678_parallel = numba.jit(parallel=True)(issue_9678)
+        self.assertEqual(issue_9678_serial(num_nodes),
+                         issue_9678_parallel(num_nodes))
+
 
 @skip_parfors_unsupported
 class TestParforsDiagnostics(TestParforsBase):
@@ -3550,10 +3567,10 @@ class TestPrangeBase(TestParforsBase):
             prange_names.append('prange')
             prange_names = tuple(prange_names)
             prange_idx = len(prange_names) - 1
-            if utils.PYVERSION in ((3, 11), (3, 12)):
+            if utils.PYVERSION in ((3, 11), (3, 12), (3, 13)):
                 # this is the inverse of _fix_LOAD_GLOBAL_arg
                 prange_idx = 1 + (prange_idx << 1)
-            elif utils.PYVERSION in ((3, 9), (3, 10)):
+            elif utils.PYVERSION in ((3, 10),):
                 pass
             else:
                 raise NotImplementedError(utils.PYVERSION)

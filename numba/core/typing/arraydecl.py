@@ -11,7 +11,7 @@ from numba.core.typing.templates import (AttributeTemplate, AbstractTemplate,
 from numba.core.typing import collections
 from numba.core.errors import (TypingError, RequireLiteralValue, NumbaTypeError,
                                NumbaNotImplementedError, NumbaAssertionError,
-                               NumbaKeyError, NumbaIndexError)
+                               NumbaKeyError, NumbaIndexError, NumbaValueError)
 from numba.core.cgutils import is_nonelike
 
 numpy_version = tuple(map(int, np.__version__.split('.')[:2]))
@@ -352,7 +352,8 @@ class ArrayAttribute(AttributeTemplate):
             if ty in types.number_domain:
                 # Guard against non integer type
                 if not isinstance(ty, types.Integer):
-                    raise TypeError("transpose() arg cannot be {0}".format(ty))
+                    msg = "transpose() arg cannot be {0}".format(ty)
+                    raise TypingError(msg)
                 return True
             else:
                 return False
@@ -380,8 +381,9 @@ class ArrayAttribute(AttributeTemplate):
 
         else:
             if any(not sentry_shape_scalar(a) for a in args):
-                raise TypeError("transpose({0}) is not supported".format(
-                    ', '.join(args)))
+                msg = "transpose({0}) is not supported".format(
+                    ', '.join(args))
+                raise TypingError(msg)
             assert ary.ndim == len(args)
             return signature(self.resolve_T(ary).copy(layout="A"), *args)
 
@@ -415,6 +417,11 @@ class ArrayAttribute(AttributeTemplate):
     def resolve_nonzero(self, ary, args, kws):
         assert not args
         assert not kws
+        if ary.ndim == 0 and numpy_version >= (2, 1):
+            raise NumbaValueError(
+                "Calling nonzero on 0d arrays is not allowed."
+                " Use np.atleast_1d(scalar).nonzero() instead."
+            )
         # 0-dim arrays return one result array
         ndim = max(ary.ndim, 1)
         retty = types.UniTuple(types.Array(types.intp, 1, 'C'), ndim)
@@ -426,7 +433,7 @@ class ArrayAttribute(AttributeTemplate):
             if ty in types.number_domain:
                 # Guard against non integer type
                 if not isinstance(ty, types.Integer):
-                    raise TypeError("reshape() arg cannot be {0}".format(ty))
+                    raise TypingError("reshape() arg cannot be {0}".format(ty))
                 return True
             else:
                 return False
@@ -434,7 +441,7 @@ class ArrayAttribute(AttributeTemplate):
         assert not kws
         if ary.layout not in 'CF':
             # only work for contiguous array
-            raise TypeError("reshape() supports contiguous array only")
+            raise TypingError("reshape() supports contiguous array only")
 
         if len(args) == 1:
             # single arg
@@ -452,12 +459,12 @@ class ArrayAttribute(AttributeTemplate):
 
         elif len(args) == 0:
             # no arg
-            raise TypeError("reshape() take at least one arg")
+            raise TypingError("reshape() take at least one arg")
 
         else:
             # vararg case
             if any(not sentry_shape_scalar(a) for a in args):
-                raise TypeError("reshape({0}) is not supported".format(
+                raise TypingError("reshape({0}) is not supported".format(
                     ', '.join(map(str, args))))
 
             retty = ary.copy(ndim=len(args))
@@ -509,9 +516,9 @@ class ArrayAttribute(AttributeTemplate):
         if dtype is None:
             return
         if not self.context.can_convert(ary.dtype, dtype):
-            raise TypeError("astype(%s) not supported on %s: "
-                            "cannot convert from %s to %s"
-                            % (dtype, ary, ary.dtype, dtype))
+            raise TypingError("astype(%s) not supported on %s: "
+                              "cannot convert from %s to %s"
+                              % (dtype, ary, ary.dtype, dtype))
         layout = ary.layout if ary.layout in 'CF' else 'C'
         # reset the write bit irrespective of whether the cast type is the same
         # as the current dtype, this replicates numpy
@@ -615,8 +622,9 @@ class StaticGetItemRecord(AbstractTemplate):
         record, idx = args
         if isinstance(record, types.Record) and isinstance(idx, str):
             if idx not in record.fields:
-                raise KeyError(f"Field '{idx}' was not found in record with "
-                               f"fields {tuple(record.fields.keys())}")
+                raise NumbaKeyError(f"Field '{idx}' was not found in record "
+                                    "with fields "
+                                    f"{tuple(record.fields.keys())}")
             ret = record.typeof(idx)
             assert ret
             return signature(ret, *args)
@@ -778,7 +786,7 @@ def sum_expand(self, args, kws):
         # There is an axis parameter, either arg or kwarg
         if self.this.ndim == 1:
             # 1d reduces to a scalar
-            return_type = self.this.dtype
+            return_type = _expand_integer(self.this.dtype)
         else:
             # the return type of this summation is  an array of dimension one
             # less than the input array.

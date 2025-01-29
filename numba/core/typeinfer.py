@@ -167,23 +167,6 @@ class ConstraintNetwork(object):
                         highlighting=False,
                     )
                     errors.append(utils.chain_exception(new_exc, e))
-                except Exception as e:
-                    if utils.use_old_style_errors():
-                        _logger.debug("captured error", exc_info=e)
-                        msg = ("Internal error at {con}.\n{err}\n"
-                               "Enable logging at debug level for details.")
-                        new_exc = TypingError(
-                            msg.format(con=constraint, err=str(e)),
-                            loc=constraint.loc,
-                            highlighting=False,
-                        )
-                        errors.append(utils.chain_exception(new_exc, e))
-                    elif utils.use_new_style_errors():
-                        raise e
-                    else:
-                        msg = ("Unknown CAPTURED_ERRORS style: "
-                               f"'{config.CAPTURED_ERRORS}'.")
-                        assert 0, msg
 
         return errors
 
@@ -535,14 +518,14 @@ def fold_arg_vars(typevars, args, vararg, kws):
             const_val = args[-1].literal_value
             # Is the constant value a tuple?
             if not isinstance(const_val, tuple):
-                raise TypeError(errmsg % (args[-1],))
+                raise TypingError(errmsg % (args[-1],))
             # Append the elements in the const tuple to the positional args
             pos_args += const_val
         # Handle non-constant
         elif not isinstance(args[-1], types.BaseTuple):
             # Unsuitable for *args
             # (Python is more lenient and accepts all iterables)
-            raise TypeError(errmsg % (args[-1],))
+            raise TypingError(errmsg % (args[-1],))
         else:
             # Append the elements in the tuple to the positional args
             pos_args += args[-1].types

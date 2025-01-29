@@ -6,10 +6,12 @@ from numba import njit, typeof
 from numba.core import types
 import unittest
 from numba.tests.support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
-from numba.core.errors import TypingError, UnsupportedError
+from numba.core.errors import (TypingError, UnsupportedError,
+                               UnsupportedBytecodeError)
 from numba.cpython.unicode import _MAX_UNICODE
 from numba.core.types.functions import _header_lead
 from numba.extending import overload
+from numba.core.utils import PYVERSION
 
 
 def isascii(s):
@@ -2697,10 +2699,17 @@ class TestUnicodeAuxillary(BaseTest):
         self.assertEqual(got, expected)
 
         # check error when format spec provided
-        with self.assertRaises(UnsupportedError) as raises:
+        unsupported_errors = (UnsupportedError, UnsupportedBytecodeError)
+        with self.assertRaises(unsupported_errors) as raises:
             njit(impl4)(["A", "B"])
-        msg = "format spec in f-strings not supported yet"
-        self.assertIn(msg, str(raises.exception))
+        if PYVERSION in ((3, 13),):
+            msg = "Use of unsupported opcode (FORMAT_WITH_SPEC)"
+            self.assertIn(msg, str(raises.exception))
+        elif PYVERSION in ((3, 10), (3, 11), (3, 12)):
+            msg = "format spec in f-strings not supported yet"
+            self.assertIn(msg, str(raises.exception))
+        else:
+            raise NotImplementedError(PYVERSION)
         self.assertEqual(impl5(), njit(impl5)())
 
 

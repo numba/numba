@@ -4,7 +4,7 @@ import re
 
 import numpy as np
 
-from numba.core import errors, types
+from numba.core import errors, types, config
 from numba.core.typing.templates import signature
 from numba.np import npdatetime_helpers
 from numba.core.errors import TypingError
@@ -16,26 +16,49 @@ from numba.core.cgutils import is_nonelike   # noqa: F401
 numpy_version = tuple(map(int, np.__version__.split('.')[:2]))
 
 
-FROM_DTYPE = {
-    np.dtype('bool'): types.boolean,
-    np.dtype('int8'): types.int8,
-    np.dtype('int16'): types.int16,
-    np.dtype('int32'): types.int32,
-    np.dtype('int64'): types.int64,
+if config.USE_LEGACY_TYPE_SYSTEM:
+    FROM_DTYPE = {
+        np.dtype('bool'): types.boolean,
+        np.dtype('int8'): types.int8,
+        np.dtype('int16'): types.int16,
+        np.dtype('int32'): types.int32,
+        np.dtype('int64'): types.int64,
 
-    np.dtype('uint8'): types.uint8,
-    np.dtype('uint16'): types.uint16,
-    np.dtype('uint32'): types.uint32,
-    np.dtype('uint64'): types.uint64,
+        np.dtype('uint8'): types.uint8,
+        np.dtype('uint16'): types.uint16,
+        np.dtype('uint32'): types.uint32,
+        np.dtype('uint64'): types.uint64,
 
-    np.dtype('float32'): types.float32,
-    np.dtype('float64'): types.float64,
-    np.dtype('float16'): types.float16,
-    np.dtype('complex64'): types.complex64,
-    np.dtype('complex128'): types.complex128,
+        np.dtype('float32'): types.float32,
+        np.dtype('float64'): types.float64,
+        np.dtype('float16'): types.float16,
+        np.dtype('complex64'): types.complex64,
+        np.dtype('complex128'): types.complex128,
 
-    np.dtype(object): types.pyobject,
-}
+        np.dtype(object): types.pyobject,
+    }
+else:
+    FROM_DTYPE = {
+        np.dtype('bool'): types.np_bool_,
+        np.dtype('int8'): types.np_int8,
+        np.dtype('int16'): types.np_int16,
+        np.dtype('int32'): types.np_int32,
+        np.dtype('int64'): types.np_int64,
+
+        np.dtype('uint8'): types.np_uint8,
+        np.dtype('uint16'): types.np_uint16,
+        np.dtype('uint32'): types.np_uint32,
+        np.dtype('uint64'): types.np_uint64,
+
+        np.dtype('float32'): types.np_float32,
+        np.dtype('float64'): types.np_float64,
+        np.dtype('float16'): types.np_float16,
+        np.dtype('complex64'): types.np_complex64,
+        np.dtype('complex128'): types.np_complex128,
+
+        np.dtype(object): types.pyobject,
+    }
+
 
 re_typestr = re.compile(r'[<>=\|]([a-z])(\d+)?$', re.I)
 re_datetimestr = re.compile(r'[<>=\|]([mM])8?(\[([a-z]+)\])?$', re.I)
@@ -46,14 +69,14 @@ sizeof_unicode_char = np.dtype('U1').itemsize
 def _from_str_dtype(dtype):
     m = re_typestr.match(dtype.str)
     if not m:
-        raise NotImplementedError(dtype)
+        raise errors.NumbaNotImplementedError(dtype)
     groups = m.groups()
     typecode = groups[0]
     if typecode == 'U':
         # unicode
         if dtype.byteorder not in '=|':
-            raise NotImplementedError("Does not support non-native "
-                                      "byteorder")
+            raise errors.NumbaNotImplementedError("Does not support non-native "
+                                                  "byteorder")
         count = dtype.itemsize // sizeof_unicode_char
         assert count == int(groups[1]), "Unicode char size mismatch"
         return types.UnicodeCharSeq(count)
@@ -65,13 +88,13 @@ def _from_str_dtype(dtype):
         return types.CharSeq(count)
 
     else:
-        raise NotImplementedError(dtype)
+        raise errors.NumbaNotImplementedError(dtype)
 
 
 def _from_datetime_dtype(dtype):
     m = re_datetimestr.match(dtype.str)
     if not m:
-        raise NotImplementedError(dtype)
+        raise errors.NumbaNotImplementedError(dtype)
     groups = m.groups()
     typecode = groups[0]
     unit = groups[2] or ''
@@ -80,13 +103,13 @@ def _from_datetime_dtype(dtype):
     elif typecode == 'M':
         return types.NPDatetime(unit)
     else:
-        raise NotImplementedError(dtype)
+        raise errors.NumbaNotImplementedError(dtype)
 
 
 def from_dtype(dtype):
     """
     Return a Numba Type instance corresponding to the given Numpy *dtype*.
-    NotImplementedError is raised on unsupported Numpy dtypes.
+    NumbaNotImplementedError is raised on unsupported Numpy dtypes.
     """
     if type(dtype) is type and issubclass(dtype, np.generic):
         dtype = np.dtype(dtype)
@@ -130,7 +153,7 @@ def as_dtype(nbtype):
     nbtype = types.unliteral(nbtype)
     if isinstance(nbtype, (types.Complex, types.Integer, types.Float)):
         return np.dtype(str(nbtype))
-    if nbtype is types.bool_:
+    if isinstance(nbtype, (types.Boolean)):
         return np.dtype('?')
     if isinstance(nbtype, (types.NPDatetime, types.NPTimedelta)):
         letter = _as_dtype_letters[type(nbtype)]
@@ -210,8 +233,8 @@ def map_arrayscalar_type(val):
         try:
             dtype = np.dtype(type(val))
         except TypeError:
-            raise NotImplementedError("no corresponding numpy dtype "
-                                      "for %r" % type(val))
+            raise errors.NumbaNotImplementedError("no corresponding numpy "
+                                                  "dtype for %r" % type(val))
     return from_dtype(dtype)
 
 
@@ -439,11 +462,11 @@ def ufunc_find_matching_loop(ufunc, arg_types):
                     unit = npdatetime_helpers.combine_datetime_timedelta_units(
                         dt_unit, td_unit)
                     if unit is None:
-                        raise TypeError(f"ufunc '{ufunc_name}' is not " +
-                                        "supported between " +
-                                        f"datetime64[{dt_unit}] " +
-                                        f"and timedelta64[{td_unit}]"
-                                        )
+                        raise TypingError(f"ufunc '{ufunc_name}' is not " +
+                                          "supported between " +
+                                          f"datetime64[{dt_unit}] " +
+                                          f"and timedelta64[{td_unit}]"
+                                          )
                     new_outputs.append(types.NPDatetime(unit))
                 else:
                     new_outputs.append(out)
@@ -549,7 +572,8 @@ def from_struct_dtype(dtype):
     """Convert a NumPy structured dtype to Numba Record type
     """
     if dtype.hasobject:
-        raise TypeError("Do not support dtype containing object")
+        msg = "dtypes that contain object are not supported."
+        raise errors.NumbaNotImplementedError(msg)
 
     fields = []
     for name, info in dtype.fields.items():

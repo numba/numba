@@ -18,7 +18,6 @@ from numba.np import numpy_support
 from numba.core.registry import cpu_target
 from numba.core.base import BaseContext
 from numba.np import ufunc_db
-from numba.tests.support import expected_failure_np2
 
 is32bits = tuple.__itemsize__ == 4
 iswindows = sys.platform.startswith('win32')
@@ -162,12 +161,16 @@ class BasicUFuncTest(BaseUFuncTest):
     def _make_ufunc_usecase(self, ufunc):
         return _make_ufunc_usecase(ufunc)
 
-    def basic_ufunc_test(self, ufunc, skip_inputs=[], additional_inputs=[],
+    def basic_ufunc_test(self, ufunc, skip_inputs=None, additional_inputs=None,
                          int_output_type=None, float_output_type=None,
                          kinds='ifc', positive_only=False):
 
         # Necessary to avoid some Numpy warnings being silenced, despite
         # the simplefilter() call below.
+        if skip_inputs is None:
+            skip_inputs = []
+        if additional_inputs is None:
+            additional_inputs = []
         self.reset_module_warnings(__name__)
 
         pyfunc = self._make_ufunc_usecase(ufunc)
@@ -928,8 +931,12 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
         np.testing.assert_array_almost_equal(expected, got)
 
     def unary_op_test(self, operator, nrt=True,
-                      skip_inputs=[], additional_inputs=[],
+                      skip_inputs=None, additional_inputs=None,
                       int_output_type=None, float_output_type=None):
+        if skip_inputs is None:
+            skip_inputs = []
+        if additional_inputs is None:
+            additional_inputs = []
         operator_func = _make_unary_ufunc_op_usecase(operator)
         inputs = list(self.inputs)
         inputs.extend(additional_inputs)
@@ -947,9 +954,13 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
             self._check_results(expected, got)
 
     def binary_op_test(self, operator, nrt=True,
-                       skip_inputs=[], additional_inputs=[],
+                       skip_inputs=None, additional_inputs=None,
                        int_output_type=None, float_output_type=None,
                        positive_rhs=False):
+        if skip_inputs is None:
+            skip_inputs = []
+        if additional_inputs is None:
+            additional_inputs = []
         operator_func = _make_binary_ufunc_op_usecase(operator)
         inputs = list(self.inputs)
         inputs.extend(additional_inputs)
@@ -1696,8 +1707,6 @@ class TestLoopTypesComplex(_LoopTypesTester):
 
 
 TestLoopTypesComplex.autogenerate()
-expected_failure_np2(TestLoopTypesComplex.test_sign_F_F)
-expected_failure_np2(TestLoopTypesComplex.test_sign_D_D)
 
 
 class TestLoopTypesDatetime(_LoopTypesTester):
