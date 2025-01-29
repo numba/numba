@@ -462,6 +462,7 @@ Pull-Requests:
 * PR `#9821 <https://github.com/numba/numba/pull/9821>`_: Add debug print to debug test_monitoring_multiple_threads failing on win-02 (`sklam <https://github.com/sklam>`_)
 * PR `#9837 <https://github.com/numba/numba/pull/9837>`_: Replace "hard-errors" with NumbaErrors. (`stuartarchibald <https://github.com/stuartarchibald>`_ `lericson <https://github.com/lericson>`_ for `#9816 <https://github.com/numba/numba/pull/9816>`_)
 * PR `#9887 <https://github.com/numba/numba/pull/9887>`_: Add env-var NUMBA_JIT_COVERAGE to disable coverage (`sklam <https://github.com/sklam>`_)
+* PR `#9848 <https://github.com/numba/numba/pull/9848>`_: Fix #9846. GET_ITER in comprehension changed to NOP. (`sklam <https://github.com/sklam>`_)
 
 Authors:
 ~~~~~~~~
