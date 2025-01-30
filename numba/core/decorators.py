@@ -223,7 +223,8 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
         disp = dispatcher(py_func=func, locals=locals,
                           targetoptions=targetoptions,
                           **dispatcher_args)
-        if cache:
+        override = config.CACHE_OVERRIDE.lower()
+        if override == "always" or (cache and override != "never"):
             disp.enable_caching()
         if sigs is not None:
             # Register the Dispatcher to the type inference mechanism,
@@ -273,7 +274,8 @@ def cfunc(sig, locals=MappingProxyType({}), cache=False, pipeline_class=None, **
         if pipeline_class is not None:
             additional_args['pipeline_class'] = pipeline_class
         res = CFunc(func, sig, locals=locals, options=options, **additional_args)
-        if cache:
+        override = config.CACHE_OVERRIDE.lower()
+        if override == "always" or (cache and override != "never"):
             res.enable_caching()
         res.compile()
         return res
