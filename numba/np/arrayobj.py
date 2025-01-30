@@ -277,7 +277,7 @@ def normalize_axis(func_name, arg_name, ndim, axis):
     raise NotImplementedError()
 
 
-@overload(normalize_axis)
+@overload(normalize_axis, jit_options={"cache": config.INTERNAL_CACHING})
 def normalize_axis_overloads(func_name, arg_name, ndim, axis):
     if not isinstance(func_name, StringLiteral):
         raise errors.TypingError("func_name must be a str literal.")
@@ -1460,7 +1460,7 @@ def _default_broadcast_to_impl(array, shape):
     return _numpy_broadcast_to(array, shape)
 
 
-@overload(np.broadcast_to)
+@overload(np.broadcast_to, jit_options={"cache": config.INTERNAL_CACHING})
 def numpy_broadcast_to(array, shape):
     if not type_can_asarray(array):
         raise errors.TypingError('The first argument "array" must '
@@ -1520,7 +1520,7 @@ def numpy_broadcast_shapes_list(r, m, shape):
                              " to a single shape")
 
 
-@overload(np.broadcast_shapes)
+@overload(np.broadcast_shapes, jit_options={"cache": config.INTERNAL_CACHING})
 def ol_numpy_broadcast_shapes(*args):
     # Based on https://github.com/numpy/numpy/blob/f702b26fff3271ba6a6ba29a021fc19051d1f007/numpy/core/src/multiarray/iterators.c#L1129-L1212  # noqa
     for idx, arg in enumerate(args):
@@ -1561,7 +1561,7 @@ def ol_numpy_broadcast_shapes(*args):
         return impl
 
 
-@overload(np.broadcast_arrays)
+@overload(np.broadcast_arrays, jit_options={"cache": config.INTERNAL_CACHING})
 def numpy_broadcast_arrays(*args):
 
     for idx, arg in enumerate(args):
@@ -1883,7 +1883,7 @@ def array_transpose_vararg(context, builder, sig, args):
     return array_transpose_tuple(context, builder, new_sig, new_args)
 
 
-@overload(np.transpose)
+@overload(np.transpose, jit_options={"cache": config.INTERNAL_CACHING})
 def numpy_transpose(a, axes=None):
     if isinstance(a, types.BaseTuple):
         raise errors.TypingError("np.transpose does not accept tuples")
@@ -1918,7 +1918,7 @@ def array_T(context, builder, typ, value):
     return impl_ret_borrowed(context, builder, typ, res)
 
 
-@overload(np.logspace)
+@overload(np.logspace, jit_options={"cache": config.INTERNAL_CACHING})
 def numpy_logspace(start, stop, num=50):
     if not isinstance(start, types.Number):
         raise errors.TypingError('The first argument "start" must be a number')
@@ -2011,7 +2011,7 @@ def numpy_geomspace(start, stop, num=50):
     return impl
 
 
-@overload(np.rot90)
+@overload(np.rot90, jit_options={"cache": config.INTERNAL_CACHING})
 def numpy_rot90(m, k=1):
     # supporting axes argument it needs to be included in np.flip
     if not isinstance(k, (int, types.Integer)):
@@ -2176,20 +2176,20 @@ def array_reshape_vararg(context, builder, sig, args):
 
 
 if numpy_version < (2, 1):
-    @overload(np.reshape)
+    @overload(np.reshape, jit_options={"cache": config.INTERNAL_CACHING})
     def np_reshape(a, newshape):
         def np_reshape_impl(a, newshape):
             return a.reshape(newshape)
         return np_reshape_impl
 else:
-    @overload(np.reshape)
+    @overload(np.reshape, jit_options={"cache": config.INTERNAL_CACHING})
     def np_reshape(a, shape):
         def np_reshape_impl(a, shape):
             return a.reshape(shape)
         return np_reshape_impl
 
 
-@overload(np.resize)
+@overload(np.resize, jit_options={"cache": config.INTERNAL_CACHING})
 def numpy_resize(a, new_shape):
 
     if not type_can_asarray(a):
@@ -2236,7 +2236,7 @@ def numpy_resize(a, new_shape):
     return impl
 
 
-@overload(np.append)
+@overload(np.append, jit_options={"cache": config.INTERNAL_CACHING})
 def np_append(arr, values, axis=None):
 
     if not type_can_asarray(arr):
@@ -2330,7 +2330,7 @@ def _np_clip_impl_none(a, b, use_min, out):
     return out
 
 
-@overload(np.clip)
+@overload(np.clip, jit_options={"cache": config.INTERNAL_CACHING})
 def np_clip(a, a_min, a_max, out=None):
     if not type_can_asarray(a):
         raise errors.TypingError('The argument "a" must be array-like')
@@ -2585,7 +2585,7 @@ def _change_dtype(context, builder, oldty, newty, ary):
     return res
 
 
-@overload(np.shape)
+@overload(np.shape, jit_options={"cache": config.INTERNAL_CACHING})
 def np_shape(a):
     if not type_can_asarray(a):
         raise errors.TypingError("The argument to np.shape must be array-like")
@@ -2595,7 +2595,7 @@ def np_shape(a):
     return impl
 
 
-@overload(np.size)
+@overload(np.size, jit_options={"cache": config.INTERNAL_CACHING})
 def np_size(a):
     if not type_can_asarray(a):
         raise errors.TypingError("The argument to np.size must be array-like")
@@ -2607,7 +2607,7 @@ def np_size(a):
 # ------------------------------------------------------------------------------
 
 
-@overload(np.unique)
+@overload(np.unique, jit_options={"cache": config.INTERNAL_CACHING})
 def np_unique(ar):
     def np_unique_impl(ar):
         b = np.sort(ar.ravel())
@@ -2617,7 +2617,7 @@ def np_unique(ar):
     return np_unique_impl
 
 
-@overload(np.repeat)
+@overload(np.repeat, jit_options={"cache": config.INTERNAL_CACHING})
 def np_repeat(a, repeats):
     # Implementation for repeats being a scalar is a module global function
     # (see below) because it might be called from the implementation below.
@@ -3051,8 +3051,8 @@ def array_complex_attr(context, builder, typ, value, attr):
     return impl_ret_borrowed(context, builder, resultty, result._getvalue())
 
 
-@overload_method(types.Array, 'conj')
-@overload_method(types.Array, 'conjugate')
+@overload_method(types.Array, 'conj', jit_options={"cache": config.INTERNAL_CACHING})
+@overload_method(types.Array, 'conjugate', jit_options={"cache": config.INTERNAL_CACHING})
 def array_conj(arr):
     def impl(arr):
         return np.conj(arr)
@@ -4283,7 +4283,7 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
     return ary
 
 
-@overload_classmethod(types.Array, "_allocate")
+@overload_classmethod(types.Array, "_allocate", jit_options={"cache": config.INTERNAL_CACHING})
 def _ol_array_allocate(cls, allocsize, align):
     """Implements a Numba-only default target (cpu) classmethod on the array
     type.
@@ -4403,7 +4403,7 @@ def numpy_empty_nd(tyctx, ty_shape, ty_dtype, ty_retty_ref):
     return sig, codegen
 
 
-@overload(np.empty)
+@overload(np.empty, jit_options={"cache": config.INTERNAL_CACHING})
 def ol_np_empty(shape, dtype=float):
     _check_const_str_dtype("empty", dtype)
     if (dtype is float or
@@ -4868,7 +4868,7 @@ def _arange_dtype(*args):
     return dtype
 
 
-@overload(np.arange)
+@overload(np.arange, jit_options={"cache": config.INTERNAL_CACHING})
 def np_arange(start, / ,stop=None, step=None, dtype=None):
     if isinstance(stop, types.Optional):
         stop = stop.type
@@ -5543,7 +5543,7 @@ def np_array(typingctx, obj, dtype):
     return sig, codegen
 
 
-@overload(np.array)
+@overload(np.array, jit_options={"cache": config.INTERNAL_CACHING})
 def impl_np_array(object, dtype=None):
     _check_const_str_dtype("array", dtype)
     if not type_can_asarray(object):
