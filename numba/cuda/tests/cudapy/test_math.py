@@ -158,6 +158,11 @@ def math_floor(A, B):
     B[i] = math.floor(A[i])
 
 
+def math_nextafter(A, B, C):
+    i = cuda.grid(1)
+    C[i] = math.nextafter(A[i], B[i])
+
+
 def math_copysign(A, B, C):
     i = cuda.grid(1)
     C[i] = math.copysign(A[i], B[i])
@@ -650,6 +655,12 @@ class TestCudaMath(CUDATestCase):
         self.unary_template_float64(math_floor, np.floor)
         self.unary_template_int64(math_floor, np.floor)
         self.unary_template_uint64(math_floor, np.floor)
+
+    #---------------------------------------------------------------------------
+    # test_math_nextafter
+    def test_math_nextafter(self):
+        self.binary_template_float32(math_nextafter, np.nextafter)
+        self.binary_template_float64(math_nextafter, np.nextafter)
 
     #---------------------------------------------------------------------------
     # test_math_trunc
