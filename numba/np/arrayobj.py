@@ -3051,8 +3051,10 @@ def array_complex_attr(context, builder, typ, value, attr):
     return impl_ret_borrowed(context, builder, resultty, result._getvalue())
 
 
-@overload_method(types.Array, 'conj', jit_options={"cache": config.INTERNAL_CACHING})
-@overload_method(types.Array, 'conjugate', jit_options={"cache": config.INTERNAL_CACHING})
+@overload_method(types.Array, 'conj',
+                 jit_options={"cache": config.INTERNAL_CACHING})
+@overload_method(types.Array, 'conjugate',
+                 jit_options={"cache": config.INTERNAL_CACHING})
 def array_conj(arr):
     def impl(arr):
         return np.conj(arr)
@@ -4283,7 +4285,8 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
     return ary
 
 
-@overload_classmethod(types.Array, "_allocate", jit_options={"cache": config.INTERNAL_CACHING})
+@overload_classmethod(types.Array, "_allocate",
+                      jit_options={"cache": config.INTERNAL_CACHING})
 def _ol_array_allocate(cls, allocsize, align):
     """Implements a Numba-only default target (cpu) classmethod on the array
     type.
