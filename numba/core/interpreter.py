@@ -1417,7 +1417,8 @@ class Interpreter(object):
         func_ir = ir.FunctionIR(self.blocks, self.is_generator, self.func_id,
                                 self.first_loc, self.definitions,
                                 self.arg_count, self.arg_names)
-        _logger.debug(_lazy_pformat(func_ir, lazy_func=lambda x: x.dump_to_string()))
+        _logger.debug(_lazy_pformat(func_ir,
+                                    lazy_func=lambda x: x.dump_to_string()))
 
         # post process the IR to rewrite opcodes/byte sequences that are too
         # involved to risk handling as part of direct interpretation
