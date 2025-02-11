@@ -1,0 +1,180 @@
+name: build-numba-whl-win64
+
+on:
+  workflow_dispatch:
+    inputs:
+      llvmlite_version:
+        description: 'llvmlite version (e.g. ">=0.45.0dev0,<0.45" or leave empty for latest)'
+        required: false
+        type: string
+
+jobs:
+  build_wheels:
+    name: build_${{ matrix.platform }}_py${{ matrix.python }}_npy${{ matrix.numpy }}${{ matrix.tbb && '_tbb' || '' }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows x64 (with TBB)
+          - os: windows-latest
+            platform: win_64
+            python: '3.10'
+            numpy: '2.0.0rc1'
+            tbb: true
+          - os: windows-latest
+            platform: win_64
+            python: '3.11'
+            numpy: '2.0.0rc1'
+            tbb: true
+          - os: windows-latest
+            platform: win_64
+            python: '3.12'
+            numpy: '2.0.0rc1'
+            tbb: true
+
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Install Miniconda
+      shell: pwsh
+      run: |
+        $wc = New-Object net.webclient
+        $wc.Downloadfile("https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe", "Miniconda3-latest-Windows-x86_64.exe")
+        Start-Process "Miniconda3-latest-Windows-x86_64.exe" "/S /D=C:\Miniconda3" -Wait
+        echo "C:\Miniconda3\Scripts" >> $env:GITHUB_PATH
+        echo "C:\Miniconda3\Library\bin" >> $env:GITHUB_PATH
+
+    - name: Create Build Environment
+      run: |
+        conda create -n build_env `
+          python=${{ matrix.python }} `
+          numpy=${{ matrix.numpy }} `
+          -c numba `
+          -c ad-testing/label/numpy2
+        conda activate build_env
+        if (${{ matrix.tbb }}) {
+          python -m pip install tbb==2021.6 tbb-devel==2021.6
+        }
+        python -m pip install --upgrade wheel
+        conda list
+
+    - name: Build Wheel
+      run: |
+        # Initialize conda for the shell
+        $Env:CONDA_EXE = "C:\Miniconda3\Scripts\conda.exe"
+        $Env:_CE_M = ""
+        $Env:_CE_CONDA = ""
+        $Env:_CONDA_ROOT = "C:\Miniconda3"
+        $Env:_CONDA_EXE = "C:\Miniconda3\Scripts\conda.exe"
+        (& "C:\Miniconda3\Scripts\conda.exe" "shell.powershell" "hook") | Out-String | Invoke-Expression
+        conda activate build_env
+
+        # Build C extensions first
+        python setup.py build_ext --inplace
+        
+        # Then build wheel
+        python setup.py -q bdist_wheel
+        Get-ChildItem dist
+
+    - name: Get Latest llvmlite Version
+      if: ${{ !inputs.llvmlite_version }}
+      run: |
+        # Initialize conda
+        $Env:CONDA_EXE = "C:\Miniconda3\Scripts\conda.exe"
+        $Env:_CE_M = ""
+        $Env:_CE_CONDA = ""
+        $Env:_CONDA_ROOT = "C:\Miniconda3"
+        $Env:_CONDA_EXE = "C:\Miniconda3\Scripts\conda.exe"
+        (& "C:\Miniconda3\Scripts\conda.exe" "shell.powershell" "hook") | Out-String | Invoke-Expression
+        
+        # Get latest version from numba channel
+        $latest_version = conda search -c numba llvmlite --json | ConvertFrom-Json
+        $versions = $latest_version.llvmlite | ForEach-Object {$_.version}
+        $latest = $versions | Sort-Object -Descending | Select-Object -First 1
+        Write-Host "LLVMLITE_VERSION=$latest" >> $env:GITHUB_ENV
+        Write-Host "Using latest llvmlite version: $latest"
+
+    - name: Set User Specified llvmlite Version
+      if: ${{ inputs.llvmlite_version }}
+      run: |
+        Write-Host "LLVMLITE_VERSION=${{ inputs.llvmlite_version }}" >> $env:GITHUB_ENV
+        Write-Host "Using specified llvmlite version: ${{ inputs.llvmlite_version }}"
+
+    - name: Create Test Environment
+      run: |
+        # Initialize conda for the shell
+        $Env:CONDA_EXE = "C:\Miniconda3\Scripts\conda.exe"
+        $Env:_CE_M = ""
+        $Env:_CE_CONDA = ""
+        $Env:_CONDA_ROOT = "C:\Miniconda3"
+        $Env:_CONDA_EXE = "C:\Miniconda3\Scripts\conda.exe"
+        (& "C:\Miniconda3\Scripts\conda.exe" "shell.powershell" "hook") | Out-String | Invoke-Expression
+        conda create -n test_env `
+          python=${{ matrix.python }} `
+          numpy=${{ matrix.numpy }} `
+          "wheel>=0.32" `
+          twine `
+          "llvmlite$env:LLVMLITE_VERSION" `
+          -c numba `
+          -c ad-testing/label/numpy2 `
+          -y
+        conda activate test_env
+        conda list
+
+    - name: Install Built Wheel
+      run: |
+        # Initialize conda for the shell
+        $Env:CONDA_EXE = "C:\Miniconda3\Scripts\conda.exe"
+        $Env:_CE_M = ""
+        $Env:_CE_CONDA = ""
+        $Env:_CONDA_ROOT = "C:\Miniconda3"
+        $Env:_CONDA_EXE = "C:\Miniconda3\Scripts\conda.exe"
+        (& "C:\Miniconda3\Scripts\conda.exe" "shell.powershell" "hook") | Out-String | Invoke-Expression
+        conda activate test_env
+        
+        # Install in development mode first
+        python setup.py develop
+        
+        # Then install the wheel
+        cd dist
+        python -m pip install --force-reinstall (Get-Item *.whl).Name
+        cd ..
+        python -c "import numba; print(numba.__version__)"
+
+    - name: Run Numba Tests
+      run: |
+        # Initialize conda for the shell
+        $Env:CONDA_EXE = "C:\Miniconda3\Scripts\conda.exe"
+        $Env:_CE_M = ""
+        $Env:_CE_CONDA = ""
+        $Env:_CONDA_ROOT = "C:\Miniconda3"
+        $Env:_CONDA_EXE = "C:\Miniconda3\Scripts\conda.exe"
+        (& "C:\Miniconda3\Scripts\conda.exe" "shell.powershell" "hook") | Out-String | Invoke-Expression
+        conda activate test_env
+        
+        # Install test dependencies from meta.yaml test.requires
+        conda install -y `
+          jinja2 `
+          cffi `
+          scipy `
+          ipython `
+          setuptools `
+          tbb>=2021.6 `
+          ipykernel `
+          -c numba
+
+        # Run the test suite with 4 processes
+        python -m numba.runtests -m 4 -v numba.tests.doc_examples
+
+    - name: Upload Wheel Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: numba-${{ matrix.platform }}-py${{ matrix.python }}-npy${{ matrix.numpy }}${{ matrix.tbb && '-tbb' || '' }}
+        path: dist/*.whl
