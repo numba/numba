@@ -13,7 +13,7 @@ from numba.core.errors import (
 )
 from numba.core.ir_utils import get_definition, guard
 from numba.core.utils import (PYVERSION, BINOPS_TO_OPERATORS,
-                              INPLACE_BINOPS_TO_OPERATORS,)
+                              INPLACE_BINOPS_TO_OPERATORS, _lazy_pformat,)
 from numba.core.byteflow import Flow, AdaptDFA, AdaptCFA, BlockKind
 from numba.core.unsafe import eh
 from numba.cpython.unsafe.tuple import unpack_single_tuple
@@ -1417,7 +1417,8 @@ class Interpreter(object):
         func_ir = ir.FunctionIR(self.blocks, self.is_generator, self.func_id,
                                 self.first_loc, self.definitions,
                                 self.arg_count, self.arg_names)
-        _logger.debug(func_ir.dump_to_string())
+        _logger.debug(_lazy_pformat(func_ir,
+                                    lazy_func=lambda x: x.dump_to_string()))
 
         # post process the IR to rewrite opcodes/byte sequences that are too
         # involved to risk handling as part of direct interpretation
