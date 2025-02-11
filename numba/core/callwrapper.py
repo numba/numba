@@ -1,7 +1,7 @@
 from llvmlite.ir import Constant, IRBuilder
 import llvmlite.ir
 
-from numba.core import types, config, cgutils
+from numba.core import types, config, cgutils, generators
 
 
 class _ArgManager(object):
@@ -187,6 +187,14 @@ class PyCallWrapper(object):
                 api.return_none()
 
             retty = self._simplified_return_type()
+            # from_native_return() steals an NRT ref, which can lead to a
+            # double-free if a generator yields a variable that is used later
+            # in the generator. In that case, we need to make an extra incref.
+            if (self.context.enable_nrt and
+                    isinstance(self.fndesc, generators.GeneratorDescriptor)):
+                with builder.if_then(status.is_live_var):
+                    self.context.nrt.incref(builder, retty, retval)
+
             obj = api.from_native_return(retty, retval, env_manager)
             builder.ret(obj)
 
