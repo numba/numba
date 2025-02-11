@@ -1,0 +1,84 @@
+name: numba_win-64_builder
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/numba_win-64_builder.yml
+  workflow_dispatch:
+    inputs:
+      llvmdev_run_id:
+        description: 'llvmdev workflow run ID (optional)'
+        required: false
+        type: string
+
+jobs:
+  win-64-build-conda:
+    name: win-64-build-conda
+    runs-on: windows-2019
+    defaults:
+      run:
+        shell: bash -elx {0}
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+      fail-fast: false
+
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          auto-activate-base: true
+          activate-environment: ""
+
+      - name: Install conda-build
+        run: conda install conda-build
+
+
+      - name: Build Numba conda package
+        run: |
+          CONDA_CHANNEL_DIR="conda_channel_dir"
+          mkdir $CONDA_CHANNEL_DIR
+          conda build --debug -c numba/label/dev -c defaults --python=${{ matrix.python-version }}  buildscripts/condarecipe.local/ --output-folder=$CONDA_CHANNEL_DIR --no-test
+
+      - name: Upload numba conda package
+        uses: actions/upload-artifact@v4
+        with:
+          name: numba_win-64_conda_py${{ matrix.python-version }}
+          path: conda_channel_dir
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error
+
+  win-64-test:
+    name: win-64-test-conda
+    needs: win-64-build-conda
+    runs-on: windows-2019
+    defaults:
+      run:
+        shell: bash -elx {0}
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+      fail-fast: false
+
+    steps:
+      - name: Setup miniconda
+        uses: conda-incubator/setup-miniconda@v3
+
+      - name: Download llvmlite artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: numba_win-64_conda_py${{ matrix.python-version }}
+
+      - name: Install conda-build
+        run: |
+          conda install conda-build
+
+      - name: Run tests
+        run: conda build --test win-64/numba*.conda
