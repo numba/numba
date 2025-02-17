@@ -228,7 +228,7 @@ class TestNumberHashing(BaseTest):
     """
 
     def setUp(self):
-        if numpy_version >= (2, 0):
+        if numpy_version >= (2, 0) and numpy_version <= (2, 1):
             # Temporarily set promotions state to legacy,
             # to ensure overflow logic works
             self.initial_state = np._get_promotion_state()
@@ -237,7 +237,7 @@ class TestNumberHashing(BaseTest):
         return super().setUp()
 
     def tearDown(self) -> None:
-        if numpy_version >= (2, 0):
+        if numpy_version >= (2, 0) and numpy_version <= (2, 1):
             # Reset numpy promotion state to initial state
             # since the setting is global
             np._set_promotion_state(self.initial_state)
@@ -340,7 +340,7 @@ class TestTupleHashing(BaseTest):
     """
 
     def setUp(self):
-        if numpy_version >= (2, 0):
+        if numpy_version >= (2, 0) and numpy_version <= (2, 1):
             # Temporarily set promotions state to legacy,
             # to ensure overflow logic works
             self.initial_state = np._get_promotion_state()
@@ -349,7 +349,7 @@ class TestTupleHashing(BaseTest):
         return super().setUp()
 
     def tearDown(self) -> None:
-        if numpy_version >= (2, 0):
+        if numpy_version >= (2, 0) and numpy_version <= (2, 1):
             # Reset numpy promotion state to initial state
             # since the setting is global
             np._set_promotion_state(self.initial_state)
