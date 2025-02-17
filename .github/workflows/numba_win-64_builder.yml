@@ -4,12 +4,6 @@ on:
   pull_request:
     paths:
       - .github/workflows/numba_win-64_builder.yml
-  workflow_dispatch:
-    inputs:
-      llvmdev_run_id:
-        description: 'llvmdev workflow run ID (optional)'
-        required: false
-        type: string
 
 jobs:
   win-64-build-conda:
@@ -20,7 +14,7 @@ jobs:
         shell: bash -elx {0}
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12"]
       fail-fast: false
 
     steps:
@@ -64,7 +58,7 @@ jobs:
         shell: bash -elx {0}
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12"]
       fail-fast: false
 
     steps:
