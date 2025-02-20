@@ -136,10 +136,11 @@ jobs:
           TESTS_TO_RUN: "numba.tests"
           NUMBA_ENABLE_CUDASIM: 1
         run: |
-          for np_ver in ${{ join(matrix.numpy_test, ' ') }}; do
-            echo "Testing with NumPy ${np_ver}"
-            conda build -c numba/label/dev -c defaults \
-              --test \
-              --numpy=${np_ver} \
-              win-64/numba*.conda
-          done
+          echo "Testing with NumPy ${{ matrix.numpy_test }}"
+          conda build -c numba/label/dev -c defaults \
+            --test \
+            --numpy=${{ matrix.numpy_test }} \
+            --override-channels \
+            --strict-channel-priority \
+            --no-deps-test \
+            win-64/numba*.conda
