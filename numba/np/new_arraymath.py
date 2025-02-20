@@ -1577,6 +1577,11 @@ def _median_inner(temp_arry, n):
     The main logic of the median() call.  *temp_arry* must be disposable,
     as this function will mutate it.
     """
+    
+    # New code
+    if n == 0:
+        return np.nan
+
     low = 0
     high = n - 1
     half = n >> 1
