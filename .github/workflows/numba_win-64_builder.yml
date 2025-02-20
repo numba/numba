@@ -4,6 +4,14 @@ on:
   pull_request:
     paths:
       - .github/workflows/numba_win-64_builder.yml
+      - buildscripts/condarecipe.local/**
+  workflow_dispatch:
+    inputs:
+      force_build:
+        description: 'Force build (ignore cache)'
+        type: boolean
+        default: false
+        required: false
 
 jobs:
   win-64-build-conda:
@@ -14,7 +22,15 @@ jobs:
         shell: bash -elx {0}
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        include:
+          - python-version: "3.10"
+            numpy_build: "2.0"
+          - python-version: "3.11"
+            numpy_build: "2.0"
+          - python-version: "3.12"
+            numpy_build: "2.0"
+          - python-version: "3.13"
+            numpy_build: "2.1"
       fail-fast: false
 
     steps:
@@ -22,6 +38,17 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Cache conda packages
+        id: cache
+        if: ${{ !inputs.force_build }}
+        uses: actions/cache@v3
+        with:
+          path: |
+            conda_channel_dir
+          key: ${{ runner.os }}-conda-${{ matrix.python-version }}-${{ hashFiles('buildscripts/condarecipe.local/**') }}
+          restore-keys: |
+            ${{ runner.os }}-conda-${{ matrix.python-version }}-
 
       - name: Setup Miniconda
         uses: conda-incubator/setup-miniconda@v3
@@ -33,12 +60,17 @@ jobs:
       - name: Install conda-build
         run: conda install conda-build
 
-
       - name: Build Numba conda package
+        if: steps.cache.outputs.cache-hit != 'true' || inputs.force_build
         run: |
           CONDA_CHANNEL_DIR="conda_channel_dir"
-          mkdir $CONDA_CHANNEL_DIR
-          conda build --debug -c numba/label/dev -c defaults --python=${{ matrix.python-version }}  buildscripts/condarecipe.local/ --output-folder=$CONDA_CHANNEL_DIR --no-test
+          mkdir -p $CONDA_CHANNEL_DIR
+          conda build --debug -c numba/label/dev -c defaults \
+            --python=${{ matrix.python-version }} \
+            --numpy=${{ matrix.numpy_build }} \
+            buildscripts/condarecipe.local/ \
+            --output-folder=$CONDA_CHANNEL_DIR \
+            --no-test
 
       - name: Upload numba conda package
         uses: actions/upload-artifact@v4
@@ -58,7 +90,32 @@ jobs:
         shell: bash -elx {0}
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        include:
+          # Python 3.10
+          - python-version: "3.10"
+            numpy_test: "1.24"
+          - python-version: "3.10"
+            numpy_test: "1.25"
+
+          # Python 3.11
+          - python-version: "3.11"
+            numpy_test: "1.26"
+          - python-version: "3.11"
+            numpy_test: "2.0"
+          - python-version: "3.11"
+            numpy_test: "2.1"
+
+          # Python 3.12
+          - python-version: "3.12"
+            numpy_test: "1.26"
+          - python-version: "3.12"
+            numpy_test: "2.0"
+          - python-version: "3.12"
+            numpy_test: "2.1"
+
+          # Python 3.13
+          - python-version: "3.13"
+            numpy_test: "2.1"
       fail-fast: false
 
     steps:
@@ -75,4 +132,14 @@ jobs:
           conda install conda-build
 
       - name: Run tests
-        run: conda build --test win-64/numba*.conda
+        env:
+          TESTS_TO_RUN: "numba.tests"
+          NUMBA_ENABLE_CUDASIM: 1
+        run: |
+          for np_ver in ${{ join(matrix.numpy_test, ' ') }}; do
+            echo "Testing with NumPy ${np_ver}"
+            conda build -c numba/label/dev -c defaults \
+              --test \
+              --numpy=${np_ver} \
+              win-64/numba*.conda
+          done
