@@ -17,6 +17,8 @@ from numba.tests.support import (TestCase, MemoryLeakMixin,
 TIMEDELTA_M = 'timedelta64[M]'
 TIMEDELTA_Y = 'timedelta64[Y]'
 
+def median_function(arr, n):
+    return np.median(arr, n)
 
 def np_around_array(arr, decimals, out):
     np.around(arr, decimals, out)
@@ -272,6 +274,7 @@ def array_dot_chain(a, b):
 
 def array_ctor(n, dtype):
     return np.ones(n, dtype=dtype)
+    
 
 class TestArrayMethods(MemoryLeakMixin, TestCase):
     """
@@ -1812,6 +1815,12 @@ class TestArrayComparisons(TestCase):
 
     # Other comparison operators ('==', etc.) are tested in test_ufuncs
 
+class TestMedianFunction(TestCase):
+    # Testing empty to ensure nan return.
+
+    def test_empty_array(self):
+        arr = np.array([])
+        self.assertTrue(np.isnan(median_function(arr, 0))) 
 
 if __name__ == '__main__':
     unittest.main()
