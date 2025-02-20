@@ -140,7 +140,4 @@ jobs:
           conda build -c numba/label/dev -c defaults \
             --test \
             --numpy=${{ matrix.numpy_test }} \
-            --override-channels \
-            --strict-channel-priority \
-            --no-deps-test \
             win-64/numba*.conda
