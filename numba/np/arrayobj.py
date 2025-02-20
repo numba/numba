@@ -5189,7 +5189,7 @@ def np_frombuffer(typingctx, buffer, dtype, count, offset, retty):
         buf = make_array(bufty)(context, builder, value=args[0])
         out_ary_ty = make_array(aryty)
         out_ary = out_ary_ty(context, builder)
-        out_datamodel = out_ary._datamodel
+        # out_datamodel = out_ary._datamodel
 
         itemsize = get_itemsize(context, aryty)
         ll_itemsize = Constant(buf.itemsize.type, itemsize)
@@ -5198,7 +5198,8 @@ def np_frombuffer(typingctx, buffer, dtype, count, offset, retty):
         nbytes = builder.sub(nbytes, offset_bytes)
 
         # Compute number of elements based on count
-        is_count_negative = builder.icmp_signed('<', count_val, ir.Constant(count_val.type, 0))
+        const_zero = ir.Constant(count_val.type, 0)
+        is_count_negative = builder.icmp_signed('<', count_val, const_zero)
 
         with builder.if_else(is_count_negative) as (then_block, else_block):
             with then_block:
