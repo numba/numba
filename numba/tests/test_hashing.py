@@ -184,7 +184,8 @@ class BaseTest(TestCase):
             yield range(start, start + n)
             yield range(start, start + 100 * n, 100)
             yield range(start, start + 128 * n, 128)
-            yield [-1]
+            if info.min < 0:
+                yield [-1]
 
     def float_samples(self, typ):
         info = np.finfo(typ)
@@ -275,9 +276,12 @@ class TestNumberHashing(BaseTest):
             info = np.iinfo(ty)
             # check hash(-1) = -2
             # check hash(0) = 0
-            self.check_hash_values([ty(-1)])
-            self.check_hash_values([ty(0)])
             signed = 'uint' not in str(ty)
+            if signed:
+                self.check_hash_values([ty(-1)])
+            else:
+                self.check_hash_values([ty(info.max)])
+            self.check_hash_values([ty(0)])
             # check bit shifting patterns from min through to max
             sz = ty().itemsize
             for x in [info.min, info.max]:
@@ -383,8 +387,8 @@ class TestTupleHashing(BaseTest):
                     i & typ(0x9249249249249249),
                     )
 
-        self.check_tuples(self.int_samples(), split2)
-        self.check_tuples(self.int_samples(), split3)
+        self.check_tuples(self.int_samples(typ), split2)
+        self.check_tuples(self.int_samples(typ), split3)
 
         # Check exact. Sample values from:
         # https://github.com/python/cpython/blob/b738237d6792acba85b1f6e6c8993a812c7fd815/Lib/test/test_tuple.py#L80-L93
