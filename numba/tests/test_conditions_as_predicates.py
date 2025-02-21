@@ -195,5 +195,5 @@ class TestConditionsAsPredicates(TestCase):
         with self.assertRaises(ValueError) as raises:
             foo(z)
         msg = ("The truth value of an empty array is ambiguous."
-                " Use `array.size > 0` to check that an array is not empty.")
+               " Use `array.size > 0` to check that an array is not empty.")
         self.assertIn(msg, str(raises.exception))
