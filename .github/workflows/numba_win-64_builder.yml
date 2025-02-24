@@ -39,17 +39,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Cache conda packages
-        id: cache
-        if: ${{ !inputs.force_build }}
-        uses: actions/cache@v3
-        with:
-          path: |
-            conda_channel_dir
-          key: ${{ runner.os }}-conda-${{ matrix.python-version }}-${{ hashFiles('buildscripts/condarecipe.local/**') }}
-          restore-keys: |
-            ${{ runner.os }}-conda-${{ matrix.python-version }}-
-
       - name: Setup Miniconda
         uses: conda-incubator/setup-miniconda@v3
         with:
@@ -61,7 +50,6 @@ jobs:
         run: conda install conda-build
 
       - name: Build Numba conda package
-        if: steps.cache.outputs.cache-hit != 'true' || inputs.force_build
         run: |
           CONDA_CHANNEL_DIR="conda_channel_dir"
           mkdir -p $CONDA_CHANNEL_DIR

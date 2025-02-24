@@ -39,7 +39,7 @@ requirements:
     - tbb-devel >=2021.6       # [not (aarch64 or ppc64le)]
   run:
     - python >=3.10
-    - numpy >=1.24
+    - numpy >=1.24,<2.2.0
     # On channel https://anaconda.org/numba/
     - llvmlite >=0.45.0dev0,<0.45
   run_constrained:
@@ -69,7 +69,6 @@ test:
     - scipy
     # At least NumPy 1.26.0 has an issue with arctanh on glibc<=2.17.
     # ref: https://github.com/numpy/numpy/issues/25087
-    - numpy {{ numpy }}
     - ipython                  # [not aarch64]
     # for pycc
     - setuptools
