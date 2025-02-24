@@ -120,6 +120,6 @@ jobs:
         run: |
           echo "Testing with NumPy ${{ matrix.numpy_test }}"
           conda build -c numba/label/dev -c defaults \
+            --extra-deps numpy=${{ matrix.numpy_test }} \
             --test \
-            --numpy=${{ matrix.numpy_test }} \
             win-64/numba*.conda
