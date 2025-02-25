@@ -67,8 +67,6 @@ test:
     # Required to test optional Numba features
     - cffi
     - scipy
-    # At least NumPy 1.26.0 has an issue with arctanh on glibc<=2.17.
-    # ref: https://github.com/numpy/numpy/issues/25087
     - ipython                  # [not aarch64]
     # for pycc
     - setuptools
