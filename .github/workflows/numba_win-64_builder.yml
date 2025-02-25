@@ -6,7 +6,12 @@ on:
       - .github/workflows/numba_win-64_builder.yml
       - buildscripts/condarecipe.local/**
   workflow_dispatch:
-  
+
+# Add concurrency control
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
 jobs:
   win-64-build-conda:
     name: win-64-build-conda (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
