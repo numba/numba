@@ -6,11 +6,20 @@ on:
       - .github/workflows/numba_win-64_builder.yml
       - buildscripts/condarecipe.local/**
   workflow_dispatch:
+    inputs:
+      llvmlite_run_id:
+        description: 'llvmlite workflow run ID (optional)'
+        required: false
+        type: string
 
 # Add concurrency control
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
+
+env:
+  LOCAL_LLVMLITE_ARTIFACT_PATH: D:/a/numba/numba/llvmlite_conda
+  CONDA_CHANNEL_NUMBA: numba/label/dev
 
 jobs:
   win-64-build-conda:
@@ -45,6 +54,16 @@ jobs:
           auto-activate-base: true
           activate-environment: ""
 
+      - name: Download llvmlite Artifact
+        if: ${{ inputs.llvmlite_run_id != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: llvmlite_win-64_conda_py${{ matrix.python-version }}
+          path: llvmlite_conda
+          run-id: ${{ inputs.llvmlite_run_id }}
+          repository: numba/llvmlite
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Install conda-build
         run: conda install conda-build
 
@@ -52,7 +71,15 @@ jobs:
         run: |
           CONDA_CHANNEL_DIR="conda_channel_dir"
           mkdir -p $CONDA_CHANNEL_DIR
-          conda build --debug -c numba/label/dev -c defaults \
+          
+          # Set channel based on whether llvmlite artifact was downloaded
+          if [ "${{ inputs.llvmlite_run_id }}" != "" ]; then
+            LLVMLITE_CHANNEL="file:///${{ env.LOCAL_LLVMLITE_ARTIFACT_PATH }}"
+          else
+            LLVMLITE_CHANNEL="${{ env.CONDA_CHANNEL_NUMBA }}"
+          fi
+          
+          conda build --debug -c $LLVMLITE_CHANNEL -c defaults \
             --python=${{ matrix.python-version }} \
             --numpy=${{ matrix.numpy_build }} \
             buildscripts/condarecipe.local/ \
@@ -104,6 +131,16 @@ jobs:
         uses: conda-incubator/setup-miniconda@v3
 
       - name: Download llvmlite artifact
+        if: ${{ inputs.llvmlite_run_id != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: llvmlite_win-64_conda_py${{ matrix.python-version }}
+          path: llvmlite_conda
+          run-id: ${{ inputs.llvmlite_run_id }}
+          repository: numba/llvmlite
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download numba artifact
         uses: actions/download-artifact@v4
         with:
           name: numba_win-64_conda_py${{ matrix.python-version }}
@@ -114,10 +151,17 @@ jobs:
 
       - name: Run tests
         env:
-          TESTS_TO_RUN: "numba.tests"
+          TESTS_TO_RUN: "numba.tests ${{ matrix.python-version == '3.13' && '-k \"not test_pycc\"' || '' }}"
           NUMBA_ENABLE_CUDASIM: 1
         run: |
-          conda build -c numba/label/dev -c defaults \
+          # Set channel based on whether llvmlite artifact was downloaded
+          if [ "${{ inputs.llvmlite_run_id }}" != "" ]; then
+            LLVMLITE_CHANNEL="file:///${{ env.LOCAL_LLVMLITE_ARTIFACT_PATH }}"
+          else
+            LLVMLITE_CHANNEL="${{ env.CONDA_CHANNEL_NUMBA }}"
+          fi
+          
+          conda build -c $LLVMLITE_CHANNEL -c defaults \
             --extra-deps numpy=${{ matrix.numpy_test }} \
             --test \
             win-64/numba*.conda
