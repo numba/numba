@@ -6,13 +6,7 @@ on:
       - .github/workflows/numba_win-64_builder.yml
       - buildscripts/condarecipe.local/**
   workflow_dispatch:
-    inputs:
-      force_build:
-        description: 'Force build (ignore cache)'
-        type: boolean
-        default: false
-        required: false
-
+  
 jobs:
   win-64-build-conda:
     name: win-64-build-conda (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
@@ -118,7 +112,6 @@ jobs:
           TESTS_TO_RUN: "numba.tests"
           NUMBA_ENABLE_CUDASIM: 1
         run: |
-          echo "Testing with NumPy ${{ matrix.numpy_test }}"
           conda build -c numba/label/dev -c defaults \
             --extra-deps numpy=${{ matrix.numpy_test }} \
             --test \
