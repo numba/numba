@@ -151,8 +151,9 @@ jobs:
 
       - name: Run tests
         env:
-          TESTS_TO_RUN: "numba.tests ${{ matrix.python-version == '3.13' && '-k \"not test_pycc\"' || '' }}"
+          TESTS_TO_RUN: "numba.tests"
           NUMBA_ENABLE_CUDASIM: 1
+          NUMBA_TEST_EXTRA_ARGS: ${{ matrix.python-version == '3.13' && '-k "not test_pycc"' || '' }}
         run: |
           # Set channel based on whether llvmlite artifact was downloaded
           if [ "${{ inputs.llvmlite_run_id }}" != "" ]; then

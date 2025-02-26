@@ -12,6 +12,6 @@ numba -s
 python -m numba.tests.test_runtests
 
 @rem Run the whole test suite
-python -m numba.runtests -b -m -- %TESTS_TO_RUN%
+python -m numba.runtests %NUMBA_TEST_EXTRA_ARGS% -b -m -- %TESTS_TO_RUN%
 
 if errorlevel 1 exit 1
