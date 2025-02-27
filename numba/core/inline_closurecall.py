@@ -78,7 +78,9 @@ class InlineClosureCallPass(object):
     closures, and inlines the body of the closure function to the call site.
     """
 
-    def __init__(self, func_ir, parallel_options, swapped={}, typed=False):
+    def __init__(self, func_ir, parallel_options, swapped=None, typed=False):
+        if swapped is None:
+            swapped = {}
         self.func_ir = func_ir
         self.parallel_options = parallel_options
         self.swapped = swapped
@@ -95,7 +97,7 @@ class InlineClosureCallPass(object):
         modified = False
         work_list = list(self.func_ir.blocks.items())
         debug_print = _make_debug_print("InlineClosureCallPass")
-        debug_print("START")
+        debug_print(f"START {self.func_ir.func_id.func_qualname}")
         while work_list:
             _label, block = work_list.pop()
             for i, instr in enumerate(block.body):

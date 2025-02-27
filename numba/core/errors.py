@@ -6,7 +6,6 @@ Numba-specific errors and warnings.
 import abc
 import contextlib
 import os
-import sys
 import warnings
 import numba.core.config
 import numpy as np
@@ -532,7 +531,6 @@ class WarningsFixer(object):
 
 
 class NumbaError(Exception):
-
     def __init__(self, msg, loc=None, highlighting=True):
         self.msg = msg
         self.loc = loc
@@ -578,7 +576,13 @@ class UnsupportedError(NumbaError):
     """
     Numba does not have an implementation for this functionality.
     """
-    pass
+
+
+class UnsupportedBytecodeError(Exception):
+    """Unsupported bytecode is non-recoverable
+    """
+    def __init__(self, msg, loc=None):
+        super().__init__(f"{msg}. Raised from {loc}")
 
 
 class UnsupportedRewriteError(UnsupportedError):
@@ -841,23 +845,12 @@ loc_info = {}
 def new_error_context(fmt_, *args, **kwargs):
     """
     A contextmanager that prepend contextual information to any exception
-    raised within.  If the exception type is not an instance of NumbaError,
-    it will be wrapped into a InternalError.   The exception class can be
-    changed by providing a "errcls_" keyword argument with the exception
-    constructor.
+    raised within.
 
     The first argument is a message that describes the context.  It can be a
     format string.  If there are additional arguments, it will be used as
     ``fmt_.format(*args, **kwargs)`` to produce the final message string.
     """
-    # Import here to avoid circular import.
-    from numba.core.utils import (
-        use_old_style_errors,
-        use_new_style_errors,
-    )
-
-    errcls = kwargs.pop('errcls_', InternalError)
-
     loc = kwargs.get('loc', None)
     if loc is not None and not loc.filename.startswith(_numba_path):
         loc_info.update(kwargs)
@@ -867,23 +860,6 @@ def new_error_context(fmt_, *args, **kwargs):
     except NumbaError as e:
         e.add_context(_format_msg(fmt_, args, kwargs))
         raise
-    except AssertionError:
-        # Let assertion error pass through for shorter traceback in debugging
-        raise
-    except Exception as e:
-        if use_old_style_errors():
-            newerr = errcls(e).add_context(_format_msg(fmt_, args, kwargs))
-            if numba.core.config.FULL_TRACEBACKS:
-                tb = sys.exc_info()[2]
-            else:
-                tb = None
-            raise newerr.with_traceback(tb)
-        elif use_new_style_errors():
-            raise e
-        else:
-            msg = ("Unknown CAPTURED_ERRORS style: "
-                   f"'{numba.core.config.CAPTURED_ERRORS}'.")
-            assert 0, msg
 
 
 __all__ += [name for (name, value) in globals().items()

@@ -209,7 +209,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         # but newer python uses a different name
         self.__code__ = self.func_code
         # a place to keep an active reference to the types of the active call
-        self._types_active_call = []
+        self._types_active_call = set()
         # Default argument values match the py_func
         self.__defaults__ = py_func.__defaults__
 
@@ -231,6 +231,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
 
         self.doc = py_func.__doc__
         self._compiling_counter = CompilingCounter()
+        self._enable_sysmon = bool(config.ENABLE_SYS_MONITORING)
         weakref.finalize(self, self._make_finalizer())
 
     def _compilation_chain_init_hook(self):
@@ -441,7 +442,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             # ignore the FULL_TRACEBACKS config, this needs reporting!
             raise e
         finally:
-            self._types_active_call = []
+            self._types_active_call.clear()
         return return_val
 
     def inspect_llvm(self, signature=None):
@@ -682,8 +683,6 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         This is called from numba._dispatcher as a fallback if the native code
         cannot decide the type.
         """
-        # Not going through the resolve_argument_type() indirection
-        # can save a couple µs.
         try:
             tp = typeof(val, Purpose.argument)
         except ValueError:
@@ -694,7 +693,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         else:
             if tp is None:
                 tp = types.pyobject
-        self._types_active_call.append(tp)
+        self._types_active_call.add(tp)
         return tp
 
     def _callback_add_timer(self, duration, cres, lock_name):
@@ -758,7 +757,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
 
     __numba__ = 'py_func'
 
-    def __init__(self, py_func, locals={}, targetoptions={},
+    def __init__(self, py_func, locals=None, targetoptions=None,
                  pipeline_class=compiler.Compiler):
         """
         Parameters
@@ -772,6 +771,10 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         pipeline_class: type numba.compiler.CompilerBase
             The compiler pipeline type.
         """
+        if locals is None:
+            locals = {}
+        if targetoptions is None:
+            targetoptions = {}
         self.typingctx = self.targetdescr.typing_context
         self.targetctx = self.targetdescr.target_context
 
@@ -1132,7 +1135,8 @@ class LiftedLoop(LiftedCode):
                 pyobject_loop_flags.force_pyobject = True
 
                 # Clone IR to avoid (some of the) mutation in the rewrite pass
-                cloned_func_ir = self.func_ir.copy()
+                cloned_func_ir_npm = self.func_ir.copy()
+                cloned_func_ir_fbk = self.func_ir.copy()
 
                 ev_details = dict(
                     dispatcher=self,
@@ -1145,7 +1149,7 @@ class LiftedLoop(LiftedCode):
                     try:
                         cres = compiler.compile_ir(typingctx=self.typingctx,
                                                    targetctx=self.targetctx,
-                                                   func_ir=cloned_func_ir,
+                                                   func_ir=cloned_func_ir_npm,
                                                    args=args,
                                                    return_type=return_type,
                                                    flags=npm_loop_flags,
@@ -1156,7 +1160,7 @@ class LiftedLoop(LiftedCode):
                     except errors.TypingError:
                         cres = compiler.compile_ir(typingctx=self.typingctx,
                                                    targetctx=self.targetctx,
-                                                   func_ir=cloned_func_ir,
+                                                   func_ir=cloned_func_ir_fbk,
                                                    args=args,
                                                    return_type=return_type,
                                                    flags=pyobject_loop_flags,
@@ -1324,7 +1328,13 @@ class ObjModeLiftedWith(LiftedWith):
         return super().compile(sig)
 
 
-# Initialize typeof machinery
-_dispatcher.typeof_init(
-    OmittedArg,
-    dict((str(t), t._code) for t in types.number_domain))
+if config.USE_LEGACY_TYPE_SYSTEM: # Old type system
+    # Initialize typeof machinery
+    _dispatcher.typeof_init(
+        OmittedArg,
+        dict((str(t), t._code) for t in types.number_domain))
+else: # New type system
+    # Initialize typeof machinery
+    _dispatcher.typeof_init(
+        OmittedArg,
+        dict((str(t).split('_')[-1], t._code) for t in types.np_number_domain))

@@ -17,7 +17,7 @@ from numba.np import arrayobj, ufunc_db, numpy_support
 from numba.np.ufunc.sigparse import parse_signature
 from numba.core.imputils import (Registry, impl_ret_new_ref, force_error_model,
                                  impl_ret_borrowed)
-from numba.core import typing, types, utils, cgutils, callconv
+from numba.core import typing, types, utils, cgutils, callconv, config
 from numba.np.numpy_support import (
     ufunc_find_matching_loop, select_array_wrapper, from_dtype, _ufunc_loop_sig
 )
@@ -327,8 +327,13 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
                                   str(tyinp)))
 
 
-_broadcast_onto_sig = types.intp(types.intp, types.CPointer(types.intp),
-                                 types.intp, types.CPointer(types.intp))
+if config.USE_LEGACY_TYPE_SYSTEM:
+    _broadcast_onto_sig = types.intp(types.intp, types.CPointer(types.intp),
+                                    types.intp, types.CPointer(types.intp))
+else:
+    _broadcast_onto_sig = types.np_intp(types.np_intp, types.CPointer(types.np_intp),
+                                    types.np_intp, types.CPointer(types.np_intp))
+
 def _broadcast_onto(src_ndim, src_shape, dest_ndim, dest_shape):
     '''Low-level utility function used in calculating a shape for
     an implicit output array.  This function assumes that the

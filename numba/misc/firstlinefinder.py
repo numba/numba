@@ -4,6 +4,8 @@ body.
 """
 
 import ast
+import inspect
+import textwrap
 
 
 class FindDefFirstLine(ast.NodeVisitor):
@@ -15,15 +17,15 @@ class FindDefFirstLine(ast.NodeVisitor):
         Or, ``None`` if the definition is not found.
     """
 
-    def __init__(self, code):
+    def __init__(self, name, firstlineno):
         """
         Parameters
         ----------
         code :
             The function's code object.
         """
-        self._co_name = code.co_name
-        self._co_firstlineno = code.co_firstlineno
+        self._co_name = name
+        self._co_firstlineno = firstlineno
         self.first_stmt_line = None
 
     def _visit_children(self, node):
@@ -82,11 +84,21 @@ def get_func_body_first_lineno(pyfunc):
     co = pyfunc.__code__
     try:
         with open(co.co_filename) as fin:
-            file_content = fin.read()
+            source = fin.read()
+            offset = 0
     except (FileNotFoundError, OSError):
-        return
+        try:
+            lines, offset = inspect.getsourcelines(pyfunc)
+            source = "".join(lines)
+            offset = offset - 1
+        except (OSError, TypeError):
+            return None
+
+    tree = ast.parse(textwrap.dedent(source))
+    finder = FindDefFirstLine(co.co_name, co.co_firstlineno - offset)
+    finder.visit(tree)
+    if finder.first_stmt_line:
+        return finder.first_stmt_line + offset
     else:
-        tree = ast.parse(file_content)
-        finder = FindDefFirstLine(co)
-        finder.visit(tree)
-        return finder.first_stmt_line
+        # No first line found.
+        return None

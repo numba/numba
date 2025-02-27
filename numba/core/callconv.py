@@ -684,7 +684,10 @@ class CPUCallConv(BaseCallConv):
 
         # serialize comp. time args
         pyapi = self.context.get_python_api(builder)
-        exc = self.build_excinfo_struct(exc, exc_args, loc, func_name)
+        dummy = self.context.get_dummy_value()
+        exc_args_static = tuple(
+            [dummy if isinstance(arg, ir.Value) else arg for arg in exc_args])
+        exc = self.build_excinfo_struct(exc, exc_args_static, loc, func_name)
         excinfo_pp = self._get_excinfo_argument(builder.function)
         struct_gv = builder.load(pyapi.serialize_object(exc))
 
@@ -876,9 +879,11 @@ class CPUCallConv(BaseCallConv):
                LLVM style string: "noinline fast"
                Equivalent iterable: ("noinline", "fast")
         """
-        # XXX better fix for callees that are not function values
-        #     (pointers to function; thus have no `.args` attribute)
-        retty = self._get_return_argument(callee.function_type).pointee
+        retty = self.get_return_type(resty).pointee
+        actual_retty = self._get_return_argument(callee.function_type).pointee
+        if retty != actual_retty:
+            m = f"Function type returns {actual_retty} but resty={retty}"
+            raise ValueError(m)
 
         retvaltmp = cgutils.alloca_once(builder, retty)
         # initialize return value to zeros
