@@ -1,6 +1,8 @@
 CUDA Kernel API
 ===============
 
+.. cuda-deprecated::
+
 Kernel declaration
 ------------------
 

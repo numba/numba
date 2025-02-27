@@ -10,7 +10,8 @@ from numba.core import typing
 from numba.core.registry import cpu_target
 from numba.core.typeconv import Conversion
 from numba.core.extending import intrinsic
-from numba.core.errors import TypingError, NumbaTypeSafetyWarning
+from numba.core.errors import (TypingError, NumbaTypeSafetyWarning,
+                               NumbaTypeError)
 
 
 def _as_bytes(builder, ptr):
@@ -92,7 +93,7 @@ def _nonoptional(typingctx, val):
     """Typing trick to cast Optional[T] to T
     """
     if not isinstance(val, types.Optional):
-        raise TypeError('expected an optional')
+        raise NumbaTypeError('expected an optional')
 
     def codegen(context, builder, sig, args):
         context.nrt.incref(builder, sig.return_type, args[0])
@@ -186,7 +187,7 @@ def _get_equal(context, module, datamodel, container_element_type):
     rhs = datamodel.load_from_data_pointer(builder, equal_fn.args[1])
 
     status, retval = context.call_conv.call_function(
-        builder, wrapfn, types.boolean, argtypes, [lhs, rhs],
+        builder, wrapfn, types.int32, argtypes, [lhs, rhs],
     )
     with builder.if_then(status.is_ok, likely=True):
         with builder.if_then(status.is_none):

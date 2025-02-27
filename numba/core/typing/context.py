@@ -6,7 +6,6 @@ import threading
 import contextlib
 import operator
 
-import numba
 from numba.core import types, errors
 from numba.core.typeconv import Conversion, rules
 from numba.core.typing import templates
@@ -351,26 +350,6 @@ class BaseContext(object):
         except ValueError:
             pass
 
-    def resolve_argument_type(self, val):
-        """
-        Return the numba type of a Python value that is being used
-        as a function argument.  Integer types will all be considered
-        int64, regardless of size.
-
-        ValueError is raised for unsupported types.
-        """
-        try:
-            return typeof(val, Purpose.argument)
-        except ValueError:
-            if numba.cuda.is_cuda_array(val):
-                # There's no need to synchronize on a stream when we're only
-                # determining typing - synchronization happens at launch time,
-                # so eliding sync here is safe.
-                return typeof(numba.cuda.as_cuda_array(val, sync=False),
-                              Purpose.argument)
-            else:
-                raise
-
     def resolve_value_type(self, val):
         """
         Return the numba type of a Python value that is being used
@@ -610,7 +589,7 @@ class BaseContext(object):
             elif conv == Conversion.exact:
                 pass
             else:
-                raise Exception("unreachable", conv)
+                raise AssertionError("unreachable", conv)
 
         return rate
 

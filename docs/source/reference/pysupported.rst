@@ -51,6 +51,7 @@ Below is a quick reference for the support level of Python constructs.
 - class definition: ``class`` (except for :ref:`@jitclass <jitclass>`)
 - set, dict and generator comprehensions
 - generator delegation: ``yield from``
+- Deletion with ``del`` statements
 
 Functions
 ---------

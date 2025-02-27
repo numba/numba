@@ -149,7 +149,7 @@ class Numpy_rules_ufunc(AbstractTemplate):
                         # raise TypeError here because
                         # NumpyRulesArrayOperator.generic is capturing
                         # TypingError
-                        raise TypeError(msg)
+                        raise NumbaTypeError(msg)
 
                 ret_tys = [output_type(dtype=ret_ty, ndim=ndims, layout=layout)
                            for ret_ty in ret_tys]
@@ -413,21 +413,38 @@ for func in ['sum', 'argsort', 'nonzero', 'ravel']:
 # -----------------------------------------------------------------------------
 # Numpy scalar constructors
 
-# Register np.int8, etc. as converters to the equivalent Numba types
-np_types = set(getattr(np, str(nb_type)) for nb_type in types.number_domain)
-np_types.add(np.bool_)
-# Those may or may not be aliases (depending on the Numpy build / version)
-np_types.add(np.intc)
-np_types.add(np.intp)
-np_types.add(np.uintc)
-np_types.add(np.uintp)
+if config.USE_LEGACY_TYPE_SYSTEM:
+    # Register np.int8, etc. as converters to the equivalent Numba types
+    np_types = set(getattr(np, str(nb_type)) for nb_type in types.number_domain)
+    np_types.add(np.bool_)
+    # Those may or may not be aliases (depending on the Numpy build / version)
+    np_types.add(np.intc)
+    np_types.add(np.intp)
+    np_types.add(np.uintc)
+    np_types.add(np.uintp)
 
 
-def register_number_classes(register_global):
-    for np_type in np_types:
-        nb_type = getattr(types, np_type.__name__)
+    def register_number_classes(register_global):
+        for np_type in np_types:
+            nb_type = getattr(types, np_type.__name__)
 
-        register_global(np_type, types.NumberClass(nb_type))
+            register_global(np_type, types.NumberClass(nb_type))
+else:
+    # Register np.int8, etc. as converters to the equivalent Numba types
+    np_types = set(getattr(np, str(nb_type).split('np_')[-1]) for nb_type in types.np_number_domain)
+    np_types.add(np.bool_)
+    # Those may or may not be aliases (depending on the Numpy build / version)
+    np_types.add(np.intc)
+    np_types.add(np.intp)
+    np_types.add(np.uintc)
+    np_types.add(np.uintp)
+
+
+    def register_number_classes(register_global):
+        for np_type in np_types:
+            nb_type = getattr(types, f'np_{np_type.__name__}')
+
+            register_global(np_type, types.NumberClass(nb_type))
 
 
 register_number_classes(infer_global)
@@ -518,15 +535,15 @@ def _sequence_of_arrays(context, func_name, arrays,
     if (not isinstance(arrays, types.BaseTuple)
         or not len(arrays)
         or not all(isinstance(a, types.Array) for a in arrays)):
-        raise TypeError("%s(): expecting a non-empty tuple of arrays, "
-                        "got %s" % (func_name, arrays))
+        raise TypingError("%s(): expecting a non-empty tuple of arrays, "
+                          "got %s" % (func_name, arrays))
 
     ndim = dim_chooser(context, func_name, arrays)
 
     dtype = context.unify_types(*(a.dtype for a in arrays))
     if dtype is None:
-        raise TypeError("%s(): input arrays must have "
-                        "compatible dtypes" % func_name)
+        raise TypingError("%s(): input arrays must have "
+                          "compatible dtypes" % func_name)
 
     return dtype, ndim
 
@@ -537,21 +554,6 @@ def _choose_concatenation_layout(arrays):
     # decide on optimal output strides
     # (see PyArray_CreateMultiSortedStridePerm()).
     return 'F' if all(a.layout == 'F' for a in arrays) else 'C'
-
-
-class BaseStackTemplate(CallableTemplate):
-
-    def generic(self):
-        def typer(arrays):
-            dtype, ndim = _sequence_of_arrays(self.context,
-                                              self.func_name, arrays)
-
-            ndim = max(ndim, self.ndim_min)
-            layout = _choose_concatenation_layout(arrays)
-
-            return types.Array(dtype, ndim, layout)
-
-        return typer
 
 
 # -----------------------------------------------------------------------------
@@ -583,11 +585,13 @@ class MatMulTyperMixin(object):
 
         if out is not None:
             if out_ndim == 0:
-                raise TypeError("explicit output unsupported for vector * vector")
+                raise TypingError(
+                    "explicit output unsupported for vector * vector")
             elif out.ndim != out_ndim:
-                raise TypeError("explicit output has incorrect dimensionality")
+                raise TypingError(
+                    "explicit output has incorrect dimensionality")
             if not isinstance(out, types.Array) or out.layout != 'C':
-                raise TypeError("output must be a C-contiguous array")
+                raise TypingError("output must be a C-contiguous array")
             all_args = (a, b, out)
         else:
             all_args = (a, b)

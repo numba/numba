@@ -1,0 +1,8 @@
+[DUX] fix use of rstcheck in towncrier check script
+---------------------------------------------------
+
+The script ``maint/towncrier_rst_validator.py`` now correctly reports any RST
+issues encountered when calling ``rstcheck`` via ``subprocess.chck_output``.
+This helps to improve the developer experience as any issues are reported
+directly and the developers no longer need to be confused and/or run a
+secondary tools

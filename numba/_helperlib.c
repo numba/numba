@@ -19,7 +19,13 @@
 #else
     #include <stdint.h>
     #define _complex_float_t complex float
-    #define _complex_float_ctor(r, i) (r + I * i)
+    #if defined(_Imaginary_I)
+        #define _complex_float_ctor(r, i) (r + _Imaginary_I * i)
+    #elif defined(_Complex_I)
+        #define _complex_float_ctor(r, i) (r + _Complex_I * i)
+    #else
+        #error "Lack _Imaginary_I and _Complex_I"
+    #endif 
     #define _complex_double_t complex double
 #endif
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
@@ -293,7 +299,7 @@ numba_recreate_record(void *pdata, int size, PyObject *dtype) {
         return NULL;
     }
 
-    numpy = PyImport_ImportModuleNoBlock("numpy");
+    numpy = PyImport_ImportModule("numpy");
     if (!numpy) goto CLEANUP;
 
     numpy_record = PyObject_GetAttrString(numpy, "record");
@@ -833,7 +839,7 @@ static void traceback_add(const char *funcname, const char *filename, int lineno
     if (!frame)
         goto error;
 
-#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 12) /* 3.12 */
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 12) || (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 13) /* 3.12 or 3.13 */
 #elif (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 11) /* 3.11 */
 
     /* unsafe cast to our copy of _frame to access the f_lineno field */
@@ -851,10 +857,10 @@ static void traceback_add(const char *funcname, const char *filename, int lineno
     Py_DECREF(frame);
     return;
 
-#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 12) /* 3.12 */
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 12) || (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 13) /* 3.12 or 3.13 */
 error:
     _PyErr_ChainExceptions1(exc);
-#elif (PY_MAJOR_VERSION == 3) && ((PY_MINOR_VERSION == 9) || (PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11)) /* 3.11 and below */
+#elif (PY_MAJOR_VERSION == 3) && ((PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11)) /* 3.11 and below */
 error:
     _PyErr_ChainExceptions(exc, val, tb);
 #else
@@ -901,7 +907,7 @@ int reraise_exc_is_none(void) {
 
 #if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 11)
     PyErr_GetExcInfo(&type, &value, &tb);
-#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 8)
+#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 10)
     PyThreadState *tstate = PyThreadState_GET();
     _PyErr_StackItem *tstate_exc = tstate->exc_info;
     type = tstate_exc->exc_type;
