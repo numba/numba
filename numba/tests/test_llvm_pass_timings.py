@@ -34,6 +34,34 @@ timings_raw2 = """
 
 class TestLLVMPassTimings(TestCase):
 
+    def test_usage_legacy(self):
+        @njit
+        def foo(n):
+            c = 0
+            for i in range(n):
+                c += i
+            return c
+
+        with override_config('USE_LLVM_LEGACY_PASS_MANAGER', True):
+            with override_config('LLVM_PASS_TIMINGS', True):
+                foo(10)
+
+        md = foo.get_metadata(foo.signatures[0])
+        timings = md['llvm_pass_timings']
+        # Check: timing is of correct type
+        self.assertIsInstance(timings, lpt.PassTimingsCollection)
+        # Check: basic for __str__
+        text = str(timings)
+        self.assertIn("Module passes (full optimization)", text)
+        # Check: there must be more than one record
+        self.assertGreater(len(timings), 0)
+        # Check: __getitem__
+        last = timings[-1]
+        self.assertIsInstance(last, lpt.NamedTimings)
+        # Check: NamedTimings
+        self.assertIsInstance(last.name, str)
+        self.assertIsInstance(last.timings, lpt.ProcessedPassTimings)
+
     def test_usage(self):
         @njit
         def foo(n):
@@ -42,11 +70,8 @@ class TestLLVMPassTimings(TestCase):
                 c += i
             return c
 
-        # FIXME: Pass timings is not fully supported right now in NewPassManager
-        # infra in llvmlite
-        with override_config('USE_LLVM_LEGACY_PASS_MANAGER', True):
-            with override_config('LLVM_PASS_TIMINGS', True):
-                foo(10)
+        with override_config('LLVM_PASS_TIMINGS', True):
+            foo(10)
 
         md = foo.get_metadata(foo.signatures[0])
         timings = md['llvm_pass_timings']

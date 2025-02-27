@@ -661,7 +661,7 @@ class CPUCodeLibrary(CodeLibrary):
             # module-level optimization.
             for func in ll_module.functions:
                 k = f"Function passes on {func.name!r}"
-                with self._recorded_timings.record(k):
+                with self._recorded_timings.record_legacy(k):
                     fpm.initialize()
                     fpm.run(func)
                     fpm.finalize()
@@ -677,7 +677,7 @@ class CPUCodeLibrary(CodeLibrary):
             # module-level optimization.
             fpm, pb = self._codegen._function_pass_manager()
             k = f"Function passes on {func.name!r}"
-            with self._recorded_timings.record(k):
+            with self._recorded_timings.record(k, pb):
                 fpm.run(func, pb)
 
     def _optimize_final_module_legacy_pm(self):
@@ -694,7 +694,7 @@ class CPUCodeLibrary(CodeLibrary):
         mpm_full = self._codegen._module_pass_manager_legacy()
 
         cheap_name = "Module passes (cheap optimization for refprune)"
-        with self._recorded_timings.record(cheap_name):
+        with self._recorded_timings.record_legacy(cheap_name):
             # A cheaper optimisation pass is run first to try and get as many
             # refops into the same function as possible via inlining
             mpm_cheap.run(self._final_module)
@@ -702,7 +702,7 @@ class CPUCodeLibrary(CodeLibrary):
         if not config.LLVM_REFPRUNE_PASS:
             self._final_module = remove_redundant_nrt_refct(self._final_module)
         full_name = "Module passes (full optimization)"
-        with self._recorded_timings.record(full_name):
+        with self._recorded_timings.record_legacy(full_name):
             # The full optimisation suite is then run on the refop pruned IR
             mpm_full.run(self._final_module)
 
@@ -726,7 +726,7 @@ class CPUCodeLibrary(CodeLibrary):
 
         mpm_full, mpb_full = self._codegen._module_pass_manager()
         cheap_name = "Module passes (cheap optimization for refprune)"
-        with self._recorded_timings.record(cheap_name):
+        with self._recorded_timings.record(cheap_name, mpb_cheap):
             # A cheaper optimisation pass is run first to try and get as many
             # refops into the same function as possible via inlining
             mpm_cheap.run(self._final_module, mpb_cheap)
@@ -734,7 +734,7 @@ class CPUCodeLibrary(CodeLibrary):
         if not config.LLVM_REFPRUNE_PASS:
             self._final_module = remove_redundant_nrt_refct(self._final_module)
         full_name = "Module passes (full optimization)"
-        with self._recorded_timings.record(full_name):
+        with self._recorded_timings.record(full_name, mpb_full):
             # The full optimisation suite is then run on the refop pruned IR
             mpm_full.run(self._final_module, mpb_full)
 
@@ -1055,7 +1055,7 @@ class JITCodeLibrary(CPUCodeLibrary):
 
     def _finalize_specific(self):
         self._codegen._scan_and_fix_unresolved_refs(self._final_module)
-        with self._recorded_timings.record("Finalize object"):
+        with self._recorded_timings.record_legacy("Finalize object"):
             self._codegen._engine.finalize_object()
 
 
