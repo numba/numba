@@ -95,7 +95,7 @@ jobs:
           if-no-files-found: error
 
   win-64-test:
-    name: win-64-test-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
+    name: win-64-test-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
     needs: win-64-build
     runs-on: windows-2019
     defaults:
@@ -105,53 +105,25 @@ jobs:
       matrix:
         include:
           - python-version: "3.10"
-            numpy_build: "2.0.2"
+            numpy_test: "2.0.2"
           - python-version: "3.11"
-            numpy_build: "2.0.2"
+            numpy_test: "2.0.2"
           - python-version: "3.12"
-            numpy_build: "2.0.2"
+            numpy_test: "2.0.2"
           - python-version: "3.13"
-            numpy_build: "2.1.3"
+            numpy_test: "2.1.3"
       fail-fast: false
 
     steps:
-      - name: Setup Miniconda
-        uses: conda-incubator/setup-miniconda@v3
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          conda-remove-defaults: true
-          auto-update-conda: true
-          auto-activate-base: true
-
-      - name: Download llvmlite Artifact
-        if: ${{ inputs.llvmlite_run_id != '' }}
-        uses: actions/download-artifact@v4
-        with:
-          name: llvmlite-win-64-py${{ matrix.python-version }}
-          path: llvmlite_wheels
-          run-id: ${{ inputs.llvmlite_run_id }}
-          repository: numba/llvmlite
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Install build dependencies
-        run: |
-          set -x
-          if [ "${{ inputs.llvmlite_run_id }}" != "" ]; then
-              CHAN="file:///${{ env.LOCAL_LLVMLITE_ARTIFACT_PATH }}"
-          else
-              CHAN="${{ env.CONDA_CHANNEL_NUMBA }}"
-          fi
-          
-          # Install llvmlite from the appropriate channel
-          conda install -c "$CHAN" llvmlite numpy==${{ matrix.numpy_build }}
-          
-          # Install TBB with specific versions
-          python -m pip install tbb==2021.6 tbb-devel==2021.6
 
       - name: Download numba wheel
         uses: actions/download-artifact@v4
         with:
-          name: numba-win-64-py${{ matrix.python-version }}-np${{ matrix.numpy_build }}-tbb
+          name: numba-win-64-py${{ matrix.python-version }}-np${{ matrix.numpy_test }}-tbb
           path: dist
 
       - name: Install and test
