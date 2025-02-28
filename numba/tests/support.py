@@ -104,6 +104,11 @@ skip_unless_py312 = unittest.skipUnless(
     "needs Python 3.12"
 )
 
+skip_if_py313_on_windows = unittest.skipIf(
+     utils.PYVERSION == (3, 13) and sys.platform.startswith('win'),
+     "Not supported on Python 3.13 on Windows"
+ )
+
 skip_if_32bit = unittest.skipIf(_32bit, "Not supported on 32 bit")
 
 IS_NUMPY_2 = numpy_support.numpy_version >= (2, 0)
