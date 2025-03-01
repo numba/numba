@@ -453,6 +453,8 @@ class BaseNativeLowering(abc.ABC, LoweringPass):
         flags = state.flags
         metadata = state.metadata
         pre_stats = llvm.passmanagers.dump_refprune_stats()
+        # Add reload functions to library
+        library._reload_init.update(state.reload_init)
 
         msg = ("Function %s failed at nopython "
                "mode lowering" % (state.func_id.func_name,))
@@ -498,6 +500,7 @@ class BaseNativeLowering(abc.ABC, LoweringPass):
                 # We also register its library to allow for inlining.
                 cfunc = targetctx.get_executable(library, fndesc, env)
                 targetctx.insert_user_function(cfunc, fndesc, [library])
+                state.reload_init.extend(library._reload_init)
                 state['cr'] = _LowerResult(fndesc, call_helper,
                                            cfunc=cfunc, env=env)
 
