@@ -8,7 +8,7 @@ from .abstract import DTypeSpec, IteratorType, MutableSequence, Number, Type
 from .common import Buffer, Opaque, SimpleIteratorType
 from numba.core.typeconv import Conversion
 from numba.core import utils
-from .misc import UnicodeType
+from .misc import NoneType, UnicodeType
 from .containers import Bytes
 import numpy as np
 
@@ -442,7 +442,7 @@ class Array(Buffer):
     """
 
     def __init__(self, dtype, ndim, layout, readonly=False, name=None,
-                 aligned=True):
+                 aligned=True, alignment=None):
         if readonly:
             self.mutable = False
         if (not aligned or
@@ -457,8 +457,20 @@ class Array(Buffer):
                 type_name = "readonly " + type_name
             if not self.aligned:
                 type_name = "unaligned " + type_name
-            name = "%s(%s, %sd, %s)" % (type_name, dtype, ndim, layout)
-        super(Array, self).__init__(dtype, ndim, layout, name=name)
+            name = "%s(%s, %sd, %s" % (type_name, dtype, ndim, layout)
+            if alignment is not None and not isinstance(alignment, NoneType):
+                try:
+                    alignment_value = alignment.literal_value
+                except AttributeError:
+                    # Ignore this for now, we're only attempting to populate
+                    # the name.  The actual value supplied for alignment will
+                    # be validated later.
+                    pass
+                else:
+                    name += ", alignment=%d" % alignment_value
+            name += ")"
+        super(Array, self).__init__(dtype, ndim, layout, name=name,
+                                    alignment=alignment)
 
     @property
     def mangling_args(self):
@@ -467,7 +479,8 @@ class Array(Buffer):
                 'aligned' if self.aligned else 'unaligned']
         return self.__class__.__name__, args
 
-    def copy(self, dtype=None, ndim=None, layout=None, readonly=None):
+    def copy(self, dtype=None, ndim=None, layout=None, readonly=None,
+             alignment=None):
         if dtype is None:
             dtype = self.dtype
         if ndim is None:
@@ -476,12 +489,17 @@ class Array(Buffer):
             layout = self.layout
         if readonly is None:
             readonly = not self.mutable
+        if alignment is None:
+            alignment = self.alignment
         return Array(dtype=dtype, ndim=ndim, layout=layout, readonly=readonly,
-                     aligned=self.aligned)
+                     aligned=self.aligned, alignment=alignment)
 
     @property
     def key(self):
-        return self.dtype, self.ndim, self.layout, self.mutable, self.aligned
+        return (
+            self.dtype, self.ndim, self.layout, self.mutable, self.aligned,
+            self.alignment,
+        )
 
     def unify(self, typingctx, other):
         """
@@ -497,8 +515,18 @@ class Array(Buffer):
                     layout = 'A'
                 readonly = not (self.mutable and other.mutable)
                 aligned = self.aligned and other.aligned
+                # XXX-9941: How should we handle different alignments here?  For
+                # now, let's pick the largest.
+                if any((self.alignment, other.alignment)):
+                    alignment = max(
+                        self.alignment or 0,
+                        other.alignment or 0,
+                    )
+                else:
+                    alignment = None
                 return Array(dtype=self.dtype, ndim=self.ndim, layout=layout,
-                             readonly=readonly, aligned=aligned)
+                             readonly=readonly, aligned=aligned,
+                             alignment=alignment)
 
     def can_convert_to(self, typingctx, other):
         """
@@ -509,6 +537,7 @@ class Array(Buffer):
             if (other.layout in ('A', self.layout)
                 and (self.mutable or not other.mutable)
                 and (self.aligned or not other.aligned)):
+                # XXX-9941: I don't think we need to check alignment here?
                 return Conversion.safe
 
     def is_precise(self):
@@ -535,6 +564,7 @@ class ArrayCTypes(Type):
         # even though they are not implemented, yet.
         self.dtype = arytype.dtype
         self.ndim = arytype.ndim
+        # XXX-9941: Do we need to handle alignment here?
         name = "ArrayCTypes(dtype={0}, ndim={1})".format(self.dtype, self.ndim)
         super(ArrayCTypes, self).__init__(name)
 
@@ -591,6 +621,7 @@ class NestedArray(Array):
         self._shape = shape
         name = "nestedarray(%s, %s)" % (dtype, shape)
         ndim = len(shape)
+        # XXX-9941: Do we need to handle alignment here?
         super(NestedArray, self).__init__(dtype, ndim, 'C', name=name)
 
     @property
