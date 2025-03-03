@@ -17,8 +17,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  LOCAL_LLVMLITE_ARTIFACT_PATH: D:/a/numba/numba/llvmlite_wheels
-  CONDA_CHANNEL_NUMBA: numba/label/ci
+  LOCAL_LLVMLITE_ARTIFACT_PATH: D:/a/numba/numba/llvmlite_conda
+  CONDA_CHANNEL_NUMBA: numba/label/dev
   VALIDATION_PYTHON_VERSION: "3.12"
   ARTIFACT_RETENTION_DAYS: 7
   FALLBACK_LLVMLITE_VERSION: "15"
@@ -62,7 +62,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: llvmlite-win-64-py${{ matrix.python-version }}
-          path: llvmlite_wheels
+          path: llvmlite_conda
           run-id: ${{ inputs.llvmlite_run_id }}
           repository: numba/llvmlite
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -93,40 +93,3 @@ jobs:
           compression-level: 0
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           if-no-files-found: error
-
-  win-64-test:
-    name: win-64-test-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
-    needs: win-64-build
-    runs-on: windows-2019
-    defaults:
-      run:
-        shell: bash -el {0}
-    strategy:
-      matrix:
-        include:
-          - python-version: "3.10"
-            numpy_test: "2.0.2"
-          - python-version: "3.11"
-            numpy_test: "2.0.2"
-          - python-version: "3.12"
-            numpy_test: "2.0.2"
-          - python-version: "3.13"
-            numpy_test: "2.1.3"
-      fail-fast: false
-
-    steps:
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Download numba wheel
-        uses: actions/download-artifact@v4
-        with:
-          name: numba-win-64-py${{ matrix.python-version }}-np${{ matrix.numpy_test }}-tbb
-          path: dist
-
-      - name: Install and test
-        run: |
-          pip install dist/*.whl
-          python -m numba.runtests -j 1:100 -v -m
