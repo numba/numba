@@ -6782,7 +6782,13 @@ def ol_bool(arr):
     if isinstance(arr, types.Array):
         def impl(arr):
             if arr.size == 0:
-                return False # this is deprecated
+                if numpy_version < (2, 2):
+                    return False # this is deprecated
+                else:
+                    msg = ("The truth value of an empty array is ambiguous."
+                           " Use `array.size > 0` to check that an array is"
+                           " not empty.")
+                    raise ValueError(msg)
             elif arr.size == 1:
                 return bool(arr.take(0))
             else:
