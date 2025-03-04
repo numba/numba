@@ -1,0 +1,18 @@
+Support for NumPy 2.2
+=====================
+
+Numba now supports NumPy 2.2. following are some notable changes:
+
+- ``np.empty(0)`` cannot be treated as a boolean value anymore. This is a
+  breaking change for code that relies on this behavior. The following code
+  will raise a ``ValueError``:
+
+  .. code-block:: python
+
+      import numpy as np
+      if np.empty(0):
+          print("This will not be printed")
+
+- Generic timedeltas can no longer be hashed due to undefined time units.
+
+- ``np.trimzeros`` now also trims ``\0`` values.
