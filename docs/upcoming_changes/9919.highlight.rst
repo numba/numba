@@ -1,5 +1,5 @@
 Support for NumPy 2.2
-=====================
+---------------------
 
 Numba now supports NumPy 2.2. following are some notable changes:
 
