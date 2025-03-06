@@ -564,9 +564,9 @@ class TestTimedeltaArithmetic(TestCase):
             check(typ(*case))
 
         if numpy_version >= (2, 2):
-            with self.assertRaises(ValueError) as ctx:
+            with self.assertRaises(ValueError) as raises:
                 f(TD(3))
-            self.assertIn("Can't hash generic timedelta64", str(ctx.exception))
+            self.assertIn("Can't hash generic timedelta64", str(raises.exception))
 
     def _test_min_max(self, usecase):
         f = self.jit(usecase)
