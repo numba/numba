@@ -541,8 +541,8 @@ class TestTimedeltaArithmetic(TestCase):
     def test_hash(self):
         f = self.jit(hash_usecase)
         def check(a):
-            # Generic timedeltas (without usage of units)
-            # is no longer hashable beyond NumPy 2.2
+            # Generic timedeltas (those without a unit)
+            # are no longer hashable beyond NumPy 2.2
             # Non-generic timedeltas will have dtype name
             # as timedelta64[<unit>]
             if numpy_version < (2, 2) and a.dtype.name != 'timedelta':
