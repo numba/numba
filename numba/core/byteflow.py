@@ -78,7 +78,8 @@ class Flow(object):
     Simulate execution to recover dataflow and controlflow information.
     """
     def __init__(self, bytecode):
-        _logger.debug("bytecode dump:\n%s", _lazy_pformat(bytecode, lazy_func=lambda x: x.dump()))
+        _logger.debug("bytecode dump:\n%s",
+                      _lazy_pformat(bytecode, lazy_func=lambda x: x.dump()))
         self._bytecode = bytecode
         self.block_infos = UniqueDict()
 
