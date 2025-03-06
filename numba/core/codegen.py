@@ -647,6 +647,7 @@ class CPUCodeLibrary(CodeLibrary):
             str(self._codegen._create_empty_module(self.name)))
         self._final_module.name = cgutils.normalize_ir_text(self.name)
         self._shared_module = None
+        self._reload_init = set()
 
     def _optimize_functions(self, ll_module):
         """
@@ -760,6 +761,8 @@ class CPUCodeLibrary(CodeLibrary):
         seen = set()
         for library in self._linking_libraries:
             if library not in seen:
+                # Parent inherits reload_init
+                self._reload_init.update(library._reload_init)
                 seen.add(library)
                 self._final_module.link_in(
                     library._get_module_for_linking(), preserve=True,
