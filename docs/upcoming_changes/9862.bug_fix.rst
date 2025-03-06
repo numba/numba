@@ -1,0 +1,5 @@
+Fix coverage to respect configuration option
+--------------------------------------------
+
+Fixes a problem that Numba's coverage support is not respecting the coverage
+configuration options.
