@@ -162,6 +162,12 @@ class _ModuleCompiler(object):
                                 entry.signature.return_type, flags,
                                 locals={}, library=library)
 
+            # Fix up dynamic exc globals
+            module = library._final_module
+            for gv in module.functions:
+                if gv.name.startswith("__excinfo_unwrap_args"):
+                    gv.linkage = "linkonce_odr"
+
             func_name = cres.fndesc.llvm_func_name
             llvm_func = cres.library.get_function(func_name)
 
