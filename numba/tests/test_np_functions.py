@@ -5698,7 +5698,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 # abf and d are not supported in numpy >= 2.2
                 yield np.array([0, 1, 2, 0]), 'abf'
                 yield np.array([0, 4, 0]), 'd'
-                # FIXME: This test case can potentially be fixed
 
             yield np.array(['\0', '1', '2']), 'f'
 

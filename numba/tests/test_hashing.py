@@ -278,7 +278,7 @@ class TestNumberHashing(BaseTest):
             info = np.iinfo(ty)
             # check hash(-1) = -2
             # check hash(0) = 0
-            self.check_hash_values([self.safe_construct(ty, -1)])            
+            self.check_hash_values([self.safe_construct(ty, -1)])
             self.check_hash_values([ty(0)])
             signed = 'uint' not in str(ty)
             # check bit shifting patterns from min through to max
