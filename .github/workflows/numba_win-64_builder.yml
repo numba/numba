@@ -1,0 +1,173 @@
+name: numba_win-64_builder
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/numba_win-64_builder.yml
+      - buildscripts/condarecipe.local/**
+  workflow_dispatch:
+    inputs:
+      llvmlite_run_id:
+        description: 'llvmlite workflow run ID (optional)'
+        required: false
+        type: string
+
+# Add concurrency control
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+env:
+  LOCAL_LLVMLITE_ARTIFACT_PATH: D:/a/numba/numba/llvmlite_conda
+  CONDA_CHANNEL_NUMBA: numba/label/dev
+
+jobs:
+  win-64-build-conda:
+    name: win-64-build-conda (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
+    runs-on: windows-2019
+    defaults:
+      run:
+        shell: bash -elx {0}
+    strategy:
+      matrix:
+        include:
+          - python-version: "3.10"
+            numpy_build: "2.0"
+          - python-version: "3.11"
+            numpy_build: "2.0"
+          - python-version: "3.12"
+            numpy_build: "2.0"
+          - python-version: "3.13"
+            numpy_build: "2.1"
+      fail-fast: false
+
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          auto-activate-base: true
+          activate-environment: ""
+
+      - name: Download llvmlite Artifact
+        if: ${{ inputs.llvmlite_run_id != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: llvmlite_win-64_conda_py${{ matrix.python-version }}
+          path: llvmlite_conda
+          run-id: ${{ inputs.llvmlite_run_id }}
+          repository: numba/llvmlite
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install conda-build
+        run: conda install conda-build
+
+      - name: Build Numba conda package
+        run: |
+          CONDA_CHANNEL_DIR="conda_channel_dir"
+          mkdir -p $CONDA_CHANNEL_DIR
+          
+          # Set channel based on whether llvmlite artifact was downloaded
+          if [ "${{ inputs.llvmlite_run_id }}" != "" ]; then
+            LLVMLITE_CHANNEL="file:///${{ env.LOCAL_LLVMLITE_ARTIFACT_PATH }}"
+          else
+            LLVMLITE_CHANNEL="${{ env.CONDA_CHANNEL_NUMBA }}"
+          fi
+          
+          conda build --debug -c $LLVMLITE_CHANNEL -c defaults \
+            --python=${{ matrix.python-version }} \
+            --numpy=${{ matrix.numpy_build }} \
+            buildscripts/condarecipe.local/ \
+            --output-folder=$CONDA_CHANNEL_DIR \
+            --no-test
+
+      - name: Upload numba conda package
+        uses: actions/upload-artifact@v4
+        with:
+          name: numba_win-64_conda_py${{ matrix.python-version }}
+          path: conda_channel_dir
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error
+
+  win-64-test:
+    name: win-64-test-conda (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
+    needs: win-64-build-conda
+    runs-on: windows-2019
+    defaults:
+      run:
+        shell: bash -elx {0}
+    strategy:
+      matrix:
+        include:
+          # Python 3.10
+          - python-version: "3.10"
+            numpy_test: "1.24"
+          - python-version: "3.10"
+            numpy_test: "1.25"
+          
+          # Python 3.11
+          - python-version: "3.11"
+            numpy_test: "1.26"
+          - python-version: "3.11"
+            numpy_test: "2.0"
+          - python-version: "3.11"
+            numpy_test: "2.1"
+          
+          # Python 3.12
+          - python-version: "3.12"
+            numpy_test: "1.26"
+          - python-version: "3.12"
+            numpy_test: "2.0"
+          - python-version: "3.12"
+            numpy_test: "2.1"
+          
+          # Python 3.13
+          - python-version: "3.13"
+            numpy_test: "2.1"
+      fail-fast: false
+
+    steps:
+      - name: Setup miniconda
+        uses: conda-incubator/setup-miniconda@v3
+
+      - name: Download llvmlite artifact
+        if: ${{ inputs.llvmlite_run_id != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: llvmlite_win-64_conda_py${{ matrix.python-version }}
+          path: llvmlite_conda
+          run-id: ${{ inputs.llvmlite_run_id }}
+          repository: numba/llvmlite
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download numba artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: numba_win-64_conda_py${{ matrix.python-version }}
+
+      - name: Install conda-build
+        run: |
+          conda install conda-build
+
+      - name: Run tests
+        env:
+          TESTS_TO_RUN: "numba.tests"
+          NUMBA_ENABLE_CUDASIM: 1
+        run: |
+          # Set channel based on whether llvmlite artifact was downloaded
+          if [ "${{ inputs.llvmlite_run_id }}" != "" ]; then
+            LLVMLITE_CHANNEL="file:///${{ env.LOCAL_LLVMLITE_ARTIFACT_PATH }}"
+          else
+            LLVMLITE_CHANNEL="${{ env.CONDA_CHANNEL_NUMBA }}"
+          fi
+          
+          conda build -c $LLVMLITE_CHANNEL -c defaults \
+            --extra-deps numpy=${{ matrix.numpy_test }} \
+            --test \
+            win-64/numba*.conda
