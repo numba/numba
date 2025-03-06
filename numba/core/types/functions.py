@@ -342,6 +342,14 @@ class Function(BaseFunction, Opaque):
     Type class for builtin functions implemented by Numba.
     """
 
+    def unify(self, typingctx, other):
+        if isinstance(other, Function) and self.typing_key == other.typing_key:
+            # Different functions might have different templates, so be sure we
+            # include them all
+            templates = set(self.templates)
+            templates.update(set(other.templates))
+            return type(self)(tuple(templates))
+
 
 class BoundFunction(Callable, Opaque):
     """
