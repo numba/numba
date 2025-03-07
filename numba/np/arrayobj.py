@@ -6785,16 +6785,14 @@ def ol_bool(arr):
                 if numpy_version < (2, 2):
                     return False # this is deprecated
                 else:
-                    msg = ("The truth value of an empty array is ambiguous."
+                    raise ValueError(("The truth value of an empty array is ambiguous."
                            " Use `array.size > 0` to check that an array is"
-                           " not empty.")
-                    raise ValueError(msg)
+                           " not empty."))
             elif arr.size == 1:
                 return bool(arr.take(0))
             else:
-                msg = ("The truth value of an array with more than one element "
-                       "is ambiguous. Use a.any() or a.all()")
-                raise ValueError(msg)
+                raise ValueError(("The truth value of an array with more than one element "
+                       "is ambiguous. Use a.any() or a.all()"))
         return impl
 
 
