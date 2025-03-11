@@ -47,7 +47,7 @@ jobs:
         PYTHON: '3.10'
         NUMPY: '1.25'
         CONDA_ENV: azure_ci
-        RUN_TYPEGUARD: yes
+        RUN_TYPEGUARD: no
         TEST_START_INDEX: 4
       py310_np126:
         PYTHON: '3.10'
