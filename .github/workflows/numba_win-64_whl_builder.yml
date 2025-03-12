@@ -86,14 +86,28 @@ jobs:
           # Install TBB with specific versions
           python -m pip install tbb==2021.6 tbb-devel==2021.6
 
+      - name: Build sdist [once - py3.10]
+        if: matrix.python-version == '3.10'
+        run: python -m build --sdist
+
       - name: Build wheel
-        run: python -m build
+        run: python -m build --wheel
 
       - name: Upload numba wheel
         uses: actions/upload-artifact@v4
         with:
           name: numba-win-64-py${{ matrix.python-version }}-np${{ matrix.numpy_build }}-tbb
           path: dist/*.whl
+          compression-level: 0
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+          if-no-files-found: error
+
+      - name: Upload numba sdist
+        if: matrix.python-version == '3.10'
+        uses: actions/upload-artifact@v4
+        with:
+          name: numba-sdist
+          path: dist/*.tar.gz
           compression-level: 0
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           if-no-files-found: error
