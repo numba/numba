@@ -20,3 +20,5 @@ os.environ['NUMBA_DEVELOPER_MODE'] = '1'
 
 if __name__ == "__main__":
     runpy.run_module('numba.runtests', run_name='__main__')
+    os.environ['NUMBA_INTERNAL_CACHING'] = '1'
+    runpy.run_module('numba.runtests', run_name='__main__')
