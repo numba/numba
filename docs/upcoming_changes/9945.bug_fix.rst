@@ -1,0 +1,7 @@
+Fix static type checker support for ``numba.core.types``
+--------------------------------------------------------
+
+When Numba 0.61 introduced the split type system, it resulted in dynamic type 
+behavior that was incompatible with static type checkers. To resolve this,
+we've added a type stub file (``.pyi``) for ``numba.core.types`` that provides
+explicit type annotations. 
