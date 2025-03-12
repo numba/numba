@@ -811,7 +811,7 @@ def _cast_npdatetime_int64(context, builder, fromty, toty, val):
 @overload_method(types.NPDatetime, '__hash__')
 def ol_hash_npdatetime(x):
     if numpy_support.numpy_version >= (2, 2)\
-          and isinstance(x, types.NPTimedelta):
+          and isinstance(x, types.NPTimedelta) and not x.unit:
         raise ValueError("Can't hash generic timedelta64")
 
     if IS_32BITS:
