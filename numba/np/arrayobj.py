@@ -1630,8 +1630,11 @@ def raise_with_shape_context(src_shapes, index_shape):
 def ol_raise_with_shape_context_generic(src_shapes, index_shape):
     # This overload is for a "generic" target, which makes no assumption about
     # the NRT or string support, but does assume exceptions can be raised.
-    if ((isinstance(src_shapes, types.BaseTuple) and
-         isinstance(index_shape, types.BaseTuple))):
+    if (isinstance(src_shapes, types.UniTuple) and
+        isinstance(index_shape, types.UniTuple) and
+        src_shapes.dtype == index_shape.dtype and
+            isinstance(src_shapes.dtype, types.Integer)):
+
         def impl(src_shapes, index_shape):
             raise ValueError("cannot assign slice from input of different size")
         return impl
@@ -1639,8 +1642,11 @@ def ol_raise_with_shape_context_generic(src_shapes, index_shape):
 
 @overload(raise_with_shape_context, target="CPU")
 def ol_raise_with_shape_context_cpu(src_shapes, index_shape):
-    if ((isinstance(src_shapes, types.BaseTuple) and
-         isinstance(index_shape, types.BaseTuple))):
+    if (isinstance(src_shapes, types.UniTuple) and
+        isinstance(index_shape, types.UniTuple) and
+        src_shapes.dtype == index_shape.dtype and
+            isinstance(src_shapes.dtype, types.Integer)):
+
         def impl(src_shapes, index_shape):
             if len(src_shapes) == 1:
                 shape_str = f"({src_shapes[0]},)"
