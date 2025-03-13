@@ -1,0 +1,7 @@
+Fix issue in code generation for array set-slice.
+-------------------------------------------------
+
+The code generation for array set-slice was inadvertently written as being CPU
+target specific. This is now rectified and refactored so as to provide a
+"generic" target version that should be safe to use everywhere, along with an
+``@overload``-able stub to allow targets to implement custom versions as needed.
