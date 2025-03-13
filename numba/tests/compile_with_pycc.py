@@ -134,7 +134,7 @@ def internal_str_dict():
     return hash("A")
 
 
-# For test dynamic exception
+# For testing dynamic exception symbol collision/linkage
 
 cc_dynexc = CC('pycc_test_dynamic_exc')
 

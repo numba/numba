@@ -265,7 +265,7 @@ class TestCC(BasePYCCTest):
     def test_dynamic_exc(self):
         """See https://github.com/numba/numba/issues/9948
 
-        Dynamic exception uses a symbol that in PYCC compilation must be come
+        Dynamic exception uses a symbol that in PYCC compilation must become
         linkonce_odr linkage to prevent symbol collision.
         """
         with self.check_cc_compiled(self._test_module.cc_dynexc) as lib:
