@@ -545,7 +545,11 @@ class TestTimedeltaArithmetic(TestCase):
             # are no longer hashable beyond NumPy 2.2
             # Non-generic timedeltas will have dtype name
             # as timedelta64[<unit>]
-            if not (numpy_version >= (2, 2) and a.dtype.name == 'timedelta64'):
+            if numpy_version >= (2, 2) and isinstance(a, TD):
+                if a.dtype.name == 'timedelta64':
+                    return
+                self.assertPreciseEqual(f(a), hash(a))
+            else:
                 self.assertPreciseEqual(f(a), hash(a))
 
         TD_CASES = ((3,), (-4,), (3, 'ms'), (-4, 'ms'), (27, 'D'),

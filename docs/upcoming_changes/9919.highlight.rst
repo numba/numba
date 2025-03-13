@@ -15,4 +15,7 @@ Numba now supports NumPy 2.2. following are some notable changes:
 
 - Generic timedeltas can no longer be hashed due to undefined time units.
 
+- ``np.timedelta64`` hash values are NOT consistent with NumPy 2.2 generated
+  hash values.
+
 - ``np.trimzeros`` now also trims ``\0`` values.
