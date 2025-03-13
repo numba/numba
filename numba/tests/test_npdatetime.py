@@ -541,14 +541,21 @@ class TestTimedeltaArithmetic(TestCase):
     def test_hash(self):
         f = self.jit(hash_usecase)
         def check(a):
-            # Generic timedeltas (those without a unit)
-            # are no longer hashable beyond NumPy 2.2
-            # Non-generic timedeltas will have dtype name
-            # as timedelta64[<unit>]
             if numpy_version >= (2, 2) and isinstance(a, TD):
-                return
+                # Generic timedeltas (those without a unit)
+                # are no longer hashable beyond NumPy 2.2
+                # Non-generic timedeltas will have dtype name
+                # as timedelta64[<unit>]
+                if a.dtype.name == 'timedelta64':
+                    return
 
-            self.assertPreciseEqual(f(a), hash(a))
+                # If the function is not being compiled in objmode
+                # then the hash should be equal to the hash of the
+                # integer representation of the timedelta
+                if f.nopython_signatures:
+                    return self.assertPreciseEqual(f(a), hash(a.astype(np.int64)))
+
+            return self.assertPreciseEqual(f(a), hash(a))
 
         TD_CASES = ((3,), (-4,), (3, 'ms'), (-4, 'ms'), (27, 'D'),
                     (2, 'D'), (2, 'W'), (2, 'Y'), (3, 'W'),
