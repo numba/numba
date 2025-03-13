@@ -968,6 +968,7 @@ in CPython under the condition that the :attr:`sys.hash_info.algorithm` is
 The ``PYTHONHASHSEED`` environment variable influences the hashing behavior in
 precisely the manner described in the CPython documentation.
 
+Note: NumPy 2.2 onwards ``np.timedelta`` hashes do not match NumPy hashes.
 
 Standard library modules
 ========================
