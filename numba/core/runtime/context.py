@@ -1,4 +1,8 @@
 import functools
+
+import io
+import traceback
+
 from collections import namedtuple
 
 from llvmlite import ir
@@ -373,7 +377,33 @@ class NRTContext(object):
             # function be called with a NULL pointer?
             fn.args[0].add_attribute("noalias")
             fn.args[0].add_attribute("nocapture")
-            builder.call(fn, [mi])
+
+            trace_str = ""
+
+            if config.DEBUG_NRT and config.DEBUG_NRT_STACK_LIMIT:
+                trace = io.StringIO()
+                traceback.print_stack(limit=config.DEBUG_NRT_STACK_LIMIT + 2,
+                                      file=trace)
+                # The last two stack frames are `_call_incref_decref`
+                # and `traceback.print_stack` which we ignore.
+                clean_trace = trace.getvalue().split('\n')
+                for i, _substr in enumerate(reversed(clean_trace)):
+                    if "_call_incref_decref" in _substr:
+                        break
+                clean_trace = clean_trace[:-(i + 1)]
+
+                if clean_trace:
+                    trace_str += 'Traceback:' + '\n'.join(clean_trace) + '\n\n'
+
+                mod = builder.module
+                # Make global constant for format string
+                fmt_bytes = cgutils.make_bytearray((trace_str + '\00').encode('ascii'))
+                global_fmt = cgutils.global_constant(mod, "nrt_debug_printf_format", fmt_bytes)
+                ptr_fmt = builder.bitcast(global_fmt, cgutils.voidptr_t)
+                builder.call(fn, [mi, ptr_fmt])
+            else:
+                builder.call(fn, [mi])
+
 
     def incref(self, builder, typ, value):
         """
