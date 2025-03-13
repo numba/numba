@@ -262,6 +262,44 @@ class TestCC(BasePYCCTest):
             expect = arr * arr
             self.assertPreciseEqual(got, expect)
 
+    def test_dynamic_exc(self):
+        """See https://github.com/numba/numba/issues/9948
+
+        Dynamic exception uses a symbol that in PYCC compilation must become
+        linkonce_odr linkage to prevent symbol collision.
+        """
+        with self.check_cc_compiled(self._test_module.cc_dynexc) as lib:
+            # these cases do not raise
+            a = np.zeros((2, 2), dtype=np.float64)
+            b = np.ones((2, 2), dtype=np.float64)
+            lib.do_setitem1(a, b)
+            self.assertPreciseEqual(a, b)
+
+            a = np.zeros((2, 2), dtype=np.float64)
+            lib.do_setitem2(a, b)
+            self.assertPreciseEqual(a, b)
+
+            # these cases will raise a dynamic exc
+            a = np.zeros((2, 2), dtype=np.float64)
+            b = np.ones((2, 3), dtype=np.float64)
+            with self.assertRaises(ValueError) as raises:
+                lib.do_setitem1(a, b)
+
+            self.assertIn(
+                f"cannot assign slice of shape {b.shape} from "
+                f"input of shape {a.shape}",
+                str(raises.exception))
+
+            a = np.zeros((4, 6), dtype=np.float64)
+            b = np.ones((4, 5), dtype=np.float64)
+            with self.assertRaises(ValueError) as raises:
+                lib.do_setitem2(a, b)
+
+            self.assertIn(
+                f"cannot assign slice of shape {b.shape} from "
+                f"input of shape {a.shape}",
+                str(raises.exception))
+
 
 @needs_setuptools
 @skip_if_py313_on_windows

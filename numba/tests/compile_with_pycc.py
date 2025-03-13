@@ -132,3 +132,16 @@ def internal_str_dict(x):
 @cc_nrt.export('hash_literal_str_A', i8())
 def internal_str_dict():
     return hash("A")
+
+
+# For testing dynamic exception symbol collision/linkage
+
+cc_dynexc = CC('pycc_test_dynamic_exc')
+
+@cc_dynexc.export('do_setitem1', 'void(f8[:, :], f8[:, :])')
+def do_setitem1(a, b):
+    a[:, :] = b
+
+@cc_dynexc.export('do_setitem2', 'void(f8[:, :], f8[:, :])')
+def do_setitem2(a, b):
+    a[:, :] = b
