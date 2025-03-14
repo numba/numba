@@ -6,8 +6,8 @@ Usually due to invalid type conversion between function boundaries.
 
 from numba import cuda
 from numba.core import types
+from numba.cuda.testing import CUDATestCase
 from numba.extending import overload
-from numba.tests.support import TestCase
 import unittest
 import numpy as np
 
@@ -32,10 +32,10 @@ def ol_generated_inner(out, x, y=5, z=6):
 
 
 def call_generated(a, b, out):
-    return generated_inner(out, a, z=b)
+    generated_inner(out, a, z=b)
 
 
-class TestNestedCall(TestCase):
+class TestNestedCall(CUDATestCase):
     def test_call_generated(self):
         """
         Test a nested function call to a generated jit function.
@@ -44,12 +44,10 @@ class TestNestedCall(TestCase):
 
         out = np.empty(2, dtype=np.int64)
         cfunc[1,1](1, 2, out)
-        cuda.synchronize()
         self.assertPreciseEqual(tuple(out), (-4, 2))
 
         out = np.empty(2, dtype=np.complex64)
         cfunc[1,1](1j, 2, out)
-        cuda.synchronize()
         self.assertPreciseEqual(tuple(map(complex,out)), (5 + 1j, 2 + 0j))
 
 
