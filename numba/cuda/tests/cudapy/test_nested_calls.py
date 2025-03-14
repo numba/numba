@@ -12,8 +12,12 @@ import unittest
 import numpy as np
 
 
-def generated_inner(x, y=5, z=6):
-    assert 0, "unreachable"
+def generated_inner(out, x, y=5, z=6):
+    # Provide implementation for the simulation.
+    if isinstance(x, complex):
+        out[0], out[1] = x + y, z
+    else:
+        out[0], out[1] = x - y, z
 
 
 @overload(generated_inner)
