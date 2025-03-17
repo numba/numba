@@ -968,7 +968,10 @@ in CPython under the condition that the :attr:`sys.hash_info.algorithm` is
 The ``PYTHONHASHSEED`` environment variable influences the hashing behavior in
 precisely the manner described in the CPython documentation.
 
-Note: NumPy 2.2 onwards ``np.timedelta`` hashes do not match NumPy hashes.
+Note: NumPy 2.2 onwards ``np.timedelta`` and ``np.datetime`` hashes do not match
+NumPy hashes. Previous to NumPy 2.2 ``np.timedelta`` hashes were equivalent to
+the integer value of the timedelta. NumPy 2.2 onwards, they are equivalent to
+the CPython hash.
 
 Standard library modules
 ========================
