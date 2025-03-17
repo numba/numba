@@ -178,7 +178,7 @@ class TestConditionsAsPredicates(TestCase):
 
         # various problems:
 
-        # empty, NumPy warns or raises if Numpy >= 2.2
+        # empty, NumPy warns or raises if NumPy >= 2.2
         z = np.empty(0)
         if numpy_support.numpy_version >= (2, 2):
             with self.assertRaises(ValueError) as raises:
