@@ -1,0 +1,9 @@
+Fix the caching of functions that call parallel=True functions.
+---------------------------------------------------------------
+
+Previously, reload_init, which keeps track of functions that need to
+be called when reloading a module, was only maintained for the current
+function but not called functions.  So, if the called function needed
+something reloaded and the parent function was cached then the reload
+would not happen.  This has been fixed by propagating the reload_init
+up the call chain.
