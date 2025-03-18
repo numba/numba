@@ -1,4 +1,4 @@
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, numpy_support
 from numba import njit, types
 from numba.typed import List, Dict
 import numpy as np
@@ -178,16 +178,23 @@ class TestConditionsAsPredicates(TestCase):
 
         # various problems:
 
-        # empty, NumPy warns
+        # empty, NumPy warns or raises if NumPy >= 2.2
         z = np.empty(0)
-        self.assertEqual(foo(z), foo.py_func(z))
-        self.assertEqual(foo.py_func(z), 20)
+        if numpy_support.numpy_version >= (2, 2):
+            with self.assertRaises(ValueError) as raises:
+                foo(z)
+            msg = ("The truth value of an empty array is ambiguous."
+                   " Use `array.size > 0` to check that an array is not empty.")
+            self.assertIn(msg, str(raises.exception))
+        else:
+            self.assertEqual(foo(z), foo.py_func(z))
+            self.assertEqual(foo.py_func(z), 20)
 
         # nd, NumPy raises
         z = np.array([1, 2])
         with self.assertRaises(ValueError) as raises:
             foo(z)
 
-        msg = ("The truth value of an array with more than one element is "
-               "ambiguous. Use a.any() or a.all()")
+        msg = ("The truth value of an array with more than one element "
+               "is ambiguous. Use a.any() or a.all()")
         self.assertIn(msg, str(raises.exception))
