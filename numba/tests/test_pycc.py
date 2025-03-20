@@ -14,7 +14,7 @@ import llvmlite.binding as ll
 
 from numba.core import utils
 from numba.tests.support import (TestCase, tag, import_dynamic, temp_directory,
-                                 has_blas, needs_setuptools)
+                                 has_blas, needs_setuptools, skip_if_py313_on_windows)
 
 import unittest
 
@@ -87,6 +87,7 @@ class BasePYCCTest(TestCase):
 
 
 @needs_setuptools
+@skip_if_py313_on_windows
 class TestCC(BasePYCCTest):
 
     def setUp(self):
@@ -263,6 +264,7 @@ class TestCC(BasePYCCTest):
 
 
 @needs_setuptools
+@skip_if_py313_on_windows
 class TestDistutilsSupport(TestCase):
 
     def setUp(self):

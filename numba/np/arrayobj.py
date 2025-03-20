@@ -1619,6 +1619,49 @@ def numpy_broadcast_arrays(*args):
     return impl
 
 
+def raise_with_shape_context(src_shapes, index_shape):
+    """Targets should implement this if they wish to specialize the error
+    handling/messages. The overload implementation takes two tuples as arguments
+    and should raise a ValueError."""
+    raise NotImplementedError
+
+
+@overload(raise_with_shape_context, target="generic")
+def ol_raise_with_shape_context_generic(src_shapes, index_shape):
+    # This overload is for a "generic" target, which makes no assumption about
+    # the NRT or string support, but does assume exceptions can be raised.
+    if (isinstance(src_shapes, types.UniTuple) and
+        isinstance(index_shape, types.UniTuple) and
+        src_shapes.dtype == index_shape.dtype and
+            isinstance(src_shapes.dtype, types.Integer)):
+
+        def impl(src_shapes, index_shape):
+            raise ValueError("cannot assign slice from input of different size")
+        return impl
+
+
+@overload(raise_with_shape_context, target="CPU")
+def ol_raise_with_shape_context_cpu(src_shapes, index_shape):
+    if (isinstance(src_shapes, types.UniTuple) and
+        isinstance(index_shape, types.UniTuple) and
+        src_shapes.dtype == index_shape.dtype and
+            isinstance(src_shapes.dtype, types.Integer)):
+
+        def impl(src_shapes, index_shape):
+            if len(src_shapes) == 1:
+                shape_str = f"({src_shapes[0]},)"
+            else:
+                shape_str = f"({', '.join([str(x) for x in src_shapes])})"
+            if len(index_shape) == 1:
+                index_str = f"({index_shape[0]},)"
+            else:
+                index_str = f"({', '.join([str(x) for x in index_shape])})"
+            msg = (f"cannot assign slice of shape {shape_str} from input of "
+                   f"shape {index_str}")
+            raise ValueError(msg)
+        return impl
+
+
 def fancy_setslice(context, builder, sig, args, index_types, indices):
     """
     Implement slice assignment for arrays.  This implementation works for
@@ -1636,6 +1679,21 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
     indexer = FancyIndexer(context, builder, aryty, ary,
                            index_types, indices)
     indexer.prepare()
+
+    def raise_shape_mismatch_error(context, builder, src_shapes, index_shape):
+        # This acts as the "trampoline" to raise a ValueError in the case
+        # of the source and destination shapes mismatch at runtime. It resolves
+        # the public overload stub `raise_with_shape_context`
+        fnty = context.typing_context.resolve_value_type(
+            raise_with_shape_context)
+        argtys = (types.UniTuple(types.int64, len(src_shapes)),
+                  types.UniTuple(types.int64, len(index_shape)))
+        raise_sig = fnty.get_call_type(context.typing_context, argtys, {})
+        func = context.get_function(fnty, raise_sig)
+        func(builder, (context.make_tuple(builder, raise_sig.args[0],
+                                          src_shapes),
+                       context.make_tuple(builder, raise_sig.args[1],
+                                          index_shape)))
 
     if isinstance(srcty, types.Buffer):
         # Source is an array
@@ -1658,23 +1716,8 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
                                       builder.icmp_signed('!=', u, v))
 
         with builder.if_then(shape_error, likely=False):
-            def raise_impl(src_shapes, index_shape):
-                return ("cannot assign slice of shape " +
-                        f"({', '.join([str(x) for x in src_shapes])}) from " +
-                        "input of shape " +
-                        f"({', '.join([str(x) for x in index_shape])})")
-
-            sig = types.unicode_type(
-                types.UniTuple(types.int64, len(src_shapes)),
-                types.UniTuple(types.int64, len(index_shape)))
-            tup = (context.make_tuple(builder, sig.args[0], src_shapes),
-                   context.make_tuple(builder, sig.args[1], index_shape))
-
-            res = context.compile_internal(builder, raise_impl, sig, tup)
-            msg = impl_ret_new_ref(context, builder, sig, res)
-            context.call_conv.return_dynamic_user_exc(builder, ValueError,
-                                                      (msg,),
-                                                      (types.unicode_type,))
+            raise_shape_mismatch_error(context, builder, src_shapes,
+                                       index_shape)
 
         # Check for array overlap
         src_start, src_end = get_array_memory_extents(context, builder, srcty,
@@ -1706,17 +1749,8 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         shape_error = builder.icmp_signed('!=', index_shape[0], seq_len)
 
         with builder.if_then(shape_error, likely=False):
-            def raise_impl(seq_len, input_shape):
-                return (f"cannot assign slice of shape ({seq_len}, )" +
-                        f"from input of shape ({input_shape}, )")
-
-            tup = (seq_len, index_shape[0])
-            sig = types.unicode_type(types.int64, types.int64)
-            res = context.compile_internal(builder, raise_impl, sig, tup)
-            msg = impl_ret_new_ref(context, builder, sig, res)
-            context.call_conv.return_dynamic_user_exc(builder, ValueError,
-                                                      (msg,),
-                                                      (types.unicode_type,))
+            raise_shape_mismatch_error(context, builder, (seq_len,),
+                                       (index_shape[0],))
 
         def src_getitem(source_indices):
             idx, = source_indices
@@ -6782,13 +6816,18 @@ def ol_bool(arr):
     if isinstance(arr, types.Array):
         def impl(arr):
             if arr.size == 0:
-                return False # this is deprecated
+                if numpy_version < (2, 2):
+                    return False # this is deprecated
+                else:
+                    raise ValueError(("The truth value of an empty array is "
+                                      "ambiguous. Use `array.size > 0` to "
+                                      "check that an array is not empty."))
             elif arr.size == 1:
                 return bool(arr.take(0))
             else:
-                msg = ("The truth value of an array with more than one element "
-                       "is ambiguous. Use a.any() or a.all()")
-                raise ValueError(msg)
+                raise ValueError(("The truth value of an array with more than"
+                                  " one element is ambiguous. Use a.any() or"
+                                  " a.all()"))
         return impl
 
 
