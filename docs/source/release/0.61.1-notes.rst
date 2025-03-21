@@ -10,7 +10,7 @@ Highlights
 Support for NumPy 2.2
 ---------------------
 
-Numba now supports NumPy 2.2. following are some notable changes:
+Numba now supports NumPy 2.2, with the following notable changes:
 
 - ``np.empty(0)`` cannot be treated as a boolean value anymore. This is a
   breaking change for code that relies on this behavior. The following code
