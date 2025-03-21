@@ -33,14 +33,16 @@ def _inlining_threshold(optlevel, sizelevel=0):
     return 225
 
 
-def create_pass_manager_builder(opt=2, loop_vectorize=False,
-                                slp_vectorize=False):
+def create_pass_builder(tm, opt=2, loop_vectorize=False,
+                        slp_vectorize=False):
     """
-    Create an LLVM pass manager with the desired optimisation level and options.
+    Create an LLVM pass builder with the desired optimisation level and options.
     """
-    pmb = llvm.create_pass_manager_builder()
-    pmb.opt_level = opt
-    pmb.loop_vectorize = loop_vectorize
-    pmb.slp_vectorize = slp_vectorize
-    pmb.inlining_threshold = _inlining_threshold(opt)
-    return pmb
+    pto = llvm.create_pipeline_tuning_options()
+    pto.speed_level = opt
+    pto.slp_vectorization = slp_vectorize
+    pto.loop_vectorization = loop_vectorize
+
+    # FIXME: Enabled from llvm 16
+    # pto.inlining_threshold = _inlining_threshold(opt)
+    return llvm.create_pass_builder(tm, pto)

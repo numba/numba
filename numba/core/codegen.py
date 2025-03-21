@@ -11,7 +11,7 @@ import llvmlite.ir as llvmir
 
 from abc import abstractmethod, ABCMeta
 from numba.core import utils, config, cgutils
-from numba.core.llvm_bindings import create_pass_manager_builder
+from numba.core.llvm_bindings import create_pass_builder
 from numba.core.runtime.nrtopt import remove_redundant_nrt_refct
 from numba.core.runtime import rtsys
 from numba.core.compiler_lock import require_global_compiler_lock
@@ -654,40 +654,40 @@ class CPUCodeLibrary(CodeLibrary):
         """
         # Enforce data layout to enable layout-specific optimizations
         ll_module.data_layout = self._codegen._data_layout
-        with self._codegen._function_pass_manager(ll_module) as fpm:
+        for func in ll_module.functions:
             # Run function-level optimizations to reduce memory usage and improve
             # module-level optimization.
-            for func in ll_module.functions:
-                k = f"Function passes on {func.name!r}"
-                with self._recorded_timings.record(k):
-                    fpm.initialize()
-                    fpm.run(func)
-                    fpm.finalize()
+            fpm, pb = self._codegen._function_pass_manager()
+            k = f"Function passes on {func.name!r}"
+            with self._recorded_timings.record(k, pb):
+                fpm.run(func, pb)
+
 
     def _optimize_final_module(self):
+
         """
         Internal: optimize this library's final module.
         """
 
-        mpm_cheap = self._codegen._module_pass_manager(loop_vectorize=self._codegen._loopvect,
-                                   slp_vectorize=False,
-                                   opt=self._codegen._opt_level,
-                                   cost="cheap")
+        mpm_cheap, mpb_cheap =  self._codegen._module_pass_manager(
+                                           loop_vectorize=self._codegen._loopvect,
+                                           slp_vectorize=False,
+                                           opt=self._codegen._opt_level,
+                                           cost="cheap")
 
-        mpm_full = self._codegen._module_pass_manager()
-
+        mpm_full, mpb_full = self._codegen._module_pass_manager()
         cheap_name = "Module passes (cheap optimization for refprune)"
-        with self._recorded_timings.record(cheap_name):
+        with self._recorded_timings.record(cheap_name, mpb_cheap):
             # A cheaper optimisation pass is run first to try and get as many
             # refops into the same function as possible via inlining
-            mpm_cheap.run(self._final_module)
+            mpm_cheap.run(self._final_module, mpb_cheap)
         # Refop pruning is then run on the heavily inlined function
         if not config.LLVM_REFPRUNE_PASS:
             self._final_module = remove_redundant_nrt_refct(self._final_module)
         full_name = "Module passes (full optimization)"
-        with self._recorded_timings.record(full_name):
+        with self._recorded_timings.record(full_name, mpb_full):
             # The full optimisation suite is then run on the refop pruned IR
-            mpm_full.run(self._final_module)
+            mpm_full.run(self._final_module, mpb_full)
 
     def _get_module_for_linking(self):
         """
@@ -1003,7 +1003,7 @@ class JITCodeLibrary(CPUCodeLibrary):
 
     def _finalize_specific(self):
         self._codegen._scan_and_fix_unresolved_refs(self._final_module)
-        with self._recorded_timings.record("Finalize object"):
+        with self._recorded_timings.record_legacy("Finalize object"):
             self._codegen._engine.finalize_object()
 
 
@@ -1226,12 +1226,9 @@ class CPUCodegen(Codegen):
         return ir_module
 
     def _module_pass_manager(self, **kwargs):
-        pm = ll.create_module_pass_manager()
-        pm.add_target_library_info(ll.get_process_triple())
-        self._tm.add_analysis_passes(pm)
         cost = kwargs.pop("cost", None)
-        with self._pass_manager_builder(**kwargs) as pmb:
-            pmb.populate(pm)
+        pb = self._pass_builder(**kwargs)
+        pm = pb.getModulePassManager()
         # If config.OPT==0 do not include these extra passes to help with
         # vectorization.
         if cost is not None and cost == "cheap" and config.OPT != 0:
@@ -1239,42 +1236,31 @@ class CPUCodegen(Codegen):
             # of vectorization failing due to unknown PHI nodes.
             pm.add_loop_rotate_pass()
             # These passes are required to get SVML to vectorize tests
-            pm.add_instruction_combining_pass()
+            pm.add_instruction_combine_pass()
             pm.add_jump_threading_pass()
 
         if config.LLVM_REFPRUNE_PASS:
-            pm.add_refprune_pass(_parse_refprune_flags())
-        return pm
+           pm.add_refprune_pass(_parse_refprune_flags())
+        return pm, pb
 
-    def _function_pass_manager(self, llvm_module, **kwargs):
-        pm = ll.create_function_pass_manager(llvm_module)
-        pm.add_target_library_info(llvm_module.triple)
-        self._tm.add_analysis_passes(pm)
-        with self._pass_manager_builder(**kwargs) as pmb:
-            pmb.populate(pm)
+    def _function_pass_manager(self, **kwargs):
+        pb = self._pass_builder(**kwargs)
+        pm = pb.getFunctionPassManager()
         if config.LLVM_REFPRUNE_PASS:
             pm.add_refprune_pass(_parse_refprune_flags())
-        return pm
+        return pm, pb
 
-    def _pass_manager_builder(self, **kwargs):
-        """
-        Create a PassManagerBuilder.
-
-        Note: a PassManagerBuilder seems good only for one use, so you
-        should call this method each time you want to populate a module
-        or function pass manager.  Otherwise some optimizations will be
-        missed...
-        """
+    def _pass_builder(self, **kwargs):
         opt_level = kwargs.pop('opt', config.OPT)
         loop_vectorize = kwargs.pop('loop_vectorize', config.LOOP_VECTORIZE)
         slp_vectorize = kwargs.pop('slp_vectorize', config.SLP_VECTORIZE)
 
-        pmb = create_pass_manager_builder(opt=opt_level,
-                                          loop_vectorize=loop_vectorize,
-                                          slp_vectorize=slp_vectorize,
-                                          **kwargs)
+        pb = create_pass_builder(self._tm, opt=opt_level,
+                                 loop_vectorize=loop_vectorize,
+                                 slp_vectorize=slp_vectorize,
+                                 **kwargs)
 
-        return pmb
+        return pb
 
     def _check_llvm_bugs(self):
         """
@@ -1431,7 +1417,6 @@ class JITCPUCodegen(CPUCodegen):
 def initialize_llvm():
     """Safe to use multiple times.
     """
-    ll.initialize()
     ll.initialize_native_target()
     ll.initialize_native_asmprinter()
 
