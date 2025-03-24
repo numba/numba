@@ -407,6 +407,10 @@ class ArrayCompatible(Type):
     def dtype(self):
         return self.as_array.dtype
 
+    @cached_property
+    def alignment(self):
+        return self.as_array.alignment
+
 
 class Literal(Type):
     """Base class for Literal types.
