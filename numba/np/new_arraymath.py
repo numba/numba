@@ -4485,7 +4485,7 @@ def numpy_unwrap(p, discont=None, axis=-1, period=6.283185307179586):
         p_init = np.asarray(p).astype(dtype)
         init_shape = p_init.shape
         last_axis = init_shape[-1]
-        p_new = p_init.reshape((p_init.size // last_axis, last_axis))
+        p_new = p_init.reshape((p_init.size // last_axis, last_axis)).copy()
         # Manipulate discont and period
         if discont is None:
             discont = period / 2
