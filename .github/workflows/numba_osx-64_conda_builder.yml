@@ -139,6 +139,10 @@ jobs:
     steps:
       - name: Setup miniconda
         uses: conda-incubator/setup-miniconda@v3
+      
+      - name: Setup platform-specific requirements
+        run: |
+          source ./buildscripts/github/setup_platform.sh "osx-64"
 
       - name: Download llvmlite artifact
         if: ${{ inputs.llvmlite_run_id != '' }}
