@@ -181,6 +181,6 @@ jobs:
           fi
           
           conda build -c $LLVMLITE_CHANNEL -c defaults \
-            --extra-deps numpy=${{ matrix.numpy_test }} \
+            --extra-deps numpy=${{ matrix.numpy_test }} blas=*=openblas \
             --test \
             osx-64/numba*.conda
