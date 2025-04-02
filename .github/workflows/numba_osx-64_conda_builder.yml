@@ -137,12 +137,17 @@ jobs:
       fail-fast: false
 
     steps:
-      - name: Setup miniconda
-        uses: conda-incubator/setup-miniconda@v3
+      - name: Clone repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       
       - name: Setup platform-specific requirements
         run: |
           source ./buildscripts/github/setup_platform.sh "osx-64"
+
+      - name: Setup miniconda
+        uses: conda-incubator/setup-miniconda@v3
 
       - name: Download llvmlite artifact
         if: ${{ inputs.llvmlite_run_id != '' }}
