@@ -85,7 +85,7 @@ jobs:
           
           conda build --debug -c $LLVMLITE_CHANNEL -c defaults \
             --python=${{ matrix.python-version }} \
-            --numpy=${{ matrix.numpy_build }} \
+            --numpy=${{ matrix.numpy_build }} blas=*=openblas \
             buildscripts/condarecipe.local/ \
             --output-folder=$CONDA_CHANNEL_DIR \
             --no-test
