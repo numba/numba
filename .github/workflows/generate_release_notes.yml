@@ -190,14 +190,9 @@ jobs:
 
           echo "" >> "$NOTES_FILE" # Ensure newline before appending
           # Ensure the script path is correct if it's not at the root
-          if python maint/gitlog2changelog.py --token="$GH_TOKEN" --beginning="$MERGE_BASE" --repo="${{ github.repository }}" --digits=4 >> "$NOTES_FILE"; then
-            echo "gitlog2changelog.py output appended to $NOTES_FILE"
-            echo "changelog_generated=true" >> $GITHUB_OUTPUT
-          else
-            echo "::error::gitlog2changelog.py script failed."
-            echo "changelog_generated=false" >> $GITHUB_OUTPUT
-            # exit 1 # Optionally fail the job
-          fi
+          python maint/gitlog2changelog.py --token="$GH_TOKEN" --beginning="$MERGE_BASE" --repo="numba/numba" --digits=4 >> "$NOTES_FILE"
+          echo "gitlog2changelog.py output appended to $NOTES_FILE"
+          echo "changelog_generated=true" >> $GITHUB_OUTPUT
 
       - name: Upload final notes file artifact
         uses: actions/upload-artifact@v4
@@ -219,12 +214,11 @@ jobs:
           name: notes-final
         continue-on-error: true
 
-      # --- MODIFIED: Simplified dependencies ---
       - name: Install and run rstcheck
         id: rst_check
         if: steps.download_artifact.outcome == 'success'
         env:
-          NOTES_FILE: ${{ needs.run_towncrier.outputs.notes_file_path }} # Original relative path
+          NOTES_FILE: ${{ needs.run_towncrier.outputs.notes_file_path }}
         run: |
           python -m pip install --upgrade pip
           pip install rstcheck # Only install rstcheck here
