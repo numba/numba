@@ -74,7 +74,7 @@ if __name__ == '__main__':
         
         pr_title = pull.title
         print("* PR %s: %s (%s)" % (hyperlink, pr_title,
-                                    " ".join([hyperlink_user(u) for u in
+                                    " ".join([hyperlink_user(u) + '_' for u in
                                               pr_authors])))
         for a in pr_authors:
             authors.add(a)
