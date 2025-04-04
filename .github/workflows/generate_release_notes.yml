@@ -1,0 +1,207 @@
+name: Generate Release Notes
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_version:
+        description: 'Target release version (e.g., 0.61.1)'
+        required: true
+        type: string
+      previous_release_branch:
+        description: 'Name of the previous release branch (e.g., release0.61)'
+        required: true
+        type: string
+
+jobs:
+  run_towncrier:
+    runs-on: ubuntu-latest
+    outputs:
+      notes_file_path: ${{ steps.set_paths.outputs.notes_file_path }}
+      notes_dir_path: ${{ steps.set_paths.outputs.notes_dir_path }}
+      towncrier_generated: ${{ steps.towncrier_build.outputs.towncrier_generated || 'false' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install towncrier GitPython PyGithub docopt
+
+      - name: Set paths
+        id: set_paths
+        run: |
+          version="${{ github.event.inputs.target_version }}"
+          notes_dir="docs/source/release"
+          notes_file="$notes_dir/${version}-notes.rst"
+          echo "notes_dir_path=${notes_dir}" >> $GITHUB_OUTPUT
+          echo "notes_file_path=${notes_file}" >> $GITHUB_OUTPUT
+
+      - name: Verify towncrier requirement
+        id: check_towncrier
+        env:
+          NOTES_FILE: ${{ steps.set_paths.outputs.notes_file_path }}
+        run: |
+          echo "Checking towncrier for version: ${{ github.event.inputs.target_version }} into file: $NOTES_FILE"
+          if [[ -f "$NOTES_FILE" ]]; then
+            echo "Notes file exists. Checking draft..."
+            towncrier build --draft --version=${{ github.event.inputs.target_version }} > towncrier_draft.txt
+            cat towncrier_draft.txt
+            if grep -q "No significant changes." towncrier_draft.txt; then
+              echo "Draft shows no new significant changes. Skipping build."
+              echo "skip_build=true" >> $GITHUB_OUTPUT
+            else
+              echo "Draft shows new changes. Proceeding with build."
+              echo "skip_build=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "Notes file does not exist. Proceeding with build."
+            echo "skip_build=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run towncrier build
+        id: towncrier_build
+        if: steps.check_towncrier.outputs.skip_build == 'false'
+        env:
+          NOTES_FILE: ${{ steps.set_paths.outputs.notes_file_path }}
+          NOTES_DIR: ${{ steps.set_paths.outputs.notes_dir_path }}
+        run: |
+          echo "Running towncrier..."
+          mkdir -p $NOTES_DIR
+          towncrier build --yes --version=${{ github.event.inputs.target_version }}
+          if [[ -f "$NOTES_FILE" ]]; then
+             echo "towncrier_generated=true" >> $GITHUB_OUTPUT
+             echo "Towncrier generated/updated $NOTES_FILE"
+          else
+             echo "towncrier_generated=false" >> $GITHUB_OUTPUT
+             echo "Towncrier did not generate $NOTES_FILE (may indicate no fragments)."
+          fi
+
+      - name: Upload notes file artifact (post-towncrier)
+        uses: actions/upload-artifact@v4
+        with:
+          name: notes-artifact-stage1
+          path: ${{ steps.set_paths.outputs.notes_file_path }}
+          if-no-files-found: ignore
+
+  run_gitlog2changelog:
+    runs-on: ubuntu-latest
+    needs: run_towncrier
+    outputs:
+      notes_file_path: ${{ needs.run_towncrier.outputs.notes_file_path }} # Pass through path
+      changelog_generated: ${{ steps.changelog_script.outputs.changelog_generated || 'false' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download notes artifact (from towncrier)
+        id: download_notes
+        uses: actions/download-artifact@v4
+        with:
+          name: notes-artifact-stage1
+          path: ${{ needs.run_towncrier.outputs.notes_dir_path }}
+        continue-on-error: true # If notes file wasn't created/uploaded
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install towncrier GitPython PyGithub docopt
+
+      - name: Verify gitlog2changelog requirement
+        id: check_changelog
+        env:
+          NOTES_FILE: ${{ needs.run_towncrier.outputs.notes_file_path }}
+        run: |
+          echo "Checking for PR/Author list in: $NOTES_FILE"
+          if [[ "${{ steps.download_notes.outcome }}" != "success" && ! -f "$NOTES_FILE" ]]; then
+             echo "Notes file does not exist. Skipping changelog append."
+             echo "skip_script=true" >> $GITHUB_OUTPUT
+          elif grep -q -E "^Pull-Requests:?(\s*~+)?$" "$NOTES_FILE" && grep -q -E "^Authors:?(\s*~+)?$" "$NOTES_FILE"; then
+             echo "Pull-Requests and Authors sections seem to exist. Skipping generation."
+             echo "skip_script=true" >> $GITHUB_OUTPUT
+          else
+             echo "Sections not found or file exists but incomplete. Proceeding."
+             echo "skip_script=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate PR & Author list
+        id: changelog_script
+        if: steps.check_changelog.outputs.skip_script == 'false'
+        env:
+          NOTES_FILE: ${{ needs.run_towncrier.outputs.notes_file_path }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PREV_BRANCH: ${{ github.event.inputs.previous_release_branch }}
+        run: |
+          echo "Running gitlog2changelog.py for branch: $PREV_BRANCH"
+          git config user.email "action@github.com"
+          git config user.name "GitHub Action"
+          git fetch origin $PREV_BRANCH:$PREV_BRANCH
+          MERGE_BASE=$(git merge-base main $PREV_BRANCH)
+          if [ -z "$MERGE_BASE" ]; then
+            echo "::error::Could not determine merge base between main and $PREV_BRANCH"
+            exit 1
+          fi
+          echo "Merge base commit: $MERGE_BASE"
+
+          echo "" >> "$NOTES_FILE" # Ensure newline before appending
+          if python maint/gitlog2changelog.py --token="$GH_TOKEN" --beginning="$MERGE_BASE" --repo="${{ github.repository }}" --digits=4 >> "$NOTES_FILE"; then
+            echo "gitlog2changelog.py output appended to $NOTES_FILE"
+            echo "changelog_generated=true" >> $GITHUB_OUTPUT
+          else
+            echo "::error::gitlog2changelog.py script failed."
+            echo "changelog_generated=false" >> $GITHUB_OUTPUT
+            # exit 1 # Optionally fail the job
+          fi
+
+      - name: Upload final notes file artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: notes-final
+          path: ${{ needs.run_towncrier.outputs.notes_file_path }}
+          if-no-files-found: ignore
+
+  finalize:
+    runs-on: ubuntu-latest
+    needs: [run_towncrier, run_gitlog2changelog]
+    if: always() # Run always to attempt the check and report
+
+    steps:
+      - name: Download final notes artifact
+        id: download_artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: notes-final
+          # Download *to* the root, as rstcheck path needs to be simple
+          # path: . # Download to workspace root
+        continue-on-error: true
+
+      - name: Install and run rstcheck
+        id: rst_check
+        if: steps.download_artifact.outcome == 'success'
+        env:
+          NOTES_FILE: ${{ needs.run_towncrier.outputs.notes_file_path }} # Original relative path
+        run: |
+          python -m pip install --upgrade pip
+          pip install rstcheck
+          # Extract filename from the original path to check it in the current dir
+          NOTES_FILENAME=$(basename $NOTES_FILE)
+          echo "Running rstcheck on downloaded file: $NOTES_FILENAME"
+          rstcheck "$NOTES_FILENAME" # Check the file at the root
+          echo "rstcheck validation passed."
+          echo "RSTCHECK_PASSED=true" >> $GITHUB_ENV
