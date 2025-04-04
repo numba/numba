@@ -1,0 +1,5 @@
+Prevent unsafe type conversion in arguments to ``range``.
+---------------------------------------------------------
+
+Types that require an unsafe type conversion to ``integer`` (such as ``float``)
+are now not permitted as arguments to ``range``.
