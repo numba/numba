@@ -42,6 +42,9 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          # Install Numba's core runtime deps first
+          pip install numpy llvmlite 
+          # Then install the workflow tools
           pip install towncrier GitPython PyGithub docopt
 
       - name: Set paths
