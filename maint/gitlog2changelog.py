@@ -3,8 +3,7 @@
 Usage:
   gitlog2changelog.py (-h | --help)
   gitlog2changelog.py --version
-  gitlog2changelog.py --token=<token> --beginning=<tag> --repo=<repo> \
-          --digits=<digits> [--summary]
+  gitlog2changelog.py --token=<token> --beginning=<tag> --repo=<repo> [--summary]
 
 Options:
   -h --help          Show this screen.
@@ -12,7 +11,6 @@ Options:
   --beginning=<tag>  Where in the History to begin
   --repo=<repo>      Which repository to look at on GitHub
   --token=<token>    The GitHub token to talk to the API
-  --digits=<digits>  The number of digits to use in the issue finding regex
   --summary          Show total count for each section
 
 """
@@ -40,7 +38,6 @@ if __name__ == '__main__':
     beginning = arguments['--beginning']
     target_ghrepo = arguments['--repo']
     github_token = arguments['--token']
-    regex_digits = arguments['--digits']
     summary = arguments["--summary"]
     ghrepo = Github(github_token).get_repo(target_ghrepo)
     repo = Repo('.')
@@ -48,17 +45,18 @@ if __name__ == '__main__':
     merge_commits = [x for x in all_commits
                      if 'Merge pull request' in x.message]
     prmatch = re.compile(
-        f'^Merge pull request #([0-9]{{{regex_digits}}}) from.*')
+        r'^Merge pull request #([0-9]+) from.*')
     ordered = {}
     authors = set()
     for x in merge_commits:
         match = prmatch.match(x.message)
         if match:
             issue_id = match.groups()[0]
-            ordered[issue_id] = "%s" % (x.message.splitlines()[2])
+            ordered[issue_id] = None
+
     print("Pull-Requests:\n")
     missing_authors = set()
-    for k in sorted(ordered.keys()):
+    for k in sorted(ordered.keys(), key=int):
         pull = get_pr(int(k))
         hyperlink = "`#%s <%s>`_" % (k, pull.html_url)
         # get all users for all commits
@@ -73,8 +71,10 @@ if __name__ == '__main__':
                 pr_authors.add(c.committer)
             elif not author:
                 missing_authors.add((pull, c))
-        print("* PR %s: %s (%s)" % (hyperlink, ordered[k],
-                                    " ".join([hyperlink_user(u) for u in
+        
+        pr_title = pull.title
+        print("* PR %s: %s (%s)" % (hyperlink, pr_title,
+                                    " ".join([hyperlink_user(u) + '_' for u in
                                               pr_authors])))
         for a in pr_authors:
             authors.add(a)
