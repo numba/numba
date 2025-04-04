@@ -108,7 +108,7 @@ jobs:
       - name: Upload notes file artifact (post-towncrier)
         uses: actions/upload-artifact@v4
         with:
-          name: release-notes-stage1-${{ env.TARGET_VERSION }}
+          name: release-notes-${{ env.TARGET_VERSION }}-towncrier
           path: ${{ steps.set_paths.outputs.notes_file_path }}
           if-no-files-found: ignore
 
@@ -129,7 +129,7 @@ jobs:
         id: download_notes
         uses: actions/download-artifact@v4
         with:
-          name: release-notes-stage1-${{ env.TARGET_VERSION }}
+          name: release-notes-${{ env.TARGET_VERSION }}-towncrier
           path: ${{ needs.generate_notes_towncrier.outputs.notes_dir_path }}
         continue-on-error: true
 
@@ -192,7 +192,7 @@ jobs:
       - name: Upload final notes file artifact
         uses: actions/upload-artifact@v4
         with:
-          name: release-notes-final-${{ env.TARGET_VERSION }}
+          name: release-notes-${{ env.TARGET_VERSION }}-final
           path: ${{ needs.generate_notes_towncrier.outputs.notes_file_path }}
           if-no-files-found: ignore
 
@@ -206,7 +206,7 @@ jobs:
         id: download_artifact
         uses: actions/download-artifact@v4
         with:
-          name: release-notes-final-${{ env.TARGET_VERSION }}
+          name: release-notes-${{ env.TARGET_VERSION }}-final
         continue-on-error: true
 
       - name: Install and run rstcheck
