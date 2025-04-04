@@ -833,7 +833,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc, UfuncBase):
 
             @register_jitable
             def tuple_slice(tup, pos):
-                s = tup_m1  # TODO: replace this by a literally call
+                s = tup_m1
                 i, j = 0, 0
                 while i < len(tup):
                     if i != pos:
@@ -842,7 +842,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc, UfuncBase):
                     i += 1
                 return s
 
-            # importing it here as an import at the top scope brings unwanted
+            # importing here as an import at the top scope brings unwanted
             # stuff. See numba/tests/test_import.py::test_no_impl_import
             from numba.np.arrayobj import generate_getitem_setitem_with_axis
             setitem = generate_getitem_setitem_with_axis(array.ndim, 'setitem')
@@ -861,7 +861,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc, UfuncBase):
                 shape = tuple_setitem(array.shape, axis, sz)
 
                 if not out_none and out.shape != shape:
-                    # TODO: improve error message
+                    # TODO: improve error message once #9524 gets merged
                     msg = ('operands could not be broadcast together with '
                            'remmaped shapes')
                     raise ValueError(msg)
@@ -872,7 +872,6 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc, UfuncBase):
                 # short-circuit to avoid overflow on Windows
                 if len(indices) == 0:
                     return out
-                # print(indices)
 
                 j = 0
                 for i in range(len(indices) - 1):
@@ -892,8 +891,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc, UfuncBase):
                             arr_slice = arr_slice.reshape(_slice)
                         setitem(out, j, axis, arr_slice)
                     elif indices[i] >= sz or indices[i] < 0:
-                        # TODO: Improve error message
-                        raise ValueError('error!')
+                        raise ValueError('Invalid value for indices')
                     j += 1
 
                 # last index
