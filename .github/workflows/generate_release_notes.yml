@@ -176,7 +176,11 @@ jobs:
           echo "Running gitlog2changelog.py for branch: $PREV_BRANCH"
           git config user.email "action@github.com"
           git config user.name "GitHub Action"
+          echo "Fetching main branch..."
+          git fetch origin main:main
+          echo "Fetching previous release branch..."
           git fetch origin $PREV_BRANCH:$PREV_BRANCH
+          echo "Determining merge base between main and $PREV_BRANCH..."
           MERGE_BASE=$(git merge-base main $PREV_BRANCH)
           if [ -z "$MERGE_BASE" ]; then
             echo "::error::Could not determine merge base between main and $PREV_BRANCH"
