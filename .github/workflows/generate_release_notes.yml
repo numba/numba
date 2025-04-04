@@ -190,7 +190,7 @@ jobs:
 
           echo "" >> "$NOTES_FILE" # Ensure newline before appending
           # Ensure the script path is correct if it's not at the root
-          python maint/gitlog2changelog.py --token="$GH_TOKEN" --beginning="$MERGE_BASE" --repo="numba/numba" --digits=4 >> "$NOTES_FILE"
+          python maint/gitlog2changelog.py --token="$GH_TOKEN" --beginning="$MERGE_BASE" --repo="numba/numba" >> "$NOTES_FILE"
           echo "gitlog2changelog.py output appended to $NOTES_FILE"
           echo "changelog_generated=true" >> $GITHUB_OUTPUT
 
