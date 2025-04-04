@@ -1,6 +1,9 @@
 name: Generate Release Notes
 
 on:
+  pull_request:
+    paths:
+      - .github/workflows/generate_release_notes.yml
   workflow_dispatch:
     inputs:
       target_version:
@@ -11,6 +14,11 @@ on:
         description: 'Name of the previous release branch (e.g., release0.61)'
         required: true
         type: string
+
+# Helper to set versions based on trigger type
+env:
+  TARGET_VERSION: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target_version || '0.61.1' }}
+  PREVIOUS_RELEASE_BRANCH: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.previous_release_branch || 'release0.61' }}
 
 jobs:
   run_towncrier:
@@ -39,7 +47,8 @@ jobs:
       - name: Set paths
         id: set_paths
         run: |
-          version="${{ github.event.inputs.target_version }}"
+          # Use the environment variable set globally for the job
+          version="${{ env.TARGET_VERSION }}"
           notes_dir="docs/source/release"
           notes_file="$notes_dir/${version}-notes.rst"
           echo "notes_dir_path=${notes_dir}" >> $GITHUB_OUTPUT
@@ -50,10 +59,12 @@ jobs:
         env:
           NOTES_FILE: ${{ steps.set_paths.outputs.notes_file_path }}
         run: |
-          echo "Checking towncrier for version: ${{ github.event.inputs.target_version }} into file: $NOTES_FILE"
+          # Use the environment variable
+          echo "Checking towncrier for version: ${{ env.TARGET_VERSION }} into file: $NOTES_FILE"
           if [[ -f "$NOTES_FILE" ]]; then
             echo "Notes file exists. Checking draft..."
-            towncrier build --draft --version=${{ github.event.inputs.target_version }} > towncrier_draft.txt
+            # Use the environment variable
+            towncrier build --draft --version=${{ env.TARGET_VERSION }} > towncrier_draft.txt
             cat towncrier_draft.txt
             if grep -q "No significant changes." towncrier_draft.txt; then
               echo "Draft shows no new significant changes. Skipping build."
@@ -76,7 +87,8 @@ jobs:
         run: |
           echo "Running towncrier..."
           mkdir -p $NOTES_DIR
-          towncrier build --yes --version=${{ github.event.inputs.target_version }}
+          # Use the environment variable
+          towncrier build --yes --version=${{ env.TARGET_VERSION }}
           if [[ -f "$NOTES_FILE" ]]; then
              echo "towncrier_generated=true" >> $GITHUB_OUTPUT
              echo "Towncrier generated/updated $NOTES_FILE"
@@ -146,7 +158,8 @@ jobs:
         env:
           NOTES_FILE: ${{ needs.run_towncrier.outputs.notes_file_path }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PREV_BRANCH: ${{ github.event.inputs.previous_release_branch }}
+          # Use the globally set env var for previous branch
+          PREV_BRANCH: ${{ env.PREVIOUS_RELEASE_BRANCH }}
         run: |
           echo "Running gitlog2changelog.py for branch: $PREV_BRANCH"
           git config user.email "action@github.com"
