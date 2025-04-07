@@ -62,7 +62,7 @@ jobs:
         if: ${{ inputs.llvmlite_run_id != '' }}
         uses: actions/download-artifact@v4
         with:
-          name: llvmlite_osx-64_conda_py${{ matrix.python-version }}
+          name: llvmlite-osx-64-py${{ matrix.python-version }}
           path: llvmlite_conda
           run-id: ${{ inputs.llvmlite_run_id }}
           repository: numba/llvmlite
@@ -153,7 +153,7 @@ jobs:
         if: ${{ inputs.llvmlite_run_id != '' }}
         uses: actions/download-artifact@v4
         with:
-          name: llvmlite_osx-64_conda_py${{ matrix.python-version }}
+          name: llvmlite-osx-64-py${{ matrix.python-version }}
           path: llvmlite_conda
           run-id: ${{ inputs.llvmlite_run_id }}
           repository: numba/llvmlite
