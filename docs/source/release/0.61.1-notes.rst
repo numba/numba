@@ -60,3 +60,23 @@ target specific. This is now rectified and refactored so as to provide a
 ``@overload``-able stub to allow targets to implement custom versions as needed.
 
 (`PR-#9972 <https://github.com/numba/numba/pull/9972>`__)
+
+Pull-Requests:
+
+* PR `#9919 <https://github.com/numba/numba/pull/9919>`_: Support for NumPy 2.2 (`kc611 <https://github.com/kc611>`__)
+* PR `#9920 <https://github.com/numba/numba/pull/9920>`_: adding win-64 builder for Numba conda packages (`swap357 <https://github.com/swap357>`__ `esc <https://github.com/esc>`__)
+* PR `#9940 <https://github.com/numba/numba/pull/9940>`_: add GHA workflow for building numba wheels for win-64 (`swap357 <https://github.com/swap357>`__)
+* PR `#9945 <https://github.com/numba/numba/pull/9945>`_: Add type stub to numba.core.types to help static type checkers. (`sklam <https://github.com/sklam>`__)
+* PR `#9964 <https://github.com/numba/numba/pull/9964>`_: remove upper pin on NumPy (`esc <https://github.com/esc>`__)
+* PR `#9965 <https://github.com/numba/numba/pull/9965>`_: update win-64 conda builder test matrix (`swap357 <https://github.com/swap357>`__)
+* PR `#9972 <https://github.com/numba/numba/pull/9972>`_: Fix issue with error handling in slice assignment. (`stuartarchibald <https://github.com/stuartarchibald>`__)
+* PR `#9999 <https://github.com/numba/numba/pull/9999>`_: Added release notes and version table entry for 0.61.1rc1 (`kc611 <https://github.com/kc611>`__)
+* PR `#10002 <https://github.com/numba/numba/pull/10002>`_: GHA workflows and other cherry picks for release0.61.1 (`sklam <https://github.com/sklam>`__ `swap357 <https://github.com/swap357>`__ `kc611 <https://github.com/kc611>`__)
+
+Authors:
+
+* `esc <https://github.com/esc>`_
+* `kc611 <https://github.com/kc611>`_
+* `sklam <https://github.com/sklam>`_
+* `stuartarchibald <https://github.com/stuartarchibald>`_
+* `swap357 <https://github.com/swap357>`_
