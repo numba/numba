@@ -18,7 +18,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  LOCAL_LLVMLITE_ARTIFACT_PATH: llvmlite_conda
   CONDA_CHANNEL_NUMBA: numba/label/dev
 
 jobs:
@@ -78,7 +77,7 @@ jobs:
           
           # Set channel based on whether llvmlite artifact was downloaded
           if [ "${{ inputs.llvmlite_run_id }}" != "" ]; then
-            LLVMLITE_CHANNEL="file:///${{ env.LOCAL_LLVMLITE_ARTIFACT_PATH }}"
+            LLVMLITE_CHANNEL="file://${{ github.workspace }}/llvmlite_conda"
           else
             LLVMLITE_CHANNEL="${{ env.CONDA_CHANNEL_NUMBA }}"
           fi
@@ -175,7 +174,7 @@ jobs:
         run: |
           # Set channel based on whether llvmlite artifact was downloaded
           if [ "${{ inputs.llvmlite_run_id }}" != "" ]; then
-            LLVMLITE_CHANNEL="file:///${{ env.LOCAL_LLVMLITE_ARTIFACT_PATH }}"
+            LLVMLITE_CHANNEL="file://${{ github.workspace }}/llvmlite_conda"
           else
             LLVMLITE_CHANNEL="${{ env.CONDA_CHANNEL_NUMBA }}"
           fi
