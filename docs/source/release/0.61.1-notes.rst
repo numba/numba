@@ -63,13 +63,6 @@ target specific. This is now rectified and refactored so as to provide a
 
 Pull-Requests:
 
-* PR `#9804 <https://github.com/numba/numba/pull/9804>`_: Release branch pins for 0.61 (`kc611 <https://github.com/kc611>`__)
-* PR `#9821 <https://github.com/numba/numba/pull/9821>`_: Add debug print to debug test_monitoring_multiple_threads failing on … (`sklam <https://github.com/sklam>`__)
-* PR `#9837 <https://github.com/numba/numba/pull/9837>`_: Replace "hard-errors" with NumbaErrors. (`stuartarchibald <https://github.com/stuartarchibald>`__)
-* PR `#9843 <https://github.com/numba/numba/pull/9843>`_: Cherry-picks and Changelog entries for 0.61.0rc2 (`sklam <https://github.com/sklam>`__ `kc611 <https://github.com/kc611>`__)
-* PR `#9848 <https://github.com/numba/numba/pull/9848>`_: Fix #9846. GET_ITER in comprehension changed to NOP. (`sklam <https://github.com/sklam>`__)
-* PR `#9887 <https://github.com/numba/numba/pull/9887>`_: Add env-var NUMBA_JIT_COVERAGE to disable coverage (`sklam <https://github.com/sklam>`__)
-* PR `#9897 <https://github.com/numba/numba/pull/9897>`_: Cherry Picks and changelog modifications for `0.61.0` final (`esc <https://github.com/esc>`__ `kc611 <https://github.com/kc611>`__)
 * PR `#9919 <https://github.com/numba/numba/pull/9919>`_: Support for NumPy 2.2 (`kc611 <https://github.com/kc611>`__)
 * PR `#9920 <https://github.com/numba/numba/pull/9920>`_: adding win-64 builder for Numba conda packages (`swap357 <https://github.com/swap357>`__ `esc <https://github.com/esc>`__)
 * PR `#9940 <https://github.com/numba/numba/pull/9940>`_: add GHA workflow for building numba wheels for win-64 (`swap357 <https://github.com/swap357>`__)
