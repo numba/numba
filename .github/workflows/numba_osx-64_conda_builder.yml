@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  LOCAL_LLVMLITE_ARTIFACT_PATH: D:/a/numba/numba/llvmlite_conda
+  LOCAL_LLVMLITE_ARTIFACT_PATH: llvmlite_conda
   CONDA_CHANNEL_NUMBA: numba/label/dev
 
 jobs:
