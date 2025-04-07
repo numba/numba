@@ -1,6 +1,6 @@
 
-Version 0.61.1rc1 (24 March 2025)
-=================================
+Version 0.61.1 (07 April 2025)
+==============================
 
 This is a maintenance release that adds support for NumPy 2.2 and fixes some
 regressions reported against 0.61.0.
