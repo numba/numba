@@ -180,12 +180,22 @@ def shutting_down(globals=globals):
     return v is True or v is None
 
 
-# weakref.finalize registers an exit function that runs all finalizers for
-# which atexit is True. Some of these finalizers may call shutting_down() to
-# check whether the interpreter is shutting down. For this to behave correctly,
-# we need to make sure that _at_shutdown is called before the finalizer exit
-# function. Since atexit operates as a LIFO stack, we first construct a dummy
-# finalizer then register atexit to ensure this ordering.
+# The first call to weakref.finalize registers an exit function that runs all
+# finalizers whose atexit attribute is True; most or all of the finalizers in
+# Numba will have atexit set to True, as it is the default for a finalizer.
+#
+# Some of these finalizers may call shutting_down() to check whether the
+# interpreter is shutting down. For this to behave correctly, we need to make
+# sure that _at_shutdown is called before the finalizer. Since atexit operates
+# as a LIFO stack, we first construct a dummy finalizer then register atexit to
+# ensure this ordering.
+#
+# The outcome of this process is that at exit time, the _at_shutdown function
+# will be called first to set the _shutting_down global, and then the finalize
+# atexit function will run and invoke all finalizers - even those registered
+# after the two lines of code below have run, because the first finalize call
+# came before the atexit registration of _at_shutdown.
+
 weakref.finalize(lambda: None, lambda: None)
 atexit.register(_at_shutdown)
 
