@@ -45,7 +45,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - name: Setup platform-specific requirements
         run: |
           source ./buildscripts/github/setup_platform.sh "osx-64"
@@ -74,14 +74,14 @@ jobs:
         run: |
           CONDA_CHANNEL_DIR="conda_channel_dir"
           mkdir -p $CONDA_CHANNEL_DIR
-          
+
           # Set channel based on whether llvmlite artifact was downloaded
           if [ "${{ inputs.llvmlite_run_id }}" != "" ]; then
             LLVMLITE_CHANNEL="file://${{ github.workspace }}/llvmlite_conda"
           else
             LLVMLITE_CHANNEL="${{ env.CONDA_CHANNEL_NUMBA }}"
           fi
-          
+
           conda build --debug -c $LLVMLITE_CHANNEL -c defaults \
             --python=${{ matrix.python-version }} \
             --numpy=${{ matrix.numpy_build }} blas=*=openblas \
@@ -113,7 +113,7 @@ jobs:
             numpy_test: "1.24"
           - python-version: "3.10"
             numpy_test: "1.25"
-          
+
           # Python 3.11
           - python-version: "3.11"
             numpy_test: "1.26"
@@ -121,7 +121,7 @@ jobs:
             numpy_test: "2.0"
           - python-version: "3.11"
             numpy_test: "2.2"
-          
+
           # Python 3.12
           - python-version: "3.12"
             numpy_test: "1.26"
@@ -129,7 +129,7 @@ jobs:
             numpy_test: "2.0"
           - python-version: "3.12"
             numpy_test: "2.2"
-          
+
           # Python 3.13
           - python-version: "3.13"
             numpy_test: "2.2"
@@ -140,7 +140,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - name: Setup platform-specific requirements
         run: |
           source ./buildscripts/github/setup_platform.sh "osx-64"
@@ -178,7 +178,7 @@ jobs:
           else
             LLVMLITE_CHANNEL="${{ env.CONDA_CHANNEL_NUMBA }}"
           fi
-          
+
           conda build -c $LLVMLITE_CHANNEL -c defaults \
             --extra-deps numpy=${{ matrix.numpy_test }} blas=*=openblas \
             --test \
