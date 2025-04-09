@@ -148,7 +148,7 @@ _as_dtype_letters = {
 def as_dtype(nbtype):
     """
     Return a numpy dtype instance corresponding to the given Numba type.
-    NotImplementedError is if no correspondence is known.
+    NumbaNotImplementedError is if no correspondence is known.
     """
     nbtype = types.unliteral(nbtype)
     if isinstance(nbtype, (types.Complex, types.Integer, types.Float)):
@@ -232,9 +232,10 @@ def map_arrayscalar_type(val):
     else:
         try:
             dtype = np.dtype(type(val))
-        except TypeError:
-            raise errors.NumbaNotImplementedError("no corresponding numpy "
-                                                  "dtype for %r" % type(val))
+        except (errors.NumbaNotImplementedError, TypeError):
+            msg = f"no corresponding numpy dtype for {type(val)}"
+            raise errors.NumbaNotImplementedError(msg)
+
     return from_dtype(dtype)
 
 
