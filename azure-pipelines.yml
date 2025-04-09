@@ -32,7 +32,7 @@ jobs:
 - template: buildscripts/azure/azure-linux-macos.yml
   parameters:
     name: Linux
-    vmImage: ubuntu-20.04
+    vmImage: ubuntu-24.04
     matrix:
       py310_np124_cov_doc:
         PYTHON: '3.10'
