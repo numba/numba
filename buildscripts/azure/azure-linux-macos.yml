@@ -13,6 +13,13 @@ jobs:
 
   steps:
     - script: |
+        echo "Installing catchsegv"
+        sudo apt-get update -qq
+        sudo apt-get install -y glibc-tools
+      displayName: 'Install catchsegv (provided by glibc-tools)'
+      condition: eq('${{ parameters.name }}', 'Linux')
+
+    - script: |
         set -e
         echo "Installing Miniconda"
         buildscripts/incremental/install_miniconda.sh
