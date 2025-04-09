@@ -92,7 +92,7 @@ if [ "$TEST_SVML" == "yes" ]; then $CONDA_INSTALL -c numba icc_rt; fi
 # Install Intel TBB parallel backend
 if [ "$TEST_THREADING" == "tbb" ]; then $CONDA_INSTALL "tbb>=2021.6" "tbb-devel>=2021.6"; fi
 # Install typeguard
-if [ "$RUN_TYPEGUARD" == "yes" ]; then $CONDA_INSTALL typeguard; fi
+$CONDA_INSTALL typeguard
 
 # environment dump for debug
 echo "DEBUG ENV:"
