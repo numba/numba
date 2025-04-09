@@ -12,7 +12,7 @@ from numba.core import typing, types, cgutils
 from numba.core.extending import overload_method, overload, intrinsic
 
 
-@lower_builtin(types.NamedTupleClass, types.VarArg(types.Any))
+@lower_builtin((types.NamedTupleClass, '__call__'), types.VarArg(types.Any))
 def namedtuple_constructor(context, builder, sig, args):
     # A namedtuple has the same representation as a regular tuple
     # the arguments need casting (lower_cast) from the types in the ctor args

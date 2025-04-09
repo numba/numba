@@ -335,7 +335,7 @@ def complex_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(types.NumberClass, types.Any)
+@lower_builtin((types.NumberClass, '__call__'), types.Any)
 def number_constructor(context, builder, sig, args):
     """
     Call a number class, e.g. np.int32(...)
@@ -668,7 +668,7 @@ def iterable_max(iterable):
     return min_max_impl(iterable, greater_than)
 
 
-@lower_builtin(types.TypeRef, types.VarArg(types.Any))
+@lower_builtin((types.TypeRef, '__call__'), types.VarArg(types.Any))
 def redirect_type_ctor(context, builder, sig, args):
     """Redirect constructor implementation to `numba_typeref_ctor(cls, *args)`,
     which should be overloaded by the type's implementation.
