@@ -21,11 +21,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  LOCAL_LLVMLITE_ARTIFACT_PATH: llvmlite_conda
   CONDA_CHANNEL_NUMBA: ad-testing/label/numpy2
-  VALIDATION_PYTHON_VERSION: "3.12"
   ARTIFACT_RETENTION_DAYS: 7
-  FALLBACK_LLVMLITE_VERSION: "15"
 
 jobs:
   osx-64-build:
@@ -130,6 +127,7 @@ jobs:
   osx-64-validate-wheel:
     name: osx-64-validate-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
     needs: osx-64-build
+    if: inputs.llvmlite_wheel_runid != ''
     runs-on: macos-13
     defaults:
       run:
