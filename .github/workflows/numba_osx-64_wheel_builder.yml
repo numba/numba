@@ -53,10 +53,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup platform-specific requirements
-        run: |
-            source ./buildscripts/github/setup_platform.sh "osx-64"
-
       - name: Setup Miniconda
         uses: conda-incubator/setup-miniconda@v3
         with:
@@ -87,6 +83,9 @@ jobs:
           conda install -c "$CHAN" --yes llvmlite 
           conda install -c ${{ env.CONDA_CHANNEL_NUMBA }} --yes setuptools python-build numpy==${{ matrix.numpy_build }} clang_osx-64 clangxx_osx-64
           conda install --yes llvm-openmp
+
+      - name: Select Xcode 14.1
+        run: sudo xcode-select -s /Applications/Xcode_14.1.0.app
 
       - name: Build sdist [once - py3.10]
         if: matrix.python-version == '3.10'
