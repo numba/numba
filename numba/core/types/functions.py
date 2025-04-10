@@ -216,8 +216,11 @@ class _ResolutionFailures(object):
         """
         if isinstance(error, Exception) and hasattr(error, '__traceback__'):
             # traceback is unavailable in py2
-            frame = traceback.extract_tb(error.__traceback__)[-1]
-            return "{}:{}".format(frame[0], frame[1])
+            frame_list = traceback.extract_tb(error.__traceback__)
+            # Check if length of frame_list is 0
+            if len(frame_list) != 0:
+                frame = frame_list[-1]
+                return "{}:{}".format(frame[0], frame[1])
 
     def raise_error(self):
         for faillist in self._failures.values():
@@ -307,12 +310,10 @@ class BaseFunction(Callable):
                                     for k, v in kws.items()}
                         sig = temp.apply(nolitargs, nolitkws)
                 except Exception as e:
-                    if (utils.use_new_style_errors() and not
-                            isinstance(e, errors.NumbaError)):
+                    if not isinstance(e, errors.NumbaError):
                         raise e
-                    else:
-                        sig = None
-                        failures.add_error(temp, False, e, uselit)
+                    sig = None
+                    failures.add_error(temp, False, e, uselit)
                 else:
                     if sig is not None:
                         self._impl_keys[sig.args] = temp.get_impl_key(sig)
@@ -399,8 +400,7 @@ class BoundFunction(Callable, Opaque):
                 try:
                     out = template.apply(args, kws)
                 except Exception as exc:
-                    if (utils.use_new_style_errors() and not
-                            isinstance(exc, errors.NumbaError)):
+                    if not isinstance(exc, errors.NumbaError):
                         raise exc
                     if isinstance(exc, errors.ForceLiteralArg):
                         raise exc
@@ -599,7 +599,8 @@ class ExternalFunctionPointer(BaseFunction):
                                                  signature)
         from numba.core.types import ffi_forced_object
         if sig.return_type == ffi_forced_object:
-            raise TypeError("Cannot return a pyobject from a external function")
+            msg = "Cannot return a pyobject from an external function"
+            raise errors.TypingError(msg)
         self.sig = sig
         self.requires_gil = any(a == ffi_forced_object for a in self.sig.args)
         self.get_pointer = get_pointer
@@ -610,7 +611,8 @@ class ExternalFunctionPointer(BaseFunction):
 
                 def generic(self, args, kws):
                     if kws:
-                        raise TypeError("does not support keyword arguments")
+                        msg = "does not support keyword arguments"
+                        raise errors.TypingError(msg)
                     # Make ffi_forced_object a bottom type to allow any type to
                     # be casted to it. This is the only place that support
                     # ffi_forced_object.

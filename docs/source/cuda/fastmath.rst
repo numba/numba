@@ -4,6 +4,8 @@
 CUDA Fast Math
 ==============
 
+.. cuda-deprecated::
+
 As noted in :ref:`fast-math`, for certain classes of applications that utilize
 floating point, strict IEEE-754 conformance is not required. For this subset of
 applications, performance speedups may be possible.

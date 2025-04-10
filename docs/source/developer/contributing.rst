@@ -214,9 +214,6 @@ instead. For example::
     $ NUMBA_USE_TYPEGUARD=1 python runtests.py
 
 
-See also: :ref:`Debugging the Test Suite <developer-testsuite>`
-
-
 Running coverage
 ''''''''''''''''
 
@@ -346,7 +343,7 @@ Platform support
 ''''''''''''''''
 
 Every commit to the main branch is automatically tested on all of the
-platforms Numba supports. This includes ARMv8, POWER8, and NVIDIA GPUs.
+platforms Numba supports. This includes ARMv8, and NVIDIA GPUs.
 The build system however is internal to Anaconda, so we also use
 `Azure <https://dev.azure.com/numba/numba/_build>`_ to provide public continuous
 integration information for as many combinations as can be supported by the

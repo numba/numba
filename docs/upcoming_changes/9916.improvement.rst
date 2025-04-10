@@ -1,0 +1,5 @@
+Improve compilation time by more lazy strings.
+----------------------------------------------
+
+Make additional large strings be generated lazily so that you don't 
+pay the cost unless you actually use them.

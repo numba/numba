@@ -186,6 +186,9 @@ class BaseTest(TestCase):
             yield range(start, start + 128 * n, 128)
             yield [-1]
 
+    def safe_construct(self, typ, value):
+        return getattr(np, 'int' + str(np.iinfo(typ).bits))(value).view(typ)
+
     def float_samples(self, typ):
         info = np.finfo(typ)
 
@@ -206,8 +209,6 @@ class BaseTest(TestCase):
 
         # Python 3.10 has a hash for nan based on the pointer to the PyObject
         # containing the nan, skip this input and use explicit test instead.
-        if utils.PYVERSION < (3, 10):
-            a.append(float('nan'))
 
         yield typ(a)
 
@@ -220,10 +221,7 @@ class BaseTest(TestCase):
                 a = real + typ(1j) * imag
                 # Python 3.10 has a hash for nan based on the pointer to the
                 # PyObject containing the nan, skip input that ends up as nan
-                if utils.PYVERSION >= (3, 10):
-                    if not np.any(np.isnan(a)):
-                        yield a
-                else:
+                if not np.any(np.isnan(a)):
                     yield a
 
 
@@ -233,7 +231,7 @@ class TestNumberHashing(BaseTest):
     """
 
     def setUp(self):
-        if numpy_version >= (2, 0):
+        if numpy_version >= (2, 0) and numpy_version <= (2, 1):
             # Temporarily set promotions state to legacy,
             # to ensure overflow logic works
             self.initial_state = np._get_promotion_state()
@@ -242,7 +240,7 @@ class TestNumberHashing(BaseTest):
         return super().setUp()
 
     def tearDown(self) -> None:
-        if numpy_version >= (2, 0):
+        if numpy_version >= (2, 0) and numpy_version <= (2, 1):
             # Reset numpy promotion state to initial state
             # since the setting is global
             np._set_promotion_state(self.initial_state)
@@ -280,7 +278,7 @@ class TestNumberHashing(BaseTest):
             info = np.iinfo(ty)
             # check hash(-1) = -2
             # check hash(0) = 0
-            self.check_hash_values([ty(-1)])
+            self.check_hash_values([self.safe_construct(ty, -1)])
             self.check_hash_values([ty(0)])
             signed = 'uint' not in str(ty)
             # check bit shifting patterns from min through to max
@@ -345,7 +343,7 @@ class TestTupleHashing(BaseTest):
     """
 
     def setUp(self):
-        if numpy_version >= (2, 0):
+        if numpy_version >= (2, 0) and numpy_version <= (2, 1):
             # Temporarily set promotions state to legacy,
             # to ensure overflow logic works
             self.initial_state = np._get_promotion_state()
@@ -354,7 +352,7 @@ class TestTupleHashing(BaseTest):
         return super().setUp()
 
     def tearDown(self) -> None:
-        if numpy_version >= (2, 0):
+        if numpy_version >= (2, 0) and numpy_version <= (2, 1):
             # Reset numpy promotion state to initial state
             # since the setting is global
             np._set_promotion_state(self.initial_state)
@@ -373,7 +371,7 @@ class TestTupleHashing(BaseTest):
             """
             Split i's bits into 2 integers.
             """
-            i = typ(i)
+            i = self.safe_construct(typ, i)
             return (i & typ(0x5555555555555555),
                     i & typ(0xaaaaaaaaaaaaaaaa),
                     )
@@ -382,7 +380,7 @@ class TestTupleHashing(BaseTest):
             """
             Split i's bits into 3 integers.
             """
-            i = typ(i)
+            i = self.safe_construct(typ, i)
             return (i & typ(0x2492492492492492),
                     i & typ(0x4924924924924924),
                     i & typ(0x9249249249249249),

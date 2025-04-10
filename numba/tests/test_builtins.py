@@ -13,7 +13,7 @@ from numba import jit, typeof, njit, typed
 from numba.core import errors, types, config
 from numba.tests.support import (TestCase, tag, ignore_internal_warnings,
                                  MemoryLeakMixin)
-from numba.core.extending import overload_method, box
+from numba.core.extending import overload_method, box, register_jitable
 
 
 forceobj_flags = {'forceobj': True}
@@ -1368,6 +1368,88 @@ class TestIsinstanceBuiltin(TestCase):
             expected = foo.py_func(x)
             got = foo(x)
             self.assertEqual(got, expected)
+
+    def test_branch_prune_and_bind_to_sig(self):
+        # see issue 9795
+        @register_jitable
+        def f(x, y):
+            return x + y
+
+        @njit
+        def call_f(x):
+            if isinstance(x, tuple):
+                return f(*x)
+            else:
+                return f(x)
+
+        # The issue is that without isinstance and branch pruning working
+        # correctly, an attempt will be made to bind the function `f` with
+        # argument `x`. If `x` is a Tuple type, this will fail on the `else`
+        # branch as `f` takes two arguments opposed to one.
+        x = (1, 2)
+        self.assertEqual(call_f(x), call_f.py_func(x))
+
+
+        # This should raise as partial type inference and branch pruning will
+        # remove the `f(*x)` branch and just leave `f(x)`, which then won't
+        # bind because `f` takes two arguments and only one is supplied.
+        with self.assertRaises(errors.TypingError) as raises:
+            call_f(1)
+
+        msg = str(raises.exception)
+        self.assertIn("Cannot bind", msg)
+        self.assertIn("TypeError: missing a required argument: 'y'", msg)
+
+    def test_branch_prune_non_tuples_as_star_arg(self):
+
+        # see issue 9795
+        @register_jitable
+        def f(x, y):
+            return x + y
+
+        @register_jitable
+        def g(x):
+            return x
+
+        @njit
+        def call_f(x):
+            if isinstance(x, tuple):
+                return f(*x)
+            else:
+                return g(x)
+
+        # The issue is that without isinstance and branch pruning working
+        # correctly, an attempt will be made to bind the function `f` with
+        # argument `x`. If `x` is a non-tuple type `*x` will not bind to the
+        # signature of `f`.
+        x = 1
+        self.assertEqual(call_f(x), call_f.py_func(x))
+
+    def test_branch_prune_literal_as_star_arg(self):
+
+        # see issue 9795
+        @register_jitable
+        def f(x, y):
+            return x + y
+
+        @register_jitable
+        def g(x):
+            return x
+
+        one = 1
+        @njit
+        def call_f():
+            x = one
+            if isinstance(x, tuple):
+                return f(*x)
+            else:
+                return g(x)
+
+        # The issue is that without isinstance and branch pruning working
+        # correctly, an attempt will be made to bind the function `f` with
+        # argument `x`. If `x` is a non-tuple const value type `*x` will not
+        # bind to the signature of `f`.
+        self.assertEqual(call_f(), call_f.py_func())
 
 
 class TestGetattrBuiltin(MemoryLeakMixin, TestCase):

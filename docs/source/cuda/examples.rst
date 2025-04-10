@@ -3,6 +3,8 @@
 Examples
 ========
 
+.. cuda-deprecated::
+
 .. _cuda-vecadd:
 
 Vector Addition

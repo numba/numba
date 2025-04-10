@@ -143,7 +143,10 @@ def unary_math_extern(fn, f32extern, f64extern, int_restype=False):
     If *int_restype* is true, then the function's return value should be
     integral, otherwise floating-point.
     """
-    f_restype = types.int64 if int_restype else None
+    if config.USE_LEGACY_TYPE_SYSTEM:
+        f_restype = types.int64 if int_restype else None
+    else:
+        f_restype = types.np_int64 if int_restype else None
 
     def float_impl(context, builder, sig, args):
         """

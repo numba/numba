@@ -2,6 +2,56 @@
 Overview
 ========
 
+.. cuda-deprecated::
+
+.. _cuda-deprecation-status:
+
+Built-in CUDA target deprecation and maintenance status
+=======================================================
+
+Numba's CUDA target is now maintained in a separate package, `numba-cuda
+<https://nvidia.github.io/numba-cuda>`_. This enables improvements in the
+development of the CUDA target:
+
+* The time and effort required to incorporate new features and bug fixes into
+  the CUDA target is decreased - its development cycle is now decoupled from the
+  Numba development process, so "upstream" reviews from Numba maintainers and
+  test runs on the Anaconda internal CI systems are no longer required as part
+  of the standard process for CUDA target pull requests. This lightening of
+  process enables development to proceed at an increased cadence.
+* Similarly, releases of the CUDA target can be made independently of Numba
+  releases, at a more frequent pace.
+* Numba is sufficiently mature as a compiler platform to support out-of-tree
+  targets. The CUDA target, whilst maintained upstream, had been migrated to
+  use the externally-facing APIs for target implementation. The continued
+  development of the CUDA target outside of the main Numba repository ensures
+  the continued development and robustness of these target extension APIs.
+
+With development proceeding outside of the main Numba package, the built-in CUDA
+target is now deprecated, but is still supported in Numba 0.61. It will continue
+to be provided by Numba through at least version 0.62, but no new functionality
+is expected to be added to it. New functionality and bug fixes will be
+implemented in the ``numba-cuda`` package.
+
+Users are encouraged to install ``numba-cuda`` in addition to Numba when using
+the CUDA target. No code changes are required - the ``numba-cuda`` package will
+continue to implement functionality under the ``numba.cuda`` namespace. 
+
+To install ``numba-cuda`` with ``pip``::
+
+   pip install numba-cuda
+
+To install ``numba-cuda`` with ``conda``, for example from the ``conda-forge``
+channel::
+
+   conda install conda-forge::numba-cuda
+
+For further information, see the :ref:`deprecation notice and schedule
+<cuda-builtin-target-deprecation-notice>`.
+
+Introduction
+============
+
 Numba supports CUDA GPU programming by directly compiling a restricted subset
 of Python code into CUDA kernels and device functions following the CUDA
 execution model.  Kernels written in Numba appear to have direct access

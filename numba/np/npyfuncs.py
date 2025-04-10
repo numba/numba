@@ -12,10 +12,11 @@ import numpy as np
 
 from numba.core.extending import overload
 from numba.core.imputils import impl_ret_untracked
-from numba.core import typing, types, errors, lowering, cgutils
+from numba.core import typing, types, errors, lowering, cgutils, config
 from numba.core.extending import register_jitable
 from numba.np import npdatetime
 from numba.np.math import cmathimpl, mathimpl, numbers
+from numba.np.numpy_support import numpy_version
 
 # some NumPy constants. Note that we could generate some of them using
 # the math library, but having the values copied from npy_math seems to
@@ -44,9 +45,13 @@ def _check_arity_and_homogeneity(sig, args, arity, return_type = None):
         msg = '{0} called with invalid types: {1}'.format(fname, sig)
         assert False, msg
 
+if config.USE_LEGACY_TYPE_SYSTEM:
+    cast_arg_ty = types.float64
+else:
+    cast_arg_ty = types.np_float64
 
 def _call_func_by_name_with_cast(context, builder, sig, args,
-                                 func_name, ty=types.float64):
+                                 func_name, ty=cast_arg_ty):
     # it is quite common in NumPy to have loops implemented as a call
     # to the double version of the function, wrapped in casts. This
     # helper function facilitates that.
@@ -580,29 +585,42 @@ def np_complex_sign_impl(context, builder, sig, args):
     # equivalent to complex sign in NumPy's sign
     # but implemented via selects, balancing the 4 cases.
     _check_arity_and_homogeneity(sig, args, 1)
-    op = args[0]
-    ty = sig.args[0]
-    float_ty = ty.underlying_float
 
-    ZERO = context.get_constant(float_ty, 0.0)
-    ONE  = context.get_constant(float_ty, 1.0)
-    MINUS_ONE = context.get_constant(float_ty, -1.0)
-    NAN = context.get_constant(float_ty, float('nan'))
-    result = context.make_complex(builder, ty)
-    result.real = ZERO
-    result.imag = ZERO
+    if numpy_version >= (2, 0):
+        # NumPy >= 2.0.0
+        def complex_sign(z):
+            abs = math.hypot(z.real, z.imag)
+            if abs == 0:
+                return 0 + 0j
+            else:
+                return z / abs
 
-    cmp_sig = typing.signature(types.boolean, *[ty] * 2)
-    cmp_args = [op, result._getvalue()]
-    arg1_ge_arg2 = np_complex_ge_impl(context, builder, cmp_sig, cmp_args)
-    arg1_eq_arg2 = np_complex_eq_impl(context, builder, cmp_sig, cmp_args)
-    arg1_lt_arg2 = np_complex_lt_impl(context, builder, cmp_sig, cmp_args)
+        res = context.compile_internal(builder, complex_sign, sig, args)
+        return impl_ret_untracked(context, builder, sig.return_type, res) 
+    else:
+        op = args[0]
+        ty = sig.args[0]
+        result = context.make_complex(builder, ty)
+        float_ty = ty.underlying_float
 
-    real_when_ge = builder.select(arg1_eq_arg2, ZERO, ONE)
-    real_when_nge = builder.select(arg1_lt_arg2, MINUS_ONE, NAN)
-    result.real = builder.select(arg1_ge_arg2, real_when_ge, real_when_nge)
+        ZERO = context.get_constant(float_ty, 0.0)
+        ONE  = context.get_constant(float_ty, 1.0)
+        MINUS_ONE = context.get_constant(float_ty, -1.0)
+        NAN = context.get_constant(float_ty, float('nan'))
 
-    return result._getvalue()
+        result.real = ZERO
+        result.imag = ZERO
+        cmp_sig = typing.signature(types.boolean, *[ty] * 2)
+        cmp_args = [op, result._getvalue()]
+        arg1_ge_arg2 = np_complex_ge_impl(context, builder, cmp_sig, cmp_args)
+        arg1_eq_arg2 = np_complex_eq_impl(context, builder, cmp_sig, cmp_args)
+        arg1_lt_arg2 = np_complex_lt_impl(context, builder, cmp_sig, cmp_args)
+
+        real_when_ge = builder.select(arg1_eq_arg2, ZERO, ONE)
+        real_when_nge = builder.select(arg1_lt_arg2, MINUS_ONE, NAN)
+        result.real = builder.select(arg1_ge_arg2, real_when_ge, real_when_nge)
+
+        return result._getvalue()
 
 
 ########################################################################

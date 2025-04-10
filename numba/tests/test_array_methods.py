@@ -172,6 +172,9 @@ def np_frombuffer_allocated_dtype(shape):
 def identity_usecase(a, b):
     return (a is b), (a is not b)
 
+def array_tobytes(a):
+    return a.tobytes()
+
 def array_nonzero(a):
     return a.nonzero()
 
@@ -457,19 +460,10 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         dt2 = np.dtype([('u', np.int16), ('v', np.int8)])
         dt3 = np.dtype([('x', np.int16), ('y', np.int16)])
 
-        # The checking routines are much more specific from NumPy 1.23 onwards
-        # as the granularity of error reporing is improved in Numba to match
-        # that of NumPy.
-        if numpy_version >= (1, 23):
-            check_error_larger_dt = check_err_larger_dtype
-            check_error_smaller_dt = check_err_smaller_dtype
-            check_error_noncontig = check_err_noncontig_last_axis
-            check_error_0d = check_err_0d
-        else:
-            check_error_larger_dt = check_err
-            check_error_smaller_dt = check_err
-            check_error_noncontig = check_err
-            check_error_0d = check_err
+        check_error_larger_dt = check_err_larger_dtype
+        check_error_smaller_dt = check_err_smaller_dtype
+        check_error_noncontig = check_err_noncontig_last_axis
+        check_error_0d = check_err_0d
 
         # C-contiguous
         arr = np.arange(24, dtype=np.int8)
@@ -496,12 +490,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # neither F or C contiguous
         not_f_or_c_arr = np.zeros((4, 4)).T[::2, ::2]
 
-        # NumPy 1.23 does not allow views with different size dtype for
-        # non-contiguous last axis.
-        if numpy_version >= (1, 23):
-            check_maybe_error = check_err_noncontig_last_axis
-        else:
-            check_maybe_error = check
+        check_maybe_error = check_err_noncontig_last_axis
 
         check(f_arr, np.int8)
         check(not_f_or_c_arr, np.uint64)
@@ -605,6 +594,12 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         self.assertIn('array.astype if dtype is a string it must be constant',
                       str(raises.exception))
 
+    def test_array_tobytes(self):
+        self.check_layout_dependent_func(
+            array_tobytes,
+            memoryaddr=lambda x: np.frombuffer(x, dtype=np.uint8).ctypes.data,
+        )
+
     def check_np_frombuffer(self, pyfunc):
 
         cfunc = njit(pyfunc)
@@ -672,15 +667,19 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         with self.assertRaisesRegex(TypingError, msg) as raises:
             func(None)
 
-    def check_layout_dependent_func(self, pyfunc, fac=np.arange):
-        def is_same(a, b):
-            return a.ctypes.data == b.ctypes.data
+    def check_layout_dependent_func(
+        self, pyfunc, fac=np.arange, memoryaddr=lambda x: x.ctypes.data
+    ):
         def check_arr(arr):
             cfunc = njit((typeof(arr),))(pyfunc)
             expected = pyfunc(arr)
             got = cfunc(arr)
             self.assertPreciseEqual(expected, got)
-            self.assertEqual(is_same(expected, arr), is_same(got, arr))
+            self.assertEqual(
+                arr.ctypes.data == memoryaddr(expected),
+                arr.ctypes.data == memoryaddr(got),
+            )
+
         arr = fac(24)
         check_arr(arr)
         check_arr(arr.reshape((3, 8)))
@@ -774,12 +773,20 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check_arr(arr.reshape((2, 3, 4)))
         check_arr(arr.reshape((2, 3, 4)).T)
         check_arr(arr.reshape((2, 3, 4))[::2])
-        for v in (0.0, 1.5, float('nan')):
-            arr = np.array([v]).reshape(())
-            check_arr(arr)
 
         arr = np.array(["Hello", "", "world"])
         check_arr(arr)
+
+        for v in (0.0, 1.5, float('nan')):
+            arr = np.array([v]).reshape(())
+            if numpy_version < (2, 1):
+                check_arr(arr)
+            else:
+                with self.assertRaises((ValueError, TypingError)) as raises:
+                    njit((typeof(arr),))(pyfunc)
+                msg = "Calling nonzero on 0d arrays is not allowed. Use " \
+                      "np.atleast_1d(scalar).nonzero() instead."
+                self.assertIn(msg, str(raises.exception))
 
     def test_array_nonzero(self):
         self.check_nonzero(array_nonzero)
@@ -1280,7 +1287,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
              np.ones((7, 3), arr_dtype) * -5]
             for arr_dtype in all_dtypes]
 
-        unsigned_dtypes = [np.uint32, np.uint64]
+        unsigned_dtypes = [np.uint32, np.uint64, np.bool_]
         all_test_arrays = [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype)]
@@ -1303,7 +1310,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
              np.ones((7, 3), arr_dtype) * -5]
             for arr_dtype in all_dtypes]
 
-        unsigned_dtypes = [np.uint64]
+        unsigned_dtypes = [np.uint64, np.bool_]
         all_test_arrays += [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype)]
@@ -1376,7 +1383,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
              np.ones((7, 3), arr_dtype) * -5]
             for arr_dtype in all_dtypes]
 
-        unsigned_dtypes = [np.uint32, np.uint64]
+        unsigned_dtypes = [np.uint32, np.uint64, np.bool_]
         all_test_arrays = [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype)]
@@ -1388,6 +1395,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                       np.dtype('int32'): [np.float64, np.int64, np.float32, np.int32],
                       np.dtype('uint32'): [np.float64, np.int64, np.float32],
                       np.dtype('uint64'): [np.float64, np.int64],
+                      np.dtype('bool'): [np.float64, np.int64, np.float32, np.int32, np.bool_],
                       np.dtype('complex64'): [np.complex64, np.complex128],
                       np.dtype('complex128'): [np.complex128]}
 
@@ -1412,7 +1420,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
              np.ones((7, 3), arr_dtype) * -5]
             for arr_dtype in all_dtypes]
 
-        unsigned_dtypes = [np.uint32, np.uint64]
+        unsigned_dtypes = [np.uint32, np.uint64, np.bool_]
         all_test_arrays = [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype)]
@@ -1424,6 +1432,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                       np.dtype('int32'): [np.float64, np.int64, np.float32, np.int32],
                       np.dtype('uint32'): [np.float64, np.int64, np.float32],
                       np.dtype('uint64'): [np.float64, np.uint64],
+                      np.dtype('bool'): [np.float64, np.int64, np.float32, np.int32, np.bool_],
                       np.dtype('complex64'): [np.complex64, np.complex128],
                       np.dtype('complex128'): [np.complex128]}
 

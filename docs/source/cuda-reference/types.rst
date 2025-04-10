@@ -1,6 +1,8 @@
 CUDA-Specific Types
 ====================
 
+.. cuda-deprecated::
+
 .. note::
 
     This page is about types specific to CUDA targets. Many other types are also
