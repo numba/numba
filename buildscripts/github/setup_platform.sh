@@ -31,4 +31,4 @@ case "${PLATFORM}" in
         ;;
 esac
 
-echo "Platform setup complete for ${PLATFORM}" 
+echo "Platform setup complete for ${PLATFORM}"
