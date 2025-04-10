@@ -71,6 +71,10 @@ jobs:
           repository: numba/llvmlite
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Setup platform-specific requirements
+        run: |
+          source ./buildscripts/github/setup_platform.sh "osx-64"
+
       - name: Install build dependencies
         run: |
           if [ "${{ inputs.llvmlite_conda_runid }}" != "" ]; then
