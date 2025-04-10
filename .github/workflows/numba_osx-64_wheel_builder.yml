@@ -131,7 +131,7 @@ jobs:
     runs-on: macos-13
     defaults:
       run:
-        shell: bash -el {0}
+        shell: bash -elx {0}
     strategy:
       matrix:
         include:
