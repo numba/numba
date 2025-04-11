@@ -147,7 +147,7 @@ jobs:
           repository: numba/llvmlite
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Validate and smoke test wheel
+      - name: Validate and test wheel
         run: |
           PYTHON_PATH=$(which python${{ matrix.python-version }})
           $PYTHON_PATH -m pip install --upgrade pip twine
