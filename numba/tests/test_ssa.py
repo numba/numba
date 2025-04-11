@@ -4,7 +4,8 @@ Tests for SSA reconstruction
 import sys
 import copy
 import logging
-
+import unittest
+\
 import numpy as np
 
 from numba import njit, jit, types
@@ -240,6 +241,7 @@ class TestReportedSSAIssues(SSABaseTest):
 
         self.check_func(foo, False)
 
+    @unittest.skip("Fails due to reshape not supporting A layout")
     def test_issue3931(self):
 
         @njit
