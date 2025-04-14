@@ -1,5 +1,6 @@
 import unittest
 from numba.tests.support import TestCase, run_in_subprocess
+from numba.core import utils
 
 
 class TestNumbaImport(TestCase):
@@ -22,6 +23,11 @@ class TestNumbaImport(TestCase):
                    'numba.core.typing.listdecl',
                    'numba.core.typing.npdatetime',
                    ]
+
+        # On Python 3.12+, distutils is removed, don't check for it.
+        if utils.PYVERSION >= (3, 12):
+            banlist = [m for m in banlist if m != 'distutils']
+
         # Sanity check the modules still exist...
         for mod in banlist:
             if mod not in ('cffi',):
