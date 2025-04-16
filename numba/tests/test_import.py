@@ -30,8 +30,8 @@ class TestNumbaImport(TestCase):
 
         # Sanity check the modules still exist...
         for mod in banlist:
-            if mod not in ('cffi',):
-                __import__(mod)
+            if mod not in ('cffi',) and (mod != 'distutils' or utils.PYVERSION < (3, 12)):
+                  __import__(mod)
 
         code = """if 1:
             from numba import jit, vectorize
