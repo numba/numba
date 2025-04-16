@@ -1,0 +1,6 @@
+Document and test ``as_numba_type``'s role in instance checks
+-------------------------------------------------------------
+
+Documentation now explains how ``as_numba_type()`` is used in the
+implementation of instance checks, and a test is added to ensure it continues
+to function as expected.

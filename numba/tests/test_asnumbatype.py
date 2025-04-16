@@ -6,9 +6,17 @@ import typing as py_typing
 
 import unittest
 
-from numba.core import types
+from contextlib import ExitStack
+from llvmlite import ir
+
+from numba import jit
+from numba.core import cgutils, types
+from numba.core.datamodel.models import PrimitiveModel
 from numba.core.errors import TypingError
-from numba.core.typing.typeof import typeof
+from numba.core.extending import (register_model, type_callable, unbox,
+                                  NativeValue)
+from numba.core.types import Number
+from numba.core.typing.typeof import typeof, typeof_impl
 from numba.core.typing.asnumbatype import as_numba_type, AsNumbaTypeRegistry
 from numba.experimental.jitclass import jitclass
 from numba.tests.support import TestCase
@@ -150,7 +158,7 @@ class TestAsNumbaType(TestCase):
             with self.assertRaises(TypingError) as raises:
                 as_numba_type(bad_py_type)
             self.assertIn(
-                "Cannot infer numba type of python type",
+                "Cannot infer Numba type of Python type",
                 str(raises.exception),
             )
 
@@ -164,6 +172,116 @@ class TestAsNumbaType(TestCase):
             with self.assertRaises(TypingError) as raises:
                 as_numba_type(bad_py_type)
             self.assertIn("Cannot type Union", str(raises.exception))
+
+    def test_instance_check_usecase(self):
+        # Demonstrates that registering the type class with as_numba_type
+        # supports instance checks, at least for those subclasses supported by
+        # the instance check (e.g. types.Number, etc.).
+        #
+        # To set up the test we need quite a lot of extension code to support
+        # a new type independent of the existing types.
+
+        # The Python class
+        class bfloat16:
+            def __init__(self, value):
+                self._value = value
+
+        # The Numba type class - we use a Number subclass both because it makes
+        # sense for a new numeric type, and it's one of the types supported by
+        # instance checks in Numba
+        class _type_class_bfloat16(Number):
+            def __init__(self):
+                self.bitwidth = 16
+                super().__init__(name="bfloat16")
+
+        # The Numba type instance
+        bfloat16_type = _type_class_bfloat16()
+
+        # Register typing of the Python class for use as arguments and
+        # constants
+        @typeof_impl.register(bfloat16)
+        def typeof_bfloat16(val, c):
+            return bfloat16_type
+
+        # A data model for the bfloat16 class. We don't need much actual
+        # implementation so it doesn't matter too much what this is; a 16-bit
+        # integer representation is sufficient.
+        @register_model(_type_class_bfloat16)
+        class _model_bfloat16(PrimitiveModel):
+            def __init__(self, dmm, fe_type):
+                be_type = ir.IntType(fe_type.bitwidth)
+                super(_model_bfloat16, self).__init__(dmm, fe_type, be_type)
+
+        # Ideally we pass in a value so we ensure that the instance check is
+        # working with values dynamically passed in (preventing the whole check
+        # being potentially optimized into a simple True or False). For this we
+        # need an unboxing.
+        @unbox(_type_class_bfloat16)
+        def unbox_bfloat16(ty, obj, c):
+            ll_type = c.context.get_argument_type(ty)
+            val = cgutils.alloca_once(c.builder, ll_type)
+            is_error_ptr = cgutils.alloca_once_value(c.builder,
+                                                     cgutils.false_bit)
+
+            with ExitStack() as stack:
+                value_obj = c.pyapi.object_getattr_string(obj, "_value")
+
+                with cgutils.early_exit_if_null(c.builder, stack, value_obj):
+                    c.builder.store(cgutils.true_bit, is_error_ptr)
+
+                value_native = c.unbox(types.uint16, value_obj)
+                c.pyapi.decref(value_obj)
+
+                with cgutils.early_exit_if(c.builder, stack,
+                                           value_native.is_error):
+                    c.builder.store(cgutils.true_bit, is_error_ptr)
+
+                c.builder.store(value_native.value, val)
+
+            return NativeValue(c.builder.load(val),
+                               is_error=c.builder.load(is_error_ptr))
+
+        # We never call bfloat16 to construct one inside a jitted function, but
+        # we need this typing so that the type of the bfloat16 class can be
+        # determined (it's the argument to the instance check).
+        @type_callable(bfloat16)
+        def type_bfloat16_ctor(context):
+            # Note that the typer is never called in this test, because we
+            # don't call bfloat16 - only the typing of it as a callable is
+            # used.
+
+            def typer(value):
+                if isinstance(value, types.Integer):
+                    return bfloat16_type
+
+        # First we try the instance check without an as_numba_type
+        # registration, to prove that it is necessary for instance checks to
+        # work.
+        @jit
+        def instancecheck_no_ant_reg(x):
+            return isinstance(x, bfloat16)
+
+        # A "random" value to test with
+        x_bf16 = bfloat16(0x4049)  # bfloat16(3.14)
+
+        # Ensure the typing fails without the registration
+        expected_message = r"Cannot infer Numba type of Python type.*bfloat16"
+        with self.assertRaisesRegex(TypingError, expected_message):
+            instancecheck_no_ant_reg(x_bf16)
+
+        # Register the typing with as_numba_type so that we can expect instance
+        # checks to work
+        as_numba_type.register(bfloat16, bfloat16_type)
+
+        # We define a new function to ensure all registrations are as-required
+        @jit
+        def instancecheck(x):
+            return isinstance(x, bfloat16)
+
+        # The instance check should be True for bfloat16 instances and False
+        # otherwise.
+        self.assertTrue(instancecheck(x_bf16))
+        self.assertFalse(instancecheck(1))
 
 
 if __name__ == '__main__':
