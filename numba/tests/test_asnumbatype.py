@@ -246,6 +246,10 @@ class TestAsNumbaType(TestCase):
         # determined (it's the argument to the instance check).
         @type_callable(bfloat16)
         def type_bfloat16_ctor(context):
+            # Note that the typer is never called in this test, because we
+            # don't call bfloat16 - only the typing of it as a callable is
+            # used.
+
             def typer(value):
                 if isinstance(value, types.Integer):
                     return bfloat16_type

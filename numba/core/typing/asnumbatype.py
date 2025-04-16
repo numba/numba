@@ -77,7 +77,7 @@ class AsNumbaTypeRegistry:
 
     def register(self, func_or_py_type, numba_type=None):
         """
-        Add support new Python types (e.g. user-defined JitClasses) to the
+        Add support for new Python types (e.g. user-defined JitClasses) to the
         registry. For a simple pair of a Python type and a Numba type, this can
         be called as a function ``register(py_type, numba_type)``. If more
         complex logic is required (e.g. for generic types), ``register`` can be
