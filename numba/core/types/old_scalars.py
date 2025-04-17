@@ -267,4 +267,5 @@ class IntEnumMember(EnumMember):
         """
         if issubclass(self.instance_class, enum.IntEnum):
             conv = typingctx.can_convert(self.dtype, other)
-            return max(conv, Conversion.safe)
+            if conv:
+                return max(conv, Conversion.safe)

@@ -874,6 +874,16 @@ class TestIssues(TestCase):
                     ty1 == ty2
                 )
 
+    def test_int_enum_no_conversion(self):
+        # Ensures that IntEnumMember.can_convert_to() handles the case when the
+        # typing context's can_convert() method returns None to signal no
+        # possible conversion
+        ctx = typing.Context()
+        int_enum_type = types.IntEnumMember(Shape, types.int64)
+        # Conversion of an int enum member to a 1D array would be invalid
+        invalid_toty = types.int64[::1]
+        self.assertIsNone(ctx.can_convert(int_enum_type, invalid_toty))
+
 
 if __name__ == '__main__':
     unittest.main()
