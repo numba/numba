@@ -1,0 +1,5 @@
+Fix ``IntEnumMember.can_convert_to()`` when no conversions found
+----------------------------------------------------------------
+
+A spurious ``TypeError`` that was raised when no conversion from an
+``IntEnumMember`` was possible has now been fixed.
