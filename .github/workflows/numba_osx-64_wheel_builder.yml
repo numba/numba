@@ -105,8 +105,8 @@ jobs:
             retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
             if-no-files-found: error
 
-  osx-64-validate-wheel:
-    name: osx-64-validate-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
+  osx-64-test:
+    name: osx-64-test (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
     needs: osx-64-build
     runs-on: macos-13
     defaults:
