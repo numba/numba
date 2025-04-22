@@ -23,7 +23,7 @@ env:
 jobs:
   osx-arm64-build-conda:
     name: osx-arm64-build-conda (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
-    runs-on: macos-13
+    runs-on: macos-14
     defaults:
       run:
         shell: bash -elx {0}
@@ -97,7 +97,7 @@ jobs:
   osx-arm64-test:
     name: osx-arm64-test-conda (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
     needs: osx-arm64-build-conda
-    runs-on: macos-13
+    runs-on: macos-14
     defaults:
       run:
         shell: bash -elx {0}
