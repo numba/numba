@@ -13,6 +13,7 @@ from numba import jit, njit, typeof
 from numba.core import types
 from numba.typed import List, Dict
 from numba.np.numpy_support import numpy_version
+import numba.np.new_arraymath
 from numba.core.errors import TypingError
 from numba.core.config import IS_32BITS
 from numba.core.utils import pysignature
@@ -538,6 +539,10 @@ def np_isin_3b(a, b, invert=False):
 
 def np_isin_4(a, b, assume_unique=False, invert=False):
     return np.isin(a, b, assume_unique, invert)
+
+
+def np_binary_repr(a, w=None):
+    return np.binary_repr(a, w)
 
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
@@ -6781,6 +6786,28 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         aux2 = nb_union1d(a, b)
         c2 = nb_setdiff1d(aux2, aux1)
         self.assertPreciseEqual(c1, c2)
+
+    def test_binary_repr(self):
+        npfunc = np_binary_repr
+        cfunc = njit(np_binary_repr)
+
+        unitary_tests = [ 15,
+                          -15]
+        binary_tests = [(12, 5),
+                        (-12, 5),
+                        (10, None),
+                        (-10, None),
+                        (-3, 3),
+                        (-10, 5)]
+        # error_tests   = [(8, 2) ]
+
+        for t in unitary_tests:
+            self.assertPreciseEqual(cfunc(t), npfunc(t))
+        for x, w in binary_tests:
+            self.assertPreciseEqual(cfunc(x, w), npfunc(x, w))
+        # for x, w in error_tests:
+        #     with self.assertRaises(ValueError):
+        #         cfunc(x, w)
 
 
 class TestNPMachineParameters(TestCase):
