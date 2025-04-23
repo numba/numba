@@ -3461,17 +3461,7 @@ def _bin(x):
 
 
 @overload(np.binary_repr)
-def np_binary_repr1(num):
-    if not isinstance(num, (int, types.Integer)):
-        return
-
-    def impl(num):
-        return ("-" if num < 0 else "") + _bin(num)
-    return impl
-
-
-@overload(np.binary_repr)
-def np_binary_repr2(num, width):
+def np_binary_repr(num, width):
     if not isinstance(num, (int, types.Integer)):
         return
     else:
