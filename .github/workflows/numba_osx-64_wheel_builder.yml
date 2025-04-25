@@ -19,6 +19,7 @@ concurrency:
 env:
   ARTIFACT_RETENTION_DAYS: 7
   WHEELS_INDEX_URL: https://pypi.anaconda.org/numba/label/dev/simple
+  CONDA_CHANNEL_NUMBA: numba/label/dev
 
 jobs:
   osx-64-build:
@@ -46,14 +47,17 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Setup platform-specific requirements
+        run: |
+          source ./buildscripts/github/setup_platform.sh "osx-64"
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v3
         with:
           python-version: ${{ matrix.python-version }}
+          conda-remove-defaults: true
+          auto-update-conda: true
+          auto-activate-base: true
 
-      - name: Set Python Path
-        run: echo "PYTHON_PATH=$(which python${{ matrix.python-version }})" >> $GITHUB_ENV
-  
       - name: Download llvmlite wheel
         if: inputs.llvmlite_wheel_runid != ''
         uses: actions/download-artifact@v4
@@ -67,25 +71,28 @@ jobs:
       - name: Install build dependencies
         run: |
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
-              $PYTHON_PATH -m pip install llvmlite_wheels/*.whl
+              python -m pip install llvmlite_wheels/*.whl
           else
-              $PYTHON_PATH -m pip install -i $WHEELS_INDEX_URL llvmlite
+              conda install -c ${{ env.CONDA_CHANNEL_NUMBA }} llvmlite
           fi
-          $PYTHON_PATH -m pip install setuptools build numpy==${{ matrix.numpy_build }} wheel
-
+          conda install -c ${{ env.CONDA_CHANNEL_NUMBA }} python-build numpy==${{ matrix.numpy_build }} clang_osx-64 clangxx_osx-64
+          conda install --yes llvm-openmp
       - name: Build sdist [once - py3.10]
         if: matrix.python-version == '3.10'
-        run: $PYTHON_PATH -m build --sdist
+        run: python -m build --sdist
 
       - name: Build wheel
-        run: $PYTHON_PATH -m build
+        env:
+          SDKROOT: /opt/MacOSX10.10.sdk
+        run: python -m build
 
       - name: Fix macOS wheel library paths
         run: |
           cd dist
-          $PYTHON_PATH ../buildscripts/github/patch_wheel_dylib.py ./*.whl
+          python ../buildscripts/github/patch_wheel_dylib.py ./*.whl
           ls -la ./*.whl
-
+          # inspect the wheel
+          find . -name "*.so" -o -name "*.dylib" | xargs -I {} otool -L {}
       - name: Upload numba wheel
         uses: actions/upload-artifact@v4
         with:
@@ -152,13 +159,11 @@ jobs:
           PYTHON_PATH=$(which python${{ matrix.python-version }})
           $PYTHON_PATH -m pip install --upgrade pip twine
           ls -l dist
-
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
               $PYTHON_PATH -m pip install llvmlite_wheels/*.whl
           else
               $PYTHON_PATH -m pip install -i $WHEELS_INDEX_URL llvmlite
           fi
-
           $PYTHON_PATH -m twine check dist/*.whl
           $PYTHON_PATH -m pip install dist/numba*.whl numpy==${{ matrix.numpy_build }}
           $PYTHON_PATH -m numba.runtests -m 4 -v
