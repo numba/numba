@@ -155,13 +155,13 @@ jobs:
         run: |
           PYTHON_PATH=$(which python${{ matrix.python-version }})
           "$PYTHON_PATH" -m venv .venv && source .venv/bin/activate
-          $PYTHON_PATH -m pip install --upgrade pip twine
+          python -m pip install --upgrade pip twine
           ls -l dist
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
-              $PYTHON_PATH -m pip install llvmlite_wheels/*.whl
+              python -m pip install llvmlite_wheels/*.whl
           else
-              $PYTHON_PATH -m pip install -i $WHEELS_INDEX_URL llvmlite
+              python -m pip install -i $WHEELS_INDEX_URL llvmlite
           fi
-          $PYTHON_PATH -m twine check dist/*.whl
-          $PYTHON_PATH -m pip install dist/numba*.whl numpy==${{ matrix.numpy_build }}
-          $PYTHON_PATH -m numba.runtests -m 4 -v
+          python -m twine check dist/*.whl
+          python -m pip install dist/numba*.whl numpy==${{ matrix.numpy_build }}
+          python -m numba.runtests -m 4 -v
