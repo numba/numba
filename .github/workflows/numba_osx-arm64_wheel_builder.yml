@@ -24,7 +24,7 @@ env:
 jobs:
   osx-arm64-build:
     name: osx-arm64-build-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
-    runs-on: macos-13
+    runs-on: macos-14
     defaults:
       run:
         shell: bash -elx {0}
@@ -112,7 +112,7 @@ jobs:
   osx-arm64-test:
     name: osx-arm64-test (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
     needs: osx-arm64-build
-    runs-on: macos-13
+    runs-on: macos-14
     defaults:
       run:
         shell: bash -elx {0}
