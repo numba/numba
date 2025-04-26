@@ -50,6 +50,7 @@ jobs:
       - name: Setup platform-specific requirements
         run: |
           source ./buildscripts/github/setup_platform.sh "osx-64"
+
       - name: Setup Miniconda
         uses: conda-incubator/setup-miniconda@v3
         with:
@@ -77,6 +78,7 @@ jobs:
           fi
           conda install -c ${{ env.CONDA_CHANNEL_NUMBA }} python-build numpy==${{ matrix.numpy_build }} clang_osx-64 clangxx_osx-64
           conda install --yes llvm-openmp
+
       - name: Build sdist [once - py3.10]
         if: matrix.python-version == '3.10'
         run: python -m build --sdist
@@ -93,6 +95,7 @@ jobs:
           ls -la ./*.whl
           # inspect the wheel
           find . -name "*.so" -o -name "*.dylib" | xargs -I {} otool -L {}
+
       - name: Upload numba wheel
         uses: actions/upload-artifact@v4
         with:
