@@ -154,6 +154,7 @@ jobs:
       - name: Validate and test wheel
         run: |
           PYTHON_PATH=$(which python${{ matrix.python-version }})
+          "$PYTHON_PATH" -m venv .venv && source .venv/bin/activate
           $PYTHON_PATH -m pip install --upgrade pip twine
           ls -l dist
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
