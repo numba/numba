@@ -74,7 +74,7 @@ jobs:
           else
               $PYTHON_PATH -m pip install -i $WHEELS_INDEX_URL llvmlite
           fi
-          $PYTHON_PATH -m pip install python-build numpy==${{ matrix.numpy_build }} auditwheel
+          $PYTHON_PATH -m pip install python-build numpy==${{ matrix.numpy_build }} auditwheel setuptools
 
       - name: Build sdist [once - py3.10]
         if: matrix.python-version == '3.10'
