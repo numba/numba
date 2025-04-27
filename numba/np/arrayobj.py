@@ -5268,14 +5268,13 @@ def np_frombuffer(typingctx, buffer, dtype, count, offset, retty):
 
     def codegen(context, builder, sig, args):
         bufty = sig.args[0]
-        arg_buffer = args[0]
         arg_count = args[2]
         arg_offset = args[3]
         aryty = sig.return_type
 
         buf = make_array(bufty)(context, builder, value=args[0])
         out_ary_ty = make_array(aryty)
-        out_ary =out_ary_ty(context, builder)
+        out_ary = out_ary_ty(context, builder)
         out_datamodel = out_ary._datamodel
 
         itemsize = get_itemsize(context, aryty)
@@ -5283,7 +5282,11 @@ def np_frombuffer(typingctx, buffer, dtype, count, offset, retty):
         nbytes = builder.mul(buf.nitems, buf.itemsize)
         ll_offset_size = builder.mul(arg_offset, ll_itemsize)
         nbytes = builder.sub(nbytes, ll_offset_size)
-        ll_count_is_negative = builder.icmp_signed('<', arg_count, ir.Constant(arg_count.type, 0))
+        ll_count_is_negative = builder.icmp_signed(
+            '<',
+            arg_count,
+            ir.Constant(arg_count.type, 0),
+        )
 
         # Check that the buffer size is compatible
         rem = builder.srem(nbytes, ll_itemsize)
