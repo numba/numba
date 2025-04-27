@@ -5267,35 +5267,36 @@ def np_frombuffer(typingctx, buffer, dtype, count, offset, retty):
     sig = ty(buffer, dtype, count, offset, retty)
 
     def codegen(context, builder, sig, args):
+        bufty = sig.args[0]
         arg_buffer = args[0]
         arg_count = args[2]
         arg_offset = args[3]
-        result_type = sig.return_type
+        aryty = sig.return_type
 
-        array_buffer = make_array(sig.args[0])(context, builder, value=arg_buffer)
-        array_result = make_array(result_type)(context, builder)
-        out_datamodel = array_result._datamodel
+        buf = make_array(bufty)(context, builder, value=args[0])
+        out_ary_ty = make_array(aryty)
+        out_ary =out_ary_ty(context, builder)
+        out_datamodel = out_ary._datamodel
 
-        result_itemsize = get_itemsize(context, result_type)
-        ll_itemsize = Constant(array_buffer.itemsize.type, result_itemsize)
-        ll_offsetsize = builder.mul(arg_offset, ll_itemsize)
-        ll_total_size = builder.mul(array_buffer.nitems, array_buffer.itemsize)
-        ll_total_size = builder.sub(ll_total_size, ll_offsetsize)
-        ll_remainder_size = builder.srem(ll_total_size, ll_itemsize)
+        itemsize = get_itemsize(context, aryty)
+        ll_itemsize = Constant(buf.itemsize.type, itemsize)
+        nbytes = builder.mul(buf.nitems, buf.itemsize)
+        ll_offset_size = builder.mul(arg_offset, ll_itemsize)
+        nbytes = builder.sub(nbytes, ll_offset_size)
+        ll_count_is_negative = builder.icmp_signed('<', arg_count, ir.Constant(arg_count.type, 0))
 
-        ll_remainder_is_nonzero = builder.icmp_unsigned('!=', ll_remainder_size, Constant(arg_count.type, 0))
-
-        with builder.if_then(ll_remainder_is_nonzero, likely=False):
+        # Check that the buffer size is compatible
+        rem = builder.srem(nbytes, ll_itemsize)
+        is_incompatible = cgutils.is_not_null(builder, rem)
+        with builder.if_then(is_incompatible, likely=False):
             msg = "buffer size must be a multiple of element size"
             context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
         # Compute number of elements based on count
-        ll_count_is_negative = builder.icmp_signed('<', arg_count, ir.Constant(arg_count.type, 0))
-
         with builder.if_else(ll_count_is_negative) as (then_block, else_block):
             with then_block:
                 bb_if = builder.basic_block
-                num_whole = builder.sdiv(ll_total_size, ll_itemsize)
+                num_whole = builder.sdiv(nbytes, ll_itemsize)
             with else_block:
                 bb_else = builder.basic_block
 
@@ -5305,7 +5306,7 @@ def np_frombuffer(typingctx, buffer, dtype, count, offset, retty):
 
         # Ensure we don’t exceed the buffer size
         ll_required_size = builder.mul(ll_itemcount, ll_itemsize)
-        is_too_large = builder.icmp_unsigned('>', ll_required_size, ll_total_size)
+        is_too_large = builder.icmp_unsigned('>', ll_required_size, nbytes)
 
         with builder.if_then(is_too_large, likely=False):
             msg = "requested count exceeds buffer size"
@@ -5315,20 +5316,20 @@ def np_frombuffer(typingctx, buffer, dtype, count, offset, retty):
         shape = cgutils.pack_array(builder, [ll_itemcount])
         strides = cgutils.pack_array(builder, [ll_itemsize])
 
-        data = builder.gep(array_buffer.data, [arg_offset])
+        data = builder.gep(buf.data, [arg_offset])
         data = builder.bitcast(
             data, context.get_value_type(out_datamodel.get_type('data'))
         )
 
-        populate_array(array_result,
+        populate_array(out_ary,
                        data=data,
                        shape=shape,
                        strides=strides,
                        itemsize=ll_itemsize,
-                       meminfo=array_buffer.meminfo,
-                       parent=array_buffer.parent, )
+                       meminfo=buf.meminfo,
+                       parent=buf.parent, )
 
-        res = array_result._getvalue()
+        res = out_ary._getvalue()
         return impl_ret_borrowed(context, builder, sig.return_type, res)
 
     return sig, codegen
