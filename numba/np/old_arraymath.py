@@ -3450,6 +3450,39 @@ def np_imag(val):
     return np_imag_impl
 
 
+@register_jitable
+def _bin(x):
+    br = ""
+    x = abs(x)
+    while (x):
+        br = str(x % 2) + br
+        x //= 2
+    return br
+
+
+@overload(np.binary_repr)
+def np_binary_repr(num, width):
+    if not isinstance(num, (int, types.Integer)):
+        return
+    else:
+        if is_nonelike(width):
+            def impl(num, width):
+                return ("-" if num < 0 else "") + _bin(num)
+        else:
+            def impl(num, width):
+                br = _bin(num)
+                lbr = len(br)
+                if width < lbr:
+                    raise ValueError(f"Insufficient bit width={width} "
+                                     f"provided for binwidth={lbr}")
+                if num >= 0:
+                    br = "0" * (width - len(br)) + br
+                else:
+                    br = _bin(2**width + num)
+                return br
+    return impl
+
+
 #----------------------------------------------------------------------------
 # Misc functions
 
