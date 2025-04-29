@@ -13,7 +13,6 @@ from numba import jit, njit, typeof
 from numba.core import types
 from numba.typed import List, Dict
 from numba.np.numpy_support import numpy_version
-import numba.np.new_arraymath
 from numba.core.errors import TypingError
 from numba.core.config import IS_32BITS
 from numba.core.utils import pysignature
