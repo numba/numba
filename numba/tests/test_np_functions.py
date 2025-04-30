@@ -5494,11 +5494,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield 1.0, 2.0
             yield 1, 2
             yield 1.0, 2
-            yield 1+3j, 2
+            yield 1 + 3j, 2
             yield 1.0, 2j
             # Scalar × n-D
             yield 1.0, rng.standard_normal((3, 4))
-            yield 1+5j, np.array([1.0, 2.0, 3.0])
+            yield 1 + 5j, np.array([1.0, 2.0, 3.0])
             yield np.array([1.0, 2.0, 3.0]), 10
             yield rng.standard_normal((4, 5)), -1.5
             yield 1.7, rng.standard_normal((3, 2))
@@ -5507,14 +5507,16 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.array([1, 2, 3]), np.array([4, 5, 6])
             yield np.array([1.0, 2.0, 3.0]), np.array([4, 5, 6])
             # 2D × 1D
-            yield np.array([[1, 2], [3, 4]], dtype=np.float64), np.array([5, 6], dtype=np.float64)
+            yield np.array([[1, 2], [3, 4]], dtype=np.float64),\
+                np.array([5, 6], dtype=np.float64)
             # 2D × 2D
             yield rng.standard_normal((4, 5)), rng.standard_normal((3, 5))
             # 3D × 3D
             yield rng.standard_normal((2, 3, 4)), rng.standard_normal((5, 6, 4))
             # different dimensions
-            yield rng.standard_normal((6, 4, 2, 3, 4)), rng.standard_normal((5, 7, 4))
-        
+            yield rng.standard_normal((6, 4, 2, 3, 4)),\
+                rng.standard_normal((5, 7, 4))
+
         def bad_test_cases():
             # incompatible dimensions
             yield np.array([[1, 2], [3, 4]]), np.array([[5, 6, 7], [8, 9, 10]])
@@ -5523,11 +5525,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             expected = pyfunc(x, y)
             got = cfunc(x, y)
             np.testing.assert_allclose(expected, got, 1e-6)
-        
+
         # for x, y in bad_test_cases():
         #     with self.assertRaises(ValueError) as raises:
         #         cfunc(x, y)
-        
 
     def test_cross(self):
         pyfunc = np_cross

@@ -4698,17 +4698,17 @@ def np_kaiser(M, beta):
 @overload(np.inner)
 def np_inner(a, b):
     if isinstance(a, (types.Integer, types.Float, types.Complex)) and\
-        isinstance(b, types.Array):
+            isinstance(b, types.Array):
         def impl(a, b):
             return a * np.asarray(b)
 
     elif isinstance(a, types.Array) and\
-        isinstance(b, (types.Integer, types.Float, types.Complex)):   
+            isinstance(b, (types.Integer, types.Float, types.Complex)):
         def impl(a, b):
             return np.asarray(a) * b
 
     elif isinstance(a, (types.Integer, types.Float, types.Complex)) and\
-        isinstance(b, (types.Integer, types.Float, types.Complex)):   
+            isinstance(b, (types.Integer, types.Float, types.Complex)):
         def impl(a, b):
             return a * b
 
@@ -4721,7 +4721,7 @@ def np_inner(a, b):
                     "Incompatible dimensions for inner product\n"
                     "(last dimension in both arrays must be equal)"
                 ))
-            
+
             # infer the shapes of the inner product result
             a_shp = a_.shape[:-1]
             b_shp = b_.shape[:-1]
@@ -4731,21 +4731,21 @@ def np_inner(a, b):
             a_ = a_.reshape((r, a_.shape[-1]))
             b_ = b_.reshape((s, b_.shape[-1]))
             # infer type of the result
-            dt = (a_[0] + b_[0]).dtype 
+            dt = (a_[0] + b_[0]).dtype
             # construct the output array
-            innp = np.empty(r*s, dtype=dt)
+            innp = np.empty(r * s, dtype=dt)
 
             for i in range(r):
                 for j in range(s):
-                    innp[i*s+j] = np.sum(a_[i,:]*b_[j,:])
-            
+                    innp[i * s + j] = np.sum(a_[i,:] * b_[j,:])
+
             innp = innp.reshape((*a_shp, *b_shp))
 
             return innp
     else:
-        raise TypingError("The arguments to np.inner must" 
+        raise TypingError("The arguments to np.inner must"
                           "be array-like or scalar")
-        
+
     return impl
 
 
