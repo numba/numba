@@ -513,7 +513,7 @@ The following top-level functions are supported:
 * :func:`numpy.identity`
 * :func:`numpy.indices` (only the first argument)
 * :func:`numpy.isclose`
-* :func:`numpy.inner` (only array-like arguments)
+* :func:`numpy.inner`
 * :func:`numpy.iscomplex`
 * :func:`numpy.iscomplexobj`
 * :func:`numpy.isin` (matching pre-1.24 behaviour without the ``kind`` keyword)
