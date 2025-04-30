@@ -424,6 +424,10 @@ def np_kaiser(M, beta):
     return np.kaiser(M, beta)
 
 
+def np_inner(a, b):
+    return np.inner(a, b)
+
+
 def np_cross(a, b):
     return np.cross(a, b)
 
@@ -5478,6 +5482,45 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 np_nbfunc(5, beta)
             self.assertIn("beta must be an integer or float",
                           str(raises.exception))
+
+    def test_inner(self):
+        pyfunc = np_inner
+        cfunc = jit(nopython=True)(pyfunc)
+
+        rng = np.random.default_rng(42)
+
+        def good_test_cases():
+            # Scalar × Scalar
+            # yield 1.0, 2.0
+            # yield 1, 2
+            # yield 1.0, 2
+            # 1D × 1D
+            yield np.array([1.0, 2.0, 3.0]), np.array([4.0, 5.0, 6.0])
+            yield np.array([1, 2, 3]), np.array([4, 5, 6])
+            yield np.array([1.0, 2.0, 3.0]), np.array([4, 5, 6])
+            # 2D × 1D
+            yield np.array([[1, 2], [3, 4]], dtype=np.float64), np.array([5, 6], dtype=np.float64)
+            # 2D × 2D
+            yield rng.standard_normal((4, 5)), rng.standard_normal((3, 5))
+            # 3D × 3D
+            yield rng.standard_normal((2, 3, 4)), rng.standard_normal((5, 6, 4))
+            # different dimensions
+            yield rng.standard_normal((6, 4, 2, 3, 4)), rng.standard_normal((5, 7, 4))
+        
+        def bad_test_cases():
+            # incompatible dimensions
+            yield np.array([[1, 2], [3, 4]]), np.array([[5, 6, 7], [8, 9, 10]])
+
+        for x, y in good_test_cases():
+            expected = pyfunc(x, y)
+            got = cfunc(x, y)
+            np.testing.assert_allclose(expected, got, 1e-6)
+            print("Passed:", x, y)
+        
+        for x, y in bad_test_cases():
+            with self.assertRaises(ValueError) as raises:
+                cfunc(x, y)
+        
 
     def test_cross(self):
         pyfunc = np_cross
