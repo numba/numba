@@ -169,4 +169,9 @@ jobs:
           fi
           $PYTHON_PATH -m twine check dist/*.whl
           $PYTHON_PATH -m pip install dist/numba*.whl numpy==${{ matrix.numpy_build }}
+
+          # print Numba system information
+          $PYTHON_PATH -m numba -s
+
+          # run tests
           $PYTHON_PATH -m numba.runtests -m 4 -v
