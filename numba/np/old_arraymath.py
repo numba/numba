@@ -4721,17 +4721,20 @@ def np_inner(a, b):
                     "Incompatible dimensions for inner product\n"
                     "(last dimension in both arrays must be equal)"
                 ))
-            
-            # dt = np.promote_types(a_.dtype, b_.dtype)
+                        
+            # infer the shapes of the inner product result
             a_shp = a_.shape[:-1]
             b_shp = b_.shape[:-1]
             r = int(np.prod(np.array(a_shp)))
             s = int(np.prod(np.array(b_shp)))
-            innp = np.empty(r*s, dtype=np.float64)
-
+            # reshape the arrays to 2D for the inner product
             a_ = a_.reshape((r, a_.shape[-1]))
             b_ = b_.reshape((s, b_.shape[-1]))
-
+            # infer type of the result
+            dt = (a_[0] + b_[0]).dtype 
+            # construct the output array
+            innp = np.empty(r*s, dtype=dt)
+            
             for i in range(r):
                 for j in range(s):
                     innp[i*s+j] = np.sum(a_[i,:]*b_[j,:])
