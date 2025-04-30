@@ -4697,38 +4697,51 @@ def np_kaiser(M, beta):
 
 @overload(np.inner)
 def np_inner(a, b):
-    if not type_can_asarray(a) or not type_can_asarray(b):
-        if type_is_scalar(type(a)) and type_is_scalar(type(b)):
-            def impl(a, b):
-                return a * b
-        else:
-            raise TypingError("Inputs must be array-like.")
-    def impl(a, b):
-        a_ = np.asarray(a)
-        b_ = np.asarray(b)
-        if a_.shape[-1] != b_.shape[-1]:
-            raise ValueError((
-                "Incompatible dimensions for inner product\n"
-                "(last dimension in both arrays must be equal)"
-            ))
-        
-        # dt = np.promote_types(a_.dtype, b_.dtype)
-        a_shp = a_.shape[:-1]
-        b_shp = b_.shape[:-1]
-        r = int(np.prod(np.array(a_shp)))
-        s = int(np.prod(np.array(b_shp)))
-        innp = np.empty(r*s, dtype=np.float64)
+    if isinstance(a, (types.Integer, types.Float, types.Complex)) and\
+        isinstance(b, types.Array):
+        def impl(a, b):
+            return a * np.asarray(b)
 
-        a_ = a_.reshape((r, a_.shape[-1]))
-        b_ = b_.reshape((s, b_.shape[-1]))
+    elif isinstance(a, types.Array) and\
+        isinstance(b, (types.Integer, types.Float, types.Complex)):   
+        def impl(a, b):
+            return np.asarray(a) * b
 
-        for i in range(r):
-            for j in range(s):
-                innp[i*s+j] = np.sum(a_[i,:]*b_[j,:])
-        
-        innp = innp.reshape((*a_shp, *b_shp))
+    elif isinstance(a, (types.Integer, types.Float, types.Complex)) and\
+        isinstance(b, (types.Integer, types.Float, types.Complex)):   
+        def impl(a, b):
+            return a * b
 
-        return innp
+    elif type_can_asarray(a) and type_can_asarray(b):
+        def impl(a, b):
+            a_ = np.asarray(a)
+            b_ = np.asarray(b)
+            if a_.shape[-1] != b_.shape[-1]:
+                raise ValueError((
+                    "Incompatible dimensions for inner product\n"
+                    "(last dimension in both arrays must be equal)"
+                ))
+            
+            # dt = np.promote_types(a_.dtype, b_.dtype)
+            a_shp = a_.shape[:-1]
+            b_shp = b_.shape[:-1]
+            r = int(np.prod(np.array(a_shp)))
+            s = int(np.prod(np.array(b_shp)))
+            innp = np.empty(r*s, dtype=np.float64)
+
+            a_ = a_.reshape((r, a_.shape[-1]))
+            b_ = b_.reshape((s, b_.shape[-1]))
+
+            for i in range(r):
+                for j in range(s):
+                    innp[i*s+j] = np.sum(a_[i,:]*b_[j,:])
+            
+            innp = innp.reshape((*a_shp, *b_shp))
+
+            return innp
+    else:
+        raise TypingError("The arguments to np.inner must" 
+                          "be array-like or scalar")
         
     return impl
 
