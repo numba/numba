@@ -177,7 +177,7 @@ jobs:
               $PYTHON_PATH -m pip install --no-cache-dir -i $WHEELS_INDEX_URL llvmlite
           fi
           $PYTHON_PATH -m twine check dist/*.whl
-          $PYTHON_PATH -m pip install dist/numba*.whl numpy==${{ matrix.numpy_build }}
+          $PYTHON_PATH -m pip install dist/numba*.whl numpy==${{ matrix.numpy_build }} setuptools
 
           # print Numba system information
           $PYTHON_PATH -m numba -s
