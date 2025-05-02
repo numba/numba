@@ -6,7 +6,6 @@ import threading
 import contextlib
 import operator
 
-import numba
 from numba.core import types, errors
 from numba.core.typeconv import Conversion, rules
 from numba.core.typing import templates
@@ -351,26 +350,6 @@ class BaseContext(object):
         except ValueError:
             pass
 
-    def resolve_argument_type(self, val):
-        """
-        Return the numba type of a Python value that is being used
-        as a function argument.  Integer types will all be considered
-        int64, regardless of size.
-
-        ValueError is raised for unsupported types.
-        """
-        try:
-            return typeof(val, Purpose.argument)
-        except ValueError:
-            if numba.cuda.is_cuda_array(val):
-                # There's no need to synchronize on a stream when we're only
-                # determining typing - synchronization happens at launch time,
-                # so eliding sync here is safe.
-                return typeof(numba.cuda.as_cuda_array(val, sync=False),
-                              Purpose.argument)
-            else:
-                raise
-
     def resolve_value_type(self, val):
         """
         Return the numba type of a Python value that is being used
@@ -435,9 +414,53 @@ class BaseContext(object):
         except KeyError:
             loader = templates.RegistryLoader(registry)
             self._registries[registry] = loader
+
+        from numba.core.target_extension import (get_local_target,
+                                                 resolve_target_str)
+        current_target = get_local_target(self)
+
+        def is_for_this_target(ftcls):
+            metadata = getattr(ftcls, 'metadata', None)
+            if metadata is None:
+                return True
+
+            target_str = metadata.get('target')
+            if target_str is None:
+                return True
+
+            # There may be pending registrations for nonexistent targets.
+            # Ideally it would be impossible to leave a registration pending
+            # for an invalid target, but in practice this is exceedingly
+            # difficult to guard against - many things are registered at import
+            # time, and eagerly reporting an error when registering for invalid
+            # targets would require that all target registration code is
+            # executed prior to all typing registrations during the import
+            # process; attempting to enforce this would impose constraints on
+            # execution order during import that would be very difficult to
+            # resolve and maintain in the presence of typical code maintenance.
+            # Furthermore, these constraints would be imposed not only on
+            # Numba internals, but also on its dependents.
+            #
+            # Instead of that enforcement, we simply catch any occurrences of
+            # registrations for targets that don't exist, and report that
+            # they're not for this target. They will then not be encountered
+            # again during future typing context refreshes (because the
+            # loader's new registrations are a stream_list that doesn't yield
+            # previously-yielded items).
+            try:
+                ft_target = resolve_target_str(target_str)
+            except errors.NonexistentTargetError:
+                return False
+
+            return current_target.inherits_from(ft_target)
+
         for ftcls in loader.new_registrations('functions'):
+            if not is_for_this_target(ftcls):
+                continue
             self.insert_function(ftcls(self))
         for ftcls in loader.new_registrations('attributes'):
+            if not is_for_this_target(ftcls):
+                continue
             self.insert_attributes(ftcls(self))
         for gv, gty in loader.new_registrations('globals'):
             existing = self._lookup_global(gv)
@@ -566,7 +589,7 @@ class BaseContext(object):
             elif conv == Conversion.exact:
                 pass
             else:
-                raise Exception("unreachable", conv)
+                raise AssertionError("unreachable", conv)
 
         return rate
 

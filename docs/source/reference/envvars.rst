@@ -77,28 +77,6 @@ These variables influence what is printed out during compilation of
 
     If set to non-zero, show resources for getting help. Default is zero.
 
-.. envvar:: NUMBA_CAPTURED_ERRORS
-
-    Alters the way in which Numba captures and handles exceptions that do not
-    inherit from ``numba.core.errors.NumbaError`` during compilation (e.g.
-    standard Python exceptions). This does not impact runtime exception
-    handling. Valid values are:
-
-    - ``"old_style"`` (default): this is the exception handling behaviour that
-      is present in Numba versions <= 0.54.x. Numba will capture and wrap all
-      errors occurring in compilation and depending on the compilation phase they
-      will likely materialize as part of the message in a ``TypingError`` or a
-      ``LoweringError``.
-    - ``"new_style"`` this will treat any exception that does not inherit from
-      ``numba.core.errors.NumbaError`` **and** is raised during compilation as a
-      "hard error", i.e. the exception will propagate and compilation will halt.
-      The purpose of this new style is to differentiate between intentionally
-      raised exceptions and those which occur due to mistakes. For example, if
-      an ``AttributeError`` occurs in the typing of an ``@overload`` function,
-      under this new behaviour it is assumed that this a mistake in the
-      implementation and compilation will halt due to this exception. This
-      behaviour will eventually become the default.
-
 .. envvar:: NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING
 
     If set to non-zero error message highlighting is disabled. This is useful
@@ -182,6 +160,17 @@ These variables influence what is printed out during compilation of
 .. envvar:: NUMBA_DEBUG_TYPEINFER
 
    If set to non-zero, print out debugging information about type inference.
+
+
+.. envvar:: NUMBA_ENABLE_SYS_MONITORING
+
+   Controls support for Python's ``sys.monitoring`` feature in Numba.
+   Disabled (set to zero) by default. When enabled (set to non-zero), allows
+   profiling tools that use ``sys.monitoring`` to work with Numba code.
+   Currently tested with ``cProfile``, other monitoring tools may work but are
+   not guaranteed.
+
+   Only available for Python 3.12 and above. Otherwise, it has no effect.
 
 .. envvar:: NUMBA_ENABLE_PROFILING
 
@@ -289,6 +278,11 @@ These variables influence what is printed out during compilation of
     See :ref:`developer-llvm-timings`.
 
     *Default value*: ``0`` (Off)
+
+.. envvar:: NUMBA_JIT_COVERAGE
+
+   Set to ``1`` to enable coverage data reporting by the JIT compiler on 
+   compiled source lines. Default to ``0`` (Off).
 
 .. seealso::
    :ref:`numba-troubleshooting` and :ref:`architecture`.
@@ -429,14 +423,6 @@ Compilation options
 
    *Default value:* None (Use the default for the system)
 
-.. envvar:: NUMBA_USE_RVSDG_FRONTEND
-
-   Turns on the experimental RVSDG frontend. It depends on the ``numba-rvsdg`` 
-   package and only supports Python 3.11 partially. 
-   This option will be removed when the RVSDG frontend fully replaces the 
-   old frontend.
-
-   *Default value:* 0 (Off)
 
 .. _numba-envvars-caching:
 
@@ -489,8 +475,8 @@ GPU support
 
    The default compute capability (a string of the type ``major.minor``) to
    target when compiling to PTX using ``cuda.compile_ptx``. The default is
-   5.2, which is the lowest non-deprecated compute capability in the most
-   recent version of the CUDA toolkit supported (11.0 at present).
+   5.0, which is the lowest non-deprecated compute capability in the most
+   recent version of the CUDA toolkit supported (12.4 at present).
 
 .. envvar:: NUMBA_ENABLE_CUDASIM
 

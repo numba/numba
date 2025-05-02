@@ -221,8 +221,9 @@ class TestDebugInfoEmission(TestCase):
         self.assertGreater(len(blocks), 1)
         block = blocks[0]
 
-        # Find non-call instr and check the sequence is as expected
-        instrs = [x for x in block.instructions if x.opcode != 'call']
+        # Find non-call/non-memory instr and check the sequence is as expected
+        instrs = [x for x in block.instructions if x.opcode not in
+                  ['call', 'load', 'store']]
         op_expect = {'fadd', 'fmul', 'fdiv'}
         started = False
         for x in instrs:

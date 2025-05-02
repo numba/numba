@@ -1,6 +1,8 @@
 CUDA Python Reference
 =====================
 
+.. cuda-deprecated::
+
 .. toctree::
 
    host.rst

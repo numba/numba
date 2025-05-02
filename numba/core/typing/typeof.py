@@ -6,7 +6,7 @@ import enum
 import numpy as np
 from numpy.random.bit_generator import BitGenerator
 
-from numba.core import types, utils, errors
+from numba.core import types, utils, errors, config
 from numba.np import numpy_support
 
 
@@ -112,40 +112,58 @@ def _typeof_type(val, c):
         return types.TypeRef(types.ListType)
 
 
-@typeof_impl.register(bool)
-def _typeof_bool(val, c):
-    return types.boolean
+if config.USE_LEGACY_TYPE_SYSTEM:
+    @typeof_impl.register(bool)
+    def _typeof_bool(val, c):
+        return types.boolean
 
+    @typeof_impl.register(float)
+    def _typeof_float(val, c):
+        return types.float64
 
-@typeof_impl.register(float)
-def _typeof_float(val, c):
-    return types.float64
+    @typeof_impl.register(complex)
+    def _typeof_complex(val, c):
+        return types.complex128
 
+    @typeof_impl.register(int)
+    def _typeof_int(val, c):
+        # As in _typeof.c
+        nbits = utils.bit_length(val)
+        if nbits < 32:
+            typ = types.intp
+        elif nbits < 64:
+            typ = types.int64
+        elif nbits == 64 and val >= 0:
+            typ = types.uint64
+        else:
+            raise ValueError("Int value is too large: %s" % val)
+        return typ
+else:
+    @typeof_impl.register(bool)
+    def _typeof_bool(val, c):
+        return types.py_bool
 
-@typeof_impl.register(complex)
-def _typeof_complex(val, c):
-    return types.complex128
+    @typeof_impl.register(float)
+    def _typeof_float(val, c):
+        return types.py_float
 
+    @typeof_impl.register(complex)
+    def _typeof_complex(val, c):
+        return types.py_complex
 
-@typeof_impl.register(int)
-def _typeof_int(val, c):
-    # As in _typeof.c
-    nbits = utils.bit_length(val)
-    if nbits < 32:
-        typ = types.intp
-    elif nbits < 64:
-        typ = types.int64
-    elif nbits == 64 and val >= 0:
-        typ = types.uint64
-    else:
-        raise ValueError("Int value is too large: %s" % val)
-    return typ
+    @typeof_impl.register(int)
+    def _typeof_int(val, c):
+        # As in _typeof.c
+        typ = types.py_int
+        return typ
 
 
 @typeof_impl.register(np.generic)
 def _typeof_numpy_scalar(val, c):
     try:
         return numpy_support.map_arrayscalar_type(val)
+    except errors.NumbaNotImplementedError:
+        pass
     except NotImplementedError:
         pass
 

@@ -1,14 +1,15 @@
-from numba.core import types, errors, ir, sigutils, ir_utils
-from numba.core.typing.typeof import typeof_impl
-from numba.core.transforms import find_region_inout_vars
-from numba.core.ir_utils import build_definitions
 import numba
+from numba.core import errors, ir, ir_utils, sigutils, types
+from numba.core.ir_utils import build_definitions
+from numba.core.transforms import find_region_inout_vars
+from numba.core.typing.typeof import typeof_impl
 
 
 class WithContext(object):
     """A dummy object for use as contextmanager.
     This can be used as a contextmanager.
     """
+
     is_callable = False
 
     def __enter__(self):
@@ -17,8 +18,16 @@ class WithContext(object):
     def __exit__(self, typ, val, tb):
         pass
 
-    def mutate_with_body(self, func_ir, blocks, blk_start, blk_end,
-                         body_blocks, dispatcher_factory, extra):
+    def mutate_with_body(
+        self,
+        func_ir,
+        blocks,
+        blk_start,
+        blk_end,
+        body_blocks,
+        dispatcher_factory,
+        extra,
+    ):
         """Mutate the *blocks* to implement this contextmanager.
 
         Parameters
@@ -41,17 +50,17 @@ def typeof_contextmanager(val, c):
 
 
 def _get_var_parent(name):
-    """Get parent of the variable given its name
-    """
+    """Get parent of the variable given its name"""
     # If not a temporary variable
-    if not name.startswith('$'):
+    if not name.startswith("$"):
         # Return the base component of the name
-        return name.split('.', )[0]
+        return name.split(
+            ".",
+        )[0]
 
 
 def _clear_blocks(blocks, to_clear):
-    """Remove keys in *to_clear* from *blocks*.
-    """
+    """Remove keys in *to_clear* from *blocks*."""
     for b in to_clear:
         del blocks[b]
 
@@ -60,8 +69,17 @@ class _ByPassContextType(WithContext):
     """A simple context-manager that tells the compiler to bypass the body
     of the with-block.
     """
-    def mutate_with_body(self, func_ir, blocks, blk_start, blk_end,
-                         body_blocks, dispatcher_factory, extra):
+
+    def mutate_with_body(
+        self,
+        func_ir,
+        blocks,
+        blk_start,
+        blk_end,
+        body_blocks,
+        dispatcher_factory,
+        extra,
+    ):
         assert extra is None
         # Determine variables that need forwarding
         vlt = func_ir.variable_lifetime
@@ -80,8 +98,17 @@ class _CallContextType(WithContext):
     """A simple context-manager that tells the compiler to lift the body of the
     with-block as another function.
     """
-    def mutate_with_body(self, func_ir, blocks, blk_start, blk_end,
-                         body_blocks, dispatcher_factory, extra):
+
+    def mutate_with_body(
+        self,
+        func_ir,
+        blocks,
+        blk_start,
+        blk_end,
+        body_blocks,
+        dispatcher_factory,
+        extra,
+    ):
         assert extra is None
         vlt = func_ir.variable_lifetime
 
@@ -91,11 +118,12 @@ class _CallContextType(WithContext):
             callfrom=blk_start,
             returnto=blk_end,
             body_block_ids=set(body_blocks),
-            )
+        )
 
         lifted_blks = {k: blocks[k] for k in body_blocks}
-        _mutate_with_block_callee(lifted_blks, blk_start, blk_end,
-                                  inputs, outputs)
+        _mutate_with_block_callee(
+            lifted_blks, blk_start, blk_end, inputs, outputs
+        )
 
         # XXX: transform body-blocks to return the output variables
         lifted_ir = func_ir.derive(
@@ -103,13 +131,18 @@ class _CallContextType(WithContext):
             arg_names=tuple(inputs),
             arg_count=len(inputs),
             force_non_generator=True,
-            )
+        )
 
         dispatcher = dispatcher_factory(lifted_ir)
 
         newblk = _mutate_with_block_caller(
-            dispatcher, blocks, blk_start, blk_end, inputs, outputs,
-            )
+            dispatcher,
+            blocks,
+            blk_start,
+            blk_end,
+            inputs,
+            outputs,
+        )
 
         blocks[blk_start] = newblk
         _clear_blocks(blocks, body_blocks)
@@ -179,10 +212,12 @@ class _ObjModeContextType(WithContext):
         change with or without notice.
 
     """
+
     is_callable = True
 
-    def _legalize_args(self, func_ir, args, kwargs, loc, func_globals,
-                       func_closures):
+    def _legalize_args(
+        self, func_ir, args, kwargs, loc, func_globals, func_closures
+    ):
         """
         Legalize arguments to the context-manager
 
@@ -203,14 +238,14 @@ class _ObjModeContextType(WithContext):
         if args:
             raise errors.CompilerError(
                 "objectmode context doesn't take any positional arguments",
-                )
+            )
         typeanns = {}
 
         def report_error(varname, msg, loc):
             raise errors.CompilerError(
-                    f"Error handling objmode argument {varname!r}. {msg}",
-                    loc=loc,
-                )
+                f"Error handling objmode argument {varname!r}. {msg}",
+                loc=loc,
+            )
 
         for k, v in kwargs.items():
             if isinstance(v, ir.Const) and isinstance(v.value, str):
@@ -250,10 +285,12 @@ class _ObjModeContextType(WithContext):
             else:
                 report_error(
                     varname=k,
-                    msg=("The value must be a compile-time constant either as "
-                         "a non-local variable or a getattr expression that "
-                         "refers to a Numba type."),
-                    loc=loc
+                    msg=(
+                        "The value must be a compile-time constant either as "
+                        "a non-local variable or a getattr expression that "
+                        "refers to a Numba type."
+                    ),
+                    loc=loc,
                 )
 
         # Legalize the types for objmode
@@ -279,12 +316,20 @@ class _ObjModeContextType(WithContext):
                 "Objmode context failed.",
                 f"Argument {name!r} is declared as "
                 f"an unsupported type: {typ}.",
-                f"Reflected types are not supported.",
+                "Reflected types are not supported.",
             ]
             raise errors.CompilerError(" ".join(msgbuf), loc=loc)
 
-    def mutate_with_body(self, func_ir, blocks, blk_start, blk_end,
-                         body_blocks, dispatcher_factory, extra):
+    def mutate_with_body(
+        self,
+        func_ir,
+        blocks,
+        blk_start,
+        blk_end,
+        body_blocks,
+        dispatcher_factory,
+        extra,
+    ):
         cellnames = func_ir.func_id.func.__code__.co_freevars
         closures = func_ir.func_id.func.__closure__
         func_globals = func_ir.func_id.func.__globals__
@@ -303,16 +348,17 @@ class _ObjModeContextType(WithContext):
         else:
             # Missing closure object
             func_closures = {}
-        args = extra['args'] if extra else ()
-        kwargs = extra['kwargs'] if extra else {}
+        args = extra["args"] if extra else ()
+        kwargs = extra["kwargs"] if extra else {}
 
-        typeanns = self._legalize_args(func_ir=func_ir,
-                                       args=args,
-                                       kwargs=kwargs,
-                                       loc=blocks[blk_start].loc,
-                                       func_globals=func_globals,
-                                       func_closures=func_closures,
-                                       )
+        typeanns = self._legalize_args(
+            func_ir=func_ir,
+            args=args,
+            kwargs=kwargs,
+            loc=blocks[blk_start].loc,
+            func_globals=func_globals,
+            func_closures=func_closures,
+        )
         vlt = func_ir.variable_lifetime
 
         inputs, outputs = find_region_inout_vars(
@@ -321,11 +367,11 @@ class _ObjModeContextType(WithContext):
             callfrom=blk_start,
             returnto=blk_end,
             body_block_ids=set(body_blocks),
-            )
+        )
 
         # Determine types in the output tuple
         def strip_var_ver(x):
-            return x.split('.', 1)[0]
+            return x.split(".", 1)[0]
 
         stripped_outs = list(map(strip_var_ver, outputs))
 
@@ -333,8 +379,8 @@ class _ObjModeContextType(WithContext):
         extra_annotated = set(typeanns) - set(stripped_outs)
         if extra_annotated:
             msg = (
-                'Invalid type annotation on non-outgoing variables: {}.'
-                'Suggestion: remove annotation of the listed variables'
+                "Invalid type annotation on non-outgoing variables: {}."
+                "Suggestion: remove annotation of the listed variables"
             )
             raise errors.TypingError(msg.format(extra_annotated))
 
@@ -349,9 +395,9 @@ class _ObjModeContextType(WithContext):
         not_annotated = set(stripped_outs) - set(typeanns)
         if not_annotated:
             msg = (
-                'Missing type annotation on outgoing variable(s): {0}\n\n'
-                'Example code: with objmode({1}=\'<'
-                'add_type_as_string_here>\')\n'
+                "Missing type annotation on outgoing variable(s): {0}\n\n"
+                "Example code: with objmode({1}='<"
+                "add_type_as_string_here>')\n"
             )
             stable_ann = sorted(not_annotated)
             raise errors.TypingError(msg.format(stable_ann, stable_ann[0]))
@@ -360,22 +406,29 @@ class _ObjModeContextType(WithContext):
         outtup = types.Tuple([typeanns[v] for v in stripped_outs])
 
         lifted_blks = {k: blocks[k] for k in body_blocks}
-        _mutate_with_block_callee(lifted_blks, blk_start, blk_end,
-                                  inputs, outputs)
+        _mutate_with_block_callee(
+            lifted_blks, blk_start, blk_end, inputs, outputs
+        )
 
         lifted_ir = func_ir.derive(
             blocks=lifted_blks,
             arg_names=tuple(inputs),
             arg_count=len(inputs),
             force_non_generator=True,
-            )
+        )
 
-        dispatcher = dispatcher_factory(lifted_ir, objectmode=True,
-                                        output_types=outtup)
+        dispatcher = dispatcher_factory(
+            lifted_ir, objectmode=True, output_types=outtup
+        )
 
         newblk = _mutate_with_block_caller(
-            dispatcher, blocks, blk_start, blk_end, inputs, outputs,
-            )
+            dispatcher,
+            blocks,
+            blk_start,
+            blk_end,
+            inputs,
+            outputs,
+        )
 
         blocks[blk_start] = newblk
         _clear_blocks(blocks, body_blocks)
@@ -400,15 +453,18 @@ def _bypass_with_context(blocks, blk_start, blk_end, forwardvars):
     loc = sblk.loc
     newblk = ir.Block(scope=scope, loc=loc)
     for k, v in forwardvars.items():
-        newblk.append(ir.Assign(value=scope.get_exact(k),
-                                target=scope.get_exact(v),
-                                loc=loc))
+        newblk.append(
+            ir.Assign(
+                value=scope.get_exact(k), target=scope.get_exact(v), loc=loc
+            )
+        )
     newblk.append(ir.Jump(target=blk_end, loc=loc))
     blocks[blk_start] = newblk
 
 
-def _mutate_with_block_caller(dispatcher, blocks, blk_start, blk_end,
-                              inputs, outputs):
+def _mutate_with_block_caller(
+    dispatcher, blocks, blk_start, blk_end, inputs, outputs
+):
     """Make a new block that calls into the lifeted with-context.
 
     Parameters
@@ -433,7 +489,7 @@ def _mutate_with_block_caller(dispatcher, blocks, blk_start, blk_end,
         label_next=blk_end,
         inputs=inputs,
         outputs=outputs,
-        )
+    )
     return newblock
 
 
@@ -461,11 +517,12 @@ def _mutate_with_block_callee(blocks, blk_start, blk_end, inputs, outputs):
         block=ir.Block(scope=scope, loc=loc),
         inputs=inputs,
         label_next=head_blk,
-        )
+    )
     blocks[blk_end] = ir_utils.fill_callee_epilogue(
         block=ir.Block(scope=scope, loc=loc),
         outputs=outputs,
     )
+
 
 class _ParallelChunksize(WithContext):
     is_callable = True
@@ -475,8 +532,17 @@ class _ParallelChunksize(WithContext):
     to the programmer specified value. On exit the original
     chunksize is restored.
     """
-    def mutate_with_body(self, func_ir, blocks, blk_start, blk_end,
-                         body_blocks, dispatcher_factory, extra):
+
+    def mutate_with_body(
+        self,
+        func_ir,
+        blocks,
+        blk_start,
+        blk_end,
+        body_blocks,
+        dispatcher_factory,
+        extra,
+    ):
         ir_utils.dprint_func_ir(func_ir, "Before with changes", blocks=blocks)
         assert extra is not None
         args = extra["args"]
@@ -492,9 +558,9 @@ class _ParallelChunksize(WithContext):
 
         # global for Numba itself
         gvar = scope.redefine("$ngvar", loc)
-        set_state.append(ir.Assign(ir.Global('numba', numba, loc), gvar, loc))
+        set_state.append(ir.Assign(ir.Global("numba", numba, loc), gvar, loc))
         # getattr for set chunksize function in Numba
-        spcattr = ir.Expr.getattr(gvar, 'set_parallel_chunksize', loc)
+        spcattr = ir.Expr.getattr(gvar, "set_parallel_chunksize", loc)
         spcvar = scope.redefine("$spc", loc)
         set_state.append(ir.Assign(spcattr, spcvar, loc))
         # call set_parallel_chunksize
@@ -507,9 +573,11 @@ class _ParallelChunksize(WithContext):
         restore_spc_call = ir.Expr.call(spcvar, [orig_pc_var], (), loc)
         restore_state.append(ir.Assign(restore_spc_call, orig_pc_var, loc))
 
-        blocks[blk_start].body = (blocks[blk_start].body[1:-1] + 
-                                  set_state + 
-                                  [blocks[blk_start].body[-1]])
+        blocks[blk_start].body = (
+            blocks[blk_start].body[1:-1]
+            + set_state
+            + [blocks[blk_start].body[-1]]
+        )
         blocks[blk_end].body = restore_state + blocks[blk_end].body
         func_ir._definitions = build_definitions(blocks)
         ir_utils.dprint_func_ir(func_ir, "After with changes", blocks=blocks)
@@ -519,8 +587,9 @@ class _ParallelChunksize(WithContext):
         setting the chunksize takes only one integer input.
         """
         if len(args) != 1 or kwargs or not isinstance(args[0], int):
-            raise ValueError("parallel_chunksize takes only a "
-                             "single integer argument.")
+            raise ValueError(
+                "parallel_chunksize takes only a " "single integer argument."
+            )
 
         self.chunksize = args[0]
         return self
@@ -531,5 +600,6 @@ class _ParallelChunksize(WithContext):
 
     def __exit__(self, typ, val, tb):
         numba.set_parallel_chunksize(self.orig_chunksize)
+
 
 parallel_chunksize = _ParallelChunksize()

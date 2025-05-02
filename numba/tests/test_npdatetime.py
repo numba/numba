@@ -541,7 +541,23 @@ class TestTimedeltaArithmetic(TestCase):
     def test_hash(self):
         f = self.jit(hash_usecase)
         def check(a):
-            self.assertPreciseEqual(f(a), hash(a))
+            if numpy_version >= (2, 2):
+                # Generic timedeltas (those without a unit)
+                # are no longer hashable beyond NumPy 2.2
+                # Non-generic timedeltas will have dtype name
+                # as timedelta64[<unit>]
+                if a.dtype.name == 'timedelta64':
+                    return
+
+                # If the function is not being compiled in objmode
+                # then the hash should be equal to the hash of the
+                # integer representation of the timedelta
+                if self.jitargs.get('nopython', False):
+                    self.assertPreciseEqual(f(a), a.astype(int))
+                else:
+                    self.assertPreciseEqual(f(a), hash(a))
+            else:
+                self.assertPreciseEqual(f(a), hash(a))
 
         TD_CASES = ((3,), (-4,), (3, 'ms'), (-4, 'ms'), (27, 'D'),
                     (2, 'D'), (2, 'W'), (2, 'Y'), (3, 'W'),
@@ -557,6 +573,11 @@ class TestTimedeltaArithmetic(TestCase):
         for case, typ in zip(TD_CASES + DT_CASES,
                              (TD,) * len(TD_CASES) + (DT,) * len(TD_CASES)):
             check(typ(*case))
+
+        if numpy_version >= (2, 2):
+            with self.assertRaises(ValueError) as raises:
+                f(TD(3))
+            self.assertIn("Can't hash generic timedelta64", str(raises.exception))
 
     def _test_min_max(self, usecase):
         f = self.jit(usecase)
@@ -852,7 +873,9 @@ class TestMetadataScalingFactor(TestCase):
     and timedelta64 dtypes.
     """
 
-    def test_datetime(self, jitargs={'forceobj':True}):
+    def test_datetime(self, jitargs=None):
+        if jitargs is None:
+            jitargs = {'forceobj': True}
         eq = jit(**jitargs)(eq_usecase)
         self.assertTrue(eq(DT('2014', '10Y'), DT('2010')))
 
@@ -860,7 +883,9 @@ class TestMetadataScalingFactor(TestCase):
         with self.assertTypingError():
             self.test_datetime(jitargs={'nopython':True})
 
-    def test_timedelta(self, jitargs={'forceobj':True}):
+    def test_timedelta(self, jitargs=None):
+        if jitargs is None:
+            jitargs = {'forceobj': True}
         eq = jit(**jitargs)(eq_usecase)
         self.assertTrue(eq(TD(2, '10Y'), TD(20, 'Y')))
 
@@ -971,21 +996,7 @@ class TestDatetimeArrayOps(TestCase):
     def test_sub_td_no_match(self):
         self._test_add_sub_td_no_match(np.subtract)
 
-    def _test_min_max(self, operation, parallel, method):
-        if method:
-            if operation is np.min:
-                def impl(arr):
-                    return arr.min()
-            else:
-                def impl(arr):
-                    return arr.max()
-        else:
-            def impl(arr):
-                return operation(arr)
-
-        py_func = impl
-        cfunc = njit(parallel=parallel)(impl)
-
+    def _get_testcases(self):
         test_cases = [
             np.array([
                 DT(0, "ns"),
@@ -1067,7 +1078,24 @@ class TestDatetimeArrayOps(TestCase):
                 TD("NaT", "ns"),
             ]),
         ]
+        return test_cases
 
+    def _test_min_max(self, operation, parallel, method):
+        if method:
+            if operation is np.min:
+                def impl(arr):
+                    return arr.min()
+            else:
+                def impl(arr):
+                    return arr.max()
+        else:
+            def impl(arr):
+                return operation(arr)
+
+        py_func = impl
+        cfunc = njit(parallel=parallel)(impl)
+
+        test_cases = self._get_testcases()
         for arr in test_cases:
             py_res = py_func(arr)
             c_res = cfunc(arr)
@@ -1110,6 +1138,67 @@ class TestDatetimeArrayOps(TestCase):
     @skip_parfors_unsupported
     def test_max_method_parallel(self):
         self._test_min_max(np.max, True, True)
+
+    def test_searchsorted_datetime(self):
+        from .test_np_functions import (
+            searchsorted, searchsorted_left, searchsorted_right,
+        )
+        pyfunc_list = [searchsorted, searchsorted_left, searchsorted_right]
+        cfunc_list = [jit(fn) for fn in pyfunc_list]
+
+        def check(pyfunc, cfunc, a, v):
+            expected = pyfunc(a, v)
+            got = cfunc(a, v)
+            self.assertPreciseEqual(expected, got)
+
+        cases = self._get_testcases()
+        for pyfunc, cfunc in zip(pyfunc_list, cfunc_list):
+            for arr in cases:
+                arr = np.sort(arr)
+                for n in range(1, min(3, arr.size) + 1):
+                    idx = np.random.randint(0, arr.size, n)
+                    vs = arr[idx]
+                    if n == 1:
+                        [v] = vs
+                        check(pyfunc, cfunc, arr, v)
+                    check(pyfunc, cfunc, arr, vs)
+
+
+
+class TestDatetimeTypeOps(TestCase):
+    def test_isinstance_datetime(self):
+        @njit
+        def is_complex(a):
+            return isinstance(a, complex)
+        @njit
+        def is_datetime(a):
+            return isinstance(a, np.datetime64)
+        @njit
+        def is_timedelta(a):
+            return isinstance(a, np.timedelta64)
+
+        dt_a = np.datetime64(1, 'ns')
+        dt_b = np.datetime64(2, 'ns')
+        td_c = dt_b - dt_a
+
+        def check(jit_func, x):
+            with self.subTest(f'{jit_func.__name__}({type(x).__name__})'):
+                got = jit_func(x)
+                expect = jit_func.py_func(x)
+                self.assertEqual(got, expect)
+
+        fns = [
+            is_complex,
+            is_datetime,
+            is_timedelta,
+        ]
+        args = [
+            dt_a,
+            dt_b,
+            td_c,
+        ]
+        for fn, arg in itertools.product(fns, args):
+            check(fn, arg)
 
 
 if __name__ == '__main__':

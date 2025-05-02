@@ -21,52 +21,7 @@ from numba.core.typing.typeof import Purpose, typeof
 from numba.core.bytecode import get_code_object
 from numba.core.caching import NullCache, FunctionCache
 from numba.core import entrypoints
-from numba.core.retarget import BaseRetarget
 import numba.core.event as ev
-
-
-class _RetargetStack(utils.ThreadLocalStack, stack_name="retarget"):
-    def push(self, state):
-        super().push(state)
-        _dispatcher.set_use_tls_target_stack(len(self) > 0)
-
-    def pop(self):
-        super().pop()
-        _dispatcher.set_use_tls_target_stack(len(self) > 0)
-
-
-class TargetConfigurationStack:
-    """The target configuration stack.
-
-    Uses the BORG pattern and stores states in threadlocal storage.
-
-    WARNING: features associated with this class are experimental. The API
-    may change without notice.
-    """
-
-    def __init__(self):
-        self._stack = _RetargetStack()
-
-    def get(self):
-        """Get the current target from the top of the stack.
-
-        May raise IndexError if the stack is empty. Users should check the size
-        of the stack beforehand.
-        """
-        return self._stack.top()
-
-    def __len__(self):
-        """Size of the stack
-        """
-        return len(self._stack)
-
-    @classmethod
-    def switch_target(cls, retarget: BaseRetarget):
-        """Returns a contextmanager that pushes a new retarget handler,
-        an instance of `numba.core.retarget.BaseRetarget`, onto the
-        target-config stack for the duration of the context-manager.
-        """
-        return cls()._stack.enter(retarget)
 
 
 class OmittedArg(object):
@@ -254,7 +209,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         # but newer python uses a different name
         self.__code__ = self.func_code
         # a place to keep an active reference to the types of the active call
-        self._types_active_call = []
+        self._types_active_call = set()
         # Default argument values match the py_func
         self.__defaults__ = py_func.__defaults__
 
@@ -276,6 +231,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
 
         self.doc = py_func.__doc__
         self._compiling_counter = CompilingCounter()
+        self._enable_sysmon = bool(config.ENABLE_SYS_MONITORING)
         weakref.finalize(self, self._make_finalizer())
 
     def _compilation_chain_init_hook(self):
@@ -486,7 +442,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             # ignore the FULL_TRACEBACKS config, this needs reporting!
             raise e
         finally:
-            self._types_active_call = []
+            self._types_active_call.clear()
         return return_val
 
     def inspect_llvm(self, signature=None):
@@ -727,8 +683,6 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         This is called from numba._dispatcher as a fallback if the native code
         cannot decide the type.
         """
-        # Not going through the resolve_argument_type() indirection
-        # can save a couple µs.
         try:
             tp = typeof(val, Purpose.argument)
         except ValueError:
@@ -736,7 +690,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         else:
             if tp is None:
                 tp = types.pyobject
-        self._types_active_call.append(tp)
+        self._types_active_call.add(tp)
         return tp
 
     def _callback_add_timer(self, duration, cres, lock_name):
@@ -800,7 +754,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
 
     __numba__ = 'py_func'
 
-    def __init__(self, py_func, locals={}, targetoptions={},
+    def __init__(self, py_func, locals=None, targetoptions=None,
                  pipeline_class=compiler.Compiler):
         """
         Parameters
@@ -814,6 +768,10 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         pipeline_class: type numba.compiler.CompilerBase
             The compiler pipeline type.
         """
+        if locals is None:
+            locals = {}
+        if targetoptions is None:
+            targetoptions = {}
         self.typingctx = self.targetdescr.typing_context
         self.targetctx = self.targetdescr.target_context
 
@@ -837,9 +795,6 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
 
         self._type = types.Dispatcher(self)
         self.typingctx.insert_global(self, self._type)
-
-        # Remember target restriction
-        self._required_target_backend = targetoptions.get('target_backend')
 
     def dump(self, tab=''):
         print(f'{tab}DUMP {type(self).__name__}[{self.py_func.__name__}'
@@ -905,10 +860,6 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         return self
 
     def compile(self, sig):
-        disp = self._get_dispatcher_for_current_target()
-        if disp is not self:
-            return disp.compile(sig)
-
         with ExitStack() as scope:
             cres = None
 
@@ -1049,34 +1000,6 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
             cres = tuple(self.overloads.values())[0]
             return types.FunctionType(cres.signature)
 
-    def _get_retarget_dispatcher(self):
-        """Returns a dispatcher for the retarget request.
-        """
-        # Check TLS target configuration
-        tc = TargetConfigurationStack()
-        retarget = tc.get()
-        retarget.check_compatible(self)
-        disp = retarget.retarget(self)
-        return disp
-
-    def _get_dispatcher_for_current_target(self):
-        """Returns a dispatcher for the current target registered in
-        `TargetConfigurationStack`. `self` is returned if no target is
-        specified.
-        """
-        tc = TargetConfigurationStack()
-        if tc:
-            return self._get_retarget_dispatcher()
-        else:
-            return self
-
-    def _call_tls_target(self, *args, **kwargs):
-        """This is called when the C dispatcher logic sees a retarget request.
-        """
-        disp = self._get_retarget_dispatcher()
-        # Call the new dispatcher
-        return disp(*args, **kwargs)
-
 
 class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
     """
@@ -1209,7 +1132,8 @@ class LiftedLoop(LiftedCode):
                 pyobject_loop_flags.force_pyobject = True
 
                 # Clone IR to avoid (some of the) mutation in the rewrite pass
-                cloned_func_ir = self.func_ir.copy()
+                cloned_func_ir_npm = self.func_ir.copy()
+                cloned_func_ir_fbk = self.func_ir.copy()
 
                 ev_details = dict(
                     dispatcher=self,
@@ -1222,7 +1146,7 @@ class LiftedLoop(LiftedCode):
                     try:
                         cres = compiler.compile_ir(typingctx=self.typingctx,
                                                    targetctx=self.targetctx,
-                                                   func_ir=cloned_func_ir,
+                                                   func_ir=cloned_func_ir_npm,
                                                    args=args,
                                                    return_type=return_type,
                                                    flags=npm_loop_flags,
@@ -1233,7 +1157,7 @@ class LiftedLoop(LiftedCode):
                     except errors.TypingError:
                         cres = compiler.compile_ir(typingctx=self.typingctx,
                                                    targetctx=self.targetctx,
-                                                   func_ir=cloned_func_ir,
+                                                   func_ir=cloned_func_ir_fbk,
                                                    args=args,
                                                    return_type=return_type,
                                                    flags=pyobject_loop_flags,
@@ -1401,7 +1325,13 @@ class ObjModeLiftedWith(LiftedWith):
         return super().compile(sig)
 
 
-# Initialize typeof machinery
-_dispatcher.typeof_init(
-    OmittedArg,
-    dict((str(t), t._code) for t in types.number_domain))
+if config.USE_LEGACY_TYPE_SYSTEM: # Old type system
+    # Initialize typeof machinery
+    _dispatcher.typeof_init(
+        OmittedArg,
+        dict((str(t), t._code) for t in types.number_domain))
+else: # New type system
+    # Initialize typeof machinery
+    _dispatcher.typeof_init(
+        OmittedArg,
+        dict((str(t).split('_')[-1], t._code) for t in types.np_number_domain))

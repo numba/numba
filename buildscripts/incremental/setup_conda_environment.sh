@@ -16,11 +16,10 @@ CONDA_INSTALL="conda install -q -y"
 PIP_INSTALL="pip install -q"
 
 
-EXTRA_CHANNELS=""
+EXTRA_CHANNELS="$EXTRA_CHANNELS"
 if [ "${USE_C3I_TEST_CHANNEL}" == "yes" ]; then
     EXTRA_CHANNELS="${EXTRA_CHANNELS} -c c3i_test"
 fi
-
 
 # Deactivate any environment
 source deactivate
@@ -50,10 +49,17 @@ if [ "${VANILLA_INSTALL}" != "yes" ]; then
     # pexpect is used to run the gdb tests.
     # ipykernel is used for testing ipython behaviours.
     if [ $PYTHON \< "3.12" ]; then
-        $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipykernel scipy pygments pexpect
-    else
+        $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipykernel pygments pexpect
+    elif [ $PYTHON \< "3.13" ]; then 
         # At the time of writing `ipykernel` was not available for Python 3.12
-        $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython scipy pygments pexpect
+        $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython pygments pexpect
+    else
+        echo "no extra packages for 3.13"
+
+    fi
+
+    if [ $NUMPY \< "2.0" ]; then
+        $CONDA_INSTALL ${EXTRA_CHANNELS} scipy
     fi
 fi
 
@@ -74,7 +80,7 @@ elif  [[ $(uname) == Darwin ]]; then
 fi
 
 # Install latest correct build
-$CONDA_INSTALL -c numba/label/dev llvmlite=0.42
+$CONDA_INSTALL -c numba/label/dev llvmlite=0.45
 
 # Install dependencies for building the documentation
 if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx docutils sphinx_rtd_theme pygments numpydoc; fi
@@ -86,12 +92,10 @@ if [ "$TEST_SVML" == "yes" ]; then $CONDA_INSTALL -c numba icc_rt; fi
 # Install Intel TBB parallel backend
 if [ "$TEST_THREADING" == "tbb" ]; then $CONDA_INSTALL "tbb>=2021.6" "tbb-devel>=2021.6"; fi
 # Install typeguard
-if [ "$RUN_TYPEGUARD" == "yes" ]; then $CONDA_INSTALL "conda-forge::typeguard==3.0.1"; fi
-# Install RVSDG
-if [ "$TEST_RVSDG" == "yes" ]; then $PIP_INSTALL numba-rvsdg; fi
+if [ "$RUN_TYPEGUARD" == "yes" ]; then $CONDA_INSTALL typeguard; fi
 
 # environment dump for debug
-# echo "DEBUG ENV:"
-# echo "-------------------------------------------------------------------------"
-# conda env export
-# echo "-------------------------------------------------------------------------"
+echo "DEBUG ENV:"
+echo "-------------------------------------------------------------------------"
+conda env export
+echo "-------------------------------------------------------------------------"

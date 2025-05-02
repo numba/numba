@@ -31,6 +31,7 @@ from numba.core.ir_utils import (
     transfer_scope,
     find_max_label,
     get_global_func_typ,
+    find_topo_order,
 )
 from numba.core.typing import signature
 from numba.core import lowering
@@ -473,7 +474,14 @@ def _lower_trivial_inplace_binops(parfor, lowerer, thread_count_var, reduce_info
         if _lower_var_to_var_assign(lowerer, inst):
             pass
         # Is inplace-binop for the reduction?
-        elif _is_inplace_binop_and_rhs_is_init(inst, reduce_info.redvar_name):
+        elif _is_right_op_and_rhs_is_init(inst, reduce_info.redvar_name, "inplace_binop"):
+            fn = inst.value.fn
+            redvar_result = _emit_binop_reduce_call(
+                fn, lowerer, thread_count_var, reduce_info,
+            )
+            lowerer.storevar(redvar_result, name=inst.target.name)
+        # Is binop for the reduction?
+        elif _is_right_op_and_rhs_is_init(inst, reduce_info.redvar_name, "binop"):
             fn = inst.value.fn
             redvar_result = _emit_binop_reduce_call(
                 fn, lowerer, thread_count_var, reduce_info,
@@ -579,9 +587,14 @@ def _emit_binop_reduce_call(binop, lowerer, thread_count_var, reduce_info):
     kernel = {
         operator.iadd: reduction_add,
         operator.isub: reduction_add,
+        operator.add: reduction_add,
+        operator.sub: reduction_add,
         operator.imul: reduction_mul,
         operator.ifloordiv: reduction_mul,
         operator.itruediv: reduction_mul,
+        operator.mul: reduction_mul,
+        operator.floordiv: reduction_mul,
+        operator.truediv: reduction_mul,
     }[binop]
 
     ctx = lowerer.context
@@ -612,7 +625,7 @@ def _emit_binop_reduce_call(binop, lowerer, thread_count_var, reduce_info):
     return redvar_result
 
 
-def _is_inplace_binop_and_rhs_is_init(inst, redvar_name):
+def _is_right_op_and_rhs_is_init(inst, redvar_name, op):
     """Is ``inst`` an inplace-binop and the RHS is the reduction init?
     """
     if not isinstance(inst, ir.Assign):
@@ -620,7 +633,7 @@ def _is_inplace_binop_and_rhs_is_init(inst, redvar_name):
     rhs = inst.value
     if not isinstance(rhs, ir.Expr):
         return False
-    if rhs.op != "inplace_binop":
+    if rhs.op != op:
         return False
     if rhs.rhs.name != f"{redvar_name}#init":
         return False
@@ -738,7 +751,9 @@ def _print_block(block):
 def _print_body(body_dict):
     '''Pretty-print a set of IR blocks.
     '''
-    for label, block in body_dict.items():
+    topo_order = wrap_find_topo(body_dict)
+    for label in topo_order:
+        block = body_dict[label]
         print("label: ", label)
         _print_block(block)
 
@@ -833,13 +848,21 @@ def compute_def_once_block(block, def_once, def_more, getattr_taken, typemap, mo
                     # to the def lists.
                     add_to_def_once_sets(argvar, def_once, def_more)
 
+def wrap_find_topo(loop_body):
+    blocks = wrap_loop_body(loop_body)
+    topo_order = find_topo_order(blocks)
+    unwrap_loop_body(loop_body)
+    return topo_order
+
 def compute_def_once_internal(loop_body, def_once, def_more, getattr_taken, typemap, module_assigns):
     '''Compute the set of variables defined exactly once in the given set of blocks
        and use the given sets for storing which variables are defined once, more than
        once and which have had a getattr call on them.
     '''
-    # For each block...
-    for label, block in loop_body.items():
+    # For each block in topological order...
+    topo_order = wrap_find_topo(loop_body)
+    for label in topo_order:
+        block = loop_body[label]
         # Scan this block and effect changes to def_once, def_more, and getattr_taken
         # based on the instructions in that block.
         compute_def_once_block(block, def_once, def_more, getattr_taken, typemap, module_assigns)
@@ -871,30 +894,37 @@ def _hoist_internal(inst, dep_on_param, call_table, hoisted, not_hoisted,
     if inst.target.name in stored_arrays:
         not_hoisted.append((inst, "stored array"))
         if config.DEBUG_ARRAY_OPT >= 1:
-            print("Instruction", inst, " could not be hoisted because the created array is stored.")
+            print("Instruction", inst, "could not be hoisted because the created array is stored.")
         return False
 
+    target_type = typemap[inst.target.name]
+
     uses = set()
+    # Get vars used by this statement.
     visit_vars_inner(inst.value, find_vars, uses)
+    # Filter out input parameters from the set of variable usages.
+    unhoistable = {assgn.target.name for assgn, _ in not_hoisted}
+    use_unhoist = uses & unhoistable
     diff = uses.difference(dep_on_param)
+    diff |= use_unhoist
     if config.DEBUG_ARRAY_OPT >= 1:
         print("_hoist_internal:", inst, "uses:", uses, "diff:", diff)
     if len(diff) == 0 and is_pure(inst.value, None, call_table):
         if config.DEBUG_ARRAY_OPT >= 1:
-            print("Will hoist instruction", inst, typemap[inst.target.name])
+            print("Will hoist instruction", inst, target_type)
         hoisted.append(inst)
-        if not isinstance(typemap[inst.target.name], types.npytypes.Array):
+        if not isinstance(target_type, types.npytypes.Array):
             dep_on_param += [inst.target.name]
         return True
     else:
         if len(diff) > 0:
             not_hoisted.append((inst, "dependency"))
             if config.DEBUG_ARRAY_OPT >= 1:
-                print("Instruction", inst, " could not be hoisted because of a dependency.")
+                print("Instruction", inst, "could not be hoisted because of a dependency.")
         else:
             not_hoisted.append((inst, "not pure"))
             if config.DEBUG_ARRAY_OPT >= 1:
-                print("Instruction", inst, " could not be hoisted because it isn't pure.")
+                print("Instruction", inst, "could not be hoisted because it isn't pure.")
     return False
 
 def find_setitems_block(setitems, itemsset, block, typemap):
@@ -910,6 +940,27 @@ def find_setitems_block(setitems, itemsset, block, typemap):
         elif isinstance(inst, parfor.Parfor):
             find_setitems_block(setitems, itemsset, inst.init_block, typemap)
             find_setitems_body(setitems, itemsset, inst.loop_body, typemap)
+        elif isinstance(inst, ir.Assign):
+            # If something of mutable type is given to a build_tuple or
+            # used in a call then consider it unanalyzable and so
+            # unavailable for hoisting.
+            rhs = inst.value
+            def add_to_itemset(item):
+                assert isinstance(item, ir.Var), rhs
+                if getattr(typemap[item.name], "mutable", False):
+                    itemsset.add(item.name)
+
+            if isinstance(rhs, ir.Expr):
+                if rhs.op in ["build_tuple", "build_list", "build_set"]:
+                    for item in rhs.items:
+                        add_to_itemset(item)
+                elif rhs.op == "build_map":
+                    for pair in rhs.items:
+                        for item in pair:
+                            add_to_itemset(item)
+                elif rhs.op == "call":
+                    for item in list(rhs.args) + [x[1] for x in rhs.kws]:
+                        add_to_itemset(item)
 
 def find_setitems_body(setitems, itemsset, loop_body, typemap):
     """
@@ -974,7 +1025,8 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
                     elif (isinstance(ib_inst, ir.Assign) and
                         ib_inst.target.name in def_once):
                         if _hoist_internal(ib_inst, dep_on_param, call_table,
-                                           hoisted, not_hoisted, typemap, itemsset):
+                                           hoisted, not_hoisted, typemap,
+                                           itemsset):
                             # don't add this instruction to the block since it is hoisted
                             continue
                     new_init_block.append(ib_inst)

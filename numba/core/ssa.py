@@ -12,11 +12,11 @@ import operator
 import warnings
 from functools import reduce
 from copy import copy
-from pprint import pformat
 from collections import defaultdict
 
 from numba import config
 from numba.core import ir, ir_utils, errors
+from numba.core.utils import OrderedSet, _lazy_pformat
 from numba.core.analysis import compute_cfg_from_blocks
 
 
@@ -66,7 +66,7 @@ def _run_ssa(blocks):
         # Fix up the LHS
         # Put fresh variables for all assignments to the variable
         blocks, defmap = _fresh_vars(blocks, varname)
-        _logger.debug("Replaced assignments: %s", pformat(defmap))
+        _logger.debug("Replaced assignments: %s", _lazy_pformat(defmap))
         # Fix up the RHS
         # Re-associate the variable uses with the reaching definition
         blocks = _fix_ssa_vars(blocks, varname, defmap, cfg, df_plus,
@@ -153,9 +153,11 @@ def _find_defs_violators(blocks, cfg):
     uses = defaultdict(set)
     states = dict(defs=defs, uses=uses)
     _run_block_analysis(blocks, states, _GatherDefsHandler())
-    _logger.debug("defs %s", pformat(defs))
-    # Gather violators by number of definitions
-    violators = {k for k, vs in defs.items() if len(vs) > 1}
+    _logger.debug("defs %s", _lazy_pformat(defs))
+    # Gather violators by number of definitions.
+    # The violators are added by the order that they are seen and the algorithm
+    # scan from the first to the last basic-block as they occur in bytecode.
+    violators = OrderedSet([k for k, vs in defs.items() if len(vs) > 1])
     # Gather violators by uses not dominated by the one def
     doms = cfg.dominators()
     for k, use_blocks in uses.items():
@@ -166,7 +168,7 @@ def _find_defs_violators(blocks, cfg):
                 if not def_labels.intersection(dom):
                     violators.add(k)
                     break
-    _logger.debug("SSA violators %s", pformat(violators))
+    _logger.debug("SSA violators %s", _lazy_pformat(violators))
     return violators
 
 

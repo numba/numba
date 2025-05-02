@@ -1,14 +1,13 @@
 import unittest
 
-import sys
-
-import numpy
+import numpy as np
 
 from numba import jit, njit
-from numba.core import types, utils
-from numba.tests.support import tag
+from numba.core import types
+from numba.tests.support import TestCase
 
-from numba.cpython.rangeobj import length_of_iterator
+from numba.core.inline_closurecall import length_of_iterator
+
 def loop1(n):
     s = 0
     for i in range(n):
@@ -60,7 +59,7 @@ def range_contains(val, start, stop, step):
     return [val in r for r in (r1, r2, r3)]
 
 
-class TestRange(unittest.TestCase):
+class TestRange(TestCase):
 
     def test_loop1_int16(self):
         pyfunc = loop1
@@ -180,6 +179,42 @@ class TestRange(unittest.TestCase):
             for val in non_numeric_vals:
                 self.assertEqual(cfunc_obj(val, *arg), pyfunc(val, *arg))
 
+    def test_range1_unsafe_cast(self):
+        cfunc = jit(range_len1)
+        with self.assertTypingError() as raises:
+            cfunc(1.234)
+
+        exc_str = str(raises.exception)
+        self.assertIn("No implementation of function", exc_str)
+        self.assertIn("range(float64)", exc_str)
+
+    def test_range2_unsafe_cast(self):
+        cfunc = jit(range_len2)
+        with self.assertTypingError() as raises:
+            cfunc(1, 12.34)
+
+        exc_str = str(raises.exception)
+        self.assertIn("No implementation of function", exc_str)
+        self.assertIn("range(int64, float64)", exc_str)
+
+    def test_range3_unsafe_cast(self):
+        cfunc = jit(range_len3)
+        with self.assertTypingError() as raises:
+            cfunc(1, 10, 1.234)
+
+        exc_str = str(raises.exception)
+        self.assertIn("No implementation of function", exc_str)
+        self.assertIn("range(int64, int64, float64)", exc_str)
+
+    def test_range_safe_cast(self):
+        @jit
+        def foo():
+            n = np.uint8(10)
+            acc = 0
+            for i in range(n):
+                acc += 1
+
+        self.assertPreciseEqual(foo(), foo.py_func())
 
 
 if __name__ == '__main__':

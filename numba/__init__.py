@@ -26,16 +26,16 @@ def _ensure_critical_deps():
 
     PYVERSION = sys.version_info[:2]
 
-    if PYVERSION < (3, 9):
-        msg = ("Numba needs Python 3.9 or greater. Got Python "
+    if PYVERSION < (3, 10):
+        msg = ("Numba needs Python 3.10 or greater. Got Python "
                f"{PYVERSION[0]}.{PYVERSION[1]}.")
         raise ImportError(msg)
 
     import numpy as np
     numpy_version = extract_version(np)
 
-    if numpy_version < (1, 22):
-        msg = (f"Numba needs NumPy 1.22 or greater. Got NumPy "
+    if numpy_version < (1, 24):
+        msg = (f"Numba needs NumPy 1.24 or greater. Got NumPy "
                f"{numpy_version[0]}.{numpy_version[1]}.")
         raise ImportError(msg)
 
@@ -142,7 +142,7 @@ __all__ = """
     """.split() + types.__all__ + errors.__all__
 
 
-_min_llvmlite_version = (0, 42, 0)
+_min_llvmlite_version = (0, 45, 0)
 _min_llvm_version = (14, 0, 0)
 
 def _ensure_llvm():
