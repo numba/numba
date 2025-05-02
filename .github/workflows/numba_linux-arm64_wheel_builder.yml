@@ -1,0 +1,186 @@
+name: numba_linux-arm64_wheel_builder
+
+on:
+  pull_request:
+    paths:
+    - .github/workflows/numba_linux-arm64_wheel_builder.yml
+  workflow_dispatch:
+    inputs:
+      llvmlite_wheel_runid:
+        description: 'llvmlite wheel workflow run ID (optional)'
+        required: false
+        type: string
+
+# Add concurrency control
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+env:
+  ARTIFACT_RETENTION_DAYS: 7
+  WHEELS_INDEX_URL: https://pypi.anaconda.org/numba/label/dev/simple
+  CONDA_CHANNEL_NUMBA: numba/label/dev
+  MANYLINUX_IMAGE: "manylinux_2_28_aarch64"
+
+jobs:
+  linux-arm64-build:
+    name: linux-arm64-build-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
+    runs-on: ubuntu-24.04-arm
+    defaults:
+      run:
+        shell: bash -elx {0}
+    strategy:
+      matrix:
+        include:
+          - python-version: "3.10"
+            numpy_build: "2.0.2"
+            python_tag: "cp310"
+          - python-version: "3.11"
+            numpy_build: "2.0.2"
+            python_tag: "cp311"
+          - python-version: "3.12"
+            numpy_build: "2.0.2"
+            python_tag: "cp312"
+          - python-version: "3.13"
+            numpy_build: "2.1.3"
+            python_tag: "cp313"
+      fail-fast: false
+
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download llvmlite wheel
+        if: inputs.llvmlite_wheel_runid != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: llvmlite-linux-arm64-py${{ matrix.python-version }}
+          path: llvmlite_wheels
+          run-id: ${{ inputs.llvmlite_wheel_runid }}
+          repository: numba/llvmlite
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build wheel in manylinux docker container
+        run: |
+          # Construct the expected Python executable path inside the container
+          PYTHON_EXECUTABLE="/opt/python/${{ matrix.python_tag }}-${{ matrix.python_tag }}/bin/python"
+          echo "Using Python executable: $PYTHON_EXECUTABLE"
+
+          # Prepare build environment
+          mkdir -p dist wheelhouse
+          chmod +x buildscripts/github/build_wheel_linux.sh
+          chmod +x buildscripts/github/repair_wheel_linux.sh
+
+          # Run the build script inside Docker container
+          docker run --rm \
+            -v ${{ github.workspace }}:/io \
+            quay.io/pypa/${{ env.MANYLINUX_IMAGE }} \
+            /io/buildscripts/github/build_wheel_linux.sh \
+            "${PYTHON_EXECUTABLE}" \
+            "false" \
+            "${{ matrix.numpy_build }}" \
+            "/io/llvmlite_wheels" \
+            "${WHEELS_INDEX_URL}"
+
+          # List built wheels
+          ls -la wheelhouse/
+
+      - name: Repair and patch wheel in manylinux docker container
+        run: |
+          # Construct the expected Python executable path inside the container
+          PYTHON_EXECUTABLE="/opt/python/${{ matrix.python_tag }}-${{ matrix.python_tag }}/bin/python"
+          echo "Using Python executable: $PYTHON_EXECUTABLE"
+
+          # Run the repair script in Docker
+          docker run --rm \
+            -v ${{ github.workspace }}:/io \
+            quay.io/pypa/${{ env.MANYLINUX_IMAGE }} \
+            /io/buildscripts/github/repair_wheel_linux.sh \
+            "${PYTHON_EXECUTABLE}" \
+            "false" \
+            "/io/wheelhouse"
+
+          # List repaired wheels
+          ls -la wheelhouse/
+
+      - name: Upload numba wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: numba-linux-arm64-py${{ matrix.python-version }}-np${{ matrix.numpy_build }}
+          path: wheelhouse/*.whl
+          compression-level: 0
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+          if-no-files-found: error
+
+      - name: Upload numba sdist
+        if: matrix.python-version == '3.10'
+        uses: actions/upload-artifact@v4
+        with:
+            name: numba-sdist
+            path: dist/*.tar.gz
+            compression-level: 0
+            retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+            if-no-files-found: error
+
+  linux-arm64-test:
+    name: linux-arm64-test (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
+    needs: linux-arm64-build
+    runs-on: ubuntu-24.04-arm
+    defaults:
+      run:
+        shell: bash -elx {0}
+    strategy:
+      matrix:
+        include:
+          - python-version: "3.10"
+            numpy_build: "2.0.2"
+          - python-version: "3.11"
+            numpy_build: "2.0.2"
+          - python-version: "3.12"
+            numpy_build: "2.0.2"
+          - python-version: "3.13"
+            numpy_build: "2.1.3"
+      fail-fast: false
+
+    steps:
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Download Numba wheel artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: numba-linux-arm64-py${{ matrix.python-version }}-np${{ matrix.numpy_build }}
+          path: dist
+
+      - name: Download llvmlite wheel
+        if: inputs.llvmlite_wheel_runid != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: llvmlite-linux-arm64-py${{ matrix.python-version }}
+          path: llvmlite_wheels
+          run-id: ${{ inputs.llvmlite_wheel_runid }}
+          repository: numba/llvmlite
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate and test wheel
+        run: |
+          PYTHON_PATH=$(which python${{ matrix.python-version }})
+          $PYTHON_PATH -m pip install --upgrade pip twine
+          ls -l dist
+          if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
+              $PYTHON_PATH -m pip install --no-cache-dir llvmlite_wheels/*.whl
+          else
+              $PYTHON_PATH -m pip install --no-cache-dir -i $WHEELS_INDEX_URL llvmlite
+          fi
+          $PYTHON_PATH -m twine check dist/*.whl
+          $PYTHON_PATH -m pip install dist/numba*.whl numpy==${{ matrix.numpy_build }}
+
+          # print Numba system information
+          $PYTHON_PATH -m numba -s
+
+          # run tests
+          $PYTHON_PATH -m numba.runtests -m 4 -v
