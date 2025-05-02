@@ -151,6 +151,12 @@ jobs:
           repository: numba/llvmlite
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install libomp and set DYLD_FALLBACK_LIBRARY_PATH
+        run: |
+          brew install libomp
+          echo "DYLD_FALLBACK_LIBRARY_PATH=$(brew --prefix libomp)/lib" >> $GITHUB_ENV
+          echo "Set DYLD_FALLBACK_LIBRARY_PATH to: $(brew --prefix libomp)/lib"
+
       - name: Validate and test wheel
         run: |
           PYTHON_PATH=$(which python${{ matrix.python-version }})
