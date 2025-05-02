@@ -68,25 +68,25 @@ jobs:
       - name: Install build dependencies
         run: |
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
-              python -m pip install llvmlite_wheels/*.whl
+              arch -arm64 python -m pip install llvmlite_wheels/*.whl
           else
               conda install -c ${{ env.CONDA_CHANNEL_NUMBA }} llvmlite
           fi
           conda install -c ${{ env.CONDA_CHANNEL_NUMBA }} python-build numpy==${{ matrix.numpy_build }} clang_osx-arm64 clangxx_osx-arm64
           conda install --yes llvm-openmp
-          python -m pip install wheel
 
       - name: Build sdist [once - py3.10]
         if: matrix.python-version == '3.10'
-        run: python -m build --sdist
+        run: arch -arm64 python -m build --sdist
 
       - name: Build wheel
-        run: python -m build
+        run: arch -arm64 python -m build
 
       - name: Fix macOS wheel library paths
         run: |
+          arch -arm64 python -m pip install wheel
           cd dist
-          python ../buildscripts/github/patch_wheel_dylib.py ./*.whl
+          arch -arm64 python ../buildscripts/github/patch_wheel_dylib.py ./*.whl
           ls -la ./*.whl
           # inspect the wheel
           find . -name "*.so" -o -name "*.dylib" | xargs -I {} otool -L {}
@@ -162,18 +162,18 @@ jobs:
         run: |
           PYTHON_PATH=$(which python${{ matrix.python-version }})
           "$PYTHON_PATH" -m venv .venv && source .venv/bin/activate
-          python -m pip install --upgrade pip twine
+          arch -arm64 python -m pip install --upgrade pip twine
           ls -l dist
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
-              python -m pip install llvmlite_wheels/*.whl
+              arch -arm64 python -m pip install llvmlite_wheels/*.whl
           else
-              python -m pip install -i $WHEELS_INDEX_URL llvmlite
+              arch -arm64 python -m pip install -i $WHEELS_INDEX_URL llvmlite
           fi
-          python -m twine check dist/*.whl
-          python -m pip install dist/numba*.whl numpy==${{ matrix.numpy_build }}
+          arch -arm64 python -m twine check dist/*.whl
+          arch -arm64 python -m pip install dist/numba*.whl numpy==${{ matrix.numpy_build }}
 
           # print Numba system information
-          python -m numba -s
+          arch -arm64 python -m numba -s
 
           # run tests
-          python -m numba.runtests -m 4 -v
+          arch -arm64 python -m numba.runtests -m 4 -v
