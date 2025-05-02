@@ -90,6 +90,7 @@ jobs:
 
       - name: Fix macOS wheel library paths
         run: |
+          python -m pip install wheel
           cd dist
           python ../buildscripts/github/patch_wheel_dylib.py ./*.whl
           ls -la ./*.whl
