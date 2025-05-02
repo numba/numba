@@ -3461,14 +3461,14 @@ def _bin(x):
 
 
 @overload(np.binary_repr)
-def np_binary_repr(num, width):
+def np_binary_repr(num, width=None):
     if not isinstance(num, (int, types.Integer)):
-        return
+        raise TypingError("num must be an integer")
     else:
         if is_nonelike(width):
-            def impl(num, width):
+            def impl(num, width=None):
                 return ("-" if num < 0 else "") + _bin(num)
-        else:
+        elif isinstance(width, (int, types.Integer)):
             def impl(num, width):
                 br = _bin(num)
                 lbr = len(br)
@@ -3480,6 +3480,8 @@ def np_binary_repr(num, width):
                 else:
                     br = _bin(2**width + num)
                 return br
+        else:
+            raise TypingError("width must be an integer or None")
     return impl
 
 
