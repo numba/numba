@@ -74,6 +74,7 @@ jobs:
           fi
           conda install -c ${{ env.CONDA_CHANNEL_NUMBA }} python-build numpy==${{ matrix.numpy_build }} clang_osx-arm64 clangxx_osx-arm64
           conda install --yes llvm-openmp
+          python -m pip install wheel
 
       - name: Build sdist [once - py3.10]
         if: matrix.python-version == '3.10'
