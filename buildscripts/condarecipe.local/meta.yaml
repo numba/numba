@@ -77,8 +77,6 @@ test:
     - llvm-openmp              # [osx]
     # This is for driving gdb tests
     - pexpect                  # [linux64]
-    # For catching segfaults during tests
-    - catchsegv                # [linux]
     # For testing ipython. At the time of writing ipykernel was not available
     # for Python 3.12.
     - ipykernel                # [not py==312]
