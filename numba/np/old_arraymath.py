@@ -3462,26 +3462,25 @@ def _bin(x):
 
 @overload(np.binary_repr)
 def np_binary_repr(num, width=None):
-    if not isinstance(num, (int, types.Integer)):
-        raise TypingError("num must be an integer")
+    if isinstance(num, (int, types.Integer)) and is_nonelike(width):
+        def impl(num, width=None):
+            return ("-" if num < 0 else "") + _bin(num)
+    elif isinstance(num, (int, types.Integer)) and\
+            isinstance(width, (int, types.Integer)):
+        def impl(num, width):
+            br = _bin(num)
+            lbr = len(br)
+            if width < lbr:
+                raise ValueError(f"Insufficient bit width={width} "
+                                 f"provided for binwidth={lbr}")
+            if num >= 0:
+                br = "0" * (width - len(br)) + br
+            else:
+                br = _bin(2**width + num)
+            return br
     else:
-        if is_nonelike(width):
-            def impl(num, width=None):
-                return ("-" if num < 0 else "") + _bin(num)
-        elif isinstance(width, (int, types.Integer)):
-            def impl(num, width):
-                br = _bin(num)
-                lbr = len(br)
-                if width < lbr:
-                    raise ValueError(f"Insufficient bit width={width} "
-                                     f"provided for binwidth={lbr}")
-                if num >= 0:
-                    br = "0" * (width - len(br)) + br
-                else:
-                    br = _bin(2**width + num)
-                return br
-        else:
-            raise TypingError("width must be an integer or None")
+        raise TypingError("num must be an integer "
+                          "and width must be an integer or None")
     return impl
 
 
