@@ -4743,7 +4743,7 @@ def np_inner(a, b):
 
             return innp
     else:
-        raise TypingError("The arguments to np.inner must"
+        raise TypingError("The arguments to np.inner must "
                           "be array-like or scalar")
 
     return impl
