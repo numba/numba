@@ -6798,15 +6798,18 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                         (-10, None),
                         (-3, 3),
                         (-10, 5)]
-        # error_tests   = [(8, 2) ]
+        width_err_tests = [(8, 2) ]
 
         for t in unitary_tests:
             self.assertPreciseEqual(cfunc(t), npfunc(t))
         for x, w in binary_tests:
             self.assertPreciseEqual(cfunc(x, w), npfunc(x, w))
-        # for x, w in error_tests:
-        #     with self.assertRaises(ValueError):
-        #         cfunc(x, w)
+        for x, w in width_err_tests:
+            with self.assertRaises(ValueError) as raises:
+                cfunc(x, w)
+                msg = f"Insufficient bit width={w} provided for " +\
+                    f"binwidth={np.ceil(np.log2(x))}"
+                self.assertPreciseEqual(msg, str(raises.exception))
 
 
 class TestNPMachineParameters(TestCase):
