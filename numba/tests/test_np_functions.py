@@ -5529,6 +5529,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # for x, y in bad_test_cases():
         #     with self.assertRaises(ValueError) as raises:
         #         cfunc(x, y)
+        #         msg = "Incompatible dimensions for inner product\n" +\
+        #               "(last dimension in both arrays must be equal)"
+        #         self.assertPreciseEqual(msg, raises.exception)
 
     def test_cross(self):
         pyfunc = np_cross
