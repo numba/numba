@@ -39,7 +39,7 @@ jobs:
         shell: bash -elx {0}
     strategy:
       matrix:
-        include: ${{ fromJson(needs.load-matrix.outputs.matrix-json) }}
+        include: ${{ fromJson(needs.load-matrix.outputs.matrix-json).build_matrix }}
       fail-fast: false
 
     steps:
@@ -106,7 +106,7 @@ jobs:
         shell: bash -elx {0}
     strategy:
       matrix:
-        include: ${{ fromJson(needs.load-matrix.outputs.matrix-json) }}
+        include: ${{ fromJson(needs.load-matrix.outputs.matrix-json).test_matrix }}
       fail-fast: false
 
     steps:
