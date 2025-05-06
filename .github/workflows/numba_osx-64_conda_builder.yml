@@ -63,9 +63,10 @@ jobs:
       - name: Setup Miniconda
         uses: conda-incubator/setup-miniconda@v3
         with:
+          python-version: 3.12
           auto-update-conda: true
           auto-activate-base: true
-          activate-environment: ""
+          activate-environment: true
 
       - name: Download llvmlite Artifact
         if: ${{ inputs.llvmlite_run_id != '' }}
@@ -132,6 +133,11 @@ jobs:
 
       - name: Setup miniconda
         uses: conda-incubator/setup-miniconda@v3
+        with:
+          python-version: 3.12
+          auto-update-conda: true
+          auto-activate-base: true
+          activate-environment: true
 
       - name: Download llvmlite artifact
         if: ${{ inputs.llvmlite_run_id != '' }}
@@ -165,6 +171,7 @@ jobs:
           fi
 
           conda build -c $LLVMLITE_CHANNEL -c defaults \
+            --python=${{ matrix.python-version }} \
             --extra-deps numpy=${{ matrix.numpy_test }} blas=*=openblas \
             --test \
             osx-64/numba*.conda
