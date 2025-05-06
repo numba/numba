@@ -24,11 +24,19 @@ jobs:
   load-matrix:
     runs-on: ubuntu-latest
     outputs:
-      matrix-json: ${{ steps.load.outputs.matrix-json }}
+      build-matrix-json: ${{ steps.parse_matrix.outputs.build-matrix-json }}
+      test-matrix-json: ${{ steps.parse_matrix.outputs.test-matrix-json }}
     steps:
       - uses: actions/checkout@v4
-      - id: load
-        run: echo "::set-output name=matrix-json::$(<.github/workflows/workflow_matrix_conda.json)"
+      - id: parse_matrix
+        name: Parse Workflow Matrix JSON
+        run: |
+          BUILD_JSON=$(jq -c .build_matrix .github/workflows/workflow_matrix_conda.json)
+          TEST_JSON=$(jq -c .test_matrix .github/workflows/workflow_matrix_conda.json)
+          echo "build matrix: $BUILD_JSON"
+          echo "test matrix: $TEST_JSON"
+          echo "build-matrix-json=$BUILD_JSON" >> $GITHUB_OUTPUT
+          echo "test-matrix-json=$TEST_JSON" >> $GITHUB_OUTPUT
 
   osx-arm64-build-conda:
     name: osx-arm64-build-conda (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
@@ -39,7 +47,7 @@ jobs:
         shell: bash -elx {0}
     strategy:
       matrix:
-        include: ${{ fromJson(needs.load-matrix.outputs.matrix-json).build_matrix }}
+        include: ${{ fromJson(needs.load-matrix.outputs.build-matrix-json) }}
       fail-fast: false
 
     steps:
@@ -106,7 +114,7 @@ jobs:
         shell: bash -elx {0}
     strategy:
       matrix:
-        include: ${{ fromJson(needs.load-matrix.outputs.matrix-json).test_matrix }}
+        include: ${{ fromJson(needs.load-matrix.outputs.test-matrix-json) }}
       fail-fast: false
 
     steps:
