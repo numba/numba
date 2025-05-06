@@ -53,6 +53,9 @@ jobs:
           auto-activate-base: true
           activate-environment: ""
 
+      - name: Use classic solver
+        run: conda config --set solver classic
+
       - name: Download llvmlite Artifact
         if: ${{ inputs.llvmlite_run_id != '' }}
         uses: actions/download-artifact@v4
@@ -143,6 +146,9 @@ jobs:
           auto-update-conda: true
           auto-activate-base: true
           activate-environment: ""
+
+      - name: Use classic solver
+        run: conda config --set solver classic
 
       - name: Download llvmlite artifact
         if: ${{ inputs.llvmlite_run_id != '' }}
