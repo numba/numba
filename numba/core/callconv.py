@@ -564,6 +564,8 @@ class CPUCallConv(BaseCallConv):
 
         fnty = ir.FunctionType(GENERIC_POINTER, [GENERIC_POINTER])
         fn = ir.Function(module, fnty, name)
+        # Linkage is changed to linkonce_odr for PYCC. External is the default.
+        fn.linkage = "external"
 
         # prevent the function from being inlined
         fn.attributes.add('nounwind')

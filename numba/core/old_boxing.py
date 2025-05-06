@@ -655,7 +655,7 @@ class _NumbaTypeHelper(object):
     def __enter__(self):
         c = self.c
         numba_name = c.context.insert_const_string(c.builder.module, 'numba')
-        numba_mod = c.pyapi.import_module_noblock(numba_name)
+        numba_mod = c.pyapi.import_module(numba_name)
         typeof_fn = c.pyapi.object_getattr_string(numba_mod, 'typeof')
         self.typeof_fn = typeof_fn
         c.pyapi.decref(numba_mod)
@@ -1213,7 +1213,7 @@ def unbox_numpy_random_bitgenerator(typ, obj, c):
         # store the results.
         # First find ctypes.cast, and ctypes.c_void_p
         ctypes_name = c.context.insert_const_string(c.builder.module, 'ctypes')
-        ctypes_module = c.pyapi.import_module_noblock(ctypes_name)
+        ctypes_module = c.pyapi.import_module(ctypes_name)
         extra_refs.append(ctypes_module)
         with cgutils.early_exit_if_null(c.builder, stack, ctypes_module):
             handle_failure()

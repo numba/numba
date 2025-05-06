@@ -514,6 +514,10 @@ class _EnvReloader(object):
         NUMBA_NUM_THREADS = _NUMBA_NUM_THREADS
         del _NUMBA_NUM_THREADS
 
+        # sys.monitoring support
+        ENABLE_SYS_MONITORING = _readenv("NUMBA_ENABLE_SYS_MONITORING",
+                                         int, 0)
+
         # Profiling support
 
         # Indicates if a profiler detected. Only VTune can be detected for now
@@ -567,6 +571,14 @@ class _EnvReloader(object):
         # LLVM_PASS_TIMINGS enables LLVM recording of pass timings.
         LLVM_PASS_TIMINGS = _readenv(
             "NUMBA_LLVM_PASS_TIMINGS", int, 0,
+        )
+
+        # Coverage support.
+
+        # JIT_COVERAGE (bool) controls whether the compiler report compiled
+        # lines to coverage tools. Defaults to off.
+        JIT_COVERAGE = _readenv(
+            "NUMBA_JIT_COVERAGE", int, 0,
         )
 
         # Inject the configuration values into the module globals

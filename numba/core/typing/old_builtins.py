@@ -24,7 +24,7 @@ class Print(AbstractTemplate):
         for a in args:
             sig = self.context.resolve_function_type("print_item", (a,), {})
             if sig is None:
-                raise TypeError("Type %s is not printable." % a)
+                raise errors.TypingError("Type %s is not printable." % a)
             assert sig.return_type is types.none
         return signature(types.none, *args)
 
@@ -71,6 +71,9 @@ class Slice(ConcreteTemplate):
 @infer_global(prange, typing_key=prange)
 @infer_global(internal_prange, typing_key=internal_prange)
 class Range(ConcreteTemplate):
+
+    unsafe_casting = False
+
     cases = [
         signature(types.range_state32_type, types.int32),
         signature(types.range_state32_type, types.int32, types.int32),
@@ -915,8 +918,8 @@ class MinMaxBase(AbstractTemplate):
             if isinstance(args[0], types.BaseTuple):
                 tys = list(args[0])
                 if not tys:
-                    raise TypeError("%s() argument is an empty tuple"
-                                    % (self.key.__name__,))
+                    raise errors.TypingError("%s() argument is an empty tuple"
+                                             % (self.key.__name__,))
             else:
                 return
         else:

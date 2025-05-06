@@ -15,6 +15,7 @@ from numba.core.compiler_lock import global_compiler_lock
 from numba.core.registry import cpu_target
 from numba.core.runtime import nrtdynmod
 from numba.core import cgutils
+from numba.core.environment import lookup_environment
 
 
 logger = logging.getLogger(__name__)
@@ -139,6 +140,7 @@ class _ModuleCompiler(object):
         self.exported_function_types = {}
         self.function_environments = {}
         self.environment_gvs = {}
+        self.extra_environments = {}
 
         codegen = self.context.codegen()
         library = codegen.create_library(self.module_name)
@@ -162,6 +164,12 @@ class _ModuleCompiler(object):
                                 entry.signature.return_type, flags,
                                 locals={}, library=library)
 
+            # Fix up dynamic exc globals
+            module = library._final_module
+            for gv in module.functions:
+                if gv.name.startswith("__excinfo_unwrap_args"):
+                    gv.linkage = "linkonce_odr"
+
             func_name = cres.fndesc.llvm_func_name
             llvm_func = cres.library.get_function(func_name)
 
@@ -176,6 +184,18 @@ class _ModuleCompiler(object):
                 self.exported_function_types[entry] = fnty
                 self.function_environments[entry] = cres.environment
                 self.environment_gvs[entry] = cres.fndesc.env_name
+
+                # Search for extra environments from linked libraries
+                for linkedlib in library._linking_libraries:
+                    linkedmod = linkedlib._final_module
+                    # Find environments
+                    for gv in linkedmod.global_variables:
+                        gvn = gv.name
+                        if gvn.startswith("_ZN08NumbaEnv"):
+                            env = lookup_environment(gvn)
+                            if env is not None:
+                                if env.can_cache():
+                                    self.extra_environments[gvn] = env
             else:
                 llvm_func.name = entry.symbol
                 self.dll_exports.append(entry.symbol)
@@ -271,6 +291,11 @@ class _ModuleCompiler(object):
             # Constants may be unhashable so avoid trying to cache them
             env_def = pyapi.serialize_uncached(env.consts)
             env_defs.append(env_def)
+        # Append extra environments
+        env_defs.extend([
+            pyapi.serialize_uncached(env.consts)
+            for env in self.extra_environments.values()
+        ])
         env_defs_init = create_constant_array(self.env_def_ty, env_defs)
         gv = self.context.insert_unique_const(llvm_module,
                                               '.module_environments',
@@ -288,6 +313,16 @@ class _ModuleCompiler(object):
             gv = self.context.declare_env_global(llvm_module, envgv_name)
             envgv = gv.bitcast(lt._void_star)
             env_setters.append(envgv)
+        # Append extra environments
+        env_setters.extend([
+            self.context.declare_env_global(
+                llvm_module,
+                envgv_name
+            ).bitcast(lt._void_star)
+            for envgv_name in self.extra_environments
+        ])
+        # The array ends with NULL
+        env_setters.append(lt._void_star(None))
 
         env_setters_init = create_constant_array(lt._void_star, env_setters)
         gv = self.context.insert_unique_const(llvm_module,

@@ -477,14 +477,14 @@ def get_type_max_value(typ):
         return np.inf
     if isinstance(typ, types.Integer):
         return typ.maxval
-    raise NotImplementedError("Unsupported type")
+    raise NumbaTypeError("Unsupported type")
 
 def get_type_min_value(typ):
     if isinstance(typ, types.Float):
         return -np.inf
     if isinstance(typ, types.Integer):
         return typ.minval
-    raise NotImplementedError("Unsupported type")
+    raise NumbaTypeError("Unsupported type")
 
 @infer_global(get_type_min_value)
 @infer_global(get_type_max_value)

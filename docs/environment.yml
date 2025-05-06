@@ -6,7 +6,7 @@ channels:
   - numba/label/dev
 dependencies:
   - python=3.10
-  - llvmlite=0.44
+  - llvmlite=0.45
   - numpy
   - numpydoc
   - setuptools

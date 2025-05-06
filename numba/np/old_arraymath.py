@@ -1880,15 +1880,16 @@ def valid_kths(a, kth):
 def np_partition(a, kth):
 
     if not isinstance(a, (types.Array, types.Sequence, types.Tuple)):
-        raise TypeError('The first argument must be an array-like')
+        raise NumbaTypeError('The first argument must be an array-like')
 
     if isinstance(a, types.Array) and a.ndim == 0:
-        raise TypeError('The first argument must be at least 1-D (found 0-D)')
+        msg = 'The first argument must be at least 1-D (found 0-D)'
+        raise NumbaTypeError(msg)
 
     kthdt = getattr(kth, 'dtype', kth)
     if not isinstance(kthdt, (types.Boolean, types.Integer)):
         # bool gets cast to int subsequently
-        raise TypeError('Partition index must be integer')
+        raise NumbaTypeError('Partition index must be integer')
 
     def np_partition_impl(a, kth):
         a_tmp = _asarray(a)
@@ -1905,15 +1906,16 @@ def np_partition(a, kth):
 def np_argpartition(a, kth):
 
     if not isinstance(a, (types.Array, types.Sequence, types.Tuple)):
-        raise TypeError('The first argument must be an array-like')
+        raise NumbaTypeError('The first argument must be an array-like')
 
     if isinstance(a, types.Array) and a.ndim == 0:
-        raise TypeError('The first argument must be at least 1-D (found 0-D)')
+        msg = 'The first argument must be at least 1-D (found 0-D)'
+        raise NumbaTypeError(msg)
 
     kthdt = getattr(kth, 'dtype', kth)
     if not isinstance(kthdt, (types.Boolean, types.Integer)):
         # bool gets cast to int subsequently
-        raise TypeError('Partition index must be integer')
+        raise NumbaTypeError('Partition index must be integer')
 
     def np_argpartition_impl(a, kth):
         a_tmp = _asarray(a)
@@ -2116,7 +2118,7 @@ def _dtype_of_compound(inobj):
             return np.float64
         dt = getattr(obj, 'dtype', None)
         if dt is None:
-            raise TypeError("type has no dtype attr")
+            raise NumbaTypeError("type has no dtype attr")
         if isinstance(obj, types.Sequence):
             obj = obj.dtype
         else:
@@ -2775,11 +2777,12 @@ def determine_dtype(array_like):
 def check_dimensions(array_like, name):
     if isinstance(array_like, types.Array):
         if array_like.ndim > 2:
-            raise TypeError("{0} has more than 2 dimensions".format(name))
+            raise NumbaTypeError("{0} has more than 2 dimensions".format(name))
     elif isinstance(array_like, types.Sequence):
         if isinstance(array_like.key[0], types.Sequence):
             if isinstance(array_like.key[0].key[0], types.Sequence):
-                raise TypeError("{0} has more than 2 dimensions".format(name))
+                msg = "{0} has more than 2 dimensions".format(name)
+                raise NumbaTypeError(msg)
 
 
 @register_jitable
@@ -3626,11 +3629,11 @@ def jit_np_intersect1d(ar1, ar2, assume_unique=False):
 def validate_1d_array_like(func_name, seq):
     if isinstance(seq, types.Array):
         if seq.ndim != 1:
-            raise TypeError("{0}(): input should have dimension 1"
-                            .format(func_name))
+            raise NumbaTypeError("{0}(): input should have dimension 1"
+                                 .format(func_name))
     elif not isinstance(seq, types.Sequence):
-        raise TypeError("{0}(): input should be an array or sequence"
-                        .format(func_name))
+        raise NumbaTypeError("{0}(): input should be an array or sequence"
+                             .format(func_name))
 
 
 @overload(np.bincount)
@@ -4815,23 +4818,25 @@ def np_trim_zeros(filt, trim='fb'):
     if not isinstance(trim, (str, types.UnicodeType)):
         raise NumbaTypeError('The second argument must be a string')
 
+    trim_escapes = numpy_version >= (2, 2)
+
     def impl(filt, trim='fb'):
         a_ = np.asarray(filt)
         first = 0
         trim = trim.lower()
         if 'f' in trim:
             for i in a_:
-                if i != 0:
-                    break
-                else:
+                if i == 0 or (trim_escapes and i == ''):
                     first = first + 1
+                else:
+                    break
         last = len(filt)
         if 'b' in trim:
             for i in a_[::-1]:
-                if i != 0:
-                    break
-                else:
+                if i == 0 or (trim_escapes and i == ''):
                     last = last - 1
+                else:
+                    break
         return a_[first:last]
 
     return impl

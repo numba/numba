@@ -12,8 +12,7 @@ from llvmlite import ir
 
 from numba.core.cgutils import is_nonelike, is_empty_tuple
 from numba.core.extending import intrinsic, overload, register_jitable
-from numba.core.imputils import (Registry, impl_ret_untracked,
-                                    impl_ret_new_ref)
+from numba.core.imputils import Registry
 from numba.core.typing import signature
 from numba.core import types, cgutils
 from numba.core.errors import NumbaTypeError
@@ -428,7 +427,7 @@ def _double_preprocessor(value):
         else:
             return lambda _builder, v: v
     else:
-        raise TypeError("Cannot convert {} to floating point type" % value)
+        raise NumbaTypeError("Cannot convert {} to floating point type" % value)
 
 
 @overload(random.getrandbits)
@@ -1930,7 +1929,8 @@ def zipf_impl(a, size):
 def do_shuffle_impl(x, rng):
 
     if not isinstance(x, types.Buffer):
-        raise TypeError("The argument to shuffle() should be a buffer type")
+        msg = "The argument to shuffle() should be a buffer type"
+        raise NumbaTypeError(msg)
 
     if rng == "np":
         rand = np.random.randint
@@ -2055,8 +2055,8 @@ def choice(a, size=None, replace=True):
             return a_i
 
     else:
-        raise TypeError("np.random.choice() first argument should be "
-                        "int or array, got %s" % (a,))
+        raise NumbaTypeError("np.random.choice() first argument should be "
+                             "int or array, got %s" % (a,))
 
     if size in (None, types.none):
         def choice_impl(a, size=None, replace=True):
@@ -2142,12 +2142,12 @@ def multinomial(n, pvals, size=None):
                 fl[i + plen - 1] = n_experiments
 
     if not isinstance(n, types.Integer):
-        raise TypeError("np.random.multinomial(): n should be an "
-                        "integer, got %s" % (n,))
+        raise NumbaTypeError("np.random.multinomial(): n should be an "
+                             "integer, got %s" % (n,))
 
     if not isinstance(pvals, (types.Sequence, types.Array)):
-        raise TypeError("np.random.multinomial(): pvals should be an "
-                        "array or sequence, got %s" % (pvals,))
+        raise NumbaTypeError("np.random.multinomial(): pvals should be an "
+                             "array or sequence, got %s" % (pvals,))
 
     if size in (None, types.none):
         def multinomial_impl(n, pvals, size=None):
@@ -2177,8 +2177,8 @@ def multinomial(n, pvals, size=None):
             return out
 
     else:
-        raise TypeError("np.random.multinomial(): size should be int or "
-                        "tuple or None, got %s" % (size,))
+        raise NumbaTypeError("np.random.multinomial(): size should be int or "
+                             "tuple or None, got %s" % (size,))
 
     return multinomial_impl
 

@@ -2,6 +2,8 @@
 Supported Atomic Operations
 ===========================
 
+.. cuda-deprecated::
+
 Numba provides access to some of the atomic operations supported in CUDA. Those
 that are presently implemented are as follows:
 

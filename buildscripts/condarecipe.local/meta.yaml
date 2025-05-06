@@ -30,10 +30,10 @@ requirements:
     - llvm-openmp              # [osx]
   host:
     - python
-    - numpy
+    - numpy {{ numpy }}
     - setuptools
     # On channel https://anaconda.org/numba/
-    - llvmlite >=0.44.0dev0,<0.44
+    - llvmlite >=0.45.0dev0,<0.45
     # TBB devel version is to match TBB libs.
     # NOTE: ppc64le and aarch64 are pending testing so excluded for now.
     - tbb-devel >=2021.6       # [not (aarch64 or ppc64le)]
@@ -41,7 +41,7 @@ requirements:
     - python >=3.10
     - numpy >=1.24
     # On channel https://anaconda.org/numba/
-    - llvmlite >=0.44.0dev0,<0.44
+    - llvmlite >=0.45.0dev0,<0.45
   run_constrained:
     # If TBB is present it must be at least version 2021.6
     - tbb >=2021.6    # [not (aarch64 or ppc64le)]
@@ -70,6 +70,9 @@ test:
     - ipython                  # [not aarch64]
     # for pycc
     - setuptools
+    - pyyaml
+    - pygments
+    - intel-cmplr-lib-rt       # [linux and x86_64]
     - tbb >=2021.6             # [not (aarch64 or ppc64le)]
     - llvm-openmp              # [osx]
     # This is for driving gdb tests

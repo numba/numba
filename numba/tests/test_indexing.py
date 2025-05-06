@@ -809,6 +809,13 @@ class TestSetItem(TestCase):
         with self.assertRaises(ValueError) as raises:
             cfunc(arg.copy(), *args)
 
+        if flags.get('nopython', False):
+            # if in nopython mode, check the error message from Numba
+            slice_size = len(arg[slice(1, -N + k, 1)])
+            msg = (f"cannot assign slice of shape ({k},) from input of shape "
+                   f"({slice_size},)")
+            self.assertIn(msg, str(raises.exception))
+
     def test_1d_slicing_set_tuple(self, flags=enable_pyobj_flags):
         """
         Tuple to 1d slice assignment

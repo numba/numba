@@ -5694,8 +5694,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.array([0, 1, 2]), 'B'
             yield np.array([np.nan, 0., 1.2, 2.3, 0.]), 'b'
             yield np.array([0, 0, 1, 2, 5]), 'f'
-            yield np.array([0, 1, 2, 0]), 'abf'
-            yield np.array([0, 4, 0]), 'd'
+            if numpy_version < (2, 2):
+                # abf and d are not supported in numpy >= 2.2
+                yield np.array([0, 1, 2, 0]), 'abf'
+                yield np.array([0, 4, 0]), 'd'
+
             yield np.array(['\0', '1', '2']), 'f'
 
         pyfunc = np_trim_zeros
@@ -6807,8 +6810,9 @@ def foo():
         tystr = ty.__name__
         basestr = basefunc.__name__
         funcstr = self.template % (tystr, basestr)
-        eval(compile(funcstr, '<string>', 'exec'))
-        return locals()['foo']
+        dct = {}
+        exec(compile(funcstr, '<string>', 'exec'), globals(), dct)
+        return dct['foo']
 
     def test_finfo(self):
         types = [np.float32, np.float64, np.complex64, np.complex128]

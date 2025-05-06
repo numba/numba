@@ -6,7 +6,7 @@ Typing declarations for np.timedelta64.
 from itertools import product
 import operator
 
-from numba.core import types
+from numba.core import types, errors
 from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                          AbstractTemplate, infer_global, infer,
                                          infer_getattr, signature)
@@ -287,8 +287,8 @@ class DatetimeMinMax(AbstractTemplate):
         assert isinstance(args[0], (types.NPDatetime, types.NPTimedelta)), error_msg
         if isinstance(args[0], types.NPDatetime):
             if not isinstance(args[1], types.NPDatetime):
-                raise TypeError(error_msg)
+                raise errors.TypingError(error_msg)
         else:
             if not isinstance(args[1], types.NPTimedelta):
-                raise TypeError(error_msg)
+                raise errors.TypingError(error_msg)
         return signature(args[0], *args)

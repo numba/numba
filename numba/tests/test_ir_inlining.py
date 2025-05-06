@@ -134,7 +134,7 @@ def _gen_involved():
             l = np.arange(1, c + 1)
             m = np.sqrt(l - g) + e * k
             if np.abs(m[0]) < 1:
-                for o in range(a):
+                for o in range(int(a)):
                     n += 0
                     if np.abs(n) < 3:
                         break
@@ -444,7 +444,7 @@ class TestFunctionInlining(MemoryLeakMixin, InliningBase):
             return bar(z + 2)
 
         # block count changes with Python version due to bytecode differences.
-        if utils.PYVERSION in ((3, 12), ):
+        if utils.PYVERSION in ((3, 12), (3, 13)):
             bc = 39
         elif utils.PYVERSION in ((3, 10), (3, 11)):
             bc = 35

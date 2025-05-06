@@ -231,6 +231,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
 
         self.doc = py_func.__doc__
         self._compiling_counter = CompilingCounter()
+        self._enable_sysmon = bool(config.ENABLE_SYS_MONITORING)
         weakref.finalize(self, self._make_finalizer())
 
     def _compilation_chain_init_hook(self):
@@ -682,8 +683,6 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         This is called from numba._dispatcher as a fallback if the native code
         cannot decide the type.
         """
-        # Not going through the resolve_argument_type() indirection
-        # can save a couple µs.
         try:
             tp = typeof(val, Purpose.argument)
         except ValueError:
@@ -755,7 +754,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
 
     __numba__ = 'py_func'
 
-    def __init__(self, py_func, locals={}, targetoptions={},
+    def __init__(self, py_func, locals=None, targetoptions=None,
                  pipeline_class=compiler.Compiler):
         """
         Parameters
@@ -769,6 +768,10 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         pipeline_class: type numba.compiler.CompilerBase
             The compiler pipeline type.
         """
+        if locals is None:
+            locals = {}
+        if targetoptions is None:
+            targetoptions = {}
         self.typingctx = self.targetdescr.typing_context
         self.targetctx = self.targetdescr.target_context
 

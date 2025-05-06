@@ -2,6 +2,8 @@
 Device management
 =================
 
+.. cuda-deprecated::
+
 For multi-GPU machines, users may want to select which GPU to use.
 By default the CUDA driver selects the fastest GPU as the device 0,
 which is the default device used by Numba.
