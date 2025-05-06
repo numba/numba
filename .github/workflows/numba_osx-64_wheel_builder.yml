@@ -31,7 +31,7 @@ jobs:
       - id: load_matrix_json
         name: Load Workflow Matrix JSON
         run: |
-          MATRIX_JSON=$(cat .github/workflows/workflow_matrix_wheel.json)
+          MATRIX_JSON=$(jq -c .wheel_matrix .github/workflows/workflow_matrix.json)
           echo "Workflow Matrix JSON: $MATRIX_JSON"
           echo "matrix-json=$MATRIX_JSON" >> $GITHUB_OUTPUT
 
