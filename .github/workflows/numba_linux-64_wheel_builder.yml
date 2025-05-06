@@ -76,14 +76,14 @@ jobs:
 
           # Prepare build environment
           mkdir -p dist wheelhouse
-          chmod +x buildscripts/github/build_wheel_linux-64.sh
-          chmod +x buildscripts/github/repair_wheel_linux-64.sh
+          chmod +x buildscripts/github/build_wheel_linux.sh
+          chmod +x buildscripts/github/repair_wheel_linux.sh
 
           # Run the build script inside Docker container
           docker run --rm \
             -v ${{ github.workspace }}:/io \
             quay.io/pypa/manylinux2014_x86_64 \
-            /io/buildscripts/github/build_wheel_linux-64.sh \
+            /io/buildscripts/github/build_wheel_linux.sh \
             "${PYTHON_EXECUTABLE}" \
             "${USE_TBB}" \
             "${{ matrix.numpy_build }}" \
@@ -103,7 +103,7 @@ jobs:
           docker run --rm \
             -v ${{ github.workspace }}:/io \
             quay.io/pypa/manylinux2014_x86_64 \
-            /io/buildscripts/github/repair_wheel_linux-64.sh \
+            /io/buildscripts/github/repair_wheel_linux.sh \
             "$PYTHON_EXECUTABLE" \
             "$USE_TBB" \
             "/io/wheelhouse"
