@@ -22,23 +22,29 @@ env:
   CONDA_CHANNEL_NUMBA: numba/label/dev
 
 jobs:
+  load-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix-json: ${{ steps.load_matrix_json.outputs.matrix-json }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: load_matrix_json
+        name: Load Workflow Matrix JSON
+        run: |
+          MATRIX_JSON=$(cat .github/workflows/workflow_matrix_wheel.json)
+          echo "Workflow Matrix JSON: $MATRIX_JSON"
+          echo "matrix-json=$MATRIX_JSON" >> $GITHUB_OUTPUT
+
   osx-64-build:
     name: osx-64-build-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
+    needs: load-matrix
     runs-on: macos-13
     defaults:
       run:
         shell: bash -elx {0}
     strategy:
       matrix:
-        include:
-          - python-version: "3.10"
-            numpy_build: "2.0.2"
-          - python-version: "3.11"
-            numpy_build: "2.0.2"
-          - python-version: "3.12"
-            numpy_build: "2.0.2"
-          - python-version: "3.13"
-            numpy_build: "2.1.3"
+        include: ${{ fromJson(needs.load-matrix.outputs.matrix-json) }}
       fail-fast: false
 
     steps:
@@ -118,22 +124,14 @@ jobs:
 
   osx-64-test:
     name: osx-64-test (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
-    needs: osx-64-build
+    needs: [load-matrix, osx-64-build]
     runs-on: macos-13
     defaults:
       run:
         shell: bash -elx {0}
     strategy:
       matrix:
-        include:
-          - python-version: "3.10"
-            numpy_build: "2.0.2"
-          - python-version: "3.11"
-            numpy_build: "2.0.2"
-          - python-version: "3.12"
-            numpy_build: "2.0.2"
-          - python-version: "3.13"
-            numpy_build: "2.1.3"
+        include: ${{ fromJson(needs.load-matrix.outputs.matrix-json) }}
       fail-fast: false
 
     steps:
