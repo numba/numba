@@ -94,7 +94,7 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
-  linux-arm64-test:
+  linux-64-test-conda:
     name: linux-64-test-conda (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
     needs: linux-64-build-conda
     runs-on: ubuntu-latest
