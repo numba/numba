@@ -21,23 +21,33 @@ env:
   CONDA_CHANNEL_NUMBA: numba/label/dev
 
 jobs:
+  load-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      build-matrix-json: ${{ steps.parse_matrix.outputs.build-matrix-json }}
+      test-matrix-json: ${{ steps.parse_matrix.outputs.test-matrix-json }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: parse_matrix
+        name: Parse Workflow Matrix JSON
+        run: |
+          BUILD_JSON=$(jq -c .conda_build_matrix .github/workflows/workflow_matrix.json)
+          TEST_JSON=$(jq -c .conda_test_matrix .github/workflows/workflow_matrix.json)
+          echo "Build Matrix JSON: $BUILD_JSON"
+          echo "Test Matrix JSON: $TEST_JSON"
+          echo "build-matrix-json=$BUILD_JSON" >> $GITHUB_OUTPUT
+          echo "test-matrix-json=$TEST_JSON" >> $GITHUB_OUTPUT
+
   osx-64-build-conda:
     name: osx-64-build-conda (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
+    needs: load-matrix
     runs-on: macos-13
     defaults:
       run:
         shell: bash -elx {0}
     strategy:
       matrix:
-        include:
-          - python-version: "3.10"
-            numpy_build: "2.0"
-          - python-version: "3.11"
-            numpy_build: "2.0"
-          - python-version: "3.12"
-            numpy_build: "2.0"
-          - python-version: "3.13"
-            numpy_build: "2.1"
+        include: ${{ fromJson(needs.load-matrix.outputs.build-matrix-json) }}
       fail-fast: false
 
     steps:
@@ -100,39 +110,14 @@ jobs:
 
   osx-64-test:
     name: osx-64-test-conda (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
-    needs: osx-64-build-conda
+    needs: [load-matrix, osx-64-build-conda]
     runs-on: macos-13
     defaults:
       run:
         shell: bash -elx {0}
     strategy:
       matrix:
-        include:
-          # Python 3.10
-          - python-version: "3.10"
-            numpy_test: "1.24"
-          - python-version: "3.10"
-            numpy_test: "1.25"
-
-          # Python 3.11
-          - python-version: "3.11"
-            numpy_test: "1.26"
-          - python-version: "3.11"
-            numpy_test: "2.0"
-          - python-version: "3.11"
-            numpy_test: "2.2"
-
-          # Python 3.12
-          - python-version: "3.12"
-            numpy_test: "1.26"
-          - python-version: "3.12"
-            numpy_test: "2.0"
-          - python-version: "3.12"
-            numpy_test: "2.2"
-
-          # Python 3.13
-          - python-version: "3.13"
-            numpy_test: "2.2"
+        include: ${{ fromJson(needs.load-matrix.outputs.test-matrix-json) }}
       fail-fast: false
 
     steps:
