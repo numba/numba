@@ -31,8 +31,8 @@ jobs:
       - id: parse_matrix
         name: Parse Workflow Matrix JSON
         run: |
-          BUILD_JSON=$(jq -c .build_matrix .github/workflows/workflow_matrix_conda.json)
-          TEST_JSON=$(jq -c .test_matrix .github/workflows/workflow_matrix_conda.json)
+          BUILD_JSON=$(jq -c .conda_build_matrix .github/workflows/workflow_matrix.json)
+          TEST_JSON=$(jq -c .conda_test_matrix .github/workflows/workflow_matrix.json)
           echo "build matrix: $BUILD_JSON"
           echo "test matrix: $TEST_JSON"
           echo "build-matrix-json=$BUILD_JSON" >> $GITHUB_OUTPUT
