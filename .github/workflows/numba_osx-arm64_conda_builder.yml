@@ -53,9 +53,6 @@ jobs:
           auto-activate-base: true
           activate-environment: ""
 
-      - name: Use classic solver
-        run: conda config --set solver classic
-
       - name: Download llvmlite Artifact
         if: ${{ inputs.llvmlite_run_id != '' }}
         uses: actions/download-artifact@v4
@@ -67,7 +64,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install conda-build
-        run: conda install conda-build
+        run: conda install conda-build=25.3.2
 
       - name: Build Numba conda package
         run: |
@@ -147,9 +144,6 @@ jobs:
           auto-activate-base: true
           activate-environment: ""
 
-      - name: Use classic solver
-        run: conda config --set solver classic
-
       - name: Download llvmlite artifact
         if: ${{ inputs.llvmlite_run_id != '' }}
         uses: actions/download-artifact@v4
@@ -167,7 +161,7 @@ jobs:
 
       - name: Install conda-build
         run: |
-          conda install conda-build
+          conda install conda-build=25.3.2
 
       - name: Run tests
         env:
