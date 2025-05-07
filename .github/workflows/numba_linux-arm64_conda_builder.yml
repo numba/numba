@@ -162,7 +162,22 @@ jobs:
             LLVMLITE_CHANNEL="${{ env.CONDA_CHANNEL_NUMBA }}"
           fi
 
+          # List directories to find the correct package path
+          echo "Listing downloaded artifact contents:"
+          find . -type f -name "numba*.conda" | sort
+          
+          # Try to find the package using the correct architecture directory
+          NUMBA_PKG=$(find . -type f -name "numba*.conda" | head -1)
+          
+          if [ -z "$NUMBA_PKG" ]; then
+            echo "ERROR: Could not find numba conda package"
+            exit 1
+          fi
+          
+          echo "Using package: $NUMBA_PKG"
+          
+          # Run the test with the found package
           conda build -c $LLVMLITE_CHANNEL -c defaults \
             --extra-deps numpy=${{ matrix.numpy_test }} blas=*=openblas \
             --test \
-            linux-arm64/numba*.conda
+            "$NUMBA_PKG"
