@@ -150,6 +150,13 @@ jobs:
         run: |
           conda install conda-build
 
+      - name: Install catchsegv
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y glibc-tools
+          # verify catchsegv is installed
+          catchsegv --version
+
       - name: Run tests
         env:
           TESTS_TO_RUN: "numba.tests"
