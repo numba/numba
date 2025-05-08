@@ -37,7 +37,6 @@ class RecordLLVMPassTimingsLegacy:
         -------
         timings: ProcessedPassTimings
         """
-        print("self._data Legacy", self._data)
         return ProcessedPassTimings(self._data)
 
 
@@ -70,7 +69,6 @@ class RecordLLVMPassTimings:
         -------
         timings: ProcessedPassTimings
         """
-        print("self._data NPM", self._data)
         return ProcessedPassTimings(self._data)
 
 
