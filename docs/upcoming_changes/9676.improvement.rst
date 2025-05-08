@@ -2,5 +2,5 @@ Use the New Pass Manager
 ------------------------
 
 LLVM's New Pass Manager is used for the optimization pipelines. The use of the
-Legacy Pass Manager, which is removed in later LLVM versions, is removed from
-Numba.
+Legacy Pass Manager, which is removed in later LLVM versions, is accessed by a
+configuration variable, `USE_LLVM_LEGACY_PASS_MANAGER`.
