@@ -40,6 +40,7 @@
 #endif
 #undef _PyGC_FINALIZED
 
+#include "dynamic_annotations.h"
 #if (PY_MINOR_VERSION == 12)
     #include "internal/pycore_atomic.h"
 #endif
