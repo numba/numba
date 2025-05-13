@@ -9,6 +9,7 @@ import errno
 import hashlib
 import inspect
 import itertools
+from math import floor
 import os
 import pickle
 import sys
@@ -224,6 +225,18 @@ class _InTreeCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
         return self._cache_path
 
 
+class _InTreeCacheLocatorFsAgnostic(_InTreeCacheLocator):
+    """
+    A locator for functions backed by a regular Python module with a
+    writable __pycache__ directory. This version is agnostic to filesystem differences,
+    e.g. timestamp precision with milliseconds.
+    """
+
+    def get_source_stamp(self):
+        st = super().get_source_stamp()
+        return floor(st[0]), st[1]
+
+
 class _UserWideCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
     """
     A locator for functions backed by a regular Python module or a
@@ -374,9 +387,23 @@ class CacheImpl(metaclass=ABCMeta):
             qualname = py_func.__qualname__
         except AttributeError:
             qualname = py_func.__name__
+
+        # Is there an override for locators list?
+        if config.CACHE_LOCATOR_CLASSES:
+            locator_classes = []
+            for locator_class in config.CACHE_LOCATOR_CLASSES.split(","):
+                cls = globals().get(locator_class)
+                if cls is None:
+                    raise RuntimeError("unknown cache locator class: '%s' specified via "
+                                       "NUMBA_CACHE_LOCATOR_CLASSES env variable"
+                                        % (locator_class))
+                locator_classes.append(cls)
+        else:
+            locator_classes = self._locator_classes
+
         # Find a locator
         source_path = inspect.getfile(py_func)
-        for cls in self._locator_classes:
+        for cls in locator_classes:
             locator = cls.from_function(py_func, source_path)
             if locator is not None:
                 break
