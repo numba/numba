@@ -2020,7 +2020,7 @@ def f(x, y):
         class InvertWrapper:
             def __init__(self, value):
                 self.x = value
-              
+
             def __invert__(self):
                 return InvertWrapper(~self.x)
 
