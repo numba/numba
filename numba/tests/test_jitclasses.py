@@ -2020,6 +2020,7 @@ def f(x, y):
         class InvertWrapper:
             def __init__(self, value):
                 self.x = value
+              
             def __invert__(self):
                 return InvertWrapper(~self.x)
 
@@ -2037,6 +2038,7 @@ def f(x, y):
         njit_result = do_invert(obj)
         self.assertIsInstance(njit_result, InvertWrapper)
         self.assertEqual(njit_result.x, ~42)
+
 
 if __name__ == "__main__":
     unittest.main()
