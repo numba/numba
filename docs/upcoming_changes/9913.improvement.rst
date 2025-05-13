@@ -1,0 +1,6 @@
+Internal caching of functions
+-----------------------------
+
+Adding a flag NUMBA_INTERNAL_CACHING that when non-zero will cause many
+internal Numba functions created primarily through njit and overload to be
+cached on disk.
