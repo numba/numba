@@ -10,3 +10,6 @@ cxx_compiler_version:       # [linux]
 fortran_compiler_version:   # [linux]
   - 7                       # [linux and (x86_64 or ppc64le)]
   - 11                      # [linux and aarch64]
+
+CONDA_BUILD_SYSROOT:            # [osx and x86_64]
+  - /opt/MacOSX10.10.sdk        # [osx and x86_64]

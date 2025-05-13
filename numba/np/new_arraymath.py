@@ -3737,7 +3737,7 @@ def _less_than_or_equal(a, b):
     if isinstance(a, complex) or isinstance(b, complex):
         return less_than_or_equal_complex(a, b)
 
-    elif isinstance(b, float):
+    elif isinstance(b, (float, types.float32, types.float64)):
         if np.isnan(b):
             return True
 
@@ -3749,7 +3749,7 @@ def _less_than(a, b):
     if isinstance(a, complex) or isinstance(b, complex):
         return less_than_complex(a, b)
 
-    elif isinstance(b, float):
+    elif isinstance(b, (float, types.float32, types.float64)):
         return less_than_float(a, b)
 
     return a < b

@@ -40,6 +40,11 @@
 #endif
 #undef _PyGC_FINALIZED
 
+/* dynamic_annotations.h is needed for building Python with --with-valgrind 
+ * support. The following include is to workaround issues described in
+ * https://github.com/numba/numba/pull/10073
+ */
+#include "dynamic_annotations.h"
 #if (PY_MINOR_VERSION == 12)
     #include "internal/pycore_atomic.h"
 #endif

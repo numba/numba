@@ -1,0 +1,6 @@
+Fix ``np.searchsorted`` with ``float32`` NaN values
+---------------------------------------------------
+
+Fixes a bug in ``np.searchsorted`` where passing a ``float32`` array containing
+NaN values produces incorrect results. This issue occurs due to the use of an
+incorrect comparison function.
