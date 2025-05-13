@@ -2038,6 +2038,5 @@ def f(x, y):
         self.assertIsInstance(njit_result, InvertWrapper)
         self.assertEqual(njit_result.x, ~42)
 
-
 if __name__ == "__main__":
     unittest.main()
