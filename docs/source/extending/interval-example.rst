@@ -63,13 +63,13 @@ Function arguments and global values will thusly be recognized as belonging
 to ``interval_type`` whenever they are instances of ``Interval``.
 
 
-Type inference for Python annotations
--------------------------------------
+Type inference for Python types
+-------------------------------
 
 While ``typeof`` is used to infer the Numba type of Python objects,
-``as_numba_type`` is used to infer the Numba type of Python types.  For simple
-cases, we can simply register that the Python type ``Interval`` corresponds with
-the Numba type ``interval_type``:
+``as_numba_type`` is used to infer the Numba type of Python types. For simple
+cases, we can simply register that the Python type ``Interval`` corresponds
+with the Numba type ``interval_type``:
 
 .. literalinclude:: ../../../numba/tests/doc_examples/test_interval_example.py
    :language: python
@@ -77,9 +77,10 @@ the Numba type ``interval_type``:
    :end-before: magictoken.numba_type_register.end
    :dedent: 8
 
-Note that ``as_numba_type`` is only used to infer types from type annotations at
-compile time.  The ``typeof`` registry above is used to infer the type of
-objects at runtime.
+Note that ``as_numba_type`` is only used at compile time to infer types from
+type annotations on jitclass fields, and the ``classinfo`` argument to the
+:func:`isinstance` function. The ``typeof`` registry above is used to infer the
+type of objects at runtime.
 
 
 Type inference for operations
