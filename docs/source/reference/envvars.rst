@@ -126,6 +126,15 @@ These variables influence what is printed out during compilation of
    allocation and ``0xDE`` on deallocation, both to help with debugging memory
    leaks.
 
+.. envvar:: NUMBA_DEBUG_NRT_STACK_LIMIT
+
+   :ref:`Numba run time (NRT) <arch-numba-runtime>` calls to reference counting
+   operations will print `n` frames of backtrace from the stack present at the time
+   the call was generated during compilation. The purpose of this is to make it
+   easier to locate the code responsible for generating reference counting
+   operations. This environment variable has no effect unless the environment
+   variable ``NUMBA_DEBUG_NRT`` is enabled. Default value is zero.
+
 .. envvar:: NUMBA_NRT_STATS
 
    If set to non-zero, enable the
