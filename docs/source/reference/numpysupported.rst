@@ -463,6 +463,7 @@ The following top-level functions are supported:
 * :func:`numpy.atleast_2d`
 * :func:`numpy.atleast_3d`
 * :func:`numpy.bartlett`
+* :func:`numpy.binary_repr`
 * :func:`numpy.bincount`
 * :func:`numpy.blackman`
 * :func:`numpy.broadcast_to` (only the 2 first arguments)
