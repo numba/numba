@@ -2015,6 +2015,30 @@ def f(x, y):
 
         self.assertFalse(instance == instance)
 
+    def test_invert_operator(self):
+        @jitclass([("x", types.intp)])
+        class InvertWrapper:
+            def __init__(self, value):
+                self.x = value
+
+            def __invert__(self):
+                return InvertWrapper(~self.x)
+
+        obj = InvertWrapper(42)
+        # Python usage
+        py_result = ~obj
+        self.assertIsInstance(py_result, InvertWrapper)
+        self.assertEqual(py_result.x, ~42)
+
+        # Numba-compiled usage
+        @njit
+        def do_invert(o):
+            return ~o
+
+        njit_result = do_invert(obj)
+        self.assertIsInstance(njit_result, InvertWrapper)
+        self.assertEqual(njit_result.x, ~42)
+
 
 if __name__ == "__main__":
     unittest.main()
