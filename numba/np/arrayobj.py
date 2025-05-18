@@ -5282,6 +5282,17 @@ def np_frombuffer(typingctx, buffer, dtype, count, offset, retty):
         nbytes = builder.mul(buf.nitems, buf.itemsize)
         ll_offset_size = builder.mul(arg_offset, ll_itemsize)
         nbytes = builder.sub(nbytes, ll_offset_size)
+
+        nbytes_is_negative = builder.icmp_signed(
+            '<',
+            nbytes,
+            ir.Constant(arg_count.type, 0),
+        )
+
+        with builder.if_then(nbytes_is_negative, likely=False):
+            msg = "offset must be non-negative and no greater than buffer length"
+            context.call_conv.return_user_exc(builder, ValueError, (msg,))
+
         ll_count_is_negative = builder.icmp_signed(
             '<',
             arg_count,
@@ -5312,7 +5323,7 @@ def np_frombuffer(typingctx, buffer, dtype, count, offset, retty):
         is_too_large = builder.icmp_unsigned('>', ll_required_size, nbytes)
 
         with builder.if_then(is_too_large, likely=False):
-            msg = "requested count exceeds buffer size"
+            msg = "buffer is smaller than requested size"
             context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
         # Set shape and strides
@@ -5330,7 +5341,7 @@ def np_frombuffer(typingctx, buffer, dtype, count, offset, retty):
                        strides=strides,
                        itemsize=ll_itemsize,
                        meminfo=buf.meminfo,
-                       parent=buf.parent, )
+                       parent=buf.parent)
 
         res = out_ary._getvalue()
         return impl_ret_borrowed(context, builder, sig.return_type, res)
