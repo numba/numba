@@ -1,0 +1,4 @@
+Improve loop-lifting to support zip and enumerate
+-------------------------------------------------
+
+Added support for ``zip()`` and ``enumerate()`` for loop-lifting.
