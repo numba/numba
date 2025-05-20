@@ -18,27 +18,36 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  LOCAL_LLVMLITE_ARTIFACT_PATH: D:/a/numba/numba/llvmlite_conda
   CONDA_CHANNEL_NUMBA: numba/label/dev
 
 jobs:
+  load-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      build-matrix-json: ${{ steps.parse_matrix.outputs.build-matrix-json }}
+      test-matrix-json: ${{ steps.parse_matrix.outputs.test-matrix-json }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: parse_matrix
+        name: Parse Workflow Matrix JSON
+        run: |
+          BUILD_JSON=$(jq -c .conda_build_matrix .github/workflows/workflow_matrix.json)
+          TEST_JSON=$(jq -c .conda_test_matrix .github/workflows/workflow_matrix.json)
+          echo "Build Matrix JSON: $BUILD_JSON"
+          echo "Test Matrix JSON: $TEST_JSON"
+          echo "build-matrix-json=$BUILD_JSON" >> $GITHUB_OUTPUT
+          echo "test-matrix-json=$TEST_JSON" >> $GITHUB_OUTPUT
+
   win-64-build-conda:
     name: win-64-build-conda (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
+    needs: load-matrix
     runs-on: windows-2019
     defaults:
       run:
         shell: bash -elx {0}
     strategy:
       matrix:
-        include:
-          - python-version: "3.10"
-            numpy_build: "2.0"
-          - python-version: "3.11"
-            numpy_build: "2.0"
-          - python-version: "3.12"
-            numpy_build: "2.0"
-          - python-version: "3.13"
-            numpy_build: "2.1"
+        include: ${{ fromJson(needs.load-matrix.outputs.build-matrix-json) }}
       fail-fast: false
 
     steps:
@@ -71,17 +80,17 @@ jobs:
         run: |
           CONDA_CHANNEL_DIR="conda_channel_dir"
           mkdir -p $CONDA_CHANNEL_DIR
-          
+
           # Set channel based on whether llvmlite artifact was downloaded
           if [ "${{ inputs.llvmlite_run_id }}" != "" ]; then
-            LLVMLITE_CHANNEL="file:///${{ env.LOCAL_LLVMLITE_ARTIFACT_PATH }}"
+            LLVMLITE_CHANNEL="file://${{ github.workspace }}/llvmlite_conda"
           else
             LLVMLITE_CHANNEL="${{ env.CONDA_CHANNEL_NUMBA }}"
           fi
-          
+
           conda build --debug -c $LLVMLITE_CHANNEL -c defaults \
             --python=${{ matrix.python-version }} \
-            --numpy=${{ matrix.numpy_build }} \
+            --numpy=${{ matrix.numpy_build }} blas=*=openblas \
             buildscripts/condarecipe.local/ \
             --output-folder=$CONDA_CHANNEL_DIR \
             --no-test
@@ -97,39 +106,14 @@ jobs:
 
   win-64-test:
     name: win-64-test-conda (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
-    needs: win-64-build-conda
+    needs: [load-matrix, win-64-build-conda]
     runs-on: windows-2019
     defaults:
       run:
         shell: bash -elx {0}
     strategy:
       matrix:
-        include:
-          # Python 3.10
-          - python-version: "3.10"
-            numpy_test: "1.24"
-          - python-version: "3.10"
-            numpy_test: "1.25"
-          
-          # Python 3.11
-          - python-version: "3.11"
-            numpy_test: "1.26"
-          - python-version: "3.11"
-            numpy_test: "2.0"
-          - python-version: "3.11"
-            numpy_test: "2.2"
-          
-          # Python 3.12
-          - python-version: "3.12"
-            numpy_test: "1.26"
-          - python-version: "3.12"
-            numpy_test: "2.0"
-          - python-version: "3.12"
-            numpy_test: "2.2"
-          
-          # Python 3.13
-          - python-version: "3.13"
-            numpy_test: "2.2"
+        include: ${{ fromJson(needs.load-matrix.outputs.test-matrix-json) }}
       fail-fast: false
 
     steps:
@@ -162,12 +146,12 @@ jobs:
         run: |
           # Set channel based on whether llvmlite artifact was downloaded
           if [ "${{ inputs.llvmlite_run_id }}" != "" ]; then
-            LLVMLITE_CHANNEL="file:///${{ env.LOCAL_LLVMLITE_ARTIFACT_PATH }}"
+            LLVMLITE_CHANNEL="file://${{ github.workspace }}/llvmlite_conda"
           else
             LLVMLITE_CHANNEL="${{ env.CONDA_CHANNEL_NUMBA }}"
           fi
-          
+
           conda build -c $LLVMLITE_CHANNEL -c defaults \
-            --extra-deps numpy=${{ matrix.numpy_test }} \
+            --extra-deps numpy=${{ matrix.numpy_test }} blas=*=openblas \
             --test \
             win-64/numba*.conda
