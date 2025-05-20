@@ -94,7 +94,7 @@ jobs:
           if-no-files-found: error
 
   win-64-test:
-    name: win-64-test-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
+    name: win-64-test-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
     needs: [load-matrix, win-64-build]
     runs-on: windows-2019
     defaults:
