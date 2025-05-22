@@ -15,8 +15,7 @@ from llvmlite import ir
 from numba import literal_unroll
 from numba.core.extending import (
     overload, overload_method, intrinsic, register_jitable)
-from numba.core import errors
-from numba.core import types
+from numba.core import config, errors, types
 from numba.core.unsafe.bytes import grab_byte, grab_uint64_t
 from numba.cpython.randomimpl import (const_int, get_next_int, get_next_int32,
                                       get_state_ptr)
@@ -61,7 +60,7 @@ def ol_defer_hash(obj, hash_func):
 
 
 # hash(obj) is implemented by calling obj.__hash__()
-@overload(hash)
+@overload(hash, jit_options={"cache": config.INTERNAL_CACHING})
 def hash_overload(obj):
     attempt_generic_msg = ("No __hash__ is defined for object of type "
                            f"'{obj}' and a generic hash() cannot be "
