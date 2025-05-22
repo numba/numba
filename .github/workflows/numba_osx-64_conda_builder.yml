@@ -98,6 +98,7 @@ jobs:
             --numpy=${{ matrix.numpy_build }} blas=*=openblas \
             buildscripts/condarecipe.local/ \
             --output-folder=$CONDA_CHANNEL_DIR \
+            --variants '{"CONDA_BUILD_SYSROOT": "/opt/MacOSX10.10.sdk"}' \
             --no-test
 
       - name: Upload numba conda package
