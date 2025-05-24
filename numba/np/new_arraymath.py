@@ -4695,6 +4695,60 @@ def np_kaiser(M, beta):
     return np_kaiser_impl
 
 
+@overload(np.inner)
+def np_inner(a, b):
+    if isinstance(a, (types.Integer, types.Float, types.Complex)) and\
+            isinstance(b, types.Array):
+        def impl(a, b):
+            return a * np.asarray(b)
+
+    elif isinstance(a, types.Array) and\
+            isinstance(b, (types.Integer, types.Float, types.Complex)):
+        def impl(a, b):
+            return np.asarray(a) * b
+
+    elif isinstance(a, (types.Integer, types.Float, types.Complex)) and\
+            isinstance(b, (types.Integer, types.Float, types.Complex)):
+        def impl(a, b):
+            return a * b
+
+    elif type_can_asarray(a) and type_can_asarray(b):
+        def impl(a, b):
+            a_ = np.asarray(a)
+            b_ = np.asarray(b)
+            if a_.shape[-1] != b_.shape[-1]:
+                raise ValueError((
+                    "Incompatible dimensions for inner product\n"
+                    "(last dimension in both arrays must be equal)"
+                ))
+
+            # infer the shapes of the inner product result
+            a_shp = a_.shape[:-1]
+            b_shp = b_.shape[:-1]
+            r = int(np.prod(np.array(a_shp)))
+            s = int(np.prod(np.array(b_shp)))
+            # reshape the arrays to 2D for the inner product
+            a_ = a_.reshape((r, a_.shape[-1]))
+            b_ = b_.reshape((s, b_.shape[-1]))
+            # infer type of the result
+            dt = (a_[0] + b_[0]).dtype
+            # construct the output array
+            innp = np.empty(r * s, dtype=dt)
+
+            for i in range(r):
+                for j in range(s):
+                    innp[i * s + j] = np.sum(a_[i,:] * b_[j,:])
+
+            innp = innp.reshape((*a_shp, *b_shp))
+
+            return innp
+    else:
+        raise TypingError("The arguments to np.inner must "
+                          "be array-like or scalar")
+
+    return impl
+
+
 @register_jitable
 def _cross_operation(a, b, out):
 
