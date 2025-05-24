@@ -3335,7 +3335,7 @@ def constant_record(context, builder, ty, pyval):
     Create a record constant as a stack-allocated array of bytes.
     """
     lty = ir.ArrayType(ir.IntType(8), pyval.nbytes)
-    val = lty(bytearray(pyval.tostring()))
+    val = lty(bytearray(pyval.tobytes()))
     return cgutils.alloca_once_value(builder, val)
 
 
