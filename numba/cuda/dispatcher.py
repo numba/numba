@@ -8,7 +8,7 @@ from numba.core import config, serialize, sigutils, types, typing, utils
 from numba.core.caching import Cache, CacheImpl
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.dispatcher import Dispatcher
-from numba.core.errors import NumbaPerformanceWarning
+from numba.core.errors import NumbaPerformanceWarning, NumbaValueError
 from numba.core.typing.typeof import Purpose, typeof
 
 from numba.cuda.api import get_current_device
@@ -693,7 +693,7 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
         # the CUDA Array Interface.
         try:
             return typeof(val, Purpose.argument)
-        except ValueError:
+        except (NumbaValueError, ValueError):
             if cuda.is_cuda_array(val):
                 # When typing, we don't need to synchronize on the array's
                 # stream - this is done when the kernel is launched.
