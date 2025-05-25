@@ -1,0 +1,6 @@
+Avoid declaring ``if`` operation bools in debug info
+----------------------------------------------------
+
+Internal bool variables that hold the result of conditional tests in ``if``
+operations are no longer declared, and therefore can't show up in the
+``locals`` in GDB.

@@ -471,6 +471,7 @@ class CanonicalizeLoopEntry(FunctionPass):
     This is needed for loop-lifting; esp in py3.8
     """
     _name = "canonicalize_loop_entry"
+    _supported_globals = {range, enumerate, zip}
 
     def __init__(self):
         FunctionPass.__init__(self)
@@ -520,7 +521,8 @@ class CanonicalizeLoopEntry(FunctionPass):
                         if isinstance(defn, ir.Global):
                             if expr.func.is_temp:
                                 deps.add(expr.func)
-                elif isinstance(rhs, ir.Global) and rhs.value is range:
+                elif (isinstance(rhs, ir.Global)
+                        and rhs.value in self._supported_globals):
                     startpt = assign
 
         if startpt is None:
