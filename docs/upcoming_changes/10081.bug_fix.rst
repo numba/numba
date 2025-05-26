@@ -1,0 +1,6 @@
+Fix deprecation warning caused by ``tostring()`` in structured record constant
+------------------------------------------------------------------------------
+
+Replaces the deprecated usage of ``tostring()`` with ``tobytes()`` in
+``numba/np/arrayobj.py:constant_record``. This resolves a DeprecationWarning
+raised when creating structured record constants under recent versions of NumPy.
