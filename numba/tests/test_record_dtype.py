@@ -411,7 +411,7 @@ def assign_array_to_nested(dest):
 
 
 def assign_array_to_nested_2d(dest):
-    tmp = (np.arange(6) + 1).astype(np.int16).reshape((3, 2))
+    tmp = (np.arange(6) + 1).astype(np.int16).reshape((3, 2)).copy()
     dest['array2'] = tmp
 
 

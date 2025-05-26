@@ -3007,8 +3007,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
             # empty data structures
             yield np.array([])
-            yield np.array([]).reshape(0, 2)
-            yield np.array([]).reshape(2, 0)
+            yield np.array([]).copy().reshape(0, 2)
+            yield np.array([]).copy().reshape(2, 0)
             yield ()
 
         # all inputs other than the first are defaulted
@@ -5985,9 +5985,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             phase = np.linspace(0, np.pi, num=5)
             phase[3:] += np.pi
             yield phase
-            yield np.arange(16).reshape((4,4))
-            yield np.arange(160, step=10).reshape((4,4))
-            yield np.arange(240, step=10).reshape((2,3,4))
+            yield np.arange(16).copy().reshape((4,4))
+            yield np.arange(160, step=10).copy().reshape((4,4))
+            yield np.arange(240, step=10).copy().reshape((2,3,4))
 
         for p in inputs1():
             self.assertPreciseEqual(pyfunc1(p), cfunc1(p))
