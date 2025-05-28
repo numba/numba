@@ -155,6 +155,7 @@ def get_array_index_type(ary, idx):
             # A slice can only keep an array contiguous if it is the
             # innermost index and it is not strided
             return (ty is types.ellipsis or isinstance(ty, types.Integer)
+                    or ty is types.none
                     or (is_innermost and isinstance(ty, types.SliceType)
                         and not ty.has_step))
 
@@ -163,8 +164,10 @@ def get_array_index_type(ary, idx):
             Whether indexing with the given indices (from outer to inner in
             physical layout order) can keep an array contiguous.
             """
-            for ty in outer_indices[:-1]:
-                if not keeps_contiguity(ty, False):
+            for i, ty in enumerate(outer_indices[:-1]):
+                is_innermost = all([t is types.none
+                                    for t in outer_indices[i+1:]])
+                if not keeps_contiguity(ty, is_innermost):
                     return False
             if outer_indices and not keeps_contiguity(outer_indices[-1], True):
                 return False
