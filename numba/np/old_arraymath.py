@@ -3737,7 +3737,7 @@ def _less_than_or_equal(a, b):
     if isinstance(a, complex) or isinstance(b, complex):
         return less_than_or_equal_complex(a, b)
 
-    elif isinstance(b, float):
+    elif isinstance(b, (float, types.float32, types.float64)):
         if np.isnan(b):
             return True
 
@@ -3749,7 +3749,7 @@ def _less_than(a, b):
     if isinstance(a, complex) or isinstance(b, complex):
         return less_than_complex(a, b)
 
-    elif isinstance(b, float):
+    elif isinstance(b, (float, types.float32, types.float64)):
         return less_than_float(a, b)
 
     return a < b
@@ -4818,23 +4818,25 @@ def np_trim_zeros(filt, trim='fb'):
     if not isinstance(trim, (str, types.UnicodeType)):
         raise NumbaTypeError('The second argument must be a string')
 
+    trim_escapes = numpy_version >= (2, 2)
+
     def impl(filt, trim='fb'):
         a_ = np.asarray(filt)
         first = 0
         trim = trim.lower()
         if 'f' in trim:
             for i in a_:
-                if i != 0:
-                    break
-                else:
+                if i == 0 or (trim_escapes and i == ''):
                     first = first + 1
+                else:
+                    break
         last = len(filt)
         if 'b' in trim:
             for i in a_[::-1]:
-                if i != 0:
-                    break
-                else:
+                if i == 0 or (trim_escapes and i == ''):
                     last = last - 1
+                else:
+                    break
         return a_[first:last]
 
     return impl

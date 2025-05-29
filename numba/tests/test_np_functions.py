@@ -1511,6 +1511,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         check(nans, ones)
         check(nans, nans)
 
+        # `a` and `v` are float32
+        a = np.array([9, np.nan], dtype=np.float32)
+        v = np.array([np.nan], dtype=np.float32)
+        check(a, v)
+
         # `v` is zero size
         a = np.arange(1)
         v = np.arange(0)
@@ -5694,8 +5699,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.array([0, 1, 2]), 'B'
             yield np.array([np.nan, 0., 1.2, 2.3, 0.]), 'b'
             yield np.array([0, 0, 1, 2, 5]), 'f'
-            yield np.array([0, 1, 2, 0]), 'abf'
-            yield np.array([0, 4, 0]), 'd'
+            if numpy_version < (2, 2):
+                # abf and d are not supported in numpy >= 2.2
+                yield np.array([0, 1, 2, 0]), 'abf'
+                yield np.array([0, 4, 0]), 'd'
+
             yield np.array(['\0', '1', '2']), 'f'
 
         pyfunc = np_trim_zeros
