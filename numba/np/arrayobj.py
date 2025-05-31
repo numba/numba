@@ -2647,7 +2647,10 @@ def np_unique(ar):
     def np_unique_impl(ar):
         b = np.sort(ar.ravel())
         head = list(b[:1])
-        tail = [x for i, x in enumerate(b[1:]) if b[i] != x]
+        tail = [
+            x for i, x in enumerate(b[1:])
+            if b[i] != x and not (np.isnan(b[i]) and np.isnan(x))
+        ]
         return np.array(head + tail)
     return np_unique_impl
 
