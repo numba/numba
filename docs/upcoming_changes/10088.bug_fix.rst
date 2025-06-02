@@ -1,0 +1,6 @@
+fix: handle ``nan`` correctly in ``np.unique``
+----------------------------------------------
+
+``np.unique`` overload has been updated to handle ``np.nan`` values correctly
+-- this fix also propagates to the ``np.union1d`` overload, fixing its behavior
+with ``np.nan`` inputs
