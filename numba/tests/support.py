@@ -109,6 +109,11 @@ skip_if_py313_on_windows = unittest.skipIf(
      "Not supported on Python 3.13 on Windows"
  )
 
+skip_if_linux_aarch64 = unittest.skipIf(
+    sys.platform.startswith('linux') and platform.machine() == 'aarch64',
+    "Not supported on Linux aarch64"
+)
+
 skip_if_32bit = unittest.skipIf(_32bit, "Not supported on 32 bit")
 
 IS_NUMPY_2 = numpy_support.numpy_version >= (2, 0)

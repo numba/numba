@@ -6,7 +6,8 @@ Just-in-Time compilation
 JIT functions
 -------------
 
-.. decorator:: numba.jit(signature_or_function=None, nopython=False, nogil=False, cache=False, forceobj=False, parallel=False, error_model='python', fastmath=False, locals={}, boundscheck=False)
+
+.. decorator:: numba.jit(signature_or_function=None, nopython=False, nogil=False, cache=False, forceobj=False, parallel=False, error_model='python', fastmath=False, locals={}, boundscheck=False, inline="never", forceinline=False)
 
    Compile the decorated function on-the-fly to produce efficient machine
    code.  All parameters are optional.
@@ -125,6 +126,12 @@ JIT functions
 
       @jit()
       def f(x): ...
+
+   If set to ``"always"``, *inline* will enable inlining at the Numba IR level.
+   See :ref:`notes-on-inlining`.
+
+   If set to ``True``, *forceinline* will force inlining at the LLVM IR level by
+   adding the ``alwaysinline`` attribute to the function definition in the IR.
 
    The decorator returns a :class:`Dispatcher` object.
 

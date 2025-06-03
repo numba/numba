@@ -3056,7 +3056,7 @@ class Interpreter(object):
         truebr = brs[iftrue]
         falsebr = brs[not iftrue]
 
-        name = "bool%s" % (inst.offset)
+        name = "$bool%s" % (inst.offset)
         gv_fn = ir.Global("bool", bool, loc=self.loc)
         self.store(value=gv_fn, name=name)
 

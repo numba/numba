@@ -754,6 +754,22 @@ class TestDebugInfoEmission(TestCase):
         # Only one line
         self.assertEqual(len(lines), 1)
 
+    def test_no_if_op_bools_declared(self):
+        @njit("int64(boolean, boolean)", debug=True, _dbg_optnone=True)
+        def choice(cond1, cond2):
+            if cond1 and cond2:
+                return 1
+            else:
+                return 2
+
+        # We should not declare variables used as the condition in if ops.
+        # See Numba PR #9888: https://github.com/numba/numba/pull/9888
+        llvm_ir = next(iter(choice.inspect_llvm().items()))[1]
+
+        for line in llvm_ir.splitlines():
+            if 'llvm.dbg.declare' in line:
+                self.assertNotIn("bool", line)
+
 
 if __name__ == '__main__':
     unittest.main()

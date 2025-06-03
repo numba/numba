@@ -561,6 +561,11 @@ class _EnvReloader(object):
             "NUMBA_USE_LLVMLITE_MEMORY_MANAGER", int, None
         )
 
+        # llvm pass manager switch
+        USE_LLVM_LEGACY_PASS_MANAGER = _readenv(
+            "NUMBA_USE_LLVM_LEGACY_PASS_MANAGER", int, 0
+        )
+
         # Timing support.
 
         # LLVM_PASS_TIMINGS enables LLVM recording of pass timings.

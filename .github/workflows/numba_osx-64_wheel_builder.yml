@@ -1,9 +1,9 @@
-name: numba_win-64_wheel_builder
+name: numba_osx-64_wheel_builder
 
 on:
   pull_request:
     paths:
-      - .github/workflows/numba_win-64_whl_builder.yml
+    - .github/workflows/numba_osx-64_wheel_builder.yml
   workflow_dispatch:
     inputs:
       llvmlite_wheel_runid:
@@ -17,9 +17,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  CONDA_CHANNEL_NUMBA: numba/label/dev
   ARTIFACT_RETENTION_DAYS: 7
   WHEELS_INDEX_URL: https://pypi.anaconda.org/numba/label/dev/simple
+  CONDA_CHANNEL_NUMBA: numba/label/dev
 
 jobs:
   load-matrix:
@@ -35,13 +35,13 @@ jobs:
           echo "Workflow Matrix JSON: $MATRIX_JSON"
           echo "matrix-json=$MATRIX_JSON" >> $GITHUB_OUTPUT
 
-  win-64-build:
-    name: win-64-build-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
+  osx-64-build:
+    name: osx-64-build-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
     needs: load-matrix
-    runs-on: windows-2019
+    runs-on: macos-13
     defaults:
       run:
-        shell: bash -el {0}
+        shell: bash -elx {0}
     strategy:
       matrix:
         include: ${{ fromJson(needs.load-matrix.outputs.matrix-json) }}
@@ -52,6 +52,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Setup platform-specific requirements
+        run: |
+          source ./buildscripts/github/setup_platform.sh "osx-64"
 
       - name: Setup Miniconda
         uses: conda-incubator/setup-miniconda@v3
@@ -65,7 +69,7 @@ jobs:
         if: inputs.llvmlite_wheel_runid != ''
         uses: actions/download-artifact@v4
         with:
-          name: llvmlite-win-64-py${{ matrix.python-version }}
+          name: llvmlite-osx-64-py${{ matrix.python-version }}
           path: llvmlite_wheels
           run-id: ${{ inputs.llvmlite_wheel_runid }}
           repository: numba/llvmlite
@@ -78,28 +82,53 @@ jobs:
           else
               conda install -c ${{ env.CONDA_CHANNEL_NUMBA }} llvmlite
           fi
-          conda install -c ${{ env.CONDA_CHANNEL_NUMBA }} python-build numpy==${{ matrix.numpy_build }} setuptools
-          python -m pip install tbb==2021.6 tbb-devel==2021.6
+          conda install -c ${{ env.CONDA_CHANNEL_NUMBA }} python-build numpy==${{ matrix.numpy_build }} clang_osx-64 clangxx_osx-64
+          conda install --yes llvm-openmp
+
+      - name: Build sdist [once - py3.10]
+        if: matrix.python-version == '3.10'
+        run: python -m build --sdist
 
       - name: Build wheel
+        env:
+          SDKROOT: /opt/MacOSX10.10.sdk
         run: python -m build
+
+      - name: Fix macOS wheel library paths
+        run: |
+          python -m pip install wheel
+          cd dist
+          python ../buildscripts/github/patch_wheel_dylib.py ./*.whl
+          ls -la ./*.whl
+          # inspect the wheel
+          find . -name "*.so" -o -name "*.dylib" | xargs -I {} otool -L {}
 
       - name: Upload numba wheel
         uses: actions/upload-artifact@v4
         with:
-          name: numba-win-64-py${{ matrix.python-version }}-np${{ matrix.numpy_build }}
+          name: numba-osx-64-py${{ matrix.python-version }}-np${{ matrix.numpy_build }}
           path: dist/*.whl
           compression-level: 0
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           if-no-files-found: error
 
-  win-64-test:
-    name: win-64-test-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
-    needs: [load-matrix, win-64-build]
-    runs-on: windows-2019
+      - name: Upload numba sdist
+        if: matrix.python-version == '3.10'
+        uses: actions/upload-artifact@v4
+        with:
+            name: numba-sdist
+            path: dist/*.tar.gz
+            compression-level: 0
+            retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+            if-no-files-found: error
+
+  osx-64-test:
+    name: osx-64-test (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
+    needs: [load-matrix, osx-64-build]
+    runs-on: macos-13
     defaults:
       run:
-        shell: bash -el {0}
+        shell: bash -elx {0}
     strategy:
       matrix:
         include: ${{ fromJson(needs.load-matrix.outputs.matrix-json) }}
@@ -114,34 +143,40 @@ jobs:
       - name: Download Numba wheel artifact
         uses: actions/download-artifact@v4
         with:
-          name: numba-win-64-py${{ matrix.python-version }}-np${{ matrix.numpy_build }}
+          name: numba-osx-64-py${{ matrix.python-version }}-np${{ matrix.numpy_build }}
           path: dist
 
       - name: Download llvmlite wheel
         if: inputs.llvmlite_wheel_runid != ''
         uses: actions/download-artifact@v4
         with:
-          name: llvmlite-win-64-py${{ matrix.python-version }}
+          name: llvmlite-osx-64-py${{ matrix.python-version }}
           path: llvmlite_wheels
           run-id: ${{ inputs.llvmlite_wheel_runid }}
           repository: numba/llvmlite
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install libomp and set DYLD_FALLBACK_LIBRARY_PATH
+        run: |
+          brew install libomp
+          echo "DYLD_FALLBACK_LIBRARY_PATH=$(brew --prefix libomp)/lib" >> $GITHUB_ENV
+          echo "Set DYLD_FALLBACK_LIBRARY_PATH to: $(brew --prefix libomp)/lib"
 
       - name: Validate and test wheel
         run: |
-          python -m pip install --upgrade pip twine
-          python -m pip install numpy==${{ matrix.numpy_build }} tbb==2021.6 tbb-devel==2021.6
+          PYTHON_PATH=$(which python${{ matrix.python-version }})
+          $PYTHON_PATH -m pip install --upgrade pip twine
+          ls -l dist
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
-              python -m pip install llvmlite_wheels/*.whl
+              $PYTHON_PATH -m pip install llvmlite_wheels/*.whl
           else
-              python -m pip install -i $WHEELS_INDEX_URL llvmlite
+              $PYTHON_PATH -m pip install -i $WHEELS_INDEX_URL llvmlite
           fi
-          python -m twine check dist/*.whl
-          python -m pip install dist/*.whl
+          $PYTHON_PATH -m twine check dist/*.whl
+          $PYTHON_PATH -m pip install dist/numba*.whl numpy==${{ matrix.numpy_build }}
 
           # print Numba system information
-          python -m numba -s
+          $PYTHON_PATH -m numba -s
 
           # run tests
-          python -m numba.runtests -m 4 -v
+          $PYTHON_PATH -m numba.runtests -m 4 -v

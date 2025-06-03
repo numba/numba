@@ -1511,6 +1511,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         check(nans, ones)
         check(nans, nans)
 
+        # `a` and `v` are float32
+        a = np.array([9, np.nan], dtype=np.float32)
+        v = np.array([np.nan], dtype=np.float32)
+        check(a, v)
+
         # `v` is zero size
         a = np.arange(1)
         v = np.arange(0)
