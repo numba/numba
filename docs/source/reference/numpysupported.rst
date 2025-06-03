@@ -527,7 +527,7 @@ The following top-level functions are supported:
 * :func:`numpy.in1d` (matching pre-1.24 behaviour without the ``kind`` keyword)
 * :func:`numpy.linspace` (only the 3-argument form)
 * :func:`numpy.logspace` (only the 3 first arguments)
-* :func:`numpy.nan_to_num` (only the 3 first arguments)
+* :func:`numpy.nan_to_num`
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`
 * :class:`numpy.nditer` (only the first argument)

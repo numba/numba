@@ -476,7 +476,7 @@ def swapaxes(a, a1, a2):
     return np.swapaxes(a, a1, a2)
 
 
-def nan_to_num(X, copy=True, nan=0.0):
+def nan_to_num(X, copy=True, nan=0.0, posinf=None, neginf=None):
     return np.nan_to_num(X, copy=copy, nan=nan)
 
 
@@ -6236,27 +6236,52 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             np.array([-np.inf, np.nan, np.inf], dtype=np.float32)
         ]
         nans = [0.0, 10]
+        posinf = [None, 1000.0]
+        neginf = [None, -1000.0]
 
         pyfunc = nan_to_num
         cfunc = njit(nan_to_num)
 
-        for value, nan in product(values, nans):
-            expected = pyfunc(value, nan=nan)
-            got = cfunc(value, nan=nan)
+        for value, nan in product(values, nans, posinf, neginf):
+            expected = pyfunc(value, nan=nan, posinf=posinf, neginf=neginf)
+            got = cfunc(value, nan=nan, posinf=posinf, neginf=neginf)
             self.assertPreciseEqual(expected, got)
 
     def test_nan_to_num_copy_false(self):
         # Check that copy=False operates in-place.
         cfunc = njit(nan_to_num)
 
-        x = np.array([0.1, 0.4, np.nan])
-        expected = 1.0
-        cfunc(x, copy=False, nan=expected)
-        self.assertPreciseEqual(x[-1], expected)
+        x = np.array([0.1, 0.4, np.nan, np.inf, -np.inf])
+        expected = np.array([1.0, 1000.0, -1000.0])
+        cfunc(
+            x,
+            copy=False,
+            nan=expected[0],
+            posinf=expected[1],
+            neginf=expected[2]
+        )
+        self.assertPreciseEqual(x[-3:], expected)
 
-        x_complex = np.array([0.1, 0.4, complex(np.nan, np.nan)])
-        cfunc(x_complex, copy=False, nan=expected)
-        self.assertPreciseEqual(x_complex[-1], 1. + 1.j)
+        x_complex = np.array(
+            [
+                0.1,
+                0.4,
+                complex(np.nan, np.nan),
+                complex(np.inf, np.nan),
+                complex(np.nan, -np.inf)
+            ]
+        )
+        cfunc(
+            x_complex,
+            copy=False,
+            nan=expected[0],
+            posinf=expected[1],
+            neginf=expected[2]
+        )
+        self.assertPreciseEqual(
+            x_complex[-3:],
+            np.array([1. + 1.j, 1e3 + 1.j, 1. - 1000.j])
+        )
 
     def test_nan_to_num_invalid_argument(self):
         cfunc = njit(nan_to_num)
