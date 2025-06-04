@@ -6236,13 +6236,15 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             np.array([-np.inf, np.nan, np.inf], dtype=np.float32)
         ]
         nans = [0.0, 10]
-        posinf = [None, 1000.0]
-        neginf = [None, -1000.0]
+        posinfs = [None, 1000.0]
+        neginfs = [None, -1000.0]
 
         pyfunc = nan_to_num
         cfunc = njit(nan_to_num)
 
-        for value, nan in product(values, nans, posinf, neginf):
+        for value, nan, posinf, neginf in product(
+            values, nans, posinfs, neginfs
+        ):
             expected = pyfunc(value, nan=nan, posinf=posinf, neginf=neginf)
             got = cfunc(value, nan=nan, posinf=posinf, neginf=neginf)
             self.assertPreciseEqual(expected, got)
