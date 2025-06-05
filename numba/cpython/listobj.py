@@ -708,7 +708,7 @@ def list_add(context, builder, sig, args):
 
 @lower_builtin(operator.iadd, types.List, types.List)
 def list_add_inplace(context, builder, sig, args):
-    assert sig.args[0].dtype == sig.return_type.dtype
+    assert sig.args[0].dtype == sig.return_type.dtype, f"Cannot combine lists of types {sig.args[0].dtype}, {sig.return_type.dtype}"
     dest = _list_extend_list(context, builder, sig, args)
 
     return impl_ret_borrowed(context, builder, sig.return_type, dest.value)
@@ -1131,7 +1131,7 @@ def ol_sorted(iterable, key=None, reverse=False):
 @lower_cast(types.List, types.List)
 def list_to_list(context, builder, fromty, toty, val):
     # Casting from non-reflected to reflected
-    assert fromty.dtype == toty.dtype
+    assert fromty.dtype == toty.dtype, f"Cannot cast list of {fromty.dtype} to {toty.dtype}"
     return val
 
 # -----------------------------------------------------------------------------
