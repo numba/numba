@@ -7089,11 +7089,34 @@ def nan_to_num_impl(x, copy=True, nan=0.0, posinf=None, neginf=None):
                 return output
         elif isinstance(x.dtype, types.Complex):
             def impl(x, copy=True, nan=0.0, posinf=None, neginf=None):
+                min_inf = (
+                    neginf
+                    if neginf is not None
+                    else np.finfo(x.dtype).min
+                )
+                max_inf = (
+                    posinf
+                    if posinf is not None
+                    else np.finfo(x.dtype).max
+                )
+
                 x_ = np.asarray(x)
                 output = np.copy(x_) if copy else x_
 
-                np.nan_to_num(output.real, copy=False, nan=nan)
-                np.nan_to_num(output.imag, copy=False, nan=nan)
+                np.nan_to_num(
+                    output.real,
+                    copy=False,
+                    nan=nan,
+                    posinf=max_inf,
+                    neginf=min_inf
+                )
+                np.nan_to_num(
+                    output.imag,
+                    copy=False,
+                    nan=nan,
+                    posinf=max_inf,
+                    neginf=min_inf
+                )
                 return output
         else:
             raise errors.TypingError(

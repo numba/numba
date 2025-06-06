@@ -477,7 +477,7 @@ def swapaxes(a, a1, a2):
 
 
 def nan_to_num(X, copy=True, nan=0.0, posinf=None, neginf=None):
-    return np.nan_to_num(X, copy=copy, nan=nan)
+    return np.nan_to_num(X, copy=copy, nan=nan, posinf=posinf, neginf=neginf)
 
 
 def np_indices(dimensions):
