@@ -7049,8 +7049,8 @@ def nan_to_num_impl(x, copy=True, nan=0.0, posinf=None, neginf=None):
                 return x
         elif isinstance(x, types.Complex):
             def impl(x, copy=True, nan=0.0, posinf=None, neginf=None):
-                r = np.nan_to_num(x.real, nan=nan)
-                c = np.nan_to_num(x.imag, nan=nan)
+                r = np.nan_to_num(x.real, nan=nan, posinf=posinf, neginf=neginf)
+                c = np.nan_to_num(x.imag, nan=nan, posinf=posinf, neginf=neginf)
                 return complex(r, c)
         else:
             raise errors.TypingError(
@@ -7089,17 +7089,6 @@ def nan_to_num_impl(x, copy=True, nan=0.0, posinf=None, neginf=None):
                 return output
         elif isinstance(x.dtype, types.Complex):
             def impl(x, copy=True, nan=0.0, posinf=None, neginf=None):
-                min_inf = (
-                    neginf
-                    if neginf is not None
-                    else np.finfo(x.dtype).min
-                )
-                max_inf = (
-                    posinf
-                    if posinf is not None
-                    else np.finfo(x.dtype).max
-                )
-
                 x_ = np.asarray(x)
                 output = np.copy(x_) if copy else x_
 
@@ -7107,15 +7096,15 @@ def nan_to_num_impl(x, copy=True, nan=0.0, posinf=None, neginf=None):
                     output.real,
                     copy=False,
                     nan=nan,
-                    posinf=max_inf,
-                    neginf=min_inf
+                    posinf=posinf,
+                    neginf=neginf
                 )
                 np.nan_to_num(
                     output.imag,
                     copy=False,
                     nan=nan,
-                    posinf=max_inf,
-                    neginf=min_inf
+                    posinf=posinf,
+                    neginf=neginf
                 )
                 return output
         else:
