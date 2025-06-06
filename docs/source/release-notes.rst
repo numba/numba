@@ -976,7 +976,7 @@ The following functions are now supported:
 * ``np.cbrt``
 * ``np.logspace``
 * ``np.take_along_axis``
-* ``np.average`` (``axis`` kwarg is not supported)
+* ``np.average``
 * ``np.argmin`` gains support for the ``axis`` kwarg.
 * ``np.ndarray.astype`` gains support for types expressed as literal strings.
 
