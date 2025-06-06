@@ -4351,7 +4351,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         #small case to test exceptions for 2D array and 1D weights
         data = np.arange(6).reshape((3,2,1))
-        w = np.asarray([1. / 4, 3. / 4])
+        w = np.asarray([[1. / 4, 3. / 4]])
 
         #test axis
         test_axis(data, axis=1)
