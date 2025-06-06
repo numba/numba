@@ -917,22 +917,20 @@ def np_any(a):
 
 @overload(np.average)
 def np_average(a, axis=None, weights=None):
-
-    if weights is None or isinstance(weights, types.NoneType):
+    if axis is not None or not isinstance(axis, types.NoneType):
         def np_average_impl(a, axis=None, weights=None):
-            arr = np.asarray(a)
-            return np.mean(arr)
+            raise TypeError("Numba does not support average with axis.")
     else:
-        if axis is None or isinstance(axis, types.NoneType):
+        if weights is None or isinstance(weights, types.NoneType):
+            def np_average_impl(a, axis=None, weights=None):
+                arr = np.asarray(a)
+                return np.mean(arr)
+        else:
             def np_average_impl(a, axis=None, weights=None):
                 arr = np.asarray(a)
                 weights = np.asarray(weights)
 
                 if arr.shape != weights.shape:
-                    if axis is None:
-                        raise TypeError(
-                            "Numba does not support average when shapes of "
-                            "a and weights differ.")
                     if weights.ndim != 1:
                         raise TypeError(
                             "1D weights expected when shapes of "
@@ -945,9 +943,6 @@ def np_average(a, axis=None, weights=None):
 
                 avg = np.sum(np.multiply(arr, weights)) / scl
                 return avg
-        else:
-            def np_average_impl(a, axis=None, weights=None):
-                raise TypeError("Numba does not support average with axis.")
 
     return np_average_impl
 

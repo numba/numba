@@ -4332,12 +4332,19 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 cfunc(data, weights=weights)
             err = e.exception
             self.assertEqual(str(err),
-                             "Numba does not support average when shapes of "
+                             "1D weights expected when shapes of "
                              "a and weights differ.")
 
         def test_1D_weights_axis(data, axis, weights):
             with self.assertRaises(TypeError) as e:
-                cfunc(data,axis=axis, weights=weights)
+                cfunc(data, axis=axis, weights=weights)
+            err = e.exception
+            self.assertEqual(str(err),
+                             "Numba does not support average with axis.")
+
+        def test_axis(data, axis):
+            with self.assertRaises(TypeError) as e:
+                cfunc(data, axis=axis)
             err = e.exception
             self.assertEqual(str(err),
                              "Numba does not support average with axis.")
@@ -4346,10 +4353,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         data = np.arange(6).reshape((3,2,1))
         w = np.asarray([1. / 4, 3. / 4])
 
-        #test without axis argument
+        #test axis
+        test_axis(data, axis=1)
+
+        #test shape mismatch
         test_1D_weights(data, weights=w)
 
-        #test with axis argument
+        #test axis and with weights provided
         test_1D_weights_axis(data, axis=1, weights=w)
 
     def test_allclose(self):
