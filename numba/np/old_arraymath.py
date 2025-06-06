@@ -917,7 +917,7 @@ def np_any(a):
 
 @overload(np.average)
 def np_average(a, axis=None, weights=None):
-    if axis is not None or not isinstance(axis, types.NoneType):
+    if axis is not None and not isinstance(axis, types.NoneType):
         def np_average_impl(a, axis=None, weights=None):
             raise TypeError("Numba does not support average with axis.")
     else:
