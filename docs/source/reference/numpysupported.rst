@@ -422,6 +422,8 @@ The following reduction functions are supported:
   unsupported)
 * :func:`numpy.quantile` (only the 2 first arguments, complex dtypes
   unsupported)
+* :func:`np.average` (`axis` argument is not supported)
+
 
 Polynomials
 -----------
