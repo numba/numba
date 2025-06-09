@@ -4944,9 +4944,9 @@ def np_arange(start, / ,stop=None, step=None, dtype=None):
         lit_stop = stop_value if stop_value is not None else stop
         lit_step = step_value if step_value is not None else step
 
-        _step = lit_step if lit_step is not None else 1
+        _step = lit_step if lit_step is not None else dtype(1)
         if lit_stop is None:
-            _start, _stop = 0, lit_start
+            _start, _stop = dtype(0), lit_start
         else:
             _start, _stop = lit_start, lit_stop
 
