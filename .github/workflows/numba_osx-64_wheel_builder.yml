@@ -25,15 +25,19 @@ jobs:
   load-matrix:
     runs-on: ubuntu-latest
     outputs:
-      matrix-json: ${{ steps.load_matrix_json.outputs.matrix-json }}
+      build-matrix-json: ${{ steps.load_matrix_json.outputs.build-matrix-json }}
+      test-matrix-json: ${{ steps.load_matrix_json.outputs.test-matrix-json }}
     steps:
       - uses: actions/checkout@v4
       - id: load_matrix_json
         name: Load Workflow Matrix JSON
         run: |
-          MATRIX_JSON=$(jq -c .wheel_matrix .github/workflows/workflow_matrix.json)
-          echo "Workflow Matrix JSON: $MATRIX_JSON"
-          echo "matrix-json=$MATRIX_JSON" >> $GITHUB_OUTPUT
+          BUILD_MATRIX_JSON=$(jq -c .wheel_build_matrix .github/workflows/workflow_matrix.json)
+          TEST_MATRIX_JSON=$(jq -c .wheel_test_matrix .github/workflows/workflow_matrix.json)
+          echo "Build Matrix JSON: $BUILD_MATRIX_JSON"
+          echo "Test Matrix JSON: $TEST_MATRIX_JSON"
+          echo "build-matrix-json=$BUILD_MATRIX_JSON" >> $GITHUB_OUTPUT
+          echo "test-matrix-json=$TEST_MATRIX_JSON" >> $GITHUB_OUTPUT
 
   osx-64-build:
     name: osx-64-build-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
@@ -44,7 +48,7 @@ jobs:
         shell: bash -elx {0}
     strategy:
       matrix:
-        include: ${{ fromJson(needs.load-matrix.outputs.matrix-json) }}
+        include: ${{ fromJson(needs.load-matrix.outputs.build-matrix-json) }}
       fail-fast: false
 
     steps:
@@ -106,7 +110,7 @@ jobs:
       - name: Upload numba wheel
         uses: actions/upload-artifact@v4
         with:
-          name: numba-osx-64-py${{ matrix.python-version }}-np${{ matrix.numpy_build }}
+          name: numba-osx-64-py${{ matrix.python-version }}
           path: dist/*.whl
           compression-level: 0
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
@@ -123,7 +127,7 @@ jobs:
             if-no-files-found: error
 
   osx-64-test:
-    name: osx-64-test (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
+    name: osx-64-test (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
     needs: [load-matrix, osx-64-build]
     runs-on: macos-13
     defaults:
@@ -131,7 +135,7 @@ jobs:
         shell: bash -elx {0}
     strategy:
       matrix:
-        include: ${{ fromJson(needs.load-matrix.outputs.matrix-json) }}
+        include: ${{ fromJson(needs.load-matrix.outputs.test-matrix-json) }}
       fail-fast: false
 
     steps:
@@ -143,7 +147,7 @@ jobs:
       - name: Download Numba wheel artifact
         uses: actions/download-artifact@v4
         with:
-          name: numba-osx-64-py${{ matrix.python-version }}-np${{ matrix.numpy_build }}
+          name: numba-osx-64-py${{ matrix.python-version }}
           path: dist
 
       - name: Download llvmlite wheel
@@ -173,7 +177,7 @@ jobs:
               $PYTHON_PATH -m pip install -i $WHEELS_INDEX_URL llvmlite
           fi
           $PYTHON_PATH -m twine check dist/*.whl
-          $PYTHON_PATH -m pip install dist/numba*.whl numpy==${{ matrix.numpy_build }}
+          $PYTHON_PATH -m pip install dist/numba*.whl numpy==${{ matrix.numpy_test }}
 
           # print Numba system information
           $PYTHON_PATH -m numba -s
