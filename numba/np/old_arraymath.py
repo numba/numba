@@ -1597,6 +1597,9 @@ def np_median(a):
         # workspace anyway
         temp_arry = a.flatten()
         n = temp_arry.shape[0]
+        is_datetime = as_dtype(a.dtype).char in 'mM'
+        if not is_datetime and n==0
+            return np.nan
         return _median_inner(temp_arry, n)
 
     return median_impl
