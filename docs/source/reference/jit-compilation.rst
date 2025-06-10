@@ -6,14 +6,16 @@ Just-in-Time compilation
 JIT functions
 -------------
 
-.. decorator:: numba.jit(signature=None, nopython=False, nogil=False, cache=False, forceobj=False, parallel=False, error_model='python', fastmath=False, locals={}, boundscheck=False, inline="never", forceinline=False)
+
+.. decorator:: numba.jit(signature_or_function=None, nopython=False, nogil=False, cache=False, forceobj=False, parallel=False, error_model='python', fastmath=False, locals={}, boundscheck=False, inline="never", forceinline=False)
 
    Compile the decorated function on-the-fly to produce efficient machine
    code.  All parameters are optional.
 
-   If present, the *signature* is either a single signature or a list of
+   If present, the *signature_or_function* is either a single signature or a list of
    signatures representing the expected :ref:`numba-types` of function
-   arguments and return values.  Each signature can be given in several
+   arguments and return values. It can also be the function to compile when used as
+   ``@jit`` with no arguments. Each signature can be given in several
    forms:
 
    * A tuple of :ref:`numba-types` arguments (for example
@@ -32,7 +34,7 @@ JIT functions
 
    This decorator has several modes of operation:
 
-   * If one or more signatures are given in *signature*, a specialization is
+   * If one or more signatures are given in *signature_or_function*, a specialization is
      compiled for each of them.  Calling the decorated function will then try
      to choose the best matching signature, and raise a :class:`TypeError` if
      no appropriate conversion is available for the function arguments.  If
@@ -40,7 +42,7 @@ JIT functions
      converted arguments and the return value is converted back according to
      the signature.
 
-   * If no *signature* is given, the decorated function implements
+   * If no *signature_or_function* is given, the decorated function implements
      lazy compilation.  Each call to the decorated function will try to
      re-use an existing specialization if it exists (for example, a call
      with two integer arguments may re-use a specialization for argument
@@ -134,7 +136,7 @@ JIT functions
    The decorator returns a :class:`Dispatcher` object.
 
    .. note::
-      If no *signature* is given, compilation errors will be raised when
+      If no *signature_or_function* is given, compilation errors will be raised when
       the actual compilation occurs, i.e. when the function is first called
       with some given argument types.
 

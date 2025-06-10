@@ -1774,6 +1774,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check(np.array(np.zeros(5)))
         check(np.array([[3.1, 3.1], [1.7, 2.29], [3.3, 1.7]]))
         check(np.array([]))
+        check(np.array([np.nan, np.nan]))
 
     @needs_blas
     def test_array_dot(self):
