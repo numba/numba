@@ -1592,13 +1592,16 @@ def np_median(a):
     if not isinstance(a, types.Array):
         return
 
+    is_datetime = as_dtype(a.dtype).char in 'mM'
+
     def median_impl(a):
         # np.median() works on the flattened array, and we need a temporary
         # workspace anyway
         temp_arry = a.flatten()
         n = temp_arry.shape[0]
+        if not is_datetime and n == 0:
+            return np.nan
         return _median_inner(temp_arry, n)
-
     return median_impl
 
 
