@@ -41,10 +41,20 @@ jobs:
         run: |
           BUILD_MATRIX_JSON=$(jq -c .wheel_build_matrix .github/workflows/workflow_matrix.json)
           TEST_MATRIX_JSON=$(jq -c .wheel_test_matrix .github/workflows/workflow_matrix.json)
-          echo "Build Matrix JSON: $BUILD_MATRIX_JSON"
-          echo "Test Matrix JSON: $TEST_MATRIX_JSON"
-          echo "build-matrix-json=$BUILD_MATRIX_JSON" >> $GITHUB_OUTPUT
-          echo "test-matrix-json=$TEST_MATRIX_JSON" >> $GITHUB_OUTPUT
+
+          # Add canonical python versions to both matrices
+          BUILD_MATRIX_EXTENDED=$(echo "$BUILD_MATRIX_JSON" | jq -c '
+            map(. + {"python_canonical": (.["python-version"] | split(".") | .[:2] | join("."))})
+          ')
+
+          TEST_MATRIX_EXTENDED=$(echo "$TEST_MATRIX_JSON" | jq -c '
+            map(. + {"python_canonical": (.["python-version"] | split(".") | .[:2] | join("."))})
+          ')
+
+          echo "Build Matrix JSON: $BUILD_MATRIX_EXTENDED"
+          echo "Test Matrix JSON: $TEST_MATRIX_EXTENDED"
+          echo "build-matrix-json=$BUILD_MATRIX_EXTENDED" >> $GITHUB_OUTPUT
+          echo "test-matrix-json=$TEST_MATRIX_EXTENDED" >> $GITHUB_OUTPUT
 
   linux-64-build:
     name: linux-64-build-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
@@ -68,7 +78,7 @@ jobs:
         if: inputs.llvmlite_wheel_runid != ''
         uses: actions/download-artifact@v4
         with:
-          name: llvmlite-linux-64-py${{ matrix.python-version }}
+          name: llvmlite-linux-64-py${{ matrix.python_canonical }}
           path: llvmlite_wheels
           run-id: ${{ inputs.llvmlite_wheel_runid }}
           repository: numba/llvmlite
@@ -120,7 +130,7 @@ jobs:
       - name: Upload numba wheel
         uses: actions/upload-artifact@v4
         with:
-          name: numba-linux-64-py${{ matrix.python-version }}
+          name: numba-linux-64-py${{ matrix.python_canonical }}
           path: wheelhouse/*.whl
           compression-level: 0
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
@@ -159,14 +169,14 @@ jobs:
       - name: Download Numba wheel artifact
         uses: actions/download-artifact@v4
         with:
-          name: numba-linux-64-py${{ matrix.python-version }}
+          name: numba-linux-64-py${{ matrix.python_canonical }}
           path: dist
 
       - name: Download llvmlite wheel
         if: inputs.llvmlite_wheel_runid != ''
         uses: actions/download-artifact@v4
         with:
-          name: llvmlite-linux-64-py${{ matrix.python-version }}
+          name: llvmlite-linux-64-py${{ matrix.python_canonical }}
           path: llvmlite_wheels
           run-id: ${{ inputs.llvmlite_wheel_runid }}
           repository: numba/llvmlite
@@ -174,7 +184,7 @@ jobs:
 
       - name: Validate and test wheel
         run: |
-          PYTHON_PATH=$(which python${{ matrix.python-version }})
+          PYTHON_PATH=$(which python${{ matrix.python_canonical }})
           $PYTHON_PATH -m pip install --upgrade pip twine
           ls -l dist
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
