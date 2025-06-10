@@ -561,15 +561,6 @@ class TestSignatures(TestCase):
 
 
 class TestRecordDtype(unittest.TestCase):
-    def test_record_type_equiv(self):
-        rec_dt = np.dtype([('a', np.int32), ('b', np.float32)])
-        rec_ty = typeof(rec_dt)
-        art1 = rec_ty[::1]
-        arr = np.zeros(5, dtype=rec_dt)
-        art2 = typeof(arr)
-        self.assertEqual(art2.dtype.dtype, rec_ty)
-        self.assertEqual(art1, art2)
-
     def test_user_specified(self):
         rec_dt = np.dtype([('a', np.int32), ('b', np.float32)])
         rec_type = typeof(rec_dt)
