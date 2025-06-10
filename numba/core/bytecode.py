@@ -538,10 +538,12 @@ class ByteCodePy312(ByteCodePy311):
                 # BUT Python3.13.1 introduced an extra GET_ITER.
                 # If we see a GET_ITER here, check if the next thing is a
                 # FOR_ITER.
-                if (sys.version_info[:3] < (3, 13, 4)
-                        and next_inst.opname == "GET_ITER"):
-                    # Add the inst to potentially be replaced to NOP
-                    current_nop_fixes.add(next_inst)
+                if next_inst.opname == "GET_ITER":
+                    # In Python 3.13.4, this becomes the only GET_ITER,
+                    # so don't turn it into a NOP.
+                    if sys.version_info[:3] < (3, 13, 4):
+                        # Add the inst to potentially be replaced to NOP.
+                        current_nop_fixes.add(next_inst)
                     # Loop up next instruction.
                     next_inst = self.table[self.ordered_offsets[index + 3]]
 
