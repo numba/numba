@@ -74,6 +74,9 @@ def array_transpose(arr):
 def array_copy(arr):
     return arr.copy()
 
+def array_reshape(arr, shape):
+    return arr.reshape(*shape) * 2
+
 def np_copy(arr):
     return np.copy(arr)
 
@@ -545,6 +548,26 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         got = cfunc(byteary)
 
         self.assertEqual(expect, got)
+    
+    def test_reshape_view_issue_9775(self):
+        pyfunc = array_reshape
+        cfunc = njit()(pyfunc)
+
+        cases = (
+            (
+                np.arange(24).reshape(3, 8).T,
+                (4, 2, 3)
+            ),(
+                np.arange(8).reshape(2, 4).T,
+                (2, 2, 2)
+            ),
+        )
+
+        for arr, shape in cases:
+            expected = pyfunc(arr, shape)
+            got = cfunc(arr, shape)
+            for idx in np.ndindex(shape):
+                self.assertEqual(expected[idx], got[idx])
 
     def test_array_astype(self):
 

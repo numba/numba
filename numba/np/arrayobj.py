@@ -6279,8 +6279,12 @@ def _np_dstack(typingctx, tup):
         if ndim == 0:
             def np_vstack_impl(arrays):
                 return np.hstack(arrays).reshape(1, 1, -1)
-
-            return context.compile_internal(builder, np_vstack_impl, sig, args)
+            stack_retty = retty.copy(ndim=retty.ndim, layout='A')
+            return context.compile_internal(builder,
+                                            np_vstack_impl,
+                                            typing.signature(stack_retty,
+                                                             *sig.args),
+                                            args)
 
         elif ndim == 1:
             # np.expand_dims(np.stack(arrays, axis=1), axis=0)
