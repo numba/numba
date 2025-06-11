@@ -1,5 +1,5 @@
 Avoid type inference hangs
-==========================
+--------------------------
 
 Type inference can take a long time if it repeatedly attempts to resolve
 functions that have already failed. A patch is added to cache failed
