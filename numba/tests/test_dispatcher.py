@@ -1053,9 +1053,6 @@ class TestNoRetryFailedSignature(unittest.TestCase):
 
         self.run_test(foo)
 
-    @unittest.expectedFailure
-    # NOTE: @overload does not have an error cache. See PR #9259 for this
-    # feature and remove the xfail once this is merged.
     def test_error_count(self):
         def check(field, would_fail):
             # Slightly modified from the reproducer in issue #4117.
@@ -1110,7 +1107,8 @@ class TestNoRetryFailedSignature(unittest.TestCase):
         # `trigger()` is visited exactly once for both successful and failed
         # compilation.
         self.assertEqual(ct_ok, 1)
-        self.assertEqual(ct_bad, 1)
+        # One attempt with unliteral-ed arguments, and one without
+        self.assertEqual(ct_bad, 2)
 
 
 @njit
