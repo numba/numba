@@ -129,7 +129,7 @@ class CallStack(Sequence):
 
         def normalize_dict(obj):
             if isinstance(obj, dict):
-                return tuple(kws.items())
+                return tuple(sorted(kws.items()))
             return kws
 
         def hashable(obj):
