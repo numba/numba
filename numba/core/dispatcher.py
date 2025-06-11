@@ -103,10 +103,9 @@ class _FunctionCompiler(object):
         self.targetdescr.options.parse_as_flags(flags, self.targetoptions)
         flags = self._customize_flags(flags)
 
-        impl = self._get_implementation(args, {})
         cres = compiler.compile_extra(self.targetdescr.typing_context,
                                       self.targetdescr.target_context,
-                                      impl,
+                                      self.py_func,
                                       args=args, return_type=return_type,
                                       flags=flags, locals=self.locals,
                                       pipeline_class=self.pipeline_class)
@@ -115,52 +114,8 @@ class _FunctionCompiler(object):
             raise cres.typing_error
         return cres
 
-    def get_globals_for_reduction(self):
-        return serialize._get_function_globals_for_reduction(self.py_func)
-
-    def _get_implementation(self, args, kws):
-        return self.py_func
-
     def _customize_flags(self, flags):
         return flags
-
-
-class _GeneratedFunctionCompiler(_FunctionCompiler):
-
-    def __init__(self, py_func, targetdescr, targetoptions, locals,
-                 pipeline_class):
-        super(_GeneratedFunctionCompiler, self).__init__(
-            py_func, targetdescr, targetoptions, locals, pipeline_class)
-        self.impls = set()
-
-    def get_globals_for_reduction(self):
-        # This will recursively get the globals used by any nested
-        # implementation function.
-        return serialize._get_function_globals_for_reduction(self.py_func)
-
-    def _get_implementation(self, args, kws):
-        impl = self.py_func(*args, **kws)
-        # Check the generating function and implementation signatures are
-        # compatible, otherwise compiling would fail later.
-        pysig = utils.pysignature(self.py_func)
-        implsig = utils.pysignature(impl)
-        ok = len(pysig.parameters) == len(implsig.parameters)
-        if ok:
-            for pyparam, implparam in zip(pysig.parameters.values(),
-                                          implsig.parameters.values()):
-                # We allow the implementation to omit default values, but
-                # if it mentions them, they should have the same value...
-                if (pyparam.name != implparam.name or
-                    pyparam.kind != implparam.kind or
-                    (implparam.default is not implparam.empty and
-                     implparam.default != pyparam.default)):
-                    ok = False
-        if not ok:
-            raise TypeError("generated implementation %s should be compatible "
-                            "with signature '%s', but has signature '%s'"
-                            % (impl, pysig, implsig))
-        self.impls.add(impl)
-        return impl
 
 
 _CompileStats = collections.namedtuple(
