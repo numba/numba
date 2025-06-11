@@ -692,7 +692,10 @@ class BaseContext(object):
         This implements implicit conversions as can happen due to the
         granularity of the Numba type system, or lax Python semantics.
         """
-        if fromty == toty or toty == types.Any:
+        if fromty is types._undef_var:
+            # Special case for undefined variable
+            return self.get_constant_null(toty)
+        elif fromty == toty or toty == types.Any:
             return val
         try:
             impl = self._casts.find((fromty, toty))
@@ -803,7 +806,7 @@ class BaseContext(object):
     def get_dummy_type(self):
         return GENERIC_POINTER
 
-    def _compile_subroutine_no_cache(self, builder, impl, sig, locals={},
+    def _compile_subroutine_no_cache(self, builder, impl, sig, locals=None,
                                      flags=None):
         """
         Invoke the compiler to compile a function to be used inside a
@@ -815,6 +818,8 @@ class BaseContext(object):
         # Compile
         from numba.core import compiler
 
+        if locals is None:
+            locals = {}
         with global_compiler_lock:
             codegen = self.codegen()
             library = codegen.create_library(impl.__name__)
@@ -841,7 +846,7 @@ class BaseContext(object):
             self.active_code_library.add_linking_library(cres.library)
             return cres
 
-    def compile_subroutine(self, builder, impl, sig, locals={}, flags=None,
+    def compile_subroutine(self, builder, impl, sig, locals=None, flags=None,
                            caching=True):
         """
         Compile the function *impl* for the given *sig* (in nopython mode).
@@ -850,6 +855,8 @@ class BaseContext(object):
         If *caching* evaluates True, the function keeps the compiled function
         for reuse in *.cached_internal_func*.
         """
+        if locals is None:
+            locals = {}
         cache_key = (impl.__code__, sig, type(self.error_model))
         if not caching:
             cached = None
@@ -870,11 +877,13 @@ class BaseContext(object):
         self.active_code_library.add_linking_library(cres.library)
         return cres
 
-    def compile_internal(self, builder, impl, sig, args, locals={}):
+    def compile_internal(self, builder, impl, sig, args, locals=None):
         """
         Like compile_subroutine(), but also call the function with the given
         *args*.
         """
+        if locals is None:
+            locals = {}
         cres = self.compile_subroutine(builder, impl, sig, locals)
         return self.call_internal(builder, cres.fndesc, sig, args)
 
@@ -967,7 +976,7 @@ class BaseContext(object):
             if offset % align:
                 msg = "{rec}.{attr} of type {type} is not aligned".format(
                     rec=rectyp, attr=attr, type=elemty)
-                raise TypeError(msg)
+                raise errors.NumbaTypeError(msg)
 
     def get_helper_class(self, typ, kind='value'):
         """

@@ -34,7 +34,7 @@ class TestMangling(TestCase):
         expect = '_Z{}{}if'.format(len(text), text)
         self.assertEqual(name, expect)
         # ensure result chars are in the right charset
-        self.assertRegexpMatches(name, r'^_Z[a-zA-Z0-9_\$]+$')
+        self.assertRegex(name, r'^_Z[a-zA-Z0-9_\$]+$')
 
 
 if __name__ == '__main__':

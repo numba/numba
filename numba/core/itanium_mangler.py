@@ -31,7 +31,7 @@ scheme for them to avoid leading digits.
 
 import re
 
-from numba.core import types
+from numba.core import types, config
 
 
 # According the scheme, valid characters for mangled names are [a-zA-Z0-9_].
@@ -43,21 +43,41 @@ PREFIX = "_Z"
 
 # Numba types to mangled type code. These correspond with the codes listed in
 # https://itanium-cxx-abi.github.io/cxx-abi/abi.html#mangling-builtin
-N2CODE = {
-    types.void: 'v',
-    types.boolean: 'b',
-    types.uint8: 'h',
-    types.int8: 'a',
-    types.uint16: 't',
-    types.int16: 's',
-    types.uint32: 'j',
-    types.int32: 'i',
-    types.uint64: 'y',
-    types.int64: 'x',
-    types.float16: 'Dh',
-    types.float32: 'f',
-    types.float64: 'd'
-}
+if config.USE_LEGACY_TYPE_SYSTEM: # Old type system
+    N2CODE = {
+        types.void: 'v',
+        types.boolean: 'b',
+        types.uint8: 'h',
+        types.int8: 'a',
+        types.uint16: 't',
+        types.int16: 's',
+        types.uint32: 'j',
+        types.int32: 'i',
+        types.uint64: 'y',
+        types.int64: 'x',
+        types.float16: 'Dh',
+        types.float32: 'f',
+        types.float64: 'd'
+    }
+else:
+    N2CODE = {
+        types.void: 'v',
+        types.py_bool: 'b',
+        types.py_int: 'x',
+        types.py_float: 'd',
+        types.np_bool_: 'b',
+        types.np_uint8: 'h',
+        types.np_int8: 'a',
+        types.np_uint16: 't',
+        types.np_int16: 's',
+        types.np_uint32: 'j',
+        types.np_int32: 'i',
+        types.np_uint64: 'y',
+        types.np_int64: 'x',
+        types.np_float16: 'Dh',
+        types.np_float32: 'f',
+        types.np_float64: 'd'
+    }
 
 
 def _escape_string(text):

@@ -346,18 +346,20 @@ Optional types
       False
 
 
-Type annotations
------------------
+Python types
+------------
+
+Python types are used in Python type annotations, and the ``classinfo``
+argument to the :func:`isinstance` function.
 
 .. function:: numba.extending.as_numba_type(py_type)
 
-   Create a Numba type corresponding to the given Python *type annotation*.
-   ``TypingError`` is raised if the type annotation can't be mapped to a Numba
-   type.  This function is meant to be used at statically compile time to
-   evaluate Python type annotations.  For runtime checking of Python objects
-   see ``typeof`` above.
+   Create a Numba type corresponding to the given Python type. ``TypingError``
+   is raised if the type can't be mapped to a Numba type. This function is used
+   by Numba at compile time to evaluate Python type annotations and instance
+   checks. For runtime checking of Python objects, see ``typeof`` above.
 
-   For any numba type, ``as_numba_type(nb_type) == nb_type``.
+   For any Numba type, ``as_numba_type(nb_type) == nb_type``.
 
       >>> numba.extending.as_numba_type(int)
       int64
@@ -384,4 +386,5 @@ Type annotations
       >>> numba.extending.as_numba_type(Counter)
       instance.jitclass.Counter#11bad4278<x:int64>
 
-   Currently ``as_numba_type`` is only used to infer fields for ``@jitclass``.
+   ``as_numba_type`` is used to infer the types of ``@jitclass`` fields, and
+   the ``classinfo`` argument to ``isinstance``.

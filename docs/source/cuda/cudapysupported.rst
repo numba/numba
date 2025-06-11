@@ -2,6 +2,8 @@
 Supported Python features in CUDA Python
 ========================================
 
+.. cuda-deprecated::
+
 This page lists the Python features supported in the CUDA Python.  This includes
 all kernel and device functions compiled with ``@cuda.jit`` and other higher
 level Numba decorators that targets the CUDA GPU.
@@ -319,6 +321,9 @@ Supported NumPy features:
   * :func:`numpy.less_equal`
   * :func:`numpy.not_equal`
   * :func:`numpy.equal`
+  * :func:`numpy.log`
+  * :func:`numpy.log2`
+  * :func:`numpy.log10`
   * :func:`numpy.logical_and`
   * :func:`numpy.logical_or`
   * :func:`numpy.logical_xor`

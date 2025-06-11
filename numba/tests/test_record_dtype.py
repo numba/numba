@@ -2,7 +2,6 @@ import numpy as np
 import ctypes
 from numba import jit, literal_unroll, njit, typeof
 from numba.core import types
-from numba.core.compiler import compile_isolated
 from numba.core.itanium_mangler import mangle_type
 from numba.core.errors import TypingError
 import unittest
@@ -333,6 +332,10 @@ def get_shape(rec):
     return np.shape(rec.j)
 
 
+def get_size(rec):
+    return np.size(rec.j)
+
+
 def get_charseq(ary, i):
     return ary[i].n
 
@@ -579,8 +582,7 @@ class TestRecordDtype(TestCase):
                 ary3[i]['d'] = "%d" % x
 
     def get_cfunc(self, pyfunc, argspec):
-        cres = compile_isolated(pyfunc, argspec)
-        return cres.entry_point
+        return njit(argspec)(pyfunc)
 
     def test_from_dtype(self):
         rec = numpy_support.from_dtype(recordtype)
@@ -931,7 +933,7 @@ class TestRecordDtype(TestCase):
         np.testing.assert_equal(expect, got)
 
     def test_record_dtype_with_titles_roundtrip(self):
-        recdtype = np.dtype([(("title a", 'a'), np.float_), ('b', np.float_)])
+        recdtype = np.dtype([(("title a", 'a'), np.float64), ('b', np.float64)])
         nbtype = numpy_support.from_dtype(recdtype)
         self.assertTrue(nbtype.is_title('title a'))
         self.assertFalse(nbtype.is_title('a'))
@@ -1012,8 +1014,7 @@ class TestRecordDtypeWithCharSeq(TestCase):
 
     def get_cfunc(self, pyfunc):
         rectype = numpy_support.from_dtype(recordwithcharseq)
-        cres = compile_isolated(pyfunc, (rectype[:], types.intp))
-        return cres.entry_point
+        return njit((rectype[:], types.intp))(pyfunc)
 
     def test_return_charseq(self):
         pyfunc = get_charseq
@@ -1029,7 +1030,7 @@ class TestRecordDtypeWithCharSeq(TestCase):
         def pyfunc(arr, i):
             return arr[i].n
 
-        identity = jit(lambda x: x)   # an identity function
+        identity = njit(lambda x: x)   # an identity function
 
         @jit(nopython=True)
         def cfunc(arr, i):
@@ -1047,9 +1048,8 @@ class TestRecordDtypeWithCharSeq(TestCase):
 
         # compile
         rectype = numpy_support.from_dtype(recordwithcharseq)
-        cres = compile_isolated(pyfunc, (rectype[:], types.intp,
-                                         rectype.typeof('n')))
-        cfunc = cres.entry_point
+        sig = (rectype[::1], types.intp, rectype.typeof('n'))
+        cfunc = njit(sig)(pyfunc).overloads[sig].entry_point
 
         for i in range(self.refsample1d.size):
             chars = "{0}".format(hex(i + 10))
@@ -1063,9 +1063,8 @@ class TestRecordDtypeWithCharSeq(TestCase):
         pyfunc = set_charseq
         # compile
         rectype = numpy_support.from_dtype(recordwithcharseq)
-        cres = compile_isolated(pyfunc, (rectype[:], types.intp,
-                                         rectype.typeof('n')))
-        cfunc = cres.entry_point
+        sig = (rectype[::1], types.intp, rectype.typeof('n'))
+        cfunc = njit(sig)(pyfunc).overloads[sig].entry_point
 
         cs_near_overflow = "abcde"
 
@@ -1084,9 +1083,8 @@ class TestRecordDtypeWithCharSeq(TestCase):
         pyfunc = set_charseq
         # compile
         rectype = numpy_support.from_dtype(recordwithcharseq)
-        cres = compile_isolated(pyfunc, (rectype[:], types.intp,
-                                         rectype.typeof('n')))
-        cfunc = cres.entry_point
+        sig = (rectype[::1], types.intp, rectype.typeof('n'))
+        cfunc = njit(sig)(pyfunc).overloads[sig].entry_point
 
         cs_overflowed = "abcdef"
 
@@ -1381,8 +1379,7 @@ class TestSubtyping(TestCase):
 class TestNestedArrays(TestCase):
 
     def get_cfunc(self, pyfunc, argspec):
-        cres = compile_isolated(pyfunc, argspec)
-        return cres.entry_point
+        return njit(argspec)(pyfunc)
 
     def test_record_write_array(self):
         # Testing writing to a 1D array within a structured type
@@ -1617,6 +1614,20 @@ class TestNestedArrays(TestCase):
 
         arg = nbarr[0]
         pyfunc = get_shape
+        ty = typeof(arg)
+        arr_expected = pyfunc(arg)
+        cfunc = self.get_cfunc(pyfunc, (ty,))
+        arr_res = cfunc(arg)
+        np.testing.assert_equal(arr_res, arr_expected)
+
+    def test_size(self):
+        # test getting the size of a nestedarray inside a record
+        nbarr = np.recarray(2, dtype=recordwith2darray)
+        nbarr[0] = np.array([(1, ((1, 2), (4, 5), (2, 3)))],
+                            dtype=recordwith2darray)[0]
+
+        arg = nbarr[0]
+        pyfunc = get_size
         ty = typeof(arg)
         arr_expected = pyfunc(arg)
         cfunc = self.get_cfunc(pyfunc, (ty,))

@@ -298,7 +298,7 @@ def _arr_expr_to_ast(expr):
                         lineno=expr.loc.line,
                         col_offset=expr.loc.col if expr.loc.col else 0), {}
     elif isinstance(expr, ir.Const):
-        return ast.Num(expr.value), {}
+        return ast.Constant(expr.value), {}
     raise NotImplementedError(
         "Don't know how to translate array expression '%r'" % (expr,))
 

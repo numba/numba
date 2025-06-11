@@ -1,12 +1,6 @@
 import unittest
-from numba.core.compiler import compile_isolated, Flags
-from numba.core import types, utils
-
-enable_pyobj_flags = Flags()
-enable_pyobj_flags.enable_pyobject = True
-
-force_pyobj_flags = Flags()
-force_pyobj_flags.force_pyobject = True
+from numba import njit
+from numba.core import types
 
 
 def is_in_mandelbrot(c):
@@ -23,8 +17,7 @@ class TestMandelbrot(unittest.TestCase):
 
     def test_mandelbrot(self):
         pyfunc = is_in_mandelbrot
-        cr = compile_isolated(pyfunc, (types.complex64,))
-        cfunc = cr.entry_point
+        cfunc = njit((types.complex64,))(pyfunc)
 
         points = [0+0j, 1+0j, 0+1j, 1+1j, 0.1+0.1j]
         for p in points:

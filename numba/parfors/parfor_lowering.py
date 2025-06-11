@@ -31,6 +31,7 @@ from numba.core.ir_utils import (
     transfer_scope,
     find_max_label,
     get_global_func_typ,
+    find_topo_order,
 )
 from numba.core.typing import signature
 from numba.core import lowering
@@ -51,6 +52,15 @@ class ParforLower(lowering.Lower):
             _lower_parfor_parallel(self, inst)
         else:
             super().lower_inst(inst)
+
+    @property
+    def _disable_sroa_like_opt(self):
+        """
+        Force disable this because Parfor use-defs is incompatible---it only
+        considers use-defs in blocks that must be executing.
+        See https://github.com/numba/numba/commit/017e2ff9db87fc34149b49dd5367ecbf0bb45268
+        """
+        return True
 
 
 def _lower_parfor_parallel(lowerer, parfor):
@@ -464,7 +474,14 @@ def _lower_trivial_inplace_binops(parfor, lowerer, thread_count_var, reduce_info
         if _lower_var_to_var_assign(lowerer, inst):
             pass
         # Is inplace-binop for the reduction?
-        elif _is_inplace_binop_and_rhs_is_init(inst, reduce_info.redvar_name):
+        elif _is_right_op_and_rhs_is_init(inst, reduce_info.redvar_name, "inplace_binop"):
+            fn = inst.value.fn
+            redvar_result = _emit_binop_reduce_call(
+                fn, lowerer, thread_count_var, reduce_info,
+            )
+            lowerer.storevar(redvar_result, name=inst.target.name)
+        # Is binop for the reduction?
+        elif _is_right_op_and_rhs_is_init(inst, reduce_info.redvar_name, "binop"):
             fn = inst.value.fn
             redvar_result = _emit_binop_reduce_call(
                 fn, lowerer, thread_count_var, reduce_info,
@@ -570,9 +587,14 @@ def _emit_binop_reduce_call(binop, lowerer, thread_count_var, reduce_info):
     kernel = {
         operator.iadd: reduction_add,
         operator.isub: reduction_add,
+        operator.add: reduction_add,
+        operator.sub: reduction_add,
         operator.imul: reduction_mul,
         operator.ifloordiv: reduction_mul,
         operator.itruediv: reduction_mul,
+        operator.mul: reduction_mul,
+        operator.floordiv: reduction_mul,
+        operator.truediv: reduction_mul,
     }[binop]
 
     ctx = lowerer.context
@@ -603,7 +625,7 @@ def _emit_binop_reduce_call(binop, lowerer, thread_count_var, reduce_info):
     return redvar_result
 
 
-def _is_inplace_binop_and_rhs_is_init(inst, redvar_name):
+def _is_right_op_and_rhs_is_init(inst, redvar_name, op):
     """Is ``inst`` an inplace-binop and the RHS is the reduction init?
     """
     if not isinstance(inst, ir.Assign):
@@ -611,7 +633,7 @@ def _is_inplace_binop_and_rhs_is_init(inst, redvar_name):
     rhs = inst.value
     if not isinstance(rhs, ir.Expr):
         return False
-    if rhs.op != "inplace_binop":
+    if rhs.op != op:
         return False
     if rhs.rhs.name != f"{redvar_name}#init":
         return False
@@ -729,7 +751,9 @@ def _print_block(block):
 def _print_body(body_dict):
     '''Pretty-print a set of IR blocks.
     '''
-    for label, block in body_dict.items():
+    topo_order = wrap_find_topo(body_dict)
+    for label in topo_order:
+        block = body_dict[label]
         print("label: ", label)
         _print_block(block)
 
@@ -824,13 +848,21 @@ def compute_def_once_block(block, def_once, def_more, getattr_taken, typemap, mo
                     # to the def lists.
                     add_to_def_once_sets(argvar, def_once, def_more)
 
+def wrap_find_topo(loop_body):
+    blocks = wrap_loop_body(loop_body)
+    topo_order = find_topo_order(blocks)
+    unwrap_loop_body(loop_body)
+    return topo_order
+
 def compute_def_once_internal(loop_body, def_once, def_more, getattr_taken, typemap, module_assigns):
     '''Compute the set of variables defined exactly once in the given set of blocks
        and use the given sets for storing which variables are defined once, more than
        once and which have had a getattr call on them.
     '''
-    # For each block...
-    for label, block in loop_body.items():
+    # For each block in topological order...
+    topo_order = wrap_find_topo(loop_body)
+    for label in topo_order:
+        block = loop_body[label]
         # Scan this block and effect changes to def_once, def_more, and getattr_taken
         # based on the instructions in that block.
         compute_def_once_block(block, def_once, def_more, getattr_taken, typemap, module_assigns)
@@ -862,30 +894,37 @@ def _hoist_internal(inst, dep_on_param, call_table, hoisted, not_hoisted,
     if inst.target.name in stored_arrays:
         not_hoisted.append((inst, "stored array"))
         if config.DEBUG_ARRAY_OPT >= 1:
-            print("Instruction", inst, " could not be hoisted because the created array is stored.")
+            print("Instruction", inst, "could not be hoisted because the created array is stored.")
         return False
 
+    target_type = typemap[inst.target.name]
+
     uses = set()
+    # Get vars used by this statement.
     visit_vars_inner(inst.value, find_vars, uses)
+    # Filter out input parameters from the set of variable usages.
+    unhoistable = {assgn.target.name for assgn, _ in not_hoisted}
+    use_unhoist = uses & unhoistable
     diff = uses.difference(dep_on_param)
+    diff |= use_unhoist
     if config.DEBUG_ARRAY_OPT >= 1:
         print("_hoist_internal:", inst, "uses:", uses, "diff:", diff)
     if len(diff) == 0 and is_pure(inst.value, None, call_table):
         if config.DEBUG_ARRAY_OPT >= 1:
-            print("Will hoist instruction", inst, typemap[inst.target.name])
+            print("Will hoist instruction", inst, target_type)
         hoisted.append(inst)
-        if not isinstance(typemap[inst.target.name], types.npytypes.Array):
+        if not isinstance(target_type, types.npytypes.Array):
             dep_on_param += [inst.target.name]
         return True
     else:
         if len(diff) > 0:
             not_hoisted.append((inst, "dependency"))
             if config.DEBUG_ARRAY_OPT >= 1:
-                print("Instruction", inst, " could not be hoisted because of a dependency.")
+                print("Instruction", inst, "could not be hoisted because of a dependency.")
         else:
             not_hoisted.append((inst, "not pure"))
             if config.DEBUG_ARRAY_OPT >= 1:
-                print("Instruction", inst, " could not be hoisted because it isn't pure.")
+                print("Instruction", inst, "could not be hoisted because it isn't pure.")
     return False
 
 def find_setitems_block(setitems, itemsset, block, typemap):
@@ -901,6 +940,27 @@ def find_setitems_block(setitems, itemsset, block, typemap):
         elif isinstance(inst, parfor.Parfor):
             find_setitems_block(setitems, itemsset, inst.init_block, typemap)
             find_setitems_body(setitems, itemsset, inst.loop_body, typemap)
+        elif isinstance(inst, ir.Assign):
+            # If something of mutable type is given to a build_tuple or
+            # used in a call then consider it unanalyzable and so
+            # unavailable for hoisting.
+            rhs = inst.value
+            def add_to_itemset(item):
+                assert isinstance(item, ir.Var), rhs
+                if getattr(typemap[item.name], "mutable", False):
+                    itemsset.add(item.name)
+
+            if isinstance(rhs, ir.Expr):
+                if rhs.op in ["build_tuple", "build_list", "build_set"]:
+                    for item in rhs.items:
+                        add_to_itemset(item)
+                elif rhs.op == "build_map":
+                    for pair in rhs.items:
+                        for item in pair:
+                            add_to_itemset(item)
+                elif rhs.op == "call":
+                    for item in list(rhs.args) + [x[1] for x in rhs.kws]:
+                        add_to_itemset(item)
 
 def find_setitems_body(setitems, itemsset, loop_body, typemap):
     """
@@ -965,7 +1025,8 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
                     elif (isinstance(ib_inst, ir.Assign) and
                         ib_inst.target.name in def_once):
                         if _hoist_internal(ib_inst, dep_on_param, call_table,
-                                           hoisted, not_hoisted, typemap, itemsset):
+                                           hoisted, not_hoisted, typemap,
+                                           itemsset):
                             # don't add this instruction to the block since it is hoisted
                             continue
                     new_init_block.append(ib_inst)
@@ -1668,7 +1729,9 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     intp_t = context.get_value_type(types.intp)
     uintp_t = context.get_value_type(types.uintp)
     intp_ptr_t = llvmlite.ir.PointerType(intp_t)
+    intp_ptr_ptr_t = llvmlite.ir.PointerType(intp_ptr_t)
     uintp_ptr_t = llvmlite.ir.PointerType(uintp_t)
+    uintp_ptr_ptr_t = llvmlite.ir.PointerType(uintp_ptr_t)
     zero = context.get_constant(types.uintp, 0)
     one = context.get_constant(types.uintp, 1)
     one_type = one.type
@@ -1684,9 +1747,11 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     if index_var_typ.signed:
         sched_type = intp_t
         sched_ptr_type = intp_ptr_t
+        sched_ptr_ptr_type = intp_ptr_ptr_t
     else:
         sched_type = uintp_t
         sched_ptr_type = uintp_ptr_t
+        sched_ptr_ptr_type = uintp_ptr_ptr_t
 
     # Call do_scheduling with appropriate arguments
     dim_starts = cgutils.alloca_once(
@@ -1713,6 +1778,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         builder.store(stop, builder.gep(dim_stops,
                                         [context.get_constant(types.uintp, i)]))
 
+    # Prepare to call get/set parallel_chunksize and get the number of threads.
     get_chunksize = cgutils.get_or_insert_function(
         builder.module,
         llvmlite.ir.FunctionType(uintp_t, []),
@@ -1728,7 +1794,9 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         llvmlite.ir.FunctionType(llvmlite.ir.IntType(types.intp.bitwidth), []),
         "get_num_threads")
 
+    # Get the current number of threads.
     num_threads = builder.call(get_num_threads, [])
+    # Get the current chunksize so we can use it and restore the value later.
     current_chunksize = builder.call(get_chunksize, [])
 
     with cgutils.if_unlikely(builder, builder.icmp_signed('<=', num_threads,
@@ -1738,6 +1806,9 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
                                                   ("Invalid number of threads. "
                                                    "This likely indicates a bug in Numba.",))
 
+    # Call get_sched_size from gufunc_scheduler.cpp that incorporates the size of the work,
+    # the number of threads and the selected chunk size.  This will tell us how many entries
+    # in the schedule we will need.
     get_sched_size_fnty = llvmlite.ir.FunctionType(uintp_t, [uintp_t, uintp_t, intp_ptr_t, intp_ptr_t])
     get_sched_size = cgutils.get_or_insert_function(
         builder.module,
@@ -1747,11 +1818,27 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
                                                   context.get_constant(types.uintp, num_dim),
                                                   dim_starts,
                                                   dim_stops])
+    # Set the chunksize to zero so that any nested calls get the default chunk size behavior.
     builder.call(set_chunksize, [zero])
 
+    # Each entry in the schedule is 2 times the number of dimensions long.
     multiplier = context.get_constant(types.uintp, num_dim * 2)
+    # Compute the total number of entries in the schedule.
     sched_size = builder.mul(num_divisions, multiplier)
-    sched = builder.alloca(sched_type, size=sched_size, name="sched")
+
+    # Prepare to dynamically allocate memory to hold the schedule.
+    alloc_sched_fnty = llvmlite.ir.FunctionType(sched_ptr_type, [uintp_t])
+    alloc_sched_func = cgutils.get_or_insert_function(
+        builder.module,
+        alloc_sched_fnty,
+        name="allocate_sched")
+    # Call gufunc_scheduler.cpp to allocate the schedule.
+    # This may or may not do pooling.
+    alloc_space = builder.call(alloc_sched_func, [sched_size])
+    # Allocate a slot in the entry block to store the schedule pointer.
+    sched = cgutils.alloca_once(builder, sched_ptr_type)
+    # Store the schedule pointer into that slot.
+    builder.store(alloc_space, sched)
 
     debug_flag = 1 if config.DEBUG_ARRAY_OPT else 0
     scheduling_fnty = llvmlite.ir.FunctionType(
@@ -1765,11 +1852,12 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
                                                        scheduling_fnty,
                                                        name="do_scheduling_unsigned")
 
+    # Call the scheduling routine that decides how to break up the work.
     builder.call(
         do_scheduling, [
             context.get_constant(
                 types.uintp, num_dim), dim_starts, dim_stops, num_divisions,
-            sched, context.get_constant(
+            builder.load(sched), context.get_constant(
                     types.intp, debug_flag)])
 
     # Get the LLVM vars for the Numba IR reduction array vars.
@@ -1810,7 +1898,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         name="pargs")
     array_strides = []
     # sched goes first
-    builder.store(builder.bitcast(sched, byte_ptr_t), args)
+    builder.store(builder.bitcast(builder.load(sched), byte_ptr_t), args)
     array_strides.append(context.get_constant(types.intp, sizeof_intp))
     rv_to_arg_dict = {}
     # followed by other arguments
@@ -1963,6 +2051,14 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         cgutils.printf(builder, "after calling kernel %p\n", fn)
 
     builder.call(set_chunksize, [current_chunksize])
+
+    # Deallocate the schedule's memory.
+    dealloc_sched_fnty = llvmlite.ir.FunctionType(llvmlite.ir.VoidType(), [sched_ptr_type])
+    dealloc_sched_func = cgutils.get_or_insert_function(
+        builder.module,
+        dealloc_sched_fnty,
+        name="deallocate_sched")
+    builder.call(dealloc_sched_func, [builder.load(sched)])
 
     for k, v in rv_to_arg_dict.items():
         arg, rv_arg = v

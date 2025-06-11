@@ -1,3 +1,4 @@
+from llvmlite import ir
 from numba.core.typing.templates import ConcreteTemplate
 from numba.core import types, typing, funcdesc, config, compiler, sigutils
 from numba.core.compiler import (sanitize_compile_result_entries, CompilerBase,
@@ -11,6 +12,7 @@ from numba.core.typed_passes import (IRLegalization, NativeLowering,
                                      AnnotateTypes)
 from warnings import warn
 from numba.cuda.api import get_current_device
+from numba.cuda.target import CUDACABICallConv
 
 
 def _nvvm_options_type(x):
@@ -206,24 +208,74 @@ def compile_cuda(pyfunc, return_type, args, debug=False, lineinfo=False,
     return cres
 
 
+def cabi_wrap_function(context, lib, fndesc, wrapper_function_name,
+                       nvvm_options):
+    """
+    Wrap a Numba ABI function in a C ABI wrapper at the NVVM IR level.
+
+    The C ABI wrapper will have the same name as the source Python function.
+    """
+    # The wrapper will be contained in a new library that links to the wrapped
+    # function's library
+    library = lib.codegen.create_library(f'{lib.name}_function_',
+                                         entry_name=wrapper_function_name,
+                                         nvvm_options=nvvm_options)
+    library.add_linking_library(lib)
+
+    # Determine the caller (C ABI) and wrapper (Numba ABI) function types
+    argtypes = fndesc.argtypes
+    restype = fndesc.restype
+    c_call_conv = CUDACABICallConv(context)
+    wrapfnty = c_call_conv.get_function_type(restype, argtypes)
+    fnty = context.call_conv.get_function_type(fndesc.restype, argtypes)
+
+    # Create a new module and declare the callee
+    wrapper_module = context.create_module("cuda.cabi.wrapper")
+    func = ir.Function(wrapper_module, fnty, fndesc.llvm_func_name)
+
+    # Define the caller - populate it with a call to the callee and return
+    # its return value
+
+    wrapfn = ir.Function(wrapper_module, wrapfnty, wrapper_function_name)
+    builder = ir.IRBuilder(wrapfn.append_basic_block(''))
+
+    arginfo = context.get_arg_packer(argtypes)
+    callargs = arginfo.from_arguments(builder, wrapfn.args)
+    # We get (status, return_value), but we ignore the status since we
+    # can't propagate it through the C ABI anyway
+    _, return_value = context.call_conv.call_function(
+        builder, func, restype, argtypes, callargs)
+    builder.ret(return_value)
+
+    library.add_ir_module(wrapper_module)
+    library.finalize()
+    return library
+
+
 @global_compiler_lock
-def compile_ptx(pyfunc, sig, debug=False, lineinfo=False, device=False,
-                fastmath=False, cc=None, opt=True):
-    """Compile a Python function to PTX for a given set of argument types.
+def compile(pyfunc, sig, debug=False, lineinfo=False, device=True,
+            fastmath=False, cc=None, opt=True, abi="c", abi_info=None,
+            output='ptx'):
+    """Compile a Python function to PTX or LTO-IR for a given set of argument
+    types.
 
     :param pyfunc: The Python function to compile.
     :param sig: The signature representing the function's input and output
-                types.
-    :param debug: Whether to include debug info in the generated PTX.
+                types. If this is a tuple of argument types without a return
+                type, the inferred return type is returned by this function. If
+                a signature including a return type is passed, the compiled code
+                will include a cast from the inferred return type to the
+                specified return type, and this function will return the
+                specified return type.
+    :param debug: Whether to include debug info in the compiled code.
     :type debug: bool
-    :param lineinfo: Whether to include a line mapping from the generated PTX
+    :param lineinfo: Whether to include a line mapping from the compiled code
                      to the source code. Usually this is used with optimized
                      code (since debug mode would automatically include this),
-                     so we want debug info in the LLVM but only the line
-                     mapping in the final PTX.
+                     so we want debug info in the LLVM IR but only the line
+                     mapping in the final output.
     :type lineinfo: bool
-    :param device: Whether to compile a device function. Defaults to ``False``,
-                   to compile global kernel functions.
+    :param device: Whether to compile a device function.
     :type device: bool
     :param fastmath: Whether to enable fast math flags (ftz=1, prec_sqrt=0,
                      prec_div=, and fma=1)
@@ -233,19 +285,44 @@ def compile_ptx(pyfunc, sig, debug=False, lineinfo=False, device=False,
     :type cc: tuple
     :param opt: Enable optimizations. Defaults to ``True``.
     :type opt: bool
-    :return: (ptx, resty): The PTX code and inferred return type
+    :param abi: The ABI for a compiled function - either ``"numba"`` or
+                ``"c"``. Note that the Numba ABI is not considered stable.
+                The C ABI is only supported for device functions at present.
+    :type abi: str
+    :param abi_info: A dict of ABI-specific options. The ``"c"`` ABI supports
+                     one option, ``"abi_name"``, for providing the wrapper
+                     function's name. The ``"numba"`` ABI has no options.
+    :type abi_info: dict
+    :param output: Type of output to generate, either ``"ptx"`` or ``"ltoir"``.
+    :type output: str
+    :return: (code, resty): The compiled code and inferred return type
     :rtype: tuple
     """
+    if abi not in ("numba", "c"):
+        raise NotImplementedError(f'Unsupported ABI: {abi}')
+
+    if abi == 'c' and not device:
+        raise NotImplementedError('The C ABI is not supported for kernels')
+
+    if output not in ("ptx", "ltoir"):
+        raise NotImplementedError(f'Unsupported output type: {output}')
+
     if debug and opt:
         msg = ("debug=True with opt=True (the default) "
                "is not supported by CUDA. This may result in a crash"
                " - set debug=False or opt=False.")
         warn(NumbaInvalidConfigWarning(msg))
 
+    lto = (output == 'ltoir')
+    abi_info = abi_info or dict()
+
     nvvm_options = {
         'fastmath': fastmath,
         'opt': 3 if opt else 0
     }
+
+    if lto:
+        nvvm_options['gen-lto'] = None
 
     args, return_type = sigutils.normalize_signature(sig)
 
@@ -258,10 +335,15 @@ def compile_ptx(pyfunc, sig, debug=False, lineinfo=False, device=False,
     if resty and not device and resty != types.void:
         raise TypeError("CUDA kernel must have void return type.")
 
+    tgt = cres.target_context
+
     if device:
         lib = cres.library
+        if abi == "c":
+            wrapper_name = abi_info.get('abi_name', pyfunc.__name__)
+            lib = cabi_wrap_function(tgt, lib, cres.fndesc, wrapper_name,
+                                     nvvm_options)
     else:
-        tgt = cres.target_context
         code = pyfunc.__code__
         filename = code.co_filename
         linenum = code.co_firstlineno
@@ -270,18 +352,45 @@ def compile_ptx(pyfunc, sig, debug=False, lineinfo=False, device=False,
                                               lineinfo, nvvm_options, filename,
                                               linenum)
 
-    ptx = lib.get_asm_str(cc=cc)
-    return ptx, resty
+    if lto:
+        code = lib.get_ltoir(cc=cc)
+    else:
+        code = lib.get_asm_str(cc=cc)
+    return code, resty
+
+
+def compile_for_current_device(pyfunc, sig, debug=False, lineinfo=False,
+                               device=True, fastmath=False, opt=True,
+                               abi="c", abi_info=None, output='ptx'):
+    """Compile a Python function to PTX or LTO-IR for a given signature for the
+    current device's compute capabilility. This calls :func:`compile` with an
+    appropriate ``cc`` value for the current device."""
+    cc = get_current_device().compute_capability
+    return compile(pyfunc, sig, debug=debug, lineinfo=lineinfo, device=device,
+                   fastmath=fastmath, cc=cc, opt=opt, abi=abi,
+                   abi_info=abi_info, output=output)
+
+
+def compile_ptx(pyfunc, sig, debug=False, lineinfo=False, device=False,
+                fastmath=False, cc=None, opt=True, abi="numba", abi_info=None):
+    """Compile a Python function to PTX for a given signature. See
+    :func:`compile`. The defaults for this function are to compile a kernel
+    with the Numba ABI, rather than :func:`compile`'s default of compiling a
+    device function with the C ABI."""
+    return compile(pyfunc, sig, debug=debug, lineinfo=lineinfo, device=device,
+                   fastmath=fastmath, cc=cc, opt=opt, abi=abi,
+                   abi_info=abi_info, output='ptx')
 
 
 def compile_ptx_for_current_device(pyfunc, sig, debug=False, lineinfo=False,
-                                   device=False, fastmath=False, opt=True):
-    """Compile a Python function to PTX for a given set of argument types for
-    the current device's compute capabilility. This calls :func:`compile_ptx`
-    with an appropriate ``cc`` value for the current device."""
+                                   device=False, fastmath=False, opt=True,
+                                   abi="numba", abi_info=None):
+    """Compile a Python function to PTX for a given signature for the current
+    device's compute capabilility. See :func:`compile_ptx`."""
     cc = get_current_device().compute_capability
     return compile_ptx(pyfunc, sig, debug=debug, lineinfo=lineinfo,
-                       device=device, fastmath=fastmath, cc=cc, opt=True)
+                       device=device, fastmath=fastmath, cc=cc, opt=opt,
+                       abi=abi, abi_info=abi_info)
 
 
 def declare_device_function(name, restype, argtypes):

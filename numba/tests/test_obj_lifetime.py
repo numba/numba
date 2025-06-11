@@ -1,5 +1,4 @@
 import collections
-import sys
 import weakref
 import gc
 import operator
@@ -7,21 +6,11 @@ from itertools import takewhile
 
 import unittest
 from numba import njit, jit
-from numba.core.controlflow import CFGraph, Loop
-from numba.core.compiler import (compile_extra, compile_isolated, Flags,
-                                 CompilerBase, DefaultPassBuilder)
+from numba.core.compiler import CompilerBase, DefaultPassBuilder
 from numba.core.untyped_passes import PreserveIR
 from numba.core.typed_passes import IRLegalization
 from numba.core import types, ir
 from numba.tests.support import TestCase, override_config, SerialMixin
-
-enable_pyobj_flags = Flags()
-enable_pyobj_flags.enable_pyobject = True
-
-forceobj_flags = Flags()
-forceobj_flags.force_pyobject = True
-
-no_pyobj_flags = Flags()
 
 
 class _Dummy(object):

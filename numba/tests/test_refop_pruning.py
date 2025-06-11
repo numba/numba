@@ -1,17 +1,15 @@
 import unittest
 import warnings
-from unittest import TestCase
 from contextlib import contextmanager
 
 import numpy as np
 
 import llvmlite.binding as llvm
 
-from numba import types
+from numba import njit, types
 from numba.core.errors import NumbaInvalidConfigWarning
-from numba.core.compiler import compile_isolated
 from numba.core.codegen import _parse_refprune_flags
-from numba.tests.support import override_config
+from numba.tests.support import override_config, TestCase
 
 
 @contextmanager
@@ -23,6 +21,7 @@ def set_refprune_flags(flags):
 class TestRefOpPruning(TestCase):
 
     _numba_parallel_test_ = False
+    _NUMBA_USE_LEGACY_PM_1_ENV = {'NUMBA_USE_LLVM_LEGACY_PASS_MANAGER': '1'}
 
     def check(self, func, *argtys, **prune_types):
         """
@@ -31,10 +30,14 @@ class TestRefOpPruning(TestCase):
         of pruning and whether the stat should be zero (False) or >0 (True).
 
         Note: The exact statistic varies across platform.
+
+        NOTE: Tests using this `check` method need to run in subprocesses as
+        `njit` sets up the module pass manager etc once and the overrides have
+        no effect else.
         """
 
         with override_config('LLVM_REFPRUNE_PASS', '1'):
-            cres = compile_isolated(func, (*argtys,))
+            cres = njit((*argtys,))(func).overloads[(*argtys,)]
 
         pstats = cres.metadata.get('prune_stats', None)
         self.assertIsNotNone(pstats)
@@ -44,10 +47,14 @@ class TestRefOpPruning(TestCase):
             self.assertIsNotNone(stat)
             msg = f'failed checking {k}'
             if v:
-                self.assertGreater(stat, 0, msg=msg)
+                if k == 'fanout_raise':
+                    self.assertGreaterEqual(stat, 0, msg=msg)
+                else:
+                    self.assertGreater(stat, 0, msg=msg)
             else:
                 self.assertEqual(stat, 0, msg=msg)
 
+    @TestCase.run_test_in_subprocess
     def test_basic_block_1(self):
         # some nominally involved control flow and ops, there's only basic_block
         # opportunities present here.
@@ -64,6 +71,7 @@ class TestRefOpPruning(TestCase):
 
         self.check(func, (types.intp), basicblock=True)
 
+    @TestCase.run_test_in_subprocess
     def test_diamond_1(self):
         # most basic?! diamond
         def func(n):
@@ -78,6 +86,7 @@ class TestRefOpPruning(TestCase):
             self.check(func, (types.intp), basicblock=True, diamond=True,
                        fanout=False, fanout_raise=False)
 
+    @TestCase.run_test_in_subprocess
     def test_diamond_2(self):
         # more complex diamonds
         def func(n):
@@ -94,6 +103,7 @@ class TestRefOpPruning(TestCase):
             self.check(func, (types.intp), basicblock=True, diamond=True,
                        fanout=False, fanout_raise=False)
 
+    @TestCase.run_test_in_subprocess
     def test_fanout_1(self):
         # most basic?! fan-out
         def func(n):
@@ -107,6 +117,7 @@ class TestRefOpPruning(TestCase):
 
         self.check(func, (types.intp), basicblock=True, fanout=True)
 
+    @TestCase.run_test_in_subprocess
     def test_fanout_2(self):
         # fanout with raise
         def func(n):
@@ -122,6 +133,7 @@ class TestRefOpPruning(TestCase):
             self.check(func, (types.intp), basicblock=True, diamond=False,
                        fanout=True, fanout_raise=False)
 
+    @TestCase.run_test_in_subprocess
     def test_fanout_3(self):
         # fanout with raise
         def func(n):

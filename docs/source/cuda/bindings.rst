@@ -1,6 +1,8 @@
 CUDA Bindings
 =============
 
+.. cuda-deprecated::
+
 Numba supports two bindings to the CUDA Driver APIs: its own internal bindings
 based on ctypes, and the official `NVIDIA CUDA Python bindings
 <https://nvidia.github.io/cuda-python/>`_. Functionality is equivalent between

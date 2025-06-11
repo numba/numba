@@ -3,7 +3,6 @@ import itertools
 
 import numpy as np
 
-from numba.core.compiler import compile_isolated
 from numba import njit, jit, typeof, literally
 from numba.core import types, errors, utils
 from numba.tests.support import TestCase, MemoryLeakMixin, tag
@@ -146,9 +145,9 @@ class TestTupleReturn(TestCase):
 
     def test_array_tuple(self):
         aryty = types.Array(types.float64, 1, 'C')
-        cres = compile_isolated(tuple_return_usecase, (aryty, aryty))
+        cfunc = njit((aryty, aryty))(tuple_return_usecase)
         a = b = np.arange(5, dtype='float64')
-        ra, rb = cres.entry_point(a, b)
+        ra, rb = cfunc(a, b)
         self.assertPreciseEqual(ra, a)
         self.assertPreciseEqual(rb, b)
         del a, b
@@ -156,9 +155,9 @@ class TestTupleReturn(TestCase):
 
     def test_scalar_tuple(self):
         scalarty = types.float32
-        cres = compile_isolated(tuple_return_usecase, (scalarty, scalarty))
+        cfunc = njit((scalarty, scalarty))(tuple_return_usecase)
         a = b = 1
-        ra, rb = cres.entry_point(a, b)
+        ra, rb = cfunc(a, b)
         self.assertEqual(ra, a)
         self.assertEqual(rb, b)
 
@@ -176,8 +175,8 @@ class TestTupleReturn(TestCase):
         allvalues.append((1231, .5))
 
         for (ta, tb), (a, b) in zip(alltypes, allvalues):
-            cres = compile_isolated(tuple_return_usecase, (ta, tb))
-            ra, rb = cres.entry_point(a, b)
+            cfunc = njit((ta, tb))(tuple_return_usecase)
+            ra, rb = cfunc(a, b)
             self.assertPreciseEqual((ra, rb), (a, b))
 
 
@@ -185,38 +184,38 @@ class TestTuplePassing(TestCase):
 
     def test_unituple(self):
         tuple_type = types.UniTuple(types.int32, 2)
-        cr_first = compile_isolated(tuple_first, (tuple_type,))
-        cr_second = compile_isolated(tuple_second, (tuple_type,))
-        self.assertPreciseEqual(cr_first.entry_point((4, 5)), 4)
-        self.assertPreciseEqual(cr_second.entry_point((4, 5)), 5)
+        cf_first = njit((tuple_type,))(tuple_first)
+        cf_second = njit((tuple_type,))(tuple_second)
+        self.assertPreciseEqual(cf_first((4, 5)), 4)
+        self.assertPreciseEqual(cf_second((4, 5)), 5)
 
     def test_hetero_tuple(self):
         tuple_type = types.Tuple((types.int64, types.float32))
-        cr_first = compile_isolated(tuple_first, (tuple_type,))
-        cr_second = compile_isolated(tuple_second, (tuple_type,))
-        self.assertPreciseEqual(cr_first.entry_point((2**61, 1.5)), 2**61)
-        self.assertPreciseEqual(cr_second.entry_point((2**61, 1.5)), 1.5)
+        cf_first = njit((tuple_type,))(tuple_first)
+        cf_second = njit((tuple_type,))(tuple_second)
+        self.assertPreciseEqual(cf_first((2**61, 1.5)), 2**61)
+        self.assertPreciseEqual(cf_second((2**61, 1.5)), 1.5)
 
     def test_size_mismatch(self):
         # Issue #1638: tuple size should be checked when unboxing
         tuple_type = types.UniTuple(types.int32, 2)
-        cr = compile_isolated(tuple_first, (tuple_type,))
+        cfunc = njit((tuple_type,))(tuple_first)
+        entry_point = cfunc.overloads[cfunc.signatures[0]].entry_point
         with self.assertRaises(ValueError) as raises:
-            cr.entry_point((4, 5, 6))
+            entry_point((4, 5, 6))
         self.assertEqual(str(raises.exception),
-                         "size mismatch for tuple, expected 2 element(s) but got 3")
+                         ("size mismatch for tuple, "
+                          "expected 2 element(s) but got 3"))
 
 
 class TestOperations(TestCase):
 
     def test_len(self):
         pyfunc = len_usecase
-        cr = compile_isolated(pyfunc,
-                              [types.Tuple((types.int64, types.float32))])
-        self.assertPreciseEqual(cr.entry_point((4, 5)), 2)
-        cr = compile_isolated(pyfunc,
-                              [types.UniTuple(types.int64, 3)])
-        self.assertPreciseEqual(cr.entry_point((4, 5, 6)), 3)
+        cfunc = njit((types.Tuple((types.int64, types.float32)),))(pyfunc)
+        self.assertPreciseEqual(cfunc((4, 5)), 2)
+        cfunc = njit((types.UniTuple(types.int64, 3),))(pyfunc)
+        self.assertPreciseEqual(cfunc((4, 5, 6)), 3)
 
     def test_index_literal(self):
         # issue #6023, test non-static getitem with IntegerLiteral index
@@ -231,78 +230,77 @@ class TestOperations(TestCase):
 
     def test_index(self):
         pyfunc = tuple_index
-        cr = compile_isolated(pyfunc,
-                              [types.UniTuple(types.int64, 3), types.int64])
+        cfunc = njit((types.UniTuple(types.int64, 3), types.int64),)(pyfunc)
         tup = (4, 3, 6)
         for i in range(len(tup)):
-            self.assertPreciseEqual(cr.entry_point(tup, i), tup[i])
+            self.assertPreciseEqual(cfunc(tup, i), tup[i])
 
         # test negative indexing
         for i in range(len(tup) + 1):
-            self.assertPreciseEqual(cr.entry_point(tup, -i), tup[-i])
+            self.assertPreciseEqual(cfunc(tup, -i), tup[-i])
 
         # oob indexes, +ve then -ve
         with self.assertRaises(IndexError) as raises:
-            cr.entry_point(tup, len(tup))
+            cfunc(tup, len(tup))
         self.assertEqual("tuple index out of range", str(raises.exception))
         with self.assertRaises(IndexError) as raises:
-            cr.entry_point(tup, -(len(tup) + 1))
+            cfunc(tup, -(len(tup) + 1))
         self.assertEqual("tuple index out of range", str(raises.exception))
 
-        # Test empty tuple
-        cr = compile_isolated(pyfunc,
-                              [types.UniTuple(types.int64, 0), types.int64])
+        # Test empty tuple, this is a bit unusual as `njit` will infer the empty
+        # tuple arg as a types.Tuple and not match the compiled signature, this
+        # is essentially because the test originally relied on
+        # `compile_isolated`.
+        args = (types.UniTuple(types.int64, 0), types.int64,)
+        cr = njit(args)(pyfunc).overloads[args]
         with self.assertRaises(IndexError) as raises:
             cr.entry_point((), 0)
         self.assertEqual("tuple index out of range", str(raises.exception))
 
         # test uintp indexing (because, e.g., parfor generates unsigned prange)
-        cr = compile_isolated(pyfunc,
-                              [types.UniTuple(types.int64, 3), types.uintp])
+        cfunc = njit((types.UniTuple(types.int64, 3), types.uintp,),)(pyfunc)
         for i in range(len(tup)):
-            self.assertPreciseEqual(cr.entry_point(tup, types.uintp(i)), tup[i])
+            self.assertPreciseEqual(cfunc(tup, types.uintp(i)), tup[i])
 
-        # With a compile-time static index (the code generation path is different)
+        # With a compile-time static index (the code generation path is
+        # different)
         pyfunc = tuple_index_static
         for typ in (types.UniTuple(types.int64, 4),
                     types.Tuple((types.int64, types.int32, types.int64, types.int32))):
-            cr = compile_isolated(pyfunc, (typ,))
+            cfunc = njit((typ,))(pyfunc)
             tup = (4, 3, 42, 6)
-            self.assertPreciseEqual(cr.entry_point(tup), pyfunc(tup))
+            self.assertPreciseEqual(cfunc(tup), pyfunc(tup))
 
         typ = types.UniTuple(types.int64, 1)
         with self.assertTypingError():
-            cr = compile_isolated(pyfunc, (typ,))
+            njit((typ,))(pyfunc)
 
         # test unpack, staticgetitem with imprecise type (issue #3895)
         pyfunc = tuple_unpack_static_getitem_err
         with self.assertTypingError() as raises:
-            cr = compile_isolated(pyfunc, ())
+            njit((),)(pyfunc)
         msg = ("Cannot infer the type of variable 'c', have imprecise type: "
                "list(undefined)<iv=None>.")
         self.assertIn(msg, str(raises.exception))
 
     def test_in(self):
         pyfunc = in_usecase
-        cr = compile_isolated(pyfunc,
-                              [types.int64, types.UniTuple(types.int64, 3)])
+        cfunc = njit((types.int64, types.UniTuple(types.int64, 3),),)(pyfunc)
         tup = (4, 1, 5)
         for i in range(5):
-            self.assertPreciseEqual(cr.entry_point(i, tup), pyfunc(i, tup))
+            self.assertPreciseEqual(cfunc(i, tup), pyfunc(i, tup))
 
         # Test the empty case
-        cr = compile_isolated(pyfunc, [types.int64, types.Tuple([])])
-        self.assertPreciseEqual(cr.entry_point(1, ()), pyfunc(1, ()))
+        cfunc = njit((types.int64, types.Tuple([]),),)(pyfunc)
+        self.assertPreciseEqual(cfunc(1, ()), pyfunc(1, ()))
 
     def check_slice(self, pyfunc):
         tup = (4, 5, 6, 7)
-        cr = compile_isolated(pyfunc,
-                              [types.UniTuple(types.int64, 4)])
-        self.assertPreciseEqual(cr.entry_point(tup), pyfunc(tup))
-        cr = compile_isolated(
-            pyfunc,
-            [types.Tuple((types.int64, types.int32, types.int64, types.int32))])
-        self.assertPreciseEqual(cr.entry_point(tup), pyfunc(tup))
+        cfunc = njit((types.UniTuple(types.int64, 4),),)(pyfunc)
+        self.assertPreciseEqual(cfunc(tup), pyfunc(tup))
+        args = types.Tuple((types.int64, types.int32, types.int64, types.int32))
+        cfunc = njit((args,))(pyfunc)
+        self.assertPreciseEqual(cfunc(tup), pyfunc(tup))
 
     def test_slice2(self):
         self.check_slice(tuple_slice2)
@@ -312,17 +310,14 @@ class TestOperations(TestCase):
 
     def test_bool(self):
         pyfunc = bool_usecase
-        cr = compile_isolated(pyfunc,
-                              [types.Tuple((types.int64, types.int32))])
+        cfunc = njit((types.Tuple((types.int64, types.int32)),),)(pyfunc)
         args = ((4, 5),)
-        self.assertPreciseEqual(cr.entry_point(*args), pyfunc(*args))
-        cr = compile_isolated(pyfunc,
-                              [types.UniTuple(types.int64, 3)])
+        self.assertPreciseEqual(cfunc(*args), pyfunc(*args))
+        cfunc = njit((types.UniTuple(types.int64, 3),),)(pyfunc)
         args = ((4, 5, 6),)
-        self.assertPreciseEqual(cr.entry_point(*args), pyfunc(*args))
-        cr = compile_isolated(pyfunc,
-                              [types.Tuple(())])
-        self.assertPreciseEqual(cr.entry_point(()), pyfunc(()))
+        self.assertPreciseEqual(cfunc(*args), pyfunc(*args))
+        cfunc = njit((types.Tuple(()),),)(pyfunc)
+        self.assertPreciseEqual(cfunc(()), pyfunc(()))
 
     def test_add(self):
         pyfunc = add_usecase
@@ -332,9 +327,9 @@ class TestOperations(TestCase):
                    (types.Tuple((types.int64, types.float32)), (3, 4.5)),
                    ]
         for (ta, a), (tb, b) in itertools.product(samples, samples):
-            cr = compile_isolated(pyfunc, (ta, tb))
+            cfunc = njit((ta, tb),)(pyfunc)
             expected = pyfunc(a, b)
-            got = cr.entry_point(a, b)
+            got = cfunc(a, b)
             self.assertPreciseEqual(got, expected, msg=(ta, tb))
 
     def _test_compare(self, pyfunc):
@@ -346,8 +341,7 @@ class TestOperations(TestCase):
         argtypes = [types.Tuple((types.int64, types.float32)),
                     types.UniTuple(types.int32, 2)]
         for ta, tb in itertools.product(argtypes, argtypes):
-            cr = compile_isolated(pyfunc, (ta, tb))
-            cfunc = cr.entry_point
+            cfunc = njit((ta, tb),)(pyfunc)
             for args in [((4, 5), (4, 5)),
                          ((4, 5), (4, 6)),
                          ((4, 6), (4, 5)),
@@ -356,8 +350,7 @@ class TestOperations(TestCase):
         # Different-sized tuples
         argtypes = [types.Tuple((types.int64, types.float32)),
                     types.UniTuple(types.int32, 3)]
-        cr = compile_isolated(pyfunc, tuple(argtypes))
-        cfunc = cr.entry_point
+        cfunc = njit(tuple(argtypes),)(pyfunc)
         for args in [((4, 5), (4, 5, 6)),
                      ((4, 5), (4, 4, 6)),
                      ((4, 5), (4, 6, 7))]:
@@ -598,8 +591,7 @@ class TestConversions(TestCase):
 
     def check_conversion(self, fromty, toty, val):
         pyfunc = identity
-        cr = compile_isolated(pyfunc, (fromty,), toty)
-        cfunc = cr.entry_point
+        cfunc = njit(toty(fromty))(pyfunc)
         res = cfunc(val)
         self.assertEqual(res, val)
 
@@ -667,20 +659,16 @@ class TestTupleBuild(TestCase):
         with self.assertRaises(errors.TypingError) as raises:
             check([4, 5])
 
-        if utils.PYVERSION > (3, 8):
-            # Python 3.9 has a peephole rewrite due to large changes in tuple
-            # unpacking. It results in a tuple + list situation from the above
-            # so the error message reflects that. Catching this specific and
-            # seemingly rare sequence in the peephole rewrite is prohibitively
-            # hard. Should it be reported numerous times, revisit then.
-            msg1 = "No implementation of function"
-            self.assertIn(msg1, str(raises.exception))
-            msg2 = "tuple(reflected list(" # ignore the rest of reflected list
-                                           # part, it's repr is quite volatile.
-            self.assertIn(msg2, str(raises.exception))
-        else:
-            msg = "Only tuples are supported when unpacking a single item"
-            self.assertIn(msg, str(raises.exception))
+        # Python 3.9 has a peephole rewrite due to large changes in tuple
+        # unpacking. It results in a tuple + list situation from the above
+        # so the error message reflects that. Catching this specific and
+        # seemingly rare sequence in the peephole rewrite is prohibitively
+        # hard. Should it be reported numerous times, revisit then.
+        msg1 = "No implementation of function"
+        self.assertIn(msg1, str(raises.exception))
+        msg2 = "tuple(reflected list(" # ignore the rest of reflected list
+                                        # part, it's repr is quite volatile.
+        self.assertIn(msg2, str(raises.exception))
 
     def test_build_unpack_more(self):
         def check(p):
@@ -733,7 +721,6 @@ class TestTupleBuild(TestCase):
         # Heterogeneous
         check(lambda a: tuple(a), (4, 5.5))
 
-    @unittest.skipIf(utils.PYVERSION < (3, 9), "needs Python 3.9+")
     def test_unpack_with_predicate_fails(self):
         # this fails as the list_to_tuple/list_extend peephole bytecode
         # rewriting needed for Python 3.9+ cannot yet traverse the CFG.
@@ -743,7 +730,7 @@ class TestTupleBuild(TestCase):
             b = (3,2,  4)
             return (*(b if a[0] else (5, 6)),)
 
-        with self.assertRaises(errors.UnsupportedError) as raises:
+        with self.assertRaises(errors.UnsupportedBytecodeError) as raises:
             foo()
         msg = "op_LIST_EXTEND at the start of a block"
         self.assertIn(msg, str(raises.exception))

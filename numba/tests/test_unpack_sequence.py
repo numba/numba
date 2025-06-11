@@ -1,19 +1,15 @@
 import numpy as np
 
 import unittest
-from numba.core.compiler import compile_isolated, Flags
+from numba import jit, njit
 from numba.core import errors, types
 from numba import typeof
-from numba.tests.support import TestCase, MemoryLeakMixin, tag
+from numba.tests.support import TestCase, MemoryLeakMixin
+from numba.tests.support import no_pyobj_flags as nullary_no_pyobj_flags
+from numba.tests.support import force_pyobj_flags as nullary_force_pyobj_flags
 
-enable_pyobj_flags = Flags()
-enable_pyobj_flags.enable_pyobject = True
-
-force_pyobj_flags = Flags()
-force_pyobj_flags.force_pyobject = True
-
-no_pyobj_flags = Flags()
-no_pyobj_flags.nrt = True
+force_pyobj_flags = {'forceobj': True}
+no_pyobj_flags = {'nopython': True}
 
 
 def unpack_list(l):
@@ -105,65 +101,71 @@ def conditional_swap(x, y):
 
 class TestUnpack(MemoryLeakMixin, TestCase):
 
+    def check_nullary_npm(self, pyfunc):
+        cfunc = njit(pyfunc)
+        self.assertPreciseEqual(cfunc(), pyfunc())
+
+    def check_nullary_objmode(self, pyfunc):
+        cfunc = jit(forceobj=True)(pyfunc)
+        self.assertPreciseEqual(cfunc(), pyfunc())
+
     def test_unpack_list(self):
         pyfunc = unpack_list
-        cr = compile_isolated(pyfunc, (), flags=force_pyobj_flags)
-        cfunc = cr.entry_point
+        cfunc = jit(forceobj=True)(pyfunc)
         l = [1, 2, 3]
         self.assertEqual(cfunc(l), pyfunc(l))
 
-    def test_unpack_shape(self, flags=force_pyobj_flags):
+    def test_unpack_shape(self):
         pyfunc = unpack_shape
-        cr = compile_isolated(pyfunc, [types.Array(dtype=types.int32,
-                                                        ndim=3,
-                                                        layout='C')],
-                              flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit((types.Array(dtype=types.int32, ndim=3, layout='C'),),
+                    forceobj=True)(pyfunc)
         a = np.zeros(shape=(1, 2, 3)).astype(np.int32)
         self.assertPreciseEqual(cfunc(a), pyfunc(a))
 
     def test_unpack_shape_npm(self):
-        self.test_unpack_shape(flags=no_pyobj_flags)
+        pyfunc = unpack_shape
+        cfunc = njit((types.Array(dtype=types.int32, ndim=3, layout='C'),),
+                     )(pyfunc)
+        a = np.zeros(shape=(1, 2, 3)).astype(np.int32)
+        self.assertPreciseEqual(cfunc(a), pyfunc(a))
 
-    def test_unpack_range(self, flags=force_pyobj_flags):
-        self.run_nullary_func(unpack_range, flags)
+    def test_unpack_range(self):
+        self.check_nullary_objmode(unpack_range)
 
     def test_unpack_range_npm(self):
-        self.test_unpack_range(flags=no_pyobj_flags)
+        self.check_nullary_npm(unpack_range)
 
-    def test_unpack_tuple(self, flags=force_pyobj_flags):
-        self.run_nullary_func(unpack_tuple, flags)
+    def test_unpack_tuple(self):
+        self.check_nullary_objmode(unpack_tuple)
 
     def test_unpack_tuple_npm(self):
-        self.test_unpack_tuple(flags=no_pyobj_flags)
+        self.check_nullary_npm(unpack_tuple)
 
-    def test_unpack_heterogeneous_tuple(self, flags=force_pyobj_flags):
-        self.run_nullary_func(unpack_heterogeneous_tuple, flags)
+    def test_unpack_heterogeneous_tuple(self):
+        self.check_nullary_objmode(unpack_heterogeneous_tuple)
 
     def test_unpack_heterogeneous_tuple_npm(self):
-        self.test_unpack_heterogeneous_tuple(flags=no_pyobj_flags)
+        self.check_nullary_npm(unpack_heterogeneous_tuple)
 
-    def test_unpack_nested_heterogeneous_tuple(self, flags=force_pyobj_flags):
-        self.run_nullary_func(unpack_nested_heterogeneous_tuple, flags)
+    def test_unpack_nested_heterogeneous_tuple(self):
+        self.check_nullary_objmode(unpack_nested_heterogeneous_tuple)
 
     def test_unpack_nested_heterogeneous_tuple_npm(self):
-        self.test_unpack_nested_heterogeneous_tuple(flags=no_pyobj_flags)
+        self.check_nullary_npm(unpack_nested_heterogeneous_tuple)
 
     def test_chained_unpack_assign(self, flags=force_pyobj_flags):
         pyfunc = chained_unpack_assign1
-        cr = compile_isolated(pyfunc, [types.int32, types.int32],
-                              flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit((types.int32, types.int32), **flags)(pyfunc)
         args = (4, 5)
         self.assertPreciseEqual(cfunc(*args), pyfunc(*args))
 
     def test_chained_unpack_assign_npm(self):
         self.test_chained_unpack_assign(flags=no_pyobj_flags)
 
-    def check_unpack_error(self, pyfunc, flags=force_pyobj_flags, exc=ValueError):
+    def check_unpack_error(self, pyfunc, flags=force_pyobj_flags,
+                           exc=ValueError):
         with self.assertRaises(exc):
-            cr = compile_isolated(pyfunc, (), flags=flags)
-            cfunc = cr.entry_point
+            cfunc = jit((), **flags)(pyfunc)
             cfunc()
 
     def test_unpack_tuple_too_small(self):
@@ -199,9 +201,7 @@ class TestUnpack(MemoryLeakMixin, TestCase):
         self.check_unpack_error(unpack_range_too_large, no_pyobj_flags)
 
     def check_conditional_swap(self, flags=force_pyobj_flags):
-        cr = compile_isolated(conditional_swap, (types.int32, types.int32),
-                              flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit((types.int32, types.int32), **flags)(conditional_swap)
         self.assertPreciseEqual(cfunc(4, 5), (5, 4))
         self.assertPreciseEqual(cfunc(0, 5), (0, 5))
 
@@ -215,21 +215,18 @@ class TestUnpack(MemoryLeakMixin, TestCase):
         tup = tuple(np.zeros(i + 1) for i in range(2))
         tupty = typeof(tup)
         pyfunc = unpack_arbitrary
-        cr = compile_isolated(pyfunc, (tupty,),
-                              flags=no_pyobj_flags)
-        cfunc = cr.entry_point
+        cfunc = njit((tupty,))(pyfunc)
         self.assertPreciseEqual(cfunc(tup), pyfunc(tup))
 
     def test_unpack_nrt(self):
         pyfunc = unpack_nrt
-        cr = compile_isolated(pyfunc, (), flags=no_pyobj_flags)
-        cfunc = cr.entry_point
+        cfunc = njit((),)(pyfunc)
         self.assertPreciseEqual(cfunc(), pyfunc())
 
     def test_invalid_unpack(self):
         pyfunc = unpack_arbitrary
         with self.assertRaises(errors.TypingError) as raises:
-            compile_isolated(pyfunc, (types.int32,), flags=no_pyobj_flags)
+            njit((types.int32,))(pyfunc)
         self.assertIn("failed to unpack int32", str(raises.exception))
 
 

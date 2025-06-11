@@ -8,6 +8,7 @@ import itertools
 import multiprocessing
 import os
 import random
+import re
 import subprocess
 import sys
 import textwrap
@@ -396,6 +397,11 @@ class TestSpecificBackend(TestInSubprocess, TestParallelBackendBase):
             o, e = self.run_test_in_separate_process(injected_method, backend)
             if self._DEBUG:
                 print('stdout:\n "%s"\n stderr:\n "%s"' % (o, e))
+            # If the test was skipped in the subprocess, then mark this as a
+            # skipped test.
+            m = re.search(r"\.\.\. skipped '(.*?)'", e)
+            if m is not None:
+                self.skipTest(m.group(1))
             self.assertIn('OK', e)
             self.assertTrue('FAIL' not in e)
             self.assertTrue('ERROR' not in e)

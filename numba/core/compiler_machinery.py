@@ -2,7 +2,6 @@ import timeit
 from abc import abstractmethod, ABCMeta
 from collections import namedtuple, OrderedDict
 import inspect
-from pprint import pformat
 
 
 from numba.core.compiler_lock import global_compiler_lock
@@ -300,11 +299,12 @@ class PassManager(object):
             name=f"{pss.name()} [{qualname}]",
             qualname=qualname,
             module=internal_state.func_id.modname,
-            flags=pformat(internal_state.flags.values()),
+            flags=utils._lazy_pformat(internal_state.flags.values()),
             args=str(internal_state.args),
             return_type=str(internal_state.return_type),
         )
-        with ev.trigger_event("numba:run_pass", data=ev_details):
+        errctx = errors.new_error_context(f"Pass {pss.name()}")
+        with ev.trigger_event("numba:run_pass", data=ev_details), errctx:
             with SimpleTimer() as init_time:
                 mutated |= check(pss.run_initialization, internal_state)
             with SimpleTimer() as pass_time:
@@ -359,8 +359,7 @@ class PassManager(object):
             except _EarlyPipelineCompletion as e:
                 raise e
             except Exception as e:
-                if (utils.use_new_style_errors() and not
-                        isinstance(e, errors.NumbaError)):
+                if not isinstance(e, errors.NumbaError):
                     raise e
                 msg = "Failed in %s mode pipeline (step: %s)" % \
                     (self.pipeline_name, pass_desc)

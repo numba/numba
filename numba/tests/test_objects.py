@@ -4,18 +4,9 @@ Test generic manipulation of objects.
 
 
 import unittest
-from numba import njit
-from numba.core.compiler import compile_isolated, Flags
+from numba import jit
 from numba.core import types
 from numba.tests.support import TestCase
-
-enable_pyobj_flags = Flags()
-enable_pyobj_flags.enable_pyobject = True
-
-force_pyobj_flags = Flags()
-force_pyobj_flags.force_pyobject = True
-
-no_pyobj_flags = Flags()
 
 
 class C(object):
@@ -25,41 +16,38 @@ class C(object):
 def setattr_usecase(o, v):
     o.x = v
 
+
 def delattr_usecase(o):
     del o.x
 
 
 class TestAttributes(TestCase):
-    def test_setattr(self, flags=enable_pyobj_flags):
+    def test_setattr(self):
         pyfunc = setattr_usecase
-        cr = compile_isolated(pyfunc, (types.pyobject, types.int32), flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit((types.pyobject, types.int32), forceobj=True)(pyfunc)
         c = C()
         cfunc(c, 123)
         self.assertEqual(c.x, 123)
 
-    def test_setattr_attribute_error(self, flags=enable_pyobj_flags):
+    def test_setattr_attribute_error(self):
         pyfunc = setattr_usecase
-        cr = compile_isolated(pyfunc, (types.pyobject, types.int32), flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit((types.pyobject, types.int32), forceobj=True)(pyfunc)
         # Can't set undeclared slot
         with self.assertRaises(AttributeError):
             cfunc(object(), 123)
 
-    def test_delattr(self, flags=enable_pyobj_flags):
+    def test_delattr(self):
         pyfunc = delattr_usecase
-        cr = compile_isolated(pyfunc, (types.pyobject,), flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit((types.pyobject,), forceobj=True)(pyfunc)
         c = C()
         c.x = 123
         cfunc(c)
         with self.assertRaises(AttributeError):
             c.x
 
-    def test_delattr_attribute_error(self, flags=enable_pyobj_flags):
+    def test_delattr_attribute_error(self):
         pyfunc = delattr_usecase
-        cr = compile_isolated(pyfunc, (types.pyobject,), flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit((types.pyobject,), forceobj=True)(pyfunc)
         # Can't delete non-existing attribute
         with self.assertRaises(AttributeError):
             cfunc(C())

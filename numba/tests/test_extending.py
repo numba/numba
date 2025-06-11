@@ -16,7 +16,6 @@ from numba import njit, jit, vectorize, guvectorize, objmode
 from numba.core import types, errors, typing, compiler, cgutils
 from numba.core.typed_passes import type_inference_stage
 from numba.core.registry import cpu_target
-from numba.core.compiler import compile_isolated
 from numba.core.imputils import lower_constant
 from numba.tests.support import (
     TestCase,
@@ -567,8 +566,8 @@ class TestLowLevelExtending(TestCase):
     Test the low-level two-tier extension API.
     """
 
-    # We check with both @jit and compile_isolated(), to exercise the
-    # registration logic.
+    # Check with `@jit` from within the test process and also in a new test
+    # process so as to check the registration mechanism.
 
     def test_func1(self):
         pyfunc = call_func1_nullary
@@ -579,22 +578,19 @@ class TestLowLevelExtending(TestCase):
         self.assertPreciseEqual(cfunc(None), 42)
         self.assertPreciseEqual(cfunc(18.0), 6.0)
 
+    @TestCase.run_test_in_subprocess
     def test_func1_isolated(self):
-        pyfunc = call_func1_nullary
-        cr = compile_isolated(pyfunc, ())
-        self.assertPreciseEqual(cr.entry_point(), 42)
-        pyfunc = call_func1_unary
-        cr = compile_isolated(pyfunc, (types.float64,))
-        self.assertPreciseEqual(cr.entry_point(18.0), 6.0)
+        self.test_func1()
 
     def test_type_callable_keeps_function(self):
         self.assertIs(type_func1, type_func1_)
         self.assertIsNotNone(type_func1)
 
+    @TestCase.run_test_in_subprocess
     def test_cast_mydummy(self):
         pyfunc = get_dummy
-        cr = compile_isolated(pyfunc, (), types.float64)
-        self.assertPreciseEqual(cr.entry_point(), 42.0)
+        cfunc = njit(types.float64(),)(pyfunc)
+        self.assertPreciseEqual(cfunc(), 42.0)
 
     def test_mk_func_literal(self):
         """make sure make_function is passed to typer class as a literal

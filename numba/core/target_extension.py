@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 from numba.core.registry import DelayedRegistry, CPUDispatcher
 from numba.core.decorators import jit
-from numba.core.errors import InternalTargetMismatchError, NumbaValueError
+from numba.core.errors import (InternalTargetMismatchError,
+                               NonexistentTargetError)
 from threading import local as tls
 
 
@@ -18,7 +19,7 @@ class _TargetRegistry(DelayedRegistry):
             msg = "No target is registered against '{}', known targets:\n{}"
             known = '\n'.join([f"{k: <{10}} -> {v}"
                                for k, v in target_registry.items()])
-            raise NumbaValueError(msg.format(item, known)) from None
+            raise NonexistentTargetError(msg.format(item, known)) from None
 
 
 # Registry mapping target name strings to Target classes

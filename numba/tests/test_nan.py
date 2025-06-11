@@ -1,15 +1,14 @@
 import unittest
-from numba.core.compiler import compile_isolated, Flags
+from numba import jit
 from numba.core import types
 
-enable_pyobj_flags = Flags()
-enable_pyobj_flags.enable_pyobject = True
-
-no_pyobj_flags = Flags()
+enable_pyobj_flags = {'forceobj': True}
+no_pyobj_flags = {'nopython': True}
 
 
 def isnan(x):
     return x != x
+
 
 def isequal(x):
     return x == x
@@ -19,15 +18,13 @@ class TestNaN(unittest.TestCase):
 
     def test_nans(self, flags=enable_pyobj_flags):
         pyfunc = isnan
-        cr = compile_isolated(pyfunc, (types.float64,), flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit((types.float64,), **flags)(pyfunc)
 
         self.assertTrue(cfunc(float('nan')))
         self.assertFalse(cfunc(1.0))
 
         pyfunc = isequal
-        cr = compile_isolated(pyfunc, (types.float64,), flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit((types.float64,), **flags)(pyfunc)
 
         self.assertFalse(cfunc(float('nan')))
         self.assertTrue(cfunc(1.0))
@@ -35,6 +32,6 @@ class TestNaN(unittest.TestCase):
     def test_nans_npm(self):
         self.test_nans(flags=no_pyobj_flags)
 
+
 if __name__ == '__main__':
     unittest.main()
-

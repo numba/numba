@@ -1,4 +1,4 @@
-from numba.core.compiler import compile_isolated
+from numba import njit
 from numba.core import types
 import unittest
 
@@ -15,8 +15,7 @@ class TestMaxMin(unittest.TestCase):
     def test_max3(self):
         pyfunc = domax3
         argtys = (types.int32, types.float32, types.double)
-        cres = compile_isolated(pyfunc, argtys)
-        cfunc = cres.entry_point
+        cfunc = njit(argtys)(pyfunc)
 
         a = 1
         b = 2
@@ -27,8 +26,7 @@ class TestMaxMin(unittest.TestCase):
     def test_min3(self):
         pyfunc = domin3
         argtys = (types.int32, types.float32, types.double)
-        cres = compile_isolated(pyfunc, argtys)
-        cfunc = cres.entry_point
+        cfunc = njit(argtys)(pyfunc)
 
         a = 1
         b = 2

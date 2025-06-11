@@ -10,7 +10,7 @@ import operator
 from numba.core.analysis import compute_cfg_from_blocks, find_top_level_loops
 from numba.core import errors, ir, ir_utils
 from numba.core.analysis import compute_use_defs, compute_cfg_from_blocks
-from numba.core.utils import PYVERSION
+from numba.core.utils import PYVERSION, _lazy_pformat
 
 
 _logger = logging.getLogger(__name__)
@@ -112,10 +112,10 @@ def _loop_lift_get_candidate_infos(cfg, blocks, livemap):
         [callfrom] = loop.entries   # requirement checked earlier
         an_exit = next(iter(loop.exits))  # anyone of the exit block
         if len(loop.exits) > 1:
-            # Pre-Py3.8 may have multiple exits
+            # has multiple exits
             [(returnto, _)] = cfg.successors(an_exit)  # requirement checked earlier
         else:
-            # Post-Py3.8 DO NOT have multiple exits
+            # does not have multiple exits
             returnto = an_exit
 
         local_block_ids = set(loop.body) | set(loop.entries) | set(loop.exits)
@@ -186,17 +186,25 @@ def _loop_lift_modify_blocks(func_ir, loopinfo, blocks,
 
     loopblockkeys = set(loop.body) | set(loop.entries)
     if len(loop.exits) > 1:
-        # Pre-Py3.8 may have multiple exits
+        # has multiple exits
         loopblockkeys |= loop.exits
     loopblocks = dict((k, blocks[k].copy()) for k in loopblockkeys)
     # Modify the loop blocks
     _loop_lift_prepare_loop_func(loopinfo, loopblocks)
-
+    # Since Python 3.13, [END_FOR, POP_TOP] sequence becomes the start of the
+    # block causing the block to have line number of the start of previous loop.
+    # Fix this using the loc of the first getiter.
+    getiter_exprs = []
+    for blk in loopblocks.values():
+        getiter_exprs.extend(blk.find_exprs(op="getiter"))
+    first_getiter = min(getiter_exprs, key=lambda x: x.loc.line)
+    loop_loc = first_getiter.loc
     # Create a new IR for the lifted loop
     lifted_ir = func_ir.derive(blocks=loopblocks,
                                arg_names=tuple(loopinfo.inputs),
                                arg_count=len(loopinfo.inputs),
-                               force_non_generator=True)
+                               force_non_generator=True,
+                               loc=loop_loc)
     liftedloop = LiftedLoop(lifted_ir,
                             typingctx, targetctx, flags, locals)
 
@@ -268,7 +276,8 @@ def loop_lifting(func_ir, typingctx, targetctx, flags, locals):
     loops = []
     if loopinfos:
         _logger.debug('loop lifting this IR with %d candidates:\n%s',
-                      len(loopinfos), func_ir.dump_to_string())
+                      len(loopinfos),
+                      _lazy_pformat(func_ir, lazy_func=lambda x: x.dump_to_string()))
     for loopinfo in loopinfos:
         lifted = _loop_lift_modify_blocks(func_ir, loopinfo, blocks,
                                           typingctx, targetctx, flags, locals)
@@ -602,13 +611,6 @@ def find_setupwiths(func_ir):
         target_block = blocks[p]
         if ir_utils.is_return(func_ir.blocks[
                 target_block.terminator.get_targets()[0]].terminator):
-            if PYVERSION == (3, 8):
-                # 3.8 needs to bail here, if this is the case, because the
-                # later code can't handle it.
-                raise errors.CompilerError(
-                    "unsupported control flow: due to return statements "
-                    "inside with block"
-                )
             _rewrite_return(func_ir, p)
 
     # now we need to rewrite the tuple such that we have SETUP_WITH matching the

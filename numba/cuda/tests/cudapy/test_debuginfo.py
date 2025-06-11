@@ -13,6 +13,16 @@ class TestCudaDebugInfo(CUDATestCase):
     """
     These tests only checks the compiled PTX for debuginfo section
     """
+
+    def setUp(self):
+        super().setUp()
+        # If we're using LTO then we can't check the PTX in these tests,
+        # because we produce LTO-IR, which is opaque to the user.
+        # Additionally, LTO optimizes away the exception status due to an
+        # oversight in the way we generate it (it is not added to the used
+        # list).
+        self.skip_if_lto("Exceptions not supported with LTO")
+
     def _getasm(self, fn, sig):
         fn.compile(sig)
         return fn.inspect_asm(sig)

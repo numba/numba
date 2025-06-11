@@ -603,12 +603,14 @@ class TestNumThreadsBackends(TestInSubprocess, TestCase):
                                                      num_threads)
             if self._DEBUG:
                 print('stdout:\n "%s"\n stderr:\n "%s"' % (o, e))
+            # If the test was skipped in the subprocess, then mark this as a
+            # skipped test.
+            m = re.search(r"\.\.\. skipped '(.*?)'", e)
+            if m is not None:
+                self.skipTest(m.group(1))
             self.assertIn('OK', e)
             self.assertTrue('FAIL' not in e)
             self.assertTrue('ERROR' not in e)
-            m = re.search(r"\.\.\. skipped '(.*?)'", e)
-            if m:
-                self.skipTest(m.group(1))
 
         injected_test = "%s_%s_%s_threads" % (name[1:], backend, num_threads)
         setattr(cls, injected_test,

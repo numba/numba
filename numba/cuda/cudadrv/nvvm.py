@@ -279,8 +279,8 @@ class CompilationUnit(object):
 
         self._try_error(err, 'Failed to get size of compiled result.')
 
-        ptxbuf = (c_char * reslen.value)()
-        err = self.driver.nvvmGetCompiledResult(self._handle, ptxbuf)
+        output_buffer = (c_char * reslen.value)()
+        err = self.driver.nvvmGetCompiledResult(self._handle, output_buffer)
         self._try_error(err, 'Failed to get compiled result.')
 
         # get log
@@ -288,7 +288,7 @@ class CompilationUnit(object):
         if self.log:
             warnings.warn(self.log, category=NvvmWarning)
 
-        return ptxbuf[:]
+        return output_buffer[:]
 
     def _try_error(self, err, msg):
         self.driver.check_error(err, "%s\n%s" % (msg, self.get_log()))
@@ -329,6 +329,8 @@ CTK_SUPPORTED = {
     (12, 0): ((5, 0), (9, 0)),
     (12, 1): ((5, 0), (9, 0)),
     (12, 2): ((5, 0), (9, 0)),
+    (12, 3): ((5, 0), (9, 0)),
+    (12, 4): ((5, 0), (9, 0)),
 }
 
 
@@ -415,10 +417,14 @@ def get_arch_option(major, minor):
 
 
 MISSING_LIBDEVICE_FILE_MSG = '''Missing libdevice file.
-Please ensure you have package cudatoolkit >= 11.0
-Install package by:
+Please ensure you have a CUDA Toolkit 11.2 or higher.
+For CUDA 12, ``cuda-nvcc`` and ``cuda-nvrtc`` are required:
 
-    conda install cudatoolkit
+    $ conda install -c conda-forge cuda-nvcc cuda-nvrtc "cuda-version>=12.0"
+
+For CUDA 11, ``cudatoolkit`` is required:
+
+    $ conda install -c conda-forge cudatoolkit "cuda-version>=11.2,<12.0"
 '''
 
 
@@ -609,7 +615,7 @@ def llvm_replace(llvmir):
     return llvmir
 
 
-def llvm_to_ptx(llvmir, **opts):
+def compile_ir(llvmir, **opts):
     if isinstance(llvmir, str):
         llvmir = [llvmir]
 
@@ -653,19 +659,43 @@ def llvm140_to_70_ir(ir):
     return '\n'.join(buf)
 
 
-def set_cuda_kernel(lfunc):
-    mod = lfunc.module
+def set_cuda_kernel(function):
+    """
+    Mark a function as a CUDA kernel. Kernels have the following requirements:
 
-    mdstr = ir.MetaDataString(mod, "kernel")
+    - Metadata that marks them as a kernel.
+    - Addition to the @llvm.used list, so that they will not be discarded.
+    - The noinline attribute is not permitted, because this causes NVVM to emit
+      a warning, which counts as failing IR verification.
+
+    Presently it is assumed that there is one kernel per module, which holds
+    for Numba-jitted functions. If this changes in future or this function is
+    to be used externally, this function may need modification to add to the
+    @llvm.used list rather than creating it.
+    """
+    module = function.module
+
+    # Add kernel metadata
+    mdstr = ir.MetaDataString(module, "kernel")
     mdvalue = ir.Constant(ir.IntType(32), 1)
-    md = mod.add_metadata((lfunc, mdstr, mdvalue))
+    md = module.add_metadata((function, mdstr, mdvalue))
 
-    nmd = cgutils.get_or_insert_named_metadata(mod, 'nvvm.annotations')
+    nmd = cgutils.get_or_insert_named_metadata(module, 'nvvm.annotations')
     nmd.add(md)
 
-    # Marking a kernel 'noinline' causes NVVM to generate a warning, so remove
-    # it if it is present.
-    lfunc.attributes.discard('noinline')
+    # Create the used list
+    ptrty = ir.IntType(8).as_pointer()
+    usedty = ir.ArrayType(ptrty, 1)
+
+    fnptr = function.bitcast(ptrty)
+
+    llvm_used = ir.GlobalVariable(module, usedty, 'llvm.used')
+    llvm_used.linkage = 'appending'
+    llvm_used.section = 'llvm.metadata'
+    llvm_used.initializer = ir.Constant(usedty, [fnptr])
+
+    # Remove 'noinline' if it is present.
+    function.attributes.discard('noinline')
 
 
 def add_ir_version(mod):

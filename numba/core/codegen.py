@@ -11,7 +11,8 @@ import llvmlite.ir as llvmir
 
 from abc import abstractmethod, ABCMeta
 from numba.core import utils, config, cgutils
-from numba.core.llvm_bindings import create_pass_manager_builder
+from numba.core.llvm_bindings import (create_pass_builder,
+                                      create_pass_manager_builder)
 from numba.core.runtime.nrtopt import remove_redundant_nrt_refct
 from numba.core.runtime import rtsys
 from numba.core.compiler_lock import require_global_compiler_lock
@@ -648,38 +649,94 @@ class CPUCodeLibrary(CodeLibrary):
         self._final_module.name = cgutils.normalize_ir_text(self.name)
         self._shared_module = None
 
+    def _optimize_functions_legacy_pm(self, ll_module):
+        """
+        Internal: run function-level optimizations inside *ll_module*
+        using llvm's legacy pass manager
+        """
+        # Enforce data layout to enable layout-specific optimizations
+        ll_module.data_layout = self._codegen._data_layout
+        with self._codegen._function_pass_manager_legacy(ll_module) as fpm:
+            # Run function-level optimizations to reduce memory usage and improve
+            # module-level optimization.
+            for func in ll_module.functions:
+                k = f"Function passes on {func.name!r}"
+                with self._recorded_timings.record_legacy(k):
+                    fpm.initialize()
+                    fpm.run(func)
+                    fpm.finalize()
+
     def _optimize_functions(self, ll_module):
         """
         Internal: run function-level optimizations inside *ll_module*.
         """
         # Enforce data layout to enable layout-specific optimizations
         ll_module.data_layout = self._codegen._data_layout
-        with self._codegen._function_pass_manager(ll_module) as fpm:
+        for func in ll_module.functions:
             # Run function-level optimizations to reduce memory usage and improve
             # module-level optimization.
-            for func in ll_module.functions:
-                k = f"Function passes on {func.name!r}"
-                with self._recorded_timings.record(k):
-                    fpm.initialize()
-                    fpm.run(func)
-                    fpm.finalize()
+            fpm, pb = self._codegen._function_pass_manager()
+            k = f"Function passes on {func.name!r}"
+            with self._recorded_timings.record(k, pb):
+                fpm.run(func, pb)
 
-    def _optimize_final_module(self):
+    def _optimize_final_module_legacy_pm(self):
+
         """
-        Internal: optimize this library's final module.
+        Internal: optimize this library's final module using llvm's legacy pass manager
         """
+        mpm_cheap = self._codegen._module_pass_manager_legacy(
+                                    loop_vectorize=self._codegen._loopvect,
+                                    slp_vectorize=False,
+                                    opt=self._codegen._opt_level,
+                                    cost="cheap")
+
+        mpm_full = self._codegen._module_pass_manager_legacy()
+
         cheap_name = "Module passes (cheap optimization for refprune)"
-        with self._recorded_timings.record(cheap_name):
+        with self._recorded_timings.record_legacy(cheap_name):
             # A cheaper optimisation pass is run first to try and get as many
             # refops into the same function as possible via inlining
-            self._codegen._mpm_cheap.run(self._final_module)
+            mpm_cheap.run(self._final_module)
         # Refop pruning is then run on the heavily inlined function
         if not config.LLVM_REFPRUNE_PASS:
             self._final_module = remove_redundant_nrt_refct(self._final_module)
         full_name = "Module passes (full optimization)"
-        with self._recorded_timings.record(full_name):
+        with self._recorded_timings.record_legacy(full_name):
             # The full optimisation suite is then run on the refop pruned IR
-            self._codegen._mpm_full.run(self._final_module)
+            mpm_full.run(self._final_module)
+
+
+    def _optimize_final_module(self):
+
+        """
+        Internal: optimize this library's final module.
+        """
+
+        if config.USE_LLVM_LEGACY_PASS_MANAGER:
+            self._optimize_final_module_legacy_pm()
+            return
+
+
+        mpm_cheap, mpb_cheap =  self._codegen._module_pass_manager(
+                                           loop_vectorize=self._codegen._loopvect,
+                                           slp_vectorize=False,
+                                           opt=self._codegen._opt_level,
+                                           cost="cheap")
+
+        mpm_full, mpb_full = self._codegen._module_pass_manager()
+        cheap_name = "Module passes (cheap optimization for refprune)"
+        with self._recorded_timings.record(cheap_name, mpb_cheap):
+            # A cheaper optimisation pass is run first to try and get as many
+            # refops into the same function as possible via inlining
+            mpm_cheap.run(self._final_module, mpb_cheap)
+        # Refop pruning is then run on the heavily inlined function
+        if not config.LLVM_REFPRUNE_PASS:
+            self._final_module = remove_redundant_nrt_refct(self._final_module)
+        full_name = "Module passes (full optimization)"
+        with self._recorded_timings.record(full_name, mpb_full):
+            # The full optimisation suite is then run on the refop pruned IR
+            mpm_full.run(self._final_module, mpb_full)
 
     def _get_module_for_linking(self):
         """
@@ -730,7 +787,10 @@ class CPUCodeLibrary(CodeLibrary):
         self.add_llvm_module(ll_module)
 
     def add_llvm_module(self, ll_module):
-        self._optimize_functions(ll_module)
+        if config.USE_LLVM_LEGACY_PASS_MANAGER:
+            self._optimize_functions_legacy_pm(ll_module)
+        else:
+            self._optimize_functions(ll_module)
         # TODO: we shouldn't need to recreate the LLVM module object
         if not config.LLVM_REFPRUNE_PASS:
             ll_module = remove_redundant_nrt_refct(ll_module)
@@ -995,7 +1055,7 @@ class JITCodeLibrary(CPUCodeLibrary):
 
     def _finalize_specific(self):
         self._codegen._scan_and_fix_unresolved_refs(self._final_module)
-        with self._recorded_timings.record("Finalize object"):
+        with self._recorded_timings.record_legacy("Finalize object"):
             self._codegen._engine.finalize_object()
 
 
@@ -1178,7 +1238,8 @@ class CPUCodegen(Codegen):
         self._tm_features = self._customize_tm_features()
         self._customize_tm_options(tm_options)
         tm = target.create_target_machine(**tm_options)
-        engine = ll.create_mcjit_compiler(llvm_module, tm)
+        use_lmm = config.USE_LLVMLITE_MEMORY_MANAGER
+        engine = ll.create_mcjit_compiler(llvm_module, tm, use_lmm=use_lmm)
 
         if config.ENABLE_PROFILING:
             engine.enable_jit_events()
@@ -1196,22 +1257,15 @@ class CPUCodegen(Codegen):
             # guarantee that this will increase runtime performance, it may
             # detriment it, this is here to give the user an easily accessible
             # option to try.
-            loopvect = True
-            opt_level = 3
+            self._loopvect = True
+            self._opt_level = 3
         else:
             # The default behaviour is to do an opt=0 pass to try and inline as
             # much as possible with the cheapest cost of doing so. This is so
             # that the ref-op pruner pass that runs after the cheap pass will
             # have the largest possible scope for working on pruning references.
-            loopvect = False
-            opt_level = 0
-
-        self._mpm_cheap = self._module_pass_manager(loop_vectorize=loopvect,
-                                                    slp_vectorize=False,
-                                                    opt=opt_level,
-                                                    cost="cheap")
-
-        self._mpm_full = self._module_pass_manager()
+            self._loopvect = False
+            self._opt_level = 0
 
         self._engine.set_object_cache(self._library_class._object_compiled_hook,
                                       self._library_class._object_getbuffer_hook)
@@ -1223,8 +1277,9 @@ class CPUCodegen(Codegen):
             ir_module.data_layout = self._data_layout
         return ir_module
 
-    def _module_pass_manager(self, **kwargs):
+    def _module_pass_manager_legacy(self, **kwargs):
         pm = ll.create_module_pass_manager()
+        pm.add_target_library_info(ll.get_process_triple())
         self._tm.add_analysis_passes(pm)
         cost = kwargs.pop("cost", None)
         with self._pass_manager_builder(**kwargs) as pmb:
@@ -1235,33 +1290,60 @@ class CPUCodegen(Codegen):
             # This knocks loops into rotated form early to reduce the likelihood
             # of vectorization failing due to unknown PHI nodes.
             pm.add_loop_rotate_pass()
-            if ll.llvm_version_info[0] < 12:
-                # LLVM 11 added LFTR to the IV Simplification pass,
-                # this interacted badly with the existing use of the
-                # InstructionCombiner here and ended up with PHI nodes that
-                # prevented vectorization from working. The desired
-                # vectorization effects can be achieved with this in LLVM 11
-                # (and also < 11) but at a potentially slightly higher cost:
-                pm.add_licm_pass()
-                pm.add_cfg_simplification_pass()
-            else:
-                # These passes are required to get SVML to vectorize tests
-                # properly on LLVM 14
-                pm.add_instruction_combining_pass()
-                pm.add_jump_threading_pass()
+            # These passes are required to get SVML to vectorize tests
+            pm.add_instruction_combining_pass()
+            pm.add_jump_threading_pass()
 
         if config.LLVM_REFPRUNE_PASS:
             pm.add_refprune_pass(_parse_refprune_flags())
         return pm
 
-    def _function_pass_manager(self, llvm_module, **kwargs):
+    def _module_pass_manager(self, **kwargs):
+        cost = kwargs.pop("cost", None)
+        pb = self._pass_builder(**kwargs)
+        pm = pb.getModulePassManager()
+        # If config.OPT==0 do not include these extra passes to help with
+        # vectorization.
+        if cost is not None and cost == "cheap" and config.OPT != 0:
+            # This knocks loops into rotated form early to reduce the likelihood
+            # of vectorization failing due to unknown PHI nodes.
+            pm.add_loop_rotate_pass()
+            # These passes are required to get SVML to vectorize tests
+            pm.add_instruction_combine_pass()
+            pm.add_jump_threading_pass()
+
+        if config.LLVM_REFPRUNE_PASS:
+           pm.add_refprune_pass(_parse_refprune_flags())
+        return pm, pb
+
+    def _function_pass_manager_legacy(self, llvm_module, **kwargs):
         pm = ll.create_function_pass_manager(llvm_module)
+        pm.add_target_library_info(llvm_module.triple)
         self._tm.add_analysis_passes(pm)
         with self._pass_manager_builder(**kwargs) as pmb:
             pmb.populate(pm)
         if config.LLVM_REFPRUNE_PASS:
             pm.add_refprune_pass(_parse_refprune_flags())
         return pm
+
+    def _function_pass_manager(self, **kwargs):
+        pb = self._pass_builder(**kwargs)
+        pm = pb.getFunctionPassManager()
+        if config.LLVM_REFPRUNE_PASS:
+            pm.add_refprune_pass(_parse_refprune_flags())
+        return pm, pb
+
+    def _pass_builder(self, **kwargs):
+        opt_level = kwargs.pop('opt', config.OPT)
+        loop_vectorize = kwargs.pop('loop_vectorize', config.LOOP_VECTORIZE)
+        slp_vectorize = kwargs.pop('slp_vectorize', config.SLP_VECTORIZE)
+
+        pb = create_pass_builder(self._tm, opt=opt_level,
+                                 loop_vectorize=loop_vectorize,
+                                 slp_vectorize=slp_vectorize,
+                                 **kwargs)
+
+        return pb
 
     def _pass_manager_builder(self, **kwargs):
         """

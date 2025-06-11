@@ -25,24 +25,6 @@ from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
 from numba.core.compiler_machinery import FunctionPass, PassManager, register_pass
 import unittest
 
-@jit((types.int32,), nopython=True)
-def inner(a):
-    return a + 1
-
-@jit((types.int32,), nopython=True)
-def more(a):
-    return inner(inner(a))
-
-def outer_simple(a):
-    return inner(a) * 2
-
-def outer_multiple(a):
-    return inner(a) * more(a)
-
-@njit
-def __dummy__():
-    return
-
 @register_pass(analysis_only=False, mutates_CFG=True)
 class InlineTestPass(FunctionPass):
     _name = "inline_test_pass"
@@ -143,6 +125,9 @@ class TestInlining(TestCase):
                           msg='unexpected {}'.format(pat))
 
     def test_inner_function(self):
+        from numba.tests.inlining_usecases import outer_simple, \
+            __name__ as prefix
+
         with override_config('DUMP_ASSEMBLY', True):
             with captured_stdout() as out:
                 cfunc = jit((types.int32,), nopython=True)(outer_simple)
@@ -150,11 +135,12 @@ class TestInlining(TestCase):
         # Check the inner function was elided from the output (which also
         # guarantees it was inlined into the outer function).
         asm = out.getvalue()
-        prefix = __name__
         self.assert_has_pattern('%s.outer_simple' % prefix, asm)
         self.assert_not_has_pattern('%s.inner' % prefix, asm)
 
     def test_multiple_inner_functions(self):
+        from numba.tests.inlining_usecases import outer_multiple, \
+            __name__ as prefix
         # Same with multiple inner functions, and multiple calls to
         # the same inner function (inner()).  This checks that linking in
         # the same library/module twice doesn't produce linker errors.
@@ -163,13 +149,13 @@ class TestInlining(TestCase):
                 cfunc = jit((types.int32,), nopython=True)(outer_multiple)
         self.assertPreciseEqual(cfunc(1), 6)
         asm = out.getvalue()
-        prefix = __name__
         self.assert_has_pattern('%s.outer_multiple' % prefix, asm)
         self.assert_not_has_pattern('%s.more' % prefix, asm)
         self.assert_not_has_pattern('%s.inner' % prefix, asm)
 
     @skip_parfors_unsupported
     def test_inline_call_after_parfor(self):
+        from numba.tests.inlining_usecases import __dummy__
         # replace the call to make sure inlining doesn't cause label conflict
         # with parfor body
         def test_impl(A):

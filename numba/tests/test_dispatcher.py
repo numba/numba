@@ -8,13 +8,13 @@ from io import StringIO
 
 import numpy as np
 
-from numba import njit, jit, generated_jit, typeof, vectorize
+from numba import njit, jit, typeof, vectorize
 from numba.core import types, errors
 from numba import _dispatcher
-from numba.core.compiler import compile_isolated
 from numba.tests.support import TestCase, captured_stdout
 from numba.np.numpy_support import as_dtype
 from numba.core.dispatcher import Dispatcher
+from numba.extending import overload
 from numba.tests.support import needs_lapack, SerialMixin
 from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
 import unittest
@@ -231,7 +231,7 @@ class TestDispatcher(BaseTest):
             f(1.0, 2.0)
         # The two best matches are output in the error message, as well
         # as the actual argument types.
-        self.assertRegexpMatches(
+        self.assertRegex(
             str(cm.exception),
             r"Ambiguous overloading for <function add [^>]*> "
             r"\(float64, float64\):\n"
@@ -299,10 +299,11 @@ class TestDispatcher(BaseTest):
             foo(1)
             foo(np.ones(1))  # no matching definition
 
-        with self.assertRaises(TypeError) as raises:
+        with self.assertRaises(errors.TypingError) as raises:
             bar()
-        m = "No matching definition for argument type(s) array(float64, 1d, C)"
-        self.assertEqual(str(raises.exception), m)
+
+        m = r".*Invalid use of.*with parameters \(array\(float64, 1d, C\)\).*"
+        self.assertRegex(str(raises.exception), m)
 
     def test_fingerprint_failure(self):
         """
@@ -310,7 +311,6 @@ class TestDispatcher(BaseTest):
         function.  On the other hand, with nopython=True, a ValueError should
         be raised to report the failure with fingerprint.
         """
-        @jit
         def foo(x):
             return x
 
@@ -319,21 +319,22 @@ class TestDispatcher(BaseTest):
         with self.assertRaises(ValueError) as raises:
             _dispatcher.compute_fingerprint([])
         self.assertIn(errmsg, str(raises.exception))
-        # It should work in fallback
-        self.assertEqual(foo([]), [])
+        # It should work in objmode
+        objmode_foo = jit(forceobj=True)(foo)
+        self.assertEqual(objmode_foo([]), [])
         # But, not in nopython=True
-        strict_foo = jit(nopython=True)(foo.py_func)
+        strict_foo = jit(nopython=True)(foo)
         with self.assertRaises(ValueError) as raises:
             strict_foo([])
         self.assertIn(errmsg, str(raises.exception))
 
         # Test in loop lifting context
-        @jit
+        @jit(forceobj=True)
         def bar():
             object()  # force looplifting
             x = []
             for i in range(10):
-                x = foo(x)
+                x = objmode_foo(x)
             return x
 
         self.assertEqual(bar(), [])
@@ -655,48 +656,6 @@ class TestSignatureHandlingObjectMode(TestSignatureHandling):
     jit_args = dict(forceobj=True)
 
 
-class TestGeneratedDispatcher(TestCase):
-    """
-    Tests for @generated_jit.
-    """
-
-    def test_generated(self):
-        f = generated_jit(nopython=True)(generated_usecase)
-        self.assertEqual(f(8), 8 - 5)
-        self.assertEqual(f(x=8), 8 - 5)
-        self.assertEqual(f(x=8, y=4), 8 - 4)
-        self.assertEqual(f(1j), 5 + 1j)
-        self.assertEqual(f(1j, 42), 42 + 1j)
-        self.assertEqual(f(x=1j, y=7), 7 + 1j)
-
-    def test_generated_dtype(self):
-        f = generated_jit(nopython=True)(dtype_generated_usecase)
-        a = np.ones((10,), dtype=np.float32)
-        b = np.ones((10,), dtype=np.float64)
-        self.assertEqual(f(a, b).dtype, np.float64)
-        self.assertEqual(f(a, b, dtype=np.dtype('int32')).dtype, np.int32)
-        self.assertEqual(f(a, b, dtype=np.int32).dtype, np.int32)
-
-    def test_signature_errors(self):
-        """
-        Check error reporting when implementation signature doesn't match
-        generating function signature.
-        """
-        f = generated_jit(nopython=True)(bad_generated_usecase)
-        # Mismatching # of arguments
-        with self.assertRaises(TypeError) as raises:
-            f(1j)
-        self.assertIn("should be compatible with signature '(x, y=5)', "
-                      "but has signature '(x)'",
-                      str(raises.exception))
-        # Mismatching defaults
-        with self.assertRaises(TypeError) as raises:
-            f(1)
-        self.assertIn("should be compatible with signature '(x, y=5)', "
-                      "but has signature '(x, y=6)'",
-                      str(raises.exception))
-
-
 class TestDispatcherMethods(TestCase):
 
     def test_recompile(self):
@@ -786,7 +745,7 @@ class TestDispatcherMethods(TestCase):
         prefix = r'^digraph "CFG for \'_ZN{}{}{}'.format(wrapper,
                                                          module_len,
                                                          module_name)
-        self.assertRegexpMatches(str(cfg), prefix)
+        self.assertRegex(str(cfg), prefix)
         # .display() requires an optional dependency on `graphviz`.
         # just test for the attribute without running it.
         self.assertTrue(callable(cfg.display))
@@ -1032,7 +991,10 @@ class TestBoxingDefaultError(unittest.TestCase):
         # Dummy type has no unbox support
         def foo(x):
             pass
-        cres = compile_isolated(foo, (types.Dummy("dummy_type"),))
+        argtys = (types.Dummy("dummy_type"),)
+        # This needs `compile_isolated`-like behaviour so as to bypass
+        # dispatcher type checking logic
+        cres = njit(argtys)(foo).overloads[argtys]
         with self.assertRaises(TypeError) as raises:
             # Can pass in whatever and the unbox logic will always raise
             # without checking the input value.
@@ -1040,15 +1002,13 @@ class TestBoxingDefaultError(unittest.TestCase):
         self.assertEqual(str(raises.exception), "can't unbox dummy_type type")
 
     def test_box_runtime_error(self):
+        @njit
         def foo():
             return unittest  # Module type has no boxing logic
-        cres = compile_isolated(foo, ())
         with self.assertRaises(TypeError) as raises:
-            # Can pass in whatever and the unbox logic will always raise
-            # without checking the input value.
-            cres.entry_point()
+            foo()
         pat = "cannot convert native Module.* to Python object"
-        self.assertRegexpMatches(str(raises.exception), pat)
+        self.assertRegex(str(raises.exception), pat)
 
 
 class TestNoRetryFailedSignature(unittest.TestCase):
@@ -1093,6 +1053,9 @@ class TestNoRetryFailedSignature(unittest.TestCase):
 
         self.run_test(foo)
 
+    @unittest.expectedFailure
+    # NOTE: @overload does not have an error cache. See PR #9259 for this
+    # feature and remove the xfail once this is merged.
     def test_error_count(self):
         def check(field, would_fail):
             # Slightly modified from the reproducer in issue #4117.
@@ -1102,8 +1065,11 @@ class TestNoRetryFailedSignature(unittest.TestCase):
             k = 10
             counter = {'c': 0}
 
-            @generated_jit
             def trigger(x):
+                assert 0, "unreachable"
+
+            @overload(trigger)
+            def ol_trigger(x):
                 # Keep track of every visit
                 counter['c'] += 1
                 if would_fail:

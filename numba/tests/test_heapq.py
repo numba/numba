@@ -4,11 +4,7 @@ import itertools
 import numpy as np
 
 from numba import jit, typed
-from numba.core.compiler import Flags
-from numba.tests.support import TestCase, CompilationCache, MemoryLeakMixin
-
-no_pyobj_flags = Flags()
-no_pyobj_flags.nrt = True
+from numba.tests.support import TestCase, MemoryLeakMixin
 
 
 def heapify(x):
@@ -43,7 +39,6 @@ class _TestHeapq(MemoryLeakMixin):
 
     def setUp(self):
         super(_TestHeapq, self).setUp()
-        self.ccache = CompilationCache()
         self.rnd = np.random.RandomState(42)
 
     def test_heapify_basic_sanity(self):

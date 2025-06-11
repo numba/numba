@@ -433,7 +433,9 @@ class List(MutableSequence, pt.Generic[T]):
         # Check whether the code was invoked from IPython shell
         try:
             get_ipython
-            return '[{0}, ...]'.format(', '.join(buf[:1000]))
+            preview = ', '.join(buf[:1000])
+            suffix = ', ...' if len(buf) > 1000 else ''
+            return '[{0}{1}]'.format(preview, suffix)
         except (NameError, IndexError):
             return '[{0}]'.format(', '.join(buf))
 
@@ -471,7 +473,7 @@ def box_lsttype(typ, val, c):
     modname = c.context.insert_const_string(
         c.builder.module, 'numba.typed.typedlist',
     )
-    typedlist_mod = c.pyapi.import_module_noblock(modname)
+    typedlist_mod = c.pyapi.import_module(modname)
     fmp_fn = c.pyapi.object_getattr_string(typedlist_mod, '_from_meminfo_ptr')
 
     lsttype_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ))

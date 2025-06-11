@@ -18,12 +18,6 @@ from numba.core.unsafe.refcount import get_refcount
 from numba.experimental import jitclass
 
 
-# global typed-list for testing purposes
-global_typed_list = List.empty_list(int32)
-for i in (1, 2, 3):
-    global_typed_list.append(int32(i))
-
-
 def to_tl(l):
     """ Convert cpython list to typed-list. """
     tl = List.empty_list(int32)
@@ -33,6 +27,7 @@ def to_tl(l):
 
 
 class TestTypedList(MemoryLeakMixin, TestCase):
+
     def test_basic(self):
         l = List.empty_list(int32)
         # len
@@ -504,11 +499,7 @@ class TestTypedList(MemoryLeakMixin, TestCase):
                 self.assertEqual(type(l), list)
 
     def test_catch_global_typed_list(self):
-        @njit()
-        def foo():
-            x = List()
-            for i in global_typed_list:
-                x.append(i)
+        from numba.tests.typedlist_usecases import catch_global
 
         expected_message = ("The use of a ListType[int32] type, assigned to "
                             "variable 'global_typed_list' in globals, is not "
@@ -516,11 +507,12 @@ class TestTypedList(MemoryLeakMixin, TestCase):
                             "constants and there is no known way to compile "
                             "a ListType[int32] type as a constant.")
         with self.assertRaises(TypingError) as raises:
-            foo()
+            njit(catch_global)()
         self.assertIn(
             expected_message,
             str(raises.exception),
         )
+        self.disable_leak_check()
 
     def test_repr(self):
         l = List()
@@ -531,7 +523,13 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         expected = "ListType[int32]([1, 2, 3])"
         self.assertEqual(expected, repr(l))
 
+    def test_repr_long_list(self):
+        l = List(range(1005))
+        expected = f"{typeof(l)}([{', '.join(map(str, l))}])"
+        self.assertEqual(expected, repr(l))
+
     def test_repr_long_list_ipython(self):
+
         # Test repr of long typed Lists in an IPython session
         args = ["-m", "IPython", "--quiet", "--quick", "--no-banner",
                 "--colors=NoColor", "-c"]
@@ -540,27 +538,42 @@ class TestTypedList(MemoryLeakMixin, TestCase):
             subprocess.check_output(base_cmd + ["--version"])
         except subprocess.CalledProcessError as e:
             self.skipTest("ipython not found: return code %d" % e.returncode)
-        repr_cmd = [" ".join(
+
+        def run_repr_cmd(repr_cmd_str):
+            cmd = base_cmd + [repr_cmd_str]
+            p = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                universal_newlines=True,
+            )
+            out, err = p.communicate()
+            return err
+
+        l = List(range(1000))
+        expected = f"{typeof(l)}([{', '.join(map(str, l))}])"
+        actual = run_repr_cmd(" ".join(
+            [
+                "import sys;",
+                "from numba.typed import List;",
+                "res = repr(List(range(1000)));",
+                "sys.stderr.write(res);"
+            ]
+        ))
+        self.assertEqual(expected, actual)
+
+        l = List(range(1005))
+        # Assert that the long list is truncated
+        expected = f"{typeof(l)}([{', '.join(map(str, l[:1000]))}, ...])"
+        actual = run_repr_cmd(" ".join(
             [
                 "import sys;",
                 "from numba.typed import List;",
                 "res = repr(List(range(1005)));",
                 "sys.stderr.write(res);"
             ]
-        )]
-        cmd = base_cmd + repr_cmd
-        p = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            universal_newlines=True,
-        )
-        out, err = p.communicate()
-
-        l = List(range(1005))
-        # Assert that the long list is truncated
-        expected = f"{typeof(l)}([{', '.join(map(str, l[:1000]))}, ...])"
-        self.assertEqual(expected, err)
+        ))
+        self.assertEqual(expected, actual)
 
     def test_iter_mutates_self(self):
         self.disable_leak_check()

@@ -564,6 +564,14 @@ class CUDACache(Cache):
     """
     _impl_class = CUDACacheImpl
 
+    def load_overload(self, sig, target_context):
+        # Loading an overload refreshes the context to ensure it is
+        # initialized. To initialize the correct (i.e. CUDA) target, we need to
+        # enforce that the current target is the CUDA target.
+        from numba.core.target_extension import target_override
+        with target_override('cuda'):
+            return super().load_overload(sig, target_context)
+
 
 class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
     '''
@@ -699,11 +707,11 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
         Create a new instance of this dispatcher specialized for the given
         *args*.
         '''
-        cc = get_current_device().compute_capability
-        argtypes = tuple(
-            [self.typingctx.resolve_argument_type(a) for a in args])
         if self.specialized:
             raise RuntimeError('Dispatcher already specialized')
+
+        cc = get_current_device().compute_capability
+        argtypes = tuple(self.typeof_pyval(a) for a in args)
 
         specialization = self.specializations.get((cc, argtypes))
         if specialization:

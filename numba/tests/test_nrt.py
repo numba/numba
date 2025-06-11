@@ -8,7 +8,6 @@ import numpy as np
 
 from numba import njit
 from numba.core import types
-from numba.core.compiler import compile_isolated, Flags
 from numba.core.runtime import (
     rtsys,
     nrtopt,
@@ -28,8 +27,6 @@ from numba.tests.support import (EnableNRTStatsMixin, TestCase, temp_directory,
 from numba.core.registry import cpu_target
 import unittest
 
-enable_nrt_flags = Flags()
-enable_nrt_flags.nrt = True
 
 linux_only = unittest.skipIf(not sys.platform.startswith('linux'),
                              'linux only test')
@@ -357,12 +354,9 @@ class TestNRTIssue(TestCase):
 
         # Note the return type isn't the same as the tuple type above:
         # the first element is a complex rather than a float.
-        cres = compile_isolated(f, (),
-                                types.Tuple((types.complex128,
-                                             types.Array(types.int32, 1, 'C')
-                                             ))
-                                )
-        z, arr = cres.entry_point()
+        cfunc = njit((types.Tuple((types.complex128,
+                                   types.Array(types.int32, 1, 'C') )))())(f)
+        z, arr = cfunc()
         self.assertPreciseEqual(z, 0j)
         self.assertPreciseEqual(arr, np.zeros(1, dtype=np.int32))
 

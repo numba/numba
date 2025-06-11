@@ -6,14 +6,16 @@ Just-in-Time compilation
 JIT functions
 -------------
 
-.. decorator:: numba.jit(signature=None, nopython=False, nogil=False, cache=False, forceobj=False, parallel=False, error_model='python', fastmath=False, locals={}, boundscheck=False)
+
+.. decorator:: numba.jit(signature_or_function=None, nopython=False, nogil=False, cache=False, forceobj=False, parallel=False, error_model='python', fastmath=False, locals={}, boundscheck=False, inline="never", forceinline=False)
 
    Compile the decorated function on-the-fly to produce efficient machine
    code.  All parameters are optional.
 
-   If present, the *signature* is either a single signature or a list of
+   If present, the *signature_or_function* is either a single signature or a list of
    signatures representing the expected :ref:`numba-types` of function
-   arguments and return values.  Each signature can be given in several
+   arguments and return values. It can also be the function to compile when used as
+   ``@jit`` with no arguments. Each signature can be given in several
    forms:
 
    * A tuple of :ref:`numba-types` arguments (for example
@@ -32,7 +34,7 @@ JIT functions
 
    This decorator has several modes of operation:
 
-   * If one or more signatures are given in *signature*, a specialization is
+   * If one or more signatures are given in *signature_or_function*, a specialization is
      compiled for each of them.  Calling the decorated function will then try
      to choose the best matching signature, and raise a :class:`TypeError` if
      no appropriate conversion is available for the function arguments.  If
@@ -40,7 +42,7 @@ JIT functions
      converted arguments and the return value is converted back according to
      the signature.
 
-   * If no *signature* is given, the decorated function implements
+   * If no *signature_or_function* is given, the decorated function implements
      lazy compilation.  Each call to the decorated function will try to
      re-use an existing specialization if it exists (for example, a call
      with two integer arguments may re-use a specialization for argument
@@ -125,10 +127,16 @@ JIT functions
       @jit()
       def f(x): ...
 
+   If set to ``"always"``, *inline* will enable inlining at the Numba IR level.
+   See :ref:`notes-on-inlining`.
+
+   If set to ``True``, *forceinline* will force inlining at the LLVM IR level by
+   adding the ``alwaysinline`` attribute to the function definition in the IR.
+
    The decorator returns a :class:`Dispatcher` object.
 
    .. note::
-      If no *signature* is given, compilation errors will be raised when
+      If no *signature_or_function* is given, compilation errors will be raised when
       the actual compilation occurs, i.e. when the function is first called
       with some given argument types.
 
@@ -139,15 +147,15 @@ JIT functions
 Generated JIT functions
 -----------------------
 
-.. decorator:: numba.generated_jit(nopython=False, nogil=False, cache=False, forceobj=False, locals={})
+Like the :func:`~numba.jit` decorator, but calls the decorated function at
+compile-time, passing the *types* of the function's arguments.
+The decorated function must return a callable which will be compiled as
+the function's implementation for those types, allowing flexible kinds of
+specialization.
 
-   Like the :func:`~numba.jit` decorator, but calls the decorated function at
-   compile-time, passing the *types* of the function's arguments.
-   The decorated function must return a callable which will be compiled as
-   the function's implementation for those types, allowing flexible kinds of
-   specialization.
-
-   The :func:`~numba.generated_jit` decorator returns a :class:`Dispatcher` object.
+If you are looking for this functionality, see the
+:ref:`high-level extension API <high-level-extending>` ``@overload`` family of
+decorators.
 
 
 Dispatcher objects
@@ -155,11 +163,11 @@ Dispatcher objects
 
 .. class:: Dispatcher
 
-   The class of objects created by calling :func:`~numba.jit` or
-   :func:`~numba.generated_jit`.  You shouldn't try to create such an object
-   in any other way.  Calling a Dispatcher object calls the compiled
-   specialization for the arguments with which it is called, letting it
-   act as an accelerated replacement for the Python function which was compiled.
+   The class of objects created by calling :func:`~numba.jit`. You shouldn't try
+   to create such an object in any other way.  Calling a Dispatcher object calls
+   the compiled specialization for the arguments with which it is called,
+   letting it act as an accelerated replacement for the Python function which
+   was compiled.
 
    In addition, Dispatcher objects have the following methods and attributes:
 

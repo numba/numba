@@ -221,8 +221,9 @@ class TestDebugInfoEmission(TestCase):
         self.assertGreater(len(blocks), 1)
         block = blocks[0]
 
-        # Find non-call instr and check the sequence is as expected
-        instrs = [x for x in block.instructions if x.opcode != 'call']
+        # Find non-call/non-memory instr and check the sequence is as expected
+        instrs = [x for x in block.instructions if x.opcode not in
+                  ['call', 'load', 'store']]
         op_expect = {'fadd', 'fmul', 'fdiv'}
         started = False
         for x in instrs:
@@ -752,6 +753,22 @@ class TestDebugInfoEmission(TestCase):
         lines = self._get_lines_from_debuginfo(metadata)
         # Only one line
         self.assertEqual(len(lines), 1)
+
+    def test_no_if_op_bools_declared(self):
+        @njit("int64(boolean, boolean)", debug=True, _dbg_optnone=True)
+        def choice(cond1, cond2):
+            if cond1 and cond2:
+                return 1
+            else:
+                return 2
+
+        # We should not declare variables used as the condition in if ops.
+        # See Numba PR #9888: https://github.com/numba/numba/pull/9888
+        llvm_ir = next(iter(choice.inspect_llvm().items()))[1]
+
+        for line in llvm_ir.splitlines():
+            if 'llvm.dbg.declare' in line:
+                self.assertNotIn("bool", line)
 
 
 if __name__ == '__main__':

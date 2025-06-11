@@ -5,8 +5,7 @@ import threading
 import numpy as np
 
 
-from numba.core.compiler import compile_isolated
-from numba import jit
+from numba import jit, njit
 from numba.core import types, errors
 from numba.core.typing import ctypes_utils
 from numba.tests.support import MemoryLeakMixin, tag, TestCase
@@ -66,38 +65,34 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
 
     def test_c_sin(self):
         pyfunc = use_c_sin
-        cres = compile_isolated(pyfunc, [types.double])
-        cfunc = cres.entry_point
+        cfunc = njit((types.double,))(pyfunc)
         x = 3.14
         self.assertEqual(pyfunc(x), cfunc(x))
 
     def test_two_funcs(self):
         # Check that two constant functions don't get mixed up.
         pyfunc = use_two_funcs
-        cres = compile_isolated(pyfunc, [types.double])
-        cfunc = cres.entry_point
+        cfunc = njit((types.double,))(pyfunc)
         x = 3.14
         self.assertEqual(pyfunc(x), cfunc(x))
 
     @unittest.skipUnless(is_windows, "Windows-specific test")
     def test_stdcall(self):
         # Just check that it doesn't crash
-        cres = compile_isolated(use_c_sleep, [types.uintc])
-        cfunc = cres.entry_point
+        cfunc = njit((types.uintc,))(use_c_sleep)
+
         cfunc(1)
 
     def test_ctype_wrapping(self):
         pyfunc = use_ctype_wrapping
-        cres = compile_isolated(pyfunc, [types.double])
-        cfunc = cres.entry_point
+        cfunc = njit((types.double,))(pyfunc)
         x = 3.14
         self.assertEqual(pyfunc(x), cfunc(x))
 
     def test_ctype_voidptr(self):
         pyfunc = use_c_pointer
         # pyfunc will segfault if called
-        cres = compile_isolated(pyfunc, [types.int32])
-        cfunc = cres.entry_point
+        cfunc = njit((types.int32,))(pyfunc)
         x = 123
         self.assertEqual(cfunc(x), x + 1)
 
@@ -117,7 +112,7 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
 
     def test_untyped_function(self):
         with self.assertRaises(TypeError) as raises:
-            compile_isolated(use_c_untyped, [types.double])
+            njit((types.double,))(use_c_untyped)
         self.assertIn("ctypes function '_numba_test_exp' doesn't define its argument types",
                       str(raises.exception))
 
@@ -239,8 +234,7 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
             return ptr
 
         # Compile it
-        cres = compile_isolated(pyfunc, [types.uintp[::1]])
-        cfunc = cres.entry_point
+        cfunc = njit((types.uintp[::1],))(pyfunc)
 
         # Setup inputs
         arr_got = np.zeros(1, dtype=np.uintp)

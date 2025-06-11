@@ -1,5 +1,5 @@
 Version 0.58.0 (20 September 2023)
-----------------------------------
+==================================
 
 .. contents:: Table of Contents
    :depth: 2
@@ -11,7 +11,7 @@ Highlights
 ~~~~~~~~~~
 
 Added towncrier
-"""""""""""""""
+---------------
 
 This PR adds towncrier as a GitHub workflow for checking release notes.
 From this PR onwards every PR made in Numba will require a appropriate
@@ -22,28 +22,28 @@ release notes in smaller PRs with minimal impact by addition of a
 (`PR-#8792 <https://github.com/numba/numba/pull/8792>`__)
 
 The minimum supported NumPy version is 1.22.
-""""""""""""""""""""""""""""""""""""""""""""
+--------------------------------------------
 
 Following NEP-0029, the minimum supported NumPy version is now 1.22.
 
 (`PR-#9093 <https://github.com/numba/numba/pull/9093>`__)
 
 Add support for NumPy 1.25
-""""""""""""""""""""""""""
+--------------------------
 
 Extend Numba to support new and changed features released in NumPy 1.25.
 
 (`PR-#9011 <https://github.com/numba/numba/pull/9011>`__)
 
 Remove NVVM 3.4 and CTK 11.0 / 11.1 support
-"""""""""""""""""""""""""""""""""""""""""""
+-------------------------------------------
 
 Support for CUDA toolkits < 11.2 is removed.
 
 (`PR-#9040 <https://github.com/numba/numba/pull/9040>`__)
 
 Removal of Windows 32-bit Support
-"""""""""""""""""""""""""""""""""
+---------------------------------
 
 This release onwards, Numba has discontinued support for Windows 32-bit
 operating systems.
@@ -51,14 +51,14 @@ operating systems.
 (`PR-#9083 <https://github.com/numba/numba/pull/9083>`__)
 
 The minimum llvmlite version is now 0.41.0.
-"""""""""""""""""""""""""""""""""""""""""""
+-------------------------------------------
 
 The minimum required version of llvmlite is now version 0.41.0.
 
 (`PR-#8916 <https://github.com/numba/numba/pull/8916>`__)
 
 Added RVSDG-frontend
-""""""""""""""""""""
+--------------------
 
 This PR is a preliminary work on adding a RVSDG-frontend for processing
 bytecode. RVSDG (Regionalized Value-State Dependence Graph) allows us to
@@ -71,7 +71,7 @@ New Features
 ~~~~~~~~~~~~
 
 ``numba.experimental.jitclass`` gains support for ``__*matmul__`` methods.
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+--------------------------------------------------------------------------
 
 ``numba.experimental.jitclass`` now has support for the following methods:
 
@@ -81,8 +81,8 @@ New Features
 
 (`PR-#8892 <https://github.com/numba/numba/pull/8892>`__)
 
-``numba.experimental.jitclass`` gains support for reflected "dunder" methods.
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+``numba.experimental.jitclass`` gains support for reflected -dunder- methods.
+-----------------------------------------------------------------------------
 
 ``numba.experimental.jitclass`` now has support for the following methods:
 
@@ -103,7 +103,7 @@ New Features
 
 
 Add support for value ``max`` to ``NUMBA_OPT``.
-"""""""""""""""""""""""""""""""""""""""""""""""
+-----------------------------------------------
 
 The optimisation level that Numba applies when compiling can be set through the
 environment variable ``NUMBA_OPT``. This has historically been a value between
@@ -122,7 +122,7 @@ Improvements
 ~~~~~~~~~~~~
 
 Updates to ``numba.core.pythonapi``.
-""""""""""""""""""""""""""""""""""""
+------------------------------------
 
 Support for Python C-API functions ``PyBytes_AsString`` and
 ``PyBytes_AsStringAndSize`` is added to ``numba.core.pythonapi.PythonAPI`` as
@@ -131,7 +131,7 @@ Support for Python C-API functions ``PyBytes_AsString`` and
 (`PR-#8462 <https://github.com/numba/numba/pull/8462>`__)
 
 Support for ``isinstance`` is now non-experimental.
-"""""""""""""""""""""""""""""""""""""""""""""""""""
+---------------------------------------------------
 
 Support for the ``isinstance`` built-in function has moved from being considered
 an experimental feature to a fully supported feature.
@@ -143,7 +143,7 @@ NumPy Support
 ~~~~~~~~~~~~~
 
 All modes are supported in ``numpy.correlate`` and ``numpy.convolve``.
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+----------------------------------------------------------------------
 
 All values for the ``mode`` argument to ``numpy.correlate`` and
 ``numpy.convolve`` are now supported.
@@ -151,7 +151,7 @@ All values for the ``mode`` argument to ``numpy.correlate`` and
 (`PR-#7543 <https://github.com/numba/numba/pull/7543>`__)
 
 ``@vectorize`` accommodates arguments implementing ``__array_ufunc__``.
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+-----------------------------------------------------------------------
 
 Universal functions (``ufunc``\ s) created with ``numba.vectorize`` will now
 respect arguments implementing ``__array_ufunc__`` (NEP-13) to allow pre- and
@@ -162,7 +162,7 @@ interpreter.
 
 
 Added support for ``np.geomspace`` function.
-""""""""""""""""""""""""""""""""""""""""""""
+--------------------------------------------
 
 This PR improves on `#4074 <https://github.com/numba/numba/issues/4074>`__ by
 adding support for ``np.geomspace``. The current implementation only supports
@@ -171,42 +171,42 @@ scalar ``start`` and ``stop`` parameters.
 (`PR-#9068 <https://github.com/numba/numba/pull/9068>`__)
 
 Added support for ``np.vsplit``, ``np.hsplit``, ``np.dsplit``.
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+--------------------------------------------------------------
 
 This PR improves on `#4074 <https://github.com/numba/numba/issues/4074>`__ by adding support for ``np.vsplit``, ``np.hsplit``, ``and np.dsplit``.
 
 (`PR-#9082 <https://github.com/numba/numba/pull/9082>`__)
 
 Added support for ``np.row_stack`` function.
-""""""""""""""""""""""""""""""""""""""""""""
+--------------------------------------------
 
 Support is added for ``numpy.row_stack``.
 
 (`PR-#9085 <https://github.com/numba/numba/pull/9085>`__)
 
 Added support for functions ``np.polynomial.polyutils.trimseq``, as well as functions ``polyadd``, ``polysub``, ``polymul`` from ``np.polynomial.polynomial``.
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 Support is added for ``np.polynomial.polyutils.trimseq``, ``np.polynomial.polynomial.polyadd``, ``np.polynomial.polynomial.polysub``, ``np.polynomial.polynomial.polymul``.
 
 (`PR-#9087 <https://github.com/numba/numba/pull/9087>`__)
 
 Added support for ``np.diagflat`` function.
-"""""""""""""""""""""""""""""""""""""""""""
+-------------------------------------------
 
 Support is added for ``numpy.diagflat``.
 
 (`PR-#9113 <https://github.com/numba/numba/pull/9113>`__)
 
 Added support for ``np.resize`` function.
-"""""""""""""""""""""""""""""""""""""""""
+-----------------------------------------
 
 Support is added for ``numpy.resize``.
 
 (`PR-#9118 <https://github.com/numba/numba/pull/9118>`__)
 
 Add np.trim_zeros
-"""""""""""""""""
+-----------------
 
 Support for ``np.trim_zeros()`` is added.
 
@@ -217,7 +217,7 @@ CUDA Changes
 ~~~~~~~~~~~~
 
 Bitwise operation ``ufunc`` support for the CUDA target.
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+--------------------------------------------------------
 
 Support is added for some ``ufunc``\ s associated with bitwise operation on the
 CUDA target. Namely:
@@ -233,7 +233,7 @@ CUDA target. Namely:
 (`PR-#8974 <https://github.com/numba/numba/pull/8974>`__)
 
 Add support for the latest CUDA driver codes.
-"""""""""""""""""""""""""""""""""""""""""""""
+---------------------------------------------
 
 Support is added for the latest set of CUDA driver codes.
 
@@ -241,14 +241,14 @@ Support is added for the latest set of CUDA driver codes.
 
 
 Add NumPy comparison ufunc in CUDA
-""""""""""""""""""""""""""""""""""
+----------------------------------
 this PR adds support for comparison ufuncs for the CUDA target
 (eg. ``numpy.greater``, ``numpy.greater_equal``, ``numpy.less_equal``, etc.).
 
 (`PR-#9007 <https://github.com/numba/numba/pull/9007>`__)
 
 Report absolute path of ``libcuda.so`` on Linux
-"""""""""""""""""""""""""""""""""""""""""""""""
+-----------------------------------------------
 
 ``numba -s`` now reports the absolute path to ``libcuda.so`` on Linux, to aid
 troubleshooting driver issues, particularly on WSL2 where a Linux driver can
@@ -257,7 +257,7 @@ incorrectly be installed in the environment.
 (`PR-#9034 <https://github.com/numba/numba/pull/9034>`__)
 
 Add debuginfo support to ``nvdisasm`` output.
-"""""""""""""""""""""""""""""""""""""""""""""
+---------------------------------------------
 
 Support is added for debuginfo (source line and inlining information) in
 functions that make calls through ``nvdisasm``. For example the CUDA dispatcher
@@ -267,7 +267,7 @@ functions that make calls through ``nvdisasm``. For example the CUDA dispatcher
 
 
 Add CUDA SASS CFG Support
-"""""""""""""""""""""""""
+-------------------------
 
 This PR adds support for getting the SASS CFG in dot language format.
 It adds an ``inspect_sass_cfg()`` method to CUDADispatcher and the ``-cfg``
@@ -276,7 +276,7 @@ flag to the nvdisasm command line tool.
 (`PR-#9051 <https://github.com/numba/numba/pull/9051>`__)
 
 Support NVRTC using the ctypes binding
-""""""""""""""""""""""""""""""""""""""
+--------------------------------------
 
 NVRTC can now be used when the ctypes binding is in use, enabling float16, and
 linking CUDA C / C++ sources without needing the NVIDIA CUDA Python bindings.
@@ -284,7 +284,7 @@ linking CUDA C / C++ sources without needing the NVIDIA CUDA Python bindings.
 (`PR-#9086 <https://github.com/numba/numba/pull/9086>`__)
 
 Fix CUDA atomics tests with toolkit 12.2
-""""""""""""""""""""""""""""""""""""""""
+----------------------------------------
 
 CUDA 12.2 generates slightly different PTX for some atomics, so the relevant
 tests are updated to look for the correct instructions when 12.2 is used.
@@ -296,7 +296,7 @@ Bug Fixes
 ~~~~~~~~~
 
 Handling of different sized unsigned integer indexes are fixed in ``numba.typed.List``.
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+---------------------------------------------------------------------------------------
 
 An issue with the order of truncation/extension and casting of unsigned integer
 indexes in ``numba.typed.List`` has been fixed.
@@ -304,7 +304,7 @@ indexes in ``numba.typed.List`` has been fixed.
 (`PR-#7262 <https://github.com/numba/numba/pull/7262>`__)
 
 Prevent invalid fusion
-""""""""""""""""""""""
+----------------------
 
 This PR fixes an issue in which an array first read in a parfor and later
 written in the same parfor would only be classified as used in the parfor.
@@ -316,7 +316,7 @@ in a parfor as being both used and defined so that fusion will be prevented.
 (`PR-#7582 <https://github.com/numba/numba/pull/7582>`__)
 
 The ``numpy.allclose`` implementation now correctly handles default arguments.
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+------------------------------------------------------------------------------
 
 The implementation of ``numpy.allclose`` is corrected to use ``TypingError`` to
 report typing errors.
@@ -324,14 +324,14 @@ report typing errors.
 (`PR-#8885 <https://github.com/numba/numba/pull/8885>`__)
 
 Add type validation to ``numpy.isclose``.
-"""""""""""""""""""""""""""""""""""""""""
+-----------------------------------------
 
 Type validation is added to the implementation of ``numpy.isclose``.
 
 (`PR-#8944 <https://github.com/numba/numba/pull/8944>`__)
 
 Fix support for overloading dispatcher with non-compatible first-class functions
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+--------------------------------------------------------------------------------
 
 Fixes an error caused by not handling compilation error during casting of
 ``Dispatcher`` objects into first-class functions. With the fix, users can now
@@ -341,7 +341,7 @@ https://github.com/numba/numba/issues/9071 for details.
 (`PR-#9072 <https://github.com/numba/numba/pull/9072>`__)
 
 Support ``dtype`` keyword argument in ``numpy.arange`` with ``parallel=True``
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+-----------------------------------------------------------------------------
 
 Fixes parfors transformation to support the use of ``dtype`` keyword argument in
 ``numpy.arange(..., dtype=dtype)``.
@@ -349,7 +349,7 @@ Fixes parfors transformation to support the use of ``dtype`` keyword argument in
 (`PR-#9095 <https://github.com/numba/numba/pull/9095>`__)
 
 Fix all ``@overload``\ s to use parameter names that match public APIs.
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+-----------------------------------------------------------------------
 
 Some of the Numba ``@overload``\ s for functions in NumPy and Python's built-ins
 were written using parameter names that did not match those used in API they
@@ -426,7 +426,7 @@ Changes
 
 
 Support for ``@numba.extending.intrinsic(prefer_literal=True)``
-"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+---------------------------------------------------------------
 
 In the high level extension API, the ``prefer_literal`` option is added to the
 ``numba.extending.intrinsic`` decorator to prioritize the use of literal types
@@ -440,7 +440,7 @@ Deprecations
 ~~~~~~~~~~~~
 
 Deprecation of old-style ``NUMBA_CAPTURED_ERRORS``
-""""""""""""""""""""""""""""""""""""""""""""""""""
+--------------------------------------------------
 
 Added deprecation schedule of ``NUMBA_CAPTURED_ERRORS=old_style``.
 ``NUMBA_CAPTURED_ERRORS=new_style`` will become the default in future releases.

@@ -1,7 +1,6 @@
 import numpy as np
 
-from numba.core.compiler import compile_isolated
-from numba import jit
+from numba import jit, njit
 from numba.core import types
 
 from numba.tests.support import TestCase, tag
@@ -68,8 +67,7 @@ class TestScalarNumberCtor(TestCase):
         x_values = [1, 0, 1000, 12.2, 23.4]
 
         for ty, x in zip(x_types, x_values):
-            cres = compile_isolated(pyfunc, [ty])
-            cfunc = cres.entry_point
+            cfunc = njit((ty,))(pyfunc)
             self.assertPreciseEqual(pyfunc(x), cfunc(x))
 
     def test_bool(self):
@@ -87,8 +85,7 @@ class TestScalarNumberCtor(TestCase):
         x_values = [1, 1000, 12.2, 23.4]
 
         for ty, x in zip(x_types, x_values):
-            cres = compile_isolated(pyfunc, [ty])
-            cfunc = cres.entry_point
+            cfunc = njit((ty,))(pyfunc)
             self.assertPreciseEqual(pyfunc(x), cfunc(x),
                 prec='single' if ty is types.float32 else 'exact')
 
@@ -102,8 +99,7 @@ class TestScalarNumberCtor(TestCase):
         x_values = [1, 1000, 12.2, 23.4, 1.5-5j, 1-4.75j]
 
         for ty, x in zip(x_types, x_values):
-            cres = compile_isolated(pyfunc, [ty])
-            cfunc = cres.entry_point
+            cfunc = njit((ty,))(pyfunc)
             got = cfunc(x)
             expected = pyfunc(x)
             self.assertPreciseEqual(pyfunc(x), cfunc(x),
@@ -113,12 +109,10 @@ class TestScalarNumberCtor(TestCase):
         # by checking the accuracy of computations.
         pyfunc = complex_calc
         x = 1.0 + 2**-50
-        cres = compile_isolated(pyfunc, [types.float32])
-        cfunc = cres.entry_point
+        cfunc = njit((types.float32,))(pyfunc)
         self.assertPreciseEqual(cfunc(x), 1.0)
         # Control (complex128)
-        cres = compile_isolated(pyfunc, [types.float64])
-        cfunc = cres.entry_point
+        cfunc = njit((types.float64,))(pyfunc)
         self.assertGreater(cfunc(x), 1.0)
 
     def test_complex2(self):
@@ -131,8 +125,7 @@ class TestScalarNumberCtor(TestCase):
         y_values = [x - 3 for x in x_values]
 
         for ty, x, y in zip(x_types, x_values, y_values):
-            cres = compile_isolated(pyfunc, [ty, ty])
-            cfunc = cres.entry_point
+            cfunc = njit((ty, ty))(pyfunc)
             self.assertPreciseEqual(pyfunc(x, y), cfunc(x, y),
                 prec='single' if ty is types.float32 else 'exact')
 
@@ -140,12 +133,10 @@ class TestScalarNumberCtor(TestCase):
         # by checking the accuracy of computations.
         pyfunc = complex_calc2
         x = 1.0 + 2**-50
-        cres = compile_isolated(pyfunc, [types.float32, types.float32])
-        cfunc = cres.entry_point
+        cfunc = njit((types.float32, types.float32))(pyfunc)
         self.assertPreciseEqual(cfunc(x, x), 2.0)
         # Control (complex128)
-        cres = compile_isolated(pyfunc, [types.float64, types.float32])
-        cfunc = cres.entry_point
+        cfunc = njit((types.float64, types.float32))(pyfunc)
         self.assertGreater(cfunc(x, x), 2.0)
 
     def check_type_converter(self, tp, np_type, values):

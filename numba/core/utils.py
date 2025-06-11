@@ -12,7 +12,9 @@ import weakref
 import warnings
 import threading
 import contextlib
+import json
 import typing as _tp
+from pprint import pformat
 
 from types import ModuleType
 from importlib import import_module
@@ -27,11 +29,7 @@ from numba.core.config import (PYVERSION, MACHINE_BITS, # noqa: F401
 from numba.core import config
 from numba.core import types
 
-if PYVERSION <= (3, 8):
-    # This is needed for Python-3.8 and before due to the lack of PEP-585.
-    from typing import MutableSet, MutableMapping, Mapping, Sequence
-else:
-    from collections.abc import Mapping, Sequence, MutableSet, MutableMapping
+from collections.abc import Mapping, Sequence, MutableSet, MutableMapping
 
 
 def erase_traceback(exc_value):
@@ -192,48 +190,6 @@ weakref.finalize(lambda: None, lambda: None)
 atexit.register(_at_shutdown)
 
 
-_old_style_deprecation_msg = (
-    "Code using Numba extension API maybe depending on 'old_style' "
-    "error-capturing, which is deprecated and will be replaced by 'new_style' "
-    "in a future release. See details at "
-    "https://numba.readthedocs.io/en/latest/reference/deprecation.html#deprecation-of-old-style-numba-captured-errors" # noqa: E501
-)
-
-
-def _warn_old_style():
-    from numba.core import errors  # to prevent circular import
-
-    exccls, _, tb = sys.exc_info()
-    # Warn only if the active exception is not a NumbaError
-    # and not a NumbaWarning which is raised if -Werror is set.
-    numba_errs = (errors.NumbaError, errors.NumbaWarning)
-    if exccls is not None and not issubclass(exccls, numba_errs):
-        tb_last = traceback.format_tb(tb)[-1]
-        msg = f"{_old_style_deprecation_msg}\nException origin:\n{tb_last}"
-        warnings.warn(msg,
-                      errors.NumbaPendingDeprecationWarning)
-
-
-def use_new_style_errors():
-    """Returns True if new style errors are to be used, false otherwise"""
-    # This uses `config` so as to make sure it gets the current value from the
-    # module as e.g. some tests mutate the config with `override_config`.
-    res = config.CAPTURED_ERRORS == 'new_style'
-    if not res:
-        _warn_old_style()
-    return res
-
-
-def use_old_style_errors():
-    """Returns True if old style errors are to be used, false otherwise"""
-    # This uses `config` so as to make sure it gets the current value from the
-    # module as e.g. some tests mutate the config with `override_config`.
-    res = config.CAPTURED_ERRORS == 'old_style'
-    if res:
-        _warn_old_style()
-    return res
-
-
 class ThreadLocalStack:
     """A TLS stack container.
 
@@ -387,6 +343,28 @@ def order_by_target_specificity(target, templates, fnkey=''):
 
 
 T = _tp.TypeVar('T')
+
+
+class OrderedSet(MutableSet[T]):
+
+    def __init__(self, iterable: _tp.Iterable[T] = ()):
+        # Just uses a dictionary under-the-hood to maintain insertion order.
+        self._data = dict.fromkeys(iterable, None)
+
+    def __contains__(self, key):
+        return key in self._data
+
+    def __iter__(self):
+        return iter(self._data)
+
+    def __len__(self):
+        return len(self._data)
+
+    def add(self, item):
+        self._data[item] = None
+
+    def discard(self, item):
+        self._data.pop(item, None)
 
 
 class MutableSortedSet(MutableSet[T], _tp.Generic[T]):
@@ -751,3 +729,55 @@ def get_hashable_key(value):
         return id(value)
     else:
         return value
+
+
+class threadsafe_cached_property(functools.cached_property):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._lock = threading.RLock()
+
+    def __get__(self, *args, **kwargs):
+        with self._lock:
+            return super().__get__(*args, **kwargs)
+
+
+def dump_llvm(fndesc, module):
+    print(("LLVM DUMP %s" % fndesc).center(80, '-'))
+    if config.HIGHLIGHT_DUMPS:
+        try:
+            from pygments import highlight
+            from pygments.lexers import LlvmLexer as lexer
+            from pygments.formatters import Terminal256Formatter
+            from numba.misc.dump_style import by_colorscheme
+            print(highlight(module.__repr__(), lexer(),
+                            Terminal256Formatter( style=by_colorscheme())))
+        except ImportError:
+            msg = "Please install pygments to see highlighted dumps"
+            raise ValueError(msg)
+    else:
+        print(module)
+    print('=' * 80)
+
+
+class _lazy_pformat(object):
+    """ Lazily generate strings that may be useful only for debugging.
+        pformat is the default formatter but you can pass lazy_func kwarg
+        to use a different formatter.
+    """
+    def __init__(self, *args, **kwargs):
+        self.func = pformat
+        self.args = args
+        self.kwargs = kwargs
+        if "lazy_func" in kwargs:
+            self.func = kwargs["lazy_func"]
+            del kwargs["lazy_func"]
+
+    def __str__(self):
+        return self.func(*self.args, **self.kwargs)
+
+
+class _LazyJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, _lazy_pformat):
+            return str(obj)
+        return super().default(obj)

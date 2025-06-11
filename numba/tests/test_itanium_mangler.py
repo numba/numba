@@ -68,12 +68,12 @@ class TestItaniumManager(unittest.TestCase):
         self.assertEqual(expect, got)
         # check float (not handled using standard)
         got = itanium_mangler.mangle_value(12.3)
-        self.assertRegexpMatches(got, r'^\d+_12_[0-9a-z][0-9a-z]3$')
+        self.assertRegex(got, r'^\d+_12_[0-9a-z][0-9a-z]3$')
 
     def test_mangle_unicode(self):
         name = u'f∂ƒ©z'
         got = itanium_mangler.mangle_identifier(name)
-        self.assertRegexpMatches(got, r'^\d+f(_[a-z0-9][a-z0-9])+z$')
+        self.assertRegex(got, r'^\d+f(_[a-z0-9][a-z0-9])+z$')
 
 
 if __name__ == '__main__':

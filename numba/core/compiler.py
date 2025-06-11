@@ -3,8 +3,8 @@ import copy
 import warnings
 from numba.core.tracing import event
 
-from numba.core import (utils, errors, typing, interpreter, bytecode, postproc,
-                        config, callconv, cpu)
+from numba.core import (errors, interpreter, bytecode, postproc, config,
+                        callconv, cpu)
 from numba.parfors.parfor import ParforDiagnostics
 from numba.core.errors import CompilerError
 from numba.core.environment import lookup_environment
@@ -22,7 +22,6 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode,
                                        CanonicalizeLoopEntry, LiteralUnroll,
                                        ReconstructSSA, RewriteDynamicRaises,
                                        LiteralPropagationSubPipelinePass,
-                                       RVSDGFrontend,
                                        )
 
 from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
@@ -41,6 +40,8 @@ from numba.core.targetconfig import TargetConfig, Option, ConfigStack
 
 
 class Flags(TargetConfig):
+    __slots__ = ()
+
     enable_looplift = Option(
         type=bool,
         default=False,
@@ -137,13 +138,6 @@ detail""",
         type=cpu.InlineOptions,
         default=cpu.InlineOptions("never"),
         doc="TODO",
-    )
-    # Defines a new target option for tracking the "target backend".
-    # This will be the XYZ in @jit(_target=XYZ).
-    target_backend = Option(
-        type=str,
-        default="cpu", # if not set, default to CPU
-        doc="backend"
     )
 
     dbg_extend_lifetimes = Option(
@@ -301,22 +295,6 @@ def sanitize_compile_result_entries(entries):
 def compile_result(**entries):
     entries = sanitize_compile_result_entries(entries)
     return CompileResult(**entries)
-
-
-def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
-                     locals={}):
-    """
-    Compile the function in an isolated environment (typing and target
-    context).
-    Good for testing.
-    """
-    from numba.core.registry import cpu_target
-    typingctx = typing.Context()
-    targetctx = cpu.CPUContext(typingctx, target='cpu')
-    # Register the contexts in case for nested @jit or @overload calls
-    with cpu_target.nested_context(typingctx, targetctx):
-        return compile_extra(typingctx, targetctx, func, args, return_type,
-                             flags, locals)
 
 
 def run_frontend(func, inline_closures=False, emit_dels=False):
@@ -499,10 +477,8 @@ class CompilerBase(object):
                     res = e.result
                     break
                 except Exception as e:
-                    if (utils.use_new_style_errors() and not
-                            isinstance(e, errors.NumbaError)):
+                    if not isinstance(e, errors.NumbaError):
                         raise e
-
                     self.state.status.fail_reason = e
                     if is_final_pipeline:
                         raise e
@@ -541,15 +517,12 @@ class Compiler(CompilerBase):
     """
 
     def define_pipelines(self):
-        # this maintains the objmode fallback behaviour
-        pms = []
-        if not self.state.flags.force_pyobject:
-            pms.append(DefaultPassBuilder.define_nopython_pipeline(self.state))
-        if self.state.status.can_fallback or self.state.flags.force_pyobject:
-            pms.append(
-                DefaultPassBuilder.define_objectmode_pipeline(self.state)
-            )
-        return pms
+        if self.state.flags.force_pyobject:
+            # either object mode
+            return [DefaultPassBuilder.define_objectmode_pipeline(self.state),]
+        else:
+            # or nopython mode
+            return [DefaultPassBuilder.define_nopython_pipeline(self.state),]
 
 
 class DefaultPassBuilder(object):
@@ -662,17 +635,10 @@ class DefaultPassBuilder(object):
     def define_untyped_pipeline(state, name='untyped'):
         """Returns an untyped part of the nopython pipeline"""
         pm = PassManager(name)
-        if config.USE_RVSDG_FRONTEND:
-            if state.func_ir is None:
-                pm.add_pass(RVSDGFrontend, "rvsdg frontend")
-                pm.add_pass(FixupArgs, "fix up args")
-            pm.add_pass(IRProcessing, "processing IR")
-        else:
-            if state.func_ir is None:
-                pm.add_pass(TranslateByteCode, "analyzing bytecode")
-                pm.add_pass(FixupArgs, "fix up args")
-            pm.add_pass(IRProcessing, "processing IR")
-
+        if state.func_ir is None:
+            pm.add_pass(TranslateByteCode, "analyzing bytecode")
+            pm.add_pass(FixupArgs, "fix up args")
+        pm.add_pass(IRProcessing, "processing IR")
         pm.add_pass(WithLifting, "Handle with contexts")
 
         # inline closures early in case they are using nonlocal's
@@ -704,6 +670,9 @@ class DefaultPassBuilder(object):
 
         if state.flags.enable_ssa:
             pm.add_pass(ReconstructSSA, "ssa")
+
+        if not state.flags.no_rewrites:
+            pm.add_pass(DeadBranchPrune, "dead branch pruning")
 
         pm.add_pass(LiteralPropagationSubPipelinePass, "Literal propagation")
 

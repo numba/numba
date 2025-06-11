@@ -3,7 +3,7 @@ from numba.core.compiler_machinery import (FunctionPass, AnalysisPass,
                                            register_pass)
 from numba.core.untyped_passes import InlineInlinables
 from numba.core.typed_passes import IRLegalization
-from numba import jit, generated_jit, objmode, njit, cfunc
+from numba import jit, objmode, njit, cfunc
 from numba.core import types, postproc, errors
 from numba.core.ir import FunctionIR
 from numba.tests.support import TestCase
@@ -51,21 +51,6 @@ class TestCustomPipeline(TestCase):
         self.assertEqual(foo(4), 4)
         self.assertListEqual(self.pipeline_class.custom_pipeline_cache,
                              [foo.__wrapped__])
-
-    def test_generated_jit_custom_pipeline(self):
-        self.assertListEqual(self.pipeline_class.custom_pipeline_cache, [])
-
-        def inner(x):
-            return x
-
-        @generated_jit(pipeline_class=self.pipeline_class)
-        def foo(x):
-            if isinstance(x, types.Integer):
-                return inner
-
-        self.assertEqual(foo(5), 5)
-        self.assertListEqual(self.pipeline_class.custom_pipeline_cache,
-                             [inner])
 
     def test_objmode_custom_pipeline(self):
         self.assertListEqual(self.pipeline_class.custom_pipeline_cache, [])

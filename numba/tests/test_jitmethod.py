@@ -3,8 +3,6 @@ import unittest
 import numpy as np
 
 from numba import jit
-from numba.core import types, config
-from numba.core.compiler import compile_isolated
 from numba.tests.support import override_config
 
 
@@ -14,7 +12,7 @@ class TestJITMethod(unittest.TestCase):
             def __init__(self, x0):
                 self.x0 = x0
 
-            @jit
+            @jit(forceobj=True)
             def method(self, x):
                 a = np.empty(shape=5, dtype=np.float32)
                 x0 = self.x0
@@ -39,12 +37,12 @@ class TestJITMethod(unittest.TestCase):
             def __init__(self, x0):
                 self.x0 = x0
 
-            @jit
+            @jit(forceobj=True)
             def method(self):
                 return self.x0
 
         something = Something(3)
-        self.assertEquals(Something.method(something), 3)
+        self.assertEqual(Something.method(something), 3)
 
 
 class TestDisabledJIT(unittest.TestCase):

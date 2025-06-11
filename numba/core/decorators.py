@@ -7,6 +7,7 @@ import sys
 import warnings
 import inspect
 import logging
+from types import MappingProxyType
 
 from numba.core.errors import DeprecationError, NumbaDeprecationWarning
 from numba.stencils.stencil import stencil
@@ -23,7 +24,7 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "positional argument.")
 
 
-def jit(signature_or_function=None, locals={}, cache=False,
+def jit(signature_or_function=None, locals=MappingProxyType({}), cache=False,
         pipeline_class=None, boundscheck=None, **options):
     """
     This decorator is used to compile a Python function into native code.
@@ -49,7 +50,7 @@ def jit(signature_or_function=None, locals={}, cache=False,
             nopython: bool
                 Set to True to disable the use of PyObjects and Python API
                 calls. The default behavior is to allow the use of PyObjects
-                and Python API. Default value is False.
+                and Python API. Default value is True.
 
             forceobj: bool
                 Set to True to force the use of PyObjects for every value.
@@ -138,39 +139,31 @@ def jit(signature_or_function=None, locals={}, cache=False,
                 return x + y
 
     """
+    locals = dict(locals)
     forceobj = options.get('forceobj', False)
     if 'argtypes' in options:
         raise DeprecationError(_msg_deprecated_signature_arg.format('argtypes'))
     if 'restype' in options:
         raise DeprecationError(_msg_deprecated_signature_arg.format('restype'))
-    if options.get('nopython', False) and forceobj:
+    nopython = options.get('nopython', None)
+    if nopython is not None:
+        assert type(nopython) is bool, "nopython option must be a bool"
+    if nopython is True and forceobj:
         raise ValueError("Only one of 'nopython' or 'forceobj' can be True.")
-
-    if "_target" in options:
-        # Set the "target_backend" option if "_target" is defined.
-        options['target_backend'] = options['_target']
     target = options.pop('_target', 'cpu')
 
-    nopython = options.get('nopython', None)
-    if (nopython is None or nopython is False) and not forceobj:
-        # if nopython was not supplied/is False AND forceobj is not in use, then
-        # warn the user about a change in the default for the nopython WRT
-        # deprecation of objmode fallback.
-        url = ("https://numba.readthedocs.io/en/stable/reference/"
-                "deprecation.html#deprecation-of-object-mode-fall-"
-                "back-behaviour-when-using-jit")
-        if nopython is None:
-            msg = ("The 'nopython' keyword argument was not supplied to the "
-                   "'numba.jit' decorator. The implicit default value for this "
-                   "argument is currently False, but it will be changed to "
-                   f"True in Numba 0.59.0. See {url} for details.")
-        else:
-            msg = ("The keyword argument 'nopython=False' was supplied. From "
-                   "Numba 0.59.0 the default is being changed to True and use "
-                   "of 'nopython=False' will raise a warning as the "
-                   f"argument will have no effect. See {url} for "
-                   "details.")
-        warnings.warn(NumbaDeprecationWarning(msg), stacklevel=2)
+    if nopython is False:
+        msg = ("The keyword argument 'nopython=False' was supplied. From "
+               "Numba 0.59.0 the default is True and supplying this argument "
+               "has no effect.")
+        warnings.warn(msg, NumbaDeprecationWarning)
+    # nopython is True by default since 0.59.0, but if `forceobj` is set
+    # `nopython` needs to set to False so that things like typing of args in the
+    # dispatcher layer continues to work.
+    if forceobj:
+        options['nopython'] = False
+    else:
+        options['nopython'] = True
 
     options['boundscheck'] = boundscheck
 
@@ -245,33 +238,6 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
     return wrapper
 
 
-def generated_jit(function=None, cache=False,
-                  pipeline_class=None, **options):
-    """
-    This decorator allows flexible type-based compilation
-    of a jitted function.  It works as `@jit`, except that the decorated
-    function is called at compile-time with the *types* of the arguments
-    and should return an implementation function for those types.
-    """
-    url_s = "https://numba.readthedocs.io/en/stable/reference/deprecation.html"
-    url_anchor = "#deprecation-of-generated-jit"
-    url = f"{url_s}{url_anchor}"
-    msg = ("numba.generated_jit is deprecated. Please see the documentation "
-           f"at: {url} for more information and advice on a suitable "
-           "replacement.")
-    warnings.warn(msg, NumbaDeprecationWarning)
-    dispatcher_args = {}
-    if pipeline_class is not None:
-        dispatcher_args['pipeline_class'] = pipeline_class
-    wrapper = _jit(sigs=None, locals={}, target='cpu', cache=cache,
-                   targetoptions=options, impl_kind='generated',
-                   **dispatcher_args)
-    if function is not None:
-        return wrapper(function)
-    else:
-        return wrapper
-
-
 def njit(*args, **kws):
     """
     Equivalent to jit(nopython=True)
@@ -287,7 +253,7 @@ def njit(*args, **kws):
     return jit(*args, **kws)
 
 
-def cfunc(sig, locals={}, cache=False, pipeline_class=None, **options):
+def cfunc(sig, locals=MappingProxyType({}), cache=False, pipeline_class=None, **options):
     """
     This decorator is used to compile a Python function into a C callback
     usable with foreign C libraries.
@@ -298,6 +264,7 @@ def cfunc(sig, locals={}, cache=False, pipeline_class=None, **options):
             return a + b
 
     """
+    locals = dict(locals)
     sig = sigutils.normalize_signature(sig)
 
     def wrapper(func):

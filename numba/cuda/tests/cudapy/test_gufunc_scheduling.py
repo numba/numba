@@ -1,4 +1,4 @@
-from numba.np.ufunc.deviceufunc import GUFuncEngine
+from numba.cuda.deviceufunc import GUFuncEngine
 import unittest
 
 

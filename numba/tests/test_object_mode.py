@@ -6,8 +6,7 @@ Testing object mode specifics.
 import numpy as np
 
 import unittest
-from numba.core.compiler import compile_isolated, Flags
-from numba import jit
+from numba import jit, types
 from numba.core import utils
 from numba.tests.support import TestCase
 
@@ -23,10 +22,6 @@ def long_constant(n):
 
 def delitem_usecase(x):
     del x[:]
-
-
-forceobj = Flags()
-forceobj.force_pyobject = True
 
 
 def loop_nest_3(x, y):
@@ -47,14 +42,12 @@ class TestObjectMode(TestCase):
 
     def test_complex_constant(self):
         pyfunc = complex_constant
-        cres = compile_isolated(pyfunc, (), flags=forceobj)
-        cfunc = cres.entry_point
+        cfunc = jit((), forceobj=True)(pyfunc)
         self.assertPreciseEqual(pyfunc(12), cfunc(12))
 
     def test_long_constant(self):
         pyfunc = long_constant
-        cres = compile_isolated(pyfunc, (), flags=forceobj)
-        cfunc = cres.entry_point
+        cfunc = jit((), forceobj=True)(pyfunc)
         self.assertPreciseEqual(pyfunc(12), cfunc(12))
 
     def test_loop_nest(self):
@@ -63,8 +56,7 @@ class TestObjectMode(TestCase):
         If the bug occurs, a segfault should occur
         """
         pyfunc = loop_nest_3
-        cres = compile_isolated(pyfunc, (), flags=forceobj)
-        cfunc = cres.entry_point
+        cfunc = jit((), forceobj=True)(pyfunc)
         self.assertEqual(pyfunc(5, 5), cfunc(5, 5))
 
         def bm_pyfunc():
@@ -73,11 +65,11 @@ class TestObjectMode(TestCase):
         def bm_cfunc():
             cfunc(5, 5)
 
-        print(utils.benchmark(bm_pyfunc))
-        print(utils.benchmark(bm_cfunc))
+        utils.benchmark(bm_pyfunc)
+        utils.benchmark(bm_cfunc)
 
     def test_array_of_object(self):
-        cfunc = jit(array_of_object)
+        cfunc = jit(forceobj=True)(array_of_object)
         objarr = np.array([object()] * 10)
         self.assertIs(cfunc(objarr), objarr)
 
@@ -100,8 +92,7 @@ class TestObjectMode(TestCase):
 
     def test_delitem(self):
         pyfunc = delitem_usecase
-        cres = compile_isolated(pyfunc, (), flags=forceobj)
-        cfunc = cres.entry_point
+        cfunc = jit((), forceobj=True)(pyfunc)
 
         l = [3, 4, 5]
         cfunc(l)
@@ -122,6 +113,14 @@ class TestObjectMode(TestCase):
         expect = foo.py_func(arg)
         self.assertEqual(got, tuple(arg))
         self.assertEqual(got, expect)
+
+    def test_expr_undef(self):
+        @jit(forceobj=True)
+        def foo():
+            # In Py3.12, this will emit a Expr.undef.
+            return [x for x in (1, 2)]
+
+        self.assertEqual(foo(), foo.py_func())
 
 
 class TestObjectModeInvalidRewrite(TestCase):
@@ -149,7 +148,7 @@ class TestObjectModeInvalidRewrite(TestCase):
                 raise ValueError()
             return test0(n)  # trigger objmode fallback
 
-        compiled = jit(test1)
+        compiled = jit(forceobj=True)(test1)
         self.assertEqual(test1(10), compiled(10))
         self._ensure_objmode(compiled)
 
@@ -169,7 +168,7 @@ class TestObjectModeInvalidRewrite(TestCase):
             a2[0] = 1
             return test0(a1.sum() + a2.sum())   # trigger objmode fallback
 
-        compiled = jit(test)
+        compiled = jit(forceobj=True)(test)
         args = np.array([3]), np.array([4])
         self.assertEqual(test(*args), compiled(*args))
         self._ensure_objmode(compiled)
@@ -186,6 +185,19 @@ class TestObjectModeInvalidRewrite(TestCase):
         func = loc_vars['func']
         jitted = jit(forceobj=True)(func)
         jitted()
+
+    def test_issue_9725_label_renaming(self):
+        # Test issue https://github.com/numba/numba/issues/9725
+        # this should compile via fallback
+        @jit(forceobj=True)
+        def f():
+            for _ in (): # cannot lift this loop as a nopython loop
+                [0 for k in (None,)]
+        f()
+        self._ensure_objmode(f)
+        lifted = f.overloads[f.signatures[0]].lifted[0]
+        self.assertFalse(lifted.nopython_signatures)
+        self.assertEqual(lifted.signatures, [(types.Tuple(()),)])
 
 
 if __name__ == '__main__':

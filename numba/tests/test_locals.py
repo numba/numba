@@ -1,6 +1,6 @@
-from numba import float32
-from numba.core import compiler
+from numba import float32, njit
 import unittest
+
 
 def foo():
     x = 123
@@ -10,8 +10,8 @@ def foo():
 class TestLocals(unittest.TestCase):
 
     def test_seed_types(self):
-        cres = compiler.compile_isolated(foo, (), locals={'x': float32})
-        self.assertEqual(cres.signature.return_type, float32)
+        cfunc = njit((), locals={'x': float32})(foo)
+        self.assertEqual(cfunc.nopython_signatures[0].return_type, float32)
 
 
 if __name__ == '__main__':

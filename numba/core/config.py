@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import warnings
+import traceback
 
 # YAML needed to use file based Numba config
 try:
@@ -67,17 +68,6 @@ def _os_supports_avx():
                 return True
         else:
             return False
-
-
-# Choose how to handle captured errors
-def _validate_captured_errors_style(style_str):
-    rendered_style = str(style_str)
-    if rendered_style not in ('new_style', 'old_style'):
-        msg = ("Invalid style in NUMBA_CAPTURED_ERRORS: "
-               f"{rendered_style}")
-        raise ValueError(msg)
-    else:
-        return rendered_style
 
 
 class _OptLevel(int):
@@ -193,18 +183,21 @@ class _EnvReloader(object):
                 return default() if callable(default) else default
             try:
                 return ctor(value)
-            except Exception as e:
+            except Exception:
                 warnings.warn(f"Environment variable '{name}' is defined but "
                               f"its associated value '{value}' could not be "
-                              f"parsed.\nThe parse failed with exception: {e}.",
+                              "parsed.\nThe parse failed with exception:\n"
+                              f"{traceback.format_exc()}",
                               RuntimeWarning)
                 return default
 
         def optional_str(x):
             return str(x) if x is not None else None
 
-        # RVSDG frontend selection
-        USE_RVSDG_FRONTEND = _readenv("NUMBA_USE_RVSDG_FRONTEND", int, 0)
+        # Type casting rules selection
+        USE_LEGACY_TYPE_SYSTEM = _readenv(
+            "NUMBA_USE_LEGACY_TYPE_SYSTEM", int, 1
+        )
 
         # developer mode produces full tracebacks, disables help instructions
         DEVELOPER_MODE = _readenv("NUMBA_DEVELOPER_MODE", int, 0)
@@ -388,9 +381,15 @@ class _EnvReloader(object):
                 # on some CPUs (list at
                 # http://llvm.org/bugs/buglist.cgi?quicksearch=avx).
                 # For now we'd rather disable it, since it can pessimize code
-                cpu_name = ll.get_host_cpu_name()
-                return cpu_name not in ('corei7-avx', 'core-avx-i',
-                                        'sandybridge', 'ivybridge')
+                cpu_name = CPU_NAME or ll.get_host_cpu_name()
+                disabled_cpus = {'corei7-avx', 'core-avx-i',
+                                 'sandybridge', 'ivybridge'}
+                # Disable known baseline CPU names that virtual machines may
+                # incorrectly report as having AVX support.
+                # This can cause problems with the SVML-pass's use of AVX512.
+                # See https://github.com/numba/numba/issues/9582
+                disabled_cpus |= {'nocona'}
+                return cpu_name not in disabled_cpus
 
         ENABLE_AVX = _readenv("NUMBA_ENABLE_AVX", int, avx_default)
 
@@ -409,10 +408,6 @@ class _EnvReloader(object):
             ['tbb', 'omp', 'workqueue'],
         )
         THREADING_LAYER = _readenv("NUMBA_THREADING_LAYER", str, 'default')
-
-        CAPTURED_ERRORS = _readenv("NUMBA_CAPTURED_ERRORS",
-                                   _validate_captured_errors_style,
-                                   'old_style')
 
         # CUDA Configs
 
@@ -524,6 +519,10 @@ class _EnvReloader(object):
         NUMBA_NUM_THREADS = _NUMBA_NUM_THREADS
         del _NUMBA_NUM_THREADS
 
+        # sys.monitoring support
+        ENABLE_SYS_MONITORING = _readenv("NUMBA_ENABLE_SYS_MONITORING",
+                                         int, 0)
+
         # Profiling support
 
         # Indicates if a profiler detected. Only VTune can be detected for now
@@ -562,11 +561,29 @@ class _EnvReloader(object):
             "all" if LLVM_REFPRUNE_PASS else "",
         )
 
+        # llvmlite memory manager
+        USE_LLVMLITE_MEMORY_MANAGER = _readenv(
+            "NUMBA_USE_LLVMLITE_MEMORY_MANAGER", int, None
+        )
+
+        # llvm pass manager switch
+        USE_LLVM_LEGACY_PASS_MANAGER = _readenv(
+            "NUMBA_USE_LLVM_LEGACY_PASS_MANAGER", int, 0
+        )
+
         # Timing support.
 
         # LLVM_PASS_TIMINGS enables LLVM recording of pass timings.
         LLVM_PASS_TIMINGS = _readenv(
             "NUMBA_LLVM_PASS_TIMINGS", int, 0,
+        )
+
+        # Coverage support.
+
+        # JIT_COVERAGE (bool) controls whether the compiler report compiled
+        # lines to coverage tools. Defaults to off.
+        JIT_COVERAGE = _readenv(
+            "NUMBA_JIT_COVERAGE", int, 0,
         )
 
         # Inject the configuration values into the module globals
