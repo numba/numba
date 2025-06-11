@@ -5292,8 +5292,8 @@ def np_frombuffer(typingctx, buffer, dtype, count, offset, retty):
             ir.Constant(arg_count.type, 0),
         )
 
+        msg = "offset must be non-negative and no greater than buffer length"
         with builder.if_then(nbytes_is_negative, likely=False):
-            msg = "offset must be non-negative and no greater than buffer length"
             context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
         ll_count_is_negative = builder.icmp_signed(
