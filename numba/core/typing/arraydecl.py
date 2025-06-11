@@ -439,9 +439,6 @@ class ArrayAttribute(AttributeTemplate):
                 return False
 
         assert not kws
-        if ary.layout not in 'CF':
-            # only work for contiguous array
-            raise TypingError("reshape() supports contiguous array only")
 
         if len(args) == 1:
             # single arg
