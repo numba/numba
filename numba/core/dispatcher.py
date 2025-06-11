@@ -55,28 +55,6 @@ class _FunctionCompiler(object):
         # the exceptions.
         self._failed_cache = {}
 
-    def fold_argument_types(self, args, kws):
-        """
-        Given positional and named argument types, fold keyword arguments
-        and resolve defaults by inserting types.Omitted() instances.
-
-        A (pysig, argument types) tuple is returned.
-        """
-        def normal_handler(index, param, value):
-            return value
-
-        def default_handler(index, param, default):
-            return types.Omitted(default)
-
-        def stararg_handler(index, param, values):
-            return types.StarArgTuple(values)
-        # For now, we take argument values from the @jit function
-        args = fold_arguments(self.pysig, args, kws,
-                              normal_handler,
-                              default_handler,
-                              stararg_handler)
-        return self.pysig, args
-
     def compile(self, args, return_type):
         key = tuple(args), return_type
 
@@ -169,6 +147,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                                         exact_match_required)
 
         self.doc = py_func.__doc__
+        self.pysig = pysig
         self._compiling_counter = CompilingCounter()
         self._enable_sysmon = bool(config.ENABLE_SYS_MONITORING)
         weakref.finalize(self, self._make_finalizer())
@@ -238,7 +217,26 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         self.overloads[args] = cres
 
     def fold_argument_types(self, args, kws):
-        return self._compiler.fold_argument_types(args, kws)
+        """
+        Given positional and named argument types, fold keyword arguments
+        and resolve defaults by inserting types.Omitted() instances.
+
+        A (pysig, argument types) tuple is returned.
+        """
+        def normal_handler(index, param, value):
+            return value
+
+        def default_handler(index, param, default):
+            return types.Omitted(default)
+
+        def stararg_handler(index, param, values):
+            return types.StarArgTuple(values)
+        # For now, we take argument values from the @jit function
+        args = fold_arguments(self.pysig, args, kws,
+                              normal_handler,
+                              default_handler,
+                              stararg_handler)
+        return self.pysig, args
 
     def get_call_template(self, args, kws):
         """
@@ -251,7 +249,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         # following?
 
         # Fold keyword arguments and resolve default values
-        pysig, args = self._compiler.fold_argument_types(args, kws)
+        pysig, args = self.fold_argument_types(args, kws)
         kws = {}
         # Ensure an overload is available
         if self._can_compile:
@@ -847,8 +845,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
                         cres = self._compiler.compile(args, return_type)
                     except errors.ForceLiteralArg as e:
                         def folded(args, kws):
-                            return self._compiler.fold_argument_types(args,
-                                                                      kws)[1]
+                            return self.fold_argument_types(args, kws)[1]
                         raise e.bind_fold_arguments(folded)
                     self.add_overload(cres)
                 self._cache.save_overload(sig, cres)
