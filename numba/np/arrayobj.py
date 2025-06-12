@@ -7023,26 +7023,37 @@ def arr_take_along_axis(arr, indices, axis):
 
 
 @overload(np.nan_to_num)
-def nan_to_num_impl(x, copy=True, nan=0.0):
+def nan_to_num_impl(x, copy=True, nan=0.0, posinf=None, neginf=None):
     if isinstance(x, types.Number):
         if isinstance(x, types.Integer):
             # Integers do not have nans or infs
-            def impl(x, copy=True, nan=0.0):
+            def impl(x, copy=True, nan=0.0, posinf=None, neginf=None):
                 return x
 
         elif isinstance(x, types.Float):
-            def impl(x, copy=True, nan=0.0):
+            def impl(x, copy=True, nan=0.0, posinf=None, neginf=None):
+                min_inf = (
+                    neginf
+                    if neginf is not None
+                    else np.finfo(type(x)).min
+                )
+                max_inf = (
+                    posinf
+                    if posinf is not None
+                    else np.finfo(type(x)).max
+                )
+
                 if np.isnan(x):
                     return nan
                 elif np.isneginf(x):
-                    return np.finfo(type(x)).min
+                    return min_inf
                 elif np.isposinf(x):
-                    return np.finfo(type(x)).max
+                    return max_inf
                 return x
         elif isinstance(x, types.Complex):
-            def impl(x, copy=True, nan=0.0):
-                r = np.nan_to_num(x.real, nan=nan)
-                c = np.nan_to_num(x.imag, nan=nan)
+            def impl(x, copy=True, nan=0.0, posinf=None, neginf=None):
+                r = np.nan_to_num(x.real, nan=nan, posinf=posinf, neginf=neginf)
+                c = np.nan_to_num(x.imag, nan=nan, posinf=posinf, neginf=neginf)
                 return complex(r, c)
         else:
             raise errors.TypingError(
@@ -7052,12 +7063,20 @@ def nan_to_num_impl(x, copy=True, nan=0.0):
     elif type_can_asarray(x):
         if isinstance(x.dtype, types.Integer):
             # Integers do not have nans or infs
-            def impl(x, copy=True, nan=0.0):
+            def impl(x, copy=True, nan=0.0, posinf=None, neginf=None):
                 return x
         elif isinstance(x.dtype, types.Float):
-            def impl(x, copy=True, nan=0.0):
-                min_inf = np.finfo(x.dtype).min
-                max_inf = np.finfo(x.dtype).max
+            def impl(x, copy=True, nan=0.0, posinf=None, neginf=None):
+                min_inf = (
+                    neginf
+                    if neginf is not None
+                    else np.finfo(x.dtype).min
+                )
+                max_inf = (
+                    posinf
+                    if posinf is not None
+                    else np.finfo(x.dtype).max
+                )
 
                 x_ = np.asarray(x)
                 output = np.copy(x_) if copy else x_
@@ -7072,12 +7091,24 @@ def nan_to_num_impl(x, copy=True, nan=0.0):
                         output_flat[i] = max_inf
                 return output
         elif isinstance(x.dtype, types.Complex):
-            def impl(x, copy=True, nan=0.0):
+            def impl(x, copy=True, nan=0.0, posinf=None, neginf=None):
                 x_ = np.asarray(x)
                 output = np.copy(x_) if copy else x_
 
-                np.nan_to_num(output.real, copy=False, nan=nan)
-                np.nan_to_num(output.imag, copy=False, nan=nan)
+                np.nan_to_num(
+                    output.real,
+                    copy=False,
+                    nan=nan,
+                    posinf=posinf,
+                    neginf=neginf
+                )
+                np.nan_to_num(
+                    output.imag,
+                    copy=False,
+                    nan=nan,
+                    posinf=posinf,
+                    neginf=neginf
+                )
                 return output
         else:
             raise errors.TypingError(
