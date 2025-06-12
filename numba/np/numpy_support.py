@@ -232,9 +232,9 @@ def map_arrayscalar_type(val):
     else:
         try:
             dtype = np.dtype(type(val))
-        except (errors.NumbaNotImplementedError, TypeError):
-            msg = f"no corresponding numpy dtype for {type(val)}"
-            raise errors.NumbaNotImplementedError(msg)
+        except TypeError:
+            raise errors.NumbaNotImplementedError("no corresponding numpy "
+                                      "dtype for %r" % type(val))
 
     return from_dtype(dtype)
 
