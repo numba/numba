@@ -4888,22 +4888,9 @@ def _arange_dtype(*args):
     elif any(isinstance(a, types.Float) for a in bounds):
         dtype = types.float64
     else:
-        # `np.arange(10).dtype` is always `np.dtype(int)`, aka `np.int_`, which
-        # in all released versions of numpy corresponds to the C `long` type.
-        # Windows 64 is broken by default here because Numba (as of 0.47) does
-        # not differentiate between Python and NumPy integers, so a `typeof(1)`
-        # on w64 is `int64`, i.e. `intp`. This means an arange(<some int>) will
-        # be typed as arange(int64) and the following will yield int64 opposed
-        # to int32. Example: without a load of analysis to work out of the args
-        # were wrapped in NumPy int*() calls it's not possible to detect the
-        # difference between `np.arange(10)` and `np.arange(np.int64(10)`.
-        NPY_TY = getattr(types, "int%s" % (8 * np.dtype(int).itemsize))
-
         # unliteral these types such that `max` works.
         unliteral_bounds = [types.unliteral(x) for x in bounds]
-        # this doesn't work on my mac with TypeError
-        # TypeError: '>' not supported between instances of 'Integer' and 'Integer'
-        # dtype = max(unliteral_bounds + [NPY_TY,])
+        
         dtype = max(unliteral_bounds)
     return dtype
 
