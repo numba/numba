@@ -4888,21 +4888,10 @@ def _arange_dtype(*args):
     elif any(isinstance(a, types.Float) for a in bounds):
         dtype = types.float64
     else:
-        # `np.arange(10).dtype` is always `np.dtype(int)`, aka `np.int_`, which
-        # in all released versions of numpy corresponds to the C `long` type.
-        # Windows 64 is broken by default here because Numba (as of 0.47) does
-        # not differentiate between Python and NumPy integers, so a `typeof(1)`
-        # on w64 is `int64`, i.e. `intp`. This means an arange(<some int>) will
-        # be typed as arange(int64) and the following will yield int64 opposed
-        # to int32. Example: without a load of analysis to work out of the args
-        # were wrapped in NumPy int*() calls it's not possible to detect the
-        # difference between `np.arange(10)` and `np.arange(np.int64(10)`.
-        NPY_TY = getattr(types, "int%s" % (8 * np.dtype(int).itemsize))
-
         # unliteral these types such that `max` works.
         unliteral_bounds = [types.unliteral(x) for x in bounds]
-        dtype = max(unliteral_bounds + [NPY_TY,])
-
+        
+        dtype = max(unliteral_bounds)
     return dtype
 
 
@@ -4934,6 +4923,8 @@ def np_arange(start, / ,stop=None, step=None, dtype=None):
     else:
         true_dtype = dtype.dtype
 
+    start_stop_dtype = _arange_dtype(start, stop)
+
     use_complex = any([isinstance(x, types.Complex)
                        for x in (start, stop, step)])
 
@@ -4947,9 +4938,9 @@ def np_arange(start, / ,stop=None, step=None, dtype=None):
         lit_stop = stop_value if stop_value is not None else stop
         lit_step = step_value if step_value is not None else step
 
-        _step = lit_step if lit_step is not None else 1
+        _step = lit_step if lit_step is not None else dtype(1)
         if lit_stop is None:
-            _start, _stop = 0, lit_start
+            _start, _stop = start_stop_dtype(0), lit_start
         else:
             _start, _stop = lit_start, lit_stop
 

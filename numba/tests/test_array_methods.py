@@ -1164,6 +1164,8 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             check_ok(0.5, 4, 2, None)
             check_ok(3, 6, None, None)
             check_ok(3, None, None, None)
+            check_ok(2 ** 63, 2 ** 63 + 5, 1, np.uint64)
+            check_ok(2 ** 63, 2 ** 63 + 5, 1.0, np.float64)
             if numpy_version < (2, 0):
                 check_ok(0, 1, 0.1, np.complex128)
                 check_ok(0, complex(4, 4), complex(1, 1), np.complex128)
