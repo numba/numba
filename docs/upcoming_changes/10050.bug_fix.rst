@@ -1,0 +1,4 @@
+Added support for ``__invert__`` method in jitclass.
+----------------------------------------------------
+
+Support is added for the ``__invert__`` method in jitclass.

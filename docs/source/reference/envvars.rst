@@ -161,6 +161,15 @@ These variables influence what is printed out during compilation of
 
    If set to non-zero, print out debugging information about type inference.
 
+.. envvar:: NUMBA_DISABLE_TYPEINFER_FAIL_CACHE
+
+   If set to truthy value, disable the cache of failed function resolutions in 
+   the type inference. The default value is false.
+   
+   Disabling the cache is **not recommended** for normal use. 
+   The cache should only be disabled temporarily for debugging purposes. 
+   Relying on disabled cache behavior is not supported and could break 
+   in future releases.
 
 .. envvar:: NUMBA_ENABLE_SYS_MONITORING
 

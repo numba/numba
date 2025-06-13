@@ -559,6 +559,9 @@ class NumbaError(Exception):
         Add contextual info.  The exception message is expanded with the new
         contextual information.
         """
+        if msg in self.contexts:
+            # avoid duplicating contexts
+            return self
         self.contexts.append(msg)
         f = termcolor().errmsg('{0}\n') + termcolor().filename('During: {1}')
         newmsg = f.format(self, msg)
