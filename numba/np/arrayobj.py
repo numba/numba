@@ -5265,12 +5265,14 @@ def impl_array_tobytes(arr):
 
 
 @intrinsic
-def np_frombuffer(typingctx, buffer, dtype, retty):
+def np_frombuffer(typingctx, buffer, dtype, count, offset, retty):
     ty = retty.instance_type
-    sig = ty(buffer, dtype, retty)
+    sig = ty(buffer, dtype, count, offset, retty)
 
     def codegen(context, builder, sig, args):
         bufty = sig.args[0]
+        arg_count = args[2]
+        arg_offset = args[3]
         aryty = sig.return_type
 
         buf = make_array(bufty)(context, builder, value=args[0])
@@ -5281,6 +5283,24 @@ def np_frombuffer(typingctx, buffer, dtype, retty):
         itemsize = get_itemsize(context, aryty)
         ll_itemsize = Constant(buf.itemsize.type, itemsize)
         nbytes = builder.mul(buf.nitems, buf.itemsize)
+        ll_offset_size = builder.mul(arg_offset, ll_itemsize)
+        nbytes = builder.sub(nbytes, ll_offset_size)
+
+        nbytes_is_negative = builder.icmp_signed(
+            '<',
+            nbytes,
+            ir.Constant(arg_count.type, 0),
+        )
+
+        msg = "offset must be non-negative and no greater than buffer length"
+        with builder.if_then(nbytes_is_negative, likely=False):
+            context.call_conv.return_user_exc(builder, ValueError, (msg,))
+
+        ll_count_is_negative = builder.icmp_signed(
+            '<',
+            arg_count,
+            ir.Constant(arg_count.type, 0),
+        )
 
         # Check that the buffer size is compatible
         rem = builder.srem(nbytes, ll_itemsize)
@@ -5289,10 +5309,33 @@ def np_frombuffer(typingctx, buffer, dtype, retty):
             msg = "buffer size must be a multiple of element size"
             context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
-        shape = cgutils.pack_array(builder, [builder.sdiv(nbytes, ll_itemsize)])
+        # Compute number of elements based on count
+        with builder.if_else(ll_count_is_negative) as (then_block, else_block):
+            with then_block:
+                bb_if = builder.basic_block
+                num_whole = builder.sdiv(nbytes, ll_itemsize)
+            with else_block:
+                bb_else = builder.basic_block
+
+        ll_itemcount = builder.phi(arg_count.type)
+        ll_itemcount.add_incoming(num_whole, bb_if)
+        ll_itemcount.add_incoming(arg_count, bb_else)
+
+        # Ensure we don’t exceed the buffer size
+        ll_required_size = builder.mul(ll_itemcount, ll_itemsize)
+        is_too_large = builder.icmp_unsigned('>', ll_required_size, nbytes)
+
+        with builder.if_then(is_too_large, likely=False):
+            msg = "buffer is smaller than requested size"
+            context.call_conv.return_user_exc(builder, ValueError, (msg,))
+
+        # Set shape and strides
+        shape = cgutils.pack_array(builder, [ll_itemcount])
         strides = cgutils.pack_array(builder, [ll_itemsize])
+
+        data = builder.gep(buf.data, [arg_offset])
         data = builder.bitcast(
-            buf.data, context.get_value_type(out_datamodel.get_type('data'))
+            data, context.get_value_type(out_datamodel.get_type('data'))
         )
 
         populate_array(out_ary,
@@ -5301,15 +5344,16 @@ def np_frombuffer(typingctx, buffer, dtype, retty):
                        strides=strides,
                        itemsize=ll_itemsize,
                        meminfo=buf.meminfo,
-                       parent=buf.parent,)
+                       parent=buf.parent)
 
         res = out_ary._getvalue()
         return impl_ret_borrowed(context, builder, sig.return_type, res)
+
     return sig, codegen
 
 
 @overload(np.frombuffer)
-def impl_np_frombuffer(buffer, dtype=float):
+def impl_np_frombuffer(buffer, dtype=float, count=-1, offset=0):
     _check_const_str_dtype("frombuffer", dtype)
 
     if not isinstance(buffer, types.Buffer) or buffer.layout != 'C':
@@ -5317,8 +5361,8 @@ def impl_np_frombuffer(buffer, dtype=float):
         raise errors.TypingError(msg)
 
     if (dtype is float or
-        (isinstance(dtype, types.Function) and dtype.typing_key is float) or
-            is_nonelike(dtype)): #default
+            (isinstance(dtype, types.Function) and dtype.typing_key is float) or
+            is_nonelike(dtype)):  # default
         nb_dtype = types.double
     else:
         nb_dtype = ty_parse_dtype(dtype)
@@ -5331,8 +5375,9 @@ def impl_np_frombuffer(buffer, dtype=float):
                f"np.frombuffer({buffer}, {dtype})")
         raise errors.TypingError(msg)
 
-    def impl(buffer, dtype=float):
-        return np_frombuffer(buffer, dtype, retty)
+    def impl(buffer, dtype=float, count=-1, offset=0):
+        return np_frombuffer(buffer, dtype, count, offset, retty)
+
     return impl
 
 
