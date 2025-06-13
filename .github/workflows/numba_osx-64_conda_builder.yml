@@ -5,6 +5,9 @@ on:
     paths:
       - .github/workflows/numba_osx-64_conda_builder.yml
       - buildscripts/condarecipe.local/**
+      - .github/workflows/workflow_matrix.json
+    paths-ignore:
+      - .github/workflows/workflow_matrix.json#wheel_*
   workflow_dispatch:
     inputs:
       llvmlite_run_id:
