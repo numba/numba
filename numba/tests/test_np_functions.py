@@ -2936,6 +2936,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             for k in range(-3, 3):
                 check(arr, k)
 
+    @unittest.skipIf(numpy_version >= (2, 3), "Removed in NumPy 2.3")
     def test_partition_boolean_inputs(self):
         pyfunc = partition
         cfunc = jit(nopython=True)(pyfunc)
@@ -2944,6 +2945,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             for kth in True, False, -1, 0, 1:
                 self.partition_sanity_check(pyfunc, cfunc, d, kth)
 
+    @unittest.skipIf(numpy_version >= (2, 3), "Removed in NumPy 2.3")
     def test_argpartition_boolean_inputs(self):
         pyfunc = argpartition
         cfunc = jit(nopython=True)(pyfunc)
