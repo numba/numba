@@ -4901,8 +4901,10 @@ def _arange_dtype(*args):
 
         # unliteral these types such that `max` works.
         unliteral_bounds = [types.unliteral(x) for x in bounds]
-        dtype = max(unliteral_bounds + [NPY_TY,])
-
+        # this doesn't work on my mac with TypeError
+        # TypeError: '>' not supported between instances of 'Integer' and 'Integer'
+        # dtype = max(unliteral_bounds + [NPY_TY,])
+        dtype = max(unliteral_bounds)
     return dtype
 
 
@@ -4934,6 +4936,8 @@ def np_arange(start, / ,stop=None, step=None, dtype=None):
     else:
         true_dtype = dtype.dtype
 
+    start_stop_dtype = _arange_dtype(start, stop)
+
     use_complex = any([isinstance(x, types.Complex)
                        for x in (start, stop, step)])
 
@@ -4949,7 +4953,7 @@ def np_arange(start, / ,stop=None, step=None, dtype=None):
 
         _step = lit_step if lit_step is not None else dtype(1)
         if lit_stop is None:
-            _start, _stop = dtype(0), lit_start
+            _start, _stop = start_stop_dtype(0), lit_start
         else:
             _start, _stop = lit_start, lit_stop
 
