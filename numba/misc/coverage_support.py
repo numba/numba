@@ -194,5 +194,5 @@ if coverage_available:
         if l2 < 0:
             packed |= 1 << 41
             l2 = -l2
-        packed |= (l2 << 20) | l1
+        packed |= (l2 << 20) + l1
         return packed
