@@ -1,0 +1,8 @@
+Fix list comprehension support for Python 3.13.4
+------------------------------------------------
+
+Python 3.13.4 introduced a change in the bytecode generated for generator
+expressions, which also affects list comprehensions. 
+See `python/cpython#135171<https://github.com/python/cpython/issues/135171>_`
+for details. Numba relied on pattern matching the previous bytecode sequence,
+which no longer matched after the change. This update restores compatibility.

@@ -1,0 +1,20 @@
+Avoid type inference hangs
+--------------------------
+
+Type inference can take a long time if it repeatedly attempts to resolve
+functions that have already failed. A patch is added to cache failed
+resolutions for the current compilation session. 
+
+This changes compiler behavior in the following way:
+
+- Previously, if a function resolution imported new extensions, those 
+  extensions could add support for the failing function. 
+
+- Now, the compiler will not retry failed resolutions, so new extensions
+  added during function resolution cannot add support retroactively.
+
+It is important to note importing of extensions during function resolution phase
+are unexpected. They should be avoided as they can cause confusing behavior. 
+
+To help isolate any issues arising from this change, an environment variable
+``NUMBA_DISABLE_TYPEINFER_FAIL_CACHE`` is added to disable the cache.

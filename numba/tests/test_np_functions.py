@@ -476,8 +476,8 @@ def swapaxes(a, a1, a2):
     return np.swapaxes(a, a1, a2)
 
 
-def nan_to_num(X, copy=True, nan=0.0):
-    return np.nan_to_num(X, copy=copy, nan=nan)
+def nan_to_num(X, copy=True, nan=0.0, posinf=None, neginf=None):
+    return np.nan_to_num(X, copy=copy, nan=nan, posinf=posinf, neginf=neginf)
 
 
 def np_indices(dimensions):
@@ -4332,24 +4332,34 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 cfunc(data, weights=weights)
             err = e.exception
             self.assertEqual(str(err),
-                             "Numba does not support average when shapes of "
+                             "1D weights expected when shapes of "
                              "a and weights differ.")
 
         def test_1D_weights_axis(data, axis, weights):
             with self.assertRaises(TypeError) as e:
-                cfunc(data,axis=axis, weights=weights)
+                cfunc(data, axis=axis, weights=weights)
+            err = e.exception
+            self.assertEqual(str(err),
+                             "Numba does not support average with axis.")
+
+        def test_axis(data, axis):
+            with self.assertRaises(TypeError) as e:
+                cfunc(data, axis=axis)
             err = e.exception
             self.assertEqual(str(err),
                              "Numba does not support average with axis.")
 
         #small case to test exceptions for 2D array and 1D weights
         data = np.arange(6).reshape((3,2,1))
-        w = np.asarray([1. / 4, 3. / 4])
+        w = np.asarray([[1. / 4, 3. / 4]])
 
-        #test without axis argument
+        #test axis
+        test_axis(data, axis=1)
+
+        #test shape mismatch
         test_1D_weights(data, weights=w)
 
-        #test with axis argument
+        #test axis and with weights provided
         test_1D_weights_axis(data, axis=1, weights=w)
 
     def test_allclose(self):
@@ -6236,27 +6246,54 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             np.array([-np.inf, np.nan, np.inf], dtype=np.float32)
         ]
         nans = [0.0, 10]
+        posinfs = [None, 1000.0]
+        neginfs = [None, -1000.0]
 
         pyfunc = nan_to_num
         cfunc = njit(nan_to_num)
 
-        for value, nan in product(values, nans):
-            expected = pyfunc(value, nan=nan)
-            got = cfunc(value, nan=nan)
+        for value, nan, posinf, neginf in product(
+            values, nans, posinfs, neginfs
+        ):
+            expected = pyfunc(value, nan=nan, posinf=posinf, neginf=neginf)
+            got = cfunc(value, nan=nan, posinf=posinf, neginf=neginf)
             self.assertPreciseEqual(expected, got)
 
     def test_nan_to_num_copy_false(self):
         # Check that copy=False operates in-place.
         cfunc = njit(nan_to_num)
 
-        x = np.array([0.1, 0.4, np.nan])
-        expected = 1.0
-        cfunc(x, copy=False, nan=expected)
-        self.assertPreciseEqual(x[-1], expected)
+        x = np.array([0.1, 0.4, np.nan, np.inf, -np.inf])
+        expected = np.array([1.0, 1000.0, -1000.0])
+        cfunc(
+            x,
+            copy=False,
+            nan=expected[0],
+            posinf=expected[1],
+            neginf=expected[2]
+        )
+        self.assertPreciseEqual(x[-3:], expected)
 
-        x_complex = np.array([0.1, 0.4, complex(np.nan, np.nan)])
-        cfunc(x_complex, copy=False, nan=expected)
-        self.assertPreciseEqual(x_complex[-1], 1. + 1.j)
+        x_complex = np.array(
+            [
+                0.1,
+                0.4,
+                complex(np.nan, np.nan),
+                complex(np.inf, np.nan),
+                complex(np.nan, -np.inf)
+            ]
+        )
+        cfunc(
+            x_complex,
+            copy=False,
+            nan=expected[0],
+            posinf=expected[1],
+            neginf=expected[2]
+        )
+        self.assertPreciseEqual(
+            x_complex[-3:],
+            np.array([1. + 1.j, 1e3 + 1.j, 1. - 1000.j])
+        )
 
     def test_nan_to_num_invalid_argument(self):
         cfunc = njit(nan_to_num)
