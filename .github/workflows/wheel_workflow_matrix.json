@@ -1,0 +1,19 @@
+{
+    "wheel_build_matrix": [
+        { "python-version": "3.10", "numpy_build": "2.0.2", "python_tag": "cp310" },
+        { "python-version": "3.11", "numpy_build": "2.0.2", "python_tag": "cp311" },
+        { "python-version": "3.12", "numpy_build": "2.0.2", "python_tag": "cp312" },
+        { "python-version": "3.13", "numpy_build": "2.1.3", "python_tag": "cp313" }
+      ],
+    "wheel_test_matrix": [
+        { "python-version": "3.10", "numpy_test": "1.24" },
+        { "python-version": "3.10", "numpy_test": "1.25" },
+        { "python-version": "3.11", "numpy_test": "1.26" },
+        { "python-version": "3.11", "numpy_test": "2.0" },
+        { "python-version": "3.11", "numpy_test": "2.2" },
+        { "python-version": "3.12", "numpy_test": "1.26" },
+        { "python-version": "3.12", "numpy_test": "2.0" },
+        { "python-version": "3.12", "numpy_test": "2.2" },
+        { "python-version": "3.13", "numpy_test": "2.2" }
+      ]
+}

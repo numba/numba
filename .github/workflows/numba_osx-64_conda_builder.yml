@@ -5,6 +5,7 @@ on:
     paths:
       - .github/workflows/numba_osx-64_conda_builder.yml
       - buildscripts/condarecipe.local/**
+      - .github/workflows/conda_workflow_matrix.json
   workflow_dispatch:
     inputs:
       llvmlite_run_id:
@@ -31,8 +32,8 @@ jobs:
       - id: parse_matrix
         name: Parse Workflow Matrix JSON
         run: |
-          BUILD_JSON=$(jq -c .conda_build_matrix .github/workflows/workflow_matrix.json)
-          TEST_JSON=$(jq -c .conda_test_matrix .github/workflows/workflow_matrix.json)
+          BUILD_JSON=$(jq -c .conda_build_matrix .github/workflows/conda_workflow_matrix.json)
+          TEST_JSON=$(jq -c .conda_test_matrix .github/workflows/conda_workflow_matrix.json)
           echo "Build Matrix JSON: $BUILD_JSON"
           echo "Test Matrix JSON: $TEST_JSON"
           echo "build-matrix-json=$BUILD_JSON" >> $GITHUB_OUTPUT

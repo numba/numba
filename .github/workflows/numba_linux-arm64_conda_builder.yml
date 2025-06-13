@@ -5,6 +5,7 @@ on:
     paths:
       - .github/workflows/numba_linux-arm64_conda_builder.yml
       - buildscripts/condarecipe.local/**
+      - .github/workflows/conda_workflow_matrix.json
   workflow_dispatch:
     inputs:
       llvmlite_run_id:
@@ -31,8 +32,8 @@ jobs:
       - id: parse_matrix
         name: Parse Workflow Matrix JSON
         run: |
-          BUILD_JSON=$(jq -c .conda_build_matrix .github/workflows/workflow_matrix.json)
-          TEST_JSON=$(jq -c .conda_test_matrix .github/workflows/workflow_matrix.json)
+          BUILD_JSON=$(jq -c .conda_build_matrix .github/workflows/conda_workflow_matrix.json)
+          TEST_JSON=$(jq -c .conda_test_matrix .github/workflows/conda_workflow_matrix.json)
           echo "Build Matrix JSON: $BUILD_JSON"
           echo "Test Matrix JSON: $TEST_JSON"
           echo "build-matrix-json=$BUILD_JSON" >> $GITHUB_OUTPUT
@@ -172,17 +173,17 @@ jobs:
           # List directories to find the correct package path
           echo "Listing downloaded artifact contents:"
           find . -type f -name "numba*.conda" | sort
-          
+
           # Try to find the package using the correct architecture directory
           NUMBA_PKG=$(find . -type f -name "numba*.conda" | head -1)
-          
+
           if [ -z "$NUMBA_PKG" ]; then
             echo "ERROR: Could not find numba conda package"
             exit 1
           fi
-          
+
           echo "Using package: $NUMBA_PKG"
-          
+
           # Run the test with the found package
           conda build -c $LLVMLITE_CHANNEL -c defaults \
             --extra-deps numpy=${{ matrix.numpy_test }} blas=*=openblas \
