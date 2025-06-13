@@ -1018,7 +1018,7 @@ The following functions from the :mod:`cmath` module are supported:
 ``collections``
 ---------------
 
-Named tuple classes, as returned by :func:`collections.namedtuple`, are
+Named tuple classes, as returned by :func:`collections.namedtuple` or implicitly created by :class:`typing.NamedTuple`, are
 supported in the same way regular tuples are supported.  Attribute access
 and named parameters in the constructor are also supported.
 
