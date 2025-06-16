@@ -835,8 +835,16 @@ class TestRandom(BaseTest):
         self._check_dist(poisson0, r.poisson,
                          [(0.0,), (0.5,), (2.0,), (10.0,), (900.5,)],
                          niters=50)
+        # Test for using the `size` argument.
         self._check_dist(poisson1, r.poisson,
-                         [(0.0,5), (0.5, (10,10)), (2.0,(3,5,2)), (10.0,(2,3)), (900.5,(2,2,2,2))],
+                         [(1.0, None),          # size=None
+                          (1.0, 10),            # size=int
+                          (1.0, ()),            # size=()
+                          (1.0, (10,)),         # size=(10,)
+                          (1.0, (10,10)),       # size=(10,10)
+                          (1.0, (10,10,10)),    # size=(10,10,10)
+                          (1.0, (10,10,10,10)), # size=(10,10,10,10)
+                         ],
                          niters=50)
         self.assertRaises(ValueError, poisson0, -0.1)
 
