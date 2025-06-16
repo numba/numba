@@ -554,3 +554,37 @@ class UnicodeIteratorType(SimpleIteratorType):
         name = "iter_unicode"
         self.data = dtype
         super(UnicodeIteratorType, self).__init__(name, dtype)
+
+
+class LiteralKeyWrapper:
+    """
+    This class isn't a type, but is instead a wrapper
+    used for hashing literal values that can't be hashed
+    (for example the lowering dictionary).
+
+    It assumes a literal type exists for the given type and
+    reuses that hash implementation as its implementation. This
+    class is used so there won't be a conflict when loading from
+    a dictionary.
+    """
+
+    def __init__(self, literal_value):
+        from numba.core.types import literal
+        self._literal_typ = literal(literal_value)
+
+    def __hash__(self):
+        # Reuse the key from the literal type
+        return hash(self._literal_typ.key)
+
+    def __eq__(self, other):
+        """
+        Treat two LiteralKeys as equal if they have the same
+        type literal and the literal values are the same.
+        """
+        return (
+            isinstance(other, LiteralKeyWrapper)
+            and type(self._literal_typ) == type(other._literal_typ)
+            and not self._literal_typ.is_mutable
+            and self._literal_typ.literal_value
+                == other._literal_typ.literal_value
+        )
