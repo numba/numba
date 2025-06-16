@@ -1,5 +1,5 @@
-Support floating arguments for `np.random.negative_binomial`
-------------------------------------------------------------
+Support floating point arguments for ``np.random.negative_binomial``
+--------------------------------------------------------------------
 
-The function `np.random.negative_binomial` was fizxed and now supports floating
-point types as arguments.
+The function ``np.random.negative_binomial`` was fixed and now supports
+floating point types as arguments.
