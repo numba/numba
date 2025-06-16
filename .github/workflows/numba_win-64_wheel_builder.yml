@@ -3,7 +3,8 @@ name: numba_win-64_wheel_builder
 on:
   pull_request:
     paths:
-      - .github/workflows/numba_win-64_whl_builder.yml
+      - .github/workflows/numba_win-64_wheel_builder.yml
+      - .github/workflows/wheel_workflow_matrix.json
   workflow_dispatch:
     inputs:
       llvmlite_wheel_runid:
@@ -32,8 +33,8 @@ jobs:
       - id: load_matrix_json
         name: Load Workflow Matrix JSON
         run: |
-          BUILD_MATRIX_JSON=$(jq -c .wheel_build_matrix .github/workflows/workflow_matrix.json)
-          TEST_MATRIX_JSON=$(jq -c .wheel_test_matrix .github/workflows/workflow_matrix.json)
+          BUILD_MATRIX_JSON=$(jq -c .wheel_build_matrix .github/workflows/wheel_workflow_matrix.json)
+          TEST_MATRIX_JSON=$(jq -c .wheel_test_matrix .github/workflows/wheel_workflow_matrix.json)
 
           # Add canonical python versions to both matrices
           BUILD_MATRIX_EXTENDED=$(echo "$BUILD_MATRIX_JSON" | jq -c '
