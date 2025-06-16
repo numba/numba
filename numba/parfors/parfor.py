@@ -115,7 +115,7 @@ sequential_parfor_lowering = False
 def init_prange():
     return
 
-@overload(init_prange)
+@overload(init_prange, jit_options={"cache": config.INTERNAL_CACHING})
 def init_prange_overload():
     def no_op():
         return
