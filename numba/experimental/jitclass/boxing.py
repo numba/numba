@@ -106,6 +106,7 @@ def _specialize_box(typ):
         "__getitem__",
         "__hash__",
         "__index__",
+        "__invert__",
         "__int__",
         "__len__",
         "__setitem__",

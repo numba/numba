@@ -1,0 +1,4 @@
+Fixed ``np.median`` raising ``AssertionError`` for empty arrays when NumPy returns NaN
+--------------------------------------------------------------------------------------
+
+Fixed an issue where passing empty arrays to ``np.median`` would cause an ``AssertionError``. Now empty arrays correctly return NaN as expected.

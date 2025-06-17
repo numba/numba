@@ -292,6 +292,11 @@ class _EnvReloader(object):
         # Enable debugging of type inference
         DEBUG_TYPEINFER = _readenv("NUMBA_DEBUG_TYPEINFER", int, 0)
 
+        # Disable caching of failed type inferences.
+        # Use this to isolate problems due to the fail cache.
+        DISABLE_TYPEINFER_FAIL_CACHE = _readenv(
+            "NUMBA_DISABLE_TYPEINFER_FAIL_CACHE", int, 0)
+
         # Configure compilation target to use the specified CPU name
         # and CPU feature as the host information.
         # Note: this overrides "host" option for AOT compilation.
