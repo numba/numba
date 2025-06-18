@@ -1,5 +1,5 @@
 Migrate CI to Windows Server 2025
-----------------------------------
+---------------------------------
 
 Migrated CI infrastructure from Windows Server 2019 to Windows Server 2025.
 Replaced deprecated WMIC commands with PowerShell equivalents in system
