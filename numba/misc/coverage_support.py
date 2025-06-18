@@ -111,8 +111,8 @@ if coverage_available:
     class NumbaTracer(coverage.types.Tracer):
         """
         Not actually a tracer as in the coverage implementation, which will
-        setup python trace function. This implementation pretends to trace
-        but instead receive fake trace event for each line the compiler have
+        setup a Python trace function. This implementation pretends to trace
+        but instead receives fake trace events for each line the compiler has
         visited.
 
         See coverage.PyTracer
