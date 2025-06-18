@@ -1,0 +1,7 @@
+Remove new type system from ``numba``
+-------------------------------------
+
+This release removes the new type system contained within files that have names 
+prefixed by ``new_*``. This decision was made due to technical complexities faced
+upon implementation of a new type system as described in: 
+https://numba.discourse.group/t/numpy-2-x-support-community-update/2815
