@@ -4916,18 +4916,18 @@ def np_arange(start, / ,stop=None, step=None, dtype=None):
     if isinstance(dtype, types.Optional):
         dtype = dtype.type
 
-    unsigned_start_stop = start in numba.core.types.np_unsigned_domain
+    unsigned_start_stop = start in types.np_unsigned_domain
 
     if stop is None:
         stop = types.none
     else:
-        if stop not in numba.core.types.np_unsigned_domain:
+        if stop not in types.np_unsigned_domain:
             unsigned_start_stop = False
+    all_unsigned = unsigned_start_stop
     if step is None:
         step = types.none
-        allUnsigned = unsigned_start_stop
     else:
-        allUnsigned = unsigned_start_stop and (step in numba.core.types.np_unsigned_domain)
+        all_unsigned = all_unsigned and (step in types.np_unsigned_domain)
     if dtype is None:
         dtype = types.none
 
@@ -4939,8 +4939,8 @@ def np_arange(start, / ,stop=None, step=None, dtype=None):
         return
 
     if isinstance(dtype, types.NoneType):
-        # avoid error from mixing unsigned and signed ints when calling _arange_dtype
-        if allUnsigned:
+        # avoid error from mixing uints and ints when calling _arange_dtype
+        if all_unsigned:
             true_dtype = np.uint64
         else:
             true_dtype = _arange_dtype(start, stop, step)
