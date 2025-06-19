@@ -4888,10 +4888,22 @@ def _arange_dtype(*args):
     elif any(isinstance(a, types.Float) for a in bounds):
         dtype = types.float64
     else:
+        # `np.arange(10).dtype` is always `np.dtype(int)`, aka `np.int_`, which
+        # in all released versions of numpy corresponds to the C `long` type.
+        # Windows 64 is broken by default here because Numba (as of 0.47) does
+        # not differentiate between Python and NumPy integers, so a `typeof(1)`
+        # on w64 is `int64`, i.e. `intp`. This means an arange(<some int>) will
+        # be typed as arange(int64) and the following will yield int64 opposed
+        # to int32. Example: without a load of analysis to work out of the args
+        # were wrapped in NumPy int*() calls it's not possible to detect the
+        # difference between `np.arange(10)` and `np.arange(np.int64(10)`.
+        NPY_TY = getattr(types, "int%s" % (8 * np.dtype(int).itemsize))
+
         # unliteral these types such that `max` works.
         unliteral_bounds = [types.unliteral(x) for x in bounds]
-        
-        dtype = max(unliteral_bounds)
+
+        dtype = max(unliteral_bounds + [NPY_TY,])
+
     return dtype
 
 
@@ -4904,10 +4916,18 @@ def np_arange(start, / ,stop=None, step=None, dtype=None):
     if isinstance(dtype, types.Optional):
         dtype = dtype.type
 
+    unsigned_start_stop = start in numba.core.types.np_unsigned_domain
+
     if stop is None:
         stop = types.none
+    else:
+        if stop not in numba.core.types.np_unsigned_domain:
+            unsigned_start_stop = False
     if step is None:
         step = types.none
+        allUnsigned = unsigned_start_stop
+    else:
+        allUnsigned = unsigned_start_stop and (step in numba.core.types.np_unsigned_domain)
     if dtype is None:
         dtype = types.none
 
@@ -4919,11 +4939,18 @@ def np_arange(start, / ,stop=None, step=None, dtype=None):
         return
 
     if isinstance(dtype, types.NoneType):
-        true_dtype = _arange_dtype(start, stop, step)
+        # avoid error from mixing unsigned and signed ints when calling _arange_dtype
+        if allUnsigned:
+            true_dtype = np.uint64
+        else:
+            true_dtype = _arange_dtype(start, stop, step)
     else:
         true_dtype = dtype.dtype
 
-    start_stop_dtype = _arange_dtype(start, stop)
+    if unsigned_start_stop:
+        start_stop_dtype = np.uint64
+    else:
+        start_stop_dtype = _arange_dtype(start, stop)
 
     use_complex = any([isinstance(x, types.Complex)
                        for x in (start, stop, step)])
@@ -4938,7 +4965,7 @@ def np_arange(start, / ,stop=None, step=None, dtype=None):
         lit_stop = stop_value if stop_value is not None else stop
         lit_step = step_value if step_value is not None else step
 
-        _step = lit_step if lit_step is not None else dtype(1)
+        _step = lit_step if lit_step is not None else true_dtype(1)
         if lit_stop is None:
             _start, _stop = start_stop_dtype(0), lit_start
         else:
