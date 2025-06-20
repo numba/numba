@@ -4941,7 +4941,13 @@ def np_arange(start, / ,stop=None, step=None, dtype=None):
     if isinstance(dtype, types.NoneType):
         # avoid error from mixing uints and ints when calling _arange_dtype
         if all_unsigned:
-            true_dtype = np.uint64
+            args = (start, step, stop)
+            bounds = [a for a in args if not isinstance(a, types.NoneType)]
+            # match numpy upcasting behavior
+            if types.uint64 == max([types.unliteral(x) for x in bounds]):
+                true_dtype = np.float64
+            else:
+                true_dtype = np.int64
         else:
             true_dtype = _arange_dtype(start, stop, step)
     else:
