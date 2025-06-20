@@ -53,7 +53,7 @@ jobs:
   win-64-build:
     name: win-64-build-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
     needs: load-matrix
-    runs-on: windows-2019
+    runs-on: windows-2025
     defaults:
       run:
         shell: bash -el {0}
@@ -111,7 +111,7 @@ jobs:
   win-64-test:
     name: win-64-test-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
     needs: [load-matrix, win-64-build]
-    runs-on: windows-2019
+    runs-on: windows-2025
     defaults:
       run:
         shell: bash -el {0}
