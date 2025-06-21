@@ -26,3 +26,5 @@ htmlcov/
 __pycache__/
 
 docs/source/developer/autogen*
+
+.eggs/
