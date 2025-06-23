@@ -1,3 +1,4 @@
+.. _notes-on-inlining:
 
 =================
 Notes on Inlining

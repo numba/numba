@@ -846,6 +846,8 @@ class TestRandom(BaseTest):
         self.assertEqual([negbin(1000, 0.1) for i in range(10)],
                          [9203, 8640, 9081, 9292, 8938,
                           9165, 9149, 8774, 8886, 9117])
+        self.assertEqual([negbin(0.3, 0.1) for i in range(10)],
+                         [0, 2, 15, 4, 4, 0, 0, 0, 1, 0])
         m = np.mean([negbin(1000000000, 0.1)
                      for i in range(50)])
         self.assertGreater(m, 9e9 * 0.99)

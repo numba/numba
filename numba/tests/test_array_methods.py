@@ -146,17 +146,17 @@ def make_array_astype(newtype):
     return array_astype
 
 
-def np_frombuffer(b):
+def np_frombuffer(b, dtype: np.dtype = np.float64, count=-1, offset=0):
     """
     np.frombuffer() on a Python-allocated buffer.
     """
-    return np.frombuffer(b)
+    return np.frombuffer(b, dtype=dtype, count=count, offset=offset)
 
-def np_frombuffer_dtype(b):
-    return np.frombuffer(b, dtype=np.complex64)
+def np_frombuffer_dtype(b, count=-1, offset=0):
+    return np.frombuffer(b, dtype=np.complex64, count=count, offset=offset)
 
-def np_frombuffer_dtype_str(b):
-    return np.frombuffer(b, dtype='complex64')
+def np_frombuffer_dtype_str(b, count=-1, offset=0):
+    return np.frombuffer(b, dtype='complex64', count=count, offset=offset)
 
 def np_frombuffer_allocated(shape):
     """
@@ -171,6 +171,9 @@ def np_frombuffer_allocated_dtype(shape):
 
 def identity_usecase(a, b):
     return (a is b), (a is not b)
+
+def array_tobytes(a):
+    return a.tobytes()
 
 def array_nonzero(a):
     return a.nonzero()
@@ -591,6 +594,12 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         self.assertIn('array.astype if dtype is a string it must be constant',
                       str(raises.exception))
 
+    def test_array_tobytes(self):
+        self.check_layout_dependent_func(
+            array_tobytes,
+            memoryaddr=lambda x: np.frombuffer(x, dtype=np.uint8).ctypes.data,
+        )
+
     def check_np_frombuffer(self, pyfunc):
 
         cfunc = njit(pyfunc)
@@ -658,15 +667,19 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         with self.assertRaisesRegex(TypingError, msg) as raises:
             func(None)
 
-    def check_layout_dependent_func(self, pyfunc, fac=np.arange):
-        def is_same(a, b):
-            return a.ctypes.data == b.ctypes.data
+    def check_layout_dependent_func(
+        self, pyfunc, fac=np.arange, memoryaddr=lambda x: x.ctypes.data
+    ):
         def check_arr(arr):
             cfunc = njit((typeof(arr),))(pyfunc)
             expected = pyfunc(arr)
             got = cfunc(arr)
             self.assertPreciseEqual(expected, got)
-            self.assertEqual(is_same(expected, arr), is_same(got, arr))
+            self.assertEqual(
+                arr.ctypes.data == memoryaddr(expected),
+                arr.ctypes.data == memoryaddr(got),
+            )
+
         arr = fac(24)
         check_arr(arr)
         check_arr(arr.reshape((3, 8)))
@@ -1761,6 +1774,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check(np.array(np.zeros(5)))
         check(np.array([[3.1, 3.1], [1.7, 2.29], [3.3, 1.7]]))
         check(np.array([]))
+        check(np.array([np.nan, np.nan]))
 
     @needs_blas
     def test_array_dot(self):
@@ -1791,6 +1805,55 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         np.testing.assert_array_equal(pyfunc(*args), cfunc(*args))
         args = n, np.dtype('f4')
         np.testing.assert_array_equal(pyfunc(*args), cfunc(*args))
+
+    def test_frombuffer_offset(self):
+        # Expect to skip the first two elements (offset = 2 bytes)
+        buffer = np.arange(8, dtype=np.uint8)
+        offset = 2
+        result = np_frombuffer(buffer, dtype=buffer.dtype, offset=offset)
+        expected = np.array([2, 3, 4, 5, 6, 7], dtype=buffer.dtype)
+        np.testing.assert_array_equal(result, expected)
+
+    def test_frombuffer_count(self):
+        # Expect to read only 4 elements
+        buffer = np.arange(24, dtype=np.uint8)
+        count = 4
+        result = np_frombuffer(buffer, dtype=buffer.dtype, count=count)
+        expected = np.array([0, 1, 2, 3], dtype=buffer.dtype)
+        np.testing.assert_array_equal(result, expected)
+
+    def test_frombuffer_count_negative_means_all(self):
+        # Expect to read only 4 elements
+        buffer = np.arange(8, dtype=np.uint8)
+        result = np_frombuffer(buffer, dtype=buffer.dtype, count=-1)
+        expected = np.array([0, 1, 2, 3, 4, 5, 6, 7], dtype=buffer.dtype)
+        np.testing.assert_array_equal(result, expected)
+
+    def test_frombuffer_offset_and_count(self):
+        # Skip first 2 bytes and read 3 elements
+        buffer = np.arange(24, dtype=np.uint8)
+        offset = 2
+        count = 3
+        result = np_frombuffer(buffer, dtype=buffer.dtype, offset=offset, count=count)
+        expected = np.array([2, 3, 4], dtype=buffer.dtype)
+        np.testing.assert_array_equal(result, expected)
+
+    def test_frombuffer_invalid_offset(self):
+        # Test behavior when offset exceeds buffer size
+        buffer = np.arange(24, dtype=np.uint8)
+        offset = len(buffer) + 1  # Invalid offset
+        msg = "offset must be non-negative and no greater than buffer length"
+        with self.assertRaisesRegex(ValueError, msg):
+            np_frombuffer(buffer, dtype=buffer.dtype, offset=offset)
+
+    def test_frombuffer_invalid_count(self):
+        # Test behavior when count exceeds the possible number of elements
+        buffer = np.arange(24, dtype=np.uint8)
+        count = len(buffer) + 1  # Count exceeds buffer size
+        msg = "buffer is smaller than requested size"
+        with self.assertRaisesRegex(ValueError, msg):
+            np.frombuffer(buffer, dtype=buffer.dtype, count=count)
+
 
 class TestArrayComparisons(TestCase):
 

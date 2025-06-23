@@ -9,3 +9,6 @@ contact_links:
   - name: Discuss an involved feature
     url: https://numba.discourse.group/c/numba/development/
     about: "If you would like to suggest a more involved feature like *Can a new compiler pass be added to do X* then please start a discussion on Numba's discourse instance."
+  - name: CUDA
+    url: https://github.com/NVIDIA/numba-cuda
+    about: "Any items related to the CUDA target should be reported in the numba-cuda repo"

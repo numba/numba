@@ -12,8 +12,7 @@ from llvmlite import ir
 
 from numba.core.cgutils import is_nonelike, is_empty_tuple
 from numba.core.extending import intrinsic, overload, register_jitable
-from numba.core.imputils import (Registry, impl_ret_untracked,
-                                    impl_ret_new_ref)
+from numba.core.imputils import Registry
 from numba.core.typing import signature
 from numba.core import types, cgutils
 from numba.core.errors import NumbaTypeError
@@ -1617,7 +1616,7 @@ def logseries_impl(p, size):
 
 @overload(np.random.negative_binomial)
 def negative_binomial_impl(n, p):
-    if isinstance(n, types.Integer) and isinstance(
+    if isinstance(n, (types.Float, types.Integer)) and isinstance(
             p,(types.Float, types.Integer)):
         def _impl(n, p):
             if n <= 0:

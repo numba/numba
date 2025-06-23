@@ -3,7 +3,7 @@ Caching mechanism for compiled functions.
 """
 
 
-from abc import ABCMeta, abstractmethod, abstractproperty
+from abc import ABCMeta, abstractmethod
 import contextlib
 import errno
 import hashlib
@@ -37,7 +37,8 @@ def _cache_log(msg, *args):
 
 class _Cache(metaclass=ABCMeta):
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def cache_path(self):
         """
         The base filesystem path of this cache (for example its root folder).

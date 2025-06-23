@@ -968,6 +968,14 @@ in CPython under the condition that the :attr:`sys.hash_info.algorithm` is
 The ``PYTHONHASHSEED`` environment variable influences the hashing behavior in
 precisely the manner described in the CPython documentation.
 
+.. note:: From NumPy 2.2 onwards, hash values for ``numpy.timedelta64`` and
+          ``numpy.datetime64`` instances computed in Numba compiled code do not
+          match the NumPy hash values of the same. Prior to NumPy 2.2, NumPy
+          hash values for ``numpy.timedelta64`` and ``numpy.datetime64``
+          instances were equivalent to their integer value representation. From
+          NumPy 2.2 onwards, their hash value is the same as the hash of the
+          equivalent type from the ``datetime`` module, Numba does not replicate
+          this behaviour.
 
 Standard library modules
 ========================

@@ -1,0 +1,6 @@
+Improve Environment Object Support in PYCC
+------------------------------------------
+
+Added support for Environment objects referenced indirectly by entry points in
+PYCC-compiled code. Previously, PYCC was unable to handle these indirect
+Environment object references, which limited certain compilation scenarios.
