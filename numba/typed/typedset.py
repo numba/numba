@@ -174,7 +174,7 @@ def box_settype(typ, val, c):
     modname = c.context.insert_const_string(
         c.builder.module, 'numba.typed.typedset',
     )
-    typedset_mod = c.pyapi.import_module_noblock(modname)
+    typedset_mod = c.pyapi.import_module(modname)
     fmp_fn = c.pyapi.object_getattr_string(typedset_mod, '_from_meminfo_ptr')
 
     settype_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ))
