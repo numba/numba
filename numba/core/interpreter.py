@@ -1887,6 +1887,14 @@ class Interpreter(object):
     def op_NOP(self, inst):
         pass
 
+    if PYVERSION in ((3, 14), ):
+        # New in 3.14
+        op_NOT_TAKEN = op_NOP
+    elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+        pass
+    else:
+        raise NotImplementedError(PYVERSION)
+
     def op_RESUME(self, inst):
         pass
 
