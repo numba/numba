@@ -2299,6 +2299,16 @@ class Interpreter(object):
     else:
         raise NotImplementedError(PYVERSION)
 
+    if PYVERSION in ((3, 14),):
+        # New in 3.14.
+        op_LOAD_FAST_BORROW = op_LOAD_FAST
+        op_LOAD_FAST_BORROW_LOAD_FAST_BORROW = op_LOAD_FAST_LOAD_FAST
+
+    elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+        pass
+    else:
+        raise NotImplementedError(PYVERSION)
+
     def op_STORE_FAST(self, inst, value):
         dstname = self.code_locals[inst.arg]
         value = self.get(value)
