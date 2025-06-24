@@ -546,8 +546,7 @@ class TraceRunner(object):
         state.append(inst, item=item, res=res)
 
     def op_LOAD_FAST(self, state, inst):
-        assert PYVERSION <= (3, 13)
-        if PYVERSION in ((3, 13), ):
+        if PYVERSION in ((3, 13), (3, 14)):
             try:
                 name = state.get_varname(inst)
             except IndexError:   # oparg is out of range
@@ -566,8 +565,10 @@ class TraceRunner(object):
                 state.append(inst, res=res, as_load_deref=True)
                 state.push(res)
                 return
-        else:
+        elif PYVERSION in ((3, 10), (3, 11), (3, 12)):
             name = state.get_varname(inst)
+        else:
+            raise NotImplementedError(PYVERSION)
         res = state.make_temp(name)
         state.append(inst, res=res)
         state.push(res)
