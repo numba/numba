@@ -2708,11 +2708,17 @@ class Interpreter(object):
                        loc=self.loc)
         self.current_block.append(br)
 
-    def op_BINARY_SUBSCR(self, inst, target, index, res):
-        index = self.get(index)
-        target = self.get(target)
-        expr = ir.Expr.getitem(target, index=index, loc=self.loc)
-        self.store(expr, res)
+    if PYVERSION in ((3, 14),):
+        # Removed in 3.14 -- replaced with BINARY_OP and []
+        pass
+    elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+        def op_BINARY_SUBSCR(self, inst, target, index, res):
+            index = self.get(index)
+            target = self.get(target)
+            expr = ir.Expr.getitem(target, index=index, loc=self.loc)
+            self.store(expr, res)
+    else:
+        raise NotImplementedError(PYVERSION)
 
     def op_STORE_SUBSCR(self, inst, target, index, value):
         index = self.get(index)
@@ -2854,7 +2860,13 @@ class Interpreter(object):
         self.store(expr, res)
 
     def op_BINARY_OP(self, inst, op, lhs, rhs, res):
-        if "=" in op:
+        if op == "[]":
+            # Special case 3.14 -- body of BINARY_SUBSCR now here
+            lhs = self.get(lhs)
+            rhs = self.get(rhs)
+            expr = ir.Expr.getitem(lhs, index=rhs, loc=self.loc)
+            self.store(expr, res)
+        elif "=" in op:
             self._inplace_binop(op[:-1], lhs, rhs, res)
         else:
             self._binop(op, lhs, rhs, res)

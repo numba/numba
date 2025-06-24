@@ -1175,12 +1175,18 @@ class TraceRunner(object):
             state.append(inst, kind='with')
         state.fork(pc=inst.next)
 
-    def op_BINARY_SUBSCR(self, state, inst):
-        index = state.pop()
-        target = state.pop()
-        res = state.make_temp()
-        state.append(inst, index=index, target=target, res=res)
-        state.push(res)
+    if PYVERSION in ((3, 14),):
+        # Removed in 3.14 -- replaced with BINARY_OP and []
+        pass
+    elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+        def op_BINARY_SUBSCR(self, state, inst):
+            index = state.pop()
+            target = state.pop()
+            res = state.make_temp()
+            state.append(inst, index=index, target=target, res=res)
+            state.push(res)
+    else:
+        raise NotImplementedError(PYVERSION)
 
     def op_STORE_SUBSCR(self, state, inst):
         index = state.pop()
@@ -1558,10 +1564,17 @@ class TraceRunner(object):
         op = dis._nb_ops[inst.arg][1]
         rhs = state.pop()
         lhs = state.pop()
-        op_name = ALL_BINOPS_TO_OPERATORS[op].__name__
-        res = state.make_temp(prefix=f"binop_{op_name}")
-        state.append(inst, op=op, lhs=lhs, rhs=rhs, res=res)
-        state.push(res)
+        if op == '[]':
+            # Special case 3.14 -- body of BINARY_SUBSCR now here
+            assert PYVERSION == (3, 14)
+            res = state.make_temp()
+            state.append(inst, op=op, lhs=lhs, rhs=rhs, res=res)
+            state.push(res)
+        else:
+            op_name = ALL_BINOPS_TO_OPERATORS[op].__name__
+            res = state.make_temp(prefix=f"binop_{op_name}")
+            state.append(inst, op=op, lhs=lhs, rhs=rhs, res=res)
+            state.push(res)
 
     def _unaryop(self, state, inst):
         val = state.pop()
