@@ -560,8 +560,14 @@ class ByteCodePy312(ByteCodePy311):
                     if not curr_inst.opname == "END_FOR":
                         continue
                     next_inst = self.table[self.ordered_offsets[index - 1]]
-                    if not next_inst.opname == "POP_TOP":
-                        continue
+                    if PYVERSION in ((3, 13), ):
+                        if not next_inst.opname == "POP_TOP":
+                            continue
+                    elif PYVERSION in ((3, 14), ):
+                        if not next_inst.opname == "POP_ITER":
+                            continue
+                    else:
+                        raise NotImplementedError(PYVERSION)
                     # END_FOR must be followed by SWAP(2)
                     next_inst = self.table[self.ordered_offsets[index]]
                     if not next_inst.opname == "SWAP" and next_inst.arg == 2:
