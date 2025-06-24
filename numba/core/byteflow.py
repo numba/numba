@@ -461,15 +461,16 @@ class TraceRunner(object):
     else:
         raise NotImplementedError(PYVERSION)
 
-    if PYVERSION in ((3, 13),):
+    if PYVERSION in ((3, 13), (3,14)):
         def op_TO_BOOL(self, state, inst):
             res = state.make_temp()
             tos = state.pop()
             state.append(inst, val=tos, res=res)
             state.push(res)
-
-    elif PYVERSION < (3, 13):
+    elif PYVERSION in ((3, 10), (3, 11), (3, 12)):
         pass
+    else:
+        raise NotImplementedError(PYVERSION)
 
     if PYVERSION in ((3, 13), (3, 14)):
         def op_LOAD_GLOBAL(self, state, inst):
