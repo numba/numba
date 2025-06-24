@@ -2369,6 +2369,17 @@ class Interpreter(object):
             const = ir.Const(value, loc=self.loc)
         self.store(const, res)
 
+    if PYVERSION in ((3, 14), ):
+        # New in 3.14
+        def op_LOAD_SMALL_INT(self, inst, res):
+            value = inst.arg
+            const = ir.Const(value, loc=self.loc)
+            self.store(const, res)
+    elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+        pass
+    else:
+        raise NotImplementedError(PYVERSION)
+
     if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
         def op_LOAD_GLOBAL(self, inst, idx, res):
             name = self.code_names[idx]

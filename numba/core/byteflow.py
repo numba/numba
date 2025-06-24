@@ -499,6 +499,18 @@ class TraceRunner(object):
         state.push(res)
         state.append(inst, res=res)
 
+    if PYVERSION in ((3, 14), ):
+        # New in 3.14
+        def op_LOAD_SMALL_INT(self, state, inst):
+            assert 0 <= inst.arg < 256
+            res = state.make_temp("const") + f".{inst.arg}"
+            state.push(res)
+            state.append(inst, res=res)
+    elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+        pass
+    else:
+        raise NotImplementedError(PYVERSION)
+
     def op_LOAD_ATTR(self, state, inst):
         item = state.pop()
         res = state.make_temp()
