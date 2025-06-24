@@ -687,7 +687,10 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             tp = typeof(val, Purpose.argument)
         except (errors.NumbaValueError, ValueError):
             if hasattr(val, '__array__'):
-                tp = typeof(val.__array__(), Purpose.argument)
+                try:
+                    tp = typeof(val.__array__(), Purpose.argument)
+                except (errors.NumbaValueError, ValueError):
+                    tp = types.pyobject
             else:
                 tp = types.pyobject
         else:
