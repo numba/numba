@@ -19,7 +19,7 @@ from numba.core.unsafe import eh
 from numba.cpython.unsafe.tuple import unpack_single_tuple
 
 
-if PYVERSION in ((3, 12), (3, 13)):
+if PYVERSION in ((3, 12), (3, 13), (3, 14)):
     # Operands for CALL_INTRINSIC_1
     from numba.core.byteflow import CALL_INTRINSIC_1_Operand as ci1op
 elif PYVERSION in ((3, 10), (3, 11)):
@@ -1389,7 +1389,7 @@ class Interpreter(object):
                                          max(inst_blocks.body))
         self.last_active_offset = last_active_offset
 
-        if PYVERSION in ((3, 12), (3, 13)):
+        if PYVERSION in ((3, 12), (3, 13), (3, 14)):
             self.active_exception_entries = tuple(
                 [entry for entry in self.bytecode.exception_entries
                  if entry.start < self.last_active_offset])
@@ -1405,7 +1405,7 @@ class Interpreter(object):
         # Interpret loop
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
-        if PYVERSION in ((3, 11), (3, 12), (3, 13)):
+        if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
             # Insert end of try markers
             self._end_try_blocks()
         elif PYVERSION in ((3, 10),):
@@ -1423,12 +1423,12 @@ class Interpreter(object):
         # post process the IR to rewrite opcodes/byte sequences that are too
         # involved to risk handling as part of direct interpretation
         peepholes = []
-        if PYVERSION in ((3, 11), (3, 12), (3, 13)):
+        if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
             peepholes.append(peep_hole_split_at_pop_block)
-        if PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+        if PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13), (3, 14)):
             peepholes.append(peep_hole_list_to_tuple)
         peepholes.append(peep_hole_delete_with_exit)
-        if PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+        if PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13), (3, 14)):
             # peep_hole_call_function_ex_to_call_function_kw
             # depends on peep_hole_list_to_tuple converting
             # any large number of arguments from a list to a
@@ -1461,7 +1461,7 @@ class Interpreter(object):
 
         See also: _insert_try_block_end
         """
-        assert PYVERSION in ((3, 11), (3, 12), (3, 13))
+        assert PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14))
         graph = self.cfa.graph
         for offset, block in self.blocks.items():
             # Get current blockstack
@@ -1569,7 +1569,7 @@ class Interpreter(object):
         self.dfainfo = self.dfa.infos[self.current_block_offset]
         self.assigner = Assigner()
         # Check out-of-scope syntactic-block
-        if PYVERSION in ((3, 11), (3, 12), (3, 13)):
+        if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
             # This is recreating pre-3.11 code structure
             while self.syntax_blocks:
                 if offset >= self.syntax_blocks[-1].exit:
@@ -1800,7 +1800,7 @@ class Interpreter(object):
         if self._DEBUG_PRINT:
             print(inst)
         assert self.current_block is not None
-        if PYVERSION in ((3, 11), (3, 12), (3, 13)):
+        if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
             if self.syntax_blocks:
                 top = self.syntax_blocks[-1]
                 if isinstance(top, ir.With) :
@@ -1983,7 +1983,7 @@ class Interpreter(object):
                                      (), loc=self.loc)
         self.store(value=sliceinst, name=res)
 
-    if PYVERSION in ((3, 12), (3, 13)):
+    if PYVERSION in ((3, 12), (3, 13), (3, 14)):
         def op_BINARY_SLICE(self, inst, start, end, container, res, slicevar,
                             temp_res):
             start = self.get(start)
@@ -2002,7 +2002,7 @@ class Interpreter(object):
     else:
         raise NotImplementedError(PYVERSION)
 
-    if PYVERSION in ((3, 12), (3, 13)):
+    if PYVERSION in ((3, 12), (3, 13), (3, 14)):
         def op_STORE_SLICE(self, inst, start, end, container, value, res,
                            slicevar):
             start = self.get(start)
@@ -2234,7 +2234,7 @@ class Interpreter(object):
         srcname = self.code_locals[inst.arg]
         self.store(value=self.get(srcname), name=res)
 
-    if PYVERSION in ((3, 13), ):
+    if PYVERSION in ((3, 13), (3, 14)):
         def op_LOAD_FAST(self, inst, res, as_load_deref=False):
             if as_load_deref:
                 self.op_LOAD_DEREF(inst, res)
@@ -2244,7 +2244,7 @@ class Interpreter(object):
     else:
         op_LOAD_FAST = _op_LOAD_FAST
 
-    if PYVERSION in ((3, 13),):
+    if PYVERSION in ((3, 13), (3, 14)):
         def op_LOAD_FAST_LOAD_FAST(self, inst, res1, res2):
             oparg = inst.arg
             oparg1 = oparg >> 4
@@ -2281,7 +2281,7 @@ class Interpreter(object):
     else:
         raise NotImplementedError(PYVERSION)
 
-    if PYVERSION in ((3, 12), (3, 13)):
+    if PYVERSION in ((3, 12), (3, 13), (3, 14)):
         op_LOAD_FAST_CHECK = op_LOAD_FAST
 
         def op_LOAD_FAST_AND_CLEAR(self, inst, res):
@@ -2328,7 +2328,7 @@ class Interpreter(object):
 
     def op_LOAD_ATTR(self, inst, item, res):
         item = self.get(item)
-        if PYVERSION in ((3, 12), (3, 13)):
+        if PYVERSION in ((3, 12), (3, 13), (3, 14)):
             attr = self.code_names[inst.arg >> 1]
         elif PYVERSION in ((3, 10), (3, 11)):
             attr = self.code_names[inst.arg]
@@ -2359,7 +2359,7 @@ class Interpreter(object):
             const = ir.Const(value, loc=self.loc)
         self.store(const, res)
 
-    if PYVERSION in ((3, 11), (3, 12), (3, 13)):
+    if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
         def op_LOAD_GLOBAL(self, inst, idx, res):
             name = self.code_names[idx]
             value = self.get_global_value(name)
@@ -2377,7 +2377,7 @@ class Interpreter(object):
     def op_COPY_FREE_VARS(self, inst):
         pass
 
-    if PYVERSION in ((3, 11), (3, 12), (3, 13)):
+    if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
         def op_LOAD_DEREF(self, inst, res):
             name = self.func_id.func.__code__._varname_from_oparg(inst.arg)
             if name in self.code_cellvars:
@@ -2406,11 +2406,11 @@ class Interpreter(object):
     else:
         raise NotImplementedError(PYVERSION)
 
-    if PYVERSION in ((3, 11), (3, 12), (3, 13)):
+    if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
         def op_MAKE_CELL(self, inst):
             pass  # ignored bytecode
 
-    if PYVERSION in ((3, 11), (3, 12), (3, 13)):
+    if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
         def op_STORE_DEREF(self, inst, value):
             name = self.func_id.func.__code__._varname_from_oparg(inst.arg)
             value = self.get(value)
@@ -2509,7 +2509,7 @@ class Interpreter(object):
         expr = ir.Expr.call(func, args, kwargs, loc=self.loc)
         self.store(expr, res)
 
-    if PYVERSION in ((3, 13),):
+    if PYVERSION in ((3, 13), (3, 14)):
         def op_CALL_KW(self, inst, func, args, kw_names, res):
             func = self.get(func)
             args = [self.get(x) for x in args]
@@ -2971,7 +2971,7 @@ class Interpreter(object):
         ret = ir.Return(self.get(castval), loc=self.loc)
         self.current_block.append(ret)
 
-    if PYVERSION in ((3, 12), (3, 13)):
+    if PYVERSION in ((3, 12), (3, 13), (3, 14)):
         def op_RETURN_CONST(self, inst, retval, castval):
             value = self.code_consts[inst.arg]
             const = ir.Const(value, loc=self.loc)
@@ -2984,7 +2984,7 @@ class Interpreter(object):
     else:
         raise NotImplementedError(PYVERSION)
 
-    if PYVERSION in ((3, 13),):
+    if PYVERSION in ((3, 13), (3, 14)):
         def op_TO_BOOL(self, inst, val, res):
             self.store(self.get(val), res) # TODO: just a lazy hack
 
@@ -2994,7 +2994,7 @@ class Interpreter(object):
         raise NotImplementedError(PYVERSION)
 
     def op_COMPARE_OP(self, inst, lhs, rhs, res):
-        if PYVERSION in ((3, 13),):
+        if PYVERSION in ((3, 13), (3, 14)):
             op = dis.cmp_op[inst.arg >> 5]
             # TODO: fifth lowest bit now indicates a forced version to bool.
         elif PYVERSION in ((3, 12),):
@@ -3115,7 +3115,7 @@ class Interpreter(object):
     def op_POP_JUMP_FORWARD_IF_NOT_NONE(self, inst, pred):
         self._jump_if_none(inst, pred, False)
 
-    if PYVERSION in ((3, 12), (3, 13)):
+    if PYVERSION in ((3, 12), (3, 13), (3, 14)):
         def op_POP_JUMP_IF_NONE(self, inst, pred):
             self._jump_if_none(inst, pred, True)
 
@@ -3257,7 +3257,7 @@ class Interpreter(object):
         self.op_MAKE_FUNCTION(inst, name, code, closure, annotations,
                               kwdefaults, defaults, res)
 
-    if PYVERSION in ((3, 11), (3, 12), (3, 13)):
+    if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
         def op_LOAD_CLOSURE(self, inst, res):
             name = self.func_id.func.__code__._varname_from_oparg(inst.arg)
             if name in self.code_cellvars:
@@ -3395,7 +3395,7 @@ class Interpreter(object):
     def op_CALL_METHOD(self, *args, **kws):
         self.op_CALL_FUNCTION(*args, **kws)
 
-    if PYVERSION in ((3, 12), (3, 13)):
+    if PYVERSION in ((3, 12), (3, 13), (3, 14)):
         def op_CALL_INTRINSIC_1(self, inst, operand, **kwargs):
             if operand == ci1op.INTRINSIC_STOPITERATION_ERROR:
                 stmt = ir.StaticRaise(INTRINSIC_STOPITERATION_ERROR, (),
@@ -3416,7 +3416,7 @@ class Interpreter(object):
         raise NotImplementedError(PYVERSION)
 
 
-if PYVERSION in ((3, 12), (3, 13)):
+if PYVERSION in ((3, 12), (3, 13), (3, 14)):
     class INTRINSIC_STOPITERATION_ERROR(AssertionError):
         pass
 elif PYVERSION in ((3, 10), (3, 11)):
