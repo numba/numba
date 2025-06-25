@@ -442,10 +442,10 @@ numba_set_discard(NB_Set *setp, char *key, Py_hash_t hash)
         return ERR_KEY_NOT_FOUND;
     if (entry->key == NULL)
         return ERR_KEY_NOT_FOUND;
+    set_decref_key(setp, entry->key);
     entry->key = (char *)dummy;
     entry->hash = -1;
     setp->used--;
-    set_decref_key(setp, key);
     return OK;
 }
 
