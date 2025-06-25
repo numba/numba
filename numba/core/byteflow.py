@@ -1265,7 +1265,24 @@ class TraceRunner(object):
     else:
         raise NotImplementedError(PYVERSION)
 
-    if PYVERSION in ((3, 13), ):
+    if PYVERSION in ((3, 14), ):
+        def op_CALL_FUNCTION_EX(self, state, inst):
+            # (func, unused, callargs, kwargs -- result))
+            # In 3.14 CALL_FUNCTION_EX always take a kwargs argument
+            # https://github.com/python/cpython/pull/129226
+            varkwarg = state.pop()
+            # TODO better way to check for Numba IR null value?
+            if 'null' in varkwarg:
+                varkwarg = None
+            vararg = state.pop()
+            state.pop()  # unused
+            func = state.pop()
+
+            res = state.make_temp()
+            state.append(inst, func=func, vararg=vararg, varkwarg=varkwarg,
+                         res=res)
+            state.push(res)
+    elif PYVERSION in ((3, 13), ):
         def op_CALL_FUNCTION_EX(self, state, inst):
             # (func, unused, callargs, kwargs if (oparg & 1) -- result))
             if inst.arg & 1:
@@ -1281,9 +1298,7 @@ class TraceRunner(object):
             state.append(inst, func=func, vararg=vararg, varkwarg=varkwarg,
                          res=res)
             state.push(res)
-
     elif PYVERSION in ((3, 10), (3, 11), (3, 12)):
-
         def op_CALL_FUNCTION_EX(self, state, inst):
             if inst.arg & 1:
                 varkwarg = state.pop()
