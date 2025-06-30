@@ -721,10 +721,10 @@ Typed Set
   functionality or suffer from unexpectedly bad performance, please report
   this, ideally by opening an issue on the Numba issue tracker.
 
-As of version 0.58.0, a new implementation of the set data type is available,
-the *typed-set*. This is compiled library backed, type-homogeneous
+As of version 0.62.0, a new implementation of the set data type is available,
+the *typed-set*. This is a compiled library backed, type-homogeneous
 set data type that functions exactly like other typed data structures.
-You will need to import it explicitly from the `numba.typed` module::
+You will need to import it explicitly from the ``numba.typed`` module::
 
     In [1]: from numba.typed import Set
 
