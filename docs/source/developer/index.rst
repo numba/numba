@@ -22,6 +22,7 @@ Developer Manual
    inlining.rst
    environment.rst
    hashing.rst
+   sys_monitoring.rst
    caching.rst
    threading_implementation.rst
    literal.rst

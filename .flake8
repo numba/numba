@@ -33,8 +33,6 @@ exclude =
     # Grandfather in existing failing files.  This list should shrink over time
     numba/stencils/stencil.py
     numba/core/transforms.py
-    numba/core/tracing.py
-    numba/core/withcontexts.py
     numba/_version.py
     numba/core/ir_utils.py
     numba/core/pylowering.py
@@ -48,7 +46,6 @@ exclude =
     numba/core/caching.py
     numba/core/debuginfo.py
     numba/core/annotations/pretty_annotate.py
-    numba/misc/dummyarray.py
     numba/core/dataflow.py
     numba/core/pythonapi.py
     numba/core/decorators.py
@@ -104,7 +101,6 @@ exclude =
     numba/tests/test_jitmethod.py
     numba/tests/test_inlining.py
     numba/tests/test_array_manipulation.py
-    numba/tests/test_dummyarray.py
     numba/tests/test_smart_array.py
     numba/tests/test_linalg.py
     numba/tests/test_threadsafety.py
@@ -234,7 +230,6 @@ exclude =
     numba/testing/notebook.py
     numba/testing/main.py
     numba/np/unsafe/ndarray.py
-    numba/np/ufunc/deviceufunc.py
     numba/np/ufunc/sigparse.py
     numba/parfors/parfor_lowering.py
     numba/np/ufunc/array_exprs.py
@@ -243,7 +238,9 @@ exclude =
     numba/core/datamodel/packer.py
     numba/core/datamodel/testing.py
     numba/core/datamodel/manager.py
-
+    numba/np/math/cmathimpl.py
+    numba/np/math/mathimpl.py
+    numba/np/math/numbers.py
 per-file-ignores =
     # Ignore star imports, unused imports, and "may be defined by star imports"
     # errors in device_init because its purpose is to bring together a lot of

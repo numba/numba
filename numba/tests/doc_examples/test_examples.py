@@ -3,8 +3,10 @@
 
 import sys
 import unittest
-from numba.tests.support import captured_stdout
+
+from numba.tests.support import TestCase, captured_stdout
 from numba.core.config import IS_WIN32
+from numba.np.numpy_support import numpy_version
 
 
 class MatplotlibBlocker:
@@ -17,7 +19,7 @@ class MatplotlibBlocker:
             raise ImportError(msg)
 
 
-class DocsExamplesTest(unittest.TestCase):
+class DocsExamplesTest(TestCase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -357,6 +359,54 @@ class DocsExamplesTest(unittest.TestCase):
             self.assertIsInstance(result, np.integer)
             self.assertEqual(result, 20)
 
+    def test_guvectorize_jit(self):
+        with captured_stdout():
+            # magictoken.gufunc_jit.begin
+            import numpy as np
+
+            from numba import jit, guvectorize
+
+            @guvectorize('(n)->(n)')
+            def copy(x, res):
+                for i in range(x.shape[0]):
+                    res[i] = x[i]
+
+            @jit(nopython=True)
+            def jit_fn(x, res):
+                copy(x, res)
+            # magictoken.gufunc_jit.end
+
+            # magictoken.gufunc_jit_call.begin
+            x = np.arange(5, dtype='i4')
+            res = np.zeros_like(x)
+            jit_fn(x, res)
+            # At this point, res == np.array([0, 1, 2, 3, 4], 'i4').
+            # magictoken.gufunc_jit_call.end
+            self.assertPreciseEqual(x, res)
+
+    def test_guvectorize_jit_fail(self):
+        with captured_stdout():
+            # magictoken.gufunc_jit_fail.begin
+            import numpy as np
+            from numba import jit, guvectorize
+
+            @guvectorize('(n)->(n)')
+            def copy(x, res):
+                for i in range(x.shape[0]):
+                    res[i] = x[i]
+
+            @jit(nopython=True)
+            def jit_fn(x, res):
+                copy(x, res)
+
+            x = np.ones((1, 5))
+            res = np.empty((5,))
+            with self.assertRaises(ValueError) as raises:
+                jit_fn(x, res)
+            # magictoken.gufunc_jit_fail.end
+            self.assertIn('Loop and array shapes are incompatible',
+                          str(raises.exception))
+
     def test_guvectorize_overwrite(self):
         with captured_stdout():
             # magictoken.ex_guvectorize_overwrite.begin
@@ -482,7 +532,10 @@ class DocsExamplesTest(unittest.TestCase):
 
             self.assertEqual(result, 12)
             if IS_WIN32:
-                correct = ['ll->q']
+                if numpy_version < (2, 0):
+                    correct = ['ll->q']
+                else:
+                    correct = ['qq->q']
             else:
                 correct = ['ll->l']
             self.assertEqual(f.types, correct)
@@ -497,7 +550,10 @@ class DocsExamplesTest(unittest.TestCase):
 
             self.assertEqual(result, 2.0)
             if IS_WIN32:
-                correct = ['ll->q', 'dd->d']
+                if numpy_version < (2, 0):
+                    correct = ['ll->q', 'dd->d']
+                else:
+                    correct = ['qq->q', 'dd->d']
             else:
                 correct = ['ll->l', 'dd->d']
             self.assertEqual(f.types, correct)
@@ -512,7 +568,10 @@ class DocsExamplesTest(unittest.TestCase):
 
             self.assertEqual(result, 2.0)
             if IS_WIN32:
-                correct = ['ll->q', 'dd->d']
+                if numpy_version < (2, 0):
+                    correct = ['ll->q', 'dd->d']
+                else:
+                    correct = ['qq->q', 'dd->d']
             else:
                 correct = ['ll->l', 'dd->d']
             self.assertEqual(f.types, correct)
@@ -586,7 +645,7 @@ class DocsExamplesTest(unittest.TestCase):
 
             # magictoken.ex_guvectorize_dynamic_call_four.begin
             x = np.arange(5, dtype=np.int64)
-            y = 2.2
+            y = 2
             res = np.zeros_like(x)
             g(x, y, res)
             print(res)

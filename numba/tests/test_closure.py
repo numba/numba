@@ -400,13 +400,13 @@ class TestInlinedClosure(TestCase):
         with self.assertRaises(NotImplementedError) as raises:
             cfunc = jit(nopython=True)(outer3)
             cfunc(var)
-        msg = "Unsupported use of op_LOAD_CLOSURE encountered"
+        msg = "Unsupported use of cell variable encountered"
         self.assertIn(msg, str(raises.exception))
 
         with self.assertRaises(NotImplementedError) as raises:
             cfunc = jit(nopython=True)(outer4)
             cfunc(var)
-        msg = "Unsupported use of op_LOAD_CLOSURE encountered"
+        msg = "Unsupported use of cell variable encountered"
         self.assertIn(msg, str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
@@ -490,6 +490,17 @@ class TestInlinedClosure(TestCase):
         # In Issue #9222, the result was completely wrong - 15 instead of 5.1 -
         # so allclose should be sufficient for comparison here.
         np.testing.assert_allclose(consume(), 4 + 1.1)
+
+    @TestCase.run_test_in_subprocess
+    def test_issue_9577(self):
+        @njit
+        def _inner():
+            range_start = 0
+            for _ in range(1):
+                np.array([1 for _ in range(range_start, 7)])
+                range_start = 0
+
+        _inner()
 
 
 if __name__ == '__main__':

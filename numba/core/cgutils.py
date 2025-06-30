@@ -72,10 +72,12 @@ def create_struct_proxy(fe_type, kind='value'):
     return res
 
 
-def copy_struct(dst, src, repl={}):
+def copy_struct(dst, src, repl=None):
     """
     Copy structure from *src* to *dst* with replacement from *repl*.
     """
+    if repl is None:
+        repl = {}
     repl = repl.copy()
     # copy data from src or use those in repl
     for k in src._datamodel._fields:
@@ -1219,6 +1221,14 @@ def is_nonelike(ty):
         ty is None or
         isinstance(ty, types.NoneType) or
         isinstance(ty, types.Omitted)
+    )
+
+
+def is_empty_tuple(ty):
+    """ returns if 'ty' is an empty tuple """
+    return (
+        isinstance(ty, types.Tuple) and
+        len(ty.types) == 0
     )
 
 

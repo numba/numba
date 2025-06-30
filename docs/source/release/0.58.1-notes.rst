@@ -1,6 +1,6 @@
 
 Version 0.58.1 (17 October 2023)
---------------------------------
+================================
 
 This is a maintenance release that adds support for NumPy 1.26 and fixes a bug.
 
@@ -8,7 +8,7 @@ NumPy Support
 ~~~~~~~~~~~~~
 
 Support NumPy 1.26
-==================
+------------------
 
 Support for NumPy 1.26 is added.
 
@@ -19,7 +19,7 @@ Bug Fixes
 ~~~~~~~~~
 
 Fixed handling of float default arguments in inline closures
-============================================================
+------------------------------------------------------------
 
 Float default arguments in inline closures would produce incorrect results since
 updates for Python 3.11 - these are now handled correctly again.

@@ -12,7 +12,8 @@ import operator
 from functools import cached_property
 import numpy as np
 from numba import njit, types
-from numba.extending import overload, intrinsic, overload_classmethod
+from numba.extending import (overload, overload_attribute,
+                             overload_classmethod, intrinsic)
 from numba.core.target_extension import (
     JitDecorator,
     target_registry,
@@ -32,6 +33,7 @@ from numba.core import callconv
 from numba.core.codegen import CPUCodegen, JITCodeLibrary
 from numba.core.callwrapper import PyCallWrapper
 from numba.core.imputils import RegistryLoader, Registry
+from numba.core.typing.typeof import typeof
 from numba import _dynfunc
 import llvmlite.binding as ll
 from llvmlite import ir as llir
@@ -281,6 +283,10 @@ dpu_target = DPUTarget("dpu")
 class DPUDispatcher(Dispatcher):
     targetdescr = dpu_target
 
+    def compile(self, sig):
+        with target_override('dpu'):
+            return super().compile(sig)
+
 
 # Register a dispatcher for the DPU target, a lot of the code uses this
 # internally to work out what to do RE compilation
@@ -512,7 +518,7 @@ class TestTargetHierarchySelection(TestCase):
 
     def test_invalid_target_jit(self):
 
-        with self.assertRaises(errors.NumbaValueError) as raises:
+        with self.assertRaises(errors.NonexistentTargetError) as raises:
             @njit(_target='invalid_silicon')
             def foo():
                 pass
@@ -529,7 +535,7 @@ class TestTargetHierarchySelection(TestCase):
 
         # This is a typing error at present as it fails during typing when the
         # overloads are walked.
-        with self.assertRaises(errors.TypingError) as raises:
+        with self.assertRaises(errors.NonexistentTargetError) as raises:
             @overload(bar, target='invalid_silicon')
             def ol_bar():
                 return lambda : None
@@ -703,6 +709,32 @@ class TestTargetHierarchySelection(TestCase):
             r = foo()
         from numba.core.runtime import nrt
         self.assertIsInstance(r, nrt.MemInfo)
+
+    def test_overload_attribute_target(self):
+        MyDummy, MyDummyType = self.make_dummy_type()
+        mydummy_type = typeof(MyDummy())
+
+        @overload_attribute(MyDummyType, 'dpu_only', target='dpu')
+        def ov_dummy_dpu_attr(obj):
+            def imp(obj):
+                return 42
+
+            return imp
+
+        # Ensure that we cannot use the DPU target-specific attribute on the
+        # CPU, and that an appropriate typing error is raised
+        with self.assertRaisesRegex(errors.TypingError,
+                                    "Unknown attribute 'dpu_only'"):
+            @njit(types.int64(mydummy_type))
+            def illegal_target_attr_use(x):
+                return x.dpu_only
+
+        # Ensure that the DPU target-specific attribute is usable and works
+        # correctly when the target is DPU - note eager compilation via
+        # signature
+        @djit(types.void(types.int64[::1], mydummy_type))
+        def cuda_target_attr_use(res, dummy):
+            res[0] = dummy.dpu_only
 
 
 class TestTargetOffload(TestCase):

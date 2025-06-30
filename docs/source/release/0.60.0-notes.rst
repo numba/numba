@@ -1,0 +1,265 @@
+
+Version 0.60.0 (13 June 2024)
+=============================
+
+.. contents:: Table of Contents
+   :depth: 2
+
+This is a major Numba release. Numba now has binary support for
+NumPy 2.0. Users should note that this does NOT yet include NEP 50
+related type-level changes which are still in progress. This
+release does not guarantee execution level compatibility with
+NumPy 2.0 and hence users should expect some type and numerical
+deviations with respect to normal Python behavior while using
+Numba with NumPy 2.0.
+
+Please find a summary of all noteworthy items below.
+
+Highlights
+~~~~~~~~~~
+
+NumPy 2.0 Binary Support
+------------------------
+
+Added Binary Support for NumPy 2.0. However, this does not yet include
+NEP 50 related type-level changes which are still in progress.
+
+Following is a summary of the user facing changes:
+
+* The ``ptp()`` method previously available for arrays has been deprecated. 
+  Instead, it is recommended to use the ``np.ptp(arr)`` function.
+* The data type ``np.bool8`` has been deprecated and replaced with ``np.bool``. 
+* The ``np.product`` function is deprecated; users are advised to use 
+  ``np.prod`` instead.
+* Starting from NumPy version 2.0, the ``itemset()`` method has been removed 
+  from the ``ndarray`` class. To achieve the same functionality, utilize 
+  the assignment operation ``arr[index] = value``.
+* Deprecated constants ``np.PINF`` and ``np.NINF`` should be replaced with 
+  ``np.inf`` for positive infinity and ``-np.inf`` for negative infinity, 
+  respectively.
+
+(`PR-#9466 <https://github.com/numba/numba/pull/9466>`__)
+
+
+New Features
+~~~~~~~~~~~~
+
+Enhance guvectorize support in JIT code
+---------------------------------------
+
+Generalized universal function support is extended, it is now possible to call
+a ``@guvectorize`` decorated function from within a JIT-compiled function.
+However, please note that broadcasting is not supported yet. Calling a
+guvectorize function in a scenario where broadcast is needed may result in
+incorrect behavior.
+
+(`PR-#8984 <https://github.com/numba/numba/pull/8984>`__)
+
+Add experimental support for ufunc.at
+-------------------------------------
+
+Experimental support for ``ufunc.at`` is added.
+
+(`PR-#9239 <https://github.com/numba/numba/pull/9239>`__)
+
+Add ``float(<string literal>)`` ctor
+------------------------------------
+
+Support for ``float(<string literal>)`` is added.
+
+(`PR-#9378 <https://github.com/numba/numba/pull/9378>`__)
+
+Add support for ``math.log2``.
+------------------------------
+
+Support for ``math.log2`` is added.
+
+(`PR-#9416 <https://github.com/numba/numba/pull/9416>`__)
+
+Add math.nextafter support for nopython mode.
+---------------------------------------------
+
+Support ``math.nextafter`` in nopython mode.
+
+(`PR-#9438 <https://github.com/numba/numba/pull/9438>`__)
+
+Add support for parfor binop reductions.
+----------------------------------------
+
+Previously, only operations with inplace operations like `+=` could be used as reductions
+in `prange`s.  Now, with this PR, binop reductions of the form `a = a binop b` can be used.
+
+(`PR-#9521 <https://github.com/numba/numba/pull/9521>`__)
+
+
+Improvements
+~~~~~~~~~~~~
+
+Expand ``isinstance()`` support for NumPy datetime types
+--------------------------------------------------------
+
+Adds support of ``numpy.datetime64`` and ``numpy.timedelta64`` types in 
+``isinstance()``.
+
+(`PR-#9455 <https://github.com/numba/numba/pull/9455>`__)
+
+Python 3.12 ``sys.monitoring`` support is added to Numba's dispatcher.
+----------------------------------------------------------------------
+
+Python 3.12 introduced a new module ``sys.monitoring`` that makes available an
+event driven monitoring API for use in tools that need to monitor execution e.g.
+debuggers or profilers. Numba's dispatcher class (the code that handles transfer
+of control between the Python interpreter and compiled code) has been updated to
+emit ``sys.monitoring.events.PY_START`` and ``sys.monitoring.events.PY_RETURN``
+as appropriate. This allows tools that are watching for these events to identify
+when control has entered and returned from compiled code. As a result of this
+change, Numba compiled code is now identified by ``cProfile`` in the same way
+that it has been historically i.e. it will be present in performance profiles.
+
+(`PR-#9482 <https://github.com/numba/numba/pull/9482>`__)
+
+
+NumPy Support
+~~~~~~~~~~~~~
+
+Added support for ``np.size()``
+-------------------------------
+
+Added ``np.size()`` support for NumPy, which was previously unsupported.
+
+(`PR-#9504 <https://github.com/numba/numba/pull/9504>`__)
+
+
+CUDA API Changes
+~~~~~~~~~~~~~~~~
+
+Support for compilation to LTO-IR
+---------------------------------
+
+Support for compiling device functions to LTO-IR in the compilation API is
+added.
+
+(`PR-#9274 <https://github.com/numba/numba/pull/9274>`__)
+
+Support math.log, math.log2 and math.log10 in CUDA
+--------------------------------------------------
+
+CUDA target now supports ``np.log``, ``np.log2`` and ``np.log10``.
+
+(`PR-#9417 <https://github.com/numba/numba/pull/9417>`__)
+
+
+Bug Fixes
+~~~~~~~~~
+
+Fix parfor variable hoisting analysis.
+--------------------------------------
+
+If a variable is used to build a container (e.g., tuple, list, map, set) or is passed as an
+argument to a call then conservatively assume it could escape the current iteration of
+the parfor and so should not be hoisted.
+
+(`PR-#9532 <https://github.com/numba/numba/pull/9532>`__)
+
+
+Deprecations
+~~~~~~~~~~~~
+
+Deprecate `old_style` error-capturing
+-------------------------------------
+
+Per deprecation schedule, `old_style` error-capturing is deprecated and the
+`default` is now `new_style`.
+
+(`PR-#9549 <https://github.com/numba/numba/pull/9549>`__)
+
+
+Expired Deprecations
+~~~~~~~~~~~~~~~~~~~~
+
+Removal of ``numba.core.retarget``
+----------------------------------
+
+The experimental features implemented in ``numba.core.retarget`` have been
+removed. These features were primarily used in numba-dpex, but that project has
+replaced its use of ``numba.core.retarget`` with a preference for
+*target extension API*.
+
+(`PR-#9539 <https://github.com/numba/numba/pull/9539>`__)
+
+
+Documentation Changes
+~~~~~~~~~~~~~~~~~~~~~
+
+``numba.cuda.gpus.current`` documentation correction
+----------------------------------------------------
+
+``numba.cuda.gpus.current`` was erroneously described
+as a function, is now described as an attribute.
+
+(`PR-#9394 <https://github.com/numba/numba/pull/9394>`__)
+
+CUDA 12 conda installation documentation
+----------------------------------------
+
+Installation instructions have been added for CUDA 12 conda users.
+
+(`PR-#9487 <https://github.com/numba/numba/pull/9487>`__)
+
+Pull-Requests:
+~~~~~~~~~~~~~~
+
+* PR `#8984 <https://github.com/numba/numba/pull/8984>`_: Support @gufunc inside @jit (`guilhermeleobas <https://github.com/guilhermeleobas>`_)
+* PR `#9239 <https://github.com/numba/numba/pull/9239>`_: ufunc.at (`guilhermeleobas <https://github.com/guilhermeleobas>`_)
+* PR `#9274 <https://github.com/numba/numba/pull/9274>`_: CUDA: Add support for compilation to LTO-IR (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9364 <https://github.com/numba/numba/pull/9364>`_: Release notes fixes for appropriate Towncrier header underlines (`kc611 <https://github.com/kc611>`_)
+* PR `#9367 <https://github.com/numba/numba/pull/9367>`_: Document release notes generation (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9368 <https://github.com/numba/numba/pull/9368>`_: Added 0.59.0 release notes (`kc611 <https://github.com/kc611>`_)
+* PR `#9369 <https://github.com/numba/numba/pull/9369>`_: Fix release notes link in bug report template (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9378 <https://github.com/numba/numba/pull/9378>`_: Add `float(<string literal>)` ctor (`guilhermeleobas <https://github.com/guilhermeleobas>`_)
+* PR `#9394 <https://github.com/numba/numba/pull/9394>`_: fix `TypeError: '_DeviceContextManager' object is not callable` (`i7878 <https://github.com/i7878>`_)
+* PR `#9411 <https://github.com/numba/numba/pull/9411>`_: Doc updates for 0.59.0 final. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#9416 <https://github.com/numba/numba/pull/9416>`_: Add math.log2 support (`guilhermeleobas <https://github.com/guilhermeleobas>`_)
+* PR `#9417 <https://github.com/numba/numba/pull/9417>`_: Add np.log* bindings for CUDA (`guilhermeleobas <https://github.com/guilhermeleobas>`_ `gmarkall <https://github.com/gmarkall>`_)
+* PR `#9425 <https://github.com/numba/numba/pull/9425>`_: Post release for 0.59.0 (`sklam <https://github.com/sklam>`_)
+* PR `#9436 <https://github.com/numba/numba/pull/9436>`_: Add timing and junit xml output to testsuite (`sklam <https://github.com/sklam>`_)
+* PR `#9437 <https://github.com/numba/numba/pull/9437>`_: Remove dependencies between Numba's Cpython and NumPy module (`kc611 <https://github.com/kc611>`_)
+* PR `#9438 <https://github.com/numba/numba/pull/9438>`_: Add math.nextafter support for nopython mode. (`groutr <https://github.com/groutr>`_)
+* PR `#9454 <https://github.com/numba/numba/pull/9454>`_: Don't attempt to register overloads that aren't for this target in `BaseContext` and related fixes (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9455 <https://github.com/numba/numba/pull/9455>`_: Support datetime types in `isinstance()` (`sklam <https://github.com/sklam>`_)
+* PR `#9456 <https://github.com/numba/numba/pull/9456>`_: Update release checklist (`sklam <https://github.com/sklam>`_)
+* PR `#9466 <https://github.com/numba/numba/pull/9466>`_: Numpy 2.0 binary support testing (`kc611 <https://github.com/kc611>`_)
+* PR `#9468 <https://github.com/numba/numba/pull/9468>`_: adding git-copy.py script (`esc <https://github.com/esc>`_)
+* PR `#9482 <https://github.com/numba/numba/pull/9482>`_: Add support for `sys.monitoring` events. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#9487 <https://github.com/numba/numba/pull/9487>`_: Add CUDA 12 conda installation docs (`bdice <https://github.com/bdice>`_ `gmarkall <https://github.com/gmarkall>`_)
+* PR `#9488 <https://github.com/numba/numba/pull/9488>`_: Update overview.rst (`jftsang <https://github.com/jftsang>`_)
+* PR `#9502 <https://github.com/numba/numba/pull/9502>`_: Post release task for 0.59.1 (`sklam <https://github.com/sklam>`_)
+* PR `#9504 <https://github.com/numba/numba/pull/9504>`_: added np.size() overload and added tests (`shourya5 <https://github.com/shourya5>`_)
+* PR `#9521 <https://github.com/numba/numba/pull/9521>`_: Support binop reduction. (`DrTodd13 <https://github.com/DrTodd13>`_)
+* PR `#9531 <https://github.com/numba/numba/pull/9531>`_: Module pass manager: Don't add passes for unsupported LLVM versions (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9532 <https://github.com/numba/numba/pull/9532>`_: Fix hoisting bug to exclude variables used in containers or calls. (`DrTodd13 <https://github.com/DrTodd13>`_)
+* PR `#9539 <https://github.com/numba/numba/pull/9539>`_: Revert PR #6870 `numba.core.retarget` (`sklam <https://github.com/sklam>`_)
+* PR `#9549 <https://github.com/numba/numba/pull/9549>`_: Make new_style the default error capturing mode (`gmarkall <https://github.com/gmarkall>`_ `sklam <https://github.com/sklam>`_)
+* PR `#9558 <https://github.com/numba/numba/pull/9558>`_: Added 0.60.0 release notes (`kc611 <https://github.com/kc611>`_)
+* PR `#9559 <https://github.com/numba/numba/pull/9559>`_: Update version support table 0.60 (`esc <https://github.com/esc>`_)
+* PR `#9568 <https://github.com/numba/numba/pull/9568>`_:  fix sigabrt in parfors tests (`esc <https://github.com/esc>`_ `stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#9586 <https://github.com/numba/numba/pull/9586>`_:  Hoisting logic needs to consider dependency on prior unhoistable variable (`sklam <https://github.com/sklam>`_)
+* PR `#9596 <https://github.com/numba/numba/pull/9596>`_: Added inline_closurecall as an import during registry loading (`kc611 <https://github.com/kc611>`_)
+* PR `#9602 <https://github.com/numba/numba/pull/9602>`_: Fix numpy2.0 incompatbility issues (`sklam <https://github.com/sklam>`_)
+* PR `#9603 <https://github.com/numba/numba/pull/9603>`_: Disable AVX for nocona (`sklam <https://github.com/sklam>`_)
+
+Authors:
+~~~~~~~~
+
+* `bdice <https://github.com/bdice>`_
+* `DrTodd13 <https://github.com/DrTodd13>`_
+* `esc <https://github.com/esc>`_
+* `gmarkall <https://github.com/gmarkall>`_
+* `groutr <https://github.com/groutr>`_
+* `guilhermeleobas <https://github.com/guilhermeleobas>`_
+* `i7878 <https://github.com/i7878>`_
+* `jftsang <https://github.com/jftsang>`_
+* `kc611 <https://github.com/kc611>`_
+* `shourya5 <https://github.com/shourya5>`_
+* `sklam <https://github.com/sklam>`_
+* `stuartarchibald <https://github.com/stuartarchibald>`_

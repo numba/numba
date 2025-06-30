@@ -20,6 +20,8 @@ from numba.core.errors import (TypingError, LoweringError,
                                NumbaExperimentalFeatureWarning,
                                NumbaTypeError, RequireLiteralValue,
                                NumbaPerformanceWarning)
+from numba.core.typing.templates import (AbstractTemplate, infer_global,
+                                         signature)
 from numba.misc.special import literal_unroll
 from numba.core.typing.asnumbatype import as_numba_type
 
@@ -298,6 +300,13 @@ def int_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
+@lower_builtin(float, types.StringLiteral)
+def float_literal_impl(context, builder, sig, args):
+    [ty] = sig.args
+    res = context.get_constant(sig.return_type, float(ty.literal_value))
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
 @lower_builtin(complex, types.VarArg(types.Any))
 def complex_impl(context, builder, sig, args):
     complex_type = sig.return_type
@@ -476,6 +485,15 @@ def get_type_min_value(typ):
     if isinstance(typ, types.Integer):
         return typ.minval
     raise NotImplementedError("Unsupported type")
+
+@infer_global(get_type_min_value)
+@infer_global(get_type_max_value)
+class MinValInfer(AbstractTemplate):
+    def generic(self, args, kws):
+        assert not kws
+        assert len(args) == 1
+        if isinstance(args[0], (types.DType, types.NumberClass)):
+            return signature(args[0].dtype, *args)
 
 @lower_builtin(get_type_min_value, types.NumberClass)
 @lower_builtin(get_type_min_value, types.DType)
@@ -772,7 +790,7 @@ def ol_isinstance(var, typs):
                         types.Function, types.ClassType, types.UnicodeType,
                         types.ClassInstanceType, types.NoneType, types.Array,
                         types.Boolean, types.Float, types.UnicodeCharSeq,
-                        types.Complex)
+                        types.Complex, types.NPDatetime, types.NPTimedelta,)
     if not isinstance(var_ty, supported_var_ty):
         msg = f'isinstance() does not support variables of type "{var_ty}".'
         raise NumbaTypeError(msg)
@@ -827,6 +845,9 @@ def ol_isinstance(var, typs):
             numba_typ = as_numba_type(key)
             if var_ty == numba_typ:
                 return true_impl
+            elif isinstance(numba_typ, (types.NPDatetime, types.NPTimedelta)):
+                if isinstance(var_ty, type(numba_typ)):
+                    return true_impl
             elif isinstance(numba_typ, types.ClassType) and \
                     isinstance(var_ty, types.ClassInstanceType) and \
                     var_ty.key == numba_typ.instance_type.key:

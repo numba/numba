@@ -132,13 +132,12 @@ A number of keyword-only arguments can be passed to the ``@jit`` decorator.
 ------------
 
 Numba has two compilation modes: :term:`nopython mode` and
-:term:`object mode`.  The former produces much faster code, but has
-limitations that can force Numba to fall back to the latter.  To prevent
-Numba from falling back, and instead raise an error, pass ``nopython=True``.
+:term:`object mode`.  :term:`Nopython mode` is the default and it produces much
+faster code, but has limitations.
 
 ::
 
-   @jit(nopython=True)
+   @jit  # same as @jit(nopython=True) or @njit since Numba 0.59
    def f(x, y):
        return x + y
 

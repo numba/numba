@@ -31,7 +31,7 @@ def atomic_binary_1dim_shared(ary, idx, op2, ary_dtype, ary_nelements,
     cuda.syncthreads()
     bin = cast_func(idx[tid] % ary_nelements)
     if neg_idx:
-        bin = bin - ary_nelements
+        bin = bin % ary_nelements
     binop_func(sm, bin, op2)
     cuda.syncthreads()
     ary[tid] = sm[tid]
@@ -60,7 +60,7 @@ def atomic_binary_2dim_shared(ary, op2, ary_dtype, ary_shape,
     cuda.syncthreads()
     bin = (tx, y_cast_func(ty))
     if neg_idx:
-        bin = (bin[0] - ary_shape[0], bin[1] - ary_shape[1])
+        bin = (bin[0] % ary_shape[0], bin[1] % ary_shape[1])
     binop_func(sm, bin, op2)
     cuda.syncthreads()
     ary[tx, ty] = sm[tx, ty]
@@ -72,7 +72,7 @@ def atomic_binary_2dim_global(ary, op2, binop_func, y_cast_func, neg_idx):
     ty = cuda.threadIdx.y
     bin = (tx, y_cast_func(ty))
     if neg_idx:
-        bin = (bin[0] - ary.shape[0], bin[1] - ary.shape[1])
+        bin = (bin[0] % ary.shape[0], bin[1] % ary.shape[1])
     binop_func(ary, bin, op2)
 
 
@@ -82,7 +82,7 @@ def atomic_binary_1dim_global(ary, idx, ary_nelements, op2,
     tid = cuda.threadIdx.x
     bin = int(idx[tid] % ary_nelements)
     if neg_idx:
-        bin = bin - ary_nelements
+        bin = bin % ary_nelements
     binop_func(ary, bin, op2)
 
 

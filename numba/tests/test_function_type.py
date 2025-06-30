@@ -1,3 +1,5 @@
+import re
+import sys
 import unittest
 import types as pytypes
 from numba import jit, njit, cfunc, types, int64, float64, float32, errors
@@ -7,6 +9,7 @@ import ctypes
 import warnings
 
 from .support import TestCase, MemoryLeakMixin
+from .support import redirect_c_stderr, captured_stderr
 
 import numpy as np
 
@@ -1273,6 +1276,132 @@ class TestMultiFunctionType(MemoryLeakMixin, TestCase):
 
         self.assertEqual(caller(callee_int, b), b)
         self.assertEqual(caller(callee_array, c), c.sum())
+
+
+class TestInliningFunctionType(MemoryLeakMixin, TestCase):
+    def count_num_bb_in_cfg(self, dispatcher):
+        dot = dispatcher.inspect_cfg(dispatcher.signatures[0]).dot
+        num_of_nodes = re.findall(r"Node0x[0-9a-z]+", dot)
+        return len(num_of_nodes)
+
+    def test_inlining_global_dispatcher(self):
+        @njit
+        def add(x, y):
+            return x + y
+
+        fnty = types.FunctionType(int64(int64, int64))
+
+        @njit(int64(fnty, int64, int64))
+        def callme(fn, x, y):
+            c = 0
+            for i in range(100):
+                c += fn(x, y)
+            return c
+
+        @njit
+        def bar(x, y):
+            return callme(add, x, y)
+
+        res = bar(123, 321)
+        self.assertEqual(100 * (123 + 321), res)
+        # There's only one BB because LLVM will be able to fully optimize
+        # the reduce-add loop if add() is properly inlined.
+        self.assertEqual(self.count_num_bb_in_cfg(bar), 1)
+
+    def test_not_inlining_dispatcher_args(self):
+        @njit
+        def add(x, y):
+            return x + y
+
+        fnty = types.FunctionType(int64(int64, int64))
+
+        @njit(int64(fnty, int64, int64))
+        def callme(fn, x, y):
+            c = 0
+            for i in range(100):
+                c += fn(x, y)
+            return c
+
+        res = callme(add, 123, 321)
+
+        self.assertEqual(100 * (123 + 321), res)
+        # Since add() is not inline-able. The number of BB will be greater
+        # than 1. See test_inlining_global_dispatcher().
+        self.assertGreater(self.count_num_bb_in_cfg(callme), 1)
+
+
+class TestExceptionInFunctionType(MemoryLeakMixin, TestCase):
+    def test_exception_raising(self):
+        class MyError(Exception):
+            pass
+
+        @njit
+        def add(x, y):
+            res = x + y
+            if res > 100:
+                raise MyError(res)
+            return res
+
+        fnty = types.FunctionType(int64(int64, int64))
+
+        @njit(int64(fnty))
+        def callme(fn):
+            c = 0
+            for i in range(100):
+                c = fn(c, i)
+            return c
+
+        @njit
+        def bar():
+            return callme(add)
+
+        # Pass Dispatcher as a global reference
+        with self.assertRaises(MyError) as exc:
+            bar()
+        self.assertEqual(exc.exception.args, (105,))
+
+        # Pass Dispatcher by argument
+        with self.assertRaises(MyError) as exc:
+            callme(add)
+        self.assertEqual(exc.exception.args, (105,))
+
+    def test_exception_ignored_in_cfunc(self):
+        class MyError(Exception):
+            pass
+
+        @njit
+        def add(x, y):
+            res = x + y
+            if res > 100:
+                raise MyError(res)
+            return res
+
+        fnty = types.FunctionType(int64(int64, int64))
+
+        @njit(int64(fnty, int64, int64))
+        def callme(fn, x, y):
+            return fn(x, y)
+
+        # Cfunc as argument will ignore raised exception
+        @cfunc(int64(int64, int64))
+        def c_add(x, y):
+            return add(x, y)
+
+        self.assertEqual(callme(c_add, 12, 32), 44)
+
+        # If unittest is buffering (-b), the message goes to Python level stderr
+        # otherwise, it goes to C stderr.
+        with redirect_c_stderr() as c_stderr, captured_stderr() as stderr:
+            # raise ignored and result is garbage
+            callme(c_add, 100, 1)
+            sys.stderr.flush()
+
+        err = c_stderr.read()
+        if not err:
+            err = stderr.getvalue()
+
+        self.assertIn("Exception ignored in:", err)
+        self.assertIn(str(MyError(101)), err)
 
 
 if __name__ == '__main__':

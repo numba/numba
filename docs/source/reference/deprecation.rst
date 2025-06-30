@@ -499,8 +499,8 @@ Schedule
 Deprecation of old-style ``NUMBA_CAPTURED_ERRORS``
 ==================================================
 
-The use of ``NUMBA_CAPTURED_ERRORS=old_style`` environment variable is being 
-deprecated in Numba.
+The use of the ``NUMBA_CAPTURED_ERRORS`` environment variable is deprecated and
+removed.
 
 Reason for deprecation
 ----------------------
@@ -514,9 +514,7 @@ The new "new_style" option treats non-``NumbaError`` exceptions as hard errors,
 propagating them without capturing. This differentiates compilation errors from 
 unintended exceptions during compilation.
 
-The old style will eventually be removed in favor of the new behavior. Users 
-should migrate to setting ``NUMBA_CAPTURED_ERRORS='new_style'`` to opt-in to the 
-new exception handling. This will become the default in the future.
+The old style was removed in favor of the new behavior.
 
 Impact
 ------
@@ -527,9 +525,6 @@ functionality.
 Recommendations
 ---------------
 
-- Projects that extends Numba should set 
-  ``NUMBA_CAPTURED_ERRORS='new_style'`` for testing to find all places where 
-  non-``NumbaError`` exceptions are raised during compilation.
 - Modify any code that raises a non-``NumbaError`` to indicate a compilation
   error to raise a subclass of ``NumbaError`` instead. For example, instead of
   raising a ``TypeError``, raise a ``numba.core.errors.NumbaTypeError``.
@@ -538,11 +533,63 @@ Recommendations
 Schedule
 --------
 
-- In Numba 0.58: ``NUMBA_CAPTURED_ERRORS=old_style`` is deprecated. Warnings 
+- In Numba 0.58: ``NUMBA_CAPTURED_ERRORS=old_style`` was deprecated. Warnings
   will be raised when `old_style` error capturing is used.
 - In Numba 0.59: explicitly setting ``NUMBA_CAPTURED_ERRORS=old_style`` will 
   raise deprecation warnings.
-- In Numba 0.60: ``NUMBA_CAPTURED_ERRORS=new_style`` becomes the default.
-- In Numba 0.61: support for ``NUMBA_CAPTURED_ERRORS=old_style`` will be 
-  removed.
+- In Numba 0.60: ``NUMBA_CAPTURED_ERRORS=new_style`` became the default.
+- In Numba 0.61: support for ``NUMBA_CAPTURED_ERRORS=old_style`` was removed.
 
+.. _cuda-builtin-target-deprecation-notice:
+
+Deprecation of the built-in CUDA target
+=======================================
+
+The CUDA target is now maintained in a separate package, `numba-cuda
+<https://nvidia.github.io/numba-cuda>`_, and the built-in CUDA target is
+deprecated.
+
+Reason for deprecation
+----------------------
+
+Development of the CUDA target has been moved to the ``numba-cuda`` package to
+proceed independently of Numba development. See :ref:`cuda-deprecation-status`.
+
+Impact
+------
+
+The built-in CUDA target is still supported by Numba 0.61 and will continue to
+be provided through at least Numba 0.62, but new changes to the built-in target
+are not expected; bug fixes and new features will be added in ``numba-cuda``. No
+code changes are required to any code that uses the CUDA target.
+
+Recommendations
+---------------
+
+Users should install the ``numba-cuda`` package when using the CUDA target.
+
+To install ``numba-cuda`` with ``pip``::
+
+   pip install numba-cuda
+
+To install ``numba-cuda`` with ``conda``, for example from the ``conda-forge``
+channel::
+
+   conda install conda-forge::numba-cuda
+
+
+Maintainers of packages that use the CUDA target should add ``numba-cuda`` as a
+dependency in addition to ``numba``, or replace the ``numba`` dependency with
+``numba-cuda`` if the CUDA target is used exclusively.
+
+
+Schedule
+--------
+
+- In Numba 0.61: The built-in CUDA target is deprecated.
+- In Numba 0.62: Use of the CUDA target when the ``numba-cuda`` package is not
+  installed will cause the emission of a warning prompting the installation of
+  ``numba-cuda``.
+- In a future version of Numba no less than 0.63: The built-in CUDA target will
+  be removed, and use of the CUDA target in the absence of the ``numba-cuda``
+  package will raise an error.

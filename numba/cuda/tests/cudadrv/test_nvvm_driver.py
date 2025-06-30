@@ -16,7 +16,7 @@ class TestNvvmDriver(unittest.TestCase):
 
     def test_nvvm_compile_simple(self):
         nvvmir = self.get_nvvmir()
-        ptx = nvvm.llvm_to_ptx(nvvmir).decode('utf8')
+        ptx = nvvm.compile_ir(nvvmir).decode('utf8')
         self.assertTrue('simple' in ptx)
         self.assertTrue('ave' in ptx)
 
@@ -30,7 +30,7 @@ class TestNvvmDriver(unittest.TestCase):
             self.skipTest("-gen-lto unavailable in this toolkit version")
 
         nvvmir = self.get_nvvmir()
-        ltoir = nvvm.llvm_to_ptx(nvvmir, opt=3, gen_lto=None, arch="compute_52")
+        ltoir = nvvm.compile_ir(nvvmir, opt=3, gen_lto=None, arch="compute_52")
 
         # Verify we correctly passed the option by checking if we got LTOIR
         # from NVVM (by looking for the expected magic number for LTOIR)
@@ -41,7 +41,7 @@ class TestNvvmDriver(unittest.TestCase):
         # to the user / caller
         msg = "-made-up-option=2 is an unsupported option"
         with self.assertRaisesRegex(NvvmError, msg):
-            nvvm.llvm_to_ptx("", made_up_option=2)
+            nvvm.compile_ir("", made_up_option=2)
 
     def test_nvvm_from_llvm(self):
         m = ir.Module("test_nvvm_from_llvm")
@@ -54,7 +54,7 @@ class TestNvvmDriver(unittest.TestCase):
         nvvm.set_cuda_kernel(kernel)
 
         m.data_layout = NVVM().data_layout
-        ptx = nvvm.llvm_to_ptx(str(m)).decode('utf8')
+        ptx = nvvm.compile_ir(str(m)).decode('utf8')
         self.assertTrue('mycudakernel' in ptx)
         self.assertTrue('.address_size 64' in ptx)
 
@@ -92,13 +92,13 @@ class TestNvvmDriver(unittest.TestCase):
         m.data_layout = NVVM().data_layout
         nvvm.add_ir_version(m)
         with self.assertRaisesRegex(NvvmError, 'Invalid target triple'):
-            nvvm.llvm_to_ptx(str(m))
+            nvvm.compile_ir(str(m))
 
     def _test_nvvm_support(self, arch):
         compute_xx = 'compute_{0}{1}'.format(*arch)
         nvvmir = self.get_nvvmir()
-        ptx = nvvm.llvm_to_ptx(nvvmir, arch=compute_xx, ftz=1, prec_sqrt=0,
-                               prec_div=0).decode('utf8')
+        ptx = nvvm.compile_ir(nvvmir, arch=compute_xx, ftz=1, prec_sqrt=0,
+                              prec_div=0).decode('utf8')
         self.assertIn(".target sm_{0}{1}".format(*arch), ptx)
         self.assertIn('simple', ptx)
         self.assertIn('ave', ptx)
@@ -125,7 +125,7 @@ class TestNvvmDriver(unittest.TestCase):
         kernel.attributes.add('noinline')
 
         with warnings.catch_warnings(record=True) as w:
-            nvvm.llvm_to_ptx(str(m))
+            nvvm.compile_ir(str(m))
 
         self.assertEqual(len(w), 1)
         self.assertIn('overriding noinline attribute', str(w[0]))

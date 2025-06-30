@@ -3,7 +3,7 @@ import numpy as np
 from numba.cuda.testing import SerialMixin
 from numba import typeof, cuda, njit
 from numba.core.types import float64
-from numba.tests.support import MemoryLeakMixin, override_env_config
+from numba.tests.support import TestCase, MemoryLeakMixin
 from numba.core import config
 import unittest
 
@@ -28,12 +28,12 @@ def fancy_array_modify(x):
     return x
 
 
-class TestBoundsCheckNoError(MemoryLeakMixin, unittest.TestCase):
-    def setUp(self):
-        self.old_boundscheck = config.BOUNDSCHECK
-        config.BOUNDSCHECK = None
+class TestBoundsCheckNoError(MemoryLeakMixin, TestCase):
 
+    @TestCase.run_test_in_subprocess(envvars={'NUMBA_BOUNDSCHECK': ''})
     def test_basic_array_boundscheck(self):
+        self.assertIsNone(config.BOUNDSCHECK)
+
         a = np.arange(5)
         # Check the numpy behavior to make sure the test is correct
         with self.assertRaises(IndexError):
@@ -47,7 +47,10 @@ class TestBoundsCheckNoError(MemoryLeakMixin, unittest.TestCase):
         noboundscheck(a)
         # boundscheck(a) is tested in TestBoundsCheckError below
 
+    @TestCase.run_test_in_subprocess(envvars={'NUMBA_BOUNDSCHECK': ''})
     def test_slice_array_boundscheck(self):
+        self.assertIsNone(config.BOUNDSCHECK)
+
         a = np.ones((5, 5))
         b = np.ones((5, 20))
         with self.assertRaises(IndexError):
@@ -69,7 +72,10 @@ class TestBoundsCheckNoError(MemoryLeakMixin, unittest.TestCase):
         # Doesn't raise
         boundscheck(b)
 
+    @TestCase.run_test_in_subprocess(envvars={'NUMBA_BOUNDSCHECK': ''})
     def test_fancy_indexing_boundscheck(self):
+        self.assertIsNone(config.BOUNDSCHECK)
+
         a = np.arange(3)
         b = np.arange(4)
 
@@ -92,17 +98,12 @@ class TestBoundsCheckNoError(MemoryLeakMixin, unittest.TestCase):
         # Doesn't raise
         boundscheck(b)
 
-    def tearDown(self):
-        config.BOUNDSCHECK = self.old_boundscheck
 
-
-class TestNoCudaBoundsCheck(SerialMixin, unittest.TestCase):
-    def setUp(self):
-        self.old_boundscheck = config.BOUNDSCHECK
-        config.BOUNDSCHECK = None
-
+class TestNoCudaBoundsCheck(SerialMixin, TestCase):
     @unittest.skipIf(not cuda.is_available(), "NO CUDA")
+    @TestCase.run_test_in_subprocess(envvars={'NUMBA_BOUNDSCHECK': '1'})
     def test_no_cuda_boundscheck(self):
+        self.assertTrue(config.BOUNDSCHECK)
         with self.assertRaises(NotImplementedError):
             @cuda.jit(boundscheck=True)
             def func():
@@ -114,30 +115,25 @@ class TestNoCudaBoundsCheck(SerialMixin, unittest.TestCase):
         def func3():
             pass
 
-        with override_env_config('NUMBA_BOUNDSCHECK', '1'):
-            @cuda.jit
-            def func2(x, a):
-                a[1] = x[1]
+        @cuda.jit
+        def func2(x, a):
+            a[1] = x[1]
 
-            a = np.ones((1,))
-            x = np.zeros((1,))
-            # Out of bounds but doesn't raise (it does raise in the simulator,
-            # so skip there)
-            if not config.ENABLE_CUDASIM:
-                func2[1, 1](x, a)
-
-    def tearDown(self):
-        config.BOUNDSCHECK = self.old_boundscheck
+        a = np.ones((1,))
+        x = np.zeros((1,))
+        # Out of bounds but doesn't raise (it does raise in the simulator,
+        # so skip there)
+        if not config.ENABLE_CUDASIM:
+            func2[1, 1](x, a)
 
 
 # This is a separate test because the jitted functions that raise exceptions
 # have memory leaks.
-class TestBoundsCheckError(unittest.TestCase):
-    def setUp(self):
-        self.old_boundscheck = config.BOUNDSCHECK
-        config.BOUNDSCHECK = None
-
+class TestBoundsCheckError(TestCase):
+    @TestCase.run_test_in_subprocess(envvars={'NUMBA_BOUNDSCHECK': ''})
     def test_basic_array_boundscheck(self):
+        self.assertIsNone(config.BOUNDSCHECK)
+
         a = np.arange(5)
         # Check the numpy behavior to make sure the test is correct
         with self.assertRaises(IndexError):
@@ -151,7 +147,10 @@ class TestBoundsCheckError(unittest.TestCase):
         with self.assertRaises(IndexError):
             boundscheck(a)
 
+    @TestCase.run_test_in_subprocess(envvars={'NUMBA_BOUNDSCHECK': ''})
     def test_slice_array_boundscheck(self):
+        self.assertIsNone(config.BOUNDSCHECK)
+
         a = np.ones((5, 5))
         b = np.ones((5, 20))
         with self.assertRaises(IndexError):
@@ -168,7 +167,10 @@ class TestBoundsCheckError(unittest.TestCase):
         with self.assertRaises(IndexError):
             boundscheck(a)
 
+    @TestCase.run_test_in_subprocess(envvars={'NUMBA_BOUNDSCHECK': ''})
     def test_fancy_indexing_boundscheck(self):
+        self.assertIsNone(config.BOUNDSCHECK)
+
         a = np.arange(3)
         b = np.arange(4)
 
@@ -186,7 +188,10 @@ class TestBoundsCheckError(unittest.TestCase):
         with self.assertRaises(IndexError):
             boundscheck(a)
 
+    @TestCase.run_test_in_subprocess(envvars={'NUMBA_BOUNDSCHECK': ''})
     def test_fancy_indexing_with_modification_boundscheck(self):
+        self.assertIsNone(config.BOUNDSCHECK)
+
         a = np.arange(3)
         b = np.arange(4)
 
@@ -204,15 +209,9 @@ class TestBoundsCheckError(unittest.TestCase):
         with self.assertRaises(IndexError):
             boundscheck(a)
 
-    def tearDown(self):
-        config.BOUNDSCHECK = self.old_boundscheck
 
-
-class TestBoundsEnvironmentVariable(unittest.TestCase):
+class TestBoundsEnvironmentVariable(TestCase):
     def setUp(self):
-        self.old_boundscheck = config.BOUNDSCHECK
-        config.BOUNDSCHECK = None
-
         @njit
         def default(x):
             return x[1]
@@ -229,37 +228,40 @@ class TestBoundsEnvironmentVariable(unittest.TestCase):
         self.off = off
         self.on = on
 
+    @TestCase.run_test_in_subprocess(envvars={'NUMBA_BOUNDSCHECK': ''})
     def test_boundscheck_unset(self):
-        with override_env_config('NUMBA_BOUNDSCHECK', ''):
-            a = np.array([1])
+        self.assertIsNone(config.BOUNDSCHECK)
 
-            # Doesn't raise
-            self.default(a)
-            self.off(a)
+        a = np.array([1])
 
-            with self.assertRaises(IndexError):
-                self.on(a)
+        # Doesn't raise
+        self.default(a)
+        self.off(a)
 
+        with self.assertRaises(IndexError):
+            self.on(a)
+
+    @TestCase.run_test_in_subprocess(envvars={'NUMBA_BOUNDSCHECK': '1'})
     def test_boundscheck_enabled(self):
-        with override_env_config('NUMBA_BOUNDSCHECK', '1'):
-            a = np.array([1])
+        self.assertTrue(config.BOUNDSCHECK)
 
-            with self.assertRaises(IndexError):
-                self.default(a)
-                self.off(a)
-                self.on(a)
+        a = np.array([1])
 
-    def test_boundscheck_disabled(self):
-        with override_env_config('NUMBA_BOUNDSCHECK', '0'):
-            a = np.array([1])
-
-            # Doesn't raise
+        with self.assertRaises(IndexError):
             self.default(a)
             self.off(a)
             self.on(a)
 
-    def tearDown(self):
-        config.BOUNDSCHECK = self.old_boundscheck
+    @TestCase.run_test_in_subprocess(envvars={'NUMBA_BOUNDSCHECK': '0'})
+    def test_boundscheck_disabled(self):
+        self.assertFalse(config.BOUNDSCHECK)
+
+        a = np.array([1])
+
+        # Doesn't raise
+        self.default(a)
+        self.off(a)
+        self.on(a)
 
 
 if __name__ == '__main__':

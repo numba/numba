@@ -17,7 +17,7 @@ Out of the box Numba works with the following:
 * Architecture: x86, x86_64, ppc64le, armv8l (aarch64), M1/Arm64.
 * GPUs: Nvidia CUDA.
 * CPython
-* NumPy 1.22 - 1.26
+* NumPy 1.24 - 1.26
 
 How do I get it?
 ----------------

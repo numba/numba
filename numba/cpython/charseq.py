@@ -3,7 +3,7 @@ import operator
 import numpy as np
 from llvmlite import ir
 
-from numba.core import types, cgutils
+from numba.core import types, cgutils, config
 from numba.core.extending import (overload, intrinsic, overload_method,
                                   lower_cast, register_jitable)
 from numba.core.cgutils import is_nonelike
@@ -18,7 +18,10 @@ from numba.cpython import unicode
 
 s1_dtype = np.dtype('S1')
 assert s1_dtype.itemsize == 1
-bytes_type = types.Bytes(types.uint8, 1, "C", readonly=True)
+if config.USE_LEGACY_TYPE_SYSTEM:
+    bytes_type = types.Bytes(types.uint8, 1, "C", readonly=True)
+else:
+    bytes_type = types.Bytes(types.c_uint8, 1, "C", readonly=True)
 
 # Currently, NumPy supports only UTF-32 arrays but this may change in
 # future and the approach used here for supporting str arrays may need

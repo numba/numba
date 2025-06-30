@@ -7,7 +7,7 @@ from numba import cuda
 from numba.cuda.testing import skip_on_cudasim, CUDATestCase
 import unittest
 import warnings
-from numba.core.errors import NumbaPerformanceWarning
+from numba.core.errors import NumbaPerformanceWarning, TypingError
 from numba.tests.support import override_config
 
 
@@ -182,6 +182,24 @@ class TestCUDAGufunc(CUDATestCase):
         B = np.zeros_like(A)
         copy2d(A, out=B)
         self.assertTrue(np.allclose(A, B))
+
+    def test_not_supported_call_from_jit(self):
+        # not supported
+        @guvectorize([void(int32[:], int32[:])],
+                     '(n)->(n)', target='cuda')
+        def gufunc_copy(A, b):
+            for i in range(A.shape[0]):
+                b[i] = A[i]
+
+        @cuda.jit
+        def cuda_jit(A, b):
+            return gufunc_copy(A, b)
+
+        A = np.arange(1024 * 32).astype('int32')
+        b = np.zeros_like(A)
+        msg = "Untyped global name 'gufunc_copy'.*"
+        with self.assertRaisesRegex(TypingError, msg):
+            cuda_jit[1, 1](A, b)
 
     # Test inefficient use of the GPU where the inputs are all mapped onto a
     # single thread in a single block.

@@ -1,19 +1,7 @@
 import logging
 import warnings
 
-from numba.core.config import PYVERSION
-
-if PYVERSION < (3, 9):
-    try:
-        import importlib_metadata
-    except ImportError as ex:
-        raise ImportError(
-            "importlib_metadata backport is required for Python version < 3.9, "
-            "try:\n"
-            "$ conda/pip install importlib_metadata"
-        ) from ex
-else:
-    from importlib import metadata as importlib_metadata
+from importlib import metadata as importlib_metadata
 
 
 _already_initialized = False

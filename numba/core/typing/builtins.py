@@ -12,7 +12,6 @@ from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                          infer_getattr, signature,
                                          bound_function, make_callable_template)
 
-from numba.cpython.builtins import get_type_min_value, get_type_max_value
 
 from numba.core.extending import (
     typeof_impl, type_callable, models, register_model, make_attribute_wrapper,
@@ -25,7 +24,7 @@ class Print(AbstractTemplate):
         for a in args:
             sig = self.context.resolve_function_type("print_item", (a,), {})
             if sig is None:
-                raise TypeError("Type %s is not printable." % a)
+                raise errors.TypingError("Type %s is not printable." % a)
             assert sig.return_type is types.none
         return signature(types.none, *args)
 
@@ -72,6 +71,9 @@ class Slice(ConcreteTemplate):
 @infer_global(prange, typing_key=prange)
 @infer_global(internal_prange, typing_key=internal_prange)
 class Range(ConcreteTemplate):
+
+    unsafe_casting = False
+
     cases = [
         signature(types.range_state32_type, types.int32),
         signature(types.range_state32_type, types.int32, types.int32),
@@ -916,8 +918,8 @@ class MinMaxBase(AbstractTemplate):
             if isinstance(args[0], types.BaseTuple):
                 tys = list(args[0])
                 if not tys:
-                    raise TypeError("%s() argument is an empty tuple"
-                                    % (self.key.__name__,))
+                    raise errors.TypingError("%s() argument is an empty tuple"
+                                             % (self.key.__name__,))
             else:
                 return
         else:
@@ -994,6 +996,13 @@ class Float(AbstractTemplate):
         assert not kws
 
         [arg] = args
+
+        if isinstance(arg, types.UnicodeType):
+            msg = 'argument must be a string literal'
+            raise errors.RequireLiteralValue(msg)
+
+        if isinstance(arg, types.StringLiteral):
+            return signature(types.float64, arg)
 
         if arg not in types.number_domain:
             raise errors.NumbaTypeError("float() only support for numbers")
@@ -1119,17 +1128,6 @@ class DeferredAttribute(AttributeTemplate):
 
     def generic_resolve(self, deferred, attr):
         return self.context.resolve_getattr(deferred.get(), attr)
-
-#------------------------------------------------------------------------------
-
-@infer_global(get_type_min_value)
-@infer_global(get_type_max_value)
-class MinValInfer(AbstractTemplate):
-    def generic(self, args, kws):
-        assert not kws
-        assert len(args) == 1
-        if isinstance(args[0], (types.DType, types.NumberClass)):
-            return signature(args[0].dtype, *args)
 
 
 #------------------------------------------------------------------------------

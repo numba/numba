@@ -1,0 +1,7 @@
+Fall back to ``inspect.getsourcelines()`` in first line finder
+--------------------------------------------------------------
+
+If the first line finder can't locate source code on disk, it now tries using
+``inspect.getsourcelines()`` to get the source. This enables it to locate
+source for cells in Jupyter notebooks, so that line info for them can be
+generated for profiling tools.

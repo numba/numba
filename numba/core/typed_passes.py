@@ -66,7 +66,9 @@ def fallback_context(state, msg):
 
 
 def type_inference_stage(typingctx, targetctx, interp, args, return_type,
-                         locals={}, raise_errors=True):
+                         locals=None, raise_errors=True):
+    if locals is None:
+        locals = {}
     if len(args) != interp.arg_count:
         raise TypeError("Mismatch number of argument types")
     warnings = errors.WarningsFixer(errors.NumbaWarning)

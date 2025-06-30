@@ -7,6 +7,7 @@ import sys
 import warnings
 import inspect
 import logging
+from types import MappingProxyType
 
 from numba.core.errors import DeprecationError, NumbaDeprecationWarning
 from numba.stencils.stencil import stencil
@@ -23,7 +24,7 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "positional argument.")
 
 
-def jit(signature_or_function=None, locals={}, cache=False,
+def jit(signature_or_function=None, locals=MappingProxyType({}), cache=False,
         pipeline_class=None, boundscheck=None, **options):
     """
     This decorator is used to compile a Python function into native code.
@@ -49,7 +50,7 @@ def jit(signature_or_function=None, locals={}, cache=False,
             nopython: bool
                 Set to True to disable the use of PyObjects and Python API
                 calls. The default behavior is to allow the use of PyObjects
-                and Python API. Default value is False.
+                and Python API. Default value is True.
 
             forceobj: bool
                 Set to True to force the use of PyObjects for every value.
@@ -138,6 +139,7 @@ def jit(signature_or_function=None, locals={}, cache=False,
                 return x + y
 
     """
+    locals = dict(locals)
     forceobj = options.get('forceobj', False)
     if 'argtypes' in options:
         raise DeprecationError(_msg_deprecated_signature_arg.format('argtypes'))
@@ -148,10 +150,6 @@ def jit(signature_or_function=None, locals={}, cache=False,
         assert type(nopython) is bool, "nopython option must be a bool"
     if nopython is True and forceobj:
         raise ValueError("Only one of 'nopython' or 'forceobj' can be True.")
-
-    if "_target" in options:
-        # Set the "target_backend" option if "_target" is defined.
-        options['target_backend'] = options['_target']
     target = options.pop('_target', 'cpu')
 
     if nopython is False:
@@ -255,7 +253,7 @@ def njit(*args, **kws):
     return jit(*args, **kws)
 
 
-def cfunc(sig, locals={}, cache=False, pipeline_class=None, **options):
+def cfunc(sig, locals=MappingProxyType({}), cache=False, pipeline_class=None, **options):
     """
     This decorator is used to compile a Python function into a C callback
     usable with foreign C libraries.
@@ -266,6 +264,7 @@ def cfunc(sig, locals={}, cache=False, pipeline_class=None, **options):
             return a + b
 
     """
+    locals = dict(locals)
     sig = sigutils.normalize_signature(sig)
 
     def wrapper(func):

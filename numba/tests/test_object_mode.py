@@ -6,7 +6,7 @@ Testing object mode specifics.
 import numpy as np
 
 import unittest
-from numba import jit
+from numba import jit, types
 from numba.core import utils
 from numba.tests.support import TestCase
 
@@ -185,6 +185,19 @@ class TestObjectModeInvalidRewrite(TestCase):
         func = loc_vars['func']
         jitted = jit(forceobj=True)(func)
         jitted()
+
+    def test_issue_9725_label_renaming(self):
+        # Test issue https://github.com/numba/numba/issues/9725
+        # this should compile via fallback
+        @jit(forceobj=True)
+        def f():
+            for _ in (): # cannot lift this loop as a nopython loop
+                [0 for k in (None,)]
+        f()
+        self._ensure_objmode(f)
+        lifted = f.overloads[f.signatures[0]].lifted[0]
+        self.assertFalse(lifted.nopython_signatures)
+        self.assertEqual(lifted.signatures, [(types.Tuple(()),)])
 
 
 if __name__ == '__main__':

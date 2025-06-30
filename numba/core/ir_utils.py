@@ -222,8 +222,11 @@ def mk_range_block(typemap, start, stop, step, calltypes, scope, loc):
     range_call_assign = ir.Assign(range_call, range_call_var, loc)
     # iter_var = getiter(range_call_var)
     iter_call = ir.Expr.getiter(range_call_var, loc)
-    calltypes[iter_call] = signature(types.range_iter64_type,
-                                     types.range_state64_type)
+    if config.USE_LEGACY_TYPE_SYSTEM:
+        calltype_sig = signature(types.range_iter64_type, types.range_state64_type)
+    else:
+        calltype_sig = signature(types.range_iter_type, types.range_state_type)
+    calltypes[iter_call] = calltype_sig
     iter_var = ir.Var(scope, mk_unique_var("$iter_var"), loc)
     typemap[iter_var.name] = types.iterators.RangeIteratorType(types.intp)
     iter_call_assign = ir.Assign(iter_call, iter_var, loc)
@@ -295,11 +298,15 @@ def mk_loop_header(typemap, phi_var, calltypes, scope, loc):
     typemap[iternext_var.name] = types.containers.Pair(
         types.intp, types.boolean)
     iternext_call = ir.Expr.iternext(phi_var, loc)
+    if config.USE_LEGACY_TYPE_SYSTEM:
+        range_iter_type = types.range_iter64_type
+    else:
+        range_iter_type = types.range_iter_type
     calltypes[iternext_call] = signature(
         types.containers.Pair(
             types.intp,
             types.boolean),
-        types.range_iter64_type)
+        range_iter_type)
     iternext_assign = ir.Assign(iternext_call, iternext_var, loc)
     # pair_first_var = pair_first(iternext_var)
     pair_first_var = ir.Var(scope, mk_unique_var("$pair_first_var"), loc)
@@ -1164,26 +1171,46 @@ def dprint_func_ir(func_ir, title, blocks=None):
 
 def find_topo_order(blocks, cfg = None):
     """find topological order of blocks such that true branches are visited
-    first (e.g. for_break test in test_dataflow).
+    first (e.g. for_break test in test_dataflow). This is written as an iterative
+    implementation of post order traversal to avoid recursion limit issues.
     """
     if cfg is None:
         cfg = compute_cfg_from_blocks(blocks)
-    post_order = []
-    seen = set()
 
-    def _dfs_rec(node):
-        if node not in seen:
+    post_order = []
+    # Has the node already added its children?
+    seen = set()
+    # Has the node already been pushed to post order?
+    visited = set()
+    stack = [cfg.entry_point()]
+
+    while len(stack) > 0:
+        node = stack[-1]
+        if node not in visited and node not in seen:
+            # We haven't added a node or its children.
             seen.add(node)
             succs = cfg._succs[node]
             last_inst = blocks[node].body[-1]
             if isinstance(last_inst, ir.Branch):
-                succs = [last_inst.falsebr, last_inst.truebr]
+                succs = [last_inst.truebr, last_inst.falsebr]
             for dest in succs:
                 if (node, dest) not in cfg._back_edges:
-                    _dfs_rec(dest)
-            post_order.append(node)
+                    if dest not in seen:
+                        stack.append(dest)
+        else:
+            # This node has already added its children. We either need
+            # to visit the node or it has been added multiple times in
+            # which case we should just skip the node.
+            node = stack.pop()
+            if node not in visited:
+                post_order.append(node)
+                visited.add(node)
+            if node in seen:
+                # Remove the node from seen if it exists to limit the memory
+                # usage to 1 entry per node. Otherwise the memory requirement
+                # can double the recursive version.
+                seen.remove(node)
 
-    _dfs_rec(cfg.entry_point())
     post_order.reverse()
     return post_order
 
@@ -1304,11 +1331,18 @@ def rename_labels(blocks):
     # update target labels in jumps/branches
     for b in blocks.values():
         term = b.terminator
+        # create new IR nodes instead of mutating the existing one as copies of
+        # the IR may also refer to the same nodes!
         if isinstance(term, ir.Jump):
-            term.target = label_map[term.target]
+            b.body[-1] = ir.Jump(label_map[term.target], term.loc)
         if isinstance(term, ir.Branch):
-            term.truebr = label_map[term.truebr]
-            term.falsebr = label_map[term.falsebr]
+            b.body[-1] = ir.Branch(term.cond,
+                                   label_map[term.truebr],
+                                   label_map[term.falsebr],
+                                   term.loc)
+
+
+
     # update blocks dictionary keys
     new_blocks = {}
     for k, b in blocks.items():

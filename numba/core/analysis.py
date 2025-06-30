@@ -354,8 +354,12 @@ def dead_branch_prune(func_ir, called_args):
         if DEBUG > 0:
             kill = branch.falsebr if take_truebr else branch.truebr
             print("Pruning %s" % kill, branch, lhs_cond, rhs_cond, condition.fn)
-        taken = do_prune(take_truebr, blk)
-        return True, taken
+        do_prune(take_truebr, blk)
+        # It is not safe to rewrite the predicate to a nominal value based on
+        # which branch is taken, the rewritten const predicate needs to
+        # hold the actual computed const value as something else may refer to
+        # it!
+        return True, take_truebr
 
     def prune_by_predicate(branch, pred, blk):
         try:

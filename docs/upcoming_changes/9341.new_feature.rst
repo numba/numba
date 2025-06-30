@@ -1,5 +1,0 @@
-Add a config variable to enable / disable the llvmlite memory manager
-=====================================================================
-
-A config variable to force enable or disable the llvmlite memory manager is
-added.

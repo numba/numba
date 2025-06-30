@@ -1,5 +1,7 @@
 import unittest
+import linecache
 import inspect
+import textwrap
 
 from numba import njit
 from numba.tests.support import TestCase
@@ -78,6 +80,111 @@ class TestFirstLineFinder(TestCase):
         first_def_line = get_func_body_first_lineno(foo)
         # Cannot determine first line of string evaled functions
         self.assertIsNone(first_def_line)
+
+    def _test_with_patched_linecache(self, filename, source,
+                                     function_name, expected_first_line):
+        # Modify the line cache in a similar manner to Jupyter, so that
+        # get_func_body_first_lineno can find the code using the fallback to
+        # inspect.getsourcelines()
+        timestamp = None
+        entry = (len(source), timestamp, source.splitlines(True), filename)
+        linecache.cache[filename] = entry
+
+        # We need to compile the code so we can give it the fake filename used
+        # in the linecache
+        code = compile(source, filename, "exec")
+
+        globalns = {}
+        exec(code, globalns)
+        function = globalns[function_name]
+
+        # We should be able to determine the first line number even though the
+        # source does not exist on disk
+        first_def_line = get_func_body_first_lineno(function)
+        self.assertEqual(first_def_line, expected_first_line)
+
+    def test_string_eval_linecache_basic(self):
+        source = """def foo():
+            pass
+        """
+
+        filename = "<foo-basic>"
+        function_name = "foo"
+        expected_first_line = 2
+        self._test_with_patched_linecache(filename, source, function_name,
+                                          expected_first_line)
+
+    def test_string_eval_linecache_indent(self):
+        source = """if True:
+        # indent designed to test against potential indent error in ast.parse
+
+        def foo():
+            pass
+        """
+
+        filename = "<foo-indent>"
+        function_name = "foo"
+        expected_first_line = 5
+        self._test_with_patched_linecache(filename, source, function_name,
+                                          expected_first_line)
+
+    def test_string_eval_linecache_closure(self):
+        source = textwrap.dedent("""
+        def foo_gen():
+            def foo():
+                pass
+            return foo
+
+        generated_foo = foo_gen()
+        """)
+
+        filename = "<foo-gen>"
+        function_name = "generated_foo"
+        expected_first_line = 4
+        self._test_with_patched_linecache(filename, source, function_name,
+                                          expected_first_line)
+
+    def test_string_eval_linecache_stacked_decorators(self):
+        source = textwrap.dedent("""
+        def decorator(function):
+            return function
+
+        @decorator
+        @decorator
+        @decorator
+        def decorated():
+            pass
+        """)
+
+        filename = "<foo-stacked-decorator>"
+        function_name = "decorated"
+        expected_first_line = 9
+        self._test_with_patched_linecache(filename, source, function_name,
+                                          expected_first_line)
+
+    def test_string_eval_linecache_all(self):
+        # A test combining indented code, a closure, and stacked decorators
+        source = """if 1:
+        def decorator(function):
+            return function
+
+        def gen_decorated_foo():
+            @decorator
+            @decorator
+            @decorator
+            def _foo():
+                pass
+
+            return _foo
+
+        foo_all = gen_decorated_foo()
+        """
+
+        filename = "<foo-all>"
+        function_name = "foo_all"
+        expected_first_line = 10
+        self._test_with_patched_linecache(filename, source, function_name,
+                                          expected_first_line)
 
     def test_single_line_function(self):
         @njit
