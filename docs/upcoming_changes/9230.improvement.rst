@@ -1,4 +1,4 @@
 Added support for using IntEnum as NumPy array's index.
-=======================================================
+-------------------------------------------------------
 
 Added support for using IntEnum as NumPy array's index.
