@@ -459,7 +459,7 @@ class TestArrayComprehension(unittest.TestCase):
             str(raises.exception),
         )
         self.assertIn(
-            "(array({}, 1d, C), Literal[int](0), complex128)".format(types.intp),
+            f"(array({types.intp}, 1d, C), {types.literal(0)}, complex128)",
             str(raises.exception),
         )
 
