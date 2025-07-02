@@ -128,7 +128,7 @@ def _as_meminfo(typingctx, setobj):
 
 
 @intrinsic
-def _set_new(typingctx, keyty):
+def _set_new_sized(typingctx, n_keys, keyty):
     """Wrap numba_set_new.
 
     Allocate a new set object.
@@ -140,22 +140,26 @@ def _set_new(typingctx, keyty):
 
     """
     resty = types.voidptr
-    sig = resty(keyty)
+    sig = resty(n_keys, keyty)
 
     def codegen(context, builder, sig, args):
-        fnty = ir.FunctionType(
-            ll_status,
-            [ll_set_type.as_pointer(), ll_ssize_t],
-        )
-        fn = cgutils.get_or_insert_function(builder.module, fnty,
-                                            'numba_set_new')
+        n_keys = builder.bitcast(args[0], ll_ssize_t)
+
         # Determine sizeof value type
         ll_val = context.get_data_type(keyty.instance_type)
         sz_val = context.get_abi_sizeof(ll_val)
         refsetp = cgutils.alloca_once(builder, ll_set_type, zfill=True)
+
+        fnty = ir.FunctionType(
+            ll_status,
+            [ll_set_type.as_pointer(), ll_ssize_t, ll_ssize_t],
+        )
+        fn = cgutils.get_or_insert_function(builder.module, fnty,
+                                            'numba_set_new_sized')
+
         status = builder.call(
             fn,
-            [refsetp, ll_ssize_t(sz_val)],
+            [refsetp, ll_ssize_t(sz_val), n_keys],
         )
         _raise_if_error(
             context, builder, status,
@@ -299,7 +303,7 @@ def _set_set_method_table(typingctx, setp, keyty):
 
 
 @overload(new_set)
-def impl_new_set(value):
+def impl_new_set(value, n_keys=0):
     """Creates a new set with *value* as the type
     of the set value.
     """
@@ -308,8 +312,8 @@ def impl_new_set(value):
 
     keyty = value
 
-    def imp(value):
-        setp = _set_new(keyty)
+    def imp(value,  n_keys=0):
+        setp = _set_new_sized(n_keys, keyty)
         _set_set_method_table(setp, keyty)
         s = _make_set(keyty, setp)
         return s
