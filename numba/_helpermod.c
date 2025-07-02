@@ -166,6 +166,7 @@ build_c_helpers_dict(void)
     /* for set support */
     declmethod(test_set);
     declmethod(set_new);
+    declmethod(set_new_sized);
     declmethod(set_set_method_table);
     declmethod(set_free);
     declmethod(set_length);
