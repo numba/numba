@@ -1,24 +1,14 @@
-/* Adapted from CPython3.11 Include/setobject.h
- *
- * The exact commit-id of the relevant file is:
- *
- * https://github.com/python/cpython/blob/4b8d2a1b40b88e4c658b3f5f450c146c78f2e6bd/Include/setobject.h
- *
- * WARNING:
- * Most interfaces listed here are exported (global), but they are not
- * supported, stable, or part of Numba's public API. These interfaces and their
- * underlying implementations may be changed or removed in future without
- * notice.
- * */
-
-
-#ifndef NUMBA_SET_H
-#define NUMBA_SET_H
-
-#include "Python.h"
+/* Adapted from CPython3.7 Objects/set-common.h */
 #include "cext.h"
 
-#define SET_MINSIZE 8
+#ifndef NUMBA_SET_COMMON_H
+#define NUMBA_SET_COMMON_H
+
+typedef struct {
+    /* Uses Py_ssize_t instead of Py_hash_t to guarantee word size alignment */
+    Py_ssize_t  hash;
+    char        key[];
+} NB_SetEntry;
 
 
 typedef int (*set_key_comparator_t)(const char *lhs, const char *rhs);
@@ -31,56 +21,51 @@ typedef struct {
 } set_type_based_methods_table;
 
 typedef struct {
-    /* Uses Py_ssize_t instead of Py_hash_t to guarantee word size alignment */
-    Py_ssize_t  hash;
-    char        *key;
+   /* hash table size */
+    Py_ssize_t      size;
+    /* Usable size of the hash table.
+       Also, size of the entries */
+    Py_ssize_t      usable;
+    /* hash table used entries */
+    Py_ssize_t      nentries;
+    /* Entry info
+        - key_size is the sizeof key type
+        - entry_size is key_size + alignment
+    */
+    Py_ssize_t      key_size, entry_size;
+    /* Byte offset from indices to the first entry. */
+    Py_ssize_t      entry_offset;
 
-} NB_SetEntry;
+    /* Method table for type-dependent operations. */
+    set_type_based_methods_table methods;
+
+    /* hash table */
+    char            indices[];
+} NB_SetKeys;
+
 
 typedef struct {
-    Py_ssize_t size;            /* Size of the active hash table*/
-    Py_ssize_t filled;          /* Number active and dummy entries*/
-    Py_ssize_t used;            /* Number active entries */
-
-    Py_ssize_t key_size;        /* key_size is the sizeof key type */
-
-    /* The table contains mask + 1 slots, and that's a power of 2.
-     * We store the mask instead of the size because the mask is more
-     * frequently needed.
-     */
-    Py_ssize_t mask;
-
-    /* method table for type-dependent operations */
-    set_type_based_methods_table methods;
-    /* The table points to a fixed-size smalltable for small tables
-     * or to additional malloc'ed memory for bigger tables.
-     * The table pointer is never NULL which saves us from repeated
-     * runtime null-tests.
-     */
-    NB_SetEntry *table;
-
-    /* Placeholder for table resizing, initally same as table */
-    NB_SetEntry smalltable[SET_MINSIZE];
+    /* num of elements in the hashtable */
+    Py_ssize_t        used;
+    NB_SetKeys      *keys;
 } NB_Set;
-
-/***** Set iterator type ***********************************************/
 
 typedef struct {
     /* parent set */
-    NB_Set        *parent;
-    /* parent set entry object */
-    NB_SetEntry     *table;
-    /* number of keys in the set being iterated */
-    Py_ssize_t       num_keys;
-    /* hash table size */
-    Py_ssize_t       table_size;
+    NB_Set         *parent;
+    /* parent keys object */
+    NB_SetKeys     *parent_keys;
+    /* set size */
+    Py_ssize_t       size;
     /* iterator position; indicates the next position to read */
     Py_ssize_t       pos;
 } NB_SetIter;
 
-
-NUMBA_EXPORT_FUNC(int)          /* A test function for sets */
-numba_test_set(void);           /* Returns 0 for OK; 1 for failure. */
+/* A test function for the set
+Returns 0 for OK; 1 for failure.
+*/
+NUMBA_EXPORT_FUNC(int)
+numba_test_set(void);
 
 /* Allocate a new set
 Parameters
@@ -95,64 +80,59 @@ NUMBA_EXPORT_FUNC(int)
 numba_set_new(NB_Set **out, Py_ssize_t key_size, Py_ssize_t size);
 
 /* Free a set */
-NUMBA_GLOBAL_FUNC(void)
+NUMBA_EXPORT_FUNC(void)
 numba_set_free(NB_Set *setp);
 
 /* Returns length of a set */
-NUMBA_EXPORT_FUNC(Py_ssize_t) 
+NUMBA_EXPORT_FUNC(Py_ssize_t)
 numba_set_length(NB_Set *setp);
 
-/* Set the method table for type specific operations */
+/* Set the method table for type specific operations
+*/
 NUMBA_EXPORT_FUNC(void)
 numba_set_set_method_table(NB_Set *setp, set_type_based_methods_table *methods);
 
-/* Add key to the set
+/* Lookup a key
 
 Parameters
 - NB_Set *setp
     The set object.
-- const char *key
-    The key as a byte buffer.
-- Py_hash_t hash
-    The precomputed hash of key.
-Returns
-- < 0 for error
-- 0 for ok
-*/
-NUMBA_EXPORT_FUNC(int)
-numba_set_add(NB_Set *setp, char *key, Py_ssize_t hash);
-
-/* Check if a given key exists within the set.
-
-Parameters
-- NB_Set *setp
-    The set object.
-- char *key
+- const char *key_bytes
     The key as a byte buffer.
 - Py_hash_t hash
     The precomputed hash of the key.
-Returns
-- 0 for not present
-- 1 for present
 */
-NUMBA_EXPORT_FUNC(int) 
-numba_set_contains(NB_Set *setp, char *key, Py_ssize_t hash);
+NUMBA_EXPORT_FUNC(Py_ssize_t)
+numba_set_contains(NB_Set *setp, char *key_bytes, Py_hash_t hash);
 
-/* Discard an entry from the set
+/* Insert to the set
+
 Parameters
 - NB_Set *setp
-    The set
-- const char *key
+    The set object.
+- const char *key_bytes
     The key as a byte buffer.
 - Py_hash_t hash
-    Precomputed hash of the key to be deleted
+    The precomputed hash of key.
+
 Returns
 - < 0 for error
 - 0 for ok
 */
 NUMBA_EXPORT_FUNC(int)
-numba_set_discard(NB_Set *setp, char *key, Py_hash_t hash);
+numba_set_add(NB_Set *setp, const char *key_bytes, Py_hash_t hash);
 
+/* Delete an entry from the set
+Parameters
+- NB_Set *setp
+    The set
+- char *key_bytes
+    Output. The key as a byte buffer
+- Py_hash_t hash
+    Precomputed hash of the key to be deleted
+*/
+NUMBA_EXPORT_FUNC(int)
+numba_set_discard(NB_Set *setp, char *key_bytes, Py_hash_t hash);
 
 /* Remove an item from the set
 Parameters
