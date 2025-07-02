@@ -180,7 +180,11 @@ get_index(NB_SetKeys *dk, Py_ssize_t i)
     Py_ssize_t s = dk->size;
     Py_ssize_t ix;
 
-    if (s <= 0xff) {
+    if (s==0) {
+        /* Empty set */
+        return SETK_EMPTY;
+    }
+    else if(s <= 0xff) {
         int8_t *indices = (int8_t*)(dk->indices);
         assert (i < dk->size);
         ix = indices[i];
@@ -517,11 +521,7 @@ numba_set_contains(NB_Set *setp, char *key, Py_hash_t hash)
 {
     NB_SetEntry *entry;
     Py_ssize_t ix = numba_set_lookup(setp, key, hash);
-    if (ix != SETK_EMPTY){
-        entry = get_entry(setp, ix);
-        return entry->key != NULL;          /* Returns 1 only for a valid entry  */
-    }
-    return ix == SETK_EMPTY;
+    return ix != SETK_EMPTY && ix != SETK_DUMMY;
 }
 
 
@@ -713,7 +713,23 @@ numba_set_resize(NB_Set *d, Py_ssize_t minsize) {
 int
 numba_set_discard(NB_Set *d, char *key_bytes, Py_hash_t hash)
 {
-    return numba_set_popitem(d, key_bytes);
+    Py_ssize_t ix = numba_set_lookup(d, key_bytes, hash);
+    NB_SetEntry *ep = get_entry(d->keys, ix);
+    char *key_ptr = entry_get_key(d->keys, ep);
+
+    Py_ssize_t j = lookset_index(d->keys, ep->hash, ix);
+    assert(j >= 0);
+    assert(get_index(d->keys, j) == ix);
+    set_index(d->keys, j, SETK_DUMMY);
+
+    zero_key(d->keys, key_ptr);
+
+    /* We can't dk_usable++ since there is SETK_DUMMY in indices */
+    d->keys->nentries--;
+    d->keys->usable++;
+    d->used--;
+
+    return OK;
 }
 
 
@@ -968,10 +984,10 @@ numba_test_set(void) {
 
     // Test delete
     ix = numba_set_lookup(d, "beg", 0xbeef);
-    status = numba_set_discard(d, 0xbeef, ix);
-    CHECK (status == OK);
+    CHECK (ix >= 0);
 
-    CHECK (ix == SETK_EMPTY); // not found
+    status = numba_set_discard(d, "beg", 0xbeef);
+    CHECK (status == OK);
 
     ix = numba_set_lookup(d, "bef", 0xbeef);
     CHECK (ix >= 0);
@@ -981,11 +997,12 @@ numba_test_set(void) {
     // They are always the last item
     status = numba_set_popitem(d, got_key);
     CHECK(status == OK);
-    CHECK(memcmp("bek", got_key, d->keys->key_size) == 0);
+    CHECK(memcmp("bej", got_key, d->keys->key_size) == 0);
 
     status = numba_set_popitem(d, got_key);
     CHECK(status == OK);
-    CHECK(memcmp("bej", got_key, d->keys->key_size) == 0);
+
+    CHECK(memcmp("bei", got_key, d->keys->key_size) == 0);
 
     // Test iterator
     CHECK( d->used > 0 );
