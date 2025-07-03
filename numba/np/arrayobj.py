@@ -3976,7 +3976,7 @@ def _make_flattening_iter_cls(flatiterty, kind):
                                                                  indices,
                                                                  dim))
                                for dim in range(ndim)]
-                    idxtuple = cgutils.pack_array(builder, idxvals)
+                    idxtuple = cgutils.pack_array(builder, idxvals, ty=context.get_value_type(types.intp))
                     result.yield_(
                         cgutils.make_anonymous_struct(builder,
                                                       [idxtuple, value]))

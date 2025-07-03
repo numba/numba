@@ -55,6 +55,16 @@ def array_ndenumerate_0d(arr):
         result = v + len(idx)  # Should be v + 0 for 0-d arrays
     return result
 
+def array_ndenumerate_0d_multiple(arr1, arr2):
+    """Test np.ndenumerate on multiple 0-dimensional arrays."""
+    result1 = 0
+    result2 = 0
+    for idx, v in np.ndenumerate(arr1):
+        result1 = v + len(idx)
+    for idx, v in np.ndenumerate(arr2):  
+        result2 = v + len(idx)
+    return result1 + result2
+
 def np_ndindex_empty():
     s = 0
     for ind in np.ndindex(()):
@@ -465,6 +475,15 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
             self.assertPreciseEqual(result, expected)
             # For 0-d arrays, the result should equal the value since len(idx) == 0
             self.assertPreciseEqual(result, val)
+            
+        # Test with multiple 0-d arrays to exercise both code paths
+        arr1 = np.array(5.0)
+        arr2 = np.array(7.0)
+        cfunc2 = njit(array_ndenumerate_0d_multiple)
+        expected2 = array_ndenumerate_0d_multiple(arr1, arr2)
+        result2 = cfunc2(arr1, arr2)
+        self.assertPreciseEqual(result2, expected2)
+        self.assertPreciseEqual(result2, 12.0)  # 5.0 + 7.0
 
     def test_np_ndindex(self):
         func = np_ndindex
