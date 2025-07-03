@@ -303,7 +303,7 @@ def _set_set_method_table(typingctx, setp, keyty):
 
 
 @overload(new_set)
-def impl_new_set(value, n_keys=0):
+def impl_new_set(value, n_keys=8):
     """Creates a new set with *value* as the type
     of the set value.
     """
