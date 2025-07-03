@@ -217,7 +217,7 @@ class TestSetImpl(TestCase):
 
     def test_init_len(self):
         # Checks length at initialization
-        s = Set(self, 8, 0)
+        s = Set(self, 8, 8)
 
         # length == zero
         self.assertEqual(len(s), 0)
@@ -226,7 +226,7 @@ class TestSetImpl(TestCase):
         # Test adding keys to a set
 
         for key in [3, 'a', "abc"]:
-            s = Set(self, 8, 0)
+            s = Set(self, 8, 8)
             # Add key to the set
             s.add(key)
             # Length of set == 1
@@ -239,7 +239,7 @@ class TestSetImpl(TestCase):
         # Test removal of keys from a set
 
         for key in [3, 'a', "abc"]:
-            s = Set(self, 8, 0)
+            s = Set(self, 8, 8)
             # Add key to the set
             s.add(key)
             # Check key exists in set
@@ -253,7 +253,7 @@ class TestSetImpl(TestCase):
 
     def test_set_iter(self):
         # Test iteration
-        s = Set(self, 3, 0)
+        s = Set(self, 3, 8)
         nmax = 1000
 
         # Add elements to the set
