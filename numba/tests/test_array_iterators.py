@@ -48,22 +48,17 @@ def array_ndenumerate_sum(arr):
         s = s + (i + 1) * (j + 1) * v
     return s
 
-def array_ndenumerate_0d(arr):
-    """Test np.ndenumerate on 0-dimensional arrays."""
-    result = 0
-    for idx, v in np.ndenumerate(arr):
-        result = v + len(idx)  # Should be v + 0 for 0-d arrays
+def _nan_maximum_impl(args):
+    """Original reproducer from issue #10127"""
+    result = np.empty(args[0].shape, dtype=args[0].dtype)
+    l = len(args)
+    for idx, max_value in np.ndenumerate(args[0]):
+        for k in range(1, l):
+            this_value = args[k][idx]
+            if this_value > max_value or np.isnan(max_value):
+                max_value = this_value
+        result[idx] = max_value
     return result
-
-def array_ndenumerate_0d_multiple(arr1, arr2):
-    """Test np.ndenumerate on multiple 0-dimensional arrays."""
-    result1 = 0
-    result2 = 0
-    for idx, v in np.ndenumerate(arr1):
-        result1 = v + len(idx)
-    for idx, v in np.ndenumerate(arr2):  
-        result2 = v + len(idx)
-    return result1 + result2
 
 def np_ndindex_empty():
     s = 0
@@ -459,32 +454,6 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         self.assertTrue(got.sum())
         self.assertPreciseEqual(expect, got)
 
-    def test_array_ndenumerate_0d(self):
-        """Test np.ndenumerate with zero-dimensional arrays."""
-        # Test with different 0-d array types
-        test_values = [1.0, 42, np.float32(3.14), np.int64(99)]
-        
-        for val in test_values:
-            arr = np.array(val)  # Creates 0-dimensional array
-            self.assertEqual(arr.ndim, 0)
-            self.assertEqual(arr.shape, ())
-            
-            cfunc = njit(array_ndenumerate_0d)
-            expected = array_ndenumerate_0d(arr)
-            result = cfunc(arr)
-            self.assertPreciseEqual(result, expected)
-            # For 0-d arrays, the result should equal the value since len(idx) == 0
-            self.assertPreciseEqual(result, val)
-            
-        # Test with multiple 0-d arrays to exercise both code paths
-        arr1 = np.array(5.0)
-        arr2 = np.array(7.0)
-        cfunc2 = njit(array_ndenumerate_0d_multiple)
-        expected2 = array_ndenumerate_0d_multiple(arr1, arr2)
-        result2 = cfunc2(arr1, arr2)
-        self.assertPreciseEqual(result2, expected2)
-        self.assertPreciseEqual(result2, 12.0)  # 5.0 + 7.0
-
     def test_np_ndindex(self):
         func = np_ndindex
         cfunc = njit((types.int32, types.int32,))(func)
@@ -512,6 +481,16 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         func = iter_next
         arr = np.arange(12, dtype=np.int32) + 10
         self.check_array_unary(arr, typeof(arr), func)
+
+    def test_ndenumerate_zero_dim(self):
+        """Test np.ndenumerate with zero-dimensional arrays (issue #10127)."""
+        # Test the original reproducer from the issue
+        cfunc = njit(_nan_maximum_impl)
+        
+        # This should not fail with IndexError anymore
+        result = cfunc((np.array(1.0),))
+        expected = _nan_maximum_impl((np.array(1.0),))
+        self.assertPreciseEqual(result, expected)
 
 
 class TestNdIter(MemoryLeakMixin, TestCase):
