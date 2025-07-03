@@ -312,7 +312,7 @@ def impl_new_set(value, n_keys=0):
 
     keyty = value
 
-    def imp(value,  n_keys=0):
+    def imp(value, n_keys=8):
         setp = _set_new_sized(n_keys, keyty)
         _set_set_method_table(setp, keyty)
         s = _make_set(keyty, setp)
