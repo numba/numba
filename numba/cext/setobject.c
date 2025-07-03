@@ -519,7 +519,6 @@ numba_set_lookup(NB_Set *d, const char *key_bytes, Py_hash_t hash)
 Py_ssize_t
 numba_set_contains(NB_Set *setp, char *key, Py_hash_t hash)
 {
-    NB_SetEntry *entry;
     Py_ssize_t ix = numba_set_lookup(setp, key, hash);
     return ix != SETK_EMPTY && ix != SETK_DUMMY;
 }
@@ -549,57 +548,6 @@ find_empty_slot(NB_SetKeys *dk, Py_hash_t hash){
     return i;
 }
 
-static int
-insertion_resize(NB_Set *d)
-{
-    return numba_set_resize(d, SET_GROWTH_RATE(d));
-}
-
-int
-numba_set_add(
-    NB_Set    *d,
-    const char *key_bytes,
-    Py_hash_t   hash)
-{
-    NB_SetKeys *dk = d->keys;
-
-    Py_ssize_t ix = numba_set_lookup(d, key_bytes, hash);
-    if (ix == SETK_ERROR) {
-        // exception in key comparison in lookup.
-        return ERR_CMP_FAILED;
-    }
-
-    if (ix == SETK_EMPTY) {
-        /* Insert into new slot */
-        Py_ssize_t hashpos;
-        NB_SetEntry *ep;
-
-        if (dk->usable <= 0) {
-            /* Need to resize */
-            if (insertion_resize(d) != OK)
-                return ERR_NO_MEMORY;
-            else
-                dk = d->keys;     // reload
-        }
-        hashpos = find_empty_slot(dk, hash);
-        ep = get_entry(dk, dk->nentries);
-        set_index(dk, hashpos, dk->nentries);
-        copy_key(dk, entry_get_key(dk, ep), key_bytes);
-        assert ( hash != -1 );
-        ep->hash = hash;
-
-        /* incref */
-        dk_incref_key(dk, key_bytes);
-
-        d->used += 1;
-        dk->usable -= 1;
-        dk->nentries += 1;
-        assert (dk->usable >= 0);
-        return OK;
-    } else {
-        return OK_REPLACED;
-    }
-}
 
 /*
 Adapted from build_indices_set().
@@ -708,6 +656,58 @@ numba_set_resize(NB_Set *d, Py_ssize_t minsize) {
     d->keys->usable -= numentries;
     d->keys->nentries = numentries;
     return OK;
+}
+
+static int
+insertion_resize(NB_Set *d)
+{
+    return numba_set_resize(d, SET_GROWTH_RATE(d));
+}
+
+int
+numba_set_add(
+    NB_Set    *d,
+    const char *key_bytes,
+    Py_hash_t   hash)
+{
+    NB_SetKeys *dk = d->keys;
+
+    Py_ssize_t ix = numba_set_lookup(d, key_bytes, hash);
+    if (ix == SETK_ERROR) {
+        // exception in key comparison in lookup.
+        return ERR_CMP_FAILED;
+    }
+
+    if (ix == SETK_EMPTY) {
+        /* Insert into new slot */
+        Py_ssize_t hashpos;
+        NB_SetEntry *ep;
+
+        if (dk->usable <= 0) {
+            /* Need to resize */
+            if (insertion_resize(d) != OK)
+                return ERR_NO_MEMORY;
+            else
+                dk = d->keys;     // reload
+        }
+        hashpos = find_empty_slot(dk, hash);
+        ep = get_entry(dk, dk->nentries);
+        set_index(dk, hashpos, dk->nentries);
+        copy_key(dk, entry_get_key(dk, ep), key_bytes);
+        assert ( hash != -1 );
+        ep->hash = hash;
+
+        /* incref */
+        dk_incref_key(dk, key_bytes);
+
+        d->used += 1;
+        dk->usable -= 1;
+        dk->nentries += 1;
+        assert (dk->usable >= 0);
+        return OK;
+    } else {
+        return OK_REPLACED;
+    }
 }
 
 int
