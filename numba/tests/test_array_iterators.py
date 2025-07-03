@@ -48,6 +48,12 @@ def array_ndenumerate_sum(arr):
         s = s + (i + 1) * (j + 1) * v
     return s
 
+def minimal_ndenumerate_zero_dim(arr):
+    """Minimal reproducer for issue #10127 - np.ndenumerate on 0-d arrays"""
+    for idx, value in np.ndenumerate(arr):
+        return value  # Just return the value from the zero-dimensional array
+    return None
+
 def np_ndindex_empty():
     s = 0
     for ind in np.ndindex(()):
@@ -469,6 +475,21 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         func = iter_next
         arr = np.arange(12, dtype=np.int32) + 10
         self.check_array_unary(arr, typeof(arr), func)
+
+    def test_ndenumerate_zero_dim(self):
+        """Test np.ndenumerate with zero-dimensional arrays (issue #10127)."""
+        # Test minimal reproducer - this would fail with IndexError before the fix
+        cfunc = njit(minimal_ndenumerate_zero_dim)
+        
+        # Test with zero-dimensional array
+        arr = np.array(42.5)
+        result = cfunc(arr)
+        expected = cfunc.py_func(arr)
+        self.assertPreciseEqual(result, expected)
+        
+        # Note: Zero-dimensional arrays are always contiguous in practice,
+        # but both C-contiguous and non-contiguous code paths in 
+        # _make_flattening_iter_cls handle the ndim=0 case with the same fix
 
 
 class TestNdIter(MemoryLeakMixin, TestCase):
