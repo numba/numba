@@ -48,17 +48,11 @@ def array_ndenumerate_sum(arr):
         s = s + (i + 1) * (j + 1) * v
     return s
 
-def _nan_maximum_impl(args):
-    """Original reproducer from issue #10127"""
-    result = np.empty(args[0].shape, dtype=args[0].dtype)
-    l = len(args)
-    for idx, max_value in np.ndenumerate(args[0]):
-        for k in range(1, l):
-            this_value = args[k][idx]
-            if this_value > max_value or np.isnan(max_value):
-                max_value = this_value
-        result[idx] = max_value
-    return result
+def minimal_ndenumerate_zero_dim(arr):
+    """Minimal reproducer for issue #10127 - np.ndenumerate on 0-d arrays"""
+    for idx, value in np.ndenumerate(arr):
+        return value  # Just return the value from the zero-dimensional array
+    return None
 
 def np_ndindex_empty():
     s = 0
@@ -484,13 +478,13 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
 
     def test_ndenumerate_zero_dim(self):
         """Test np.ndenumerate with zero-dimensional arrays (issue #10127)."""
-        # Test the original reproducer from the issue
-        cfunc = njit(_nan_maximum_impl)
+        # Test minimal reproducer - this would fail with IndexError before the fix
+        cfunc = njit(minimal_ndenumerate_zero_dim)
         
-        # This should not fail with IndexError anymore
-        args = (np.array(1.0),)
-        result = cfunc(args)
-        expected = cfunc.py_func(args)
+        # Test with zero-dimensional array
+        arr = np.array(42.5)
+        result = cfunc(arr)
+        expected = cfunc.py_func(arr)
         self.assertPreciseEqual(result, expected)
         
         # Note: Zero-dimensional arrays are always contiguous in practice,
