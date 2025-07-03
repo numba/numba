@@ -48,6 +48,13 @@ def array_ndenumerate_sum(arr):
         s = s + (i + 1) * (j + 1) * v
     return s
 
+def array_ndenumerate_0d(arr):
+    """Test np.ndenumerate on 0-dimensional arrays."""
+    result = 0
+    for idx, v in np.ndenumerate(arr):
+        result = v + len(idx)  # Should be v + 0 for 0-d arrays
+    return result
+
 def np_ndindex_empty():
     s = 0
     for ind in np.ndindex(()):
@@ -441,6 +448,23 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         got = cfunc(6)
         self.assertTrue(got.sum())
         self.assertPreciseEqual(expect, got)
+
+    def test_array_ndenumerate_0d(self):
+        """Test np.ndenumerate with zero-dimensional arrays."""
+        # Test with different 0-d array types
+        test_values = [1.0, 42, np.float32(3.14), np.int64(99)]
+        
+        for val in test_values:
+            arr = np.array(val)  # Creates 0-dimensional array
+            self.assertEqual(arr.ndim, 0)
+            self.assertEqual(arr.shape, ())
+            
+            cfunc = njit(array_ndenumerate_0d)
+            expected = array_ndenumerate_0d(arr)
+            result = cfunc(arr)
+            self.assertPreciseEqual(result, expected)
+            # For 0-d arrays, the result should equal the value since len(idx) == 0
+            self.assertPreciseEqual(result, val)
 
     def test_np_ndindex(self):
         func = np_ndindex
