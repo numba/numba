@@ -1,8 +1,6 @@
 Fix IndexError in ``np.ndenumerate`` for zero-dimensional arrays
 ----------------------------------------------------------------
 
-Fix ``IndexError`` that occurred when using ``np.ndenumerate()`` on zero-dimensional
-arrays in numba-compiled functions. The issue was caused by ``pack_array`` being
-called with an empty list when ``ndim=0``. Fixed by providing explicit type
-parameters to ``pack_array`` calls in the flattening iterator implementation.
+``np.ndenumerate()`` now works correctly with zero-dimensional arrays in 
+numba-compiled functions. Previously, this would fail with an ``IndexError``.
 Assisted by Copilot.

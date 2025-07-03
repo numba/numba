@@ -488,9 +488,14 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         cfunc = njit(_nan_maximum_impl)
         
         # This should not fail with IndexError anymore
-        result = cfunc((np.array(1.0),))
-        expected = _nan_maximum_impl((np.array(1.0),))
+        args = (np.array(1.0),)
+        result = cfunc(args)
+        expected = cfunc.py_func(args)
         self.assertPreciseEqual(result, expected)
+        
+        # Note: Zero-dimensional arrays are always contiguous in practice,
+        # but both C-contiguous and non-contiguous code paths in 
+        # _make_flattening_iter_cls handle the ndim=0 case with the same fix
 
 
 class TestNdIter(MemoryLeakMixin, TestCase):
