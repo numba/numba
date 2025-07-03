@@ -1,5 +1,5 @@
 Fix IndexError in ``np.ndenumerate`` for zero-dimensional arrays
---------------------------------------------------------------
+----------------------------------------------------------------
 
 Fix ``IndexError`` that occurred when using ``np.ndenumerate()`` on zero-dimensional
 arrays in numba-compiled functions. The issue was caused by ``pack_array`` being
