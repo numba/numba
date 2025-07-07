@@ -10,7 +10,10 @@ multiple_locations_msg = (
 )
 
 no_spec_msg = (
-    "Couldn't get spec for {}. Cannot redirect numba.cuda to numba_cuda"
+    "The NVIDIA-maintained CUDA target (the `numba_cuda` module) has not been "
+    "found. Falling back to the built-in CUDA target. The NVIDIA-maintained "
+    "target should be installed - see https://numba.readthedocs.io/en/stable/cuda/overview.html#cuda-deprecation-status"
+    " - for installation instructions, see https://nvidia.github.io/numba-cuda/user/installation.html"
 )
 
 
@@ -23,16 +26,10 @@ class NumbaCudaFinder(importlib.abc.MetaPathFinder):
             return self.initialized
 
         numba_spec = importlib.util.find_spec("numba")
-
-        if numba_spec is None:
-            warnings.warn(no_spec_msg.format("numba"))
-            self.initialized = False
-            return False
-
         numba_cuda_spec = importlib.util.find_spec("numba_cuda")
 
         if numba_cuda_spec is None:
-            warnings.warn(no_spec_msg.format("numba_cuda"))
+            warnings.warn(no_spec_msg, DeprecationWarning)
             self.initialized = False
             return False
 
