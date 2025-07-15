@@ -567,7 +567,7 @@ class TestRecordDtype(unittest.TestCase):
         art1 = rec_ty[::1]
         arr = np.zeros(5, dtype=rec_dt)
         art2 = typeof(arr)
-        self.assertEqual(art2.dtype.dtype, rec_ty)
+        self.assertEqual(art2.dtype.dtype, rec_ty.dtype)
         self.assertEqual(art1, art2)
 
     def test_user_specified(self):
