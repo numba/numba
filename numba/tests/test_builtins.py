@@ -1583,6 +1583,47 @@ class TestHasattrBuiltin(MemoryLeakMixin, TestCase):
                '"attr" due to a branch.')
         self.assertIn(msg, str(raises.exception))
 
+class TestSetAttr(MemoryLeakMixin, TestCase):
+    # Tests the setattr() overload
+
+    def test_setattr(self):
+        from numba import int64
+        from numba.experimental import jitclass
+
+        spec = [
+            ("member", int64)
+        ]
+
+        @jitclass(spec)
+        class MyClass:
+            def __init__(self, member: int) -> None:
+                self.member = member
+
+        @njit
+        def foo1() -> int:
+            my_instance = MyClass(5)
+            setattr(my_instance, "member", 6)
+            return my_instance.member
+
+        self.assertPreciseEqual(foo1(), 6)
+
+        my_instance = MyClass(5)
+
+        @njit
+        def foo2(my_arg: MyClass) -> None:
+            setattr(my_arg, "member", 6)
+
+        foo2(my_instance)
+
+        self.assertPreciseEqual(my_instance.member, 6)
+
+    def test_setattr_attribute_error(self):
+        @njit
+        def foo():
+            setattr(np.ones(1), "__not_a_valid_attr__", 6)
+
+        foo()
+
 
 class TestStrAndReprBuiltin(MemoryLeakMixin, TestCase):
 

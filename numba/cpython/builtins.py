@@ -1,6 +1,7 @@
 from collections import namedtuple
 import math
 from functools import reduce
+import re
 
 import numpy as np
 import operator
@@ -22,7 +23,7 @@ from numba.core.errors import (TypingError, LoweringError,
                                NumbaPerformanceWarning)
 from numba.core.typing.templates import (AbstractTemplate, infer_global,
                                          signature)
-from numba.misc.special import literal_unroll
+from numba.misc.special import literal_unroll, literally
 from numba.core.typing.asnumbatype import as_numba_type
 
 
@@ -1023,3 +1024,27 @@ def ol_str_generic(object=''):
         else:
             return repr(object)
     return impl
+
+_var_name_regex = re.compile("^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+@overload(setattr)
+def jit_setattr(obj, attr, val):
+    if not isinstance(attr, types.Literal):
+        return lambda obj, attr, val: literally(attr)
+    if not isinstance(attr, types.StringLiteral):
+        return None
+
+    if _var_name_regex.match(attr.literal_value) is None:
+        raise NumbaTypeError(f"{attr.literal_value!r} is not a valid attribute name.")
+
+    locals = {}
+    globals = {}
+    code = f"""
+def setattr(obj, attr: str, val) -> None:
+    obj.{attr.literal_value} = val"""
+    exec(
+        code,
+        globals,
+        locals,
+    )
+    return locals["setattr"]
