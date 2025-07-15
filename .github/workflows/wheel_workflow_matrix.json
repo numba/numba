@@ -14,6 +14,7 @@
         { "python-version": "3.12", "numpy_test": "1.26" },
         { "python-version": "3.12", "numpy_test": "2.0" },
         { "python-version": "3.12", "numpy_test": "2.2" },
-        { "python-version": "3.13", "numpy_test": "2.2" }
+        { "python-version": "3.13", "numpy_test": "2.2" },
+        { "python-version": "3.13", "numpy_test": "2.3" }
       ]
 }
