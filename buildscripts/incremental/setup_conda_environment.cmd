@@ -9,10 +9,13 @@ set CONDA_CONFIG=cmd /C conda config
 cmd /C conda info
 %CONDA_CONFIG% --show
 
+
 @rem The cmd /C hack circumvents a regression where conda installs a conda.bat
 @rem script in non-root environments.
 set CONDA_INSTALL=cmd /C conda install -q -y
 set PIP_INSTALL=pip install -q
+
+
 
 @echo on
 
@@ -20,6 +23,10 @@ set PIP_INSTALL=pip install -q
 call deactivate
 @rem Display root environment (for debugging)
 conda list
+
+@rem Install conda-anaconda-tos before creating environment to improve Azure CI detection
+%CONDA_INSTALL% "conda-anaconda-tos>=0.2.1"
+
 if "%PYTHON%" neq "3.13" (
     @rem CFFI, jinja2 and IPython are optional dependencies, but exercised in the test suite
     conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip jinja2 ipython gitpython pyyaml
