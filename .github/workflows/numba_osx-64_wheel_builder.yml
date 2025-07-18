@@ -97,7 +97,7 @@ jobs:
           else
               conda install -c ${{ env.CONDA_CHANNEL_NUMBA }} llvmlite
           fi
-          conda install -c ${{ env.CONDA_CHANNEL_NUMBA }} python-build numpy==${{ matrix.numpy_build }} clang_osx-64 clangxx_osx-64
+          conda install -c defaults python-build numpy==${{ matrix.numpy_build }} clang_osx-64 clangxx_osx-64
           conda install --yes llvm-openmp
 
       - name: Build sdist [once - py3.10]
