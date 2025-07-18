@@ -27,7 +27,7 @@ source deactivate
 conda list
 
 # Install conda-anaconda-tos before creating environment to improve Azure CI detection
-$CONDA_INSTALL "conda-anaconda-tos>=0.2.1"
+CONDA_PLUGINS_AUTO_ACCEPT_TOS=true $CONDA_INSTALL "conda-anaconda-tos>=0.2.1"
 
 # If VANILLA_INSTALL is yes, then only Python, NumPy and pip are installed, this
 # is to catch tests/code paths that require an optional package and are not

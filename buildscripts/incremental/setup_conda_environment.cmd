@@ -25,7 +25,7 @@ call deactivate
 conda list
 
 @rem Install conda-anaconda-tos before creating environment to improve Azure CI detection
-%CONDA_INSTALL% "conda-anaconda-tos>=0.2.1"
+set CONDA_PLUGINS_AUTO_ACCEPT_TOS=true && %CONDA_INSTALL% "conda-anaconda-tos>=0.2.1" && set CONDA_PLUGINS_AUTO_ACCEPT_TOS=
 
 if "%PYTHON%" neq "3.13" (
     @rem CFFI, jinja2 and IPython are optional dependencies, but exercised in the test suite
