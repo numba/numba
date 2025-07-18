@@ -9,13 +9,10 @@ set CONDA_CONFIG=cmd /C conda config
 cmd /C conda info
 %CONDA_CONFIG% --show
 
-
 @rem The cmd /C hack circumvents a regression where conda installs a conda.bat
 @rem script in non-root environments.
 set CONDA_INSTALL=cmd /C conda install -q -y
 set PIP_INSTALL=pip install -q
-
-
 
 @echo on
 
