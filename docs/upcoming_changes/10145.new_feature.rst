@@ -1,0 +1,4 @@
+Add support for setattr
+-----------------------
+
+Support for ``setattr`` is added.
