@@ -1766,10 +1766,16 @@ class TraceRunner(object):
         state.append(inst, res=res)
         state.push(res)
 
-    def op_LOAD_ASSERTION_ERROR(self, state, inst):
-        res = state.make_temp("assertion_error")
-        state.append(inst, res=res)
-        state.push(res)
+    if PYVERSION in ((3, 14), ):
+        # Removed in 3.14
+        pass
+    elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+        def op_LOAD_ASSERTION_ERROR(self, state, inst):
+            res = state.make_temp("assertion_error")
+            state.append(inst, res=res)
+            state.push(res)
+    else:
+        raise NotImplementedError(PYVERSION)
 
     def op_CHECK_EXC_MATCH(self, state, inst):
         pred = state.make_temp("predicate")
@@ -1946,6 +1952,21 @@ class TraceRunner(object):
             # And fork to force a new block.
             state.fork(pc=inst.next)
 
+    elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+        pass
+    else:
+        raise NotImplementedError(PYVERSION)
+
+    if PYVERSION in ((3, 14), ):
+        def op_LOAD_COMMON_CONSTANT(self, state, inst):
+            oparg = inst.arg
+            if oparg == 0:
+                name = 'assertion_error'
+            else:
+                raise NotImplementedError
+            res = state.make_temp(name)
+            state.append(inst, res=res, idx=oparg)
+            state.push(res)
     elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
         pass
     else:
