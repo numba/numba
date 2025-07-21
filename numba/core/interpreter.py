@@ -3424,9 +3424,15 @@ class Interpreter(object):
                                   loc=self.loc)
         self.store(value=appendinst, name=res)
 
-    def op_LOAD_ASSERTION_ERROR(self, inst, res):
-        gv_fn = ir.Global("AssertionError", AssertionError, loc=self.loc)
-        self.store(value=gv_fn, name=res)
+    if PYVERSION in ((3, 14), ):
+        # Removed in 3.14
+        pass
+    elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+        def op_LOAD_ASSERTION_ERROR(self, inst, res):
+            gv_fn = ir.Global("AssertionError", AssertionError, loc=self.loc)
+            self.store(value=gv_fn, name=res)
+    else:
+        raise NotImplementedError(PYVERSION)
 
     # NOTE: The LOAD_METHOD opcode is implemented as a LOAD_ATTR for ease,
     # however this means a new object (the bound-method instance) could be
@@ -3486,6 +3492,20 @@ class Interpreter(object):
             exit_fn_obj = ir.Const(None, loc=self.loc)
             self.store(value=exit_fn_obj, name=exit_method)
 
+    elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+        pass
+    else:
+        raise NotImplementedError(PYVERSION)
+
+    if PYVERSION in ((3, 14), ):
+        def op_LOAD_COMMON_CONSTANT(self, inst, res, idx):
+            if idx == 0:
+                gv_fn = ir.Global("AssertionError",
+                                  AssertionError,
+                                  loc=self.loc)
+                self.store(value=gv_fn, name=res)
+            else:
+                raise NotImplementedError
     elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
         pass
     else:
