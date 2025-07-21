@@ -1621,8 +1621,12 @@ class TestSetAttr(MemoryLeakMixin, TestCase):
         @njit
         def foo():
             setattr(np.ones(1), "__not_a_valid_attr__", 6)
+        self.disable_leak_check()
+        with self.assertRaises(AttributeError) as raises:
+            foo()
 
-        foo()
+        msg = "has no attribute '__not_a_valid_attr__'"
+        self.assertIn(msg, str(raises.exception))
 
 
 class TestStrAndReprBuiltin(MemoryLeakMixin, TestCase):
