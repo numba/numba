@@ -444,7 +444,7 @@ class TestFunctionInlining(MemoryLeakMixin, InliningBase):
             return bar(z + 2)
 
         # block count changes with Python version due to bytecode differences.
-        if utils.PYVERSION in ((3, 12), (3, 13)):
+        if utils.PYVERSION in ((3, 12), (3, 13), (3, 14)):
             bc = 39
         elif utils.PYVERSION in ((3, 10), (3, 11)):
             bc = 35
