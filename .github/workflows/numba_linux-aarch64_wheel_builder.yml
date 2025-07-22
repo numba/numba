@@ -1,9 +1,9 @@
-name: numba_linux-arm64_wheel_builder
+name: numba_linux-aarch64_wheel_builder
 
 on:
   pull_request:
     paths:
-      - .github/workflows/numba_linux-arm64_wheel_builder.yml
+      - .github/workflows/numba_linux-aarch64_wheel_builder.yml
       - .github/workflows/wheel_workflow_matrix.json
   workflow_dispatch:
     inputs:
@@ -51,8 +51,8 @@ jobs:
           echo "build-matrix-json=$BUILD_MATRIX_EXTENDED" >> $GITHUB_OUTPUT
           echo "test-matrix-json=$TEST_MATRIX_EXTENDED" >> $GITHUB_OUTPUT
 
-  linux-arm64-build:
-    name: linux-arm64-build-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
+  linux-aarch64-build:
+    name: linux-aarch64-build-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
     needs: load-matrix
     runs-on: ubuntu-24.04-arm
     defaults:
@@ -73,7 +73,7 @@ jobs:
         if: inputs.llvmlite_wheel_runid != ''
         uses: actions/download-artifact@v4
         with:
-          name: llvmlite-linux-arm64-py${{ matrix.python_canonical }}
+          name: llvmlite-linux-aarch64-py${{ matrix.python_canonical }}
           path: llvmlite_wheels
           run-id: ${{ inputs.llvmlite_wheel_runid }}
           repository: numba/llvmlite
@@ -125,7 +125,7 @@ jobs:
       - name: Upload numba wheel
         uses: actions/upload-artifact@v4
         with:
-          name: numba-linux-arm64-py${{ matrix.python_canonical }}
+          name: numba-linux-aarch64-py${{ matrix.python_canonical }}
           path: wheelhouse/*.whl
           compression-level: 0
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
@@ -141,9 +141,9 @@ jobs:
             retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
             if-no-files-found: error
 
-  linux-arm64-test:
-    name: linux-arm64-test (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
-    needs: [load-matrix, linux-arm64-build]
+  linux-aarch64-test:
+    name: linux-aarch64-test (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
+    needs: [load-matrix, linux-aarch64-build]
     runs-on: ubuntu-24.04-arm
     defaults:
       run:
@@ -162,14 +162,14 @@ jobs:
       - name: Download Numba wheel artifact
         uses: actions/download-artifact@v4
         with:
-          name: numba-linux-arm64-py${{ matrix.python_canonical }}
+          name: numba-linux-aarch64-py${{ matrix.python_canonical }}
           path: dist
 
       - name: Download llvmlite wheel
         if: inputs.llvmlite_wheel_runid != ''
         uses: actions/download-artifact@v4
         with:
-          name: llvmlite-linux-arm64-py${{ matrix.python_canonical }}
+          name: llvmlite-linux-aarch64-py${{ matrix.python_canonical }}
           path: llvmlite_wheels
           run-id: ${{ inputs.llvmlite_wheel_runid }}
           repository: numba/llvmlite
