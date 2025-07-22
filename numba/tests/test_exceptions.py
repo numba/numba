@@ -7,6 +7,7 @@ from numba.core import types, errors, utils
 from numba.tests.support import (TestCase, expected_failure_py311,
                                  expected_failure_py312,
                                  expected_failure_py313,
+                                 expected_failure_py314,
                                  )
 import unittest
 
@@ -442,6 +443,7 @@ class TestRaising(TestCase):
     @expected_failure_py311
     @expected_failure_py312
     @expected_failure_py313
+    @expected_failure_py314
     def test_dynamic_raise(self):
 
         @njit
