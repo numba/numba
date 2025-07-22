@@ -8,9 +8,16 @@ from numba.core.utils import PYVERSION
 
 # List of bytecodes creating a new block in the control flow graph
 # (in addition to explicit jump labels).
-NEW_BLOCKERS = frozenset([
-    'SETUP_LOOP', 'FOR_ITER', 'SETUP_WITH', 'BEFORE_WITH'
-])
+if PYVERSION in ((3, 14),):
+    NEW_BLOCKERS = frozenset([
+        'SETUP_LOOP', 'FOR_ITER', 'SETUP_WITH', 'BEFORE_WITH', 'LOAD_SPECIAL'
+    ])
+elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+    NEW_BLOCKERS = frozenset([
+        'SETUP_LOOP', 'FOR_ITER', 'SETUP_WITH', 'BEFORE_WITH'
+    ])
+else:
+    raise NotImplementedError(PYVERSION)
 
 
 class CFBlock(object):
