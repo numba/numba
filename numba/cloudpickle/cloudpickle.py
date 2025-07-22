@@ -1,4 +1,12 @@
-"""Pickler class to extend the standard pickle.Pickler functionality
+"""
+This is a modified version of the cloudpickle module.
+Patches:
+- https://github.com/numba/numba/pull/7388
+  Avoid resetting class state of dynamic classes.
+
+Original module docstring:
+
+Pickler class to extend the standard pickle.Pickler functionality
 
 The main objective is to make it natural to perform distributed computing on
 clusters (such as PySpark, Dask, Ray...) with interactively defined code
@@ -94,6 +102,7 @@ _PICKLE_BY_VALUE_MODULES = set()
 _DYNAMIC_CLASS_TRACKER_BY_CLASS = weakref.WeakKeyDictionary()
 _DYNAMIC_CLASS_TRACKER_BY_ID = weakref.WeakValueDictionary()
 _DYNAMIC_CLASS_TRACKER_LOCK = threading.Lock()
+_DYNAMIC_CLASS_TRACKER_REUSING = weakref.WeakSet()
 
 PYPY = platform.python_implementation() == "PyPy"
 
@@ -118,10 +127,15 @@ def _get_or_create_tracker_id(class_def):
 def _lookup_class_or_track(class_tracker_id, class_def):
     if class_tracker_id is not None:
         with _DYNAMIC_CLASS_TRACKER_LOCK:
+            orig_class_def = class_def
             class_def = _DYNAMIC_CLASS_TRACKER_BY_ID.setdefault(
                 class_tracker_id, class_def
             )
             _DYNAMIC_CLASS_TRACKER_BY_CLASS[class_def] = class_tracker_id
+            # Check if we are reusing a previous class_def
+            if orig_class_def is not class_def:
+                # Remember the class_def is being reused
+                _DYNAMIC_CLASS_TRACKER_REUSING.add(class_def)
     return class_def
 
 
@@ -1156,6 +1170,9 @@ def _function_setstate(obj, state):
 
 
 def _class_setstate(obj, state):
+    # Check if class is being reused and needs bypass setstate logic.
+    if obj in _DYNAMIC_CLASS_TRACKER_REUSING:
+        return obj
     state, slotstate = state
     registry = None
     for attrname, attr in state.items():
