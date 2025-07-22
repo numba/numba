@@ -5,12 +5,13 @@ import dis
 import logging
 from collections import namedtuple, defaultdict, deque
 from functools import total_ordering
+import re
 
 from numba.core.utils import (UniqueDict, PYVERSION, ALL_BINOPS_TO_OPERATORS,
                               _lazy_pformat)
 from numba.core.controlflow import NEW_BLOCKERS, CFGraph
 from numba.core.ir import Loc
-from numba.core.errors import UnsupportedBytecodeError
+from numba.core.errors import UnsupportedBytecodeError, CompilerError
 
 
 _logger = logging.getLogger(__name__)
@@ -37,6 +38,37 @@ elif PYVERSION in ((3, 10), (3, 11)):
     pass
 else:
     raise NotImplementedError(PYVERSION)
+
+
+def parse_temp_var(string):
+    """Parse temporary variables made with State.make_temp.
+
+    The style is always '$PREFIX666INSTRUCTION.INDEX'
+
+    Returns
+    -------
+    prefix: string or empty
+        any prefix inserted
+    offset: int
+        the instruction offset
+    instruction: string or empty
+        the string describing the instruction
+    temp_var_index
+        the index of the temporary variable created
+
+    See also
+    --------
+
+    State.make_temp
+
+    """
+    pattern = r'\$(.*?)(\d+)([a-zA-Z_]*)\.(\d+)'
+    match = re.search(pattern, string)
+    assert match
+    return (match.group(1),
+            int(match.group(2)),
+            match.group(3),
+            int(match.group(4)))
 
 
 @total_ordering
@@ -293,18 +325,25 @@ class Flow(object):
         else:
             return False
 
-    def _guard_with_as(self, state):
-        """Checks if the next instruction after a SETUP_WITH is something other
-        than a POP_TOP, if it is something else it'll be some sort of store
-        which is not supported (this corresponds to `with CTXMGR as VAR(S)`)."""
-        current_inst = state.get_inst()
-        if current_inst.opname in {"SETUP_WITH", "BEFORE_WITH"}:
-            next_op = self._bytecode[current_inst.next].opname
-            if next_op != "POP_TOP":
-                msg = ("The 'with (context manager) as "
-                       "(variable):' construct is not "
-                       "supported.")
-                raise UnsupportedBytecodeError(msg)
+    if PYVERSION in ((3, 14),):
+        def _guard_with_as(self, state):
+            # Handled as part of `LOAD_SPECIAL` as of 3.14.
+            pass
+    elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+        def _guard_with_as(self, state):
+            """Checks if the next instruction after a SETUP_WITH is something
+            other than a POP_TOP, if it is something else it'll be some sort of
+            store which is not supported (this corresponds to `with CTXMGR as
+            VAR(S)`)."""
+            current_inst = state.get_inst()
+            if current_inst.opname in {"SETUP_WITH", "BEFORE_WITH"}:
+                next_op = self._bytecode[current_inst.next].opname
+                if next_op != "POP_TOP":
+                    msg = ("The 'with (context manager) as (variable):' "
+                           "construct is not supported.")
+                    raise UnsupportedBytecodeError(msg)
+    else:
+        raise NotImplementedError(PYVERSION)
 
 
 def _is_null_temp_reg(reg):
@@ -546,7 +585,12 @@ class TraceRunner(object):
             state.push(res)
         else:
             raise NotImplementedError(PYVERSION)
-        state.append(inst, item=item, res=res)
+        if PYVERSION in ((3, 14), ):
+            # Need the index in 3.14
+            idx = inst.arg >> 1
+            state.append(inst, item=item, idx=idx, res=res)
+        elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+            state.append(inst, item=item, res=res)
 
     def op_LOAD_FAST(self, state, inst):
         if PYVERSION in ((3, 13), (3, 14)):
@@ -1108,36 +1152,42 @@ class TraceRunner(object):
                 end=inst.get_jump_target(),
             )
         )
+    if PYVERSION in ((3, 14), ):
+        # Replaced by LOAD_SPECIAL in 3.14.
+        pass
+    elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+        def op_BEFORE_WITH(self, state, inst):
+            # Almost the same as py3.10 SETUP_WITH just lacking the finally
+            # block.
+            cm = state.pop()    # the context-manager
 
-    def op_BEFORE_WITH(self, state, inst):
-        # Almost the same as py3.10 SETUP_WITH just lacking the finally block.
-        cm = state.pop()    # the context-manager
+            yielded = state.make_temp()
+            exitfn = state.make_temp(prefix='setup_with_exitfn')
 
-        yielded = state.make_temp()
-        exitfn = state.make_temp(prefix='setup_with_exitfn')
+            state.push(exitfn)
+            state.push(yielded)
 
-        state.push(exitfn)
-        state.push(yielded)
+            # Gather all exception entries for this WITH. There maybe multiple
+            # entries; esp. for nested WITHs.
+            bc = state._bytecode
+            ehhead = bc.find_exception_entry(inst.next)
+            ehrelated = [ehhead]
+            for eh in bc.exception_entries:
+                if eh.target == ehhead.target:
+                    ehrelated.append(eh)
+            end = max(eh.end for eh in ehrelated)
+            state.append(inst, contextmanager=cm, exitfn=exitfn, end=end)
 
-        # Gather all exception entries for this WITH. There maybe multiple
-        # entries; esp. for nested WITHs.
-        bc = state._bytecode
-        ehhead = bc.find_exception_entry(inst.next)
-        ehrelated = [ehhead]
-        for eh in bc.exception_entries:
-            if eh.target == ehhead.target:
-                ehrelated.append(eh)
-        end = max(eh.end for eh in ehrelated)
-        state.append(inst, contextmanager=cm, exitfn=exitfn, end=end)
-
-        state.push_block(
-            state.make_block(
-                kind='WITH',
-                end=end,
+            state.push_block(
+                state.make_block(
+                    kind='WITH',
+                    end=end,
+                )
             )
-        )
-        # Forces a new block
-        state.fork(pc=inst.next)
+            # Forces a new block
+            state.fork(pc=inst.next)
+    else:
+        raise NotImplementedError(PYVERSION)
 
     def op_SETUP_WITH(self, state, inst):
         cm = state.pop()    # the context-manager
@@ -1820,6 +1870,211 @@ class TraceRunner(object):
     def op_CALL_METHOD(self, state, inst):
         self.op_CALL_FUNCTION(state, inst)
 
+    if PYVERSION in ((3, 14), ):
+        # New in 3.14, replaces BEFORE_WITH.
+        def op_LOAD_SPECIAL(self, state, inst):
+
+            # Define the arguments
+            special_methods = {
+                0: '__enter__',
+                1: '__exit__',
+                2: '__aenter__',
+                3: '__aexit__',
+            }
+            if inst.arg not in [0, 1]:
+                raise NotImplementedError(
+                    "async special methods not supported")
+
+            def resolve_object_name(state, temp_var):
+                """ Recursively resolve the object name.
+
+                This will resolve the object_name into a single global and any
+                attributes that follow:
+
+                ['global', 'attribute', ...]
+
+                This list can be used to obtain the global from the
+                '__global__' dictionary and then use `getattr` to resolve the
+                attributes.
+
+                Returns
+                -------
+
+                object_name : list
+                """
+                # Parse the temp_var string.
+                prefix, offset, instruction, index = parse_temp_var(temp_var)
+                # Get the register map for the given offset.
+                register_map = state.instruction_at_pc(offset)
+                if instruction == 'load_global':
+                    return [state._bytecode.co_names[register_map['idx']]]
+                elif instruction == 'load_attr':
+                    return resolve_object_name(state, register_map['item']) + \
+                        [state._bytecode.co_names[register_map['idx']]]
+                elif instruction in ['call', 'call_kw']:
+                    return resolve_object_name(state, register_map['func'])
+                else:
+                    raise NotImplementedError('unreachable')
+
+            def resolve_object(state, name):
+                """ For a given result from resolve_object_name, get the actual
+                object. """
+                n = name[0]
+                if n in state._bytecode.func_id.func.__globals__:
+                    the_object = state._bytecode.func_id.func.__globals__[n]
+                elif n in state._bytecode.func_id.func.__builtins__:
+                    the_object = state._bytecode.func_id.func.__builtins__[n]
+                else:
+                    raise NotImplementedError('unreachable')
+                for attr in name[1:]:
+                    the_object = getattr(the_object, attr)
+                return the_object
+
+            # This implementation of LOAD_SPECIAL is somewhat unusual.
+            #
+            # Essentially this comes from the insight, that with Python 3.14
+            # the bytecode `BEFORE_WITH` is replaced by `LOAD_SPECIAL`. But
+            # this is not a simple replacement. In fact, the single
+            # `BEFORE_WITH` is replaced by the following sequence of bytecodes:
+            #
+            #   COPY(arg=1, lineno=X)
+            #   LOAD_SPECIAL(arg=1, lineno=X)
+            #   SWAP(arg=2, lineno=X)
+            #   SWAP(arg=3, lineno=X)
+            #   LOAD_SPECIAL(arg=0, lineno=X)
+            #   CALL(arg=0, lineno=X)
+            #   POP_TOP(arg=None, lineno=X)
+            #
+            #   Basically, after seeing the first `LOAD_SPECIAL` we can consume
+            #   all the bytecodes up until the `POP_TOP` and leave the stack
+            #   with a single copy of current TOS + the temp var to denote the
+            #   `__exit__` function. We can also reject syntax of the form:
+            #
+            #   with context as c:
+            #       pass
+            #
+            # Using the fact that the `CALL` to `__enter__` must be followed by
+            # as POP_TOP, otherwise it's using `with as`.
+
+            # Pop top of stack once for first LOAD_SPECIAL
+            tos = state.pop()
+            # Pop top of stack second time for second LOAD_SPECIAL
+            tos_two = state.pop()
+
+            # Now need to find the non-phi
+            def un_phi(state, value):
+                if not value.startswith('$phi'):
+                    return state, value
+                else:
+                    for s in self.finished:
+                        if value in s._outgoing_phis:
+                            return un_phi(s, s._outgoing_phis[value])
+
+            old_state, temp_call = un_phi(None, tos)
+            old_state_two, temp_call_two = un_phi(None, tos_two)
+            assert temp_call == temp_call_two
+
+            # We then do the requested  `type(STACK[-1])`
+            # Get the object name from the instructions list.
+            object_name = resolve_object_name(old_state, temp_call)
+
+            # Reject anything not in __globals__ or __builtins__.
+            if (object_name[0] not in
+                    state._bytecode.func_id.func.__globals__
+                    and object_name[0] not in
+                    state._bytecode.func_id.func.__builtins__):
+                msg = "Undefined variable used as context manager"
+                raise CompilerError(msg, 0)
+
+            # Get the actual object from the name.
+            target_object = resolve_object(old_state, object_name)
+
+            # Lookup both methods, to ensure the object has them
+            enter = special_methods[0]
+            exit = special_methods[1]
+
+            # Reject anything that doesn't have an __enter__ and __exit__.
+            if (not hasattr(target_object, enter) or
+                    not hasattr(target_object, exit)):
+                msg = "Unsupported context manager in use",
+                raise CompilerError(msg)
+
+            # Check both methods are callable
+            enter_is_method = callable(getattr(target_object, enter))
+            exit_is_method = callable(getattr(target_object, exit))
+
+            # Make a temporary variable for the __exit__ -- we intend to leave
+            # this on the stack later on.
+            if enter_is_method and exit_is_method:
+                method = state.make_temp(prefix='setup_with_exitfn')
+            else:
+                method = state.make_null()
+
+            # Cache current instruction (the LOAD_SPECIAL).
+            old_inst = inst
+
+            # Now we need to consume the instructions in the known sequence.
+            for i,a in (('SWAP', 2),
+                        ('SWAP', 3),
+                        ('LOAD_SPECIAL', 0),
+                        ('CALL', 0),
+                        ):
+                state.advance_pc()
+                inst = state.get_inst()
+                assert inst.opname == i
+                assert inst.arg == a
+
+            # POP_TOP
+            state.advance_pc()
+            inst = state.get_inst()
+            # Special case, the `CALL` must be followed by a `POP_TOP`.
+            # Otherwise this is an unsupported construct.
+            #
+            # See: `_guard_with_as` for how this is handled for 3.13 and below.
+            if inst.opname != 'POP_TOP':
+                msg = ("The 'with (context manager) as "
+                       "(variable):' construct is not "
+                       "supported.")
+                raise UnsupportedBytecodeError(msg)
+            assert inst.arg is None
+
+            # Finished consuming bytecode pattern.
+
+            # Find the end of the with-block using the exception tables using
+            # the instruction offset of the `POP_TOP` instruction.
+            bc = state._bytecode
+            ehhead = bc.find_exception_entry(inst.offset)
+            ehrelated = [ehhead]
+            for eh in bc.exception_entries:
+                if eh.target == ehhead.target:
+                    ehrelated.append(eh)
+            end = max(eh.end for eh in ehrelated)
+
+            # Push the `__exit__` method (or null) to the stack,
+            # followed by the original tos (which is the instatiated context
+            # manager). This is such that the `CALL` after the with-block can
+            # be simulated.
+            state.push(method)
+            state.push(tos)
+            # Record the instruction.
+            state.append(old_inst, contextmanager=tos, exit_method=method,
+                         block_end=end)
+
+            # Insert WITH-block.
+            state.push_block(
+                state.make_block(
+                    kind='WITH',
+                    end=end,
+                )
+            )
+            # And fork to force a new block.
+            state.fork(pc=inst.next)
+
+    elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+        pass
+    else:
+        raise NotImplementedError(PYVERSION)
+
 
 @total_ordering
 class _State(object):
@@ -1890,6 +2145,16 @@ class _State(object):
         ``(pc : int, register_map : Dict)``
         """
         return self._insts
+
+    def instruction_at_pc(self, pc):
+        """ Find and return the register map for instruction at pc."""
+        filter = [i for i in self._insts if i[0] == pc]
+        if not filter:
+            raise ValueError(f"No instruction found for pc: '{pc}'")
+        elif len(filter) > 1:
+            raise ValueError(f"Too many instructions found for pc: '{pc}'")
+        else:
+            return filter[0][1]
 
     @property
     def outgoing_edges(self):
