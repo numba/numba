@@ -2344,16 +2344,25 @@ class Interpreter(object):
         sa = ir.DelAttr(target=self.get(target), attr=attr, loc=self.loc)
         self.current_block.append(sa)
 
-    def op_LOAD_ATTR(self, inst, item, res):
-        item = self.get(item)
-        if PYVERSION in ((3, 12), (3, 13), (3, 14)):
-            attr = self.code_names[inst.arg >> 1]
-        elif PYVERSION in ((3, 10), (3, 11)):
-            attr = self.code_names[inst.arg]
-        else:
-            raise NotImplementedError(PYVERSION)
-        getattr = ir.Expr.getattr(item, attr, loc=self.loc)
-        self.store(getattr, res)
+    if PYVERSION in ((3, 14), ):
+        def op_LOAD_ATTR(self, inst, item, idx, res):
+            item = self.get(item)
+            attr = self.code_names[idx]
+            getattr = ir.Expr.getattr(item, attr, loc=self.loc)
+            self.store(getattr, res)
+    elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+        def op_LOAD_ATTR(self, inst, item, res):
+            item = self.get(item)
+            if PYVERSION in ((3, 12), (3, 13)):
+                attr = self.code_names[inst.arg >> 1]
+            elif PYVERSION in ((3, 10), (3, 11)):
+                attr = self.code_names[inst.arg]
+            else:
+                raise NotImplementedError(PYVERSION)
+            getattr = ir.Expr.getattr(item, attr, loc=self.loc)
+            self.store(getattr, res)
+    else:
+        raise NotImplementedError(PYVERSION)
 
     def op_LOAD_CONST(self, inst, res):
         value = self.code_consts[inst.arg]
@@ -2477,29 +2486,35 @@ class Interpreter(object):
         exit_fn_obj = ir.Const(None, loc=self.loc)
         self.store(value=exit_fn_obj, name=exitfn)
 
-    def op_BEFORE_WITH(self, inst, contextmanager, exitfn, end):
-        assert self.blocks[inst.offset] is self.current_block
-        if PYVERSION in ((3, 12), (3, 13)):
-            # Python 3.12 hack for handling nested with blocks
-            if end > self.last_active_offset:
-                # Use exception entries to figure out end of syntax block
-                end = max([ex.end for ex in self.active_exception_entries
-                           if ex.target == end])
-        elif PYVERSION in ((3, 10), (3, 11)):
-            pass
-        else:
-            raise NotImplementedError(PYVERSION)
-        # Handle with
-        wth = ir.With(inst.offset, exit=end)
-        self.syntax_blocks.append(wth)
-        ctxmgr = self.get(contextmanager)
-        self.current_block.append(ir.EnterWith(contextmanager=ctxmgr,
-                                               begin=inst.offset,
-                                               end=end, loc=self.loc,))
+    if PYVERSION in ((3, 14), ):
+        # Replaced by LOAD_SPECIAL in 3.14.
+        pass
+    elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+        def op_BEFORE_WITH(self, inst, contextmanager, exitfn, end):
+            assert self.blocks[inst.offset] is self.current_block
+            if PYVERSION in ((3, 12), (3, 13)):
+                # Python 3.12 hack for handling nested with blocks
+                if end > self.last_active_offset:
+                    # Use exception entries to figure out end of syntax block
+                    end = max([ex.end for ex in self.active_exception_entries
+                               if ex.target == end])
+            elif PYVERSION in ((3, 10), (3, 11)):
+                pass
+            else:
+                raise NotImplementedError(PYVERSION)
+            # Handle with
+            wth = ir.With(inst.offset, exit=end)
+            self.syntax_blocks.append(wth)
+            ctxmgr = self.get(contextmanager)
+            self.current_block.append(ir.EnterWith(contextmanager=ctxmgr,
+                                                   begin=inst.offset,
+                                                   end=end, loc=self.loc,))
 
-        # Store exit function
-        exit_fn_obj = ir.Const(None, loc=self.loc)
-        self.store(value=exit_fn_obj, name=exitfn)
+            # Store exit function
+            exit_fn_obj = ir.Const(None, loc=self.loc)
+            self.store(value=exit_fn_obj, name=exitfn)
+    else:
+        raise NotImplementedError(PYVERSION)
 
     def op_SETUP_FINALLY(self, inst):
         # Removed since python3.11
@@ -3452,6 +3467,35 @@ class Interpreter(object):
             else:
                 raise NotImplementedError(operand)
     elif PYVERSION in ((3, 10), (3, 11)):
+        pass
+    else:
+        raise NotImplementedError(PYVERSION)
+
+    if PYVERSION in ((3, 14), ):
+        # New in 3.14, replaces BEFORE_WITH.
+        def op_LOAD_SPECIAL(self, inst, contextmanager, exit_method, block_end):
+            assert self.blocks[inst.offset] is self.current_block
+
+            # Python 3.12 hack for handling nested with blocks
+            if block_end > self.last_active_offset:
+                # Use exception entries to figure out end of syntax block
+                block_end = max([ex.end for ex in self.active_exception_entries
+                                 if ex.target == block_end])
+
+            # Handle with
+            wth = ir.With(inst.offset, exit=block_end)
+            self.syntax_blocks.append(wth)
+            ctxmgr = self.get(contextmanager)
+            self.current_block.append(
+                ir.EnterWith(contextmanager=ctxmgr,
+                             begin=inst.offset,
+                             end=block_end, loc=self.loc,))
+
+            # Store exit function
+            exit_fn_obj = ir.Const(None, loc=self.loc)
+            self.store(value=exit_fn_obj, name=exit_method)
+
+    elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
         pass
     else:
         raise NotImplementedError(PYVERSION)
