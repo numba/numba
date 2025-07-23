@@ -20,6 +20,7 @@ from numba.core.datamodel import register_default as register_model  # noqa: F40
 from numba.core.pythonapi import box, unbox, reflect, NativeValue  # noqa: F401
 from numba._helperlib import _import_cython_function  # noqa: F401
 from numba.core.serialize import ReduceMixin
+from numba.core.utils import PYVERSION
 
 
 def type_callable(func):
@@ -351,6 +352,19 @@ class _Intrinsic(ReduceMixin):
             u = str(uuid.uuid1())
             self._set_uuid(u)
         return u
+
+    if PYVERSION in ((3, 14), ):
+        # In 3.14 __annotations__ is a function, not a dictionary. So it is not
+        # longer updated using functools, but must be added explicitly.
+        #
+        # See also: https://peps.python.org/pep-0649/
+        @property
+        def __annotations__(self):
+            return self._defn.__annotations__
+    elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+        pass
+    else:
+        raise NotImplementedError(PYVERSION)
 
     def _set_uuid(self, u):
         assert self.__uuid is None

@@ -3,6 +3,7 @@ import sys
 import weakref
 
 from numba.core.serialize import ReduceMixin
+from numba.core.utils import PYVERSION
 
 
 def type_callable(func):
@@ -54,6 +55,19 @@ class _Intrinsic(ReduceMixin, Generic[P, R]):
     @property
     def _uuid(self):
         ...
+
+    if PYVERSION in ((3, 14), ):
+        # In 3.14 __annotations__ is a function, not a dictionary. So it is not
+        # longer updated using functools, but must be added explicitly.
+        #
+        # See also: https://peps.python.org/pep-0649/
+        @property
+        def __annotations__(self):
+            ...
+    elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+        pass
+    else:
+        raise NotImplementedError(PYVERSION)
 
     def _set_uuid(self, u):
         ...
