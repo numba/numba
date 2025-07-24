@@ -27,7 +27,7 @@
  *
  */
 
-#if (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 12) || (PY_MINOR_VERSION == 13))
+#if (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 12) || (PY_MINOR_VERSION == 13) || (PY_MINOR_VERSION == 14))
 
 #ifndef Py_BUILD_CORE
     #define Py_BUILD_CORE 1
@@ -791,7 +791,7 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
     }
 }
 
-#elif (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 12) || (PY_MINOR_VERSION == 13))
+#elif (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 12) || (PY_MINOR_VERSION == 13) || (PY_MINOR_VERSION == 14))
 
 // Python 3.12 has a completely new approach to tracing and profiling due to
 // the new `sys.monitoring` system.
@@ -1625,7 +1625,7 @@ static PyTypeObject DispatcherType = {
 };
 
 
-#if (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 12) || (PY_MINOR_VERSION == 13))
+#if (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 12) || (PY_MINOR_VERSION == 13) || (PY_MINOR_VERSION == 14))
 static
 bool is_sysmon_enabled(Dispatcher * self) {
     return self->enable_sysmon;
