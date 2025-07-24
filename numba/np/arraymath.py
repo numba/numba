@@ -1885,7 +1885,10 @@ def np_partition(a, kth):
         raise NumbaTypeError(msg)
 
     kthdt = getattr(kth, 'dtype', kth)
-    kth_types = types.Integer if numpy_version >= (2, 3) else (types.Boolean, types.Integer)
+    if numpy_version >= (2, 3):
+      kth_types = types.Integer 
+    else:
+      kth_types = (types.Boolean, types.Integer)
     if not isinstance(kthdt, kth_types):
         # bool gets cast to int subsequently
         raise NumbaTypeError('Partition index must be integer')
@@ -1912,7 +1915,10 @@ def np_argpartition(a, kth):
         raise NumbaTypeError(msg)
 
     kthdt = getattr(kth, 'dtype', kth)
-    kth_types = types.Integer if numpy_version >= (2, 3) else (types.Boolean, types.Integer)
+    if numpy_version >= (2, 3):
+      kth_types = types.Integer 
+    else:
+      kth_types = (types.Boolean, types.Integer)
     if not isinstance(kthdt, kth_types):
         # bool gets cast to int subsequently
         raise NumbaTypeError('Partition index must be integer')
