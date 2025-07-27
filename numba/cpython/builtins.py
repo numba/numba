@@ -1,6 +1,7 @@
 from collections import namedtuple
 import math
 from functools import reduce
+import re
 
 import numpy as np
 import operator
@@ -1022,4 +1023,39 @@ def ol_str_generic(object=''):
             return getattr(object, attr)()
         else:
             return repr(object)
+    return impl
+
+_var_name_regex = re.compile("^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+@intrinsic
+def resolve_setattr(typingctx, obj, attr, value):
+    if not isinstance(attr, types.StringLiteral):
+        raise RequireLiteralValue("argument 'attr' must be a literal string")
+
+    sig = types.none(obj, attr, value)
+    name = attr.literal_value
+    setattr_sig = typingctx.resolve_setattr(obj, name, value)
+    if setattr_sig is None:
+        return None
+
+    def codegen(context, builder, sig, args):
+        getattr_sig = signature(sig.return_type, obj, value)
+        attr_impl = context.get_setattr(name, getattr_sig)
+        casted_val = context.cast(builder, args[2], value, setattr_sig.args[-1])
+        return attr_impl(builder, [args[0], casted_val])
+
+    return sig, codegen
+
+
+@overload(setattr)
+def jit_setattr(obj, attr, val):
+    if not isinstance(attr, types.StringLiteral):
+        raise RequireLiteralValue("argument 'attr' must be a literal string")
+    msg = f"{obj.name!r} has no attribute {attr.literal_value!r}"
+    def impl(obj, attr, val):
+        if hasattr(obj, attr) == True:
+            return resolve_setattr(obj, attr, val)
+        else:
+            raise AttributeError(msg)
+
     return impl
