@@ -766,7 +766,7 @@ class TestOperators(TestCase):
             cres(4j, 2j)
 
         # error message depends on Python version.
-        if utils.PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+        if utils.PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13), (3, 14)):
             msg = "unsupported operand type(s) for %"
         else:
             raise NotImplementedError(utils.PYVERSION)
