@@ -1143,80 +1143,37 @@ class TestLiftObjCaching(MemoryLeak, TestCase):
 
 class TestBogusContext(BaseTestWithLifting):
 
-    if PYVERSION in ((3, 14), ):
-        def test_undefined_global(self):
-            with self.assertRaises(errors.CompilerError) as raises:
-                f = njit(lift_undefiend)
-                f()
-            self.assertIn(
-                "Undefined variable used as context manager",
-                str(raises.exception),
-                )
+    def test_undefined_global(self):
+        with self.assertRaises(errors.CompilerError) as raises:
+            f = njit(lift_undefiend)
+            f()
+        self.assertIn(
+            "Undefined variable used as context manager",
+            str(raises.exception),
+            )
 
-        def test_invalid(self):
-            with self.assertRaises(errors.CompilerError) as raises:
-                f = njit(lift_invalid)
-                f()
-            self.assertIn(
-                "Unsupported context manager in use",
-                str(raises.exception),
-                )
+    def test_invalid(self):
+        with self.assertRaises(errors.CompilerError) as raises:
+            f = njit(lift_invalid)
+            f()
+        self.assertIn(
+            "Unsupported context manager in use",
+            str(raises.exception),
+            )
 
-        def test_with_as_fails_gracefully(self):
-            @njit
-            def foo():
-                with bypass_context as bp:
-                    pass
+    def test_with_as_fails_gracefully(self):
+        @njit
+        def foo():
+            with bypass_context as bp:
+                pass
 
-            with self.assertRaises(errors.UnsupportedBytecodeError) as raises:
-                foo()
+        with self.assertRaises(errors.UnsupportedBytecodeError) as raises:
+            foo()
 
-            excstr = str(raises.exception)
-            msg = ("The 'with (context manager) as (variable):' construct is not "
-                "supported.")
-            self.assertIn(msg, excstr)
-
-    elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
-        def test_undefined_global(self):
-            the_ir = get_func_ir(lift_undefiend)
-
-            with self.assertRaises(errors.CompilerError) as raises:
-                with_lifting(
-                    the_ir, self.typingctx, self.targetctx, self.flags, locals={},
-                )
-            self.assertIn(
-                "Undefined variable used as context manager",
-                str(raises.exception),
-                )
-
-        def test_invalid(self):
-            the_ir = get_func_ir(lift_invalid)
-
-            with self.assertRaises(errors.CompilerError) as raises:
-                with_lifting(
-                    the_ir, self.typingctx, self.targetctx, self.flags, locals={},
-                )
-            self.assertIn(
-                "Unsupported context manager in use",
-                str(raises.exception),
-                )
-
-        def test_with_as_fails_gracefully(self):
-            @njit
-            def foo():
-                with open('') as f:
-                    pass
-
-            with self.assertRaises(errors.UnsupportedBytecodeError) as raises:
-                foo()
-
-            excstr = str(raises.exception)
-            msg = ("The 'with (context manager) as (variable):' construct is not "
-                "supported.")
-            self.assertIn(msg, excstr)
-
-    else:
-        raise NotImplementedError(PYVERSION)
+        excstr = str(raises.exception)
+        msg = ("The 'with (context manager) as (variable):' construct is not "
+            "supported.")
+        self.assertIn(msg, excstr)
 
 
 class TestMisc(TestCase):

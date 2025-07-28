@@ -2344,25 +2344,16 @@ class Interpreter(object):
         sa = ir.DelAttr(target=self.get(target), attr=attr, loc=self.loc)
         self.current_block.append(sa)
 
-    if PYVERSION in ((3, 14), ):
-        def op_LOAD_ATTR(self, inst, item, idx, res):
-            item = self.get(item)
-            attr = self.code_names[idx]
-            getattr = ir.Expr.getattr(item, attr, loc=self.loc)
-            self.store(getattr, res)
-    elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
-        def op_LOAD_ATTR(self, inst, item, res):
-            item = self.get(item)
-            if PYVERSION in ((3, 12), (3, 13)):
-                attr = self.code_names[inst.arg >> 1]
-            elif PYVERSION in ((3, 10), (3, 11)):
-                attr = self.code_names[inst.arg]
-            else:
-                raise NotImplementedError(PYVERSION)
-            getattr = ir.Expr.getattr(item, attr, loc=self.loc)
-            self.store(getattr, res)
-    else:
-        raise NotImplementedError(PYVERSION)
+    def op_LOAD_ATTR(self, inst, item, res):
+        item = self.get(item)
+        if PYVERSION in ((3, 12), (3, 13), (3, 14)):
+            attr = self.code_names[inst.arg >> 1]
+        elif PYVERSION in ((3, 10), (3, 11)):
+            attr = self.code_names[inst.arg]
+        else:
+            raise NotImplementedError(PYVERSION)
+        getattr = ir.Expr.getattr(item, attr, loc=self.loc)
+        self.store(getattr, res)
 
     def op_LOAD_CONST(self, inst, res):
         value = self.code_consts[inst.arg]
