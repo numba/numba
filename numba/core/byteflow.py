@@ -40,37 +40,6 @@ else:
     raise NotImplementedError(PYVERSION)
 
 
-def parse_temp_var(string):
-    """Parse temporary variables made with State.make_temp.
-
-    The style is always '$PREFIX666INSTRUCTION.INDEX'
-
-    Returns
-    -------
-    prefix: string or empty
-        any prefix inserted
-    offset: int
-        the instruction offset
-    instruction: string or empty
-        the string describing the instruction
-    temp_var_index
-        the index of the temporary variable created
-
-    See also
-    --------
-
-    State.make_temp
-
-    """
-    pattern = r'\$(.*?)(\d+)([a-zA-Z_]*)\.(\d+)'
-    match = re.search(pattern, string)
-    assert match
-    return (match.group(1),
-            int(match.group(2)),
-            match.group(3),
-            int(match.group(4)))
-
-
 @total_ordering
 class BlockKind(object):
     """Kinds of block to make related code safer than just `str`.
@@ -585,12 +554,7 @@ class TraceRunner(object):
             state.push(res)
         else:
             raise NotImplementedError(PYVERSION)
-        if PYVERSION in ((3, 14), ):
-            # Need the index in 3.14
-            idx = inst.arg >> 1
-            state.append(inst, item=item, idx=idx, res=res)
-        elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
-            state.append(inst, item=item, res=res)
+        state.append(inst, item=item, res=res)
 
     def op_LOAD_FAST(self, state, inst):
         if PYVERSION in ((3, 13), (3, 14)):
@@ -1885,52 +1849,8 @@ class TraceRunner(object):
                 raise NotImplementedError(
                     "async special methods not supported")
 
-            def resolve_object_name(state, temp_var):
-                """ Recursively resolve the object name.
-
-                This will resolve the object_name into a single global and any
-                attributes that follow:
-
-                ['global', 'attribute', ...]
-
-                This list can be used to obtain the global from the
-                '__global__' dictionary and then use `getattr` to resolve the
-                attributes.
-
-                Returns
-                -------
-
-                object_name : list
-                """
-                # Parse the temp_var string.
-                prefix, offset, instruction, index = parse_temp_var(temp_var)
-                # Get the register map for the given offset.
-                register_map = state.instruction_at_pc(offset)
-                if instruction == 'load_global':
-                    return [state._bytecode.co_names[register_map['idx']]]
-                elif instruction == 'load_attr':
-                    return resolve_object_name(state, register_map['item']) + \
-                        [state._bytecode.co_names[register_map['idx']]]
-                elif instruction in ['call', 'call_kw']:
-                    return resolve_object_name(state, register_map['func'])
-                else:
-                    raise NotImplementedError('unreachable')
-
-            def resolve_object(state, name):
-                """ For a given result from resolve_object_name, get the actual
-                object. """
-                n = name[0]
-                if n in state._bytecode.func_id.func.__globals__:
-                    the_object = state._bytecode.func_id.func.__globals__[n]
-                elif n in state._bytecode.func_id.func.__builtins__:
-                    the_object = state._bytecode.func_id.func.__builtins__[n]
-                else:
-                    raise NotImplementedError('unreachable')
-                for attr in name[1:]:
-                    the_object = getattr(the_object, attr)
-                return the_object
-
-            # This implementation of LOAD_SPECIAL is somewhat unusual.
+            # This implementation of LOAD_SPECIAL is somewhat unusual for a
+            # Numba bytecode handler.
             #
             # Essentially this comes from the insight, that with Python 3.14
             # the bytecode `BEFORE_WITH` is replaced by `LOAD_SPECIAL`. But
@@ -1938,11 +1858,11 @@ class TraceRunner(object):
             # `BEFORE_WITH` is replaced by the following sequence of bytecodes:
             #
             #   COPY(arg=1, lineno=X)
-            #   LOAD_SPECIAL(arg=1, lineno=X)
+            #   LOAD_SPECIAL(arg=1, lineno=X)  -- loading __exit__ --
             #   SWAP(arg=2, lineno=X)
             #   SWAP(arg=3, lineno=X)
-            #   LOAD_SPECIAL(arg=0, lineno=X)
-            #   CALL(arg=0, lineno=X)
+            #   LOAD_SPECIAL(arg=0, lineno=X)  -- loading __enter__ --
+            #   CALL(arg=0, lineno=X)          -- calling __enter__ --
             #   POP_TOP(arg=None, lineno=X)
             #
             #   Basically, after seeing the first `LOAD_SPECIAL` we can consume
@@ -1961,55 +1881,11 @@ class TraceRunner(object):
             # Pop top of stack second time for second LOAD_SPECIAL
             tos_two = state.pop()
 
-            # Now need to find the non-phi
-            def un_phi(state, value):
-                if not value.startswith('$phi'):
-                    return state, value
-                else:
-                    for s in self.finished:
-                        if value in s._outgoing_phis:
-                            return un_phi(s, s._outgoing_phis[value])
-
-            old_state, temp_call = un_phi(None, tos)
-            old_state_two, temp_call_two = un_phi(None, tos_two)
-            assert temp_call == temp_call_two
-
-            # We then do the requested  `type(STACK[-1])`
-            # Get the object name from the instructions list.
-            object_name = resolve_object_name(old_state, temp_call)
-
-            # Reject anything not in __globals__ or __builtins__.
-            if (object_name[0] not in
-                    state._bytecode.func_id.func.__globals__
-                    and object_name[0] not in
-                    state._bytecode.func_id.func.__builtins__):
-                msg = "Undefined variable used as context manager"
-                raise CompilerError(msg, 0)
-
-            # Get the actual object from the name.
-            target_object = resolve_object(old_state, object_name)
-
-            # Lookup both methods, to ensure the object has them
-            enter = special_methods[0]
-            exit = special_methods[1]
-
-            # Reject anything that doesn't have an __enter__ and __exit__.
-            if (not hasattr(target_object, enter) or
-                    not hasattr(target_object, exit)):
-                msg = "Unsupported context manager in use",
-                raise CompilerError(msg)
-
-            # Check both methods are callable
-            enter_is_method = callable(getattr(target_object, enter))
-            exit_is_method = callable(getattr(target_object, exit))
-
-            # Make a temporary variable for the __exit__ -- we intend to leave
-            # this on the stack later on.
-            if enter_is_method and exit_is_method:
-                method = state.make_temp(prefix='setup_with_exitfn')
-            else:
-                method = state.make_null()
-
+            # Fake an exit method, will not be called and removed from Numba IR
+            # before final processing is complete. Only need this such that the
+            # `CALL` op when closing the with-block can be simulated as a stack
+            # effect.
+            method = state.make_temp(prefix='setup_with_exitfn')
             # Cache current instruction (the LOAD_SPECIAL).
             old_inst = inst
 
@@ -2145,16 +2021,6 @@ class _State(object):
         ``(pc : int, register_map : Dict)``
         """
         return self._insts
-
-    def instruction_at_pc(self, pc):
-        """ Find and return the register map for instruction at pc."""
-        filter = [i for i in self._insts if i[0] == pc]
-        if not filter:
-            raise ValueError(f"No instruction found for pc: '{pc}'")
-        elif len(filter) > 1:
-            raise ValueError(f"Too many instructions found for pc: '{pc}'")
-        else:
-            return filter[0][1]
 
     @property
     def outgoing_edges(self):
