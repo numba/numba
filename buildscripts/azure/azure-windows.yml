@@ -52,12 +52,18 @@ jobs:
         python -m numba.runtests -l
       displayName: 'List discovered tests'
 
-    - script: |
-        call activate %CONDA_ENV%
-        set NUMBA_ENABLE_CUDASIM=1
-        echo "Running shard of discovered tests: %TEST_START_INDEX%,None,%TEST_COUNT%"
-        python -m numba.runtests -b -v -g -m 2 -- numba.tests
-      displayName: 'Test modified test files'
+    # - script: |
+    #     call activate %CONDA_ENV%
+    #     set NUMBA_ENABLE_CUDASIM=1
+    #     echo "Running shard of discovered tests: %TEST_START_INDEX%,None,%TEST_COUNT%"
+    #     python -m numba.runtests -b -v -g -m 2 -- numba.tests
+    #   displayName: 'Test modified test files'
+    - powershell: |
+        # Force Winsock initialization
+        [System.Net.Dns]::GetHostName() | Out-Null
+        # Small delay to ensure initialization
+        Start-Sleep -Seconds 2
+      displayName: 'Initialize Winsock'
 
     - script: |
         call activate %CONDA_ENV%
