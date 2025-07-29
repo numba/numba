@@ -7,8 +7,10 @@ from abc import ABCMeta, abstractmethod
 import contextlib
 import errno
 import hashlib
+import importlib
 import inspect
 import itertools
+from math import floor
 import os
 import pickle
 import sys
@@ -187,7 +189,7 @@ class _SourceFileBackedLocatorMixin(object):
         return self
 
 
-class _UserProvidedCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
+class UserProvidedCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
     """
     A locator that always point to the user provided directory in
     `numba.config.CACHE_DIR`
@@ -205,11 +207,11 @@ class _UserProvidedCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
     def from_function(cls, py_func, py_file):
         if not config.CACHE_DIR:
             return
-        parent = super(_UserProvidedCacheLocator, cls)
+        parent = super(UserProvidedCacheLocator, cls)
         return parent.from_function(py_func, py_file)
 
 
-class _InTreeCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
+class InTreeCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
     """
     A locator for functions backed by a regular Python module with a
     writable __pycache__ directory.
@@ -224,7 +226,19 @@ class _InTreeCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
         return self._cache_path
 
 
-class _UserWideCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
+class InTreeCacheLocatorFsAgnostic(InTreeCacheLocator):
+    """
+    A locator for functions backed by a regular Python module with a
+    writable __pycache__ directory. This version is agnostic to filesystem differences,
+    e.g. timestamp precision with milliseconds.
+    """
+
+    def get_source_stamp(self):
+        st = super().get_source_stamp()
+        return floor(st[0]), st[1]
+
+
+class UserWideCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
     """
     A locator for functions backed by a regular Python module or a
     frozen executable, cached into a user-wide cache directory.
@@ -256,7 +270,7 @@ class _UserWideCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
         return self
 
 
-class _IPythonCacheLocator(_CacheLocator):
+class IPythonCacheLocator(_CacheLocator):
     """
     A locator for functions entered at the IPython prompt (notebook or other).
     """
@@ -311,7 +325,7 @@ class _IPythonCacheLocator(_CacheLocator):
         return self
 
 
-class _ZipCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
+class ZipCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
     """
     A locator for functions backed by Python modules within a zip archive.
     """
@@ -360,11 +374,11 @@ class CacheImpl(metaclass=ABCMeta):
     """
 
     _locator_classes = [
-        _UserProvidedCacheLocator,
-        _InTreeCacheLocator,
-        _UserWideCacheLocator,
-        _IPythonCacheLocator,
-        _ZipCacheLocator,
+        UserProvidedCacheLocator,
+        InTreeCacheLocator,
+        UserWideCacheLocator,
+        IPythonCacheLocator,
+        ZipCacheLocator,
     ]
 
     def __init__(self, py_func):
@@ -374,9 +388,34 @@ class CacheImpl(metaclass=ABCMeta):
             qualname = py_func.__qualname__
         except AttributeError:
             qualname = py_func.__name__
+
+        # Is there an override for locators list?
+        if config.CACHE_LOCATOR_CLASSES:
+            locator_classes = []
+            for locator_class_path in config.CACHE_LOCATOR_CLASSES.split(","):
+                locator_class_path = locator_class_path.strip()
+                if "." in locator_class_path:
+                    # assume full module path: package.module.Klass
+                    module_path, class_name = locator_class_path.rsplit(".", 1)
+                    try:
+                        module = importlib.import_module(module_path)
+                        cls = getattr(module, class_name)
+                    except (ImportError, AttributeError) as e:
+                        raise RuntimeError(f"Failed to import '{locator_class_path}' specified via "
+                                           "NUMBA_CACHE_LOCATOR_CLASSES env variable") from e
+                else:
+                    # fallback to local globals
+                    cls = globals().get(locator_class_path)
+                    if cls is None:
+                        raise RuntimeError(f"Unknown cache locator class: '{locator_class_path}' specified via "
+                                           "NUMBA_CACHE_LOCATOR_CLASSES env variable")
+                locator_classes.append(cls)
+        else:
+            locator_classes = self._locator_classes
+
         # Find a locator
         source_path = inspect.getfile(py_func)
-        for cls in self._locator_classes:
+        for cls in locator_classes:
             locator = cls.from_function(py_func, source_path)
             if locator is not None:
                 break
