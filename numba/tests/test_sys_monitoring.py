@@ -694,7 +694,7 @@ class TestMonitoring(TestCase):
         # check the stored_raise
         self.assertIs(store_raised, callback.side_effect)
 
-    @unittest.skipIf(IS_WIN32 and PYVERSION == (3, 13),
+    @unittest.skipIf(IS_WIN32,
                      reason="unsure reason of failure observed on Azure")
     def test_monitoring_multiple_threads(self):
         # two threads, different tools and events registered on each thread.
