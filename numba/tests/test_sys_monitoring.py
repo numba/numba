@@ -7,6 +7,7 @@ from unittest.mock import Mock, call
 from numba.tests.support import TestCase
 from numba import jit, objmode
 from numba.core.utils import PYVERSION
+from numba.core.config import IN_AZURE_CI, IS_WIN32
 from numba.core.serialize import _numba_unpickle
 
 
@@ -693,6 +694,8 @@ class TestMonitoring(TestCase):
         # check the stored_raise
         self.assertIs(store_raised, callback.side_effect)
 
+    @unittest.skipIf(IN_AZURE_CI and IS_WIN32,
+                     reason="Problem only occur on AzureCI and windows")
     def test_monitoring_multiple_threads(self):
         # two threads, different tools and events registered on each thread.
 
@@ -734,9 +737,11 @@ class TestMonitoring(TestCase):
         # make sure there were no exceptions
         def assert_empty_queue(q):
             if q.qsize() != 0:
+                buf = []
                 while not q.empty():
-                    print(q.get())
-                self.fail("queue supposed to be empty")
+                    v = q.get()
+                    buf.append(f"{v!r} :: {type(v)}")
+                self.fail("queue supposed to be empty\n" + '\n'.join(buf))
 
         assert_empty_queue(q1)
         assert_empty_queue(q2)

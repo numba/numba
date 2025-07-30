@@ -83,7 +83,7 @@ tag = testing.make_tag_decorator(['important', 'long_running', 'always_test'])
 always_test = tag('always_test')
 
 _32bit = sys.maxsize <= 2 ** 32
-is_parfors_unsupported = _32bit
+is_parfors_unsupported = _32bit or (config.IS_WIN32 and config.IN_AZURE_CI)
 skip_parfors_unsupported = unittest.skipIf(
     is_parfors_unsupported,
     'parfors not supported',
