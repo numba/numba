@@ -7,7 +7,7 @@ from unittest.mock import Mock, call
 from numba.tests.support import TestCase
 from numba import jit, objmode
 from numba.core.utils import PYVERSION
-from numba.core.config import IN_AZURE_CI
+from numba.core.config import IN_AZURE_CI, IS_WIN32
 from numba.core.serialize import _numba_unpickle
 
 
@@ -694,7 +694,8 @@ class TestMonitoring(TestCase):
         # check the stored_raise
         self.assertIs(store_raised, callback.side_effect)
 
-    @unittest.skipIf(IN_AZURE_CI, reason="Problem only occur on AzureCI")
+    @unittest.skipIf(IN_AZURE_CI and IS_WIN32,
+                     reason="Problem only occur on AzureCI and windows")
     def test_monitoring_multiple_threads(self):
         # two threads, different tools and events registered on each thread.
 
