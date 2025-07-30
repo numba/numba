@@ -734,9 +734,11 @@ class TestMonitoring(TestCase):
         # make sure there were no exceptions
         def assert_empty_queue(q):
             if q.qsize() != 0:
+                buf = []
                 while not q.empty():
-                    print(q.get())
-                self.fail("queue supposed to be empty")
+                    v = q.get()
+                    buf.append(f"{v!r} :: {type(v)}")
+                self.fail("queue supposed to be empty\n" + '\n'.join(buf))
 
         assert_empty_queue(q1)
         assert_empty_queue(q2)
