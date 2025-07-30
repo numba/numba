@@ -23,6 +23,8 @@ MACHINE_BITS = tuple.__itemsize__ * 8
 IS_32BITS = MACHINE_BITS == 32
 # Python version in (major, minor) tuple
 PYVERSION = sys.version_info[:2]
+# Detect AzureCI: https://learn.microsoft.com/en-us/azure/devops/pipelines/build/variables?view=azure-devops&tabs=yaml#build-variables-devops-services # noqa: E501
+IN_AZURE_CI = os.getenv('TF_BUILD') == 'True'
 
 # this is the name of the user supplied configuration file
 _config_fname = '.numba_config.yaml'
