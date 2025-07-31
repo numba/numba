@@ -1,21 +1,21 @@
 name: numba_linux-64_wheel_builder
 
-on:
-  pull_request:
-    paths:
-      - .github/workflows/numba_linux-64_wheel_builder.yml
-      - .github/workflows/wheel_workflow_matrix.json
-  workflow_dispatch:
-    inputs:
-      llvmlite_wheel_runid:
-        description: 'llvmlite wheel workflow run ID (optional)'
-        required: false
-        type: string
-      use_tbb:
-        description: 'use TBB (Threading Building Blocks)'
-        required: false
-        type: boolean
-        default: true
+# on:
+#   pull_request:
+#     paths:
+#       - .github/workflows/numba_linux-64_wheel_builder.yml
+#       - .github/workflows/wheel_workflow_matrix.json
+#   workflow_dispatch:
+#     inputs:
+#       llvmlite_wheel_runid:
+#         description: 'llvmlite wheel workflow run ID (optional)'
+#         required: false
+#         type: string
+#       use_tbb:
+#         description: 'use TBB (Threading Building Blocks)'
+#         required: false
+#         type: boolean
+#         default: true
 
 # Add concurrency control
 concurrency:

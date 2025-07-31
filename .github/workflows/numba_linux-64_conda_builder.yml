@@ -1,17 +1,17 @@
 name: numba_linux-64_conda_builder
 
-on:
-  pull_request:
-    paths:
-      - .github/workflows/numba_linux-64_conda_builder.yml
-      - buildscripts/condarecipe.local/**
-      - .github/workflows/conda_workflow_matrix.json
-  workflow_dispatch:
-    inputs:
-      llvmlite_run_id:
-        description: 'llvmlite workflow run ID (optional)'
-        required: false
-        type: string
+# on:
+#   pull_request:
+#     paths:
+#       - .github/workflows/numba_linux-64_conda_builder.yml
+#       - buildscripts/condarecipe.local/**
+#       - .github/workflows/conda_workflow_matrix.json
+#   workflow_dispatch:
+#     inputs:
+#       llvmlite_run_id:
+#         description: 'llvmlite workflow run ID (optional)'
+#         required: false
+#         type: string
 
 # Add concurrency control
 concurrency:
