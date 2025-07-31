@@ -385,6 +385,7 @@ class StructRefProxy:
         """
         return self._type
 
+
 @extending.lower_builtin(operator.is_, types.StructRef, types.StructRef)
 def structref_is(context, builder, sig, args):
     """
