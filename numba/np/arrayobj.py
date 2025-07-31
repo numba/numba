@@ -4848,12 +4848,6 @@ def numpy_take(a, indices, axis=None):
             def take_impl(a, indices, axis=None):
                 r = np.take(a, (indices,), axis=axis)
                 if a.ndim == 1:
-                    # caveats
-                    # >>> isinstance(np.take(1d_arr, 0), int)
-                    # True
-                    # >>> isinstance(np.take(1d_arr, (0,)), int)
-                    # False
-                    # The latter returns an array
                     return r[0]
                 if axis < 0:
                     axis += a.ndim
@@ -4869,12 +4863,11 @@ def numpy_take(a, indices, axis=None):
             _setitem = generate_getitem_setitem_with_axis(ndim, 'setitem')
 
             def take_impl(a, indices, axis=None):
-                ax = axis
                 if axis < 0:
                     axis += a.ndim
 
                 if axis < 0 or axis >= a.ndim:
-                    msg = (f"axis {ax} is out of bounds for array "
+                    msg = (f"axis {axis} is out of bounds for array "
                            f"of dimension {a.ndim}")
                     raise ValueError(msg)
 
