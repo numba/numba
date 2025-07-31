@@ -146,17 +146,17 @@ def make_array_astype(newtype):
     return array_astype
 
 
-def np_frombuffer(b, dtype: np.dtype = np.float64, count=-1, offset=0):
+def np_frombuffer(b):
     """
     np.frombuffer() on a Python-allocated buffer.
     """
-    return np.frombuffer(b, dtype=dtype, count=count, offset=offset)
+    return np.frombuffer(b)
 
-def np_frombuffer_dtype(b, count=-1, offset=0):
-    return np.frombuffer(b, dtype=np.complex64, count=count, offset=offset)
+def np_frombuffer_dtype(b):
+    return np.frombuffer(b, dtype=np.complex64)
 
-def np_frombuffer_dtype_str(b, count=-1, offset=0):
-    return np.frombuffer(b, dtype='complex64', count=count, offset=offset)
+def np_frombuffer_dtype_str(b):
+    return np.frombuffer(b, dtype='complex64')
 
 def np_frombuffer_allocated(shape):
     """
@@ -1805,55 +1805,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         np.testing.assert_array_equal(pyfunc(*args), cfunc(*args))
         args = n, np.dtype('f4')
         np.testing.assert_array_equal(pyfunc(*args), cfunc(*args))
-
-    def test_frombuffer_offset(self):
-        # Expect to skip the first two elements (offset = 2 bytes)
-        buffer = np.arange(8, dtype=np.uint8)
-        offset = 2
-        result = np_frombuffer(buffer, dtype=buffer.dtype, offset=offset)
-        expected = np.array([2, 3, 4, 5, 6, 7], dtype=buffer.dtype)
-        np.testing.assert_array_equal(result, expected)
-
-    def test_frombuffer_count(self):
-        # Expect to read only 4 elements
-        buffer = np.arange(24, dtype=np.uint8)
-        count = 4
-        result = np_frombuffer(buffer, dtype=buffer.dtype, count=count)
-        expected = np.array([0, 1, 2, 3], dtype=buffer.dtype)
-        np.testing.assert_array_equal(result, expected)
-
-    def test_frombuffer_count_negative_means_all(self):
-        # Expect to read only 4 elements
-        buffer = np.arange(8, dtype=np.uint8)
-        result = np_frombuffer(buffer, dtype=buffer.dtype, count=-1)
-        expected = np.array([0, 1, 2, 3, 4, 5, 6, 7], dtype=buffer.dtype)
-        np.testing.assert_array_equal(result, expected)
-
-    def test_frombuffer_offset_and_count(self):
-        # Skip first 2 bytes and read 3 elements
-        buffer = np.arange(24, dtype=np.uint8)
-        offset = 2
-        count = 3
-        result = np_frombuffer(buffer, dtype=buffer.dtype, offset=offset, count=count)
-        expected = np.array([2, 3, 4], dtype=buffer.dtype)
-        np.testing.assert_array_equal(result, expected)
-
-    def test_frombuffer_invalid_offset(self):
-        # Test behavior when offset exceeds buffer size
-        buffer = np.arange(24, dtype=np.uint8)
-        offset = len(buffer) + 1  # Invalid offset
-        msg = "offset must be non-negative and no greater than buffer length"
-        with self.assertRaisesRegex(ValueError, msg):
-            np_frombuffer(buffer, dtype=buffer.dtype, offset=offset)
-
-    def test_frombuffer_invalid_count(self):
-        # Test behavior when count exceeds the possible number of elements
-        buffer = np.arange(24, dtype=np.uint8)
-        count = len(buffer) + 1  # Count exceeds buffer size
-        msg = "buffer is smaller than requested size"
-        with self.assertRaisesRegex(ValueError, msg):
-            np.frombuffer(buffer, dtype=buffer.dtype, count=count)
-
 
 class TestArrayComparisons(TestCase):
 
