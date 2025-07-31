@@ -1,4 +1,0 @@
-Implemented support for ``np.frombuffer`` kwargs ``offset`` and ``count``
--------------------------------------------------------------------------
-
-``np.frombuffer`` now support ``offset`` and ``count`` kwargs.

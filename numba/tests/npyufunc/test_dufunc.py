@@ -1,4 +1,3 @@
-import functools
 import itertools
 import pickle
 import textwrap
@@ -144,52 +143,7 @@ class TestDUFunc(MemoryLeakMixin, unittest.TestCase):
         # self.assertEqual(cfunc(), 2)
 
 
-class TestDUFuncMethodsBase(TestCase):
-
-    @functools.cache
-    def _generate_jit(self, ufunc, kind, identity=None):
-        assert kind in ('reduce', 'reduceat', 'at')
-        if kind == 'reduce':
-            if ufunc.nin == 2:
-                vec = vectorize(identity=identity)(lambda a, b: ufunc(a, b))
-            else:
-                vec = vectorize(identity=identity)(lambda a: ufunc(a))
-
-            @njit
-            def fn(array, axis=0, initial=None):
-                return vec.reduce(array, axis=axis, initial=initial)
-            return fn
-        elif kind == 'reduceat':
-            if ufunc.nin != 2:
-                raise ValueError('reduceat only supported for binary functions')
-            vec = vectorize(identity=identity)(lambda a, b: ufunc(a, b))
-
-            @njit
-            def fn(array, indices, axis=0, dtype=None, out=None):
-                return vec.reduceat(array, indices, axis, dtype, out)
-            return fn
-        else:
-            if ufunc.nin == 2:
-                vec = vectorize(identity=identity)(lambda a, b: ufunc(a, b))
-            else:
-                vec = vectorize(identity=identity)(lambda a: ufunc(a))
-
-            @njit
-            def fn(*args):
-                return vec.at(*args)
-            return fn
-
-    def _reduce(self, ufunc, identity):
-        return self._generate_jit(ufunc, 'reduce', identity=identity)
-
-    def _reduceat(self, ufunc, identity):
-        return self._generate_jit(ufunc, 'reduceat', identity=identity)
-
-    def _at(self, ufunc):
-        return self._generate_jit(ufunc, 'at')
-
-
-class TestDUFuncAt(TestDUFuncMethodsBase):
+class TestDUFuncAt(TestCase):
     def _compare_output(self, fn, ufunc, a, *args):
         expected = a.copy()
         got = a.copy()
@@ -197,14 +151,25 @@ class TestDUFuncAt(TestDUFuncMethodsBase):
         fn(got, *args)
         self.assertPreciseEqual(expected, got)
 
+    def _generate_jit(self, ufunc):
+        if ufunc.nin == 2:
+            vec = vectorize()(lambda a, b: ufunc(a, b))
+        else:
+            vec = vectorize()(lambda a: ufunc(a))
+
+        @njit
+        def fn(*args):
+            return vec.at(*args)
+        return fn
+
     def test_numpy_ufunc_at_basic(self):
         # tests taken from: https://github.com/numpy/numpy/blob/27d8c43eb958b4ecee59b4d66908750759a9afc2/numpy/core/tests/test_ufunc.py#L1974-L2003  # noqa: E501
         # NumPy also test this function with a Rational array dtype. We skip
         # this test as Numba doesn't support Rational
         a = np.arange(10, dtype=int)
 
-        add_at = self._at(np.add)
-        negative_at = self._at(np.negative)
+        add_at = self._generate_jit(np.add)
+        negative_at = self._generate_jit(np.negative)
 
         negative_vec = vectorize()(lambda a: np.negative(a))
 
@@ -248,7 +213,7 @@ class TestDUFuncAt(TestDUFuncMethodsBase):
                 indx = np.concatenate([np.ones(6, dtype=np.intp),
                                        np.full(18, 4, dtype=np.intp)])
                 value = a.dtype.type(1j)
-                ufunc_at = self._at(ufunc)
+                ufunc_at = self._generate_jit(ufunc)
                 ufunc_at(a, indx, value)
                 expected = np.ones_like(a)
                 if ufunc is np.multiply:
@@ -263,14 +228,14 @@ class TestDUFuncAt(TestDUFuncMethodsBase):
         # Make sure the indexed loop check does not choke on iters
         # with subspaces
         arr = np.zeros(5, dtype=int)
-        add_at = self._at(np.add)
+        add_at = self._generate_jit(np.add)
         self._compare_output(add_at, np.add, arr, slice(None),
                              np.ones(5, dtype=int))
 
     def test_ufunc_at_negative(self):
         arr = np.ones(5, dtype=np.int32)
         indx = np.arange(5)
-        at = self._at(np.negative)
+        at = self._generate_jit(np.negative)
         at(arr, indx)
         assert np.all(arr == [-1, -1, -1, -1, -1])
 
@@ -282,14 +247,14 @@ class TestDUFuncAt(TestDUFuncMethodsBase):
         b[1] = 5
         b[8192:] = 100
         a = np.zeros(1, dtype=float)
-        add_at = self._at(np.add)
+        add_at = self._generate_jit(np.add)
         add_at(a, indices, b)
         assert a[0] == b.sum()
 
     def test_cast_index_fastpath(self):
         arr = np.zeros(10)
         values = np.ones(100000)
-        add_at = self._at(np.add)
+        add_at = self._generate_jit(np.add)
         # index must be cast, which may be buffered in chunks:
         index = np.zeros(len(values), dtype=np.uint8)
         add_at(arr, index, values)
@@ -301,14 +266,14 @@ class TestDUFuncAt(TestDUFuncMethodsBase):
             arr = np.zeros(1000)
             # index must be cast, which may be buffered in chunks:
             index = np.repeat(np.arange(1000), 2)
-            add_at = self._at(np.add)
+            add_at = self._generate_jit(np.add)
             add_at(arr, index, value)
             np.testing.assert_array_equal(arr, np.full_like(arr, 2 * value))
 
     def test_ufunc_at_multiD(self):
         a = np.arange(9).reshape(3, 3)
         b = np.array([[100, 100, 100], [200, 200, 200], [300, 300, 300]])
-        add_at = self._at(np.add)
+        add_at = self._generate_jit(np.add)
         add_at(a, (slice(None), np.asarray([1, 2, 1])), b)
         self.assertPreciseEqual(a, np.array(
             [[0, 201, 102], [3, 404, 205], [6, 607, 308]]))
@@ -375,7 +340,7 @@ class TestDUFuncAt(TestDUFuncMethodsBase):
 
         a = np.arange(27).reshape(3, 3, 3)
         b = np.array([100, 200, 300])
-        add_at = self._at(np.add)
+        add_at = self._generate_jit(np.add)
         add_at(a, (slice(None), slice(None), slice(None)), b)
         self.assertPreciseEqual(a, np.asarray(
                                 [[[100, 201, 302],
@@ -392,7 +357,7 @@ class TestDUFuncAt(TestDUFuncMethodsBase):
 
     def test_ufunc_at_0D(self):
         a = np.array(0)
-        add_at = self._at(np.add)
+        add_at = self._generate_jit(np.add)
         add_at(a, (), 1)
         self.assertPreciseEqual(a, np.array(1))
 
@@ -411,7 +376,7 @@ class TestDUFuncAt(TestDUFuncMethodsBase):
     def test_ufunc_at_dtypes(self):
         # Test mixed dtypes
         a = np.arange(10)
-        power_at = self._at(np.power)
+        power_at = self._generate_jit(np.power)
         power_at(a, [1, 2, 3, 2], 3.5)
         self.assertPreciseEqual(a, np.array([0, 1, 4414, 46, 4, 5, 6, 7, 8, 9]))
 
@@ -419,7 +384,7 @@ class TestDUFuncAt(TestDUFuncMethodsBase):
         # Test boolean indexing and boolean ufuncs
         a = np.arange(10)
         index = a % 2 == 0
-        equal_at = self._at(np.equal)
+        equal_at = self._generate_jit(np.equal)
         # boolean indexing not supported
         equal_at(a, index, [0, 2, 4, 6, 8])
         self.assertPreciseEqual(a, np.array([1, 1, 1, 3, 1, 5, 1, 7, 1, 9]))
@@ -427,7 +392,7 @@ class TestDUFuncAt(TestDUFuncMethodsBase):
     def test_ufunc_at_boolean2(self):
         # Test unary operator
         a = np.arange(10, dtype='u4')
-        invert_at = self._at(np.invert)
+        invert_at = self._generate_jit(np.invert)
         invert_at(a, [2, 5, 2])
         self.assertPreciseEqual(a, np.array([0, 1, 2, 3, 4, 5 ^ 0xffffffff, 6,
                                              7, 8, 9], dtype=np.uint32))
@@ -436,7 +401,7 @@ class TestDUFuncAt(TestDUFuncMethodsBase):
         # Test empty subspace
         orig = np.arange(4)
         a = orig[:, None][:, 0:0]
-        add_at = self._at(np.add)
+        add_at = self._generate_jit(np.add)
         add_at(a, [0, 1], 3)
         self.assertPreciseEqual(orig, np.arange(4))
 
@@ -445,28 +410,28 @@ class TestDUFuncAt(TestDUFuncMethodsBase):
         # Test with swapped byte order
         index = np.array([1, 2, 1], np.dtype('i').newbyteorder())
         values = np.array([1, 2, 3, 4], np.dtype('f').newbyteorder())
-        add_at = self._at(np.add)
+        add_at = self._generate_jit(np.add)
         add_at(values, index, 3)
         self.assertPreciseEqual(values, [1, 8, 6, 4])
 
     def test_ufunc_at_advanced_3(self):
         # Test exception thrown
         values = np.array(['a', 1], dtype=object)
-        add_at = self._at(np.add)
+        add_at = self._generate_jit(np.add)
         with self.assertRaises(TypingError):
             add_at(values, [0, 1], 1)
         self.assertPreciseEqual(values, np.array(['a', 1], dtype=object))
 
     def test_ufunc_at_advanced_4(self):
         # Test multiple output ufuncs raise error, NumPy gh-5665
-        modf_at = self._at(np.modf)
+        modf_at = self._generate_jit(np.modf)
         # NumPy raises ValueError as modf returns multiple outputs
         with self.assertRaises(TypingError):
             modf_at(np.arange(10), [1])
 
     def test_ufunc_at_advanced_5(self):
         # Test maximum
-        maximum_at = self._at(np.maximum)
+        maximum_at = self._generate_jit(np.maximum)
         a = np.array([1, 2, 3])
         maximum_at(a, [0], 0)
         self.assertPreciseEqual(a, np.array([1, 2, 3]))
@@ -494,7 +459,7 @@ class TestDUFuncAt(TestDUFuncMethodsBase):
                 for i, v in zip(indxs, vals):
                     expected[i] = ufunc(expected[i], v)
 
-                ufunc_at = self._at(ufunc)
+                ufunc_at = self._generate_jit(ufunc)
                 ufunc_at(a, indxs, vals)
                 np.testing.assert_array_equal(a, expected)
                 assert np.all(indxs == [-1, 1, -1, 2])
@@ -505,7 +470,7 @@ class TestDUFuncAt(TestDUFuncMethodsBase):
         a = np.ones((2, 2, 2))
         b = np.ones((1, 2, 2))
         # matmul is a gufunc, thus, this will fail atm
-        matmul_at = self._at(np.matmul)
+        matmul_at = self._generate_jit(np.matmul)
         err_msg = 'does not support ufunc with non-trivial signature'
         with self.assertRaisesRegex(TypingError, err_msg):
             matmul_at(a, [0], b)
@@ -516,20 +481,20 @@ class TestDUFuncAt(TestDUFuncMethodsBase):
     def test_ufunc_at_no_loop_for_op(self):
         # str dtype does not have a ufunc loop for np.add
         arr = np.ones(10, dtype=str)
-        add_at = self._at(np.add)
+        add_at = self._generate_jit(np.add)
         # NumPy raises `np.core._exceptions._UFuncNoLoopError`
         with self.assertRaises(TypingError):
             add_at(arr, [0, 1], [0, 1])
 
     def test_ufunc_at_output_casting(self):
         arr = np.array([-1])
-        equal_at = self._at(np.equal)
+        equal_at = self._generate_jit(np.equal)
         equal_at(arr, [0], [0])
         assert arr[0] == 0
 
     def test_ufunc_at_broadcast_failure(self):
         arr = np.arange(5)
-        add_at = self._at(np.add)
+        add_at = self._generate_jit(np.add)
 
         # NumPy raises ValueError('array is not broadcastable to correct shape')
         msg = 'operands could not be broadcast together with remapped shapes'
@@ -552,7 +517,7 @@ class TestDUFuncAt(TestDUFuncMethodsBase):
 
     def test_ufunc_at_experimental_warning(self):
         arr = np.arange(5)
-        add_at = self._at(np.add)
+        add_at = self._generate_jit(np.add)
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter('always', NumbaExperimentalFeatureWarning)
@@ -794,7 +759,7 @@ class TestDUFuncReduceNumPyTests(TestCase):
         add_reduce(np.zeros((0, 0)), axis=())
 
 
-class TestDUFuncReduce(TestDUFuncMethodsBase):
+class TestDUFuncReduce(TestCase):
     def _check_reduce(self, ufunc, dtype=None, initial=None):
 
         @njit
@@ -926,179 +891,6 @@ class TestDUFuncReduce(TestDUFuncMethodsBase):
         for axis in cases:
             with self.assertRaisesRegex(ValueError, "Invalid axis"):
                 foo(a, axis)
-
-
-class TestDUFuncReduceAt(TestDUFuncMethodsBase):
-    def _compare_output(self, ufunc, a, idx, **kwargs):
-        identity = getattr(ufunc, 'identity')
-        fn = self._reduceat(ufunc, identity)
-        expected = a.copy()
-        got = a.copy()
-        ufunc.reduceat(expected, idx, **kwargs)
-        fn(got, idx, **kwargs)
-        self.assertPreciseEqual(expected, got)
-
-    def test_reduceat_out_kw(self):
-        arr = np.arange(4)
-        idx = np.asarray([0, 3, 1, 2])
-        add_reduce = self._reduceat(np.add, 0)
-        add_reduce(arr, idx, out=arr)
-        self.assertPreciseEqual(np.asarray([3, 3, 3, 6]), arr)
-        add_reduce(arr, idx, out=arr)
-        self.assertPreciseEqual(np.asarray([9, 6, 6, 12]), arr)
-
-    @unittest.expectedFailure
-    def test_reduceat_axis_kw(self):
-        arrays = (
-            np.arange(16).reshape(4, 4),
-            np.arange(40).reshape(4, 5, 2),
-            np.ones((4, 4))
-        )
-        indices = (
-            np.asarray([0, 3, 1, 2, 0]),
-            np.asarray([0, 3, 1, 2]),
-        )
-        axis = (1, 0, -1)  # needs gh-9296
-        for array in arrays:
-            for idx in indices:
-                for ax in axis:
-                    self._compare_output(np.add, array, idx, axis=ax)
-
-    def test_reduceat_invalid_axis(self):
-        arr = np.ones((4, 4))
-        idx = np.asarray([0, 3, 1, 2])
-        add_reduceat = self._reduceat(np.add, 0)
-
-        for ax in (2, -3):  # needs gh-9296
-            msg = (f'axis {ax} is out of bounds for array of dimension '
-                   f'{arr.ndim}')
-            with self.assertRaisesRegex(ValueError, msg):
-                add_reduceat(arr, idx, ax)
-
-    def test_reduceat_cast_args_to_array(self):
-        add_reduceat = self._reduceat(np.add, 0)
-
-        # cast array and indices
-        a = [1, 2, 3, 4]
-        idx = [1, 2, 3]
-        expected = np.add.reduceat(a, idx)
-        got = add_reduceat(a, idx)
-        self.assertPreciseEqual(expected, got)
-
-        # array and indices as tuples
-        a = (1, 2, 3, 4)
-        idx = (1, 2, 3)
-        expected = np.add.reduceat(a, idx)
-        got = add_reduceat(a, idx)
-        self.assertPreciseEqual(expected, got)
-
-    # tests below this line were copied from NumPy
-    # https://github.com/numpy/numpy/blob/7f8dc13b9bcaa26cb378b9c8246110ca1dc9ce75/numpy/_core/tests/test_ufunc.py#L200C1-L200C1  # noqa: E501
-    def test_reduceat_basic(self):
-        x = np.arange(8)
-        idx = [0,4, 1,5, 2,6, 3,7]
-        self._compare_output(np.add, x, idx)
-
-    def test_reduceat_basic_2d(self):
-        x = np.linspace(0, 15, 16).reshape(4, 4)
-        idx = [0, 3, 1, 2, 0]
-        self._compare_output(np.add, x, idx)
-
-    def test_reduceat_shifting_sum(self):
-        L = 6
-        x = np.arange(L)
-        idx = np.array(list(zip(np.arange(L - 2), np.arange(L - 2) + 2))).ravel()  # noqa: E501
-        self._compare_output(np.add, x, idx)
-
-    def test_reduceat_int_array_reduceat_inplace(self):
-        # Checks that in-place reduceats work, see also gh-7465
-        arr = np.ones(4, dtype=np.int64)
-        out = np.ones(4, dtype=np.int64)
-        self._compare_output(np.add, arr, np.arange(4), out=arr)
-        self._compare_output(np.add, arr, np.arange(4), out=arr)
-        self.assertPreciseEqual(arr, out)
-
-        # needs gh-9296
-        # And the same if the axis argument is used
-        arr = np.ones((2, 4), dtype=np.int64)
-        arr[0, :] = [2 for i in range(4)]
-        out = np.ones((2, 4), dtype=np.int64)
-        out[0, :] = [2 for i in range(4)]
-        self._compare_output(np.add, arr, np.arange(4), out=arr, axis=-1)
-        self._compare_output(np.add, arr, np.arange(4), out=arr, axis=-1)
-        self.assertPreciseEqual(arr, out)
-
-    def test_reduceat_out_shape_mismatch(self):
-        # Should raise an error mentioning "shape" or "size"
-        # original test has an extra step for accumulate but we don't support
-        # it yet
-        add_reduceat = self._reduceat(np.add, 0)
-
-        for with_cast in (True, False):
-            arr = np.arange(5)
-            out = np.arange(3)  # definitely wrong shape
-            if with_cast:
-                # If a cast is necessary on the output, we can be sure to use
-                # the generic NpyIter (non-fast) path.
-                out = out.astype(np.float64)
-
-            with self.assertRaises(ValueError):
-                add_reduceat(arr, [0, 3], out=out)
-
-    def test_reduceat_empty(self):
-        """Reduceat should work with empty arrays"""
-        indices = np.array([], 'i4')
-        x = np.array([], 'f8')
-        add_reduceat = self._reduceat(np.add, 0)
-        expected = np.add.reduceat(x, indices)
-        got = add_reduceat(x, indices)
-        self.assertPreciseEqual(expected, got)
-        self.assertEqual(expected.dtype, got.dtype)
-
-        # Another case with a slightly different zero-sized shape
-        x = np.ones((5, 2))
-        idx = np.asarray([], dtype=np.intp)
-        self._compare_output(np.add, x, idx, axis=0)
-        self._compare_output(np.add, x, idx, axis=1)
-
-    def test_reduceat_error_ndim_2(self):
-        add_reduceat = self._reduceat(np.add, 0)
-
-        # indices ndim > 1
-        a = np.arange(5)
-        idx = np.arange(10).reshape(5, 2)
-        with self.assertRaisesRegex(TypingError, 'have at most 1 dimension'):
-            add_reduceat(a, idx)
-
-    def test_reduceat_error_non_binary_function(self):
-        # non binary functions
-        @vectorize
-        def neg(a):
-            return np.negative(a)
-
-        @njit
-        def neg_reduceat(a, idx):
-            return neg.reduceat(a, idx)
-
-        a = np.arange(5)
-        msg = 'reduceat only supported for binary functions'
-        with self.assertRaisesRegex(TypingError, msg):
-            neg_reduceat(a, [0, 1, 2])
-
-    def test_reduceat_error_argument_types(self):
-        # first argument must be array-like
-        add_reduceat = self._reduceat(np.add, 0)
-        with self.assertRaisesRegex(TypingError, '"array" must be array-like'):
-            add_reduceat('abc', [1, 2, 3])
-
-        with self.assertRaisesRegex(TypingError, '"indices" must be array-like'):  # noqa: E501
-            add_reduceat(np.arange(5), 'abcd')
-
-        with self.assertRaisesRegex(TypingError, 'output must be an array'):
-            add_reduceat(np.arange(5), [1, 2, 3], out=())
-
-        with self.assertRaisesRegex(TypingError, '"axis" must be an integer'):
-            add_reduceat(np.arange(5), [1, 2, 3], axis=(1,))
 
 
 class TestDUFuncPickling(MemoryLeakMixin, unittest.TestCase):

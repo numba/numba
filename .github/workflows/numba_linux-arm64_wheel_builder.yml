@@ -1,16 +1,16 @@
 name: numba_linux-arm64_wheel_builder
 
-on:
-  pull_request:
-    paths:
-      - .github/workflows/numba_linux-arm64_wheel_builder.yml
-      - .github/workflows/wheel_workflow_matrix.json
-  workflow_dispatch:
-    inputs:
-      llvmlite_wheel_runid:
-        description: 'llvmlite wheel workflow run ID (optional)'
-        required: false
-        type: string
+# on:
+#   pull_request:
+#     paths:
+#       - .github/workflows/numba_linux-arm64_wheel_builder.yml
+#       - .github/workflows/wheel_workflow_matrix.json
+#   workflow_dispatch:
+#     inputs:
+#       llvmlite_wheel_runid:
+#         description: 'llvmlite wheel workflow run ID (optional)'
+#         required: false
+#         type: string
 
 # Add concurrency control
 concurrency:

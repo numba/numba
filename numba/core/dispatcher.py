@@ -406,7 +406,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                 val = arg.value if isinstance(arg, OmittedArg) else arg
                 try:
                     tp = typeof(val, Purpose.argument)
-                except (errors.NumbaValueError, ValueError) as typeof_exc:
+                except ValueError as typeof_exc:
                     failed_args.append((i, str(typeof_exc)))
                 else:
                     if tp is None:
@@ -685,7 +685,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         """
         try:
             tp = typeof(val, Purpose.argument)
-        except (errors.NumbaValueError, ValueError):
+        except ValueError:
             tp = types.pyobject
         else:
             if tp is None:

@@ -546,6 +546,10 @@ def get_sysinfo():
 
 
 def display_sysinfo(info=None, sep_pos=45):
+
+    from pprint import pprint
+    pprint(dict(**os.environ))
+
     class DisplayMap(dict):
         display_map_flag = True
 
