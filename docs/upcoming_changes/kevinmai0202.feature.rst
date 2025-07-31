@@ -1,0 +1,1 @@
+- Add support for 'is' identity operator on structref types.
