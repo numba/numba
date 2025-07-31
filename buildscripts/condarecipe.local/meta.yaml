@@ -37,6 +37,7 @@ requirements:
     # TBB devel version is to match TBB libs.
     # NOTE: ppc64le and aarch64 are pending testing so excluded for now.
     - tbb-devel >=2021.6       # [not (aarch64 or ppc64le)]
+    - vc 14.42
   run:
     - python >=3.10
     - numpy >=1.24
