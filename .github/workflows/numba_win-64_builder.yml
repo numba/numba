@@ -42,7 +42,7 @@ jobs:
   win-64-build-conda:
     name: win-64-build-conda (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
     needs: load-matrix
-    runs-on: windows-2025
+    runs-on: windows-2022
     defaults:
       run:
         shell: bash -elx {0}
@@ -109,7 +109,7 @@ jobs:
   win-64-test:
     name: win-64-test-conda (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
     needs: [load-matrix, win-64-build-conda]
-    runs-on: windows-2025
+    runs-on: windows-2022
     defaults:
       run:
         shell: bash -elx {0}
