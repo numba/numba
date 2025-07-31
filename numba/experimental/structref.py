@@ -7,7 +7,7 @@ hence, structref (a reference to a struct).
 import operator
 from numba.core.cgutils import create_struct_proxy
 from numba import njit
-from numba.core import types, imputils, cgutils, extending
+from numba.core import types, imputils, cgutils
 from numba.core.datamodel import default_manager, models
 from numba.core.extending import (
     infer_getattr,
@@ -384,6 +384,7 @@ class StructRefProxy:
         Subclasses should NOT override.
         """
         return self._type
+
 
 @extending.lower_builtin(operator.is_, types.StructRef, types.StructRef)
 def structref_is(context, builder, sig, args):
