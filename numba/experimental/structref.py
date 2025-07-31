@@ -390,7 +390,7 @@ class StructRefProxy:
 @lower_builtin(operator.is_, types.StructRef, types.StructRef)
 def structref_is(context, builder, sig, args):
     """
-    Define the 'is' operator for structrefs by comparing the memeory addresses.
+    Define the 'is' operator for structrefs by comparing the memory addresses.
     This is the identity check for structref objects.
     """
     a, b = args
