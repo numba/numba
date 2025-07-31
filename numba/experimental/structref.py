@@ -13,6 +13,7 @@ from numba.core.extending import (
     infer_getattr,
     lower_getattr_generic,
     lower_setattr_generic,
+    lower_builtin,
     box,
     unbox,
     NativeValue,
@@ -386,7 +387,7 @@ class StructRefProxy:
         return self._type
 
 
-@extending.lower_builtin(operator.is_, types.StructRef, types.StructRef)
+@lower_builtin(operator.is_, types.StructRef, types.StructRef)
 def structref_is(context, builder, sig, args):
     """
     Define the 'is' operator for structrefs by comparing the memeory addresses.
