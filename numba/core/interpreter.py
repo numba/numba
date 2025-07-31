@@ -2356,23 +2356,50 @@ class Interpreter(object):
         self.store(getattr, res)
 
     def op_LOAD_CONST(self, inst, res):
+        # New in 3.14: slice is loaded via LOAD_CONST. The value is the
+        # slice object itself, so we get the start, stop and step from it
+        # directly and then proceed with the code in `BUILD_SLICE`. It may also
+        # be a tuple containing a slice, so we need to account for that too.
+        def process_slice(value):
+            start = self.store(ir.Const(value.start, loc=self.loc),
+                               name=f'$const_{value.start}', redefine=True)
+            stop = self.store(ir.Const(value.stop, loc=self.loc),
+                              name=f'$const_{value.stop}', redefine=True)
+
+            slicevar = self.store(value=ir.Global("slice", slice,
+                                                  loc=self.loc),
+                                  name='$const_slice', redefine=True)
+
+            if value.step is None:
+                params = (start, stop)
+            else:
+                step = self.store(ir.Const(value.step, loc=self.loc),
+                                  name=f'$const_{value.step}', redefine=True)
+                params = (start, stop, step)
+
+            return ir.Expr.call(slicevar, params, (), loc=self.loc)
+
+        def process_args(value):
+            st = []
+            for x in value:
+                if isinstance(x, slice):
+                    st.append(self.store(process_slice(x),
+                                         name='$const_my_slice',
+                                         redefine=True))
+                else:
+                    st.append(self.store(ir.Const(x, loc=self.loc),
+                                         name=f'$const_{x}',
+                                         redefine=True))
+            return st
+
         value = self.code_consts[inst.arg]
+
         if isinstance(value, tuple):
-            st = []
-            for x in value:
-                nm = '$const_%s' % str(x)
-                val_const = ir.Const(x, loc=self.loc)
-                target = self.store(val_const, name=nm, redefine=True)
-                st.append(target)
-            const = ir.Expr.build_tuple(st, loc=self.loc)
+            const = ir.Expr.build_tuple(process_args(value), loc=self.loc)
         elif isinstance(value, frozenset):
-            st = []
-            for x in value:
-                nm = '$const_%s' % str(x)
-                val_const = ir.Const(x, loc=self.loc)
-                target = self.store(val_const, name=nm, redefine=True)
-                st.append(target)
-            const = ir.Expr.build_set(st, loc=self.loc)
+            const = ir.Expr.build_set(process_args(value), loc=self.loc)
+        elif isinstance(value, slice):
+            const = process_slice(value)
         else:
             const = ir.Const(value, loc=self.loc)
         self.store(const, res)
