@@ -93,7 +93,7 @@ jobs:
           else
               conda install -c ${{ env.CONDA_CHANNEL_NUMBA }} llvmlite
           fi
-          conda install -c ${{ env.CONDA_CHANNEL_NUMBA }} python-build numpy==${{ matrix.numpy_build }} setuptools
+          conda install -c defaults python-build numpy==${{ matrix.numpy_build }} setuptools
           python -m pip install tbb==2021.6 tbb-devel==2021.6
 
       - name: Build wheel

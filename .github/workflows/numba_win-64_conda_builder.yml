@@ -1,9 +1,9 @@
-name: numba_win-64_builder
+name: numba_win-64_conda_builder
 
 on:
   pull_request:
     paths:
-      - .github/workflows/numba_win-64_builder.yml
+      - .github/workflows/numba_win-64_conda_builder.yml
       - buildscripts/condarecipe.local/**
       - .github/workflows/conda_workflow_matrix.json
   workflow_dispatch:
@@ -68,7 +68,7 @@ jobs:
         if: ${{ inputs.llvmlite_run_id != '' }}
         uses: actions/download-artifact@v4
         with:
-          name: llvmlite_win-64_conda_py${{ matrix.python-version }}
+          name: llvmlite-win-64-py${{ matrix.python-version }}
           path: llvmlite_conda
           run-id: ${{ inputs.llvmlite_run_id }}
           repository: numba/llvmlite
@@ -84,7 +84,7 @@ jobs:
 
           # Set channel based on whether llvmlite artifact was downloaded
           if [ "${{ inputs.llvmlite_run_id }}" != "" ]; then
-            LLVMLITE_CHANNEL="file://${{ github.workspace }}/llvmlite_conda"
+            LLVMLITE_CHANNEL="${{ github.workspace }}/llvmlite_conda"
           else
             LLVMLITE_CHANNEL="${{ env.CONDA_CHANNEL_NUMBA }}"
           fi
