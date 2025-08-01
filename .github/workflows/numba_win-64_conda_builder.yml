@@ -84,7 +84,7 @@ jobs:
 
           # Set channel based on whether llvmlite artifact was downloaded
           if [ "${{ inputs.llvmlite_run_id }}" != "" ]; then
-            LLVMLITE_CHANNEL="file://${{ github.workspace }}/llvmlite_conda"
+            LLVMLITE_CHANNEL="${{ github.workspace }}/llvmlite_conda"
           else
             LLVMLITE_CHANNEL="${{ env.CONDA_CHANNEL_NUMBA }}"
           fi
