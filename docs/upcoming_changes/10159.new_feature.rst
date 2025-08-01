@@ -2,4 +2,3 @@ Add support for `is` identity operator on structref types
 ---------------------------------------------------------
 
 Support has been added for the `is` identity operator to compare two `StructRef` instances in JIT-compiled code.
-
