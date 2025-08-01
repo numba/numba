@@ -126,6 +126,20 @@ def compute_fields(st):
     return st.values + st.counter
 
 
+@njit
+def test_structref_is():
+    c = MyStruct(3, 4)
+    d = MyStruct(3, 4)
+    return (c is c, c is d)
+
+
+class TestStructRefIs(TestCase):
+    def test_is_identity(self):
+        res = test_structref_is()
+        self.assertTrue(res[0])
+        self.assertFalse(res[1])
+
+
 class TestStructRefBasic(MemoryLeakMixin, TestCase):
     def test_structref_type(self):
         sr = types.StructRef([('a', types.int64)])
