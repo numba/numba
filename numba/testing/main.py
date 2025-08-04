@@ -696,8 +696,13 @@ class _MinimalRunner(object):
         signals.registerResult(result)
         result.failfast = runner.failfast
         result.buffer = runner.buffer
-        with self.cleanup_object(test):
-            test(result)
+        # with self.cleanup_object(test):
+        #     test(result)
+        from numba.misc import memoryutils
+        memoryutils.install_atexit(f'memlog_pid{os.getpid()}.log')
+        with memoryutils.memory_monitor(test.id()):
+            with self.cleanup_object(test):
+                test(result)
         # HACK as cStringIO.StringIO isn't picklable in 2.x
         result.stream = _FakeStringIO(result.stream.getvalue())
         return _MinimalResult(result, test.id())
@@ -773,8 +778,9 @@ class ParallelTestRunner(runner.TextTestRunner):
         splitted_tests = [self._ptests[i:i + chunk_size]
                           for i in range(0, len(self._ptests), chunk_size)]
 
+        spawnctx = multiprocessing.get_context("spawn")
         for tests in splitted_tests:
-            pool = multiprocessing.Pool(self.nprocs)
+            pool = spawnctx.Pool(self.nprocs)
             try:
                 self._run_parallel_tests(result, pool, child_runner, tests)
             except:
