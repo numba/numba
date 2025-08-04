@@ -3,9 +3,15 @@ Memory monitoring utilities for testing.
 """
 import io
 import os
-import resource
 import sys
 import atexit
+
+# resource module is not available on Windows
+try:
+    import resource
+    _HAS_RESOURCE = True
+except ImportError:
+    _HAS_RESOURCE = False
 
 try:
     import psutil
@@ -47,25 +53,35 @@ def get_memory_usage():
             # Fallback to resource module if psutil fails
             pass
 
-    # Use resource module as fallback or supplement
-    try:
-        # Get resource usage
-        usage = resource.getrusage(resource.RUSAGE_SELF)
+    # Use resource module as fallback or supplement (not available on Windows)
+    if _HAS_RESOURCE:
+        try:
+            # Get resource usage
+            usage = resource.getrusage(resource.RUSAGE_SELF)
 
-        # On Linux, ru_maxrss is in KB, on macOS it's in bytes
-        if sys.platform == 'darwin':
-            memory_info['peak_rss'] = usage.ru_maxrss  # bytes
-        else:
-            memory_info['peak_rss'] = usage.ru_maxrss * 1024  # KB to bytes
+            # On Linux, ru_maxrss is in KB, on macOS it's in bytes
+            if sys.platform == 'darwin':
+                memory_info['peak_rss'] = usage.ru_maxrss  # bytes
+            else:
+                memory_info['peak_rss'] = usage.ru_maxrss * 1024  # KB to bytes
 
-        # If psutil is not available, use resource module values
-        if not _HAS_PSUTIL:
-            memory_info['rss'] = memory_info['peak_rss']
-            memory_info['vms'] = memory_info['peak_rss']  # Approximation
+            # If psutil is not available, use resource module values
+            if not _HAS_PSUTIL:
+                memory_info['rss'] = memory_info['peak_rss']
+                memory_info['vms'] = memory_info['peak_rss']  # Approximation
 
-    except (OSError, AttributeError):
-        # resource module not available or doesn't support getrusage
-        pass
+        except (OSError, AttributeError):
+            # resource module doesn't support getrusage
+            pass
+
+    # If neither psutil nor resource is available (e.g., on Windows),
+    # provide minimal fallback information
+    if not _HAS_PSUTIL and not _HAS_RESOURCE:
+        # On Windows without psutil, we have limited options
+        # We can't get accurate memory information without external libraries
+        memory_info['rss'] = None
+        memory_info['vms'] = None
+        memory_info['peak_rss'] = None
 
     return memory_info
 
