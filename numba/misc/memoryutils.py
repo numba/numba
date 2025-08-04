@@ -214,7 +214,11 @@ def install_atexit(filename) -> None:
     _atexit_installed = True
 
     def memory_write_handler():
-        print(get_memory_log())
+        from numba.core.config import IS_WIN32
+        msg = get_memory_log()
+        if IS_WIN32:
+            msg = msg.encode('ascii', errors='replace').decode('ascii')
+        print(msg)
 
     atexit.register(memory_write_handler)
 
