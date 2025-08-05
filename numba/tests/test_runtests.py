@@ -275,9 +275,18 @@ class TestCase(unittest.TestCase):
         # Run to validate the test suite does not trigger compilation during
         # listing.
         cmd = [sys.executable, "-c", code.format("numba.test('-l')")]
-        subprocess.check_call(cmd,
-                              stdout=subprocess.DEVNULL,
-                              stderr=subprocess.DEVNULL,)
+        try:
+            subprocess.run(cmd,
+                           stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE,
+                           check=True)
+        except subprocess.CalledProcessError as e:
+            stdout_str = e.stdout.decode('UTF-8') if e.stdout else ""
+            stderr_str = e.stderr.decode('UTF-8') if e.stderr else ""
+            error_msg = (f"{str(e)}\n"
+                         f"STDOUT:\n{stdout_str}\n"
+                         f"STDERR:\n{stderr_str}")
+            self.fail(error_msg)
 
 
 if __name__ == '__main__':
