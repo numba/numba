@@ -613,11 +613,8 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
         Tests that OMP does not overflow stack
         """
         runme = """if 1:
-            import os
             from numba import vectorize, threading_layer
             import numpy as np
-            print('NUMBA_THREADING_LAYER', os.environ['NUMBA_THREADING_LAYER'])
-            print('OMP_STACKSIZE', os.environ['OMP_STACKSIZE'])
 
             @vectorize(['f4(f4,f4,f4,f4,f4,f4,f4,f4)'], target='parallel')
             def foo(a, b, c, d, e, f, g, h):
