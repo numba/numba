@@ -6645,9 +6645,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     @staticmethod
     def _isin_arrays():
         # Essential edge cases
-        yield (List.empty_list(types.float64),
-               List.empty_list(types.float64))  # empty arrays
-        yield [1], List.empty_list(types.float64)  # empty right
+        yield (lambda: List.empty_list(types.float64),
+               lambda: List.empty_list(types.float64))  # empty arrays
+        yield [1], lambda: List.empty_list(types.float64)  # empty right
 
         # Core functionality
         yield [1], [1]  # match
@@ -6717,7 +6717,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def _create_test_method(check_func, ar1, ar2, **kwargs):
         """Factory function to create individual test methods"""
         def test_method(self):
-            return check_func(self, ar1, ar2, **kwargs)
+            processed_ar1 = ar1() if callable(ar1) else ar1
+            processed_ar2 = ar2() if callable(ar2) else ar2
+            return check_func(self, processed_ar1, processed_ar2, **kwargs)
         return test_method
 
     @staticmethod
