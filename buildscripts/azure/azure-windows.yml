@@ -55,6 +55,8 @@ jobs:
     - script: |
         call activate %CONDA_ENV%
         set NUMBA_ENABLE_CUDASIM=1
+        set NUMBA_CPU_NAME=generic
+        set NUMBA_CPU_FEATURES=''
         echo "Running shard of discovered tests: %TEST_START_INDEX%,None,%TEST_COUNT%"
         python -m numba.runtests -b -v -g -m 2 -- numba.tests
       displayName: 'Test modified test files'
@@ -62,6 +64,8 @@ jobs:
     - script: |
         call activate %CONDA_ENV%
         set NUMBA_ENABLE_CUDASIM=1
+        set NUMBA_CPU_NAME=generic
+        set NUMBA_CPU_FEATURES=''
         echo "Running shard of discovered tests: %TEST_START_INDEX%:%TEST_COUNT%"
         python runtests.py -m 2 -b -j "%TEST_START_INDEX%:%TEST_COUNT%"  --exclude-tags='long_running'  -- numba.tests
       displayName: 'Test shard of test files'
