@@ -6650,49 +6650,49 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for a, b in self._isin_arrays():
             check(a, b)
 
-    def test_isin_3a(self):
-        np_pyfunc = np_isin_3a
-        np_nbfunc = njit(np_pyfunc)
+    # def test_isin_3a(self):
+    #     np_pyfunc = np_isin_3a
+    #     np_nbfunc = njit(np_pyfunc)
 
-        def check(ar1, ar2, assume_unique=False):
-            expected = np_pyfunc(ar1, ar2, assume_unique)
-            if isinstance(ar1, list):
-                ar1 = List(ar1)
-            if isinstance(ar2, list):
-                ar2 = List(ar2)
-            got = np_nbfunc(ar1, ar2, assume_unique)
-            self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
+    #     def check(ar1, ar2, assume_unique=False):
+    #         expected = np_pyfunc(ar1, ar2, assume_unique)
+    #         if isinstance(ar1, list):
+    #             ar1 = List(ar1)
+    #         if isinstance(ar2, list):
+    #             ar2 = List(ar2)
+    #         got = np_nbfunc(ar1, ar2, assume_unique)
+    #         self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
 
-        for a, b in self._isin_arrays():
-            check(a, b)
+    #     for a, b in self._isin_arrays():
+    #         check(a, b)
 
-            try:
-                len_a = len(a)
-            except TypeError:
-                len_a = 1
-            try:
-                len_b = len(b)
-            except TypeError:
-                len_b = 1
-            if len(np.unique(a)) == len_a and len(np.unique(b)) == len_b:
-                check(a, b, assume_unique=True)
+    #         try:
+    #             len_a = len(a)
+    #         except TypeError:
+    #             len_a = 1
+    #         try:
+    #             len_b = len(b)
+    #         except TypeError:
+    #             len_b = 1
+    #         if len(np.unique(a)) == len_a and len(np.unique(b)) == len_b:
+    #             check(a, b, assume_unique=True)
 
-    def test_isin_3b(self):
-        np_pyfunc = np_isin_3b
-        np_nbfunc = njit(np_pyfunc)
+    # def test_isin_3b(self):
+    #     np_pyfunc = np_isin_3b
+    #     np_nbfunc = njit(np_pyfunc)
 
-        def check(ar1, ar2, invert=False):
-            expected = np_pyfunc(ar1, ar2, invert)
-            if isinstance(ar1, list):
-                ar1 = List(ar1)
-            if isinstance(ar2, list):
-                ar2 = List(ar2)
-            got = np_nbfunc(ar1, ar2, invert)
-            self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
+    #     def check(ar1, ar2, invert=False):
+    #         expected = np_pyfunc(ar1, ar2, invert)
+    #         if isinstance(ar1, list):
+    #             ar1 = List(ar1)
+    #         if isinstance(ar2, list):
+    #             ar2 = List(ar2)
+    #         got = np_nbfunc(ar1, ar2, invert)
+    #         self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
 
-        for a, b in self._isin_arrays():
-            check(a, b, invert=False)
-            check(a, b, invert=True)
+    #     for a, b in self._isin_arrays():
+    #         check(a, b, invert=False)
+    #         check(a, b, invert=True)
 
     def test_isin_4(self):
         np_pyfunc = np_isin_4

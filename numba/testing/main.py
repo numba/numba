@@ -774,7 +774,7 @@ class ParallelTestRunner(runner.TextTestRunner):
         child_runner = _MinimalRunner(self.runner_cls, self.runner_args)
 
         # Split the tests and recycle the worker process to tame memory usage.
-        chunk_size = 100
+        chunk_size = 50
         splitted_tests = [self._ptests[i:i + chunk_size]
                           for i in range(0, len(self._ptests), chunk_size)]
 
