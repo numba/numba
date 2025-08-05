@@ -1756,18 +1756,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         check_values(values)
 
-    def _test_correlate_convolve(self, pyfunc):
-        cfunc = jit(nopython=True)(pyfunc)
-        # only 1d arrays are accepted, test varying lengths
-        # and varying dtype
-        lengths = (1, 2, 3, 7)
-        dts = [np.int8, np.int32, np.int64, np.float32, np.float64,
-               np.complex64, np.complex128]
-        modes = ["full", "valid", "same"]
+    @staticmethod
+    def _make_correlate_convolve_test(pyfunc, dt1, dt2, n, m, mode):
+        """Factory function to create individual test cases for correlate/convolve"""
+        def test_method(self):
+            cfunc = jit(nopython=True)(pyfunc)
 
-        for dt1, dt2, n, m, mode in itertools.product(
-            dts, dts, lengths, lengths, modes
-        ):
             a = np.arange(n, dtype=dt1)
             v = np.arange(m, dtype=dt2)
 
@@ -1781,16 +1775,56 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
             self.assertPreciseEqual(expected, got)
 
-        _a = np.arange(12).reshape(4, 3)
-        _b = np.arange(12)
-        for x, y in [(_a, _b), (_b, _a)]:
+        # Create a descriptive test name
+        test_name = f"test_{pyfunc.__name__}_{dt1.__name__}_{dt2.__name__}_n{n}_m{m}_{mode}"
+        test_method.__name__ = test_name
+        return test_method
+
+    @staticmethod
+    def _make_correlate_convolve_dimension_error_test(pyfunc, x_shape, y_shape):
+        """Factory function to create dimension error test cases"""
+        def test_method(self):
+            cfunc = jit(nopython=True)(pyfunc)
+
+            if x_shape == "2d":
+                x = np.arange(12).reshape(4, 3)
+            else:  # 1d
+                x = np.arange(12)
+
+            if y_shape == "2d":
+                y = np.arange(12).reshape(4, 3)
+            else:  # 1d
+                y = np.arange(12)
+
             with self.assertRaises(TypingError) as raises:
                 cfunc(x, y)
             msg = 'only supported on 1D arrays'
             self.assertIn(msg, str(raises.exception))
 
-    def test_correlate(self):
-        self._test_correlate_convolve(correlate)
+        test_name = f"test_{pyfunc.__name__}_dimension_error_{x_shape}_vs_{y_shape}"
+        test_method.__name__ = test_name
+        return test_method
+
+
+    @classmethod
+    def _generate_correlate_convolve_tests(cls, pyfunc):
+        """Generate all test methods for a given correlate/convolve function"""
+        lengths = (1, 2, 3, 7)
+        dts = [np.int8, np.int32, np.int64, np.float32, np.float64,
+            np.complex64, np.complex128]
+        modes = ["full", "valid", "same"]
+
+        # Generate parameter combination tests
+        for dt1, dt2, n, m, mode in itertools.product(dts, dts, lengths, lengths, modes):
+            test_method = cls._make_correlate_convolve_test(pyfunc, dt1, dt2, n, m, mode)
+            setattr(cls, test_method.__name__, test_method)
+
+        # Generate dimension error tests
+        dimension_combinations = [("2d", "1d"), ("1d", "2d")]
+        for x_shape, y_shape in dimension_combinations:
+            test_method = cls._make_correlate_convolve_dimension_error_test(pyfunc, x_shape, y_shape)
+            setattr(cls, test_method.__name__, test_method)
+
 
     def _test_correlate_convolve_exceptions(self, fn):
         # Exceptions leak references
@@ -1816,9 +1850,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_correlate_exceptions(self):
         # correlate supported 0 dimension arrays until 1.18
         self._test_correlate_convolve_exceptions(correlate)
-
-    def test_convolve(self):
-        self._test_correlate_convolve(convolve)
 
     def test_convolve_exceptions(self):
         self._test_correlate_convolve_exceptions(convolve)
@@ -6634,94 +6665,149 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                np.array([2, 3], dtype=np.float64))
         yield np.array([True, False]), np.array([False, True])
 
-    def test_isin_2(self):
+    def _check_isin_2(self, ar1, ar2):
         np_pyfunc = np_isin_2
         np_nbfunc = njit(np_pyfunc)
 
-        def check(ar1, ar2):
-            expected = np_pyfunc(ar1, ar2)
-            if isinstance(ar1, list):
-                ar1 = List(ar1)
-            if isinstance(ar2, list):
-                ar2 = List(ar2)
-            got = np_nbfunc(ar1, ar2)
-            self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
+        expected = np_pyfunc(ar1, ar2)
+        if isinstance(ar1, list):
+            ar1 = List(ar1)
+        if isinstance(ar2, list):
+            ar2 = List(ar2)
+        got = np_nbfunc(ar1, ar2)
+        self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
 
-        for a, b in self._isin_arrays():
-            check(a, b)
+    def _check_isin_3a(self, ar1, ar2, assume_unique=False):
+        np_pyfunc = np_isin_3a
+        np_nbfunc = njit(np_pyfunc)
 
-    # def test_isin_3a(self):
-    #     np_pyfunc = np_isin_3a
-    #     np_nbfunc = njit(np_pyfunc)
+        expected = np_pyfunc(ar1, ar2, assume_unique)
+        if isinstance(ar1, list):
+            ar1 = List(ar1)
+        if isinstance(ar2, list):
+            ar2 = List(ar2)
+        got = np_nbfunc(ar1, ar2, assume_unique)
+        self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
 
-    #     def check(ar1, ar2, assume_unique=False):
-    #         expected = np_pyfunc(ar1, ar2, assume_unique)
-    #         if isinstance(ar1, list):
-    #             ar1 = List(ar1)
-    #         if isinstance(ar2, list):
-    #             ar2 = List(ar2)
-    #         got = np_nbfunc(ar1, ar2, assume_unique)
-    #         self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
+    def _check_isin_3b(self, ar1, ar2, invert=False):
+        np_pyfunc = np_isin_3b
+        np_nbfunc = njit(np_pyfunc)
 
-    #     for a, b in self._isin_arrays():
-    #         check(a, b)
+        expected = np_pyfunc(ar1, ar2, invert)
+        if isinstance(ar1, list):
+            ar1 = List(ar1)
+        if isinstance(ar2, list):
+            ar2 = List(ar2)
+        got = np_nbfunc(ar1, ar2, invert)
+        self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
 
-    #         try:
-    #             len_a = len(a)
-    #         except TypeError:
-    #             len_a = 1
-    #         try:
-    #             len_b = len(b)
-    #         except TypeError:
-    #             len_b = 1
-    #         if len(np.unique(a)) == len_a and len(np.unique(b)) == len_b:
-    #             check(a, b, assume_unique=True)
-
-    # def test_isin_3b(self):
-    #     np_pyfunc = np_isin_3b
-    #     np_nbfunc = njit(np_pyfunc)
-
-    #     def check(ar1, ar2, invert=False):
-    #         expected = np_pyfunc(ar1, ar2, invert)
-    #         if isinstance(ar1, list):
-    #             ar1 = List(ar1)
-    #         if isinstance(ar2, list):
-    #             ar2 = List(ar2)
-    #         got = np_nbfunc(ar1, ar2, invert)
-    #         self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
-
-    #     for a, b in self._isin_arrays():
-    #         check(a, b, invert=False)
-    #         check(a, b, invert=True)
-
-    def test_isin_4(self):
+    def _check_isin_4(self, ar1, ar2, assume_unique=False, invert=False):
         np_pyfunc = np_isin_4
         np_nbfunc = njit(np_pyfunc)
 
-        def check(ar1, ar2, assume_unique=False, invert=False):
-            expected = np_pyfunc(ar1, ar2, assume_unique, invert)
-            if isinstance(ar1, list):
-                ar1 = List(ar1)
-            if isinstance(ar2, list):
-                ar2 = List(ar2)
-            got = np_nbfunc(ar1, ar2, assume_unique, invert)
-            self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
+        expected = np_pyfunc(ar1, ar2, assume_unique, invert)
+        if isinstance(ar1, list):
+            ar1 = List(ar1)
+        if isinstance(ar2, list):
+            ar2 = List(ar2)
+        got = np_nbfunc(ar1, ar2, assume_unique, invert)
+        self.assertPreciseEqual(expected, got, msg=f"ar1={ar1}, ar2={ar2}")
 
-        for a, b in self._isin_arrays():
-            check(a, b, invert=False)
-            check(a, b, invert=True)
+    @staticmethod
+    def _create_test_method(check_func, ar1, ar2, **kwargs):
+        """Factory function to create individual test methods"""
+        def test_method(self):
+            return check_func(self, ar1, ar2, **kwargs)
+        return test_method
 
-            try:
-                len_a = len(a)
-            except TypeError:
-                len_a = 1
-            try:
-                len_b = len(b)
-            except TypeError:
-                len_b = 1
-            if len(np.unique(a)) == len_a and len(np.unique(b)) == len_b:
-                check(a, b, assume_unique=True, invert=False)
-                check(a, b, assume_unique=True, invert=True)
+    @staticmethod
+    def _is_unique_arrays(ar1, ar2):
+        """Check if both arrays contain unique elements"""
+        try:
+            len_a = len(ar1)
+        except TypeError:
+            len_a = 1
+        try:
+            len_b = len(ar2)
+        except TypeError:
+            len_b = 1
+        return len(np.unique(ar1)) == len_a and len(np.unique(ar2)) == len_b
+
+    @classmethod
+    def _generate_isin_tests(cls):
+        """Generate individual test methods for each test case"""
+        test_data = list(cls._isin_arrays())
+
+        for i, (ar1, ar2) in enumerate(test_data):
+            # Generate test name suffix
+            if hasattr(ar1, 'dtype') and hasattr(ar2, 'dtype'):
+                suffix = f"{i}_dtype_{ar1.dtype}_{ar2.dtype}"
+            elif isinstance(ar1, list) and isinstance(ar2, list):
+                suffix = f"{i}_list_{len(ar1)}_{len(ar2)}"
+            else:
+                suffix = f"{i}_mixed"
+
+            # Create isin_2 tests
+            test_name = f"test_isin_2_{suffix}"
+            test_method = cls._create_test_method(
+                cls._check_isin_2, ar1, ar2
+            )
+            setattr(cls, test_name, test_method)
+
+            # Create isin_3a tests (basic)
+            test_name = f"test_isin_3a_{suffix}"
+            test_method = cls._create_test_method(
+                cls._check_isin_3a, ar1, ar2
+            )
+            setattr(cls, test_name, test_method)
+
+            # Create isin_3a tests with assume_unique=True (when applicable)
+            if cls._is_unique_arrays(ar1, ar2):
+                test_name = f"test_isin_3a_{suffix}_assume_unique"
+                test_method = cls._create_test_method(
+                    cls._check_isin_3a, ar1, ar2, assume_unique=True
+                )
+                setattr(cls, test_name, test_method)
+
+            # Create isin_3b tests
+            test_name = f"test_isin_3b_{suffix}"
+            test_method = cls._create_test_method(
+                cls._check_isin_3b, ar1, ar2
+            )
+            setattr(cls, test_name, test_method)
+
+            test_name = f"test_isin_3b_{suffix}_invert"
+            test_method = cls._create_test_method(
+                cls._check_isin_3b, ar1, ar2, invert=True
+            )
+            setattr(cls, test_name, test_method)
+
+            # Create isin_4 tests
+            test_name = f"test_isin_4_{suffix}"
+            test_method = cls._create_test_method(
+                cls._check_isin_4, ar1, ar2
+            )
+            setattr(cls, test_name, test_method)
+
+            test_name = f"test_isin_4_{suffix}_invert"
+            test_method = cls._create_test_method(
+                cls._check_isin_4, ar1, ar2, invert=True
+            )
+            setattr(cls, test_name, test_method)
+
+            # Create isin_4 tests with assume_unique=True (when applicable)
+            if cls._is_unique_arrays(ar1, ar2):
+                test_name = f"test_isin_4_{suffix}_assume_unique"
+                test_method = cls._create_test_method(
+                    cls._check_isin_4, ar1, ar2, assume_unique=True
+                )
+                setattr(cls, test_name, test_method)
+
+                test_name = f"test_isin_4_{suffix}_assume_unique_invert"
+                test_method = cls._create_test_method(
+                    cls._check_isin_4, ar1, ar2, assume_unique=True, invert=True
+                )
+                setattr(cls, test_name, test_method)
 
     def test_isin_errors(self):
         np_pyfunc = np_isin_4
@@ -6767,6 +6853,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         c2 = nb_setdiff1d(aux2, aux1)
         self.assertPreciseEqual(c1, c2)
 
+
+# Generate individual test methods for each isin test case
+TestNPFunctions._generate_isin_tests()
+TestNPFunctions._generate_correlate_convolve_tests(correlate)
+TestNPFunctions._generate_correlate_convolve_tests(convolve)
 
 class TestNPMachineParameters(TestCase):
     # tests np.finfo, np.iinfo, np.MachAr
