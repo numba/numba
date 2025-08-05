@@ -61,9 +61,18 @@ jobs:
         call activate %CONDA_ENV%
         set NUMBA_ENABLE_CUDASIM=1
         set NUMBA_CPU_NAME=generic
+        echo "Check problems"
+        python -m numba.runtests -b -v -m 2 -- numba.tests.test_parallel_backend.TestSpecificBackend.test_multiprocessing_spawn_concurrent_guvectorize_tbb numba.tests.test_parallel_backend.TestMiscBackendIssues.test_omp_stack_overflow
+      displayName: 'Test problematic files'
+
+    - script: |
+        call activate %CONDA_ENV%
+        set NUMBA_ENABLE_CUDASIM=1
+        set NUMBA_CPU_NAME=generic
         echo "Running shard of discovered tests: %TEST_START_INDEX%,None,%TEST_COUNT%"
         python -m numba.runtests -b -v -g -m 2 -- numba.tests
       displayName: 'Test modified test files'
+    
 
     - script: |
         call activate %CONDA_ENV%
