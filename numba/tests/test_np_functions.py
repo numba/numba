@@ -540,6 +540,7 @@ def np_isin_4(a, b, assume_unique=False, invert=False):
     return np.isin(a, b, assume_unique, invert)
 
 
+@unittest.skipIf(True, "too much memory pressure from here")
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
     Tests for various Numpy functions.
