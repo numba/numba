@@ -465,5 +465,22 @@ class TestCapturedErrorHandling(SerialMixin, TestCase):
             self.assertIn(expected, str(raises.exception))
 
 
+class TestCurlyBracesInPaths(unittest.TestCase):
+    """
+    Test that error messages handle file paths with curly braces (issue #10094)
+    """
+
+    def test_curly_braces_in_path_formatting(self):
+        # Issue #10094: paths with {uuid} caused KeyError in formatting
+        from numba.core.errors import _format_msg
+
+        problematic_path = r"C:\Users\{fa977bf3384160bce9243175b380be8}\file.py"
+        fmt = f"Error at {problematic_path}"
+
+        result = _format_msg(fmt, (), {})
+
+        expected = f"Error at {problematic_path}"
+        self.assertEqual(result, expected)
+
 if __name__ == '__main__':
     unittest.main()
