@@ -11,6 +11,7 @@ import time
 import unittest
 import warnings
 import zlib
+import pickle
 
 from functools import lru_cache
 from io import StringIO
@@ -699,7 +700,7 @@ class _MinimalRunner(object):
         # with self.cleanup_object(test):
         #     test(result)
         from numba.misc import memoryutils
-        memoryutils.install_atexit(f'memlog_pid{os.getpid()}.log')
+        memoryutils.install_atexit(os.environ['_NUMBA_MEMLOG_DATA_FILE'])
         with memoryutils.memory_monitor(test.id()):
             with self.cleanup_object(test):
                 test(result)
@@ -831,6 +832,23 @@ class ParallelTestRunner(runner.TextTestRunner):
                                                               self.useslice)
         print("Parallel: %s. Serial: %s" % (len(self._ptests),
                                             len(self._stests)))
-        # This will call self._run_inner() on the created result object,
-        # and print out the detailed test results at the end.
-        return super(ParallelTestRunner, self).run(self._run_inner)
+        from numba.misc.memoryutils import memory_monitor, get_memory_log, get_memory_records
+
+        MEMLOG_DATA_FILE = f"memlog_{int(time.time())}.dat"
+        os.environ['_NUMBA_MEMLOG_DATA_FILE'] = MEMLOG_DATA_FILE
+
+        try:
+            # This will call self._run_inner() on the created result object,
+            # and print out the detailed test results at the end.
+            with memory_monitor("main process"):
+                return super(ParallelTestRunner, self).run(self._run_inner)
+        finally:
+            with open(MEMLOG_DATA_FILE, "rb") as fin:
+                records = []
+                try:
+                    while True:
+                        records.extend(pickle.load(fin))
+                except EOFError:
+                    pass
+            print("FINAL MEMORY USAGE:".center(80, '='))
+            print(get_memory_log(records))

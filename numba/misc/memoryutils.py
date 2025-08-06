@@ -5,6 +5,7 @@ import io
 import os
 import sys
 import atexit
+import pickle
 
 # resource module is not available on Windows
 try:
@@ -191,13 +192,13 @@ class MemoryRecord:
         parts.append(f"Duration: {self.duration:.3f}s")
 
         if 'rss' in delta:
-            parts.append(f"RSS Δ: {format_bytes(delta['rss'])}")
+            parts.append(f"RSS delta: {format_bytes(delta['rss'])}")
 
         if 'vms' in delta:
-            parts.append(f"VMS Δ: {format_bytes(delta['vms'])}")
+            parts.append(f"VMS delta: {format_bytes(delta['vms'])}")
 
         if 'peak_rss' in delta:
-            parts.append(f"Peak RSS Δ: {format_bytes(delta['peak_rss'])}")
+            parts.append(f"Peak RSS delta: {format_bytes(delta['peak_rss'])}")
 
         return " | ".join(parts)
 
@@ -215,19 +216,21 @@ def install_atexit(filename) -> None:
 
     def memory_write_handler():
         from numba.core.config import IS_WIN32
-        msg = get_memory_log()
-        if IS_WIN32:
-            msg = msg.encode('ascii', errors='replace').decode('ascii')
-        print(msg)
+        msg = get_memory_log(_memory_records)
+        # print(msg)
+        with open(filename, "ab") as fout:
+            pickle.dump(_memory_records, fout, protocol=pickle.HIGHEST_PROTOCOL)
 
     atexit.register(memory_write_handler)
 
 
-def get_memory_log():
+def get_memory_log(records):
     with io.StringIO() as f:
-        _write_memory_log(f, _memory_records)
-        return f.getvalue()
-
+        _write_memory_log(f, records)
+        msg = f.getvalue().encode('ascii').decode('ascii')
+        # if IS_WIN32:
+        #     msg = msg.encode('ascii', errors='replace').decode('ascii')
+        return msg
 
 @contextlib.contextmanager
 def memory_monitor(name):
@@ -386,5 +389,5 @@ def format_memory_summary():
         return f"{sign}{bytes_val:.2f} TB"
 
     return (f"Memory Summary: {total_tests} tests, "
-            f"Total RSS Δ: {format_bytes(total_rss_delta)}, "
+            f"Total RSS delta: {format_bytes(total_rss_delta)}, "
             f"Total Duration: {total_duration:.3f}s")
