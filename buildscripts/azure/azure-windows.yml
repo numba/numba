@@ -65,7 +65,7 @@ jobs:
         set NUMBA_CPU_NAME=generic
         set NUMBA_REDUCED_TYPE_TESTING=1
         echo "Check problems"
-        python -m numba.runtests -b -v -m 2 -- numba.tests.test_parallel_backend.TestSpecificBackend.test_multiprocessing_spawn_concurrent_guvectorize_tbb numba.tests.test_parallel_backend.TestMiscBackendIssues.test_omp_stack_overflow
+        python -m numba.runtests -b -v -m 1 -- numba.tests.test_parallel_backend.TestSpecificBackend.test_multiprocessing_spawn_concurrent_guvectorize_tbb numba.tests.test_parallel_backend.TestMiscBackendIssues.test_omp_stack_overflow
       displayName: 'Test problematic files'
 
     # - script: |
@@ -84,5 +84,5 @@ jobs:
         set NUMBA_REDUCED_TYPE_TESTING=1
 
         echo "Running shard of discovered tests: %TEST_START_INDEX%:%TEST_COUNT%"
-        python runtests.py -m 2 -b -j "%TEST_START_INDEX%:%TEST_COUNT%"  --exclude-tags='long_running'  -- numba.tests
+        python runtests.py -m 1 -b -j "%TEST_START_INDEX%:%TEST_COUNT%"  --exclude-tags='long_running'  -- numba.tests
       displayName: 'Test shard of test files'
