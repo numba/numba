@@ -544,9 +544,10 @@ def np_isin_4(a, b, assume_unique=False, invert=False):
 def get_test_types():
     """Get type combinations based on test profile.
 
-    Returns different type sets based on NUMBA_REDUCED_TYPE_TESTING environment variable:
-    - If NUMBA_REDUCED_TYPE_TESTING=1: Use only double precision types (for Azure CI)
-    - Otherwise: Use full type coverage for comprehensive testing
+    Returns different type sets based on NUMBA_REDUCED_TYPE_TESTING environment
+    variable: - If NUMBA_REDUCED_TYPE_TESTING=1: Use only double precision
+    types (for Azure CI) - Otherwise: Use full type coverage for comprehensive
+    testing
     """
     reduced = bool(int(os.environ.get('NUMBA_REDUCED_TYPE_TESTING', 0)))
 
@@ -656,7 +657,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # real domain scalar context
         x_values = [1., -1., 0.0, -0.0, 0.5, -0.5, 5, -5, 5e-21, -5e-21]
         test_types = get_test_types()
-        x_types = test_types['real'] * (len(x_values) // len(test_types['real']) + 1)
+        x_types = test_types['real'] * (
+            len(x_values) // len(test_types['real']) + 1)
         check(x_types, x_values)
 
         # real domain vector context
@@ -671,7 +673,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                     5e-21+0j, -5e-21+0j, 5e-21j, +(0-5e-21j)                 # noqa
                     ]
         test_types = get_test_types()
-        x_types = test_types['complex'] * (len(x_values) // len(test_types['complex']) + 1)
+        x_types = test_types['complex'] * (
+            len(x_values) // len(test_types['complex']) + 1)
         check(x_types, x_values, ulps=2)
 
         # complex domain vector context
@@ -767,7 +770,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # real domain scalar context
         x_values = [1., -1., 0.0, -0.0, 0.5, -0.5, 5, -5]
         test_types = get_test_types()
-        x_types = test_types['real'] * (len(x_values) // len(test_types['real']) + 1)
+        x_types = test_types['real'] * (
+            len(x_values) // len(test_types['real']) + 1)
         check(x_types, x_values)
 
         # real domain vector context
@@ -779,7 +783,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x_values = [1.+0j, -1+0j, 0.0+0.0j, -0.0+0.0j, 1j, -1j, 0.5+0.0j, # noqa
                     -0.5+0.0j, 0.5+0.5j, -0.5-0.5j, 5+5j, -5-5j]          # noqa
         test_types = get_test_types()
-        x_types = test_types['complex'] * (len(x_values) // len(test_types['complex']) + 1)
+        x_types = test_types['complex'] * (
+            len(x_values) // len(test_types['complex']) + 1)
         check(x_types, x_values)
 
         # complex domain vector context
@@ -1433,12 +1438,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.assertPreciseEqual(expected, got)
 
         reduced = bool(int(os.environ.get('NUMBA_REDUCED_TYPE_TESTING', 0)))
-        
+
         if reduced:
             # Minimal essential testing for reduced mode
             bins = np.array([0, 1, 4])  # Simple sorted array
             values = np.array([0, 2, 5])  # Simple test values
-            
+
             # Test basic functionality only
             check(bins, values[0])  # scalar
             check(bins, values)     # array
@@ -1532,7 +1537,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.assertPreciseEqual(expected, got)
 
         reduced = bool(int(os.environ.get('NUMBA_REDUCED_TYPE_TESTING', 0)))
-        
+
         if reduced:
             # Essential tests only - minimal cases
             a = np.array([1, 3, 5])
@@ -1614,11 +1619,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.assertPreciseEqual(expected, got)
 
         reduced = bool(int(os.environ.get('NUMBA_REDUCED_TYPE_TESTING', 0)))
-        
+
         if reduced:
             # Essential complex number test only
-            a = np.array([1+0j, 2+1j, 3+0j])
-            v = np.array([1+1j, 2+0j])
+            a = np.array([1 + 0j, 2 + 1j, 3 + 0j])
+            v = np.array([1 + 1j, 2 + 0j])
             check(a, v)
             check(np.sort(a), v)
         else:
@@ -1828,7 +1833,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         reduced = bool(int(os.environ.get('NUMBA_REDUCED_TYPE_TESTING', 0)))
         if reduced:
             lengths = (1, 2)
-            test_types = get_test_types()
             dts = [np.float64, np.complex128]
             modes = ["full", "valid"]
         else:
@@ -2445,8 +2449,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 if not reduced:  # Skip list/tuple variations in reduced mode
                     self.assertPreciseEqual(d[cfunc(d.tolist(), kth)[kth]],
                                             d[tgt])  # a -> list
-                    self.assertPreciseEqual(d[cfunc(tuple(d.tolist()), kth)[kth]],
-                                            d[tgt])  # a -> tuple
+                    self.assertPreciseEqual(
+                        d[cfunc(tuple(d.tolist()), kth)[kth]],
+                        d[tgt])  # a -> tuple
 
                 for k in kth:
                     self.argpartition_sanity_check(pyfunc, cfunc, d, k)
@@ -4086,11 +4091,14 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         element_pool = (True, False, np.nan, -1, -1.0, -1.2, 1, 1.0, 1.5j)
         if reduced:
             # Reduce combinations to limit memory usage
-            for cond in itertools.islice(itertools.combinations_with_replacement(element_pool, 3), 10):
+            for cond in itertools.islice(
+                    itertools.combinations_with_replacement(element_pool, 3),
+                    10):
                 _check({'condition': cond, 'arr': a[:3]})
                 _check({'condition': np.array(cond), 'arr': a[:3]})
         else:
-            for cond in itertools.combinations_with_replacement(element_pool, 4):
+            for cond in itertools.combinations_with_replacement(
+                    element_pool, 4):
                 _check({'condition': cond, 'arr': a})
                 _check({'condition': np.array(cond).reshape(2, 2), 'arr': a})
 
@@ -6842,7 +6850,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 yield a, [2, 3, 4] * mult
                 yield a, [2, 3, 4] * mult + [5, 5, 4] * mult
                 yield np.array([5, 7, 1, 2]), np.array([2, 4, 3, 1, 5] * mult)
-                yield np.array([5, 7, 1, 1, 2]), np.array([2, 4, 3, 3, 1, 5] * mult)
+                yield (np.array([5, 7, 1, 1, 2]),
+                       np.array([2, 4, 3, 3, 1, 5] * mult))
                 yield np.array([5, 5]), np.array([2, 2] * mult)
 
             yield np.array([5]), np.array([2])
