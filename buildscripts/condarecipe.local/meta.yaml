@@ -84,9 +84,6 @@ test:
     # Need these for AOT. Do not init msvc as it may not be present
     - {{ compiler('c') }}      # [not (win or aarch64)]
     - {{ compiler('cxx') }}    # [not (win or aarch64)]
-  commands:
-    # Display system info
-    - python -m numba -s
 
 about:
   home: https://numba.pydata.org/
