@@ -6846,6 +6846,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for a, b in self._isin_arrays():
             check(a, b)
 
+    @unittest.skipIf(bool(int(os.environ.get('NUMBA_REDUCED_TYPE_TESTING', 0))), 
+                     "Skipped for reduced type testing")
     def test_isin_3a(self):
         np_pyfunc = np_isin_3a
         np_nbfunc = njit(np_pyfunc)
@@ -6873,6 +6875,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             if len(np.unique(a)) == len_a and len(np.unique(b)) == len_b:
                 check(a, b, assume_unique=True)
 
+    @unittest.skipIf(bool(int(os.environ.get('NUMBA_REDUCED_TYPE_TESTING', 0))), 
+                     "Skipped for reduced type testing")
     def test_isin_3b(self):
         np_pyfunc = np_isin_3b
         np_nbfunc = njit(np_pyfunc)
@@ -6890,6 +6894,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             check(a, b, invert=False)
             check(a, b, invert=True)
 
+    @unittest.skipIf(bool(int(os.environ.get('NUMBA_REDUCED_TYPE_TESTING', 0))), 
+                     "Skipped for reduced type testing")
     def test_isin_4(self):
         np_pyfunc = np_isin_4
         np_nbfunc = njit(np_pyfunc)
