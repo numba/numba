@@ -1,0 +1,10 @@
+Fix AzureCI memory limit failures
+---------------------------------
+
+Resolved AzureCI test failures caused by memory limit exhaustion. Windows 
+systems experienced system service failures, and LLVM code bloat on ``znver3`` 
+CPUs exacerbated memory usage.
+
+Implemented ``_NUMBA_REDUCED_TESTING=1`` environment variable to reduce test 
+cases, primarily targeting ``test_np_functions.py``. Reduced testing only 
+applies to Windows tests on Azure.
