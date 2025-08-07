@@ -2,6 +2,7 @@
 
 import itertools
 import math
+import os
 import platform
 from functools import partial
 from itertools import product
@@ -540,6 +541,32 @@ def np_isin_4(a, b, assume_unique=False, invert=False):
     return np.isin(a, b, assume_unique, invert)
 
 
+def get_test_types():
+    """Get type combinations based on test profile.
+
+    Returns different type sets based on NUMBA_REDUCED_TYPE_TESTING environment
+    variable: - If NUMBA_REDUCED_TYPE_TESTING=1: Use only double precision
+    types (for Azure CI) - Otherwise: Use full type coverage for comprehensive
+    testing
+    """
+    reduced = bool(int(os.environ.get('NUMBA_REDUCED_TYPE_TESTING', 0)))
+
+    if reduced:
+        return {
+            'real': [types.float64],
+            'complex': [types.complex128],
+            'integer': [types.int64],
+            'bool': [types.bool_]
+        }
+    else:
+        return {
+            'real': [types.float32, types.float64],
+            'complex': [types.complex64, types.complex128],
+            'integer': [types.int32, types.int64],
+            'bool': [types.bool_]
+        }
+
+
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
     Tests for various Numpy functions.
@@ -629,7 +656,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         # real domain scalar context
         x_values = [1., -1., 0.0, -0.0, 0.5, -0.5, 5, -5, 5e-21, -5e-21]
-        x_types = [types.float32, types.float64] * (len(x_values) // 2)
+        test_types = get_test_types()
+        x_types = test_types['real'] * (
+            len(x_values) // len(test_types['real']) + 1)
         check(x_types, x_values)
 
         # real domain vector context
@@ -643,7 +672,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                     # the following are to test sin(x)/x for small x
                     5e-21+0j, -5e-21+0j, 5e-21j, +(0-5e-21j)                 # noqa
                     ]
-        x_types = [types.complex64, types.complex128] * (len(x_values) // 2)
+        test_types = get_test_types()
+        x_types = test_types['complex'] * (
+            len(x_values) // len(test_types['complex']) + 1)
         check(x_types, x_values, ulps=2)
 
         # complex domain vector context
@@ -738,7 +769,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         # real domain scalar context
         x_values = [1., -1., 0.0, -0.0, 0.5, -0.5, 5, -5]
-        x_types = [types.float32, types.float64] * (len(x_values) // 2 + 1)
+        test_types = get_test_types()
+        x_types = test_types['real'] * (
+            len(x_values) // len(test_types['real']) + 1)
         check(x_types, x_values)
 
         # real domain vector context
@@ -749,12 +782,15 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # complex domain scalar context
         x_values = [1.+0j, -1+0j, 0.0+0.0j, -0.0+0.0j, 1j, -1j, 0.5+0.0j, # noqa
                     -0.5+0.0j, 0.5+0.5j, -0.5-0.5j, 5+5j, -5-5j]          # noqa
-        x_types = [types.complex64, types.complex128] * (len(x_values) // 2 + 1)
+        test_types = get_test_types()
+        x_types = test_types['complex'] * (
+            len(x_values) // len(test_types['complex']) + 1)
         check(x_types, x_values)
 
         # complex domain vector context
         x_values = np.array(x_values)
-        x_types = [types.complex64, types.complex128]
+        test_types = get_test_types()
+        x_types = test_types['complex']
         check(x_types, x_values)
 
     def test_angle_return_type(self):
@@ -1401,69 +1437,81 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc_right(a, v)
             self.assertPreciseEqual(expected, got)
 
-        # First with integer values (no NaNs)
-        bins = np.arange(5) ** 2
-        values = np.arange(20) - 1
+        reduced = bool(int(os.environ.get('NUMBA_REDUCED_TYPE_TESTING', 0)))
 
-        for a in (bins, list(bins)):
-            # Scalar values
-            for v in values:
-                check(a, v)
-            # Array values
-            for v in (values, values.reshape((4, 5))):
-                check(a, v)
-            # Sequence values
-            check(a, list(values))
+        if reduced:
+            # Minimal essential testing for reduced mode
+            bins = np.array([0, 1, 4])  # Simple sorted array
+            values = np.array([0, 2, 5])  # Simple test values
 
-        # Second with float values (including NaNs)
-        bins = np.float64(list(bins) + [float('nan')] * 7) / 2.0
-        values = np.arange(20) - 0.5
+            # Test basic functionality only
+            check(bins, values[0])  # scalar
+            check(bins, values)     # array
+            check(list(bins), values)  # list input
+        else:
+            # First with integer values (no NaNs)
+            bins = np.arange(5) ** 2
+            values = np.arange(20) - 1
 
-        for a in (bins, list(bins)):
-            # Scalar values
-            for v in values:
-                check(a, v)
-            # Array values
-            for v in (values, values.reshape((4, 5))):
-                check(a, v)
-            # Sequence values
-            check(a, list(values))
+            for a in (bins, list(bins)):
+                # Scalar values
+                for v in values:
+                    check(a, v)
+                # Array values
+                for v in (values, values.reshape((4, 5))):
+                    check(a, v)
+                # Sequence values
+                check(a, list(values))
 
-        # nonsense value for 'side' raises TypingError
-        def bad_side(a, v):
-            return np.searchsorted(a, v, side='nonsense')
-        cfunc = jit(nopython=True)(bad_side)
-        with self.assertTypingError():
-            cfunc([1,2], 1)
+            # Second with float values (including NaNs)
+            bins = np.float64(list(bins) + [float('nan')] * 7) / 2.0
+            values = np.arange(20) - 0.5
 
-        # non-constant value for 'side' raises TypingError
-        def nonconst_side(a, v, side='left'):
-            return np.searchsorted(a, v, side=side)
-        cfunc = jit(nopython=True)(nonconst_side)
-        with self.assertTypingError():
-            cfunc([1,2], 1, side='right')
+            for a in (bins, list(bins)):
+                # Scalar values
+                for v in values:
+                    check(a, v)
+                # Array values
+                for v in (values, values.reshape((4, 5))):
+                    check(a, v)
+                # Sequence values
+                check(a, list(values))
 
-        # Test unordered values
-        a = np.array([1, 2, 0])
-        v = np.array(
-            [
-                [5, 4],
-                [6, 7],
-                [2, 1],
-                [0, 3],
-            ]
-        )
-        check(a, v)
+            # nonsense value for 'side' raises TypingError
+            def bad_side(a, v):
+                return np.searchsorted(a, v, side='nonsense')
+            cfunc = jit(nopython=True)(bad_side)
+            with self.assertTypingError():
+                cfunc([1,2], 1)
 
-        a = np.array([9, 1, 4, 2, 0, 3, 7, 6, 8])
-        v = np.array(
-            [
-                [5, 10],
-                [10, 5],
-                [-1, 5],
-            ]
-        )
-        check(a, v)
+            # non-constant value for 'side' raises TypingError
+            def nonconst_side(a, v, side='left'):
+                return np.searchsorted(a, v, side=side)
+            cfunc = jit(nopython=True)(nonconst_side)
+            with self.assertTypingError():
+                cfunc([1,2], 1, side='right')
+
+            # Test unordered values
+            a = np.array([1, 2, 0])
+            v = np.array(
+                [
+                    [5, 4],
+                    [6, 7],
+                    [2, 1],
+                    [0, 3],
+                ]
+            )
+            check(a, v)
+
+            a = np.array([9, 1, 4, 2, 0, 3, 7, 6, 8])
+            v = np.array(
+                [
+                    [5, 10],
+                    [10, 5],
+                    [-1, 5],
+                ]
+            )
+            check(a, v)
 
     def test_searchsorted_supplemental(self):
         pyfunc = searchsorted
@@ -1488,53 +1536,64 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc_right(a, v)
             self.assertPreciseEqual(expected, got)
 
-        element_pool = list(range(-5, 50))
-        element_pool += [np.nan] * 5 + [np.inf] * 3 + [-np.inf] * 3
+        reduced = bool(int(os.environ.get('NUMBA_REDUCED_TYPE_TESTING', 0)))
 
-        for i in range(1000):
-            sample_size = self.rnd.choice([5, 10, 25])
-
-            # `a` and `v` not sorted; either may have repeating values
-            a = self.rnd.choice(element_pool, sample_size)
-            v = self.rnd.choice(element_pool, sample_size + (i % 3 - 1))
-
-            # output should match numpy regardless of whether `a` is sorted
+        if reduced:
+            # Essential tests only - minimal cases
+            a = np.array([1, 3, 5])
+            v = np.array([0, 2, 4, 6])
             check(a, v)
             check(np.sort(a), v)
+        else:
+            element_pool = list(range(-5, 50))
+            element_pool += [np.nan] * 5 + [np.inf] * 3 + [-np.inf] * 3
 
-        ones = np.ones(5)
-        nans = np.full(len(ones), fill_value=np.nan)
-        check(ones, ones)
+            iterations = 1000
 
-        # `a` and / or `v` full of nans
-        check(ones, nans)
-        check(nans, ones)
-        check(nans, nans)
+            for i in range(iterations):
+                sample_size = self.rnd.choice([5, 10, 25])
 
-        # `a` and `v` are float32
-        a = np.array([9, np.nan], dtype=np.float32)
-        v = np.array([np.nan], dtype=np.float32)
-        check(a, v)
+                # `a` and `v` not sorted; either may have repeating values
+                a = self.rnd.choice(element_pool, sample_size)
+                v = self.rnd.choice(element_pool, sample_size + (i % 3 - 1))
 
-        # `v` is zero size
-        a = np.arange(1)
-        v = np.arange(0)
-        check(a, v)
+                # output should match numpy regardless of whether `a` is sorted
+                check(a, v)
+                check(np.sort(a), v)
 
-        # `a` and `v` booleans
-        a = np.array([False, False, True, True])
-        v = np.array([False, True])
-        check(a, v)
+            ones = np.ones(5)
+            nans = np.full(len(ones), fill_value=np.nan)
+            check(ones, ones)
 
-        # `v` is a (scalar) boolean
-        a = [1, 2, 3]
-        v = True
-        check(a, v)
+            # `a` and / or `v` full of nans
+            check(ones, nans)
+            check(nans, ones)
+            check(nans, nans)
 
-        # `a` and `v` arrays of strings
-        a = np.array(['1', '2', '3'])
-        v = np.array(['2', '4'])
-        check(a, v)
+            # `a` and `v` are float32
+            a = np.array([9, np.nan], dtype=np.float32)
+            v = np.array([np.nan], dtype=np.float32)
+            check(a, v)
+
+            # `v` is zero size
+            a = np.arange(1)
+            v = np.arange(0)
+            check(a, v)
+
+            # `a` and `v` booleans
+            a = np.array([False, False, True, True])
+            v = np.array([False, True])
+            check(a, v)
+
+            # `v` is a (scalar) boolean
+            a = [1, 2, 3]
+            v = True
+            check(a, v)
+
+            # `a` and `v` arrays of strings
+            a = np.array(['1', '2', '3'])
+            v = np.array(['2', '4'])
+            check(a, v)
 
     def test_searchsorted_complex(self):
         pyfunc = searchsorted
@@ -1559,22 +1618,33 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc_right(a, v)
             self.assertPreciseEqual(expected, got)
 
-        pool = [0, 1, np.nan]
-        element_pool = [complex(*c) for c in itertools.product(pool, pool)]
+        reduced = bool(int(os.environ.get('NUMBA_REDUCED_TYPE_TESTING', 0)))
 
-        for i in range(100):
-            sample_size = self.rnd.choice([3, 5, len(element_pool)])
-
-            # `a` and `v` not sorted; either may have repeating values
-            a = self.rnd.choice(element_pool, sample_size)
-            v = self.rnd.choice(element_pool, sample_size + (i % 3 - 1))
-
-            # output should match numpy regardless of whether `a` is sorted
+        if reduced:
+            # Essential complex number test only
+            a = np.array([1 + 0j, 2 + 1j, 3 + 0j])
+            v = np.array([1 + 1j, 2 + 0j])
             check(a, v)
             check(np.sort(a), v)
+        else:
+            pool = [0, 1, np.nan]
+            element_pool = [complex(*c) for c in itertools.product(pool, pool)]
 
-        # check type promotion (a complex; v not so much)
-        check(a=np.array(element_pool), v=np.arange(2))
+            iterations = 100
+
+            for i in range(iterations):
+                sample_size = self.rnd.choice([3, 5, len(element_pool)])
+
+                # `a` and `v` not sorted; either may have repeating values
+                a = self.rnd.choice(element_pool, sample_size)
+                v = self.rnd.choice(element_pool, sample_size + (i % 3 - 1))
+
+                # output should match numpy regardless of whether `a` is sorted
+                check(a, v)
+                check(np.sort(a), v)
+
+            # check type promotion (a complex; v not so much)
+            check(a=np.array(element_pool), v=np.arange(2))
 
     def test_digitize(self):
         pyfunc = digitize
@@ -1760,10 +1830,16 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
         # only 1d arrays are accepted, test varying lengths
         # and varying dtype
-        lengths = (1, 2, 3, 7)
-        dts = [np.int8, np.int32, np.int64, np.float32, np.float64,
-               np.complex64, np.complex128]
-        modes = ["full", "valid", "same"]
+        reduced = bool(int(os.environ.get('NUMBA_REDUCED_TYPE_TESTING', 0)))
+        if reduced:
+            lengths = (1, 2)
+            dts = [np.float64, np.complex128]
+            modes = ["full", "valid"]
+        else:
+            lengths = (1, 2, 3, 7)
+            dts = [np.int8, np.int32, np.int64, np.float32, np.float64,
+                   np.complex64, np.complex128]
+            modes = ["full", "valid", "same"]
 
         for dt1, dt2, n, m, mode in itertools.product(
             dts, dts, lengths, lengths, modes
@@ -1834,8 +1910,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         _check_output = partial(self._check_output, pyfunc, cfunc)
 
         def _check(x):
-            n_choices = [None, 0, 1, 2, 3, 4]
-            increasing_choices = [True, False]
+            reduced = bool(int(os.environ.get('NUMBA_REDUCED_TYPE_TESTING', 0)))
+            if reduced:
+                n_choices = [None, 1, 2]
+                increasing_choices = [False]
+            else:
+                n_choices = [None, 0, 1, 2, 3, 4]
+                increasing_choices = [True, False]
 
             # N and increasing defaulted
             params = {'x': x}
@@ -1846,40 +1927,48 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 params = {'x': x, 'N': n}
                 _check_output(params)
 
-            # increasing provided and N defaulted:
-            for increasing in increasing_choices:
-                params = {'x': x, 'increasing': increasing}
-                _check_output(params)
-
-            # both n and increasing supplied
-            for n in n_choices:
+            if not reduced:
+                # increasing provided and N defaulted:
                 for increasing in increasing_choices:
-                    params = {'x': x, 'N': n, 'increasing': increasing}
+                    params = {'x': x, 'increasing': increasing}
                     _check_output(params)
 
-        _check(np.array([1, 2, 3, 5]))
-        _check(np.arange(7) - 10.5)
-        _check(np.linspace(3, 10, 5))
-        _check(np.array([1.2, np.nan, np.inf, -np.inf]))
-        _check(np.array([]))
-        _check(np.arange(-5, 5) - 0.3)
+                # both n and increasing supplied
+                for n in n_choices:
+                    for increasing in increasing_choices:
+                        params = {'x': x, 'N': n, 'increasing': increasing}
+                        _check_output(params)
 
-        # # boolean array
-        _check(np.array([True] * 5 + [False] * 4))
+        reduced = bool(int(os.environ.get('NUMBA_REDUCED_TYPE_TESTING', 0)))
+        if reduced:
+            # Minimal test cases for memory optimization
+            _check(np.array([1, 2, 3]))
+            _check(np.array([]))
+            _check([0, 1, 2])
+        else:
+            _check(np.array([1, 2, 3, 5]))
+            _check(np.arange(7) - 10.5)
+            _check(np.linspace(3, 10, 5))
+            _check(np.array([1.2, np.nan, np.inf, -np.inf]))
+            _check(np.array([]))
+            _check(np.arange(-5, 5) - 0.3)
 
-        # cycle through dtypes to check type promotion a la numpy
-        for dtype in np.int32, np.int64, np.float32, np.float64:
-            _check(np.arange(10, dtype=dtype))
+            # # boolean array
+            _check(np.array([True] * 5 + [False] * 4))
 
-        # non array inputs
-        _check([0, 1, 2, 3])
-        _check((4, 5, 6, 7))
-        _check((0.0, 1.0, 2.0))
-        _check(())
+            # cycle through dtypes to check type promotion a la numpy
+            for dtype in np.int32, np.int64, np.float32, np.float64:
+                _check(np.arange(10, dtype=dtype))
 
-        # edge cases
-        _check((3, 4.444, 3.142))
-        _check((True, False, 4))
+            # non array inputs
+            _check([0, 1, 2, 3])
+            _check((4, 5, 6, 7))
+            _check((0.0, 1.0, 2.0))
+            _check(())
+
+            # edge cases
+            _check((3, 4.444, 3.142))
+            _check((True, False, 4))
 
     def test_vander_exceptions(self):
         pyfunc = vander
@@ -2315,9 +2404,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py    # noqa: E501
         pyfunc = partition
         cfunc = jit(nopython=True)(pyfunc)
+        reduced = bool(int(os.environ.get('NUMBA_REDUCED_TYPE_TESTING', 0)))
 
-        for j in range(10, 30):
-            for i in range(1, j - 2):
+        j_range = range(10, 15) if reduced else range(10, 30)
+        for j in j_range:
+            i_range = range(1, min(5, j - 2)) if reduced else range(1, j - 2)
+            for i in i_range:
                 d = np.arange(j)
                 self.rnd.shuffle(d)
                 d = d % self.rnd.randint(2, 30)
@@ -2326,10 +2418,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 tgt = np.sort(d)[kth]
                 self.assertPreciseEqual(cfunc(d, kth)[kth],
                                         tgt)  # a -> array
-                self.assertPreciseEqual(cfunc(d.tolist(), kth)[kth],
-                                        tgt)  # a -> list
-                self.assertPreciseEqual(cfunc(tuple(d.tolist()), kth)[kth],
-                                        tgt)  # a -> tuple
+                if not reduced:  # Skip list/tuple variations in reduced mode
+                    self.assertPreciseEqual(cfunc(d.tolist(), kth)[kth],
+                                            tgt)  # a -> list
+                    self.assertPreciseEqual(cfunc(tuple(d.tolist()), kth)[kth],
+                                            tgt)  # a -> tuple
 
                 for k in kth:
                     self.partition_sanity_check(pyfunc, cfunc, d, k)
@@ -2339,9 +2432,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py    # noqa: E501
         pyfunc = argpartition
         cfunc = jit(nopython=True)(pyfunc)
+        reduced = bool(int(os.environ.get('NUMBA_REDUCED_TYPE_TESTING', 0)))
 
-        for j in range(10, 30):
-            for i in range(1, j - 2):
+        j_range = range(10, 15) if reduced else range(10, 30)
+        for j in j_range:
+            i_range = range(1, min(5, j - 2)) if reduced else range(1, j - 2)
+            for i in i_range:
                 d = np.arange(j)
                 self.rnd.shuffle(d)
                 d = d % self.rnd.randint(2, 30)
@@ -2350,10 +2446,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 tgt = np.argsort(d)[kth]
                 self.assertPreciseEqual(d[cfunc(d, kth)[kth]],
                                         d[tgt])  # a -> array
-                self.assertPreciseEqual(d[cfunc(d.tolist(), kth)[kth]],
-                                        d[tgt])  # a -> list
-                self.assertPreciseEqual(d[cfunc(tuple(d.tolist()), kth)[kth]],
-                                        d[tgt])  # a -> tuple
+                if not reduced:  # Skip list/tuple variations in reduced mode
+                    self.assertPreciseEqual(d[cfunc(d.tolist(), kth)[kth]],
+                                            d[tgt])  # a -> list
+                    self.assertPreciseEqual(
+                        d[cfunc(tuple(d.tolist()), kth)[kth]],
+                        d[tgt])  # a -> tuple
 
                 for k in kth:
                     self.argpartition_sanity_check(pyfunc, cfunc, d, k)
@@ -2623,14 +2721,26 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         # median of 3 killer, O(n^2) on pure median 3 pivot quickselect
         # exercises the median of median of 5 code used to keep O(n)
-        d = np.arange(1000000)
-        x = np.roll(d, d.size // 2)
-        mid = x.size // 2 + 1
-        self.assertEqual(cfunc(x, mid)[mid], mid)
-        d = np.arange(1000001)
-        x = np.roll(d, d.size // 2 + 1)
-        mid = x.size // 2 + 1
-        self.assertEqual(cfunc(x, mid)[mid], mid)
+        reduced = bool(int(os.environ.get('NUMBA_REDUCED_TYPE_TESTING', 0)))
+        if reduced:
+            # Use much smaller arrays to reduce memory usage
+            d = np.arange(100)
+            x = np.roll(d, d.size // 2)
+            mid = x.size // 2 + 1
+            self.assertEqual(cfunc(x, mid)[mid], mid)
+            d = np.arange(101)
+            x = np.roll(d, d.size // 2 + 1)
+            mid = x.size // 2 + 1
+            self.assertEqual(cfunc(x, mid)[mid], mid)
+        else:
+            d = np.arange(1000000)
+            x = np.roll(d, d.size // 2)
+            mid = x.size // 2 + 1
+            self.assertEqual(cfunc(x, mid)[mid], mid)
+            d = np.arange(1000001)
+            x = np.roll(d, d.size // 2 + 1)
+            mid = x.size // 2 + 1
+            self.assertEqual(cfunc(x, mid)[mid], mid)
 
         # max
         d = np.ones(10)
@@ -2641,12 +2751,21 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         assert np.isnan(cfunc(d, (2, -1))[-1])
 
         # equal elements
-        d = np.arange(47) % 7
-        tgt = np.sort(np.arange(47) % 7)
-        self.rnd.shuffle(d)
-        for i in range(d.size):
-            self.assertEqual(cfunc(d, i)[i], tgt[i])
-            self.partition_sanity_check(pyfunc, cfunc, d, i)
+        if reduced:
+            # Use smaller array for equal elements test
+            d = np.arange(15) % 3
+            tgt = np.sort(np.arange(15) % 3)
+            self.rnd.shuffle(d)
+            for i in range(0, d.size, 3):  # Sample fewer indices
+                self.assertEqual(cfunc(d, i)[i], tgt[i])
+                self.partition_sanity_check(pyfunc, cfunc, d, i)
+        else:
+            d = np.arange(47) % 7
+            tgt = np.sort(np.arange(47) % 7)
+            self.rnd.shuffle(d)
+            for i in range(d.size):
+                self.assertEqual(cfunc(d, i)[i], tgt[i])
+                self.partition_sanity_check(pyfunc, cfunc, d, i)
 
         d = np.array([0, 1, 2, 3, 4, 5, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
                       7, 7, 7, 7, 7, 9])
@@ -2726,14 +2845,26 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         # median of 3 killer, O(n^2) on pure median 3 pivot quickselect
         # exercises the median of median of 5 code used to keep O(n)
-        d = np.arange(1000000)
-        x = np.roll(d, d.size // 2)
-        mid = x.size // 2 + 1
-        self.assertEqual(x[cfunc(x, mid)[mid]], mid)
-        d = np.arange(1000001)
-        x = np.roll(d, d.size // 2 + 1)
-        mid = x.size // 2 + 1
-        self.assertEqual(x[cfunc(x, mid)[mid]], mid)
+        reduced = bool(int(os.environ.get('NUMBA_REDUCED_TYPE_TESTING', 0)))
+        if reduced:
+            # Use much smaller arrays to reduce memory usage
+            d = np.arange(1000)
+            x = np.roll(d, d.size // 2)
+            mid = x.size // 2 + 1
+            self.assertEqual(x[cfunc(x, mid)[mid]], mid)
+            d = np.arange(1001)
+            x = np.roll(d, d.size // 2 + 1)
+            mid = x.size // 2 + 1
+            self.assertEqual(x[cfunc(x, mid)[mid]], mid)
+        else:
+            d = np.arange(1000000)
+            x = np.roll(d, d.size // 2)
+            mid = x.size // 2 + 1
+            self.assertEqual(x[cfunc(x, mid)[mid]], mid)
+            d = np.arange(1000001)
+            x = np.roll(d, d.size // 2 + 1)
+            mid = x.size // 2 + 1
+            self.assertEqual(x[cfunc(x, mid)[mid]], mid)
 
         # max
         d = np.ones(10)
@@ -2939,17 +3070,23 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_partition_boolean_inputs(self):
         pyfunc = partition
         cfunc = jit(nopython=True)(pyfunc)
+        kths = (-1, 0, 1)
+        if numpy_version < (2, 3):
+            kths = (True, False) + kths
 
         for d in np.linspace(1, 10, 17), np.array((True, False, True)):
-            for kth in True, False, -1, 0, 1:
+            for kth in kths:
                 self.partition_sanity_check(pyfunc, cfunc, d, kth)
 
     def test_argpartition_boolean_inputs(self):
         pyfunc = argpartition
         cfunc = jit(nopython=True)(pyfunc)
+        kths = (-1, 0, 1)
+        if numpy_version < (2, 3):
+            kths = (True, False) + kths
 
         for d in np.linspace(1, 10, 17), np.array((True, False, True)):
-            for kth in True, False, -1, 0, 1:
+            for kth in kths:
                 self.argpartition_sanity_check(pyfunc, cfunc, d, kth)
 
     @needs_blas
@@ -3209,18 +3346,22 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         pyfunc = ediff1d
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc)
+        reduced = bool(int(os.environ.get('NUMBA_REDUCED_TYPE_TESTING', 0)))
 
         def to_variations(a):
             yield None
             yield a
-            yield a.astype(np.int16)
+            if not reduced:  # Skip additional type variations in reduced mode
+                yield a.astype(np.int16)
 
         def ary_variations(a):
             yield a
-            yield a.reshape(3, 2, 2)
-            yield a.astype(np.int32)
+            if not reduced:  # Skip reshape and type variations in reduced mode
+                yield a.reshape(3, 2, 2)
+                yield a.astype(np.int32)
 
-        for ary in ary_variations(np.linspace(-2, 7, 12)):
+        array_size = 6 if reduced else 12
+        for ary in ary_variations(np.linspace(-2, 7, array_size)):
             params = {'ary': ary}
             _check(params)
 
@@ -3922,15 +4063,20 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         pyfunc = extract
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc)
+        reduced = bool(int(os.environ.get('NUMBA_REDUCED_TYPE_TESTING', 0)))
 
         a = np.arange(10)
         self.rnd.shuffle(a)
-        for threshold in range(-3, 13):
+        threshold_range = range(-1, 5) if reduced else range(-3, 13)
+        for threshold in threshold_range:
             cond = a > threshold
             _check({'condition': cond, 'arr': a})
 
-        a = np.arange(60).reshape(4, 5, 3)
-        cond = a > 11.2
+        if reduced:
+            a = np.arange(12).reshape(3, 4)
+        else:
+            a = np.arange(60).reshape(4, 5, 3)
+        cond = a > 5.2
         _check({'condition': cond, 'arr': a})
 
         a = ((1, 2, 3), (3, 4, 5), (4, 5, 6))
@@ -3943,9 +4089,18 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         a = np.linspace(-2, 10, 6)
         element_pool = (True, False, np.nan, -1, -1.0, -1.2, 1, 1.0, 1.5j)
-        for cond in itertools.combinations_with_replacement(element_pool, 4):
-            _check({'condition': cond, 'arr': a})
-            _check({'condition': np.array(cond).reshape(2, 2), 'arr': a})
+        if reduced:
+            # Reduce combinations to limit memory usage
+            for cond in itertools.islice(
+                    itertools.combinations_with_replacement(element_pool, 3),
+                    10):
+                _check({'condition': cond, 'arr': a[:3]})
+                _check({'condition': np.array(cond), 'arr': a[:3]})
+        else:
+            for cond in itertools.combinations_with_replacement(
+                    element_pool, 4):
+                _check({'condition': cond, 'arr': a})
+                _check({'condition': np.array(cond).reshape(2, 2), 'arr': a})
 
         a = np.array([1, 2, 3])
         cond = np.array([])
@@ -5230,44 +5385,62 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 self.assertPreciseEqual(pyfunc(a, repeats), nbfunc(a, repeats))
 
             # test array arguments
-            target_numpy_values = [
-                np.ones(1),
-                np.arange(1000),
-                np.array([[0, 1], [2, 3]]),
-                np.array([]),
-                np.array([[], []]),
-            ]
-
-            target_numpy_types = [
-                np.uint32,
-                np.int32,
-                np.uint64,
-                np.int64,
-                np.float32,
-                np.float64,
-                np.complex64,
-                np.complex128,
-            ]
+            reduced = bool(int(os.environ.get('NUMBA_REDUCED_TYPE_TESTING', 0)))
+            if reduced:
+                # Reduced test data for memory optimization
+                target_numpy_values = [
+                    np.ones(1),
+                    np.arange(10),  # Much smaller than 1000
+                    np.array([]),
+                ]
+                target_numpy_types = [
+                    np.float64,
+                    np.complex128,
+                ]
+                repeats_values = [0, 1, 2]  # Fewer repeat values
+            else:
+                target_numpy_values = [
+                    np.ones(1),
+                    np.arange(1000),
+                    np.array([[0, 1], [2, 3]]),
+                    np.array([]),
+                    np.array([[], []]),
+                ]
+                target_numpy_types = [
+                    np.uint32,
+                    np.int32,
+                    np.uint64,
+                    np.int64,
+                    np.float32,
+                    np.float64,
+                    np.complex64,
+                    np.complex128,
+                ]
+                repeats_values = [0, 1, 2, 3, 100]
 
             target_numpy_inputs = (np.array(a,dtype=t) for a,t in
                                    itertools.product(target_numpy_values,
                                                      target_numpy_types))
 
-            target_non_numpy_inputs = [
-                1,
-                1.0,
-                True,
-                1j,
-                [0, 1, 2],
-                (0, 1, 2),
-            ]
+            if reduced:
+                target_non_numpy_inputs = [
+                    1,
+                    [0, 1, 2],
+                ]
+            else:
+                target_non_numpy_inputs = [
+                    1,
+                    1.0,
+                    True,
+                    1j,
+                    [0, 1, 2],
+                    (0, 1, 2),
+                ]
+
             for i in itertools.chain(target_numpy_inputs,
                                      target_non_numpy_inputs):
-                check(i, repeats=0)
-                check(i, repeats=1)
-                check(i, repeats=2)
-                check(i, repeats=3)
-                check(i, repeats=100)
+                for repeats in repeats_values:
+                    check(i, repeats=repeats)
 
             # check broadcasting when repeats is an array/list
             one = np.arange(1)
@@ -6607,89 +6780,107 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     @staticmethod
     def _isin_arrays():
-        yield (List.empty_list(types.float64),
-               List.empty_list(types.float64))  # two empty arrays
-        yield (np.zeros((1, 0), dtype=np.int64),
-               List.empty_list(types.int64))  # two-dim array - shape (1, 0)
-        yield (np.zeros((0, 0), dtype=np.int64),
-               List.empty_list(types.int64))
-        yield (np.zeros((0, 1), dtype=np.int64),
-               List.empty_list(types.int64))
-        yield [1], List.empty_list(types.float64)  # empty right
-        yield List.empty_list(types.float64), [1]  # empty left
-        yield [1], [2]  # singletons - False
-        yield [1], [1]  # singletons - True
-        yield [1, 2], [1]
-        yield [1, 2, 2], [2, 2]
-        yield [1, 2, 2], [2, 2, 3]
-        yield [1, 2], [2, 1]
-        yield [2, 3], np.arange(20)  # Test the "sorting" method.
-        yield [2, 3], np.tile(np.arange(5), 4)
-        yield np.arange(30).reshape(2, 3, 5), [5, 7, 10, 15]  # 3d
+        reduced = bool(int(os.environ.get('NUMBA_REDUCED_TYPE_TESTING', 0)))
 
-        # from numpy
-        # https://github.com/numpy/numpy/blob/b0371ef240560e78b651a5d7c9407ae3212a3d56/numpy/lib/tests/test_arraysetops.py#L200 # noqa: E501
-        a = np.arange(24).reshape([2, 3, 4])
-        b = np.array([[10, 20, 30], [0, 1, 3], [11, 22, 33]])
-        yield a, b
-        yield np.array(3), b
-        yield a, np.array(3)
-        yield np.array(3), np.array(3)
-        yield 5, b
-        yield a, 6
-        yield 5, 6
-        yield List.empty_list(types.int64), b
-        yield a, List.empty_list(types.int64)
+        if reduced:
+            # Minimal test cases for memory optimization
+            yield [1], [1]  # singletons - True
+            yield [1], [2]  # singletons - False
+            yield [2, 3], [3, 4]  # basic arrays
 
-        for dtype in [bool, np.int64, np.float64]:
-            if dtype in {np.int64, np.float64}:
-                ar = np.array([10, 20, 30], dtype=dtype)
-            elif dtype in {bool}:
-                ar = np.array([True, False, False])
-
-            empty_array = np.array([], dtype=dtype)
-
-            yield empty_array, ar
-            yield ar, empty_array
-            yield empty_array, empty_array
-
-        for mult in (1, 10):
-            yield [5, 7, 1, 2], [2, 4, 3, 1, 5] * mult
-            yield [8, 7, 1, 2], [2, 4, 3, 1, 5] * mult
-            yield [4, 7, 1, 8], [2, 4, 3, 1, 5] * mult
-            a = [5, 4, 5, 3, 4, 4, 3, 4, 3, 5, 2, 1, 5, 5]
-            yield a, [2, 3, 4] * mult
-            yield a, [2, 3, 4] * mult + [5, 5, 4] * mult
-            yield np.array([5, 7, 1, 2]), np.array([2, 4, 3, 1, 5] * mult)
-            yield np.array([5, 7, 1, 1, 2]), np.array([2, 4, 3, 3, 1, 5] * mult)
-            yield np.array([5, 5]), np.array([2, 2] * mult)
-
-        yield np.array([5]), np.array([2])
-        yield np.array([True, False]), np.array([False, False, False])
-
-        for dtype1, dtype2 in [
-            (np.int8, np.int16),
-            (np.int16, np.int8),
-            (np.uint8, np.uint16),
-            (np.uint16, np.uint8),
-            (np.uint8, np.int16),
-            (np.int16, np.uint8),
-        ]:
-            is_dtype2_signed = np.issubdtype(dtype2, np.signedinteger)
-            ar1 = np.array([0, 0, 1, 1], dtype=dtype1)
-
-            if is_dtype2_signed:
-                ar2 = np.array([-128, 0, 127], dtype=dtype2)
-            else:
-                ar2 = np.array([127, 0, 255], dtype=dtype2)
-
-            yield ar1, ar2
-
-        for dtype in np.typecodes["AllInteger"]:
-            a = np.array([True, False, False], dtype=bool)
-            b = np.array([0, 0, 0, 0], dtype=dtype)
+            # One numpy array test
+            a = np.arange(4).reshape([2, 2])
+            b = np.array([2, 3])
             yield a, b
-            yield b, a
+        else:
+            yield (List.empty_list(types.float64),
+                   List.empty_list(types.float64))  # two empty arrays
+            yield (np.zeros((1, 0), dtype=np.int64),
+                   List.empty_list(types.int64))  # two-dim array - shape (1, 0)
+            yield (np.zeros((0, 0), dtype=np.int64),
+                   List.empty_list(types.int64))
+            yield (np.zeros((0, 1), dtype=np.int64),
+                   List.empty_list(types.int64))
+            yield [1], List.empty_list(types.float64)  # empty right
+            yield List.empty_list(types.float64), [1]  # empty left
+            yield [1], [2]  # singletons - False
+            yield [1], [1]  # singletons - True
+            yield [1, 2], [1]
+            yield [1, 2, 2], [2, 2]
+            yield [1, 2, 2], [2, 2, 3]
+            yield [1, 2], [2, 1]
+
+            yield [2, 3], np.arange(20)  # Test the "sorting" method.
+            yield [2, 3], np.tile(np.arange(5), 4)
+            yield np.arange(30).reshape(2, 3, 5), [5, 7, 10, 15]  # 3d
+
+            # from numpy
+            # https://github.com/numpy/numpy/blob/b0371ef240560e78b651a5d7c9407ae3212a3d56/numpy/lib/tests/test_arraysetops.py#L200 # noqa: E501
+            a = np.arange(24).reshape([2, 3, 4])
+            b = np.array([[10, 20, 30], [0, 1, 3], [11, 22, 33]])
+            yield a, b
+            yield np.array(3), b
+            yield a, np.array(3)
+            yield np.array(3), np.array(3)
+            yield 5, b
+            yield a, 6
+            yield 5, 6
+            yield List.empty_list(types.int64), b
+            yield a, List.empty_list(types.int64)
+
+            for dtype in [bool, np.int64, np.float64]:
+                if dtype in {np.int64, np.float64}:
+                    ar = np.array([10, 20, 30], dtype=dtype)
+                elif dtype in {bool}:
+                    ar = np.array([True, False, False])
+
+                empty_array = np.array([], dtype=dtype)
+
+                yield empty_array, ar
+                yield ar, empty_array
+                yield empty_array, empty_array
+
+        if not reduced:
+            mult_range = (1, 10)
+            for mult in mult_range:
+                yield [5, 7, 1, 2], [2, 4, 3, 1, 5] * mult
+                yield [8, 7, 1, 2], [2, 4, 3, 1, 5] * mult
+                yield [4, 7, 1, 8], [2, 4, 3, 1, 5] * mult
+                a = [5, 4, 5, 3, 4, 4, 3, 4, 3, 5, 2, 1, 5, 5]
+                yield a, [2, 3, 4] * mult
+                yield a, [2, 3, 4] * mult + [5, 5, 4] * mult
+                yield np.array([5, 7, 1, 2]), np.array([2, 4, 3, 1, 5] * mult)
+                yield (np.array([5, 7, 1, 1, 2]),
+                       np.array([2, 4, 3, 3, 1, 5] * mult))
+                yield np.array([5, 5]), np.array([2, 2] * mult)
+
+            yield np.array([5]), np.array([2])
+            yield np.array([True, False]), np.array([False, False, False])
+
+        if not reduced:
+            for dtype1, dtype2 in [
+                (np.int8, np.int16),
+                (np.int16, np.int8),
+                (np.uint8, np.uint16),
+                (np.uint16, np.uint8),
+                (np.uint8, np.int16),
+                (np.int16, np.uint8),
+            ]:
+                is_dtype2_signed = np.issubdtype(dtype2, np.signedinteger)
+                ar1 = np.array([0, 0, 1, 1], dtype=dtype1)
+
+                if is_dtype2_signed:
+                    ar2 = np.array([-128, 0, 127], dtype=dtype2)
+                else:
+                    ar2 = np.array([127, 0, 255], dtype=dtype2)
+
+                yield ar1, ar2
+
+            for dtype in np.typecodes["AllInteger"]:
+                a = np.array([True, False, False], dtype=bool)
+                b = np.array([0, 0, 0, 0], dtype=dtype)
+                yield a, b
+                yield b, a
 
     def test_isin_2(self):
         np_pyfunc = np_isin_2
@@ -6707,6 +6898,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for a, b in self._isin_arrays():
             check(a, b)
 
+    @unittest.skipIf(bool(int(os.environ.get('NUMBA_REDUCED_TYPE_TESTING', 0))),
+                     "Skipped for reduced type testing")
     def test_isin_3a(self):
         np_pyfunc = np_isin_3a
         np_nbfunc = njit(np_pyfunc)
@@ -6734,6 +6927,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             if len(np.unique(a)) == len_a and len(np.unique(b)) == len_b:
                 check(a, b, assume_unique=True)
 
+    @unittest.skipIf(bool(int(os.environ.get('NUMBA_REDUCED_TYPE_TESTING', 0))),
+                     "Skipped for reduced type testing")
     def test_isin_3b(self):
         np_pyfunc = np_isin_3b
         np_nbfunc = njit(np_pyfunc)
@@ -6751,6 +6946,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             check(a, b, invert=False)
             check(a, b, invert=True)
 
+    @unittest.skipIf(bool(int(os.environ.get('NUMBA_REDUCED_TYPE_TESTING', 0))),
+                     "Skipped for reduced type testing")
     def test_isin_4(self):
         np_pyfunc = np_isin_4
         np_nbfunc = njit(np_pyfunc)

@@ -1,0 +1,4 @@
+Support for NumPy 2.3
+---------------------
+
+Numba now supports NumPy 2.3.

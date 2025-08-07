@@ -119,6 +119,9 @@ fi
 # First run Numba's Power-On-Self-Test to make sure testing will likely work
 python -m numba.misc.POST
 
+export NUMBA_CPU_NAME=generic
+export NUMBA_CPU_FEATURES=''
+
 # Now run tests based on the changes identified via git
 NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -g -m $TEST_NPROCS -- numba.tests
 
