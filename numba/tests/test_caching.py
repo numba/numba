@@ -837,16 +837,19 @@ class TestCacheWithCpuSetting(DispatcherCacheUsecasesTest):
     def test_user_set_cpu_name(self):
         self.check_pycache(0)
 
-        cpu_codegen = cpu_target.target_context.codegen()
         # Run initial test without NUMBA_CPU_NAME to ensure host CPU
         self.run_in_separate_process(
-            envvars={'NUMBA_CPU_NAME': ll.get_host_cpu_name()}
+            envvars={'NUMBA_CPU_NAME': ll.get_host_cpu_name(),
+                     'NUMBA_CPU_FEATURES': ''}
         )
         mtimes = self.get_cache_mtimes()
         cache_size = len(self.cache_contents())
 
         # Change CPU name to generic
-        self.run_in_separate_process(envvars={'NUMBA_CPU_NAME': 'generic'})
+        self.run_in_separate_process(envvars={
+            'NUMBA_CPU_NAME': 'generic',
+            'NUMBA_CPU_FEATURES': '',
+        })
 
         self.check_later_mtimes(mtimes)
         self.assertGreater(len(self.cache_contents()), cache_size)
@@ -862,7 +865,7 @@ class TestCacheWithCpuSetting(DispatcherCacheUsecasesTest):
         else:
             key_host, key_generic = key_a, key_b
         self.assertEqual(key_host[1][1], ll.get_host_cpu_name())
-        self.assertEqual(key_host[1][2], cpu_codegen._get_host_cpu_features())
+        self.assertEqual(key_host[1][2], '')
         self.assertEqual(key_generic[1][1], 'generic')
         self.assertEqual(key_generic[1][2], '')
 
