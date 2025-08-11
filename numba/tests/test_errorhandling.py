@@ -474,7 +474,11 @@ class TestCurlyBracesInPaths(unittest.TestCase):
         from numba.core.errors import _format_msg
 
         # used on typeinfer: placeholders with positional args
-        problematic_path = r"C:\\Users\\{fa977bf3384160bce9243175b380be8}\\file.py"
+        problematic_path = (
+            r"C:\\Users\\"
+            r"{fa977bf3384160bce9243175b380be8}"
+            r"\\file.py"
+        )
         fmt = "Error at {0}"
 
         result = _format_msg(fmt, (problematic_path,), {})
@@ -493,6 +497,7 @@ class TestCurlyBracesInPaths(unittest.TestCase):
 
         expected = f"Pass {name_with_braces}"
         self.assertEqual(result, expected)
+
 
 if __name__ == '__main__':
     unittest.main()
