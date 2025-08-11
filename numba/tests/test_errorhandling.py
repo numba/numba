@@ -470,16 +470,28 @@ class TestCurlyBracesInPaths(unittest.TestCase):
     Test that error messages handle file paths with curly braces (issue #10094)
     """
 
-    def test_curly_braces_in_path_formatting(self):
-        # Issue #10094: paths with {uuid} caused KeyError in formatting
+    def test_placeholders_with_positional_args(self):
         from numba.core.errors import _format_msg
 
-        problematic_path = r"C:\Users\{fa977bf3384160bce9243175b380be8}\file.py"
-        fmt = f"Error at {problematic_path}"
+        # used on typeinfer: placeholders with positional args
+        problematic_path = r"C:\\Users\\{fa977bf3384160bce9243175b380be8}\\file.py"
+        fmt = "Error at {0}"
+
+        result = _format_msg(fmt, (problematic_path,), {})
+
+        expected = f"Error at {problematic_path}"
+        self.assertEqual(result, expected)
+
+    def test_preformatted_string_no_args(self):
+        from numba.core.errors import _format_msg
+
+        # used on compiler_machinery: preformatted string without args
+        name_with_braces = "{abc123}"
+        fmt = f"Pass {name_with_braces}"
 
         result = _format_msg(fmt, (), {})
 
-        expected = f"Error at {problematic_path}"
+        expected = f"Pass {name_with_braces}"
         self.assertEqual(result, expected)
 
 if __name__ == '__main__':
