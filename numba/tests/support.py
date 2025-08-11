@@ -120,6 +120,16 @@ IS_NUMPY_2 = numpy_support.numpy_version >= (2, 0)
 skip_if_numpy_2 = unittest.skipIf(IS_NUMPY_2,
                                   "Not supported on numpy 2.0+")
 
+REDUCED_TESTING = bool(int(os.environ.get('_NUMBA_REDUCED_TESTING', 0)))
+"""
+Set to truthy to reduce the amount of testing. This can reduce memory use by
+tests on resource-limited machines.
+"""
+
+skip_if_reduced_testing = unittest.skipIf(REDUCED_TESTING,
+                                          "Skipped for reduced testing")
+
+
 def expected_failure_py311(fn):
     if utils.PYVERSION == (3, 11):
         return unittest.expectedFailure(fn)
