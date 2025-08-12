@@ -1575,6 +1575,13 @@ class TraceRunner(object):
         state.append(inst, items=items, res=res)
         state.push(res)
 
+    def op_SET_ADD(self, state, inst):
+        value = state.pop()
+        target = state.get_tos()
+        addvar = state.make_temp()
+        res = state.make_temp()
+        state.append(inst, value=value, target=target, addvar=addvar, res=res)
+
     def op_SET_UPDATE(self, state, inst):
         value = state.pop()
         index = inst.arg
