@@ -170,7 +170,7 @@ def install_atexit(filename) -> None:
     _atexit_installed = True
 
     def memory_write_handler():
-        summary = get_memory_log(_memory_records)
+        summary = get_memory_log(_memory_records, topk=-1)
         print(summary)
         with open(filename, "ab") as fout:
             pickle.dump(
@@ -180,9 +180,9 @@ def install_atexit(filename) -> None:
     atexit.register(memory_write_handler)
 
 
-def get_memory_log(records: List[_MemoryRecord]) -> str:
+def get_memory_log(records: List[_MemoryRecord], topk=20) -> str:
     with io.StringIO() as f:
-        _write_memory_log(f, records)
+        _write_memory_log(f, records, topk=topk)
         return f.getvalue()
 
 
