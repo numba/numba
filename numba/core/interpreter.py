@@ -2811,6 +2811,14 @@ class Interpreter(object):
                                  loc=self.loc)
         self.store(expr, res)
 
+    def op_SET_ADD(self, inst, value, target, addvar, res):
+        value = self.get(value)
+        target = self.get(target)
+        addattr = ir.Expr.getattr(target, 'add', loc=self.loc)
+        self.store(value=addattr, name=addvar)
+        addinst = ir.Expr.call(self.get(addvar), (value, ), (), loc=self.loc)
+        self.store(value=addinst, name=res)
+
     def op_SET_UPDATE(self, inst, target, value, updatevar, res):
         target = self.get(target)
         value = self.get(value)
