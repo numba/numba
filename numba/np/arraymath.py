@@ -3966,6 +3966,10 @@ def np_histogram(a, bins=10, range=None):
                 if not bin_min <= bin_max:
                     raise ValueError("histogram(): max must be larger than "
                                      "min in range parameter")
+                
+                if bin_min == bin_max:
+                    bin_min = bin_min - 0.5
+                    bin_max = bin_max + 0.5
 
                 hist = np.zeros(bins, np.intp)
                 if bin_max > bin_min:
