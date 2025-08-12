@@ -78,6 +78,7 @@ class TestMonitoring(TestCase):
         # Checks that PY_START calls were correctly captured for a
         # `self.call_foo(self.arg)` call.
         mockcalls = allcalls[PY_START]
+        print('check_py_start_calls', mockcalls._mock_call_args_list)
         self.assertEqual(mockcalls.call_count, 2)
         # Find the resume op, this is where the code for `call_foo` "starts"
         inst = [x for x in dis.get_instructions(self.call_foo)
@@ -92,6 +93,7 @@ class TestMonitoring(TestCase):
         # Checks that PY_RETURN calls were correctly captured for a
         # `self.call_foo(self.arg)` call.
         mockcalls = allcalls[PY_RETURN]
+        print('check_py_return_calls', mockcalls._mock_call_args_list)
         self.assertEqual(mockcalls.call_count, 2)
         # These are in the order the returns were encountered. Return from `foo`
         # occurred first, followed by return from `call_foo`.
