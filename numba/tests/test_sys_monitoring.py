@@ -104,7 +104,8 @@ class TestMonitoring(TestCase):
                  call(self.call_foo.__code__, offset, self.call_foo_result)]
         mockcalls.assert_has_calls(calls)
 
-    def run_with_events(self, function, args, events, tool_id=None):
+    def run_with_events(self, function, args, events, tool_id=None,
+                        barrier=None):
         # Runs function with args with monitoring set for events on `tool_id`
         # (if present, else just uses the default of "PROFILER_ID") returns a
         # dictionary event->callback.
@@ -121,14 +122,18 @@ class TestMonitoring(TestCase):
                 sys.monitoring.register_callback(_tool_id, event, callback)
                 callbacks[event] = callback
                 event_bitmask |= event
+            if barrier is not None:
+                barrier()
             # only start monitoring once callbacks are registered
             sys.monitoring.set_events(_tool_id, event_bitmask)
             function(*args)
         finally:
             # clean up state
+            sys.monitoring.set_events(_tool_id, NO_EVENTS)
+            if barrier is not None:
+                barrier()
             for event in events:
                 sys.monitoring.register_callback(_tool_id, event, None)
-            sys.monitoring.set_events(_tool_id, NO_EVENTS)
             sys.monitoring.free_tool_id(_tool_id)
         return callbacks
 
@@ -697,29 +702,36 @@ class TestMonitoring(TestCase):
         # two threads, different tools and events registered on each thread.
         import traceback
 
+        barrier = threading.Barrier(2)
+
+        def barrier_cb():
+            barrier.wait()
+
         def t1_work(self, q):
             try:
                 # test event PY_START on a "debugger tool"
                 cb = self.run_with_events(self.call_foo, (self.arg,),
                                           (PY_START,),
-                                          tool_id=sys.monitoring.DEBUGGER_ID)
+                                          tool_id=sys.monitoring.DEBUGGER_ID,
+                                          barrier=barrier_cb)
                 # Check...
                 self.assertEqual(len(cb), 1)
                 self.check_py_start_calls(cb)
             except Exception as e:
-                q.put(traceback.format_exception(e))
+                q.put(''.join(traceback.format_exception(e)))
 
         def t2_work(self, q):
             try:
                 # test event PY_RETURN on a "coverage tool"
                 cb = self.run_with_events(self.call_foo, (self.arg,),
                                           (PY_RETURN,),
-                                          tool_id=sys.monitoring.COVERAGE_ID)
+                                          tool_id=sys.monitoring.COVERAGE_ID,
+                                          barrier=barrier_cb)
                 # Check...
                 self.assertEqual(len(cb), 1)
                 self.check_py_return_calls(cb)
             except Exception as e:
-                q.put(traceback.format_exception(e))
+                q.put(''.join(traceback.format_exception(e)))
 
         q1 = queue.Queue()
         t1 = threading.Thread(target=t1_work, args=(self, q1))
