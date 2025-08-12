@@ -63,6 +63,15 @@ jobs:
     #     python -m numba.runtests -b -v -g -m 1 -- numba.tests
     #   displayName: 'Test modified test files'
     
+    - script: |
+        call activate %CONDA_ENV%
+        set NUMBA_ENABLE_CUDASIM=1
+        set NUMBA_CPU_NAME=generic
+        set _NUMBA_REDUCED_TESTING=1
+
+        python runtests.py -m 1 -vb numba.tests.test_sys_monitoring.TestMonitoring.test_monitoring_multiple_threads
+      displayName: 'Test problematic test'
+
 
     - script: |
         call activate %CONDA_ENV%
@@ -71,5 +80,5 @@ jobs:
         set _NUMBA_REDUCED_TESTING=1
 
         echo "Running shard of discovered tests: %TEST_START_INDEX%:%TEST_COUNT%"
-        python runtests.py -m 1 -b -j "%TEST_START_INDEX%:%TEST_COUNT%"  --exclude-tags='long_running'  -- numba.tests
+        python runtests.py -m 1 -vb -j "%TEST_START_INDEX%:%TEST_COUNT%"  --exclude-tags='long_running'  -- numba.tests
       displayName: 'Test shard of test files'
