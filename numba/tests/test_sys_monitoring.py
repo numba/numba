@@ -695,6 +695,7 @@ class TestMonitoring(TestCase):
 
     def test_monitoring_multiple_threads(self):
         # two threads, different tools and events registered on each thread.
+        import traceback
 
         def t1_work(self, q):
             try:
@@ -706,7 +707,7 @@ class TestMonitoring(TestCase):
                 self.assertEqual(len(cb), 1)
                 self.check_py_start_calls(cb)
             except Exception as e:
-                q.put(e)
+                q.put(traceback.format_exception(e))
 
         def t2_work(self, q):
             try:
@@ -718,7 +719,7 @@ class TestMonitoring(TestCase):
                 self.assertEqual(len(cb), 1)
                 self.check_py_return_calls(cb)
             except Exception as e:
-                q.put(e)
+                q.put(traceback.format_exception(e))
 
         q1 = queue.Queue()
         t1 = threading.Thread(target=t1_work, args=(self, q1))
