@@ -12,6 +12,7 @@ import unittest
 import warnings
 import zlib
 import pickle
+import traceback
 
 from functools import lru_cache
 from io import StringIO
@@ -844,12 +845,15 @@ class ParallelTestRunner(runner.TextTestRunner):
                 return super(ParallelTestRunner, self).run(self._run_inner)
         finally:
             if os.path.exists(MEMLOG_DATA_FILE):
-                with open(MEMLOG_DATA_FILE, "rb") as fin:
-                    records = []
-                    try:
-                        while True:
-                            records.extend(pickle.load(fin))
-                    except EOFError:
-                        pass
-                print("FINAL MEMORY USAGE:".center(80, '='))
-                print(get_memory_log(records))
+                try:
+                    with open(MEMLOG_DATA_FILE, "rb") as fin:
+                        records = []
+                        try:
+                            while True:
+                                records.extend(pickle.load(fin))
+                        except EOFError:
+                            pass
+                    print("FINAL MEMORY USAGE:".center(80, '='))
+                    print(get_memory_log(records))
+                except pickle.UnpicklingError:
+                    traceback.print_exc()
