@@ -18,9 +18,9 @@ jobs:
         NUMPY: '2.0'
         CONDA_ENV: 'testenv'
         TEST_START_INDEX: 19
-      py313_np22:
+      py313_np23:
         PYTHON: '3.13'
-        NUMPY: '2.2'
+        NUMPY: '2.3'
         CONDA_ENV: 'testenv'
         TEST_START_INDEX: 20
 
@@ -50,7 +50,7 @@ jobs:
         call activate %CONDA_ENV%
         set NUMBA_ENABLE_CUDASIM=1
         set _NUMBA_REDUCED_TESTING=1
-        
+
         python -m numba.runtests -l
       displayName: 'List discovered tests'
 
@@ -62,7 +62,7 @@ jobs:
         echo "Running shard of discovered tests: %TEST_START_INDEX%,None,%TEST_COUNT%"
         python -m numba.runtests -b -v -g -m 1 -- numba.tests
       displayName: 'Test modified test files'
-    
+
 
     - script: |
         call activate %CONDA_ENV%
