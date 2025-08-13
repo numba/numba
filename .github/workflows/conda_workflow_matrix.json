@@ -3,6 +3,7 @@
       { "python-version": "3.13", "numpy_build": "2.1" }
     ],
     "conda_test_matrix": [
+      { "python-version": "3.13", "numpy_test": "2.2" },
       { "python-version": "3.13", "numpy_test": "2.3" }
     ]
 }
