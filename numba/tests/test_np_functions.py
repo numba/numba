@@ -3041,17 +3041,23 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_partition_boolean_inputs(self):
         pyfunc = partition
         cfunc = jit(nopython=True)(pyfunc)
+        kths = (-1, 0, 1)
+        if numpy_version < (2, 3):
+            kths = (True, False) + kths
 
         for d in np.linspace(1, 10, 17), np.array((True, False, True)):
-            for kth in True, False, -1, 0, 1:
+            for kth in kths:
                 self.partition_sanity_check(pyfunc, cfunc, d, kth)
 
     def test_argpartition_boolean_inputs(self):
         pyfunc = argpartition
         cfunc = jit(nopython=True)(pyfunc)
+        kths = (-1, 0, 1)
+        if numpy_version < (2, 3):
+            kths = (True, False) + kths
 
         for d in np.linspace(1, 10, 17), np.array((True, False, True)):
-            for kth in True, False, -1, 0, 1:
+            for kth in kths:
                 self.argpartition_sanity_check(pyfunc, cfunc, d, kth)
 
     @needs_blas
