@@ -3,6 +3,7 @@ import queue
 import sys
 import threading
 import unittest
+from collections import Counter
 from unittest.mock import Mock, call
 from numba.tests.support import TestCase
 from numba import jit, objmode
@@ -74,6 +75,29 @@ class TestMonitoring(TestCase):
         # pretend to be a profiler in the majority of these unit tests
         self.tool_id = sys.monitoring.PROFILER_ID
 
+    def gather_mock_calls_multithreads(self, mockcalls):
+        matched = Counter()
+        target_codeobjs = {self.call_foo.__code__, self.foo.__code__}
+        for cb_args in mockcalls._mock_call_args_list:
+            (codeobj, *args) = cb_args.args
+            if codeobj in target_codeobjs:
+                matched[(codeobj, *args)] += 1
+        return matched
+
+    def check_py_start_calls_multithreads(self, allcalls):
+        # Checks that PY_START calls were correctly captured for a
+        # `self.call_foo(self.arg)` call in multithreads
+        matched = self.gather_mock_calls_multithreads(allcalls[PY_START])
+        self.assertEqual(len(matched), 2) # two types of call
+
+        # Find the resume op, this is where the code for `call_foo` "starts"
+        inst = [x for x in dis.get_instructions(self.call_foo)
+                if x.opname == "RESUME"]
+        offset = inst[0].offset
+        self.assertEqual(matched[self.call_foo.__code__, offset], 2)
+        self.assertEqual(matched[self.foo.__code__, 0], 2)
+        self.assertEqual(matched.total(), 4)
+
     def check_py_start_calls(self, allcalls):
         # Checks that PY_START calls were correctly captured for a
         # `self.call_foo(self.arg)` call.
@@ -87,6 +111,17 @@ class TestMonitoring(TestCase):
         calls = (call(self.call_foo.__code__, offset),
                  call(self.foo.__code__, 0))
         mockcalls.assert_has_calls(calls)
+
+    def check_py_return_calls_multithreads(self, allcalls):
+        # Checks that PY_RETURN calls were correctly captured for a
+        # `self.call_foo(self.arg)` call.
+        matched = self.gather_mock_calls_multithreads(allcalls[PY_RETURN])
+        offset = [x for x in dis.get_instructions(self.call_foo)][-1].offset
+        self.assertEqual(matched[self.foo.__code__, 0, self.foo_result], 2)
+        self.assertEqual(
+            matched[self.call_foo.__code__, offset, self.call_foo_result], 2
+        )
+        self.assertEqual(matched.total(), 4)
 
     def check_py_return_calls(self, allcalls):
         # Checks that PY_RETURN calls were correctly captured for a
@@ -122,16 +157,20 @@ class TestMonitoring(TestCase):
                 sys.monitoring.register_callback(_tool_id, event, callback)
                 callbacks[event] = callback
                 event_bitmask |= event
-            if barrier is not None:
-                barrier()
             # only start monitoring once callbacks are registered
             sys.monitoring.set_events(_tool_id, event_bitmask)
+            if barrier is not None:
+                # Wait for all threads to have enabled events.
+                barrier()
             function(*args)
         finally:
             # clean up state
-            sys.monitoring.set_events(_tool_id, NO_EVENTS)
             if barrier is not None:
+                # Wait for all threads to finish `function()`
+                # This makes sure all threads have a chance to see the events
+                # from other threads.
                 barrier()
+            sys.monitoring.set_events(_tool_id, NO_EVENTS)
             for event in events:
                 sys.monitoring.register_callback(_tool_id, event, None)
             sys.monitoring.free_tool_id(_tool_id)
@@ -716,7 +755,7 @@ class TestMonitoring(TestCase):
                                           barrier=barrier_cb)
                 # Check...
                 self.assertEqual(len(cb), 1)
-                self.check_py_start_calls(cb)
+                self.check_py_start_calls_multithreads(cb)
             except Exception as e:
                 q.put(''.join(traceback.format_exception(e)))
 
@@ -729,7 +768,7 @@ class TestMonitoring(TestCase):
                                           barrier=barrier_cb)
                 # Check...
                 self.assertEqual(len(cb), 1)
-                self.check_py_return_calls(cb)
+                self.check_py_return_calls_multithreads(cb)
             except Exception as e:
                 q.put(''.join(traceback.format_exception(e)))
 
