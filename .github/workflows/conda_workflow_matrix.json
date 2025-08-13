@@ -1,9 +1,9 @@
 {
     "conda_build_matrix": [
-      { "python-version": "3.12", "numpy_build": "2.0" },
+      { "python-version": "3.12", "numpy_build": "2.0" }
     ],
     "conda_test_matrix": [
       { "python-version": "3.12", "numpy_test": "2.0" },
-      { "python-version": "3.12", "numpy_test": "2.2" },
+      { "python-version": "3.12", "numpy_test": "2.2" }
     ]
 }
