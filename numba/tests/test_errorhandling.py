@@ -471,7 +471,6 @@ class TestCurlyBracesInPaths(unittest.TestCase):
     """
 
     def test_placeholders_with_positional_args(self):
-        from numba.core.errors import _format_msg
 
         # used on typeinfer: placeholders with positional args
         problematic_path = (
@@ -481,19 +480,18 @@ class TestCurlyBracesInPaths(unittest.TestCase):
         )
         fmt = "Error at {0}"
 
-        result = _format_msg(fmt, (problematic_path,), {})
+        result = errors._format_msg(fmt, (problematic_path,), {})
 
         expected = f"Error at {problematic_path}"
         self.assertEqual(result, expected)
 
     def test_preformatted_string_no_args(self):
-        from numba.core.errors import _format_msg
 
         # used on compiler_machinery: preformatted string without args
         name_with_braces = "{abc123}"
         fmt = f"Pass {name_with_braces}"
 
-        result = _format_msg(fmt, (), {})
+        result = errors._format_msg(fmt, (), {})
 
         expected = f"Pass {name_with_braces}"
         self.assertEqual(result, expected)
