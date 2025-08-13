@@ -1,6 +1,8 @@
 set NUMBA_DEVELOPER_MODE=1
 set NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING=1
 set PYTHONFAULTHANDLER=1
+@rem Set CPU to generic to avoid LLVM 15 code bloat issue
+set NUMBA_CPU_NAME=generic
 
 @rem Check Numba executable is there
 numba -h
