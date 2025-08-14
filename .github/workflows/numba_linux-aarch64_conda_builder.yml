@@ -1,9 +1,9 @@
-name: numba_linux-arm64_conda_builder
+name: numba_linux-aarch64_conda_builder
 
 on:
   pull_request:
     paths:
-      - .github/workflows/numba_linux-arm64_conda_builder.yml
+      - .github/workflows/numba_linux-aarch64_conda_builder.yml
       - buildscripts/condarecipe.local/**
       - .github/workflows/conda_workflow_matrix.json
   workflow_dispatch:
@@ -39,8 +39,8 @@ jobs:
           echo "build-matrix-json=$BUILD_JSON" >> $GITHUB_OUTPUT
           echo "test-matrix-json=$TEST_JSON" >> $GITHUB_OUTPUT
 
-  linux-arm64-build-conda:
-    name: linux-arm64-build-conda (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
+  linux-aarch64-build-conda:
+    name: linux-aarch64-build-conda (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
     needs: load-matrix
     runs-on: ubuntu-24.04-arm
     defaults:
@@ -69,7 +69,7 @@ jobs:
         if: ${{ inputs.llvmlite_run_id != '' }}
         uses: actions/download-artifact@v4
         with:
-          name: llvmlite-linux-arm64-py${{ matrix.python-version }}
+          name: llvmlite-linux-aarch64-py${{ matrix.python-version }}
           path: llvmlite_conda
           run-id: ${{ inputs.llvmlite_run_id }}
           repository: numba/llvmlite
@@ -100,15 +100,15 @@ jobs:
       - name: Upload numba conda package
         uses: actions/upload-artifact@v4
         with:
-          name: numba_linux-arm64_conda_py${{ matrix.python-version }}
+          name: numba_linux-aarch64_conda_py${{ matrix.python-version }}
           path: conda_channel_dir
           compression-level: 0
           retention-days: 7
           if-no-files-found: error
 
-  linux-arm64-test:
-    name: linux-arm64-test-conda (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
-    needs: [load-matrix, linux-arm64-build-conda]
+  linux-aarch64-test:
+    name: linux-aarch64-test-conda (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
+    needs: [load-matrix, linux-aarch64-build-conda]
     runs-on: ubuntu-24.04-arm
     defaults:
       run:
@@ -136,7 +136,7 @@ jobs:
         if: ${{ inputs.llvmlite_run_id != '' }}
         uses: actions/download-artifact@v4
         with:
-          name: llvmlite-linux-arm64-py${{ matrix.python-version }}
+          name: llvmlite-linux-aarch64-py${{ matrix.python-version }}
           path: llvmlite_conda
           run-id: ${{ inputs.llvmlite_run_id }}
           repository: numba/llvmlite
@@ -145,7 +145,7 @@ jobs:
       - name: Download numba artifact
         uses: actions/download-artifact@v4
         with:
-          name: numba_linux-arm64_conda_py${{ matrix.python-version }}
+          name: numba_linux-aarch64_conda_py${{ matrix.python-version }}
 
       - name: Install conda-build
         run: |
