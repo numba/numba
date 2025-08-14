@@ -783,33 +783,35 @@ class ParallelTestRunner(runner.TextTestRunner):
                           for i in range(0, len(self._ptests), chunk_size)]
 
         spawnctx = multiprocessing.get_context("spawn")
-        for tests in splitted_tests:
-            pool = spawnctx.Pool(self.nprocs)
-            try:
-                self._run_parallel_tests(result, pool, child_runner, tests)
-            except:
-                # On exception, kill still active workers immediately
-                pool.terminate()
-                # Make sure exception is reported and not ignored
-                raise
-            else:
-                # Close the pool cleanly unless asked to early out
-                if result.shouldStop:
+        try:
+            for tests in splitted_tests:
+                pool = spawnctx.Pool(self.nprocs)
+                try:
+                    self._run_parallel_tests(result, pool, child_runner, tests)
+                except:
+                    # On exception, kill still active workers immediately
                     pool.terminate()
-                    break
+                    # Make sure exception is reported and not ignored
+                    raise
                 else:
-                    pool.close()
-            finally:
-                # Always join the pool (this is necessary for coverage.py)
-                pool.join()
-                # Always display the resource infos
-                print("=== Resource Infos ===")
-                for ri in self.resource_infos:
-                    print(ri)
-        if not result.shouldStop:
-            stests = SerialSuite(self._stests)
-            stests.run(result)
-            return result
+                    # Close the pool cleanly unless asked to early out
+                    if result.shouldStop:
+                        pool.terminate()
+                        break
+                    else:
+                        pool.close()
+                finally:
+                    # Always join the pool (this is necessary for coverage.py)
+                    pool.join()
+            if not result.shouldStop:
+                stests = SerialSuite(self._stests)
+                stests.run(result)
+                return result
+        finally:
+            # Always display the resource infos
+            print("=== Resource Infos ===")
+            for ri in self.resource_infos:
+                print(ri)
 
     def _run_parallel_tests(self, result, pool, child_runner, tests):
         remaining_ids = set(t.id() for t in tests)
