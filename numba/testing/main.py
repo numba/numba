@@ -11,8 +11,6 @@ import time
 import unittest
 import warnings
 import zlib
-import pickle
-import traceback
 
 from functools import lru_cache
 from io import StringIO
@@ -698,13 +696,8 @@ class _MinimalRunner(object):
         signals.registerResult(result)
         result.failfast = runner.failfast
         result.buffer = runner.buffer
-        # with self.cleanup_object(test):
-        #     test(result)
-        from numba.misc import memoryutils
-        memoryutils.install_atexit(os.environ['_NUMBA_MEMLOG_DATA_FILE'])
-        with memoryutils.memory_monitor(test.id()):
-            with self.cleanup_object(test):
-                test(result)
+        with self.cleanup_object(test):
+            test(result)
         # HACK as cStringIO.StringIO isn't picklable in 2.x
         result.stream = _FakeStringIO(result.stream.getvalue())
         return _MinimalResult(result, test.id())
@@ -780,9 +773,8 @@ class ParallelTestRunner(runner.TextTestRunner):
         splitted_tests = [self._ptests[i:i + chunk_size]
                           for i in range(0, len(self._ptests), chunk_size)]
 
-        spawnctx = multiprocessing.get_context("spawn")
         for tests in splitted_tests:
-            pool = spawnctx.Pool(self.nprocs)
+            pool = multiprocessing.Pool(self.nprocs)
             try:
                 self._run_parallel_tests(result, pool, child_runner, tests)
             except:
@@ -833,27 +825,6 @@ class ParallelTestRunner(runner.TextTestRunner):
                                                               self.useslice)
         print("Parallel: %s. Serial: %s" % (len(self._ptests),
                                             len(self._stests)))
-        from numba.misc.memoryutils import memory_monitor, get_memory_log
-
-        MEMLOG_DATA_FILE = f"memlog_{int(time.time())}.dat"
-        os.environ['_NUMBA_MEMLOG_DATA_FILE'] = MEMLOG_DATA_FILE
-
-        try:
-            # This will call self._run_inner() on the created result object,
-            # and print out the detailed test results at the end.
-            with memory_monitor("main process"):
-                return super(ParallelTestRunner, self).run(self._run_inner)
-        finally:
-            if os.path.exists(MEMLOG_DATA_FILE):
-                try:
-                    with open(MEMLOG_DATA_FILE, "rb") as fin:
-                        records = []
-                        try:
-                            while True:
-                                records.extend(pickle.load(fin))
-                        except EOFError:
-                            pass
-                    print("FINAL MEMORY USAGE:".center(80, '='))
-                    print(get_memory_log(records))
-                except pickle.UnpicklingError:
-                    traceback.print_exc()
+        # This will call self._run_inner() on the created result object,
+        # and print out the detailed test results at the end.
+        return super(ParallelTestRunner, self).run(self._run_inner)

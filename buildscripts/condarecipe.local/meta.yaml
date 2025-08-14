@@ -80,8 +80,6 @@ test:
     # For testing ipython. At the time of writing ipykernel was not available
     # for Python 3.12.
     - ipykernel                # [not py==312]
-    # For memoryutils in testing
-    - psutil
     # Need these for AOT. Do not init msvc as it may not be present
     - {{ compiler('c') }}      # [not (win or aarch64)]
     - {{ compiler('cxx') }}    # [not (win or aarch64)]
