@@ -776,13 +776,36 @@ class ParallelTestRunner(runner.TextTestRunner):
         # We hijack TextTestRunner.run()'s inner logic by passing this
         # method as if it were a test case.
         child_runner = _MinimalRunner(self.runner_cls, self.runner_args)
+
+        # Split the tests and recycle the worker process to tame memory usage.
+        chunk_size = 100
+        splitted_tests = [self._ptests[i:i + chunk_size]
+                          for i in range(0, len(self._ptests), chunk_size)]
+
+        spawnctx = multiprocessing.get_context("spawn")
         try:
-            self._run_tests_in_process_pool(
-                self._ptests, child_runner, result, nprocs=self.nprocs
-            )
+            for tests in splitted_tests:
+                pool = spawnctx.Pool(self.nprocs)
+                try:
+                    self._run_parallel_tests(result, pool, child_runner, tests)
+                except:
+                    # On exception, kill still active workers immediately
+                    pool.terminate()
+                    # Make sure exception is reported and not ignored
+                    raise
+                else:
+                    # Close the pool cleanly unless asked to early out
+                    if result.shouldStop:
+                        pool.terminate()
+                        break
+                    else:
+                        pool.close()
+                finally:
+                    # Always join the pool (this is necessary for coverage.py)
+                    pool.join()
             if not result.shouldStop:
-                # Run serial tests
-                self._run_tests_in_process_pool(self._stests, child_runner, result, nprocs=1)
+                stests = SerialSuite(self._stests)
+                stests.run(result)
                 return result
         finally:
             # Always display the resource infos
@@ -795,32 +818,6 @@ class ParallelTestRunner(runner.TextTestRunner):
                 traceback.print_exc()
             finally:
                 print("=== End Resource Infos ===")
-
-    def _run_tests_in_process_pool(self, tests, child_runner, result, nprocs):
-        # Split the tests and recycle the worker process to tame memory usage.
-        chunk_size = 100
-        splitted_tests = [tests[i:i + chunk_size]
-                          for i in range(0, len(tests), chunk_size)]
-        ctx = multiprocessing.get_context("spawn")
-        for tests in splitted_tests:
-            pool = ctx.Pool(nprocs)
-            try:
-                self._run_parallel_tests(result, pool, child_runner, tests)
-            except:
-                # On exception, kill still active workers immediately
-                pool.terminate()
-                # Make sure exception is reported and not ignored
-                raise
-            else:
-                # Close the pool cleanly unless asked to early out
-                if result.shouldStop:
-                    pool.terminate()
-                    break
-                else:
-                    pool.close()
-            finally:
-                # Always join the pool (this is necessary for coverage.py)
-                pool.join()
 
     def _run_parallel_tests(self, result, pool, child_runner, tests):
         remaining_ids = set(t.id() for t in tests)
