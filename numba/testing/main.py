@@ -800,7 +800,9 @@ class ParallelTestRunner(runner.TextTestRunner):
             while remaining_tests:
                 pool = spawnctx.Pool(self.nprocs)
                 try:
-                    remaining_tests = self._run_parallel_tests(result, pool, child_runner, remaining_tests)
+                    remaining_tests = self._run_parallel_tests(
+                        result, pool, child_runner, remaining_tests
+                    )
                 except:
                     # On exception, kill still active workers immediately
                     pool.terminate()
@@ -819,7 +821,8 @@ class ParallelTestRunner(runner.TextTestRunner):
 
                 # If we have remaining tests, it means memory pressure triggered pool recycling
                 if remaining_tests:
-                    print(f"Recycling pool, {len(remaining_tests)} tests remaining")
+                    print(f"Recycling pool, {len(remaining_tests)} tests remaining",
+                          file=sys.stderr)
 
             if not result.shouldStop:
                 # Run serial tests with memory tracking
@@ -831,20 +834,19 @@ class ParallelTestRunner(runner.TextTestRunner):
         finally:
             # Always display the resource infos
             try:
-                print("=== Resource Infos ===")
+                print("=== Resource Infos ===", file=sys.stderr)
                 for ri in self.resource_infos:
-                    print(ri)
+                    print(ri, file=sys.stderr)
             except Exception:
-                print("ERROR: Ignored exception in priting resource infos")
-                traceback.print_exc()
+                print("ERROR: Ignored exception in priting resource infos",
+                      file=sys.stderr)
+                traceback.print_exc(file=sys.stderr)
             finally:
                 print("=== End Resource Infos ===")
 
     def _run_parallel_tests(self, result, pool, child_runner, tests):
-        availble_mem = get_memory_usage()['available']
-
-        threshold = (availble_mem * 0.8) // self.nprocs
-        print(f"Memory threshold: {threshold}")
+        threshold = 1024 ** 3   # 1 GB
+        print(f"Memory threshold: {threshold}", file=sys.stderr)
         tests.sort(key=cuda_sensitive_mtime)
 
         # Track submitted and completed tasks
@@ -871,7 +873,8 @@ class ParallelTestRunner(runner.TextTestRunner):
 
                     result.add_results(child_result)
                     memtrack: MemoryTracker = child_result.resource_info
-                    high_pressure = memtrack.end_memory["rss"] > threshold
+                    mem_avail = memtrack.end_memory["available"]
+                    high_pressure = mem_avail < threshold
                     self.resource_infos.append(memtrack.get_summary())
 
                     if child_result.shouldStop:
@@ -908,8 +911,8 @@ class ParallelTestRunner(runner.TextTestRunner):
     def run(self, test):
         self._ptests, self._stests = _split_nonparallel_tests(test,
                                                               self.useslice)
-        print("Parallel: %s. Serial: %s" % (len(self._ptests),
-                                            len(self._stests)))
+        print(f"Parallel: {len(self._ptests)}. Serial: {len(self._stests)}",
+              file=sys.stderr)
 
         # This will call self._run_inner() on the created result object,
         # and print out the detailed test results at the end.
