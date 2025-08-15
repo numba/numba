@@ -68,6 +68,7 @@ def get_memory_usage() -> Dict[str, Optional[int]]:
             # Get system available memory
             sys_mem = psutil.virtual_memory()
             memory_info["available"] = sys_mem.available
+            memory_info["total"] = sys_mem.total
 
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             pass
