@@ -149,6 +149,10 @@ class SerialSuite(unittest.TestSuite):
           remember they should not be run in parallel.
     """
 
+    def __init__(self, tests=()):
+        super(SerialSuite, self).__init__(tests)
+        self.resource_infos = []
+
     def addTest(self, test):
         if not isinstance(test, unittest.TestCase):
             # It's a sub-suite, recurse
@@ -158,6 +162,17 @@ class SerialSuite(unittest.TestSuite):
             # It's a test case, mark it serial
             test._numba_parallel_test_ = False
             super(SerialSuite, self).addTest(test)
+
+    def run(self, result):
+        # Run each test with memory tracking
+        for test in self:
+            if result.shouldStop:
+                break
+            memtrack = MemoryTracker(test.id())
+            with memtrack.monitor():
+                test(result)
+            self.resource_infos.append(memtrack.get_summary())
+        return result
 
 
 class BasicTestRunner(runner.TextTestRunner):
@@ -804,8 +819,11 @@ class ParallelTestRunner(runner.TextTestRunner):
                     # Always join the pool (this is necessary for coverage.py)
                     pool.join()
             if not result.shouldStop:
+                # Run serial tests with memory tracking
                 stests = SerialSuite(self._stests)
                 stests.run(result)
+                # Add serial test resource infos to the main collection
+                self.resource_infos.extend(stests.resource_infos)
                 return result
         finally:
             # Always display the resource infos
