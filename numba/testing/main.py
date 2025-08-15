@@ -845,7 +845,10 @@ class ParallelTestRunner(runner.TextTestRunner):
                 print("=== End Resource Infos ===")
 
     def _run_parallel_tests(self, result, pool, child_runner, tests):
-        threshold = 1024 ** 3   # 1 GB
+        threshold = max(
+                2 * 1024 ** 2,  # Minimum 2GB
+                int(get_memory_usage()['total'] * 0.15)  # 15% of total RAM
+        )
         print(f"Memory threshold: {threshold}", file=sys.stderr)
         tests.sort(key=cuda_sensitive_mtime)
 
