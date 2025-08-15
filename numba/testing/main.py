@@ -883,7 +883,8 @@ class ParallelTestRunner(runner.TextTestRunner):
 
                     # Check memory pressure after each completed test
                     if high_pressure:
-                        print(f"Memory pressure is high: {memtrack.get_summary()}, recycling pool...")
+                        print(f"Memory pressure is high: {memtrack.get_summary()}, recycling pool...",
+                              file=sys.stderr)
                         # Wait for remaining tasks to complete, don't submit new ones
                         while pending_tasks:
                             for (pending_async, pending_id) in pending_tasks[:]:
