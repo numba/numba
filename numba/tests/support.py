@@ -238,7 +238,8 @@ needs_subprocess = unittest.skipUnless(_exec_cond, "needs subprocess harness")
 try:
     import setuptools
     has_setuptools = True
-except ImportError:
+except (ImportError, OSError):
+    # Suppress error caused by https://github.com/python/cpython/issues/118234
     has_setuptools = False
 
 
