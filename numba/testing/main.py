@@ -847,7 +847,7 @@ class ParallelTestRunner(runner.TextTestRunner):
     def _run_parallel_tests(self, result, pool, child_runner, tests):
         threshold = max(
                 3 * 1024 ** 2,  # Minimum 3GB
-                int(get_memory_usage()['total'] * 0.15)  # 15% of total RAM
+                int(get_memory_usage()['total'] * 0.30)  # 30% of total RAM
         )
         ONE_GB = 1 * 1024 ** 3  # 1 GB
         print(f"Memory threshold: {threshold}", file=sys.stderr)
