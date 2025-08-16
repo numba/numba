@@ -846,9 +846,10 @@ class ParallelTestRunner(runner.TextTestRunner):
 
     def _run_parallel_tests(self, result, pool, child_runner, tests):
         threshold = max(
-                2 * 1024 ** 2,  # Minimum 2GB
+                3 * 1024 ** 2,  # Minimum 3GB
                 int(get_memory_usage()['total'] * 0.15)  # 15% of total RAM
         )
+        ONE_GB = 1 * 1024 ** 3  # 1 GB
         print(f"Memory threshold: {threshold}", file=sys.stderr)
         tests.sort(key=cuda_sensitive_mtime)
 
@@ -877,7 +878,8 @@ class ParallelTestRunner(runner.TextTestRunner):
                     result.add_results(child_result)
                     memtrack: MemoryTracker = child_result.resource_info
                     mem_avail = memtrack.end_memory["available"]
-                    high_pressure = mem_avail < threshold
+                    mem_rss = memtrack.end_memory['rss']
+                    high_pressure = mem_avail < threshold or mem_rss > ONE_GB
                     self.resource_infos.append(memtrack.get_summary())
 
                     if child_result.shouldStop:
