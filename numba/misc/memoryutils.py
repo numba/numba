@@ -89,7 +89,8 @@ class MemoryTracker:
     Stores monitoring data in instance attributes for later access.
     Each instance is typically used for monitoring a single operation.
     """
-    name: str | None
+    pid: int
+    name: str
     start_time: float | None
     end_time: float | None
     start_memory: Dict[str, int | None] | None
@@ -99,6 +100,7 @@ class MemoryTracker:
 
     def __init__(self, name: str):
         """Initialize a MemoryTracker with empty monitoring data."""
+        self.pid = os.getpid()
         self.name = name
         self.start_time = None
         self.end_time = None
@@ -158,7 +160,6 @@ class MemoryTracker:
         if self.start_memory is None or self.end_memory is None:
             raise ValueError("Memory monitoring data not available")
 
-        pid = os.getpid()
         current_available = self.end_memory.get("available")
 
         def format_bytes(bytes_val, show_sign=False):
@@ -185,7 +186,7 @@ class MemoryTracker:
 
         buf = [
             f"Name: {self.name}",
-            f"PID: {pid}",
+            f"PID: {self.pid}",
             f"Start: {start_ts}",
             f"Duration: {self.duration:.3f}s",
             f"Start RSS: {format_bytes(start_rss)}",
