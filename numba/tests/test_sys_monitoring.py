@@ -77,7 +77,7 @@ class TestMonitoring(TestCase):
         self.tool_id = sys.monitoring.PROFILER_ID
 
     def gather_mock_calls_multithreads(self, mockcalls):
-        # Gather mock-calls for the self.foo and self.call_foo
+        # Gather mock-calls for the `self.foo` and `self.call_foo`
         matched = Counter()
         target_codeobjs = {self.call_foo.__code__, self.foo.__code__}
         for cb_args in mockcalls._mock_call_args_list:
