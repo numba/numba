@@ -6,6 +6,7 @@ Implementation of math operations on Array objects.
 import math
 from collections import namedtuple
 import operator
+import warnings
 
 import llvmlite.ir
 import numpy as np
@@ -24,7 +25,7 @@ from numba.np.linalg import ensure_blas
 from numba.core.extending import intrinsic
 from numba.core.errors import (RequireLiteralValue, TypingError,
                                NumbaValueError, NumbaNotImplementedError,
-                               NumbaTypeError)
+                               NumbaTypeError, NumbaDeprecationWarning)
 from numba.cpython.unsafe.tuple import tuple_setitem
 
 
@@ -4049,6 +4050,42 @@ finfo = namedtuple('finfo', _finfo_supported)
 _iinfo_supported = ('min', 'max', 'bits',)
 
 iinfo = namedtuple('iinfo', _iinfo_supported)
+
+
+
+# This module is imported under the compiler lock which should deal with the
+# lack of thread safety in the warning filter.
+def _gen_np_machar():
+    # NumPy 1.24 removed np.MachAr
+    if numpy_version >= (1, 24):
+        return
+
+    w = None
+    with warnings.catch_warnings(record=True) as w:
+        msg = r'`np.MachAr` is deprecated \(NumPy 1.22\)'
+        warnings.filterwarnings("always", message=msg,
+                                category=DeprecationWarning,
+                                module=r'.*numba.*arraymath')
+        np_MachAr = np.MachAr
+
+    @overload(np_MachAr)
+    def MachAr_impl():
+        f = np_MachAr()
+        _mach_ar_data = tuple([getattr(f, x) for x in _mach_ar_supported])
+
+        if w:
+            wmsg = w[0]
+            warnings.warn_explicit(wmsg.message.args[0],
+                                   NumbaDeprecationWarning,
+                                   wmsg.filename,
+                                   wmsg.lineno)
+
+        def impl():
+            return MachAr(*_mach_ar_data)
+        return impl
+
+
+_gen_np_machar()
 
 
 def generate_xinfo_body(arg, np_func, container, attr):
