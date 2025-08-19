@@ -3816,8 +3816,15 @@ def make_searchsorted_implementation(np_dtype, side):
         _impl = _searchsorted(lt)
         _cmp = lt
     else:
-        _impl = _searchsorted(le)
-        _cmp = le
+        if np.issubdtype(np_dtype, np.inexact) and numpy_version < (1, 23):
+            # change in behaviour for inexact types
+            # introduced by:
+            # https://github.com/numpy/numpy/pull/21867
+            _impl = _searchsorted(le)
+            _cmp = lt
+        else:
+            _impl = _searchsorted(le)
+            _cmp = le
 
     return register_jitable(_impl), register_jitable(_cmp)
 
@@ -4050,7 +4057,6 @@ finfo = namedtuple('finfo', _finfo_supported)
 _iinfo_supported = ('min', 'max', 'bits',)
 
 iinfo = namedtuple('iinfo', _iinfo_supported)
-
 
 
 # This module is imported under the compiler lock which should deal with the
