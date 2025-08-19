@@ -11,6 +11,7 @@ import time
 import unittest
 import warnings
 import zlib
+import traceback
 
 from functools import lru_cache
 from io import StringIO
@@ -18,6 +19,7 @@ from unittest import result, runner, signals, suite, loader, case
 
 from .loader import TestLoader
 from numba.core import config
+from numba.misc import memoryutils
 
 try:
     from multiprocessing import TimeoutError
@@ -146,6 +148,10 @@ class SerialSuite(unittest.TestSuite):
           remember they should not be run in parallel.
     """
 
+    def __init__(self, tests=()):
+        super(SerialSuite, self).__init__(tests)
+        self.resource_infos = []
+
     def addTest(self, test):
         if not isinstance(test, unittest.TestCase):
             # It's a sub-suite, recurse
@@ -155,6 +161,17 @@ class SerialSuite(unittest.TestSuite):
             # It's a test case, mark it serial
             test._numba_parallel_test_ = False
             super(SerialSuite, self).addTest(test)
+
+    def run(self, result):
+        # Run each test with memory tracking
+        for test in self:
+            if result.shouldStop:
+                break
+            memtrack = memoryutils.MemoryTracker(test.id())
+            with memtrack.monitor():
+                test(result)
+            self.resource_infos.append(memtrack.get_summary())
+        return result
 
 
 class BasicTestRunner(runner.TextTestRunner):
@@ -637,7 +654,7 @@ class _MinimalResult(object):
     __slots__ = (
         'failures', 'errors', 'skipped', 'expectedFailures',
         'unexpectedSuccesses', 'stream', 'shouldStop', 'testsRun',
-        'test_id')
+        'test_id', 'resource_info')
 
     def fixup_case(self, case):
         """
@@ -646,7 +663,7 @@ class _MinimalResult(object):
         # Python 3.3 doesn't reset this one.
         case._outcomeForDoCleanups = None
 
-    def __init__(self, original_result, test_id=None):
+    def __init__(self, original_result, test_id=None, resource_info=None):
         for attr in self.__slots__:
             setattr(self, attr, getattr(original_result, attr, None))
         for case, _ in self.expectedFailures:
@@ -656,6 +673,7 @@ class _MinimalResult(object):
         for case, _ in self.failures:
             self.fixup_case(case)
         self.test_id = test_id
+        self.resource_info = resource_info
 
 
 class _FakeStringIO(object):
@@ -696,11 +714,15 @@ class _MinimalRunner(object):
         signals.registerResult(result)
         result.failfast = runner.failfast
         result.buffer = runner.buffer
-        with self.cleanup_object(test):
-            test(result)
+        # Create a per-process memory tracker to avoid global state issues
+        memtrack = memoryutils.MemoryTracker(test.id())
+        with memtrack.monitor():
+            with self.cleanup_object(test):
+                test(result)
         # HACK as cStringIO.StringIO isn't picklable in 2.x
         result.stream = _FakeStringIO(result.stream.getvalue())
-        return _MinimalResult(result, test.id())
+        return _MinimalResult(result, test.id(),
+                              resource_info=memtrack.get_summary())
 
     @contextlib.contextmanager
     def cleanup_object(self, test):
@@ -762,6 +784,7 @@ class ParallelTestRunner(runner.TextTestRunner):
         self.nprocs = nprocs
         self.useslice = parse_slice(useslice)
         self.runner_args = kwargs
+        self.resource_infos = []
 
     def _run_inner(self, result):
         # We hijack TextTestRunner.run()'s inner logic by passing this
@@ -773,29 +796,46 @@ class ParallelTestRunner(runner.TextTestRunner):
         splitted_tests = [self._ptests[i:i + chunk_size]
                           for i in range(0, len(self._ptests), chunk_size)]
 
-        for tests in splitted_tests:
-            pool = multiprocessing.Pool(self.nprocs)
-            try:
-                self._run_parallel_tests(result, pool, child_runner, tests)
-            except:
-                # On exception, kill still active workers immediately
-                pool.terminate()
-                # Make sure exception is reported and not ignored
-                raise
-            else:
-                # Close the pool cleanly unless asked to early out
-                if result.shouldStop:
+        spawnctx = multiprocessing.get_context("spawn")
+        try:
+            for tests in splitted_tests:
+                pool = spawnctx.Pool(self.nprocs)
+                try:
+                    self._run_parallel_tests(result, pool, child_runner, tests)
+                except:
+                    # On exception, kill still active workers immediately
                     pool.terminate()
-                    break
+                    # Make sure exception is reported and not ignored
+                    raise
                 else:
-                    pool.close()
-            finally:
-                # Always join the pool (this is necessary for coverage.py)
-                pool.join()
-        if not result.shouldStop:
-            stests = SerialSuite(self._stests)
-            stests.run(result)
-            return result
+                    # Close the pool cleanly unless asked to early out
+                    if result.shouldStop:
+                        pool.terminate()
+                        break
+                    else:
+                        pool.close()
+                finally:
+                    # Always join the pool (this is necessary for coverage.py)
+                    pool.join()
+            if not result.shouldStop:
+                # Run serial tests with memory tracking
+                stests = SerialSuite(self._stests)
+                stests.run(result)
+                # Add serial test resource infos to the main collection
+                self.resource_infos.extend(stests.resource_infos)
+                return result
+        finally:
+            # Always display the resource infos
+            if memoryutils.IS_SUPPORTED:
+                try:
+                    print("=== Resource Infos ===")
+                    for ri in self.resource_infos:
+                        print(ri)
+                except Exception:
+                    print("ERROR: Ignored exception in priting resource infos")
+                    traceback.print_exc()
+                finally:
+                    print("=== End Resource Infos ===")
 
     def _run_parallel_tests(self, result, pool, child_runner, tests):
         remaining_ids = set(t.id() for t in tests)
@@ -815,6 +855,7 @@ class ParallelTestRunner(runner.TextTestRunner):
                 raise e
             else:
                 result.add_results(child_result)
+                self.resource_infos.append(child_result.resource_info)
                 remaining_ids.discard(child_result.test_id)
                 if child_result.shouldStop:
                     result.shouldStop = True
