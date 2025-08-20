@@ -1,5 +1,5 @@
 Add NUMBA_CACHE_LOCATOR_CLASSES environment variable and InTreeCacheLocatorFsAgnostic
----------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------
 
 A new environment variable :envvar:`NUMBA_CACHE_LOCATOR_CLASSES` has been added
 that allows users to override the default cache locator classes and their order.
