@@ -1,0 +1,12 @@
+Add NUMBA_CACHE_LOCATOR_CLASSES environment variable and InTreeCacheLocatorFsAgnostic
+-------------------------------------------------------------------------------------
+
+A new environment variable `NUMBA_CACHE_LOCATOR_CLASSES` has been added
+that allows users to override the default cache locator classes and their order.
+This variable accepts a comma-separated list of locator class names.
+
+Additionally, a new cache locator class ``InTreeCacheLocatorFsAgnostic`` has been
+introduced. This locator is a subclass of ``InTreeCacheLocator`` that is agnostic
+to filesystem differences, particularly timestamp precision differences (e.g.,
+milliseconds vs seconds). This helps ensure cache consistency across different
+filesystems and environments.
