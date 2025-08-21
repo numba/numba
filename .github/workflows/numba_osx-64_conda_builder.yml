@@ -42,7 +42,7 @@ jobs:
   osx-64-build-conda:
     name: osx-64-build-conda (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
     needs: load-matrix
-    runs-on: macos-13
+    runs-on: macos-14
     defaults:
       run:
         shell: bash -elx {0}
@@ -114,7 +114,7 @@ jobs:
   osx-64-test:
     name: osx-64-test-conda (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
     needs: [load-matrix, osx-64-build-conda]
-    runs-on: macos-13
+    runs-on: macos-14
     defaults:
       run:
         shell: bash -elx {0}
