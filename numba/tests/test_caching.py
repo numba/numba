@@ -842,6 +842,8 @@ class TestCacheWithCpuSetting(DispatcherCacheUsecasesTest):
         self.assertGreater(match_count, 0,
                            msg='nothing to compare')
 
+    @unittest.skipIf(ll.get_host_cpu_name() == "generic",
+                     "LLVM detected 'generic' CPU")
     def test_user_set_cpu_name(self):
         self.check_pycache(0)
 
