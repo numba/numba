@@ -11,6 +11,8 @@ import time
 import unittest
 import warnings
 import zlib
+import pickle
+import traceback
 
 from functools import lru_cache
 from io import StringIO
@@ -18,6 +20,7 @@ from unittest import result, runner, signals, suite, loader, case
 
 from .loader import TestLoader
 from numba.core import config
+from numba.misc.memoryutils import MemoryTracker, get_memory_usage
 
 try:
     from multiprocessing import TimeoutError
@@ -146,6 +149,10 @@ class SerialSuite(unittest.TestSuite):
           remember they should not be run in parallel.
     """
 
+    def __init__(self, tests=()):
+        super(SerialSuite, self).__init__(tests)
+        self.resource_infos = []
+
     def addTest(self, test):
         if not isinstance(test, unittest.TestCase):
             # It's a sub-suite, recurse
@@ -155,6 +162,17 @@ class SerialSuite(unittest.TestSuite):
             # It's a test case, mark it serial
             test._numba_parallel_test_ = False
             super(SerialSuite, self).addTest(test)
+
+    def run(self, result):
+        # Run each test with memory tracking
+        for test in self:
+            if result.shouldStop:
+                break
+            memtrack = MemoryTracker(test.id())
+            with memtrack.monitor():
+                test(result)
+            self.resource_infos.append(memtrack.get_summary())
+        return result
 
 
 class BasicTestRunner(runner.TextTestRunner):
@@ -637,7 +655,7 @@ class _MinimalResult(object):
     __slots__ = (
         'failures', 'errors', 'skipped', 'expectedFailures',
         'unexpectedSuccesses', 'stream', 'shouldStop', 'testsRun',
-        'test_id')
+        'test_id', 'resource_info')
 
     def fixup_case(self, case):
         """
@@ -646,7 +664,7 @@ class _MinimalResult(object):
         # Python 3.3 doesn't reset this one.
         case._outcomeForDoCleanups = None
 
-    def __init__(self, original_result, test_id=None):
+    def __init__(self, original_result, test_id=None, resource_info=None):
         for attr in self.__slots__:
             setattr(self, attr, getattr(original_result, attr, None))
         for case, _ in self.expectedFailures:
@@ -656,6 +674,7 @@ class _MinimalResult(object):
         for case, _ in self.failures:
             self.fixup_case(case)
         self.test_id = test_id
+        self.resource_info = resource_info
 
 
 class _FakeStringIO(object):
@@ -696,11 +715,15 @@ class _MinimalRunner(object):
         signals.registerResult(result)
         result.failfast = runner.failfast
         result.buffer = runner.buffer
-        with self.cleanup_object(test):
-            test(result)
+        # Create a per-process memory tracker to avoid global state issues
+        memtrack = MemoryTracker(test.id())
+        with memtrack.monitor():
+            with self.cleanup_object(test):
+                test(result)
         # HACK as cStringIO.StringIO isn't picklable in 2.x
         result.stream = _FakeStringIO(result.stream.getvalue())
-        return _MinimalResult(result, test.id())
+        return _MinimalResult(result, test.id(),
+                              resource_info=memtrack)
 
     @contextlib.contextmanager
     def cleanup_object(self, test):
@@ -762,69 +785,141 @@ class ParallelTestRunner(runner.TextTestRunner):
         self.nprocs = nprocs
         self.useslice = parse_slice(useslice)
         self.runner_args = kwargs
+        self.resource_infos = []
 
     def _run_inner(self, result):
         # We hijack TextTestRunner.run()'s inner logic by passing this
         # method as if it were a test case.
         child_runner = _MinimalRunner(self.runner_cls, self.runner_args)
 
-        # Split the tests and recycle the worker process to tame memory usage.
-        chunk_size = 100
-        splitted_tests = [self._ptests[i:i + chunk_size]
-                          for i in range(0, len(self._ptests), chunk_size)]
+        spawnctx = multiprocessing.get_context("spawn")
+        try:
+            remaining_tests = list(self._ptests)
 
-        for tests in splitted_tests:
-            pool = multiprocessing.Pool(self.nprocs)
-            try:
-                self._run_parallel_tests(result, pool, child_runner, tests)
-            except:
-                # On exception, kill still active workers immediately
-                pool.terminate()
-                # Make sure exception is reported and not ignored
-                raise
-            else:
-                # Close the pool cleanly unless asked to early out
-                if result.shouldStop:
+            # Process tests, recycling pool when memory pressure is high
+            while remaining_tests:
+                pool = spawnctx.Pool(self.nprocs)
+                try:
+                    remaining_tests = self._run_parallel_tests(
+                        result, pool, child_runner, remaining_tests
+                    )
+                except:
+                    # On exception, kill still active workers immediately
                     pool.terminate()
-                    break
+                    # Make sure exception is reported and not ignored
+                    raise
                 else:
-                    pool.close()
+                    # Close the pool cleanly unless asked to early out
+                    if result.shouldStop:
+                        pool.terminate()
+                        break
+                    else:
+                        pool.close()
+                finally:
+                    # Always join the pool (this is necessary for coverage.py)
+                    pool.join()
+
+                # If we have remaining tests, it means memory pressure triggered pool recycling
+                if remaining_tests:
+                    print(f"Recycling pool, {len(remaining_tests)} tests remaining",
+                          file=sys.stderr)
+
+            if not result.shouldStop:
+                # Run serial tests with memory tracking
+                stests = SerialSuite(self._stests)
+                stests.run(result)
+                # Add serial test resource infos to the main collection
+                self.resource_infos.extend(stests.resource_infos)
+                return result
+        finally:
+            # Always display the resource infos
+            try:
+                print("=== Resource Infos ===", file=sys.stderr)
+                for ri in self.resource_infos:
+                    print(ri, file=sys.stderr)
+            except Exception:
+                print("ERROR: Ignored exception in priting resource infos",
+                      file=sys.stderr)
+                traceback.print_exc(file=sys.stderr)
             finally:
-                # Always join the pool (this is necessary for coverage.py)
-                pool.join()
-        if not result.shouldStop:
-            stests = SerialSuite(self._stests)
-            stests.run(result)
-            return result
+                print("=== End Resource Infos ===")
 
     def _run_parallel_tests(self, result, pool, child_runner, tests):
-        remaining_ids = set(t.id() for t in tests)
+        threshold = max(
+                3 * 1024 ** 2,  # Minimum 3GB
+                int(get_memory_usage()['total'] * 0.30)  # 30% of total RAM
+        )
+        ONE_GB = 1 * 1024 ** 3  # 1 GB
+        print(f"Memory threshold: {threshold}", file=sys.stderr)
         tests.sort(key=cuda_sensitive_mtime)
-        it = pool.imap_unordered(child_runner, tests)
-        while True:
-            try:
-                child_result = it.__next__(self.timeout)
-            except StopIteration:
-                return
-            except TimeoutError as e:
-                # Diagnose the names of unfinished tests
-                msg = ("Tests didn't finish before timeout (or crashed):\n%s"
-                       % "".join("- %r\n" % tid for tid in sorted(remaining_ids))
-                       )
-                e.args = (msg,) + e.args[1:]
-                raise e
-            else:
-                result.add_results(child_result)
-                remaining_ids.discard(child_result.test_id)
-                if child_result.shouldStop:
-                    result.shouldStop = True
-                    return
+
+        # Track submitted and completed tasks
+        pending_tasks = []
+        remaining_tests = list(tests)
+        completed_count = 0
+
+        # Submit initial batch of tasks
+        max_concurrent = min(int(self.nprocs * 1.5), len(remaining_tests))
+        for _ in range(max_concurrent):
+            if remaining_tests:
+                test = remaining_tests.pop(0)
+                async_result = pool.apply_async(child_runner, (test,))
+                pending_tasks.append((async_result, test.id()))
+
+        while pending_tasks:
+            # Check for completed tasks
+            for (async_result, test_id) in pending_tasks[:]:
+                try:
+                    child_result = async_result.get(timeout=self.timeout)
+                    # Task completed successfully
+                    pending_tasks.remove((async_result, test_id))
+                    completed_count += 1
+
+                    result.add_results(child_result)
+                    memtrack: MemoryTracker = child_result.resource_info
+                    mem_avail = memtrack.end_memory["available"]
+                    mem_rss = memtrack.end_memory['rss']
+                    high_pressure = mem_avail < threshold or mem_rss > ONE_GB
+                    self.resource_infos.append(memtrack.get_summary())
+
+                    if child_result.shouldStop:
+                        result.shouldStop = True
+                        return remaining_tests
+
+                    # Check memory pressure after each completed test
+                    if high_pressure:
+                        print(f"Memory pressure is high: {memtrack.get_summary()}, recycling pool...",
+                              file=sys.stderr)
+                        # Wait for remaining tasks to complete, don't submit new ones
+                        while pending_tasks:
+                            for (pending_async, pending_id) in pending_tasks[:]:
+                                try:
+                                    pending_result = pending_async.get(timeout=self.timeout)
+                                    pending_tasks.remove((pending_async, pending_id))
+                                    result.add_results(pending_result)
+                                    self.resource_infos.append(pending_result.resource_info.get_summary())
+                                except TimeoutError:
+                                    continue
+                        return remaining_tests
+
+                    # Submit next test if available and memory pressure is OK
+                    if remaining_tests:
+                        next_test = remaining_tests.pop(0)
+                        new_async = pool.apply_async(child_runner, (next_test,))
+                        pending_tasks.append((new_async, next_test.id()))
+
+                except TimeoutError:
+                    # Task still running
+                    continue
+
+        return []
 
     def run(self, test):
         self._ptests, self._stests = _split_nonparallel_tests(test,
                                                               self.useslice)
-        print("Parallel: %s. Serial: %s" % (len(self._ptests),
-                                            len(self._stests)))
+        print(f"Parallel: {len(self._ptests)}. Serial: {len(self._stests)}",
+              file=sys.stderr)
+
         # This will call self._run_inner() on the created result object,
         # and print out the detailed test results at the end.
         return super(ParallelTestRunner, self).run(self._run_inner)
