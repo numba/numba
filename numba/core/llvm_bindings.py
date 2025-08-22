@@ -32,6 +32,7 @@ def _inlining_threshold(optlevel, sizelevel=0):
 
     return 225
 
+
 def create_pass_builder(tm, opt=2, loop_vectorize=False,
                         slp_vectorize=False):
     """
