@@ -1,0 +1,6 @@
+Fix error formatting when paths contain curly braces
+----------------------------------------------------
+
+Fix ``KeyError`` in error formatting for file paths containing curly braces
+(e.g., ``C:\\Users\\{GUID}\\...`` on Windows). Pre-formatted messages without
+formatting arguments are now preserved as-is.

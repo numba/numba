@@ -20,6 +20,10 @@ set PIP_INSTALL=pip install -q
 call deactivate
 @rem Display root environment (for debugging)
 conda list
+
+@rem Install conda-anaconda-tos before creating environment to improve Azure CI detection
+set CONDA_PLUGINS_AUTO_ACCEPT_TOS=true && %CONDA_INSTALL% "conda-anaconda-tos>=0.2.1" && set CONDA_PLUGINS_AUTO_ACCEPT_TOS=
+
 if "%PYTHON%" neq "3.13" (
     @rem CFFI, jinja2 and IPython are optional dependencies, but exercised in the test suite
     conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip jinja2 ipython gitpython pyyaml

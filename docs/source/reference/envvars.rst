@@ -465,6 +465,25 @@ Options for the compilation cache.
     Also see :ref:`docs on cache sharing <cache-sharing>` and
     :ref:`docs on cache clearing <cache-clearing>`
 
+.. envvar:: NUMBA_CACHE_LOCATOR_CLASSES
+
+    Override the default cache locator classes and their order. If defined,
+    this should be a comma-separated list of cache locator class names.
+
+    Available locator classes include:
+
+    - ``InTreeCacheLocator`` - Cache next to source files in ``__pycache__``
+    - ``InTreeCacheLocatorFsAgnostic`` - Like ``InTreeCacheLocator`` but
+      agnostic to filesystem timestamp precision differences
+    - ``UserWideCacheLocator`` - Cache in user-wide application directory
+    - ``IPythonCacheLocator`` - Cache in IPython-specific directory
+    - ``ZipCacheLocator`` - Cache for functions in zip files
+
+    Custom locator classes can also be specified using their full module path
+    (e.g., ``mymodule.MyCustomLocator``).
+
+    If not defined, Numba uses the default locator order.
+
 
 .. _numba-envvars-gpu-support:
 
