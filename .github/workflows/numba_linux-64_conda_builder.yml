@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  CONDA_CHANNEL_NUMBA: numba/label/dev
+  CONDA_CHANNEL_NUMBA: numba/label/llvm20
 
 jobs:
   load-matrix:
