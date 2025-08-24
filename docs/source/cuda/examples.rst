@@ -546,3 +546,115 @@ kernel following this pattern:
    :end-before: ex_cuda_ufunc.end
    :dedent: 8
    :linenos:
+
+.. _cuda_max_value_array_example:
+
+Parallel Array Maximum
+======================
+This example demonstrates how to find the maximum value in a large array using Numba CUDA.
+It showcases the use of shared memory for efficient reduction operations across thread blocks.
+
+First, let's import the necessary modules:
+
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_parallel_max.py
+   :language: python
+   :caption: from ``test_parallel_max`` in ``numba/cuda/tests/doc_examples/test_parallel_max.py``
+   :start-after: ex_parallel_max.import.begin
+   :end-before: ex_parallel_max.import.end
+   :dedent: 4
+   :linenos:
+
+The following CUDA kernel performs a reduction operation within each thread block to find the
+local maximum. It uses shared memory to store intermediate results:
+
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_parallel_max.py
+   :language: python
+   :caption: from ``test_parallel_max`` in ``numba/cuda/tests/doc_examples/test_parallel_max.py``
+   :start-after: ex_parallel_max.kernel.begin
+   :end-before: ex_parallel_max.kernel.end
+   :dedent: 4
+   :linenos:
+
+We can then write a helper function that manages the device memory and kernel launch:
+
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_parallel_max.py
+   :language: python
+   :caption: from ``test_parallel_max`` in ``numba/cuda/tests/doc_examples/test_parallel_max.py``
+   :start-after: ex_parallel_max.helper.begin
+   :end-before: ex_parallel_max.helper.end
+   :dedent: 4
+   :linenos:
+
+To use this function, we simply pass our array and get the maximum value:
+
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_parallel_max.py
+   :language: python
+   :caption: from ``test_parallel_max`` in ``numba/cuda/tests/doc_examples/test_parallel_max.py``
+   :start-after: ex_parallel_max.run.begin
+   :end-before: ex_parallel_max.run.end
+   :dedent: 4
+   :linenos:
+
+This will output the maximum value found in the array, and verify it against NumPy's result:
+
+.. code-block:: none
+
+   GPU max: 999.9996337890625
+   CPU max: 999.9996337890625
+   Match: True
+
+.. _cuda_convolution:
+
+Image Convolution
+================
+This example demonstrates how to perform 2D convolution operations on images using Numba CUDA.
+Convolution is a fundamental operation in image processing and deep learning.
+
+First, let's import the necessary modules:
+
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_convolution.py
+   :language: python
+   :caption: from ``test_convolution`` in ``numba/cuda/tests/doc_examples/test_convolution.py``
+   :start-after: ex_convolution.import.begin
+   :end-before: ex_convolution.import.end
+   :dedent: 4
+   :linenos:
+
+The following kernel applies a 2D convolution filter to an image:
+
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_convolution.py
+   :language: python
+   :caption: from ``test_convolution`` in ``numba/cuda/tests/doc_examples/test_convolution.py``
+   :start-after: ex_convolution.kernel.begin
+   :end-before: ex_convolution.kernel.end
+   :dedent: 4
+   :linenos:
+
+We then create a helper function to manage device memory and kernel execution:
+
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_convolution.py
+   :language: python
+   :caption: from ``test_convolution`` in ``numba/cuda/tests/doc_examples/test_convolution.py``
+   :start-after: ex_convolution.helper.begin
+   :end-before: ex_convolution.helper.end
+   :dedent: 4
+   :linenos:
+
+Here's how to use this function with some common convolution kernels:
+
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_convolution.py
+   :language: python
+   :caption: from ``test_convolution`` in ``numba/cuda/tests/doc_examples/test_convolution.py``
+   :start-after: ex_convolution.run.begin
+   :end-before: ex_convolution.run.end
+   :dedent: 4
+   :linenos:
+
+This will apply different convolution filters to our test image and report the results:
+
+.. code-block:: none
+
+   Original image shape: (512, 512)
+   Filtered image shape: (512, 512)
+   Edge magnitude min: 0.005524271633476019, max: 4.228829860687256
+   Blurred image min: 0.0003662109375, max: 0.99609375
