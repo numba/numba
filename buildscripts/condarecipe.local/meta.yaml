@@ -39,7 +39,7 @@ requirements:
     - tbb-devel >=2021.6       # [not (aarch64 or ppc64le)]
   run:
     - python >=3.10
-    - numpy >=1.24
+    - numpy >=1.22.3
     # On channel https://anaconda.org/numba/
     - llvmlite >=0.45.0dev0,<0.45
   run_constrained:
@@ -80,6 +80,8 @@ test:
     # For testing ipython. At the time of writing ipykernel was not available
     # for Python 3.12.
     - ipykernel                # [not py==312]
+    # For memory monitoring
+    - psutil
     # Need these for AOT. Do not init msvc as it may not be present
     - {{ compiler('c') }}      # [not (win or aarch64)]
     - {{ compiler('cxx') }}    # [not (win or aarch64)]
