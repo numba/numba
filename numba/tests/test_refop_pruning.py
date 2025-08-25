@@ -21,7 +21,6 @@ def set_refprune_flags(flags):
 class TestRefOpPruning(TestCase):
 
     _numba_parallel_test_ = False
-    _NUMBA_USE_LEGACY_PM_1_ENV = {'NUMBA_USE_LLVM_LEGACY_PASS_MANAGER': '1'}
 
     def check(self, func, *argtys, **prune_types):
         """
