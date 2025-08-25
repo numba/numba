@@ -197,7 +197,7 @@ def _lower_parfor_parallel_std(lowerer, parfor):
             # First create a var for the numpy empty ufunc.
             glbl_np_empty = pfbdr.bind_global_function(
                 fobj=np.empty,
-                ftype=get_np_ufunc_typ(np.empty),
+                ftype=get_np_ufunc_typ(np.empty, pfbdr._typingctx),
                 args=(
                     types.UniTuple(types.intp, redarrdim),
                 ),
@@ -251,7 +251,7 @@ def _lower_parfor_parallel_std(lowerer, parfor):
                     # First, create a variable for np.full.
                     full_func_node = pfbdr.bind_global_function(
                         fobj=np.full,
-                        ftype=get_np_ufunc_typ(np.full),
+                        ftype=get_np_ufunc_typ(np.full, pfbdr._typingctx),
                         args=(
                             types.UniTuple(types.intp, redvar_typ.ndim),
                             reddtype,
