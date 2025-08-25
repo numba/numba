@@ -20,7 +20,6 @@ concurrency:
 env:
   ARTIFACT_RETENTION_DAYS: 7
   WHEELS_INDEX_URL: https://pypi.anaconda.org/numba/label/dev/simple
-  CONDA_CHANNEL_NUMBA: numba/label/dev
 
 jobs:
   load-matrix:
@@ -91,7 +90,7 @@ jobs:
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
               arch -arm64 python -m pip install llvmlite_wheels/*.whl
           else
-              conda install -c ${{ env.CONDA_CHANNEL_NUMBA }} llvmlite
+              arch -arm64 python -m pip install -i ${{ env.WHEELS_INDEX_URL }} llvmlite
           fi
           conda install -c defaults python-build numpy==${{ matrix.numpy_build }} clang_osx-arm64 clangxx_osx-arm64
           conda install --yes llvm-openmp
@@ -191,7 +190,7 @@ jobs:
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
               arch -arm64 python -m pip install llvmlite_wheels/*.whl
           else
-              arch -arm64 python -m pip install -i $WHEELS_INDEX_URL llvmlite
+              arch -arm64 python -m pip install -i ${{ env.WHEELS_INDEX_URL }} llvmlite
           fi
           arch -arm64 python -m twine check dist/*.whl
           arch -arm64 python -m pip install dist/numba*.whl numpy==${{ matrix.numpy_test }}

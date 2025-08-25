@@ -18,7 +18,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  CONDA_CHANNEL_NUMBA: numba/label/dev
   ARTIFACT_RETENTION_DAYS: 7
   WHEELS_INDEX_URL: https://pypi.anaconda.org/numba/label/dev/simple
 
@@ -91,7 +90,7 @@ jobs:
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
               python -m pip install llvmlite_wheels/*.whl
           else
-              conda install -c ${{ env.CONDA_CHANNEL_NUMBA }} llvmlite
+              python -m pip install -i ${{ env.WHEELS_INDEX_URL }} llvmlite
           fi
           conda install -c defaults python-build numpy==${{ matrix.numpy_build }} setuptools
           python -m pip install tbb==2021.6 tbb-devel==2021.6
@@ -149,7 +148,7 @@ jobs:
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
               python -m pip install llvmlite_wheels/*.whl
           else
-              python -m pip install -i $WHEELS_INDEX_URL llvmlite
+              python -m pip install -i ${{ env.WHEELS_INDEX_URL }} llvmlite
           fi
           python -m twine check dist/*.whl
           python -m pip install dist/*.whl
