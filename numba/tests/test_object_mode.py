@@ -8,6 +8,7 @@ import numpy as np
 import unittest
 from numba import jit, types
 from numba.core import utils
+from numba.core.utils import PYVERSION
 from numba.tests.support import TestCase
 
 
@@ -88,7 +89,16 @@ class TestObjectMode(TestCase):
         with self.assertRaises(TypeError) as raises:
             foo(None, None)
 
-        self.assertIn("is not iterable", str(raises.exception))
+        # This tests 'None in None' with the python interpreter. The error
+        # message has changed in 3.14.
+        if PYVERSION in ((3, 14), ):
+            expected_snippet = "is not a container or iterable"
+        elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+            expected_snippet = "is not iterable"
+        else:
+            raise NotImplementedError(PYVERSION)
+
+        self.assertIn(expected_snippet, str(raises.exception))
 
     def test_delitem(self):
         pyfunc = delitem_usecase
