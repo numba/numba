@@ -142,6 +142,9 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Validate and test wheel
+        env:
+          NUMBA_CPU_NAME: generic
+          _NUMBA_REDUCED_TESTING: 1
         run: |
           python -m pip install --upgrade pip twine
           python -m pip install numpy==${{ matrix.numpy_test }} tbb==2021.6 tbb-devel==2021.6
