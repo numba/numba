@@ -58,8 +58,8 @@ For CUDA 11, ``cudatoolkit`` is required::
 
 You do not need to install the CUDA SDK from NVIDIA.
 
-Installing using pip on x86/x86_64 Platforms
---------------------------------------------
+Installing using ``pip``
+------------------------
 
 Binary wheels for Windows, Mac, and Linux are also available from `PyPI
 <https://pypi.org/project/numba/>`_.  You can install Numba using ``pip``::
