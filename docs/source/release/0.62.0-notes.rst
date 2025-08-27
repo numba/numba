@@ -5,10 +5,8 @@ Version 0.62.0rc1 (28 August 2025)
    :depth: 2
 
 This is a major Numba release. Numba now supports an LLVM 20 enabled llvmlite
-by requiring llvmlite 0.45 as a minimum. Furthermore, the NumPy minimum version
-has been decreased to 1.22 and the NumPy maximum version has been increased to
-2.3. This means Numba now supports a wider range of both older and newer NumPy
-releases.
+by requiring llvmlite 0.45 as a minimum. Furthermore, this release re-enables
+NumPy 1.22 support and adds NumPy 2.3 support.
 
 Importantly for users, this is the last release to officially support the Intel
 x86_64 MacOSX platform -- also known as ``osx-64``. This does not mean support
