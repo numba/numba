@@ -9,7 +9,7 @@ by requiring llvmlite 0.45 as a minimum. Furthermore, this release re-enables
 NumPy 1.22 support and adds NumPy 2.3 support.
 
 Importantly for users, this is the last release to officially support the Intel
-x86_64 MacOSX platform -- also known as ``osx-64``. This does not mean support
+x86_64 macos platform -- also known as ``osx-64``. This does not mean support
 will be removed from the source tree, just that continuous integration will no
 longer test this platform and new releases will not include binary artifacts as
 part of the release process. For more details see:
