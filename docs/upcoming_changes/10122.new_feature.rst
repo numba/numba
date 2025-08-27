@@ -1,4 +1,0 @@
-Add support for ufunc.reduceat
-------------------------------
-
-Support for ``ufunc.reduceat`` is added.
