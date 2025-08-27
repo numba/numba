@@ -11,8 +11,9 @@ information<numba_support_info>` for details.
 Our supported platforms are:
 
 * Linux x86_64
+* Linux arm64/aarch-64
 * Windows 10 and later (64-bit)
-* OS X 10.9 and later (64-bit and unofficial support on M1/Arm64)
+* OS X 10.9 and later (64-bit Intel and M1/Arm64)
 * NVIDIA GPUs of compute capability 5.0 and later
 
   * Compute capabilities 3.5 and 3.7 are supported, but deprecated.
