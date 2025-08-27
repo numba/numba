@@ -305,7 +305,7 @@ Schedule
 --------
 
 - In Numba 0.61: The built-in CUDA target is deprecated.
-- In Numba 0.62: Use of the CUDA target when the ``numba-cuda`` package is not
+- In Numba 0.63: Use of the CUDA target when the ``numba-cuda`` package is not
   installed will cause the emission of a warning prompting the installation of
   ``numba-cuda``.
 - In a future version of Numba no less than 0.63: The built-in CUDA target will
