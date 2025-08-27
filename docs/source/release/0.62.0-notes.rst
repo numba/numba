@@ -351,3 +351,138 @@ to prevent out-of-memory failures due to
 `LLVM code-bloat issue <https://github.com/numba/llvmlite/issues/1247>`_.
 
 (`PR-#10176 <https://github.com/numba/numba/pull/10176>`__)
+
+Pull-Requests
+~~~~~~~~~~~~~
+
+* PR `#9259 <https://github.com/numba/numba/pull/9259>`_: Stop type inference from indefinite retry on failed function resolution (`gmarkall <https://github.com/gmarkall>`_ `sklam <https://github.com/sklam>`_)
+* PR `#9390 <https://github.com/numba/numba/pull/9390>`_: Add .tobytes() method (`alanhdu <https://github.com/alanhdu>`_ `guilhermeleobas <https://github.com/guilhermeleobas>`_)
+* PR `#9401 <https://github.com/numba/numba/pull/9401>`_: Add type annotations for @intrinsic (`aneeshdurg <https://github.com/aneeshdurg>`_)
+* PR `#9595 <https://github.com/numba/numba/pull/9595>`_: Fix #9585: Correct exceptions raised by NumPy dtype typing and catch them (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9676 <https://github.com/numba/numba/pull/9676>`_: Move Numba to LLVM's NewPassManager (`yashssh <https://github.com/yashssh>`_ `gmarkall <https://github.com/gmarkall>`_)
+* PR `#9789 <https://github.com/numba/numba/pull/9789>`_: Upgrade GitHub Actions stale (`cclauss <https://github.com/cclauss>`_)
+* PR `#9805 <https://github.com/numba/numba/pull/9805>`_: Handle empty arrays in np.median implementation and add datetime check (`tanishac25 <https://github.com/tanishac25>`_)
+* PR `#9807 <https://github.com/numba/numba/pull/9807>`_: Resolve mutable default argument problems (`EarlMilktea <https://github.com/EarlMilktea>`_)
+* PR `#9821 <https://github.com/numba/numba/pull/9821>`_: Add debug print to debug test_monitoring_multiple_threads failing on … (`sklam <https://github.com/sklam>`_)
+* PR `#9823 <https://github.com/numba/numba/pull/9823>`_: Initialize 0.62.0dev : Bump llvmlite to next dev version (`kc611 <https://github.com/kc611>`_)
+* PR `#9828 <https://github.com/numba/numba/pull/9828>`_: Add new type-checking level (`EarlMilktea <https://github.com/EarlMilktea>`_)
+* PR `#9831 <https://github.com/numba/numba/pull/9831>`_: Lint `core/tracing.py` using `flake8` (`EarlMilktea <https://github.com/EarlMilktea>`_)
+* PR `#9832 <https://github.com/numba/numba/pull/9832>`_: Lint `core/withcontexts.py` using `flake8` (`EarlMilktea <https://github.com/EarlMilktea>`_)
+* PR `#9837 <https://github.com/numba/numba/pull/9837>`_: Replace "hard-errors" with NumbaErrors. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#9843 <https://github.com/numba/numba/pull/9843>`_: Cherry-picks and Changelog entries for 0.61.0rc2 (`kc611 <https://github.com/kc611>`_ `sklam <https://github.com/sklam>`_)
+* PR `#9847 <https://github.com/numba/numba/pull/9847>`_: Update checklist post 0.61.0rc1 (`esc <https://github.com/esc>`_)
+* PR `#9848 <https://github.com/numba/numba/pull/9848>`_: Fix #9846. GET_ITER in comprehension changed to NOP. (`sklam <https://github.com/sklam>`_)
+* PR `#9850 <https://github.com/numba/numba/pull/9850>`_: Handle empty traceback in get_loc method to prevent IndexError (`tanishac25 <https://github.com/tanishac25>`_)
+* PR `#9861 <https://github.com/numba/numba/pull/9861>`_: Fall back on inspect.getsourcelines() in first line finder (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9862 <https://github.com/numba/numba/pull/9862>`_: Fix coverage support to respect include and omit and other options (`sklam <https://github.com/sklam>`_)
+* PR `#9876 <https://github.com/numba/numba/pull/9876>`_: Support floating point arguments for `np.random.negative_binomial` (`dforero0896 <https://github.com/dforero0896>`_ `esc <https://github.com/esc>`_ `daria-shaw <https://github.com/daria-shaw>`_)
+* PR `#9887 <https://github.com/numba/numba/pull/9887>`_: Add env-var NUMBA_JIT_COVERAGE to disable coverage (`sklam <https://github.com/sklam>`_)
+* PR `#9888 <https://github.com/numba/numba/pull/9888>`_: Prevent bools from if ops being interpreted as user variables (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9892 <https://github.com/numba/numba/pull/9892>`_: [UX] TypedDict: better error message for KeyError (`esc <https://github.com/esc>`_)
+* PR `#9893 <https://github.com/numba/numba/pull/9893>`_: [DUX] fix use of rstcheck in towncrier check script (`esc <https://github.com/esc>`_)
+* PR `#9897 <https://github.com/numba/numba/pull/9897>`_: Cherry Picks and changelog modifications for `0.61.0` final (`kc611 <https://github.com/kc611>`_ `esc <https://github.com/esc>`_)
+* PR `#9898 <https://github.com/numba/numba/pull/9898>`_: remove requirements.txt for doc build (`esc <https://github.com/esc>`_)
+* PR `#9899 <https://github.com/numba/numba/pull/9899>`_: Prevent cache invalidation due to file system differences on various systems (`futurewasfree <https://github.com/futurewasfree>`_)
+* PR `#9902 <https://github.com/numba/numba/pull/9902>`_: reformat the towncrier support scripts (`esc <https://github.com/esc>`_)
+* PR `#9904 <https://github.com/numba/numba/pull/9904>`_: Update release checklist post 0.61.0 (`esc <https://github.com/esc>`_)
+* PR `#9905 <https://github.com/numba/numba/pull/9905>`_: Cherry-pick change-log and version support table modifications to main (`kc611 <https://github.com/kc611>`_ `esc <https://github.com/esc>`_)
+* PR `#9916 <https://github.com/numba/numba/pull/9916>`_: More lazy strings. (`DrTodd13 <https://github.com/DrTodd13>`_)
+* PR `#9919 <https://github.com/numba/numba/pull/9919>`_: Support for NumPy 2.2 (`kc611 <https://github.com/kc611>`_)
+* PR `#9920 <https://github.com/numba/numba/pull/9920>`_: adding win-64 builder for Numba conda packages (`swap357 <https://github.com/swap357>`_ `esc <https://github.com/esc>`_)
+* PR `#9926 <https://github.com/numba/numba/pull/9926>`_: Implemented np.frombuffer kwargs offset and count (`hbina <https://github.com/hbina>`_)
+* PR `#9940 <https://github.com/numba/numba/pull/9940>`_: add GHA workflow for building numba wheels for win-64 (`swap357 <https://github.com/swap357>`_)
+* PR `#9943 <https://github.com/numba/numba/pull/9943>`_: Direct CUDA issues to the numba-cuda repo (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9945 <https://github.com/numba/numba/pull/9945>`_: Add type stub to numba.core.types to help static type checkers. (`sklam <https://github.com/sklam>`_)
+* PR `#9946 <https://github.com/numba/numba/pull/9946>`_: Replace deprecated abstractproperty and abstractclassmethod (`sklam <https://github.com/sklam>`_)
+* PR `#9955 <https://github.com/numba/numba/pull/9955>`_: Use linkonce_odr linkage for `__excinfo_unwrap_args` global  (`sklam <https://github.com/sklam>`_)
+* PR `#9961 <https://github.com/numba/numba/pull/9961>`_: Fix flake8 issue on main branch. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#9964 <https://github.com/numba/numba/pull/9964>`_: remove upper pin on NumPy (`esc <https://github.com/esc>`_)
+* PR `#9965 <https://github.com/numba/numba/pull/9965>`_: update win-64 conda builder test matrix (`swap357 <https://github.com/swap357>`_)
+* PR `#9972 <https://github.com/numba/numba/pull/9972>`_: Fix issue with error handling in slice assignment. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#9973 <https://github.com/numba/numba/pull/9973>`_: Prevent unsafe type conversions use in `range`. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#9999 <https://github.com/numba/numba/pull/9999>`_: Added release notes and version table entry for 0.61.1rc1 (`kc611 <https://github.com/kc611>`_)
+* PR `#10023 <https://github.com/numba/numba/pull/10023>`_: gha/add numba osx-64 conda builder (`swap357 <https://github.com/swap357>`_)
+* PR `#10028 <https://github.com/numba/numba/pull/10028>`_: update release notes 0.61.1 (`swap357 <https://github.com/swap357>`_)
+* PR `#10032 <https://github.com/numba/numba/pull/10032>`_: Updated dates in version support table and release notes (`kc611 <https://github.com/kc611>`_)
+* PR `#10035 <https://github.com/numba/numba/pull/10035>`_: Add support for PYCC for functions that has indirect dependency on Environment object (`sklam <https://github.com/sklam>`_)
+* PR `#10036 <https://github.com/numba/numba/pull/10036>`_: Bump azure ubuntu from 20.04 to 24.04 (`sklam <https://github.com/sklam>`_)
+* PR `#10038 <https://github.com/numba/numba/pull/10038>`_: gha/add numba osx-64 wheel builder (`swap357 <https://github.com/swap357>`_)
+* PR `#10043 <https://github.com/numba/numba/pull/10043>`_: Backport change-log and version support table modifications for `0.61.2` to `main`. (`kc611 <https://github.com/kc611>`_ `swap357 <https://github.com/swap357>`_)
+* PR `#10044 <https://github.com/numba/numba/pull/10044>`_: Document and test `as_numba_type`'s role in instance checks (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#10047 <https://github.com/numba/numba/pull/10047>`_: Fix `IntEnumMember.can_convert_to()` when no conversions found (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#10050 <https://github.com/numba/numba/pull/10050>`_: Fixed invert in overload and added testcase. (`LuniaKunal <https://github.com/LuniaKunal>`_)
+* PR `#10052 <https://github.com/numba/numba/pull/10052>`_: Fix bug in `np.searchsorted` when the arguments have `float32` dtype (`guilhermeleobas <https://github.com/guilhermeleobas>`_)
+* PR `#10055 <https://github.com/numba/numba/pull/10055>`_: gha/add numba osx-arm64 wheel builder (`swap357 <https://github.com/swap357>`_)
+* PR `#10059 <https://github.com/numba/numba/pull/10059>`_: gha/add linux-arm64 wheel builder workflow (`swap357 <https://github.com/swap357>`_)
+* PR `#10061 <https://github.com/numba/numba/pull/10061>`_: gha/add numba linux-64 conda builder (`swap357 <https://github.com/swap357>`_)
+* PR `#10063 <https://github.com/numba/numba/pull/10063>`_: gha/add numba linux-64 wheel builder (`swap357 <https://github.com/swap357>`_)
+* PR `#10064 <https://github.com/numba/numba/pull/10064>`_: gha/add numba osx-arm64 conda builder (`swap357 <https://github.com/swap357>`_)
+* PR `#10065 <https://github.com/numba/numba/pull/10065>`_: gha/add numba linux-arm64 conda builder (`swap357 <https://github.com/swap357>`_)
+* PR `#10068 <https://github.com/numba/numba/pull/10068>`_: Document the inline and forceinline kwargs (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#10072 <https://github.com/numba/numba/pull/10072>`_: Docs: Fix jit decorator parameter name from 'signature' to 'signature_or_function' (`esc <https://github.com/esc>`_ `dipampaul17 <https://github.com/dipampaul17>`_)
+* PR `#10073 <https://github.com/numba/numba/pull/10073>`_: Fix C++ linkage for Python builds with Valgrind (`tiran <https://github.com/tiran>`_ `seibert <https://github.com/seibert>`_)
+* PR `#10077 <https://github.com/numba/numba/pull/10077>`_: gha/refactor numba win-64 workflows (`swap357 <https://github.com/swap357>`_)
+* PR `#10078 <https://github.com/numba/numba/pull/10078>`_: fix/revert gha numba recipe change (`swap357 <https://github.com/swap357>`_)
+* PR `#10079 <https://github.com/numba/numba/pull/10079>`_: Fix looplifting issue in for-zip, for-enumerate (`sklam <https://github.com/sklam>`_)
+* PR `#10081 <https://github.com/numba/numba/pull/10081>`_: Resolve NumPy `DeprecationWarning` in `constant_record` (`mreraser <https://github.com/mreraser>`_)
+* PR `#10088 <https://github.com/numba/numba/pull/10088>`_: fix: handle nan correctly in np.unique (`Saransh-cpp <https://github.com/Saransh-cpp>`_)
+* PR `#10097 <https://github.com/numba/numba/pull/10097>`_: Add support for `posinf` and `neginf` in `nan_to_num` (`Saransh-cpp <https://github.com/Saransh-cpp>`_ `gmarkall <https://github.com/gmarkall>`_)
+* PR `#10102 <https://github.com/numba/numba/pull/10102>`_: Fix error for unsupported `axis` kwarg in `average` (`Saransh-cpp <https://github.com/Saransh-cpp>`_ `gmarkall <https://github.com/gmarkall>`_)
+* PR `#10103 <https://github.com/numba/numba/pull/10103>`_: Pin python 3.13 to 3.13.3 in CI (`maxnoe <https://github.com/maxnoe>`_)
+* PR `#10106 <https://github.com/numba/numba/pull/10106>`_: Fix list-comprehension for python 3.13.4 (`sklam <https://github.com/sklam>`_)
+* PR `#10107 <https://github.com/numba/numba/pull/10107>`_: gha/seperate wheel build and test matrices (`swap357 <https://github.com/swap357>`_)
+* PR `#10109 <https://github.com/numba/numba/pull/10109>`_: Remove new type system files from numba (`kc611 <https://github.com/kc611>`_)
+* PR `#10115 <https://github.com/numba/numba/pull/10115>`_: gha/refactor workflow triggers (`swap357 <https://github.com/swap357>`_)
+* PR `#10119 <https://github.com/numba/numba/pull/10119>`_: ci/numba update win-2019 to 2025 (`swap357 <https://github.com/swap357>`_)
+* PR `#10122 <https://github.com/numba/numba/pull/10122>`_: add ufunc.reduceat support (`guilhermeleobas <https://github.com/guilhermeleobas>`_)
+* PR `#10146 <https://github.com/numba/numba/pull/10146>`_: Prepare Numba for LLVM20 changes (`swap357 <https://github.com/swap357>`_ `yashssh <https://github.com/yashssh>`_)
+* PR `#10147 <https://github.com/numba/numba/pull/10147>`_: Fixes for NumPy 2.3.0 (`eric-wieser <https://github.com/eric-wieser>`_)
+* PR `#10148 <https://github.com/numba/numba/pull/10148>`_: gha/fix gha ci issues (`swap357 <https://github.com/swap357>`_)
+* PR `#10152 <https://github.com/numba/numba/pull/10152>`_: Explicitly accept conda TOS in Windows Azure public CI (`kc611 <https://github.com/kc611>`_)
+* PR `#10153 <https://github.com/numba/numba/pull/10153>`_: [vendor] cloudpickle 3.1.1 (`esc <https://github.com/esc>`_)
+* PR `#10159 <https://github.com/numba/numba/pull/10159>`_: Added 'is' operator for structref types, issue #9936 (`KevinMai0202 <https://github.com/KevinMai0202>`_)
+* PR `#10167 <https://github.com/numba/numba/pull/10167>`_: Fix Azure failure by reducing memory use. (`sklam <https://github.com/sklam>`_)
+* PR `#10171 <https://github.com/numba/numba/pull/10171>`_: fix/handle curly braces paths (`swap357 <https://github.com/swap357>`_)
+* PR `#10176 <https://github.com/numba/numba/pull/10176>`_: Fix GHA windows workers memory pressure issue (`sklam <https://github.com/sklam>`_)
+* PR `#10178 <https://github.com/numba/numba/pull/10178>`_: Fix test_monitoring_multiple_threads (`sklam <https://github.com/sklam>`_)
+* PR `#10179 <https://github.com/numba/numba/pull/10179>`_: update azure pipeline configs to use numpy2.3 (`swap357 <https://github.com/swap357>`_)
+* PR `#10183 <https://github.com/numba/numba/pull/10183>`_: Revert NumPy 1.23 support removal (`kc611 <https://github.com/kc611>`_ `swap357 <https://github.com/swap357>`_)
+* PR `#10185 <https://github.com/numba/numba/pull/10185>`_: Fix target extension issues (`sklam <https://github.com/sklam>`_)
+* PR `#10189 <https://github.com/numba/numba/pull/10189>`_: Fix CI: skip test if LLVM reports host CPU as 'generic' (`sklam <https://github.com/sklam>`_)
+* PR `#10190 <https://github.com/numba/numba/pull/10190>`_: gha/replace conda installation of llvmlite with pip on wheel workflows (`swap357 <https://github.com/swap357>`_)
+* PR `#10192 <https://github.com/numba/numba/pull/10192>`_: gha/fix artifact llvmlite artifact name on win-64 test step (`swap357 <https://github.com/swap357>`_)
+* PR `#10193 <https://github.com/numba/numba/pull/10193>`_: gha/fix llvmlite channel path format on win artifact handling (`swap357 <https://github.com/swap357>`_)
+* PR `#10194 <https://github.com/numba/numba/pull/10194>`_: gha/add env variables for reduced testing on win-64 wheel builder (`swap357 <https://github.com/swap357>`_)
+* PR `#10197 <https://github.com/numba/numba/pull/10197>`_: Update version support 0.62 (`esc <https://github.com/esc>`_)
+* PR `#10198 <https://github.com/numba/numba/pull/10198>`_: Update deprecation doc for 0.62 (`esc <https://github.com/esc>`_)
+
+Authors
+~~~~~~~
+
+* `alanhdu <https://github.com/alanhdu>`_
+* `aneeshdurg <https://github.com/aneeshdurg>`_
+* `cclauss <https://github.com/cclauss>`_
+* `daria-shaw <https://github.com/daria-shaw>`_
+* `dforero0896 <https://github.com/dforero0896>`_
+* `dipampaul17 <https://github.com/dipampaul17>`_
+* `DrTodd13 <https://github.com/DrTodd13>`_
+* `EarlMilktea <https://github.com/EarlMilktea>`_
+* `eric-wieser <https://github.com/eric-wieser>`_
+* `esc <https://github.com/esc>`_
+* `futurewasfree <https://github.com/futurewasfree>`_
+* `gmarkall <https://github.com/gmarkall>`_
+* `guilhermeleobas <https://github.com/guilhermeleobas>`_
+* `hbina <https://github.com/hbina>`_
+* `kc611 <https://github.com/kc611>`_
+* `KevinMai0202 <https://github.com/KevinMai0202>`_
+* `LuniaKunal <https://github.com/LuniaKunal>`_
+* `maxnoe <https://github.com/maxnoe>`_
+* `mreraser <https://github.com/mreraser>`_
+* `Saransh-cpp <https://github.com/Saransh-cpp>`_
+* `seibert <https://github.com/seibert>`_
+* `sklam <https://github.com/sklam>`_
+* `stuartarchibald <https://github.com/stuartarchibald>`_
+* `swap357 <https://github.com/swap357>`_
+* `tanishac25 <https://github.com/tanishac25>`_
+* `tiran <https://github.com/tiran>`_
+* `yashssh <https://github.com/yashssh>`_
