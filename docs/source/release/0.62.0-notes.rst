@@ -1,0 +1,353 @@
+
+Version 0.62.0 (Release Date)
+=============================
+
+
+Highlights
+~~~~~~~~~~
+
+Remove new type system from ``numba``
+-------------------------------------
+
+This release removes the new type system contained within files that have names 
+prefixed by ``new_*``. This decision was made due to technical complexities faced
+upon implementation of a new type system as described in: 
+https://numba.discourse.group/t/numpy-2-x-support-community-update/2815
+
+(`PR-#10109 <https://github.com/numba/numba/pull/10109>`__)
+
+Support for NumPy 2.3
+---------------------
+
+Numba now supports NumPy 2.3.
+
+(`PR-#10147 <https://github.com/numba/numba/pull/10147>`__)
+
+Revert the minimum supported NumPy version to 1.22
+--------------------------------------------------
+
+This release updates the minimum supported version of NumPy to 1.22.
+
+(`PR-#10183 <https://github.com/numba/numba/pull/10183>`__)
+
+
+New Features
+~~~~~~~~~~~~
+
+Add NUMBA_CACHE_LOCATOR_CLASSES environment variable and InTreeCacheLocatorFsAgnostic
+-------------------------------------------------------------------------------------
+
+A new environment variable `NUMBA_CACHE_LOCATOR_CLASSES` has been added
+that allows users to override the default cache locator classes and their order.
+This variable accepts a comma-separated list of locator class names.
+
+Additionally, a new cache locator class ``InTreeCacheLocatorFsAgnostic`` has been
+introduced. This locator is a subclass of ``InTreeCacheLocator`` that is agnostic
+to filesystem differences, particularly timestamp precision differences (e.g.,
+milliseconds vs seconds). This helps ensure cache consistency across different
+filesystems and environments.
+
+(`PR-#9899 <https://github.com/numba/numba/pull/9899>`__)
+
+Add support for ufunc.reduceat
+------------------------------
+
+Support for ``ufunc.reduceat`` is added.
+
+(`PR-#10122 <https://github.com/numba/numba/pull/10122>`__)
+
+Add support for `is` identity operator on structref types
+---------------------------------------------------------
+
+Support has been added for the `is` identity operator to compare two `StructRef` instances in JIT-compiled code.
+
+(`PR-#10159 <https://github.com/numba/numba/pull/10159>`__)
+
+
+Improvements
+~~~~~~~~~~~~
+
+Use the New Pass Manager
+------------------------
+
+LLVM's New Pass Manager is used for the optimization pipelines. The use of the
+Legacy Pass Manager, which is removed in later LLVM versions, is accessed by a
+configuration variable, `USE_LLVM_LEGACY_PASS_MANAGER`.
+
+(`PR-#9676 <https://github.com/numba/numba/pull/9676>`__)
+
+Fall back to ``inspect.getsourcelines()`` in first line finder
+--------------------------------------------------------------
+
+If the first line finder can't locate source code on disk, it now tries using
+``inspect.getsourcelines()`` to get the source. This enables it to locate
+source for cells in Jupyter notebooks, so that line info for them can be
+generated for profiling tools.
+
+(`PR-#9861 <https://github.com/numba/numba/pull/9861>`__)
+
+[UX] TypedDict: better error message for KeyError #9892
+-------------------------------------------------------
+
+The ``KeyError`` raised from ``__getitem__`` for the ``numba.typed.Dict`` in
+case of an non-existing key now reports the value of the key. This behaviour is
+in-line with the regular ``dict`` via CPython.
+
+(`PR-#9892 <https://github.com/numba/numba/pull/9892>`__)
+
+Improve compilation time by more lazy strings.
+----------------------------------------------
+
+Make additional large strings be generated lazily so that you don't 
+pay the cost unless you actually use them.
+
+(`PR-#9916 <https://github.com/numba/numba/pull/9916>`__)
+
+Implemented support for ``np.frombuffer`` kwargs ``offset`` and ``count``
+-------------------------------------------------------------------------
+
+``np.frombuffer`` now support ``offset`` and ``count`` kwargs.
+
+(`PR-#9926 <https://github.com/numba/numba/pull/9926>`__)
+
+Improve Environment Object Support in PYCC
+------------------------------------------
+
+Added support for Environment objects referenced indirectly by entry points in
+PYCC-compiled code. Previously, PYCC was unable to handle these indirect
+Environment object references, which limited certain compilation scenarios.
+
+(`PR-#10035 <https://github.com/numba/numba/pull/10035>`__)
+
+Document and test ``as_numba_type``'s role in instance checks
+-------------------------------------------------------------
+
+Documentation now explains how ``as_numba_type()`` is used in the
+implementation of instance checks, and a test is added to ensure it continues
+to function as expected.
+
+(`PR-#10044 <https://github.com/numba/numba/pull/10044>`__)
+
+Improve loop-lifting to support zip and enumerate
+-------------------------------------------------
+
+Added support for ``zip()`` and ``enumerate()`` for loop-lifting.
+
+(`PR-#10079 <https://github.com/numba/numba/pull/10079>`__)
+
+
+NumPy Support
+~~~~~~~~~~~~~
+
+Added support for ``np.ndarray.tobytes`` method.
+================================================
+
+Support is added for the ``np.ndarray.tobytes`` method.
+
+(`PR-#9390 <https://github.com/numba/numba/pull/9390>`__)
+
+Add support for ``posinf`` and ``neginf`` in ``nan_to_num``
+-----------------------------------------------------------
+
+Numba's ``nan_to_num`` now supports ``posinf`` and ``neginf`` arguments of
+NumPy's ``nan_to_num``.
+
+(`PR-#10097 <https://github.com/numba/numba/pull/10097>`__)
+
+
+Bug Fixes
+~~~~~~~~~
+
+Avoid type inference hangs
+--------------------------
+
+Type inference can take a long time if it repeatedly attempts to resolve
+functions that have already failed. A patch is added to cache failed
+resolutions for the current compilation session. 
+
+This changes compiler behavior in the following way:
+
+- Previously, if a function resolution imported new extensions, those 
+  extensions could add support for the failing function. 
+
+- Now, the compiler will not retry failed resolutions, so new extensions
+  added during function resolution cannot add support retroactively.
+
+It is important to note importing of extensions during function resolution phase
+are unexpected. They should be avoided as they can cause confusing behavior. 
+
+To help isolate any issues arising from this change, an environment variable
+``NUMBA_DISABLE_TYPEINFER_FAIL_CACHE`` is added to disable the cache.
+
+(`PR-#9259 <https://github.com/numba/numba/pull/9259>`__)
+
+Fixed ``np.median`` raising ``AssertionError`` for empty arrays when NumPy returns NaN
+--------------------------------------------------------------------------------------
+
+Fixed an issue where passing empty arrays to ``np.median`` would cause an ``AssertionError``. Now empty arrays correctly return NaN as expected.
+
+(`PR-#9805 <https://github.com/numba/numba/pull/9805>`__)
+
+Fix coverage to respect configuration option
+--------------------------------------------
+
+Fixes a problem that Numba's coverage support is not respecting the coverage
+configuration options.
+
+(`PR-#9862 <https://github.com/numba/numba/pull/9862>`__)
+
+Support floating point arguments for ``np.random.negative_binomial``
+--------------------------------------------------------------------
+
+The function ``np.random.negative_binomial`` was fixed and now supports
+floating point types as arguments.
+
+(`PR-#9876 <https://github.com/numba/numba/pull/9876>`__)
+
+Avoid declaring ``if`` operation bools in debug info
+----------------------------------------------------
+
+Internal bool variables that hold the result of conditional tests in ``if``
+operations are no longer declared, and therefore can't show up in the
+``locals`` in GDB.
+
+(`PR-#9888 <https://github.com/numba/numba/pull/9888>`__)
+
+[DUX] fix use of rstcheck in towncrier check script
+---------------------------------------------------
+
+The script ``maint/towncrier_rst_validator.py`` now correctly reports any RST
+issues encountered when calling ``rstcheck`` via ``subprocess.chck_output``.
+This helps to improve the developer experience as any issues are reported
+directly and the developers no longer need to be confused and/or run a
+secondary tools
+
+(`PR-#9893 <https://github.com/numba/numba/pull/9893>`__)
+
+Prevent unsafe type conversion in arguments to ``range``.
+---------------------------------------------------------
+
+Types that require an unsafe type conversion to ``integer`` (such as ``float``)
+are now not permitted as arguments to ``range``.
+
+(`PR-#9973 <https://github.com/numba/numba/pull/9973>`__)
+
+Fix ``IntEnumMember.can_convert_to()`` when no conversions found
+----------------------------------------------------------------
+
+A spurious ``TypeError`` that was raised when no conversion from an
+``IntEnumMember`` was possible has now been fixed.
+
+(`PR-#10047 <https://github.com/numba/numba/pull/10047>`__)
+
+Added support for ``__invert__`` method in jitclass.
+----------------------------------------------------
+
+Support is added for the ``__invert__`` method in jitclass.
+
+(`PR-#10050 <https://github.com/numba/numba/pull/10050>`__)
+
+Fix ``np.searchsorted`` with ``float32`` NaN values
+---------------------------------------------------
+
+Fixes a bug in ``np.searchsorted`` where passing a ``float32`` array containing
+NaN values produces incorrect results. This issue occurs due to the use of an
+incorrect comparison function.
+
+(`PR-#10052 <https://github.com/numba/numba/pull/10052>`__)
+
+Fix deprecation warning caused by ``tostring()`` in structured record constant
+------------------------------------------------------------------------------
+
+Replaces the deprecated usage of ``tostring()`` with ``tobytes()`` in
+``numba/np/arrayobj.py:constant_record``. This resolves a DeprecationWarning
+raised when creating structured record constants under recent versions of NumPy.
+
+(`PR-#10081 <https://github.com/numba/numba/pull/10081>`__)
+
+fix: handle ``nan`` correctly in ``np.unique``
+----------------------------------------------
+
+``np.unique`` overload has been updated to handle ``np.nan`` values correctly
+-- this fix also propagates to the ``np.union1d`` overload, fixing its behavior
+with ``np.nan`` inputs
+
+(`PR-#10088 <https://github.com/numba/numba/pull/10088>`__)
+
+Fix error for unsupported ``axis`` kwarg in ``average``
+-------------------------------------------------------
+
+Be explicit about the ``axis`` kwarg not being supported and fix logic in error
+handling
+
+(`PR-#10102 <https://github.com/numba/numba/pull/10102>`__)
+
+Fix error formatting when paths contain curly braces
+----------------------------------------------------
+
+Fix ``KeyError`` in error formatting for file paths containing curly braces
+(e.g., ``C:\\Users\\{GUID}\\...`` on Windows). Pre-formatted messages without
+formatting arguments are now preserved as-is.
+
+(`PR-#10171 <https://github.com/numba/numba/pull/10171>`__)
+
+Fix target-specific function resolution
+---------------------------------------
+
+Fix target-specific function resolution. This resolves errors when
+target-specific extensions are run before any compilation for CPU targets.
+Also fixes parfors' function resolution to be target-aware.
+
+(`PR-#10185 <https://github.com/numba/numba/pull/10185>`__)
+
+
+Changes
+~~~~~~~
+
+Fix list comprehension support for Python 3.13.4
+------------------------------------------------
+
+Python 3.13.4 introduced a change in the bytecode generated for generator
+expressions, which also affects list comprehensions. 
+See `python/cpython#135171<https://github.com/python/cpython/issues/135171>_`
+for details. Numba relied on pattern matching the previous bytecode sequence,
+which no longer matched after the change. This update restores compatibility.
+
+(`PR-#10106 <https://github.com/numba/numba/pull/10106>`__)
+
+
+Infrastructure Related Changes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Migrate CI to Windows Server 2025
+---------------------------------
+
+Migrated CI infrastructure from Windows Server 2019 to Windows Server 2025.
+Replaced deprecated WMIC commands with PowerShell equivalents in system
+information gathering. Added manual VS2022 environment setup to handle
+conda activation issues.
+
+(`PR-#10119 <https://github.com/numba/numba/pull/10119>`__)
+
+Fix AzureCI memory limit failures
+---------------------------------
+
+Resolved AzureCI test failures caused by memory limit exhaustion. Windows 
+systems experienced system service failures, and LLVM code bloat on ``znver3`` 
+CPUs exacerbated memory usage.
+
+Implemented ``_NUMBA_REDUCED_TESTING=1`` environment variable to reduce test 
+cases, primarily targeting ``test_np_functions.py``. Reduced testing only 
+applies to Windows tests on Azure.
+
+(`PR-#10167 <https://github.com/numba/numba/pull/10167>`__)
+
+Control memory usage in test suite
+----------------------------------
+
+Add memory monitoring to the test suite using ``psutil`` to track and report
+memory usage during test execution. Reduce test coverage on Windows GHA workers
+to prevent out-of-memory failures due to 
+`LLVM code-bloat issue <https://github.com/numba/llvmlite/issues/1247>`_.
+
+(`PR-#10176 <https://github.com/numba/numba/pull/10176>`__)

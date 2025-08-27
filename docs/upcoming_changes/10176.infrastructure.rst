@@ -1,7 +1,0 @@
-Control memory usage in test suite
-----------------------------------
-
-Add memory monitoring to the test suite using ``psutil`` to track and report
-memory usage during test execution. Reduce test coverage on Windows GHA workers
-to prevent out-of-memory failures due to 
-`LLVM code-bloat issue <https://github.com/numba/llvmlite/issues/1247>`_.

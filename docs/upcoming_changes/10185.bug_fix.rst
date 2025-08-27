@@ -1,6 +1,0 @@
-Fix target-specific function resolution
----------------------------------------
-
-Fix target-specific function resolution. This resolves errors when
-target-specific extensions are run before any compilation for CPU targets.
-Also fixes parfors' function resolution to be target-aware.
