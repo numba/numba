@@ -848,6 +848,8 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
             if isinstance(instr, ir.Assign):
                 expr = instr.value
                 lhs = instr.target.name
+                lhstype = get_type_or_none(lhs, typemap)
+
                 # only mutable types can alias
                 if is_immutable_type(lhs, typemap):
                     continue
@@ -885,6 +887,12 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                         _add_alias(lhs, expr.args[0].name, alias_map, arg_aliases)
                     if isinstance(fmod, ir.Var) and fname in np_alias_funcs:
                         _add_alias(lhs, fmod.name, alias_map, arg_aliases)
+                    if isinstance(lhstype, types.containers.BaseTuple):
+                        for used_var in expr.args:
+                            _add_alias(lhs, used_var.name, alias_map, arg_aliases)
+                        for used_var in expr.kws:
+                            assert(isinstance(used_var[1], ir.Var))
+                            _add_alias(lhs, used_var[1].name, alias_map, arg_aliases)
 
     # copy to avoid changing size during iteration
     old_alias_map = copy.deepcopy(alias_map)
@@ -922,6 +930,11 @@ def is_immutable_type(var, typemap):
         return True
     # conservatively, assume mutable
     return False
+
+def get_type_or_none(var, typemap):
+    if typemap is None or var not in typemap:
+        return None
+    return typemap[var]
 
 def copy_propagate(blocks, typemap):
     """compute copy propagation information for each block using fixed-point
