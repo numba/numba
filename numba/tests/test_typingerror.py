@@ -158,7 +158,7 @@ class TestTypingError(unittest.TestCase):
             errmsg,
         )
         self.assertIn(
-            "(array(float64, 1d, C), Literal[int](0), complex128)",
+            f"(array(float64, 1d, C), {types.literal(0)}, complex128)",
             errmsg,
         )
 
