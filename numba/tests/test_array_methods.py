@@ -714,8 +714,24 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_array_copy(self):
         self.check_layout_dependent_func(array_copy)
 
+    def check_object_copy(self, pyfunc):
+        def check_obj(obj):
+            cfunc = njit((typeof(obj),))(pyfunc)
+            expected = pyfunc(obj)
+            got = cfunc(obj)
+            self.assertPreciseEqual(expected, got)
+
+        check_obj((1, 2, 3))
+        check_obj([1.0, 2.0, 3.0])
+        check_obj(6)
+
+        msg = '.*The argument "a" must be array-like.*'
+        with self.assertRaisesRegex(TypingError, msg) as raises:
+            njit((typeof('hello'), ))(pyfunc)
+
     def test_np_copy(self):
         self.check_layout_dependent_func(np_copy)
+        self.check_object_copy(np_copy)
 
     def check_ascontiguousarray_scalar(self, pyfunc):
         def check_scalar(x):
