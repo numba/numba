@@ -157,7 +157,7 @@ NumPy Support
 ~~~~~~~~~~~~~
 
 Added support for ``np.ndarray.tobytes`` method.
-================================================
+------------------------------------------------
 
 Support is added for the ``np.ndarray.tobytes`` method.
 
