@@ -5,7 +5,8 @@ import struct
 
 from numba import jit
 from numba.core import utils
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, expected_failure_py314
+from numba.core.utils import PYVERSION
 
 
 class TestExtendedArg(TestCase):
@@ -38,7 +39,10 @@ class TestExtendedArg(TestCase):
         f.__code__ = f.__code__.replace(co_code=bytes(b), co_consts=consts)
         return f
 
+    @expected_failure_py314
     def test_extended_arg_load_const(self):
+        if PYVERSION == (3, 14):
+            self.fail()
         pyfunc = self.get_extended_arg_load_const()
         # make sure that the pyfunc contains the expected modification
         self.assertGreater(len(pyfunc.__code__.co_consts), self.bytecode_len)
