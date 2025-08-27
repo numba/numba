@@ -11,7 +11,7 @@ has been decreased to 1.22 and the NumPy maximum version has been increased to
 releases.
 
 Importantly for users, this is the last release to officially support the Intel
-x86_64 MacOSX platform -- also known as ``osx-64``. This does not mean, support
+x86_64 MacOSX platform -- also known as ``osx-64``. This does not mean support
 will be removed from the source tree, just that continuous integration will no
 longer test this platform and new releases will not include binary artifacts as
 part of the release process. For more details see:
