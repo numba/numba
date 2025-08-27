@@ -35,13 +35,21 @@ class Integer(Number):
             bitwidth = parse_integer_bitwidth(name)
         if signed is None:
             signed = parse_integer_signed(name)
-        self.bitwidth = bitwidth
-        self.signed = signed
+        self.__bitwidth = bitwidth
+        self.__signed = signed
+
+    @property
+    def bitwidth(self):
+        return self.__bitwidth
+
+    @property
+    def signed(self):
+        return self.__signed
 
     @classmethod
     def from_bitwidth(cls, bitwidth, signed=True):
         name = ('int%d' if signed else 'uint%d') % bitwidth
-        return cls(name)
+        return cls(name, bitwidth, signed)
 
     def cast_python_value(self, value):
         return getattr(np, self.name)(value)
@@ -161,6 +169,17 @@ class _NPDatetimeBase(Type):
         self.unit = unit
         self.unit_code = npdatetime_helpers.DATETIME_UNITS[self.unit]
         super(_NPDatetimeBase, self).__init__(name, *args, **kws)
+
+    @property
+    def unit(self):
+        return self.__unit
+
+    @unit.setter
+    def unit(self, unit):
+        if not hasattr(self, "_NPDatetimeBase__unit"):
+            self.__unit = unit
+        else:
+            raise Exception("Cannot redefine unit of _NPDatetimeBase")
 
     def __lt__(self, other):
         if self.__class__ is not other.__class__:
