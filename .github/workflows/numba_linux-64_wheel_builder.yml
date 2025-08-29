@@ -137,15 +137,6 @@ jobs:
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           if-no-files-found: error
 
-      - name: Upload numba sdist
-        if: matrix.python-version == '3.10'
-        uses: actions/upload-artifact@v4
-        with:
-            name: numba-sdist
-            path: dist/*.tar.gz
-            compression-level: 0
-            retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
-            if-no-files-found: error
 
   linux-64-test:
     name: linux-64-test (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
