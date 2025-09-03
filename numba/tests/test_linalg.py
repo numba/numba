@@ -27,6 +27,9 @@ def dot3(a, b, out):
 def vdot(a, b):
     return np.vdot(a, b)
 
+def vecdot(a, b, **kwargs):
+    return np.vecdot(a, b, **kwargs)
+
 
 class TestProduct(EnableNRTStatsMixin, TestCase):
     """
@@ -327,6 +330,53 @@ class TestProduct(EnableNRTStatsMixin, TestCase):
         cfunc = jit(nopython=True)(vdot)
         with self.check_contiguity_warning(cfunc.py_func):
             cfunc(a, b)
+
+    @needs_blas
+    def test_vecdot(self):
+        """
+        Test np.vecdot()
+        """
+        cfunc = jit(nopython=True)(vecdot)
+        for dtype in self.dtypes:
+            # 2D arrays, axis argument
+            a2 = self.sample_matrix(4, 4, dtype)
+            b2 = self.sample_matrix(4, 4, dtype)
+            self.check_func(lambda x, y: np.vecdot(x, y, axis=1),
+                            jit(nopython=True)(lambda x, y: np.vecdot(x, y, axis=1)),
+                            (a2, b2))
+            # 2D arrays, axes argument
+            self.check_func(lambda x, y: np.vecdot(x, y, axes=[0,1]),
+                            jit(nopython=True)(lambda x, y: np.vecdot(x, y, axes=[0,1])),
+                            (a2, b2))
+            # ND arrays, axis argument
+            a3 = self.sample_vector(96, dtype).reshape((4,3,4,2))
+            b3 = self.sample_vector(96, dtype).reshape((4,3,4,2))
+            self.check_func(lambda x, y: np.vecdot(x, y, axis=2),
+                            jit(nopython=True)(lambda x, y: np.vecdot(x, y, axis=2)),
+                            (a3, b3))
+            # ND arrays, axes argument
+            self.check_func(lambda x, y: np.vecdot(x, y, axes=[0,2]),
+                            jit(nopython=True)(lambda x, y: np.vecdot(x, y, axes=[0,2])),
+                            (a3, b3))
+            # Broadcasting
+            self.check_func(vecdot, cfunc, (a2, b))
+            self.check_func(vecdot, cfunc, (a, b2))
+            self.check_func(lambda x, y: np.vecdot(x, y, axes=[2,0]),
+                            jit(nopython=True)(lambda x, y: np.vecdot(x, y, axes=[2,0])),
+                            (a3, b))
+            self.check_func(lambda x, y: np.vecdot(x, y, axes=[0,2]),
+                            jit(nopython=True)(lambda x, y: np.vecdot(x, y, axes=[0,2])),
+                            (b, a3))
+        # Mismatching sizes
+        a = self.sample_vector(2, np.float64)
+        b = self.sample_vector(3, np.float64)
+        with self.assertRaises(ValueError):
+            cfunc(a, b)
+        # Test out argument
+        a = self.sample_vector(3, np.float64)
+        b = self.sample_vector(3, np.float64)
+        out = np.empty((), dtype=np.float64)
+        self.check_func_out(vecdot, cfunc, (a, b), out)
 
 
 # Implementation definitions for the purpose of jitting.

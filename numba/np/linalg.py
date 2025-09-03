@@ -903,6 +903,132 @@ def ol_copy_to_fortran_order(a):
     return impl
 
 
+@overload(np.vecdot)
+def np_vecdot(x1, x2):
+    return np_vecdot_impl(x1, x2)
+
+@overload(np.vecdot)
+def np_vecdot_axis(x1, x2, axis):
+    return np_vecdot_impl(x1, x2, axis=axis)
+
+@overload(np.vecdot)
+def np_vecdot_axes(x1, x2, axes):
+    return np_vecdot_impl(x1, x2, axes=axes)
+
+def np_vecdot_impl(x1, x2, axis=-1, axes=None):
+    """ Preform a vector dot product of two arrays along specified axes.
+    x1 and x2 are treated as collections of vectors along the specified axis/axes.
+
+    Let :math:`\mathbf{a}` be a vector in `x1` and :math:`\mathbf{b}` be
+    a corresponding vector in `x2`. The dot product is defined as:
+    
+    .. math::
+       \mathbf{a} \cdot \mathbf{b} = \sum_{i=0}^{n-1} \overline{a_i}b_i
+
+    where the sum is over the last dimension (unless `axis` is specified) and
+    where :math:`\overline{a_i}` denotes the complex conjugate if :math:`a_i`
+    is complex and the identity otherwise.
+
+    See the numpy.vecdot function signature and behavior:
+    `https://numpy.org/doc/stable/reference/generated/numpy.vecdot.html`
+
+        Parameters
+    ----------
+    x1, x2 : array_like
+        Input arrays, scalars not allowed.
+    out : ndarray, optional
+        A location into which the result is stored. If provided, it must have
+        the broadcasted shape of `x1` and `x2` with the last axis removed.
+        If not provided or None, a freshly-allocated array is used.
+    **kwargs
+        For other keyword-only arguments, see the
+        :ref:`ufunc docs <ufuncs.kwargs>`.
+
+    Returns
+    -------
+    y : ndarray
+        The vector dot product of the inputs.
+        This is a scalar only when both x1, x2 are 1-d vectors.
+
+    Raises
+    ------
+    ValueError
+        If the last dimension of `x1` is not the same size as
+        the last dimension of `x2`.
+
+        If a scalar value is passed in.
+
+    See Also
+    --------
+    vdot : same but flattens arguments first
+    matmul : Matrix-matrix product.
+    vecmat : Vector-matrix product.
+    matvec : Matrix-vector product.
+    einsum : Einstein summation convention.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> v = np.array([[0., 5., 0.], [0., 0., 10.], [0., 6., 8.]])
+    >>> n = np.array([0., 0.6, 0.8])
+    >>> np.vecdot(v, n)
+    array([ 3.,  8., 10.])
+    """
+    # Scalars are not allowed per numpy's implementation
+    if np_support.type_is_scalar(x1) or np_support.type_is_scalar(x2):
+        raise TypingError("np.vecdot() only supported on array types")
+
+    if axes is None:
+        axis1, axis2 = axis, axis
+    else:
+        axis1, axis2 = axes[0], axes[1]
+
+    # Normalize axis values manually
+    if axis1 < 0:
+        axis1 += x1.ndim
+    if axis1 < 0 or axis1 >= x1.ndim:
+        raise ValueError("axis1 is out of bounds for array of "
+                        "dimension %d" % x1.ndim)
+
+    if axis2 < 0:
+        axis2 += x2.ndim
+    if axis2 < 0 or axis2 >= x2.ndim:
+        raise ValueError("axis2 is out of bounds for array of "
+                        "dimension %d" % x2.ndim)
+
+    # Main algorithm. Works for all shapes compatible with the original
+    # numpy.vecdot
+
+    # does the same as np.moveaxis(x1, axis1, -1)
+    # but moveaxis doesn't behave well in nopython mode
+    perm1 = np.empty(x1.ndim, dtype=np.intp)
+    for i in range(x1.ndim):
+        if i < axis1:
+            perm1[i] = i
+        elif i == axis1:
+            perm1[i] = x1.ndim - 1
+        else:
+            perm1[i] = i - 1
+
+    # does the same as np.moveaxis(x2, axis2, -1)
+    # but moveaxis doesn't behave well in nopython mode
+    perm2 = np.empty(x2.ndim, dtype=np.intp)
+    for i in range(x2.ndim):
+        if i < axis2:
+            perm2[i] = i
+        elif i == axis2:
+            perm2[i] = x2.ndim - 1
+        else:
+            perm2[i] = i - 1
+
+    left = np.transpose(x1, perm1).conjugate()
+    right = np.transpose(x2, perm2)
+    product = np.multiply(left, right)
+    result = np.sum(product, axis=-1)
+
+    return result
+
+
 @register_jitable
 def _inv_err_handler(r):
     if r != 0:
