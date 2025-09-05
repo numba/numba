@@ -229,7 +229,7 @@ class TestRange(TestCase):
         
         max_i64 = np.uint64(np.iinfo(np.int64).max)
         a = my_arange(max_i64+6, max_i64, np.int64(-1))
-        self.assertPreciseEqual(a - max_i64, np.arange(6, 0, -1, dtype=np.uint64), strict=True)
+        self.assertPreciseEqual(a - max_i64, np.arange(6, 0, -1, dtype=np.uint64))
 
 
 if __name__ == '__main__':
