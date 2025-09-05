@@ -216,6 +216,7 @@ class TestRange(TestCase):
 
         self.assertPreciseEqual(foo(), foo.py_func())
 
+    @unittest.expectedFailure  # https://github.com/numba/numba/issues/10202
     def test_range_safe_cast_mixed(self):
         """Test that mixing `uint64` and `int64` works."""
         @njit
