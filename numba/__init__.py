@@ -99,6 +99,9 @@ from numba.np.numpy_support import carray, farray, from_dtype
 # Re-export experimental
 from numba import experimental
 
+# Re-export atomics
+from numba.core.atomic_stubs import atomic
+
 # Initialize withcontexts
 import numba.core.withcontexts
 from numba.core.withcontexts import objmode_context as objmode
@@ -118,6 +121,7 @@ def test(argv, **kwds):
     return runtests.main(argv, **kwds)
 
 __all__ = """
+    atomic
     cfunc
     from_dtype
     guvectorize
