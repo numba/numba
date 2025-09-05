@@ -71,9 +71,6 @@ class Slice(ConcreteTemplate):
 @infer_global(prange, typing_key=prange)
 @infer_global(internal_prange, typing_key=internal_prange)
 class Range(ConcreteTemplate):
-
-    unsafe_casting = False
-
     cases = [
         signature(types.range_state32_type, types.int32),
         signature(types.range_state32_type, types.int32, types.int32),

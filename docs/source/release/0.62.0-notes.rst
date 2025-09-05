@@ -238,14 +238,6 @@ secondary tools
 
 (`PR-#9893 <https://github.com/numba/numba/pull/9893>`__)
 
-Prevent unsafe type conversion in arguments to ``range``.
----------------------------------------------------------
-
-Types that require an unsafe type conversion to ``integer`` (such as ``float``)
-are now not permitted as arguments to ``range``.
-
-(`PR-#9973 <https://github.com/numba/numba/pull/9973>`__)
-
 Fix ``IntEnumMember.can_convert_to()`` when no conversions found
 ----------------------------------------------------------------
 
