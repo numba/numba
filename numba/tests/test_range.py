@@ -216,6 +216,22 @@ class TestRange(TestCase):
 
         self.assertPreciseEqual(foo(), foo.py_func())
 
+    @unittest.expectedFailure  # https://github.com/numba/numba/issues/10202
+    def test_range_safe_cast_mixed(self):
+        """Test that mixing `uint64` and `int64` works."""
+        @njit
+        def my_arange(start, stop, step):
+            x = np.zeros(len(range(start, stop, step)), dtype=np.uint64)
+            i = 0
+            for v in range(start, stop, step):
+                x[i] = v
+                i += 1
+            return x
+        
+        max_i64 = np.uint64(np.iinfo(np.int64).max)
+        a = my_arange(max_i64+6, max_i64, np.int64(-1))
+        self.assertPreciseEqual(a - max_i64, np.arange(6, 0, -1, dtype=np.uint64))
+
 
 if __name__ == '__main__':
     unittest.main()
