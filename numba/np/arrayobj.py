@@ -5086,10 +5086,10 @@ def impl_numpy_copy(a):
     if not type_can_asarray(a):
         raise errors.TypingError('The argument "a" must '
                                  'be array-like')
-    
+
     if isinstance(a, types.Array):
         def numpy_copy(a):
-            return _array_copy_intrinsic(a)        
+            return _array_copy_intrinsic(a)
     else:
         def numpy_copy(a):
             # asarray automatically copies non-Array types
