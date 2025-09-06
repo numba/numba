@@ -148,6 +148,12 @@ static PyTypeObject EnvironmentType = {
  */
     0,                                           /* tp_watched */
 #endif
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION >= 13)
+/* This was introduced in 3.13
+ * https://github.com/python/cpython/pull/114900
+ */
+    0,                                           /* tp_versions_used */
+#endif
 
 /* WARNING: Do not remove this, only modify it! It is a version guard to
  * act as a reminder to update this struct on Python version update! */
@@ -266,6 +272,12 @@ static PyTypeObject ClosureType = {
  * https://github.com/python/cpython/issues/91051
  */
     0,                                           /* tp_watched */
+#endif
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION >= 13)
+/* This was introduced in 3.13
+ * https://github.com/python/cpython/pull/114900
+ */
+    0,                                           /* tp_versions_used */
 #endif
 
 /* WARNING: Do not remove this, only modify it! It is a version guard to
@@ -486,6 +498,12 @@ static PyTypeObject GeneratorType = {
  * https://github.com/python/cpython/issues/91051
  */
     0,                                           /* tp_watched */
+#endif
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION >= 13)
+/* This was introduced in 3.13
+ * https://github.com/python/cpython/pull/114900
+ */
+    0,                                           /* tp_versions_used */
 #endif
 
 /* WARNING: Do not remove this, only modify it! It is a version guard to
