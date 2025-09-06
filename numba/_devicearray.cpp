@@ -86,7 +86,7 @@ PyTypeObject DeviceArrayType = {
     0,                                           /* tp_version_tag */
     0,                                           /* tp_finalize */
     0,                                           /* tp_vectorcall */
-#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 12)
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION >= 12)
 /* This was introduced first in 3.12
  * https://github.com/python/cpython/issues/91051
  */
