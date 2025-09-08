@@ -27,7 +27,7 @@ requirements:
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
     # OpenMP headers from llvm needed for OSX.
-    - llvm-openmp              # [osx]
+    - llvm-openmp={{ c_compiler_version }}              # [osx]
   host:
     - python
     - numpy
