@@ -134,7 +134,7 @@ def _gen_involved():
             l = np.arange(1, c + 1)
             m = np.sqrt(l - g) + e * k
             if np.abs(m[0]) < 1:
-                for o in range(int(a)):
+                for o in range(a):
                     n += 0
                     if np.abs(n) < 3:
                         break
