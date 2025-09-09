@@ -15,6 +15,13 @@ longer test this platform and new releases will not include binary artifacts as
 part of the release process. For more details see:
 https://github.com/numba/numba/issues/10187.
 
+Further, please note that the Intel SVML library is not supported by this
+release of Numba. This loss of support was caused by the patch that enables the
+SVML optimisations not applying cleanly to the LLVM 20 code base when upgrading
+llvmlite (the library used by Numba to bind to LLVM). The impact of this change
+is a loss of performance in cases where SVML would previously have been used, it
+is hoped that the issues with this patch can be resolved in the future.
+
 Please find a summary of all noteworthy items below.
 
 Highlights
