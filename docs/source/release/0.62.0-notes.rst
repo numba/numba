@@ -460,6 +460,15 @@ Pull-Requests
 * PR `#10194 <https://github.com/numba/numba/pull/10194>`_: gha/add env variables for reduced testing on win-64 wheel builder (`swap357 <https://github.com/swap357>`_)
 * PR `#10197 <https://github.com/numba/numba/pull/10197>`_: Update version support 0.62 (`esc <https://github.com/esc>`_)
 * PR `#10198 <https://github.com/numba/numba/pull/10198>`_: Update deprecation doc for 0.62 (`esc <https://github.com/esc>`_)
+* PR `#10199 <https://github.com/numba/numba/pull/10199>`_: Changelog 0.62 (`seibert <https://github.com/seibert>`_ `esc <https://github.com/esc>`_)
+* PR `#10200 <https://github.com/numba/numba/pull/10200>`_: Dep pin 0.62 (`seibert <https://github.com/seibert>`_ `esc <https://github.com/esc>`_)
+* PR `#10205 <https://github.com/numba/numba/pull/10205>`_: GHA/ Fix for linux wheel builds (`swap357 <https://github.com/swap357>`_)
+* PR `#10206 <https://github.com/numba/numba/pull/10206>`_: GHA/ update artifact names in wheel builder workflows (`swap357 <https://github.com/swap357>`_)
+* PR `#10208 <https://github.com/numba/numba/pull/10208>`_: GHA/ remove redundant sdist exports (`swap357 <https://github.com/swap357>`_)
+* PR `#10212 <https://github.com/numba/numba/pull/10212>`_: Revert 9973 (`esc <https://github.com/esc>`_)
+* PR `#10214 <https://github.com/numba/numba/pull/10214>`_: skip test_prange_fastmath_check_works (`swap357 <https://github.com/swap357>`_)
+* PR `#10216 <https://github.com/numba/numba/pull/10216>`_: Update conda_build_config.yaml to pin osx compiler version to 19 (`swap357 <https://github.com/swap357>`_)
+* PR `#10218 <https://github.com/numba/numba/pull/10218>`_: add no SVML support note to 0.62.0 release notes (`swap357 <https://github.com/swap357>`_)
 
 Authors
 ~~~~~~~
