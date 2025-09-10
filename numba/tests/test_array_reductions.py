@@ -255,6 +255,17 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(arr)
         check(arr[::-1])
 
+    def test_np_any_scalar(self):
+        cfunc = jit(nopython=True)(array_any_global)
+        def check(scalar):
+            expected = array_any_global(scalar)
+            got = cfunc(scalar)
+            self.assertPreciseEqual(got, expected)
+        check(0.0)
+        check(0.2)
+        check(True)
+        check(False)
+
     def test_sum_basic(self):
         self.check_reduction_basic(array_sum)
 
