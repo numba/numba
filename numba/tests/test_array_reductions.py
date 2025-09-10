@@ -238,6 +238,19 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(arr)
         check(arr[::-1])
 
+    def test_np_all_scalar(self):
+        cfunc = jit(nopython=True)(array_all_global)
+
+        def check(scalar):
+            expected = array_all_global(scalar)
+            got = cfunc(scalar)
+            self.assertPreciseEqual(got, expected)
+
+        check(0.0)
+        check(0.2)
+        check(True)
+        check(False)
+
     def test_any_basic(self, pyfunc=array_any):
         cfunc = jit(nopython=True)(pyfunc)
         def check(arr):
