@@ -1,5 +1,5 @@
-Version 0.62.0rc1 (28 August 2025)
-==================================
+Version 0.62.0rc2 (11 September 2025)
+=====================================
 
 .. contents:: Table of Contents
    :depth: 2
