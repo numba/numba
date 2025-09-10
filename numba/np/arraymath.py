@@ -801,6 +801,13 @@ def array_argmax(a, axis=None):
 @overload(np.all)
 @overload_method(types.Array, "all")
 def np_all(a):
+    # for scalar
+    if isinstance(a, (types.Number, types.Boolean)):
+        def scalar_all(a):
+            return bool(a)
+        return scalar_all
+
+    # for array
     def flat_all(a):
         for v in np.nditer(a):
             if not v.item():
