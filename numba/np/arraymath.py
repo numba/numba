@@ -907,6 +907,13 @@ def np_allclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 @overload(np.any)
 @overload_method(types.Array, "any")
 def np_any(a):
+    # for scalar
+    if isinstance(a, (types.Number, types.Boolean)):
+        def scalar_any(a):
+            return bool(a)
+        return scalar_any
+
+    # for array
     def flat_any(a):
         for v in np.nditer(a):
             if v.item():
