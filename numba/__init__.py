@@ -197,7 +197,7 @@ def _try_enable_svml():
             # The SVML library is loaded, therefore SVML *could* be supported.
             # Now see if LLVM has been compiled with the SVML support patch.
             # If llvmlite has the checking function `has_svml` and it returns
-            # True, then LLVM was compiled with SVML support and the the setup
+            # True, then LLVM was compiled with SVML support and the setup
             # for SVML can proceed. We err on the side of caution and if the
             # checking function is missing, regardless of that being fine for
             # most 0.23.{0,1} llvmlite instances (i.e. conda or pip installed),

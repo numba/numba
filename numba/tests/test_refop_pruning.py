@@ -24,7 +24,7 @@ class TestRefOpPruning(TestCase):
 
     def check(self, func, *argtys, **prune_types):
         """
-        Asserts the the func compiled with argument types "argtys" reports
+        Asserts the func compiled with argument types "argtys" reports
         refop pruning statistics. The **prune_types** kwargs list each kind
         of pruning and whether the stat should be zero (False) or >0 (True).
 
