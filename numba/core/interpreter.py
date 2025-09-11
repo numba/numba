@@ -1150,7 +1150,7 @@ def peep_hole_fuse_dict_add_updates(func_ir):
                             map_updates[update_map_name].append(args)
                             # Update the list of instructions that would
                             # need to be removed to include the setitem
-                            # and the the getattr
+                            # and the getattr
                             lit_map_use_idx[update_map_name].extend([i - 1, i])
                         elif attr == "_update_from_bytecode":
                             d2_map_name = args[0].name
