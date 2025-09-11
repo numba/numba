@@ -152,7 +152,7 @@ def _ensure_llvm():
     import warnings
     import llvmlite
 
-    # Only look at the the major, minor and bugfix version numbers.
+    # Only look at the major, minor and bugfix version numbers.
     # Ignore other stuffs
     regex = re.compile(r'(\d+)\.(\d+).(\d+)')
     m = regex.match(llvmlite.__version__)
