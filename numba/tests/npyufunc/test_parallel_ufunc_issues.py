@@ -3,7 +3,7 @@ import ctypes
 
 import numpy as np
 
-from numba.tests.support import captured_stdout
+from numba.tests.support import captured_stdout, skip_if_freethreading
 from numba import vectorize, guvectorize
 import unittest
 
@@ -32,6 +32,7 @@ class TestParUfuncIssues(unittest.TestCase):
             # Reduce sleep time
             sleep_time /= 2
 
+    @skip_if_freethreading
     def test_gil_reacquire_deadlock(self):
         """
         Testing issue #1998 due to GIL reacquiring
@@ -80,6 +81,7 @@ class TestParGUfuncIssues(unittest.TestCase):
 
     _numba_parallel_test_ = False
 
+    @skip_if_freethreading
     def test_gil_reacquire_deadlock(self):
         """
         Testing similar issue to #1998 due to GIL reacquiring for Gufunc
