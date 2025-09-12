@@ -123,7 +123,7 @@ export NUMBA_CPU_NAME=generic
 export NUMBA_CPU_FEATURES=''
 
 # Now run tests based on the changes identified via git
-NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -g -m $TEST_NPROCS -- numba.tests
+NUMBA_ENABLE_CUDASIM=1 NUMBA_USE_TYPEGUARD=true $SEGVCATCH python -m numba.runtests -b -v -g -m $TEST_NPROCS -- numba.tests
 
 # List the tests found
 echo "INFO: All discovered tests:"
