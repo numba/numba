@@ -19,7 +19,7 @@ class TestExtendedArg(TestCase):
         Get a function with a EXTENDED_ARG opcode before a LOAD_CONST opcode.
         """
         def f():
-            x = 5
+            x = 256
             return x
 
         b = bytearray(f.__code__.co_code)

@@ -3,6 +3,7 @@ import typing as py_typing
 
 from numba.core.typing.typeof import typeof
 from numba.core import errors, types
+from numba.core.utils import PYVERSION
 
 
 class AsNumbaTypeRegistry:
@@ -40,8 +41,41 @@ class AsNumbaTypeRegistry:
             return py_type
 
     def _builtin_infer(self, py_type):
-        if not isinstance(py_type, py_typing._GenericAlias):
-            return
+        if PYVERSION in ((3, 14), ):
+            # As of 3.14 the typing module has been updated to return a
+            # different type when calling: `typing.Optional[X]`.
+            #
+            # On 3.14:
+            #
+            # >>> type(typing.Optional[float])
+            # <class 'typing.Union'>
+            #
+            #
+            # On 3.13 (and presumably below):
+            #
+            # >>> type(typing._UnionGenericAlias)
+            # <class 'typing._UnionGenericAlias'>
+            #
+            #
+            # The previous implementation of this predicate used
+            # `_GenericAlias`, which was possible because `_UnionGenericAlias`
+            # is a subclass of `_GenericAlias`...
+            #
+            # >>> issubclass(typing._UnionGenericAlias, typing._GenericAlias)
+            # True
+            #
+            # However, other types, such as `typing.List[float]` remain as
+            # `typing._GenericAlias`, so that must be keept.
+            #
+            if not isinstance(py_type, (py_typing.Union,
+                                        py_typing._GenericAlias)):
+                return
+        elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+            # Use of underscore type `_GenericAlias`.
+            if not isinstance(py_type, py_typing._GenericAlias):
+                return
+        else:
+            raise NotImplementedError(PYVERSION)
 
         if getattr(py_type, "__origin__", None) is py_typing.Union:
             if len(py_type.__args__) != 2:
