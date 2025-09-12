@@ -7,13 +7,29 @@
 #include "structmember.h"
 #include "frameobject.h"
 
+/*
+ * Macro to handle GIL/free-threading at module level. Call on a newly created
+ * module returned by a call to PyModule_Create().
+ */
+#ifdef Py_GIL_DISABLED
+#define MOD_NOGIL(m) \
+        do { \
+                PyUnstable_Module_SetGIL(m, Py_MOD_GIL_NOT_USED); \
+        } while(0)
+#else
+#define MOD_NOGIL(m) do {} while(0)
+#endif
+
 #define MOD_ERROR_VAL NULL
 #define MOD_SUCCESS_VAL(val) val
 #define MOD_INIT(name) PyMODINIT_FUNC PyInit_##name(void)
 #define MOD_DEF(ob, name, doc, methods) { \
         static struct PyModuleDef moduledef = { \
           PyModuleDef_HEAD_INIT, name, doc, -1, methods, NULL, NULL, NULL, NULL }; \
-        ob = PyModule_Create(&moduledef); }
+        ob = PyModule_Create(&moduledef); \
+        if (ob == NULL) { return NULL; } \
+        MOD_NOGIL(ob); \
+}
 #define MOD_INIT_EXEC(name) PyInit_##name();
 
 #define PyString_AsString PyUnicode_AsUTF8

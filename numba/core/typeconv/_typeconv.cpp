@@ -40,7 +40,7 @@ MOD_INIT(_typeconv) {
     MOD_DEF(m, "_typeconv", "No docs", ext_methods)
     if (m == NULL)
         return MOD_ERROR_VAL;
-
+    MOD_NOGIL(m);
     return MOD_SUCCESS_VAL(m);
 }
 
