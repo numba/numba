@@ -228,7 +228,7 @@ done manually, for example::
 Further Reading
 ----------------
 
-Please refer to the the `CUDA C Programming Guide`_ for a detailed discussion
+Please refer to the `CUDA C Programming Guide`_ for a detailed discussion
 of CUDA programming.
 
 
