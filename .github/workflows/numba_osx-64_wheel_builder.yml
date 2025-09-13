@@ -96,7 +96,7 @@ jobs:
           else
               python -m pip install -i ${{ env.WHEELS_INDEX_URL }} llvmlite
           fi
-          conda install -c defaults python-build numpy==${{ matrix.numpy_build }} clang_osx-64 clangxx_osx-64
+          conda install -c defaults python-build numpy==${{ matrix.numpy_build }} clang_osx-64=19 clangxx_osx-64=19
           conda install --yes llvm-openmp
 
       - name: Build wheel
