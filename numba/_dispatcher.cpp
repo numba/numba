@@ -1009,7 +1009,7 @@ static int invoke_monitoring(PyThreadState * tstate, int event, Dispatcher *self
             callback_args[2] = (PyObject*)retval;
             PyObject ** callargs = &callback_args[0];
 
-            // finally, stage the call the the instrument
+            // finally, stage the call to instrument
             result = PyObject_Vectorcall(instrument, callargs, nargsf, NULL);
 
             // decrement the tracing tracking field and set the event back to

@@ -2803,11 +2803,17 @@ def array_view(context, builder, sig, args):
         else:
             setattr(ret, k, val)
 
-    tyctx = context.typing_context
-    fnty = tyctx.resolve_value_type(_compatible_view)
-    _compatible_view_sig = fnty.get_call_type(tyctx, (*sig.args,), {})
-    impl = context.get_function(fnty, _compatible_view_sig)
-    impl(builder, args)
+    if numpy_version >= (1, 23):
+        # NumPy 1.23+ bans views using a dtype that is a different size to that
+        # of the array when the last axis is not contiguous. For example, this
+        # manifests at runtime when a dtype size altering view is requested
+        # on a Fortran ordered array.
+
+        tyctx = context.typing_context
+        fnty = tyctx.resolve_value_type(_compatible_view)
+        _compatible_view_sig = fnty.get_call_type(tyctx, (*sig.args,), {})
+        impl = context.get_function(fnty, _compatible_view_sig)
+        impl(builder, args)
 
     ok = _change_dtype(context, builder, aryty, retty, ret)
     fail = builder.icmp_unsigned('==', ok, Constant(ok.type, 0))
@@ -4321,7 +4327,7 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
     return ary
 
 
-@overload_classmethod(types.Array, "_allocate")
+@overload_classmethod(types.Array, "_allocate", target="CPU")
 def _ol_array_allocate(cls, allocsize, align):
     """Implements a Numba-only default target (cpu) classmethod on the array
     type.
@@ -5077,9 +5083,17 @@ def array_copy(context, builder, sig, args):
 
 @overload(np.copy)
 def impl_numpy_copy(a):
+    if not type_can_asarray(a):
+        raise errors.TypingError('The argument "a" must '
+                                 'be array-like')
+
     if isinstance(a, types.Array):
         def numpy_copy(a):
             return _array_copy_intrinsic(a)
+    else:
+        def numpy_copy(a):
+            # asarray automatically copies non-Array types
+            return np.asarray(a)
     return numpy_copy
 
 

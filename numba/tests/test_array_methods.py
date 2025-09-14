@@ -460,10 +460,19 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         dt2 = np.dtype([('u', np.int16), ('v', np.int8)])
         dt3 = np.dtype([('x', np.int16), ('y', np.int16)])
 
-        check_error_larger_dt = check_err_larger_dtype
-        check_error_smaller_dt = check_err_smaller_dtype
-        check_error_noncontig = check_err_noncontig_last_axis
-        check_error_0d = check_err_0d
+        # The checking routines are much more specific from NumPy 1.23 onwards
+        # as the granularity of error reporing is improved in Numba to match
+        # that of NumPy.
+        if numpy_version >= (1, 23):
+            check_error_larger_dt = check_err_larger_dtype
+            check_error_smaller_dt = check_err_smaller_dtype
+            check_error_noncontig = check_err_noncontig_last_axis
+            check_error_0d = check_err_0d
+        else:
+            check_error_larger_dt = check_err
+            check_error_smaller_dt = check_err
+            check_error_noncontig = check_err
+            check_error_0d = check_err
 
         # C-contiguous
         arr = np.arange(24, dtype=np.int8)
@@ -490,7 +499,12 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # neither F or C contiguous
         not_f_or_c_arr = np.zeros((4, 4)).T[::2, ::2]
 
-        check_maybe_error = check_err_noncontig_last_axis
+        # NumPy 1.23 does not allow views with different size dtype for
+        # non-contiguous last axis.
+        if numpy_version >= (1, 23):
+            check_maybe_error = check_err_noncontig_last_axis
+        else:
+            check_maybe_error = check
 
         check(f_arr, np.int8)
         check(not_f_or_c_arr, np.uint64)
@@ -700,8 +714,24 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_array_copy(self):
         self.check_layout_dependent_func(array_copy)
 
+    def check_object_copy(self, pyfunc):
+        def check_obj(obj):
+            cfunc = njit((typeof(obj),))(pyfunc)
+            expected = pyfunc(obj)
+            got = cfunc(obj)
+            self.assertPreciseEqual(expected, got)
+
+        check_obj((1, 2, 3))
+        check_obj([1.0, 2.0, 3.0])
+        check_obj(6)
+
+        msg = '.*The argument "a" must be array-like.*'
+        with self.assertRaisesRegex(TypingError, msg) as raises:
+            njit((typeof('hello'), ))(pyfunc)
+
     def test_np_copy(self):
         self.check_layout_dependent_func(np_copy)
+        self.check_object_copy(np_copy)
 
     def check_ascontiguousarray_scalar(self, pyfunc):
         def check_scalar(x):

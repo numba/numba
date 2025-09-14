@@ -26,17 +26,17 @@ set CONDA_PLUGINS_AUTO_ACCEPT_TOS=true && %CONDA_INSTALL% "conda-anaconda-tos>=0
 
 if "%PYTHON%" neq "3.13" (
     @rem CFFI, jinja2 and IPython are optional dependencies, but exercised in the test suite
-    conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip jinja2 ipython gitpython pyyaml
+    conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip jinja2 ipython gitpython pyyaml psutil
 ) else (
     @rem missing IPython for Python 3.13
-    conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip jinja2 gitpython pyyaml
+    conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip jinja2 gitpython pyyaml psutil
 )
 @rem Install SciPy only if NumPy is not 2.1
 if "%NUMPY%" neq "2.1" (%CONDA_INSTALL% scipy)
 
 call activate %CONDA_ENV%
 @rem Install latest llvmlite build
-%CONDA_INSTALL% -c numba/label/dev llvmlite=0.45
+%CONDA_INSTALL% -c numba/label/dev llvmlite=0.46
 @rem Install dependencies for building the documentation
 if "%BUILD_DOC%" == "yes" (%CONDA_INSTALL% sphinx sphinx_rtd_theme pygments)
 @rem Install dependencies for code coverage (codecov.io)

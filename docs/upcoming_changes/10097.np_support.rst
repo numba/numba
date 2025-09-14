@@ -1,5 +1,0 @@
-Add support for ``posinf`` and ``neginf`` in ``nan_to_num``
------------------------------------------------------------
-
-Numba's ``nan_to_num`` now supports ``posinf`` and ``neginf`` arguments of
-NumPy's ``nan_to_num``.

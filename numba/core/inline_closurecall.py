@@ -1533,7 +1533,7 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
 
         # Create a variable to hold the numpy empty function.
         empty_func = scope.redefine("empty_func", loc)
-        fnty = get_np_ufunc_typ(np.empty)
+        fnty = get_np_ufunc_typ(np.empty, context)
         context.resolve_function_type(fnty, (size_typ,), {'dtype': nptype})
 
         typemap[empty_func.name] = fnty

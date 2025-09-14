@@ -1,5 +1,0 @@
-Fix error for unsupported ``axis`` kwarg in ``average``
--------------------------------------------------------
-
-Be explicit about the ``axis`` kwarg not being supported and fix logic in error
-handling

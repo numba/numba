@@ -837,6 +837,11 @@ class NumbaRuntimeError(NumbaError):
 
 
 def _format_msg(fmt, args, kwargs):
+    # If no formatting arguments are supplied, return the string unchanged.
+    # This avoids KeyError when fmt contains curly braces, which can be
+    # interpreted as format fields.
+    if not args and not kwargs:
+        return fmt
     return fmt.format(*args, **kwargs)
 
 

@@ -14,10 +14,17 @@ from pathlib import Path
 
 import llvmlite.binding as ll
 import numpy as np
+from math import floor
 
 from numba import njit
 from numba.core import codegen
-from numba.core.caching import _UserWideCacheLocator, _ZipCacheLocator
+from numba.core.caching import (
+    UserWideCacheLocator,
+    ZipCacheLocator,
+    FunctionCache,
+    InTreeCacheLocator,
+    InTreeCacheLocatorFsAgnostic,
+)
 from numba.core.errors import NumbaWarning
 from numba.parfors import parfor
 from numba.tests.support import (
@@ -30,6 +37,7 @@ from numba.tests.support import (
     skip_if_typeguard,
     skip_parfors_unsupported,
     temp_directory,
+    override_env_config,
 )
 
 from numba.core.registry import cpu_target
@@ -538,14 +546,14 @@ class TestCache(DispatcherCacheUsecasesTest):
             source = inspect.getfile(function)
             # doesn't return anything, since it cannot find the module
             # fails unless the executable is frozen
-            locator = _UserWideCacheLocator.from_function(function, source)
+            locator = UserWideCacheLocator.from_function(function, source)
             self.assertIsNone(locator)
 
             sys.frozen = True
             # returns a cache locator object, only works when the executable
             # is frozen
-            locator = _UserWideCacheLocator.from_function(function, source)
-            self.assertIsInstance(locator, _UserWideCacheLocator)
+            locator = UserWideCacheLocator.from_function(function, source)
+            self.assertIsInstance(locator, UserWideCacheLocator)
 
         finally:
             function.__code__ = old_code
@@ -781,7 +789,7 @@ class TestCacheZipLib(DispatcherCacheUsecasesTest):
 
         zip_path = "/path/to/archive.zip/module.py"
 
-        locator = _ZipCacheLocator.from_function(mock_func, zip_path)
+        locator = ZipCacheLocator.from_function(mock_func, zip_path)
         self.assertIsNotNone(locator)
         self.assertEqual(locator._zip_path, str(Path("/path/to/archive.zip")))
         self.assertEqual(locator._internal_path, "module.py")
@@ -793,7 +801,7 @@ class TestCacheZipLib(DispatcherCacheUsecasesTest):
 
         non_zip_path = "/path/to/module.py"
 
-        locator = _ZipCacheLocator.from_function(mock_func, non_zip_path)
+        locator = ZipCacheLocator.from_function(mock_func, non_zip_path)
         self.assertIsNone(locator)
 
 
@@ -834,6 +842,8 @@ class TestCacheWithCpuSetting(DispatcherCacheUsecasesTest):
         self.assertGreater(match_count, 0,
                            msg='nothing to compare')
 
+    @unittest.skipIf(ll.get_host_cpu_name() == "generic",
+                     "LLVM detected 'generic' CPU")
     def test_user_set_cpu_name(self):
         self.check_pycache(0)
 
@@ -1178,6 +1188,137 @@ class TestCFuncCache(BaseCacheTest):
         self.check_module(mod)
 
         self.run_in_separate_process()
+
+
+class TestLocator(InTreeCacheLocator):
+    pass
+
+
+class TestCacheLocatorEnvironmentIntegration(TestCase):
+    """Integration tests for environment variable functionality."""
+
+    def test_locators_env_override_unknown(self):
+        def mock_func():
+            return 42
+
+        with override_env_config(
+            "NUMBA_CACHE_LOCATOR_CLASSES",
+            "foo,bar",
+        ):
+            with self.assertRaises(RuntimeError):
+                FunctionCache(mock_func)
+
+    def test_locators_env_override_single(self):
+        def mock_func():
+            return 42
+
+        with override_env_config(
+            "NUMBA_CACHE_LOCATOR_CLASSES",
+            "InTreeCacheLocatorFsAgnostic",
+        ):
+            cache = FunctionCache(mock_func)
+            expectedLocator = InTreeCacheLocatorFsAgnostic
+            self.assertIsInstance(cache._impl.locator,
+                                  expectedLocator)
+
+    def test_locators_env_override_custom(self):
+        def mock_func():
+            return 42
+
+        with override_env_config(
+            "NUMBA_CACHE_LOCATOR_CLASSES",
+            f"{__name__}.TestLocator",
+        ):
+            cache = FunctionCache(mock_func)
+            expectedLocator = TestLocator
+            self.assertIsInstance(cache._impl.locator,
+                                  expectedLocator)
+
+    def test_locators_env_override_list(self):
+        def mock_func():
+            return 42
+
+        locatorClasses = ("InTreeCacheLocatorFsAgnostic,InTreeCacheLocator,"
+                          "IPythonCacheLocator,UserWideCacheLocator")
+        expectedLocator = InTreeCacheLocatorFsAgnostic
+
+        with override_env_config(
+            "NUMBA_CACHE_LOCATOR_CLASSES",
+            locatorClasses,
+        ):
+            cache = FunctionCache(mock_func)
+            self.assertIsInstance(cache._impl.locator, expectedLocator)
+
+    def test_default_locators(self):
+        def mock_func():
+            return 42
+
+        cache = FunctionCache(mock_func)
+        expectedLocator = InTreeCacheLocator
+        self.assertIsInstance(cache._impl.locator, expectedLocator)
+
+
+class TestInTreeCacheLocatorFsAgnostic(TestCase):
+    """Test _InTreeCacheLocatorFsAgnostic class functionality."""
+
+    def test_source_stamp_precision(self):
+        """Test that FsAgnostic locator floors timestamp to seconds."""
+        from .dummy_module import function
+
+        source = inspect.getfile(function)
+
+        # Create regular and FsAgnostic locators
+        regular_locator = InTreeCacheLocator.from_function(function, source)
+        fs_agnostic_locator = InTreeCacheLocatorFsAgnostic.from_function(
+            function, source
+        )
+
+        # Both should be valid locators
+        self.assertIsNotNone(regular_locator)
+        self.assertIsNotNone(fs_agnostic_locator)
+
+        # Get source stamps
+        regular_stamp = regular_locator.get_source_stamp()
+        fs_agnostic_stamp = fs_agnostic_locator.get_source_stamp()
+
+        # Verify structure: (timestamp, size)
+        self.assertEqual(len(regular_stamp), 2)
+        self.assertEqual(len(fs_agnostic_stamp), 2)
+
+        # The second element (size) should be the same
+        self.assertEqual(regular_stamp[1], fs_agnostic_stamp[1])
+
+        # The first element (timestamp) in fs_agnostic should be floored
+        self.assertEqual(fs_agnostic_stamp[0], floor(regular_stamp[0]))
+
+        # Verify that fs_agnostic timestamp is always <= regular timestamp
+        self.assertLessEqual(fs_agnostic_stamp[0], regular_stamp[0])
+
+    def test_timestamp_precision_on_fs(self):
+        """Test FsAgnostic timestamp handling using filesystem mtime."""
+
+        from .dummy_module import function
+
+        source = inspect.getfile(function)
+
+        # Test with a file that has a precise timestamp
+        fs_agnostic_locator = InTreeCacheLocatorFsAgnostic.from_function(
+            function, source
+        )
+
+        # Get file stat
+        stat_result = os.stat(source)
+        original_mtime = stat_result.st_mtime
+
+        # Get stamp from locator
+        stamp = fs_agnostic_locator.get_source_stamp()
+
+        # Verify that the timestamp is floored
+        expected_timestamp = floor(original_mtime)
+        self.assertEqual(stamp[0], expected_timestamp)
+
+        # Verify size is correct
+        self.assertEqual(stamp[1], stat_result.st_size)
 
 
 if __name__ == '__main__':

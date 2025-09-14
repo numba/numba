@@ -566,7 +566,6 @@ br i1 %.294, label %B42, label %B160
     def test_inline_asm(self):
         """The InlineAsm class from llvmlite.ir has no 'name' attr the refcount
         pruning pass should be tolerant to this"""
-        llvm.initialize()
         llvm.initialize_native_target()
         llvm.initialize_native_asmprinter()
         llvm.initialize_native_asmparser()
