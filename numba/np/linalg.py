@@ -16,6 +16,7 @@ from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
 from numba.core.typing import signature
 from numba.core.extending import intrinsic, overload, register_jitable
 from numba.core import types, cgutils, config
+from numba import literally
 from numba.core.errors import TypingError, NumbaTypeError, \
     NumbaPerformanceWarning
 from .arrayobj import make_array, _empty_nd_impl, array_copy
@@ -909,11 +910,24 @@ def np_vecdot(x1, x2):
 
 @overload(np.vecdot)
 def np_vecdot_axis(x1, x2, axis):
-    return np_vecdot_impl(x1, x2, axis=axis)
+    # Handle axis parameter - it might be a literal type
+    if not isinstance(axis, types.Literal):
+        def impl(x1, x2, axis):
+            return np_vecdot_impl(x1, x2, axis=literally(axis))
+        return impl
+    else:
+        print(x1, x2, axis)
+        return np_vecdot_impl(x1, x2, axis=axis.literal_value)
 
 @overload(np.vecdot)
 def np_vecdot_axes(x1, x2, axes):
-    return np_vecdot_impl(x1, x2, axes=axes)
+    # Handle axes parameter - it might be a literal type
+    if not isinstance(axes, types.Literal):
+        def impl(x1, x2, axes):
+            return np_vecdot_impl(x1, x2, axes=literally(axes))
+        return impl
+    else:
+        return np_vecdot_impl(x1, x2, axes=axes.literal_value)
 
 def np_vecdot_impl(x1, x2, axis=-1, axes=None):
     """ Preform a vector dot product of two arrays along specified axes.
@@ -982,7 +996,7 @@ def np_vecdot_impl(x1, x2, axis=-1, axes=None):
         axis1, axis2 = axis, axis
     else:
         axis1, axis2 = axes[0], axes[1]
-
+    
     # Normalize axis values manually
     if axis1 < 0:
         axis1 += x1.ndim
@@ -995,34 +1009,31 @@ def np_vecdot_impl(x1, x2, axis=-1, axes=None):
     if axis2 < 0 or axis2 >= x2.ndim:
         raise ValueError("axis2 is out of bounds for array of "
                         "dimension %d" % x2.ndim)
-
+    
     # Main algorithm. Works for all shapes compatible with the original
     # numpy.vecdot
 
     # does the same as np.moveaxis(x1, axis1, -1)
     # but moveaxis doesn't behave well in nopython mode
-    perm1 = np.empty(x1.ndim, dtype=np.intp)
-    for i in range(x1.ndim):
-        if i < axis1:
-            perm1[i] = i
-        elif i == axis1:
-            perm1[i] = x1.ndim - 1
-        else:
-            perm1[i] = i - 1
-
+    # Create permutation tuple for x1: move axis1 to the last position
+    print(x1.ndim, axis1)
+    print(x1, x2)
+    perm1 = [i for i in range(x1.ndim) if i != axis1]
+    perm1.append(axis1)
+    
     # does the same as np.moveaxis(x2, axis2, -1)
     # but moveaxis doesn't behave well in nopython mode
-    perm2 = np.empty(x2.ndim, dtype=np.intp)
-    for i in range(x2.ndim):
-        if i < axis2:
-            perm2[i] = i
-        elif i == axis2:
-            perm2[i] = x2.ndim - 1
-        else:
-            perm2[i] = i - 1
-
-    left = np.transpose(x1, perm1).conjugate()
-    right = np.transpose(x2, perm2)
+    # Create permutation tuple for x2: move axis2 to the last position
+    perm2 = [i for i in range(x2.ndim) if i != axis2]
+    perm2.append(axis2)
+    
+    perm1_tuple = tuple(perm1)
+    perm2_tuple = tuple(perm2)
+    
+    #left = np.transpose(x1, perm1_tuple).conjugate()
+    #right = np.transpose(x2, perm2_tuple)
+    left = np.moveaxis(x1, axis1, -1).conjugate()
+    right = np.moveaxis(x2, axis2, -1)
     product = np.multiply(left, right)
     result = np.sum(product, axis=-1)
 

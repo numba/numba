@@ -338,6 +338,10 @@ class TestProduct(EnableNRTStatsMixin, TestCase):
         """
         cfunc = jit(nopython=True)(vecdot)
         for dtype in self.dtypes:
+            # 1D vectors
+            a = self.sample_vector(4, dtype)
+            b = self.sample_vector(4, dtype)
+            # self.check_func(vecdot, cfunc, (a, b))
             # 2D arrays, axis argument
             a2 = self.sample_matrix(4, 4, dtype)
             b2 = self.sample_matrix(4, 4, dtype)
