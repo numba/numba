@@ -369,6 +369,8 @@ floating-point and complex numbers:
 * :func:`numpy.vdot`
 * On Python 3.5 and above, the matrix multiplication operator from
   :pep:`465` (i.e. ``a @ b`` where ``a`` and ``b`` are 1-D or 2-D arrays).
+* :func: `numpy.vecdot` (casting, order, dtype, subok, and signature
+  arguments are not supported)
 * :func:`numpy.linalg.cholesky`
 * :func:`numpy.linalg.cond` (only non string values in ``p``).
 * :func:`numpy.linalg.det`
