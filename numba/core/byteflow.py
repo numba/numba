@@ -1326,8 +1326,7 @@ class TraceRunner(object):
             # In 3.14 CALL_FUNCTION_EX always take a kwargs argument
             # https://github.com/python/cpython/pull/129226
             varkwarg = state.pop()
-            # TODO better way to check for Numba IR null value?
-            if 'null' in varkwarg:
+            if _is_null_temp_reg(varkwarg):
                 varkwarg = None
             vararg = state.pop()
             state.pop()  # unused
