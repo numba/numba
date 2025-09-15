@@ -1148,18 +1148,22 @@ class TestLiftObjCaching(MemoryLeak, TestCase):
 class TestBogusContext(BaseTestWithLifting):
 
     def test_undefined_global(self):
+        the_ir = get_func_ir(lift_undefiend)
         with self.assertRaises(errors.CompilerError) as raises:
-            f = njit(lift_undefiend)
-            f()
+            with_lifting(
+                the_ir, self.typingctx, self.targetctx, self.flags, locals={},
+            )
         self.assertIn(
             "Undefined variable used as context manager",
             str(raises.exception),
             )
 
     def test_invalid(self):
+        the_ir = get_func_ir(lift_invalid)
         with self.assertRaises(errors.CompilerError) as raises:
-            f = njit(lift_invalid)
-            f()
+            with_lifting(
+                the_ir, self.typingctx, self.targetctx, self.flags, locals={},
+            )
         self.assertIn(
             "Unsupported context manager in use",
             str(raises.exception),
