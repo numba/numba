@@ -1910,8 +1910,9 @@ class TraceRunner(object):
                         ):
                 state.advance_pc()
                 inst = state.get_inst()
-                assert inst.opname == i
-                assert inst.arg == a
+                if (inst.opname != i or inst.arg != a):
+                    raise UnsupportedBytecodeError(
+                        "Unsupported bytecode pattern for 'LOAD_SPECIAL'.")
 
             # POP_TOP
             state.advance_pc()
