@@ -1857,7 +1857,8 @@ class TraceRunner(object):
             #     2: '__aenter__',
             #     3: '__aexit__',
             # }
-            if inst.arg not in [0, 1]:
+            if (dis._special_method_names[inst.arg]
+                    not in ['__enter__', '__exit__']):
                 raise NotImplementedError(
                     "async special methods not supported")
 
