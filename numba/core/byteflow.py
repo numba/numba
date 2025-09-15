@@ -1968,7 +1968,7 @@ class TraceRunner(object):
     if PYVERSION in ((3, 14), ):
         def op_LOAD_COMMON_CONSTANT(self, state, inst):
             oparg = inst.arg
-            if oparg == 0:
+            if dis._common_constants[oparg] == AssertionError:
                 name = 'assertion_error'
             else:
                 raise NotImplementedError

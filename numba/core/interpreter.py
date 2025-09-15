@@ -3534,7 +3534,7 @@ class Interpreter(object):
 
     if PYVERSION in ((3, 14), ):
         def op_LOAD_COMMON_CONSTANT(self, inst, res, idx):
-            if idx == 0:
+            if dis._common_constants[idx] == AssertionError:
                 gv_fn = ir.Global("AssertionError",
                                   AssertionError,
                                   loc=self.loc)
