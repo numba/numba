@@ -241,27 +241,26 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_np_all(self):
         cfunc = jit(nopython=True)(array_all_global)
 
-        def check_scalar(scalar):
-            expected = array_all_global(scalar)
-            got = cfunc(scalar)
-            self.assertPreciseEqual(got, expected)
-
-        def check_array(arr):
-            expected = array_all_global(arr)
-            got = cfunc(arr)
+        def check(arg):
+            expected = array_all_global(arg)
+            got = cfunc(arg)
             self.assertPreciseEqual(got, expected)
 
         # Test scalar cases
-        check_scalar(0.0)
-        check_scalar(0.2)
-        check_scalar(True)
-        check_scalar(False)
+        check(0.0)
+        check(0.2)
+        check(True)
+        check(False)
 
         # Test array cases
-        check_array(np.array([True, True, True]))
-        check_array(np.array([True, False, True]))
-        check_array(np.array([1.0, 2.0, 3.0]))
-        check_array(np.array([0.0, 1.0, 2.0]))
+        check(np.array([True, True, True]))
+        check(np.array([True, False, True]))
+        check(np.array([1.0, 2.0, 3.0]))
+        check(np.array([0.0, 1.0, 2.0]))
+
+        with self.assertTypingError() as e:
+            cfunc([1,2,3])
+        self.assertIn('The argument "a" must be array-like', str(e.exception))
 
     def test_any_basic(self, pyfunc=array_any):
         cfunc = jit(nopython=True)(pyfunc)
