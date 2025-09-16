@@ -70,10 +70,14 @@ jobs:
       - name: Setup Miniconda
         uses: conda-incubator/setup-miniconda@v3
         with:
-          python-version: ${{ matrix.python-version }}
           conda-remove-defaults: true
           auto-update-conda: true
           auto-activate-base: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
 
       - name: Download llvmlite wheel
         if: inputs.llvmlite_wheel_runid != ''
@@ -92,8 +96,7 @@ jobs:
           else
               python -m pip install -i ${{ env.WHEELS_INDEX_URL }} llvmlite
           fi
-          conda install -c defaults python-build numpy==${{ matrix.numpy_build }} setuptools
-          python -m pip install tbb==2021.6 tbb-devel==2021.6
+          python -m pip install build numpy==${{ matrix.numpy_build }} setuptools tbb==2021.6 tbb-devel==2021.6
 
       - name: Build wheel
         run: python -m build
