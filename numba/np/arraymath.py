@@ -800,6 +800,9 @@ def array_argmax(a, axis=None):
 
 @overload(np.all)
 @overload_method(types.Array, "all")
+@overload_method(types.Number, "all")
+@overload_method(types.Boolean, "all")
+@overload_method(types.UnicodeType, "all")
 def np_all(a):
 
     if not type_can_asarray(a):
