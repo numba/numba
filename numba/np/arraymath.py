@@ -800,7 +800,21 @@ def array_argmax(a, axis=None):
 
 @overload(np.all)
 @overload_method(types.Array, "all")
+@overload_method(types.Number, "all")
+@overload_method(types.Boolean, "all")
+@overload_method(types.UnicodeType, "all")
 def np_all(a):
+
+    if not type_can_asarray(a):
+        raise TypingError('The argument "a" must be array-like')
+
+    # for scalar
+    if isinstance(a, (types.Number, types.Boolean)):
+        def scalar_all(a):
+            return bool(a)
+        return scalar_all
+
+    # for array
     def flat_all(a):
         for v in np.nditer(a):
             if not v.item():
