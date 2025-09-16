@@ -67,13 +67,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Miniconda
-        uses: conda-incubator/setup-miniconda@v3
-        with:
-          conda-remove-defaults: true
-          auto-update-conda: true
-          auto-activate-base: true
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
