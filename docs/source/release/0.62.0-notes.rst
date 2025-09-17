@@ -1,5 +1,5 @@
-Version 0.62.0rc2 (11 September 2025)
-=====================================
+Version 0.62.0 (18 September 2025)
+==================================
 
 .. contents:: Table of Contents
    :depth: 2
@@ -469,6 +469,7 @@ Pull-Requests
 * PR `#10214 <https://github.com/numba/numba/pull/10214>`_: skip test_prange_fastmath_check_works (`swap357 <https://github.com/swap357>`_)
 * PR `#10216 <https://github.com/numba/numba/pull/10216>`_: Update conda_build_config.yaml to pin osx compiler version to 19 (`swap357 <https://github.com/swap357>`_)
 * PR `#10218 <https://github.com/numba/numba/pull/10218>`_: add no SVML support note to 0.62.0 release notes (`swap357 <https://github.com/swap357>`_)
+* PR `#10232 <https://github.com/numba/numba/pull/10232>`_: Update release date and change-log for 0.62.0 (`esc <https://github.com/esc>`_)
 
 Authors
 ~~~~~~~
