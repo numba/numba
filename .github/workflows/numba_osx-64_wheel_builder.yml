@@ -99,10 +99,6 @@ jobs:
           conda install -c defaults python-build numpy==${{ matrix.numpy_build }} clang_osx-64 clangxx_osx-64
           conda install --yes llvm-openmp
 
-      - name: Build sdist [once - py3.10]
-        if: matrix.python-version == '3.10'
-        run: python -m build --sdist
-
       - name: Build wheel
         env:
           SDKROOT: /opt/MacOSX10.10.sdk
@@ -120,21 +116,12 @@ jobs:
       - name: Upload numba wheel
         uses: actions/upload-artifact@v4
         with:
-          name: numba-osx-64-py${{ matrix.python_canonical }}
+          name: numba_osx-64_wheel_py${{ matrix.python_canonical }}
           path: dist/*.whl
           compression-level: 0
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           if-no-files-found: error
 
-      - name: Upload numba sdist
-        if: matrix.python-version == '3.10'
-        uses: actions/upload-artifact@v4
-        with:
-            name: numba-sdist
-            path: dist/*.tar.gz
-            compression-level: 0
-            retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
-            if-no-files-found: error
 
   osx-64-test:
     name: osx-64-test (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
@@ -157,7 +144,7 @@ jobs:
       - name: Download Numba wheel artifact
         uses: actions/download-artifact@v4
         with:
-          name: numba-osx-64-py${{ matrix.python_canonical }}
+          name: numba_osx-64_wheel_py${{ matrix.python_canonical }}
           path: dist
 
       - name: Download llvmlite wheel
