@@ -282,12 +282,15 @@ def _drop_ignored_attrs(dct):
     drop = set(['__weakref__',
                 '__module__',
                 '__dict__'])
-    if utils.PYVERSION == (3, 13):
+    if utils.PYVERSION in ((3, 13), (3, 14)):
         # new in python 3.13
         drop |= set(['__firstlineno__', '__static_attributes__'])
 
-    if '__annotations__' in dct:
-        drop.add('__annotations__')
+    for att in ('__annotations__',
+                '__annotate_func__',
+                '__annotations_cache__'):
+        if att in dct:
+            drop.add(att)
 
     for k, v in dct.items():
         if isinstance(v, (pytypes.BuiltinFunctionType,
