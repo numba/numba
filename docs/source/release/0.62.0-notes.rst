@@ -1,4 +1,4 @@
-Version 0.62.0rc1 (28 August 2025)
+Version 0.62.0 (18 September 2025)
 ==================================
 
 .. contents:: Table of Contents
@@ -14,6 +14,13 @@ will be removed from the source tree, just that continuous integration will no
 longer test this platform and new releases will not include binary artifacts as
 part of the release process. For more details see:
 https://github.com/numba/numba/issues/10187.
+
+Further, please note that the Intel SVML library is not supported by this
+release of Numba. This loss of support was caused by the patch that enables the
+SVML optimisations not applying cleanly to the LLVM 20 code base when upgrading
+llvmlite (the library used by Numba to bind to LLVM). The impact of this change
+is a loss of performance in cases where SVML would previously have been used, it
+is hoped that the issues with this patch can be resolved in the future.
 
 Please find a summary of all noteworthy items below.
 
@@ -238,14 +245,6 @@ secondary tools
 
 (`PR-#9893 <https://github.com/numba/numba/pull/9893>`__)
 
-Prevent unsafe type conversion in arguments to ``range``.
----------------------------------------------------------
-
-Types that require an unsafe type conversion to ``integer`` (such as ``float``)
-are now not permitted as arguments to ``range``.
-
-(`PR-#9973 <https://github.com/numba/numba/pull/9973>`__)
-
 Fix ``IntEnumMember.can_convert_to()`` when no conversions found
 ----------------------------------------------------------------
 
@@ -461,6 +460,16 @@ Pull-Requests
 * PR `#10194 <https://github.com/numba/numba/pull/10194>`_: gha/add env variables for reduced testing on win-64 wheel builder (`swap357 <https://github.com/swap357>`_)
 * PR `#10197 <https://github.com/numba/numba/pull/10197>`_: Update version support 0.62 (`esc <https://github.com/esc>`_)
 * PR `#10198 <https://github.com/numba/numba/pull/10198>`_: Update deprecation doc for 0.62 (`esc <https://github.com/esc>`_)
+* PR `#10199 <https://github.com/numba/numba/pull/10199>`_: Changelog 0.62 (`seibert <https://github.com/seibert>`_ `esc <https://github.com/esc>`_)
+* PR `#10200 <https://github.com/numba/numba/pull/10200>`_: Dep pin 0.62 (`seibert <https://github.com/seibert>`_ `esc <https://github.com/esc>`_)
+* PR `#10205 <https://github.com/numba/numba/pull/10205>`_: GHA/ Fix for linux wheel builds (`swap357 <https://github.com/swap357>`_)
+* PR `#10206 <https://github.com/numba/numba/pull/10206>`_: GHA/ update artifact names in wheel builder workflows (`swap357 <https://github.com/swap357>`_)
+* PR `#10208 <https://github.com/numba/numba/pull/10208>`_: GHA/ remove redundant sdist exports (`swap357 <https://github.com/swap357>`_)
+* PR `#10212 <https://github.com/numba/numba/pull/10212>`_: Revert 9973 (`esc <https://github.com/esc>`_)
+* PR `#10214 <https://github.com/numba/numba/pull/10214>`_: skip test_prange_fastmath_check_works (`swap357 <https://github.com/swap357>`_)
+* PR `#10216 <https://github.com/numba/numba/pull/10216>`_: Update conda_build_config.yaml to pin osx compiler version to 19 (`swap357 <https://github.com/swap357>`_)
+* PR `#10218 <https://github.com/numba/numba/pull/10218>`_: add no SVML support note to 0.62.0 release notes (`swap357 <https://github.com/swap357>`_)
+* PR `#10232 <https://github.com/numba/numba/pull/10232>`_: Update release date and change-log for 0.62.0 (`esc <https://github.com/esc>`_)
 
 Authors
 ~~~~~~~

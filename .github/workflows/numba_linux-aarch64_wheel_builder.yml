@@ -87,14 +87,12 @@ jobs:
 
           # Prepare build environment
           mkdir -p dist wheelhouse
-          chmod +x buildscripts/github/build_wheel_linux.sh
-          chmod +x buildscripts/github/repair_wheel_linux.sh
 
           # Run the build script inside Docker container
           docker run --rm \
             -v ${{ github.workspace }}:/io \
             quay.io/pypa/${{ env.MANYLINUX_IMAGE }} \
-            /io/buildscripts/github/build_wheel_linux.sh \
+            bash /io/buildscripts/github/build_wheel_linux.sh \
             "${PYTHON_EXECUTABLE}" \
             "false" \
             "${{ matrix.numpy_build }}" \
@@ -114,7 +112,7 @@ jobs:
           docker run --rm \
             -v ${{ github.workspace }}:/io \
             quay.io/pypa/${{ env.MANYLINUX_IMAGE }} \
-            /io/buildscripts/github/repair_wheel_linux.sh \
+            bash /io/buildscripts/github/repair_wheel_linux.sh \
             "${PYTHON_EXECUTABLE}" \
             "false" \
             "/io/wheelhouse"
@@ -125,21 +123,12 @@ jobs:
       - name: Upload numba wheel
         uses: actions/upload-artifact@v4
         with:
-          name: numba-linux-aarch64-py${{ matrix.python_canonical }}
+          name: numba_linux-aarch64_wheel_py${{ matrix.python_canonical }}
           path: wheelhouse/*.whl
           compression-level: 0
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           if-no-files-found: error
 
-      - name: Upload numba sdist
-        if: matrix.python-version == '3.10'
-        uses: actions/upload-artifact@v4
-        with:
-            name: numba-sdist
-            path: dist/*.tar.gz
-            compression-level: 0
-            retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
-            if-no-files-found: error
 
   linux-aarch64-test:
     name: linux-aarch64-test (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
@@ -162,7 +151,7 @@ jobs:
       - name: Download Numba wheel artifact
         uses: actions/download-artifact@v4
         with:
-          name: numba-linux-aarch64-py${{ matrix.python_canonical }}
+          name: numba_linux-aarch64_wheel_py${{ matrix.python_canonical }}
           path: dist
 
       - name: Download llvmlite wheel

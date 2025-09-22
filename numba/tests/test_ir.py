@@ -376,7 +376,7 @@ class TestIRCompounds(CheckEquality):
                     m = np.sqrt(l - g)
                     if np.abs(m[0]) < 1:
                         n = 0
-                        for o in range(int(a)):
+                        for o in range(a):
                             n += 0
                             if np.abs(n) < 3:
                                 break
