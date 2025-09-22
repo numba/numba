@@ -501,8 +501,8 @@ class TestDynArray(NrtRefCtTest, TestCase):
         np.testing.assert_equal(expected_y, got_y)
         # getrefcount owns 1, got_y owns 1
         self.assertEqual(2, sys.getrefcount(got_y))
-        # getrefcount owns 1, got_y owns 1
-        self.assertEqual(2, sys.getrefcount(got_y))
+        # getrefcount owns 1, got_x owns 1
+        self.assertEqual(2, sys.getrefcount(got_x))
 
     def test_issue_with_return_leak(self):
         """
