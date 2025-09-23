@@ -190,6 +190,8 @@ jobs:
 
           if [ "$USE_TBB" = "true" ]; then
             $PYTHON_PATH -m pip install tbb
+            # Verify TBB threading layer
+            NUMBA_THREADING_LAYER=tbb $PYTHON_PATH -c "import numba; numba.get_num_threads(); print(numba.threading_layer())"
           fi
 
           # print Numba system information
