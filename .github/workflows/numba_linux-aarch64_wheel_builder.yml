@@ -5,6 +5,8 @@ on:
     paths:
       - .github/workflows/numba_linux-aarch64_wheel_builder.yml
       - .github/workflows/wheel_workflow_matrix.json
+      - buildscripts/github/build_wheel_linux.sh
+      - buildscripts/github/repair_wheel_linux.sh
   workflow_dispatch:
     inputs:
       llvmlite_wheel_runid:
