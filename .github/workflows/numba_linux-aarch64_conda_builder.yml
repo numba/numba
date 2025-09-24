@@ -43,6 +43,8 @@ jobs:
     name: linux-aarch64-build-conda (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
     needs: load-matrix
     runs-on: ubuntu-24.04-arm
+    env:
+      EXTRA_CHANNELS: ${{ matrix.python-version == '3.14' && '-c ad-testing/label/py314' || '' }}
     defaults:
       run:
         shell: bash -elx {0}
@@ -90,7 +92,13 @@ jobs:
             LLVMLITE_CHANNEL="${{ env.CONDA_CHANNEL_NUMBA }}"
           fi
 
-          conda build --debug -c $LLVMLITE_CHANNEL -c defaults \
+          if [ -n "${EXTRA_CHANNELS}" ]; then
+            extra_args=(${EXTRA_CHANNELS})
+          else
+            extra_args=()
+          fi
+
+          conda build --debug -c $LLVMLITE_CHANNEL "${extra_args[@]}" -c defaults \
             --python=${{ matrix.python-version }} \
             --numpy=${{ matrix.numpy_build }} blas=*=openblas \
             buildscripts/condarecipe.local/ \
@@ -110,6 +118,8 @@ jobs:
     name: linux-aarch64-test-conda (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
     needs: [load-matrix, linux-aarch64-build-conda]
     runs-on: ubuntu-24.04-arm
+    env:
+      EXTRA_CHANNELS: ${{ matrix.python-version == '3.14' && '-c ad-testing/label/py314' || '' }}
     defaults:
       run:
         shell: bash -elx {0}
@@ -170,6 +180,12 @@ jobs:
             LLVMLITE_CHANNEL="${{ env.CONDA_CHANNEL_NUMBA }}"
           fi
 
+          if [ -n "${EXTRA_CHANNELS}" ]; then
+            extra_args=(${EXTRA_CHANNELS})
+          else
+            extra_args=()
+          fi
+
           # List directories to find the correct package path
           echo "Listing downloaded artifact contents:"
           find . -type f -name "numba*.conda" | sort
@@ -185,7 +201,8 @@ jobs:
           echo "Using package: $NUMBA_PKG"
 
           # Run the test with the found package
-          conda build -c $LLVMLITE_CHANNEL -c defaults \
+          conda build -c $LLVMLITE_CHANNEL "${extra_args[@]}" -c defaults \
+            --python=${{ matrix.python-version }} \
             --extra-deps numpy=${{ matrix.numpy_test }} blas=*=openblas \
             --test \
             "$NUMBA_PKG"
