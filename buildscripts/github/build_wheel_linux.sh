@@ -36,7 +36,7 @@ echo "Contents of /io directory:"
 ls -la
 
 # Build wheel from the workspace directory
-$PYTHON_EXECUTABLE -m build --wheel
+$PYTHON_EXECUTABLE -m build --wheel --no-isolation
 
 # Create output directory if it doesn't exist
 mkdir -p /io/wheelhouse
