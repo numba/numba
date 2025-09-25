@@ -5,6 +5,8 @@ on:
     paths:
       - .github/workflows/numba_linux-64_wheel_builder.yml
       - .github/workflows/wheel_workflow_matrix.json
+      - buildscripts/github/build_wheel_linux.sh
+      - buildscripts/github/repair_wheel_linux.sh
   workflow_dispatch:
     inputs:
       llvmlite_wheel_runid:
@@ -188,6 +190,8 @@ jobs:
 
           if [ "$USE_TBB" = "true" ]; then
             $PYTHON_PATH -m pip install tbb
+            # Verify TBB threading layer
+            NUMBA_THREADING_LAYER=tbb $PYTHON_PATH -c "import numba; numba.get_num_threads(); print(numba.threading_layer())"
           fi
 
           # print Numba system information
