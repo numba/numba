@@ -1,7 +1,7 @@
 Version 0.62.1 (26 September 2025)
 ==================================
 
-This is a patch release of Numba that fixes issues with TBB linkage: `#10240 <https://github.com/numba/numba/pull/10240>`_.
+This is a patch release of Numba that fixes issues with TBB support on Linux: `#10240 <https://github.com/numba/numba/pull/10240>`_.
 
 Pull-Requests
 ~~~~~~~~~~~~~
