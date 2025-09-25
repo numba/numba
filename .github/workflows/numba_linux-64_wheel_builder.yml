@@ -157,6 +157,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
 
       - name: Download Numba wheel artifact
         uses: actions/download-artifact@v4
