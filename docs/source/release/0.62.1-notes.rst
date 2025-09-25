@@ -7,7 +7,7 @@ Pull-Requests
 ~~~~~~~~~~~~~
 
 * PR `#10244 <https://github.com/numba/numba/pull/10244>`_: Backport tbb linkage fix for `linux-64` wheel build (`swap357 <https://github.com/swap357>`_ `esc <https://github.com/esc>`_)
-* PR `#10246 <https://github.com/numba/numba/pull/10246>`_: Release notes for 0.62.1 (`swap357 <https://github.com/swap357>`_ `esc <https://github.com/esc>`_)
+* PR `#10247 <https://github.com/numba/numba/pull/10247>`_: Release notes for 0.62.1 (`esc <https://github.com/esc>`_)
 
 Authors
 ~~~~~~~
