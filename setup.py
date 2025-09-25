@@ -213,6 +213,7 @@ def get_ext_modules():
         """
         found = None
         path2check = [os.path.split(os.path.split(sys.executable)[0])[0]]
+        path2check += [os.path.dirname(sys.executable)]    # for GHA win toolcache: ...\Python\<ver>\x64
         path2check += [os.getenv(n, '') for n in ['CONDA_PREFIX', 'PREFIX']]
         if sys.platform.startswith('win'):
             path2check += [os.path.join(p, 'Library') for p in path2check]
