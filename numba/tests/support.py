@@ -109,6 +109,10 @@ skip_if_py313_on_windows = unittest.skipIf(
      "Not supported on Python 3.13 on Windows"
  )
 
+skip_if_py314= unittest.skipIf(
+     utils.PYVERSION == (3, 14), "Test unstable on 3.14"
+ )
+
 skip_if_linux_aarch64 = unittest.skipIf(
     sys.platform.startswith('linux') and platform.machine() == 'aarch64',
     "Not supported on Linux aarch64"
