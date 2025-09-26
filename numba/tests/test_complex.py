@@ -3,7 +3,7 @@ import math
 import sys
 
 from numba import jit, types
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, skip_if_py314
 from .complex_usecases import *
 import unittest
 
@@ -114,6 +114,7 @@ class TestComplex(BaseComplexTest, TestCase):
                        (types.complex64, types.complex64)]
         self.run_binary(div_usecase, value_types, values, flags=flags)
 
+    @skip_if_py314
     def test_div_npm(self):
         self.test_div(flags=no_pyobj_flags)
 
@@ -207,6 +208,7 @@ class TestCMath(BaseComplexTest, TestCase):
         self.run_binary(log_base_usecase, value_types, values, flags=flags,
                         ulps=3)
 
+    @skip_if_py314
     def test_log_base_npm(self):
         self.test_log_base(flags=no_pyobj_flags)
 

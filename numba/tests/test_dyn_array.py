@@ -10,6 +10,7 @@ from numba.core.errors import TypingError
 from numba import njit
 from numba.core import types, utils, config
 from numba.tests.support import MemoryLeakMixin, TestCase, tag, skip_if_32bit
+from numba.core.utils import PYVERSION
 import unittest
 
 
@@ -499,10 +500,16 @@ class TestDynArray(NrtRefCtTest, TestCase):
         got_x, got_y = cfunc(x)
         np.testing.assert_equal(expected_x, got_x)
         np.testing.assert_equal(expected_y, got_y)
-        # getrefcount owns 1, got_y owns 1
-        self.assertEqual(2, sys.getrefcount(got_y))
-        # getrefcount owns 1, got_y owns 1
-        self.assertEqual(2, sys.getrefcount(got_y))
+
+        if PYVERSION in ((3, 14), ):
+            expected_refcount = 1
+        elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+            expected_refcount = 2
+        else:
+            raise NotImplementedError(PYVERSION)
+
+        self.assertEqual(expected_refcount, sys.getrefcount(got_y))
+        self.assertEqual(expected_refcount, sys.getrefcount(got_x))
 
     def test_issue_with_return_leak(self):
         """
@@ -521,8 +528,15 @@ class TestDynArray(NrtRefCtTest, TestCase):
         arr = np.arange(10)
         old_refct = sys.getrefcount(arr)
 
-        self.assertEqual(old_refct, sys.getrefcount(pyfunc(arr)))
-        self.assertEqual(old_refct, sys.getrefcount(cfunc(arr)))
+        if PYVERSION in ((3, 14), ):
+            self.assertEqual(2, sys.getrefcount(pyfunc(arr)))
+            self.assertEqual(2, sys.getrefcount(cfunc(arr)))
+        elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+            self.assertEqual(old_refct, sys.getrefcount(pyfunc(arr)))
+            self.assertEqual(old_refct, sys.getrefcount(cfunc(arr)))
+        else:
+            raise NotImplementedError(PYVERSION)
+
         self.assertEqual(old_refct, sys.getrefcount(arr))
 
 
