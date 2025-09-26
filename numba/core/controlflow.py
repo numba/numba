@@ -595,7 +595,7 @@ class CFGraph(object):
             stats.setdefault('iteration_count', 0)
 
         # Uses a simple DFS to find back-edges.
-        # The new algorithm is faster than the the previous dominator based
+        # The new algorithm is faster than the previous dominator based
         # algorithm.
         back_edges = set()
         # stack: keeps track of the traversal path

@@ -36,14 +36,7 @@ echo "Contents of /io directory:"
 ls -la
 
 # Build wheel from the workspace directory
-$PYTHON_EXECUTABLE -m build --wheel
-
-# Build sdist based on python version (check if path contains cp310-cp310)
-# Check relies on standard manylinux path structure like /opt/python/cp310-cp310/bin/python
-if [[ "$PYTHON_EXECUTABLE" == *"cp310-cp310"* ]]; then
-    echo "Building sdist for cp310 environment..."
-    $PYTHON_EXECUTABLE -m build --sdist
-fi
+$PYTHON_EXECUTABLE -m build --wheel --no-isolation
 
 # Create output directory if it doesn't exist
 mkdir -p /io/wheelhouse

@@ -1,0 +1,6 @@
+Make ``types.ListType`` string representation evaluable
+-------------------------------------------------------
+
+Fix ``types.ListType`` canonical string representation by making it evaluable.
+This changes ``str()`` to ``repr()`` call for obtaining string representation of
+the list's element.

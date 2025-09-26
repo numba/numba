@@ -90,7 +90,7 @@ class _OptLevel(int):
 
     @property
     def is_opt_max(self):
-        """Returns True if the the optimisation level is "max" False
+        """Returns True if the optimisation level is "max" False
         otherwise."""
         return self._raw_value == "max"
 

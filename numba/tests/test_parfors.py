@@ -4227,6 +4227,7 @@ class TestPrangeSpecific(TestPrangeBase):
         msg = 'Only constant step size of 1 is supported for prange'
         self.assertIn(msg, str(raises.exception))
 
+    @unittest.skip("skip due to issue #10203: https://github.com/numba/numba/issues/10203")
     def test_prange_fastmath_check_works(self):
         # this function will benefit from `fastmath`, the div will
         # get optimised to a multiply by reciprocal and the accumulator

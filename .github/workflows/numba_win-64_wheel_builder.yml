@@ -67,13 +67,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Miniconda
-        uses: conda-incubator/setup-miniconda@v3
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          conda-remove-defaults: true
-          auto-update-conda: true
-          auto-activate-base: true
 
       - name: Download llvmlite wheel
         if: inputs.llvmlite_wheel_runid != ''
@@ -92,16 +89,15 @@ jobs:
           else
               python -m pip install -i ${{ env.WHEELS_INDEX_URL }} llvmlite
           fi
-          conda install -c defaults python-build numpy==${{ matrix.numpy_build }} setuptools
-          python -m pip install tbb==2021.6 tbb-devel==2021.6
+          python -m pip install build numpy==${{ matrix.numpy_build }} setuptools wheel tbb==2021.6 tbb-devel==2021.6
 
       - name: Build wheel
-        run: python -m build
+        run: python -m build --wheel --no-isolation
 
       - name: Upload numba wheel
         uses: actions/upload-artifact@v4
         with:
-          name: numba-win-64-py${{ matrix.python_canonical }}
+          name: numba_win-64_wheel_py${{ matrix.python_canonical }}
           path: dist/*.whl
           compression-level: 0
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
@@ -128,7 +124,7 @@ jobs:
       - name: Download Numba wheel artifact
         uses: actions/download-artifact@v4
         with:
-          name: numba-win-64-py${{ matrix.python_canonical }}
+          name: numba_win-64_wheel_py${{ matrix.python_canonical }}
           path: dist
 
       - name: Download llvmlite wheel
