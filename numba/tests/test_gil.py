@@ -10,7 +10,7 @@ import numpy as np
 import unittest
 from numba import jit
 from numba.core import errors
-from numba.tests.support import TestCase, tag
+from numba.tests.support import TestCase, tag, skip_if_freethreading
 
 
 # This CPython API function is a portable way to get the current thread id.
@@ -108,6 +108,7 @@ class TestGILRelease(TestCase):
                 return
         raise failure
 
+    @skip_if_freethreading
     def test_gil_held(self):
         """
         Test the GIL is held by default, by checking serialized runs
@@ -153,6 +154,7 @@ class TestGILRelease(TestCase):
             compiled_f(a, i)
         self.check_gil_released(caller)
 
+    @skip_if_freethreading
     def test_gil_ignored_by_callee(self):
         """
         When only the callee asks to release the GIL, it gets ignored.
