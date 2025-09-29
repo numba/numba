@@ -73,7 +73,7 @@ class DebugTestBase(TestCase):
                 self.assert_fails(check_meth, out)
 
     def _check_dump_bytecode(self, out):
-        if utils.PYVERSION in ((3, 11), (3, 12), (3, 13)):
+        if utils.PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
             self.assertIn('BINARY_OP', out)
         elif utils.PYVERSION in ((3, 10),):
             self.assertIn('BINARY_ADD', out)

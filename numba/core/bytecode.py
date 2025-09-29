@@ -10,7 +10,7 @@ from numba.core import errors, utils, serialize
 from numba.core.utils import PYVERSION
 
 
-if PYVERSION in ((3, 12), (3, 13)):
+if PYVERSION in ((3, 12), (3, 13), (3, 14)):
     from opcode import _inline_cache_entries
     # Instruction/opcode length in bytes
     INSTR_LEN = 2
@@ -105,7 +105,7 @@ class ByteCodeInst(object):
         # https://bugs.python.org/issue27129
         # https://github.com/python/cpython/pull/25069
         assert self.is_jump
-        if PYVERSION in ((3, 13),):
+        if PYVERSION in ((3, 13), (3, 14)):
             if self.opcode in (dis.opmap[k]
                                for k in ["JUMP_BACKWARD",
                                          "JUMP_BACKWARD_NO_INTERRUPT"]):
@@ -127,7 +127,7 @@ class ByteCodeInst(object):
         else:
             raise NotImplementedError(PYVERSION)
 
-        if PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+        if PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13), (3, 14)):
             if self.opcode in JREL_OPS:
                 return self.next + self.arg * 2
             else:
@@ -159,7 +159,7 @@ NO_ARG_LEN = 1
 OPCODE_NOP = dis.opname.index('NOP')
 
 
-if PYVERSION in ((3, 13),):
+if PYVERSION in ((3, 13), (3, 14)):
 
     def _unpack_opargs(code):
         buf = []
@@ -383,7 +383,7 @@ class _ByteCode(object):
 
 
 def _fix_LOAD_GLOBAL_arg(arg):
-    if PYVERSION in ((3, 11), (3, 12), (3, 13)):
+    if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
         return arg >> 1
     elif PYVERSION in ((3, 10),):
         return arg
@@ -551,7 +551,7 @@ class ByteCodePy312(ByteCodePy311):
                 if not next_inst.opname == "FOR_ITER":
                     continue
 
-                if PYVERSION in ((3, 13),):
+                if PYVERSION in ((3, 13), (3, 14)):
                     # Check end of pattern, two instructions.
                     # Check for the corresponding END_FOR, exception table end
                     # is non-inclusive, so subtract one.
@@ -560,8 +560,14 @@ class ByteCodePy312(ByteCodePy311):
                     if not curr_inst.opname == "END_FOR":
                         continue
                     next_inst = self.table[self.ordered_offsets[index - 1]]
-                    if not next_inst.opname == "POP_TOP":
-                        continue
+                    if PYVERSION in ((3, 13), ):
+                        if not next_inst.opname == "POP_TOP":
+                            continue
+                    elif PYVERSION in ((3, 14), ):
+                        if not next_inst.opname == "POP_ITER":
+                            continue
+                    else:
+                        raise NotImplementedError(PYVERSION)
                     # END_FOR must be followed by SWAP(2)
                     next_inst = self.table[self.ordered_offsets[index]]
                     if not next_inst.opname == "SWAP" and next_inst.arg == 2:
@@ -603,7 +609,7 @@ class ByteCodePy312(ByteCodePy311):
 
 if PYVERSION == (3, 11):
     ByteCode = ByteCodePy311
-elif PYVERSION in ((3, 12), (3, 13),):
+elif PYVERSION in ((3, 12), (3, 13), (3, 14)):
     ByteCode = ByteCodePy312
 elif PYVERSION < (3, 11):
     ByteCode = _ByteCode
