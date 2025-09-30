@@ -1,0 +1,16 @@
+Version 0.62.1 (26 September 2025)
+==================================
+
+This is a patch release of Numba that fixes issues with TBB support on Linux: `#10240 <https://github.com/numba/numba/pull/10240>`_.
+
+Pull-Requests
+~~~~~~~~~~~~~
+
+* PR `#10244 <https://github.com/numba/numba/pull/10244>`_: Backport tbb linkage fix for `linux-64` wheel build (`swap357 <https://github.com/swap357>`_ `esc <https://github.com/esc>`_)
+* PR `#10247 <https://github.com/numba/numba/pull/10247>`_: Release notes for 0.62.1 (`esc <https://github.com/esc>`_)
+
+Authors
+~~~~~~~
+
+* `esc <https://github.com/esc>`_
+* `swap357 <https://github.com/swap357>`_
