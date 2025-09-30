@@ -1,5 +1,7 @@
 import unittest
 
+import numpy as np
+
 from numba import jit, njit
 from numba.core import types
 from numba.tests.support import TestCase
@@ -178,23 +180,21 @@ class TestRange(unittest.TestCase):
                 self.assertEqual(cfunc_obj(val, *arg), pyfunc(val, *arg))
 
 
+@njit
+def my_arange(start, stop, step):
+    x = np.zeros(len(range(start, stop, step)), dtype=np.uint64)
+    i = 0
+    for v in range(start, stop, step):
+        x[i] = v
+        i += 1
+    return x
+
+
 class TestRangeNumpy(TestCase):
     def test_range_safe_cast_mixed(self):
         """Test that mixing `uint64` and `int64` works."""
-        import numpy
-
-        @njit
-        def my_arange(start, stop, step):
-            x = numpy.zeros(len(range(start, stop, step)), dtype=numpy.uint64)
-            i = 0
-            for v in range(start, stop, step):
-                x[i] = v
-                i += 1
-            return x
-        
-        max_i64 = numpy.uint64(numpy.iinfo(numpy.int64).max)
-        a = my_arange(max_i64+6, max_i64, numpy.int64(-1))
-        self.assertPreciseEqual(a - max_i64, numpy.arange(6, 0, -1, dtype=numpy.uint64))
+        a = my_arange(np.uint64(6), np.uint64(0), np.int64(-1))
+        self.assertPreciseEqual(a, np.arange(6, 0, -1, dtype=np.uint64))
 
 
 if __name__ == '__main__':
