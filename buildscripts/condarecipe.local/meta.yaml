@@ -66,8 +66,8 @@ test:
     - jinja2
     # Required to test optional Numba features
     - cffi
-    - scipy
-    - ipython                  # [not aarch64]
+    - scipy                    # [py<314]
+    - ipython                  # [py<314 and not aarch64]
     # for pycc
     - setuptools
     - pyyaml
@@ -76,10 +76,10 @@ test:
     - tbb >=2021.6             # [not (aarch64 or ppc64le)]
     - llvm-openmp              # [osx]
     # This is for driving gdb tests
-    - pexpect                  # [linux64]
+    - pexpect                  # [py<314 and linux64]
     # For testing ipython. At the time of writing ipykernel was not available
     # for Python 3.12.
-    - ipykernel                # [not py==312]
+    - ipykernel                # [py<314 and not py==312]
     # For memory monitoring
     - psutil
     # Need these for AOT. Do not init msvc as it may not be present
