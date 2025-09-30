@@ -1,0 +1,28 @@
+name: lint with pre-commit
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - '*'
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -el {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          auto-activate-base: false
+      - name: Install pre-commit
+        run: conda install -c conda-forge pre-commit
+      - name: Lint code with pre-commit
+        run: pre-commit run --verbose --all-files
