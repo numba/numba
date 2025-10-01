@@ -914,13 +914,15 @@ def np_any(a):
         return scalar_any
 
     # for array
-    def flat_any(a):
-        for v in np.nditer(a):
-            if v.item():
-                return True
-        return False
+    if isinstance(a, types.Array):
+        def flat_any(a):
+            for v in np.nditer(a):
+                if v.item():
+                    return True
+            return False
+        return flat_any
 
-    return flat_any
+    return None
 
 
 @overload(np.average)

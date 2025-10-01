@@ -255,30 +255,44 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(arr)
         check(arr[::-1])
 
+    def test_array_any(self):
+        cfunc = jit(nopython=True)(array_any)
+        def check(arg):
+            expected = array_any(arg)
+            got = cfunc(arg)
+            self.assertPreciseEqual(got, expected)
+
+        # Test numpy array cases
+        check(np.array([True, True, True]))
+        check(np.array([True, False, True]))
+        check(np.array([1.0, 2.0, 3.0]))
+        check(np.array([0.0, 1.0, 2.0]))
+
+        with self.assertTypingError() as e:
+            cfunc('hello')
+
     def test_np_any(self):
         cfunc = jit(nopython=True)(array_any_global)
 
-        def check_scalar(scalar):
-            expected = array_any_global(scalar)
-            got = cfunc(scalar)
+        def check(arg):
+            expected = array_any_global(arg)
+            got = cfunc(arg)
             self.assertPreciseEqual(got, expected)
 
-        def check_array(arr):
-            expected = array_any_global(arr)
-            got = cfunc(arr)
-            self.assertPreciseEqual(got, expected)
+        # Test numpy scalar cases
+        check(np.float64(0.0))
+        check(np.float64(0.2))
+        check(np.bool_(True))
+        check(np.bool_(False))
 
-        # Test scalar cases
-        check_scalar(0.0)
-        check_scalar(0.2)
-        check_scalar(True)
-        check_scalar(False)
+        # Test numpy array cases
+        check(np.array([True, True, True]))
+        check(np.array([True, False, True]))
+        check(np.array([1.0, 2.0, 3.0]))
+        check(np.array([0.0, 1.0, 2.0]))
 
-        # Test array cases
-        check_array(np.array([True, True, True]))
-        check_array(np.array([True, False, True]))
-        check_array(np.array([1.0, 2.0, 3.0]))
-        check_array(np.array([0.0, 1.0, 2.0]))
+        with self.assertTypingError() as e:
+            cfunc([1,2,3])
 
     def test_sum_basic(self):
         self.check_reduction_basic(array_sum)
