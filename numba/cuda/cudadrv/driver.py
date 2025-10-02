@@ -365,6 +365,10 @@ class Driver(object):
         else:
             variants = ('_v2', '')
 
+        # workaround from https://github.com/NVIDIA/numba-cuda/pull/185
+        if fname in ("cuCtxGetDevice", "cuCtxSynchronize"):
+            return getattr(self.lib, fname)
+
         for variant in variants:
             try:
                 return getattr(self.lib, f'{fname}{variant}')
