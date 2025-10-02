@@ -134,6 +134,22 @@ skip_if_reduced_testing = unittest.skipIf(REDUCED_TESTING,
                                           "Skipped for reduced testing")
 
 
+_free_threading = not getattr(sys, "_is_gil_enabled", lambda: True)()
+
+
+skip_if_freethreading = unittest.skipIf(_free_threading,
+                                        ("Skipped [NOT APPLICABLE] if using a "
+                                         "free-threading build and "
+                                         "free-threading is enabled."))
+
+
+skip_as_broken_if_freethreading = unittest.skipIf(_free_threading,
+                                                  ("Skipped [BROKEN] if using "
+                                                   "a free-threading build and "
+                                                   "free-threading is "
+                                                   "enabled."))
+
+
 def expected_failure_py311(fn):
     if utils.PYVERSION == (3, 11):
         return unittest.expectedFailure(fn)
