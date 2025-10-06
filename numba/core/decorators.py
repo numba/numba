@@ -2,7 +2,6 @@
 Define @jit and related decorators.
 """
 
-
 import sys
 import warnings
 import inspect
@@ -19,13 +18,21 @@ _logger = logging.getLogger(__name__)
 # -----------------------------------------------------------------------------
 # Decorators
 
-_msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
-                                 "Signatures should be passed as the first "
-                                 "positional argument.")
+_msg_deprecated_signature_arg = (
+    "Deprecated keyword argument `{0}`. "
+    "Signatures should be passed as the first "
+    "positional argument."
+)
 
 
-def jit(signature_or_function=None, locals=MappingProxyType({}), cache=False,
-        pipeline_class=None, boundscheck=None, **options):
+def jit(
+    signature_or_function=None,
+    locals=MappingProxyType({}),
+    cache=False,
+    pipeline_class=None,
+    boundscheck=None,
+    **options,
+):
     """
     This decorator is used to compile a Python function into native code.
 
@@ -42,8 +49,26 @@ def jit(signature_or_function=None, locals=MappingProxyType({}), cache=False,
         Mapping of local variable names to Numba types. Used to override the
         types deduced by Numba's type inference engine.
 
+    cache: bool
+        Set to True to enable caching of the compiled function to disk.  The
+        default is False.  Note that caching requires the presence of a
+        working LLVM setup.
+
     pipeline_class: type numba.compiler.CompilerBase
             The compiler pipeline type for customizing the compilation stages.
+
+    boundscheck: bool or None
+        Set to True to enable bounds checking for array indices. Out
+        of bounds accesses will raise IndexError. The default is to
+        not do bounds checking. If False, bounds checking is disabled,
+        out of bounds accesses can produce garbage results or segfaults.
+        However, enabling bounds checking will slow down typical
+        functions, so it is recommended to only use this flag for
+        debugging. You can also set the NUMBA_BOUNDSCHECK environment
+        variable to 0 or 1 to globally override this flag. The default
+        value is None, which under normal execution equates to False,
+        but if debug is set to True then bounds checking will be
+        enabled. Note that bounds checking is only supported in nopython mode.
 
     options:
         For a cpu target, valid options are:
@@ -80,19 +105,6 @@ def jit(signature_or_function=None, locals=MappingProxyType({}), cache=False,
                 return Truthy as to whether to inline.
                 NOTE: This inlining is performed at the Numba IR level and is in
                 no way related to LLVM inlining.
-
-            boundscheck: bool or None
-                Set to True to enable bounds checking for array indices. Out
-                of bounds accesses will raise IndexError. The default is to
-                not do bounds checking. If False, bounds checking is disabled,
-                out of bounds accesses can produce garbage results or segfaults.
-                However, enabling bounds checking will slow down typical
-                functions, so it is recommended to only use this flag for
-                debugging. You can also set the NUMBA_BOUNDSCHECK environment
-                variable to 0 or 1 to globally override this flag. The default
-                value is None, which under normal execution equates to False,
-                but if debug is set to True then bounds checking will be
-                enabled.
 
     Returns
     --------
