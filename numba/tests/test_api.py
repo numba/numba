@@ -1,5 +1,6 @@
 import warnings
 
+import numpy as np
 import numba
 from numba import jit, njit
 
@@ -85,6 +86,35 @@ class TestJitDecorator(TestCase):
         jit_func(1)
         # Since forceobj is ignored this has to compile in nopython mode
         self.assertEqual(len(jit_func.nopython_signatures), 1)
+
+    def test_enable_further_signatures_false(self):
+        def py_func(x):
+            return x
+
+        jit_func = jit("float64(float64)", allow_further_signature_compilation=False)(
+            py_func
+        )
+        self.assertEqual(len(jit_func.nopython_signatures), 1)
+        assert not jit_func._can_compile
+
+        with self.assertRaises(TypeError):
+            jit_func(np.array([1, 2, 3]))
+
+    def test_enable_further_signatures_true(self):
+        def py_func(x):
+            return x
+
+        jit_func = jit("float64(float64)", allow_further_signature_compilation=True)(
+            py_func
+        )
+        self.assertEqual(len(jit_func.nopython_signatures), 1)
+        assert jit_func._can_compile
+
+        x = np.array([1, 2, 3])
+        out = jit_func(x)
+        assert (out == x).all()
+        assert out.dtype == x.dtype
+        self.assertEqual(len(jit_func.nopython_signatures), 2)
 
 
 if __name__ == '__main__':

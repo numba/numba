@@ -32,6 +32,7 @@ def jit(
     cache=False,
     pipeline_class=None,
     boundscheck=None,
+    allow_further_signature_compilation=False,
     **options,
 ):
     """
@@ -70,6 +71,13 @@ def jit(
         value is None, which under normal execution equates to False,
         but if debug is set to True then bounds checking will be
         enabled. Note that bounds checking is only supported in nopython mode.
+
+    enable_further_compilation: bool
+        If a signature or list of signatures is passed, the default behaviour is
+        to disable further compilation of the function with other signatures.
+        This is to help catch cases where the user may have forgotten to
+        provide a required signature. If this is set to True, further
+        compilation will be allowed.
 
     options:
         For a cpu target, valid options are:
@@ -200,18 +208,34 @@ def jit(
 
     dispatcher_args = {}
     if pipeline_class is not None:
-        dispatcher_args['pipeline_class'] = pipeline_class
-    wrapper = _jit(sigs, locals=locals, target=target, cache=cache,
-                   targetoptions=options, **dispatcher_args)
+        dispatcher_args["pipeline_class"] = pipeline_class
+    wrapper = _jit(
+        sigs,
+        locals=locals,
+        target=target,
+        cache=cache,
+        targetoptions=options,
+        allow_further_signature_compilation=allow_further_signature_compilation,
+        **dispatcher_args,
+    )
     if pyfunc is not None:
         return wrapper(pyfunc)
     else:
         return wrapper
 
 
-def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
+def _jit(
+    sigs,
+    locals,
+    target,
+    cache,
+    targetoptions,
+    allow_further_signature_compilation,
+    **dispatcher_args,
+):
 
     from numba.core.target_extension import resolve_dispatcher_from_str
+
     dispatcher = resolve_dispatcher_from_str(target)
 
     def wrapper(func):
