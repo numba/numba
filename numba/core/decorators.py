@@ -1,6 +1,7 @@
 """
 Define @jit and related decorators.
 """
+from functools import wraps
 
 import sys
 import warnings
@@ -244,12 +245,14 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
             with typeinfer.register_dispatcher(disp):
                 for sig in sigs:
                     disp.compile(sig)
-                disp.disable_compile()
+                if not allow_further_signature_compilation:
+                    disp.disable_compile()
         return disp
 
     return wrapper
 
 
+@wraps(jit)
 def njit(*args, **kws):
     """
     Equivalent to jit(nopython=True)
