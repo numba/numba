@@ -1506,7 +1506,7 @@ class TestIntrinsic(TestCase):
         self.assertEqual("void_func", void_func.__name__)
         self.assertEqual("TestIntrinsic.test_docstring.<locals>.void_func",
                          void_func.__qualname__)
-        self.assertDictEqual({'a': int}, void_func.__annotations__)
+        self.assertDictEqual({'a': int}, inspect.get_annotations(void_func))
         self.assertEqual("void_func docstring", void_func.__doc__)
 
 

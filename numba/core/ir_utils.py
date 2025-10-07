@@ -116,7 +116,7 @@ def mk_alloc(typingctx, typemap, calltypes, lhs, size_var, dtype, scope, loc,
     empty_attr_call = ir.Expr.getattr(g_np_var, "empty", loc)
     attr_var = ir.Var(scope, mk_unique_var("$empty_attr_attr"), loc)
     if typemap:
-        typemap[attr_var.name] = get_np_ufunc_typ(numpy.empty)
+        typemap[attr_var.name] = get_np_ufunc_typ(numpy.empty, typingctx)
     attr_assign = ir.Assign(empty_attr_call, attr_var, loc)
      # Assume str(dtype) returns a valid type
     dtype_str = str(dtype)
@@ -160,7 +160,7 @@ def mk_alloc(typingctx, typemap, calltypes, lhs, size_var, dtype, scope, loc,
         asfortranarray_attr_call = ir.Expr.getattr(g_np_var, "asfortranarray", loc)
         afa_attr_var = ir.Var(scope, mk_unique_var("$asfortran_array_attr"), loc)
         if typemap:
-            typemap[afa_attr_var.name] = get_np_ufunc_typ(numpy.asfortranarray)
+            typemap[afa_attr_var.name] = get_np_ufunc_typ(numpy.asfortranarray, typingctx)
         afa_attr_assign = ir.Assign(asfortranarray_attr_call, afa_attr_var, loc)
         # call asfortranarray
         asfortranarray_call = ir.Expr.call(afa_attr_var, [empty_c_var], (), loc)
@@ -191,15 +191,15 @@ def convert_size_to_var(size_var, typemap, scope, loc, nodes):
     return size_var
 
 
-def get_np_ufunc_typ(func):
-    """get type of the incoming function from builtin registry"""
-    for (k, v) in typing.npydecl.registry.globals:
-        if k == func:
-            return v
-    for (k, v) in typing.templates.builtin_registry.globals:
-        if k == func:
-            return v
-    raise RuntimeError("type for func ", func, " not found")
+def get_np_ufunc_typ(func, typingctx):
+    """get type of the incoming function
+
+    Resolve using the context for target-awareness
+    """
+    try:
+        return typingctx.resolve_value_type(func)
+    except TypingError:
+        raise RuntimeError("type for func ", func, " not found")
 
 
 def mk_range_block(typemap, start, stop, step, calltypes, scope, loc):
@@ -1417,7 +1417,7 @@ def canonicalize_array_math(func_ir, typemap, calltypes, typingctx):
                     func_ir._definitions[g_np_var.name] = [g_np]
                     # update func var type
                     func = getattr(numpy, rhs.attr)
-                    func_typ = get_np_ufunc_typ(func)
+                    func_typ = get_np_ufunc_typ(func, typingctx)
                     typemap.pop(lhs)
                     typemap[lhs] = func_typ
                 if rhs.op == 'call' and rhs.func.name in saved_arr_arg:
@@ -1886,7 +1886,7 @@ def gen_np_call(func_as_str, func, lhs, args, typingctx, typemap, calltypes):
     # attr call: <something>_attr = getattr(g_np_var, func_as_str)
     np_attr_call = ir.Expr.getattr(g_np_var, func_as_str, loc)
     attr_var = ir.Var(scope, mk_unique_var("$np_attr_attr"), loc)
-    func_var_typ = get_np_ufunc_typ(func)
+    func_var_typ = get_np_ufunc_typ(func, typingctx)
     typemap[attr_var.name] = func_var_typ
     attr_assign = ir.Assign(np_attr_call, attr_var, loc)
     # np call: lhs = np_attr(*args)

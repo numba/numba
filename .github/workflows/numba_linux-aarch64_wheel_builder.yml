@@ -1,9 +1,13 @@
-name: numba_linux-arm64_wheel_builder
+name: numba_linux-aarch64_wheel_builder
 
 on:
   pull_request:
     paths:
-    - .github/workflows/numba_linux-arm64_wheel_builder.yml
+      - .github/workflows/numba_linux-aarch64_wheel_builder.yml
+      - .github/workflows/wheel_workflow_matrix.json
+      - buildscripts/github/build_wheel_linux.sh
+      - buildscripts/github/repair_wheel_linux.sh
+      - setup.py
   workflow_dispatch:
     inputs:
       llvmlite_wheel_runid:
@@ -26,18 +30,32 @@ jobs:
   load-matrix:
     runs-on: ubuntu-latest
     outputs:
-      wheel-matrix-json: ${{ steps.load_matrix_json.outputs.wheel-matrix-json }}
+      build-matrix-json: ${{ steps.load_matrix_json.outputs.build-matrix-json }}
+      test-matrix-json: ${{ steps.load_matrix_json.outputs.test-matrix-json }}
     steps:
       - uses: actions/checkout@v4
       - id: load_matrix_json
         name: Load Workflow Matrix JSON
         run: |
-          MATRIX_JSON=$(jq -c .wheel_matrix .github/workflows/workflow_matrix.json)
-          echo "Workflow Matrix JSON: $MATRIX_JSON"
-          echo "wheel-matrix-json=$MATRIX_JSON" >> $GITHUB_OUTPUT
+          BUILD_MATRIX_JSON=$(jq -c .wheel_build_matrix .github/workflows/wheel_workflow_matrix.json)
+          TEST_MATRIX_JSON=$(jq -c .wheel_test_matrix .github/workflows/wheel_workflow_matrix.json)
 
-  linux-arm64-build:
-    name: linux-arm64-build-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
+          # Add canonical python versions to both matrices
+          BUILD_MATRIX_EXTENDED=$(echo "$BUILD_MATRIX_JSON" | jq -c '
+            map(. + {"python_canonical": (.["python-version"] | split(".") | .[:2] | join("."))})
+          ')
+
+          TEST_MATRIX_EXTENDED=$(echo "$TEST_MATRIX_JSON" | jq -c '
+            map(. + {"python_canonical": (.["python-version"] | split(".") | .[:2] | join("."))})
+          ')
+
+          echo "Build Matrix JSON: $BUILD_MATRIX_EXTENDED"
+          echo "Test Matrix JSON: $TEST_MATRIX_EXTENDED"
+          echo "build-matrix-json=$BUILD_MATRIX_EXTENDED" >> $GITHUB_OUTPUT
+          echo "test-matrix-json=$TEST_MATRIX_EXTENDED" >> $GITHUB_OUTPUT
+
+  linux-aarch64-build:
+    name: linux-aarch64-build-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
     needs: load-matrix
     runs-on: ubuntu-24.04-arm
     defaults:
@@ -45,7 +63,7 @@ jobs:
         shell: bash -elx {0}
     strategy:
       matrix:
-        include: ${{ fromJson(needs.load-matrix.outputs.wheel-matrix-json) }}
+        include: ${{ fromJson(needs.load-matrix.outputs.build-matrix-json) }}
       fail-fast: false
 
     steps:
@@ -58,7 +76,7 @@ jobs:
         if: inputs.llvmlite_wheel_runid != ''
         uses: actions/download-artifact@v4
         with:
-          name: llvmlite-linux-arm64-py${{ matrix.python-version }}
+          name: llvmlite-linux-aarch64-py${{ matrix.python_canonical }}
           path: llvmlite_wheels
           run-id: ${{ inputs.llvmlite_wheel_runid }}
           repository: numba/llvmlite
@@ -72,14 +90,12 @@ jobs:
 
           # Prepare build environment
           mkdir -p dist wheelhouse
-          chmod +x buildscripts/github/build_wheel_linux.sh
-          chmod +x buildscripts/github/repair_wheel_linux.sh
 
           # Run the build script inside Docker container
           docker run --rm \
             -v ${{ github.workspace }}:/io \
             quay.io/pypa/${{ env.MANYLINUX_IMAGE }} \
-            /io/buildscripts/github/build_wheel_linux.sh \
+            bash /io/buildscripts/github/build_wheel_linux.sh \
             "${PYTHON_EXECUTABLE}" \
             "false" \
             "${{ matrix.numpy_build }}" \
@@ -99,7 +115,7 @@ jobs:
           docker run --rm \
             -v ${{ github.workspace }}:/io \
             quay.io/pypa/${{ env.MANYLINUX_IMAGE }} \
-            /io/buildscripts/github/repair_wheel_linux.sh \
+            bash /io/buildscripts/github/repair_wheel_linux.sh \
             "${PYTHON_EXECUTABLE}" \
             "false" \
             "/io/wheelhouse"
@@ -110,32 +126,23 @@ jobs:
       - name: Upload numba wheel
         uses: actions/upload-artifact@v4
         with:
-          name: numba-linux-arm64-py${{ matrix.python-version }}-np${{ matrix.numpy_build }}
+          name: numba_linux-aarch64_wheel_py${{ matrix.python_canonical }}
           path: wheelhouse/*.whl
           compression-level: 0
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           if-no-files-found: error
 
-      - name: Upload numba sdist
-        if: matrix.python-version == '3.10'
-        uses: actions/upload-artifact@v4
-        with:
-            name: numba-sdist
-            path: dist/*.tar.gz
-            compression-level: 0
-            retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
-            if-no-files-found: error
 
-  linux-arm64-test:
-    name: linux-arm64-test (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
-    needs: [load-matrix, linux-arm64-build]
+  linux-aarch64-test:
+    name: linux-aarch64-test (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
+    needs: [load-matrix, linux-aarch64-build]
     runs-on: ubuntu-24.04-arm
     defaults:
       run:
         shell: bash -elx {0}
     strategy:
       matrix:
-        include: ${{ fromJson(needs.load-matrix.outputs.wheel-matrix-json) }}
+        include: ${{ fromJson(needs.load-matrix.outputs.test-matrix-json) }}
       fail-fast: false
 
     steps:
@@ -143,18 +150,19 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
 
       - name: Download Numba wheel artifact
         uses: actions/download-artifact@v4
         with:
-          name: numba-linux-arm64-py${{ matrix.python-version }}-np${{ matrix.numpy_build }}
+          name: numba_linux-aarch64_wheel_py${{ matrix.python_canonical }}
           path: dist
 
       - name: Download llvmlite wheel
         if: inputs.llvmlite_wheel_runid != ''
         uses: actions/download-artifact@v4
         with:
-          name: llvmlite-linux-arm64-py${{ matrix.python-version }}
+          name: llvmlite-linux-aarch64-py${{ matrix.python_canonical }}
           path: llvmlite_wheels
           run-id: ${{ inputs.llvmlite_wheel_runid }}
           repository: numba/llvmlite
@@ -162,7 +170,7 @@ jobs:
 
       - name: Validate and test wheel
         run: |
-          PYTHON_PATH=$(which python${{ matrix.python-version }})
+          PYTHON_PATH=$(which python${{ matrix.python_canonical }})
           $PYTHON_PATH -m pip install --upgrade pip twine
           ls -l dist
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
@@ -171,7 +179,7 @@ jobs:
               $PYTHON_PATH -m pip install --no-cache-dir -i $WHEELS_INDEX_URL llvmlite
           fi
           $PYTHON_PATH -m twine check dist/*.whl
-          $PYTHON_PATH -m pip install dist/numba*.whl numpy==${{ matrix.numpy_build }} setuptools
+          $PYTHON_PATH -m pip install dist/numba*.whl numpy==${{ matrix.numpy_test }} setuptools
 
           # print Numba system information
           $PYTHON_PATH -m numba -s

@@ -90,7 +90,7 @@ class _OptLevel(int):
 
     @property
     def is_opt_max(self):
-        """Returns True if the the optimisation level is "max" False
+        """Returns True if the optimisation level is "max" False
         otherwise."""
         return self._raw_value == "max"
 
@@ -283,6 +283,11 @@ class _EnvReloader(object):
         # Contains path to the directory
         CACHE_DIR = _readenv("NUMBA_CACHE_DIR", str, "")
 
+        # Override default cache locators list including their order
+        # Comma separated list of locator class names,
+        # see _locator_classes in caching submodule
+        CACHE_LOCATOR_CLASSES = _readenv("NUMBA_CACHE_LOCATOR_CLASSES", str, "")
+
         # Enable tracing support
         TRACE = _readenv("NUMBA_TRACE", int, 0)
 
@@ -291,6 +296,11 @@ class _EnvReloader(object):
 
         # Enable debugging of type inference
         DEBUG_TYPEINFER = _readenv("NUMBA_DEBUG_TYPEINFER", int, 0)
+
+        # Disable caching of failed type inferences.
+        # Use this to isolate problems due to the fail cache.
+        DISABLE_TYPEINFER_FAIL_CACHE = _readenv(
+            "NUMBA_DISABLE_TYPEINFER_FAIL_CACHE", int, 0)
 
         # Configure compilation target to use the specified CPU name
         # and CPU feature as the host information.
@@ -559,11 +569,6 @@ class _EnvReloader(object):
         # llvmlite memory manager
         USE_LLVMLITE_MEMORY_MANAGER = _readenv(
             "NUMBA_USE_LLVMLITE_MEMORY_MANAGER", int, None
-        )
-
-        # llvm pass manager switch
-        USE_LLVM_LEGACY_PASS_MANAGER = _readenv(
-            "NUMBA_USE_LLVM_LEGACY_PASS_MANAGER", int, 0
         )
 
         # Timing support.

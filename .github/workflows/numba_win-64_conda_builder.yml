@@ -1,10 +1,11 @@
-name: numba_osx-64_conda_builder
+name: numba_win-64_conda_builder
 
 on:
   pull_request:
     paths:
-      - .github/workflows/numba_osx-64_conda_builder.yml
+      - .github/workflows/numba_win-64_conda_builder.yml
       - buildscripts/condarecipe.local/**
+      - .github/workflows/conda_workflow_matrix.json
   workflow_dispatch:
     inputs:
       llvmlite_run_id:
@@ -31,17 +32,19 @@ jobs:
       - id: parse_matrix
         name: Parse Workflow Matrix JSON
         run: |
-          BUILD_JSON=$(jq -c .conda_build_matrix .github/workflows/workflow_matrix.json)
-          TEST_JSON=$(jq -c .conda_test_matrix .github/workflows/workflow_matrix.json)
+          BUILD_JSON=$(jq -c .conda_build_matrix .github/workflows/conda_workflow_matrix.json)
+          TEST_JSON=$(jq -c .conda_test_matrix .github/workflows/conda_workflow_matrix.json)
           echo "Build Matrix JSON: $BUILD_JSON"
           echo "Test Matrix JSON: $TEST_JSON"
           echo "build-matrix-json=$BUILD_JSON" >> $GITHUB_OUTPUT
           echo "test-matrix-json=$TEST_JSON" >> $GITHUB_OUTPUT
 
-  osx-64-build-conda:
-    name: osx-64-build-conda (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
+  win-64-build-conda:
+    name: win-64-build-conda (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
     needs: load-matrix
-    runs-on: macos-13
+    runs-on: windows-2025
+    env:
+      EXTRA_CHANNELS: ${{ matrix.python-version == '3.14' && '-c ad-testing/label/py314' || '' }}
     defaults:
       run:
         shell: bash -elx {0}
@@ -56,23 +59,18 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup platform-specific requirements
-        run: |
-          source ./buildscripts/github/setup_platform.sh "osx-64"
-
       - name: Setup Miniconda
         uses: conda-incubator/setup-miniconda@v3
         with:
-          python-version: 3.12
           auto-update-conda: true
           auto-activate-base: true
-          activate-environment: true
+          activate-environment: ""
 
       - name: Download llvmlite Artifact
         if: ${{ inputs.llvmlite_run_id != '' }}
         uses: actions/download-artifact@v4
         with:
-          name: llvmlite-osx-64-py${{ matrix.python-version }}
+          name: llvmlite-win-64-py${{ matrix.python-version }}
           path: llvmlite_conda
           run-id: ${{ inputs.llvmlite_run_id }}
           repository: numba/llvmlite
@@ -88,32 +86,39 @@ jobs:
 
           # Set channel based on whether llvmlite artifact was downloaded
           if [ "${{ inputs.llvmlite_run_id }}" != "" ]; then
-            LLVMLITE_CHANNEL="file://${{ github.workspace }}/llvmlite_conda"
+            LLVMLITE_CHANNEL="${{ github.workspace }}/llvmlite_conda"
           else
             LLVMLITE_CHANNEL="${{ env.CONDA_CHANNEL_NUMBA }}"
           fi
 
-          conda build --debug -c $LLVMLITE_CHANNEL -c defaults \
+          if [ -n "${EXTRA_CHANNELS}" ]; then
+            extra_args=(${EXTRA_CHANNELS})
+          else
+            extra_args=()
+          fi
+
+          conda build --debug -c $LLVMLITE_CHANNEL "${extra_args[@]}" -c defaults \
             --python=${{ matrix.python-version }} \
-            --numpy=${{ matrix.numpy_build }} blas=*=openblas \
+            --numpy=${{ matrix.numpy_build }} \
             buildscripts/condarecipe.local/ \
             --output-folder=$CONDA_CHANNEL_DIR \
-            --variants '{"CONDA_BUILD_SYSROOT": "/opt/MacOSX10.10.sdk"}' \
             --no-test
 
       - name: Upload numba conda package
         uses: actions/upload-artifact@v4
         with:
-          name: numba_osx-64_conda_py${{ matrix.python-version }}
+          name: numba_win-64_conda_py${{ matrix.python-version }}
           path: conda_channel_dir
           compression-level: 0
           retention-days: 7
           if-no-files-found: error
 
-  osx-64-test:
-    name: osx-64-test-conda (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
-    needs: [load-matrix, osx-64-build-conda]
-    runs-on: macos-13
+  win-64-test:
+    name: win-64-test-conda (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
+    needs: [load-matrix, win-64-build-conda]
+    runs-on: windows-2025
+    env:
+      EXTRA_CHANNELS: ${{ matrix.python-version == '3.14' && '-c ad-testing/label/py314' || '' }}
     defaults:
       run:
         shell: bash -elx {0}
@@ -123,28 +128,14 @@ jobs:
       fail-fast: false
 
     steps:
-      - name: Clone repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup platform-specific requirements
-        run: |
-          source ./buildscripts/github/setup_platform.sh "osx-64"
-
       - name: Setup miniconda
         uses: conda-incubator/setup-miniconda@v3
-        with:
-          python-version: 3.12
-          auto-update-conda: true
-          auto-activate-base: true
-          activate-environment: true
 
       - name: Download llvmlite artifact
         if: ${{ inputs.llvmlite_run_id != '' }}
         uses: actions/download-artifact@v4
         with:
-          name: llvmlite-osx-64-py${{ matrix.python-version }}
+          name: llvmlite-win-64-py${{ matrix.python-version }}
           path: llvmlite_conda
           run-id: ${{ inputs.llvmlite_run_id }}
           repository: numba/llvmlite
@@ -153,7 +144,7 @@ jobs:
       - name: Download numba artifact
         uses: actions/download-artifact@v4
         with:
-          name: numba_osx-64_conda_py${{ matrix.python-version }}
+          name: numba_win-64_conda_py${{ matrix.python-version }}
 
       - name: Install conda-build
         run: |
@@ -166,13 +157,19 @@ jobs:
         run: |
           # Set channel based on whether llvmlite artifact was downloaded
           if [ "${{ inputs.llvmlite_run_id }}" != "" ]; then
-            LLVMLITE_CHANNEL="file://${{ github.workspace }}/llvmlite_conda"
+            LLVMLITE_CHANNEL="${{ github.workspace }}/llvmlite_conda"
           else
             LLVMLITE_CHANNEL="${{ env.CONDA_CHANNEL_NUMBA }}"
           fi
 
-          conda build -c $LLVMLITE_CHANNEL -c defaults \
+          if [ -n "${EXTRA_CHANNELS}" ]; then
+            extra_args=(${EXTRA_CHANNELS})
+          else
+            extra_args=()
+          fi
+
+          conda build -c $LLVMLITE_CHANNEL "${extra_args[@]}" -c defaults \
             --python=${{ matrix.python-version }} \
-            --extra-deps numpy=${{ matrix.numpy_test }} blas=*=openblas \
+            --extra-deps numpy=${{ matrix.numpy_test }} \
             --test \
-            osx-64/numba*.conda
+            win-64/numba*.conda

@@ -2803,11 +2803,17 @@ def array_view(context, builder, sig, args):
         else:
             setattr(ret, k, val)
 
-    tyctx = context.typing_context
-    fnty = tyctx.resolve_value_type(_compatible_view)
-    _compatible_view_sig = fnty.get_call_type(tyctx, (*sig.args,), {})
-    impl = context.get_function(fnty, _compatible_view_sig)
-    impl(builder, args)
+    if numpy_version >= (1, 23):
+        # NumPy 1.23+ bans views using a dtype that is a different size to that
+        # of the array when the last axis is not contiguous. For example, this
+        # manifests at runtime when a dtype size altering view is requested
+        # on a Fortran ordered array.
+
+        tyctx = context.typing_context
+        fnty = tyctx.resolve_value_type(_compatible_view)
+        _compatible_view_sig = fnty.get_call_type(tyctx, (*sig.args,), {})
+        impl = context.get_function(fnty, _compatible_view_sig)
+        impl(builder, args)
 
     ok = _change_dtype(context, builder, aryty, retty, ret)
     fail = builder.icmp_unsigned('==', ok, Constant(ok.type, 0))
@@ -4321,7 +4327,7 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
     return ary
 
 
-@overload_classmethod(types.Array, "_allocate")
+@overload_classmethod(types.Array, "_allocate", target="CPU")
 def _ol_array_allocate(cls, allocsize, align):
     """Implements a Numba-only default target (cpu) classmethod on the array
     type.
@@ -4848,6 +4854,12 @@ def numpy_take(a, indices, axis=None):
             def take_impl(a, indices, axis=None):
                 r = np.take(a, (indices,), axis=axis)
                 if a.ndim == 1:
+                    # caveats
+                    # >>> isinstance(np.take(1d_arr, 0), int)
+                    # True
+                    # >>> isinstance(np.take(1d_arr, (0,)), int)
+                    # False
+                    # The latter returns an array
                     return r[0]
                 if axis < 0:
                     axis += a.ndim
@@ -4863,11 +4875,12 @@ def numpy_take(a, indices, axis=None):
             _setitem = generate_getitem_setitem_with_axis(ndim, 'setitem')
 
             def take_impl(a, indices, axis=None):
+                ax = axis
                 if axis < 0:
                     axis += a.ndim
 
                 if axis < 0 or axis >= a.ndim:
-                    msg = (f"axis {axis} is out of bounds for array "
+                    msg = (f"axis {ax} is out of bounds for array "
                            f"of dimension {a.ndim}")
                     raise ValueError(msg)
 
@@ -5070,9 +5083,17 @@ def array_copy(context, builder, sig, args):
 
 @overload(np.copy)
 def impl_numpy_copy(a):
+    if not type_can_asarray(a):
+        raise errors.TypingError('The argument "a" must '
+                                 'be array-like')
+
     if isinstance(a, types.Array):
         def numpy_copy(a):
             return _array_copy_intrinsic(a)
+    else:
+        def numpy_copy(a):
+            # asarray automatically copies non-Array types
+            return np.asarray(a)
     return numpy_copy
 
 
@@ -5265,12 +5286,14 @@ def impl_array_tobytes(arr):
 
 
 @intrinsic
-def np_frombuffer(typingctx, buffer, dtype, retty):
+def np_frombuffer(typingctx, buffer, dtype, count, offset, retty):
     ty = retty.instance_type
-    sig = ty(buffer, dtype, retty)
+    sig = ty(buffer, dtype, count, offset, retty)
 
     def codegen(context, builder, sig, args):
         bufty = sig.args[0]
+        arg_count = args[2]
+        arg_offset = args[3]
         aryty = sig.return_type
 
         buf = make_array(bufty)(context, builder, value=args[0])
@@ -5281,6 +5304,24 @@ def np_frombuffer(typingctx, buffer, dtype, retty):
         itemsize = get_itemsize(context, aryty)
         ll_itemsize = Constant(buf.itemsize.type, itemsize)
         nbytes = builder.mul(buf.nitems, buf.itemsize)
+        ll_offset_size = builder.mul(arg_offset, ll_itemsize)
+        nbytes = builder.sub(nbytes, ll_offset_size)
+
+        nbytes_is_negative = builder.icmp_signed(
+            '<',
+            nbytes,
+            ir.Constant(arg_count.type, 0),
+        )
+
+        msg = "offset must be non-negative and no greater than buffer length"
+        with builder.if_then(nbytes_is_negative, likely=False):
+            context.call_conv.return_user_exc(builder, ValueError, (msg,))
+
+        ll_count_is_negative = builder.icmp_signed(
+            '<',
+            arg_count,
+            ir.Constant(arg_count.type, 0),
+        )
 
         # Check that the buffer size is compatible
         rem = builder.srem(nbytes, ll_itemsize)
@@ -5289,10 +5330,33 @@ def np_frombuffer(typingctx, buffer, dtype, retty):
             msg = "buffer size must be a multiple of element size"
             context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
-        shape = cgutils.pack_array(builder, [builder.sdiv(nbytes, ll_itemsize)])
+        # Compute number of elements based on count
+        with builder.if_else(ll_count_is_negative) as (then_block, else_block):
+            with then_block:
+                bb_if = builder.basic_block
+                num_whole = builder.sdiv(nbytes, ll_itemsize)
+            with else_block:
+                bb_else = builder.basic_block
+
+        ll_itemcount = builder.phi(arg_count.type)
+        ll_itemcount.add_incoming(num_whole, bb_if)
+        ll_itemcount.add_incoming(arg_count, bb_else)
+
+        # Ensure we don’t exceed the buffer size
+        ll_required_size = builder.mul(ll_itemcount, ll_itemsize)
+        is_too_large = builder.icmp_unsigned('>', ll_required_size, nbytes)
+
+        with builder.if_then(is_too_large, likely=False):
+            msg = "buffer is smaller than requested size"
+            context.call_conv.return_user_exc(builder, ValueError, (msg,))
+
+        # Set shape and strides
+        shape = cgutils.pack_array(builder, [ll_itemcount])
         strides = cgutils.pack_array(builder, [ll_itemsize])
+
+        data = builder.gep(buf.data, [arg_offset])
         data = builder.bitcast(
-            buf.data, context.get_value_type(out_datamodel.get_type('data'))
+            data, context.get_value_type(out_datamodel.get_type('data'))
         )
 
         populate_array(out_ary,
@@ -5301,15 +5365,16 @@ def np_frombuffer(typingctx, buffer, dtype, retty):
                        strides=strides,
                        itemsize=ll_itemsize,
                        meminfo=buf.meminfo,
-                       parent=buf.parent,)
+                       parent=buf.parent)
 
         res = out_ary._getvalue()
         return impl_ret_borrowed(context, builder, sig.return_type, res)
+
     return sig, codegen
 
 
 @overload(np.frombuffer)
-def impl_np_frombuffer(buffer, dtype=float):
+def impl_np_frombuffer(buffer, dtype=float, count=-1, offset=0):
     _check_const_str_dtype("frombuffer", dtype)
 
     if not isinstance(buffer, types.Buffer) or buffer.layout != 'C':
@@ -5317,8 +5382,8 @@ def impl_np_frombuffer(buffer, dtype=float):
         raise errors.TypingError(msg)
 
     if (dtype is float or
-        (isinstance(dtype, types.Function) and dtype.typing_key is float) or
-            is_nonelike(dtype)): #default
+            (isinstance(dtype, types.Function) and dtype.typing_key is float) or
+            is_nonelike(dtype)):  # default
         nb_dtype = types.double
     else:
         nb_dtype = ty_parse_dtype(dtype)
@@ -5331,8 +5396,9 @@ def impl_np_frombuffer(buffer, dtype=float):
                f"np.frombuffer({buffer}, {dtype})")
         raise errors.TypingError(msg)
 
-    def impl(buffer, dtype=float):
-        return np_frombuffer(buffer, dtype, retty)
+    def impl(buffer, dtype=float, count=-1, offset=0):
+        return np_frombuffer(buffer, dtype, count, offset, retty)
+
     return impl
 
 
@@ -7023,26 +7089,37 @@ def arr_take_along_axis(arr, indices, axis):
 
 
 @overload(np.nan_to_num)
-def nan_to_num_impl(x, copy=True, nan=0.0):
+def nan_to_num_impl(x, copy=True, nan=0.0, posinf=None, neginf=None):
     if isinstance(x, types.Number):
         if isinstance(x, types.Integer):
             # Integers do not have nans or infs
-            def impl(x, copy=True, nan=0.0):
+            def impl(x, copy=True, nan=0.0, posinf=None, neginf=None):
                 return x
 
         elif isinstance(x, types.Float):
-            def impl(x, copy=True, nan=0.0):
+            def impl(x, copy=True, nan=0.0, posinf=None, neginf=None):
+                min_inf = (
+                    neginf
+                    if neginf is not None
+                    else np.finfo(type(x)).min
+                )
+                max_inf = (
+                    posinf
+                    if posinf is not None
+                    else np.finfo(type(x)).max
+                )
+
                 if np.isnan(x):
                     return nan
                 elif np.isneginf(x):
-                    return np.finfo(type(x)).min
+                    return min_inf
                 elif np.isposinf(x):
-                    return np.finfo(type(x)).max
+                    return max_inf
                 return x
         elif isinstance(x, types.Complex):
-            def impl(x, copy=True, nan=0.0):
-                r = np.nan_to_num(x.real, nan=nan)
-                c = np.nan_to_num(x.imag, nan=nan)
+            def impl(x, copy=True, nan=0.0, posinf=None, neginf=None):
+                r = np.nan_to_num(x.real, nan=nan, posinf=posinf, neginf=neginf)
+                c = np.nan_to_num(x.imag, nan=nan, posinf=posinf, neginf=neginf)
                 return complex(r, c)
         else:
             raise errors.TypingError(
@@ -7052,12 +7129,20 @@ def nan_to_num_impl(x, copy=True, nan=0.0):
     elif type_can_asarray(x):
         if isinstance(x.dtype, types.Integer):
             # Integers do not have nans or infs
-            def impl(x, copy=True, nan=0.0):
+            def impl(x, copy=True, nan=0.0, posinf=None, neginf=None):
                 return x
         elif isinstance(x.dtype, types.Float):
-            def impl(x, copy=True, nan=0.0):
-                min_inf = np.finfo(x.dtype).min
-                max_inf = np.finfo(x.dtype).max
+            def impl(x, copy=True, nan=0.0, posinf=None, neginf=None):
+                min_inf = (
+                    neginf
+                    if neginf is not None
+                    else np.finfo(x.dtype).min
+                )
+                max_inf = (
+                    posinf
+                    if posinf is not None
+                    else np.finfo(x.dtype).max
+                )
 
                 x_ = np.asarray(x)
                 output = np.copy(x_) if copy else x_
@@ -7072,12 +7157,24 @@ def nan_to_num_impl(x, copy=True, nan=0.0):
                         output_flat[i] = max_inf
                 return output
         elif isinstance(x.dtype, types.Complex):
-            def impl(x, copy=True, nan=0.0):
+            def impl(x, copy=True, nan=0.0, posinf=None, neginf=None):
                 x_ = np.asarray(x)
                 output = np.copy(x_) if copy else x_
 
-                np.nan_to_num(output.real, copy=False, nan=nan)
-                np.nan_to_num(output.imag, copy=False, nan=nan)
+                np.nan_to_num(
+                    output.real,
+                    copy=False,
+                    nan=nan,
+                    posinf=posinf,
+                    neginf=neginf
+                )
+                np.nan_to_num(
+                    output.imag,
+                    copy=False,
+                    nan=nan,
+                    posinf=posinf,
+                    neginf=neginf
+                )
                 return output
         else:
             raise errors.TypingError(

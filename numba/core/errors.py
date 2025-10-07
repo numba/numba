@@ -559,6 +559,9 @@ class NumbaError(Exception):
         Add contextual info.  The exception message is expanded with the new
         contextual information.
         """
+        if msg in self.contexts:
+            # avoid duplicating contexts
+            return self
         self.contexts.append(msg)
         f = termcolor().errmsg('{0}\n') + termcolor().filename('During: {1}')
         newmsg = f.format(self, msg)
@@ -834,6 +837,11 @@ class NumbaRuntimeError(NumbaError):
 
 
 def _format_msg(fmt, args, kwargs):
+    # If no formatting arguments are supplied, return the string unchanged.
+    # This avoids KeyError when fmt contains curly braces, which can be
+    # interpreted as format fields.
+    if not args and not kwargs:
+        return fmt
     return fmt.format(*args, **kwargs)
 
 

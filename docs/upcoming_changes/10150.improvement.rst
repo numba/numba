@@ -1,0 +1,4 @@
+Support for Python 3.14
+-----------------------
+
+Support for Python 3.14 is implemented.

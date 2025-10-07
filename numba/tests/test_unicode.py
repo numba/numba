@@ -2702,7 +2702,7 @@ class TestUnicodeAuxillary(BaseTest):
         unsupported_errors = (UnsupportedError, UnsupportedBytecodeError)
         with self.assertRaises(unsupported_errors) as raises:
             njit(impl4)(["A", "B"])
-        if PYVERSION in ((3, 13),):
+        if PYVERSION in ((3, 13), (3, 14)):
             msg = "Use of unsupported opcode (FORMAT_WITH_SPEC)"
             self.assertIn(msg, str(raises.exception))
         elif PYVERSION in ((3, 10), (3, 11), (3, 12)):
