@@ -1,0 +1,5 @@
+Document the Numba organisation hardware/OS/packaging etc. support policy.
+--------------------------------------------------------------------------
+
+Documentation is added to provide clarity over what OS/hardware/packaging etc.
+is supported by projects in the Numba organisation.
