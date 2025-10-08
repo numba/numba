@@ -2889,6 +2889,33 @@ class TestParforsMisc(TestParforsBase):
             # recover global state
             numba.parfors.parfor.sequential_parfor_lowering = old_seq_flag
 
+    def test_stringdtype_fallback_emits_warning(self):
+        from numba.np import numpy_support
+
+        if numpy_support.numpy_version < (2, 0):
+            self.skipTest("StringDType requires NumPy >= 2.0")
+
+        @njit(parallel=True)
+        def func(A):
+            acc = 0
+            for i in prange(A.shape[0]):
+                acc += 1
+            return acc
+
+        A = np.array(["a", "b", "c"], dtype=np.dtypes.StringDType())
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always', errors.NumbaPerformanceWarning)
+            out = func(A)
+
+        self.assertEqual(out, 3)
+        # Ensure a performance warning was raised about falling back
+        perf_warnings = [w for w in caught if w.category is errors.NumbaPerformanceWarning]
+        self.assertTrue(perf_warnings, msg="Expected NumbaPerformanceWarning not raised")
+        msg = str(perf_warnings[0].message)
+        self.assertIn("StringDType", msg)
+        self.assertIn("sequential", msg)
+
     def test_init_block_dce(self):
         # issue4690
         def test_impl():

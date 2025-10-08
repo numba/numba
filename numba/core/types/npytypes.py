@@ -1,14 +1,16 @@
 import collections
+import math
 import warnings
 from functools import cached_property
 
 from llvmlite import ir
 
-from .abstract import DTypeSpec, IteratorType, MutableSequence, Number, Type
+from .abstract import DTypeSpec, IteratorType, MutableSequence, Number, Type, IterableType
 from .common import Buffer, Opaque, SimpleIteratorType
 from numba.core.typeconv import Conversion
 from numba.core import utils
-from .misc import UnicodeType
+from .misc import UnicodeType, UnicodeIteratorType
+from .misc import UnicodeType as _UnicodeType, StringLiteral as _StringLiteral, Optional as _Optional
 from .containers import Bytes
 import numpy as np
 
@@ -60,6 +62,128 @@ class UnicodeCharSeq(Type):
 
     def __repr__(self):
         return f"UnicodeCharSeq({self.count})"
+
+
+class StringDTypeType(IterableType):
+    """Representation of a NumPy ``StringDType`` element.
+
+    ``StringDType`` stores elements as ``npy_packed_static_string`` records in
+    NumPy.  The ``itemsize`` field describes the on-disk storage width for the
+    packed representation (currently 16 bytes in NumPy 2.x).  Elements may
+    optionally have a distinguished NA sentinel (``na_object``) and can relax
+    coercion rules via ``coerce``.
+    """
+
+    mutable = True
+
+    def __init__(self, itemsize, coerce=True, na_object=None, numpy_dtype=None):
+        self.itemsize = itemsize
+        self.coerce = bool(coerce)
+        self.na_object = na_object
+        self._na_key = self._canonical_na_object(na_object)
+
+        name = "StringDTypeType(itemsize={}, coerce={}, na_object={})".format(
+            itemsize, int(self.coerce), self._na_key
+        )
+        super().__init__(name)
+        
+        from numba.np.numpy_support import numpy_version as _numpy_version
+        if _numpy_version < (2, 0):
+            raise ValueError("StringDTypeType requires NumPy 2.0 or newer")
+        if numpy_dtype is None:
+            dtype_ctor = np.dtypes.StringDType
+            # Construct a NumPy dtype matching the semantics of this type.
+            # Prefer the bare constructor when arguments are all defaults so
+            # equality matches NumPy's default StringDType().
+            # Note: ``coerce`` may be a numpy.bool_ coming from a NumPy dtype;
+            # avoid identity checks against True which can fail. Use truthiness
+            # instead so that default descriptors round-trip exactly.
+            if bool(self.coerce) and self.na_object is None:
+                numpy_dtype = np.dtype(dtype_ctor())
+            else:
+                numpy_dtype = np.dtype(
+                    dtype_ctor(coerce=self.coerce, na_object=self.na_object)
+                )
+        self._numpy_dtype = numpy_dtype
+
+    @staticmethod
+    def _canonical_na_object(value):
+        if value is None:
+            return None
+        # ``np.nan`` is not equal to itself; normalise it so hashing works.
+        if isinstance(value, (float, np.floating)) and math.isnan(float(value)):
+            # Preserve dtype information for NumPy scalars to distinguish 32/64-bit NANs.
+            if isinstance(value, np.floating):
+                return (value.dtype.str, "nan")
+            return ("float", "nan")
+        # Immutable containers such as tuples can be hashed directly.  For
+        # mutable or otherwise unhashable sentinels fall back to ``repr``.
+        try:
+            hash(value)
+        except TypeError:
+            return (type(value).__name__, repr(value))
+        return value
+
+    @property
+    def key(self):
+        return self.itemsize, self.coerce, self._na_key
+
+    def __repr__(self):
+        na_repr = self._na_key
+        return (
+            "StringDTypeType(itemsize={itemsize}, coerce={coerce}, na_object={na})"
+            .format(itemsize=self.itemsize, coerce=self.coerce, na=na_repr)
+        )
+
+    @property
+    def numpy_dtype(self):
+        return self._numpy_dtype
+
+    @property
+    def descr_pointer(self):
+        # ``PyArray_Descr`` is a PyObject, so its address is the object's id.
+        return id(self._numpy_dtype)
+
+    def can_convert_from(self, typingctx, other):
+        # Disallow implicit conversion from a different StringDType descriptor.
+        if isinstance(other, StringDTypeType):
+            # Exact match only (itemsize, coerce, na_object)
+            return Conversion.exact if self == other else None
+        # Allow unicode/StringLiteral to StringDType values
+        if isinstance(other, (_UnicodeType, _StringLiteral)):
+            return Conversion.safe
+        # Note on `coerce`:
+        # NumPy's StringDType(coerce=True) allows broader coercions at the
+        # Python/NumPy layer. Numba currently only implements implicit
+        # conversion from unicode (and string literals). Additional coercions
+        # when `coerce=True` would require dedicated lowerings (e.g. bytes →
+        # StringDType, number → StringDType). Until those are implemented,
+        # keep typing strict and do not widen accepted inputs based on
+        # `self.coerce`.
+        return None
+
+    def can_convert_to(self, typingctx, other):
+        # Disallow implicit conversion to a different StringDType descriptor
+        if isinstance(other, StringDTypeType):
+            return Conversion.exact if self == other else None
+        # Allow implicit conversion to unicode and Optional[unicode]
+        # direct unicode
+        if isinstance(other, _UnicodeType):
+            return Conversion.safe
+        # Optional[unicode]
+        try:
+            is_opt = isinstance(other, _Optional)
+        except Exception:
+            is_opt = False
+        if is_opt and isinstance(other.type, _UnicodeType):
+            return Conversion.safe
+        return None
+
+    @property
+    def iterator_type(self):
+        # Iterate as Unicode by decoding once and delegating to unicode iterator
+        # Use a fresh UnicodeType instance to avoid import cycles.
+        return UnicodeIteratorType(UnicodeType('unicode_type'))
 
 
 _RecordField = collections.namedtuple(

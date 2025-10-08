@@ -9,6 +9,8 @@
 #include <stdio.h>
 #include <math.h>
 #include <complex.h>
+#include <string.h>
+#include <stdlib.h>
 #ifdef _MSC_VER
     #define int64_t signed __int64
     #define uint64_t unsigned __int64
@@ -31,6 +33,13 @@
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/ndarrayobject.h>
 #include <numpy/arrayscalars.h>
+#include <numpy/npy_math.h>
+
+#if NPY_ABI_VERSION >= 0x02000000
+    /* NumPy 2.0+ compatibility helpers (StringDType, etc.) */
+    #include <numpy/npy_2_compat.h>
+#endif
+
 
 #include "_arraystruct.h"
 
@@ -341,6 +350,7 @@ numba_adapt_ndarray(PyObject *obj, arystruct_t* arystruct) {
     arystruct->nitems = PyArray_SIZE(ndary);
     arystruct->itemsize = PyArray_ITEMSIZE(ndary);
     arystruct->parent = obj;
+    arystruct->descr = (void*)PyArray_DESCR(ndary);
     p = arystruct->shape_and_strides;
     for (i = 0; i < ndim; i++, p++) {
         *p = PyArray_DIM(ndary, i);
@@ -368,6 +378,7 @@ numba_adapt_buffer(Py_buffer *buf, arystruct_t *arystruct)
     arystruct->data = buf->buf;
     arystruct->itemsize = buf->itemsize;
     arystruct->parent = buf->obj;
+    arystruct->descr = NULL;
     arystruct->nitems = 1;
     p = arystruct->shape_and_strides;
     for (i = 0; i < buf->ndim; i++, p++) {
@@ -624,7 +635,7 @@ numba_extract_np_datetime(PyObject *td)
                         "expected a numpy.datetime64 object");
         return -1;
     }
-    return PyArrayScalar_VAL(td, Timedelta);
+    return PyArrayScalar_VAL(td, Datetime);
 }
 
 NUMBA_EXPORT_FUNC(npy_int64)
@@ -688,6 +699,7 @@ numba_gil_release(PyGILState_STATE *state) {
 
 NUMBA_EXPORT_FUNC(PyObject *)
 numba_py_type(PyObject *obj) {
+    /* Borrowed reference to the object's exact type; do not DECREF. */
     return (PyObject *) Py_TYPE(obj);
 }
 
@@ -1202,6 +1214,437 @@ numba_gettyperecord(Py_UCS4 code, int *upper, int *lower, int *title,
     *digit = rec->digit;
     *flags = rec->flags;
 }
+
+
+/* ------------------------------------------------------------------------- */
+/* NumPy StringDType helpers                                                  */
+
+#if NPY_ABI_VERSION >= 0x02000000
+
+/* Status code constants returned by NpyString_load and our helper functions */
+#define NPYSTRING_STATUS_ERROR   (-1)  /* Error occurred (exception set) */
+#define NPYSTRING_STATUS_OK      (0)   /* Success, string is not NA */
+#define NPYSTRING_STATUS_NA      (1)   /* Success, string is NA/null */
+
+/*
+ * numba_stringdtype_is_na: Check if a Python object represents the NA sentinel
+ *
+ * Args:
+ *   candidate: Python object to check
+ *   na_object: The NA sentinel object from the StringDType descriptor
+ *
+ * Returns:
+ *   1 if candidate is the NA sentinel, 0 otherwise
+ *
+ */
+static int
+numba_stringdtype_is_na(PyObject *candidate, PyObject *na_object)
+{
+    if (candidate == na_object) {
+        return 1;
+    }
+    if (candidate == NULL || na_object == NULL) {
+        return 0;
+    }
+    if (PyFloat_Check(candidate) && PyFloat_Check(na_object)) {
+        double lhs = PyFloat_AsDouble(candidate);
+        if (lhs == -1.0 && PyErr_Occurred()) {
+            PyErr_Clear();
+            return 0;
+        }
+        double rhs = PyFloat_AsDouble(na_object);
+        if (rhs == -1.0 && PyErr_Occurred()) {
+            PyErr_Clear();
+            return 0;
+        }
+        if (npy_isnan(lhs) && npy_isnan(rhs)) {
+            return 1;
+        }
+    }
+    int result = PyObject_RichCompareBool(candidate, na_object, Py_EQ);
+    if (result == -1) {
+        PyErr_Clear();
+        return 0;
+    }
+    return result;
+}
+
+
+/*
+ * numba_stringdtype_unpack: Unpack a StringDType value to a Python string object
+ *
+ * Args:
+ *   descr: PyArray_Descr* for the StringDType (contains allocator and na_object)
+ *   packed: Pointer to the packed string data in the array
+ *
+ * Returns:
+ *   PyObject*: Python unicode string, na_object, or None for NA values
+ *   NULL on error (with Python exception set)
+ *
+ * Memory: Returns a new reference that the caller must DECREF
+ */
+NUMBA_EXPORT_FUNC(PyObject *)
+numba_stringdtype_unpack(PyArray_Descr *descr,
+                         const npy_packed_static_string *packed)
+{
+    PyGILState_STATE gilstate = PyGILState_Ensure();
+    PyArray_StringDTypeObject *string_descr;
+    npy_string_allocator *allocator;
+    npy_static_string unpacked = {0, NULL};
+    PyObject *result = NULL;
+    int status;
+
+    string_descr = (PyArray_StringDTypeObject *)descr;
+    allocator = NpyString_acquire_allocator(string_descr);
+    if (allocator == NULL) {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "failed to acquire StringDType allocator");
+        PyGILState_Release(gilstate);
+        return NULL;
+    }
+
+    status = NpyString_load(allocator, packed, &unpacked);
+    if (status == NPYSTRING_STATUS_ERROR) {
+        NpyString_release_allocator(allocator);
+        PyGILState_Release(gilstate);
+        return NULL;
+    }
+    if (status == NPYSTRING_STATUS_NA) {
+        PyObject *na_object = string_descr->na_object;
+        if (na_object == NULL) {
+            NpyString_release_allocator(allocator);
+            Py_INCREF(Py_None);
+            PyGILState_Release(gilstate);
+            return Py_None;
+        }
+        Py_INCREF(na_object);
+        NpyString_release_allocator(allocator);
+        PyGILState_Release(gilstate);
+        return na_object;
+    }
+
+    result = PyUnicode_DecodeUTF8(unpacked.buf, (Py_ssize_t)unpacked.size,
+                                  NULL);
+    NpyString_release_allocator(allocator);
+    PyGILState_Release(gilstate);
+    return result;
+}
+
+
+/*
+ * numba_stringdtype_pack: Pack a Python object into a StringDType array element
+ *
+ * Args:
+ *   descr: PyArray_Descr* for the StringDType
+ *   packed: Pointer to destination packed string in array (will be overwritten)
+ *   source: Python object to pack (unicode string or NA sentinel)
+ *
+ * Returns:
+ *   0 on success, -1 on error (with Python exception set)
+ *
+ * Memory: Invalidates any previously loaded pointers from this packed string
+ *
+ * Note: Handles NA sentinel checking if descr->na_object is set
+ */
+NUMBA_EXPORT_FUNC(int)
+numba_stringdtype_pack(PyArray_Descr *descr,
+                       npy_packed_static_string *packed,
+                       PyObject *source)
+{
+    PyGILState_STATE gilstate = PyGILState_Ensure();
+    PyArray_StringDTypeObject *string_descr;
+    npy_string_allocator *allocator;
+    int result = -1;
+
+    string_descr = (PyArray_StringDTypeObject *)descr;
+    allocator = NpyString_acquire_allocator(string_descr);
+    if (allocator == NULL) {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "failed to acquire StringDType allocator");
+        PyGILState_Release(gilstate);
+        return -1;
+    }
+
+    if (string_descr->na_object != NULL) {
+        int is_na = numba_stringdtype_is_na(source, string_descr->na_object);
+        /* numba_stringdtype_is_na returns 1 if NA, 0 otherwise */
+        if (is_na) {
+            result = NpyString_pack_null(allocator, packed);
+            goto done;
+        }
+    }
+
+    PyObject *unicode_obj = PyUnicode_FromObject(source);
+    if (unicode_obj == NULL) {
+        goto done;
+    }
+
+    Py_ssize_t length = 0;
+    const char *buffer = PyUnicode_AsUTF8AndSize(unicode_obj, &length);
+    if (buffer == NULL) {
+        Py_DECREF(unicode_obj);
+        goto done;
+    }
+
+    result = NpyString_pack(allocator, packed, buffer, (size_t)length);
+    Py_DECREF(unicode_obj);
+
+done:
+    NpyString_release_allocator(allocator);
+    PyGILState_Release(gilstate);
+    return result;
+}
+
+
+/*
+ * numba_stringdtype_unpack_utf8: Unpack StringDType to raw UTF-8 buffer; on error, -1 is returned.
+ * Safe to call without holding the GIL.
+ */
+NUMBA_EXPORT_FUNC(int)
+numba_stringdtype_unpack_utf8(PyArray_Descr *descr,
+                                    const npy_packed_static_string *packed,
+                                    npy_static_string *output)
+{
+    PyArray_StringDTypeObject *string_descr;
+    npy_string_allocator *allocator;
+    int status;
+
+    string_descr = (PyArray_StringDTypeObject *)descr;
+    allocator = NpyString_acquire_allocator(string_descr);
+    if (allocator == NULL) {
+        return -1;
+    }
+
+    status = NpyString_load(allocator, packed, output);
+    NpyString_release_allocator(allocator);
+    if (status == NPYSTRING_STATUS_NA) {
+        output->size = 0;
+        output->buf = NULL;
+    }
+    return status;
+}
+
+/*
+ * numba_stringdtype_clone: Clone a packed StringDType element from
+ * src -> dst without acquiring the GIL. Uses NpyString_load on the source
+ * allocator and NpyString_pack/pack_null on the destination allocator.
+ * Returns 0 on success, -1 on error.
+ */
+NUMBA_EXPORT_FUNC(int)
+numba_stringdtype_clone(PyArray_Descr *src_descr,
+                              const npy_packed_static_string *src_packed,
+                              PyArray_Descr *dst_descr,
+                              npy_packed_static_string *dst_packed)
+{
+    /* Use multi-acquire to avoid deadlocks when allocators alias. */
+    PyArray_StringDTypeObject *src_string_descr = (PyArray_StringDTypeObject *)src_descr;
+    PyArray_StringDTypeObject *dst_string_descr = (PyArray_StringDTypeObject *)dst_descr;
+    npy_string_allocator *allocs[2] = {NULL, NULL};
+    PyArray_Descr *descrs[2];
+    npy_static_string tmp = (npy_static_string){0, NULL};
+    int st;
+
+    if ((src_string_descr == dst_string_descr) && (src_packed == dst_packed)) {
+        return 0;
+    }
+
+    descrs[0] = src_descr;
+    descrs[1] = dst_descr;
+    NpyString_acquire_allocators(2, descrs, allocs);
+    if (allocs[0] == NULL || allocs[1] == NULL) {
+        NpyString_release_allocators(2, allocs);
+        return -1;
+    }
+
+    st = NpyString_load(allocs[0], src_packed, &tmp);
+    if (st == NPYSTRING_STATUS_ERROR) {
+        NpyString_release_allocators(2, allocs);
+        return -1;
+    }
+
+    if (st == NPYSTRING_STATUS_NA || tmp.buf == NULL) {
+        st = NpyString_pack_null(allocs[1], dst_packed);
+    } else {
+        size_t n = (size_t)tmp.size;
+        if (allocs[0] == allocs[1]) {
+            /* Same allocator: avoid aliasing by copying to a stable buffer */
+            char *cpy = (char *)malloc(n);
+            if (cpy == NULL) {
+                NpyString_release_allocators(2, allocs);
+                return -1;
+            }
+            if (n) memcpy(cpy, tmp.buf, n);
+            st = NpyString_pack(allocs[1], dst_packed, cpy, n);
+            free(cpy);
+        } else {
+            /* Different allocators: safe to pack directly from tmp.buf */
+            st = NpyString_pack(allocs[1], dst_packed, tmp.buf, n);
+        }
+    }
+
+    NpyString_release_allocators(2, allocs);
+    return st;
+}
+
+/*
+ * numba_stringdtype_utf8_eq: Equality compare two StringDType values
+ * using raw UTF-8 byte comparison. Returns 1 if equal, 0 if not equal,
+ * and -1 on error.
+ */
+NUMBA_EXPORT_FUNC(int)
+numba_stringdtype_utf8_eq(PyArray_Descr *a_descr,
+                                const npy_packed_static_string *a_packed,
+                                PyArray_Descr *b_descr,
+                                const npy_packed_static_string *b_packed)
+{
+    npy_string_allocator *allocs[2] = {NULL, NULL};
+    PyArray_Descr *descrs[2];
+    npy_static_string a = {0, NULL}, b = {0, NULL};
+    int st;
+
+    descrs[0] = a_descr;
+    descrs[1] = b_descr;
+    NpyString_acquire_allocators(2, descrs, allocs);
+    if (allocs[0] == NULL || allocs[1] == NULL) {
+        NpyString_release_allocators(2, allocs);
+        return -1;
+    }
+
+    st = NpyString_load(allocs[0], a_packed, &a);
+    if (st == NPYSTRING_STATUS_ERROR) {
+        NpyString_release_allocators(2, allocs);
+        return -1;
+    }
+    st = NpyString_load(allocs[1], b_packed, &b);
+    if (st == NPYSTRING_STATUS_ERROR) {
+        NpyString_release_allocators(2, allocs);
+        return -1;
+    }
+
+    if (a.size != b.size) {
+        NpyString_release_allocators(2, allocs);
+        return 0;
+    }
+    if (a.size == 0) {
+        NpyString_release_allocators(2, allocs);
+        return 1;
+    }
+    st = (memcmp(a.buf, b.buf, (size_t)a.size) == 0) ? 1 : 0;
+    NpyString_release_allocators(2, allocs);
+    return st;
+}
+
+/*
+ * numba_stringdtype_utf8_ord: Lexicographic compare of two UTF-8
+ * StringDType values. Returns -1 if a<b, 0 if equal, 1 if a>b, and -2 on
+ * error.
+ */
+NUMBA_EXPORT_FUNC(int)
+numba_stringdtype_utf8_ord(PyArray_Descr *a_descr,
+                                 const npy_packed_static_string *a_packed,
+                                 PyArray_Descr *b_descr,
+                                 const npy_packed_static_string *b_packed)
+{
+    npy_string_allocator *allocs[2] = {NULL, NULL};
+    PyArray_Descr *descrs[2];
+    npy_static_string a = {0, NULL}, b = {0, NULL};
+    int st;
+
+    descrs[0] = a_descr;
+    descrs[1] = b_descr;
+    NpyString_acquire_allocators(2, descrs, allocs);
+    if (allocs[0] == NULL || allocs[1] == NULL) {
+        NpyString_release_allocators(2, allocs);
+        return -2;
+    }
+
+    st = NpyString_load(allocs[0], a_packed, &a);
+    if (st == NPYSTRING_STATUS_ERROR) {
+        NpyString_release_allocators(2, allocs);
+        return -2;
+    }
+    st = NpyString_load(allocs[1], b_packed, &b);
+    if (st == NPYSTRING_STATUS_ERROR) {
+        NpyString_release_allocators(2, allocs);
+        return -2;
+    }
+
+    size_t mina = (size_t)((a.size < b.size) ? a.size : b.size);
+    if (mina > 0) {
+        int cmp = memcmp(a.buf, b.buf, mina);
+        if (cmp < 0) { NpyString_release_allocators(2, allocs); return -1; }
+        if (cmp > 0) { NpyString_release_allocators(2, allocs); return 1; }
+    }
+    if (a.size < b.size) { NpyString_release_allocators(2, allocs); return -1; }
+    if (a.size > b.size) { NpyString_release_allocators(2, allocs); return 1; }
+    NpyString_release_allocators(2, allocs);
+    return 0;
+}
+
+/*
+ * numba_stringdtype_concat: Concatenate two StringDType values into
+ * a destination packed slot using the destination descriptor. If either
+ * input is NA, packs a null.
+ * Returns 0 on success, -1 on error.
+ */
+NUMBA_EXPORT_FUNC(int)
+numba_stringdtype_concat(PyArray_Descr *dst_descr,
+                               npy_packed_static_string *dst_packed,
+                               PyArray_Descr *a_descr,
+                               const npy_packed_static_string *a_packed,
+                               PyArray_Descr *b_descr,
+                               const npy_packed_static_string *b_packed)
+{
+    npy_string_allocator *allocs[3] = {NULL, NULL, NULL};
+    PyArray_Descr *descrs[3];
+    npy_static_string a = {0, NULL}, b = {0, NULL};
+    int st_a, st_b, rc;
+
+    descrs[0] = a_descr;
+    descrs[1] = b_descr;
+    descrs[2] = dst_descr;
+    NpyString_acquire_allocators(3, descrs, allocs);
+    if (allocs[0] == NULL || allocs[1] == NULL || allocs[2] == NULL) {
+        NpyString_release_allocators(3, allocs);
+        return -1;
+    }
+
+    st_a = NpyString_load(allocs[0], a_packed, &a);
+    if (st_a == NPYSTRING_STATUS_ERROR) {
+        NpyString_release_allocators(3, allocs);
+        return -1;
+    }
+    st_b = NpyString_load(allocs[1], b_packed, &b);
+    if (st_b == NPYSTRING_STATUS_ERROR) {
+        NpyString_release_allocators(3, allocs);
+        return -1;
+    }
+
+    if (st_a == NPYSTRING_STATUS_NA || st_b == NPYSTRING_STATUS_NA) {
+        rc = NpyString_pack_null(allocs[2], dst_packed);
+    } else {
+        size_t an = (size_t)a.size;
+        size_t bn = (size_t)b.size;
+        size_t cn = an + bn;
+        if (cn == 0) {
+            rc = NpyString_pack(allocs[2], dst_packed, "", 0);
+        } else {
+            char *buf = (char *)malloc(cn);
+            if (buf == NULL) {
+                NpyString_release_allocators(3, allocs);
+                return -1;
+            }
+            if (an) memcpy(buf, a.buf, an);
+            if (bn) memcpy(buf + an, b.buf, bn);
+            rc = NpyString_pack(allocs[2], dst_packed, buf, cn);
+            free(buf);
+        }
+    }
+    NpyString_release_allocators(3, allocs);
+    return rc;
+}
+
+#endif /* NPY_ABI_VERSION >= 0x02000000 */
 
 /* This function provides a consistent access point for the
  * _PyUnicode_ExtendedCase array defined in CPython's Objects/unicodectype.c

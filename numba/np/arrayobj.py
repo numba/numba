@@ -43,6 +43,18 @@ from numba.core.typing.npydecl import (parse_dtype as ty_parse_dtype,
                                        _choose_concatenation_layout)
 
 
+def _dtype_trait(context, dtype, name, default=False):
+    """Query a trait on the dtype's data model. Traits allow array element
+    I/O to adapt to dtype-specific requirements without hard-coding dtype
+    classes at call sites.
+    """
+    try:
+        dm = context.data_model_manager[dtype]
+    except Exception:
+        return default
+    return getattr(dm, name, default)
+
+
 def set_range_metadata(builder, load, lower_bound, upper_bound):
     """
     Set the "range" metadata on a load instruction.
@@ -130,20 +142,39 @@ def get_itemsize(context, array_type):
     return context.get_abi_sizeof(llty)
 
 
-def load_item(context, builder, arrayty, ptr):
+def load_item(context, builder, arrayty, ptr, ary=None):
     """
     Load the item at the given array pointer.
     """
+    # Prefer dtype-provided load hook
+    dm = context.data_model_manager[arrayty.dtype]
+    hook = getattr(dm, 'array_load', None)
+    if hook is not None:
+        result = hook(context, builder, arrayty, ary, ptr)
+        if result is not None:
+            return result
     align = None if arrayty.aligned else 1
     return context.unpack_value(builder, arrayty.dtype, ptr,
                                 align=align)
 
 
-def store_item(context, builder, arrayty, val, ptr):
+def store_item(context, builder, arrayty, val, ptr, ary=None, descr=None):
     """
     Store the item at the given array pointer.
+
+    If the dtype requires the array's descriptor (via trait), this will ensure
+    a correct clone/pack using that descriptor. For all other dtypes it falls
+    back to the generic pack_value path.
     """
     align = None if arrayty.aligned else 1
+
+    # Give dtype a chance to handle storage using a specialized hook.
+    dm = context.data_model_manager[arrayty.dtype]
+    hook = getattr(dm, 'array_store', None)
+    if hook is not None:
+        handled = hook(context, builder, arrayty, val, ptr, ary, descr)
+        if handled:
+            return
     return context.pack_value(builder, arrayty.dtype, val, ptr, align=align)
 
 
@@ -166,7 +197,7 @@ def normalize_index(context, builder, idxty, idx):
     if isinstance(idxty, types.Array) and idxty.ndim == 0:
         assert isinstance(idxty.dtype, types.Integer)
         idxary = make_array(idxty)(context, builder, idx)
-        idxval = load_item(context, builder, idxty, idxary.data)
+        idxval = load_item(context, builder, idxty, idxary.data, idxary)
         return idxty.dtype, idxval
     else:
         return idxty, idx
@@ -186,7 +217,7 @@ def normalize_indices(context, builder, index_types, indices):
 
 
 def populate_array(array, data, shape, strides, itemsize, meminfo,
-                   parent=None):
+                   parent=None, descr=None):
     """
     Helper function for populating array structures.
     This avoids forgetting to set fields.
@@ -234,6 +265,17 @@ def populate_array(array, data, shape, strides, itemsize, meminfo,
             datamodel.get_type('parent')), None)
     else:
         attrs['parent'] = parent
+
+    descr_llty = context.get_value_type(datamodel.get_type('descr'))
+    if _dtype_trait(context, array._fe_type.dtype, 'requires_array_descr'):
+        if descr is None:
+            dm = context.data_model_manager[array._fe_type.dtype]
+            descr_ptr = dm.array_descr_ptr(context, builder)
+            attrs['descr'] = builder.bitcast(descr_ptr, descr_llty)
+        else:
+            attrs['descr'] = builder.bitcast(descr, descr_llty)
+    else:
+        attrs['descr'] = Constant(descr_llty, None)
     # Calc num of items from shape
     nitems = context.get_constant(types.intp, 1)
     unpacked_shape = cgutils.unpack_tuple(builder, shape, shape.type.count)
@@ -343,7 +385,7 @@ def _getitem_array_single_int(context, builder, return_type, aryty, ary, idx):
     else:
         # Load scalar from 0-d result
         assert not view_shapes
-        return load_item(context, builder, aryty, dataptr)
+        return load_item(context, builder, aryty, dataptr, ary)
 
 
 @lower_builtin('iternext', types.ArrayIterator)
@@ -454,7 +496,8 @@ def make_view(context, builder, aryty, ary, return_type,
                    strides=strides,
                    itemsize=ary.itemsize,
                    meminfo=ary.meminfo,
-                   parent=ary.parent)
+                   parent=ary.parent,
+                   descr=ary.descr)
     return retary
 
 
@@ -476,7 +519,7 @@ def _getitem_array_generic(context, builder, return_type, aryty, ary,
     else:
         # Load scalar from 0-d result
         assert not view_shapes
-        return load_item(context, builder, aryty, dataptr)
+        return load_item(context, builder, aryty, dataptr, ary)
 
 
 @lower_builtin(operator.getitem, types.Buffer, types.Integer)
@@ -559,7 +602,7 @@ def setitem_array(context, builder, sig, args):
 
     # Store source value the given location
     val = context.cast(builder, val, valty, aryty.dtype)
-    store_item(context, builder, aryty, val, dataptr)
+    store_item(context, builder, aryty, val, dataptr, ary)
 
 
 @lower_builtin(len, types.Buffer)
@@ -585,7 +628,7 @@ def array_item(context, builder, sig, args):
         msg = "item(): can only convert an array of size 1 to a Python scalar"
         context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
-    return load_item(context, builder, aryty, ary.data)
+    return load_item(context, builder, aryty, ary.data, ary)
 
 
 if numpy_version < (2, 0):
@@ -602,7 +645,7 @@ if numpy_version < (2, 0):
             msg = "itemset(): can only write to an array of size 1"
             context.call_conv.return_user_exc(builder, ValueError, (msg,))
 
-        store_item(context, builder, aryty, val, ary.data)
+        store_item(context, builder, aryty, val, ary.data, ary)
         return context.get_dummy_value()
 
 
@@ -1110,7 +1153,14 @@ def fancy_getitem(context, builder, sig, args,
     out_ty = sig.return_type
     out_shapes = indexer.get_shape()
 
-    out = _empty_nd_impl(context, builder, out_ty, out_shapes)
+    # For dtypes that require a descriptor (e.g., StringDType), propagate
+    # the source array's descriptor to ensure the output array uses the same
+    # descriptor pointer, preventing issues with descriptor lifetime.
+    descr = None
+    if _dtype_trait(context, aryty.dtype, 'requires_array_descr'):
+        descr = ary.descr
+
+    out = _empty_nd_impl(context, builder, out_ty, out_shapes, descr=descr)
     out_data = out.data
     out_idx = cgutils.alloca_once_value(builder,
                                         context.get_constant(types.intp, 0))
@@ -1123,13 +1173,13 @@ def fancy_getitem(context, builder, sig, args,
     ptr = cgutils.get_item_pointer2(context, builder, data, shapes, strides,
                                     aryty.layout, indices, wraparound=False,
                                     boundscheck=context.enable_boundscheck)
-    val = load_item(context, builder, aryty, ptr)
+    val = load_item(context, builder, aryty, ptr, ary)
 
     # Since the destination is C-contiguous, no need for multi-dimensional
     # indexing.
     cur = builder.load(out_idx)
     ptr = builder.gep(out_data, [cur])
-    store_item(context, builder, out_ty, val, ptr)
+    store_item(context, builder, out_ty, val, ptr, out)
     next_idx = cgutils.increment_index(builder, cur)
     builder.store(next_idx, out_idx)
 
@@ -1284,7 +1334,7 @@ def maybe_copy_source(context, builder, use_copy,
                                               srcty.layout, source_indices,
                                               wraparound=False),
                     src_ptr)
-        return load_item(context, builder, srcty, builder.load(src_ptr))
+        return load_item(context, builder, srcty, builder.load(src_ptr), src)
 
     def src_cleanup():
         # Deallocate memory
@@ -1378,7 +1428,8 @@ def _broadcast_to_shape(context, builder, arrtype, arr, target_shape):
                    strides=cgutils.pack_array(builder, strides),
                    itemsize=arr.itemsize,
                    meminfo=arr.meminfo,
-                   parent=arr.parent)
+                   parent=arr.parent,
+                   descr=arr.descr)
     return new_arrtype, new_arr
 
 
@@ -1806,7 +1857,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
                                          aryty.layout, dest_indices,
                                          wraparound=False,
                                          boundscheck=context.enable_boundscheck)
-    store_item(context, builder, aryty, val, dest_ptr)
+    store_item(context, builder, aryty, val, dest_ptr, ary)
 
     indexer.end_loops()
 
@@ -1907,7 +1958,8 @@ def array_transpose_tuple(context, builder, sig, args):
                    strides=builder.load(ll_arys[2]),
                    itemsize=ary.itemsize,
                    meminfo=ary.meminfo,
-                   parent=ary.parent)
+                   parent=ary.parent,
+                   descr=ary.descr)
     res = ret._getvalue()
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
@@ -1948,7 +2000,8 @@ def array_T(context, builder, typ, value):
                        strides=cgutils.pack_array(builder, strides[::-1]),
                        itemsize=ary.itemsize,
                        meminfo=ary.meminfo,
-                       parent=ary.parent)
+                       parent=ary.parent,
+                       descr=ary.descr)
         res = ret._getvalue()
     return impl_ret_borrowed(context, builder, typ, res)
 
@@ -2199,7 +2252,8 @@ def array_reshape(context, builder, sig, args):
                    strides=builder.load(newstrides),
                    itemsize=ary.itemsize,
                    meminfo=ary.meminfo,
-                   parent=ary.parent)
+                   parent=ary.parent,
+                   descr=ary.descr)
     res = ret._getvalue()
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
@@ -3194,7 +3248,8 @@ def array_record_getattr(context, builder, typ, value, attr):
                    strides=strides,
                    itemsize=context.get_constant(types.intp, datasize),
                    meminfo=array.meminfo,
-                   parent=array.parent)
+                   parent=array.parent,
+                   descr=array.descr)
     res = rary._getvalue()
     return impl_ret_borrowed(context, builder, resty, res)
 
@@ -3749,7 +3804,8 @@ def make_nditer_cls(nditerty):
                                          ())
             # HACK: meminfo=None avoids expensive refcounting operations
             # on ephemeral views
-            populate_array(view, ptr, shape, strides, itemsize, meminfo=None)
+            populate_array(view, ptr, shape, strides, itemsize, meminfo=None,
+                           descr=arr.descr)
             return view
 
         def _arrays_or_scalars(self, context, builder, arrtys, arrays):
@@ -3879,7 +3935,7 @@ def _make_flattening_iter_cls(flatiterty, kind):
 
                 with cgutils.if_likely(builder, is_valid):
                     ptr = builder.gep(arr.data, [index])
-                    value = load_item(context, builder, arrty, ptr)
+                    value = load_item(context, builder, arrty, ptr, arr)
                     if kind == 'flat':
                         result.yield_(value)
                     else:
@@ -3901,11 +3957,11 @@ def _make_flattening_iter_cls(flatiterty, kind):
 
             def getitem(self, context, builder, arrty, arr, index):
                 ptr = builder.gep(arr.data, [index])
-                return load_item(context, builder, arrty, ptr)
+                return load_item(context, builder, arrty, ptr, arr)
 
             def setitem(self, context, builder, arrty, arr, index, value):
                 ptr = builder.gep(arr.data, [index])
-                store_item(context, builder, arrty, value, ptr)
+                store_item(context, builder, arrty, value, ptr, arr)
 
         return CContiguousFlatIter
 
@@ -3973,7 +4029,7 @@ def _make_flattening_iter_cls(flatiterty, kind):
                 # Current pointer inside last dimension
                 last_ptr = cgutils.gep_inbounds(builder, pointers, ndim - 1)
                 ptr = builder.load(last_ptr)
-                value = load_item(context, builder, arrty, ptr)
+                value = load_item(context, builder, arrty, ptr, arr)
                 if kind == 'flat':
                     result.yield_(value)
                 else:
@@ -4039,11 +4095,11 @@ def _make_flattening_iter_cls(flatiterty, kind):
 
             def getitem(self, context, builder, arrty, arr, index):
                 ptr = self._ptr_for_index(context, builder, arrty, arr, index)
-                return load_item(context, builder, arrty, ptr)
+                return load_item(context, builder, arrty, ptr, arr)
 
             def setitem(self, context, builder, arrty, arr, index, value):
                 ptr = self._ptr_for_index(context, builder, arrty, arr, index)
-                store_item(context, builder, arrty, value, ptr)
+                store_item(context, builder, arrty, value, ptr, arr)
 
         return FlatIter
 
@@ -4248,11 +4304,17 @@ def dtype_eq_impl(context, builder, sig, args):
 # ------------------------------------------------------------------------------
 # Numpy array constructors
 
-def _empty_nd_impl(context, builder, arrtype, shapes):
+def _empty_nd_impl(context, builder, arrtype, shapes, descr=None):
     """Utility function used for allocating a new array during LLVM code
     generation (lowering).  Given a target context, builder, array
     type, and a tuple or list of lowered dimension sizes, returns a
     LLVM value pointing at a Numba runtime allocated array.
+
+    Parameters
+    ----------
+    descr : optional
+        Descriptor pointer to use for dtypes that require_array_descr.
+        If None, the descriptor will be obtained from the dtype's data model.
     """
     arycls = make_array(arrtype)
     ary = arycls(context, builder)
@@ -4322,7 +4384,17 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
                    shape=shape_array,
                    strides=strides_array,
                    itemsize=itemsize,
-                   meminfo=meminfo)
+                   meminfo=meminfo,
+                   descr=descr)
+
+    # For dtypes that require zero-initialized storage (e.g. StringDType), zero
+    # the storage to ensure packed headers start from a clean state before any
+    # writes via the allocator helpers.
+    if _dtype_trait(
+        context, arrtype.dtype, 'requires_zero_initialized_storage'
+    ):
+        i8ptr = ir.IntType(8).as_pointer()
+        cgutils.memset(builder, builder.bitcast(data, i8ptr), allocsize, 0)
 
     return ary
 
@@ -5045,7 +5117,8 @@ def _array_copy(context, builder, sig, args):
     dest_data = ret.data
 
     assert rettype.layout in "CF"
-    if arytype.layout == rettype.layout:
+    if (arytype.layout == rettype.layout and
+            not _dtype_trait(context, arytype.dtype, 'prohibits_raw_memcpy')):
         # Fast path: memcpy
         cgutils.raw_memcpy(builder, dest_data, src_data, ary.nitems,
                            ary.itemsize, align=1)
@@ -5062,7 +5135,8 @@ def _array_copy(context, builder, sig, args):
             dest_ptr = cgutils.get_item_pointer2(context, builder, dest_data,
                                                  shapes, dest_strides,
                                                  rettype.layout, indices)
-            builder.store(builder.load(src_ptr), dest_ptr)
+            val = load_item(context, builder, arytype, src_ptr, ary)
+            store_item(context, builder, rettype, val, dest_ptr, ret)
 
     return impl_ret_new_ref(context, builder, sig.return_type, ret._getvalue())
 
@@ -5119,7 +5193,7 @@ def _as_layout_array(context, builder, sig, args, output_layout):
                                      types.UniTuple(types.intp, 1),
                                      (ary.itemsize,))
         populate_array(ret, ary.data, shape, strides, ary.itemsize,
-                       ary.meminfo, ary.parent)
+                       ary.meminfo, ary.parent, descr=ary.descr)
         return impl_ret_borrowed(context, builder, retty, ret._getvalue())
 
     elif (retty.layout == aryty.layout
@@ -5227,9 +5301,9 @@ def array_astype(context, builder, sig, args):
         dest_ptr = cgutils.get_item_pointer2(context, builder, dest_data,
                                              shapes, dest_strides,
                                              rettype.layout, indices)
-        item = load_item(context, builder, arytype, src_ptr)
+        item = load_item(context, builder, arytype, src_ptr, ary)
         item = context.cast(builder, item, arytype.dtype, rettype.dtype)
-        store_item(context, builder, rettype, item, dest_ptr)
+        store_item(context, builder, rettype, item, dest_ptr, ret)
 
     return impl_ret_new_ref(context, builder, sig.return_type, ret._getvalue())
 
@@ -5621,7 +5695,7 @@ def check_sequence_shape(context, builder, seqty, seq, shapes):
 
 
 def assign_sequence_to_array(context, builder, data, shapes, strides,
-                             arrty, seqty, seq):
+                             arrty, seqty, seq, ary=None):
     """
     Assign a nested sequence contents to an array.  The shape must match
     the sequence's structure.
@@ -5631,7 +5705,7 @@ def assign_sequence_to_array(context, builder, data, shapes, strides,
         ptr = cgutils.get_item_pointer2(context, builder, data, shapes, strides,
                                         arrty.layout, indices, wraparound=False)
         val = context.cast(builder, val, valty, arrty.dtype)
-        store_item(context, builder, arrty, val, ptr)
+        store_item(context, builder, arrty, val, ptr, ary)
 
     def assign(seqty, seq, shapes, indices):
         if len(shapes) == 0:
@@ -5690,7 +5764,7 @@ def np_array(typingctx, obj, dtype):
         check_sequence_shape(context, builder, seqty, seq, shapes)
         arr = _empty_nd_impl(context, builder, arrty, shapes)
         assign_sequence_to_array(context, builder, arr.data, shapes,
-                                 arr.strides, arrty, seqty, seq)
+                                 arr.strides, arrty, seqty, seq, arr)
 
         return impl_ret_new_ref(context, builder, sig.return_type,
                                 arr._getvalue())
@@ -5813,7 +5887,8 @@ def expand_dims(context, builder, sig, args, axis):
                    strides=new_strides,
                    itemsize=arr.itemsize,
                    meminfo=arr.meminfo,
-                   parent=arr.parent)
+                   parent=arr.parent,
+                   descr=arr.descr)
 
     return ret._getvalue()
 
@@ -5964,12 +6039,12 @@ def _do_concatenate(context, builder, axis,
             src_ptr = cgutils.get_item_pointer2(context, builder, arr_data,
                                                 arr_sh, arr_st,
                                                 arrty.layout, indices)
-            val = load_item(context, builder, arrty, src_ptr)
+            val = load_item(context, builder, arrty, src_ptr, arr)
             val = context.cast(builder, val, arrty.dtype, retty.dtype)
             dest_ptr = cgutils.get_item_pointer2(context, builder, ret_data,
                                                  ret_shapes, ret_strides,
                                                  retty.layout, indices)
-            store_item(context, builder, retty, val, dest_ptr)
+            store_item(context, builder, retty, val, dest_ptr, ret)
 
         # Bump destination pointer
         ret_data = cgutils.pointer_add(builder, ret_data, offset)
@@ -6802,7 +6877,7 @@ def impl_shape_unchecked(context, builder, sig, args):
                    strides=strides,
                    itemsize=ary.itemsize,
                    meminfo=ary.meminfo,
-                   )
+                   descr=ary.descr)
 
     res = out._getvalue()
     return impl_ret_borrowed(context, builder, retty, res)
