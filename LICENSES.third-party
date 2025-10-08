@@ -533,6 +533,13 @@ PERFORMANCE OF THIS SOFTWARE.
 
 numba-cuda
 ----------
+Numba source code that references URLs starting with:
+
+https://github.com/NVIDIA/numba-cuda
+
+relates to use of/inclusion of/derivate work based on numba-cuda source code which
+has the following license:
+
 
 Copyright (c) 2012, Anaconda, Inc.
 Copyright (c) 2024, NVIDIA CORPORATION.
