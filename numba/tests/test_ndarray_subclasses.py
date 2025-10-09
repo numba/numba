@@ -133,6 +133,7 @@ class MyArrayTypeModel(numba.core.datamodel.models.StructModel):
             ('nitems', types.intp),
             ('itemsize', types.intp),
             ('data', types.CPointer(fe_type.dtype)),
+            ('descr', types.voidptr),
             ('shape', types.UniTuple(types.intp, ndim)),
             ('strides', types.UniTuple(types.intp, ndim)),
             ('extra_field', types.intp),
