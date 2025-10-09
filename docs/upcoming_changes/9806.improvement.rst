@@ -1,0 +1,4 @@
+Delay target context refresh until it is needed
+-----------------------------------------------
+
+Avoid reloading the target context inside caching if there is no cache hit.
