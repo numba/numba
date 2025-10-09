@@ -6,6 +6,7 @@ import os
 import shutil
 import sys
 import tempfile
+import numpy as np
 
 from numba.core import typing, sigutils
 from numba.core.compiler_lock import global_compiler_lock
@@ -162,10 +163,15 @@ class CC(object):
 
     def _get_mixin_defines(self):
         # Macro definitions required by modulemixin.c
-        return [
+        defines = [
             ('PYCC_MODULE_NAME', self._basename),
             ('PYCC_USE_NRT', int(self._use_nrt)),
-            ]
+        ]
+
+        if np.lib.NumpyVersion(np.__version__) >= np.lib.NumpyVersion('2.0.0'):
+                defines.append(('NPY_TARGET_VERSION', 'NPY_2_0_API_VERSION'))
+
+        return defines
 
     def _get_extra_cflags(self):
         extra_cflags = self._extra_cflags.get(sys.platform, [])

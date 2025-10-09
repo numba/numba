@@ -1219,7 +1219,7 @@ numba_gettyperecord(Py_UCS4 code, int *upper, int *lower, int *title,
 /* ------------------------------------------------------------------------- */
 /* NumPy StringDType helpers                                                  */
 
-#if NPY_ABI_VERSION >= 0x02000000
+#if NPY_ABI_VERSION >= 0x02000000 && NPY_FEATURE_VERSION >= NPY_2_0_API_VERSION
 
 /* Status code constants returned by NpyString_load and our helper functions */
 #define NPYSTRING_STATUS_ERROR   (-1)  /* Error occurred (exception set) */
