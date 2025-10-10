@@ -152,7 +152,6 @@ Type Management
 
 - :ghfile:`numba/core/typeconv/` - Implementation of type casting and type
   signature matching in both C++ and Python
-- :ghfile:`numba/capsulethunk.h` - Used by typeconv
 - :ghfile:`numba/core/types/` - definition of the Numba type hierarchy, used
   everywhere in compiler to select implementations
 - :ghfile:`numba/core/consts.py` - Constant inference (used to make constant
