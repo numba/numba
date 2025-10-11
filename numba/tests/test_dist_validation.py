@@ -363,12 +363,14 @@ class TestBuild(TestCase):
         os_name = platform.system().lower()
 
         if package_type == "wheel":
-            expected = self.wheel_expected_imports.get(os_name, {}).get(machine, {})
+            expected = self.wheel_expected_imports.get(
+                os_name, {}).get(machine, {})
         else:
             raise ValueError(f"Unexpected package type: {package_type}")
 
         if not expected:
-            self.skipTest(f"No expected data for {os_name}/{machine}/{package_type}")
+            msg = f"No expected data for {os_name}/{machine}/{package_type}"
+            self.skipTest(msg)
 
         # Process each extension module
         canonicalised_libs = info.get("canonicalised_linked_libraries", {})
@@ -376,41 +378,58 @@ class TestBuild(TestCase):
         for ext_path, libs in canonicalised_libs.items():
             ext_name = os.path.basename(ext_path)
 
-            # Make extension name version-agnostic by replacing cpython-XXX with cpython-310
-            # e.g. _dispatcher.cpython-313-darwin.so -> _dispatcher.cpython-310-darwin.so
+            # Make extension name version-agnostic by replacing
+            # cpython-XXX with cpython-310
+            # e.g. _dispatcher.cpython-313-darwin.so ->
+            # _dispatcher.cpython-310-darwin.so
             normalized_name = re.sub(r'\.cpython-\d+', '.cpython-310', ext_name)
             normalized_name = re.sub(r'\.cp\d+', '.cp310', normalized_name)
 
             # Every module must have expected data - fail if missing
             if normalized_name not in expected:
-                raise AssertionError(
-                    f"Extension module '{ext_name}' (normalized: '{normalized_name}') "
-                    f"not found in expected data for {os_name}/{machine}. "
+                msg = (
+                    f"Extension module '{ext_name}' "
+                    f"(normalized: '{normalized_name}') "
+                    f"not found in expected data for "
+                    f"{os_name}/{machine}. "
                     f"Available modules: {sorted(expected.keys())}"
                 )
+                raise AssertionError(msg)
 
             expected_libs = expected[normalized_name]
 
-            # Normalize version-specific library names to be version-agnostic
+            # Normalize version-specific library names to be
+            # version-agnostic
             normalized_libs = []
             for lib in libs:
-                # Normalize Python DLL version (e.g. python313.dll -> python310.dll)
+                # Normalize Python DLL version
+                # (e.g. python313.dll -> python310.dll)
                 lib = re.sub(r'python\d+', 'python310', lib)
-                # Normalize delvewheel-bundled MSVCP hashed name (e.g. msvcp140-abc123 -> msvcp140)
+                # Normalize delvewheel-bundled MSVCP hashed name
+                # (e.g. msvcp140-abc123 -> msvcp140)
                 lib = re.sub(r'msvcp140-[a-f0-9]+', 'msvcp140', lib)
                 normalized_libs.append(lib)
 
             got = set(normalized_libs)
 
-            print(f"Checking {ext_name}: Expected {sorted(expected_libs)}, Got {sorted(got)}", flush=True)
+            print(
+                f"Checking {ext_name}: Expected {sorted(expected_libs)}, "
+                f"Got {sorted(got)}",
+                flush=True
+            )
 
             if expected_libs != got:
-                msg = (f"Unexpected linkage for {ext_name}:\n"
-                       f"Expected: {sorted(expected_libs)}\n"
-                       f"     Got: {sorted(got)}\n\n"
-                       f"Difference: {set.symmetric_difference(expected_libs, got)}\n"
-                       f"Only in Expected: {set.difference(expected_libs, got)}\n"
-                       f"Only in Got: {set.difference(got, expected_libs)}\n")
+                diff = set.symmetric_difference(expected_libs, got)
+                only_expected = set.difference(expected_libs, got)
+                only_got = set.difference(got, expected_libs)
+                msg = (
+                    f"Unexpected linkage for {ext_name}:\n"
+                    f"Expected: {sorted(expected_libs)}\n"
+                    f"     Got: {sorted(got)}\n\n"
+                    f"Difference: {diff}\n"
+                    f"Only in Expected: {only_expected}\n"
+                    f"Only in Got: {only_got}\n"
+                )
                 raise AssertionError(msg)
 
     @needs_lief

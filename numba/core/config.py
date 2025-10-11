@@ -601,6 +601,7 @@ def reload_config():
     """
     _env_reloader.update()
 
+
 def get_sysinfo():
     d = dict()
 
