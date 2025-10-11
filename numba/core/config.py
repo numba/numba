@@ -600,3 +600,64 @@ def reload_config():
     Reload the configuration from environment variables, if necessary.
     """
     _env_reloader.update()
+
+def get_sysinfo():
+    d = dict()
+
+    # All compiled Numba extension modules (.so / .pyd / .dylib)
+    pkg_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    extension_suffixes = (".so", ".pyd", ".dylib")
+    extension_paths = []
+    for root, _, files in os.walk(pkg_root):
+        for filename in files:
+            if filename.endswith(extension_suffixes):
+                extension_paths.append(os.path.join(root, filename))
+    d["extension_module_paths"] = extension_paths
+
+    # import lief
+    HAVE_LIEF = False
+    try:
+        import lief
+        HAVE_LIEF = True
+    except ImportError:
+        msg = "py-lief package not found, sysinfo is limited as a result"
+        warnings.warn(msg)
+
+    d["lief_probe_status"] = HAVE_LIEF
+    d["linked_libraries"] = {}
+    d["canonicalised_linked_libraries"] = {}
+
+    def canonicalise_library_type(dso):
+        """Canonicalises the representation of the binary::libraries as a
+        sequence of strings"""
+        # Note lief v16:
+        # Mach-O .libraries are DylibCommand instances.
+        # Windows PE and Linux ELF .libraries are strings.
+        return [getattr(x, "name", x) for x in dso.libraries]
+
+    def canonicalise_library_spelling(libs):
+        # This adjusts the library "spelling" so that it just contains the
+        # name given to the linker. e.g. `@rpath/somewhere/libfoo.so.1.3`
+        # would be canonicalised to "foo".
+        fixes = []
+        for lib in libs:
+            # some libraries, e.g. Mach-O have an @rpath or system path
+            # prefix in their name, remove it.
+            path_stripped = os.path.split(lib)[-1]
+            # Assume all library names contain at least one dot, even if they
+            # don't it's fine, the first part is the piece of interest.
+            prefix_libname = path_stripped.split(".")[0]
+            linker_name = prefix_libname.replace("lib", "").replace("LIB", "")
+            # further canonicalize by referring to all libraries in lower case.
+            fixes.append(linker_name.lower())
+        return fixes
+
+    if HAVE_LIEF:
+        for path in d["extension_module_paths"]:
+            dso = lief.parse(path)
+            link_libs = tuple(canonicalise_library_type(dso))
+            canonicalised_libs = canonicalise_library_spelling(link_libs)
+            d["linked_libraries"][path] = link_libs
+            d["canonicalised_linked_libraries"][path] = canonicalised_libs
+
+    return d
