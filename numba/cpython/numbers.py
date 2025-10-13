@@ -1096,26 +1096,49 @@ def complex_div_impl(context, builder, sig, args):
         aimag = a.imag
         breal = b.real
         bimag = b.imag
+        abs_breal = abs(breal)
+        abs_bimag = abs(bimag)
         if not breal and not bimag:
             raise ZeroDivisionError("complex division by zero")
-        if abs(breal) >= abs(bimag):
+        if abs_breal >= abs_bimag:
             # Divide tops and bottom by b.real
             if not breal:
-                return complex(NAN, NAN)
-            ratio = bimag / breal
-            denom = breal + bimag * ratio
-            return complex(
-                (areal + aimag * ratio) / denom,
-                (aimag - areal * ratio) / denom)
+                res = complex(NAN, NAN)
+            else:
+                ratio = bimag / breal
+                denom = breal + bimag * ratio
+                res = complex(
+                    (areal + aimag * ratio) / denom,
+                    (aimag - areal * ratio) / denom)
         else:
             # Divide tops and bottom by b.imag
             if not bimag:
-                return complex(NAN, NAN)
-            ratio = breal / bimag
-            denom = breal * ratio + bimag
-            return complex(
-                (a.real * ratio + a.imag) / denom,
-                (a.imag * ratio - a.real) / denom)
+                res = complex(NAN, NAN)
+            else:
+                ratio = breal / bimag
+                denom = breal * ratio + bimag
+                res = complex(
+                    (areal * ratio + aimag) / denom,
+                    (aimag * ratio - areal) / denom)
+
+        if (utils.HAS_COMPLEX_DIV_NAN_RECOVERY
+                and math.isnan(res.real) and math.isnan(res.imag)):
+            if ((math.isinf(areal) or math.isinf(aimag))
+                    and math.isfinite(breal) and math.isfinite(bimag)):
+                x = math.copysign(1.0 if math.isinf(areal) else 0.0, areal)
+                y = math.copysign(1.0 if math.isinf(aimag) else 0.0, aimag)
+                res = complex(
+                    math.inf * (x * breal + y * bimag),
+                    math.inf * (y * breal - x * bimag))
+            elif ((math.isinf(abs_breal) or math.isinf(abs_bimag))
+                  and math.isfinite(areal) and math.isfinite(aimag)):
+                x = math.copysign(1.0 if math.isinf(breal) else 0.0, breal)
+                y = math.copysign(1.0 if math.isinf(bimag) else 0.0, bimag)
+                res = complex(
+                    0.0 * (areal * x + aimag * y),
+                    0.0 * (aimag * x - areal * y))
+
+        return res
 
     res = context.compile_internal(builder, complex_div, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)

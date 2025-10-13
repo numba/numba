@@ -32,6 +32,20 @@ from numba.core import types
 from collections.abc import Mapping, Sequence, MutableSet, MutableMapping
 
 
+def _detect_complex_div_nan_recovery():
+    """
+    Detect whether the host interpreter applies the CPython 3.14 complex
+    division NaN-recovery semantics. The probe divides a finite complex by
+    an infinite complex; pre-3.14 yields NaNs, 3.14+ returns signed zeros.
+    """
+    test = (1.0 + 0.0j) / complex(math.inf, math.inf)
+    return not (math.isnan(test.real) or math.isnan(test.imag))
+
+
+HAS_COMPLEX_DIV_NAN_RECOVERY = _detect_complex_div_nan_recovery()
+del _detect_complex_div_nan_recovery
+
+
 def erase_traceback(exc_value):
     """
     Erase the traceback and hanging locals from the given exception instance.
