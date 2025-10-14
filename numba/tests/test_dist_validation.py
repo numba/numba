@@ -3,7 +3,7 @@ import platform
 import re
 import unittest
 from numba.tests.support import TestCase
-from numba.core import config
+from numba.misc.numba_sysinfo import get_ext_info
 
 
 _HAVE_LIEF = False
@@ -373,7 +373,7 @@ class TestBuild(TestCase):
             self.skipTest(msg)
 
         # Process each extension module
-        canonicalised_libs = info.get("canonicalised_linked_libraries", {})
+        canonicalised_libs = info.get("Canonicalised Linked Libraries", {})
 
         for ext_path, libs in canonicalised_libs.items():
             ext_name = os.path.basename(ext_path)
@@ -433,6 +433,20 @@ class TestBuild(TestCase):
                 raise AssertionError(msg)
 
     @needs_lief
-    def test_wheel_linkage(self):
-        info = config.get_sysinfo()
-        self.check_linkage(info, "wheel")
+    def test_expected_extensions(self):
+        """Test that all expected extension modules are present."""
+        info = get_ext_info()
+        missing = info.get("Missing Extensions", [])
+
+        if missing:
+            msg = (
+                f"Expected extension modules are missing:\n"
+                f"  {missing}\n\n"
+            )
+            raise AssertionError(msg)
+
+    @needs_lief
+    def test_expected_imports_by_extension(self):
+        package_type = "wheel"
+        info = get_ext_info()
+        self.check_linkage(info, package_type)
