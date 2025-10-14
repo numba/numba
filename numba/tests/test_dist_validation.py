@@ -438,8 +438,6 @@ class TestBuild(TestCase):
                 )
                 raise AssertionError(msg)
 
-    @is_conda_package
-    @is_wheel_package
     def test_expected_extensions(self):
         """Test that all expected extension modules are present."""
         info = get_ext_info()
