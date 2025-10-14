@@ -107,6 +107,14 @@ class NumbaBuildExt(build_ext):
 cmdclass['build_ext'] = NumbaBuildExt
 
 
+def get_package_format():
+    """
+    Get package format from NUMBA_PACKAGE_FORMAT environment variable.
+    Falls back to 'unknown' if not set.
+    """
+    return os.getenv('NUMBA_PACKAGE_FORMAT', 'unknown')
+
+
 def is_building():
     """
     Parse the setup.py command and return whether a build is requested.
@@ -166,6 +174,7 @@ def get_ext_modules():
                                extra_compile_args=['-std=c++11'],
                                **np_compile_args)
 
+    package_format = get_package_format()
     ext_helperlib = Extension(name="numba._helperlib",
                               sources=["numba/_helpermod.c",
                                        "numba/cext/utils.c",
@@ -181,6 +190,7 @@ def get_ext_modules():
                                        "numba/_random.c",
                                        "numba/mathnames.inc",
                                        ],
+                              define_macros=[('NUMBA_PACKAGE_FORMAT', f'"{package_format}"')],
                               **np_compile_args)
 
     ext_typeconv = Extension(name="numba.core.typeconv._typeconv",
