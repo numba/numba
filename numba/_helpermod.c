@@ -128,7 +128,7 @@ build_c_helpers_dict(void)
 #if NPY_ABI_VERSION >= 0x02000000
     declmethod(stringdtype_unpack);
     declmethod(stringdtype_pack);
-    declmethod(stringdtype_unpack_utf8);
+    declmethod(stringdtype_utf8_status);
     declmethod(stringdtype_clone);
     declmethod(stringdtype_utf8_eq);
     declmethod(stringdtype_utf8_ord);

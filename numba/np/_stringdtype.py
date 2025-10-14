@@ -60,26 +60,17 @@ def unpack_to_pyobject(context, builder, descr_voidptr, packed_ptr, pyapi):
 
 def unpack_utf8_status(context, builder, descr_voidptr, packed_ptr):
     """Call the nogil UTF-8 unpack helper and return status code only."""
-    # Define static_string type once
-    ll_size_t = context.get_value_type(types.intp)
     ll_i8_ptr = ir.IntType(8).as_pointer()
-    static_string_ty = ir.LiteralStructType([ll_size_t, ll_i8_ptr])
-    utf8_out = cgutils.alloca_once(builder, static_string_ty)
-    zero_static = ir.Constant.literal_struct([
-        ir.Constant(ll_size_t, 0),
-        ir.Constant(ll_i8_ptr, None),
-    ])
-    builder.store(zero_static, utf8_out)
 
     fn_ty = ir.FunctionType(ir.IntType(32), [
         context.get_value_type(types.voidptr),
-        ll_i8_ptr, static_string_ty.as_pointer(),
+        ll_i8_ptr,
     ])
     fn = cgutils.get_or_insert_function(
         builder.module, fn_ty,
-        name="numba_stringdtype_unpack_utf8",
+        name="numba_stringdtype_utf8_status",
     )
-    return builder.call(fn, [descr_voidptr, packed_ptr, utf8_out])
+    return builder.call(fn, [descr_voidptr, packed_ptr])
 
 
 def prepare_from_value(context, builder, typ, val):
@@ -112,56 +103,25 @@ def prepare_from_value(context, builder, typ, val):
     return descr_voidptr, packed_ptr, final_descr_ptr
 
 
-def unpack_utf8_pair(context, builder, ty_a, val_a, ty_b, val_b):
-    """Unpack two StringDType scalars to UTF-8 static strings.
-
-    Returns (status_a, out_a, status_b, out_b, static_string_ty,
-    ll_size_t, ll_i8_ptr) where out_* are pointers to
-    `npy_static_string`-like structs.
-    """
+def utf8_status_pair(context, builder, ty_a, val_a, ty_b, val_b):
+    """Return UTF-8 load status codes for two StringDType scalars."""
     ll_voidptr = context.get_value_type(types.voidptr)
-    ll_size_t = context.get_value_type(types.intp)
     ll_i8_ptr = ir.IntType(8).as_pointer()
-    static_string_ty = ir.LiteralStructType([ll_size_t, ll_i8_ptr])
+    status_fn_ty = ir.FunctionType(ir.IntType(32), [
+        ll_voidptr,
+        ll_i8_ptr,
+    ])
+    status_fn = cgutils.get_or_insert_function(
+        builder.module, status_fn_ty,
+        name="numba_stringdtype_utf8_status",
+    )
 
     def unpack_one(ty, val):
-        descr_typed = builder.extract_value(val, 0)
-        data_value = builder.extract_value(val, 1)
-
-        # Ensure descr
-        tmp = cgutils.alloca_once_value(builder, descr_typed)
-        is_null = cgutils.is_null(builder, descr_typed)
-        with builder.if_then(is_null, likely=False):
-            d = get_descr_ptr(context, builder, ty)
-            d_cast = builder.bitcast(d, descr_typed.type)
-            builder.store(d_cast, tmp)
-        d_final = builder.load(tmp)
-
-        # Prep out buffer and call
-        out = cgutils.alloca_once(builder, static_string_ty)
-        zero_static = ir.Constant.literal_struct([
-            ir.Constant(ll_size_t, 0),
-            ir.Constant(ll_i8_ptr, None),
-        ])
-        builder.store(zero_static, out)
-        packed_storage = cgutils.alloca_once_value(builder, data_value)
-        packed_ptr = builder.bitcast(packed_storage, ll_i8_ptr)
-        d_void = builder.bitcast(d_final, ll_voidptr)
-        fn_ty = ir.FunctionType(ir.IntType(32), [
-            ll_voidptr,
-            ll_i8_ptr,
-            static_string_ty.as_pointer(),
-        ])
-        fn = cgutils.get_or_insert_function(
-            builder.module, fn_ty,
-            name="numba_stringdtype_unpack_utf8",
+        descr_void, packed_ptr, _ = prepare_from_value(
+            context, builder, ty, val
         )
-        st = builder.call(fn, [d_void, packed_ptr, out])
-        return st, out
+        return builder.call(status_fn, [descr_void, packed_ptr])
 
-    status_a, out_a = unpack_one(ty_a, val_a)
-    status_b, out_b = unpack_one(ty_b, val_b)
-    return (
-        status_a, out_a, status_b, out_b,
-        static_string_ty, ll_size_t, ll_i8_ptr,
-    )
+    status_a = unpack_one(ty_a, val_a)
+    status_b = unpack_one(ty_b, val_b)
+    return status_a, status_b

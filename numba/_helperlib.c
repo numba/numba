@@ -635,7 +635,7 @@ numba_extract_np_datetime(PyObject *td)
                         "expected a numpy.datetime64 object");
         return -1;
     }
-    return PyArrayScalar_VAL(td, Datetime);
+    return PyArrayScalar_VAL(td, Timedelta);
 }
 
 NUMBA_EXPORT_FUNC(npy_int64)
@@ -699,7 +699,6 @@ numba_gil_release(PyGILState_STATE *state) {
 
 NUMBA_EXPORT_FUNC(PyObject *)
 numba_py_type(PyObject *obj) {
-    /* Borrowed reference to the object's exact type; do not DECREF. */
     return (PyObject *) Py_TYPE(obj);
 }
 
@@ -1289,7 +1288,7 @@ numba_stringdtype_unpack(PyArray_Descr *descr,
 {
     PyGILState_STATE gilstate = PyGILState_Ensure();
     PyArray_StringDTypeObject *string_descr;
-    npy_string_allocator *allocator;
+    npy_string_allocator *allocator = NULL;
     npy_static_string unpacked = {0, NULL};
     PyObject *result = NULL;
     int status;
@@ -1299,33 +1298,32 @@ numba_stringdtype_unpack(PyArray_Descr *descr,
     if (allocator == NULL) {
         PyErr_SetString(PyExc_RuntimeError,
                         "failed to acquire StringDType allocator");
-        PyGILState_Release(gilstate);
-        return NULL;
+        goto done;
     }
 
     status = NpyString_load(allocator, packed, &unpacked);
     if (status == NPYSTRING_STATUS_ERROR) {
-        NpyString_release_allocator(allocator);
-        PyGILState_Release(gilstate);
-        return NULL;
+        goto done;
     }
     if (status == NPYSTRING_STATUS_NA) {
         PyObject *na_object = string_descr->na_object;
         if (na_object == NULL) {
-            NpyString_release_allocator(allocator);
             Py_INCREF(Py_None);
-            PyGILState_Release(gilstate);
-            return Py_None;
+            result = Py_None;
+            goto done;
         }
         Py_INCREF(na_object);
-        NpyString_release_allocator(allocator);
-        PyGILState_Release(gilstate);
-        return na_object;
+        result = na_object;
+        goto done;
     }
 
     result = PyUnicode_DecodeUTF8(unpacked.buf, (Py_ssize_t)unpacked.size,
                                   NULL);
-    NpyString_release_allocator(allocator);
+
+done:
+    if (allocator != NULL) {
+        NpyString_release_allocator(allocator);
+    }
     PyGILState_Release(gilstate);
     return result;
 }
@@ -1397,16 +1395,16 @@ done:
 
 
 /*
- * numba_stringdtype_unpack_utf8: Unpack StringDType to raw UTF-8 buffer; on error, -1 is returned.
- * Safe to call without holding the GIL.
+ * numba_stringdtype_utf8_status: Probe a StringDType value and return the UTF-8
+ * load status (-1 on error, 0 on success, 1 if NA). Safe to call without the GIL.
  */
 NUMBA_EXPORT_FUNC(int)
-numba_stringdtype_unpack_utf8(PyArray_Descr *descr,
-                                    const npy_packed_static_string *packed,
-                                    npy_static_string *output)
+numba_stringdtype_utf8_status(PyArray_Descr *descr,
+                              const npy_packed_static_string *packed)
 {
     PyArray_StringDTypeObject *string_descr;
     npy_string_allocator *allocator;
+    npy_static_string tmp = (npy_static_string){0, NULL};
     int status;
 
     string_descr = (PyArray_StringDTypeObject *)descr;
@@ -1415,12 +1413,8 @@ numba_stringdtype_unpack_utf8(PyArray_Descr *descr,
         return -1;
     }
 
-    status = NpyString_load(allocator, packed, output);
+    status = NpyString_load(allocator, packed, &tmp);
     NpyString_release_allocator(allocator);
-    if (status == NPYSTRING_STATUS_NA) {
-        output->size = 0;
-        output->buf = NULL;
-    }
     return status;
 }
 
@@ -1443,6 +1437,7 @@ numba_stringdtype_clone(PyArray_Descr *src_descr,
     PyArray_Descr *descrs[2];
     npy_static_string tmp = (npy_static_string){0, NULL};
     int st;
+    int rc = -1;
 
     if ((src_string_descr == dst_string_descr) && (src_packed == dst_packed)) {
         return 0;
@@ -1452,14 +1447,12 @@ numba_stringdtype_clone(PyArray_Descr *src_descr,
     descrs[1] = dst_descr;
     NpyString_acquire_allocators(2, descrs, allocs);
     if (allocs[0] == NULL || allocs[1] == NULL) {
-        NpyString_release_allocators(2, allocs);
-        return -1;
+        goto done;
     }
 
     st = NpyString_load(allocs[0], src_packed, &tmp);
     if (st == NPYSTRING_STATUS_ERROR) {
-        NpyString_release_allocators(2, allocs);
-        return -1;
+        goto done;
     }
 
     if (st == NPYSTRING_STATUS_NA || tmp.buf == NULL) {
@@ -1470,8 +1463,7 @@ numba_stringdtype_clone(PyArray_Descr *src_descr,
             /* Same allocator: avoid aliasing by copying to a stable buffer */
             char *cpy = (char *)malloc(n);
             if (cpy == NULL) {
-                NpyString_release_allocators(2, allocs);
-                return -1;
+                goto done;
             }
             if (n) memcpy(cpy, tmp.buf, n);
             st = NpyString_pack(allocs[1], dst_packed, cpy, n);
@@ -1482,8 +1474,11 @@ numba_stringdtype_clone(PyArray_Descr *src_descr,
         }
     }
 
+    rc = st;
+
+done:
     NpyString_release_allocators(2, allocs);
-    return st;
+    return rc;
 }
 
 /*
@@ -1501,37 +1496,37 @@ numba_stringdtype_utf8_eq(PyArray_Descr *a_descr,
     PyArray_Descr *descrs[2];
     npy_static_string a = {0, NULL}, b = {0, NULL};
     int st;
+    int rc = -1;
 
     descrs[0] = a_descr;
     descrs[1] = b_descr;
     NpyString_acquire_allocators(2, descrs, allocs);
     if (allocs[0] == NULL || allocs[1] == NULL) {
-        NpyString_release_allocators(2, allocs);
-        return -1;
+        goto done;
     }
 
     st = NpyString_load(allocs[0], a_packed, &a);
     if (st == NPYSTRING_STATUS_ERROR) {
-        NpyString_release_allocators(2, allocs);
-        return -1;
+        goto done;
     }
     st = NpyString_load(allocs[1], b_packed, &b);
     if (st == NPYSTRING_STATUS_ERROR) {
-        NpyString_release_allocators(2, allocs);
-        return -1;
+        goto done;
     }
 
     if (a.size != b.size) {
-        NpyString_release_allocators(2, allocs);
-        return 0;
+        rc = 0;
+        goto done;
     }
     if (a.size == 0) {
-        NpyString_release_allocators(2, allocs);
-        return 1;
+        rc = 1;
+        goto done;
     }
-    st = (memcmp(a.buf, b.buf, (size_t)a.size) == 0) ? 1 : 0;
+    rc = (memcmp(a.buf, b.buf, (size_t)a.size) == 0) ? 1 : 0;
+
+done:
     NpyString_release_allocators(2, allocs);
-    return st;
+    return rc;
 }
 
 /*
@@ -1549,36 +1544,37 @@ numba_stringdtype_utf8_ord(PyArray_Descr *a_descr,
     PyArray_Descr *descrs[2];
     npy_static_string a = {0, NULL}, b = {0, NULL};
     int st;
+    int rc = -2;
 
     descrs[0] = a_descr;
     descrs[1] = b_descr;
     NpyString_acquire_allocators(2, descrs, allocs);
     if (allocs[0] == NULL || allocs[1] == NULL) {
-        NpyString_release_allocators(2, allocs);
-        return -2;
+        goto done;
     }
 
     st = NpyString_load(allocs[0], a_packed, &a);
     if (st == NPYSTRING_STATUS_ERROR) {
-        NpyString_release_allocators(2, allocs);
-        return -2;
+        goto done;
     }
     st = NpyString_load(allocs[1], b_packed, &b);
     if (st == NPYSTRING_STATUS_ERROR) {
-        NpyString_release_allocators(2, allocs);
-        return -2;
+        goto done;
     }
 
     size_t mina = (size_t)((a.size < b.size) ? a.size : b.size);
     if (mina > 0) {
         int cmp = memcmp(a.buf, b.buf, mina);
-        if (cmp < 0) { NpyString_release_allocators(2, allocs); return -1; }
-        if (cmp > 0) { NpyString_release_allocators(2, allocs); return 1; }
+        if (cmp < 0) { rc = -1; goto done; }
+        if (cmp > 0) { rc = 1; goto done; }
     }
-    if (a.size < b.size) { NpyString_release_allocators(2, allocs); return -1; }
-    if (a.size > b.size) { NpyString_release_allocators(2, allocs); return 1; }
+    if (a.size < b.size) { rc = -1; goto done; }
+    if (a.size > b.size) { rc = 1; goto done; }
+    rc = 0;
+
+done:
     NpyString_release_allocators(2, allocs);
-    return 0;
+    return rc;
 }
 
 /*
@@ -1598,26 +1594,23 @@ numba_stringdtype_concat(PyArray_Descr *dst_descr,
     npy_string_allocator *allocs[3] = {NULL, NULL, NULL};
     PyArray_Descr *descrs[3];
     npy_static_string a = {0, NULL}, b = {0, NULL};
-    int st_a, st_b, rc;
+    int st_a, st_b, rc = -1;
 
     descrs[0] = a_descr;
     descrs[1] = b_descr;
     descrs[2] = dst_descr;
     NpyString_acquire_allocators(3, descrs, allocs);
     if (allocs[0] == NULL || allocs[1] == NULL || allocs[2] == NULL) {
-        NpyString_release_allocators(3, allocs);
-        return -1;
+        goto done;
     }
 
     st_a = NpyString_load(allocs[0], a_packed, &a);
     if (st_a == NPYSTRING_STATUS_ERROR) {
-        NpyString_release_allocators(3, allocs);
-        return -1;
+        goto done;
     }
     st_b = NpyString_load(allocs[1], b_packed, &b);
     if (st_b == NPYSTRING_STATUS_ERROR) {
-        NpyString_release_allocators(3, allocs);
-        return -1;
+        goto done;
     }
 
     if (st_a == NPYSTRING_STATUS_NA || st_b == NPYSTRING_STATUS_NA) {
@@ -1631,8 +1624,7 @@ numba_stringdtype_concat(PyArray_Descr *dst_descr,
         } else {
             char *buf = (char *)malloc(cn);
             if (buf == NULL) {
-                NpyString_release_allocators(3, allocs);
-                return -1;
+                goto done;
             }
             if (an) memcpy(buf, a.buf, an);
             if (bn) memcpy(buf + an, b.buf, bn);
@@ -1640,6 +1632,8 @@ numba_stringdtype_concat(PyArray_Descr *dst_descr,
             free(buf);
         }
     }
+
+done:
     NpyString_release_allocators(3, allocs);
     return rc;
 }

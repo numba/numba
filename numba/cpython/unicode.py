@@ -37,8 +37,8 @@ from numba.np._stringdtype import (
     pack_from_pyobject as _stringdtype_pack_from_pyobject,
     unpack_to_pyobject as _stringdtype_unpack_to_pyobject,
     unpack_utf8_status as _stringdtype_unpack_utf8_status,
+    utf8_status_pair as _stringdtype_utf8_status_pair,
     prepare_from_value as _stringdtype_prepare_from_value,
-    unpack_utf8_pair as _stringdtype_unpack_utf8_pair,
 )
 from numba.cpython.hashing import _Py_hash_t
 from numba.core.unsafe.bytes import memcpy_region
@@ -3010,9 +3010,6 @@ def stringdtype_len_overload(s):
         return len_impl
 
 
-## Helper moved to numba.np._stringdtype.unpack_utf8_pair
-
-
 def _stringdtype_cmp_core(context, builder, a_ty, a_val, b_ty, b_val, op):
     """Comparator for StringDType scalars using unicode semantics.
 
@@ -3020,7 +3017,7 @@ def _stringdtype_cmp_core(context, builder, a_ty, a_val, b_ty, b_val, op):
     - eq: NA==NA True; NA with value False
     - order (<,>,<=,>=): any NA -> False
     """
-    st_a, _, st_b, _, _, _, _ = _stringdtype_unpack_utf8_pair(
+    st_a, st_b = _stringdtype_utf8_status_pair(
         context, builder, a_ty, a_val, b_ty, b_val
     )
     status_error = Constant(st_a.type, NPYSTRING_STATUS_ERROR)
@@ -3223,7 +3220,7 @@ def _stringdtype_add(typingctx, a, b):
         (a_ty, b_ty) = signature.args
         (a_val, b_val) = args
 
-        st_a, _, st_b, _, _, _, _ = _stringdtype_unpack_utf8_pair(
+        st_a, st_b = _stringdtype_utf8_status_pair(
             context, builder, a_ty, a_val, b_ty, b_val
         )
         status_error = Constant(st_a.type, NPYSTRING_STATUS_ERROR)
