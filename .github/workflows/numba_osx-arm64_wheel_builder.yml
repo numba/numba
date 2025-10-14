@@ -106,6 +106,8 @@ jobs:
         run: arch -arm64 python -m build --sdist
 
       - name: Build wheel
+        env:
+          NUMBA_PACKAGE_FORMAT: "wheel"
         run: arch -arm64 python -m build --wheel --no-isolation
 
       - name: Fix macOS wheel library paths
@@ -189,6 +191,9 @@ jobs:
           echo "Set DYLD_FALLBACK_LIBRARY_PATH to: $(brew --prefix libomp)/lib"
 
       - name: Validate and test wheel
+        env:
+          NUMBA_DIST_TEST: 1
+          TESTS_TO_RUN: "numba.tests"
         run: |
           PYTHON_PATH=$(which python${{ matrix.python_canonical }})
           "$PYTHON_PATH" -m venv .venv && source .venv/bin/activate
@@ -206,4 +211,4 @@ jobs:
           arch -arm64 python -m numba -s
 
           # run tests
-          arch -arm64 python -m numba.runtests -m 4 -v
+          arch -arm64 python -m numba.runtests $TESTS_TO_RUN -m 4 -v
