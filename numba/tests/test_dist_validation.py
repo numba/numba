@@ -4,7 +4,7 @@ import re
 import unittest
 from numba.tests.support import TestCase
 from numba.misc.numba_sysinfo import get_ext_info
-
+from numba import _helperlib
 
 _HAVE_LIEF = False
 try:
@@ -13,6 +13,12 @@ try:
 except ImportError:
     pass
 
+is_conda_package = unittest.skipUnless(_helperlib.package_format == "conda",
+                                       ("conda package test only, have "
+                                        f"{_helperlib.package_format}"))
+is_wheel_package = unittest.skipUnless(_helperlib.package_format == "wheel",
+                                       ("wheel package test only, have "
+                                        f"{_helperlib.package_format}"))
 
 needs_lief = unittest.skipUnless(_HAVE_LIEF, "test needs py-lief package")
 
@@ -432,7 +438,8 @@ class TestBuild(TestCase):
                 )
                 raise AssertionError(msg)
 
-    @needs_lief
+    @is_conda_package
+    @is_wheel_package
     def test_expected_extensions(self):
         """Test that all expected extension modules are present."""
         info = get_ext_info()
@@ -445,8 +452,12 @@ class TestBuild(TestCase):
             )
             raise AssertionError(msg)
 
-    @needs_lief
-    def test_expected_imports_by_extension(self):
-        package_type = "wheel"
+    @is_wheel_package
+    def test_wheel_expected_imports_by_extension(self):
         info = get_ext_info()
-        self.check_linkage(info, package_type)
+        self.check_linkage(info, "wheel")
+
+    @is_conda_package
+    def test_conda_expected_imports_by_extension(self):
+        info = get_ext_info()
+        self.check_linkage(info, "conda")
