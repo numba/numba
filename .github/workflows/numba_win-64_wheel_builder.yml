@@ -149,7 +149,7 @@ jobs:
           NUMBA_DIST_TEST: 1
           TESTS_TO_RUN: "numba.tests.test_dist_validation"
         run: |
-          python -m pip install --upgrade pip twine
+          python -m pip install --upgrade pip twine lief
           python -m pip install numpy==${{ matrix.numpy_test }} tbb==2021.6 tbb-devel==2021.6
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
               python -m pip install llvmlite_wheels/*.whl

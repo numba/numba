@@ -197,7 +197,7 @@ jobs:
         run: |
           PYTHON_PATH=$(which python${{ matrix.python_canonical }})
           "$PYTHON_PATH" -m venv .venv && source .venv/bin/activate
-          arch -arm64 python -m pip install --upgrade pip twine
+          arch -arm64 python -m pip install --upgrade pip twine lief
           ls -l dist
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
               arch -arm64 python -m pip install llvmlite_wheels/*.whl
