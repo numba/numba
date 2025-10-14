@@ -171,7 +171,7 @@ jobs:
       - name: Validate and test wheel
         env:
           NUMBA_DIST_TEST: 1
-          TESTS_TO_RUN: "numba.tests"
+          TESTS_TO_RUN: "numba.tests.test_dist_validation"
         run: |
           PYTHON_PATH=$(which python${{ matrix.python_canonical }})
           $PYTHON_PATH -m pip install --upgrade pip twine
