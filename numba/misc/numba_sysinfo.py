@@ -750,10 +750,17 @@ def get_ext_info():
 
     # optional extensions (conditionally built, from setup.py)
     optional_extension_names = [
-        'numba.np.ufunc.tbbpool',
         'numba.np.ufunc.omppool',
         'numba.np.ufunc.workqueue',
     ]
+
+    # tbbpool is only built on Windows x64 and Linux x86_64
+    current_platform = sys.platform
+    current_machine = platform.machine().lower()
+
+    if ((current_platform.startswith('win') and current_machine in ('amd64', 'x86_64')) or
+        (current_platform.startswith('linux') and current_machine in ('x86_64', 'amd64'))):
+        optional_extension_names.append('numba.np.ufunc.tbbpool')
 
     def canonicalise_library_type(dso):
         """Canonicalises the representation of the binary::libraries as a
