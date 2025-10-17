@@ -1785,7 +1785,7 @@ class TestManyStencils(TestStencilBase):
         a = np.arange(12.).reshape(3, 4)
         ex = self.exception_dict(
             stencil=NumbaValueError,
-            parfor=ValueError,
+            parfor=NumbaValueError,
             njit=NumbaValueError)
         self.check_exceptions(kernel, a, options={'cval': 1.j},
                               expected_exception=ex)
@@ -1887,7 +1887,7 @@ class TestManyStencils(TestStencilBase):
             return a[0, 1]
         a = np.arange(12.).reshape(3, 4)
         b = np.arange(12.).reshape(3, 4)
-        self.check_exceptions(kernel, a, b, expected_exception=[ValueError,
+        self.check_exceptions(kernel, a, b, expected_exception=[NumbaValueError,
                                                                 LoweringError])
 
     def test_basic45(self):
@@ -1897,7 +1897,7 @@ class TestManyStencils(TestStencilBase):
             return a[0, 1] + a[1, 0]
         a = np.arange(12.).reshape(3, 4)
         b = np.arange(12.).reshape(3, 4)
-        self.check_exceptions(kernel, a, b, expected_exception=[ValueError,
+        self.check_exceptions(kernel, a, b, expected_exception=[NumbaValueError,
                                                                 LoweringError])
 
     def test_basic46(self):
@@ -1907,7 +1907,7 @@ class TestManyStencils(TestStencilBase):
             return a[0, 1] + a[1, 0]
         a = np.arange(12.).reshape(3, 4)
         b = np.arange(12.).reshape(3, 4)
-        self.check_exceptions(kernel, a, b, expected_exception=[ValueError,
+        self.check_exceptions(kernel, a, b, expected_exception=[NumbaValueError,
                                                                 LoweringError])
 
     def test_basic47(self):
@@ -2035,7 +2035,7 @@ class TestManyStencils(TestStencilBase):
         b = np.arange(12.).reshape(3, 4)
         ex = self.exception_dict(
             stencil=Exception,
-            parfor=ValueError,
+            parfor=NumbaValueError,
             njit=Exception)
         self.check_exceptions(kernel, a, b, options={'standard_indexing': 'c'},
                               expected_exception=ex)
@@ -2203,7 +2203,7 @@ class TestManyStencils(TestStencilBase):
         b = np.arange(12.).reshape(3, 4)
         c = (10,)
         # parfors does not support tuple args for stencil kernels
-        ex = self.exception_dict(parfor=ValueError)
+        ex = self.exception_dict(parfor=NumbaValueError)
         self.check_exceptions(kernel, a, b, c,
                               options={'standard_indexing': ['b', 'c']},
                               expected_exception=ex)
@@ -2250,7 +2250,7 @@ class TestManyStencils(TestStencilBase):
         b = np.arange(12).reshape(3, 4)
         ex = self.exception_dict(
             stencil=NumbaValueError,
-            parfor=ValueError,
+            parfor=NumbaValueError,
             njit=NumbaValueError)
         self.check_exceptions(kernel, a, b, options={'standard_indexing': 'b'},
                               expected_exception=ex)
@@ -2972,7 +2972,7 @@ class TestManyStencils(TestStencilBase):
         a = np.arange(12.).reshape(3, 4)
         ex = self.exception_dict(
             stencil=NumbaValueError,
-            parfor=ValueError,
+            parfor=NumbaValueError,
             njit=NumbaValueError)
         self.check_exceptions(kernel, a, 1.0, options={}, expected_exception=ex)
 

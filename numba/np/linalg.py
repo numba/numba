@@ -59,7 +59,7 @@ else:
 def get_blas_kind(dtype, func_name="<BLAS function>"):
     kind = _blas_kinds.get(dtype)
     if kind is None:
-        raise TypeError("unsupported dtype for %s()" % (func_name,))
+        raise NumbaTypeError("unsupported dtype for %s()" % (func_name,))
     return kind
 
 

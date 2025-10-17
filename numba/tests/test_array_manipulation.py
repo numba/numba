@@ -565,6 +565,19 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         self.check_as_strided(as_strided1)
         self.check_as_strided(as_strided2)
 
+    def test_as_strided_stride_none(self):
+
+        @jit
+        def foo():
+            arr = np.arange(24).reshape((6, 4))
+            return np.lib.stride_tricks.as_strided(arr, strides=None)
+
+        with self.assertRaises(errors.TypingError) as raises:
+            foo()
+
+        msg = "strides argument cannot be None"
+        self.assertIn(msg, str(raises.exception))
+
     def test_sliding_window_view(self):
         def check(arr, window_shape, axis):
             # Our version is always writeable (NumPy default is False).

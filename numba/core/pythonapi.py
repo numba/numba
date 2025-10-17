@@ -922,9 +922,9 @@ class PythonAPI(object):
     # Other APIs (organize them better!)
     #
 
-    def import_module_noblock(self, modname):
+    def import_module(self, modname):
         fnty = ir.FunctionType(self.pyobj, [self.cstring])
-        fn = self._get_function(fnty, name="PyImport_ImportModuleNoBlock")
+        fn = self._get_function(fnty, name="PyImport_ImportModule")
         return self.builder.call(fn, [modname])
 
     def call_function_objargs(self, callee, objargs):

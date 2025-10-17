@@ -70,32 +70,6 @@ def _os_supports_avx():
             return False
 
 
-_old_style_deprecation_msg = (
-    "NUMBA_CAPTURED_ERRORS=old_style is deprecated. "
-    "It will be removed in the next release. See details at "
-    "https://numba.readthedocs.io/en/latest/reference/deprecation.html#deprecation-of-old-style-numba-captured-errors" # noqa: E501
-)
-
-
-# Choose how to handle captured errors
-def _validate_captured_errors_style(style_str):
-    # to prevent circular import
-    from numba.core.errors import NumbaDeprecationWarning
-
-    rendered_style = str(style_str)
-    if rendered_style not in ('new_style', 'old_style', 'default'):
-        msg = ("Invalid style in NUMBA_CAPTURED_ERRORS: "
-               f"{rendered_style}")
-        raise ValueError(msg)
-    else:
-        if rendered_style == 'default':
-            rendered_style = 'new_style'
-        elif rendered_style == 'old_style':
-            warnings.warn(_old_style_deprecation_msg,
-                          NumbaDeprecationWarning)
-        return rendered_style
-
-
 class _OptLevel(int):
     """This class holds the "optimisation level" set in `NUMBA_OPT`. As this env
     var can be an int or a string, but is almost always interpreted as an int,
@@ -116,7 +90,7 @@ class _OptLevel(int):
 
     @property
     def is_opt_max(self):
-        """Returns True if the the optimisation level is "max" False
+        """Returns True if the optimisation level is "max" False
         otherwise."""
         return self._raw_value == "max"
 
@@ -309,6 +283,11 @@ class _EnvReloader(object):
         # Contains path to the directory
         CACHE_DIR = _readenv("NUMBA_CACHE_DIR", str, "")
 
+        # Override default cache locators list including their order
+        # Comma separated list of locator class names,
+        # see _locator_classes in caching submodule
+        CACHE_LOCATOR_CLASSES = _readenv("NUMBA_CACHE_LOCATOR_CLASSES", str, "")
+
         # Enable tracing support
         TRACE = _readenv("NUMBA_TRACE", int, 0)
 
@@ -317,6 +296,11 @@ class _EnvReloader(object):
 
         # Enable debugging of type inference
         DEBUG_TYPEINFER = _readenv("NUMBA_DEBUG_TYPEINFER", int, 0)
+
+        # Disable caching of failed type inferences.
+        # Use this to isolate problems due to the fail cache.
+        DISABLE_TYPEINFER_FAIL_CACHE = _readenv(
+            "NUMBA_DISABLE_TYPEINFER_FAIL_CACHE", int, 0)
 
         # Configure compilation target to use the specified CPU name
         # and CPU feature as the host information.
@@ -430,10 +414,6 @@ class _EnvReloader(object):
         )
         THREADING_LAYER = _readenv("NUMBA_THREADING_LAYER", str, 'default')
 
-        CAPTURED_ERRORS = _readenv("NUMBA_CAPTURED_ERRORS",
-                                   _validate_captured_errors_style,
-                                   'new_style')
-
         # CUDA Configs
 
         # Whether to warn about kernel launches where a host array
@@ -544,6 +524,10 @@ class _EnvReloader(object):
         NUMBA_NUM_THREADS = _NUMBA_NUM_THREADS
         del _NUMBA_NUM_THREADS
 
+        # sys.monitoring support
+        ENABLE_SYS_MONITORING = _readenv("NUMBA_ENABLE_SYS_MONITORING",
+                                         int, 0)
+
         # Profiling support
 
         # Indicates if a profiler detected. Only VTune can be detected for now
@@ -592,6 +576,14 @@ class _EnvReloader(object):
         # LLVM_PASS_TIMINGS enables LLVM recording of pass timings.
         LLVM_PASS_TIMINGS = _readenv(
             "NUMBA_LLVM_PASS_TIMINGS", int, 0,
+        )
+
+        # Coverage support.
+
+        # JIT_COVERAGE (bool) controls whether the compiler report compiled
+        # lines to coverage tools. Defaults to off.
+        JIT_COVERAGE = _readenv(
+            "NUMBA_JIT_COVERAGE", int, 0,
         )
 
         # Inject the configuration values into the module globals

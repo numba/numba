@@ -3,17 +3,22 @@ import typing as py_typing
 
 from numba.core.typing.typeof import typeof
 from numba.core import errors, types
+from numba.core.utils import PYVERSION
 
 
 class AsNumbaTypeRegistry:
     """
-    A registry for python typing declarations.  This registry stores a lookup
-    table for simple cases (e.g. int) and a list of functions for more
-    complicated cases (e.g. generics like List[int]).
+    A registry for Python types. It stores a lookup table for simple cases
+    (e.g. ``int``) and a list of functions for more complicated cases (e.g.
+    generics like ``List[int]``).
 
-    The as_numba_type registry is meant to work statically on type annotations
-    at compile type, not dynamically on instances at runtime. To check the type
-    of an object at runtime, see numba.typeof.
+    Python types are used in Python type annotations, and in instance checks.
+    Therefore, this registry supports determining the Numba type of Python type
+    annotations at compile time, along with determining the type of classinfo
+    arguments to ``isinstance()``.
+
+    This registry is not used dynamically on instances at runtime; to check the
+    type of an object at runtime, use ``numba.typeof``.
     """
 
     def __init__(self):
@@ -36,8 +41,41 @@ class AsNumbaTypeRegistry:
             return py_type
 
     def _builtin_infer(self, py_type):
-        if not isinstance(py_type, py_typing._GenericAlias):
-            return
+        if PYVERSION in ((3, 14), ):
+            # As of 3.14 the typing module has been updated to return a
+            # different type when calling: `typing.Optional[X]`.
+            #
+            # On 3.14:
+            #
+            # >>> type(typing.Optional[float])
+            # <class 'typing.Union'>
+            #
+            #
+            # On 3.13 (and presumably below):
+            #
+            # >>> type(typing._UnionGenericAlias)
+            # <class 'typing._UnionGenericAlias'>
+            #
+            #
+            # The previous implementation of this predicate used
+            # `_GenericAlias`, which was possible because `_UnionGenericAlias`
+            # is a subclass of `_GenericAlias`...
+            #
+            # >>> issubclass(typing._UnionGenericAlias, typing._GenericAlias)
+            # True
+            #
+            # However, other types, such as `typing.List[float]` remain as
+            # `typing._GenericAlias`, so that must be keept.
+            #
+            if not isinstance(py_type, (py_typing.Union,
+                                        py_typing._GenericAlias)):
+                return
+        elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+            # Use of underscore type `_GenericAlias`.
+            if not isinstance(py_type, py_typing._GenericAlias):
+                return
+        else:
+            raise NotImplementedError(PYVERSION)
 
         if getattr(py_type, "__origin__", None) is py_typing.Union:
             if len(py_type.__args__) != 2:
@@ -73,12 +111,12 @@ class AsNumbaTypeRegistry:
 
     def register(self, func_or_py_type, numba_type=None):
         """
-        Extend AsNumbaType to support new python types (e.g. a user defined
-        JitClass).  For a simple pair of a python type and a numba type, can
-        use as a function register(py_type, numba_type).  If more complex logic
-        is required (e.g. for generic types), register can also be used as a
-        decorator for a function that takes a python type as input and returns
-        a numba type or None.
+        Add support for new Python types (e.g. user-defined JitClasses) to the
+        registry. For a simple pair of a Python type and a Numba type, this can
+        be called as a function ``register(py_type, numba_type)``. If more
+        complex logic is required (e.g. for generic types), ``register`` can be
+        used as a decorator for a function that takes a Python type as input
+        and returns a Numba type or ``None``.
         """
         if numba_type is not None:
             # register used with a specific (py_type, numba_type) pair.
@@ -91,10 +129,10 @@ class AsNumbaTypeRegistry:
 
     def try_infer(self, py_type):
         """
-        Try to determine the numba type of a given python type.
-        We first consider the lookup dictionary.  If py_type is not there, we
-        iterate through the registered functions until one returns a numba type.
-        If type inference fails, return None.
+        Try to determine the Numba type of a given Python type. We first
+        consider the lookup dictionary. If ``py_type`` is not there, we iterate
+        through the registered functions until one returns a Numba type.  If
+        type inference fails, return ``None``.
         """
         result = self.lookup.get(py_type, None)
 
@@ -105,7 +143,7 @@ class AsNumbaTypeRegistry:
 
         if result is not None and not isinstance(result, types.Type):
             raise errors.TypingError(
-                f"as_numba_type should return a numba type, got {result}"
+                f"as_numba_type should return a Numba type, got {result}"
             )
         return result
 
@@ -113,7 +151,7 @@ class AsNumbaTypeRegistry:
         result = self.try_infer(py_type)
         if result is None:
             raise errors.TypingError(
-                f"Cannot infer numba type of python type {py_type}"
+                f"Cannot infer Numba type of Python type {py_type}"
             )
         return result
 

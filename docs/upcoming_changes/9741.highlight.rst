@@ -1,4 +1,0 @@
-Added Support for NumPy 2.1
----------------------------
-
-This release adds support for NumPy 2.1 (excluding the NEP-050 semantics).

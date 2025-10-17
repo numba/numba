@@ -217,7 +217,15 @@ def fold_arguments(pysig, args, kws, normal_handler, default_handler,
             bind_kws[n] = args[len(kwonly) + idx]
 
     # now bind
-    ba = pysig.bind(*bind_args, **bind_kws)
+    try:
+        ba = pysig.bind(*bind_args, **bind_kws)
+    except TypeError as e:
+        # The binding attempt can raise if the args don't match up, this needs
+        # to be converted to a TypingError so that e.g. partial type inference
+        # doesn't just halt.
+        msg = (f"Cannot bind 'args={bind_args} kws={bind_kws}' to "
+               f"signature '{pysig}' due to \"{type(e).__name__}: {e}\".")
+        raise TypingError(msg)
     for i, param in enumerate(pysig.parameters.values()):
         name = param.name
         default = param.default

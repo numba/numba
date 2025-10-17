@@ -5,6 +5,7 @@ Typing support for the buffer protocol (PEP 3118).
 import array
 
 from numba.core import types, config
+from numba.core.errors import NumbaValueError
 
 
 _pep3118_int_types = set('bBhHiIlLqQnN')
@@ -54,7 +55,7 @@ def decode_pep3118_format(fmt, itemsize):
         # in front of the PEP 3118 format string.
         return _pep3118_scalar_map[fmt.lstrip('=')]
     except KeyError:
-        raise ValueError("unsupported PEP 3118 format %r" % (fmt,))
+        raise NumbaValueError("unsupported PEP 3118 format %r" % (fmt,))
 
 
 def get_type_class(typ):

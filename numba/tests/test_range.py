@@ -1,12 +1,10 @@
 import unittest
 
-import sys
-
-import numpy
+import numpy as np
 
 from numba import jit, njit
-from numba.core import types, utils
-from numba.tests.support import tag
+from numba.core import types
+from numba.tests.support import TestCase
 
 from numba.core.inline_closurecall import length_of_iterator
 
@@ -181,6 +179,22 @@ class TestRange(unittest.TestCase):
             for val in non_numeric_vals:
                 self.assertEqual(cfunc_obj(val, *arg), pyfunc(val, *arg))
 
+
+@njit
+def my_arange(start, stop, step):
+    x = np.zeros(len(range(start, stop, step)), dtype=np.uint64)
+    i = 0
+    for v in range(start, stop, step):
+        x[i] = v
+        i += 1
+    return x
+
+
+class TestRangeNumpy(TestCase):
+    def test_range_safe_cast_mixed(self):
+        """Test that mixing `uint64` and `int64` works."""
+        a = my_arange(np.uint64(6), np.uint64(0), np.int64(-1))
+        self.assertPreciseEqual(a, np.arange(6, 0, -1, dtype=np.uint64))
 
 
 if __name__ == '__main__':

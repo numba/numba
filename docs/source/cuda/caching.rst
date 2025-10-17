@@ -1,6 +1,8 @@
 On-disk Kernel Caching
 ======================
 
+.. cuda-deprecated::
+
 When the ``cache`` keyword argument of the :func:`@cuda.jit <numba.cuda.jit>`
 decorator is ``True``, a file-based cache is enabled. This shortens compilation
 times when the function was already compiled in a previous invocation.

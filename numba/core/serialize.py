@@ -214,7 +214,8 @@ class ReduceMixin(abc.ABC):
     def _reduce_states(self):
         raise NotImplementedError
 
-    @abc.abstractclassmethod
+    @classmethod
+    @abc.abstractmethod
     def _rebuild(cls, **kwargs):
         raise NotImplementedError
 

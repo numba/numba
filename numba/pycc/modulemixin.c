@@ -23,6 +23,12 @@
 #include "../core/runtime/nrt.h"
 #endif
 
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION >= 12)
+    #define Py_BUILD_CORE 1
+    #include "internal/pycore_pyhash.h"
+    #undef Py_BUILD_CORE
+#endif
+
 /* Defines hashsecret variables (see issue #6386) */
 int64_t _numba_hashsecret_siphash_k0;
 int64_t _numba_hashsecret_siphash_k1;
@@ -190,6 +196,19 @@ PYCC(pycc_init_) (PyObject *module, PyMethodDef *defs,
             goto error;
         }
         Py_DECREF(func);
+    }
+    /* Recreate other environment objects 
+       envgvs is expected to end with a NULL pointer.
+    */
+    for (; envgvs[i]; ++i) {
+        EnvironmentObject *envobj;
+        envobj = recreate_environment(module, envs[i]);
+        if (envobj == NULL) {
+            goto error;
+        }
+        // Store the environment pointer into the global
+        *envgvs[i] = envobj;
+        Py_DECREF(envobj);
     }
     Py_DECREF(docobj);
     Py_DECREF(modname);

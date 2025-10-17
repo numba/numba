@@ -104,11 +104,35 @@ skip_unless_py312 = unittest.skipUnless(
     "needs Python 3.12"
 )
 
+skip_if_py313_on_windows = unittest.skipIf(
+     utils.PYVERSION == (3, 13) and sys.platform.startswith('win'),
+     "Not supported on Python 3.13 on Windows"
+ )
+
+skip_if_py314= unittest.skipIf(
+     utils.PYVERSION == (3, 14), "Test unstable on 3.14"
+ )
+
+skip_if_linux_aarch64 = unittest.skipIf(
+    sys.platform.startswith('linux') and platform.machine() == 'aarch64',
+    "Not supported on Linux aarch64"
+)
+
 skip_if_32bit = unittest.skipIf(_32bit, "Not supported on 32 bit")
 
 IS_NUMPY_2 = numpy_support.numpy_version >= (2, 0)
 skip_if_numpy_2 = unittest.skipIf(IS_NUMPY_2,
                                   "Not supported on numpy 2.0+")
+
+REDUCED_TESTING = bool(int(os.environ.get('_NUMBA_REDUCED_TESTING', 0)))
+"""
+Set to truthy to reduce the amount of testing. This can reduce memory use by
+tests on resource-limited machines.
+"""
+
+skip_if_reduced_testing = unittest.skipIf(REDUCED_TESTING,
+                                          "Skipped for reduced testing")
+
 
 def expected_failure_py311(fn):
     if utils.PYVERSION == (3, 11):
@@ -116,11 +140,26 @@ def expected_failure_py311(fn):
     else:
         return fn
 
+
 def expected_failure_py312(fn):
     if utils.PYVERSION == (3, 12):
         return unittest.expectedFailure(fn)
     else:
         return fn
+
+
+def expected_failure_py313(fn):
+    if utils.PYVERSION == (3, 13):
+        return unittest.expectedFailure(fn)
+    else:
+        return fn
+
+def expected_failure_py314(fn):
+    if utils.PYVERSION == (3, 14):
+        return unittest.expectedFailure(fn)
+    else:
+        return fn
+
 
 def expected_failure_np2(fn):
     if numpy_support.numpy_version == (2, 0):
@@ -209,7 +248,8 @@ needs_subprocess = unittest.skipUnless(_exec_cond, "needs subprocess harness")
 try:
     import setuptools
     has_setuptools = True
-except ImportError:
+except (ImportError, OSError):
+    # Suppress error caused by https://github.com/python/cpython/issues/118234
     has_setuptools = False
 
 

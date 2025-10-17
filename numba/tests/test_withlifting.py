@@ -16,7 +16,10 @@ from numba.tests.support import (MemoryLeak, TestCase, captured_stdout,
                                  skip_unless_scipy, linux_only,
                                  strace_supported, strace,
                                  expected_failure_py311,
-                                 expected_failure_py312)
+                                 expected_failure_py312,
+                                 expected_failure_py313,
+                                 expected_failure_py314,
+                                )
 from numba.core.utils import PYVERSION
 from numba.experimental import jitclass
 import unittest
@@ -280,6 +283,8 @@ class TestLiftCall(BaseTestWithLifting):
 
     @expected_failure_py311
     @expected_failure_py312
+    @expected_failure_py313
+    @expected_failure_py314
     def test_liftcall5(self):
         self.check_extracted_with(liftcall5, expect_count=1,
                                   expected_stdout="0\n1\n2\n3\n4\n5\nA\n")
@@ -719,6 +724,8 @@ class TestLiftObj(MemoryLeak, TestCase):
 
     @expected_failure_py311
     @expected_failure_py312
+    @expected_failure_py313
+    @expected_failure_py314
     def test_case19_recursion(self):
         def foo(x):
             with objmode_context():
@@ -1139,9 +1146,9 @@ class TestLiftObjCaching(MemoryLeak, TestCase):
 
 
 class TestBogusContext(BaseTestWithLifting):
+
     def test_undefined_global(self):
         the_ir = get_func_ir(lift_undefiend)
-
         with self.assertRaises(errors.CompilerError) as raises:
             with_lifting(
                 the_ir, self.typingctx, self.targetctx, self.flags, locals={},
@@ -1153,7 +1160,6 @@ class TestBogusContext(BaseTestWithLifting):
 
     def test_invalid(self):
         the_ir = get_func_ir(lift_invalid)
-
         with self.assertRaises(errors.CompilerError) as raises:
             with_lifting(
                 the_ir, self.typingctx, self.targetctx, self.flags, locals={},
@@ -1166,15 +1172,15 @@ class TestBogusContext(BaseTestWithLifting):
     def test_with_as_fails_gracefully(self):
         @njit
         def foo():
-            with open('') as f:
+            with bypass_context as bp:
                 pass
 
-        with self.assertRaises(errors.UnsupportedError) as raises:
+        with self.assertRaises(errors.UnsupportedBytecodeError) as raises:
             foo()
 
         excstr = str(raises.exception)
         msg = ("The 'with (context manager) as (variable):' construct is not "
-               "supported.")
+            "supported.")
         self.assertIn(msg, excstr)
 
 

@@ -8,9 +8,16 @@ from numba.core.utils import PYVERSION
 
 # List of bytecodes creating a new block in the control flow graph
 # (in addition to explicit jump labels).
-NEW_BLOCKERS = frozenset([
-    'SETUP_LOOP', 'FOR_ITER', 'SETUP_WITH', 'BEFORE_WITH'
-])
+if PYVERSION in ((3, 14),):
+    NEW_BLOCKERS = frozenset([
+        'SETUP_LOOP', 'FOR_ITER', 'SETUP_WITH', 'BEFORE_WITH', 'LOAD_SPECIAL'
+    ])
+elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+    NEW_BLOCKERS = frozenset([
+        'SETUP_LOOP', 'FOR_ITER', 'SETUP_WITH', 'BEFORE_WITH'
+    ])
+else:
+    raise NotImplementedError(PYVERSION)
 
 
 class CFBlock(object):
@@ -588,7 +595,7 @@ class CFGraph(object):
             stats.setdefault('iteration_count', 0)
 
         # Uses a simple DFS to find back-edges.
-        # The new algorithm is faster than the the previous dominator based
+        # The new algorithm is faster than the previous dominator based
         # algorithm.
         back_edges = set()
         # stack: keeps track of the traversal path
@@ -954,7 +961,7 @@ class ControlFlowAnalysis(object):
         self._curblock.terminating = True
         self._force_new_block = True
 
-    if PYVERSION in ((3, 12), ):
+    if PYVERSION in ((3, 12), (3, 13), (3, 14)):
         def op_RETURN_CONST(self, inst):
             self._curblock.terminating = True
             self._force_new_block = True

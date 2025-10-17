@@ -2,15 +2,24 @@ import dis
 import queue
 import sys
 import threading
+import traceback
 import unittest
+from collections import Counter
 from unittest.mock import Mock, call
-from numba.tests.support import TestCase, skip_unless_py312
+from numba.tests.support import TestCase
 from numba import jit, objmode
 from numba.core.utils import PYVERSION
 from numba.core.serialize import _numba_unpickle
 
 
+def _enable_sysmon(disp):
+    """Decorator to enable sys.monitoring on the dispatcher"""
+    disp._enable_sysmon = True
+    return disp
+
+
 def generate_usecase():
+    @_enable_sysmon
     @jit('int64(int64)',)
     def foo(x):
         return x + 1
@@ -21,7 +30,7 @@ def generate_usecase():
     return foo, call_foo
 
 
-if PYVERSION == (3, 12):
+if PYVERSION in ((3, 12), (3, 13), (3, 14)):
     PY_START = sys.monitoring.events.PY_START
     PY_RETURN = sys.monitoring.events.PY_RETURN
     RAISE = sys.monitoring.events.RAISE
@@ -36,7 +45,7 @@ TOOL2MONITORTYPE = {0 : "Debugger",
                     5 : "Optimizer"}
 
 
-@skip_unless_py312
+@unittest.skipUnless(PYVERSION >= (3, 12), "needs Python 3.12+")
 class TestMonitoring(TestCase):
     # Tests the interaction of the Numba dispatcher with `sys.monitoring`.
     #
@@ -67,6 +76,30 @@ class TestMonitoring(TestCase):
         # pretend to be a profiler in the majority of these unit tests
         self.tool_id = sys.monitoring.PROFILER_ID
 
+    def gather_mock_calls_multithreads(self, mockcalls):
+        # Gather mock-calls for the `self.foo` and `self.call_foo`
+        matched = Counter()
+        target_codeobjs = {self.call_foo.__code__, self.foo.__code__}
+        for cb_args in mockcalls._mock_call_args_list:
+            (codeobj, *args) = cb_args.args
+            if codeobj in target_codeobjs:
+                matched[(codeobj, *args)] += 1
+        return matched
+
+    def check_py_start_calls_multithreads(self, allcalls):
+        # Checks that PY_START calls were correctly captured for a
+        # `self.call_foo(self.arg)` call in multithreads
+        matched = self.gather_mock_calls_multithreads(allcalls[PY_START])
+        self.assertEqual(len(matched), 2) # two types of call
+
+        # Find the resume op, this is where the code for `call_foo` "starts"
+        inst = [x for x in dis.get_instructions(self.call_foo)
+                if x.opname == "RESUME"]
+        offset = inst[0].offset
+        self.assertEqual(matched[self.call_foo.__code__, offset], 2)
+        self.assertEqual(matched[self.foo.__code__, 0], 2)
+        self.assertEqual(matched.total(), 4)
+
     def check_py_start_calls(self, allcalls):
         # Checks that PY_START calls were correctly captured for a
         # `self.call_foo(self.arg)` call.
@@ -80,6 +113,17 @@ class TestMonitoring(TestCase):
         calls = (call(self.call_foo.__code__, offset),
                  call(self.foo.__code__, 0))
         mockcalls.assert_has_calls(calls)
+
+    def check_py_return_calls_multithreads(self, allcalls):
+        # Checks that PY_RETURN calls were correctly captured for a
+        # `self.call_foo(self.arg)` call.
+        matched = self.gather_mock_calls_multithreads(allcalls[PY_RETURN])
+        offset = [x for x in dis.get_instructions(self.call_foo)][-1].offset
+        self.assertEqual(matched[self.foo.__code__, 0, self.foo_result], 2)
+        self.assertEqual(
+            matched[self.call_foo.__code__, offset, self.call_foo_result], 2
+        )
+        self.assertEqual(matched.total(), 4)
 
     def check_py_return_calls(self, allcalls):
         # Checks that PY_RETURN calls were correctly captured for a
@@ -97,7 +141,8 @@ class TestMonitoring(TestCase):
                  call(self.call_foo.__code__, offset, self.call_foo_result)]
         mockcalls.assert_has_calls(calls)
 
-    def run_with_events(self, function, args, events, tool_id=None):
+    def run_with_events(self, function, args, events, tool_id=None,
+                        barrier=None):
         # Runs function with args with monitoring set for events on `tool_id`
         # (if present, else just uses the default of "PROFILER_ID") returns a
         # dictionary event->callback.
@@ -116,12 +161,20 @@ class TestMonitoring(TestCase):
                 event_bitmask |= event
             # only start monitoring once callbacks are registered
             sys.monitoring.set_events(_tool_id, event_bitmask)
+            if barrier is not None:
+                # Wait for all threads to have enabled events.
+                barrier()
             function(*args)
         finally:
             # clean up state
+            if barrier is not None:
+                # Wait for all threads to finish `function()`
+                # This makes sure all threads have a chance to see the events
+                # from other threads.
+                barrier()
+            sys.monitoring.set_events(_tool_id, NO_EVENTS)
             for event in events:
                 sys.monitoring.register_callback(_tool_id, event, None)
-            sys.monitoring.set_events(_tool_id, NO_EVENTS)
             sys.monitoring.free_tool_id(_tool_id)
         return callbacks
 
@@ -312,6 +365,7 @@ class TestMonitoring(TestCase):
                 if switch_on_event:
                     sys.monitoring.set_events(tool_id, event)
 
+            @_enable_sysmon
             @jit('int64(int64)')
             def foo(enable):
                 with objmode:
@@ -413,6 +467,7 @@ class TestMonitoring(TestCase):
 
         msg = 'exception raised'
 
+        @_enable_sysmon
         @jit('()')
         def foo():
             raise ValueError(msg)
@@ -482,6 +537,7 @@ class TestMonitoring(TestCase):
 
         msg = 'exception raised'
 
+        @_enable_sysmon
         @jit('()')
         def foo():
             raise StopIteration(msg)
@@ -592,6 +648,7 @@ class TestMonitoring(TestCase):
         class LocalException(Exception):
             pass
 
+        @_enable_sysmon
         @jit("()")
         def raising():
             raise LocalException(msg_execution)
@@ -651,6 +708,7 @@ class TestMonitoring(TestCase):
         class LocalException(Exception):
             pass
 
+        @_enable_sysmon
         @jit("()")
         def raising():
             raise LocalException(msg_execution)
@@ -682,31 +740,41 @@ class TestMonitoring(TestCase):
         self.assertIs(store_raised, callback.side_effect)
 
     def test_monitoring_multiple_threads(self):
-        # two threads, different tools and events registered on each thread.
+        # Two threads, different tools and events registered on each thread.
+        # Each test creates a global event capturing. The threads use barriers
+        # to wait for each other to start and stop capturing. This way they
+        # see the events from each other. One thread is capturing PY_START
+        # and the other is capturing PY_RETURN.
+        barrier = threading.Barrier(2)
+
+        def barrier_cb():
+            barrier.wait()
 
         def t1_work(self, q):
             try:
                 # test event PY_START on a "debugger tool"
                 cb = self.run_with_events(self.call_foo, (self.arg,),
                                           (PY_START,),
-                                          tool_id=sys.monitoring.DEBUGGER_ID)
+                                          tool_id=sys.monitoring.DEBUGGER_ID,
+                                          barrier=barrier_cb)
                 # Check...
                 self.assertEqual(len(cb), 1)
-                self.check_py_start_calls(cb)
+                self.check_py_start_calls_multithreads(cb)
             except Exception as e:
-                q.put(e)
+                q.put(''.join(traceback.format_exception(e)))
 
         def t2_work(self, q):
             try:
                 # test event PY_RETURN on a "coverage tool"
                 cb = self.run_with_events(self.call_foo, (self.arg,),
                                           (PY_RETURN,),
-                                          tool_id=sys.monitoring.COVERAGE_ID)
+                                          tool_id=sys.monitoring.COVERAGE_ID,
+                                          barrier=barrier_cb)
                 # Check...
                 self.assertEqual(len(cb), 1)
-                self.check_py_return_calls(cb)
+                self.check_py_return_calls_multithreads(cb)
             except Exception as e:
-                q.put(e)
+                q.put(''.join(traceback.format_exception(e)))
 
         q1 = queue.Queue()
         t1 = threading.Thread(target=t1_work, args=(self, q1))
@@ -720,11 +788,17 @@ class TestMonitoring(TestCase):
             t.join()
 
         # make sure there were no exceptions
-        self.assertFalse(q1.qsize())
-        self.assertFalse(q2.qsize())
+        def assert_empty_queue(q):
+            if q.qsize() != 0:
+                while not q.empty():
+                    print(q.get())
+                self.fail("queue supposed to be empty")
+
+        assert_empty_queue(q1)
+        assert_empty_queue(q2)
 
 
-@skip_unless_py312
+@unittest.skipUnless(PYVERSION >= (3, 12), "needs Python 3.12+")
 class TestMonitoringSelfTest(TestCase):
 
     def test_skipping_of_tests_if_monitoring_in_use(self):
@@ -736,6 +810,36 @@ class TestMonitoringSelfTest(TestCase):
                                         'test_start_event',
                                         flags={'-m': 'cProfile'})
         self.assertIn("skipped=1", str(r))
+
+
+@unittest.skipUnless(PYVERSION >= (3, 12), "needs Python 3.12+")
+class TestMonitoringEnvVarControl(TestCase):
+    @TestCase.run_test_in_subprocess(
+        envvars={"NUMBA_ENABLE_SYS_MONITORING": ''})
+    def test_default_off(self):
+        @jit
+        def foo(x):
+            return x + 1
+
+        self.assertFalse(foo._enable_sysmon)
+
+    @TestCase.run_test_in_subprocess(
+        envvars={"NUMBA_ENABLE_SYS_MONITORING": '0'})
+    def test_override_off(self):
+        @jit
+        def foo(x):
+            return x + 1
+
+        self.assertFalse(foo._enable_sysmon)
+
+    @TestCase.run_test_in_subprocess(
+        envvars={"NUMBA_ENABLE_SYS_MONITORING": '1'})
+    def test_override_on(self):
+        @jit
+        def foo(x):
+            return x + 1
+
+        self.assertTrue(foo._enable_sysmon)
 
 
 if __name__ == '__main__':

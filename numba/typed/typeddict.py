@@ -266,7 +266,7 @@ def box_dicttype(typ, val, c):
     modname = c.context.insert_const_string(
         c.builder.module, 'numba.typed.typeddict',
     )
-    typeddict_mod = c.pyapi.import_module_noblock(modname)
+    typeddict_mod = c.pyapi.import_module(modname)
     fmp_fn = c.pyapi.object_getattr_string(typeddict_mod, '_from_meminfo_ptr')
 
     dicttype_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ))

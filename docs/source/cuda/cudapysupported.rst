@@ -2,6 +2,8 @@
 Supported Python features in CUDA Python
 ========================================
 
+.. cuda-deprecated::
+
 This page lists the Python features supported in the CUDA Python.  This includes
 all kernel and device functions compiled with ``@cuda.jit`` and other higher
 level Numba decorators that targets the CUDA GPU.

@@ -5,7 +5,7 @@ import unittest
 from numba import jit, njit, objmode, typeof, literally
 from numba.extending import overload
 from numba.core import types
-from numba.core.errors import UnsupportedError
+from numba.core.errors import UnsupportedBytecodeError
 from numba.tests.support import (
     TestCase,
     MemoryLeakMixin,
@@ -388,7 +388,7 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
                 arg41=1,
             )
 
-        with self.assertRaises(UnsupportedError) as raises:
+        with self.assertRaises(UnsupportedBytecodeError) as raises:
             njit()(inline_func)(False)
         self.assertIn(
             'You can resolve this issue by moving the control flow out',
@@ -498,7 +498,7 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
                 1,
             )
 
-        with self.assertRaises(UnsupportedError) as raises:
+        with self.assertRaises(UnsupportedBytecodeError) as raises:
             njit()(inline_func)(False)
         self.assertIn(
             'You can resolve this issue by moving the control flow out',
@@ -585,7 +585,7 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
                 arg15=1 if flag else 2,
             )
 
-        with self.assertRaises(UnsupportedError) as raises:
+        with self.assertRaises(UnsupportedBytecodeError) as raises:
             njit()(inline_func)(False)
         self.assertIn(
             'You can resolve this issue by moving the control flow out',
@@ -973,7 +973,7 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
             }
             return d["S"]
 
-        with self.assertRaises(UnsupportedError) as raises:
+        with self.assertRaises(UnsupportedBytecodeError) as raises:
             njit()(inline_func)("a_string", False)
         self.assertIn(
             'You can resolve this issue by moving the control flow out',

@@ -473,7 +473,7 @@ def box_lsttype(typ, val, c):
     modname = c.context.insert_const_string(
         c.builder.module, 'numba.typed.typedlist',
     )
-    typedlist_mod = c.pyapi.import_module_noblock(modname)
+    typedlist_mod = c.pyapi.import_module(modname)
     fmp_fn = c.pyapi.object_getattr_string(typedlist_mod, '_from_meminfo_ptr')
 
     lsttype_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ))

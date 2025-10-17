@@ -1,9 +1,0 @@
-Allow caching of Numba functions within Zip files
--------------------------------------------------
-
-This change enables Numba functions imported from a file within a Zip archive to
-be cached, by recognizing a Zip file and using a user-wide cache directory
-for the cache. Previously, Numba would fail.
-
-For context, Zip archives are a supported-but-less-common way to distribute
-Python packages, and heavily used in PySpark.

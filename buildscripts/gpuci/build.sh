@@ -35,10 +35,10 @@ fi;
 # Test with different NumPy and Python versions with each toolkit (it's not
 # worth testing the Cartesian product of versions here, we just need to test
 # with different CUDA, NumPy, and Python versions).
-declare -A CTK_NUMPY_VMAP=( ["11.2"]="1.22" ["11.3"]="1.23" ["11.5"]="1.25" ["11.8"]="1.26")
+declare -A CTK_NUMPY_VMAP=( ["11.2"]="1.24" ["11.3"]="1.26" ["11.5"]="2.0" ["11.8"]="2.1")
 NUMPY_VER="${CTK_NUMPY_VMAP[$CUDA_TOOLKIT_VER]}"
 
-declare -A CTK_PYTHON_VMAP=( ["11.2"]="3.9" ["11.3"]="3.10" ["11.5"]="3.11" ["11.8"]="3.12")
+declare -A CTK_PYTHON_VMAP=( ["11.2"]="3.10" ["11.3"]="3.11" ["11.5"]="3.11" ["11.8"]="3.12")
 PYTHON_VER="${CTK_PYTHON_VMAP[$CUDA_TOOLKIT_VER]}"
 
 ################################################################################

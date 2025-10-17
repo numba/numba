@@ -27,7 +27,7 @@
  *
  */
 
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 12)
+#if (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 12) || (PY_MINOR_VERSION == 13) || (PY_MINOR_VERSION == 14))
 
 #ifndef Py_BUILD_CORE
     #define Py_BUILD_CORE 1
@@ -39,7 +39,15 @@
 #  undef HAVE_STD_ATOMIC
 #endif
 #undef _PyGC_FINALIZED
-#include "internal/pycore_atomic.h"
+
+/* dynamic_annotations.h is needed for building Python with --with-valgrind 
+ * support. The following include is to workaround issues described in
+ * https://github.com/numba/numba/pull/10073
+ */
+#include "dynamic_annotations.h"
+#if (PY_MINOR_VERSION == 12)
+    #include "internal/pycore_atomic.h"
+#endif
 #include "internal/pycore_interp.h"
 #include "internal/pycore_pyerrors.h"
 #include "internal/pycore_instruments.h"
@@ -400,6 +408,8 @@ public:
     PyObject_HEAD
     /* Whether compilation of new overloads is permitted */
     char can_compile;
+    /* Enable sys.monitoring (since Python 3.12+) */
+    char enable_sysmon;
     /* Whether fallback to object mode is permitted */
     char can_fallback;
     /* Whether types must match exactly when resolving overloads.
@@ -529,6 +539,7 @@ Dispatcher_init(Dispatcher *self, PyObject *args, PyObject *kwds)
     self->tm = static_cast<TypeManager*>(tmaddr);
     self->argct = argct;
     self->can_compile = 1;
+    self->enable_sysmon = 0;  // default to turn off sys.monitoring
     self->can_fallback = can_fallback;
     self->fallbackdef = NULL;
     self->has_stararg = has_stararg;
@@ -672,7 +683,7 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
 
 #if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 11)
     /*
-     * On Python 3.11, _PyEval_EvalFrameDefault stops using PyTraceInfo since 
+     * On Python 3.11, _PyEval_EvalFrameDefault stops using PyTraceInfo since
      * it's now baked into ThreadState.
      * https://github.com/python/cpython/pull/26623
      */
@@ -780,7 +791,7 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
     }
 }
 
-#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 12)
+#elif (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 12) || (PY_MINOR_VERSION == 13) || (PY_MINOR_VERSION == 14))
 
 // Python 3.12 has a completely new approach to tracing and profiling due to
 // the new `sys.monitoring` system.
@@ -998,7 +1009,7 @@ static int invoke_monitoring(PyThreadState * tstate, int event, Dispatcher *self
             callback_args[2] = (PyObject*)retval;
             PyObject ** callargs = &callback_args[0];
 
-            // finally, stage the call the the instrument
+            // finally, stage the call to instrument
             result = PyObject_Vectorcall(instrument, callargs, nargsf, NULL);
 
             // decrement the tracing tracking field and set the event back to
@@ -1040,6 +1051,9 @@ int static inline invoke_monitoring_PY_UNWIND(PyThreadState * tstate, Dispatcher
     return invoke_monitoring(tstate, PY_MONITORING_EVENT_PY_UNWIND, self, exception);
 }
 
+/* forward declaration */
+bool static is_sysmon_enabled(Dispatcher *self);
+
 /* A custom, fast, inlinable version of PyCFunction_Call() */
 static PyObject *
 call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyObject *locals)
@@ -1048,18 +1062,19 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
     PyThreadState *tstate = NULL;
     PyObject * pyresult = NULL;
     PyObject * pyexception = NULL;
+    const bool enabled_sysmon = is_sysmon_enabled(self);
 
     assert(PyCFunction_Check(cfunc));
     assert(PyCFunction_GET_FLAGS(cfunc) == (METH_VARARGS | METH_KEYWORDS));
     fn = (PyCFunctionWithKeywords) PyCFunction_GET_FUNCTION(cfunc);
     tstate = PyThreadState_GET();
     // issue PY_START if event is set
-    if(invoke_monitoring_PY_START(tstate, self) != 0){
+    if(enabled_sysmon && invoke_monitoring_PY_START(tstate, self) != 0){
         return NULL;
     }
     // make call
     pyresult = fn(PyCFunction_GET_SELF(cfunc), args, kws);
-    if (pyresult == NULL) {
+    if (enabled_sysmon && pyresult == NULL) {
         // pyresult == NULL, which means the Numba function raised an exception
         // which is now pending.
         //
@@ -1104,7 +1119,7 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
         return NULL;
     }
     // issue PY_RETURN if event is set
-    if(invoke_monitoring_PY_RETURN(tstate, self, pyresult) != 0){
+    if(enabled_sysmon && invoke_monitoring_PY_RETURN(tstate, self, pyresult) != 0){
         return NULL;
     }
     return pyresult;
@@ -1535,6 +1550,7 @@ static PyMethodDef Dispatcher_methods[] = {
 
 static PyMemberDef Dispatcher_members[] = {
     {(char*)"_can_compile", T_BOOL, offsetof(Dispatcher, can_compile), 0, NULL },
+    {(char*)"_enable_sysmon", T_BOOL, offsetof(Dispatcher, enable_sysmon), 0, NULL },
     {NULL}  /* Sentinel */
 };
 
@@ -1589,17 +1605,23 @@ static PyTypeObject DispatcherType = {
     0,                                           /* tp_version_tag */
     0,                                           /* tp_finalize */
     0,                                           /* tp_vectorcall */
-#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 12)
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION >= 12)
 /* This was introduced first in 3.12
  * https://github.com/python/cpython/issues/91051
  */
     0,                                           /* tp_watched */
 #endif
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION >= 13)
+/* This was introduced in 3.13
+ * https://github.com/python/cpython/pull/114900
+ */
+    0,                                           /* tp_versions_used */
+#endif
 
 /* WARNING: Do not remove this, only modify it! It is a version guard to
  * act as a reminder to update this struct on Python version update! */
 #if (PY_MAJOR_VERSION == 3)
-#if ! ((PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11) || (PY_MINOR_VERSION == 12))
+#if ! (NB_SUPPORTED_PYTHON_MINOR)
 #error "Python minor version is not supported."
 #endif
 #else
@@ -1608,6 +1630,13 @@ static PyTypeObject DispatcherType = {
 /* END WARNING*/
 };
 
+
+#if (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 12) || (PY_MINOR_VERSION == 13) || (PY_MINOR_VERSION == 14))
+static
+bool is_sysmon_enabled(Dispatcher * self) {
+    return self->enable_sysmon;
+}
+#endif
 
 static PyObject *compute_fingerprint(PyObject *self, PyObject *args)
 {

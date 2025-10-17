@@ -162,6 +162,8 @@ else:
 def _typeof_numpy_scalar(val, c):
     try:
         return numpy_support.map_arrayscalar_type(val)
+    except errors.NumbaNotImplementedError:
+        pass
     except NotImplementedError:
         pass
 

@@ -1,7 +1,0 @@
-Fix incorrect return type of ``numpy.sum`` on boolean arrays
-------------------------------------------------------------
-
-Calling ``numpy.sum`` with ``axis`` parameter on boolean arrays incorrectly
-returns bool type, while it should return int type. Consequently,
-calling ``numpy.count_nonzero`` on boolean arrays also incorrectly returns
-bool type. This is now fixed.
