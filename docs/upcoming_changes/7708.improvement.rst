@@ -1,0 +1,4 @@
+Enable boxing of unhashable literals
+------------------------------------
+
+Adds ``LiteralKeyWrapper`` to support boxing of unhashable literal types.
