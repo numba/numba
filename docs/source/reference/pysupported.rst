@@ -1070,6 +1070,7 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.erf`
 * :func:`math.erfc`
 * :func:`math.exp`
+* :func:`math.exp2`
 * :func:`math.expm1`
 * :func:`math.fabs`
 * :func:`math.floor`
