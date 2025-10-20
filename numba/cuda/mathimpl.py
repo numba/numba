@@ -144,7 +144,7 @@ def fp16_exp2_impl(context, builder, sig, args):
         return cuda.fp16.hexp2(x)
 
     return context.compile_internal(builder, fp16_exp2, sig, args)
-    
+
 
 @lower(math.floor, types.float16)
 def fp16_floor_impl(context, builder, sig, args):
