@@ -137,12 +137,14 @@ def fp16_exp_impl(context, builder, sig, args):
 
     return context.compile_internal(builder, fp16_exp, sig, args)
 
+
 @lower(math.exp2, types.float16)
 def fp16_exp2_impl(context, builder, sig, args):
     def fp16_exp2(x):
         return cuda.fp16.hexp2(x)
 
     return context.compile_internal(builder, fp16_exp2, sig, args)
+    
 
 @lower(math.floor, types.float16)
 def fp16_floor_impl(context, builder, sig, args):
