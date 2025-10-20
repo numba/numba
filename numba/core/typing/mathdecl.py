@@ -8,7 +8,6 @@ infer_global = registry.register_global
 
 
 @infer_global(math.exp)
-@infer_global(math.exp2)
 @infer_global(math.expm1)
 @infer_global(math.fabs)
 @infer_global(math.sqrt)
@@ -41,7 +40,8 @@ class Math_unary(ConcreteTemplate):
         signature(types.float32, types.float32),
         signature(types.float64, types.float64),
     ]
-
+if hasattr(math, 'exp2'):
+    Math_unary = infer_global(math.exp2)(Math_unary)
 
 @infer_global(math.atan2)
 class Math_atan2(ConcreteTemplate):
