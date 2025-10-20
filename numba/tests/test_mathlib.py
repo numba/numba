@@ -74,6 +74,8 @@ def npy_sqrt(x):
 def exp(x):
     return math.exp(x)
 
+def exp2(x):
+    return math.exp2(x)
 
 def expm1(x):
     return math.expm1(x)

@@ -21,6 +21,7 @@ unarys += [('ceil', 'ceilf', math.ceil)]
 unarys += [('floor', 'floorf', math.floor)]
 unarys += [('fabs', 'fabsf', math.fabs)]
 unarys += [('exp', 'expf', math.exp)]
+unarys += [('exp2', 'exp2f', math.exp2)]
 unarys += [('expm1', 'expm1f', math.expm1)]
 unarys += [('erf', 'erff', math.erf)]
 unarys += [('erfc', 'erfcf', math.erfc)]
@@ -136,6 +137,12 @@ def fp16_exp_impl(context, builder, sig, args):
 
     return context.compile_internal(builder, fp16_exp, sig, args)
 
+@lower(math.exp2, types.float16)
+def fp16_exp2_impl(context, builder, sig, args):
+    def fp16_exp2(x):
+        return cuda.fp16.hexp2(x)
+
+    return context.compile_internal(builder, fp16_exp2, sig, args)
 
 @lower(math.floor, types.float16)
 def fp16_floor_impl(context, builder, sig, args):

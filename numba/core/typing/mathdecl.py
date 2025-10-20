@@ -8,6 +8,7 @@ infer_global = registry.register_global
 
 
 @infer_global(math.exp)
+@infer_global(math.exp2)
 @infer_global(math.expm1)
 @infer_global(math.fabs)
 @infer_global(math.sqrt)
