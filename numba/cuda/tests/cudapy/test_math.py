@@ -78,11 +78,6 @@ def math_exp(A, B):
     B[i] = math.exp(A[i])
 
 
-def math_exp2(A, B):
-    i = cuda.grid(1)
-    B[i] = math.exp2(A[i])
-
-
 def math_erf(A, B):
     i = cuda.grid(1)
     B[i] = math.erf(A[i])
