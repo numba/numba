@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import warnings
+import traceback
 
 # YAML needed to use file based Numba config
 try:
@@ -69,15 +70,47 @@ def _os_supports_avx():
             return False
 
 
-# Choose how to handle captured errors
-def _validate_captured_errors_style(style_str):
-    rendered_style = str(style_str)
-    if rendered_style not in ('new_style', 'old_style'):
-        msg = ("Invalid style in NUMBA_CAPTURED_ERRORS: "
-               f"{rendered_style}")
+class _OptLevel(int):
+    """This class holds the "optimisation level" set in `NUMBA_OPT`. As this env
+    var can be an int or a string, but is almost always interpreted as an int,
+    this class subclasses int so as to get the common behaviour but stores the
+    actual value as a `_raw_value` member. The value "max" is a special case
+    and the property `is_opt_max` can be queried to find if the optimisation
+    level (supplied value at construction time) is "max"."""
+
+    def __new__(cls, *args, **kwargs):
+        assert len(args) == 1
+        (value,) = args
+        _int_value = 3 if value == 'max' else int(value)
+        # the int ctor is always called with an appropriate integer value
+        new = super().__new__(cls, _int_value, **kwargs)
+        # raw value is max or int
+        new._raw_value = value if value == 'max' else _int_value
+        return new
+
+    @property
+    def is_opt_max(self):
+        """Returns True if the optimisation level is "max" False
+        otherwise."""
+        return self._raw_value == "max"
+
+    def __repr__(self):
+        if isinstance(self._raw_value, str):
+            arg = f"'{self._raw_value}'"
+        else:
+            arg = self._raw_value
+        return f"_OptLevel({arg})"
+
+
+def _process_opt_level(opt_level):
+
+    if opt_level not in ('0', '1', '2', '3', 'max'):
+        msg = ("Environment variable `NUMBA_OPT` is set to an unsupported "
+               f"value '{opt_level}', supported values are 0, 1, 2, 3, and "
+               "'max'")
         raise ValueError(msg)
     else:
-        return rendered_style
+        return _OptLevel(opt_level)
 
 
 class _EnvReloader(object):
@@ -151,12 +184,20 @@ class _EnvReloader(object):
             try:
                 return ctor(value)
             except Exception:
-                warnings.warn("environ %s defined but failed to parse '%s'" %
-                              (name, value), RuntimeWarning)
+                warnings.warn(f"Environment variable '{name}' is defined but "
+                              f"its associated value '{value}' could not be "
+                              "parsed.\nThe parse failed with exception:\n"
+                              f"{traceback.format_exc()}",
+                              RuntimeWarning)
                 return default
 
         def optional_str(x):
             return str(x) if x is not None else None
+
+        # Type casting rules selection
+        USE_LEGACY_TYPE_SYSTEM = _readenv(
+            "NUMBA_USE_LEGACY_TYPE_SYSTEM", int, 1
+        )
 
         # developer mode produces full tracebacks, disables help instructions
         DEVELOPER_MODE = _readenv("NUMBA_DEVELOPER_MODE", int, 0)
@@ -242,6 +283,11 @@ class _EnvReloader(object):
         # Contains path to the directory
         CACHE_DIR = _readenv("NUMBA_CACHE_DIR", str, "")
 
+        # Override default cache locators list including their order
+        # Comma separated list of locator class names,
+        # see _locator_classes in caching submodule
+        CACHE_LOCATOR_CLASSES = _readenv("NUMBA_CACHE_LOCATOR_CLASSES", str, "")
+
         # Enable tracing support
         TRACE = _readenv("NUMBA_TRACE", int, 0)
 
@@ -251,6 +297,11 @@ class _EnvReloader(object):
         # Enable debugging of type inference
         DEBUG_TYPEINFER = _readenv("NUMBA_DEBUG_TYPEINFER", int, 0)
 
+        # Disable caching of failed type inferences.
+        # Use this to isolate problems due to the fail cache.
+        DISABLE_TYPEINFER_FAIL_CACHE = _readenv(
+            "NUMBA_DISABLE_TYPEINFER_FAIL_CACHE", int, 0)
+
         # Configure compilation target to use the specified CPU name
         # and CPU feature as the host information.
         # Note: this overrides "host" option for AOT compilation.
@@ -259,7 +310,7 @@ class _EnvReloader(object):
                                 ("" if str(CPU_NAME).lower() == 'generic'
                                  else None))
         # Optimization level
-        OPT = _readenv("NUMBA_OPT", int, 3)
+        OPT = _readenv("NUMBA_OPT", _process_opt_level, _OptLevel(3))
 
         # Force dump of Python bytecode
         DUMP_BYTECODE = _readenv("NUMBA_DUMP_BYTECODE", int, DEBUG_FRONTEND)
@@ -301,12 +352,11 @@ class _EnvReloader(object):
         DUMP_OPTIMIZED = _readenv("NUMBA_DUMP_OPTIMIZED", int, DEBUG)
 
         # Force disable loop vectorize
-        # Loop vectorizer is disabled on 32-bit win32 due to a bug (#649)
-        LOOP_VECTORIZE = _readenv("NUMBA_LOOP_VECTORIZE", int,
-                                  not (IS_WIN32 and IS_32BITS))
+        LOOP_VECTORIZE = _readenv("NUMBA_LOOP_VECTORIZE", int, 1)
 
-        # Switch on  superword-level parallelism vectorization, default is on.
-        SLP_VECTORIZE = _readenv("NUMBA_SLP_VECTORIZE", int, 1)
+        # Enable superword-level parallelism vectorization, default is off
+        # since #8705 (miscompilation).
+        SLP_VECTORIZE = _readenv("NUMBA_SLP_VECTORIZE", int, 0)
 
         # Force dump of generated assembly
         DUMP_ASSEMBLY = _readenv("NUMBA_DUMP_ASSEMBLY", int, DEBUG)
@@ -336,9 +386,15 @@ class _EnvReloader(object):
                 # on some CPUs (list at
                 # http://llvm.org/bugs/buglist.cgi?quicksearch=avx).
                 # For now we'd rather disable it, since it can pessimize code
-                cpu_name = ll.get_host_cpu_name()
-                return cpu_name not in ('corei7-avx', 'core-avx-i',
-                                        'sandybridge', 'ivybridge')
+                cpu_name = CPU_NAME or ll.get_host_cpu_name()
+                disabled_cpus = {'corei7-avx', 'core-avx-i',
+                                 'sandybridge', 'ivybridge'}
+                # Disable known baseline CPU names that virtual machines may
+                # incorrectly report as having AVX support.
+                # This can cause problems with the SVML-pass's use of AVX512.
+                # See https://github.com/numba/numba/issues/9582
+                disabled_cpus |= {'nocona'}
+                return cpu_name not in disabled_cpus
 
         ENABLE_AVX = _readenv("NUMBA_ENABLE_AVX", int, avx_default)
 
@@ -358,10 +414,6 @@ class _EnvReloader(object):
         )
         THREADING_LAYER = _readenv("NUMBA_THREADING_LAYER", str, 'default')
 
-        CAPTURED_ERRORS = _readenv("NUMBA_CAPTURED_ERRORS",
-                                   _validate_captured_errors_style,
-                                   'old_style')
-
         # CUDA Configs
 
         # Whether to warn about kernel launches where a host array
@@ -375,7 +427,7 @@ class _EnvReloader(object):
 
         # The default compute capability to target when compiling to PTX.
         CUDA_DEFAULT_PTX_CC = _readenv("NUMBA_CUDA_DEFAULT_PTX_CC", _parse_cc,
-                                       (5, 3))
+                                       (5, 0))
 
         # Disable CUDA support
         DISABLE_CUDA = _readenv("NUMBA_DISABLE_CUDA",
@@ -418,6 +470,9 @@ class _EnvReloader(object):
         # Whether the default stream is the per-thread default stream
         CUDA_PER_THREAD_DEFAULT_STREAM = _readenv(
             "NUMBA_CUDA_PER_THREAD_DEFAULT_STREAM", int, 0)
+
+        CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY = _readenv(
+            "NUMBA_CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY", int, 0)
 
         # Location of the CUDA include files
         if IS_WIN32:
@@ -469,6 +524,10 @@ class _EnvReloader(object):
         NUMBA_NUM_THREADS = _NUMBA_NUM_THREADS
         del _NUMBA_NUM_THREADS
 
+        # sys.monitoring support
+        ENABLE_SYS_MONITORING = _readenv("NUMBA_ENABLE_SYS_MONITORING",
+                                         int, 0)
+
         # Profiling support
 
         # Indicates if a profiler detected. Only VTune can be detected for now
@@ -507,11 +566,24 @@ class _EnvReloader(object):
             "all" if LLVM_REFPRUNE_PASS else "",
         )
 
+        # llvmlite memory manager
+        USE_LLVMLITE_MEMORY_MANAGER = _readenv(
+            "NUMBA_USE_LLVMLITE_MEMORY_MANAGER", int, None
+        )
+
         # Timing support.
 
         # LLVM_PASS_TIMINGS enables LLVM recording of pass timings.
         LLVM_PASS_TIMINGS = _readenv(
             "NUMBA_LLVM_PASS_TIMINGS", int, 0,
+        )
+
+        # Coverage support.
+
+        # JIT_COVERAGE (bool) controls whether the compiler report compiled
+        # lines to coverage tools. Defaults to off.
+        JIT_COVERAGE = _readenv(
+            "NUMBA_JIT_COVERAGE", int, 0,
         )
 
         # Inject the configuration values into the module globals

@@ -1,5 +1,4 @@
 import numpy as np
-from numba.core.compiler import compile_isolated
 from numba.core.errors import TypingError
 from numba import njit
 from numba.core import types
@@ -29,10 +28,9 @@ def numpy_scalar_cast_error():
 class TestCasting(unittest.TestCase):
     def test_float_to_int(self):
         pyfunc = float_to_int
-        cr = compile_isolated(pyfunc, [types.float32])
-        cfunc = cr.entry_point
+        cfunc = njit((types.float32,))(pyfunc)
 
-        self.assertEqual(cr.signature.return_type, types.int32)
+        self.assertEqual(cfunc.nopython_signatures[0].return_type, types.int32)
         self.assertEqual(cfunc(12.3), pyfunc(12.3))
         self.assertEqual(cfunc(12.3), int(12.3))
         self.assertEqual(cfunc(-12.3), pyfunc(-12.3))
@@ -40,28 +38,27 @@ class TestCasting(unittest.TestCase):
 
     def test_int_to_float(self):
         pyfunc = int_to_float
-        cr = compile_isolated(pyfunc, [types.int64])
-        cfunc = cr.entry_point
+        cfunc = njit((types.int64,))(pyfunc)
 
-        self.assertEqual(cr.signature.return_type, types.float64)
+        self.assertEqual(cfunc.nopython_signatures[0].return_type,
+                         types.float64)
         self.assertEqual(cfunc(321), pyfunc(321))
         self.assertEqual(cfunc(321), 321. / 2)
 
     def test_float_to_unsigned(self):
         pyfunc = float_to_unsigned
-        cr = compile_isolated(pyfunc, [types.float32])
-        cfunc = cr.entry_point
+        cfunc = njit((types.float32,))(pyfunc)
 
-        self.assertEqual(cr.signature.return_type, types.uint32)
+        self.assertEqual(cfunc.nopython_signatures[0].return_type, types.uint32)
         self.assertEqual(cfunc(3.21), pyfunc(3.21))
         self.assertEqual(cfunc(3.21), struct.unpack('I', struct.pack('i',
                                                                       3))[0])
 
     def test_float_to_complex(self):
         pyfunc = float_to_complex
-        cr = compile_isolated(pyfunc, [types.float64])
-        cfunc = cr.entry_point
-        self.assertEqual(cr.signature.return_type, types.complex128)
+        cfunc = njit((types.float64,))(pyfunc)
+        self.assertEqual(cfunc.nopython_signatures[0].return_type,
+                         types.complex128)
         self.assertEqual(cfunc(-3.21), pyfunc(-3.21))
         self.assertEqual(cfunc(-3.21), -3.21 + 0j)
 
@@ -112,7 +109,7 @@ class TestCasting(unittest.TestCase):
         """
 
         with self.assertRaises(TypingError) as raises:
-            compile_isolated(numpy_scalar_cast_error, ())
+            njit(())(numpy_scalar_cast_error)
 
         self.assertIn("Casting array(float64, 1d, C) to int32 directly is unsupported.",
                       str(raises.exception))

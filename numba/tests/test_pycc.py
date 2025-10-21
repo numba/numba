@@ -1,5 +1,5 @@
 import contextlib
-import imp
+import importlib
 import os
 import shutil
 import subprocess
@@ -13,19 +13,12 @@ import numpy as np
 import llvmlite.binding as ll
 
 from numba.core import utils
-from numba.pycc.decorators import clear_export_registry
-from numba.pycc.platform import find_shared_ending, find_pyext_ending
-from numba.pycc.platform import external_compiler_works
-
 from numba.tests.support import (TestCase, tag, import_dynamic, temp_directory,
-                                 has_blas)
+                                 has_blas, needs_setuptools, skip_if_py313_on_windows,
+                                 skip_if_linux_aarch64)
+
 import unittest
 
-
-try:
-    import setuptools
-except ImportError:
-    setuptools = None
 
 _skip_reason = 'windows only'
 _windows_only = unittest.skipIf(not sys.platform.startswith('win'),
@@ -42,6 +35,8 @@ def unset_macosx_deployment_target():
     if 'MACOSX_DEPLOYMENT_TARGET' in os.environ:
         del os.environ['MACOSX_DEPLOYMENT_TARGET']
 
+
+@needs_setuptools
 class TestCompilerChecks(TestCase):
 
     # NOTE: THIS TEST MUST ALWAYS RUN ON WINDOWS, DO NOT SKIP
@@ -50,6 +45,10 @@ class TestCompilerChecks(TestCase):
         # When inside conda-build VSINSTALLDIR should be set and windows should
         # have a valid compiler available, `external_compiler_works()` should
         # agree with this. If this is not the case then error out to alert devs.
+
+        # This is a local import to avoid deprecation warnings being generated
+        # through the use of the numba.pycc module.
+        from numba.pycc.platform import external_compiler_works
         is_running_conda_build = os.environ.get('CONDA_BUILD', None) is not None
         if is_running_conda_build:
             if os.environ.get('VSINSTALLDIR', None) is not None:
@@ -71,6 +70,10 @@ class BasePYCCTest(TestCase):
         # Since we're executing the module-under-test several times
         # from the same process, we must clear the exports registry
         # between invocations.
+
+        # This is a local import to avoid deprecation warnings being generated
+        # through the use of the numba.pycc module.
+        from numba.pycc.decorators import clear_export_registry
         clear_export_registry()
 
     @contextlib.contextmanager
@@ -84,6 +87,9 @@ class BasePYCCTest(TestCase):
             sys.modules.pop(name, None)
 
 
+@needs_setuptools
+@skip_if_py313_on_windows
+@skip_if_linux_aarch64
 class TestCC(BasePYCCTest):
 
     def setUp(self):
@@ -91,7 +97,7 @@ class TestCC(BasePYCCTest):
         self.skip_if_no_external_compiler() # external compiler needed
         from numba.tests import compile_with_pycc
         self._test_module = compile_with_pycc
-        imp.reload(self._test_module)
+        importlib.reload(self._test_module)
 
     @contextlib.contextmanager
     def check_cc_compiled(self, cc):
@@ -136,6 +142,9 @@ class TestCC(BasePYCCTest):
         self.assertTrue(os.path.basename(f).startswith('pycc_test_simple.'), f)
         if sys.platform.startswith('linux'):
             self.assertTrue(f.endswith('.so'), f)
+            # This is a local import to avoid deprecation warnings being
+            # generated through the use of the numba.pycc module.
+            from numba.pycc.platform import find_pyext_ending
             self.assertIn(find_pyext_ending(), f)
 
     def test_compile(self):
@@ -167,9 +176,6 @@ class TestCC(BasePYCCTest):
         # Compiling for the host CPU should always succeed
         self.check_compile_for_cpu("host")
 
-    @unittest.skipIf(sys.platform == 'darwin' and
-                     utils.PYVERSION == (3, 8),
-                     'distutils incorrectly using gcc on python 3.8 builds')
     def test_compile_helperlib(self):
         with self.check_cc_compiled(self._test_module.cc_helperlib) as lib:
             res = lib.power(2, 7)
@@ -258,7 +264,48 @@ class TestCC(BasePYCCTest):
             expect = arr * arr
             self.assertPreciseEqual(got, expect)
 
+    def test_dynamic_exc(self):
+        """See https://github.com/numba/numba/issues/9948
 
+        Dynamic exception uses a symbol that in PYCC compilation must become
+        linkonce_odr linkage to prevent symbol collision.
+        """
+        with self.check_cc_compiled(self._test_module.cc_dynexc) as lib:
+            # these cases do not raise
+            a = np.zeros((2, 2), dtype=np.float64)
+            b = np.ones((2, 2), dtype=np.float64)
+            lib.do_setitem1(a, b)
+            self.assertPreciseEqual(a, b)
+
+            a = np.zeros((2, 2), dtype=np.float64)
+            lib.do_setitem2(a, b)
+            self.assertPreciseEqual(a, b)
+
+            # these cases will raise a dynamic exc
+            a = np.zeros((2, 2), dtype=np.float64)
+            b = np.ones((2, 3), dtype=np.float64)
+            with self.assertRaises(ValueError) as raises:
+                lib.do_setitem1(a, b)
+
+            self.assertIn(
+                f"cannot assign slice of shape {b.shape} from "
+                f"input of shape {a.shape}",
+                str(raises.exception))
+
+            a = np.zeros((4, 6), dtype=np.float64)
+            b = np.ones((4, 5), dtype=np.float64)
+            with self.assertRaises(ValueError) as raises:
+                lib.do_setitem2(a, b)
+
+            self.assertIn(
+                f"cannot assign slice of shape {b.shape} from "
+                f"input of shape {a.shape}",
+                str(raises.exception))
+
+
+@needs_setuptools
+@skip_if_py313_on_windows
+@skip_if_linux_aarch64
 class TestDistutilsSupport(TestCase):
 
     def setUp(self):
@@ -344,11 +391,9 @@ class TestDistutilsSupport(TestCase):
     def test_setup_py_distutils_nested(self):
         self.check_setup_nested_py("setup_distutils_nested.py")
 
-    @unittest.skipIf(setuptools is None, "test needs setuptools")
     def test_setup_py_setuptools(self):
         self.check_setup_py("setup_setuptools.py")
 
-    @unittest.skipIf(setuptools is None, "test needs setuptools")
     def test_setup_py_setuptools_nested(self):
         self.check_setup_nested_py("setup_setuptools_nested.py")
 

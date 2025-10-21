@@ -90,8 +90,10 @@ def distance_matrix(vectors):
 
 class RewritesTester(Compiler):
     @classmethod
-    def mk_pipeline(cls, args, return_type=None, flags=None, locals={},
+    def mk_pipeline(cls, args, return_type=None, flags=None, locals=None,
                     library=None, typing_context=None, target_context=None):
+        if locals is None:
+            locals = {}
         if not flags:
             flags = Flags()
         flags.nrt = True
@@ -103,8 +105,10 @@ class RewritesTester(Compiler):
                    flags, locals)
 
     @classmethod
-    def mk_no_rw_pipeline(cls, args, return_type=None, flags=None, locals={},
+    def mk_no_rw_pipeline(cls, args, return_type=None, flags=None, locals=None,
                           library=None, **kws):
+        if locals is None:
+            locals = {}
         if not flags:
             flags = Flags()
         flags.no_rewrites = True

@@ -2,8 +2,10 @@
 .. _simulator:
 
 =================================================
-Debugging CUDA Python with the the CUDA Simulator
+Debugging CUDA Python with the CUDA Simulator
 =================================================
+
+.. cuda-deprecated::
 
 Numba includes a CUDA Simulator that implements most of the semantics in CUDA
 Python using the Python interpreter and some additional Python code. This can

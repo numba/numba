@@ -1,14 +1,9 @@
-import sys
-
 import numpy as np
 import ctypes
 from numba import jit, literal_unroll, njit, typeof
 from numba.core import types
-from numba.core.compiler import compile_isolated
 from numba.core.itanium_mangler import mangle_type
-from numba.core.config import IS_WIN32
 from numba.core.errors import TypingError
-from numba.np.numpy_support import numpy_version
 import unittest
 from numba.np import numpy_support
 from numba.tests.support import TestCase, skip_ppc64le_issue6465
@@ -337,6 +332,10 @@ def get_shape(rec):
     return np.shape(rec.j)
 
 
+def get_size(rec):
+    return np.size(rec.j)
+
+
 def get_charseq(ary, i):
     return ary[i].n
 
@@ -448,7 +447,7 @@ nested_array1_dtype = np.dtype([("array1", np.int16, (3,))], align=True)
 nested_array2_dtype = np.dtype([("array2", np.int16, (3, 2))], align=True)
 
 
-class TestRecordDtypeMakeCStruct(unittest.TestCase):
+class TestRecordDtypeMakeCStruct(TestCase):
     def test_two_scalars(self):
 
         class Ref(ctypes.Structure):
@@ -520,24 +519,7 @@ class TestRecordDtypeMakeCStruct(unittest.TestCase):
         # Correct size
         self.assertEqual(ty.size, ctypes.sizeof(Ref))
         # Is aligned?
-        # NumPy version < 1.16 misalign complex-128 types to 16bytes.
-        # (it seems to align on windows?!)
-        if numpy_version >= (1, 16) or IS_WIN32:
-            dtype = ty.dtype
-            self.assertTrue(dtype.isalignedstruct)
-        else:
-            with self.assertRaises(ValueError) as raises:
-                dtype = ty.dtype
-            # get numpy alignment
-            npalign = np.dtype(np.complex128).alignment
-            # llvm should align to alignment of double.
-            llalign = np.dtype(np.double).alignment
-            self.assertIn(
-                ("NumPy is using a different alignment ({}) "
-                 "than Numba/LLVM ({}) for complex128. "
-                 "This is likely a NumPy bug.").format(npalign, llalign),
-                str(raises.exception),
-            )
+        self.assertTrue(ty.dtype.isalignedstruct)
 
     def test_nestedarray_issue_8132(self):
         # issue#8132 is caused by misrepresenting the NestedArray. Instead of
@@ -556,7 +538,7 @@ class TestRecordDtypeMakeCStruct(unittest.TestCase):
         np.testing.assert_array_equal(extracted_array, data)
 
 
-class TestRecordDtype(unittest.TestCase):
+class TestRecordDtype(TestCase):
 
     def _createSampleArrays(self):
         '''
@@ -600,8 +582,7 @@ class TestRecordDtype(unittest.TestCase):
                 ary3[i]['d'] = "%d" % x
 
     def get_cfunc(self, pyfunc, argspec):
-        cres = compile_isolated(pyfunc, argspec)
-        return cres.entry_point
+        return njit(argspec)(pyfunc)
 
     def test_from_dtype(self):
         rec = numpy_support.from_dtype(recordtype)
@@ -775,44 +756,42 @@ class TestRecordDtype(unittest.TestCase):
         attrs = 'abc'
         valtypes = types.float64, types.int16, types.complex64
         values = 1.23, 12345, 123 + 456j
-        old_refcnt = sys.getrefcount(nbval)
-
-        for attr, valtyp, val in zip(attrs, valtypes, values):
-            expected = getattr(npval, attr)
-            nbrecord = numpy_support.from_dtype(recordtype)
-
-            # Test with a record as either the first argument or the second
-            # argument (issue #870)
-            if revargs:
-                prefix = 'get_record_rev_'
-                argtypes = (valtyp, nbrecord)
-                args = (val, nbval)
-            else:
-                prefix = 'get_record_'
-                argtypes = (nbrecord, valtyp)
-                args = (nbval, val)
-
-            pyfunc = globals()[prefix + attr]
-            cfunc = self.get_cfunc(pyfunc, argtypes)
-
-            got = cfunc(*args)
-            try:
-                self.assertEqual(expected, got)
-            except AssertionError:
-                # On ARM, a LLVM misoptimization can produce buggy code,
-                # see https://llvm.org/bugs/show_bug.cgi?id=24669
-                import llvmlite.binding as ll
-                if attr != 'c':
-                    raise
-                if ll.get_default_triple() != 'armv7l-unknown-linux-gnueabihf':
-                    raise
-                self.assertEqual(val, got)
-            else:
-                self.assertEqual(nbval[attr], val)
-            del got, expected, args
-
         # Check for potential leaks (issue #441)
-        self.assertEqual(sys.getrefcount(nbval), old_refcnt)
+        with self.assertRefCount(nbval):
+            for attr, valtyp, val in zip(attrs, valtypes, values):
+                expected = getattr(npval, attr)
+                nbrecord = numpy_support.from_dtype(recordtype)
+
+                # Test with a record as either the first argument or the second
+                # argument (issue #870)
+                if revargs:
+                    prefix = 'get_record_rev_'
+                    argtypes = (valtyp, nbrecord)
+                    args = (val, nbval)
+                else:
+                    prefix = 'get_record_'
+                    argtypes = (nbrecord, valtyp)
+                    args = (nbval, val)
+
+                pyfunc = globals()[prefix + attr]
+                cfunc = self.get_cfunc(pyfunc, argtypes)
+
+                got = cfunc(*args)
+                try:
+                    self.assertEqual(expected, got)
+                except AssertionError:
+                    # On ARM, a LLVM misoptimization can produce buggy code,
+                    # see https://llvm.org/bugs/show_bug.cgi?id=24669
+                    import llvmlite.binding as ll
+                    if attr != 'c':
+                        raise
+                    triple = 'armv7l-unknown-linux-gnueabihf'
+                    if ll.get_default_triple() != triple:
+                        raise
+                    self.assertEqual(val, got)
+                else:
+                    self.assertEqual(nbval[attr], val)
+                del got, expected, args
 
     def test_record_args(self):
         self._test_record_args(False)
@@ -867,15 +846,14 @@ class TestRecordDtype(unittest.TestCase):
         indices = [0, 1, 2]
         for index, attr in zip(indices, attrs):
             nbary = self.nbsample1d.copy()
-            old_refcnt = sys.getrefcount(nbary)
-            res = cfunc(nbary, index)
-            self.assertEqual(nbary[index], res)
-            # Prove that this is a by-value copy
-            setattr(res, attr, 0)
-            self.assertNotEqual(nbary[index], res)
-            del res
             # Check for potential leaks
-            self.assertEqual(sys.getrefcount(nbary), old_refcnt)
+            with self.assertRefCount(nbary):
+                res = cfunc(nbary, index)
+                self.assertEqual(nbary[index], res)
+                # Prove that this is a by-value copy
+                setattr(res, attr, 0)
+                self.assertNotEqual(nbary[index], res)
+                del res
 
     def test_record_arg_transform(self):
         # Testing that transforming the name of a record type argument to a
@@ -955,7 +933,7 @@ class TestRecordDtype(unittest.TestCase):
         np.testing.assert_equal(expect, got)
 
     def test_record_dtype_with_titles_roundtrip(self):
-        recdtype = np.dtype([(("title a", 'a'), np.float_), ('b', np.float_)])
+        recdtype = np.dtype([(("title a", 'a'), np.float64), ('b', np.float64)])
         nbtype = numpy_support.from_dtype(recdtype)
         self.assertTrue(nbtype.is_title('title a'))
         self.assertFalse(nbtype.is_title('a'))
@@ -1015,7 +993,7 @@ class TestRecordDtypeWithStructArraysAndDispatcher(TestRecordDtypeWithStructArra
 
 
 @skip_ppc64le_issue6465
-class TestRecordDtypeWithCharSeq(unittest.TestCase):
+class TestRecordDtypeWithCharSeq(TestCase):
 
     def _createSampleaArray(self):
         self.refsample1d = np.recarray(3, dtype=recordwithcharseq)
@@ -1036,8 +1014,7 @@ class TestRecordDtypeWithCharSeq(unittest.TestCase):
 
     def get_cfunc(self, pyfunc):
         rectype = numpy_support.from_dtype(recordwithcharseq)
-        cres = compile_isolated(pyfunc, (rectype[:], types.intp))
-        return cres.entry_point
+        return njit((rectype[:], types.intp))(pyfunc)
 
     def test_return_charseq(self):
         pyfunc = get_charseq
@@ -1053,7 +1030,7 @@ class TestRecordDtypeWithCharSeq(unittest.TestCase):
         def pyfunc(arr, i):
             return arr[i].n
 
-        identity = jit(lambda x: x)   # an identity function
+        identity = njit(lambda x: x)   # an identity function
 
         @jit(nopython=True)
         def cfunc(arr, i):
@@ -1071,9 +1048,8 @@ class TestRecordDtypeWithCharSeq(unittest.TestCase):
 
         # compile
         rectype = numpy_support.from_dtype(recordwithcharseq)
-        cres = compile_isolated(pyfunc, (rectype[:], types.intp,
-                                         rectype.typeof('n')))
-        cfunc = cres.entry_point
+        sig = (rectype[::1], types.intp, rectype.typeof('n'))
+        cfunc = njit(sig)(pyfunc).overloads[sig].entry_point
 
         for i in range(self.refsample1d.size):
             chars = "{0}".format(hex(i + 10))
@@ -1087,9 +1063,8 @@ class TestRecordDtypeWithCharSeq(unittest.TestCase):
         pyfunc = set_charseq
         # compile
         rectype = numpy_support.from_dtype(recordwithcharseq)
-        cres = compile_isolated(pyfunc, (rectype[:], types.intp,
-                                         rectype.typeof('n')))
-        cfunc = cres.entry_point
+        sig = (rectype[::1], types.intp, rectype.typeof('n'))
+        cfunc = njit(sig)(pyfunc).overloads[sig].entry_point
 
         cs_near_overflow = "abcde"
 
@@ -1108,9 +1083,8 @@ class TestRecordDtypeWithCharSeq(unittest.TestCase):
         pyfunc = set_charseq
         # compile
         rectype = numpy_support.from_dtype(recordwithcharseq)
-        cres = compile_isolated(pyfunc, (rectype[:], types.intp,
-                                         rectype.typeof('n')))
-        cfunc = cres.entry_point
+        sig = (rectype[::1], types.intp, rectype.typeof('n'))
+        cfunc = njit(sig)(pyfunc).overloads[sig].entry_point
 
         cs_overflowed = "abcdef"
 
@@ -1129,7 +1103,7 @@ class TestRecordDtypeWithCharSeq(unittest.TestCase):
             self.assertEqual(expected, got)
 
 
-class TestRecordArrayGetItem(unittest.TestCase):
+class TestRecordArrayGetItem(TestCase):
 
     # Test getitem when index is Literal[str]
 
@@ -1213,7 +1187,7 @@ class TestRecordArrayGetItem(unittest.TestCase):
         np.testing.assert_allclose(expected, got)
 
 
-class TestRecordArraySetItem(unittest.TestCase):
+class TestRecordArraySetItem(TestCase):
     """
     Test setitem when index is Literal[str]
     """
@@ -1405,8 +1379,7 @@ class TestSubtyping(TestCase):
 class TestNestedArrays(TestCase):
 
     def get_cfunc(self, pyfunc, argspec):
-        cres = compile_isolated(pyfunc, argspec)
-        return cres.entry_point
+        return njit(argspec)(pyfunc)
 
     def test_record_write_array(self):
         # Testing writing to a 1D array within a structured type
@@ -1554,7 +1527,7 @@ class TestNestedArrays(TestCase):
         nbarr2 = np.recarray(1, dtype=recordwith2darray)
         args = (nbarr1, nbarr2)
         pyfunc = record_setitem_array
-        errmsg = "unsupported array index type"
+        errmsg = "Unsupported array index type"
         with self.assertRaisesRegex(TypingError, errmsg):
             self.get_cfunc(pyfunc, tuple((typeof(arg) for arg in args)))
 
@@ -1641,6 +1614,20 @@ class TestNestedArrays(TestCase):
 
         arg = nbarr[0]
         pyfunc = get_shape
+        ty = typeof(arg)
+        arr_expected = pyfunc(arg)
+        cfunc = self.get_cfunc(pyfunc, (ty,))
+        arr_res = cfunc(arg)
+        np.testing.assert_equal(arr_res, arr_expected)
+
+    def test_size(self):
+        # test getting the size of a nestedarray inside a record
+        nbarr = np.recarray(2, dtype=recordwith2darray)
+        nbarr[0] = np.array([(1, ((1, 2), (4, 5), (2, 3)))],
+                            dtype=recordwith2darray)[0]
+
+        arg = nbarr[0]
+        pyfunc = get_size
         ty = typeof(arg)
         arr_expected = pyfunc(arg)
         cfunc = self.get_cfunc(pyfunc, (ty,))

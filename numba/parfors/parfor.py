@@ -24,6 +24,7 @@ from collections import defaultdict, OrderedDict, namedtuple
 from contextlib import contextmanager
 import operator
 from dataclasses import make_dataclass
+import warnings
 
 from llvmlite import ir as lir
 from numba.core.imputils import impl_ret_untracked
@@ -369,16 +370,25 @@ def std_parallel_impl(return_type, arg):
         return in_arr.var() ** 0.5
     return std_1
 
-def arange_parallel_impl(return_type, *args):
-    dtype = as_dtype(return_type.dtype)
+def arange_parallel_impl(return_type, *args, dtype=None):
+    inferred_dtype = as_dtype(return_type.dtype)
 
     def arange_1(stop):
+        return np.arange(0, stop, 1, inferred_dtype)
+
+    def arange_1_dtype(stop, dtype):
         return np.arange(0, stop, 1, dtype)
 
     def arange_2(start, stop):
+        return np.arange(start, stop, 1, inferred_dtype)
+
+    def arange_2_dtype(start, stop, dtype):
         return np.arange(start, stop, 1, dtype)
 
     def arange_3(start, stop, step):
+        return np.arange(start, stop, step, inferred_dtype)
+
+    def arange_3_dtype(start, stop, step, dtype):
         return np.arange(start, stop, step, dtype)
 
     if any(isinstance(a, types.Complex) for a in args):
@@ -404,11 +414,11 @@ def arange_parallel_impl(return_type, *args):
             return arr
 
     if len(args) == 1:
-        return arange_1
+        return arange_1 if dtype is None else arange_1_dtype
     elif len(args) == 2:
-        return arange_2
+        return arange_2  if dtype is None else arange_2_dtype
     elif len(args) == 3:
-        return arange_3
+        return arange_3  if dtype is None else arange_3_dtype
     elif len(args) == 4:
         return arange_4
     else:
@@ -556,7 +566,9 @@ class Parfor(ir.Expr, ir.Stmt):
             flags,
             *,  #only specify the options below by keyword
             no_sequential_lowering=False,
-            races=set()):
+            races=None):
+        if races is None:
+            races = set()
         super(Parfor, self).__init__(
             op='parfor',
             loc=loc
@@ -584,6 +596,11 @@ class Parfor(ir.Expr, ir.Stmt):
         self.races = races
         self.redvars = []
         self.reddict = {}
+        # If the lowerer is None then the standard lowerer will be used.
+        # This can be set to a function to have that function act as the lowerer
+        # for this parfor.  This lowerer field will also prevent parfors from
+        # being fused unless they have use the same lowerer.
+        self.lowerer = None
         if config.DEBUG_ARRAY_OPT_STATS:
             fmt = 'Parallel for-loop #{} is produced from pattern \'{}\' at {}'
             print(fmt.format(
@@ -592,6 +609,9 @@ class Parfor(ir.Expr, ir.Stmt):
     def __repr__(self):
         return "id=" + str(self.id) + repr(self.loop_nests) + \
             repr(self.loop_body) + repr(self.index_var)
+
+    def get_loop_nest_vars(self):
+        return [x.index_variable for x in self.loop_nests]
 
     def list_vars(self):
         """list variables used (read/written) in this parfor by
@@ -788,7 +808,7 @@ class ParforDiagnostics(object):
             val = a.get(x)
             if val is not None:
                 a[x] = val
-            elif val is []:
+            elif val == []:
                 not_roots.add(x) # debug only
             else:
                 a[x] = []
@@ -1416,7 +1436,9 @@ class PreParforPass(object):
     implementations of numpy functions if available.
     """
     def __init__(self, func_ir, typemap, calltypes, typingctx, targetctx,
-                 options, swapped={}, replace_functions_map=None):
+                 options, swapped=None, replace_functions_map=None):
+        if swapped is None:
+            swapped = {}
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
@@ -1478,11 +1500,15 @@ class PreParforPass(object):
 
                             require(repl_func is not None)
                             typs = tuple(self.typemap[x.name] for x in expr.args)
+                            kws_typs = {k: self.typemap[x.name] for k, x in expr.kws}
                             try:
-                                new_func =  repl_func(lhs_typ, *typs)
+                                new_func =  repl_func(lhs_typ, *typs, **kws_typs)
                             except:
                                 new_func = None
                             require(new_func is not None)
+                            # bind arguments to the new_func
+                            typs = utils.pysignature(new_func).bind(*typs, **kws_typs).args
+
                             g = copy.copy(self.func_ir.func_id.func.__globals__)
                             g['numba'] = numba
                             g['np'] = numpy
@@ -2354,7 +2380,27 @@ class ConvertLoopPass:
         # We go over all loops, smaller loops first (inner first)
         for loop, s in sorted(sized_loops, key=lambda tup: tup[1]):
             if len(loop.entries) != 1 or len(loop.exits) != 1:
+                if not config.DISABLE_PERFORMANCE_WARNINGS:
+                    for entry in loop.entries:
+                        for inst in blocks[entry].body:
+                            # if prange or pndindex call
+                            if (
+                                isinstance(inst, ir.Assign)
+                                and isinstance(inst.value, ir.Expr)
+                                and inst.value.op == "call"
+                                and self._is_parallel_loop(
+                                    inst.value.func.name, call_table)
+                            ):
+                                msg = "\nprange or pndindex loop " \
+                                      "will not be executed in " \
+                                      "parallel due to there being more than one " \
+                                      "entry to or exit from the loop (e.g., an " \
+                                      "assertion)."
+                                warnings.warn(
+                                    errors.NumbaPerformanceWarning(
+                                        msg, inst.loc))
                 continue
+
             entry = list(loop.entries)[0]
             for inst in blocks[entry].body:
                 # if prange or pndindex call
@@ -2888,6 +2934,29 @@ class ParforPass(ParforPassStates):
 
         dprint_func_ir(self.func_ir, "after parfor pass")
 
+    def _find_mask(self, arr_def):
+        """check if an array is of B[...M...], where M is a
+        boolean array, and other indices (if available) are ints.
+        If found, return B, M, M's type, and a tuple representing mask indices.
+        Otherwise, raise GuardException.
+        """
+        return _find_mask(self.typemap, self.func_ir, arr_def)
+
+    def _mk_parfor_loops(self, size_vars, scope, loc):
+        """
+        Create loop index variables and build LoopNest objects for a parfor.
+        """
+        return _mk_parfor_loops(self.typemap, size_vars, scope, loc)
+
+
+class ParforFusionPass(ParforPassStates):
+
+    """ParforFusionPass class is responsible for fusing parfors
+    """
+
+    def run(self):
+        """run parfor fusion pass"""
+
         # simplify CFG of parfor body loops since nested parfors with extra
         # jumps can be created with prange conversion
         n_parfors = simplify_parfor_body_CFG(self.func_ir.blocks)
@@ -2937,6 +3006,61 @@ class ParforPass(ParforPassStates):
             dprint_func_ir(self.func_ir, "after fusion")
             # remove dead code after fusion to remove extra arrays and variables
             simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
+
+    def fuse_parfors(self, array_analysis, blocks, func_ir, typemap):
+        for label, block in blocks.items():
+            equiv_set = array_analysis.get_equiv_set(label)
+            fusion_happened = True
+            while fusion_happened:
+                fusion_happened = False
+                new_body = []
+                i = 0
+                while i < len(block.body) - 1:
+                    stmt = block.body[i]
+                    next_stmt = block.body[i + 1]
+                    if isinstance(stmt, Parfor) and isinstance(next_stmt, Parfor):
+                        # we have to update equiv_set since they have changed due to
+                        # variables being renamed before fusion.
+                        equiv_set = array_analysis.get_equiv_set(label)
+                        stmt.equiv_set = equiv_set
+                        next_stmt.equiv_set = equiv_set
+                        fused_node, fuse_report = try_fuse(equiv_set, stmt, next_stmt,
+                            self.metadata["parfors"], func_ir, typemap)
+                        # accumulate fusion reports
+                        self.diagnostics.fusion_reports.append(fuse_report)
+                        if fused_node is not None:
+                            fusion_happened = True
+                            self.diagnostics.fusion_info[stmt.id].extend([next_stmt.id])
+                            new_body.append(fused_node)
+                            self.fuse_recursive_parfor(fused_node, equiv_set, func_ir, typemap)
+                            i += 2
+                            continue
+                    new_body.append(stmt)
+                    if isinstance(stmt, Parfor):
+                        self.fuse_recursive_parfor(stmt, equiv_set, func_ir, typemap)
+                    i += 1
+                new_body.append(block.body[-1])
+                block.body = new_body
+        return
+
+    def fuse_recursive_parfor(self, parfor, equiv_set, func_ir, typemap):
+        blocks = wrap_parfor_blocks(parfor)
+        maximize_fusion(self.func_ir, blocks, self.typemap)
+        dprint_func_ir(self.func_ir, "after recursive maximize fusion down", blocks)
+        arr_analysis = array_analysis.ArrayAnalysis(self.typingctx, self.func_ir,
+                                                self.typemap, self.calltypes)
+        arr_analysis.run(blocks, equiv_set)
+        self.fuse_parfors(arr_analysis, blocks, func_ir, typemap)
+        unwrap_parfor_blocks(parfor)
+
+
+class ParforPreLoweringPass(ParforPassStates):
+
+    """ParforPreLoweringPass class is responsible for preparing parfors for lowering.
+    """
+
+    def run(self):
+        """run parfor prelowering pass"""
 
         # push function call variables inside parfors so gufunc function
         # wouldn't need function variables as argument
@@ -3011,68 +3135,6 @@ class ParforPass(ParforPassStates):
                            after_fusion, name, n_parfors, parfor_ids))
                 else:
                     print('Function {} has no Parfor.'.format(name))
-
-        return
-
-    def _find_mask(self, arr_def):
-        """check if an array is of B[...M...], where M is a
-        boolean array, and other indices (if available) are ints.
-        If found, return B, M, M's type, and a tuple representing mask indices.
-        Otherwise, raise GuardException.
-        """
-        return _find_mask(self.typemap, self.func_ir, arr_def)
-
-    def _mk_parfor_loops(self, size_vars, scope, loc):
-        """
-        Create loop index variables and build LoopNest objects for a parfor.
-        """
-        return _mk_parfor_loops(self.typemap, size_vars, scope, loc)
-
-    def fuse_parfors(self, array_analysis, blocks, func_ir, typemap):
-        for label, block in blocks.items():
-            equiv_set = array_analysis.get_equiv_set(label)
-            fusion_happened = True
-            while fusion_happened:
-                fusion_happened = False
-                new_body = []
-                i = 0
-                while i < len(block.body) - 1:
-                    stmt = block.body[i]
-                    next_stmt = block.body[i + 1]
-                    if isinstance(stmt, Parfor) and isinstance(next_stmt, Parfor):
-                        # we have to update equiv_set since they have changed due to
-                        # variables being renamed before fusion.
-                        equiv_set = array_analysis.get_equiv_set(label)
-                        stmt.equiv_set = equiv_set
-                        next_stmt.equiv_set = equiv_set
-                        fused_node, fuse_report = try_fuse(equiv_set, stmt, next_stmt,
-                            self.metadata["parfors"], func_ir, typemap)
-                        # accumulate fusion reports
-                        self.diagnostics.fusion_reports.append(fuse_report)
-                        if fused_node is not None:
-                            fusion_happened = True
-                            self.diagnostics.fusion_info[stmt.id].extend([next_stmt.id])
-                            new_body.append(fused_node)
-                            self.fuse_recursive_parfor(fused_node, equiv_set, func_ir, typemap)
-                            i += 2
-                            continue
-                    new_body.append(stmt)
-                    if isinstance(stmt, Parfor):
-                        self.fuse_recursive_parfor(stmt, equiv_set, func_ir, typemap)
-                    i += 1
-                new_body.append(block.body[-1])
-                block.body = new_body
-        return
-
-    def fuse_recursive_parfor(self, parfor, equiv_set, func_ir, typemap):
-        blocks = wrap_parfor_blocks(parfor)
-        maximize_fusion(self.func_ir, blocks, self.typemap)
-        dprint_func_ir(self.func_ir, "after recursive maximize fusion down", blocks)
-        arr_analysis = array_analysis.ArrayAnalysis(self.typingctx, self.func_ir,
-                                                self.typemap, self.calltypes)
-        arr_analysis.run(blocks, equiv_set)
-        self.fuse_parfors(arr_analysis, blocks, func_ir, typemap)
-        unwrap_parfor_blocks(parfor)
 
 
 def _remove_size_arg(call_name, expr):
@@ -3174,7 +3236,7 @@ def _arrayexpr_tree_to_ir(
                 ir_expr = ir.Expr.binop(op, arg_vars[0], arg_vars[1], loc)
                 if op == operator.truediv:
                     func_typ, ir_expr = _gen_np_divide(
-                        arg_vars[0], arg_vars[1], out_ir, typemap)
+                        arg_vars[0], arg_vars[1], out_ir, typemap, typingctx)
             else:
                 func_typ = typingctx.resolve_function_type(op, (el_typ1,), {})
                 ir_expr = ir.Expr.unary(op, arg_vars[0], loc)
@@ -3240,7 +3302,7 @@ def _arrayexpr_tree_to_ir(
     return out_ir
 
 
-def _gen_np_divide(arg1, arg2, out_ir, typemap):
+def _gen_np_divide(arg1, arg2, out_ir, typemap, typingctx):
     """generate np.divide() instead of / for array_expr to get numpy error model
     like inf for division by zero (test_division_by_zero).
     """
@@ -3254,13 +3316,13 @@ def _gen_np_divide(arg1, arg2, out_ir, typemap):
     # attr call: div_attr = getattr(g_np_var, divide)
     div_attr_call = ir.Expr.getattr(g_np_var, "divide", loc)
     attr_var = ir.Var(scope, mk_unique_var("$div_attr"), loc)
-    func_var_typ = get_np_ufunc_typ(numpy.divide)
+    func_var_typ = get_np_ufunc_typ(numpy.divide, typingctx)
     typemap[attr_var.name] = func_var_typ
     attr_assign = ir.Assign(div_attr_call, attr_var, loc)
     # divide call:  div_attr(arg1, arg2)
     div_call = ir.Expr.call(attr_var, [arg1, arg2], (), loc)
     func_typ = func_var_typ.get_call_type(
-        typing.Context(), [typemap[arg1.name], typemap[arg2.name]], {})
+        typingctx, [typemap[arg1.name], typemap[arg2.name]], {})
     out_ir.extend([g_np_assign, attr_assign])
     return func_typ, div_call
 
@@ -3542,6 +3604,74 @@ def _find_parfors(body):
             yield i, inst
 
 
+def _is_indirect_index(func_ir, index, nest_indices):
+    index_def = guard(get_definition, func_ir, index.name)
+    if isinstance(index_def, ir.Expr) and index_def.op == 'build_tuple':
+        if [x.name for x in index_def.items] == [x.name for x in nest_indices]:
+            return True
+
+    return False
+
+
+def get_array_indexed_with_parfor_index_internal(loop_body,
+                                                 index,
+                                                 ret_indexed,
+                                                 ret_not_indexed,
+                                                 nest_indices,
+                                                 func_ir):
+    for blk in loop_body:
+        for stmt in blk.body:
+            if isinstance(stmt, (ir.StaticSetItem, ir.SetItem)):
+                setarray_index = get_index_var(stmt)
+                if (isinstance(setarray_index, ir.Var) and
+                    (setarray_index.name == index or
+                     _is_indirect_index(
+                         func_ir,
+                         setarray_index,
+                         nest_indices))):
+                    ret_indexed.add(stmt.target.name)
+                else:
+                    ret_not_indexed.add(stmt.target.name)
+            elif (isinstance(stmt, ir.Assign) and
+                  isinstance(stmt.value, ir.Expr) and
+                  stmt.value.op in ['getitem', 'static_getitem']):
+                getarray_index = stmt.value.index
+                getarray_name = stmt.value.value.name
+                if (isinstance(getarray_index, ir.Var) and
+                    (getarray_index.name == index or
+                     _is_indirect_index(
+                         func_ir,
+                         getarray_index,
+                         nest_indices))):
+                    ret_indexed.add(getarray_name)
+                else:
+                    ret_not_indexed.add(getarray_name)
+            elif isinstance(stmt, Parfor):
+                get_array_indexed_with_parfor_index_internal(
+                    stmt.loop_body.values(),
+                    index,
+                    ret_indexed,
+                    ret_not_indexed,
+                    nest_indices,
+                    func_ir)
+
+
+def get_array_indexed_with_parfor_index(loop_body,
+                                        index,
+                                        nest_indices,
+                                        func_ir):
+    ret_indexed = set()
+    ret_not_indexed = set()
+    get_array_indexed_with_parfor_index_internal(
+        loop_body,
+        index,
+        ret_indexed,
+        ret_not_indexed,
+        nest_indices,
+        func_ir)
+    return ret_indexed, ret_not_indexed
+
+
 def get_parfor_outputs(parfor, parfor_params):
     """get arrays that are written to inside the parfor and need to be passed
     as parameters to gufunc.
@@ -3677,12 +3807,22 @@ def get_reduction_init(nodes):
     # there could be multiple extra assignments after the reduce node
     # See: test_reduction_var_reuse
     acc_expr = list(filter(lambda x: isinstance(x.value, ir.Expr), nodes))[-1].value
-    require(isinstance(acc_expr, ir.Expr) and acc_expr.op=='inplace_binop')
-    if acc_expr.fn == operator.iadd or acc_expr.fn == operator.isub:
-        return 0, acc_expr.fn
-    if (  acc_expr.fn == operator.imul
-       or acc_expr.fn == operator.itruediv ):
-        return 1, acc_expr.fn
+    require(isinstance(acc_expr, ir.Expr) and acc_expr.op in ['inplace_binop', 'binop'])
+    acc_expr_fn = acc_expr.fn
+    if acc_expr.op == 'binop':
+        if acc_expr_fn == operator.add:
+            acc_expr_fn = operator.iadd
+        elif acc_expr_fn == operator.sub:
+            acc_expr_fn = operator.isub
+        elif acc_expr_fn == operator.mul:
+            acc_expr_fn = operator.imul
+        elif acc_expr_fn == operator.truediv:
+            acc_expr_fn = operator.itruediv
+    if acc_expr_fn == operator.iadd or acc_expr_fn == operator.isub:
+        return 0, acc_expr_fn
+    if (  acc_expr_fn == operator.imul
+       or acc_expr_fn == operator.itruediv ):
+        return 1, acc_expr_fn
     return None, None
 
 def supported_reduction(x, func_ir):
@@ -3722,12 +3862,30 @@ def get_reduce_nodes(reduction_node, nodes, func_ir):
     reduce_nodes = None
     defs = {}
 
-    def lookup(var, varonly=True):
-        val = defs.get(var.name, None)
-        if isinstance(val, ir.Var):
-            return lookup(val)
+    def cyclic_lookup(var, varonly=True, start=None):
+        """Lookup definition of ``var``.
+        Returns ``None`` if variable definition forms a cycle.
+        """
+        lookedup_var = defs.get(var.name, None)
+        if isinstance(lookedup_var, ir.Var):
+            if start is None:
+                start = lookedup_var
+            elif start == lookedup_var:
+                # cycle detected
+                return None
+            return cyclic_lookup(lookedup_var, start=start)
         else:
-            return var if (varonly or val is None) else val
+            return var if (varonly or lookedup_var is None) else lookedup_var
+
+    def noncyclic_lookup(*args, **kwargs):
+        """Similar to cyclic_lookup but raise AssertionError if a cycle is
+        detected.
+        """
+        res = cyclic_lookup(*args, **kwargs)
+        if res is None:
+            raise AssertionError("unexpected cycle in lookup()")
+        return res
+
     name = reduction_node.name
     unversioned_name = reduction_node.unversioned_name
     for i, stmt in enumerate(nodes):
@@ -3735,14 +3893,52 @@ def get_reduce_nodes(reduction_node, nodes, func_ir):
         rhs = stmt.value
         defs[lhs.name] = rhs
         if isinstance(rhs, ir.Var) and rhs.name in defs:
-            rhs = lookup(rhs)
+            rhs = cyclic_lookup(rhs)
         if isinstance(rhs, ir.Expr):
-            in_vars = set(lookup(v, True).name for v in rhs.list_vars())
+            in_vars = set(noncyclic_lookup(v, True).name
+                          for v in rhs.list_vars())
             if name in in_vars:
                 # reductions like sum have an assignment afterwards
                 # e.g. $2 = a + $1; a = $2
                 # reductions that are functions calls like max() don't have an
                 # extra assignment afterwards
+
+                # This code was created when Numba had an IR generation strategy
+                # where a binop for a reduction would be followed by an
+                # assignment as follows:
+                #$c.4.15 = inplace_binop(fn=<iadd>, ...>, lhs=c.3, rhs=$const20)
+                #c.4 = $c.4.15
+
+                # With Python 3.12 changes, Numba may separate that assignment
+                # to a new basic block.  The code below looks and sees if an
+                # assignment to the reduction var follows the reduction operator
+                # and if not it searches the rest of the reduction nodes to find
+                # the assignment that should follow the reduction operator
+                # and then reorders the reduction nodes so that assignment
+                # follows the reduction operator.
+                if (i + 1 < len(nodes) and
+                    ((not isinstance(nodes[i + 1], ir.Assign)) or
+                     nodes[i + 1].target.unversioned_name != unversioned_name)):
+                    foundj = None
+                    # Iterate through the rest of the reduction nodes.
+                    for j, jstmt in enumerate(nodes[i + 1:]):
+                        # If this stmt is an assignment where the right-hand
+                        # side of the assignment is the output of the reduction
+                        # operator.
+                        if isinstance(jstmt, ir.Assign) and jstmt.value == lhs:
+                            # Remember the index of this node.  Because of
+                            # nodes[i+1] above, we have to add i + 1 to j below
+                            # to get the index in the original nodes list.
+                            foundj = i + j + 1
+                            break
+                    if foundj is not None:
+                        # If we found the correct assignment then move it to
+                        # after the reduction operator.
+                        nodes = (nodes[:i + 1] +   # nodes up to operator
+                                 nodes[foundj:foundj + 1] + # assignment node
+                                 nodes[i + 1:foundj] + # between op and assign
+                                 nodes[foundj + 1:]) # after assignment node
+
                 if (not (i+1 < len(nodes) and isinstance(nodes[i+1], ir.Assign)
                         and nodes[i+1].target.unversioned_name == unversioned_name)
                         and lhs.unversioned_name != unversioned_name):
@@ -3755,7 +3951,8 @@ def get_reduce_nodes(reduction_node, nodes, func_ir):
                 if not supported_reduction(rhs, func_ir):
                     raise ValueError(("Use of reduction variable " + unversioned_name +
                                       " in an unsupported reduction function."))
-                args = [ (x.name, lookup(x, True)) for x in get_expr_args(rhs) ]
+                args = [(x.name, noncyclic_lookup(x, True))
+                        for x in get_expr_args(rhs) ]
                 non_red_args = [ x for (x, y) in args if y.name != name ]
                 assert len(non_red_args) == 1
                 args = [ (x, y) for (x, y) in args if x != y.name ]
@@ -4043,6 +4240,13 @@ def try_fuse(equiv_set, parfor1, parfor2, metadata, func_ir, typemap):
     # default report is None
     report = None
 
+    # fusion of parfors with different lowerers is not possible
+    if parfor1.lowerer != parfor2.lowerer:
+        dprint("try_fuse: parfors different lowerers")
+        msg = "- fusion failed: lowerer mismatch"
+        report = FusionReport(parfor1.id, parfor2.id, msg)
+        return None, report
+
     # fusion of parfors with different dimensions not supported yet
     if len(parfor1.loop_nests) != len(parfor2.loop_nests):
         dprint("try_fuse: parfors number of dimensions mismatch")
@@ -4085,8 +4289,6 @@ def try_fuse(equiv_set, parfor1, parfor2, metadata, func_ir, typemap):
             return None, report
 
     func_ir._definitions = build_definitions(func_ir.blocks)
-    # TODO: make sure parfor1's reduction output is not used in parfor2
-    # only data parallel loops
     p1_cross_dep, p1_ip, p1_ia, p1_non_ia = has_cross_iter_dep(parfor1, func_ir, typemap)
     if not p1_cross_dep:
         p2_cross_dep = has_cross_iter_dep(parfor2, func_ir, typemap, p1_ip, p1_ia, p1_non_ia)[0]
@@ -4108,6 +4310,7 @@ def try_fuse(equiv_set, parfor1, parfor2, metadata, func_ir, typemap):
     p1_body_defs = set()
     for defs in p1_body_usedefs.defmap.values():
         p1_body_defs |= defs
+    p1_body_defs |= get_parfor_writes(parfor1)
     # Add reduction variables from parfor1 to the set of body defs
     # so that if parfor2 reads the reduction variable it won't fuse.
     p1_body_defs |= set(parfor1.redvars)
@@ -4117,13 +4320,25 @@ def try_fuse(equiv_set, parfor1, parfor2, metadata, func_ir, typemap):
     for uses in p2_usedefs.usemap.values():
         p2_uses |= uses
 
-    if not p1_body_defs.isdisjoint(p2_uses):
-        dprint("try_fuse: parfor2 depends on parfor1 body")
-        msg = ("- fusion failed: parallel loop %s has a dependency on the "
-                "body of parallel loop %s. ")
-        report = FusionReport(parfor1.id, parfor2.id,
-                                msg % (parfor1.id, parfor2.id))
-        return None, report
+    overlap = p1_body_defs.intersection(p2_uses)
+    # overlap are those variable defined in first parfor and used in the second
+    if len(overlap) != 0:
+        # Get all the arrays
+        _, p2arraynotindexed = get_array_indexed_with_parfor_index(
+            parfor2.loop_body.values(),
+            parfor2.index_var.name,
+            parfor2.get_loop_nest_vars(),
+            func_ir)
+
+        unsafe_var = (not isinstance(typemap[x], types.ArrayCompatible) or x in p2arraynotindexed for x in overlap)
+
+        if any(unsafe_var):
+            dprint("try_fuse: parfor2 depends on parfor1 body")
+            msg = ("- fusion failed: parallel loop %s has a dependency on the "
+                    "body of parallel loop %s. ")
+            report = FusionReport(parfor1.id, parfor2.id,
+                                    msg % (parfor1.id, parfor2.id))
+            return None, report
 
     return fuse_parfors_inner(parfor1, parfor2)
 

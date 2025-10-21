@@ -5,6 +5,7 @@ Test hashing of various supported types.
 
 import unittest
 
+import os
 import sys
 import subprocess
 from collections import defaultdict
@@ -12,14 +13,15 @@ from textwrap import dedent
 
 import numpy as np
 
-from numba import jit, typed, typeof
+from numba import jit, config, typed, typeof
 from numba.core import types, utils
 import unittest
-from numba.tests.support import (TestCase, tag, CompilationCache,
-                                 skip_unless_py10_or_later)
+from numba.tests.support import (TestCase, skip_unless_py10_or_later,
+                                 run_in_subprocess)
 
 from numba.cpython.unicode import compile_time_get_string_data
 from numba.cpython import hashing
+from numba.np.numpy_support import numpy_version
 
 
 def hash_usecase(x):
@@ -71,6 +73,89 @@ class TestHashingSetup(TestCase):
         subprocess.check_call([sys.executable, '-c', dedent(work)])
 
 
+class TestHashAlgs(TestCase):
+    # This tests Numba hashing replication against cPython "gold", i.e. the
+    # actual hash values for given inputs, algs and PYTHONHASHSEEDs
+    # Test adapted from:
+    # https://github.com/python/cpython/blob/9dda9020abcf0d51d59b283a89c58c8e1fb0f574/Lib/test/test_hash.py#L197-L264
+    # and
+    # https://github.com/python/cpython/blob/9dda9020abcf0d51d59b283a89c58c8e1fb0f574/Lib/test/test_hash.py#L174-L189
+
+    # 32bit little, 64bit little, 32bit big, 64bit big
+    known_hashes = {
+        'djba33x': [ # only used for small strings
+            # seed 0, 'abc'
+            [193485960, 193485960,  193485960, 193485960],
+            # seed 42, 'abc'
+            [-678966196, 573763426263223372, -820489388, -4282905804826039665],
+            ],
+        'siphash13': [
+            # NOTE: PyUCS2 layout depends on endianness
+            # seed 0, 'abc'
+            [69611762, -4594863902769663758, 69611762, -4594863902769663758],
+            # seed 42, 'abc'
+            [-975800855, 3869580338025362921, -975800855, 3869580338025362921],
+            # seed 42, 'abcdefghijk'
+            [-595844228, 7764564197781545852, -595844228, 7764564197781545852],
+            # seed 0, 'äú∑ℇ'
+            [-1093288643, -2810468059467891395, -1041341092, 4925090034378237276],
+            # seed 42, 'äú∑ℇ'
+            [-585999602, -2845126246016066802, -817336969, -2219421378907968137],
+        ],
+        'siphash24': [
+            # NOTE: PyUCS2 layout depends on endianness
+            # seed 0, 'abc'
+            [1198583518, 4596069200710135518, 1198583518, 4596069200710135518],
+            # seed 42, 'abc'
+            [273876886, -4501618152524544106, 273876886, -4501618152524544106],
+            # seed 42, 'abcdefghijk'
+            [-1745215313, 4436719588892876975, -1745215313, 4436719588892876975],
+            # seed 0, 'äú∑ℇ'
+            [493570806, 5749986484189612790, -1006381564, -5915111450199468540],
+            # seed 42, 'äú∑ℇ'
+            [-1677110816, -2947981342227738144, -1860207793, -4296699217652516017],
+        ],
+    }
+
+    def get_expected_hash(self, position, length):
+        if length < sys.hash_info.cutoff:
+            algorithm = "djba33x"
+        else:
+            algorithm = sys.hash_info.algorithm
+        IS_64BIT = not config.IS_32BITS
+        if sys.byteorder == 'little':
+            platform = 1 if IS_64BIT else 0
+        else:
+            assert(sys.byteorder == 'big')
+            platform = 3 if IS_64BIT else 2
+        return self.known_hashes[algorithm][position][platform]
+
+    def get_hash_command(self, repr_):
+        return 'print(hash(eval(%a)))' % repr_
+
+    def get_hash(self, repr_, seed=None):
+        env = os.environ.copy()
+        if seed is not None:
+            env['PYTHONHASHSEED'] = str(seed)
+        else:
+            env.pop('PYTHONHASHSEED', None)
+        out, _ = run_in_subprocess(code=self.get_hash_command(repr_),
+                                   env=env)
+        stdout = out.decode().strip()
+        return int(stdout)
+
+    def test_against_cpython_gold(self):
+
+        args = (('abc', 0, 0), ('abc', 42, 1), ('abcdefghijk', 42, 2),
+                ('äú∑ℇ', 0, 3), ('äú∑ℇ', 42, 4),)
+
+        for input_str, seed, position in args:
+            with self.subTest(input_str=input_str, seed=seed):
+                got = self.get_hash(repr(input_str), seed=seed)
+                expected = self.get_expected_hash(position, len(input_str))
+                self.assertEqual(got, expected)
+
+
 class BaseTest(TestCase):
 
     def setUp(self):
@@ -101,6 +186,9 @@ class BaseTest(TestCase):
             yield range(start, start + 128 * n, 128)
             yield [-1]
 
+    def safe_construct(self, typ, value):
+        return getattr(np, 'int' + str(np.iinfo(typ).bits))(value).view(typ)
+
     def float_samples(self, typ):
         info = np.finfo(typ)
 
@@ -121,8 +209,6 @@ class BaseTest(TestCase):
 
         # Python 3.10 has a hash for nan based on the pointer to the PyObject
         # containing the nan, skip this input and use explicit test instead.
-        if utils.PYVERSION < (3, 10):
-            a.append(float('nan'))
 
         yield typ(a)
 
@@ -135,10 +221,7 @@ class BaseTest(TestCase):
                 a = real + typ(1j) * imag
                 # Python 3.10 has a hash for nan based on the pointer to the
                 # PyObject containing the nan, skip input that ends up as nan
-                if utils.PYVERSION >= (3, 10):
-                    if not np.any(np.isnan(a)):
-                        yield a
-                else:
+                if not np.any(np.isnan(a)):
                     yield a
 
 
@@ -146,6 +229,23 @@ class TestNumberHashing(BaseTest):
     """
     Test hashing of number types.
     """
+
+    def setUp(self):
+        if numpy_version >= (2, 0) and numpy_version <= (2, 1):
+            # Temporarily set promotions state to legacy,
+            # to ensure overflow logic works
+            self.initial_state = np._get_promotion_state()
+            np._set_promotion_state("legacy")
+
+        return super().setUp()
+
+    def tearDown(self) -> None:
+        if numpy_version >= (2, 0) and numpy_version <= (2, 1):
+            # Reset numpy promotion state to initial state
+            # since the setting is global
+            np._set_promotion_state(self.initial_state)
+
+        return super().tearDown()
 
     def check_floats(self, typ):
         for a in self.float_samples(typ):
@@ -170,6 +270,7 @@ class TestNumberHashing(BaseTest):
 
     def test_ints(self):
         minmax = []
+
         for ty in [np.int8, np.uint8, np.int16, np.uint16,
                    np.int32, np.uint32, np.int64, np.uint64]:
             for a in self.int_samples(ty):
@@ -177,7 +278,7 @@ class TestNumberHashing(BaseTest):
             info = np.iinfo(ty)
             # check hash(-1) = -2
             # check hash(0) = 0
-            self.check_hash_values([ty(-1)])
+            self.check_hash_values([self.safe_construct(ty, -1)])
             self.check_hash_values([ty(0)])
             signed = 'uint' not in str(ty)
             # check bit shifting patterns from min through to max
@@ -222,7 +323,6 @@ class TestNumberHashing(BaseTest):
         self.check_hash_values([np.int32(-0x7ffffff6)])
         self.check_hash_values([np.int32(-0x7fffff9c)])
 
-
     @skip_unless_py10_or_later
     def test_py310_nan_hash(self):
         # On Python 3.10+ nan's hash to a value which is based on the pointer to
@@ -242,6 +342,23 @@ class TestTupleHashing(BaseTest):
     Test hashing of tuples.
     """
 
+    def setUp(self):
+        if numpy_version >= (2, 0) and numpy_version <= (2, 1):
+            # Temporarily set promotions state to legacy,
+            # to ensure overflow logic works
+            self.initial_state = np._get_promotion_state()
+            np._set_promotion_state("legacy")
+
+        return super().setUp()
+
+    def tearDown(self) -> None:
+        if numpy_version >= (2, 0) and numpy_version <= (2, 1):
+            # Reset numpy promotion state to initial state
+            # since the setting is global
+            np._set_promotion_state(self.initial_state)
+
+        return super().tearDown()
+
     def check_tuples(self, value_generator, split):
         for values in value_generator:
             tuples = [split(a) for a in values]
@@ -254,7 +371,7 @@ class TestTupleHashing(BaseTest):
             """
             Split i's bits into 2 integers.
             """
-            i = typ(i)
+            i = self.safe_construct(typ, i)
             return (i & typ(0x5555555555555555),
                     i & typ(0xaaaaaaaaaaaaaaaa),
                     )
@@ -263,7 +380,7 @@ class TestTupleHashing(BaseTest):
             """
             Split i's bits into 3 integers.
             """
-            i = typ(i)
+            i = self.safe_construct(typ, i)
             return (i & typ(0x2492492492492492),
                     i & typ(0x4924924924924924),
                     i & typ(0x9249249249249249),

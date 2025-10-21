@@ -25,6 +25,7 @@ def _find_valid_path(options):
 def _get_libdevice_path_decision():
     options = [
         ('Conda environment', get_conda_ctk()),
+        ('Conda environment (NVIDIA package)', get_nvidia_libdevice_ctk()),
         ('CUDA_HOME', get_cuda_home('nvvm', 'libdevice')),
         ('System', get_system_ctk('nvvm', 'libdevice')),
         ('Debian package', get_debian_pkg_libdevice()),
@@ -43,6 +44,7 @@ def _nvvm_lib_dir():
 def _get_nvvm_path_decision():
     options = [
         ('Conda environment', get_conda_ctk()),
+        ('Conda environment (NVIDIA package)', get_nvidia_nvvm_ctk()),
         ('CUDA_HOME', get_cuda_home(*_nvvm_lib_dir())),
         ('System', get_system_ctk(*_nvvm_lib_dir())),
     ]
@@ -67,10 +69,29 @@ def _cudalib_path():
         return 'lib64'
 
 
+def _cuda_home_static_cudalib_path():
+    if IS_WIN32:
+        return ('lib', 'x64')
+    else:
+        return ('lib64',)
+
+
 def _get_cudalib_dir_path_decision():
     options = [
         ('Conda environment', get_conda_ctk()),
+        ('Conda environment (NVIDIA package)', get_nvidia_cudalib_ctk()),
         ('CUDA_HOME', get_cuda_home(_cudalib_path())),
+        ('System', get_system_ctk(_cudalib_path())),
+    ]
+    by, libdir = _find_valid_path(options)
+    return by, libdir
+
+
+def _get_static_cudalib_dir_path_decision():
+    options = [
+        ('Conda environment', get_conda_ctk()),
+        ('Conda environment (NVIDIA package)', get_nvidia_static_cudalib_ctk()),
+        ('CUDA_HOME', get_cuda_home(*_cuda_home_static_cudalib_path())),
         ('System', get_system_ctk(_cudalib_path())),
     ]
     by, libdir = _find_valid_path(options)
@@ -79,6 +100,11 @@ def _get_cudalib_dir_path_decision():
 
 def _get_cudalib_dir():
     by, libdir = _get_cudalib_dir_path_decision()
+    return _env_path_tuple(by, libdir)
+
+
+def _get_static_cudalib_dir():
+    by, libdir = _get_static_cudalib_dir_path_decision()
     return _env_path_tuple(by, libdir)
 
 
@@ -106,6 +132,72 @@ def get_conda_ctk():
         return
     # Use the directory name of the max path
     return os.path.dirname(max(paths))
+
+
+def get_nvidia_nvvm_ctk():
+    """Return path to directory containing the NVVM shared library.
+    """
+    is_conda_env = os.path.exists(os.path.join(sys.prefix, 'conda-meta'))
+    if not is_conda_env:
+        return
+
+    # Assume the existence of NVVM in the conda env implies that a CUDA toolkit
+    # conda package is installed.
+
+    # First, try the location used on Linux and the Windows 11.x packages
+    libdir = os.path.join(sys.prefix, 'nvvm', _cudalib_path())
+    if not os.path.exists(libdir) or not os.path.isdir(libdir):
+        # If that fails, try the location used for Windows 12.x packages
+        libdir = os.path.join(sys.prefix, 'Library', 'nvvm', _cudalib_path())
+        if not os.path.exists(libdir) or not os.path.isdir(libdir):
+            # If that doesn't exist either, assume we don't have the NVIDIA
+            # conda package
+            return
+
+    paths = find_lib('nvvm', libdir=libdir)
+    if not paths:
+        return
+    # Use the directory name of the max path
+    return os.path.dirname(max(paths))
+
+
+def get_nvidia_libdevice_ctk():
+    """Return path to directory containing the libdevice library.
+    """
+    nvvm_ctk = get_nvidia_nvvm_ctk()
+    if not nvvm_ctk:
+        return
+    nvvm_dir = os.path.dirname(nvvm_ctk)
+    return os.path.join(nvvm_dir, 'libdevice')
+
+
+def get_nvidia_cudalib_ctk():
+    """Return path to directory containing the shared libraries of cudatoolkit.
+    """
+    nvvm_ctk = get_nvidia_nvvm_ctk()
+    if not nvvm_ctk:
+        return
+    env_dir = os.path.dirname(os.path.dirname(nvvm_ctk))
+    subdir = 'bin' if IS_WIN32 else 'lib'
+    return os.path.join(env_dir, subdir)
+
+
+def get_nvidia_static_cudalib_ctk():
+    """Return path to directory containing the static libraries of cudatoolkit.
+    """
+    nvvm_ctk = get_nvidia_nvvm_ctk()
+    if not nvvm_ctk:
+        return
+
+    if IS_WIN32 and ("Library" not in nvvm_ctk):
+        # Location specific to CUDA 11.x packages on Windows
+        dirs = ('Lib', 'x64')
+    else:
+        # Linux, or Windows with CUDA 12.x packages
+        dirs = ('lib',)
+
+    env_dir = os.path.dirname(os.path.dirname(nvvm_ctk))
+    return os.path.join(env_dir, *dirs)
 
 
 def get_cuda_home(*subdirs):
@@ -148,6 +240,7 @@ def get_cuda_paths():
             'nvvm': _get_nvvm_path(),
             'libdevice': _get_libdevice_paths(),
             'cudalib_dir': _get_cudalib_dir(),
+            'static_cudalib_dir': _get_static_cudalib_dir(),
         }
         # Cache result
         get_cuda_paths._cached_result = d

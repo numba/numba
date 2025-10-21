@@ -51,11 +51,7 @@ Documentation
 - :ghfile:`docs/Makefile` - Used to build Sphinx docs with ``make``
 - :ghfile:`docs/source` - ReST source for Numba documentation
 - :ghfile:`docs/_static/` - Static CSS and image assets for Numba docs
-- :ghfile:`docs/gh-pages.py` - Utility script to update Numba docs (stored
-  as gh-pages)
 - :ghfile:`docs/make.bat` - Not used (remove?)
-- :ghfile:`docs/requirements.txt` - Pip package requirements for building docs
-  with Read the Docs.
 - :ghfile:`numba/scripts/generate_lower_listing.py` - Dump all registered
   implementations decorated with ``@lower*`` for reference
   documentation.  Currently misses implementations from the higher
@@ -102,8 +98,6 @@ Dispatching
   for different type signatures.
 - :ghfile:`numba/_dispatcher.cpp` - C++ dispatcher implementation (for speed on
   common data types)
-- :ghfile:`numba/core/retarget.py` - Support for dispatcher objects to switch
-  target via a specific with-context.
 
 
 Compiler Pipeline
@@ -158,7 +152,6 @@ Type Management
 
 - :ghfile:`numba/core/typeconv/` - Implementation of type casting and type
   signature matching in both C++ and Python
-- :ghfile:`numba/capsulethunk.h` - Used by typeconv
 - :ghfile:`numba/core/types/` - definition of the Numba type hierarchy, used
   everywhere in compiler to select implementations
 - :ghfile:`numba/core/consts.py` - Constant inference (used to make constant
@@ -220,6 +213,8 @@ Misc Support
   (also imports local copy of ``six``)
 - :ghfile:`numba/misc/appdirs.py` - Vendored package for determining application
   config directories on every platform
+- :ghfile:`numba/misc/POST.py` - A power-on-self-test script Numba uses in CI
+  to make sure the test runner and compilation is working.
 - :ghfile:`numba/core/compiler_lock.py` - Global compiler lock because Numba's
   usage of LLVM is not thread-safe
 - :ghfile:`numba/misc/special.py` - Python stub implementations of special Numba
@@ -238,8 +233,6 @@ Misc Support
 - :ghfile:`numba/np/unsafe/ndarray.py` - NumPy array helpers
 - :ghfile:`numba/core/unsafe/bytes.py` - Copying and dereferencing data from
   void pointers
-- :ghfile:`numba/misc/dummyarray.py` - Used by GPU backends to hold array
-  information on the host, but not the data.
 - :ghfile:`numba/core/callwrapper.py` - Handles argument unboxing and releasing
   the GIL when moving from Python to nopython mode
 - :ghfile:`numba/np/numpy_support.py` - Helper functions for working with NumPy
@@ -427,7 +420,8 @@ typing and implementation to be specified together.
 - :ghfile:`numba/np/npyfuncs.py` - Kernels used in generating some
   NumPy ufuncs
 - :ghfile:`numba/np/npyimpl.py` - Implementations of most NumPy ufuncs
-- :ghfile:`numba/np/polynomial.py` - ``numpy.roots`` function
+- :ghfile:`numba/np/polynomial/polynomial_functions.py` - Implementations of NumPy ``Polynomial`` functions
+- :ghfile:`numba/np/polynomial/polynomial_core.py` - Implementations of NumPy ``Polynomial`` class
 - :ghfile:`numba/np/ufunc_db.py` - Big table mapping types to ufunc
   implementations
 
@@ -439,8 +433,6 @@ Ufunc Compiler and Runtime
 - :ghfile:`numba/np/ufunc/_internal.{h,c}` - Python extension module with
   helper functions that use CPython & NumPy C API
 - :ghfile:`numba/np/ufunc/_ufunc.c` - Used by `_internal.c`
-- :ghfile:`numba/np/ufunc/deviceufunc.py` - Custom ufunc dispatch for
-  non-CPU targets
 - :ghfile:`numba/np/ufunc/gufunc_scheduler.{h,cpp}` - Schedule work chunks
   to threads
 - :ghfile:`numba/np/ufunc/dufunc.py` - Special ufunc that can compile new
@@ -520,6 +512,7 @@ Note that the CUDA target does reuse some parts of the CPU target.
   and associated unit tests
 - :ghfile:`numba/cuda/decorators.py` - Compiler decorators for CUDA kernels
   and device functions
+- :ghfile:`numba/cuda/deviceufunc.py` - Custom ufunc dispatch for CUDA
 - :ghfile:`numba/cuda/dispatcher.py` - Dispatcher for CUDA JIT functions
 - :ghfile:`numba/cuda/printimpl.py` - Special implementation of device printing
 - :ghfile:`numba/cuda/libdevice.py` - Registers libdevice functions
@@ -557,6 +550,8 @@ Note that the CUDA target does reuse some parts of the CPU target.
   on GPU
 - :ghfile:`numba/cuda/codegen.py` - Code generator object for CUDA target
 - :ghfile:`numba/cuda/cudadrv/` - Wrapper around CUDA driver API
+- :ghfile:`numba/cuda/cudadrv/dummyarray.py` - Used to hold array information
+  on the host, but not the data.
 - :ghfile:`numba/cuda/tests/` - CUDA unit tests, skipped when CUDA is not
   detected
 - :ghfile:`numba/cuda/tests/cudasim/` - Tests of CUDA simulator

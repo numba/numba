@@ -195,7 +195,7 @@ The use of ``classmethod`` is not supported.
 Inheritance
 ~~~~~~~~~~~
 
-Class inhertance is not considered in this proposal.  The only accepted base
+Class inheritance is not considered in this proposal.  The only accepted base
 class for a jitclass is `object`.
 
 Supported targets

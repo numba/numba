@@ -4,7 +4,8 @@ import numpy as np
 
 from numba import config, cuda, int32
 from numba.cuda.testing import (unittest, CUDATestCase, skip_on_cudasim,
-                                skip_unless_cc_60, skip_if_cudadevrt_missing)
+                                skip_unless_cc_60, skip_if_cudadevrt_missing,
+                                skip_if_mvc_enabled)
 
 
 @cuda.jit
@@ -46,6 +47,7 @@ def sequential_rows(M):
 
 
 @skip_if_cudadevrt_missing
+@skip_if_mvc_enabled('CG not supported with MVC')
 class TestCudaCooperativeGroups(CUDATestCase):
     @skip_unless_cc_60
     def test_this_grid(self):

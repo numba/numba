@@ -463,8 +463,6 @@ class List(MutableSequence, InitialValue):
     Type class for (arbitrary-sized) homogeneous lists.
     """
 
-    mutable = True
-
     def __init__(self, dtype, reflected=False, initial_value=None):
         dtype = unliteral(dtype)
         self.dtype = dtype
@@ -666,7 +664,8 @@ class SetEntry(Type):
 
 
 class ListType(IterableType):
-    """List type
+    """
+    List type
     """
 
     mutable = True
@@ -712,11 +711,12 @@ class ListType(IterableType):
                 return self
 
     def __repr__(self):
-        return f"ListType({self.item_type})"
+        return f"ListType({repr(self.item_type)})"
 
 
 class ListTypeIterableType(SimpleIterableType):
-    """List iterable type
+    """
+    List iterable type
     """
 
     def __init__(self, parent):
@@ -784,7 +784,8 @@ class DictType(IterableType, InitialValue):
 
     @classmethod
     def refine(cls, keyty, valty):
-        """Refine to a precise dictionary type
+        """
+        Refine to a precise dictionary type
         """
         res = cls(keyty, valty)
         assert res.is_precise()

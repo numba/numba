@@ -400,13 +400,13 @@ class TestInlinedClosure(TestCase):
         with self.assertRaises(NotImplementedError) as raises:
             cfunc = jit(nopython=True)(outer3)
             cfunc(var)
-        msg = "Unsupported use of op_LOAD_CLOSURE encountered"
+        msg = "Unsupported use of cell variable encountered"
         self.assertIn(msg, str(raises.exception))
 
         with self.assertRaises(NotImplementedError) as raises:
             cfunc = jit(nopython=True)(outer4)
             cfunc(var)
-        msg = "Unsupported use of op_LOAD_CLOSURE encountered"
+        msg = "Unsupported use of cell variable encountered"
         self.assertIn(msg, str(raises.exception))
 
         with self.assertRaises(TypingError) as raises:
@@ -473,102 +473,34 @@ class TestInlinedClosure(TestCase):
             regex = r'closure__locals__bar_v[0-9]+.x'
             self.assertRegex(name, regex)
 
+    def test_issue9222(self):
+        # Ensures that float default arguments are handled correctly in
+        # closures.
 
-class TestObjmodeFallback(TestCase):
-    # These are all based on tests from real life issues where, predominantly,
-    # the object mode fallback compilation path would fail as a result of the IR
-    # being mutated by closure inlining in npm. Tests are named after issues,
-    # all of which failed to compile as of 0.44.
+        @njit
+        def foo():
+            def bar(x, y=1.1):
+                return x + y
+            return bar
 
-    decorators = [jit, jit(forceobj=True)]
+        @njit
+        def consume():
+            return foo()(4)
 
-    def test_issue2955(self):
+        # In Issue #9222, the result was completely wrong - 15 instead of 5.1 -
+        # so allclose should be sufficient for comparison here.
+        np.testing.assert_allclose(consume(), 4 + 1.1)
 
-        def numbaFailure(scores, cooc):
-            rows, cols = scores.shape
-            for i in range(rows):
-                coxv = scores[i]
-                groups = sorted(set(coxv), reverse=True)
-                [set(np.argwhere(coxv == x).flatten()) for x in groups]
+    @TestCase.run_test_in_subprocess
+    def test_issue_9577(self):
+        @njit
+        def _inner():
+            range_start = 0
+            for _ in range(1):
+                np.array([1 for _ in range(range_start, 7)])
+                range_start = 0
 
-        x = np.random.random((10, 10))
-        y = np.abs((np.random.randn(10, 10) * 1.732)).astype(int)
-        for d in self.decorators:
-            d(numbaFailure)(x, y)
-
-    def test_issue3239(self):
-
-        def fit(X, y):
-            if type(X) is not np.ndarray:
-                X = np.array(X)
-
-            if type(y) is not np.ndarray:
-                y = np.array(y)
-
-            m, _ = X.shape
-            X = np.hstack((
-                np.array([[1] for _ in range(m)]),
-                X
-            ))
-
-            res = np.dot(np.dot(X, X.T), y)
-            intercept = res[0]
-            coefs = res[1:]
-            return intercept, coefs
-
-        for d in self.decorators:
-            res = d(fit)(np.arange(10).reshape(1, 10),
-                         np.arange(10).reshape(1, 10))
-            exp = fit(np.arange(10).reshape(1, 10),
-                      np.arange(10).reshape(1, 10))
-            np.testing.assert_equal(res, exp)
-
-    def test_issue3289(self):
-        b = [(5, 124), (52, 5)]
-
-        def a():
-            [b[index] for index in [0, 1]]
-            for x in range(5):
-                pass
-        for d in self.decorators:
-            d(a)()
-
-    def test_issue3413(self):
-
-        def foo(data):
-            # commenting out this line prevents the crash:
-            t = max([len(m) for m in data['y']])
-
-            mask = data['x'] == 0
-            if any(mask):
-                z = 15
-            return t, z
-
-        data = {'x': np.arange(5), 'y': [[1], [2, 3]]}
-        for d in self.decorators:
-            res = d(foo)(data)
-            np.testing.assert_allclose(res, foo(data))
-
-    def test_issue3659(self):
-
-        def main():
-            a = np.array(((1, 2), (3, 4)))
-            return np.array([x for x in a])
-        for d in self.decorators:
-            res = d(main)()
-            np.testing.assert_allclose(res, main())
-
-    def test_issue3803(self):
-
-        def center(X):
-            np.array([np.float_(x) for x in X.T])
-            np.array([np.float_(1) for _ in X.T])
-            return X
-
-        X = np.zeros((10,))
-        for d in self.decorators:
-            res = d(center)(X)
-            np.testing.assert_allclose(res, center(X))
+        _inner()
 
 
 if __name__ == '__main__':

@@ -14,6 +14,13 @@ regex_pattern = (
 
 class TestUserExc(CUDATestCase):
 
+    def setUp(self):
+        super().setUp()
+        # LTO optimizes away the exception status due to an oversight
+        # in the way we generate it (it is not added to the used list).
+        # See https://github.com/numba/numba/issues/9526.
+        self.skip_if_lto("Exceptions not supported with LTO")
+
     def test_user_exception(self):
         @cuda.jit("void(int32)", debug=True)
         def test_exc(x):
@@ -26,13 +33,13 @@ class TestUserExc(CUDATestCase):
         with self.assertRaises(MyError) as cm:
             test_exc[1, 1](1)
         if not config.ENABLE_CUDASIM:
-            self.assertRegexpMatches(str(cm.exception), regex_pattern)
+            self.assertRegex(str(cm.exception), regex_pattern)
         self.assertIn("tid=[0, 0, 0] ctaid=[0, 0, 0]", str(cm.exception))
         with self.assertRaises(MyError) as cm:
             test_exc[1, 1](2)
         if not config.ENABLE_CUDASIM:
-            self.assertRegexpMatches(str(cm.exception), regex_pattern)
-            self.assertRegexpMatches(str(cm.exception), regex_pattern)
+            self.assertRegex(str(cm.exception), regex_pattern)
+            self.assertRegex(str(cm.exception), regex_pattern)
         self.assertIn("tid=[0, 0, 0] ctaid=[0, 0, 0]: foo", str(cm.exception))
 
 

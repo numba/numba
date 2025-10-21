@@ -1,0 +1,533 @@
+Version 0.59.0 (31 January 2024)
+--------------------------------
+
+.. contents:: Table of Contents
+   :depth: 2
+
+This is a major Numba release. Numba now supports Python 3.12,
+please find a summary of all noteworthy items below.
+
+Highlights
+~~~~~~~~~~
+
+Python 3.12 Support
+===================
+
+The standout feature of this release is the official support for Python 3.12 
+in Numba.
+
+Please note that profiling support is temporarily disabled in 
+this release (for Python 3.12) and several known issues have been identified 
+during development. The Numba team is actively working on resolving them. 
+Please refer to the respective issue pages 
+(`Numba #9289 <https://github.com/numba/numba/pull/9289>`_ and 
+`Numba #9291 <https://github.com/numba/numba/pull/9291>`_) 
+for a list of ongoing issues and updates on progress.
+
+(`PR-#9246 <https://github.com/numba/numba/pull/9246>`__)
+
+Move minimum supported Python version to 3.9.
+=============================================
+
+Support for Python 3.8 has been removed, Numba's minimum supported Python
+version is now Python 3.9.
+
+(`PR-#9310 <https://github.com/numba/numba/pull/9310>`__)
+
+
+New Features
+~~~~~~~~~~~~
+
+Add support for ufunc attributes and reduce
+===========================================
+
+Support for ``ufunc.reduce`` and most ufunc attributes is added.
+
+(`PR-#9123 <https://github.com/numba/numba/pull/9123>`__)
+
+Add a config variable to enable / disable the llvmlite memory manager
+=====================================================================
+
+A config variable to force enable or disable the llvmlite memory manager is
+added.
+
+(`PR-#9341 <https://github.com/numba/numba/pull/9341>`__)
+
+
+Improvements
+~~~~~~~~~~~~
+
+Add ``TargetLibraryInfo`` pass to CPU LLVM pipeline.
+====================================================
+
+The ``TargetLibraryInfo`` pass makes sure that the optimisations that take place
+during call simplification are appropriate for the target, without this the
+target is assumed to be Linux and code will be optimised to produce e.g. math
+symbols that do not exit on Windows. Historically this issue has been avoided
+through the use of Numba internal libraries carrying wrapped symbols, but doing
+so potentially detriments performance. As a result of this change Numba internal
+libraries are smaller and there is an increase in optimisation opportunity in
+code using ``exp2`` and ``log2`` functions.
+
+(`PR-#9336 <https://github.com/numba/numba/pull/9336>`__)
+
+Numba deprecation warning classes are now subclasses of builtin ones
+====================================================================
+
+To help users manage and suppress deprecation warnings from Numba, the
+``NumbaDeprecationWarning`` and ``NumbaPendingDeprecationWarning`` classes are
+now subclasses of the builtin ``DeprecationWarning`` and
+``PendingDeprecationWarning`` respectively. Therefore, warning filters on
+``DeprecationWarning`` and ``PendingDeprecationWarning`` will apply to Numba
+deprecation warnings.
+
+(`PR-#9347 <https://github.com/numba/numba/pull/9347>`__)
+
+
+NumPy Support
+~~~~~~~~~~~~~
+
+Added support for np.indices() function.
+========================================
+
+Support is added for ``numpy.indices()``.
+
+(`PR-#9126 <https://github.com/numba/numba/pull/9126>`__)
+
+Added support for ``np.polynomial.polynomial.Polynomial`` class.
+================================================================
+
+Support is added for the `Polynomial` class from the package ``np.polynomial.polynomial``.
+
+(`PR-#9140 <https://github.com/numba/numba/pull/9140>`__)
+
+Added support for functions ``np.polynomial.polyutils.as_series()``, as well as functions ``polydiv()``, ``polyint()``, ``polyval()`` from ``np.polynomial.polynomial``.
+========================================================================================================================================================================
+
+Support is added for ``np.polynomial.polyutils.as_series()``, ``np.polynomial.polynomial.polydiv()``, ``np.polynomial.polynomial.polyint()`` (only the first 2 arguments), ``np.polynomial.polynomial.polyval()`` (only the first 2 arguments).
+
+(`PR-#9141 <https://github.com/numba/numba/pull/9141>`__)
+
+Added support for np.unwrap() function.
+=======================================
+
+Support is added for ``numpy.unwrap()``. The ``axis`` argument is only supported when its value equals -1.
+
+(`PR-#9154 <https://github.com/numba/numba/pull/9154>`__)
+
+Adds support for checking if dtypes are equal.
+==============================================
+
+Support is added for checking if two dtype objects are equal, for example ``assert X.dtype == np.dtype(np.float64)``.
+
+(`PR-#9249 <https://github.com/numba/numba/pull/9249>`__)
+
+
+CUDA API Changes
+~~~~~~~~~~~~~~~~
+
+Added support for compiling device functions with a C ABI
+=========================================================
+
+Support for compiling device functions with a C ABI through the
+:func:`compile_ptx() <numba.cuda.compile_ptx>` API, for easier interoperability
+with CUDA C/C++ and other languages.
+
+(`PR-#9223 <https://github.com/numba/numba/pull/9223>`__)
+
+Make grid() and gridsize() use 64-bit integers
+==============================================
+
+``cuda.grid()`` and ``cuda.gridsize()`` now use 64-bit integers, so they no longer
+overflow when the grid contains more than ``2 ** 31`` threads.
+
+(`PR-#9235 <https://github.com/numba/numba/pull/9235>`__)
+
+Prevent kernels being dropped by implementing the used list
+===========================================================
+
+Kernels are no longer dropped when being compiled and linked using nvJitLink,
+because they are added to the ``@"llvm.used"`` list.
+
+(`PR-#9267 <https://github.com/numba/numba/pull/9267>`__)
+
+Support for Windows CUDA 12.0 toolkit conda packages
+====================================================
+
+The library paths used in CUDA toolkit 12.0 conda packages on Windows are
+added to the search paths used when detecting CUDA libraries.
+
+(`PR-#9279 <https://github.com/numba/numba/pull/9279>`__)
+
+
+Performance Improvements and Changes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Improvement to IR copying speed
+===============================
+
+Improvements were made to the deepcopying of ``FunctionIR``. 
+In one case, the ``InlineInlineables`` pass is 3x faster.
+
+(`PR-#9245 <https://github.com/numba/numba/pull/9245>`__)
+
+
+Bug Fixes
+~~~~~~~~~
+
+Dynamically Allocate Parfor Schedules
+=====================================
+
+This PR fixes an issue where a parallel region is executed in a loop
+many times.  The previous code used an alloca to allocate the parfor
+schedule on the stack but if there are many such parfors in a loop
+then the stack will overflow.  The new code does a pair of
+allocation/deallocation calls into the Numba parallel runtime before
+and after the parallel region respectively.  At the moment, these
+calls redirect to malloc/free although other mechanisms such as
+pooling are possible and may be implemented later.  This PR also
+adds a warning in cases where a prange loop is not converted to a
+parfor.  This can happen if there is exceptional control flow in the
+loop.  These are related in that the original issue had a prange
+loop that wasn't converted to a parfor and therefore all the parfors
+inside the body of the prange were running in parallel and adding to
+the stack each time.
+
+(`PR-#9048 <https://github.com/numba/numba/pull/9048>`__)
+
+Support multiple outputs in a ``@guvectorize`` function
+=======================================================
+
+This PR fixes `Numba #9058 <https://github.com/numba/numba/pull/9058>`_
+where it is now possible to call a guvectorize with multiple outputs.
+
+(`PR-#9049 <https://github.com/numba/numba/pull/9049>`__)
+
+Handling of ``None`` args fixed in ``PythonAPI.call``.
+======================================================
+
+Fixing segfault when ``args=None`` was passed to ``PythonAPI.call``.
+
+(`PR-#9089 <https://github.com/numba/numba/pull/9089>`__)
+
+Fix propagation of literal values in PHI nodes.
+===============================================
+
+Fixed a bug in the literal propagation pass where a PHI node could be wrongly
+replaced by a constant.
+
+(`PR-#9144 <https://github.com/numba/numba/pull/9144>`__)
+
+``numpy.digitize`` implementation behaviour aligned with numpy
+==============================================================
+
+The implementation of ``numpy.digitize`` is updated to behave per
+numpy in a wider set of cases, including where the supplied bins
+are not in fact monotonic.
+
+(`PR-#9169 <https://github.com/numba/numba/pull/9169>`__)
+
+``numpy.searchsorted`` and ``numpy.sort`` behaviour updates
+===========================================================
+
+* ``numpy.searchsorted`` implementation updated to produce
+  identical outputs to numpy for a wider set of use cases,
+  including where the provided array `a` is in fact not
+  properly sorted.
+
+* ``numpy.searchsorted`` implementation bugfix for the case where
+  side='right' and the provided array `a` contains NaN(s).
+
+* ``numpy.searchsorted`` implementation extended to support complex
+  inputs.
+
+* ``numpy.sort`` (and ``array.sort``) implementation extended to
+  support sorting of complex data.
+
+(`PR-#9189 <https://github.com/numba/numba/pull/9189>`__)
+
+Fix SSA to consider variables where use is not dominated by the definition
+==========================================================================
+
+A SSA problem is fixed such that a conditionally defined variable will receive
+a phi node showing that there is a path where the variable is undefined.
+This affects extension code that relies on SSA behavior.
+
+(`PR-#9242 <https://github.com/numba/numba/pull/9242>`__)
+
+Fixed ``RecursionError`` in ``prange``
+======================================
+
+A problem with certain loop patterns using ``prange`` leading to 
+``RecursionError`` in the compiler is fixed. An example of such loop is shown 
+below. The problem would cause the compiler to fall into an infinite recursive
+cycle trying to determine the definition of ``var1`` and ``var2``. The pattern
+involves definitions of variables within an if-else tree and not all branches 
+are defining the variables.
+
+.. code-block::
+
+    for i in prange(N):
+        for j in inner:
+            if cond1:
+                var1 = ...
+            elif cond2:
+                var1, var2 = ...
+
+            elif cond3:
+                pass
+
+            if cond4:
+                use(var1)
+                use(var2)
+
+(`PR-#9244 <https://github.com/numba/numba/pull/9244>`__)
+
+Support negative axis in ufunc.reduce
+=====================================
+
+Fixed a bug in ufunc.reduce to correctly handle negative axis values.
+
+(`PR-#9296 <https://github.com/numba/numba/pull/9296>`__)
+
+Fix issue with parfor reductions and Python 3.12.
+=================================================
+
+The parfor reduction code has certain expectations on the order of statements
+that it discovers, these are based on the code that previous versions of Numba
+generated.  With Python 3.12, one assignment that used to follow the
+reduction operator statement, such as a binop, is now moved to its own basic
+block.  This change reorders the set of discovered reduction nodes so that
+this assignment is right after the reduction operator as it was in previous
+Numba versions.  This only affects internal parfor reduction code and
+doesn't actually change the Numba IR.
+
+(`PR-#9334 <https://github.com/numba/numba/pull/9334>`__)
+
+
+Changes
+~~~~~~~
+
+Make test listing not invoke CPU compilation.
+=============================================
+
+Numba's test listing command ``python -m numba.runtests -l`` has historically
+triggered CPU target compilation due to the way in which certain test functions
+were declared within the test suite. It has now been made such that the CPU
+target compiler is not invoked on test listing and a test is added to ensure
+that it remains the case.
+
+(`PR-#9309 <https://github.com/numba/numba/pull/9309>`__)
+
+Semantic differences due to Python 3.12 variable shadowing in comprehensions
+============================================================================
+
+Python 3.12 introduced a new bytecode ``LOAD_FAST_AND_CLEAR`` that is only used 
+in comprehensions. It has dynamic semantics that Numba cannot model. 
+
+For example,
+
+.. code-block:: python
+
+    def foo():
+        if False:
+            x = 1
+        [x for x in (1,)]
+        return x  # This return uses undefined variable
+
+The variable `x` is undefined at the return statement. Instead of raising an 
+``UnboundLocalError``, Numba will raise a ``TypingError`` at compile time if an 
+undefined variable is used.
+
+However, Numba cannot always detect undefined variables. 
+
+For example,
+
+.. code-block:: python
+
+    def foo(a):
+        [x for x in (0,)]
+        if a:
+            x = 3 + a
+        x += 10
+        return x
+
+Calling ``foo(0)`` returns ``10`` instead of raising ``UnboundLocalError``. 
+This is because Numba does not track variable liveness at runtime. 
+The return value is ``0 + 10`` since Numba zero-initializes undefined variables.
+
+(`PR-#9315 <https://github.com/numba/numba/pull/9315>`__)
+
+Refactor and remove legacy APIs/testing internals.
+==================================================
+
+A number of internally used functions have been removed to aid with general
+maintenance by reducing the number of ways in which it is possible to invoke
+compilation, specifically:
+
+* ``numba.core.compiler.compile_isolated`` is removed.
+* ``numba.tests.support.TestCase::run_nullary_func`` is removed.
+* ``numba.tests.support.CompilationCache`` is removed.
+
+Additionally, the concept of "nested context" is removed from
+``numba.core.registry.CPUTarget`` along with the implementation details.
+Maintainers of target extensions (those using the
+API in ``numba.core.target_extension`` to extend Numba support to
+custom/synthetic hardware) should note that the same can be deleted from
+target extension implementations of ``numba.core.descriptor.TargetDescriptor``
+if it is present. i.e. the ``nested_context`` method and associated
+implementation details can just be removed from the custom target's
+``TargetDescriptor``.
+
+Further, a bug was discovered, during the refactoring, in the typing of record
+arrays. It materialised that two record types that only differed in their
+mutability could alias, this has now been fixed.
+
+(`PR-#9330 <https://github.com/numba/numba/pull/9330>`__)
+
+
+Deprecations
+~~~~~~~~~~~~
+
+Explicitly setting ``NUMBA_CAPTURED_ERRORS=old_style`` will raise deprecation warnings
+======================================================================================
+
+As per deprecation schedule of old-style error-capturing, explicitly setting 
+``NUMBA_CAPTURED_ERRORS=old_style`` will raise deprecation warnings. 
+This release is the last to use "old_style" as the default.
+Details are documented at 
+https://numba.readthedocs.io/en/0.58.1/reference/deprecation.html#deprecation-of-old-style-numba-captured-errors
+
+(`PR-#9346 <https://github.com/numba/numba/pull/9346>`__)
+
+
+Expired Deprecations
+~~~~~~~~~~~~~~~~~~~~
+
+Object mode *fall-back* support has been removed.
+=================================================
+
+As per the deprecation schedule for Numba 0.59.0, support for
+"object mode fall-back" is removed from all Numba ``jit``-family decorators.
+Further, the default for the ``nopython`` key-word argument has been changed to
+``True``, this means that all Numba ``jit``-family decorated functions will now
+compile in ``nopython`` mode by default.
+
+(`PR-#9352 <https://github.com/numba/numba/pull/9352>`__)
+
+Removal of deprecated API ``@numba.generated_jit``.
+===================================================
+
+As per the deprecation schedule for 0.59.0, support for
+``@numba.generated_jit`` has been removed. Use of ``@numba.extending.overload``
+and the high-level extension API is recommended as a replacement.
+
+(`PR-#9353 <https://github.com/numba/numba/pull/9353>`__)
+
+
+Infrastructure Related Changes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Add validation capability for user generated towncrier ``.rst`` files.
+======================================================================
+
+Added a validation script for user generated towncrier ``.rst`` files.
+The script will run as a part of towncrier Github workflow automatically
+on every PR.
+
+(`PR-#9335 <https://github.com/numba/numba/pull/9335>`__)
+
+Pull-Requests:
+~~~~~~~~~~~~~~
+
+* PR `#8990 <https://github.com/numba/numba/pull/8990>`_: Removed extra block copying in InlineWorker (`kc611 <https://github.com/kc611>`_)
+* PR `#9048 <https://github.com/numba/numba/pull/9048>`_: Dynamically allocate parfor schedule. (`DrTodd13 <https://github.com/DrTodd13>`_)
+* PR `#9058 <https://github.com/numba/numba/pull/9058>`_: Fix gufunc with multiple outputs (`guilhermeleobas <https://github.com/guilhermeleobas>`_)
+* PR `#9089 <https://github.com/numba/numba/pull/9089>`_: Fix segfault on passing `None` for args in PythonAPI.call (`hellozee <https://github.com/hellozee>`_)
+* PR `#9101 <https://github.com/numba/numba/pull/9101>`_: Add misc script to find missing towncrier news files (`sklam <https://github.com/sklam>`_)
+* PR `#9123 <https://github.com/numba/numba/pull/9123>`_: Implement most ufunc attributes and ufunc.reduce (`guilhermeleobas <https://github.com/guilhermeleobas>`_)
+* PR `#9126 <https://github.com/numba/numba/pull/9126>`_: Add support for np.indices() (`KrisMinchev <https://github.com/KrisMinchev>`_)
+* PR `#9140 <https://github.com/numba/numba/pull/9140>`_: Add support for Polynomial class (`KrisMinchev <https://github.com/KrisMinchev>`_)
+* PR `#9141 <https://github.com/numba/numba/pull/9141>`_: Add support for `as_series()` from `np.polynomial.polyutils` and `polydiv()`, `polyint()`, `polyval()` from `np.polynomial.polynomial` (`KrisMinchev <https://github.com/KrisMinchev>`_)
+* PR `#9142 <https://github.com/numba/numba/pull/9142>`_: Removed out of date comment handled by PR#8338 (`njriasan <https://github.com/njriasan>`_)
+* PR `#9144 <https://github.com/numba/numba/pull/9144>`_: Fix error when literal is wrongly propagated in a PHI node (`guilhermeleobas <https://github.com/guilhermeleobas>`_)
+* PR `#9148 <https://github.com/numba/numba/pull/9148>`_: bump llvmdev dependency to 0.42.0dev for next development cycle (`esc <https://github.com/esc>`_)
+* PR `#9149 <https://github.com/numba/numba/pull/9149>`_: update release checklist post 0.58.0rc1 (`esc <https://github.com/esc>`_)
+* PR `#9154 <https://github.com/numba/numba/pull/9154>`_: Add support for np.unwrap() (`KrisMinchev <https://github.com/KrisMinchev>`_)
+* PR `#9155 <https://github.com/numba/numba/pull/9155>`_: Remove unused test.cmd (`sklam <https://github.com/sklam>`_)
+* PR `#9168 <https://github.com/numba/numba/pull/9168>`_: fix the `get_template_info` method in `overload_method` template (`dlee992 <https://github.com/dlee992>`_ `sklam <https://github.com/sklam>`_)
+* PR `#9169 <https://github.com/numba/numba/pull/9169>`_: Update `np.digitize` handling of np.nan bin edge(s) (`rjenc29 <https://github.com/rjenc29>`_)
+* PR `#9170 <https://github.com/numba/numba/pull/9170>`_: Fix an inappropriate test expression to remove a logical short circuit (`munahaf <https://github.com/munahaf>`_)
+* PR `#9171 <https://github.com/numba/numba/pull/9171>`_: Fix the implementation of a special method (`munahaf <https://github.com/munahaf>`_)
+* PR `#9189 <https://github.com/numba/numba/pull/9189>`_: Align `searchsorted` behaviour with numpy (`rjenc29 <https://github.com/rjenc29>`_)
+* PR `#9191 <https://github.com/numba/numba/pull/9191>`_: Add a Numba power-on-self-test script and use in CI. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#9205 <https://github.com/numba/numba/pull/9205>`_: release notes and version support updates from release0.58 branch (`esc <https://github.com/esc>`_)
+* PR `#9223 <https://github.com/numba/numba/pull/9223>`_: CUDA: Add support for compiling device functions with C ABI (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9235 <https://github.com/numba/numba/pull/9235>`_: CUDA: Make `grid()` and `gridsize()` use 64-bit integers (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9236 <https://github.com/numba/numba/pull/9236>`_: Fixes numba/numba#9234 (`SridharCR <https://github.com/SridharCR>`_)
+* PR `#9244 <https://github.com/numba/numba/pull/9244>`_: Fix Recursion error in parfor lookup (`sklam <https://github.com/sklam>`_)
+* PR `#9245 <https://github.com/numba/numba/pull/9245>`_: Fix slow InlineInlineable (`sklam <https://github.com/sklam>`_)
+* PR `#9246 <https://github.com/numba/numba/pull/9246>`_: Support for Python 3.12 (`stuartarchibald <https://github.com/stuartarchibald>`_ `kc611 <https://github.com/kc611>`_ `esc <https://github.com/esc>`_)
+* PR `#9249 <https://github.com/numba/numba/pull/9249>`_: add support for checking dtypes equal (`saulshanabrook <https://github.com/saulshanabrook>`_)
+* PR `#9255 <https://github.com/numba/numba/pull/9255>`_: Fix SSA to consider variables whose use is not dominated by the definition (`sklam <https://github.com/sklam>`_)
+* PR `#9258 <https://github.com/numba/numba/pull/9258>`_: [docs] Typo in overloading-guide.rst (`kinow <https://github.com/kinow>`_)
+* PR `#9267 <https://github.com/numba/numba/pull/9267>`_: CUDA: Fix dropping of kernels by nvjitlink, by implementing the used list (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9279 <https://github.com/numba/numba/pull/9279>`_: CUDA: Add support for CUDA 12.0 Windows conda packages (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9292 <https://github.com/numba/numba/pull/9292>`_: CUDA: Switch cooperative groups to use overloads (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9296 <https://github.com/numba/numba/pull/9296>`_: Fix bug when axis is negative and check when axis is invalid (`guilhermeleobas <https://github.com/guilhermeleobas>`_)
+* PR `#9301 <https://github.com/numba/numba/pull/9301>`_: Release Notes 0.58.1 for main (`esc <https://github.com/esc>`_)
+* PR `#9302 <https://github.com/numba/numba/pull/9302>`_: add missing backtick to example git tag command (`esc <https://github.com/esc>`_)
+* PR `#9303 <https://github.com/numba/numba/pull/9303>`_: Add category to warning (`kkokkoros <https://github.com/kkokkoros>`_)
+* PR `#9307 <https://github.com/numba/numba/pull/9307>`_: Upgrade to cloudpickle 3.0.0 (`sklam <https://github.com/sklam>`_)
+* PR `#9308 <https://github.com/numba/numba/pull/9308>`_: Fix typo in azure ci script (`sklam <https://github.com/sklam>`_)
+* PR `#9309 <https://github.com/numba/numba/pull/9309>`_: Continue #9044, prevent compilation on the CPU target when listing tests. (`stuartarchibald <https://github.com/stuartarchibald>`_ `apmasell <https://github.com/apmasell>`_)
+* PR `#9310 <https://github.com/numba/numba/pull/9310>`_: Remove Python 3.8 support. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#9315 <https://github.com/numba/numba/pull/9315>`_: Fix support for LOAD_FAST_AND_CLEAR (`sklam <https://github.com/sklam>`_)
+* PR `#9318 <https://github.com/numba/numba/pull/9318>`_: GPU CI: Test with Python 3.9-3.12 (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9325 <https://github.com/numba/numba/pull/9325>`_: Fix GPUCI (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9326 <https://github.com/numba/numba/pull/9326>`_: Add docs for LOAD_FAST_AND_CLEAR changes (`sklam <https://github.com/sklam>`_)
+* PR `#9330 <https://github.com/numba/numba/pull/9330>`_: Refactor and remove legacy APIs/testing internals. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#9331 <https://github.com/numba/numba/pull/9331>`_: Fix Syntax and Deprecation Warnings from 3.12. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#9334 <https://github.com/numba/numba/pull/9334>`_: Fix parfor reduction issue with Python 3.12. (`DrTodd13 <https://github.com/DrTodd13>`_)
+* PR `#9335 <https://github.com/numba/numba/pull/9335>`_: Add validation capability for user generated towncrier .rst files. (`kc611 <https://github.com/kc611>`_)
+* PR `#9336 <https://github.com/numba/numba/pull/9336>`_: Add TargetLibraryInfo pass to CPU LLVM pipeline. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#9337 <https://github.com/numba/numba/pull/9337>`_: Revert #8583 which skip tests due to M1 RuntimeDyLd Assertion error (`sklam <https://github.com/sklam>`_)
+* PR `#9341 <https://github.com/numba/numba/pull/9341>`_: Add configuration variable to force llvmlite memory manager on / off (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9342 <https://github.com/numba/numba/pull/9342>`_: Fix flake8 checks for v6.1.0 (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#9346 <https://github.com/numba/numba/pull/9346>`_: Setting ``NUMBA_CAPTURED_ERRORS=old_style`` will now raise warnings. (`sklam <https://github.com/sklam>`_)
+* PR `#9347 <https://github.com/numba/numba/pull/9347>`_: Make Numba's deprecation warnings subclasses of the builtin ones. (`sklam <https://github.com/sklam>`_)
+* PR `#9351 <https://github.com/numba/numba/pull/9351>`_: Made Python 3.12 support rst note more verbose (`kc611 <https://github.com/kc611>`_)
+* PR `#9352 <https://github.com/numba/numba/pull/9352>`_: Removing object mode fallback from `@jit`. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#9353 <https://github.com/numba/numba/pull/9353>`_: Remove `numba.generated_jit` (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#9356 <https://github.com/numba/numba/pull/9356>`_: Refactor print tests to avoid NRT leak issue. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#9357 <https://github.com/numba/numba/pull/9357>`_: Fix a typo in `_set_init_process_lock` warning. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#9358 <https://github.com/numba/numba/pull/9358>`_: Remove note about OpenMP restriction in wheels. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#9359 <https://github.com/numba/numba/pull/9359>`_: Fix test_jit_module test against objmode fallback. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#9360 <https://github.com/numba/numba/pull/9360>`_: AzureCI changes. RVSDG test config should still test its assigned test slice (`sklam <https://github.com/sklam>`_)
+* PR `#9362 <https://github.com/numba/numba/pull/9362>`_: Fix ``np.MachAr`` warning matching in test. (`sklam <https://github.com/sklam>`_)
+* PR `#9402 <https://github.com/numba/numba/pull/9402>`_: Doc updates for 0.59 final (`sklam <https://github.com/sklam>`_ `stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#9403 <https://github.com/numba/numba/pull/9403>`_: Fix test isolation for stateful configurations in the testsuite (`sklam <https://github.com/sklam>`_ `stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#9404 <https://github.com/numba/numba/pull/9404>`_: Fix skipped test stderr change for Python 3.12.1. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#9407 <https://github.com/numba/numba/pull/9407>`_: Fix incorrect cycle detection (`sklam <https://github.com/sklam>`_)
+
+Authors:
+~~~~~~~~
+
+* `apmasell <https://github.com/apmasell>`_
+* `dlee992 <https://github.com/dlee992>`_
+* `DrTodd13 <https://github.com/DrTodd13>`_
+* `esc <https://github.com/esc>`_
+* `gmarkall <https://github.com/gmarkall>`_
+* `guilhermeleobas <https://github.com/guilhermeleobas>`_
+* `hellozee <https://github.com/hellozee>`_
+* `kc611 <https://github.com/kc611>`_
+* `kinow <https://github.com/kinow>`_
+* `kkokkoros <https://github.com/kkokkoros>`_
+* `KrisMinchev <https://github.com/KrisMinchev>`_
+* `munahaf <https://github.com/munahaf>`_
+* `njriasan <https://github.com/njriasan>`_
+* `rjenc29 <https://github.com/rjenc29>`_
+* `saulshanabrook <https://github.com/saulshanabrook>`_
+* `sklam <https://github.com/sklam>`_
+* `SridharCR <https://github.com/SridharCR>`_
+* `stuartarchibald <https://github.com/stuartarchibald>`_

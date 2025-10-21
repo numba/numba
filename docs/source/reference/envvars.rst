@@ -77,28 +77,6 @@ These variables influence what is printed out during compilation of
 
     If set to non-zero, show resources for getting help. Default is zero.
 
-.. envvar:: NUMBA_CAPTURED_ERRORS
-
-    Alters the way in which Numba captures and handles exceptions that do not
-    inherit from ``numba.core.errors.NumbaError`` during compilation (e.g.
-    standard Python exceptions). This does not impact runtime exception
-    handling. Valid values are:
-
-    - ``"old_style"`` (default): this is the exception handling behaviour that
-      is present in Numba versions <= 0.54.x. Numba will capture and wrap all
-      errors occurring in compilation and depending on the compilation phase they
-      will likely materialize as part of the message in a ``TypingError`` or a
-      ``LoweringError``.
-    - ``"new_style"`` this will treat any exception that does not inherit from
-      ``numba.core.errors.NumbaError`` **and** is raised during compilation as a
-      "hard error", i.e. the exception will propagate and compilation will halt.
-      The purpose of this new style is to differentiate between intentionally
-      raised exceptions and those which occur due to mistakes. For example, if
-      an ``AttributeError`` occurs in the typing of an ``@overload`` function,
-      under this new behaviour it is assumed that this a mistake in the
-      implementation and compilation will halt due to this exception. This
-      behaviour will eventually become the default.
-
 .. envvar:: NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING
 
     If set to non-zero error message highlighting is disabled. This is useful
@@ -182,6 +160,26 @@ These variables influence what is printed out during compilation of
 .. envvar:: NUMBA_DEBUG_TYPEINFER
 
    If set to non-zero, print out debugging information about type inference.
+
+.. envvar:: NUMBA_DISABLE_TYPEINFER_FAIL_CACHE
+
+   If set to truthy value, disable the cache of failed function resolutions in 
+   the type inference. The default value is false.
+   
+   Disabling the cache is **not recommended** for normal use. 
+   The cache should only be disabled temporarily for debugging purposes. 
+   Relying on disabled cache behavior is not supported and could break 
+   in future releases.
+
+.. envvar:: NUMBA_ENABLE_SYS_MONITORING
+
+   Controls support for Python's ``sys.monitoring`` feature in Numba.
+   Disabled (set to zero) by default. When enabled (set to non-zero), allows
+   profiling tools that use ``sys.monitoring`` to work with Numba code.
+   Currently tested with ``cProfile``, other monitoring tools may work but are
+   not guaranteed.
+
+   Only available for Python 3.12 and above. Otherwise, it has no effect.
 
 .. envvar:: NUMBA_ENABLE_PROFILING
 
@@ -290,6 +288,11 @@ These variables influence what is printed out during compilation of
 
     *Default value*: ``0`` (Off)
 
+.. envvar:: NUMBA_JIT_COVERAGE
+
+   Set to ``1`` to enable coverage data reporting by the JIT compiler on 
+   compiled source lines. Default to ``0`` (Off).
+
 .. seealso::
    :ref:`numba-troubleshooting` and :ref:`architecture`.
 
@@ -299,7 +302,16 @@ Compilation options
 
 .. envvar:: NUMBA_OPT
 
-   The optimization level; this option is passed straight to LLVM.
+   The optimization level; typically this option is passed straight to LLVM. It
+   may take one of the values ``0``, ``1``, ``2`` or ``3`` which correspond
+   approximately to the ``-O{value}`` flag found in many command line
+   compilation tools. The value ``max`` is also supported, this is Numba
+   specific, it has the effect of running with the optimization level set at
+   ``3`` both before and after a pass which in which reference count operation
+   pruning takes place. In some cases this may increase performance, in other
+   cases it may impede performance, the same can be said for compilation time.
+   This option is present to give users the opportunity to choose a value
+   suitable for their application.
 
    *Default value:* 3
 
@@ -307,13 +319,15 @@ Compilation options
 
    If set to non-zero, enable LLVM loop vectorization.
 
-   *Default value:* 1 (except on 32-bit Windows)
+   *Default value:* 1
 
 .. envvar:: NUMBA_SLP_VECTORIZE
 
    If set to non-zero, enable LLVM superword-level parallelism vectorization.
+   Note that use of this feature has occasionally resulted in LLVM producing
+   miscompilations, hence it is off by default.
 
-   *Default value:* 1
+   *Default value:* 0
 
 .. envvar:: NUMBA_ENABLE_AVX
 
@@ -403,6 +417,21 @@ Compilation options
 
     *Default value:* "all"
 
+.. envvar:: NUMBA_USE_LLVMLITE_MEMORY_MANAGER
+
+   Whether llvmlite's built-in memory manager is enabled. The default is to
+   enable it on 64-bit ARM platforms (macOS on Apple Silicon and Linux on
+   AArch64), where it is needed to ensure ABI compliance, specifically
+   conformance with the requirements for GOT and text segment placement in the
+   large code model.
+
+   This environment variable can be used to override the default setting and
+   force it to be enabled (``1``) or disabled (``0``). This should not normally
+   be required, but it is provided as an option for debugging and potential
+   workaround situations.
+
+   *Default value:* None (Use the default for the system)
+
 
 .. _numba-envvars-caching:
 
@@ -436,6 +465,25 @@ Options for the compilation cache.
     Also see :ref:`docs on cache sharing <cache-sharing>` and
     :ref:`docs on cache clearing <cache-clearing>`
 
+.. envvar:: NUMBA_CACHE_LOCATOR_CLASSES
+
+    Override the default cache locator classes and their order. If defined,
+    this should be a comma-separated list of cache locator class names.
+
+    Available locator classes include:
+
+    - ``InTreeCacheLocator`` - Cache next to source files in ``__pycache__``
+    - ``InTreeCacheLocatorFsAgnostic`` - Like ``InTreeCacheLocator`` but
+      agnostic to filesystem timestamp precision differences
+    - ``UserWideCacheLocator`` - Cache in user-wide application directory
+    - ``IPythonCacheLocator`` - Cache in IPython-specific directory
+    - ``ZipCacheLocator`` - Cache for functions in zip files
+
+    Custom locator classes can also be specified using their full module path
+    (e.g., ``mymodule.MyCustomLocator``).
+
+    If not defined, Numba uses the default locator order.
+
 
 .. _numba-envvars-gpu-support:
 
@@ -455,8 +503,8 @@ GPU support
 
    The default compute capability (a string of the type ``major.minor``) to
    target when compiling to PTX using ``cuda.compile_ptx``. The default is
-   5.2, which is the lowest non-deprecated compute capability in the most
-   recent version of the CUDA toolkit supported (11.0 at present).
+   5.0, which is the lowest non-deprecated compute capability in the most
+   recent version of the CUDA toolkit supported (12.4 at present).
 
 .. envvar:: NUMBA_ENABLE_CUDASIM
 

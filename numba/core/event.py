@@ -44,7 +44,7 @@ from timeit import default_timer as timer
 from contextlib import contextmanager, ExitStack
 from collections import defaultdict
 
-from numba.core import config
+from numba.core import config, utils
 
 
 class EventStatus(enum.Enum):
@@ -441,14 +441,6 @@ def trigger_event(kind, data=None):
         yield
 
 
-def _get_native_ident():
-    try:
-        return threading.get_native_ident()
-    except AttributeError:
-        # Fallback for python <3.8
-        return threading.get_ident()
-
-
 def _prepare_chrome_trace_data(listener: RecordingListener):
     """Prepare events in `listener` for serializing as chrome trace data.
     """
@@ -456,7 +448,7 @@ def _prepare_chrome_trace_data(listener: RecordingListener):
     # https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU/edit   # noqa
     # This code only uses the JSON Array Format for simplicity.
     pid = os.getpid()
-    tid = _get_native_ident()
+    tid = threading.get_native_id()
     evs = []
     for ts, rec in listener.buffer:
         data = rec.data
@@ -486,7 +478,7 @@ def _setup_chrome_trace_exit_handler():
         # The following output file is not multi-process safe.
         evs = _prepare_chrome_trace_data(listener)
         with open(filename, "w") as out:
-            json.dump(evs, out)
+            json.dump(evs, out, cls=utils._LazyJSONEncoder)
 
 
 if config.CHROME_TRACE:

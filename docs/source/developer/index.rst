@@ -22,6 +22,7 @@ Developer Manual
    inlining.rst
    environment.rst
    hashing.rst
+   sys_monitoring.rst
    caching.rst
    threading_implementation.rst
    literal.rst
@@ -29,4 +30,5 @@ Developer Manual
    debugging.rst
    event_api.rst
    target_extension.rst
+   bytecode.rst
    mission.rst

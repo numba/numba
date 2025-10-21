@@ -2,9 +2,8 @@ import re
 from io import StringIO
 
 import numba
-from numba.core.compiler import compile_isolated, Flags
 from numba.core import types
-from numba import njit
+from numba import jit, njit
 from numba.tests.support import override_config, TestCase
 import unittest
 
@@ -22,6 +21,7 @@ except ImportError:
 @unittest.skipIf(jinja2 is None, "please install the 'jinja2' package")
 class TestAnnotation(TestCase):
 
+    @TestCase.run_test_in_subprocess # annotations compound per module
     def test_exercise_code_path(self):
         """
         Ensures template.html is available
@@ -33,7 +33,8 @@ class TestAnnotation(TestCase):
                 s += i
             return s
 
-        cres = compile_isolated(foo, [types.int32, types.int32])
+        cfunc = njit((types.int32, types.int32))(foo)
+        cres = cfunc.overloads[cfunc.signatures[0]]
         ta = cres.type_annotation
 
         buf = StringIO()
@@ -42,6 +43,7 @@ class TestAnnotation(TestCase):
         buf.close()
         self.assertIn("foo", output)
 
+    @TestCase.run_test_in_subprocess # annotations compound per module
     def test_exercise_code_path_with_lifted_loop(self):
         """
         Ensures that lifted loops are handled correctly in obj mode
@@ -61,10 +63,8 @@ class TestAnnotation(TestCase):
             return h
 
         # compile into an isolated context
-        flags = Flags()
-        flags.enable_pyobject = True
-        flags.enable_looplift = True
-        cres = compile_isolated(foo, [types.intp], flags=flags)
+        cfunc = jit((types.intp,), forceobj=True, looplift=True)(foo)
+        cres = cfunc.overloads[cfunc.signatures[0]]
 
         ta = cres.type_annotation
 
@@ -76,11 +76,12 @@ class TestAnnotation(TestCase):
         self.assertIn("foo", output)
         self.assertIn("LiftedLoop", output)
 
+    @TestCase.run_test_in_subprocess # annotations compound per module
     def test_html_output_with_lifted_loop(self):
         """
         Test some format and behavior of the html annotation with lifted loop
         """
-        @numba.jit
+        @numba.jit(forceobj=True)
         def udt(x):
             object()  # to force object mode
             z = 0

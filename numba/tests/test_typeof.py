@@ -6,18 +6,20 @@ from collections import namedtuple
 import enum
 import mmap
 import typing as py_typing
+import random
+import string
 
 import numpy as np
 
 import unittest
-import numba.core.typing.cffi_utils as cffi_support
+from numba import jit, _dispatcher
 from numba.core import types
 from numba.core.errors import NumbaValueError, NumbaTypeError
 from numba.misc.special import typeof
 from numba.core.dispatcher import OmittedArg
 from numba._dispatcher import compute_fingerprint
 
-from numba.tests.support import TestCase, tag
+from numba.tests.support import TestCase, skip_unless_cffi, tag
 from numba.tests.test_numpy_support import ValueTypingTestBase
 from numba.tests.ctypes_usecases import *
 from numba.tests.enum_usecases import *
@@ -282,7 +284,7 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         self.assertNotEqual(ty_cos.get_pointer(c_cos),
                             ty_sin.get_pointer(c_sin))
 
-    @unittest.skipUnless(cffi_support.SUPPORTED, "CFFI not supported")
+    @skip_unless_cffi
     def test_cffi(self):
         from numba.tests import cffi_usecases as mod
         mod.init()
@@ -570,6 +572,29 @@ class TestFingerprint(TestCase):
         for i in range(1000):
             t = (t,)
         s = compute_fingerprint(t)
+
+
+class TestTypeOfMemCpy(TestCase):
+
+    def test_memcpy_typeof_buffer(self):
+        # https://github.com/numba/numba/issues/9097
+        # bug is fixed if the code below compiles
+        random.seed(0)
+        chars = string.ascii_letters
+        n = 256
+        field = "".join([chars[random.randint(0, len(chars) - 1)] for x in range(n)])
+        for i in range(1, n):
+            lfield = field[:i]
+            nt_ty = namedtuple("tuplename", lfield)
+            nt = nt_ty(1)
+            fp = _dispatcher.compute_fingerprint(nt)
+            nt_name = nt.__class__.__name__
+            expected = f"{nt_name}({lfield}i)"
+            self.assertEqual(
+                expected,
+                fp.decode(),
+                f"iteration {i} failed, {expected} != {fp.decode()}"
+            )
 
 
 if __name__ == '__main__':

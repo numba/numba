@@ -21,6 +21,7 @@ from numba.core.ir_utils import (get_call_table, mk_unique_var,
                             find_callname, require, find_const, GuardException)
 from numba.core.errors import NumbaValueError
 from numba.core.utils import OPERATORS_TO_BUILTINS
+from numba.np import numpy_support
 
 
 def _compute_last_ind(dim_size, index_const):
@@ -75,8 +76,10 @@ class StencilPass(object):
                     arg_typemap = tuple(self.typemap[i.name] for i in in_args)
                     for arg_type in arg_typemap:
                         if isinstance(arg_type, types.BaseTuple):
-                            raise ValueError("Tuple parameters not supported " \
-                                "for stencil kernels in parallel=True mode.")
+                            raise NumbaValueError("Tuple parameters not " \
+                                                  "supported for stencil " \
+                                                  "kernels in parallel=True " \
+                                                  "mode.")
 
                     out_arr = kws.get('out')
 
@@ -243,7 +246,8 @@ class StencilPass(object):
                 # TODO: Loosen this restriction to adhere to casting rules.
                 cval_ty = typing.typeof.typeof(cval)
                 if not self.typingctx.can_convert(cval_ty, return_type.dtype):
-                    raise ValueError("cval type does not match stencil return type.")
+                    raise NumbaValueError("cval type does not match stencil " \
+                                          "return type.")
 
                 temp2 = return_type.dtype(cval)
             else:
@@ -264,7 +268,11 @@ class StencilPass(object):
             dtype_g_np_assign = ir.Assign(dtype_g_np, dtype_g_np_var, loc)
             init_block.body.append(dtype_g_np_assign)
 
-            dtype_np_attr_call = ir.Expr.getattr(dtype_g_np_var, return_type.dtype.name, loc)
+            return_type_name = numpy_support.as_dtype(
+                               return_type.dtype).type.__name__
+            if return_type_name == 'bool':
+                return_type_name = 'bool_'
+            dtype_np_attr_call = ir.Expr.getattr(dtype_g_np_var, return_type_name, loc)
             dtype_attr_var = ir.Var(scope, mk_unique_var("$np_attr_attr"), loc)
             self.typemap[dtype_attr_var.name] = types.functions.NumberClass(return_type.dtype)
             dtype_attr_assign = ir.Assign(dtype_np_attr_call, dtype_attr_var, loc)
@@ -552,16 +560,18 @@ class StencilPass(object):
         if "standard_indexing" in stencil_func.options:
             for x in stencil_func.options["standard_indexing"]:
                 if x not in arg_to_arr_dict:
-                    raise ValueError("Standard indexing requested for an array " \
-                        "name not present in the stencil kernel definition.")
+                    raise NumbaValueError("Standard indexing requested for " \
+                                          "an array name not present in the " \
+                                          "stencil kernel definition.")
             standard_indexed = [arg_to_arr_dict[x] for x in
                                      stencil_func.options["standard_indexing"]]
         else:
             standard_indexed = []
 
         if in_arr.name in standard_indexed:
-            raise ValueError("The first argument to a stencil kernel must use " \
-                "relative indexing, not standard indexing.")
+            raise NumbaValueError("The first argument to a stencil kernel " \
+                                  "must use relative indexing, not standard " \
+                                  "indexing.")
 
         ndims = self.typemap[in_arr.name].ndim
         scope = in_arr.scope
@@ -598,7 +608,8 @@ class StencilPass(object):
                    ((isinstance(stmt, ir.SetItem) or
                      isinstance(stmt, ir.StaticSetItem))
                         and stmt.target.name in in_arg_names)):
-                    raise ValueError("Assignments to arrays passed to stencil kernels is not allowed.")
+                    raise NumbaValueError("Assignments to arrays passed to " \
+                                          "stencil kernels is not allowed.")
                 # We found a getitem for some array.  If that array is an input
                 # array and isn't in the list of standard indexed arrays then
                 # update min and max seen indices if we are inferring the
@@ -632,8 +643,9 @@ class StencilPass(object):
                         # neighborhood automatically
                         if (isinstance(index_list, ir.Var) or
                             any([not isinstance(v, int) for v in index_list])):
-                            raise ValueError("Variable stencil index only "
-                                "possible with known neighborhood")
+                            raise NumbaValueError("Variable stencil index " \
+                                                  "only possible with known " \
+                                                  "neighborhood")
                         start_lengths = list(map(min, start_lengths,
                                                                     index_list))
                         end_lengths = list(map(max, end_lengths, index_list))
@@ -675,8 +687,8 @@ class StencilPass(object):
                 new_body.append(stmt)
             block.body = new_body
         if need_to_calc_kernel and not found_relative_index:
-            raise ValueError("Stencil kernel with no accesses to " \
-                "relatively indexed arrays.")
+            raise NumbaValueError("Stencil kernel with no accesses to " \
+                                  "relatively indexed arrays.")
 
         return start_lengths, end_lengths
 
@@ -791,29 +803,30 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
 
     name_var_table = ir_utils.get_name_var_table(stencil_func_ir.blocks)
     if "out" in name_var_table:
-        raise ValueError("Cannot use the reserved word 'out' in stencil kernels.")
+        raise NumbaValueError("Cannot use the reserved word 'out' in stencil " \
+                              "kernels.")
 
     # get typed IR with a dummy pipeline (similar to test_parfors.py)
     from numba.core.registry import cpu_target
     targetctx = cpu_target.target_context
-    with cpu_target.nested_context(typingctx, targetctx):
-        tp = DummyPipeline(typingctx, targetctx, args, stencil_func_ir)
 
-        rewrites.rewrite_registry.apply('before-inference', tp.state)
+    tp = DummyPipeline(typingctx, targetctx, args, stencil_func_ir)
 
-        tp.state.typemap, tp.state.return_type, tp.state.calltypes, _ = type_inference_stage(
-            tp.state.typingctx, tp.state.targetctx, tp.state.func_ir,
-            tp.state.args, None)
+    rewrites.rewrite_registry.apply('before-inference', tp.state)
 
-        type_annotations.TypeAnnotation(
-            func_ir=tp.state.func_ir,
-            typemap=tp.state.typemap,
-            calltypes=tp.state.calltypes,
-            lifted=(),
-            lifted_from=None,
-            args=tp.state.args,
-            return_type=tp.state.return_type,
-            html_output=config.HTML)
+    tp.state.typemap, tp.state.return_type, tp.state.calltypes, _ = type_inference_stage(
+        tp.state.typingctx, tp.state.targetctx, tp.state.func_ir,
+        tp.state.args, None)
+
+    type_annotations.TypeAnnotation(
+        func_ir=tp.state.func_ir,
+        typemap=tp.state.typemap,
+        calltypes=tp.state.calltypes,
+        lifted=(),
+        lifted_from=None,
+        args=tp.state.args,
+        return_type=tp.state.return_type,
+        html_output=config.HTML)
 
     # make block labels unique
     stencil_blocks = ir_utils.add_offset_to_labels(stencil_blocks,

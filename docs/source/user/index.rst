@@ -8,7 +8,6 @@ User Manual
    overview.rst
    installing.rst
    jit.rst
-   generated-jit.rst
    vectorize.rst
    jitclass.rst
    cfunc.rst
@@ -20,6 +19,7 @@ User Manual
    performance-tips.rst
    threading-layer.rst
    cli.rst
+   code_coverage.rst
    troubleshoot.rst
    faq.rst
    examples.rst

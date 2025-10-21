@@ -1,24 +1,21 @@
 import array
 import numpy as np
 
-from numba import jit
+from numba import jit, njit
 import numba.core.typing.cffi_utils as cffi_support
 from numba.core import types, errors
-from numba.core.compiler import compile_isolated, Flags
-from numba.tests.support import TestCase, tag
+from numba.tests.support import TestCase, skip_unless_cffi
+
 
 import numba.tests.cffi_usecases as mod
 import unittest
 
 
-enable_pyobj_flags = Flags()
-enable_pyobj_flags.enable_pyobject = True
-
-no_pyobj_flags = Flags()
+enable_pyobj_flags = {'forceobj': True}
+no_pyobj_flags = {'nopython': True}
 
 
-@unittest.skipUnless(cffi_support.SUPPORTED,
-                     "CFFI not supported -- please install the cffi module")
+@skip_unless_cffi
 class TestCFFI(TestCase):
 
     # Need to run the tests serially because of race conditions in
@@ -35,8 +32,7 @@ class TestCFFI(TestCase):
         self.assertEqual(signature.args[0], types.double)
 
     def _test_function(self, pyfunc, flags=enable_pyobj_flags):
-        cres = compile_isolated(pyfunc, [types.double], flags=flags)
-        cfunc = cres.entry_point
+        cfunc = jit((types.double,), **flags)(pyfunc)
 
         for x in [-1.2, -1, 0, 0.1, 3.14]:
             self.assertPreciseEqual(pyfunc(x), cfunc(x))
@@ -46,8 +42,7 @@ class TestCFFI(TestCase):
 
     def test_bool_function_ool(self):
         pyfunc = mod.use_cffi_boolean_true
-        cres = compile_isolated(pyfunc, (), flags=no_pyobj_flags)
-        cfunc = cres.entry_point
+        cfunc = njit((),)(pyfunc)
         self.assertEqual(pyfunc(), True)
         self.assertEqual(cfunc(), True)
 

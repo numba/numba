@@ -210,8 +210,10 @@ def build_ufunc_wrapper(library, ctx, fname, signature, cres):
 
 class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
     def __init__(self, py_func, signature, identity=None, cache=False,
-                 targetoptions={}):
+                 targetoptions=None, writable_args=()):
         # Force nopython mode
+        if targetoptions is None:
+            targetoptions = {}
         targetoptions.update(dict(nopython=True))
         super(
             ParallelGUFuncBuilder,
@@ -220,7 +222,8 @@ class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
             signature=signature,
             identity=identity,
             cache=cache,
-            targetoptions=targetoptions)
+            targetoptions=targetoptions,
+            writable_args=writable_args)
 
     def build(self, cres):
         """
@@ -314,13 +317,13 @@ def _set_init_process_lock():
         # probably lack of /dev/shm for semaphore writes, warn the user
         msg = (
             "Could not obtain multiprocessing lock due to OS level error: %s\n"
-            "A likely cause of this problem is '/dev/shm' is missing or"
+            "A likely cause of this problem is '/dev/shm' is missing or "
             "read-only such that necessary semaphores cannot be written.\n"
             "*** The responsibility of ensuring multiprocessing safe access to "
             "this initialization sequence/module import is deferred to the "
             "user! ***\n"
         )
-        warnings.warn(msg % str(e))
+        warnings.warn(msg % str(e), errors.NumbaSystemWarning)
 
         _backend_init_process_lock = _nop()
 
@@ -360,10 +363,10 @@ def _check_tbb_version_compatible():
         version_func.argtypes = []
         version_func.restype = c_int
         tbb_iface_ver = version_func()
-        if tbb_iface_ver < 12010: # magic number from TBB
+        if tbb_iface_ver < 12060: # magic number from TBB
             msg = ("The TBB threading layer requires TBB "
-                   "version 2021 update 1 or later i.e., "
-                   "TBB_INTERFACE_VERSION >= 12010. Found "
+                   "version 2021 update 6 or later i.e., "
+                   "TBB_INTERFACE_VERSION >= 12060. Found "
                    "TBB_INTERFACE_VERSION = %s. The TBB "
                    "threading layer is disabled.") % tbb_iface_ver
             problem = errors.NumbaWarning(msg)
@@ -514,6 +517,8 @@ def _launch_threads():
             ll.add_symbol('numba_parallel_for', lib.parallel_for)
             ll.add_symbol('do_scheduling_signed', lib.do_scheduling_signed)
             ll.add_symbol('do_scheduling_unsigned', lib.do_scheduling_unsigned)
+            ll.add_symbol('allocate_sched', lib.allocate_sched)
+            ll.add_symbol('deallocate_sched', lib.deallocate_sched)
 
             launch_threads = CFUNCTYPE(None, c_int)(lib.launch_threads)
             launch_threads(NUM_THREADS)
@@ -723,7 +728,6 @@ def set_parallel_chunksize(n):
     _launch_threads()
     if not isinstance(n, (int, np.integer)):
         raise TypeError("The parallel chunksize must be an integer")
-    global _set_parallel_chunksize
     if n < 0:
         raise ValueError("chunksize must be greater than or equal to zero")
     return _set_parallel_chunksize(n)
@@ -731,7 +735,6 @@ def set_parallel_chunksize(n):
 
 def get_parallel_chunksize():
     _launch_threads()
-    global _get_parallel_chunksize
     return _get_parallel_chunksize()
 
 

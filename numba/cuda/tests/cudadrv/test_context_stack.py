@@ -39,10 +39,10 @@ class TestContextAPI(CUDATestCase):
             self.skipTest('EMM Plugin does not implement get_memory_info()')
 
         self.assertIsInstance(mem.free, numbers.Number)
-        self.assertEquals(mem.free, mem[0])
+        self.assertEqual(mem.free, mem[0])
 
         self.assertIsInstance(mem.total, numbers.Number)
-        self.assertEquals(mem.total, mem[1])
+        self.assertEqual(mem.total, mem[1])
 
         self.assertLessEqual(mem.free, mem.total)
 

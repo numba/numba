@@ -104,7 +104,7 @@ class TestUFuncs(TestCase):
         tests = []
         expect = "ufunc 'sin' called with an explicit output that is read-only"
         tests.append((jit(nopython=True), TypingError, expect))
-        tests.append((jit(nopython=False), ValueError,
+        tests.append((jit(forceobj=True), ValueError,
                       "output array is read-only"))
 
         for dec, exc, msg in tests:
@@ -139,6 +139,34 @@ class TestUFuncs(TestCase):
 
         msg = "expected array(float64, 1d, C), got None"
         self.assertIn(msg, str(raises.exception))
+
+
+class TestUFuncsMisc(TestCase):
+    # Test for miscellaneous ufunc issues
+
+    def test_exp2(self):
+        # See issue #8898, and TargetLibraryInfo based fix in #9336
+        @njit
+        def foo(x):
+            return np.exp2(x)
+
+        for ty in (np.int8, np.uint16):
+            x = ty(2)
+            expected = foo.py_func(x)
+            got = foo(x)
+            self.assertPreciseEqual(expected, got)
+
+    def test_log2(self):
+        # See issue #8898, and TargetLibraryInfo based fix in #9336
+        @njit
+        def foo(x):
+            return np.log2(x)
+
+        for ty in (np.int8, np.uint16):
+            x = ty(2)
+            expected = foo.py_func(x)
+            got = foo(x)
+            self.assertPreciseEqual(expected, got)
 
 
 if __name__ == '__main__':

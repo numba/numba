@@ -2,6 +2,8 @@ import numba
 import numpy as np
 import sys
 import itertools
+import gc
+import re
 
 from numba import types
 from numba.tests.support import TestCase, MemoryLeakMixin
@@ -53,12 +55,18 @@ class TestHelperFuncs(TestCase):
         numba_func = numba.njit(cache=True)(py_func)
         with self.assertRaises(TypingError) as raises:
             numba_func(rng)
-        self.assertIn(
-            'Argument loc is not one of the expected type(s): '
-            + '[<class \'numba.core.types.scalars.Float\'>, '
-            + '<class \'numba.core.types.scalars.Integer\'>, '
-            + '<class \'int\'>, <class \'float\'>]',
-            str(raises.exception)
+
+        expected_pattern = (
+            r"Argument loc is not one of the expected type\(s\): "
+            r"\[<class 'numba.core.types.*.Float'>, "
+            r"<class 'numba.core.types.*.Integer'>, "
+            r"<class 'int'>, <class 'float'>\]"
+        )
+
+        self.assertTrue(
+            re.search(expected_pattern, str(raises.exception)) is not None,
+            "Expected pattern not found in exception message." +
+            f" Found {str(raises.exception)}"
         )
 
     def test_integers_arg_check(self):
@@ -185,8 +193,8 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
 
         # Check if the end state of both BitGenerators is same
         # after drawing the distributions
-        numba_gen_state = numba_rng_instance.__getstate__()['state']
-        numpy_gen_state = numpy_rng_instance.__getstate__()['state']
+        numba_gen_state = numba_rng_instance.bit_generator.state['state']
+        numpy_gen_state = numpy_rng_instance.bit_generator.state['state']
 
         for _state_key in numpy_gen_state:
             self.assertPreciseEqual(numba_gen_state[_state_key],
@@ -231,9 +239,11 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         do_box = numba.njit(lambda x:x)
 
         y = do_box(rng_instance)
+        gc.collect()
         ref_1 = sys.getrefcount(rng_instance)
         del y
         no_box(rng_instance)
+        gc.collect()
         ref_2 = sys.getrefcount(rng_instance)
 
         self.assertEqual(ref_1, ref_2 + 1)
@@ -1094,6 +1104,8 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             curr_args[2] = -1
             nb_dist_func(*curr_args)
         self.assertIn('nonc < 0', str(raises.exception))
+        # Exceptions leak references
+        self.disable_leak_check()
 
     def test_noncentral_f(self):
         # For this test dtype argument is never used, so we pass [None] as dtype
@@ -1138,6 +1150,8 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
             curr_args[3] = -1
             nb_dist_func(*curr_args)
         self.assertIn('nonc < 0', str(raises.exception))
+        # Exceptions leak references
+        self.disable_leak_check()
 
     def test_logseries(self):
         # For this test dtype argument is never used, so we pass [None] as dtype
@@ -1170,6 +1184,79 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                 curr_args[1] = _p
                 nb_dist_func(*curr_args)
             self.assertIn('p < 0, p >= 1 or p is NaN', str(raises.exception))
+        # Exceptions leak references
+        self.disable_leak_check()
+
+    def test_binomial(self):
+        # For this test dtype argument is never used, so we pass [None] as dtype
+        # to make sure it runs only once with default system type.
+
+        test_sizes = [None, (), (100,), (10, 20, 30)]
+        bitgen_types = [None, MT19937]
+
+        dist_func = lambda x, size, dtype:\
+            x.binomial(n=1, p=0.1, size=size)
+        for _size in test_sizes:
+            for _bitgen in bitgen_types:
+                with self.subTest(_size=_size, _bitgen=_bitgen):
+                    self.check_numpy_parity(dist_func, _bitgen,
+                                            None, _size, None,
+                                            adjusted_ulp_prec)
+
+        dist_func = lambda x, n, p, size:\
+            x.binomial(n=n, p=p, size=size)
+        self._check_invalid_types(dist_func, ['n', 'p', 'size'],
+                                  [1, 0.75, (1,)], ['x', 'x', ('x',)])
+
+    def test_binomial_cases(self):
+        cases = [
+            (1, 0.1), # p <= 0.5 && n * p <= 30
+            (50, 0.9), # p > 0.5 && n * p <= 30
+            (100, 0.4), # p <= 0.5 && n * p > 30
+            (100, 0.9) # p > 0.5 && n * p > 30
+        ]
+        size = None
+
+        for n, p in cases:
+            with self.subTest(n=n, p=p):
+                dist_func = lambda x, size, dtype:\
+                    x.binomial(n, p, size=size)
+                self.check_numpy_parity(dist_func, None,
+                                        None, size, None, 0)
+
+    def test_binomial_specific_issues(self):
+        # The algorithm for "binomial" is quite involved. This test contains
+        # subtests for specific issues reported on the issue tracker.
+
+        # testing specific bugs found in binomial.
+        with self.subTest("infinite loop issue #9493"):
+            # This specific generator state caused a "hang" as noted in #9493
+
+            gen1 = np.random.default_rng(0)
+            gen2 = np.random.default_rng(0)
+
+            @numba.jit
+            def foo(gen):
+                return gen.binomial(700, 0.1, 100)
+
+            got = foo(gen1)
+            expected = foo.py_func(gen2)
+            self.assertPreciseEqual(got, expected)
+
+        with self.subTest("issue with midrange value branch #9493/#9734"):
+            # The use of 301 is specific to trigger use of random_binomial_btpe
+            # with an input state that caused incorrect values to be computed.
+
+            gen1 = np.random.default_rng(0)
+            gen2 = np.random.default_rng(0)
+
+            @numba.jit
+            def foo(gen):
+                return gen.binomial(301, 0.1, 100)
+
+            got = foo(gen1)
+            expected = foo.py_func(gen2)
+            self.assertPreciseEqual(got, expected)
 
 
 class TestGeneratorCaching(TestCase, SerialMixin):

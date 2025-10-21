@@ -157,27 +157,6 @@ class const(Stub):
         '''
 
 
-#-------------------------------------------------------------------------------
-# Cooperative groups
-
-class cg(Stub):
-    '''
-    Cooperative groups
-    '''
-
-    @stub_function
-    def this_grid():
-        '''
-        Get the current grid group.
-        '''
-
-    class GridGroup(Stub):
-        def sync():
-            '''
-            Synchronize the current grid group.
-            '''
-
-
 # -------------------------------------------------------------------------------
 # warp level operations
 
@@ -501,7 +480,20 @@ class atomic(Stub):
         Conditionally assign ``val`` to the first element of an 1D array ``ary``
         if the current value matches ``old``.
 
-        Returns the current value as if it is loaded atomically.
+        Supported on int32, int64, uint32, uint64 operands only.
+
+        Returns the old value as if it is loaded atomically.
+        """
+
+    class cas(Stub):
+        """cas(ary, idx, old, val)
+
+        Conditionally assign ``val`` to the element ``idx`` of an array
+        ``ary`` if the current value of ``ary[idx]`` matches ``old``.
+
+        Supported on int32, int64, uint32, uint64 operands only.
+
+        Returns the old value as if it is loaded atomically.
         """
 
 

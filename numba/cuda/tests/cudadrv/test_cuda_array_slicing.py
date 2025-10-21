@@ -186,7 +186,7 @@ class CudaArraySlicing(CUDATestCase):
         for i in range(darr.shape[0]):
             np.testing.assert_array_equal(darr[i:i].copy_to_host(), arr[i:i])
         # empty slice of empty slice
-        self.assertFalse(darr[:0][:0].copy_to_host())
+        np.testing.assert_array_equal(darr[:0][:0].copy_to_host(), np.empty(0))
         # out-of-bound slice just produces empty slices
         np.testing.assert_array_equal(darr[:0][:1].copy_to_host(),
                                       arr[:0][:1])
@@ -199,7 +199,8 @@ class CudaArraySlicing(CUDATestCase):
         np.testing.assert_array_equal(darr[:0].copy_to_host(), arr[:0])
         np.testing.assert_array_equal(darr[3, :0].copy_to_host(), arr[3, :0])
         # empty slice of empty slice
-        self.assertFalse(darr[:0][:0].copy_to_host())
+        np.testing.assert_array_equal(darr[:0][:0].copy_to_host(),
+                                      np.empty((0, 7)))
         # out-of-bound slice just produces empty slices
         np.testing.assert_array_equal(darr[:0][:1].copy_to_host(), arr[:0][:1])
         np.testing.assert_array_equal(darr[:0][-1:].copy_to_host(),
@@ -291,8 +292,6 @@ class CudaArraySetting(CUDATestCase):
             container=[
                 "Can't assign 3-D array to 1-D self",  # device
                 "could not broadcast input array from shape (2,3) "
-                "into shape (35)",  # simulator, NP < 1.20
-                "could not broadcast input array from shape (2,3) "
                 "into shape (35,)",  # simulator, NP >= 1.20
             ])
 
@@ -307,8 +306,6 @@ class CudaArraySetting(CUDATestCase):
             container=[
                 "Can't copy sequence with size 2 to array axis 0 with "
                 "dimension 5",  # device
-                "cannot copy sequence with size 2 to array axis with "
-                "dimension 5",  # simulator, NP < 1.20
                 "could not broadcast input array from shape (2,) into "
                 "shape (5,)",   # simulator, NP >= 1.20
             ])

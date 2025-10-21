@@ -33,6 +33,17 @@ class Undefined(Dummy):
         return False
 
 
+class UndefVar(Dummy):
+    """
+    A type that is created by Expr.undef to represent an undefined variable.
+    This type can be promoted to any other type.
+    This is introduced to handle Python 3.12 LOAD_FAST_AND_CLEAR.
+    """
+
+    def can_convert_to(self, typingctx, other):
+        return Conversion.promote
+
+
 class RawPointer(Opaque):
     """
     A raw pointer without any specific meaning.

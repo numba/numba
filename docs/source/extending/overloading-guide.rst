@@ -15,7 +15,7 @@ decorator and what contributing such a function to the Numba code base might
 entail. This should help you get started when needing to use the ``@overload``
 decorator or when attempting to contribute new functions to Numba itself.
 
-The ``@overload`` decorator and it's variants are useful when you have a
+The ``@overload`` decorator and its variants are useful when you have a
 third-party library that you do not control and you wish to provide Numba
 compatible implementations for specific functions from that library.
 

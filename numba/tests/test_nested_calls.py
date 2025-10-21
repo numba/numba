@@ -5,8 +5,9 @@ Usually due to invalid type conversion between function boundaries.
 
 
 from numba import int32, int64
-from numba import jit, generated_jit
+from numba import jit
 from numba.core import types
+from numba.extending import overload
 from numba.tests.support import TestCase, tag
 import unittest
 
@@ -45,15 +46,21 @@ def argcast_inner(a, b):
 def argcast(a, b):
     return argcast_inner(int32(a), b)
 
-@generated_jit(nopython=True)
+
 def generated_inner(x, y=5, z=6):
+    assert 0, "unreachable"
+
+
+@overload(generated_inner)
+def ol_generated_inner(x, y=5, z=6):
     if isinstance(x, types.Complex):
-        def impl(x, y, z):
+        def impl(x, y=5, z=6):
             return x + y, z
     else:
-        def impl(x, y, z):
+        def impl(x, y=5, z=6):
             return x - y, z
     return impl
+
 
 def call_generated(a, b):
     return generated_inner(a, z=b)

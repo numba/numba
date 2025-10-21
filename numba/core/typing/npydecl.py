@@ -57,11 +57,6 @@ class Numpy_rules_ufunc(AbstractTemplate):
         # explicit outputs must be arrays (no explicit scalar return values supported)
         explicit_outputs = args[nin:]
 
-        # all the explicit outputs must match the number max number of dimensions
-        if not all(d == ndims for d in arg_ndims[nin:]):
-            msg = "ufunc '{0}' called with unsuitable explicit output arrays."
-            raise TypingError(msg=msg.format(ufunc.__name__))
-
         if not all(isinstance(output, types.ArrayCompatible)
                    for output in explicit_outputs):
             msg = "ufunc '{0}' called with an explicit output that is not an array"
@@ -154,7 +149,7 @@ class Numpy_rules_ufunc(AbstractTemplate):
                         # raise TypeError here because
                         # NumpyRulesArrayOperator.generic is capturing
                         # TypingError
-                        raise TypeError(msg)
+                        raise NumbaTypeError(msg)
 
                 ret_tys = [output_type(dtype=ret_ty, ndim=ndims, layout=layout)
                            for ret_ty in ret_tys]
@@ -271,39 +266,39 @@ class NumpyRulesUnaryArrayOperator(NumpyRulesArrayOperator):
 
 # list of unary ufuncs to register
 
-_math_operations = [ "add", "subtract", "multiply",
-                     "logaddexp", "logaddexp2", "true_divide",
-                     "floor_divide", "negative", "positive", "power",
-                     "float_power", "remainder", "fmod", "absolute",
-                     "rint", "sign", "conjugate", "exp", "exp2",
-                     "log", "log2", "log10", "expm1", "log1p",
-                     "sqrt", "square", "cbrt", "reciprocal",
-                     "divide", "mod", "divmod", "abs", "fabs" , "gcd", "lcm"]
+math_operations = [ "add", "subtract", "multiply",
+                    "logaddexp", "logaddexp2", "true_divide",
+                    "floor_divide", "negative", "positive", "power",
+                    "float_power", "remainder", "fmod", "absolute",
+                    "rint", "sign", "conjugate", "exp", "exp2",
+                    "log", "log2", "log10", "expm1", "log1p",
+                    "sqrt", "square", "cbrt", "reciprocal",
+                    "divide", "mod", "divmod", "abs", "fabs" , "gcd", "lcm"]
 
-_trigonometric_functions = [ "sin", "cos", "tan", "arcsin",
-                             "arccos", "arctan", "arctan2",
-                             "hypot", "sinh", "cosh", "tanh",
-                             "arcsinh", "arccosh", "arctanh",
-                             "deg2rad", "rad2deg", "degrees",
-                             "radians" ]
+trigonometric_functions = [ "sin", "cos", "tan", "arcsin",
+                            "arccos", "arctan", "arctan2",
+                            "hypot", "sinh", "cosh", "tanh",
+                            "arcsinh", "arccosh", "arctanh",
+                            "deg2rad", "rad2deg", "degrees",
+                            "radians" ]
 
-_bit_twiddling_functions = ["bitwise_and", "bitwise_or",
-                            "bitwise_xor", "invert",
-                            "left_shift", "right_shift",
-                            "bitwise_not" ]
+bit_twiddling_functions = ["bitwise_and", "bitwise_or",
+                           "bitwise_xor", "invert",
+                           "left_shift", "right_shift",
+                           "bitwise_not" ]
 
-_comparison_functions = [ "greater", "greater_equal", "less",
-                          "less_equal", "not_equal", "equal",
-                          "logical_and", "logical_or",
-                          "logical_xor", "logical_not",
-                          "maximum", "minimum", "fmax", "fmin" ]
+comparison_functions = [ "greater", "greater_equal", "less",
+                         "less_equal", "not_equal", "equal",
+                         "logical_and", "logical_or",
+                         "logical_xor", "logical_not",
+                         "maximum", "minimum", "fmax", "fmin" ]
 
-_floating_functions = [ "isfinite", "isinf", "isnan", "signbit",
-                        "copysign", "nextafter", "modf", "ldexp",
-                        "frexp", "floor", "ceil", "trunc",
-                        "spacing" ]
+floating_functions = [ "isfinite", "isinf", "isnan", "signbit",
+                       "copysign", "nextafter", "modf", "ldexp",
+                       "frexp", "floor", "ceil", "trunc",
+                       "spacing" ]
 
-_logic_functions = [ "isnat" ]
+logic_functions = [ "isnat" ]
 
 
 # This is a set of the ufuncs that are not yet supported by Lowering. In order
@@ -316,7 +311,7 @@ _unsupported = set([ 'frexp',
                  ])
 
 
-def _numpy_ufunc(name):
+def register_numpy_ufunc(name, register_global=infer_global):
     func = getattr(np, name)
     class typing_class(Numpy_rules_ufunc):
         key = func
@@ -328,16 +323,16 @@ def _numpy_ufunc(name):
     aliases = ("abs", "bitwise_not", "divide", "abs")
 
     if name not in aliases:
-        infer_global(func, types.Function(typing_class))
+        register_global(func, types.Function(typing_class))
 
-all_ufuncs = sum([_math_operations, _trigonometric_functions,
-                  _bit_twiddling_functions, _comparison_functions,
-                  _floating_functions, _logic_functions], [])
+all_ufuncs = sum([math_operations, trigonometric_functions,
+                  bit_twiddling_functions, comparison_functions,
+                  floating_functions, logic_functions], [])
 
 supported_ufuncs = [x for x in all_ufuncs if x not in _unsupported]
 
 for func in supported_ufuncs:
-    _numpy_ufunc(func)
+    register_numpy_ufunc(func)
 
 all_ufuncs = [getattr(np, name) for name in all_ufuncs]
 supported_ufuncs = [getattr(np, name) for name in supported_ufuncs]
@@ -354,9 +349,7 @@ supported_array_operators = set(
     NumpyRulesInplaceArrayOperator._op_map.keys()
 )
 
-del _math_operations, _trigonometric_functions, _bit_twiddling_functions
-del _comparison_functions, _floating_functions, _unsupported
-del _numpy_ufunc
+del _unsupported
 
 
 # -----------------------------------------------------------------------------
@@ -420,21 +413,38 @@ for func in ['sum', 'argsort', 'nonzero', 'ravel']:
 # -----------------------------------------------------------------------------
 # Numpy scalar constructors
 
-# Register np.int8, etc. as converters to the equivalent Numba types
-np_types = set(getattr(np, str(nb_type)) for nb_type in types.number_domain)
-np_types.add(np.bool_)
-# Those may or may not be aliases (depending on the Numpy build / version)
-np_types.add(np.intc)
-np_types.add(np.intp)
-np_types.add(np.uintc)
-np_types.add(np.uintp)
+if config.USE_LEGACY_TYPE_SYSTEM:
+    # Register np.int8, etc. as converters to the equivalent Numba types
+    np_types = set(getattr(np, str(nb_type)) for nb_type in types.number_domain)
+    np_types.add(np.bool_)
+    # Those may or may not be aliases (depending on the Numpy build / version)
+    np_types.add(np.intc)
+    np_types.add(np.intp)
+    np_types.add(np.uintc)
+    np_types.add(np.uintp)
 
 
-def register_number_classes(register_global):
-    for np_type in np_types:
-        nb_type = getattr(types, np_type.__name__)
+    def register_number_classes(register_global):
+        for np_type in np_types:
+            nb_type = getattr(types, np_type.__name__)
 
-        register_global(np_type, types.NumberClass(nb_type))
+            register_global(np_type, types.NumberClass(nb_type))
+else:
+    # Register np.int8, etc. as converters to the equivalent Numba types
+    np_types = set(getattr(np, str(nb_type).split('np_')[-1]) for nb_type in types.np_number_domain)
+    np_types.add(np.bool_)
+    # Those may or may not be aliases (depending on the Numpy build / version)
+    np_types.add(np.intc)
+    np_types.add(np.intp)
+    np_types.add(np.uintc)
+    np_types.add(np.uintp)
+
+
+    def register_number_classes(register_global):
+        for np_type in np_types:
+            nb_type = getattr(types, f'np_{np_type.__name__}')
+
+            register_global(np_type, types.NumberClass(nb_type))
 
 
 register_number_classes(infer_global)
@@ -525,15 +535,15 @@ def _sequence_of_arrays(context, func_name, arrays,
     if (not isinstance(arrays, types.BaseTuple)
         or not len(arrays)
         or not all(isinstance(a, types.Array) for a in arrays)):
-        raise TypeError("%s(): expecting a non-empty tuple of arrays, "
-                        "got %s" % (func_name, arrays))
+        raise TypingError("%s(): expecting a non-empty tuple of arrays, "
+                          "got %s" % (func_name, arrays))
 
     ndim = dim_chooser(context, func_name, arrays)
 
     dtype = context.unify_types(*(a.dtype for a in arrays))
     if dtype is None:
-        raise TypeError("%s(): input arrays must have "
-                        "compatible dtypes" % func_name)
+        raise TypingError("%s(): input arrays must have "
+                          "compatible dtypes" % func_name)
 
     return dtype, ndim
 
@@ -544,21 +554,6 @@ def _choose_concatenation_layout(arrays):
     # decide on optimal output strides
     # (see PyArray_CreateMultiSortedStridePerm()).
     return 'F' if all(a.layout == 'F' for a in arrays) else 'C'
-
-
-class BaseStackTemplate(CallableTemplate):
-
-    def generic(self):
-        def typer(arrays):
-            dtype, ndim = _sequence_of_arrays(self.context,
-                                              self.func_name, arrays)
-
-            ndim = max(ndim, self.ndim_min)
-            layout = _choose_concatenation_layout(arrays)
-
-            return types.Array(dtype, ndim, layout)
-
-        return typer
 
 
 # -----------------------------------------------------------------------------
@@ -590,11 +585,13 @@ class MatMulTyperMixin(object):
 
         if out is not None:
             if out_ndim == 0:
-                raise TypeError("explicit output unsupported for vector * vector")
+                raise TypingError(
+                    "explicit output unsupported for vector * vector")
             elif out.ndim != out_ndim:
-                raise TypeError("explicit output has incorrect dimensionality")
+                raise TypingError(
+                    "explicit output has incorrect dimensionality")
             if not isinstance(out, types.Array) or out.layout != 'C':
-                raise TypeError("output must be a C-contiguous array")
+                raise TypingError("output must be a C-contiguous array")
             all_args = (a, b, out)
         else:
             all_args = (a, b)
@@ -683,3 +680,11 @@ class NdIndex(AbstractTemplate):
         if all(isinstance(x, types.Integer) for x in shape):
             iterator_type = types.NumpyNdIndexType(len(shape))
             return signature(iterator_type, *args)
+
+
+@infer_global(operator.eq)
+class DtypeEq(AbstractTemplate):
+    def generic(self, args, kws):
+        [lhs, rhs] = args
+        if isinstance(lhs, types.DType) and isinstance(rhs, types.DType):
+            return signature(types.boolean, lhs, rhs)

@@ -361,6 +361,38 @@ def int_ne_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
+def int_signed_unsigned_cmp(op):
+    def impl(context, builder, sig, args):
+        (left, right) = args
+        # This code is translated from the NumPy source.
+        # What we're going to do is divide the range of a signed value at zero.
+        # If the signed value is less than zero, then we can treat zero as the
+        # unsigned value since the unsigned value is necessarily zero or larger
+        # and any signed comparison between a negative value and zero/infinity
+        # will yield the same result. If the signed value is greater than or
+        # equal to zero, then we can safely cast it to an unsigned value and do
+        # the expected unsigned-unsigned comparison operation.
+        # Original: https://github.com/numpy/numpy/pull/23713
+        cmp_zero = builder.icmp_signed('<', left, Constant(left.type, 0))
+        lt_zero = builder.icmp_signed(op, left, Constant(left.type, 0))
+        ge_zero = builder.icmp_unsigned(op, left, right)
+        res = builder.select(cmp_zero, lt_zero, ge_zero)
+        return impl_ret_untracked(context, builder, sig.return_type, res)
+    return impl
+
+
+def int_unsigned_signed_cmp(op):
+    def impl(context, builder, sig, args):
+        (left, right) = args
+        # See the function `int_signed_unsigned_cmp` for implementation notes.
+        cmp_zero = builder.icmp_signed('<', right, Constant(right.type, 0))
+        lt_zero = builder.icmp_signed(op, Constant(right.type, 0), right)
+        ge_zero = builder.icmp_unsigned(op, left, right)
+        res = builder.select(cmp_zero, lt_zero, ge_zero)
+        return impl_ret_untracked(context, builder, sig.return_type, res)
+    return impl
+
+
 def int_abs_impl(context, builder, sig, args):
     [x] = args
     ZERO = Constant(x.type, None)

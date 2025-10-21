@@ -1,13 +1,11 @@
-from distutils.core import setup
-
+from setuptools import distutils
 from source_module import cc
 
-from numba.pycc.platform import _patch_exec_command
+
+setup = distutils.core.setup
 
 
 def run_setup():
-    # Avoid sporadic crashes on Windows due to MSVCRT spawnve()
-    _patch_exec_command()
     setup(ext_modules=[cc.distutils_extension()])
 
 

@@ -3,10 +3,16 @@ from collections import namedtuple
 
 _MemoryInfo = namedtuple("_MemoryInfo", "free,total")
 
+_SIMULATOR_CC = (5, 2)
+
 
 class FakeCUDADevice:
     def __init__(self):
         self.uuid = 'GPU-00000000-0000-0000-0000-000000000000'
+
+    @property
+    def compute_capability(self):
+        return _SIMULATOR_CC
 
 
 class FakeCUDAContext:
@@ -37,7 +43,7 @@ class FakeCUDAContext:
 
     @property
     def compute_capability(self):
-        return (5, 2)
+        return _SIMULATOR_CC
 
     def reset(self):
         pass

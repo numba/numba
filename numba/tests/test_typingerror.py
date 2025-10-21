@@ -6,8 +6,7 @@ import operator
 import numpy as np
 
 import unittest
-from numba.core.compiler import compile_isolated
-from numba import jit
+from numba import jit, njit
 from numba.core import types
 from numba.core.errors import TypingError
 from numba.core.types.functions import _header_lead
@@ -64,7 +63,7 @@ class TestTypingError(unittest.TestCase):
 
     def test_unknown_function(self):
         try:
-            compile_isolated(foo, ())
+            njit((),)(foo)
         except TypingError as e:
             self.assertIn("Untyped global name 'what'", str(e))
         else:
@@ -72,7 +71,7 @@ class TestTypingError(unittest.TestCase):
 
     def test_unknown_attrs(self):
         try:
-            compile_isolated(bar, (types.int32,))
+            njit((types.int32,),)(bar)
         except TypingError as e:
             self.assertIn("Unknown attribute 'a' of type int32", str(e))
         else:
@@ -81,7 +80,7 @@ class TestTypingError(unittest.TestCase):
     def test_unknown_module(self):
         # This used to print "'object' object has no attribute 'int32'"
         with self.assertRaises(TypingError) as raises:
-            compile_isolated(unknown_module, ())
+            njit((),)(unknown_module)
         self.assertIn("name 'numpyz' is not defined", str(raises.exception))
 
     def test_issue_868(self):
@@ -91,7 +90,7 @@ class TestTypingError(unittest.TestCase):
         its operands was an NPTimeDelta in its generic() method.
         '''
         with self.assertRaises(TypingError) as raises:
-            compile_isolated(issue_868, (types.Array(types.int32, 1, 'C'),))
+            njit((types.Array(types.int32, 1, 'C'),))(issue_868)
 
         expected = ((_header_lead + " Function(<built-in function mul>) found "
                      "for signature:\n \n >>> mul(UniTuple({} x 1), {})")
@@ -101,14 +100,14 @@ class TestTypingError(unittest.TestCase):
 
     def test_return_type_unification(self):
         with self.assertRaises(TypingError) as raises:
-            compile_isolated(impossible_return_type, (types.int32,))
+            njit((types.int32,))(impossible_return_type,)
         msg = ("Can't unify return type from the following types: Tuple(), "
                "complex128")
         self.assertIn(msg, str(raises.exception))
 
     def test_bad_hypot_usage(self):
         with self.assertRaises(TypingError) as raises:
-            compile_isolated(bad_hypot_usage, ())
+            njit((),)(bad_hypot_usage,)
 
         errmsg = str(raises.exception)
         # Make sure it listed the known signatures.
@@ -129,7 +128,7 @@ class TestTypingError(unittest.TestCase):
         instead of letting lowering fail.
         """
         with self.assertRaises(TypingError) as raises:
-            compile_isolated(imprecise_list, ())
+            njit((),)(imprecise_list)
 
         errmsg = str(raises.exception)
         msg = ("Cannot infer the type of variable 'l', have imprecise type: "
@@ -144,14 +143,14 @@ class TestTypingError(unittest.TestCase):
         TODO: #2931
         """
         with self.assertRaises(TypingError) as raises:
-            compile_isolated(using_imprecise_list, ())
+            njit((),)(using_imprecise_list)
 
         errmsg = str(raises.exception)
         self.assertIn("Undecided type", errmsg)
 
     def test_array_setitem_invalid_cast(self):
         with self.assertRaises(TypingError) as raises:
-            compile_isolated(array_setitem_invalid_cast, ())
+            njit((),)(array_setitem_invalid_cast)
 
         errmsg = str(raises.exception)
         self.assertIn(
@@ -207,7 +206,7 @@ class TestArgumentTypingError(unittest.TestCase):
             cfunc(1, foo, 1)
 
         expected=re.compile(("This error may have been caused by the following "
-                             "argument\(s\):\\n- argument 1:.*Cannot determine "
+                             r"argument\(s\):\n- argument 1:.*Cannot determine "
                              "Numba type of "
                              "<class \'numba.tests.test_typingerror.Foo\'>"))
         self.assertTrue(expected.search(str(raises.exception)) is not None)

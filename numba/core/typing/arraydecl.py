@@ -11,8 +11,10 @@ from numba.core.typing.templates import (AttributeTemplate, AbstractTemplate,
 from numba.core.typing import collections
 from numba.core.errors import (TypingError, RequireLiteralValue, NumbaTypeError,
                                NumbaNotImplementedError, NumbaAssertionError,
-                               NumbaKeyError, NumbaIndexError)
+                               NumbaKeyError, NumbaIndexError, NumbaValueError)
 from numba.core.cgutils import is_nonelike
+
+numpy_version = tuple(map(int, np.__version__.split('.')[:2]))
 
 
 Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
@@ -34,49 +36,87 @@ def get_array_index_type(ary, idx):
     right_indices = []
     ellipsis_met = False
     advanced = False
-    has_integer = False
     num_newaxis = 0
 
     if not isinstance(idx, types.BaseTuple):
         idx = [idx]
 
+    # Here, a subspace is considered as a contiguous group of advanced indices.
+    # num_subspaces keeps track of the number of such
+    # contiguous groups.
+    in_subspace = False
+    num_subspaces = 0
+    array_indices = 0
+
     # Walk indices
     for ty in idx:
         if ty is types.ellipsis:
             if ellipsis_met:
-                raise NumbaTypeError("only one ellipsis allowed in array index "
-                                     "(got %s)" % (idx,))
+                raise NumbaTypeError(
+                    "Only one ellipsis allowed in array indices "
+                    "(got %s)" % (idx,))
             ellipsis_met = True
+            in_subspace = False
         elif isinstance(ty, types.SliceType):
-            pass
+            # If we encounter a non-advanced index while in a
+            # subspace then that subspace ends.
+            in_subspace = False
+        # In advanced indexing, any index broadcastable to an
+        # array is considered an advanced index. Hence all the
+        # branches below are considered as advanced indices.
         elif isinstance(ty, types.Integer):
             # Normalize integer index
             ty = types.intp if ty.signed else types.uintp
             # Integer indexing removes the given dimension
             ndim -= 1
-            has_integer = True
+            # If we're within a subspace/contiguous group of
+            # advanced indices then no action is necessary
+            # since we've already counted that subspace once.
+            if not in_subspace:
+                # If we're not within a subspace and we encounter
+                # this branch then we have a new subspace/group.
+                num_subspaces += 1
+                in_subspace = True
         elif (isinstance(ty, types.Array) and ty.ndim == 0
               and isinstance(ty.dtype, types.Integer)):
             # 0-d array used as integer index
             ndim -= 1
-            has_integer = True
+            if not in_subspace:
+                num_subspaces += 1
+                in_subspace = True
         elif (isinstance(ty, types.Array)
-              and ty.ndim == 1
               and isinstance(ty.dtype, (types.Integer, types.Boolean))):
-            if advanced or has_integer:
-                # We don't support the complicated combination of
-                # advanced indices (and integers are considered part
-                # of them by Numpy).
-                msg = "only one advanced index supported"
-                raise NumbaNotImplementedError(msg)
+            if ty.ndim > 1:
+                # Advanced indexing limitation # 1
+                raise NumbaTypeError(
+                    "Multi-dimensional indices are not supported.")
+            array_indices += 1
+            # The condition for activating advanced indexing is simply
+            # having at least one array with size > 1.
             advanced = True
+            if not in_subspace:
+                num_subspaces += 1
+                in_subspace = True
         elif (is_nonelike(ty)):
             ndim += 1
             num_newaxis += 1
         else:
-            raise NumbaTypeError("unsupported array index type %s in %s"
+            raise NumbaTypeError("Unsupported array index type %s in %s"
                                  % (ty, idx))
         (right_indices if ellipsis_met else left_indices).append(ty)
+
+    if advanced:
+        if array_indices > 1:
+            # Advanced indexing limitation # 2
+            msg = "Using more than one non-scalar array index is unsupported."
+            raise NumbaTypeError(msg)
+
+        if num_subspaces > 1:
+            # Advanced indexing limitation # 3
+            msg = ("Using more than one indexing subspace is unsupported."
+                   " An indexing subspace is a group of one or more"
+                   " consecutive indices comprising integer or array types.")
+            raise NumbaTypeError(msg)
 
     # Only Numpy arrays support advanced indexing
     if advanced and not isinstance(ary, types.Array):
@@ -312,7 +352,8 @@ class ArrayAttribute(AttributeTemplate):
             if ty in types.number_domain:
                 # Guard against non integer type
                 if not isinstance(ty, types.Integer):
-                    raise TypeError("transpose() arg cannot be {0}".format(ty))
+                    msg = "transpose() arg cannot be {0}".format(ty)
+                    raise TypingError(msg)
                 return True
             else:
                 return False
@@ -340,8 +381,9 @@ class ArrayAttribute(AttributeTemplate):
 
         else:
             if any(not sentry_shape_scalar(a) for a in args):
-                raise TypeError("transpose({0}) is not supported".format(
-                    ', '.join(args)))
+                msg = "transpose({0}) is not supported".format(
+                    ', '.join(args))
+                raise TypingError(msg)
             assert ary.ndim == len(args)
             return signature(self.resolve_T(ary).copy(layout="A"), *args)
 
@@ -361,19 +403,25 @@ class ArrayAttribute(AttributeTemplate):
         if not args:
             return signature(ary.dtype)
 
-    @bound_function("array.itemset")
-    def resolve_itemset(self, ary, args, kws):
-        assert not kws
-        # We don't support explicit arguments as that's exactly equivalent
-        # to regular indexing.  The no-argument form is interesting to
-        # allow some degree of genericity when writing functions.
-        if len(args) == 1:
-            return signature(types.none, ary.dtype)
+    if numpy_version < (2, 0):
+        @bound_function("array.itemset")
+        def resolve_itemset(self, ary, args, kws):
+            assert not kws
+            # We don't support explicit arguments as that's exactly equivalent
+            # to regular indexing.  The no-argument form is interesting to
+            # allow some degree of genericity when writing functions.
+            if len(args) == 1:
+                return signature(types.none, ary.dtype)
 
     @bound_function("array.nonzero")
     def resolve_nonzero(self, ary, args, kws):
         assert not args
         assert not kws
+        if ary.ndim == 0 and numpy_version >= (2, 1):
+            raise NumbaValueError(
+                "Calling nonzero on 0d arrays is not allowed."
+                " Use np.atleast_1d(scalar).nonzero() instead."
+            )
         # 0-dim arrays return one result array
         ndim = max(ary.ndim, 1)
         retty = types.UniTuple(types.Array(types.intp, 1, 'C'), ndim)
@@ -385,7 +433,7 @@ class ArrayAttribute(AttributeTemplate):
             if ty in types.number_domain:
                 # Guard against non integer type
                 if not isinstance(ty, types.Integer):
-                    raise TypeError("reshape() arg cannot be {0}".format(ty))
+                    raise TypingError("reshape() arg cannot be {0}".format(ty))
                 return True
             else:
                 return False
@@ -393,7 +441,7 @@ class ArrayAttribute(AttributeTemplate):
         assert not kws
         if ary.layout not in 'CF':
             # only work for contiguous array
-            raise TypeError("reshape() supports contiguous array only")
+            raise TypingError("reshape() supports contiguous array only")
 
         if len(args) == 1:
             # single arg
@@ -411,12 +459,12 @@ class ArrayAttribute(AttributeTemplate):
 
         elif len(args) == 0:
             # no arg
-            raise TypeError("reshape() take at least one arg")
+            raise TypingError("reshape() take at least one arg")
 
         else:
             # vararg case
             if any(not sentry_shape_scalar(a) for a in args):
-                raise TypeError("reshape({0}) is not supported".format(
+                raise TypingError("reshape({0}) is not supported".format(
                     ', '.join(map(str, args))))
 
             retty = ary.copy(ndim=len(args))
@@ -468,9 +516,9 @@ class ArrayAttribute(AttributeTemplate):
         if dtype is None:
             return
         if not self.context.can_convert(ary.dtype, dtype):
-            raise TypeError("astype(%s) not supported on %s: "
-                            "cannot convert from %s to %s"
-                            % (dtype, ary, ary.dtype, dtype))
+            raise TypingError("astype(%s) not supported on %s: "
+                              "cannot convert from %s to %s"
+                              % (dtype, ary, ary.dtype, dtype))
         layout = ary.layout if ary.layout in 'CF' else 'C'
         # reset the write bit irrespective of whether the cast type is the same
         # as the current dtype, this replicates numpy
@@ -574,8 +622,9 @@ class StaticGetItemRecord(AbstractTemplate):
         record, idx = args
         if isinstance(record, types.Record) and isinstance(idx, str):
             if idx not in record.fields:
-                raise KeyError(f"Field '{idx}' was not found in record with "
-                               f"fields {tuple(record.fields.keys())}")
+                raise NumbaKeyError(f"Field '{idx}' was not found in record "
+                                    "with fields "
+                                    f"{tuple(record.fields.keys())}")
             ret = record.typeof(idx)
             assert ret
             return signature(ret, *args)
@@ -737,7 +786,7 @@ def sum_expand(self, args, kws):
         # There is an axis parameter, either arg or kwarg
         if self.this.ndim == 1:
             # 1d reduces to a scalar
-            return_type = self.this.dtype
+            return_type = _expand_integer(self.this.dtype)
         else:
             # the return type of this summation is  an array of dimension one
             # less than the input array.

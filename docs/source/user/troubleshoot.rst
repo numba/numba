@@ -210,158 +210,17 @@ used to instruct the typing mechanism::
         tmp = [np.complex64(x) for x in range(0)]
         return (tmp, x) # the type of `tmp` is known, but it is still empty
 
-The compiled code is too slow
-=============================
 
-The most common reason for slowness of a compiled JIT function is that
-compiling in :term:`nopython mode` has failed and the Numba compiler has
-fallen back to :term:`object mode`.  :term:`object mode` currently provides
-little to no speedup compared to regular Python interpretation, and its
-main point is to allow an internal optimization known as
-:term:`loop-lifting`: this optimization will allow to compile inner
-loops in :term:`nopython mode` regardless of what code surrounds those
-inner loops.
+`Object mode` or ``@jit(forceobj=True)`` is too slow
+====================================================
 
-To find out if type inference succeeded on your function, you can use
-the :meth:`~Dispatcher.inspect_types` method on the compiled function.
-
-For example, let's take the following function::
-
-   @jit
-   def f(a, b):
-       s = a + float(b)
-       return s
-
-When called with numbers, this function should be fast as Numba is able
-to convert number types to floating-point numbers.  Let's see::
-
-   >>> f(1, 2)
-   3.0
-   >>> f.inspect_types()
-   f (int64, int64)
-   --------------------------------------------------------------------------------
-   # --- LINE 7 ---
-
-   @jit
-
-   # --- LINE 8 ---
-
-   def f(a, b):
-
-       # --- LINE 9 ---
-       # label 0
-       #   a.1 = a  :: int64
-       #   del a
-       #   b.1 = b  :: int64
-       #   del b
-       #   $0.2 = global(float: <class 'float'>)  :: Function(<class 'float'>)
-       #   $0.4 = call $0.2(b.1, )  :: (int64,) -> float64
-       #   del b.1
-       #   del $0.2
-       #   $0.5 = a.1 + $0.4  :: float64
-       #   del a.1
-       #   del $0.4
-       #   s = $0.5  :: float64
-       #   del $0.5
-
-       s = a + float(b)
-
-       # --- LINE 10 ---
-       #   $0.7 = cast(value=s)  :: float64
-       #   del s
-       #   return $0.7
-
-       return s
-
-Without trying to understand too much of the Numba intermediate representation,
-it is still visible that all variables and temporary values have had their
-types inferred properly: for example *a* has the type ``int64``, *$0.5* has
-the type ``float64``, etc.
-
-However, if *b* is passed as a string, compilation will fall back on object
-mode as the float() constructor with a string is currently not supported
-by Numba::
-
-   >>> f(1, "2")
-   3.0
-   >>> f.inspect_types()
-   [... snip annotations for other signatures, see above ...]
-   ================================================================================
-   f (int64, str)
-   --------------------------------------------------------------------------------
-   # --- LINE 7 ---
-
-   @jit
-
-   # --- LINE 8 ---
-
-   def f(a, b):
-
-       # --- LINE 9 ---
-       # label 0
-       #   a.1 = a  :: pyobject
-       #   del a
-       #   b.1 = b  :: pyobject
-       #   del b
-       #   $0.2 = global(float: <class 'float'>)  :: pyobject
-       #   $0.4 = call $0.2(b.1, )  :: pyobject
-       #   del b.1
-       #   del $0.2
-       #   $0.5 = a.1 + $0.4  :: pyobject
-       #   del a.1
-       #   del $0.4
-       #   s = $0.5  :: pyobject
-       #   del $0.5
-
-       s = a + float(b)
-
-       # --- LINE 10 ---
-       #   $0.7 = cast(value=s)  :: pyobject
-       #   del s
-       #   return $0.7
-
-       return s
-
-Here we see that all variables end up typed as ``pyobject``.  This means
-that the function was compiled in object mode and values are passed
-around as generic Python objects, without Numba trying to look into them
-to reason about their raw values.  This is a situation you want to avoid
-when caring about the speed of your code.
-
-If a function fails to compile in ``nopython`` mode warnings will be emitted
-with explanation as to why compilation failed. For example with the ``f()``
-function above (slightly edited for documentation purposes)::
-
-    >>> f(1, 2)
-    3.0
-    >>> f(1, "2")
-    example.py:7: NumbaWarning:
-    Compilation is falling back to object mode WITH looplifting enabled because Function "f" failed type inference due to: Invalid use of Function(<class 'float'>) with argument(s) of type(s): (unicode_type)
-    * parameterized
-    In definition 0:
-        TypeError: float() only support for numbers
-        raised from <path>/numba/typing/builtins.py:880
-    In definition 1:
-        TypeError: float() only support for numbers
-        raised from <path>/numba/typing/builtins.py:880
-    This error is usually caused by passing an argument of a type that is unsupported by the named function.
-    [1] During: resolving callee type: Function(<class 'float'>)
-    [2] During: typing of call at example.py (9)
-
-
-    File "example.py", line 9:
-    def f(a, b):
-        s = a + float(b)
-        ^
-
-    <path>/numba/compiler.py:722: NumbaWarning: Function "f" was compiled in object mode without forceobj=True.
-
-    File "example.py", line 8:
-    @jit
-    def f(a, b):
-    ^
-
-    3.0
+:term:`object mode` provides little to no speedup compared to regular Python 
+interpretation, its main point is to allow an internal optimization known as  
+:term:`loop-lifting`. This optimization will allow compilation of inner  
+loops in :term:`nopython mode` regardless of what code surrounds those  
+inner loops. The compilation of inner loops can still fallback to  
+:term:`object mode` if they use types or operations that  
+:term:`nopython mode` does not support. 
 
 
 Disabling JIT compilation

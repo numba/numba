@@ -214,6 +214,7 @@ The following dunder methods may be defined for jitclasses:
 * ``__getitem__``
 * ``__hash__``
 * ``__index__``
+* ``__invert__``
 * ``__int__``
 * ``__len__``
 * ``__setitem__``
@@ -227,6 +228,7 @@ The following dunder methods may be defined for jitclasses:
 * ``__add__``
 * ``__floordiv__``
 * ``__lshift__``
+* ``__matmul__``
 * ``__mod__``
 * ``__mul__``
 * ``__neg__``
@@ -241,6 +243,7 @@ The following dunder methods may be defined for jitclasses:
 * ``__iadd__``
 * ``__ifloordiv__``
 * ``__ilshift__``
+* ``__imatmul__``
 * ``__imod__``
 * ``__imul__``
 * ``__ipow__``
@@ -250,6 +253,19 @@ The following dunder methods may be defined for jitclasses:
 * ``__iand__``
 * ``__ior__``
 * ``__ixor__``
+* ``__radd__``
+* ``__rfloordiv__``
+* ``__rlshift__``
+* ``__rmatmul__``
+* ``__rmod__``
+* ``__rmul__``
+* ``__rpow__``
+* ``__rrshift__``
+* ``__rsub__``
+* ``__rtruediv__``
+* ``__rand__``
+* ``__ror__``
+* ``__rxor__``
 
 Refer to the `Python Data Model documentation
 <https://docs.python.org/3/reference/datamodel.html>`_ for descriptions of

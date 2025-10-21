@@ -306,6 +306,7 @@ The following methods of NumPy arrays are supported:
 
 * :meth:`~numpy.ndarray.argmax` (``axis`` keyword argument supported).
 * :meth:`~numpy.ndarray.argmin` (``axis`` keyword argument supported).
+* :func:`numpy.argpartition` (only the 2 first arguments)
 * :meth:`~numpy.ndarray.argsort` (``kind`` key word argument supported for
   values ``'quicksort'`` and ``'mergesort'``)
 * :meth:`~numpy.ndarray.astype` (only the 1-argument form)
@@ -340,6 +341,7 @@ The following methods of NumPy arrays are supported:
     inputs), while NumPy would use a 32-bit accumulator in those cases.
 
 
+* :meth:`~numpy.ndarray.tobytes` (without arguments)
 * :meth:`~numpy.ndarray.transpose`
 * :meth:`~numpy.ndarray.view` (only the 1-argument form)
 * :meth:`~numpy.ndarray.__contains__`
@@ -420,6 +422,24 @@ The following reduction functions are supported:
   unsupported)
 * :func:`numpy.quantile` (only the 2 first arguments, complex dtypes
   unsupported)
+* :func:`np.average` (`axis` argument is not supported)
+
+
+Polynomials
+-----------
+
+The following polynomial classes are supported:
+* :class:`numpy.polynomial.polynomial.Polynomial` (only the first three arguments)
+
+The following polynomial functions are supported:
+* :func:`numpy.polynomial.polynomial.polyadd()`
+* :func:`numpy.polynomial.polynomial.polydiv()`
+* :func:`numpy.polynomial.polynomial.polyint()` (only the 2 first arguments)
+* :func:`numpy.polynomial.polynomial.polymul()`
+* :func:`numpy.polynomial.polynomial.polysub()`
+* :func:`numpy.polynomial.polynomial.polyval()` (the argument ``tensor`` must be a boolean constant)
+* :func:`numpy.polynomial.polyutils.as_series()`
+* :func:`numpy.polynomial.polyutils.trimseq()`
 
 Other functions
 ---------------
@@ -452,10 +472,10 @@ The following top-level functions are supported:
 * :func:`numpy.broadcast_shapes`
 * :func:`numpy.column_stack`
 * :func:`numpy.concatenate` (only supports tuple arguments)
-* :func:`numpy.convolve` (only the 2 first arguments)
+* :func:`numpy.convolve` (all arguments)
 * :func:`numpy.copy` (only the first argument)
 * :func:`numpy.corrcoef` (only the 3 first arguments, requires SciPy)
-* :func:`numpy.correlate` (only the 2 first arguments)
+* :func:`numpy.correlate` (all arguments)
 * :func:`numpy.count_nonzero` (axis only supports scalar values)
 * :func:`numpy.cov` (only the 5 first arguments)
 * :func:`numpy.cross` (only the 2 first arguments; at least one of the input
@@ -466,7 +486,9 @@ The following top-level functions are supported:
 
 * :func:`numpy.delete` (only the 2 first arguments)
 * :func:`numpy.diag`
+* :func:`numpy.diagflat`
 * :func:`numpy.digitize`
+* :func:`numpy.dsplit`
 * :func:`numpy.dstack`
 * :func:`numpy.dtype` (only the first argument)
 * :func:`numpy.ediff1d`
@@ -484,25 +506,30 @@ The following top-level functions are supported:
 * :func:`numpy.frombuffer` (only the 2 first arguments)
 * :func:`numpy.full` (only the 3 first arguments)
 * :func:`numpy.full_like` (only the 3 first arguments)
+* :func:`numpy.geomspace` (only the 3 first arguments)
 * :func:`numpy.hamming`
 * :func:`numpy.hanning`
 * :func:`numpy.histogram` (only the 3 first arguments)
+* :func:`numpy.hsplit`
 * :func:`numpy.hstack`
 * :func:`numpy.identity`
+* :func:`numpy.indices` (only the first argument)
 * :func:`numpy.isclose`
 * :func:`numpy.kaiser`
 * :func:`numpy.iscomplex`
 * :func:`numpy.iscomplexobj`
+* :func:`numpy.isin` (matching pre-1.24 behaviour without the ``kind`` keyword)
 * :func:`numpy.isneginf`
 * :func:`numpy.isposinf`
 * :func:`numpy.isreal`
 * :func:`numpy.isrealobj`
 * :func:`numpy.isscalar`
 * :func:`numpy.interp` (only the 3 first arguments)
-* :func:`numpy.intersect1d` (only first 2 arguments, ar1 and ar2)
+* :func:`numpy.intersect1d` (only 3 first arguments: ``ar1``, ``ar2``, and ``assume_unique``)
+* :func:`numpy.in1d` (matching pre-1.24 behaviour without the ``kind`` keyword)
 * :func:`numpy.linspace` (only the 3-argument form)
 * :func:`numpy.logspace` (only the 3 first arguments)
-* :func:`numpy.nan_to_num` (only the 3 first arguments)
+* :func:`numpy.nan_to_num`
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`
 * :class:`numpy.nditer` (only the first argument)
@@ -513,15 +540,19 @@ The following top-level functions are supported:
 * :func:`numpy.ravel` (no order argument; 'C' order only)
 * :func:`numpy.repeat` (no axis argument)
 * :func:`numpy.reshape` (no order argument; 'C' order only)
+* :func:`numpy.resize`
 * :func:`numpy.roll` (only the 2 first arguments; second argument ``shift``
   must be an integer)
 * :func:`numpy.roots`
 * :func:`numpy.rot90` (only the 2 first arguments)
 * :func:`numpy.round_`
+* :func:`numpy.row_stack`
 * :func:`numpy.searchsorted` (only the 3 first arguments)
 * :func:`numpy.select` (only using homogeneous lists or tuples for the first
   two arguments, condlist and choicelist). Additionally, these two arguments
   can only contain arrays (unlike NumPy that also accepts tuples).
+* :func:`numpy.setxor1d`
+* :func:`numpy.setdiff1d`
 * :func:`numpy.shape`
 * :func:`numpy.sinc`
 * :func:`numpy.sort` (no optional arguments, quicksort accepts
@@ -532,17 +563,21 @@ The following top-level functions are supported:
 * :func:`numpy.take` (only the 2 first arguments)
 * :func:`numpy.take_along_axis` (the axis argument must be a literal value)
 * :func:`numpy.transpose`
+* :func:`numpy.trapezoid` (only the 3 first arguments)
 * :func:`numpy.trapz` (only the 3 first arguments)
 * :func:`numpy.tri` (only the 3 first arguments; third argument ``k`` must be an integer)
 * :func:`numpy.tril` (second argument ``k`` must be an integer)
 * :func:`numpy.tril_indices` (all arguments must be integer)
 * :func:`numpy.tril_indices_from` (second argument ``k`` must be an integer)
+* :func:`numpy.trim_zeros` (for NumPy array arguments only)
 * :func:`numpy.triu` (second argument ``k`` must be an integer)
 * :func:`numpy.triu_indices` (all arguments must be integer)
 * :func:`numpy.triu_indices_from` (second argument ``k`` must be an integer)
 * :func:`numpy.union1d` (For unicode arrays, only supports arrays of the same dtype)
 * :func:`numpy.unique` (only the first argument)
+* :func:`numpy.unwrap` (third argument ``axis`` must equal -1)
 * :func:`numpy.vander`
+* :func:`numpy.vsplit`
 * :func:`numpy.vstack`
 * :func:`numpy.where`
 * :func:`numpy.zeros` (only the 2 first arguments)
@@ -604,7 +639,7 @@ Numba supports :py:class:`numpy.random.Generator()` objects. As of version 0.56,
 individual NumPy :py:class:`Generator` objects into Numba functions and use their
 methods inside the functions. The same algorithms are used as NumPy for
 random number generation hence maintaining parity between the random
-number generated using NumPy and Numba under identical arguments 
+number generated using NumPy and Numba under identical arguments
 (also the same documentation notes as NumPy :py:class:`Generator` methods apply).
 The current Numba support for :py:class:`Generator` is not thread-safe, hence we
 do not recommend using :py:class:`Generator` methods in methods with parallel
@@ -810,11 +845,15 @@ The following functions support all arguments.
 ``stride_tricks``
 -----------------
 
-The following function from the :mod:`numpy.lib.stride_tricks` module
-is supported:
+The following functions from the :mod:`numpy.lib.stride_tricks` module
+are supported:
 
 * :func:`~numpy.lib.stride_tricks.as_strided` (the *strides* argument
   is mandatory, the *subok* argument is not supported)
+
+* :func:`~numpy.lib.stride_tricks.sliding_window_view` (the *subok* argument is
+  not supported, the *writeable* argument is not supported with the returned
+  view always being writeable)
 
 .. _supported_ufuncs:
 
@@ -969,15 +1008,13 @@ Floating functions
  copysign            Yes          Yes
  nextafter           Yes          Yes
  modf                Yes          No
- ldexp               Yes (*)      Yes
+ ldexp               Yes          Yes
  frexp               Yes          No
  floor               Yes          Yes
  ceil                Yes          Yes
  trunc               Yes          Yes
  spacing             Yes          Yes
 ==============  =============  ===============
-
-(\*) not supported on windows 32 bit
 
 
 Datetime functions

@@ -10,6 +10,7 @@ from numba.core.errors import TypingError
 from numba import njit
 from numba.core import types, utils, config
 from numba.tests.support import MemoryLeakMixin, TestCase, tag, skip_if_32bit
+from numba.core.utils import PYVERSION
 import unittest
 
 
@@ -33,6 +34,9 @@ def np_hstack(a, b, c):
 
 def np_vstack(a, b, c):
     return np.vstack((a, b, c))
+
+def np_row_stack(a, b, c):
+    return np.row_stack((a, b, c))
 
 def np_dstack(a, b, c):
     return np.dstack((a, b, c))
@@ -496,10 +500,16 @@ class TestDynArray(NrtRefCtTest, TestCase):
         got_x, got_y = cfunc(x)
         np.testing.assert_equal(expected_x, got_x)
         np.testing.assert_equal(expected_y, got_y)
-        # getrefcount owns 1, got_y owns 1
-        self.assertEqual(2, sys.getrefcount(got_y))
-        # getrefcount owns 1, got_y owns 1
-        self.assertEqual(2, sys.getrefcount(got_y))
+
+        if PYVERSION in ((3, 14), ):
+            expected_refcount = 1
+        elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+            expected_refcount = 2
+        else:
+            raise NotImplementedError(PYVERSION)
+
+        self.assertEqual(expected_refcount, sys.getrefcount(got_y))
+        self.assertEqual(expected_refcount, sys.getrefcount(got_x))
 
     def test_issue_with_return_leak(self):
         """
@@ -518,8 +528,15 @@ class TestDynArray(NrtRefCtTest, TestCase):
         arr = np.arange(10)
         old_refct = sys.getrefcount(arr)
 
-        self.assertEqual(old_refct, sys.getrefcount(pyfunc(arr)))
-        self.assertEqual(old_refct, sys.getrefcount(cfunc(arr)))
+        if PYVERSION in ((3, 14), ):
+            self.assertEqual(2, sys.getrefcount(pyfunc(arr)))
+            self.assertEqual(2, sys.getrefcount(cfunc(arr)))
+        elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+            self.assertEqual(old_refct, sys.getrefcount(pyfunc(arr)))
+            self.assertEqual(old_refct, sys.getrefcount(cfunc(arr)))
+        else:
+            raise NotImplementedError(PYVERSION)
+
         self.assertEqual(old_refct, sys.getrefcount(arr))
 
 
@@ -1754,18 +1771,22 @@ class TestNpStack(MemoryLeakMixin, TestCase):
         self.check_stack(pyfunc, cfunc, (a, b, a))
 
     def test_vstack(self):
-        pyfunc = np_vstack
-        cfunc = nrtjit(pyfunc)
+        # Since np.row_stack is an alias for np.vstack, it does not need a
+        # separate Numba implementation. For every test for np.vstack, the same
+        # test for np.row_stack has been added.
+        functions = [np_vstack, np_row_stack]
+        for pyfunc in functions:
+            cfunc = nrtjit(pyfunc)
 
-        self.check_xxstack(pyfunc, cfunc)
-        # 1d
-        a = np.arange(5)
-        b = a + 10
-        self.check_stack(pyfunc, cfunc, (a, b, b))
-        # 2d
-        a = np.arange(6).reshape((3, 2))
-        b = np.arange(8).reshape((4, 2)) + 100
-        self.check_stack(pyfunc, cfunc, (a, b, b))
+            self.check_xxstack(pyfunc, cfunc)
+            # 1d
+            a = np.arange(5)
+            b = a + 10
+            self.check_stack(pyfunc, cfunc, (a, b, b))
+            # 2d
+            a = np.arange(6).reshape((3, 2))
+            b = np.arange(8).reshape((4, 2)) + 100
+            self.check_stack(pyfunc, cfunc, (a, b, b))
 
     def test_dstack(self):
         pyfunc = np_dstack

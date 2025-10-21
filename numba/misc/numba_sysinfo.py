@@ -55,12 +55,16 @@ _python_locale = 'Python Locale'
 _llvmlite_version = 'llvmlite Version'
 _llvm_version = 'LLVM Version'
 # CUDA info
+_cu_target_impl = 'CUDA Target Impl'
 _cu_dev_init = 'CUDA Device Init'
 _cu_drv_ver = 'CUDA Driver Version'
 _cu_rt_ver = 'CUDA Runtime Version'
 _cu_nvidia_bindings = 'NVIDIA CUDA Bindings'
 _cu_nvidia_bindings_used = 'NVIDIA CUDA Bindings In Use'
 _cu_detect_out, _cu_lib_test = 'CUDA Detect Output', 'CUDA Lib Test'
+_cu_mvc_available = 'NVIDIA CUDA Minor Version Compatibility Available'
+_cu_mvc_needed = 'NVIDIA CUDA Minor Version Compatibility Needed'
+_cu_mvc_in_use = 'NVIDIA CUDA Minor Version Compatibility In Use'
 # NumPy info
 _numpy_version = 'NumPy Version'
 _numpy_supported_simd_features = 'NumPy Supported SIMD features'
@@ -99,8 +103,10 @@ def get_os_spec_info(os_name):
     # Linux man page for `/proc`:
     # http://man7.org/linux/man-pages/man5/proc.5.html
 
-    # Windows documentation for `wmic OS`:
-    # https://docs.microsoft.com/en-us/windows/win32/cimwin32prov/cim-operatingsystem
+    # WMIC is deprecated in windows-2025, using powershell instead
+    # https://techcommunity.microsoft.com/t5/windows-it-pro-blog/wmi-command-line-wmic-utility-deprecation-next-steps/ba-p/4039242
+    # Windows documentation for `powershell`:
+    # https://learn.microsoft.com/en-us/powershell/
 
     # MacOS man page for `sysctl`:
     # https://www.unix.com/man-page/osx/3/sysctl/
@@ -136,8 +142,14 @@ def get_os_spec_info(os_name):
         'Windows': {
             'cmd': (),
             'cmd_optional': (
-                CmdBufferOut(('wmic', 'OS', 'get', 'TotalVirtualMemorySize')),
-                CmdBufferOut(('wmic', 'OS', 'get', 'FreeVirtualMemory')),
+                CmdBufferOut(('powershell', '-NoProfile', '-Command',
+                              "'TotalVirtualMemorySize ' + "
+                              "(Get-CimInstance -ClassName "
+                              "Win32_OperatingSystem).TotalVirtualMemorySize")),
+                CmdBufferOut(('powershell', '-NoProfile', '-Command',
+                              "'FreeVirtualMemory ' + "
+                              "(Get-CimInstance -ClassName "
+                              "Win32_OperatingSystem).FreeVirtualMemory")),
             ),
             'kwds': {
                 # output string fragment -> result dict key
@@ -330,6 +342,13 @@ def get_sysinfo():
 
     # CUDA information
     try:
+        sys_info[_cu_target_impl] = cu.implementation
+    except AttributeError:
+        # On the offchance an out-of-tree target did not set the
+        # implementation, we can try to continue
+        pass
+
+    try:
         cu.list_devices()[0]  # will a device initialise?
     except Exception as e:
         sys_info[_cu_dev_init] = False
@@ -360,12 +379,14 @@ def get_sysinfo():
             sys_info[_cu_detect_out] = output.getvalue()
             output.close()
 
-            sys_info[_cu_drv_ver] = '%s.%s' % cudriver.get_version()
-            sys_info[_cu_rt_ver] = '%s.%s' % curuntime.get_version()
+            cu_drv_ver = cudriver.get_version()
+            cu_rt_ver = curuntime.get_version()
+            sys_info[_cu_drv_ver] = '%s.%s' % cu_drv_ver
+            sys_info[_cu_rt_ver] = '%s.%s' % cu_rt_ver
 
             output = StringIO()
             with redirect_stdout(output):
-                cudadrv.libs.test(sys.platform, print_paths=False)
+                cudadrv.libs.test()
             sys_info[_cu_lib_test] = output.getvalue()
             output.close()
 
@@ -378,6 +399,17 @@ def get_sysinfo():
 
             nv_binding_used = bool(cudadrv.driver.USE_NV_BINDING)
             sys_info[_cu_nvidia_bindings_used] = nv_binding_used
+
+            try:
+                from ptxcompiler import compile_ptx  # noqa: F401
+                from cubinlinker import CubinLinker  # noqa: F401
+                sys_info[_cu_mvc_available] = True
+            except ImportError:
+                sys_info[_cu_mvc_available] = False
+
+            sys_info[_cu_mvc_needed] = cu_rt_ver > cu_drv_ver
+            sys_info[_cu_mvc_in_use] = bool(
+                config.CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY)
         except Exception as e:
             _warning_log.append(
                 "Warning (cuda): Probing CUDA failed "
@@ -578,12 +610,19 @@ def display_sysinfo(info=None, sep_pos=45):
         ("LLVM Version", info.get(_llvm_version, '?')),
         ("",),
         ("__CUDA Information__",),
+        ("CUDA Target Implementation", info.get(_cu_target_impl, '?')),
         ("CUDA Device Initialized", info.get(_cu_dev_init, '?')),
         ("CUDA Driver Version", info.get(_cu_drv_ver, '?')),
         ("CUDA Runtime Version", info.get(_cu_rt_ver, '?')),
         ("CUDA NVIDIA Bindings Available", info.get(_cu_nvidia_bindings, '?')),
         ("CUDA NVIDIA Bindings In Use",
          info.get(_cu_nvidia_bindings_used, '?')),
+        ("CUDA Minor Version Compatibility Available",
+         info.get(_cu_mvc_available, '?')),
+        ("CUDA Minor Version Compatibility Needed",
+         info.get(_cu_mvc_needed, '?')),
+        ("CUDA Minor Version Compatibility In Use",
+         info.get(_cu_mvc_in_use, '?')),
         ("CUDA Detect Output:",),
         (info.get(_cu_detect_out, "None"),),
         ("CUDA Libraries Test Output:",),

@@ -51,6 +51,7 @@ Below is a quick reference for the support level of Python constructs.
 - class definition: ``class`` (except for :ref:`@jitclass <jitclass>`)
 - set, dict and generator comprehensions
 - generator delegation: ``yield from``
+- Deletion with ``del`` statements
 
 Functions
 ---------
@@ -139,8 +140,7 @@ Exception handling
 The ``raise`` statement is only supported in the following forms:
 
 * ``raise SomeException``
-* ``raise SomeException(<arguments>)``: in :term:`nopython mode`, constructor
-  arguments must be :term:`compile-time constants <compile-time constant>`
+* ``raise SomeException(<arguments>)``
 
 It is currently unsupported to re-raise an exception created in compiled code.
 
@@ -724,10 +724,10 @@ Typed Dict
   ``dict()`` was not supported in versions prior to 0.44.  Currently, calling
   ``dict()`` translates to calling ``numba.typed.Dict()``.
 
-Numba only supports the use of ``dict()`` without any arguments.  Such use is
-semantically equivalent to ``{}`` and ``numba.typed.Dict()``.  It will create
-an instance of ``numba.typed.Dict`` where the key-value types will be later
-inferred by usage.
+Numba supports the use of ``dict()``.  Such use is semantically equivalent to
+``{}`` and ``numba.typed.Dict()``. It will create an instance of
+``numba.typed.Dict`` where the key-value types will be later inferred by usage.
+Numba also supports, explicitly, the ``dict(iterable)`` constructor.
 
 Numba does not fully support the Python ``dict`` because it is an untyped
 container that can have any Python types as members. To generate efficient
@@ -918,10 +918,6 @@ Built-in functions
 
 The following built-in functions are supported:
 
-.. warning::
-  Support for ``isinstance`` is an experimental feature. This feature is
-  automatically enabled by simply using ``isinstance`` in JIT compiled code.
-
 * :func:`abs`
 * :class:`bool`
 * :func:`chr`
@@ -937,7 +933,7 @@ The following built-in functions are supported:
 * :func:`hash` (see :ref:`pysupported-hashing` below)
 * :class:`int`: only the one-argument form
 * :func:`iter`: only the one-argument form
-* :func:`isinstance` (experimental support only)
+* :func:`isinstance`
 * :func:`len`
 * :func:`min`
 * :func:`map`
@@ -972,6 +968,14 @@ in CPython under the condition that the :attr:`sys.hash_info.algorithm` is
 The ``PYTHONHASHSEED`` environment variable influences the hashing behavior in
 precisely the manner described in the CPython documentation.
 
+.. note:: From NumPy 2.2 onwards, hash values for ``numpy.timedelta64`` and
+          ``numpy.datetime64`` instances computed in Numba compiled code do not
+          match the NumPy hash values of the same. Prior to NumPy 2.2, NumPy
+          hash values for ``numpy.timedelta64`` and ``numpy.datetime64``
+          instances were equivalent to their integer value representation. From
+          NumPy 2.2 onwards, their hash value is the same as the hash of the
+          equivalent type from the ``datetime`` module, Numba does not replicate
+          this behaviour.
 
 Standard library modules
 ========================
@@ -1079,8 +1083,10 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.ldexp`
 * :func:`math.lgamma`
 * :func:`math.log`
+* :func:`math.log2`
 * :func:`math.log10`
 * :func:`math.log1p`
+* :func:`math.nextafter`
 * :func:`math.pow`
 * :func:`math.radians`
 * :func:`math.sin`

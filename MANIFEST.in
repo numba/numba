@@ -6,5 +6,4 @@ recursive-include docs *.ipynb *.txt *.py Makefile *.rst
 recursive-include examples *.py
 
 prune docs/_build
-prune docs/gh-pages
 include numba/_version.py

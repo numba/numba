@@ -3,6 +3,7 @@ from collections import namedtuple
 
 from llvmlite import ir
 from numba.core import types, cgutils, errors, config
+from numba.core.utils import PYVERSION
 
 
 _NRT_Meminfo_Functions = namedtuple("_NRT_Meminfo_Functions",
@@ -405,8 +406,9 @@ class NRTContext(object):
         trystatus = cc.check_try_status(builder)
         excinfo = trystatus.excinfo
         has_raised = builder.not_(cgutils.is_null(builder, excinfo))
-        with builder.if_then(has_raised):
-            self.eh_end_try(builder)
+        if PYVERSION < (3, 11):
+            with builder.if_then(has_raised):
+                self.eh_end_try(builder)
         return has_raised
 
     def eh_try(self, builder):

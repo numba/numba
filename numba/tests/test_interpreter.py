@@ -5,8 +5,12 @@ import unittest
 from numba import jit, njit, objmode, typeof, literally
 from numba.extending import overload
 from numba.core import types
-from numba.core.errors import UnsupportedError
-from numba.tests.support import TestCase, MemoryLeakMixin, skip_unless_py10
+from numba.core.errors import UnsupportedBytecodeError
+from numba.tests.support import (
+    TestCase,
+    MemoryLeakMixin,
+    skip_unless_py10_or_later,
+)
 
 
 @njit
@@ -153,7 +157,7 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
         exec(func_text, {"sum_jit_func": sum_jit_func}, local_vars)
         return local_vars["impl"]
 
-    @skip_unless_py10
+    @skip_unless_py10_or_later
     def test_all_args(self):
         """
         Tests calling a function when n_args > 30 and
@@ -168,7 +172,7 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
         b = cfunc(*total_args)
         self.assertEqual(a, b)
 
-    @skip_unless_py10
+    @skip_unless_py10_or_later
     def test_all_kws(self):
         """
         Tests calling a function when n_kws > 15 and
@@ -182,7 +186,7 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
         b = cfunc(*total_args)
         self.assertEqual(a, b)
 
-    @skip_unless_py10
+    @skip_unless_py10_or_later
     def test_small_args_small_kws(self):
         """
         Tests calling a function when (n_args / 2) + n_kws > 15,
@@ -198,7 +202,7 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
         b = cfunc(*total_args)
         self.assertEqual(a, b)
 
-    @skip_unless_py10
+    @skip_unless_py10_or_later
     def test_small_args_large_kws(self):
         """
         Tests calling a function when (n_args / 2) + n_kws > 15,
@@ -214,7 +218,7 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
         b = cfunc(*total_args)
         self.assertEqual(a, b)
 
-    @skip_unless_py10
+    @skip_unless_py10_or_later
     def test_large_args_small_kws(self):
         """
         Tests calling a function when (n_args / 2) + n_kws > 15,
@@ -230,7 +234,7 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
         b = cfunc(*total_args)
         self.assertEqual(a, b)
 
-    @skip_unless_py10
+    @skip_unless_py10_or_later
     def test_large_args_large_kws(self):
         """
         Tests calling a function when (n_args / 2) + n_kws > 15,
@@ -246,7 +250,7 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
         b = cfunc(*total_args)
         self.assertEqual(a, b)
 
-    @skip_unless_py10
+    @skip_unless_py10_or_later
     def test_large_kws_objmode(self):
         """
         Tests calling an objectmode function with > 15 return values.
@@ -337,7 +341,7 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
         b = objmode_func()
         self.assertEqual(a, b)
 
-    @skip_unless_py10
+    @skip_unless_py10_or_later
     def test_large_args_inline_controlflow(self):
         """
         Tests generating large args when one of the inputs
@@ -384,14 +388,14 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
                 arg41=1,
             )
 
-        with self.assertRaises(UnsupportedError) as raises:
+        with self.assertRaises(UnsupportedBytecodeError) as raises:
             njit()(inline_func)(False)
         self.assertIn(
             'You can resolve this issue by moving the control flow out',
             str(raises.exception)
         )
 
-    @skip_unless_py10
+    @skip_unless_py10_or_later
     def test_large_args_noninlined_controlflow(self):
         """
         Tests generating large args when one of the inputs
@@ -446,7 +450,7 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
         b = cfunc(False)
         self.assertEqual(a, b)
 
-    @skip_unless_py10
+    @skip_unless_py10_or_later
     def test_all_args_inline_controlflow(self):
         """
         Tests generating only large args when one of the inputs
@@ -494,14 +498,14 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
                 1,
             )
 
-        with self.assertRaises(UnsupportedError) as raises:
+        with self.assertRaises(UnsupportedBytecodeError) as raises:
             njit()(inline_func)(False)
         self.assertIn(
             'You can resolve this issue by moving the control flow out',
             str(raises.exception)
         )
 
-    @skip_unless_py10
+    @skip_unless_py10_or_later
     def test_all_args_noninlined_controlflow(self):
         """
         Tests generating large args when one of the inputs
@@ -555,7 +559,7 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
         b = cfunc(False)
         self.assertEqual(a, b)
 
-    @skip_unless_py10
+    @skip_unless_py10_or_later
     def test_large_kws_inline_controlflow(self):
         """
         Tests generating large kws when one of the inputs
@@ -581,14 +585,14 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
                 arg15=1 if flag else 2,
             )
 
-        with self.assertRaises(UnsupportedError) as raises:
+        with self.assertRaises(UnsupportedBytecodeError) as raises:
             njit()(inline_func)(False)
         self.assertIn(
             'You can resolve this issue by moving the control flow out',
             str(raises.exception)
         )
 
-    @skip_unless_py10
+    @skip_unless_py10_or_later
     def test_large_kws_noninlined_controlflow(self):
         """
         Tests generating large kws when one of the inputs
@@ -639,7 +643,7 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
     to succeed.
     """
 
-    @skip_unless_py10
+    @skip_unless_py10_or_later
     def test_large_heterogeneous_const_dict(self):
         """
         Tests that a function with a large heterogeneous constant
@@ -678,7 +682,7 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
         b = cfunc()
         self.assertEqual(a, b)
 
-    @skip_unless_py10
+    @skip_unless_py10_or_later
     def test_large_heterogeneous_LiteralStrKeyDict_literal_values(self):
         """Check the literal values for a LiteralStrKeyDict requiring
         optimizations because it is heterogeneous.
@@ -749,7 +753,7 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
 
         foo()
 
-    @skip_unless_py10
+    @skip_unless_py10_or_later
     def test_large_heterogeneous_const_keys_dict(self):
         """
         Tests that a function with a large heterogeneous constant
@@ -790,7 +794,7 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
         b = cfunc(value)
         self.assertEqual(a, b)
 
-    @skip_unless_py10
+    @skip_unless_py10_or_later
     def test_large_dict_mutation_not_carried(self):
         """Checks that the optimization for large dictionaries
         do not incorrectly update initial values due to other
@@ -858,7 +862,7 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
 
         foo()
 
-    @skip_unless_py10
+    @skip_unless_py10_or_later
     def test_usercode_update_use_d2(self):
         """
         Tests an example using a regular update is
@@ -934,7 +938,7 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
         b = cfunc()
         self.assertEqual(a, b)
 
-    @skip_unless_py10
+    @skip_unless_py10_or_later
     def test_large_const_dict_inline_controlflow(self):
         """
         Tests generating a large dictionary when one of
@@ -969,14 +973,14 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
             }
             return d["S"]
 
-        with self.assertRaises(UnsupportedError) as raises:
+        with self.assertRaises(UnsupportedBytecodeError) as raises:
             njit()(inline_func)("a_string", False)
         self.assertIn(
             'You can resolve this issue by moving the control flow out',
             str(raises.exception)
         )
 
-    @skip_unless_py10
+    @skip_unless_py10_or_later
     def test_large_const_dict_noninline_controlflow(self):
         """
         Tests generating large constant dict when one of the
@@ -1018,7 +1022,7 @@ class TestLargeConstDict(TestCase, MemoryLeakMixin):
         b = cfunc(value, False)
         self.assertEqual(a, b)
 
-    @skip_unless_py10
+    @skip_unless_py10_or_later
     def test_fuse_twice_literal_values(self):
         """
         Tests that the correct literal values are generated

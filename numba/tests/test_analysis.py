@@ -3,9 +3,9 @@ import collections
 import types as pytypes
 
 import numpy as np
-from numba.core.compiler import compile_isolated, run_frontend, Flags, StateDict
+from numba.core.compiler import run_frontend, Flags, StateDict
 from numba import jit, njit, literal_unroll
-from numba.core import types, errors, ir, rewrites, ir_utils, utils, cpu
+from numba.core import types, errors, ir, rewrites, ir_utils, cpu
 from numba.core import postproc
 from numba.core.inline_closurecall import InlineClosureCallPass
 from numba.tests.support import (TestCase, MemoryLeakMixin, SerialMixin,
@@ -15,6 +15,7 @@ from numba.core.untyped_passes import (ReconstructSSA, TranslateByteCode,
                                        IRProcessing, DeadBranchPrune,
                                        PreserveIR)
 from numba.core.compiler import DefaultPassBuilder, CompilerBase, PassManager
+from numba.core.utils import PYVERSION
 
 
 _GLOBAL = 123
@@ -62,8 +63,8 @@ class TestBranchPruneBase(MemoryLeakMixin, TestCase):
         # *args: the argument instances to pass to the function to check
         #        execution is still valid post transform
         # **kwargs:
-        #        - flags: compiler.Flags instance to pass to `compile_isolated`,
-        #          permits use of e.g. object mode
+        #        - flags: args to pass to `jit` default is `nopython=True`,
+        #          e.g. permits use of e.g. object mode.
 
         func_ir = compile_to_ir(func)
         before = func_ir.copy()
@@ -126,9 +127,9 @@ class TestBranchPruneBase(MemoryLeakMixin, TestCase):
             print("expect_removed", sorted(expect_removed))
             raise e
 
-        supplied_flags = kwargs.pop('flags', False)
-        compiler_kws = {'flags': supplied_flags} if supplied_flags else {}
-        cres = compile_isolated(func, args_tys, **compiler_kws)
+        supplied_flags = kwargs.pop('flags', {'nopython': True})
+        # NOTE: original testing used `compile_isolated` hence use of `cres`.
+        cres = jit(args_tys, **supplied_flags)(func).overloads[args_tys]
         if args is None:
             res = cres.entry_point()
             expected = func()
@@ -260,14 +261,10 @@ class TestBranchPrune(TestBranchPruneBase, SerialMixin):
                 y = -3
             return y
 
-        if utils.PYVERSION >= (3, 10):
-            # Python 3.10 creates a block with a NOP in it for the `pass` which
-            # means it gets pruned.
-            self.assert_prune(impl, (types.NoneType('none'),), [False, None],
-                              None)
-        else:
-            self.assert_prune(impl, (types.NoneType('none'),), [None, None],
-                              None)
+        # Python 3.10 creates a block with a NOP in it for the `pass` which
+        # means it gets pruned.
+        self.assert_prune(impl, (types.NoneType('none'),), [False, None],
+                          None)
 
         self.assert_prune(impl, (types.IntegerLiteral(10),), [True, None], 10)
 
@@ -406,24 +403,6 @@ class TestBranchPrune(TestBranchPruneBase, SerialMixin):
 
         check(fn, (types.NoneType('none'),), 1)
         check(fn, (types.IntegerLiteral(10),), 0)
-
-    def test_obj_mode_fallback(self):
-        # see issue #3879, this checks that object mode fall back doesn't suffer
-        # from the IR mutation
-
-        @jit
-        def bug(a, b):
-            if a.ndim == 1:
-                if b is None:
-                    return dict()
-                return 12
-            return []
-
-        self.assertEqual(bug(np.zeros(10), 4), 12)
-        self.assertEqual(bug(np.arange(10), None), dict())
-        self.assertEqual(bug(np.arange(10).reshape((2, 5)), 10), [])
-        self.assertEqual(bug(np.arange(10).reshape((2, 5)), None), [])
-        self.assertFalse(bug.nopython_signatures)
 
     def test_global_bake_in(self):
 
@@ -675,12 +654,28 @@ class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):
                 _CONST2 = "PLACEHOLDER2"
             return _CONST2 + 4
 
-        new = self._literal_const_sample_generator(impl, {1:0, 3:20})
+        if PYVERSION in ((3, 14), ):
+            # The order of the __code__.co_consts changes with 3.14
+            new = self._literal_const_sample_generator(impl, {0:0, 2:20})
+        elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+            new = self._literal_const_sample_generator(impl, {1:0, 3:20})
+        else:
+            raise NotImplementedError(PYVERSION)
+
         iconst = impl.__code__.co_consts
         nconst = new.__code__.co_consts
-        self.assertEqual(iconst, (None, "PLACEHOLDER1", 3.14159,
-                                  "PLACEHOLDER2", 4))
-        self.assertEqual(nconst, (None, 0, 3.14159,  20, 4))
+
+        if PYVERSION in ((3, 14), ):
+            self.assertEqual(iconst, ("PLACEHOLDER1", 3.14159,
+                                      "PLACEHOLDER2"))
+            self.assertEqual(nconst, (0, 3.14159,  20))
+        elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+            self.assertEqual(iconst, (None, "PLACEHOLDER1", 3.14159,
+                                      "PLACEHOLDER2", 4))
+            self.assertEqual(nconst, (None, 0, 3.14159,  20, 4))
+        else:
+            raise NotImplementedError(PYVERSION)
+
         self.assertEqual(impl(None), 3.14159)
         self.assertEqual(new(None), 24)
 
@@ -693,7 +688,17 @@ class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):
 
         for c_inp, prune in (self._TRUTHY, False), (self._FALSEY, True):
             for const in c_inp:
-                func = self._literal_const_sample_generator(impl, {1: const})
+
+                if PYVERSION in ((3, 14), ):
+                    # The order of the __code__.co_consts changes with 3.14
+                    func = self._literal_const_sample_generator(impl,
+                                                                {0: const})
+                elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+                    func = self._literal_const_sample_generator(impl,
+                                                                {1: const})
+                else:
+                    raise NotImplementedError(PYVERSION)
+
                 self.assert_prune(func, (types.NoneType('none'),), [prune],
                                   None)
 
@@ -706,7 +711,17 @@ class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):
 
         for c_inp, prune in (self._TRUTHY, False), (self._FALSEY, True):
             for const in c_inp:
-                func = self._literal_const_sample_generator(impl, {1: const})
+
+                if PYVERSION in ((3, 14), ):
+                    # The order of the __code__.co_consts changes with 3.14
+                    func = self._literal_const_sample_generator(impl,
+                                                                {0: const})
+                elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+                    func = self._literal_const_sample_generator(impl,
+                                                                {1: const})
+                else:
+                    raise NotImplementedError(PYVERSION)
+
                 self.assert_prune(func, (types.NoneType('none'),), [prune],
                                   None)
 
@@ -721,7 +736,17 @@ class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):
 
         for c_inp, prune in (self._TRUTHY, False), (self._FALSEY, True):
             for const in c_inp:
-                func = self._literal_const_sample_generator(impl, {1: const})
+
+                if PYVERSION in ((3, 14), ):
+                    # The order of the __code__.co_consts changes with 3.14
+                    func = self._literal_const_sample_generator(impl,
+                                                                {0: const})
+                elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+                    func = self._literal_const_sample_generator(impl,
+                                                                {1: const})
+                else:
+                    raise NotImplementedError(PYVERSION)
+
                 self.assert_prune(func, (types.NoneType('none'),), [prune],
                                   None)
 
@@ -736,7 +761,17 @@ class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):
 
         for c_inp, prune in (self._TRUTHY, False), (self._FALSEY, True):
             for const in c_inp:
-                func = self._literal_const_sample_generator(impl, {1: const})
+
+                if PYVERSION in ((3, 14), ):
+                    # The order of the __code__.co_consts changes with 3.14
+                    func = self._literal_const_sample_generator(impl,
+                                                                {0: const})
+                elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+                    func = self._literal_const_sample_generator(impl,
+                                                                {1: const})
+                else:
+                    raise NotImplementedError(PYVERSION)
+
                 self.assert_prune(func, (types.NoneType('none'),), [prune],
                                   None)
 
@@ -993,7 +1028,7 @@ class TestBranchPrunePostSemanticConstRewrites(TestBranchPruneBase):
         # check prune fails for something with `ndim` attr that is not array
         FakeArrayType = types.NamedUniTuple(types.int64, 1, FakeArray)
         self.assert_prune(impl, (FakeArrayType,), [None], fa,
-                          flags=enable_pyobj_flags)
+                          flags={'nopython':False, 'forceobj':True})
 
     def test_semantic_const_propagates_before_static_rewrites(self):
         # see issue #5015, the ndim needs writing in as a const before

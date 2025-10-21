@@ -17,7 +17,7 @@ from numba.core.extending import (
     lower_builtin,
 )
 from numba.core.imputils import iternext_impl
-from numba.core import types, cgutils
+from numba.core import types, cgutils, config
 from numba.core.types import (
     ListType,
     ListTypeIterableType,
@@ -26,7 +26,7 @@ from numba.core.types import (
     NoneType,
 )
 from numba.core.imputils import impl_ret_borrowed, RefType
-from numba.core.errors import TypingError
+from numba.core.errors import TypingError, NumbaTypeError
 from numba.core import typing
 from numba.typed.typedobjectutils import (_as_bytes, _cast, _nonoptional,
                                           _get_incref_decref,
@@ -44,9 +44,14 @@ ll_bytes = cgutils.voidptr_t
 
 _meminfo_listptr = types.MemInfoPointer(types.voidptr)
 
-INDEXTY = types.intp
+if config.USE_LEGACY_TYPE_SYSTEM:
+    INDEXTY = types.intp
 
-index_types = types.integer_domain
+    index_types = types.integer_domain
+else:
+    INDEXTY = types.py_int
+
+    index_types = types.py_integer_domain
 
 DEFAULT_ALLOCATED = 0
 
@@ -384,7 +389,7 @@ def impl_new_list(item, allocated=DEFAULT_ALLOCATED):
 
     """
     if not isinstance(item, Type):
-        raise TypeError("expecting *item* to be a numba Type")
+        raise NumbaTypeError("expecting *item* to be a Numba Type")
 
     itemty = item
 
@@ -764,9 +769,9 @@ def impl_getitem(l, index):
     if index in index_types:
         if IS_NOT_NONE:
             def integer_non_none_impl(l, index):
-                index = handle_index(l, index)
                 castedindex = _cast(index, indexty)
-                status, item = _list_getitem(l, castedindex)
+                handledindex = handle_index(l, castedindex)
+                status, item = _list_getitem(l, handledindex)
                 if status == ListStatus.LIST_OK:
                     return _nonoptional(item)
                 else:

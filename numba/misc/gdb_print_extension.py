@@ -55,7 +55,7 @@ class NumbaArrayPrinter:
                 # NOTE: need to deal with "Alignment" else dtype size is wrong
                 arr_info = [x.strip() for x in matcher.match(ty_str).groups()]
                 dtype_str, ndim_str, order_str = arr_info
-                rstr = 'Record\\((.*\\[.*\\]);([0-9]+);(True|False)'
+                rstr = r'Record\((.*\[.*\]);([0-9]+);(True|False)'
                 rstr_match = re.match(rstr, dtype_str)
                 # balign is unused, it's the alignment
                 fields, balign, is_aligned_str = rstr_match.groups()

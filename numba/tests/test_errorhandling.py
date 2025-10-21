@@ -4,10 +4,10 @@ Unspecified error handling tests
 
 import numpy as np
 import os
+import warnings
 
-from numba import jit, njit, typed, int64, types
+from numba import jit, njit, types
 from numba.core import errors
-import numba.core.typing.cffi_utils as cffi_support
 from numba.experimental import structref
 from numba.extending import (overload, intrinsic, overload_method,
                              overload_attribute)
@@ -20,12 +20,9 @@ from numba.core.compiler_machinery import PassManager
 from numba.core.types.functions import _err_reasons as error_reasons
 
 from numba.tests.support import (skip_parfors_unsupported, override_config,
-                                 SerialMixin, skip_unless_scipy)
+                                 SerialMixin, skip_unless_cffi,
+                                 skip_unless_scipy, TestCase)
 import unittest
-
-# used in TestMiscErrorHandling::test_handling_of_write_to_*_global
-_global_list = [1, 2, 3, 4]
-_global_dict = typed.Dict.empty(int64, int64)
 
 
 class TestErrorHandlingBeforeLowering(unittest.TestCase):
@@ -134,18 +131,12 @@ class TestMiscErrorHandling(unittest.TestCase):
             self.assertIn(ex, str(raises.exception))
 
     def test_handling_of_write_to_reflected_global(self):
-        @njit
-        def foo():
-            _global_list[0] = 10
-
-        self.check_write_to_globals(foo)
+        from numba.tests.errorhandling_usecases import global_reflected_write
+        self.check_write_to_globals(njit(global_reflected_write))
 
     def test_handling_of_write_to_typed_dict_global(self):
-        @njit
-        def foo():
-            _global_dict[0] = 10
-
-        self.check_write_to_globals(foo)
+        from numba.tests.errorhandling_usecases import global_dict_write
+        self.check_write_to_globals(njit(global_dict_write))
 
     @skip_parfors_unsupported
     def test_handling_forgotten_numba_internal_import(self):
@@ -182,25 +173,6 @@ class TestMiscErrorHandling(unittest.TestCase):
         with self.assertRaises(errors.TypingError) as raises:
             foo()
         self.assertIn(expected, str(raises.exception))
-
-
-class TestConstantInferenceErrorHandling(unittest.TestCase):
-
-    def test_basic_error(self):
-        # issue 3717
-        @njit
-        def problem(a,b):
-            if a == b:
-                raise Exception("Equal numbers: %i %i", a, b)
-            return a * b
-
-        with self.assertRaises(errors.ConstantInferenceError) as raises:
-            problem(1,2)
-
-        msg1 = "Constant inference not possible for: arg(0, name=a)"
-        msg2 = 'raise Exception("Equal numbers: %i %i", a, b)'
-        self.assertIn(msg1, str(raises.exception))
-        self.assertIn(msg2, str(raises.exception))
 
 
 class TestErrorMessages(unittest.TestCase):
@@ -412,7 +384,7 @@ class TestErrorMessages(unittest.TestCase):
         excstr = str(raises.exception)
         self.assertIn("Type Restricted Function in function 'unknown'", excstr)
 
-    @unittest.skipUnless(cffi_support.SUPPORTED, "CFFI not supported")
+    @skip_unless_cffi
     def test_cffi_function_pointer_template_source(self):
         from numba.tests import cffi_usecases as mod
         mod.init()
@@ -463,9 +435,8 @@ class TestDeveloperSpecificErrorMessages(SerialMixin, unittest.TestCase):
         self.assertIn("too many positional arguments", excstr)
 
 
-class TestCapturedErrorHandling(SerialMixin, unittest.TestCase):
-    """Checks that the way errors are captured changes depending on the env
-    var "NUMBA_CAPTURED_ERRORS".
+class TestCapturedErrorHandling(SerialMixin, TestCase):
+    """Checks that the way errors are captured.
     """
 
     def test_error_in_overload(self):
@@ -481,15 +452,49 @@ class TestCapturedErrorHandling(SerialMixin, unittest.TestCase):
                 pass
             return impl
 
-        for style, err_class in (('new_style', AttributeError),
-                                 ('old_style', errors.TypingError)):
-            with override_config('CAPTURED_ERRORS', style):
-                with self.assertRaises(err_class) as raises:
-                    @njit('void(int64)')
-                    def foo(x):
-                        bar(x)
-                expected = "object has no attribute 'some_invalid_attr'"
-                self.assertIn(expected, str(raises.exception))
+        with warnings.catch_warnings():
+            # Suppress error going into stdout
+            warnings.simplefilter("ignore",
+                                  errors.NumbaPendingDeprecationWarning)
+
+            with self.assertRaises(AttributeError) as raises:
+                @njit('void(int64)')
+                def foo(x):
+                    bar(x)
+            expected = "object has no attribute 'some_invalid_attr'"
+            self.assertIn(expected, str(raises.exception))
+
+
+class TestCurlyBracesInPaths(unittest.TestCase):
+    """
+    Test that error messages handle file paths with curly braces (issue #10094)
+    """
+
+    def test_placeholders_with_positional_args(self):
+
+        # used on typeinfer: placeholders with positional args
+        problematic_path = (
+            r"C:\\Users\\"
+            r"{fa977bf3384160bce9243175b380be8}"
+            r"\\file.py"
+        )
+        fmt = "Error at {0}"
+
+        result = errors._format_msg(fmt, (problematic_path,), {})
+
+        expected = f"Error at {problematic_path}"
+        self.assertEqual(result, expected)
+
+    def test_preformatted_string_no_args(self):
+
+        # used on compiler_machinery: preformatted string without args
+        name_with_braces = "{abc123}"
+        fmt = f"Pass {name_with_braces}"
+
+        result = errors._format_msg(fmt, (), {})
+
+        expected = f"Pass {name_with_braces}"
+        self.assertEqual(result, expected)
 
 
 if __name__ == '__main__':

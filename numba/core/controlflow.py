@@ -4,10 +4,20 @@ import sys
 
 from numba.core.ir import Loc
 from numba.core.errors import UnsupportedError
+from numba.core.utils import PYVERSION
 
 # List of bytecodes creating a new block in the control flow graph
 # (in addition to explicit jump labels).
-NEW_BLOCKERS = frozenset(['SETUP_LOOP', 'FOR_ITER', 'SETUP_WITH'])
+if PYVERSION in ((3, 14),):
+    NEW_BLOCKERS = frozenset([
+        'SETUP_LOOP', 'FOR_ITER', 'SETUP_WITH', 'BEFORE_WITH', 'LOAD_SPECIAL'
+    ])
+elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+    NEW_BLOCKERS = frozenset([
+        'SETUP_LOOP', 'FOR_ITER', 'SETUP_WITH', 'BEFORE_WITH'
+    ])
+else:
+    raise NotImplementedError(PYVERSION)
 
 
 class CFBlock(object):
@@ -585,7 +595,7 @@ class CFGraph(object):
             stats.setdefault('iteration_count', 0)
 
         # Uses a simple DFS to find back-edges.
-        # The new algorithm is faster than the the previous dominator based
+        # The new algorithm is faster than the previous dominator based
         # algorithm.
         back_edges = set()
         # stack: keeps track of the traversal path
@@ -711,7 +721,7 @@ class CFGraph(object):
 
     def __eq__(self, other):
         if not isinstance(other, CFGraph):
-            raise NotImplementedError
+            return NotImplemented
 
         for x in ['_nodes', '_edge_data', '_entry_point', '_preds', '_succs']:
             this = getattr(self, x, None)
@@ -924,6 +934,11 @@ class ControlFlowAnalysis(object):
     op_JUMP_IF_FALSE = _op_ABSOLUTE_JUMP_IF
     op_JUMP_IF_TRUE = _op_ABSOLUTE_JUMP_IF
 
+    op_POP_JUMP_FORWARD_IF_FALSE = _op_ABSOLUTE_JUMP_IF
+    op_POP_JUMP_BACKWARD_IF_FALSE = _op_ABSOLUTE_JUMP_IF
+    op_POP_JUMP_FORWARD_IF_TRUE = _op_ABSOLUTE_JUMP_IF
+    op_POP_JUMP_BACKWARD_IF_TRUE = _op_ABSOLUTE_JUMP_IF
+
     def _op_ABSOLUTE_JUMP_OR_POP(self, inst):
         self.jump(inst.get_jump_target())
         self.jump(inst.next, pops=1)
@@ -940,9 +955,20 @@ class ControlFlowAnalysis(object):
         self.jump(inst.get_jump_target())
         self._force_new_block = True
 
+    op_JUMP_BACKWARD = op_JUMP_FORWARD
+
     def op_RETURN_VALUE(self, inst):
         self._curblock.terminating = True
         self._force_new_block = True
+
+    if PYVERSION in ((3, 12), (3, 13), (3, 14)):
+        def op_RETURN_CONST(self, inst):
+            self._curblock.terminating = True
+            self._force_new_block = True
+    elif PYVERSION in ((3, 10), (3, 11)):
+        pass
+    else:
+        raise NotImplementedError(PYVERSION)
 
     def op_RAISE_VARARGS(self, inst):
         self._curblock.terminating = True

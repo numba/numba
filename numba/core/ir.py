@@ -26,7 +26,7 @@ class Loc(object):
     """Source location
 
     """
-    _defmatcher = re.compile(r'def\s+(\w+)\(.*')
+    _defmatcher = re.compile(r'def\s+(\w+)')
 
     def __init__(self, filename, line, col=None, maybe_decorator=False):
         """ Arguments:
@@ -82,16 +82,20 @@ class Loc(object):
     def _raw_function_name(self):
         defn = self._find_definition()
         if defn:
-            return self._defmatcher.match(defn.strip()).groups()[0]
-        else:
-            # Probably exec(<string>) or REPL.
-            return None
+            m = self._defmatcher.match(defn.strip())
+            if m:
+                return m.groups()[0]
+        # Probably exec(<string>) or REPL.
+        return None
 
     def get_lines(self):
         if self.lines is None:
-
-            self.lines = linecache.getlines(self._get_path())
-
+            path = self._get_path()
+            # Avoid reading from dynamic string. They are most likely
+            # overridden. Problem started with Python 3.13. "<string>" seems
+            # to be something from multiprocessing.
+            lns = [] if path == "<string>" else linecache.getlines(path)
+            self.lines = lns
         return self.lines
 
     def _get_path(self):
@@ -138,7 +142,7 @@ class Loc(object):
 
 
         ret = [] # accumulates output
-        if lines and use_line:
+        if lines and use_line > 0:
 
             def count_spaces(string):
                 spaces = 0
@@ -181,7 +185,11 @@ class Loc(object):
 
         # if in the REPL source may not be available
         if not ret:
-            ret = "<source missing, REPL/exec in use?>"
+            if not lines:
+                ret = "<source missing, REPL/exec in use?>"
+            elif use_line <= 0:
+                ret = "<source line number missing>"
+
 
         err = _termcolor.filename('\nFile "%s", line %d:')+'\n%s'
         tmp = err % (self._get_path(), use_line, _termcolor.code(''.join(ret)))
@@ -559,6 +567,15 @@ class Expr(Inst):
         return cls(op=op, loc=loc)
 
     @classmethod
+    def undef(cls, loc):
+        """
+        A node for undefined value specifically from LOAD_FAST_AND_CLEAR opcode.
+        """
+        assert isinstance(loc, Loc)
+        op = 'undef'
+        return cls(op=op, loc=loc)
+
+    @classmethod
     def dummy(cls, op, info, loc):
         """
         A node for a dummy value.
@@ -754,6 +771,35 @@ class StaticRaise(Terminator):
         return []
 
 
+class DynamicRaise(Terminator):
+    """
+    Raise an exception class and some argument *values* unknown at compile-time.
+    Note that if *exc_class* is None, a bare "raise" statement is implied
+    (i.e. re-raise the current exception).
+    """
+    is_exit = True
+
+    def __init__(self, exc_class, exc_args, loc):
+        assert exc_class is None or isinstance(exc_class, type)
+        assert isinstance(loc, Loc)
+        assert exc_args is None or isinstance(exc_args, tuple)
+        self.exc_class = exc_class
+        self.exc_args = exc_args
+        self.loc = loc
+
+    def __str__(self):
+        if self.exc_class is None:
+            return "<dynamic> raise"
+        elif self.exc_args is None:
+            return "<dynamic> raise %s" % (self.exc_class,)
+        else:
+            return "<dynamic> raise %s(%s)" % (self.exc_class,
+                                     ", ".join(map(repr, self.exc_args)))
+
+    def get_targets(self):
+        return []
+
+
 class TryRaise(Stmt):
     """A raise statement inside a try-block
     Similar to ``Raise`` but does not terminate.
@@ -772,7 +818,6 @@ class StaticTryRaise(Stmt):
     """A raise statement inside a try-block.
     Similar to ``StaticRaise`` but does not terminate.
     """
-
     def __init__(self, exc_class, exc_args, loc):
         assert exc_class is None or isinstance(exc_class, type)
         assert isinstance(loc, Loc)
@@ -783,12 +828,34 @@ class StaticTryRaise(Stmt):
 
     def __str__(self):
         if self.exc_class is None:
-            return "static_try_raise"
+            return f"static_try_raise"
         elif self.exc_args is None:
-            return "static_try_raise %s" % (self.exc_class,)
+            return f"static_try_raise {self.exc_class}"
         else:
-            return "static_try_raise %s(%s)" % (self.exc_class,
-                                     ", ".join(map(repr, self.exc_args)))
+            args = ", ".join(map(repr, self.exc_args))
+            return f"static_try_raise {self.exc_class}({args})"
+
+
+class DynamicTryRaise(Stmt):
+    """A raise statement inside a try-block.
+    Similar to ``DynamicRaise`` but does not terminate.
+    """
+    def __init__(self, exc_class, exc_args, loc):
+        assert exc_class is None or isinstance(exc_class, type)
+        assert isinstance(loc, Loc)
+        assert exc_args is None or isinstance(exc_args, tuple)
+        self.exc_class = exc_class
+        self.exc_args = exc_args
+        self.loc = loc
+
+    def __str__(self):
+        if self.exc_class is None:
+            return f"dynamic_try_raise"
+        elif self.exc_args is None:
+            return f"dynamic_try_raise {self.exc_class}"
+        else:
+            args = ", ".join(map(repr, self.exc_args))
+            return f"dynamic_try_raise {self.exc_class}({args})"
 
 
 class Return(Terminator):
@@ -1073,6 +1140,11 @@ class Var(EqualityCheckMixin, AbstractRHS):
         """All known versioned and unversioned names for this variable
         """
         return self.versioned_names | {self.unversioned_name,}
+
+    def __deepcopy__(self, memo):
+        out = Var(copy.deepcopy(self.scope, memo), self.name, self.loc)
+        memo[id(self)] = out
+        return out
 
 
 class Scope(EqualityCheckMixin):
@@ -1427,7 +1499,7 @@ class FunctionIR(object):
         self.block_entry_vars = {}
 
     def derive(self, blocks, arg_count=None, arg_names=None,
-               force_non_generator=False):
+               force_non_generator=False, loc=None):
         """
         Derive a new function IR from this one, using the given blocks,
         and possibly modifying the argument count and generator flag.
@@ -1438,7 +1510,7 @@ class FunctionIR(object):
 
         new_ir = copy.copy(self)
         new_ir.blocks = blocks
-        new_ir.loc = firstblock.loc
+        new_ir.loc = firstblock.loc if loc is None else loc
         if force_non_generator:
             new_ir.is_generator = False
         if arg_count is not None:

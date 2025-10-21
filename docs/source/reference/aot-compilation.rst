@@ -3,6 +3,9 @@
 Ahead-of-Time compilation
 =========================
 
+.. note:: This module is pending deprecation. Please see
+          :ref:`deprecation-numba-pycc` for more information.
+
 .. currentmodule:: numba.pycc
 
 .. class:: CC(extension_name, source_module=None)

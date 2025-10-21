@@ -184,7 +184,7 @@ class TestDebugInfoEmission(TestCase):
         @njit(debug=True, error_model='numpy')
         def foo(a):
             b = a + 1.23
-            c = a * 2.34
+            c = b * 2.34
             d = b / c
             print(d)
             return d
@@ -221,11 +221,19 @@ class TestDebugInfoEmission(TestCase):
         self.assertGreater(len(blocks), 1)
         block = blocks[0]
 
-        # Find non-call instr and check the sequence is as expected
-        instrs = [x for x in block.instructions if x.opcode != 'call']
-        op_seq = [x.opcode for x in instrs]
-        op_expect = ('fadd', 'fmul', 'fdiv')
-        self.assertIn(''.join(op_expect), ''.join(op_seq))
+        # Find non-call/non-memory instr and check the sequence is as expected
+        instrs = [x for x in block.instructions if x.opcode not in
+                  ['call', 'load', 'store']]
+        op_expect = {'fadd', 'fmul', 'fdiv'}
+        started = False
+        for x in instrs:
+            if x.opcode in op_expect:
+                op_expect.remove(x.opcode)
+                if not started:
+                    started = True
+            elif op_expect and started:
+                self.fail("Math opcodes are not contiguous")
+        self.assertFalse(op_expect, "Math opcodes were not found")
 
         # Parse out metadata from end of each line, check it monotonically
         # ascends with LLVM source line. Also store all the dbg references,
@@ -745,6 +753,22 @@ class TestDebugInfoEmission(TestCase):
         lines = self._get_lines_from_debuginfo(metadata)
         # Only one line
         self.assertEqual(len(lines), 1)
+
+    def test_no_if_op_bools_declared(self):
+        @njit("int64(boolean, boolean)", debug=True, _dbg_optnone=True)
+        def choice(cond1, cond2):
+            if cond1 and cond2:
+                return 1
+            else:
+                return 2
+
+        # We should not declare variables used as the condition in if ops.
+        # See Numba PR #9888: https://github.com/numba/numba/pull/9888
+        llvm_ir = next(iter(choice.inspect_llvm().items()))[1]
+
+        for line in llvm_ir.splitlines():
+            if 'llvm.dbg.declare' in line:
+                self.assertNotIn("bool", line)
 
 
 if __name__ == '__main__':

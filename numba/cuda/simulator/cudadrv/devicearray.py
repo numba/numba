@@ -3,6 +3,7 @@ The Device Array API is not implemented in the simulator. This module provides
 stubs to allow tests to import correctly.
 '''
 from contextlib import contextmanager
+from numba.np.numpy_support import numpy_version
 
 import numpy as np
 
@@ -50,10 +51,14 @@ class FakeWithinKernelCUDAArray(object):
             return item
 
     def __getattr__(self, attrname):
-        if attrname in dir(self._item._ary):  # For e.g. array size.
-            return self.__wrap_if_fake(getattr(self._item._ary, attrname))
-        else:
-            return self.__wrap_if_fake(self._item.__getitem__(attrname))
+        try:
+            if attrname in dir(self._item._ary):  # For e.g. array size.
+                return self.__wrap_if_fake(getattr(self._item._ary, attrname))
+            else:
+                return self.__wrap_if_fake(self._item.__getitem__(attrname))
+        except Exception as e:
+            if not isinstance(e, AttributeError):
+                raise AttributeError(attrname) from e
 
     def __setattr__(self, nm, val):
         self._item.__setitem__(nm, val)
@@ -66,6 +71,28 @@ class FakeWithinKernelCUDAArray(object):
 
     def __len__(self):
         return len(self._item)
+
+    def __array_ufunc__(self, ufunc, method, *args, **kwargs):
+        # ufuncs can only be called directly on instances of numpy.ndarray (not
+        # things that implement its interfaces, like the FakeCUDAArray or
+        # FakeWithinKernelCUDAArray). For other objects, __array_ufunc__ is
+        # called when they are arguments to ufuncs, to provide an opportunity
+        # to somehow implement the ufunc. Since the FakeWithinKernelCUDAArray
+        # is just a thin wrapper over an ndarray, we can implement all ufuncs
+        # by passing the underlying ndarrays to a call to the intended ufunc.
+        call = getattr(ufunc, method)
+
+        def convert_fakes(obj):
+            if isinstance(obj, FakeWithinKernelCUDAArray):
+                obj = obj._item._ary
+
+            return obj
+
+        out = kwargs.get('out')
+        if out:
+            kwargs['out'] = tuple(convert_fakes(o) for o in out)
+        args = tuple(convert_fakes(a) for a in args)
+        return call(*args, **kwargs)
 
 
 class FakeCUDAArray(object):
@@ -143,7 +170,7 @@ class FakeCUDAArray(object):
                 ary_core,
                 order='C' if self_core.flags['C_CONTIGUOUS'] else 'F',
                 subok=True,
-                copy=False)
+                copy=False if numpy_version < (2, 0) else None)
             check_array_compatibility(self_core, ary_core)
         np.copyto(self_core._ary, ary_core)
 
@@ -277,7 +304,9 @@ def check_array_compatibility(ary1, ary2):
 
 
 def to_device(ary, stream=0, copy=True, to=None):
-    ary = np.array(ary, copy=False, subok=True)
+    ary = np.array(ary,
+                   copy=False if numpy_version < (2, 0) else None,
+                   subok=True)
     sentry_contiguous(ary)
     if to is None:
         buffer_dtype = np.int64 if ary.dtype.char in 'Mm' else ary.dtype
@@ -305,11 +334,11 @@ def mapped_array(*args, **kwargs):
     return device_array(*args, **kwargs)
 
 
-def pinned_array(shape, dtype=np.float_, strides=None, order='C'):
+def pinned_array(shape, dtype=np.float64, strides=None, order='C'):
     return np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order)
 
 
-def managed_array(shape, dtype=np.float_, strides=None, order='C'):
+def managed_array(shape, dtype=np.float64, strides=None, order='C'):
     return np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order)
 
 
@@ -375,7 +404,7 @@ def auto_device(ary, stream=0, copy=True):
     if not isinstance(ary, np.void):
         ary = np.array(
             ary,
-            copy=False,
+            copy=False if numpy_version < (2, 0) else None,
             subok=True)
     return to_device(ary, stream, copy), True
 

@@ -1,11 +1,16 @@
 import operator
 from numba.core import types
 from numba.core.typing.npydecl import (parse_dtype, parse_shape,
-                                       register_number_classes)
+                                       register_number_classes,
+                                       register_numpy_ufunc,
+                                       trigonometric_functions,
+                                       comparison_functions,
+                                       math_operations,
+                                       bit_twiddling_functions)
 from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                          AbstractTemplate, CallableTemplate,
                                          signature, Registry)
-from numba.cuda.types import dim3, grid_group
+from numba.cuda.types import dim3
 from numba.core.typeconv import Conversion
 from numba import cuda
 from numba.cuda.compiler import declare_device_function_template
@@ -84,35 +89,6 @@ class Cuda_threadfence_system(ConcreteTemplate):
 class Cuda_syncwarp(ConcreteTemplate):
     key = cuda.syncwarp
     cases = [signature(types.none), signature(types.none, types.i4)]
-
-
-@register
-class Cuda_cg_this_grid(ConcreteTemplate):
-    key = cuda.cg.this_grid
-    cases = [signature(grid_group)]
-
-
-@register_attr
-class CudaCgModuleTemplate(AttributeTemplate):
-    key = types.Module(cuda.cg)
-
-    def resolve_this_grid(self, mod):
-        return types.Function(Cuda_cg_this_grid)
-
-
-class Cuda_grid_group_sync(AbstractTemplate):
-    key = "GridGroup.sync"
-
-    def generic(self, args, kws):
-        return signature(types.int32, recvr=self.this)
-
-
-@register_attr
-class GridGroup_attrs(AttributeTemplate):
-    key = grid_group
-
-    def resolve_sync(self, mod):
-        return types.BoundFunction(Cuda_grid_group_sync, grid_group)
 
 
 @register
@@ -515,6 +491,24 @@ class Cuda_atomic_compare_and_swap(AbstractTemplate):
 
 
 @register
+class Cuda_atomic_cas(AbstractTemplate):
+    key = cuda.atomic.cas
+
+    def generic(self, args, kws):
+        assert not kws
+        ary, idx, old, val = args
+        dty = ary.dtype
+
+        if dty not in integer_numba_types:
+            return
+
+        if ary.ndim == 1:
+            return signature(dty, ary, types.intp, dty, dty)
+        elif ary.ndim > 1:
+            return signature(dty, ary, idx, dty, dty)
+
+
+@register
 class Cuda_nanosleep(ConcreteTemplate):
     key = cuda.nanosleep
 
@@ -601,6 +595,9 @@ class CudaAtomicTemplate(AttributeTemplate):
 
     def resolve_compare_and_swap(self, mod):
         return types.Function(Cuda_atomic_compare_and_swap)
+
+    def resolve_cas(self, mod):
+        return types.Function(Cuda_atomic_cas)
 
 
 @register_attr
@@ -791,3 +788,19 @@ class CudaModuleTemplate(AttributeTemplate):
 
 
 register_global(cuda, types.Module(cuda))
+
+
+# NumPy
+
+for func in trigonometric_functions:
+    register_numpy_ufunc(func, register_global)
+
+for func in comparison_functions:
+    register_numpy_ufunc(func, register_global)
+
+for func in bit_twiddling_functions:
+    register_numpy_ufunc(func, register_global)
+
+for func in math_operations:
+    if func in ('log', 'log2', 'log10'):
+        register_numpy_ufunc(func, register_global)

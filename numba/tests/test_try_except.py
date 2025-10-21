@@ -5,14 +5,15 @@ from itertools import product
 import numpy as np
 
 from numba import njit, typed, objmode, prange
-from numba.core.utils import PYVERSION
 from numba.core import ir_utils, ir
 from numba.core.errors import (
-    UnsupportedError, CompilerError, NumbaPerformanceWarning, TypingError,
+    CompilerError, NumbaPerformanceWarning, TypingError,
+    UnsupportedBytecodeError,
 )
 from numba.tests.support import (
     TestCase, unittest, captured_stdout, MemoryLeakMixin,
-    skip_parfors_unsupported, skip_unless_scipy,
+    skip_parfors_unsupported, skip_unless_scipy, expected_failure_py311,
+    expected_failure_py312, expected_failure_py313, expected_failure_py314,
 )
 
 
@@ -371,7 +372,7 @@ class TestTryBareExcept(TestCase):
             except:    # noqa: E722
                 raise
 
-        with self.assertRaises(UnsupportedError) as raises:
+        with self.assertRaises(UnsupportedBytecodeError) as raises:
             udt()
         self.assertIn(
             "The re-raising of an exception is not yet supported.",
@@ -458,7 +459,7 @@ class TestTryExceptCaught(TestCase):
                 return r
             return r
 
-        with self.assertRaises(UnsupportedError) as raises:
+        with self.assertRaises(UnsupportedBytecodeError) as raises:
             udt(True)
         self.assertIn(
             "Exception object cannot be stored into variable (e)",
@@ -473,7 +474,7 @@ class TestTryExceptCaught(TestCase):
             except Exception:
                 raise
 
-        with self.assertRaises(UnsupportedError) as raises:
+        with self.assertRaises(UnsupportedBytecodeError) as raises:
             udt()
         self.assertIn(
             "The re-raising of an exception is not yet supported.",
@@ -491,7 +492,7 @@ class TestTryExceptCaught(TestCase):
                 except Exception:
                     raise
 
-        with self.assertRaises(UnsupportedError) as raises:
+        with self.assertRaises(UnsupportedBytecodeError) as raises:
             udt()
         self.assertIn(
             "The re-raising of an exception is not yet supported.",
@@ -668,7 +669,7 @@ class TestTryExceptRefct(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as raises:
             udt()
-        self.assertRegexpMatches(
+        self.assertRegex(
             str(raises.exception),
             r"Cannot refine type|cannot safely cast unicode_type to int(32|64)"
         )
@@ -689,6 +690,10 @@ class TestTryExceptOtherControlFlow(TestCase):
         self.assertEqual(list(udt(10, 5)), list(range(5)))
         self.assertEqual(list(udt(10, 10)), list(range(10)))
 
+    @expected_failure_py311
+    @expected_failure_py312
+    @expected_failure_py313
+    @expected_failure_py314
     def test_objmode(self):
         @njit
         def udt():
@@ -707,6 +712,10 @@ class TestTryExceptOtherControlFlow(TestCase):
             str(raises.exception),
         )
 
+    @expected_failure_py311
+    @expected_failure_py312
+    @expected_failure_py313
+    @expected_failure_py314
     def test_objmode_output_type(self):
         def bar(x):
             return np.asarray(list(reversed(x.tolist())))
@@ -732,7 +741,6 @@ class TestTryExceptOtherControlFlow(TestCase):
             str(raises.exception),
         )
 
-    @unittest.skipIf(PYVERSION < (3, 9), "Python 3.9+ only")
     def test_reraise_opcode_unreachable(self):
         # The opcode RERAISE was added in python 3.9, there should be no
         # supported way to actually reach it. This test just checks that an

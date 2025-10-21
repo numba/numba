@@ -14,14 +14,10 @@ import numpy as np
 from numba import cfunc, carray, farray, njit
 from numba.core import types, typing, utils
 import numba.core.typing.cffi_utils as cffi_support
-from numba.tests.support import TestCase, tag, captured_stderr
+from numba.tests.support import (TestCase, skip_unless_cffi, tag,
+                                 captured_stderr)
 import unittest
 from numba.np import numpy_support
-
-skip_cffi_unsupported = unittest.skipUnless(
-    cffi_support.SUPPORTED,
-    "CFFI not supported -- please install the cffi module",
-)
 
 
 def add_usecase(a, b):
@@ -130,7 +126,7 @@ class TestCFunc(TestCase):
 
         self.assertPreciseEqual(ct(2.0, 3.5), 5.5)
 
-    @skip_cffi_unsupported
+    @skip_unless_cffi
     def test_cffi(self):
         from numba.tests import cffi_usecases
         ffi, lib = cffi_usecases.load_inline_module()
@@ -304,7 +300,7 @@ class TestCArray(TestCase):
         self.check_numba_carray_farray(farray_usecase, farray_dtype_usecase)
 
 
-@skip_cffi_unsupported
+@skip_unless_cffi
 class TestCffiStruct(TestCase):
     c_source = """
 typedef struct _big_struct {

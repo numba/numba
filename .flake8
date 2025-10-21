@@ -29,11 +29,10 @@ exclude =
     __init__.py
     # Ignore vendored files
     numba/cloudpickle/*
+    versioneer.py
     # Grandfather in existing failing files.  This list should shrink over time
     numba/stencils/stencil.py
     numba/core/transforms.py
-    numba/core/tracing.py
-    numba/core/withcontexts.py
     numba/_version.py
     numba/core/ir_utils.py
     numba/core/pylowering.py
@@ -47,7 +46,6 @@ exclude =
     numba/core/caching.py
     numba/core/debuginfo.py
     numba/core/annotations/pretty_annotate.py
-    numba/misc/dummyarray.py
     numba/core/dataflow.py
     numba/core/pythonapi.py
     numba/core/decorators.py
@@ -74,7 +72,6 @@ exclude =
     numba/core/imputils.py
     numba/cpython/builtins.py
     numba/misc/quicksort.py
-    numba/core/callconv.py
     numba/cpython/randomimpl.py
     numba/np/npyimpl.py
     numba/cpython/slicing.py
@@ -88,7 +85,6 @@ exclude =
     numba/np/npyfuncs.py
     numba/cpython/iterators.py
     numba/core/codegen.py
-    numba/np/polynomial.py
     numba/misc/mergesort.py
     numba/core/base.py
     numba/np/npdatetime.py
@@ -105,7 +101,6 @@ exclude =
     numba/tests/test_jitmethod.py
     numba/tests/test_inlining.py
     numba/tests/test_array_manipulation.py
-    numba/tests/test_dummyarray.py
     numba/tests/test_smart_array.py
     numba/tests/test_linalg.py
     numba/tests/test_threadsafety.py
@@ -128,7 +123,6 @@ exclude =
     numba/tests/matmul_usecase.py
     numba/tests/complex_usecases.py
     numba/tests/test_array_exprs.py
-    numba/tests/test_polynomial.py
     numba/tests/test_wrapper.py
     numba/tests/test_obj_lifetime.py
     numba/tests/test_intwidth.py
@@ -236,7 +230,6 @@ exclude =
     numba/testing/notebook.py
     numba/testing/main.py
     numba/np/unsafe/ndarray.py
-    numba/np/ufunc/deviceufunc.py
     numba/np/ufunc/sigparse.py
     numba/parfors/parfor_lowering.py
     numba/np/ufunc/array_exprs.py
@@ -245,7 +238,9 @@ exclude =
     numba/core/datamodel/packer.py
     numba/core/datamodel/testing.py
     numba/core/datamodel/manager.py
-
+    numba/np/math/cmathimpl.py
+    numba/np/math/mathimpl.py
+    numba/np/math/numbers.py
 per-file-ignores =
     # Ignore star imports, unused imports, and "may be defined by star imports"
     # errors in device_init because its purpose is to bring together a lot of

@@ -34,9 +34,9 @@ cleaner_dealloc(PyUFuncCleaner *self)
     if (ufunc->functions)
         PyArray_free(ufunc->functions);
     if (ufunc->types)
-        PyArray_free(ufunc->types);
+        PyArray_free((void *)ufunc->types);
     if (ufunc->data)
-        PyArray_free(ufunc->data);
+        PyArray_free((void *)ufunc->data);
     PyObject_Del(self);
 }
 
@@ -89,25 +89,24 @@ PyTypeObject PyUFuncCleaner_Type = {
     0,                                          /* tp_del */
     0,                                          /* tp_version_tag */
     0,                                          /* tp_finalize */
-/* The docs suggest Python 3.8 has no tp_vectorcall
- * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Doc/c-api/typeobj.rst?plain=1#L146
- * but the header has it:
- * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Include/cpython/object.h#L257
- */
     0,                                          /* tp_vectorcall */
-#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 8)
-/* This is Python 3.8 only.
- * See: https://github.com/python/cpython/blob/3.8/Include/cpython/object.h
- * there's a tp_print preserved for backwards compatibility. xref:
- * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Include/cpython/object.h#L260
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION >= 12)
+/* This was introduced first in 3.12
+ * https://github.com/python/cpython/issues/91051
  */
-    0,                                          /* tp_print */
+    0,                                           /* tp_watched */
+#endif
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION >= 13)
+/* This was introduced in 3.13
+ * https://github.com/python/cpython/pull/114900
+ */
+    0,                                           /* tp_versions_used */
 #endif
 
 /* WARNING: Do not remove this, only modify it! It is a version guard to
  * act as a reminder to update this struct on Python version update! */
 #if (PY_MAJOR_VERSION == 3)
-#if ! ((PY_MINOR_VERSION == 8) || (PY_MINOR_VERSION == 9) || (PY_MINOR_VERSION == 10))
+#if ! (NB_SUPPORTED_PYTHON_MINOR)
 #error "Python minor version is not supported."
 #endif
 #else
@@ -306,9 +305,7 @@ static struct _ufunc_dispatch {
     PyCFunctionWithKeywords ufunc_accumulate;
     PyCFunctionWithKeywords ufunc_reduceat;
     PyCFunctionWithKeywords ufunc_outer;
-#if NPY_API_VERSION >= 0x00000008
     PyCFunction ufunc_at;
-#endif
 } ufunc_dispatch;
 
 static int
@@ -324,10 +321,8 @@ init_ufunc_dispatch(int *numpy_uses_fastcall)
             if (strncmp(crnt_name, "accumulate", 11) == 0) {
                 ufunc_dispatch.ufunc_accumulate =
                     (PyCFunctionWithKeywords)crnt->ml_meth;
-#if NPY_API_VERSION >= 0x00000008
             } else if (strncmp(crnt_name, "at", 3) == 0) {
                 ufunc_dispatch.ufunc_at = crnt->ml_meth;
-#endif
             } else {
                 result = -1;
             }
@@ -347,9 +342,14 @@ init_ufunc_dispatch(int *numpy_uses_fastcall)
             } else if (strncmp(crnt_name, "reduceat", 9) == 0) {
                 ufunc_dispatch.ufunc_reduceat =
                     (PyCFunctionWithKeywords)crnt->ml_meth;
+            } else if (strncmp(crnt_name, "resolve_dtypes", 15) == 0) {
+              /* Ignored */
             } else {
                 result = -1;
             }
+            break;
+        case '_':
+            // We ignore private methods
             break;
         default:
             result = -1; /* Unknown method */
@@ -362,6 +362,9 @@ init_ufunc_dispatch(int *numpy_uses_fastcall)
                 *numpy_uses_fastcall = crnt->ml_flags & METH_FASTCALL;
             }
             else if (*numpy_uses_fastcall != (crnt->ml_flags & METH_FASTCALL)) {
+                PyErr_Format(PyExc_RuntimeError,
+                    "ufunc.%s() flags do not match numpy_uses_fastcall",
+                    crnt_name);
                 return -1;
             }
         }
@@ -372,11 +375,13 @@ init_ufunc_dispatch(int *numpy_uses_fastcall)
                   && (ufunc_dispatch.ufunc_accumulate != NULL)
                   && (ufunc_dispatch.ufunc_reduceat != NULL)
                   && (ufunc_dispatch.ufunc_outer != NULL)
-#if NPY_API_VERSION >= 0x00000008
                   && (ufunc_dispatch.ufunc_at != NULL)
-#endif
                   );
+    } else {
+        char const * const fmt = "Unexpected ufunc method %s()";
+        PyErr_Format(PyExc_RuntimeError, fmt, crnt_name);
     }
+
     return result;
 }
 
@@ -446,13 +451,11 @@ dufunc_outer_fast(PyDUFuncObject * self,
 }
 
 
-#if NPY_API_VERSION >= 0x00000008
 static PyObject *
 dufunc_at(PyDUFuncObject * self, PyObject * args)
 {
     return ufunc_dispatch.ufunc_at((PyObject*)self->ufunc, args);
 }
-#endif
 
 static PyObject *
 dufunc__compile_for_args(PyDUFuncObject * self, PyObject * args,
@@ -499,7 +502,6 @@ dufunc__add_loop(PyDUFuncObject * self, PyObject * args)
     int idx=-1, usertype=NPY_VOID;
     int *arg_types_arr=NULL;
     PyObject *arg_types=NULL, *loop_obj=NULL, *data_obj=NULL;
-    PyUFuncGenericFunction old_func=NULL;
 
     if (self->frozen) {
         PyErr_SetString(PyExc_ValueError,
@@ -547,16 +549,6 @@ dufunc__add_loop(PyDUFuncObject * self, PyObject * args)
                                         (PyUFuncGenericFunction)loop_ptr,
                                         arg_types_arr, data_ptr) < 0) {
             goto _dufunc__add_loop_fail;
-        }
-    } else if (PyUFunc_ReplaceLoopBySignature(ufunc,
-                                              (PyUFuncGenericFunction)loop_ptr,
-                                              arg_types_arr, &old_func) == 0) {
-        /* TODO: Consider freeing any memory held by the old loop (somehow) */
-        for (idx = 0; idx < ufunc->ntypes; idx++) {
-            if (ufunc->functions[idx] == (PyUFuncGenericFunction)loop_ptr) {
-                ufunc->data[idx] = data_ptr;
-                break;
-            }
         }
     } else {
         /* The following is an attempt to loosely follow the allocation
@@ -630,11 +622,9 @@ static struct PyMethodDef dufunc_methods[] = {
     {"outer",
         (PyCFunction)dufunc_outer,
         METH_VARARGS | METH_KEYWORDS, NULL},
-#if NPY_API_VERSION >= 0x00000008
     {"at",
         (PyCFunction)dufunc_at,
         METH_VARARGS, NULL},
-#endif
     {"_compile_for_args",
         (PyCFunction)dufunc__compile_for_args,
         METH_VARARGS | METH_KEYWORDS,
@@ -664,11 +654,9 @@ static struct PyMethodDef dufunc_methods_fast[] = {
     {"outer",
         (PyCFunction)dufunc_outer_fast,
         METH_FASTCALL | METH_KEYWORDS, NULL},
-#if NPY_API_VERSION >= 0x00000008
     {"at",
         (PyCFunction)dufunc_at,
         METH_VARARGS, NULL},
-#endif
     {"_compile_for_args",
         (PyCFunction)dufunc__compile_for_args,
         METH_VARARGS | METH_KEYWORDS,
@@ -760,25 +748,24 @@ PyTypeObject PyDUFunc_Type = {
     0,                                          /* tp_del */
     0,                                          /* tp_version_tag */
     0,                                          /* tp_finalize */
-/* The docs suggest Python 3.8 has no tp_vectorcall
- * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Doc/c-api/typeobj.rst?plain=1#L146
- * but the header has it:
- * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Include/cpython/object.h#L257
- */
     0,                                          /* tp_vectorcall */
-#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 8)
-/* This is Python 3.8 only.
- * See: https://github.com/python/cpython/blob/3.8/Include/cpython/object.h
- * there's a tp_print preserved for backwards compatibility. xref:
- * https://github.com/python/cpython/blob/d917cfe4051d45b2b755c726c096ecfcc4869ceb/Include/cpython/object.h#L260
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION >= 12)
+/* This was introduced first in 3.12
+ * https://github.com/python/cpython/issues/91051
  */
-    0,                                          /* tp_print */
+    0,                                           /* tp_watched */
+#endif
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION >= 13)
+/* This was introduced in 3.13
+ * https://github.com/python/cpython/pull/114900
+ */
+    0,                                           /* tp_versions_used */
 #endif
 
 /* WARNING: Do not remove this, only modify it! It is a version guard to
  * act as a reminder to update this struct on Python version update! */
 #if (PY_MAJOR_VERSION == 3)
-#if ! ((PY_MINOR_VERSION == 8) || (PY_MINOR_VERSION == 9) || (PY_MINOR_VERSION == 10))
+#if ! (NB_SUPPORTED_PYTHON_MINOR)
 #error "Python minor version is not supported."
 #endif
 #else
@@ -837,9 +824,7 @@ MOD_INIT(_internal)
     if (PyModule_AddIntMacro(m, PyUFunc_One)
         || PyModule_AddIntMacro(m, PyUFunc_Zero)
         || PyModule_AddIntMacro(m, PyUFunc_None)
-#if NPY_API_VERSION >= 0x00000007
         || PyModule_AddIntMacro(m, PyUFunc_ReorderableNone)
-#endif
         )
         return MOD_ERROR_VAL;
 

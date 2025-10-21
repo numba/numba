@@ -1,21 +1,15 @@
 import itertools
 
 import unittest
+from numba import jit
 from numba.core.controlflow import CFGraph, ControlFlowAnalysis
-from numba.core.compiler import compile_isolated, Flags
 from numba.core import types
-from numba.core.bytecode import FunctionIdentity, ByteCode
-from numba.core.utils import PYVERSION
+from numba.core.bytecode import FunctionIdentity, ByteCode, _fix_LOAD_GLOBAL_arg
 from numba.tests.support import TestCase
 
-enable_pyobj_flags = Flags()
-enable_pyobj_flags.enable_pyobject = True
+enable_pyobj_flags = {}
 
-forceobj_flags = Flags()
-forceobj_flags.force_pyobject = True
-
-no_pyobj_flags = Flags()
-no_pyobj_flags.nrt = True
+no_pyobj_flags = {'_nrt': True, 'nopython': True}
 
 
 def for_loop_usecase1(x, y):
@@ -223,8 +217,7 @@ class TestFlowControl(TestCase):
 
     def run_test(self, pyfunc, x_operands, y_operands,
                  flags=enable_pyobj_flags):
-        cr = compile_isolated(pyfunc, (types.intp, types.intp), flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit((types.intp, types.intp), **flags)(pyfunc)
         for x, y in itertools.product(x_operands, y_operands):
             pyerr = None
             cerr = None
@@ -1116,7 +1109,7 @@ class TestRealCodeDomFront(TestCase):
         for inst in bc:
             # Find LOAD_GLOBAL that refers to "SET_BLOCK_<name>"
             if inst.opname == 'LOAD_GLOBAL':
-                gv = bc.co_names[inst.arg]
+                gv = bc.co_names[_fix_LOAD_GLOBAL_arg(inst.arg)]
                 if gv.startswith(prefix):
                     name = gv[len(prefix):]
                     # Find the block where this instruction resides
@@ -1142,19 +1135,13 @@ class TestRealCodeDomFront(TestCase):
             return c
 
         cfa, blkpts = self.get_cfa_and_namedblocks(foo)
-        idoms = cfa.graph.immediate_dominators()
 
         # Py3.10 turns while loop into if(...) { do {...} while(...) }.
         # Also, `SET_BLOCK_B0` is duplicated. As a result, the second B0
         # is picked up by `blkpts`.
-        if PYVERSION < (3, 10):
-            self.assertEqual(blkpts['B0'], idoms[blkpts['B1']])
-
         domfront = cfa.graph.dominance_frontier()
         self.assertFalse(domfront[blkpts['A']])
         self.assertFalse(domfront[blkpts['C']])
-        if PYVERSION < (3, 10):
-            self.assertEqual({blkpts['B0']}, domfront[blkpts['B1']])
 
     def test_loop_nested_and_break(self):
         def foo(n):
@@ -1173,29 +1160,16 @@ class TestRealCodeDomFront(TestCase):
             SET_BLOCK_G                     # noqa: F821
 
         cfa, blkpts = self.get_cfa_and_namedblocks(foo)
-        idoms = cfa.graph.immediate_dominators()
         self.assertEqual(blkpts['D0'], blkpts['C1'])
 
         # Py3.10 changes while loop into if-do-while
-        if PYVERSION < (3, 10):
-            self.assertEqual(blkpts['C0'], idoms[blkpts['C1']])
-
         domfront = cfa.graph.dominance_frontier()
         self.assertFalse(domfront[blkpts['A']])
         self.assertFalse(domfront[blkpts['G']])
-        if PYVERSION < (3, 10):
-            self.assertEqual({blkpts['B0']}, domfront[blkpts['B1']])
         # 2 domfront members for C1
         # C0 because of the loop; F because of the break.
-        if PYVERSION < (3, 10):
-            self.assertEqual({blkpts['C0'], blkpts['F']},
-                             domfront[blkpts['C1']])
         self.assertEqual({blkpts['F']}, domfront[blkpts['D1']])
         self.assertEqual({blkpts['E']}, domfront[blkpts['D2']])
-        if PYVERSION < (3, 10):
-            self.assertEqual({blkpts['C0']}, domfront[blkpts['E']])
-            self.assertEqual({blkpts['B0']}, domfront[blkpts['F']])
-            self.assertEqual({blkpts['B0']}, domfront[blkpts['B0']])
 
     def test_if_else(self):
         def foo(a, b):
@@ -1291,16 +1265,11 @@ class TestRealCodeDomFront(TestCase):
         idoms = cfa.graph.immediate_dominators()
         # Py3.10 optimizes away the infinite loop and removes SET_BLOCK_E from
         # the bytecode.
-        if PYVERSION >= (3, 10):
-            self.assertNotIn('E', blkpts)
-        else:
-            self.assertNotIn(blkpts['E'], idoms)
+        self.assertNotIn('E', blkpts)
         self.assertEqual(blkpts['B'], idoms[blkpts['C']])
         self.assertEqual(blkpts['B'], idoms[blkpts['D']])
 
         domfront = cfa.graph.dominance_frontier()
-        if PYVERSION < (3, 10):
-            self.assertNotIn(blkpts['E'], domfront)
         self.assertFalse(domfront[blkpts['A']])
         self.assertFalse(domfront[blkpts['C']])
         self.assertEqual({blkpts['B']}, domfront[blkpts['B']])

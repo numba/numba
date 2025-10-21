@@ -1,5 +1,6 @@
 import numpy as np
 
+from numba.core.utils import PYVERSION
 from numba.cuda.testing import skip_on_cudasim, CUDATestCase
 from numba.tests.support import (override_config, captured_stderr,
                                  captured_stdout)
@@ -47,7 +48,13 @@ class TestDebugOutput(CUDATestCase):
                 self.assertRaises(AssertionError, check_meth, out)
 
     def _check_dump_bytecode(self, out):
-        self.assertIn('BINARY_ADD', out)
+        if PYVERSION in ((3, 11), (3, 12), (3, 13)):
+            # binop with arg=0 is binary add, see CPython dis.py and opcode.py
+            self.assertIn('BINARY_OP(arg=0', out)
+        elif PYVERSION in ((3, 10),):
+            self.assertIn('BINARY_ADD', out)
+        else:
+            raise NotImplementedError(PYVERSION)
 
     def _check_dump_cfg(self, out):
         self.assertIn('CFG dominators', out)
@@ -58,6 +65,7 @@ class TestDebugOutput(CUDATestCase):
 
     def _check_dump_llvm(self, out):
         self.assertIn('--LLVM DUMP', out)
+        self.assertIn('!"kernel", i32 1', out)
 
     def _check_dump_assembly(self, out):
         self.assertIn('--ASSEMBLY simple_cuda', out)

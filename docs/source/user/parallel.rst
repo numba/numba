@@ -130,11 +130,17 @@ The following example demonstrates a product reduction on a two-dimensional arra
           Numba's ``prange`` when ``parallel=False``. However, for
           ``parallel=True``, if the range is identifiable as strictly positive,
           the type of the induction variable  will be ``uint64``. The impact of
-          a ``uint64`` induction variable is often most noticable when
+          a ``uint64`` induction variable is often most noticeable when
           undertaking operations involving it and a signed integer. Under
           Numba's type coercion rules, such a case will commonly result in the
           operation producing a floating point result type.
 
+.. note:: Only prange loops with a single entry block and single exit block
+          can be converted such that they will be run in parallel.  Exceptional
+          control flow, such as an assertion, in the loop can generate multiple
+          exit blocks and cause the loop not to be run in parallel.  If this is
+          the case, Numba will issue a warning indicating which loop could not
+          be parallelized.
 
 Care should be taken, however, when reducing into slices or elements of an array
 if the elements specified by the slice or index are written to simultaneously by

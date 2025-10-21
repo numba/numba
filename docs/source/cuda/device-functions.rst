@@ -2,6 +2,8 @@
 Writing Device Functions
 ========================
 
+.. cuda-deprecated::
+
 CUDA device functions can only be invoked from within the device (by a kernel
 or another device function).  To define a device function::
 

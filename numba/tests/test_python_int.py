@@ -1,12 +1,10 @@
 import unittest
-from numba.core.compiler import compile_isolated, Flags
+from numba import jit
 from numba.core import types
 
 
-force_pyobj_flags = Flags()
-force_pyobj_flags.force_pyobject = True
-
-no_pyobj_flags = Flags()
+force_pyobj_flags = {'forceobj': True}
+no_pyobj_flags = {'nopython': True}
 
 
 def return_int(a, b):
@@ -21,8 +19,7 @@ class TestPythonInt(unittest.TestCase):
     def test_int_return_type(self, flags=force_pyobj_flags,
                              int_type=types.int64, operands=(3, 4)):
         pyfunc = return_int
-        cr = compile_isolated(pyfunc, (int_type, int_type), flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit((int_type, int_type), **flags)(pyfunc)
         expected = pyfunc(*operands)
         got = cfunc(*operands)
         self.assertIs(type(got), type(expected))

@@ -298,7 +298,7 @@ def _arr_expr_to_ast(expr):
                         lineno=expr.loc.line,
                         col_offset=expr.loc.col if expr.loc.col else 0), {}
     elif isinstance(expr, ir.Const):
-        return ast.Num(expr.value), {}
+        return ast.Constant(expr.value), {}
     raise NotImplementedError(
         "Don't know how to translate array expression '%r'" % (expr,))
 
@@ -329,6 +329,28 @@ def _legalize_parameter_names(var_list):
             var.name = old_name
 
 
+class _EraseInvalidLineRanges(ast.NodeTransformer):
+    def generic_visit(self, node: ast.AST) -> ast.AST:
+        node = super().generic_visit(node)
+        if hasattr(node, "lineno"):
+            if getattr(node, "end_lineno", None) is not None:
+                if node.lineno > node.end_lineno:
+                    del node.lineno
+                    del node.end_lineno
+        return node
+
+
+def _fix_invalid_lineno_ranges(astree: ast.AST):
+    """Inplace fixes invalid lineno ranges.
+    """
+    # Make sure lineno and end_lineno are present
+    ast.fix_missing_locations(astree)
+    # Delete invalid lineno ranges
+    _EraseInvalidLineRanges().visit(astree)
+    # Make sure lineno and end_lineno are present
+    ast.fix_missing_locations(astree)
+
+
 def _lower_array_expr(lowerer, expr):
     '''Lower an array expression built by RewriteArrayExprs.
     '''
@@ -354,7 +376,7 @@ def _lower_array_expr(lowerer, expr):
         ast_fn = ast_module.body[0]
         ast_fn.args.args = ast_args
         ast_fn.body[0].value, namespace = _arr_expr_to_ast(expr.expr)
-        ast.fix_missing_locations(ast_module)
+        _fix_invalid_lineno_ranges(ast_module)
 
     # 2. Compile the AST module and extract the Python function.
     code_obj = compile(ast_module, expr_filename, 'exec')

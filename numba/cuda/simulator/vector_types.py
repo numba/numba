@@ -1,4 +1,4 @@
-from numba import types
+from numba import types, config
 from numba.cuda.stubs import _vector_type_stubs
 
 
@@ -35,9 +35,14 @@ class SimulatedVectorType:
 
 
 def make_simulated_vector_type(num_elements, name):
+    if config.USE_LEGACY_TYPE_SYSTEM:
+        base_type = types.float32
+    else:
+        base_type = types.np_float32
+
     obj = type(name, (SimulatedVectorType,), {
         "num_elements": num_elements,
-        "base_type": types.float32,
+        "base_type": base_type,
         "name": name
     })
     obj.user_facing_object = obj

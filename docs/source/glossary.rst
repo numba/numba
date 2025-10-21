@@ -33,6 +33,7 @@ Glossary
       Shorthand for "a function :term:`JIT-compiled <JIT>` with Numba using
       the :ref:`@jit <jit>` decorator."
 
+   lifted loops
    loop-lifting
    loop-jitting
       A feature of compilation in :term:`object mode` where a loop can be
@@ -51,9 +52,11 @@ Glossary
       A Numba compilation mode that generates code that does not access the
       Python C API.  This compilation mode produces the highest performance
       code, but requires that the native types of all values in the function
-      can be :term:`inferred <type inference>`.  Unless otherwise instructed,
-      the ``@jit`` decorator will automatically fall back to :term:`object
-      mode` if nopython mode cannot be used.
+      can be :term:`inferred <type inference>`.
+
+      .. note:: Prior to Numba 0.59, ``@jit`` did not set ``nopython=True`` by
+                default and allowed automatic fall back to
+                :term:`object mode`.
 
    Numba IR
    Numba intermediate representation

@@ -1,4 +1,4 @@
-import imp
+import importlib
 import sys
 
 import unittest
@@ -29,13 +29,13 @@ class TestLlvmVersion(unittest.TestCase):
         ver_fail = (version_fail, git_version_fail)
         for v in ver_pass:
             llvmlite.__version__ = v
-            imp.reload(numba)
+            importlib.reload(numba)
             self.assertTrue(numba.__version__)
 
         for v in ver_fail:
             with self.assertRaises(ImportError):
                 llvmlite.__version__ = v
-                imp.reload(numba)
+                importlib.reload(numba)
 
 
 if __name__ == '__main__':

@@ -26,16 +26,16 @@ def _ensure_critical_deps():
 
     PYVERSION = sys.version_info[:2]
 
-    if PYVERSION < (3, 8):
-        msg = ("Numba needs Python 3.8 or greater. Got Python "
+    if PYVERSION < (3, 10):
+        msg = ("Numba needs Python 3.10 or greater. Got Python "
                f"{PYVERSION[0]}.{PYVERSION[1]}.")
         raise ImportError(msg)
 
     import numpy as np
     numpy_version = extract_version(np)
 
-    if numpy_version < (1, 18):
-        msg = (f"Numba needs NumPy 1.18 or greater. Got NumPy "
+    if numpy_version < (1, 22):
+        msg = (f"Numba needs NumPy 1.22 or greater. Got NumPy "
                f"{numpy_version[0]}.{numpy_version[1]}.")
         raise ImportError(msg)
 
@@ -84,7 +84,7 @@ import numba.core.types as types
 from numba.core.types import *
 
 # Re-export decorators
-from numba.core.decorators import (cfunc, generated_jit, jit, njit, stencil,
+from numba.core.decorators import (cfunc, jit, njit, stencil,
                                    jit_module)
 
 # Re-export vectorize decorators and the thread layer querying function
@@ -142,8 +142,8 @@ __all__ = """
     """.split() + types.__all__ + errors.__all__
 
 
-_min_llvmlite_version = (0, 40, 0)
-_min_llvm_version = (11, 0, 0)
+_min_llvmlite_version = (0, 46, 0)
+_min_llvm_version = (14, 0, 0)
 
 def _ensure_llvm():
     """
@@ -152,7 +152,7 @@ def _ensure_llvm():
     import warnings
     import llvmlite
 
-    # Only look at the the major, minor and bugfix version numbers.
+    # Only look at the major, minor and bugfix version numbers.
     # Ignore other stuffs
     regex = re.compile(r'(\d+)\.(\d+).(\d+)')
     m = regex.match(llvmlite.__version__)
@@ -197,7 +197,7 @@ def _try_enable_svml():
             # The SVML library is loaded, therefore SVML *could* be supported.
             # Now see if LLVM has been compiled with the SVML support patch.
             # If llvmlite has the checking function `has_svml` and it returns
-            # True, then LLVM was compiled with SVML support and the the setup
+            # True, then LLVM was compiled with SVML support and the setup
             # for SVML can proceed. We err on the side of caution and if the
             # checking function is missing, regardless of that being fine for
             # most 0.23.{0,1} llvmlite instances (i.e. conda or pip installed),

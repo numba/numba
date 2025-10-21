@@ -88,6 +88,7 @@ build_c_helpers_dict(void)
     declmethod(unpack_slice);
     declmethod(do_raise);
     declmethod(unpickle);
+    declmethod(runtime_build_excinfo_struct);
     declmethod(attempt_nocopy_reshape);
     declmethod(get_pyobject_private_data);
     declmethod(set_pyobject_private_data);
@@ -128,7 +129,7 @@ build_c_helpers_dict(void)
 
     /* for dictionary support */
     declmethod(test_dict);
-    declmethod(dict_new_minsize);
+    declmethod(dict_new_sized);
     declmethod(dict_set_method_table);
     declmethod(dict_free);
     declmethod(dict_length);
@@ -265,7 +266,11 @@ MOD_INIT(_helperlib) {
     PyModule_AddIntConstant(m, "py_unicode_1byte_kind", PyUnicode_1BYTE_KIND);
     PyModule_AddIntConstant(m, "py_unicode_2byte_kind", PyUnicode_2BYTE_KIND);
     PyModule_AddIntConstant(m, "py_unicode_4byte_kind", PyUnicode_4BYTE_KIND);
+#if (PY_MAJOR_VERSION == 3)
+#if ((PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11))
     PyModule_AddIntConstant(m, "py_unicode_wchar_kind", PyUnicode_WCHAR_KIND);
+#endif
+#endif
     numba_rnd_ensure_global_init();
 
     return MOD_SUCCESS_VAL(m);

@@ -1,13 +1,10 @@
-import array
 import gc
 import itertools
-import sys
 
 import numpy as np
 
 import unittest
-from numba.core.compiler import compile_isolated, Flags
-from numba import jit
+from numba import jit, njit
 from numba.core import types
 from numba.tests.support import TestCase
 from numba.np import numpy_support
@@ -33,53 +30,49 @@ class TestConversion(TestCase):
 
     def test_complex_identity(self):
         pyfunc = identity
-        cres = compile_isolated(pyfunc, [types.complex64],
-                                return_type=types.complex64)
+        cfunc = njit(types.complex64(types.complex64))(pyfunc)
 
         xs = [1.0j, (1+1j), (-1-1j), (1+0j)]
         for x in xs:
-            self.assertEqual(cres.entry_point(x), x)
+            self.assertEqual(cfunc(x), x)
         for x in np.complex64(xs):
-            self.assertEqual(cres.entry_point(x), x)
+            self.assertEqual(cfunc(x), x)
 
-        cres = compile_isolated(pyfunc, [types.complex128],
-                                return_type=types.complex128)
+        cfunc = njit(types.complex128(types.complex128))(pyfunc)
 
         xs = [1.0j, (1+1j), (-1-1j), (1+0j)]
         for x in xs:
-            self.assertEqual(cres.entry_point(x), x)
+            self.assertEqual(cfunc(x), x)
         for x in np.complex128(xs):
-            self.assertEqual(cres.entry_point(x), x)
+            self.assertEqual(cfunc(x), x)
 
     def test_complex_addition(self):
         pyfunc = addition
-        cres = compile_isolated(pyfunc, [types.complex64, types.complex64],
-                                return_type=types.complex64)
+        cfunc = njit(types.complex64(types.complex64, types.complex64))(pyfunc)
 
         xs = [1.0j, (1+1j), (-1-1j), (1+0j)]
         for x in xs:
             y = x
-            self.assertEqual(cres.entry_point(x, y), x + y)
+            self.assertEqual(cfunc(x, y), x + y)
         for x in np.complex64(xs):
             y = x
-            self.assertEqual(cres.entry_point(x, y), x + y)
+            self.assertEqual(cfunc(x, y), x + y)
 
 
-        cres = compile_isolated(pyfunc, [types.complex128, types.complex128],
-                                return_type=types.complex128)
+        cfunc = njit(types.complex128(types.complex128,
+                                      types.complex128))(pyfunc)
 
         xs = [1.0j, (1+1j), (-1-1j), (1+0j)]
         for x in xs:
             y = x
-            self.assertEqual(cres.entry_point(x, y), x + y)
+            self.assertEqual(cfunc(x, y), x + y)
         for x in np.complex128(xs):
             y = x
-            self.assertEqual(cres.entry_point(x, y), x + y)
+            self.assertEqual(cfunc(x, y), x + y)
 
     def test_boolean_as_int(self):
         pyfunc = equality
-        cres = compile_isolated(pyfunc, [types.boolean, types.intp])
-        cfunc = cres.entry_point
+        cfunc = njit((types.boolean, types.intp))(pyfunc)
 
         xs = True, False
         ys = -1, 0, 1
@@ -89,8 +82,7 @@ class TestConversion(TestCase):
 
     def test_boolean_as_float(self):
         pyfunc = equality
-        cres = compile_isolated(pyfunc, [types.boolean, types.float64])
-        cfunc = cres.entry_point
+        cfunc = njit((types.boolean, types.float64))(pyfunc)
 
         xs = True, False
         ys = -1, 0, 1
@@ -100,8 +92,7 @@ class TestConversion(TestCase):
 
     def test_boolean_eq_boolean(self):
         pyfunc = equality
-        cres = compile_isolated(pyfunc, [types.boolean, types.boolean])
-        cfunc = cres.entry_point
+        cfunc = njit((types.boolean, types.boolean))(pyfunc)
 
         xs = True, False
         ys = True, False
@@ -110,9 +101,9 @@ class TestConversion(TestCase):
             self.assertEqual(pyfunc(xs, ys), cfunc(xs, ys))
 
     # test when a function parameters are jitted as unsigned types
-    # the function is called with negative parameters the Python error 
+    # the function is called with negative parameters the Python error
     # that it generates is correctly handled -- a Python error is returned to the user
-    # For more info, see the comment in Include/longobject.h for _PyArray_AsByteArray 
+    # For more info, see the comment in Include/longobject.h for _PyArray_AsByteArray
     # which PyLong_AsUnsignedLongLong calls
     def test_negative_to_unsigned(self):
         def f(x):
@@ -124,9 +115,9 @@ class TestConversion(TestCase):
     # and where the error occurs 
     def test_multiple_args_negative_to_unsigned(self): 
         pyfunc = foobar
-        cres = compile_isolated(pyfunc, [types.uint64, types.uint64, types.uint64],
-                                return_type=types.uint64)
-        cfunc = cres.entry_point
+        cfunc = njit(types.uint64(types.uint64, types.uint64,
+                                  types.uint64),)(pyfunc)
+
         test_fail_args = ((-1, 0, 1), (0, -1, 1), (0, 1, -1))
         with self.assertRaises(OverflowError):
             for a, b, c in test_fail_args:
@@ -141,9 +132,8 @@ class TestConversion(TestCase):
                            ('col', np.float64)])
         mystruct = numpy_support.from_dtype(mystruct_dt)
 
-        cres = compile_isolated(pyfunc, [mystruct[:], types.uint64, types.uint64],
-                                return_type=mystruct[:])
-        cfunc = cres.entry_point
+        cfunc = njit(mystruct[:](mystruct[:], types.uint64,
+                                 types.uint64),)(pyfunc)
 
         st1 = np.recarray(3, dtype=mystruct_dt)
 
@@ -183,23 +173,23 @@ class TestConversion(TestCase):
 
         objects = _objects(obj)
 
-        cres = compile_isolated(f, (typ, types.uint32))
+        cfunc = njit((typ, types.uint32))(f)
         with self.assertRefCount(*objects):
-            cres.entry_point(obj, 1)
+            cfunc(obj, 1)
         with self.assertRefCount(*objects):
             with self.assertRaises(OverflowError):
-                cres.entry_point(obj, -1)
+                cfunc(obj, -1)
 
-        cres = compile_isolated(f, (types.uint32, typ))
+        cfunc = njit((types.uint32, typ))(f)
         with self.assertRefCount(*objects):
-            cres.entry_point(1, obj)
+            cfunc(1, obj)
         with self.assertRefCount(*objects):
             with self.assertRaises(OverflowError):
-                cres.entry_point(-1, obj)
+                cfunc(-1, obj)
 
     def test_cleanup_buffer(self):
         mem = memoryview(bytearray(b"xyz"))
-        self.check_argument_cleanup(types.Buffer(types.intc, 1, 'C'), mem)
+        self.check_argument_cleanup(types.MemoryView(types.byte, 1, 'C'), mem)
 
     def test_cleanup_record(self):
         dtype = np.dtype([('x', np.float64), ('y', np.float64)])
@@ -208,12 +198,12 @@ class TestConversion(TestCase):
 
     def test_cleanup_tuple(self):
         mem = memoryview(bytearray(b"xyz"))
-        tp = types.UniTuple(types.Buffer(types.intc, 1, 'C'), 2)
+        tp = types.UniTuple(types.MemoryView(types.byte, 1, 'C'), 2)
         self.check_argument_cleanup(tp, (mem, mem))
 
     def test_cleanup_optional(self):
         mem = memoryview(bytearray(b"xyz"))
-        tp = types.Optional(types.Buffer(types.intc, 1, 'C'))
+        tp = types.Optional(types.MemoryView(types.byte, 1, 'C'))
         self.check_argument_cleanup(tp, mem)
 
     def test_stringliteral_to_unicode(self):

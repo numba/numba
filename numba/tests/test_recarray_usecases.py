@@ -1,11 +1,11 @@
 import sys
+import unittest
 
 import numpy as np
 
+from numba import njit
 from numba.core import types
-from numba.core.compiler import compile_isolated
-from numba.tests.support import captured_stdout, tag, TestCase
-import unittest
+from numba.tests.support import captured_stdout, TestCase
 from numba.np import numpy_support
 
 
@@ -77,8 +77,7 @@ class TestRecordUsecase(TestCase):
                            ('col', np.float64)])
         mystruct = numpy_support.from_dtype(mystruct_dt)
 
-        cres = compile_isolated(pyfunc, (mystruct[:], mystruct[:]))
-        cfunc = cres.entry_point
+        cfunc = njit((mystruct[:], mystruct[:]))(pyfunc)
 
         st1 = np.recarray(3, dtype=mystruct_dt)
         st2 = np.recarray(3, dtype=mystruct_dt)
@@ -114,8 +113,7 @@ class TestRecordUsecase(TestCase):
     def _test_usecase2to5(self, pyfunc, dtype):
         array = self._setup_usecase2to5(dtype)
         record_type = numpy_support.from_dtype(dtype)
-        cres = compile_isolated(pyfunc, (record_type[:], types.intp))
-        cfunc = cres.entry_point
+        cfunc = njit((record_type[:], types.intp))(pyfunc)
 
         with captured_stdout():
             pyfunc(array, len(array))

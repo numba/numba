@@ -12,11 +12,13 @@ from numba import _helperlib
 from numba.core import (
     types, utils, config, lowering, cgutils, imputils, serialize,
 )
+from numba.core.utils import PYVERSION
 
 PY_UNICODE_1BYTE_KIND = _helperlib.py_unicode_1byte_kind
 PY_UNICODE_2BYTE_KIND = _helperlib.py_unicode_2byte_kind
 PY_UNICODE_4BYTE_KIND = _helperlib.py_unicode_4byte_kind
-PY_UNICODE_WCHAR_KIND = _helperlib.py_unicode_wchar_kind
+if PYVERSION in ((3, 10), (3, 11)):
+    PY_UNICODE_WCHAR_KIND = _helperlib.py_unicode_wchar_kind
 
 
 class _Registry(object):
@@ -187,7 +189,10 @@ class PythonAPI(object):
         self.longlong = ir.IntType(ctypes.sizeof(ctypes.c_ulonglong) * 8)
         self.ulonglong = self.longlong
         self.double = ir.DoubleType()
-        self.py_ssize_t = self.context.get_value_type(types.intp)
+        if config.USE_LEGACY_TYPE_SYSTEM:
+            self.py_ssize_t = self.context.get_value_type(types.intp)
+        else:
+            self.py_ssize_t = self.context.get_value_type(types.c_intp)
         self.cstring = ir.PointerType(ir.IntType(8))
         self.gil_state = ir.IntType(_helperlib.py_gil_state_size * 8)
         self.py_buffer_t = ir.ArrayType(ir.IntType(8), _helperlib.py_buffer_size)
@@ -195,7 +200,6 @@ class PythonAPI(object):
         self.py_unicode_1byte_kind = _helperlib.py_unicode_1byte_kind
         self.py_unicode_2byte_kind = _helperlib.py_unicode_2byte_kind
         self.py_unicode_4byte_kind = _helperlib.py_unicode_4byte_kind
-        self.py_unicode_wchar_kind = _helperlib.py_unicode_wchar_kind
 
     def get_env_manager(self, env, env_body, env_ptr):
         return EnvironmentManager(self, env, env_body, env_ptr)
@@ -771,18 +775,18 @@ class PythonAPI(object):
         return self.builder.call(fn, [tup])
 
     def tuple_new(self, count):
-        fnty = ir.FunctionType(self.pyobj, [ir.IntType(32)])
+        fnty = ir.FunctionType(self.pyobj, [self.py_ssize_t])
         fn = self._get_function(fnty, name='PyTuple_New')
-        return self.builder.call(fn, [self.context.get_constant(types.int32,
-                                                                count)])
+        return self.builder.call(fn, [self.py_ssize_t(count)])
 
     def tuple_setitem(self, tuple_val, index, item):
         """
         Steals a reference to `item`.
         """
-        fnty = ir.FunctionType(ir.IntType(32), [self.pyobj, ir.IntType(32), self.pyobj])
+        fnty = ir.FunctionType(ir.IntType(32),
+                               [self.pyobj, self.py_ssize_t, self.pyobj])
         setitem_fn = self._get_function(fnty, name='PyTuple_SetItem')
-        index = self.context.get_constant(types.int32, index)
+        index = self.py_ssize_t(index)
         self.builder.call(setitem_fn, [tuple_val, index, item])
 
     #
@@ -918,9 +922,9 @@ class PythonAPI(object):
     # Other APIs (organize them better!)
     #
 
-    def import_module_noblock(self, modname):
+    def import_module(self, modname):
         fnty = ir.FunctionType(self.pyobj, [self.cstring])
-        fn = self._get_function(fnty, name="PyImport_ImportModuleNoBlock")
+        fn = self._get_function(fnty, name="PyImport_ImportModule")
         return self.builder.call(fn, [modname])
 
     def call_function_objargs(self, callee, objargs):
@@ -944,13 +948,16 @@ class PythonAPI(object):
         return self.builder.call(fn, args)
 
     def call(self, callee, args=None, kws=None):
-        if args is None:
-            args = self.get_null_object()
+        if args_was_none := args is None:
+            args = self.tuple_new(0)
         if kws is None:
             kws = self.get_null_object()
         fnty = ir.FunctionType(self.pyobj, [self.pyobj] * 3)
         fn = self._get_function(fnty, name="PyObject_Call")
-        return self.builder.call(fn, (callee, args, kws))
+        result = self.builder.call(fn, (callee, args, kws))
+        if args_was_none:
+            self.decref(args)
+        return result
 
     def object_type(self, obj):
         """Emit a call to ``PyObject_Type(obj)`` to get the type of ``obj``.
@@ -1150,6 +1157,23 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name=fname)
         return self.builder.call(fn, [kind, string, size])
 
+    def bytes_as_string(self, obj):
+        fnty = ir.FunctionType(self.cstring, [self.pyobj])
+        fname = "PyBytes_AsString"
+        fn = self._get_function(fnty, name=fname)
+        return self.builder.call(fn, [obj])
+
+    def bytes_as_string_and_size(self, obj, p_buffer, p_length):
+        fnty = ir.FunctionType(
+            ir.IntType(32),
+            [self.pyobj, self.cstring.as_pointer(), self.py_ssize_t.as_pointer()],
+        )
+        fname = "PyBytes_AsStringAndSize"
+        fn = self._get_function(fnty, name=fname)
+        result = self.builder.call(fn, [obj, p_buffer, p_length])
+        ok = self.builder.icmp_signed("!=", Constant(result.type, -1), result)
+        return ok
+
     def bytes_from_string_and_size(self, string, size):
         fnty = ir.FunctionType(self.pyobj, [self.cstring, self.py_ssize_t])
         fname = "PyBytes_FromStringAndSize"
@@ -1332,7 +1356,8 @@ class PythonAPI(object):
     def unserialize(self, structptr):
         """
         Unserialize some data.  *structptr* should be a pointer to
-        a {i8* data, i32 length} structure.
+        a {i8* data, i32 length, i8* hashbuf, i8* func_ptr, i32 alloc_flag}
+        structure.
         """
         fnty = ir.FunctionType(self.pyobj,
                              (self.voidptr, ir.IntType(32), self.voidptr))
@@ -1342,10 +1367,21 @@ class PythonAPI(object):
         hashed = self.builder.extract_value(self.builder.load(structptr), 2)
         return self.builder.call(fn, (ptr, n, hashed))
 
+    def build_dynamic_excinfo_struct(self, struct_gv, exc_args):
+        """
+        Serialize some data at runtime. Returns a pointer to a python tuple
+        (bytes_data, hash) where the first element is the serialized data as
+        bytes and the second its hash.
+        """
+        fnty = ir.FunctionType(self.pyobj, (self.pyobj, self.pyobj))
+        fn = self._get_function(fnty, name="numba_runtime_build_excinfo_struct")
+        return self.builder.call(fn, (struct_gv, exc_args))
+
     def serialize_uncached(self, obj):
         """
         Same as serialize_object(), but don't create a global variable,
-        simply return a literal {i8* data, i32 length, i8* hashbuf} structure.
+        simply return a literal for structure:
+        {i8* data, i32 length, i8* hashbuf, i8* func_ptr, i32 alloc_flag}
         """
         # First make the array constant
         data = serialize.dumps(obj)
@@ -1365,14 +1401,17 @@ class PythonAPI(object):
             arr.bitcast(self.voidptr),
             Constant(ir.IntType(32), arr.type.pointee.count),
             hasharr.bitcast(self.voidptr),
+            cgutils.get_null_value(self.voidptr),
+            Constant(ir.IntType(32), 0),
             ])
         return struct
 
     def serialize_object(self, obj):
         """
         Serialize the given object in the bitcode, and return it
-        as a pointer to a {i8* data, i32 length}, structure constant
-        (suitable for passing to unserialize()).
+        as a pointer to a
+        {i8* data, i32 length, i8* hashbuf, i8* fn_ptr, i32 alloc_flag},
+        structure constant (suitable for passing to unserialize()).
         """
         try:
             gv = self.module.__serialized[obj]

@@ -99,6 +99,7 @@ def _specialize_box(typ):
     # Inject methods as class members
     supported_dunders = {
         "__abs__",
+        "__annotate_func__",
         "__bool__",
         "__complex__",
         "__contains__",
@@ -106,6 +107,7 @@ def _specialize_box(typ):
         "__getitem__",
         "__hash__",
         "__index__",
+        "__invert__",
         "__int__",
         "__len__",
         "__setitem__",
@@ -119,6 +121,7 @@ def _specialize_box(typ):
         "__add__",
         "__floordiv__",
         "__lshift__",
+        "__matmul__",
         "__mod__",
         "__mul__",
         "__neg__",
@@ -133,6 +136,7 @@ def _specialize_box(typ):
         "__iadd__",
         "__ifloordiv__",
         "__ilshift__",
+        "__imatmul__",
         "__imod__",
         "__imul__",
         "__ipow__",
@@ -142,6 +146,19 @@ def _specialize_box(typ):
         "__iand__",
         "__ior__",
         "__ixor__",
+        "__radd__",
+        "__rfloordiv__",
+        "__rlshift__",
+        "__rmatmul__",
+        "__rmod__",
+        "__rmul__",
+        "__rpow__",
+        "__rrshift__",
+        "__rsub__",
+        "__rtruediv__",
+        "__rand__",
+        "__ror__",
+        "__rxor__",
     }
     for name, func in typ.methods.items():
         if name == "__init__":

@@ -4,19 +4,16 @@ import itertools
 import numpy as np
 
 import unittest
-from numba.core.compiler import compile_isolated, Flags
-from numba import njit, typeof
+from numba import jit, njit, typeof
 from numba.core import utils, types, errors
 from numba.tests.support import TestCase, tag
 from numba.core.typing import arraydecl
 from numba.core.types import intp, ellipsis, slice2_type, slice3_type
 
 
-enable_pyobj_flags = Flags()
-enable_pyobj_flags.enable_pyobject = True
+enable_pyobj_flags = {'forceobj': True}
 
-Noflags = Flags()
-Noflags.nrt = True
+Noflags = {'nopython': True}
 
 
 def slicing_1d_usecase(a, start, stop, step):
@@ -163,8 +160,7 @@ class TestGetItem(TestCase):
         pyfunc = slicing_1d_usecase
         arraytype = types.Array(types.int32, 1, 'C')
         argtys = (arraytype, types.int32, types.int32, types.int32)
-        cr = compile_isolated(pyfunc, argtys, flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         a = np.arange(10, dtype='i4')
         for indices in [(0, 10, 1),
@@ -186,8 +182,7 @@ class TestGetItem(TestCase):
         pyfunc = slicing_1d_usecase2
         arraytype = types.Array(types.int32, 1, 'C')
         argtys = (arraytype, types.int32, types.int32, types.int32)
-        cr = compile_isolated(pyfunc, argtys, flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         a = np.arange(10, dtype='i4')
 
@@ -204,8 +199,7 @@ class TestGetItem(TestCase):
         # Any
         arraytype = types.Array(types.int32, 1, 'A')
         argtys = (arraytype, types.int32, types.int32, types.int32)
-        cr = compile_isolated(pyfunc, argtys, flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         a = np.arange(20, dtype='i4')[::2]
         self.assertFalse(a.flags['C_CONTIGUOUS'])
@@ -227,8 +221,7 @@ class TestGetItem(TestCase):
         pyfunc = slicing_1d_usecase3
         arraytype = types.Array(types.int32, 1, 'C')
         argtys = (arraytype, types.int32, types.int32)
-        cr = compile_isolated(pyfunc, argtys, flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         a = np.arange(10, dtype='i4')
 
@@ -245,8 +238,7 @@ class TestGetItem(TestCase):
         # Any
         arraytype = types.Array(types.int32, 1, 'A')
         argtys = (arraytype, types.int32, types.int32)
-        cr = compile_isolated(pyfunc, argtys, flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         a = np.arange(20, dtype='i4')[::2]
         self.assertFalse(a.flags['C_CONTIGUOUS'])
@@ -262,8 +254,7 @@ class TestGetItem(TestCase):
         pyfunc = slicing_1d_usecase4
         arraytype = types.Array(types.int32, 1, 'C')
         argtys = (arraytype,)
-        cr = compile_isolated(pyfunc, argtys, flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         a = np.arange(10, dtype='i4')
         self.assertEqual(pyfunc(a), cfunc(a))
@@ -271,8 +262,7 @@ class TestGetItem(TestCase):
         # Any
         arraytype = types.Array(types.int32, 1, 'A')
         argtys = (arraytype,)
-        cr = compile_isolated(pyfunc, argtys, flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         a = np.arange(20, dtype='i4')[::2]
         self.assertFalse(a.flags['C_CONTIGUOUS'])
@@ -287,8 +277,7 @@ class TestGetItem(TestCase):
 
         arraytype = types.Array(types.int32, 1, 'C')
         argtys = (arraytype, types.int32)
-        cr = compile_isolated(pyfunc, argtys, flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         a = np.arange(10, dtype='i4')
         for arg in args:
@@ -297,8 +286,7 @@ class TestGetItem(TestCase):
         # Any
         arraytype = types.Array(types.int32, 1, 'A')
         argtys = (arraytype, types.int32)
-        cr = compile_isolated(pyfunc, argtys, flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         a = np.arange(20, dtype='i4')[::2]
         self.assertFalse(a.flags['C_CONTIGUOUS'])
@@ -341,8 +329,7 @@ class TestGetItem(TestCase):
         pyfunc = slicing_1d_usecase
         arraytype = types.Array(types.int32, 2, 'C')
         argtys = (arraytype, types.int32, types.int32, types.int32)
-        cr = compile_isolated(pyfunc, argtys, flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         a = np.arange(100, dtype='i4').reshape(10, 10)
         for args in [(0, 10, 1), (2, 3, 1), (10, 0, 1),
@@ -362,8 +349,7 @@ class TestGetItem(TestCase):
         arraytype = types.Array(types.int32, 2, 'C')
         argtys = (arraytype, types.int32, types.int32, types.int32,
                   types.int32, types.int32, types.int32)
-        cr = compile_isolated(pyfunc, argtys, flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         a = np.arange(100, dtype='i4').reshape(10, 10)
 
@@ -387,8 +373,7 @@ class TestGetItem(TestCase):
         arraytype = types.Array(types.int32, 2, 'A')
         argtys = (arraytype, types.int32, types.int32, types.int32,
                   types.int32, types.int32, types.int32)
-        cr = compile_isolated(pyfunc, argtys, flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         a = np.arange(400, dtype='i4').reshape(20, 20)[::2, ::2]
 
@@ -408,8 +393,7 @@ class TestGetItem(TestCase):
         arraytype = types.Array(types.int32, 2, 'C')
         argtys = (arraytype, types.int32, types.int32, types.int32,
                   types.int32)
-        cr = compile_isolated(pyfunc, argtys, flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         a = np.arange(100, dtype='i4').reshape(10, 10)
 
@@ -429,8 +413,7 @@ class TestGetItem(TestCase):
         arraytype = types.Array(types.int32, 2, 'A')
         argtys = (arraytype, types.int32, types.int32, types.int32,
                   types.int32)
-        cr = compile_isolated(pyfunc, argtys, flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         a = np.arange(400, dtype='i4').reshape(20, 20)[::2, ::2]
 
@@ -446,8 +429,7 @@ class TestGetItem(TestCase):
         pyfunc = slicing_3d_usecase
         arraytype = types.Array(types.int32, 3, 'C')
         argtys = (arraytype, types.int32, types.int32, types.int32)
-        cr = compile_isolated(pyfunc, argtys, flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         a = np.arange(1000, dtype='i4').reshape(10, 10, 10)
 
@@ -464,8 +446,7 @@ class TestGetItem(TestCase):
         # Any layout
         arraytype = types.Array(types.int32, 3, 'A')
         argtys = (arraytype, types.int32, types.int32, types.int32)
-        cr = compile_isolated(pyfunc, argtys, flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         a = np.arange(2000, dtype='i4')[::2].reshape(10, 10, 10)
 
@@ -480,8 +461,7 @@ class TestGetItem(TestCase):
         pyfunc = slicing_3d_usecase2
         arraytype = types.Array(types.int32, 3, 'C')
         argtys = (arraytype, types.int32, types.int32, types.int32)
-        cr = compile_isolated(pyfunc, argtys, flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         a = np.arange(1000, dtype='i4').reshape(10, 10, 10)
 
@@ -498,8 +478,7 @@ class TestGetItem(TestCase):
         # Any layout
         arraytype = types.Array(types.int32, 3, 'A')
         argtys = (arraytype, types.int32, types.int32, types.int32)
-        cr = compile_isolated(pyfunc, argtys, flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         a = np.arange(2000, dtype='i4')[::2].reshape(10, 10, 10)
 
@@ -513,8 +492,8 @@ class TestGetItem(TestCase):
         # C layout
         pyfunc = integer_indexing_1d_usecase
         arraytype = types.Array(types.int32, 1, 'C')
-        cr = compile_isolated(pyfunc, (arraytype, types.int32), flags=flags)
-        cfunc = cr.entry_point
+        argtys = (arraytype, types.int32)
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         a = np.arange(10, dtype='i4')
         self.assertEqual(pyfunc(a, 0), cfunc(a, 0))
@@ -523,8 +502,8 @@ class TestGetItem(TestCase):
 
         # Any layout
         arraytype = types.Array(types.int32, 1, 'A')
-        cr = compile_isolated(pyfunc, (arraytype, types.int32), flags=flags)
-        cfunc = cr.entry_point
+        argtys = (arraytype, types.int32)
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         a = np.arange(10, dtype='i4')[::2]
         self.assertFalse(a.flags['C_CONTIGUOUS'])
@@ -536,8 +515,8 @@ class TestGetItem(TestCase):
         # Using a 0-d array as integer index
         arraytype = types.Array(types.int32, 1, 'C')
         indextype = types.Array(types.int16, 0, 'C')
-        cr = compile_isolated(pyfunc, (arraytype, indextype), flags=flags)
-        cfunc = cr.entry_point
+        argtys = (arraytype, indextype)
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         a = np.arange(3, 13, dtype=np.int32)
         for i in (0, 9, -2):
@@ -552,8 +531,8 @@ class TestGetItem(TestCase):
         # Test partial (1d) indexing of a 2d array
         pyfunc = integer_indexing_1d_usecase
         arraytype = types.Array(types.int32, 2, 'C')
-        cr = compile_isolated(pyfunc, (arraytype, types.int32), flags=flags)
-        cfunc = cr.entry_point
+        argtys = (arraytype, types.int32)
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         a = np.arange(100, dtype='i4').reshape(10, 10)
         self.assertPreciseEqual(pyfunc(a, 0), cfunc(a, 0))
@@ -561,8 +540,8 @@ class TestGetItem(TestCase):
         self.assertPreciseEqual(pyfunc(a, -1), cfunc(a, -1))
 
         arraytype = types.Array(types.int32, 2, 'A')
-        cr = compile_isolated(pyfunc, (arraytype, types.int32), flags=flags)
-        cfunc = cr.entry_point
+        argtys = (arraytype, types.int32)
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         a = np.arange(20, dtype='i4').reshape(5, 4)[::2]
         self.assertPreciseEqual(pyfunc(a, 0), cfunc(a, 0))
@@ -575,9 +554,8 @@ class TestGetItem(TestCase):
         # C layout
         a = np.arange(100, dtype='i4').reshape(10, 10)
         arraytype = types.Array(types.int32, 2, 'C')
-        cr = compile_isolated(pyfunc, (arraytype, types.int32, types.int32),
-                              flags=flags)
-        cfunc = cr.entry_point
+        argtys = (arraytype, types.int32, types.int32)
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         self.assertEqual(pyfunc(a, 0, 3), cfunc(a, 0, 3))
         self.assertEqual(pyfunc(a, 9, 9), cfunc(a, 9, 9))
@@ -589,9 +567,8 @@ class TestGetItem(TestCase):
         self.assertFalse(a.flags['F_CONTIGUOUS'])
 
         arraytype = types.Array(types.int32, 2, 'A')
-        cr = compile_isolated(pyfunc, (arraytype, types.int32, types.int32),
-                              flags=flags)
-        cfunc = cr.entry_point
+        argtys = (arraytype, types.int32, types.int32)
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         self.assertEqual(pyfunc(a, 0, 1), cfunc(a, 0, 1))
         self.assertEqual(pyfunc(a, 2, 2), cfunc(a, 2, 2))
@@ -601,9 +578,8 @@ class TestGetItem(TestCase):
         a = np.arange(100, dtype='i4').reshape(10, 10)
         arraytype = types.Array(types.int32, 2, 'C')
         indextype = types.Array(types.int32, 0, 'C')
-        cr = compile_isolated(pyfunc, (arraytype, indextype, indextype),
-                              flags=flags)
-        cfunc = cr.entry_point
+        argtys = (arraytype, indextype, indextype)
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         for i, j in [(0, 3), (8, 9), (-2, -1)]:
             i = np.array(i).astype(np.int32)
@@ -634,9 +610,8 @@ class TestGetItem(TestCase):
         a = np.arange(100, dtype='i4').reshape(10, 10)
         pyfunc = integer_indexing_2d_usecase
         arraytype = types.Array(types.int32, 2, 'C')
-        cr = compile_isolated(pyfunc, (arraytype, types.float32, types.int32),
-                              flags=flags)
-        cfunc = cr.entry_point
+        argtys = (arraytype, types.float32, types.int32)
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         self.assertEqual(pyfunc(a, 0, 0), cfunc(a, 0, 0))
         self.assertEqual(pyfunc(a, 9, 9), cfunc(a, 9, 9))
@@ -646,9 +621,8 @@ class TestGetItem(TestCase):
         pyfunc = partial_1d_usecase
 
         def check(arr, arraytype):
-            cr = compile_isolated(pyfunc, (arraytype, types.int32),
-                                  flags=flags)
-            cfunc = cr.entry_point
+            argtys = (arraytype, types.int32)
+            cfunc = jit(argtys, **flags)(pyfunc)
             self.assertEqual(pyfunc(arr, 0), cfunc(arr, 0))
             n = arr.shape[0] - 1
             self.assertEqual(pyfunc(arr, n), cfunc(arr, n))
@@ -668,9 +642,8 @@ class TestGetItem(TestCase):
 
     def check_ellipsis(self, pyfunc, flags):
         def compile_func(arr):
-            cr = compile_isolated(pyfunc, (typeof(arr), types.intp, types.intp),
-                                  flags=flags)
-            return cr.entry_point
+            argtys = (typeof(arr), types.intp, types.intp)
+            return jit(argtys, **flags)(pyfunc)
 
         def run(a):
             bounds = (0, 1, 2, -1, -2)
@@ -737,8 +710,8 @@ class TestGetItem(TestCase):
         pyfunc = none_index_usecase
         arraytype = types.Array(types.int32, 2, 'C')
         # TODO should be enable to handle this in NoPython mode
-        cr = compile_isolated(pyfunc, (arraytype,), flags=flags)
-        cfunc = cr.entry_point
+        argtys = (arraytype,)
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         a = np.arange(100, dtype='i4').reshape(10, 10)
         self.assertPreciseEqual(pyfunc(a), cfunc(a))
@@ -750,8 +723,8 @@ class TestGetItem(TestCase):
     def test_empty_tuple_indexing(self, flags=enable_pyobj_flags):
         pyfunc = empty_tuple_usecase
         arraytype = types.Array(types.int32, 0, 'C')
-        cr = compile_isolated(pyfunc, (arraytype,), flags=flags)
-        cfunc = cr.entry_point
+        argtys = (arraytype,)
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         a = np.arange(1, dtype='i4').reshape(())
         self.assertPreciseEqual(pyfunc(a), cfunc(a))
@@ -774,7 +747,7 @@ class TestSetItem(TestCase):
             for index in range(len(array)):
                 array[index] = index % decimal.Decimal(100)
 
-        cfunc = jit("void(i8[:])")(pyfunc)
+        cfunc = jit("void(i8[:])", **flags)(pyfunc)
 
         udt = np.arange(100, dtype='i1')
         control = udt.copy()
@@ -792,8 +765,7 @@ class TestSetItem(TestCase):
         dest_type = types.Array(types.int32, 1, 'C')
         src_type = types.Array(types.int16, 1, 'A')
         argtys = (dest_type, src_type, types.int32, types.int32, types.int32)
-        cr = compile_isolated(pyfunc, argtys, flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         N = 10
         arg = np.arange(N, dtype='i2') + 40
@@ -820,8 +792,10 @@ class TestSetItem(TestCase):
         pyfunc = slicing_1d_usecase_set
         dest_type = types.Array(types.int32, 1, 'C')
         argtys = (dest_type, seqty, types.int32, types.int32, types.int32)
-        cr = compile_isolated(pyfunc, argtys, flags=flags)
-        cfunc = cr.entry_point
+        # This emulates the use of `compile_result`. The args that are passed
+        # into this checking function are not as advertised in argtys and
+        # implicit casting is required.
+        cfunc = jit(argtys, **flags)(pyfunc).overloads[argtys].entry_point
 
         N = 10
         k = len(seq)
@@ -834,6 +808,13 @@ class TestSetItem(TestCase):
         args = (seq, 1, -N + k, 1)
         with self.assertRaises(ValueError) as raises:
             cfunc(arg.copy(), *args)
+
+        if flags.get('nopython', False):
+            # if in nopython mode, check the error message from Numba
+            slice_size = len(arg[slice(1, -N + k, 1)])
+            msg = (f"cannot assign slice of shape ({k},) from input of shape "
+                   f"({slice_size},)")
+            self.assertIn(msg, str(raises.exception))
 
     def test_1d_slicing_set_tuple(self, flags=enable_pyobj_flags):
         """
@@ -858,8 +839,7 @@ class TestSetItem(TestCase):
         # Note heterogeneous types for the source scalar and the destination
         # array (int16 -> int32[:])
         argtys = (arraytype, types.int16, types.int32, types.int32, types.int32)
-        cr = compile_isolated(pyfunc, argtys, flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         N = 10
         arg = np.arange(N, dtype='i4')
@@ -877,8 +857,7 @@ class TestSetItem(TestCase):
         pyfunc = slicing_1d_usecase_add
         arraytype = types.Array(types.int32, 1, 'C')
         argtys = (arraytype, arraytype, types.int32, types.int32)
-        cr = compile_isolated(pyfunc, argtys, flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         arg = np.arange(10, dtype='i4')
         for test in ((0, 10), (2, 5)):
@@ -909,8 +888,7 @@ class TestSetItem(TestCase):
         arraytype = types.Array(types.int32, 2, 'A')
         argtys = (arraytype, arraytype, types.int32, types.int32, types.int32,
                   types.int32, types.int32, types.int32)
-        cr = compile_isolated(pyfunc, argtys, flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         arg = np.arange(10*10, dtype='i4').reshape(10,10)
         tests = [
@@ -935,8 +913,7 @@ class TestSetItem(TestCase):
         # array (int16 -> int32[:])
         argtys = (arraytype, types.int16, types.int32, types.int32, types.int32,
                   types.int32, types.int32, types.int32)
-        cr = compile_isolated(pyfunc, argtys, flags=flags)
-        cfunc = cr.entry_point
+        cfunc = jit(argtys, **flags)(pyfunc)
 
         arg = np.arange(10*10, dtype='i4').reshape(10,10)
         val = 42
@@ -1019,7 +996,8 @@ class TestSetItem(TestCase):
         with self.assertRaises(ValueError) as raises:
             setitem_broadcast_usecase(dst, src)
         errmsg = str(raises.exception)
-        self.assertEqual('cannot assign slice from input of different size',
+        self.assertEqual(('cannot assign slice of shape (2, 5) from input of' +
+                         ' shape (1, 5)'),
                          errmsg)
         # lower to higher
         # 1D -> 2D
@@ -1028,8 +1006,9 @@ class TestSetItem(TestCase):
         with self.assertRaises(ValueError) as raises:
             setitem_broadcast_usecase(dst, src)
         errmsg = str(raises.exception)
-        self.assertEqual('cannot assign slice from input of different size',
-                         errmsg)
+        self.assertEqual(('cannot assign slice of shape (2, 4) from input of' +
+                        ' shape (2, 5)'),
+                        errmsg)
 
     def test_slicing_1d_broadcast(self):
         # 1D -> 2D sliced (1)

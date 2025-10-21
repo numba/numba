@@ -1,12 +1,12 @@
 import os
 import platform
+import subprocess
 import sys
-from distutils import sysconfig
-from distutils.command import build
-from distutils.command.build_ext import build_ext
-from distutils.spawn import spawn
+import sysconfig
 
-from setuptools import Extension, find_packages, setup
+from setuptools import Command, Extension, find_packages, setup
+from setuptools.command.build_ext import build_ext
+
 import versioneer
 
 _version_module = None
@@ -19,12 +19,12 @@ except ImportError:
         pass
 
 
-min_python_version = "3.8"
-max_python_version = "3.11"  # exclusive
+min_python_version = "3.10"
+max_python_version = "3.15"  # exclusive
 min_numpy_build_version = "1.11"
-min_numpy_run_version = "1.18"
-min_llvmlite_version = "0.40.0dev0"
-max_llvmlite_version = "0.41"
+min_numpy_run_version = "1.22"
+min_llvmlite_version = "0.46.0dev0"
+max_llvmlite_version = "0.47"
 
 if sys.platform.startswith('linux'):
     # Patch for #2555 to make wheels without libpython
@@ -50,18 +50,12 @@ def _guard_py_ver():
 _guard_py_ver()
 
 
-class build_doc(build.build):
+class build_doc(Command):
     description = "build documentation"
 
     def run(self):
-        spawn(['make', '-C', 'docs', 'html'])
+        subprocess.run(['make', '-C', 'docs', 'html'])
 
-
-versioneer.VCS = 'git'
-versioneer.versionfile_source = 'numba/_version.py'
-versioneer.versionfile_build = 'numba/_version.py'
-versioneer.tag_prefix = ''
-versioneer.parentdir_prefix = 'numba-'
 
 cmdclass = versioneer.get_cmdclass()
 cmdclass['build_doc'] = build_doc
@@ -158,11 +152,14 @@ def get_ext_modules():
                             depends=['numba/_pymodule.h',
                                      'numba/_dynfunc.c'])
 
+    dispatcher_sources = [
+        'numba/_dispatcher.cpp',
+        'numba/_typeof.cpp',
+        'numba/_hashtable.cpp',
+        'numba/core/typeconv/typeconv.cpp',
+    ]
     ext_dispatcher = Extension(name="numba._dispatcher",
-                               sources=['numba/_dispatcher.cpp',
-                                        'numba/_typeof.cpp',
-                                        'numba/_hashtable.cpp',
-                                        'numba/core/typeconv/typeconv.cpp'],
+                               sources=dispatcher_sources,
                                depends=["numba/_pymodule.h",
                                         "numba/_typeof.h",
                                         "numba/_hashtable.h"],
@@ -216,6 +213,7 @@ def get_ext_modules():
         """
         found = None
         path2check = [os.path.split(os.path.split(sys.executable)[0])[0]]
+        path2check += [os.path.dirname(sys.executable)]    # for GHA win toolcache: ...\Python\<ver>\x64
         path2check += [os.getenv(n, '') for n in ['CONDA_PREFIX', 'PREFIX']]
         if sys.platform.startswith('win'):
             path2check += [os.path.join(p, 'Library') for p in path2check]
@@ -373,8 +371,6 @@ build_requires = ['numpy >={}'.format(min_numpy_build_version)]
 install_requires = [
     'llvmlite >={},<{}'.format(min_llvmlite_version, max_llvmlite_version),
     'numpy >={}'.format(min_numpy_run_version),
-    'setuptools',
-    'importlib_metadata; python_version < "3.9"',
 ]
 
 metadata = dict(
@@ -388,16 +384,18 @@ metadata = dict(
         "Operating System :: OS Independent",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.8",
-        "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
+        "Programming Language :: Python :: 3.14",
         "Topic :: Software Development :: Compilers",
     ],
     package_data={
         # HTML templates for type annotations
         "numba.core.annotations": ["*.html"],
         # Various test data
-        "numba.cuda.tests.cudadrv.data": ["*.ptx", "*.cu"],
+        "numba.cuda.tests.data": ["*.ptx", "*.cu"],
         "numba.cuda.tests.doc_examples.ffi": ["*.cu"],
         "numba.tests": ["pycc_distutils_usecase/*.py"],
         # Some C files are needed by pycc
@@ -408,7 +406,8 @@ metadata = dict(
         # numba gdb hook init command language file
         "numba.misc": ["cmdlang.gdb"],
         "numba.typed": ["py.typed"],
-        "numba.cuda" : ["cpp_function_wrappers.cu"]
+        "numba.cuda" : ["cpp_function_wrappers.cu", "cuda_fp16.h",
+                        "cuda_fp16.hpp"]
     },
     scripts=["bin/numba"],
     url="https://numba.pydata.org",

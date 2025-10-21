@@ -6,10 +6,10 @@ import ctypes
 import random
 
 from numba.tests.support import TestCase
-from numba import generated_jit, _helperlib, jit, typed, types
+from numba import _helperlib, jit, typed, types
 from numba.core.config import IS_32BITS
 from numba.core.datamodel.models import UniTupleModel
-from numba.extending import register_model, typeof_impl, unbox
+from numba.extending import register_model, typeof_impl, unbox, overload
 
 
 DKIX_EMPTY = -1
@@ -84,8 +84,8 @@ class Dict(object):
 
     def dict_new_minsize(self, key_size, val_size):
         dp = ctypes.c_void_p()
-        status = self.tc.numba_dict_new_minsize(
-            ctypes.byref(dp), key_size, val_size,
+        status = self.tc.numba_dict_new_sized(
+            ctypes.byref(dp), 0, key_size, val_size,
         )
         self.tc.assertEqual(status, 0)
         return dp
@@ -224,16 +224,18 @@ class TestDictImpl(TestCase):
             'test_dict',
             ctypes.c_int,
         )
-        # numba_dict_new_minsize(
+        # numba_dict_new_sized(
         #    NB_Dict **out,
+        #    Py_ssize_t n_keys,
         #    Py_ssize_t key_size,
         #    Py_ssize_t val_size
         # )
-        self.numba_dict_new_minsize = wrap(
-            'dict_new_minsize',
+        self.numba_dict_new_sized = wrap(
+            'dict_new_sized',
             ctypes.c_int,
             [
                 ctypes.POINTER(dict_t),  # out
+                ctypes.c_ssize_t,        # n_keys
                 ctypes.c_ssize_t,        # key_size
                 ctypes.c_ssize_t,        # val_size
             ],
@@ -604,7 +606,7 @@ class TestDictImpl(TestCase):
         for i in range(1, 8):
             self.check_sizing(key_size=i, val_size=i, nmax=2**i)
 
-    def test_parametrized_types(self):
+    def test_parameterized_types(self):
         """https://github.com/numba/numba/issues/6401"""
 
         register_model(ParametrizedType)(UniTupleModel)
@@ -617,8 +619,11 @@ class TestDictImpl(TestCase):
         def unbox_parametrized(typ, obj, context):
             return context.unbox(types.UniTuple(typ.dtype, len(typ)), obj)
 
-        @generated_jit
         def dict_vs_cache_vs_parametrized(v):
+            assert 0
+
+        @overload(dict_vs_cache_vs_parametrized)
+        def ol_dict_vs_cache_vs_parametrized(v):
             typ = v
 
             def objmode_vs_cache_vs_parametrized_impl(v):

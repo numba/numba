@@ -120,6 +120,16 @@ extern "C" uintp get_sched_size(uintp num_threads, uintp num_dim, intp *starts, 
     return num_divisions < num_threads ? num_threads : num_divisions;
 }
 
+extern "C" intp* allocate_sched(uintp sched_size) {
+    intp* ret;
+    ret = (intp*)malloc(sched_size * sizeof(intp));
+    return ret;
+}
+
+extern "C" void deallocate_sched(intp* sched) {
+    return free(sched);
+}
+
 class dimlength {
 public:
     uintp dim;

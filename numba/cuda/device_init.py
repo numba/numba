@@ -1,10 +1,11 @@
 # Re export
 import sys
+from numba.cuda import cg
 from .stubs import (threadIdx, blockIdx, blockDim, gridDim, laneid, warpsize,
                     syncwarp, shared, local, const, atomic,
                     shfl_sync_intrinsic, vote_sync_intrinsic, match_any_sync,
                     match_all_sync, threadfence_block, threadfence_system,
-                    threadfence, selp, popc, brev, clz, ffs, fma, cbrt, cg,
+                    threadfence, selp, popc, brev, clz, ffs, fma, cbrt,
                     activemask, lanemask_lt, nanosleep, fp16,
                     _vector_type_stubs)
 from .intrinsics import (grid, gridsize, syncthreads, syncthreads_and,

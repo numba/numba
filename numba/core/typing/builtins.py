@@ -12,7 +12,6 @@ from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                          infer_getattr, signature,
                                          bound_function, make_callable_template)
 
-from numba.cpython.builtins import get_type_min_value, get_type_max_value
 
 from numba.core.extending import (
     typeof_impl, type_callable, models, register_model, make_attribute_wrapper,
@@ -25,7 +24,7 @@ class Print(AbstractTemplate):
         for a in args:
             sig = self.context.resolve_function_type("print_item", (a,), {})
             if sig is None:
-                raise TypeError("Type %s is not printable." % a)
+                raise errors.TypingError("Type %s is not printable." % a)
             assert sig.return_type is types.none
         return signature(types.none, *args)
 
@@ -654,6 +653,24 @@ class StaticGetItemLiteralStrKeyDict(AbstractTemplate):
             sig = signature(ret, *args)
             return sig
 
+@infer
+class StaticGetItemClass(AbstractTemplate):
+    """This handles the "static_getitem" when a Numba type is subscripted e.g:
+    var = typed.List.empty_list(float64[::1, :])
+    It only allows this on simple numerical types. Compound types, like
+    records, are not supported.
+    """
+    key = "static_getitem"
+
+    def generic(self, args, kws):
+        clazz, idx = args
+        if not isinstance(clazz, types.NumberClass):
+            return
+        ret = clazz.dtype[idx]
+        sig = signature(ret, *args)
+        return sig
+
+
 # Generic implementation for "not in"
 
 @infer
@@ -796,7 +813,7 @@ class NumberClassAttribute(AttributeTemplate):
 
     def resolve___call__(self, classty):
         """
-        Resolve a number class's constructor (e.g. calling int(...))
+        Resolve a NumPy number class's constructor (e.g. calling numpy.int32(...))
         """
         ty = classty.instance_type
 
@@ -841,7 +858,7 @@ class TypeRefAttribute(AttributeTemplate):
 
     def resolve___call__(self, classty):
         """
-        Resolve a number class's constructor (e.g. calling int(...))
+        Resolve a core number's constructor (e.g. calling int(...))
 
         Note:
 
@@ -898,8 +915,8 @@ class MinMaxBase(AbstractTemplate):
             if isinstance(args[0], types.BaseTuple):
                 tys = list(args[0])
                 if not tys:
-                    raise TypeError("%s() argument is an empty tuple"
-                                    % (self.key.__name__,))
+                    raise errors.TypingError("%s() argument is an empty tuple"
+                                             % (self.key.__name__,))
             else:
                 return
         else:
@@ -960,6 +977,13 @@ class Int(AbstractTemplate):
             return signature(arg, arg)
         if isinstance(arg, (types.Float, types.Boolean)):
             return signature(types.intp, arg)
+        if isinstance(arg, types.NPDatetime):
+            if arg.unit == 'ns':
+                return signature(types.int64, arg)
+            else:
+                raise errors.NumbaTypeError(f"Only datetime64[ns] can be converted, but got datetime64[{arg.unit}]")
+        if isinstance(arg, types.NPTimedelta):
+            return signature(types.int64, arg)
 
 
 @infer_global(float)
@@ -969,6 +993,13 @@ class Float(AbstractTemplate):
         assert not kws
 
         [arg] = args
+
+        if isinstance(arg, types.UnicodeType):
+            msg = 'argument must be a string literal'
+            raise errors.RequireLiteralValue(msg)
+
+        if isinstance(arg, types.StringLiteral):
+            return signature(types.float64, arg)
 
         if arg not in types.number_domain:
             raise errors.NumbaTypeError("float() only support for numbers")
@@ -1094,17 +1125,6 @@ class DeferredAttribute(AttributeTemplate):
 
     def generic_resolve(self, deferred, attr):
         return self.context.resolve_getattr(deferred.get(), attr)
-
-#------------------------------------------------------------------------------
-
-@infer_global(get_type_min_value)
-@infer_global(get_type_max_value)
-class MinValInfer(AbstractTemplate):
-    def generic(self, args, kws):
-        assert not kws
-        assert len(args) == 1
-        if isinstance(args[0], (types.DType, types.NumberClass)):
-            return signature(args[0].dtype, *args)
 
 
 #------------------------------------------------------------------------------

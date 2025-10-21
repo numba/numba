@@ -1,18 +1,13 @@
 import math
 import numpy as np
-import subprocess
 import numbers
-import importlib
-import sys
 import re
 import traceback
 import multiprocessing as mp
-from itertools import chain, combinations
 
 import numba
-from numba.core import config, cpu
-from numba import prange, njit
-from numba.core.compiler import compile_isolated, Flags
+from numba import njit, prange
+from numba.core import config
 from numba.tests.support import TestCase, tag, override_env_config
 import unittest
 
@@ -24,6 +19,12 @@ vlen2cpu = {2: 'nehalem', 4: 'haswell', 8: 'skylake-avx512'}
 # force LLVM to use AVX512 registers for vectorization
 # https://reviews.llvm.org/D67259
 vlen2cpu_features = {2: '', 4: '', 8: '-prefer-256-bit'}
+
+# env vars to force CPU as skylake-avx512.
+# force LLVM to use AVX512 registers for vectorization
+# https://reviews.llvm.org/D67259
+_skylake_axv512_envvars = {'NUMBA_CPU_NAME': 'skylake-avx512',
+                           'NUMBA_CPU_FEATURES': '-prefer-256-bit'}
 
 # K: SVML functions, V: python functions which are expected to be SIMD-vectorized
 # using SVML, explicit references to Python functions here are mostly for sake of
@@ -73,13 +74,12 @@ svml_funcs = {
     "round":      [],  # round],
     "sind":       [],
     "sinh":    [np.sinh, math.sinh],
-    "sqrt":    [np.sqrt, math.sqrt],
     "tan":     [np.tan, math.tan],
     "tanh":    [np.tanh, math.tanh],
     "trunc":      [],  # np.trunc, math.trunc],
 }
 # TODO: these functions are not vectorizable with complex types
-complex_funcs_exclude = ["sqrt", "tan", "log10", "expm1", "log1p", "tanh", "log"]
+complex_funcs_exclude = ["tan", "log10", "expm1", "log1p", "tanh", "log"]
 
 # remove untested entries
 svml_funcs = {k: v for k, v in svml_funcs.items() if len(v) > 0}
@@ -130,15 +130,6 @@ def func_patterns(func, args, res, dtype, mode, vlen, fastmath, pad=' '*8):
                      #                     generating the failsafe scalar paths
         if vlen != 8 and (is_f32 or dtype == 'int32'):  # Issue #3016
             avoids += ['%zmm', '__svml_%s%d%s,' % (f, v*2, prec_suff)]
-    # special handling
-    if func == 'sqrt':
-        if mode == "scalar":
-            contains = ['sqrts']
-            avoids = [scalar_func, svml_func]  # LLVM uses CPU instruction
-        elif vlen == 8:
-            contains = ['vsqrtp']
-            avoids = [scalar_func, svml_func]  # LLVM uses CPU instruction
-        # else expect use of SVML for older architectures
     return body, contains, avoids
 
 
@@ -181,7 +172,7 @@ class TestSVMLGeneration(TestCase):
     # env mutating, must not run in parallel
     _numba_parallel_test_ = False
     # RE for a generic symbol reference and for each particular SVML function
-    asm_filter = re.compile('|'.join(['\$[a-z_]\w+,']+list(svml_funcs)))
+    asm_filter = re.compile('|'.join([r'\$[a-z_]\w+,']+list(svml_funcs)))
 
     @classmethod
     def mp_runner(cls, testname, outqueue):
@@ -297,24 +288,14 @@ class TestSVML(TestCase):
     # env mutating, must not run in parallel
     _numba_parallel_test_ = False
 
-    def __init__(self, *args):
-        self.flags = Flags()
-        self.flags.nrt = True
-
-        # flags for njit(fastmath=True)
-        self.fastflags = Flags()
-        self.fastflags.nrt = True
-        self.fastflags.fastmath = cpu.FastMathOptions(True)
-        super(TestSVML, self).__init__(*args)
-
     def compile(self, func, *args, **kwargs):
         assert not kwargs
         sig = tuple([numba.typeof(x) for x in args])
 
-        std = compile_isolated(func, sig, flags=self.flags)
-        fast = compile_isolated(func, sig, flags=self.fastflags)
+        std = njit(sig)(func)
+        fast = njit(sig, fastmath=True)(func)
 
-        return std, fast
+        return std.overloads[sig], fast.overloads[sig]
 
     def copy_args(self, *args):
         if not args:
@@ -331,16 +312,8 @@ class TestSVML(TestCase):
                 raise ValueError('Unsupported argument type encountered')
         return tuple(new_args)
 
-    def check(self, pyfunc, *args, **kwargs):
-
+    def check_result(self, pyfunc, *args, **kwargs):
         jitstd, jitfast = self.compile(pyfunc, *args)
-
-        std_pattern = kwargs.pop('std_pattern', None)
-        fast_pattern = kwargs.pop('fast_pattern', None)
-        cpu_name = kwargs.pop('cpu_name', 'skylake-avx512')
-        # force LLVM to use AVX512 registers for vectorization
-        # https://reviews.llvm.org/D67259
-        cpu_features = kwargs.pop('cpu_features', '-prefer-256-bit')
 
         # python result
         py_expected = pyfunc(*self.copy_args(*args))
@@ -355,88 +328,72 @@ class TestSVML(TestCase):
         np.testing.assert_almost_equal(jitstd_result, py_expected, **kwargs)
         np.testing.assert_almost_equal(jitfast_result, py_expected, **kwargs)
 
+    def check_asm(self, pyfunc, *args, **kwargs):
+        std_pattern = kwargs.pop('std_pattern', None)
+        fast_pattern = kwargs.pop('fast_pattern', None)
+
         # look for specific patterns in the asm for a given target
-        with override_env_config('NUMBA_CPU_NAME', cpu_name), \
-             override_env_config('NUMBA_CPU_FEATURES', cpu_features):
-            # recompile for overridden CPU
-            jitstd, jitfast = self.compile(pyfunc, *args)
-            if std_pattern:
-                self.check_svml_presence(jitstd, std_pattern)
-            if fast_pattern:
-                self.check_svml_presence(jitfast, fast_pattern)
+        # recompile for overridden CPU
+        jitstd, jitfast = self.compile(pyfunc, *args)
+        if std_pattern:
+            self.check_svml_presence(jitstd, std_pattern)
+        if fast_pattern:
+            self.check_svml_presence(jitfast, fast_pattern)
+
+    def check(self, pyfunc, *args, what="both", **kwargs):
+        assert what in ("both", "result", "asm")
+        if what == "both" or what == "result":
+            self.check_result(pyfunc, *args, **kwargs)
+        if what == "both" or what == "asm":
+            self.check_asm(pyfunc, *args, **kwargs)
 
     def check_svml_presence(self, func, pattern):
         asm = func.library.get_asm_str()
         self.assertIn(pattern, asm)
 
-    def test_scalar_context(self):
+    @TestCase.run_test_in_subprocess(envvars=_skylake_axv512_envvars)
+    def test_scalar_context_asm(self):
         # SVML will not be used.
         pat = '$_sin' if config.IS_OSX else '$sin'
-        self.check(math_sin_scalar, 7., std_pattern=pat)
-        self.check(math_sin_scalar, 7., fast_pattern=pat)
+        self.check(math_sin_scalar, 7., what="asm", std_pattern=pat)
+        self.check(math_sin_scalar, 7., what="asm", fast_pattern=pat)
 
-    def test_svml(self):
+    def test_scalar_context_result(self):
+        # checks result for test_scalar_context_asm
+        self.check(math_sin_scalar, 7., what="result")
+
+    @TestCase.run_test_in_subprocess(envvars=_skylake_axv512_envvars)
+    def test_svml_asm(self):
         # loops both with and without fastmath should use SVML.
         # The high accuracy routines are dropped if `fastmath` is set
         std = "__svml_sin8_ha,"
         fast = "__svml_sin8,"  # No `_ha`!
-        self.check(math_sin_loop, 10, std_pattern=std, fast_pattern=fast)
+        self.check(math_sin_loop, 10, what="asm", std_pattern=std,
+                   fast_pattern=fast)
 
+    def test_svml_result(self):
+        # checks result for test_svml_asm
+        self.check(math_sin_loop, 10, what="result")
+
+    @TestCase.run_test_in_subprocess(envvars={'NUMBA_DISABLE_INTEL_SVML': "1",
+                                              **_skylake_axv512_envvars})
     def test_svml_disabled(self):
-        code = """if 1:
-            import os
-            import numpy as np
-            import math
 
-            def math_sin_loop(n):
-                ret = np.empty(n, dtype=np.float64)
-                for x in range(n):
-                    ret[x] = math.sin(np.float64(x))
-                return ret
+        def math_sin_loop(n):
+            ret = np.empty(n, dtype=np.float64)
+            for x in range(n):
+                ret[x] = math.sin(np.float64(x))
+            return ret
 
-            def check_no_svml():
-                try:
-                    # ban the use of SVML
-                    os.environ['NUMBA_DISABLE_INTEL_SVML'] = '1'
+        sig = (numba.int32,)
+        std = njit(sig)(math_sin_loop)
+        fast = njit(sig, fastmath=True)(math_sin_loop)
+        fns = std.overloads[sig], fast.overloads[sig]
 
-                    # delay numba imports to account for env change as
-                    # numba.__init__ picks up SVML and it is too late by
-                    # then to override using `numba.config`
-                    import numba
-                    from numba import config
-                    from numba.core import cpu
-                    from numba.tests.support import override_env_config
-                    from numba.core.compiler import compile_isolated, Flags
-
-                    # compile for overridden CPU, with and without fastmath
-                    with override_env_config('NUMBA_CPU_NAME', 'skylake-avx512'), \
-                         override_env_config('NUMBA_CPU_FEATURES', ''):
-                        sig = (numba.int32,)
-                        f = Flags()
-                        f.nrt = True
-                        std = compile_isolated(math_sin_loop, sig, flags=f)
-                        f.fastmath = cpu.FastMathOptions(True)
-                        fast = compile_isolated(math_sin_loop, sig, flags=f)
-                        fns = std, fast
-
-                        # assert no SVML call is present in the asm
-                        for fn in fns:
-                            asm = fn.library.get_asm_str()
-                            assert '__svml_sin' not in asm
-                finally:
-                    # not really needed as process is separate
-                    os.environ['NUMBA_DISABLE_INTEL_SVML'] = '0'
-                    config.reload_config()
-            check_no_svml()
-            """
-        popen = subprocess.Popen(
-            [sys.executable, "-c", code],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        out, err = popen.communicate()
-        if popen.returncode != 0:
-            raise AssertionError(
-                "process failed with code %s: stderr follows\n%s\n" %
-                (popen.returncode, err.decode()))
+        # assert no SVML call is present in the asm
+        for fn in fns:
+            asm = fn.library.get_asm_str()
+            self.assertNotIn('__svml_sin', asm)
 
     def test_svml_working_in_non_isolated_context(self):
         @njit(fastmath={'fast'}, error_model="numpy")
@@ -444,7 +401,7 @@ class TestSVML(TestCase):
             x   = np.empty(n * 8, dtype=np.float64)
             ret = np.empty_like(x)
             for i in range(ret.size):
-                    ret[i] += math.cosh(x[i])
+                ret[i] += math.cosh(x[i])
             return ret
         impl(1)
         self.assertTrue('intel_svmlcc' in impl.inspect_llvm(impl.signatures[0]))

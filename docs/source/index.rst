@@ -34,4 +34,4 @@ with Numba, we suggest you start with the :doc:`User manual <user/index>`.
    developer/index.rst
    proposals/index.rst
    glossary.rst
-   release-notes.rst
+   release-notes-overview.rst
