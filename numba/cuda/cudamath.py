@@ -43,7 +43,6 @@ class Math_unary(ConcreteTemplate):
 @infer_global(math.log2)
 @infer_global(math.log10)
 @infer_global(math.exp)
-@infer_global(math.exp2)
 @infer_global(math.fabs)
 @infer_global(math.trunc)
 class Math_unary_with_fp16(ConcreteTemplate):
