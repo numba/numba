@@ -263,6 +263,14 @@ class TestMathLib(TestCase):
         x_values = [-2, -1, -2, 2, 1, 2, .1, .2]
         self.run_unary(pyfunc, x_types, x_values)
 
+    def test_exp2(self):
+        pyfunc = exp2
+        x_types = [types.int16, types.int32, types.int64,
+                   types.uint16, types.uint32, types.uint64,
+                   types.float32, types.float64]
+        x_values = [-2, -1, -2, 2, 1, 2, .1, .2]
+        self.run_unary(pyfunc, x_types, x_values)
+
     def test_expm1(self):
         pyfunc = expm1
         x_types = [types.int16, types.int32, types.int64,
