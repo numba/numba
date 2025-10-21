@@ -9,6 +9,7 @@ import numpy as np
 from numba import njit, types
 from numba.tests.support import TestCase
 from numba.np import numpy_support
+from numba.core.utils import PYVERSION
 
 
 def sin(x):
@@ -263,6 +264,7 @@ class TestMathLib(TestCase):
         x_values = [-2, -1, -2, 2, 1, 2, .1, .2]
         self.run_unary(pyfunc, x_types, x_values)
 
+    @unittest.skipUnless(PYVERSION >= (3, 11), "needs Python 3.11+")
     def test_exp2(self):
         pyfunc = exp2
         x_types = [types.int16, types.int32, types.int64,
