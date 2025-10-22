@@ -758,8 +758,11 @@ def get_ext_info():
     current_platform = sys.platform
     current_machine = platform.machine().lower()
 
-    if ((current_platform.startswith('win') and current_machine in ('amd64', 'x86_64')) or
-        (current_platform.startswith('linux') and current_machine in ('x86_64', 'amd64'))):
+    is_win_x64 = (current_platform.startswith('win') and
+                  current_machine in ('amd64', 'x86_64'))
+    is_linux_x64 = (current_platform.startswith('linux') and
+                    current_machine in ('x86_64', 'amd64'))
+    if is_win_x64 or is_linux_x64:
         optional_extension_names.append('numba.np.ufunc.tbbpool')
 
     def canonicalise_library_type(dso):
