@@ -1,12 +1,10 @@
 Initial support for free-threading enabled Python
 -------------------------------------------------
 
-The Numba code base now supports Python with free-threading enabled. When
-free-threading is enabled there are two test failures for the CPU target related
-to reference counting, but otherwise all the tests pass. Whilst the reference
-counting problem is likely an isolated and somewhat minor issue, it does
-emphasise that this work is experimental and subject to further development.
+The Numba code base now supports the CPython interpreter built with
+free-threading enabled. Note that this feature is experimental and subject to
+further development.
 
-Futher, note that the deprecated ``numba.pycc`` module does not support the
+Also note that the deprecated ``numba.pycc`` module does not support the
 creation of free-threaded AOT compiled modules.
 

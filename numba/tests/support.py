@@ -143,13 +143,6 @@ skip_if_freethreading = unittest.skipIf(_free_threading,
                                          "free-threading is enabled."))
 
 
-skip_as_broken_if_freethreading = unittest.skipIf(_free_threading,
-                                                  ("Skipped [BROKEN] if using "
-                                                   "a free-threading build and "
-                                                   "free-threading is "
-                                                   "enabled."))
-
-
 def expected_failure_py311(fn):
     if utils.PYVERSION == (3, 11):
         return unittest.expectedFailure(fn)
@@ -327,8 +320,14 @@ class TestCase(unittest.TestCase):
         same reference counts before and after executing the
         enclosed block.
         """
+        # Collect before counting references. Note that in free-threading builds
+        # there are some object types that are only collected during garbage
+        # collection e.g. classes and code objects.
+        gc.collect()
         old_refcounts = [sys.getrefcount(x) for x in objects]
+        # Yield to test code
         yield
+        # Collect again before counting references.
         gc.collect()
         new_refcounts = [sys.getrefcount(x) for x in objects]
         for old, new, obj in zip(old_refcounts, new_refcounts, objects):

@@ -4,8 +4,8 @@ import numpy as np
 
 from numba import jit
 from numba.core import utils
-from numba.tests.support import (TestCase, forbid_codegen,
-                                 skip_as_broken_if_freethreading)
+from numba.tests.support import TestCase, forbid_codegen
+
 from .enum_usecases import *
 import unittest
 
@@ -316,11 +316,10 @@ class TestAssertPreciseEqual(TestCase):
 
 class TestMisc(TestCase):
 
-    @skip_as_broken_if_freethreading
     def test_assertRefCount(self):
-        # Use floats to avoid integer interning
-        x = 55.
-        y = 66.
+        # Use objects to avoid interning
+        x = object()
+        y = object()
         l = []
         with self.assertRefCount(x, y):
             pass
@@ -328,7 +327,7 @@ class TestMisc(TestCase):
             # y gains a reference
             with self.assertRefCount(x, y):
                 l.append(y)
-        self.assertIn("66", str(cm.exception))
+        self.assertIn(str(y), str(cm.exception))
 
     def test_forbid_codegen(self):
         """

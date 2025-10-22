@@ -6,8 +6,7 @@ import unittest
 from numba import njit, jit
 from numba.core.errors import TypingError, UnsupportedError
 from numba.core import ir
-from numba.tests.support import (TestCase, IRPreservingTestPipeline,
-                                 skip_as_broken_if_freethreading)
+from numba.tests.support import TestCase, IRPreservingTestPipeline
 
 
 class TestClosure(TestCase):
@@ -91,7 +90,6 @@ class TestClosure(TestCase):
     def test_jit_inner_function(self):
         self.run_jit_inner_function(forceobj=True)
 
-    @skip_as_broken_if_freethreading
     def test_jit_inner_function_npm(self):
         self.run_jit_inner_function(nopython=True)
 

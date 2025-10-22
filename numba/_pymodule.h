@@ -27,7 +27,7 @@
         static struct PyModuleDef moduledef = { \
           PyModuleDef_HEAD_INIT, name, doc, -1, methods, NULL, NULL, NULL, NULL }; \
         ob = PyModule_Create(&moduledef); \
-        if (ob == NULL) { return NULL; } \
+        if (ob == NULL) { return MOD_ERROR_VAL; } \
         MOD_NOGIL(ob); \
 }
 #define MOD_INIT_EXEC(name) PyInit_##name();
