@@ -29,6 +29,304 @@ needs_lief = unittest.skipUnless(_HAVE_LIEF, "test needs py-lief package")
 class TestBuild(TestCase):
     """Test distribution linkage validation for wheels and conda packages"""
 
+    conda_expected_imports = {
+        "darwin": {
+            "arm64": {
+                "_box.cpython-310-darwin.so": set([
+                    "system",
+                ]),
+                "_devicearray.cpython-310-darwin.so": set([
+                    "system",
+                ]),
+                "_dispatcher.cpython-310-darwin.so": set([
+                    "c++",
+                    "system",
+                ]),
+                "_dynfunc.cpython-310-darwin.so": set([
+                    "system",
+                ]),
+                "_extras.cpython-310-darwin.so": set([
+                    "system",
+                ]),
+                "_helperlib.cpython-310-darwin.so": set([
+                    "system",
+                ]),
+                "_internal.cpython-310-darwin.so": set([
+                    "system",
+                ]),
+                "_nrt_python.cpython-310-darwin.so": set([
+                    "system",
+                ]),
+                "_num_threads.cpython-310-darwin.so": set([
+                    "system",
+                ]),
+                "_typeconv.cpython-310-darwin.so": set([
+                    "c++",
+                    "system",
+                ]),
+                "mviewbuf.cpython-310-darwin.so": set([
+                    "system",
+                ]),
+                "omppool.cpython-310-darwin.so": set([
+                    "c++",
+                    "omp",
+                    "system",
+                ]),
+                "tbbpool.cpython-310-darwin.so": set([
+                    "c++",
+                    "system",
+                    "tbb",
+                ]),
+                "workqueue.cpython-310-darwin.so": set([
+                    "c++",
+                    "system",
+                ]),
+            },
+        },
+        "linux": {
+            "aarch64": {
+                "_box.cpython-310-aarch64-linux-gnu.so": set([
+                    "c",
+                    "ld-linux-aarch64",
+                ]),
+                "_devicearray.cpython-310-aarch64-linux-gnu.so": set([
+                ]),
+                "_dispatcher.cpython-310-aarch64-linux-gnu.so": set([
+                    "c",
+                    "gcc_s",
+                    "ld-linux-aarch64",
+                    "pthread",
+                    "stdc++",
+                ]),
+                "_dynfunc.cpython-310-aarch64-linux-gnu.so": set([
+                    "c",
+                    "ld-linux-aarch64",
+                ]),
+                "_extras.cpython-310-aarch64-linux-gnu.so": set([
+                ]),
+                "_helperlib.cpython-310-aarch64-linux-gnu.so": set([
+                    "c",
+                    "ld-linux-aarch64",
+                    "m",
+                ]),
+                "_internal.cpython-310-aarch64-linux-gnu.so": set([
+                    "c",
+                    "ld-linux-aarch64",
+                ]),
+                "_nrt_python.cpython-310-aarch64-linux-gnu.so": set([
+                    "c",
+                    "ld-linux-aarch64",
+                ]),
+                "_num_threads.cpython-310-aarch64-linux-gnu.so": set([
+                ]),
+                "_typeconv.cpython-310-aarch64-linux-gnu.so": set([
+                    "c",
+                    "gcc_s",
+                    "ld-linux-aarch64",
+                    "pthread",
+                    "stdc++",
+                ]),
+                "mviewbuf.cpython-310-aarch64-linux-gnu.so": set([
+                    "c",
+                    "ld-linux-aarch64",
+                ]),
+                "omppool.cpython-310-aarch64-linux-gnu.so": set([
+                    "c",
+                    "gcc_s",
+                    "gomp",
+                    "ld-linux-aarch64",
+                    "pthread",
+                    "stdc++",
+                ]),
+                "workqueue.cpython-310-aarch64-linux-gnu.so": set([
+                    "c",
+                    "gcc_s",
+                    "ld-linux-aarch64",
+                    "pthread",
+                    "stdc++",
+                ]),
+            },
+            "x86_64": {
+                "_box.cpython-310-x86_64-linux-gnu.so": set([
+                    "c",
+                ]),
+                "_devicearray.cpython-310-x86_64-linux-gnu.so": set([
+                ]),
+                "_dispatcher.cpython-310-x86_64-linux-gnu.so": set([
+                    "c",
+                    "gcc_s",
+                    "pthread",
+                    "stdc++",
+                ]),
+                "_dynfunc.cpython-310-x86_64-linux-gnu.so": set([
+                    "c",
+                ]),
+                "_extras.cpython-310-x86_64-linux-gnu.so": set([
+                    "c",
+                ]),
+                "_helperlib.cpython-310-x86_64-linux-gnu.so": set([
+                    "c",
+                    "ld-linux-x86-64",
+                    "m",
+                ]),
+                "_internal.cpython-310-x86_64-linux-gnu.so": set([
+                    "c",
+                ]),
+                "_nrt_python.cpython-310-x86_64-linux-gnu.so": set([
+                    "c",
+                ]),
+                "_num_threads.cpython-310-x86_64-linux-gnu.so": set([
+                    "c",
+                    "ld-linux-x86-64",
+                ]),
+                "_typeconv.cpython-310-x86_64-linux-gnu.so": set([
+                    "c",
+                    "gcc_s",
+                    "pthread",
+                    "stdc++",
+                ]),
+                "mviewbuf.cpython-310-x86_64-linux-gnu.so": set([
+                    "c",
+                ]),
+                "omppool.cpython-310-x86_64-linux-gnu.so": set([
+                    "c",
+                    "gcc_s",
+                    "gomp",
+                    "ld-linux-x86-64",
+                    "pthread",
+                    "stdc++",
+                ]),
+                "tbbpool.cpython-310-x86_64-linux-gnu.so": set([
+                    "c",
+                    "gcc_s",
+                    "ld-linux-x86-64",
+                    "stdc++",
+                    "tbb",
+                ]),
+                "workqueue.cpython-310-x86_64-linux-gnu.so": set([
+                    "c",
+                    "gcc_s",
+                    "ld-linux-x86-64",
+                    "pthread",
+                    "stdc++",
+                ]),
+            },
+        },
+        "windows": {
+            "amd64": {
+                "_box.cp310-win_amd64.pyd": set([
+                    "api-ms-win-crt-runtime-l1-1-0",
+                    "kernel32",
+                    "python310",
+                    "vcruntime140",
+                ]),
+                "_devicearray.cp310-win_amd64.pyd": set([
+                    "api-ms-win-crt-runtime-l1-1-0",
+                    "kernel32",
+                    "python310",
+                    "vcruntime140",
+                ]),
+                "_dispatcher.cp310-win_amd64.pyd": set([
+                    "api-ms-win-crt-heap-l1-1-0",
+                    "api-ms-win-crt-runtime-l1-1-0",
+                    "kernel32",
+                    "msvcp140",
+                    "python310",
+                    "vcruntime140",
+                ]),
+                "_dynfunc.cp310-win_amd64.pyd": set([
+                    "api-ms-win-crt-runtime-l1-1-0",
+                    "kernel32",
+                    "python310",
+                    "vcruntime140",
+                ]),
+                "_extras.cp310-win_amd64.pyd": set([
+                    "api-ms-win-crt-runtime-l1-1-0",
+                    "kernel32",
+                    "python310",
+                    "vcruntime140",
+                ]),
+                "_helperlib.cp310-win_amd64.pyd": set([
+                    "api-ms-win-crt-heap-l1-1-0",
+                    "api-ms-win-crt-math-l1-1-0",
+                    "api-ms-win-crt-runtime-l1-1-0",
+                    "api-ms-win-crt-stdio-l1-1-0",
+                    "kernel32",
+                    "python310",
+                    "vcruntime140",
+                ]),
+                "_internal.cp310-win_amd64.pyd": set([
+                    "api-ms-win-crt-runtime-l1-1-0",
+                    "api-ms-win-crt-string-l1-1-0",
+                    "kernel32",
+                    "python310",
+                    "vcruntime140",
+                ]),
+                "_nrt_python.cp310-win_amd64.pyd": set([
+                    "api-ms-win-crt-heap-l1-1-0",
+                    "api-ms-win-crt-runtime-l1-1-0",
+                    "api-ms-win-crt-stdio-l1-1-0",
+                    "kernel32",
+                    "python310",
+                    "vcruntime140",
+                ]),
+                "_num_threads.cp310-win_amd64.pyd": set([
+                    "api-ms-win-crt-runtime-l1-1-0",
+                    "kernel32",
+                    "python310",
+                    "vcruntime140",
+                ]),
+                "_typeconv.cp310-win_amd64.pyd": set([
+                    "api-ms-win-crt-heap-l1-1-0",
+                    "api-ms-win-crt-runtime-l1-1-0",
+                    "kernel32",
+                    "msvcp140",
+                    "python310",
+                    "vcruntime140",
+                ]),
+                "mviewbuf.cp310-win_amd64.pyd": set([
+                    "api-ms-win-crt-heap-l1-1-0",
+                    "api-ms-win-crt-runtime-l1-1-0",
+                    "kernel32",
+                    "python310",
+                    "vcruntime140",
+                ]),
+                "omppool.cp310-win_amd64.pyd": set([
+                    "api-ms-win-crt-heap-l1-1-0",
+                    "api-ms-win-crt-math-l1-1-0",
+                    "api-ms-win-crt-runtime-l1-1-0",
+                    "api-ms-win-crt-stdio-l1-1-0",
+                    "kernel32",
+                    "msvcp140",
+                    "python310",
+                    "vcomp140",
+                    "vcruntime140",
+                ]),
+                "tbbpool.cp310-win_amd64.pyd": set([
+                    "api-ms-win-crt-heap-l1-1-0",
+                    "api-ms-win-crt-math-l1-1-0",
+                    "api-ms-win-crt-runtime-l1-1-0",
+                    "api-ms-win-crt-stdio-l1-1-0",
+                    "kernel32",
+                    "msvcp140",
+                    "python310",
+                    "tbb12",
+                    "vcruntime140",
+                ]),
+                "workqueue.cp310-win_amd64.pyd": set([
+                    "api-ms-win-crt-heap-l1-1-0",
+                    "api-ms-win-crt-math-l1-1-0",
+                    "api-ms-win-crt-runtime-l1-1-0",
+                    "api-ms-win-crt-stdio-l1-1-0",
+                    "kernel32",
+                    "msvcp140",
+                    "python310",
+                    "vcruntime140",
+                ]),
+            },
+        },
+    }
+
     wheel_expected_imports = {
         "windows": {
             "amd64": {
