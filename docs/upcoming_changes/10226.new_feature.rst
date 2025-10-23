@@ -1,0 +1,10 @@
+Initial support for free-threading enabled Python
+-------------------------------------------------
+
+The Numba code base now supports the CPython interpreter built with
+free-threading enabled. Note that this feature is experimental and subject to
+further development.
+
+Also note that the deprecated ``numba.pycc`` module does not support the
+creation of free-threaded AOT compiled modules.
+
