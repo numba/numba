@@ -374,11 +374,15 @@ def _call_function_ex_replace_args_large(
     # tuple.
     search_start = 0
     total_args = []
-    if (
-        isinstance(vararg_stmt, ir.Assign)
-        and isinstance(vararg_stmt.value, ir.Var)
-    ):
-        target_name = vararg_stmt.value.name
+    if isinstance(vararg_stmt, ir.Assign):
+        value = vararg_stmt.value
+
+        if isinstance(value, ir.Var):
+            target_name = value.name
+        elif isinstance(value, ir.Expr):
+            msg = "Generator expression for arguments is unsupported"
+            raise UnsupportedBytecodeError(msg, loc=vararg_stmt.loc)
+
         # If there is an initial assignment, delete it
         new_body[search_end] = None
         # Remove the definition.
