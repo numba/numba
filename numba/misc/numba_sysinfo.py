@@ -744,9 +744,13 @@ def get_ext_info():
         'numba.mviewbuf',
         'numba.core.runtime._nrt_python',
         'numba.experimental.jitclass._box',
-        'numba.cuda.cudadrv._extras',
         'numba._devicearray',
     ]
+
+    # Skip CUDA driver extensions when CUDASIM is enabled as they are replaced
+    # by Python-based simulation and won't be loadable
+    if os.environ.get('NUMBA_ENABLE_CUDASIM') != '1':
+        core_extension_names.append('numba.cuda.cudadrv._extras')
 
     # optional extensions (conditionally built, from setup.py)
     optional_extension_names = [
