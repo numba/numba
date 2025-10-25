@@ -155,7 +155,6 @@ class TestBuild(TestCase):
                     "c",
                     "gcc_s",
                     "ld-linux-aarch64",
-                    "pthread",
                     "stdc++",
                 ]),
                 "_dynfunc.cpython-310-aarch64-linux-gnu.so": set([
@@ -215,7 +214,6 @@ class TestBuild(TestCase):
                 "_dispatcher.cpython-310-x86_64-linux-gnu.so": set([
                     "c",
                     "gcc_s",
-                    "pthread",
                     "stdc++",
                 ]),
                 "_dynfunc.cpython-310-x86_64-linux-gnu.so": set([
