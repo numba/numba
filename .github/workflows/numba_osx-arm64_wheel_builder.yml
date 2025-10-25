@@ -71,15 +71,10 @@ jobs:
       - name: Setup Miniconda
         uses: conda-incubator/setup-miniconda@v3
         with:
+          python-version: ${{ matrix.python-version }}
           conda-remove-defaults: true
           auto-update-conda: true
           auto-activate-base: true
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-          allow-prereleases: true
 
       - name: Download llvmlite wheel
         if: inputs.llvmlite_wheel_runid != ''
@@ -108,6 +103,7 @@ jobs:
       - name: Build wheel
         env:
           NUMBA_PACKAGE_FORMAT: "wheel"
+          MACOSX_DEPLOYMENT_TARGET: "11.0"
         run: arch -arm64 python -m build --wheel --no-isolation
 
       - name: Fix macOS wheel library paths
