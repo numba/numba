@@ -30,56 +30,116 @@ class TestBuild(TestCase):
     """Test distribution linkage validation for wheels and conda packages"""
 
     conda_expected_imports = {
-        "darwin": {
-            "arm64": {
-                "_box.cpython-310-darwin.so": set([
-                    "system",
+        "windows": {
+            "amd64": {
+                "_dynfunc.cp310-win_amd64.pyd": set([
+                    "api-ms-win-crt-runtime-l1-1-0",
+                    "kernel32",
+                    "python310",
+                    "vcruntime140",
                 ]),
-                "_devicearray.cpython-310-darwin.so": set([
-                    "system",
+                "_helperlib.cp310-win_amd64.pyd": set([
+                    "api-ms-win-crt-heap-l1-1-0",
+                    "api-ms-win-crt-math-l1-1-0",
+                    "api-ms-win-crt-runtime-l1-1-0",
+                    "api-ms-win-crt-stdio-l1-1-0",
+                    "kernel32",
+                    "python310",
+                    "vcruntime140",
                 ]),
-                "_dispatcher.cpython-310-darwin.so": set([
-                    "c++",
-                    "system",
+                "_devicearray.cp310-win_amd64.pyd": set([
+                    "api-ms-win-crt-runtime-l1-1-0",
+                    "kernel32",
+                    "python310",
+                    "vcruntime140",
                 ]),
-                "_dynfunc.cpython-310-darwin.so": set([
-                    "system",
+                "mviewbuf.cp310-win_amd64.pyd": set([
+                    "api-ms-win-crt-heap-l1-1-0",
+                    "api-ms-win-crt-runtime-l1-1-0",
+                    "kernel32",
+                    "python310",
+                    "vcruntime140",
                 ]),
-                "_extras.cpython-310-darwin.so": set([
-                    "system",
+                "_dispatcher.cp310-win_amd64.pyd": set([
+                    "api-ms-win-crt-heap-l1-1-0",
+                    "api-ms-win-crt-runtime-l1-1-0",
+                    "kernel32",
+                    "msvcp140",
+                    "python310",
+                    "vcruntime140",
                 ]),
-                "_helperlib.cpython-310-darwin.so": set([
-                    "system",
+                "_internal.cp310-win_amd64.pyd": set([
+                    "api-ms-win-crt-runtime-l1-1-0",
+                    "api-ms-win-crt-string-l1-1-0",
+                    "kernel32",
+                    "python310",
+                    "vcruntime140",
                 ]),
-                "_internal.cpython-310-darwin.so": set([
-                    "system",
+                "omppool.cp310-win_amd64.pyd": set([
+                    "api-ms-win-crt-heap-l1-1-0",
+                    "api-ms-win-crt-math-l1-1-0",
+                    "api-ms-win-crt-runtime-l1-1-0",
+                    "api-ms-win-crt-stdio-l1-1-0",
+                    "kernel32",
+                    "msvcp140",
+                    "python310",
+                    "vcomp140",
+                    "vcruntime140",
                 ]),
-                "_nrt_python.cpython-310-darwin.so": set([
-                    "system",
+                "workqueue.cp310-win_amd64.pyd": set([
+                    "api-ms-win-crt-heap-l1-1-0",
+                    "api-ms-win-crt-math-l1-1-0",
+                    "api-ms-win-crt-runtime-l1-1-0",
+                    "api-ms-win-crt-stdio-l1-1-0",
+                    "kernel32",
+                    "msvcp140",
+                    "python310",
+                    "vcruntime140",
                 ]),
-                "_num_threads.cpython-310-darwin.so": set([
-                    "system",
+                "tbbpool.cp310-win_amd64.pyd": set([
+                    "api-ms-win-crt-heap-l1-1-0",
+                    "api-ms-win-crt-math-l1-1-0",
+                    "api-ms-win-crt-runtime-l1-1-0",
+                    "api-ms-win-crt-stdio-l1-1-0",
+                    "kernel32",
+                    "msvcp140",
+                    "python310",
+                    "tbb12",
+                    "vcruntime140",
                 ]),
-                "_typeconv.cpython-310-darwin.so": set([
-                    "c++",
-                    "system",
+                "_num_threads.cp310-win_amd64.pyd": set([
+                    "api-ms-win-crt-runtime-l1-1-0",
+                    "kernel32",
+                    "python310",
+                    "vcruntime140",
                 ]),
-                "mviewbuf.cpython-310-darwin.so": set([
-                    "system",
+                "_extras.cp310-win_amd64.pyd": set([
+                    "api-ms-win-crt-runtime-l1-1-0",
+                    "kernel32",
+                    "python310",
+                    "vcruntime140",
                 ]),
-                "omppool.cpython-310-darwin.so": set([
-                    "c++",
-                    "omp",
-                    "system",
+                "_typeconv.cp310-win_amd64.pyd": set([
+                    "api-ms-win-crt-heap-l1-1-0",
+                    "api-ms-win-crt-runtime-l1-1-0",
+                    "kernel32",
+                    "msvcp140",
+                    "python310",
+                    "vcruntime140",
                 ]),
-                "tbbpool.cpython-310-darwin.so": set([
-                    "c++",
-                    "system",
-                    "tbb",
+                "_nrt_python.cp310-win_amd64.pyd": set([
+                    "api-ms-win-crt-heap-l1-1-0",
+                    "api-ms-win-crt-runtime-l1-1-0",
+                    "api-ms-win-crt-stdio-l1-1-0",
+                    "kernel32",
+                    "python310",
+                    "vcruntime140",
                 ]),
-                "workqueue.cpython-310-darwin.so": set([
-                    "c++",
-                    "system",
+                "_box.cp310-win_amd64.pyd": set([
+                    "api-ms-win-crt-runtime-l1-1-0",
+                    "kernel32",
+                    "python310",
+                    "vcruntime140",
                 ]),
             },
         },
@@ -212,116 +272,56 @@ class TestBuild(TestCase):
                 ]),
             },
         },
-        "windows": {
-            "amd64": {
-                "_box.cp310-win_amd64.pyd": set([
-                    "api-ms-win-crt-runtime-l1-1-0",
-                    "kernel32",
-                    "python310",
-                    "vcruntime140",
+        "darwin": {
+            "arm64": {
+                "_box.cpython-310-darwin.so": set([
+                    "system",
                 ]),
-                "_devicearray.cp310-win_amd64.pyd": set([
-                    "api-ms-win-crt-runtime-l1-1-0",
-                    "kernel32",
-                    "python310",
-                    "vcruntime140",
+                "_devicearray.cpython-310-darwin.so": set([
+                    "system",
                 ]),
-                "_dispatcher.cp310-win_amd64.pyd": set([
-                    "api-ms-win-crt-heap-l1-1-0",
-                    "api-ms-win-crt-runtime-l1-1-0",
-                    "kernel32",
-                    "msvcp140",
-                    "python310",
-                    "vcruntime140",
+                "_dispatcher.cpython-310-darwin.so": set([
+                    "c++",
+                    "system",
                 ]),
-                "_dynfunc.cp310-win_amd64.pyd": set([
-                    "api-ms-win-crt-runtime-l1-1-0",
-                    "kernel32",
-                    "python310",
-                    "vcruntime140",
+                "_dynfunc.cpython-310-darwin.so": set([
+                    "system",
                 ]),
-                "_extras.cp310-win_amd64.pyd": set([
-                    "api-ms-win-crt-runtime-l1-1-0",
-                    "kernel32",
-                    "python310",
-                    "vcruntime140",
+                "_extras.cpython-310-darwin.so": set([
+                    "system",
                 ]),
-                "_helperlib.cp310-win_amd64.pyd": set([
-                    "api-ms-win-crt-heap-l1-1-0",
-                    "api-ms-win-crt-math-l1-1-0",
-                    "api-ms-win-crt-runtime-l1-1-0",
-                    "api-ms-win-crt-stdio-l1-1-0",
-                    "kernel32",
-                    "python310",
-                    "vcruntime140",
+                "_helperlib.cpython-310-darwin.so": set([
+                    "system",
                 ]),
-                "_internal.cp310-win_amd64.pyd": set([
-                    "api-ms-win-crt-runtime-l1-1-0",
-                    "api-ms-win-crt-string-l1-1-0",
-                    "kernel32",
-                    "python310",
-                    "vcruntime140",
+                "_internal.cpython-310-darwin.so": set([
+                    "system",
                 ]),
-                "_nrt_python.cp310-win_amd64.pyd": set([
-                    "api-ms-win-crt-heap-l1-1-0",
-                    "api-ms-win-crt-runtime-l1-1-0",
-                    "api-ms-win-crt-stdio-l1-1-0",
-                    "kernel32",
-                    "python310",
-                    "vcruntime140",
+                "_nrt_python.cpython-310-darwin.so": set([
+                    "system",
                 ]),
-                "_num_threads.cp310-win_amd64.pyd": set([
-                    "api-ms-win-crt-runtime-l1-1-0",
-                    "kernel32",
-                    "python310",
-                    "vcruntime140",
+                "_num_threads.cpython-310-darwin.so": set([
+                    "system",
                 ]),
-                "_typeconv.cp310-win_amd64.pyd": set([
-                    "api-ms-win-crt-heap-l1-1-0",
-                    "api-ms-win-crt-runtime-l1-1-0",
-                    "kernel32",
-                    "msvcp140",
-                    "python310",
-                    "vcruntime140",
+                "_typeconv.cpython-310-darwin.so": set([
+                    "c++",
+                    "system",
                 ]),
-                "mviewbuf.cp310-win_amd64.pyd": set([
-                    "api-ms-win-crt-heap-l1-1-0",
-                    "api-ms-win-crt-runtime-l1-1-0",
-                    "kernel32",
-                    "python310",
-                    "vcruntime140",
+                "mviewbuf.cpython-310-darwin.so": set([
+                    "system",
                 ]),
-                "omppool.cp310-win_amd64.pyd": set([
-                    "api-ms-win-crt-heap-l1-1-0",
-                    "api-ms-win-crt-math-l1-1-0",
-                    "api-ms-win-crt-runtime-l1-1-0",
-                    "api-ms-win-crt-stdio-l1-1-0",
-                    "kernel32",
-                    "msvcp140",
-                    "python310",
-                    "vcomp140",
-                    "vcruntime140",
+                "omppool.cpython-310-darwin.so": set([
+                    "c++",
+                    "omp",
+                    "system",
                 ]),
-                "tbbpool.cp310-win_amd64.pyd": set([
-                    "api-ms-win-crt-heap-l1-1-0",
-                    "api-ms-win-crt-math-l1-1-0",
-                    "api-ms-win-crt-runtime-l1-1-0",
-                    "api-ms-win-crt-stdio-l1-1-0",
-                    "kernel32",
-                    "msvcp140",
-                    "python310",
-                    "tbb12",
-                    "vcruntime140",
+                "tbbpool.cpython-310-darwin.so": set([
+                    "c++",
+                    "system",
+                    "tbb",
                 ]),
-                "workqueue.cp310-win_amd64.pyd": set([
-                    "api-ms-win-crt-heap-l1-1-0",
-                    "api-ms-win-crt-math-l1-1-0",
-                    "api-ms-win-crt-runtime-l1-1-0",
-                    "api-ms-win-crt-stdio-l1-1-0",
-                    "kernel32",
-                    "msvcp140",
-                    "python310",
-                    "vcruntime140",
+                "workqueue.cpython-310-darwin.so": set([
+                    "c++",
+                    "system",
                 ]),
             },
         },
@@ -668,6 +668,9 @@ class TestBuild(TestCase):
 
         if package_type == "wheel":
             expected = self.wheel_expected_imports.get(
+                os_name, {}).get(machine, {})
+        elif package_type == "conda":
+            expected = self.conda_expected_imports.get(
                 os_name, {}).get(machine, {})
         else:
             raise ValueError(f"Unexpected package type: {package_type}")
