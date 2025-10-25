@@ -112,7 +112,14 @@ def get_package_format():
     Get package format from NUMBA_PACKAGE_FORMAT environment variable.
     Falls back to 'unknown' if not set.
     """
-    return os.getenv('NUMBA_PACKAGE_FORMAT', 'unknown')
+    valid_formats = ('conda', 'wheel')
+    fmt = os.getenv('NUMBA_PACKAGE_FORMAT', 'unknown')
+    if fmt not in valid_formats and fmt != 'unknown':
+        print(f"Warning: Invalid NUMBA_PACKAGE_FORMAT='{fmt}'. "
+              f"Valid values are: {', '.join(valid_formats)}. "
+              f"Defaulting to 'unknown'.")
+        fmt = 'unknown'
+    return fmt
 
 
 def is_building():
