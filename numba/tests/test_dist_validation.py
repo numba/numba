@@ -126,6 +126,7 @@ class TestBuild(TestCase):
                     "msvcp140",
                     "python310",
                     "vcruntime140",
+                    "vcruntime140_1",
                 ]),
                 "_nrt_python.cp310-win_amd64.pyd": set([
                     "api-ms-win-crt-heap-l1-1-0",
