@@ -42,6 +42,11 @@ def array_flat_sum(arr):
 def array_flat_len(arr):
     return len(arr.flat)
 
+def array_ndenumerate_zero_dim(arr):
+    for i, v in np.ndenumerate(arr):
+        return (i, v)
+    return None
+
 def array_ndenumerate_sum(arr):
     s = 0
     for (i, j), v in np.ndenumerate(arr):
@@ -441,6 +446,16 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         got = cfunc(6)
         self.assertTrue(got.sum())
         self.assertPreciseEqual(expect, got)
+
+    def test_array_ndenumerate_zero_dim(self):
+        func = array_ndenumerate_zero_dim
+        cfunc = njit(func)
+        arr = np.array(97)
+        expected = func(arr)
+        got = cfunc(arr)
+        self.assertPreciseEqual(got, expected)
+        self.assertEqual(expected[0], ())
+        self.assertEqual(expected[1], 97)
 
     def test_np_ndindex(self):
         func = np_ndindex
