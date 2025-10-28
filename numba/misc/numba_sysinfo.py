@@ -103,8 +103,10 @@ def get_os_spec_info(os_name):
     # Linux man page for `/proc`:
     # http://man7.org/linux/man-pages/man5/proc.5.html
 
-    # Windows documentation for `wmic OS`:
-    # https://docs.microsoft.com/en-us/windows/win32/cimwin32prov/cim-operatingsystem
+    # WMIC is deprecated in windows-2025, using powershell instead
+    # https://techcommunity.microsoft.com/t5/windows-it-pro-blog/wmi-command-line-wmic-utility-deprecation-next-steps/ba-p/4039242
+    # Windows documentation for `powershell`:
+    # https://learn.microsoft.com/en-us/powershell/
 
     # MacOS man page for `sysctl`:
     # https://www.unix.com/man-page/osx/3/sysctl/
@@ -140,8 +142,14 @@ def get_os_spec_info(os_name):
         'Windows': {
             'cmd': (),
             'cmd_optional': (
-                CmdBufferOut(('wmic', 'OS', 'get', 'TotalVirtualMemorySize')),
-                CmdBufferOut(('wmic', 'OS', 'get', 'FreeVirtualMemory')),
+                CmdBufferOut(('powershell', '-NoProfile', '-Command',
+                              "'TotalVirtualMemorySize ' + "
+                              "(Get-CimInstance -ClassName "
+                              "Win32_OperatingSystem).TotalVirtualMemorySize")),
+                CmdBufferOut(('powershell', '-NoProfile', '-Command',
+                              "'FreeVirtualMemory ' + "
+                              "(Get-CimInstance -ClassName "
+                              "Win32_OperatingSystem).FreeVirtualMemory")),
             ),
             'kwds': {
                 # output string fragment -> result dict key

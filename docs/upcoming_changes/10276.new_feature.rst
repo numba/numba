@@ -1,0 +1,4 @@
+Add support for ``math.exp2``.
+------------------------------
+
+Support for ``math.exp2`` is added.

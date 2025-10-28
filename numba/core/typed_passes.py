@@ -452,7 +452,7 @@ class BaseNativeLowering(abc.ABC, LoweringPass):
         calltypes = state.calltypes
         flags = state.flags
         metadata = state.metadata
-        pre_stats = llvm.passmanagers.dump_refprune_stats()
+        pre_stats = llvm.newpassmanagers.dump_refprune_stats()
         # Add reload functions to library
         library._reload_init.update(state.reload_init)
 
@@ -505,7 +505,7 @@ class BaseNativeLowering(abc.ABC, LoweringPass):
                                            cfunc=cfunc, env=env)
 
             # capture pruning stats
-            post_stats = llvm.passmanagers.dump_refprune_stats()
+            post_stats = llvm.newpassmanagers.dump_refprune_stats()
             metadata['prune_stats'] = post_stats - pre_stats
 
             # Save the LLVM pass timings

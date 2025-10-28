@@ -839,7 +839,7 @@ static void traceback_add(const char *funcname, const char *filename, int lineno
     if (!frame)
         goto error;
 
-#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 12) || (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 13) /* 3.12 or 3.13 */
+#if (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 12) || (PY_MINOR_VERSION == 13) || (PY_MINOR_VERSION == 14))
 #elif (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 11) /* 3.11 */
 
     /* unsafe cast to our copy of _frame to access the f_lineno field */
@@ -857,7 +857,7 @@ static void traceback_add(const char *funcname, const char *filename, int lineno
     Py_DECREF(frame);
     return;
 
-#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 12) || (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 13) /* 3.12 or 3.13 */
+#if (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 12) || (PY_MINOR_VERSION == 13) || (PY_MINOR_VERSION == 14))
 error:
     _PyErr_ChainExceptions1(exc);
 #elif (PY_MAJOR_VERSION == 3) && ((PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11)) /* 3.11 and below */
