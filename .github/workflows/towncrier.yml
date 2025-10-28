@@ -10,7 +10,7 @@ env:
 jobs:
   check:
     name: Check release notes
-    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip_release_notes') }}
+    if: ${{ github.event.pull_request.state == 'open' && !contains(github.event.pull_request.labels.*.name, 'skip_release_notes') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
