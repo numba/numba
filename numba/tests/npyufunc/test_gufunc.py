@@ -6,7 +6,7 @@ import numpy as np
 from numba import void, float32, float64, int32, int64, jit, guvectorize
 from numba.core.errors import TypingError
 from numba.np.ufunc import GUVectorize
-from numba.tests.support import tag, TestCase
+from numba.tests.support import TestCase, MemoryLeakMixin
 
 
 def matmulcore(A, B, C):
@@ -24,7 +24,7 @@ def axpy(a, x, y, out):
     out[0] = a * x  + y
 
 
-class TestGUFunc(TestCase):
+class TestGUFunc(MemoryLeakMixin, TestCase):
     target = 'cpu'
 
     def check_matmul_gufunc(self, gufunc):
@@ -97,7 +97,7 @@ class TestGUFunc(TestCase):
         self.assertEqual("docstring for gufunc", gufunc.__doc__)
 
 
-class TestMultipleOutputs(TestCase):
+class TestMultipleOutputs(MemoryLeakMixin, TestCase):
     target = 'cpu'
 
     def test_multiple_outputs_same_type_passed_in(self):
@@ -171,7 +171,7 @@ class TestGUFuncParallel(TestGUFunc):
     target = 'parallel'
 
 
-class TestDynamicGUFunc(TestCase):
+class TestDynamicGUFunc(MemoryLeakMixin, TestCase):
     target = 'cpu'
 
     def test_dynamic_matmul(self):
@@ -334,7 +334,7 @@ class TestDynamicGUFunc(TestCase):
         self.assertPreciseEqual(x, np.array([2, 4, 3, 4]))
 
 
-class TestGUVectorizeScalar(TestCase):
+class TestGUVectorizeScalar(MemoryLeakMixin, TestCase):
     """
     Nothing keeps user from out-of-bound memory access
     """
@@ -432,7 +432,7 @@ class TestGUVectorizeScalarParallel(TestGUVectorizeScalar):
     target = 'parallel'
 
 
-class TestGUVectorizePickling(TestCase):
+class TestGUVectorizePickling(MemoryLeakMixin, TestCase):
     def test_pickle_gufunc_non_dyanmic(self):
         """Non-dynamic gufunc.
         """
@@ -546,7 +546,7 @@ class TestGUVectorizePickling(TestCase):
         self.assertPreciseEqual(expect, got)
 
 
-class TestGUVectorizeJit(TestCase):
+class TestGUVectorizeJit(MemoryLeakMixin, TestCase):
     target = 'cpu'
 
     def check_add_gufunc(self, gufunc):
@@ -844,6 +844,27 @@ class TestGUVectorizeJit(TestCase):
             jit_func(x, y, res, out)
         msg = ('Loop and array shapes are incompatible')
         self.assertIn(msg, str(raises.exception))
+
+    def test_issue_10287(self):
+        @guvectorize([(float64[:], int64, float64[:])], "(n),()->(n)")
+        def guve(x, n, res):
+            pass
+
+
+        @jit
+        def njit_guve(x, n):
+            res = np.zeros_like(x)
+            guve(x, n, res)
+            return res
+
+
+        rng = np.random.default_rng(69)
+
+        for _ in range(20000):
+            x = rng.random(65)
+            y = np.repeat(x[None], 130, axis=0)
+            njit_guve(y, 5)
+
 
 if __name__ == '__main__':
     unittest.main()
