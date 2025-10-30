@@ -1805,6 +1805,11 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check(np.array([[3.1, 3.1], [1.7, 2.29], [3.3, 1.7]]))
         check(np.array([]))
         check(np.array([np.nan, np.nan]))
+        check(np.array(['A', 'A', 'B'], dtype='<U16'))  # issue 10250
+        check(np.array([np.datetime64("2001-01-01"),
+                        np.datetime64("2001-01-01"),
+                        np.datetime64("2001-01-02"),
+                        np.datetime64("NAT")]))
 
     @needs_blas
     def test_array_dot(self):
