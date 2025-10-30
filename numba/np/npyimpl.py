@@ -15,8 +15,7 @@ import operator
 
 from numba.np import arrayobj, ufunc_db, numpy_support
 from numba.np.ufunc.sigparse import parse_signature
-from numba.core.imputils import (Registry, impl_ret_new_ref, force_error_model,
-                                 impl_ret_borrowed)
+from numba.core.imputils import (Registry, impl_ret_new_ref, force_error_model, impl_ret_borrowed)
 from numba.core import typing, types, utils, cgutils, callconv, config
 from numba.np.numpy_support import (
     ufunc_find_matching_loop, select_array_wrapper, from_dtype, _ufunc_loop_sig
@@ -235,7 +234,9 @@ class _ArrayGUHelper(namedtuple('_ArrayHelper', ('context', 'builder',
             res = _getitem_array_generic(context, builder,
                                          self.inner_arr_ty, arrty, arr,
                                          index_types, indices)
-            return impl_ret_borrowed(context, builder, self.inner_arr_ty, res)
+            # NOTE: don't call impl_ret_borrowed since the caller doesn't handle
+            #       references; but this is a borrow.
+            return res
 
     def guard_shape(self, loopshape):
         inner_ndim = self.inner_arr_ty.ndim

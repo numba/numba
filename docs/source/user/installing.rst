@@ -8,6 +8,9 @@ Compatibility
 For software compatibility, please see the section on :ref:`version support
 information<numba_support_info>` for details.
 
+Support is provided in Tiers, for details see the
+:ref:`Support Tiers <support_tiers>` policy.
+
 Our supported platforms are:
 
 * Linux x86_64
