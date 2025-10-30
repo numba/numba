@@ -365,7 +365,7 @@ class Driver(object):
         else:
             variants = ('_v2', '')
 
-        # workaround from https://github.com/NVIDIA/numba-cuda/commit/6e08c9d08e9de59c7af28b720289debbbd384764
+        # workaround from https://github.com/NVIDIA/numba-cuda/commit/6e08c9d08e9de59c7af28b720289debbbd384764  # noqa: E501
         if fname in ("cuCtxGetDevice", "cuCtxSynchronize"):
             return getattr(self.lib, fname)
 
