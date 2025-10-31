@@ -80,7 +80,7 @@ jobs:
 
       - name: Download llvmlite wheel
         if: inputs.llvmlite_wheel_runid != ''
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: llvmlite-linux-64-py${{ matrix.python_canonical }}
           path: llvmlite_wheels
@@ -161,14 +161,14 @@ jobs:
           allow-prereleases: true
 
       - name: Download Numba wheel artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: numba_linux-64_wheel_py${{ matrix.python_canonical }}
           path: dist
 
       - name: Download llvmlite wheel
         if: inputs.llvmlite_wheel_runid != ''
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: llvmlite-linux-64-py${{ matrix.python_canonical }}
           path: llvmlite_wheels
