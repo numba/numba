@@ -179,8 +179,12 @@ vary with target operating system and hardware. The following lists them all
   See :ref:`numba-source-install-env_vars` for more details about additional
   options for the configuration and specification of these optional components.
 
-  * ``llvm-openmp`` (OSX) - provides headers for compiling OpenMP support into
-    Numba's threading backend
+  * OpenMP - provides headers for compiling OpenMP support into
+    Numba's threading backend. Platform-specific OpenMP requirements are:
+      
+    * Windows: an OpenMP 2.0-compliant implementation.
+    * OSX: The ``llvm-openmp`` implementation.
+    * Other platforms: an OpenMP 3.0-compliant implementation.
   * ``tbb-devel`` - provides TBB headers/libraries for compiling TBB support
     into Numba's threading backend (version >= 2021.6 required).
 
@@ -193,10 +197,9 @@ vary with target operating system and hardware. The following lists them all
   * ``jinja2`` - for "pretty" type annotation output (HTML) via the ``numba``
     CLI
   * ``cffi`` - permits use of CFFI bindings in Numba compiled functions
-  * ``llvm-openmp`` - (OSX) provides OpenMP library support for Numba's OpenMP
-    threading backend.
-  * ``intel-openmp`` - (OSX) provides an alternative OpenMP library for use with
-    Numba's OpenMP threading backend.
+  * OpenMP - similar version constraints to the build time OpenMP dependency,
+    with the exception that either ``intel-openmp`` or ``llvm-openmp`` may be
+    used on OSX.
   * ``ipython`` - if in use, caching will use IPython's cache
     directories/caching still works
   * ``pyyaml`` - permits the use of a ``.numba_config.yaml``
