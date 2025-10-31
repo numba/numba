@@ -104,9 +104,9 @@ skip_unless_py312 = unittest.skipUnless(
     "needs Python 3.12"
 )
 
-skip_if_py313_on_windows = unittest.skipIf(
-     utils.PYVERSION == (3, 13) and sys.platform.startswith('win'),
-     "Not supported on Python 3.13 on Windows"
+skip_if_py313plus_on_windows = unittest.skipIf(
+     utils.PYVERSION >= (3, 13) and sys.platform.startswith('win'),
+     "Not supported on Python 3.13+ on Windows"
  )
 
 skip_if_py314= unittest.skipIf(
