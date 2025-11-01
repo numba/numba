@@ -138,6 +138,10 @@ def get_ext_modules():
     np_compile_args = {'include_dirs': [np.get_include(),],}
     if sys.platform != 'win32':
         np_compile_args['libraries'] = ['m',]
+    if np.lib.NumpyVersion(np.__version__) >= np.lib.NumpyVersion('2.0.0'):
+        np_compile_args['define_macros'] = [
+            ("NPY_TARGET_VERSION", "NPY_2_0_API_VERSION")
+        ]
 
     ext_devicearray = Extension(name='numba._devicearray',
                                 sources=['numba/_devicearray.cpp'],
