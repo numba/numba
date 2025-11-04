@@ -1763,7 +1763,7 @@ class TraceRunner(object):
         elif inst.arg == 16:
             # In 3.14 a new flag was added it has the value 0x10/16
             # Numba report: https://github.com/numba/numba/issues/10319
-            state.set_function_attribute(make_func_stack, annotations=data)
+            state.set_function_attribute(make_func_stack, annotate=data)
         else:
             raise AssertionError("unreachable")
         state.push(make_func_stack)
