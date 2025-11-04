@@ -1,6 +1,7 @@
 /* MSVC C99 doesn't have <stdatomic.h>, else this could be written in easily
  * in C */
 #include <atomic>
+#include <algorithm>
 
 #ifdef _MSC_VER
 #include <inttypes.h>
@@ -11,6 +12,11 @@
 #include "nrt.h"
 #include "assert.h"
 
+#if defined(__s390x__) || defined(__zarch__)
+    #define IS_S390X_ARCH 1
+#else
+    #define IS_S390X_ARCH 0
+#endif
 
 /* NOTE: if changing the layout, please update numba.core.runtime.atomicops */
 extern "C" {
@@ -301,6 +307,14 @@ void *nrt_allocate_meminfo_and_data_align(size_t size, unsigned align,
 {
     size_t offset = 0, intptr = 0, remainder = 0;
     NRT_Debug(nrt_debug_print("nrt_allocate_meminfo_and_data_align %p\n", allocator));
+    /*
+     * For s390x, all three SIMD backends have the same vector register size, 128 bits
+     * All three behave similarly but PPC and s390x gain more because they can load 128 bits of memory from quadword aligned memory
+     * https://pypy.org/posts/2016/11/vectorization-extended-powerpc-and-s390x-4042433015460084057.html
+     */
+    if (IS_S390X_ARCH) {
+        align = std::max({align, (unsigned)sizeof(void*), 16u});
+    }
     char *base = (char *)nrt_allocate_meminfo_and_data(size + 2 * align, mi, allocator);
     if (base == NULL) {
         return NULL; /* return early as allocation failed */
