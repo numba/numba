@@ -1748,20 +1748,20 @@ class TraceRunner(object):
         assert PYVERSION in ((3, 13), (3, 14))
         make_func_stack = state.pop()
         data = state.pop()
-        if inst.arg == 1:
+        if inst.arg & 0x01:
             # 0x01 a tuple of default values for positional-only and
             #      positional-or-keyword parameters in positional order
             state.set_function_attribute(make_func_stack, defaults=data)
-        elif inst.arg == 2:
+        elif inst.arg & 0x02:
             # 0x02 a tuple of strings containing parameters’ annotations
             state.set_function_attribute(make_func_stack, kwdefaults=data)
-        elif inst.arg == 4:
+        elif inst.arg & 0x04:
             # 0x04 a tuple of strings containing parameters’ annotations
             state.set_function_attribute(make_func_stack, annotations=data)
-        elif inst.arg == 8:
+        elif inst.arg & 0x08:
             # 0x08 a tuple containing cells for free variables, making a closure
             state.set_function_attribute(make_func_stack, closure=data)
-        elif inst.arg == 16:
+        elif inst.arg & 0x10:
             # In 3.14 a new flag was added it has the value 0x10/16
             # Numba report: https://github.com/numba/numba/issues/10319
             state.set_function_attribute(make_func_stack, annotate=data)
