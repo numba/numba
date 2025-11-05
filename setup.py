@@ -123,7 +123,8 @@ def is_building():
                       'install_headers', 'install_scripts', 'install_data',
                       'sdist', 'bdist', 'bdist_dumb', 'bdist_rpm',
                       'bdist_wininst', 'check', 'build_doc', 'bdist_wheel',
-                      'bdist_egg', 'develop', 'easy_install', 'test']
+                      'bdist_egg', 'develop', 'easy_install', 'test',
+                      'editable_wheel', ]
     return any(bc in sys.argv[1:] for bc in build_commands)
 
 
