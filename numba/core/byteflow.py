@@ -1716,7 +1716,7 @@ class TraceRunner(object):
         else:
             raise NotImplementedError(PYVERSION)
         code = state.pop()
-        closure = annotations = kwdefaults = defaults = None
+        closure = annotations = annotate = kwdefaults = defaults = None
         if PYVERSION in ((3, 13), (3, 14)):
             assert inst.arg is None
             # SET_FUNCTION_ATTRIBUTE is responsible for setting
@@ -1737,6 +1737,7 @@ class TraceRunner(object):
             code=code,
             closure=closure,
             annotations=annotations,
+            annotate=annotate,
             kwdefaults=kwdefaults,
             defaults=defaults,
             res=res,
