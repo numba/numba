@@ -1720,7 +1720,7 @@ class TraceRunner(object):
         if PYVERSION in ((3, 13), (3, 14)):
             assert inst.arg is None
             # SET_FUNCTION_ATTRIBUTE is responsible for setting
-            # closure, annotations, kwdefaults and defaults.
+            # closure, annotations, annotate, kwdefaults and defaults.
         else:
             if inst.arg & 0x8:
                 closure = state.pop()
