@@ -118,7 +118,7 @@ def is_building():
         # User forgot to give an argument probably, let setuptools handle that.
         return True
 
-    build_commands = ['build', 'build_py', 'build_ext', 'build_clib'
+    build_commands = ['build', 'build_py', 'build_ext', 'build_clib',
                       'build_scripts', 'install', 'install_lib',
                       'install_headers', 'install_scripts', 'install_data',
                       'sdist', 'bdist', 'bdist_dumb', 'bdist_rpm',
