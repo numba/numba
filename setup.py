@@ -118,12 +118,13 @@ def is_building():
         # User forgot to give an argument probably, let setuptools handle that.
         return True
 
-    build_commands = ['build', 'build_py', 'build_ext', 'build_clib'
+    build_commands = ['build', 'build_py', 'build_ext', 'build_clib',
                       'build_scripts', 'install', 'install_lib',
                       'install_headers', 'install_scripts', 'install_data',
                       'sdist', 'bdist', 'bdist_dumb', 'bdist_rpm',
                       'bdist_wininst', 'check', 'build_doc', 'bdist_wheel',
-                      'bdist_egg', 'develop', 'easy_install', 'test']
+                      'bdist_egg', 'develop', 'easy_install', 'test',
+                      'editable_wheel', ]
     return any(bc in sys.argv[1:] for bc in build_commands)
 
 
