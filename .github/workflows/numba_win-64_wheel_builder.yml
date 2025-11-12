@@ -144,6 +144,7 @@ jobs:
         env:
           NUMBA_CPU_NAME: generic
           _NUMBA_REDUCED_TESTING: 1
+          NPY_DISABLE_CPU_FEATURES: AVX512_SKX
         run: |
           python -m pip install --upgrade pip twine
           python -m pip install numpy==${{ matrix.numpy_test }} tbb==2021.6 tbb-devel==2021.6

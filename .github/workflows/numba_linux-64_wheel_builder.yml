@@ -177,6 +177,8 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Validate and test wheel
+        env:
+          NPY_DISABLE_CPU_FEATURES: AVX512_SKX
         run: |
           PYTHON_PATH=$(which python${{ matrix.python_canonical }})
           $PYTHON_PATH -m pip install --upgrade pip twine
