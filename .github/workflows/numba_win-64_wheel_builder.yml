@@ -144,7 +144,6 @@ jobs:
         env:
           NUMBA_CPU_NAME: generic
           _NUMBA_REDUCED_TESTING: 1
-          NPY_DISABLE_CPU_FEATURES: AVX512_SKX
         run: |
           python -m pip install --upgrade pip twine
           python -m pip install numpy==${{ matrix.numpy_test }} tbb==2021.6 tbb-devel==2021.6
@@ -155,6 +154,20 @@ jobs:
           fi
           python -m twine check dist/*.whl
           python -m pip install dist/*.whl
+
+          # Disable NumPy dispatching to AVX512_SKX feature extensions if the chip is
+          # reported to support the feature and NumPy >= 1.22 as this results in the use
+          # of low accuracy SVML libm replacements in ufunc loops.
+          _NPY_CMD='from numba.misc import numba_sysinfo;\
+                    sysinfo=numba_sysinfo.get_sysinfo();\
+                    print(sysinfo["NumPy AVX512_SKX detected"] and
+                          sysinfo["NumPy Version"]>="1.22")'
+          NUMPY_DETECTS_AVX512_SKX_NP_GT_122=$(python -c "$_NPY_CMD")
+          echo "NumPy >= 1.22 with AVX512_SKX detected: $NUMPY_DETECTS_AVX512_SKX_NP_GT_122"
+
+          if [[ "$NUMPY_DETECTS_AVX512_SKX_NP_GT_122" == "True" ]]; then
+              export NPY_DISABLE_CPU_FEATURES="AVX512_SKX"
+          fi
 
           # print Numba system information
           python -m numba -s
