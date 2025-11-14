@@ -133,12 +133,13 @@ def is_building():
         # User forgot to give an argument probably, let setuptools handle that.
         return True
 
-    build_commands = ['build', 'build_py', 'build_ext', 'build_clib'
+    build_commands = ['build', 'build_py', 'build_ext', 'build_clib',
                       'build_scripts', 'install', 'install_lib',
                       'install_headers', 'install_scripts', 'install_data',
                       'sdist', 'bdist', 'bdist_dumb', 'bdist_rpm',
                       'bdist_wininst', 'check', 'build_doc', 'bdist_wheel',
-                      'bdist_egg', 'develop', 'easy_install', 'test']
+                      'bdist_egg', 'develop', 'easy_install', 'test',
+                      'editable_wheel', ]
     return any(bc in sys.argv[1:] for bc in build_commands)
 
 
@@ -272,8 +273,18 @@ def get_ext_modules():
         # They are binary compatible and may not safely coexist in a process, as
         # libiomp5 is more prevalent and often linked in for NumPy it is used
         # here!
-        ompcompileflags = ['-fopenmp']
-        omplinkflags = ['-fopenmp=libiomp5']
+        # Apple clang requires -Xclang -fopenmp, conda clang uses -fopenmp
+        try:
+            is_apple_clang = b'Apple' in subprocess.check_output(['clang', '--version'])
+        except:
+            is_apple_clang = False
+
+        if is_apple_clang:
+            ompcompileflags = ['-Xclang', '-fopenmp']
+            omplinkflags = ['-Xclang', '-fopenmp', '-liomp5']
+        else:
+            ompcompileflags = ['-fopenmp']
+            omplinkflags = ['-fopenmp=libiomp5']
         omppath = ['lib', 'clang', '*', 'include', 'omp.h']
         have_openmp = check_file_at_path(omppath)
     else:

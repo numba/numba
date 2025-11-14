@@ -5,7 +5,7 @@ Usually due to invalid type conversion between function boundaries.
 
 
 from numba import int32, int64
-from numba import jit
+from numba import jit, njit
 from numba.core import types
 from numba.extending import overload
 from numba.tests.support import TestCase, tag
@@ -64,6 +64,12 @@ def ol_generated_inner(x, y=5, z=6):
 
 def call_generated(a, b):
     return generated_inner(a, z=b)
+
+
+def nested_annotated() -> int:
+    def inner(inner_arg: int) -> int:
+        return inner_arg
+    return 1
 
 
 class TestNestedCall(TestCase):
@@ -147,6 +153,14 @@ class TestNestedCall(TestCase):
         cfunc = jit(nopython=True)(call_generated)
         self.assertPreciseEqual(cfunc(1, 2), (-4, 2))
         self.assertPreciseEqual(cfunc(1j, 2), (1j + 5, 2))
+
+    def test_nested_annotated(self):
+        """
+        Tested a nested function with annotations.
+        """
+        cfunc = njit()(nested_annotated)
+        # should not fail
+        cfunc()
 
 
 if __name__ == '__main__':

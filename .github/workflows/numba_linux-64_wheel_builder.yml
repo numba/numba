@@ -39,7 +39,7 @@ jobs:
       build-matrix-json: ${{ steps.load_matrix_json.outputs.build-matrix-json }}
       test-matrix-json: ${{ steps.load_matrix_json.outputs.test-matrix-json }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       - id: load_matrix_json
         name: Load Workflow Matrix JSON
         run: |
@@ -74,13 +74,13 @@ jobs:
 
     steps:
       - name: Clone repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           fetch-depth: 0
 
       - name: Download llvmlite wheel
         if: inputs.llvmlite_wheel_runid != ''
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: llvmlite-linux-64-py${{ matrix.python_canonical }}
           path: llvmlite_wheels
@@ -130,7 +130,7 @@ jobs:
           ls -la wheelhouse/
 
       - name: Upload numba wheel
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: numba_linux-64_wheel_py${{ matrix.python_canonical }}
           path: wheelhouse/*.whl
@@ -155,20 +155,20 @@ jobs:
 
     steps:
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
         with:
           python-version: ${{ matrix.python-version }}
           allow-prereleases: true
 
       - name: Download Numba wheel artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: numba_linux-64_wheel_py${{ matrix.python_canonical }}
           path: dist
 
       - name: Download llvmlite wheel
         if: inputs.llvmlite_wheel_runid != ''
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: llvmlite-linux-64-py${{ matrix.python_canonical }}
           path: llvmlite_wheels
@@ -197,6 +197,20 @@ jobs:
             $PYTHON_PATH -m pip install tbb
             # Verify TBB threading layer
             NUMBA_THREADING_LAYER=tbb $PYTHON_PATH -c "import numba; numba.get_num_threads(); print(numba.threading_layer())"
+          fi
+
+          # Disable NumPy dispatching to AVX512_SKX feature extensions if the chip is
+          # reported to support the feature and NumPy >= 1.22 as this results in the use
+          # of low accuracy SVML libm replacements in ufunc loops.
+          _NPY_CMD='from numba.misc import numba_sysinfo;\
+                    sysinfo=numba_sysinfo.get_sysinfo();\
+                    print(sysinfo["NumPy AVX512_SKX detected"] and
+                          sysinfo["NumPy Version"]>="1.22")'
+          NUMPY_DETECTS_AVX512_SKX_NP_GT_122=$($PYTHON_PATH -c "$_NPY_CMD")
+          echo "NumPy >= 1.22 with AVX512_SKX detected: $NUMPY_DETECTS_AVX512_SKX_NP_GT_122"
+
+          if [[ "$NUMPY_DETECTS_AVX512_SKX_NP_GT_122" == "True" ]]; then
+              export NPY_DISABLE_CPU_FEATURES="AVX512_SKX"
           fi
 
           # print Numba system information

@@ -28,7 +28,7 @@ jobs:
       build-matrix-json: ${{ steps.parse_matrix.outputs.build-matrix-json }}
       test-matrix-json: ${{ steps.parse_matrix.outputs.test-matrix-json }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       - id: parse_matrix
         name: Parse Workflow Matrix JSON
         run: |
@@ -55,12 +55,12 @@ jobs:
 
     steps:
       - name: Clone repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           fetch-depth: 0
 
       - name: Setup Miniconda
-        uses: conda-incubator/setup-miniconda@v3
+        uses: conda-incubator/setup-miniconda@835234971496cad1653abb28a638a281cf32541f # v3.2.0
         with:
           auto-update-conda: true
           auto-activate-base: true
@@ -68,7 +68,7 @@ jobs:
 
       - name: Download llvmlite Artifact
         if: ${{ inputs.llvmlite_run_id != '' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: llvmlite-win-64-py${{ matrix.python-version }}
           path: llvmlite_conda
@@ -107,7 +107,7 @@ jobs:
             --no-test
 
       - name: Upload numba conda package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: numba_win-64_conda_py${{ matrix.python-version }}
           path: conda_channel_dir
@@ -131,11 +131,11 @@ jobs:
 
     steps:
       - name: Setup miniconda
-        uses: conda-incubator/setup-miniconda@v3
+        uses: conda-incubator/setup-miniconda@835234971496cad1653abb28a638a281cf32541f # v3.2.0
 
       - name: Download llvmlite artifact
         if: ${{ inputs.llvmlite_run_id != '' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: llvmlite-win-64-py${{ matrix.python-version }}
           path: llvmlite_conda
@@ -144,7 +144,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download numba artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: numba_win-64_conda_py${{ matrix.python-version }}
 
