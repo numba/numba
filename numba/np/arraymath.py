@@ -2222,7 +2222,7 @@ def get_d_impl(x, dx):
     return impl
 
 
-@overload(np.trapz)
+@overload(np.trapezoid)
 def np_trapz(y, x=None, dx=1.0):
 
     if isinstance(y, (types.Number, types.Boolean)):
