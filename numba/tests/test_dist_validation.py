@@ -106,6 +106,7 @@ class TestBuild(TestCase):
                     "python310",
                     "tbb12",
                     "vcruntime140",
+                    "vcruntime140_1",
                 ]),
                 "_num_threads.cp310-win_amd64.pyd": set([
                     "api-ms-win-crt-runtime-l1-1-0",
