@@ -686,7 +686,6 @@ class TestBuild(TestCase):
             ext_name = os.path.basename(ext_path)
             errors = []
 
-
             # Make extension name version-agnostic by replacing
             # cpython-XXX with cpython-310
             # e.g. _dispatcher.cpython-313-darwin.so ->
@@ -745,7 +744,7 @@ class TestBuild(TestCase):
         if errors:
             combined_msg = (
                 f"Found {len(errors)} linkage error(s):\n\n" +
-                "\n\n".join(f"{i+1}. {err}" for i, err in enumerate(errors))
+                "\n\n".join(f"{i + 1}. {err}" for i, err in enumerate(errors))
             )
             raise AssertionError(combined_msg)
 
