@@ -683,6 +683,8 @@ class TestBuild(TestCase):
 
         for ext_path, libs in canonicalised_libs.items():
             ext_name = os.path.basename(ext_path)
+            errors = []
+
 
             # Make extension name version-agnostic by replacing
             # cpython-XXX with cpython-310
@@ -700,7 +702,8 @@ class TestBuild(TestCase):
                     f"{os_name}/{machine}. "
                     f"Available modules: {sorted(expected.keys())}"
                 )
-                raise AssertionError(msg)
+                errors.append(msg)
+                continue
 
             expected_libs = expected[normalized_name]
 
@@ -736,7 +739,14 @@ class TestBuild(TestCase):
                     f"Only in Expected: {only_expected}\n"
                     f"Only in Got: {only_got}\n"
                 )
-                raise AssertionError(msg)
+                errors.append(msg)
+
+        if errors:
+            combined_msg = (
+                f"Found {len(errors)} linkage error(s):\n\n" +
+                "\n\n".join(f"{i+1}. {err}" for i, err in enumerate(errors))
+            )
+            raise AssertionError(combined_msg)
 
     def test_expected_extensions(self):
         """Test that all expected extension modules are present."""
