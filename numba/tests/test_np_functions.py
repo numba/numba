@@ -347,19 +347,19 @@ def extract(condition, arr):
 
 
 def np_trapz(y):
-    return np.trapz(y)
+    return np.trapezoid(y)
 
 
 def np_trapz_x(y, x):
-    return np.trapz(y, x)
+    return np.trapezoid(y, x)
 
 
 def np_trapz_dx(y, dx):
-    return np.trapz(y, dx=dx)
+    return np.trapezoid(y, dx=dx)
 
 
 def np_trapz_x_dx(y, x, dx):
-    return np.trapz(y, x, dx)
+    return np.trapezoid(y, x, dx)
 
 
 def np_trapezoid(y):
