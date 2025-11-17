@@ -2222,7 +2222,7 @@ def get_d_impl(x, dx):
     return impl
 
 
-@overload(np.trapezoid)
+@overload(np.trapezoid if numpy_version >= (2, 0) else np.trapz)
 def np_trapz(y, x=None, dx=1.0):
 
     if isinstance(y, (types.Number, types.Boolean)):
