@@ -334,7 +334,7 @@ distribution support for Intel Mac (``osx-64``) has been discontinued.
 Impact
 ------
 
-* No CI testing or binary wheels for ``osx-64`` starting with Numba 0.63.0
+* No CI testing or binary artifacts will be released for ``osx-64`` starting with Numba 0.63.0
 * Platform code remains in source tree and may continue to work
 * Bug reports and PRs for Intel Macs will not block releases
 
