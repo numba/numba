@@ -17,6 +17,11 @@ on:
         required: false
         type: boolean
         default: false
+      publish_to_pypi:
+        description: 'Publish to PyPI (main)'
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ inputs.tag || github.sha }}
@@ -165,6 +170,7 @@ jobs:
   publish-pypi:
     name: Publish to PyPI
     needs: publish-testpypi
+    if: inputs.publish_to_pypi
     runs-on: ubuntu-latest
     environment:
       name: pypi
