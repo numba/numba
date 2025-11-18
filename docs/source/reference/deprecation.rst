@@ -311,3 +311,43 @@ Schedule
 - In a future version of Numba no less than 0.63: The built-in CUDA target will
   be removed, and use of the CUDA target in the absence of the ``numba-cuda``
   package will raise an error.
+
+.. _macos-x86-64-deprecation:
+
+Deprecation of macOS x86-64 (Intel) platform support
+=====================================================
+
+Official support for the Intel x86-64 macOS platform (``osx-64``) has been
+deprecated and moved to Tier 2 under the :ref:`Support Tiers <support_tiers>`
+policy.
+
+Reason for deprecation
+----------------------
+
+GitHub Actions retired the ``macos-13`` Intel Mac runners, which were the only
+free-tier Intel Mac images available when the tiered support policy was
+established. This violates the Tier 1 requirement that "the operating system
+and hardware target must be supported by GitHub Actions on the free-tier"
+(see :ref:`Support Tiers <support_tiers>`). Additionally, conda-based Python
+distribution support for Intel Mac (``osx-64``) has been discontinued.
+
+Impact
+------
+
+* No CI testing or binary wheels for ``osx-64`` starting with Numba 0.63.0
+* Platform code remains in source tree and may continue to work
+* Bug reports and PRs for Intel Macs will not block releases
+
+Recommendations
+---------------
+
+* Pin dependency to ``numba<0.63`` to use the last officially supported release
+  for Intel Macs
+
+Schedule
+--------
+
+- Numba 0.62.x: Last release with official Intel macOS support
+- Numba 0.63.0+: Intel macOS deprecated, moved to Tier 2 (community support only)
+
+See issue `#10187 <https://github.com/numba/numba/issues/10187>`_ for details.
