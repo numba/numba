@@ -1,0 +1,135 @@
+
+Version 0.63.0 (Release Date)
+=============================
+
+
+New Features
+~~~~~~~~~~~~
+
+Initial support for free-threading enabled Python
+-------------------------------------------------
+
+The Numba code base now supports the CPython interpreter built with
+free-threading enabled. Note that this feature is experimental and subject to
+further development.
+
+Also note that the deprecated ``numba.pycc`` module does not support the
+creation of free-threaded AOT compiled modules.
+
+(`PR-#10226 <https://github.com/numba/numba/pull/10226>`__)
+
+Add support for ``math.exp2``.
+------------------------------
+
+Support for ``math.exp2`` is added.
+
+(`PR-#10276 <https://github.com/numba/numba/pull/10276>`__)
+
+
+Improvements
+~~~~~~~~~~~~
+
+Support for Python 3.14
+-----------------------
+
+Support for Python 3.14 is implemented.
+
+(`PR-#10150 <https://github.com/numba/numba/pull/10150>`__)
+
+
+CUDA API Changes
+~~~~~~~~~~~~~~~~
+
+Fix CUDA target crash bug with NVIDIA driver version 580
+--------------------------------------------------------
+
+Fixes a bug in the CUDA driver wrapper that caused the CUDA target to
+crash with NVIDIA driver version 580 and later.  This was already
+fixed in the `numba-cuda` package, but has been backported here for
+users who haven't migrated yet.  (We still encourage all CUDA users to
+switch to the `numba-cuda` package for the most up to date CUDA
+support in Numba.)
+
+(`PR-#10237 <https://github.com/numba/numba/pull/10237>`__)
+
+
+Bug Fixes
+~~~~~~~~~
+
+Fix the caching of functions that call parallel=True functions.
+---------------------------------------------------------------
+
+Previously, reload_init, which keeps track of functions that need to
+be called when reloading a module, was only maintained for the current
+function but not called functions.  So, if the called function needed
+something reloaded and the parent function was cached then the reload
+would not happen.  This has been fixed by propagating the reload_init
+up the call chain.
+
+(`PR-#9950 <https://github.com/numba/numba/pull/9950>`__)
+
+Make ``types.ListType`` string representation evaluable
+-------------------------------------------------------
+
+Fix ``types.ListType`` canonical string representation by making it evaluable.
+This changes ``str()`` to ``repr()`` call for obtaining string representation of
+the list's element.
+
+(`PR-#10195 <https://github.com/numba/numba/pull/10195>`__)
+
+Fix UnboundLocalError when calling copy on non-Array types
+----------------------------------------------------------
+
+Enables calling np.copy inside a jitted function with non-Array 
+arguments, such as lists or scalars, and fails with a readable
+error message on incoercible types
+
+(`PR-#10201 <https://github.com/numba/numba/pull/10201>`__)
+
+Fix ``np.ndenumerate`` support for zero-dimensional arrays
+----------------------------------------------------------
+
+``np.ndenumerate()`` now correctly handles zero-dimensional arrays in 
+JIT-compiled functions. Previously this would raise an ``IndexError``.
+
+(`PR-#10288 <https://github.com/numba/numba/pull/10288>`__)
+
+Fix gufunc memory leak when called from JIT-compiled functions
+--------------------------------------------------------------
+
+Fix memory leak in gufuncs when called from within `@jit` functions.
+The issue was caused by incorrect reference counting in the gufunc loopnest
+that increment reference count of array slices.
+
+(`PR-#10298 <https://github.com/numba/numba/pull/10298>`__)
+
+
+Deprecations
+~~~~~~~~~~~~
+
+Deprecation of macOS x86-64 (Intel) support
+---------------------------------------------
+
+Official support for the Intel x86_64 macOS platform (also known as osx-64)
+has been deprecated and moved to Tier 2 under the :ref:`Support Tiers
+<support_tiers>` policy. Continuous integration will no longer test this
+platform and new releases will not include binary artifacts for osx-64.
+The platform remains in the source tree and may continue to work based on
+community reports.
+
+Users on Intel Macs should use the last officially supported release (0.62.x).
+See :issue:`10187` for more details.
+
+(`PR-#10187 <https://github.com/numba/numba/pull/10187>`__)
+
+
+Documentation Changes
+~~~~~~~~~~~~~~~~~~~~~
+
+Document the Numba organisation hardware/OS/packaging etc. support policy.
+--------------------------------------------------------------------------
+
+Documentation is added to provide clarity over what OS/hardware/packaging etc.
+is supported by projects in the Numba organisation.
+
+(`PR-#10283 <https://github.com/numba/numba/pull/10283>`__)

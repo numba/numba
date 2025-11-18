@@ -1,6 +1,0 @@
-Fix gufunc memory leak when called from JIT-compiled functions
---------------------------------------------------------------
-
-Fix memory leak in gufuncs when called from within `@jit` functions.
-The issue was caused by incorrect reference counting in the gufunc loopnest
-that increment reference count of array slices.
