@@ -162,6 +162,35 @@ jobs:
           repository-url: https://test.pypi.org/legacy/
           verbose: true
 
+  publish-pypi:
+    name: Publish to PyPI
+    needs: publish-testpypi
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/numba
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download wheels artifact
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: wheels
+          path: dist
+
+      - name: List artifacts to publish
+        run: |
+          echo "=== To publish ==="
+          ls -lh dist/
+          echo ""
+          find dist -type f -name "*.whl" | wc -l
+
+      - name: Publish wheels to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          verbose: true
+
   publish-anaconda-org:
     name: Publish to Anaconda.org
     needs: download-artifacts
