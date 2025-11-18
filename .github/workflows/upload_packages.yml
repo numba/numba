@@ -7,6 +7,16 @@ on:
         description: 'Git tag to download artifacts from (e.g., v0.45.0)'
         required: true
         type: string
+      anaconda_label:
+        description: 'Anaconda.org label (dev, main, etc.)'
+        required: false
+        type: string
+        default: 'dev'
+      copy_conda_to_main:
+        description: 'copy to Anaconda.org main label'
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ inputs.tag || github.sha }}
@@ -151,3 +161,86 @@ jobs:
         with:
           repository-url: https://test.pypi.org/legacy/
           verbose: true
+
+  publish-anaconda-org:
+    name: Publish to Anaconda.org
+    needs: download-artifacts
+    runs-on: ubuntu-latest
+    env:
+      ANACONDA_USER: numba
+      ANACONDA_LABEL: ${{ inputs.anaconda_label || 'dev' }}
+    defaults:
+      run:
+        shell: bash -elx {0}
+
+    steps:
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@835234971496cad1653abb28a638a281cf32541f # v3.2.0
+        with:
+          python-version: '3.13'
+          auto-update-conda: true
+          auto-activate-base: true
+
+      - name: Install anaconda-client
+        run: conda install -c anaconda anaconda-client
+
+      - name: Download conda packages artifact
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: conda-packages
+          path: conda_packages
+
+      - name: Download wheels artifact
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: wheels
+          path: dist
+
+      - name: List conda packages to publish
+        run: |
+          echo "=== Conda packages to publish ==="
+          find conda_packages -type f -name "*.conda" -print | sort
+          echo ""
+          echo "=== Total packages ==="
+          find conda_packages -type f -name "*.conda" | wc -l
+          echo ""
+
+      - name: List wheels to publish
+        run: |
+          echo "=== Wheels to publish ==="
+          find dist -type f -name "*.whl" -print | sort
+          echo ""
+          echo "=== Total wheels ==="
+          find dist -type f -name "*.whl" | wc -l
+          echo ""
+
+      - name: Publish conda packages to Anaconda.org
+        env:
+          ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_ORG_GITHUB_NUMBA_UPLOAD }}
+        run: |
+          echo "Publishing conda packages to: ${{ env.ANACONDA_USER }}/label/${{ env.ANACONDA_LABEL }}"
+          find conda_packages -name "*.conda" -type f | while read -r pkg; do
+            echo "Uploading: $pkg"
+            anaconda -t "$ANACONDA_API_TOKEN" upload --force -u ${{ env.ANACONDA_USER }} -l ${{ env.ANACONDA_LABEL }} "$pkg"
+          done
+
+      - name: Publish wheels to Anaconda.org
+        env:
+          ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_ORG_GITHUB_NUMBA_UPLOAD }}
+        run: |
+          echo "Publishing wheels to: ${{ env.ANACONDA_USER }}/label/${{ env.ANACONDA_LABEL }}"
+          find dist -name "*.whl" -type f | while read -r pkg; do
+            echo "Uploading: $pkg"
+            anaconda -t "$ANACONDA_API_TOKEN" upload --force -u ${{ env.ANACONDA_USER }} -l ${{ env.ANACONDA_LABEL }} "$pkg"
+          done
+
+      - name: Copy packages to main label
+        if: inputs.copy_conda_to_main
+        env:
+          ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_ORG_GITHUB_NUMBA_UPLOAD }}
+        run: |
+          VERSION="${{ inputs.tag }}"
+          VERSION="${VERSION#v}"
+          PACKAGE_NAME="numba"
+          echo "Copying all packages for version $VERSION from ${{ env.ANACONDA_LABEL }} to main"
+          anaconda -t "$ANACONDA_API_TOKEN" copy ${{ env.ANACONDA_USER }}/$PACKAGE_NAME/$VERSION --from-label ${{ env.ANACONDA_LABEL }} --to-label main --replace
