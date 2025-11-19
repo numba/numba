@@ -117,7 +117,7 @@ Deprecations
 ~~~~~~~~~~~~
 
 Deprecation of macOS x86-64 (Intel) support
----------------------------------------------
+-------------------------------------------
 
 Official support for the Intel x86_64 macOS platform (also known as osx-64)
 has been deprecated and moved to Tier 2 under the :ref:`Support Tiers
@@ -127,9 +127,7 @@ The platform remains in the source tree and may continue to work based on
 community reports.
 
 Users on Intel Macs should use the last officially supported release (0.62.x).
-See :issue:`10187` for more details.
-
-(`PR-#10187 <https://github.com/numba/numba/pull/10187>`__)
+See https://github.com/numba/numba/issues/10187 for more details.
 
 
 Documentation Changes
