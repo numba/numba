@@ -41,7 +41,7 @@ def list_rst_filename() -> str:
         ]
     else:
         output = check_output(
-            ["git", "diff", "--name-only", "origin/main"],
+            ["git", "diff", "--name-only", "origin/release0.63"],
             encoding="utf-8",
             stderr=STDOUT,
         )
