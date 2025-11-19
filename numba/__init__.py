@@ -39,6 +39,11 @@ def _ensure_critical_deps():
                f"{numpy_version[0]}.{numpy_version[1]}.")
         raise ImportError(msg)
 
+    if numpy_version > (2, 3):
+        msg = (f"Numba needs NumPy 2.3 or less. Got NumPy "
+                f"{numpy_version[0]}.{numpy_version[1]}.")
+        raise ImportError(msg)
+
     try:
         import scipy
     except ImportError:
