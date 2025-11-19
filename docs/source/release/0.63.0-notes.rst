@@ -1,0 +1,206 @@
+Version 0.63.0 (TBD)
+====================
+
+.. contents:: Table of Contents
+   :depth: 2
+
+This is a major Numba release. Numba now supports Python 3.14. This release
+also includes initial support for free-threading enabled Python builds.
+
+Intel x86_64 macOS (``osx-64``) support has been deprecated and moved to Tier 2 support.
+See :ref:`Support Tiers <support_tiers>` for more details.
+
+Please find a summary of all noteworthy items below.
+
+New Features
+~~~~~~~~~~~~
+
+Initial support for free-threading enabled Python
+-------------------------------------------------
+
+The Numba code base now supports the CPython interpreter built with
+free-threading enabled. Note that this feature is experimental and subject to
+further development.
+
+Also note that the deprecated ``numba.pycc`` module does not support the
+creation of free-threaded AOT compiled modules.
+
+(`PR-#10226 <https://github.com/numba/numba/pull/10226>`__)
+
+Add support for ``math.exp2``.
+------------------------------
+
+Support for ``math.exp2`` is added.
+
+(`PR-#10276 <https://github.com/numba/numba/pull/10276>`__)
+
+
+Improvements
+~~~~~~~~~~~~
+
+Support for Python 3.14
+-----------------------
+
+Support for Python 3.14 is implemented.
+
+(`PR-#10150 <https://github.com/numba/numba/pull/10150>`__)
+
+
+CUDA API Changes
+~~~~~~~~~~~~~~~~
+
+Fix CUDA target crash bug with NVIDIA driver version 580
+--------------------------------------------------------
+
+Fixes a bug in the CUDA driver wrapper that caused the CUDA target to
+crash with NVIDIA driver version 580 and later.  This was already
+fixed in the `numba-cuda` package, but has been backported here for
+users who haven't migrated yet.  (We still encourage all CUDA users to
+switch to the `numba-cuda` package for the most up to date CUDA
+support in Numba.)
+
+(`PR-#10237 <https://github.com/numba/numba/pull/10237>`__)
+
+
+Bug Fixes
+~~~~~~~~~
+
+Fix the caching of functions that call parallel=True functions.
+---------------------------------------------------------------
+
+Previously, reload_init, which keeps track of functions that need to
+be called when reloading a module, was only maintained for the current
+function but not called functions.  So, if the called function needed
+something reloaded and the parent function was cached then the reload
+would not happen.  This has been fixed by propagating the reload_init
+up the call chain.
+
+(`PR-#9950 <https://github.com/numba/numba/pull/9950>`__)
+
+Make ``types.ListType`` string representation evaluable
+-------------------------------------------------------
+
+Fix ``types.ListType`` canonical string representation by making it evaluable.
+This changes ``str()`` to ``repr()`` call for obtaining string representation of
+the list's element.
+
+(`PR-#10195 <https://github.com/numba/numba/pull/10195>`__)
+
+Fix UnboundLocalError when calling copy on non-Array types
+----------------------------------------------------------
+
+Enables calling np.copy inside a jitted function with non-Array 
+arguments, such as lists or scalars, and fails with a readable
+error message on incoercible types
+
+(`PR-#10201 <https://github.com/numba/numba/pull/10201>`__)
+
+Fix ``np.ndenumerate`` support for zero-dimensional arrays
+----------------------------------------------------------
+
+``np.ndenumerate()`` now correctly handles zero-dimensional arrays in 
+JIT-compiled functions. Previously this would raise an ``IndexError``.
+
+(`PR-#10288 <https://github.com/numba/numba/pull/10288>`__)
+
+Fix gufunc memory leak when called from JIT-compiled functions
+--------------------------------------------------------------
+
+Fix memory leak in gufuncs when called from within `@jit` functions.
+The issue was caused by incorrect reference counting in the gufunc loopnest
+that increment reference count of array slices.
+
+(`PR-#10298 <https://github.com/numba/numba/pull/10298>`__)
+
+
+Deprecations
+~~~~~~~~~~~~
+
+Deprecation of macOS x86-64 (Intel) support
+-------------------------------------------
+
+Official support for the Intel x86_64 macOS platform (also known as osx-64)
+has been deprecated and moved to Tier 2 under the :ref:`Support Tiers
+<support_tiers>` policy. Continuous integration will no longer test this
+platform and new releases will not include binary artifacts for osx-64.
+The platform remains in the source tree and may continue to work based on
+community reports.
+
+Users on Intel Macs should use the last officially supported release (0.62.x).
+See https://github.com/numba/numba/issues/10187 for more details.
+
+
+Documentation Changes
+~~~~~~~~~~~~~~~~~~~~~
+
+Document the Numba organisation hardware/OS/packaging etc. support policy.
+--------------------------------------------------------------------------
+
+Documentation is added to provide clarity over what OS/hardware/packaging etc.
+is supported by projects in the Numba organisation.
+
+(`PR-#10283 <https://github.com/numba/numba/pull/10283>`__)
+
+Pull-Requests
+~~~~~~~~~~~~~
+
+* PR `#9950 <https://github.com/numba/numba/pull/9950>`_: Ensure _launch_threads is called if cached function calls a parallel=True function. (`DrTodd13 <https://github.com/DrTodd13>`_)
+* PR `#10150 <https://github.com/numba/numba/pull/10150>`_: Python 3.14 (`swap357 <https://github.com/swap357>`_ `esc <https://github.com/esc>`_)
+* PR `#10215 <https://github.com/numba/numba/pull/10215>`_: Add test for negative ranges (`flying-sheep <https://github.com/flying-sheep>`_)
+* PR `#10226 <https://github.com/numba/numba/pull/10226>`_: Initial code support for free-threading. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#10230 <https://github.com/numba/numba/pull/10230>`_: GHA/refactor `osx-arm64` and `win-64` wheel builder workflows to use setup-python for build job (`swap357 <https://github.com/swap357>`_)
+* PR `#10237 <https://github.com/numba/numba/pull/10237>`_: Backport of driver fix from NVIDIA/numba-cuda#185 (`seibert <https://github.com/seibert>`_)
+* PR `#10238 <https://github.com/numba/numba/pull/10238>`_: Cherry pick 0.62.0 (`esc <https://github.com/esc>`_)
+* PR `#10241 <https://github.com/numba/numba/pull/10241>`_: GHA/fix linux wheel build linkages (`swap357 <https://github.com/swap357>`_)
+* PR `#10242 <https://github.com/numba/numba/pull/10242>`_: GHA/ test python-3.14  (`swap357 <https://github.com/swap357>`_ `esc <https://github.com/esc>`_)
+* PR `#10243 <https://github.com/numba/numba/pull/10243>`_: GHA/ deprecate `osx-64` workflows and scripts (`swap357 <https://github.com/swap357>`_)
+* PR `#10247 <https://github.com/numba/numba/pull/10247>`_: Release notes for 0.62 (`esc <https://github.com/esc>`_)
+* PR `#10248 <https://github.com/numba/numba/pull/10248>`_: GHA/ fix win-64 lib lookup paths (`swap357 <https://github.com/swap357>`_)
+* PR `#10252 <https://github.com/numba/numba/pull/10252>`_: update trove classifier for 3.14 (`esc <https://github.com/esc>`_)
+* PR `#10253 <https://github.com/numba/numba/pull/10253>`_: Merge pull request #10247 from esc/release0.62 (`esc <https://github.com/esc>`_ `seibert <https://github.com/seibert>`_)
+* PR `#10254 <https://github.com/numba/numba/pull/10254>`_: Add SECURITY.md file (`seibert <https://github.com/seibert>`_)
+* PR `#10259 <https://github.com/numba/numba/pull/10259>`_: CI/ move `sphinx_rtd_theme` dependency (`swap357 <https://github.com/swap357>`_)
+* PR `#10268 <https://github.com/numba/numba/pull/10268>`_: Remove Python 2.6 capsule support (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#10274 <https://github.com/numba/numba/pull/10274>`_: GHA/ fix numba `osx-arm64` wheel tag regression  (`swap357 <https://github.com/swap357>`_)
+* PR `#10276 <https://github.com/numba/numba/pull/10276>`_: add support for `math.exp2` (`kaeun97 <https://github.com/kaeun97>`_)
+* PR `#10283 <https://github.com/numba/numba/pull/10283>`_: Preliminary policy on support Tiers. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#10285 <https://github.com/numba/numba/pull/10285>`_: gha/ fix `osx-arm64` wheel build for openmp linkage (`swap357 <https://github.com/swap357>`_)
+* PR `#10288 <https://github.com/numba/numba/pull/10288>`_: fix: zero dim index error in ndenumerate (`kaeun97 <https://github.com/kaeun97>`_)
+* PR `#10291 <https://github.com/numba/numba/pull/10291>`_: only run the towncrier check on open PRs (`esc <https://github.com/esc>`_)
+* PR `#10294 <https://github.com/numba/numba/pull/10294>`_: add renovate for dependency management (`swap357 <https://github.com/swap357>`_)
+* PR `#10296 <https://github.com/numba/numba/pull/10296>`_: chore(deps): update actions/checkout action to v4.3.0 (`renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10298 <https://github.com/numba/numba/pull/10298>`_: Fix Gufunc leak when called from jit function (`sklam <https://github.com/sklam>`_)
+* PR `#10301 <https://github.com/numba/numba/pull/10301>`_: chore(deps): update actions/stale action to v9.1.0 (`renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10302 <https://github.com/numba/numba/pull/10302>`_: chore(deps): update actions/upload-artifact action to v4.6.2 (`renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10305 <https://github.com/numba/numba/pull/10305>`_: Fix `np.unique` not supporting non-numeric types (`sklam <https://github.com/sklam>`_)
+* PR `#10307 <https://github.com/numba/numba/pull/10307>`_: Update dependency python to 3.14 (`renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10308 <https://github.com/numba/numba/pull/10308>`_: Update dependency twitter-bootstrap to v3.4.1 (`renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10309 <https://github.com/numba/numba/pull/10309>`_: Update pre-commit hook PyCQA/flake8 to v7.3.0 (`renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10310 <https://github.com/numba/numba/pull/10310>`_: gha/update `setup-miniconda` action on workflows (`renovate[bot] <https://github.com/apps/renovate>`_ `swap357 <https://github.com/swap357>`_)
+* PR `#10311 <https://github.com/numba/numba/pull/10311>`_: ci/update add 'skip_release_notes' label to renovate.json (`swap357 <https://github.com/swap357>`_)
+* PR `#10313 <https://github.com/numba/numba/pull/10313>`_: chore(deps): update actions/checkout action to v5 (`renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10314 <https://github.com/numba/numba/pull/10314>`_: chore(deps): update actions/setup-python action to v6 (`renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10315 <https://github.com/numba/numba/pull/10315>`_: chore(deps): update actions/stale action to v10 (`renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10317 <https://github.com/numba/numba/pull/10317>`_: chore(deps): update dependency twitter-bootstrap to v5 (`renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10318 <https://github.com/numba/numba/pull/10318>`_: chore(deps): update github artifact actions (major) (`renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10321 <https://github.com/numba/numba/pull/10321>`_: fix use of flag `0x10/16` in `SET_FUNCTION_ATTRIBUTE` (`esc <https://github.com/esc>`_)
+* PR `#10323 <https://github.com/numba/numba/pull/10323>`_: fix editable installs (`esc <https://github.com/esc>`_)
+* PR `#10326 <https://github.com/numba/numba/pull/10326>`_: disable AVX512_SKX on test env for x86 workflows  (`swap357 <https://github.com/swap357>`_)
+* PR `#10327 <https://github.com/numba/numba/pull/10327>`_: pin gcc/gxx to v11 on azure setup scripts (`swap357 <https://github.com/swap357>`_)
+* PR `#10333 <https://github.com/numba/numba/pull/10333>`_: update version support table for `0.63.0rc1` (`swap357 <https://github.com/swap357>`_)
+* PR `#10334 <https://github.com/numba/numba/pull/10334>`_: update deprecation notice for 0.63 (`swap357 <https://github.com/swap357>`_)
+* PR `#10335 <https://github.com/numba/numba/pull/10335>`_: update macos image version from `macos-13` to `macos-15` on azure ci (`swap357 <https://github.com/swap357>`_)
+
+Authors
+~~~~~~~
+
+* `DrTodd13 <https://github.com/DrTodd13>`_
+* `esc <https://github.com/esc>`_
+* `flying-sheep <https://github.com/flying-sheep>`_
+* `gmarkall <https://github.com/gmarkall>`_
+* `kaeun97 <https://github.com/kaeun97>`_
+* `renovate[bot] <https://github.com/apps/renovate>`_
+* `seibert <https://github.com/seibert>`_
+* `sklam <https://github.com/sklam>`_
+* `stuartarchibald <https://github.com/stuartarchibald>`_
+* `swap357 <https://github.com/swap357>`_
