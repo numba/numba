@@ -1,4 +1,4 @@
-Version 0.63.0 (19 November 2025)
+Version 0.63.0 (TBD)
 =================================
 
 .. contents:: Table of Contents
