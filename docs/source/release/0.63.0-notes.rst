@@ -1,5 +1,5 @@
 Version 0.63.0 (TBD)
-=================================
+====================
 
 .. contents:: Table of Contents
    :depth: 2
