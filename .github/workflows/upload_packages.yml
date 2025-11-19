@@ -1,0 +1,281 @@
+name: Upload Packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Git tag to download artifacts from (e.g., v0.45.0)'
+        required: true
+        type: string
+      anaconda_label:
+        description: 'Anaconda.org label (dev, main, etc.)'
+        required: false
+        type: string
+        default: 'dev'
+      copy_conda_to_main:
+        description: 'copy to Anaconda.org main label'
+        required: false
+        type: boolean
+        default: false
+      publish_to_pypi:
+        description: 'Publish to PyPI (main)'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.tag || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  find-workflow-runs:
+    name: Find Workflow Runs
+    runs-on: ubuntu-latest
+    outputs:
+      conda_run_ids: ${{ steps.find-runs.outputs.conda_run_ids }}
+      wheel_run_ids: ${{ steps.find-runs.outputs.wheel_run_ids }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Setup Python
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: '3.13'
+
+      - name: Find workflow runs for tag
+        id: find-runs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ inputs.tag }}"
+          if [ -z "$TAG" ]; then
+            echo "Error: tag input is required"
+            exit 1
+          fi
+          output=$(./buildscripts/github/find_workflow_runs.py \
+            --tag "$TAG" \
+            --repo ${{ github.repository }} \
+            --token "${{ secrets.GITHUB_TOKEN }}" \
+            --config ./buildscripts/github/workflow_groups.json)
+          echo "$output" >> $GITHUB_OUTPUT
+
+  download-artifacts:
+    name: Download Artifacts
+    needs: find-workflow-runs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Setup Python
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+        with:
+          python-version: '3.13'
+
+      - name: Download conda packages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./buildscripts/github/download_artifacts.py \
+            --run-ids ${{ needs.find-workflow-runs.outputs.conda_run_ids }} \
+            --repo ${{ github.repository }} \
+            --token "${{ secrets.GITHUB_TOKEN }}" \
+            --output-dir conda_packages
+
+      - name: Download wheels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./buildscripts/github/download_artifacts.py \
+            --run-ids ${{ needs.find-workflow-runs.outputs.wheel_run_ids }} \
+            --repo ${{ github.repository }} \
+            --token "${{ secrets.GITHUB_TOKEN }}" \
+            --output-dir dist
+
+      - name: List downloaded conda packages
+        run: |
+          echo "=== Downloaded conda packages ==="
+          find conda_packages -type f -name "*.conda" -print | sort
+          echo ""
+          echo "=== Total conda packages ==="
+          find conda_packages -type f -name "*.conda" | wc -l
+          echo ""
+
+      - name: List downloaded wheels
+        run: |
+          echo "=== Downloaded wheels ==="
+          find dist -type f -name "*.whl" -print | sort
+          echo ""
+          echo "=== Wheel count by platform ==="
+          echo "linux-64: $(find dist -type f -name "*manylinux*x86_64*.whl" | wc -l)"
+          echo "linux-aarch64: $(find dist -type f -name "*manylinux*aarch64*.whl" | wc -l)"
+          echo "osx-arm64: $(find dist -type f -name "*macosx*arm64*.whl" | wc -l)"
+          echo "win-64: $(find dist -type f -name "*win_amd64*.whl" | wc -l)"
+          echo ""
+          echo "=== Total wheels count ==="
+          find dist -type f -name "*.whl" | wc -l
+          echo ""
+          echo "=== sdist ==="
+          find dist -type f -name "*.tar.gz" -print
+          echo ""
+
+      - name: Upload wheels as artifact
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: wheels
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+          retention-days: 7
+
+      - name: Upload conda packages as artifact
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: conda-packages
+          path: conda_packages/
+          retention-days: 7
+
+  publish-testpypi:
+    name: Publish to TestPyPI
+    needs: download-artifacts
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/numba
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download wheels artifact
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: wheels
+          path: dist
+
+      - name: List artifacts to publish
+        run: |
+          echo "=== To publish ==="
+          ls -lh dist/
+          echo ""
+          find dist -type f -name "*.whl" | wc -l
+
+      - name: Publish wheels to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          verbose: true
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: publish-testpypi
+    if: inputs.publish_to_pypi
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/numba
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download wheels artifact
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: wheels
+          path: dist
+
+      - name: List artifacts to publish
+        run: |
+          echo "=== To publish ==="
+          ls -lh dist/
+          echo ""
+          find dist -type f -name "*.whl" | wc -l
+
+      - name: Publish wheels to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          verbose: true
+
+  publish-anaconda-org:
+    name: Publish to Anaconda.org
+    needs: download-artifacts
+    runs-on: ubuntu-latest
+    env:
+      ANACONDA_USER: numba
+      ANACONDA_LABEL: ${{ inputs.anaconda_label || 'dev' }}
+    defaults:
+      run:
+        shell: bash -elx {0}
+
+    steps:
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@835234971496cad1653abb28a638a281cf32541f # v3.2.0
+        with:
+          python-version: '3.13'
+          auto-update-conda: true
+          auto-activate-base: true
+
+      - name: Install anaconda-client
+        run: conda install -c anaconda anaconda-client
+
+      - name: Download conda packages artifact
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: conda-packages
+          path: conda_packages
+
+      - name: Download wheels artifact
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: wheels
+          path: dist
+
+      - name: List conda packages to publish
+        run: |
+          echo "=== Conda packages to publish ==="
+          find conda_packages -type f -name "*.conda" -print | sort
+          echo ""
+          echo "=== Total packages ==="
+          find conda_packages -type f -name "*.conda" | wc -l
+          echo ""
+
+      - name: List wheels to publish
+        run: |
+          echo "=== Wheels to publish ==="
+          find dist -type f -name "*.whl" -print | sort
+          echo ""
+          echo "=== Total wheels ==="
+          find dist -type f -name "*.whl" | wc -l
+          echo ""
+
+      - name: Publish conda packages to Anaconda.org
+        env:
+          ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_ORG_GITHUB_NUMBA_UPLOAD }}
+        run: |
+          echo "Publishing conda packages to: ${{ env.ANACONDA_USER }}/label/${{ env.ANACONDA_LABEL }}"
+          find conda_packages -name "*.conda" -type f | while read -r pkg; do
+            echo "Uploading: $pkg"
+            anaconda -t "$ANACONDA_API_TOKEN" upload --force -u ${{ env.ANACONDA_USER }} -l ${{ env.ANACONDA_LABEL }} "$pkg"
+          done
+
+      - name: Publish wheels to Anaconda.org
+        env:
+          ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_ORG_GITHUB_NUMBA_UPLOAD }}
+        run: |
+          echo "Publishing wheels to: ${{ env.ANACONDA_USER }}/label/${{ env.ANACONDA_LABEL }}"
+          find dist -name "*.whl" -type f | while read -r pkg; do
+            echo "Uploading: $pkg"
+            anaconda -t "$ANACONDA_API_TOKEN" upload --force -u ${{ env.ANACONDA_USER }} -l ${{ env.ANACONDA_LABEL }} "$pkg"
+          done
+
+      - name: Copy packages to main label
+        if: inputs.copy_conda_to_main
+        env:
+          ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_ORG_GITHUB_NUMBA_UPLOAD }}
+        run: |
+          VERSION="${{ inputs.tag }}"
+          VERSION="${VERSION#v}"
+          PACKAGE_NAME="numba"
+          echo "Copying all packages for version $VERSION from ${{ env.ANACONDA_LABEL }} to main"
+          anaconda -t "$ANACONDA_API_TOKEN" copy ${{ env.ANACONDA_USER }}/$PACKAGE_NAME/$VERSION --from-label ${{ env.ANACONDA_LABEL }} --to-label main --replace
