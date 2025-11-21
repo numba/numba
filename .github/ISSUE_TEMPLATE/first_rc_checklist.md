@@ -30,16 +30,12 @@ labels: task
     * [ ] `setup.py`
     * [ ] `docs/environment.yml`
   * [ ] Pin TBB if needed.
-* [ ] Run the HEAD of the release branch through the build farm and confirm:
-  * [ ] Build farm CPU testing has passed.
-  * [ ] Build farm CUDA testing has passed.
-  * [ ] Build farm wheel testing has passed.
+* [ ] Run the HEAD of the release branch through GHA and confirm:
+  * [ ] conda build and test has passed.
+  * [ ] wheel build and test has passed.
 * [ ] Annotated tag `X.Y.Zrc1` on release branch (no `v` prefix).
-* [ ] Build and upload conda packages on buildfarm (check "upload").
-* [ ] Build wheels and sdist on the buildfarm (check "upload").
-* [ ] Verify packages uploaded to Anaconda Cloud and move to `numba/label/main`.
-* [ ] Upload wheels and sdist to PyPI (upload from `ci_artifacts`).
-* [ ] Verify wheels for all platforms arrived on PyPi.
+* [ ] Upload conda packages, wheels and sdist using GHA.
+* [ ] Make sure that packages arrived on PyPI and on anaconda.org on labels `numba/label/dev` and `numba/label/main`.
 * [ ] Initialize and verify ReadTheDocs build.
 * [ ] Post announcement to discourse group and ping the release testers group
   using `@RC_Testers`.
@@ -47,8 +43,6 @@ labels: task
 
 ### Post Release:
 
-* [ ] Snapshot Build Farm config.
-* [ ] Clean up `ci_artifacts` by moving files to sub-directories.
 * [ ] Tag `X.Y+1.0dev0` to start new development cycle on `main`.
 * [ ] Update llvmlite dependency via PR to `main`, PR includes version updates
       to:
