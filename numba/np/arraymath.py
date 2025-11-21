@@ -2222,9 +2222,8 @@ def get_d_impl(x, dx):
     return impl
 
 
-@overload(np.trapezoid if numpy_version >= (2, 0) else np.trapz)
-def np_trapz(y, x=None, dx=1.0):
-
+def _trapz_impl(y, x=None, dx=1.0):
+    """Shared implementation for both np.trapz and np.trapezoid."""
     if isinstance(y, (types.Number, types.Boolean)):
         raise TypingError('y cannot be a scalar')
     elif isinstance(y, types.Array) and y.ndim == 0:
@@ -2244,9 +2243,18 @@ def np_trapz(y, x=None, dx=1.0):
     return impl
 
 
-# numpy 2.0 rename np.trapz to np.trapezoid
+# np.trapz exists in NumPy < 2.4 (deprecated in 2.0, removed in 2.4)
+if numpy_version < (2, 4):
+    @overload(np.trapz)
+    def np_trapz(y, x=None, dx=1.0):
+        return _trapz_impl(y, x, dx)
+
+
+# np.trapezoid introduced in NumPy 2.0 as replacement for np.trapz
 if numpy_version >= (2, 0):
-    overload(np.trapezoid)(np_trapz)
+    @overload(np.trapezoid)
+    def np_trapezoid(y, x=None, dx=1.0):
+        return _trapz_impl(y, x, dx)
 
 
 @register_jitable
