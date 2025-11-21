@@ -347,19 +347,19 @@ def extract(condition, arr):
 
 
 def np_trapz(y):
-    return np.trapezoid(y)
+    return np.trapz(y)
 
 
 def np_trapz_x(y, x):
-    return np.trapezoid(y, x)
+    return np.trapz(y, x)
 
 
 def np_trapz_dx(y, dx):
-    return np.trapezoid(y, dx=dx)
+    return np.trapz(y, dx=dx)
 
 
 def np_trapz_x_dx(y, x, dx):
-    return np.trapezoid(y, x, dx)
+    return np.trapz(y, x, dx)
 
 
 def np_trapezoid(y):
@@ -4155,6 +4155,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_np_trapezoid_basic(self):
         self.test_np_trapz_basic(pyfunc=np_trapezoid)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.trapz removed in NumPy 2.4+")
     def test_np_trapz_basic(self, pyfunc=np_trapz):
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc)
@@ -4193,6 +4194,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_np_trapezoid_x_basic(self):
         self.test_np_trapz_x_basic(pyfunc=np_trapezoid_x)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.trapz removed in NumPy 2.4+")
     def test_np_trapz_x_basic(self, pyfunc=np_trapz_x):
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc)
@@ -4255,6 +4257,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_trapezoid_numpy_questionable(self):
         self.test_trapz_numpy_questionable(pyfunc=np_trapezoid)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.trapz removed in NumPy 2.4+")
     @unittest.skip('NumPy behaviour questionable')
     def test_trapz_numpy_questionable(self, pyfunc=np_trapz):
         # https://github.com/numpy/numpy/issues/12858
@@ -4273,6 +4276,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_np_trapezoid_dx_basic(self):
         self.test_np_trapz_dx_basic(pyfunc=np_trapezoid_dx)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.trapz removed in NumPy 2.4+")
     def test_np_trapz_dx_basic(self, pyfunc=np_trapz_dx):
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc)
@@ -4322,6 +4326,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_np_trapezoid_x_dx_basic(self):
         self.test_np_trapz_x_dx_basic(pyfunc=np_trapezoid_x_dx)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.trapz removed in NumPy 2.4+")
     def test_np_trapz_x_dx_basic(self, pyfunc=np_trapz_x_dx):
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc)
@@ -4350,6 +4355,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_np_trapezoid_x_dx_exceptions(self):
         self.test_np_trapz_x_dx_exceptions(pyfunc=np_trapezoid_x_dx)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.trapz removed in NumPy 2.4+")
     def test_np_trapz_x_dx_exceptions(self, pyfunc=np_trapz_x_dx):
         cfunc = jit(nopython=True)(pyfunc)
 
