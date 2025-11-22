@@ -1,6 +1,8 @@
 name: numba_linux-aarch64_conda_builder
 
 on:
+  schedule:
+    - cron: '10 7 * * 6'  # Saturday 7:10 AM UTC - linux-aarch64 conda
   pull_request:
     paths:
       - .github/workflows/numba_linux-aarch64_conda_builder.yml

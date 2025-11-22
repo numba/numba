@@ -1,6 +1,8 @@
 name: numba_osx-arm64_wheel_builder
 
 on:
+  schedule:
+    - cron: '5 7 * * 6'  # Saturday 7:05 AM UTC - osx-arm64 wheel (staggered to manage osx runner limit)
   pull_request:
     paths:
       - .github/workflows/numba_osx-arm64_wheel_builder.yml

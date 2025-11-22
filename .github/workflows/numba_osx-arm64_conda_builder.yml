@@ -1,6 +1,8 @@
 name: numba_osx-arm64_conda_builder
 
 on:
+  schedule:
+    - cron: '0 7 * * 6'  # Saturday 7:00 AM UTC - osx-arm64 conda (starts first to manage osx runner limit)
   pull_request:
     paths:
       - .github/workflows/numba_osx-arm64_conda_builder.yml
