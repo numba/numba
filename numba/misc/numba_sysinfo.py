@@ -5,6 +5,7 @@ import os
 import platform
 import textwrap
 import sys
+import importlib.util
 from contextlib import redirect_stdout
 from datetime import datetime
 from io import StringIO
@@ -26,7 +27,7 @@ except ImportError:
 else:
     _psutil_import = True
 
-__all__ = ['get_sysinfo', 'display_sysinfo']
+__all__ = ['get_sysinfo', 'display_sysinfo', 'get_ext_info']
 
 # Keys of a `sysinfo` dictionary
 
@@ -93,6 +94,13 @@ _psutil = 'Psutil Available'
 # Errors and warnings
 _errors = 'Errors'
 _warnings = 'Warnings'
+
+# Compiled Extensions info
+_ext_lief_status = 'Lief Available'
+_ext_module_paths = 'Extension Module Paths'
+_ext_linked_libs = 'Linked Libraries'
+_ext_canonicalised_libs = 'Canonicalised Linked Libraries'
+_ext_missing = 'Missing Extensions'
 
 # Error and warning log
 _error_log = []
@@ -700,6 +708,117 @@ def display_sysinfo(info=None, sep_pos=45):
             print(fmt % t)
         else:
             print(*t)
+
+
+def get_ext_info():
+    """
+    Gather information about Numba's compiled extension modules using lief.
+    """
+
+    # Gather the information that shouldn't raise exceptions
+    ext_info = {
+        _ext_lief_status: False,
+        _ext_module_paths: [],
+        _ext_linked_libs: {},
+        _ext_canonicalised_libs: {},
+        _ext_missing: [],
+    }
+
+    # Try to import lief
+    HAVE_LIEF = False
+    try:
+        import lief
+        HAVE_LIEF = True
+        ext_info[_ext_lief_status] = True
+    except ImportError:
+        pass
+
+    # core extensions (from setup.py)
+    core_extension_names = [
+        'numba._dynfunc',
+        'numba._dispatcher',
+        'numba._helperlib',
+        'numba.core.typeconv._typeconv',
+        'numba.np.ufunc._internal',
+        'numba.np.ufunc._num_threads',
+        'numba.mviewbuf',
+        'numba.core.runtime._nrt_python',
+        'numba.experimental.jitclass._box',
+        'numba._devicearray',
+    ]
+
+    # Skip CUDA driver extensions when CUDASIM is enabled as they are replaced
+    # by Python-based simulation and won't be loadable
+    if os.environ.get('NUMBA_ENABLE_CUDASIM') != '1':
+        core_extension_names.append('numba.cuda.cudadrv._extras')
+
+    # optional extensions (conditionally built, from setup.py)
+    optional_extension_names = [
+        'numba.np.ufunc.omppool',
+        'numba.np.ufunc.workqueue',
+    ]
+
+    # tbbpool is only built on Windows x64 and Linux x86_64
+    current_platform = sys.platform
+    current_machine = platform.machine().lower()
+
+    is_win_x64 = (current_platform.startswith('win') and
+                  current_machine in ('amd64', 'x86_64'))
+    is_linux_x64 = (current_platform.startswith('linux') and
+                    current_machine in ('x86_64', 'amd64'))
+    if is_win_x64 or is_linux_x64:
+        optional_extension_names.append('numba.np.ufunc.tbbpool')
+
+    def canonicalise_library_type(dso):
+        """Canonicalises the representation of the binary::libraries as a
+        sequence of strings"""
+        # Note lief v16:
+        # Mach-O .libraries are DylibCommand instances.
+        # Windows PE and Linux ELF .libraries are strings.
+        return [getattr(x, "name", x) for x in dso.libraries]
+
+    def canonicalise_library_spelling(libs):
+        # This adjusts the library "spelling" so that it just contains the
+        # name given to the linker. e.g. `@rpath/somewhere/libfoo.so.1.3`
+        # would be canonicalised to "foo".
+        fixes = []
+        for lib in libs:
+            # some libraries, e.g. Mach-O have an @rpath or system path
+            # prefix in their name, remove it.
+            path_stripped = os.path.split(lib)[-1]
+            # Assume all library names contain at least one dot, even if they
+            # don't it's fine, the first part is the piece of interest.
+            prefix_libname = path_stripped.split(".")[0]
+            linker_name = prefix_libname.replace("lib", "").replace("LIB", "")
+            # further canonicalize by referring to all libraries in lower case.
+            fixes.append(linker_name.lower())
+        return fixes
+
+    def find_extension_module(module_name):
+        """Find the file path for an extension module"""
+        spec = importlib.util.find_spec(module_name)
+        if spec and spec.origin:
+            return spec.origin
+        return None
+
+    # Gather paths for all extensions
+    all_extension_names = core_extension_names + optional_extension_names
+
+    for module_name in all_extension_names:
+        path = find_extension_module(module_name)
+        if path and os.path.exists(path):
+            ext_info[_ext_module_paths].append(path)
+
+            if HAVE_LIEF:
+                dso = lief.parse(path)
+                link_libs = tuple(canonicalise_library_type(dso))
+                canonicalised_libs = canonicalise_library_spelling(link_libs)
+                ext_info[_ext_linked_libs][path] = link_libs
+                ext_info[_ext_canonicalised_libs][path] = canonicalised_libs
+        else:
+            ext_info[_ext_missing].append(module_name)
+
+    return ext_info
 
 
 if __name__ == '__main__':

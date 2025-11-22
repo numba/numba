@@ -169,9 +169,12 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Validate and test wheel
+        env:
+          NUMBA_DIST_TEST: 1
+          TESTS_TO_RUN: "numba.tests.test_dist_validation"
         run: |
           PYTHON_PATH=$(which python${{ matrix.python_canonical }})
-          $PYTHON_PATH -m pip install --upgrade pip twine
+          $PYTHON_PATH -m pip install --upgrade pip twine lief
           ls -l dist
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
               $PYTHON_PATH -m pip install --no-cache-dir llvmlite_wheels/*.whl
@@ -185,4 +188,4 @@ jobs:
           $PYTHON_PATH -m numba -s
 
           # run tests
-          $PYTHON_PATH -m numba.runtests -m 4 -v
+          $PYTHON_PATH -m numba.runtests $TESTS_TO_RUN -m 4 -v
