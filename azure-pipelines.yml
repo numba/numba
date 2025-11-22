@@ -3,7 +3,7 @@ trigger:
 
 variables:
   # Change the following along with adding new TEST_START_INDEX.
-  TEST_COUNT: 22
+  TEST_COUNT: 24
 
 jobs:
 # Mac and Linux use the same template with different matrixes
@@ -123,6 +123,12 @@ jobs:
         NUMPY: '2.3'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 18
+
+      py314_np23:
+        PYTHON: '3.14'
+        NUMPY: '2.3'
+        CONDA_ENV: azure_ci
+        TEST_START_INDEX: 19
 
 - template: buildscripts/azure/azure-windows.yml
   parameters:
