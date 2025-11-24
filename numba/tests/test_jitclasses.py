@@ -1176,6 +1176,24 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         classModule = TestModname.__module__
         self.assertEqual(thisModule, classModule)
 
+    def test_uninitialized_instance(self):
+        # Test from https://github.com/numba/numba/issues/10292
+        @jitclass
+        class Object:
+            value: int
+
+            def __init__(self):
+                pass
+
+        a = Object()
+        a.value = 12321
+        self.assertEqual(a.value, 12321)
+
+        b = a.__class__()
+        with self.assertRaises(RuntimeError) as raises:
+            b.value = 321321
+        self.assertIn("meminfo pointer is null", str(raises.exception))
+
 
 class TestJitClassOverloads(MemoryLeakMixin, TestCase):
 
