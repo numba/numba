@@ -229,6 +229,12 @@ def _try_enable_svml():
 
 _ensure_llvm()
 
+# Redirect the built-in CUDA target to the NVIDIA-maintained one
+from numba import cuda_redirector
+
+cuda_finder = cuda_redirector.NumbaCudaFinder()
+sys.meta_path.insert(0, cuda_finder)
+
 # we know llvmlite is working as the above tests passed, import it now as SVML
 # needs to mutate runtime options (sets the `-vector-library`).
 import llvmlite
