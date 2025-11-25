@@ -7,6 +7,8 @@ variables:
 
 jobs:
 # Mac and Linux use the same template with different matrixes
+# NOTE: Mac jobs have been commented out because Numba no longer support osx-64
+#       and Azure does not support osx-arm64.
 # - template: buildscripts/azure/azure-linux-macos.yml
 #   parameters:
 #     name: macOS
