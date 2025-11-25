@@ -6,6 +6,7 @@ from numba.core import types, cgutils
 from numba.core.imputils import (
     lower_builtin, iternext_impl, call_iternext, call_getiter,
     impl_ret_borrowed, impl_ret_new_ref, RefType)
+from numba.core.extending import overload
 
 
 
@@ -138,3 +139,15 @@ def iternext_zip(context, builder, sig, args, result):
                              builder.and_(status.is_error,
                                           builder.not_(status.is_stop_iteration))):
         context.call_conv.return_status_propagate(builder, status)
+
+
+@overload(reversed)
+def iter_reverse(A):
+    """
+    reversed(A) for an iterable A.
+    """
+    if isinstance(A, types.IterableType) and not isinstance(A, types.RangeType):
+        def impl_reversed(A):
+            for i in reversed(range(len(A))):
+                yield A[i]
+        return impl_reversed
