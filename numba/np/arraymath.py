@@ -801,13 +801,23 @@ def array_argmax(a, axis=None):
 @overload(np.all)
 @overload_method(types.Array, "all")
 def np_all(a):
-    def flat_all(a):
-        for v in np.nditer(a):
-            if not v.item():
-                return False
-        return True
 
-    return flat_all
+    # for scalar
+    if isinstance(a, (types.Number, types.Boolean)):
+        def scalar_all(a):
+            return bool(a)
+        return scalar_all
+
+    # for array
+    if isinstance(a, types.Array):
+        def flat_all(a):
+            for v in np.nditer(a):
+                if not v.item():
+                    return False
+            return True
+        return flat_all
+
+    return None
 
 
 @register_jitable
