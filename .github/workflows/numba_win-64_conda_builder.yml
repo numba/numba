@@ -1,6 +1,8 @@
 name: numba_win-64_conda_builder
 
 on:
+  schedule:
+    - cron: '45 7 * * 6'  # Saturday 7:45 AM UTC - win-64 conda
   pull_request:
     paths:
       - .github/workflows/numba_win-64_conda_builder.yml
