@@ -519,7 +519,10 @@ class _LaunchConfiguration:
         self.stream = stream
         self.sharedmem = sharedmem
 
-        if config.CUDA_LOW_OCCUPANCY_WARNINGS:
+        if (
+            config.CUDA_LOW_OCCUPANCY_WARNINGS
+            and not config.DISABLE_PERFORMANCE_WARNINGS
+        ):
             # Warn when the grid has fewer than 128 blocks. This number is
             # chosen somewhat heuristically - ideally the minimum is 2 times
             # the number of SMs, but the number of SMs varies between devices -
