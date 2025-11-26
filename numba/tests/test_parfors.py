@@ -52,6 +52,9 @@ from numba.core.extending import register_jitable
 from numba.core.bytecode import _fix_LOAD_GLOBAL_arg
 from numba.core import utils
 
+from typing import NamedTuple
+from numpy.typing import NDArray
+
 import cmath
 import unittest
 
@@ -132,6 +135,7 @@ _GLOBAL_INT_FOR_TESTING1 = 17
 _GLOBAL_INT_FOR_TESTING2 = 5
 
 TestNamedTuple = namedtuple('TestNamedTuple', ('part0', 'part1'))
+issue_10338_A = NamedTuple("issue_10338_A", [("age", NDArray[np.int64]),])
 
 
 def null_comparer(a, b):
@@ -252,6 +256,9 @@ class TestParforsBase(TestCase):
         parfor_args = copy_args(*args)
         parfor_output = cpfunc.entry_point(*parfor_args)
 
+        print("py_expected", py_expected)
+        print("njit", njit_output)
+        print("parfor", parfor_output)
         if check_args_for_equality is None:
             np.testing.assert_almost_equal(njit_output, py_expected, **kwargs)
             np.testing.assert_almost_equal(parfor_output, py_expected, **kwargs)
@@ -4363,14 +4370,6 @@ class TestPrangeSpecific(TestPrangeBase):
         self.prange_tester(test_impl, 1.0)
 
     def test_issue_10338(self):
-        from numpy.typing import NDArray
-        issue_10338_A = NamedTuple(
-            "A",
-            [
-                ("age", NDArray[np.int64]),
-            ]
-        )
-
         def test_impl(x, y):
             for i in range(x.age.shape[0]):
                 y.age[i] = x.age[i]
