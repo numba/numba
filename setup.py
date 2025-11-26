@@ -391,7 +391,6 @@ metadata = dict(
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
-        "License :: OSI Approved :: BSD License",
         "Operating System :: OS Independent",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
@@ -426,7 +425,8 @@ metadata = dict(
     setup_requires=build_requires,
     install_requires=install_requires,
     python_requires=">={}".format(min_python_version),
-    license="BSD",
+    license="MIT AND 0BSD AND BSD-2-Clause AND BSD-3-Clause AND Python-2.0",
+    license_files=['LICENSE', 'LICENSE.thirdparty'],
     cmdclass=cmdclass,
 )
 
