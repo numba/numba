@@ -19,7 +19,6 @@ Build and Packaging
   installed package from git tags
 - :ghfile:`.flake8` - Preferences for code formatting.  Files should be
   fixed and removed from the exception list as time allows.
-- :ghfile:`.pre-commit-config.yaml` - Configuration file for pre-commit hooks.
 - :ghfile:`.readthedocs.yml` - Configuration file for Read the Docs.
 - :ghfile:`buildscripts/condarecipe.local` - Conda build recipe
 
