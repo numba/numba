@@ -890,7 +890,7 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                     # We can put a var in a tuple and get it out again and
                     # so the tuple and the field inside it should be said
                     # to alias.
-                    if isinstance(typemap[lhs], types.containers.BaseTuple):
+                    if typemap and isinstance(typemap[lhs], types.containers.BaseTuple):
                         for earg in expr.args:
                             if isinstance(earg, ir.Var):
                                 _add_alias(lhs, earg.name, alias_map, arg_aliases)
