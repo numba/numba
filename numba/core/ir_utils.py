@@ -5,6 +5,7 @@
 
 import numpy
 import math
+import sys
 
 import types as pytypes
 import collections
@@ -885,6 +886,22 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                         _add_alias(lhs, expr.args[0].name, alias_map, arg_aliases)
                     if isinstance(fmod, ir.Var) and fname in np_alias_funcs:
                         _add_alias(lhs, fmod.name, alias_map, arg_aliases)
+
+                    # We can put a var in a tuple and get it out again and
+                    # so the tuple and the field inside it should be said
+                    # to alias.
+                    if typemap and isinstance(typemap[lhs], types.containers.BaseTuple):
+                        for earg in expr.args:
+                            if isinstance(earg, ir.Var):
+                                _add_alias(lhs, earg.name, alias_map, arg_aliases)
+                        for earg_tup in expr.kws:
+                            _, earg = earg_tup
+                            if isinstance(earg, ir.Var):
+                                _add_alias(lhs, earg.name, alias_map, arg_aliases)
+                    # FIX ME: Technically this should be an denylist instead
+                    # of a allowlist.  Any call could potentially create an alias
+                    # and we should exclude calls known not to create aliases.
+
 
     # copy to avoid changing size during iteration
     old_alias_map = copy.deepcopy(alias_map)

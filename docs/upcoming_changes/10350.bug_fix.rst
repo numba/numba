@@ -1,0 +1,5 @@
+Fix aliasing issue with type calls.
+-----------------------------------
+
+If a variable is used in a call to a type (constructor) then consider
+that variable and the resulting object to alias.
