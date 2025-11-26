@@ -426,7 +426,7 @@ metadata = dict(
     install_requires=install_requires,
     python_requires=">={}".format(min_python_version),
     license="MIT AND 0BSD AND BSD-2-Clause AND BSD-3-Clause AND Python-2.0",
-    license_files=['LICENSE', 'LICENSE.thirdparty'],
+    license_files=['LICENSE', 'LICENSES.thirdparty'],
     cmdclass=cmdclass,
 )
 
