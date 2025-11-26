@@ -52,9 +52,6 @@ from numba.core.extending import register_jitable
 from numba.core.bytecode import _fix_LOAD_GLOBAL_arg
 from numba.core import utils
 
-from typing import NamedTuple
-from numpy.typing import NDArray
-
 import cmath
 import unittest
 
@@ -135,7 +132,7 @@ _GLOBAL_INT_FOR_TESTING1 = 17
 _GLOBAL_INT_FOR_TESTING2 = 5
 
 TestNamedTuple = namedtuple('TestNamedTuple', ('part0', 'part1'))
-issue_10338_A = NamedTuple("issue_10338_A", [("age", NDArray[np.int64]),])
+issue_10338_A = namedtuple("issue_10338_A", ("age",))
 
 
 def null_comparer(a, b):

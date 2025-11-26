@@ -887,24 +887,19 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                     if isinstance(fmod, ir.Var) and fname in np_alias_funcs:
                         _add_alias(lhs, fmod.name, alias_map, arg_aliases)
 
-                    # fmod isn't necessarily a module so sys.modules below
-                    # may fail and that is okay.
-                    try:
-                        # If we use an arg to create a type then they alias.
-                        fmod_mod = sys.modules[fmod]
-                        fmod_obj = getattr(fmod_mod, fname)
-                        if isinstance(fmod_obj, type):
-                            for earg in expr.args:
-                                if isinstance(earg, ir.Var):
-                                    _add_alias(lhs, earg.name, alias_map, arg_aliases)
-                            for earg_tup in expr.kws:
-                                _, earg = earg_tup
-                                if isinstance(earg, ir.Var):
-                                    _add_alias(lhs, earg.name, alias_map, arg_aliases)
-                    except Exception:
-                        pass
+                    # We can put a var in a tuple and get it out again and
+                    # so the tuple and the field inside it should be said
+                    # to alias.
+                    if isinstance(typemap[lhs], types.containers.BaseTuple):
+                        for earg in expr.args:
+                            if isinstance(earg, ir.Var):
+                                _add_alias(lhs, earg.name, alias_map, arg_aliases)
+                        for earg_tup in expr.kws:
+                            _, earg = earg_tup
+                            if isinstance(earg, ir.Var):
+                                _add_alias(lhs, earg.name, alias_map, arg_aliases)
                     # FIX ME: Technically this should be an denylist instead
-                    # of a allowlist.  Any call to potentially create an alias
+                    # of a allowlist.  Any call could potentially create an alias
                     # and we should exclude calls known not to create aliases.
 
 
