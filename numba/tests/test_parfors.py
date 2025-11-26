@@ -4362,6 +4362,24 @@ class TestPrangeSpecific(TestPrangeBase):
             return B
         self.prange_tester(test_impl, 1.0)
 
+    def test_issue_10338(self):
+        from numpy.typing import NDArray
+        issue_10338_A = NamedTuple(
+            "A",
+            [
+                ("age", NDArray[np.int64]),
+            ]
+        )
+
+        def test_impl(x, y):
+            for i in range(x.age.shape[0]):
+                y.age[i] = x.age[i]
+            return x, y
+
+        a = issue_10338_A(age=np.array([1, 2, 3]))
+        b = issue_10338_A(age=np.array([0, 0, 0]))
+        self.prange_tester(test_impl, a, b)
+
     def test_argument_alias_recarray_field(self):
         # Test for issue4007.
         def test_impl(n):
