@@ -78,7 +78,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install conda-build
-        run: conda install conda-build
+        run: conda install conda-build "conda-libmamba-solver<25.11"
 
       - name: Build Numba conda package
         run: |
@@ -159,7 +159,7 @@ jobs:
 
       - name: Install conda-build
         run: |
-          conda install conda-build
+          conda install conda-build "conda-libmamba-solver<25.11"
 
       - name: Run tests
         env:
