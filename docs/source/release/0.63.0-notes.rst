@@ -190,6 +190,7 @@ Pull-Requests
 * PR `#10333 <https://github.com/numba/numba/pull/10333>`_: update version support table for `0.63.0rc1` (`swap357 <https://github.com/swap357>`_)
 * PR `#10334 <https://github.com/numba/numba/pull/10334>`_: update deprecation notice for 0.63 (`swap357 <https://github.com/swap357>`_)
 * PR `#10335 <https://github.com/numba/numba/pull/10335>`_: update macos image version from `macos-13` to `macos-15` on azure ci (`swap357 <https://github.com/swap357>`_)
+* PR `#10360 <https://github.com/numba/numba/pull/10360>`_: update changelog and version table (`swap357 <https://github.com/swap357>`_)
 
 Authors
 ~~~~~~~
