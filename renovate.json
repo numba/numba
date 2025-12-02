@@ -4,9 +4,6 @@
     "config:recommended",
     "helpers:pinGitHubActionDigestsToSemver"
   ],
-  "pre-commit": {
-    "enabled": true
-  },
   "ignorePaths": [],
   "labels": ["skip_release_notes"]
 }
