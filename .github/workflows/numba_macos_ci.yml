@@ -14,7 +14,7 @@ jobs:
     runs-on: macos-14
     env:
       # Change the following along with adding new TEST_START_INDEX entries in matrix
-      # NOTE: TEST_COUNT must match azure-pipelines.yml (currently 22)
+      # NOTE: Azure uses TEST_COUNT=19 (shards 0-18), GHA macOS uses shards 19-21
       TEST_COUNT: 22
       CONDA_ENV: numba_ci
       PYTHON: ${{ matrix.python }}
