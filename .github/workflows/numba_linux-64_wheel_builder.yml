@@ -1,6 +1,8 @@
 name: numba_linux-64_wheel_builder
 
 on:
+  schedule:
+    - cron: '30 7 * * 6'  # Saturday 7:30 AM UTC - linux-64 wheel
   pull_request:
     paths:
       - .github/workflows/numba_linux-64_wheel_builder.yml
