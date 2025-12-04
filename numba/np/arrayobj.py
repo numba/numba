@@ -6975,13 +6975,6 @@ def numpy_swapaxes(a, axis1, axis2):
     def impl(a, axis1, axis2):
         axis1 = normalize_axis("np.swapaxes", "axis1", ndim, axis1)
         axis2 = normalize_axis("np.swapaxes", "axis2", ndim, axis2)
-
-        # to ensure tuple_setitem support of negative values
-        if axis1 < 0:
-            axis1 += ndim
-        if axis2 < 0:
-            axis2 += ndim
-
         axes_tuple = tuple_setitem(axes_list, axis1, axis2)
         axes_tuple = tuple_setitem(axes_tuple, axis2, axis1)
         return np.transpose(a, axes_tuple)
