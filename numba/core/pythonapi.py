@@ -3,6 +3,7 @@ import contextlib
 import pickle
 import hashlib
 import sys
+from platform import machine as get_architecture
 
 from llvmlite import ir
 from llvmlite.ir import Constant
@@ -981,12 +982,19 @@ class PythonAPI(object):
         Refer to Python source Include/object.h for macros definition
         of the opid.
         """
+
+        """
+        s390x requires 64-bit ints because the ABI does not guarantee upper-bit clearing
+        when using 32-bit values. Using IntType(64) ensures the upper bit are cleared.
+        """
+        ir_intty = ir.IntType(64) if get_architecture() == "s390x" else ir.IntType(32)
+        intty = types.int64 if get_architecture() == "s390x" else types.int32
         ops = ['<', '<=', '==', '!=', '>', '>=']
         if opstr in ops:
             opid = ops.index(opstr)
-            fnty = ir.FunctionType(self.pyobj, [self.pyobj, self.pyobj, ir.IntType(32)])
+            fnty = ir.FunctionType(self.pyobj, [self.pyobj, self.pyobj, ir_intty])
             fn = self._get_function(fnty, name="PyObject_RichCompare")
-            lopid = self.context.get_constant(types.int32, opid)
+            lopid = self.context.get_constant(intty, opid)
             return self.builder.call(fn, (lhs, rhs, lopid))
         elif opstr == 'is':
             bitflag = self.builder.icmp_unsigned('==', lhs, rhs)
@@ -995,10 +1003,10 @@ class PythonAPI(object):
             bitflag = self.builder.icmp_unsigned('!=', lhs, rhs)
             return self.bool_from_bool(bitflag)
         elif opstr in ('in', 'not in'):
-            fnty = ir.FunctionType(ir.IntType(32), [self.pyobj, self.pyobj])
+            fnty = ir.FunctionType(ir_intty, [self.pyobj, self.pyobj])
             fn = self._get_function(fnty, name="PySequence_Contains")
             status = self.builder.call(fn, (rhs, lhs))
-            negone = self.context.get_constant(types.int32, -1)
+            negone = self.context.get_constant(intty, -1)
             is_good = self.builder.icmp_unsigned('!=', status, negone)
             # Stack allocate output and initialize to Null
             outptr = cgutils.alloca_once_value(self.builder,
@@ -1219,7 +1227,12 @@ class PythonAPI(object):
     def nrt_adapt_ndarray_to_python(self, aryty, ary, dtypeptr):
         assert self.context.enable_nrt, "NRT required"
 
-        intty = ir.IntType(32)
+        """
+        s390x requires 64-bit ints because the ABI does not guarantee upper-bit clearing 
+        when using 32-bit values. Using IntType(64) ensures the upper bit are cleared.
+        """
+        intty = ir.IntType(64) if get_architecture() == "s390x" else ir.IntType(32)
+        int_size = types.int64 if get_architecture() == "s390x" else types.int32
         # Embed the Python type of the array (maybe subclass) in the LLVM IR.
         serial_aryty_pytype = self.unserialize(self.serialize_object(aryty.box_type))
 
@@ -1228,8 +1241,8 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="NRT_adapt_ndarray_to_python_acqref")
         fn.args[0].add_attribute('nocapture')
 
-        ndim = self.context.get_constant(types.int32, aryty.ndim)
-        writable = self.context.get_constant(types.int32, int(aryty.mutable))
+        ndim = self.context.get_constant(int_size, aryty.ndim)
+        writable = self.context.get_constant(int_size, int(aryty.mutable))
 
         aryptr = cgutils.alloca_once_value(self.builder, ary)
         return self.builder.call(fn, [self.builder.bitcast(aryptr,
@@ -1359,11 +1372,18 @@ class PythonAPI(object):
         a {i8* data, i32 length, i8* hashbuf, i8* func_ptr, i32 alloc_flag}
         structure.
         """
+
+        """
+        s390x requires 64-bit ints because the ABI does not guarantee upper-bit clearing
+        when using 32-bit values. Using IntType(64) ensures the upper bit are cleared.
+        """
+        intty = ir.IntType(64) if get_architecture() == "s390x" else ir.IntType(32)
         fnty = ir.FunctionType(self.pyobj,
-                             (self.voidptr, ir.IntType(32), self.voidptr))
+                             (self.voidptr, intty, self.voidptr))
         fn = self._get_function(fnty, name="numba_unpickle")
         ptr = self.builder.extract_value(self.builder.load(structptr), 0)
         n = self.builder.extract_value(self.builder.load(structptr), 1)
+        n = self.builder.zext(n, intty)
         hashed = self.builder.extract_value(self.builder.load(structptr), 2)
         return self.builder.call(fn, (ptr, n, hashed))
 
