@@ -7035,6 +7035,61 @@ def numpy_swapaxes(a, axis1, axis2):
     return impl
 
 
+@overload(np.moveaxis)
+def numpy_moveaxis(a, source, destination):
+    if not isinstance(a, types.Array):
+        raise errors.TypingError('The first argument "a" must be an array')
+    if not (
+        isinstance(source, types.Integer)
+        or (
+            isinstance(source, types.Sequence)
+            and isinstance(source.dtype, types.Integer)
+        )
+    ):
+        raise errors.TypingError(
+            'The second argument "source" must be an integer '
+            'or sequence of integers'
+        )
+    if not (
+        isinstance(destination, types.Integer)
+        or (
+            isinstance(destination, types.Sequence)
+            and isinstance(destination.dtype, types.Integer)
+        )
+    ):
+        raise errors.TypingError(
+            'The third argument "destination" must be an integer '
+            'or sequence of integers'
+        )
+
+    ndim = a.ndim
+    order_init = (1,) * a.ndim
+
+    def impl(a, source, destination):
+        source = normalize_axis_tuple("np.moveaxis", "source", ndim, source)
+        destination = normalize_axis_tuple(
+            "np.moveaxis", "destination", ndim, destination
+        )
+        if len(source) != len(destination):
+            raise ValueError(
+                "`source` and `destination` arguments must have "
+                "the same number of parameters"
+            )
+
+        order_list = [n for n in range(a.ndim) if n not in source]
+
+        for dest, src in sorted(zip(destination, source)):
+            order_list.insert(dest, src)
+
+        order = order_init
+        for i, o in enumerate(order_list):
+            order = tuple_setitem(order, i, o)
+
+        return a.transpose(order)
+
+    return impl
+
+
 @register_jitable
 def _take_along_axis_impl(
         arr, indices, axis, Ni_orig, Nk_orig, indices_broadcast_shape
