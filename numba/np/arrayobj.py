@@ -301,6 +301,59 @@ def normalize_axis_overloads(func_name, arg_name, ndim, axis):
     return impl
 
 
+def normalize_axis_tuple(func_name, arg_name, ndim, axis):
+    """Normalizes an axis argument into a tuple of non-negative integer axes."""
+    raise NotImplementedError()
+
+
+@overload(normalize_axis_tuple)
+def normalize_axis_tuple_overloads(func_name, arg_name, ndim, axis):
+    if not isinstance(func_name, StringLiteral):
+        raise errors.TypingError("func_name must be a str literal.")
+    if not isinstance(arg_name, StringLiteral):
+        raise errors.TypingError("arg_name must be a str literal.")
+
+    invalid_axis_msg = (
+        f"{func_name.literal_value}: Argument {arg_name.literal_value} "
+        "out of bounds for dimensions of the array"
+    )
+
+    repeated_axis_msg = (
+        f"{func_name.literal_value}: repeated axis in "
+        f"{arg_name.literal_value} argument"
+    )
+
+    if isinstance(axis, types.Integer):
+
+        def impl(func_name, arg_name, ndim, axis):
+            if axis < 0:
+                axis += ndim
+            if axis < 0 or axis >= ndim:
+                raise ValueError(invalid_axis_msg)
+
+            return (axis,)
+
+    else:
+        axis_len = len(axis)
+        norm_axis_init = (0,) * axis_len
+
+        def impl(func_name, arg_name, ndim, axis):
+            norm_axis = norm_axis_init
+            for i, ax in enumerate(axis):
+                if ax < 0:
+                    ax += ndim
+                if ax < 0 or ax >= ndim:
+                    raise ValueError(invalid_axis_msg)
+                norm_axis = tuple_setitem(norm_axis, i, ax)
+
+            if len(set(norm_axis)) != axis_len:
+                raise ValueError(repeated_axis_msg)
+
+            return norm_axis
+
+    return impl
+
+
 @lower_builtin('getiter', types.Buffer)
 def getiter_array(context, builder, sig, args):
     [arrayty] = sig.args
