@@ -1,0 +1,25 @@
+
+Version 0.63.1 (Release Date)
+=============================
+
+This is a patch release of Numba that fixes lowering for non-CPU targets: `#10373 <https://github.com/numba/numba/issues/10373>`_.
+
+Bug Fixes
+~~~~~~~~~
+
+Fix lowering for non-CPU targets
+--------------------------------
+
+Non-CPU targets did not provide the ``_reload_init`` member in their
+``CodeLibrary`` subclasses. This is fixed by providing it in the
+``CodeLibrary``.
+
+(`PR-#10375 <https://github.com/numba/numba/pull/10375>`__)
+
+Pull-Requests:
+
+* PR `#10375 <https://github.com/numba/numba/pull/10375>`_: Fix #10373: Move `_reload_init` to `CodeLibrary` (`gmarkall <https://github.com/gmarkall>`_)
+
+Authors:
+
+* `gmarkall <https://github.com/gmarkall>`_
