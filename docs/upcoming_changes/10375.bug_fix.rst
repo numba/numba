@@ -1,0 +1,6 @@
+Fix lowering for non-CPU targets
+--------------------------------
+
+Non-CPU targets did not provide the ``_reload_init`` member in their
+``CodeLibrary`` subclasses. This is fixed by providing it in the
+``CodeLibrary``.
