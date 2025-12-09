@@ -534,6 +534,8 @@ class CodeLibrary(metaclass=ABCMeta):
         # Track names of the dynamic globals
         self._dynamic_globals = []
 
+        self._reload_init = set()
+
     @property
     def has_dynamic_globals(self):
         self._ensure_finalized()
@@ -647,7 +649,6 @@ class CPUCodeLibrary(CodeLibrary):
             str(self._codegen._create_empty_module(self.name)))
         self._final_module.name = cgutils.normalize_ir_text(self.name)
         self._shared_module = None
-        self._reload_init = set()
 
     def _optimize_functions(self, ll_module):
         """
