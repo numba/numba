@@ -19,7 +19,9 @@ Non-CPU targets did not provide the ``_reload_init`` member in their
 Pull-Requests:
 
 * PR `#10375 <https://github.com/numba/numba/pull/10375>`_: Fix #10373: Move `_reload_init` to `CodeLibrary` (`gmarkall <https://github.com/gmarkall>`_)
+* PR `#10377 <https://github.com/numba/numba/pull/10377>`_: Cherry picks and changelog update for 0.63.1 (`swap357 <https://github.com/swap357>`_)
 
 Authors:
 
 * `gmarkall <https://github.com/gmarkall>`_
+* `swap357 <https://github.com/swap357>`_
