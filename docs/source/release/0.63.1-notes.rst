@@ -1,6 +1,6 @@
 
-Version 0.63.1 (Release Date)
-=============================
+Version 0.63.1 (9 December 2025)
+================================
 
 This is a patch release of Numba that fixes lowering for non-CPU targets: `#10373 <https://github.com/numba/numba/issues/10373>`_.
 
