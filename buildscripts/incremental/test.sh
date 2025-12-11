@@ -113,7 +113,12 @@ fi
 
 # setup SDKROOT on Mac
 if [[ $(uname) == "Darwin" ]]; then
-    export SDKROOT=`pwd`/MacOSX10.10.sdk
+    # ARM64 macOS uses system SDK; x86_64 needs older SDK for compatibility
+    if [[ $(uname -m) == "arm64" ]]; then
+        export SDKROOT=$(xcrun --sdk macosx --show-sdk-path)
+    else
+        export SDKROOT=`pwd`/MacOSX10.10.sdk
+    fi
 fi
 
 # First run Numba's Power-On-Self-Test to make sure testing will likely work
