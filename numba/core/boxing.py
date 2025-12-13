@@ -434,7 +434,20 @@ def box_array(typ, val, c):
     nativeary = nativearycls(c.context, c.builder, value=val)
     if c.context.enable_nrt:
         np_dtype = numpy_support.as_dtype(typ.dtype)
-        dtypeptr = c.env_manager.read_const(c.env_manager.add_const(np_dtype))
+
+        # For dtypes that require a descriptor (e.g., StringDType), we need to
+        # use the descriptor from the native array struct rather than creating
+        # a new one, to ensure the descriptor matches the one used during
+        # string allocation.
+        from numba.np.arrayobj import _dtype_trait
+        if _dtype_trait(c.context, typ.dtype, 'requires_array_descr'):
+            # Extract the descriptor pointer from the native array struct
+            # and cast it to a PyObject* (dtype pointer)
+            descr_voidptr = nativeary.descr
+            dtypeptr = c.builder.bitcast(descr_voidptr, c.pyapi.pyobj)
+        else:
+            dtypeptr = c.env_manager.read_const(c.env_manager.add_const(np_dtype))
+
         newary = c.pyapi.nrt_adapt_ndarray_to_python(typ, val, dtypeptr)
         # Steals NRT ref
         c.context.nrt.decref(c.builder, typ, val)
