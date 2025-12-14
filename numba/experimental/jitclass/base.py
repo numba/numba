@@ -553,7 +553,8 @@ def imp_dtor(context, module, instance_type):
         ptr = builder.bitcast(dtor_fn.args[0], alloc_type.as_pointer())
         data = context.make_helper(builder, alloc_fe_type, ref=ptr)
 
-        # Call user-defined __del__ if present (only for jitclass instance types)
+        # Call user-defined __del__ if present
+        # (only for jitclass instance types)
         jit_methods = getattr(instance_type, "jit_methods", None)
         user_dtor = None if jit_methods is None else jit_methods.get("__del__")
         if user_dtor is not None:
