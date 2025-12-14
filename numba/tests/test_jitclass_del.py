@@ -36,7 +36,8 @@ def alias_refs(arr):
     inst = WithDel(arr)
     other = inst
     # Both names refer to the same instance; destructor should still run once.
-    return
+    if other.arr[0] == -1:
+        arr[0] = -1
 
 
 @njit
@@ -81,7 +82,8 @@ class TestJitClassDel(TestCase):
     def test_del_from_python_box_lifetime(self):
         arr = np.zeros(1, dtype=np.int64)
         inst = WithDel(arr)
-        # Drop the Python box and force collection; meminfo destructor should run.
+        # Drop the Python box and force collection;
+        # meminfo destructor should run.
         del inst
         gc.collect()
         self.assertEqual(arr[0], 1)
