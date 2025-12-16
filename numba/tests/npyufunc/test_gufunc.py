@@ -736,7 +736,6 @@ class TestGUVectorizeJit(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(ValueError) as raises:
             foo(x, y, res)
-        msg = ('Operand has a mismatch in one of its core dimensions')
         self.assertIn(msg, str(raises.exception))
 
     def test_mismatch_inner_dimensions_input_output(self):
@@ -763,7 +762,6 @@ class TestGUVectorizeJit(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(ValueError) as raises:
             foo(x, y, res)
-        msg = ('Operand has a mismatch in one of its core dimensions')
         self.assertIn(msg, str(raises.exception))
 
     def test_mismatch_inner_dimensions_output(self):
@@ -792,7 +790,6 @@ class TestGUVectorizeJit(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(ValueError) as raises:
             foo(x, y, res, out)
-        msg = ('Operand has a mismatch in one of its core dimensions')
         self.assertIn(msg, str(raises.exception))
 
     def test_mismatch_loop_shape(self):
