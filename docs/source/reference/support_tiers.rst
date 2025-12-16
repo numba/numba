@@ -161,7 +161,10 @@ maintainers.
 
 Examples include:
 
-* Conda and wheel packages not listed in Tier 1
+* Conda and wheel packages not listed in Tier 1:
+
+  * ``osx-64`` (As of Numba ``0.63.*``)
+
 * Hardware targets:
 
   * ``s390x``
