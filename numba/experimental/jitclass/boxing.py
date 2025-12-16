@@ -250,14 +250,33 @@ def _unbox_class_instance(typ, val, c):
     ptr_meminfo = access_member(_box.box_meminfoptr_offset)
     ptr_dataptr = access_member(_box.box_dataptr_offset)
 
-    # store to native structure
-    inst.meminfo = c.builder.bitcast(ptr_meminfo, inst.meminfo.type)
-    inst.data = c.builder.bitcast(ptr_dataptr, inst.data.type)
+    # Check for null pointers and raise error if found
+    msg = "uninitialized jitclass instance; {}"
+    meminfo_is_null = cgutils.is_null(c.builder, ptr_meminfo)
+    if_else = c.builder.if_else(meminfo_is_null, likely=False)
+    with if_else as (bb_mi_error, bb_ok):
+        with bb_mi_error:
+            c.pyapi.err_set_string(
+                "PyExc_RuntimeError", msg.format("meminfo pointer is null")
+            )
+
+        with bb_ok:
+            dataptr_is_null = cgutils.is_null(c.builder, ptr_dataptr)
+            if_else_2 = c.builder.if_else(dataptr_is_null, likely=False)
+            with if_else_2 as (bb_dp_error, bb_ok):
+                with bb_dp_error:
+                    c.pyapi.err_set_string(
+                        "PyExc_RuntimeError", msg.format("data pointer is null")
+                    )
+                with bb_ok:
+                    # store to native structure
+                    inst.meminfo = c.builder.bitcast(
+                        ptr_meminfo, inst.meminfo.type
+                    )
+                    inst.data = c.builder.bitcast(ptr_dataptr, inst.data.type)
 
     ret = inst._getvalue()
-
     c.context.nrt.incref(c.builder, typ, ret)
-
     return NativeValue(ret, is_error=c.pyapi.c_api_error())
 
 
