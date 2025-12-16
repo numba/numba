@@ -11,6 +11,10 @@ from numba.np import npdatetime_helpers
 
 class Boolean(Hashable):
 
+    def __init__(self, name):
+        super().__init__(name)
+        self.bitwidth = 8
+
     def cast_python_value(self, value):
         return bool(value)
 
