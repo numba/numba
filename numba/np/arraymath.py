@@ -1568,7 +1568,7 @@ def _select_two(arry, k, low, high):
 
 
 @register_jitable
-def _median_inner(temp_arry, n, supports_nans = False):
+def _median_inner(temp_arry, n, supports_nans=False):
     """
     The main logic of the median() call.  *temp_arry* must be disposable,
     as this function will mutate it.
@@ -1578,7 +1578,7 @@ def _median_inner(temp_arry, n, supports_nans = False):
     half = n >> 1
     if supports_nans:
         maxval = temp_arry[low]
-        for k in range(low+1, n):
+        for k in range(low + 1, n):
             if not less_than(temp_arry[k], maxval):
                 maxval = temp_arry[k]
         if np.isnan(maxval):
