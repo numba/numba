@@ -150,7 +150,7 @@ jobs:
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
               python -m pip install llvmlite_wheels/*.whl
           else
-              python -m pip install -i ${{ env.WHEELS_INDEX_URL }} llvmlite
+              python -m pip install --pre -i ${{ env.WHEELS_INDEX_URL }} llvmlite
           fi
           python -m twine check dist/*.whl
           python -m pip install dist/*.whl

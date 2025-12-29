@@ -207,7 +207,7 @@ jobs:
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
               arch -arm64 python -m pip install llvmlite_wheels/*.whl
           else
-              arch -arm64 python -m pip install -i ${{ env.WHEELS_INDEX_URL }} llvmlite
+              arch -arm64 python -m pip install --pre -i ${{ env.WHEELS_INDEX_URL }} llvmlite
           fi
           arch -arm64 python -m twine check dist/*.whl
           arch -arm64 python -m pip install dist/numba*.whl numpy==${{ matrix.numpy_test }}
