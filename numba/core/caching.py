@@ -109,7 +109,16 @@ class _CacheLocator(metaclass=ABCMeta):
         path = self.get_cache_path()
         os.makedirs(path, exist_ok=True)
         # Ensure the directory is writable by trying to write a temporary file
-        tempfile.TemporaryFile(dir=path).close()
+        if os.name == "nt":
+            # We avoid using tempfile.TemporaryFile or tempfile.mkstemp since it may hang indefinitely on Windows:
+            # https://github.com/python/cpython/issues/66305
+            tmpfile = tempfile.mktemp(dir=path)
+            open(tmpfile, mode="wb").close()
+            os.remove(tmpfile)
+        else:
+            # on other operating systems it's safer to rely on
+            # TemporaryFile.
+            tempfile.TemporaryFile(dir=path).close()
 
     @abstractmethod
     def get_cache_path(self):
