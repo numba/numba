@@ -184,7 +184,7 @@ jobs:
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
               $PYTHON_PATH -m pip install --no-cache-dir llvmlite_wheels/*.whl
           else
-              $PYTHON_PATH -m pip install --no-cache-dir -i $WHEELS_INDEX_URL llvmlite
+              $PYTHON_PATH -m pip install --no-cache-dir --pre -i $WHEELS_INDEX_URL llvmlite
           fi
           $PYTHON_PATH -m twine check dist/*.whl
 
