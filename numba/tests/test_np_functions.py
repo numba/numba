@@ -6657,6 +6657,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         yield [2, 3], np.arange(20)  # Test the "sorting" method.
         yield [2, 3], np.tile(np.arange(5), 4)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.in1d removed in NumPy 2.4+")
     def test_in1d_2(self):
         np_pyfunc = np_in1d_2
         np_nbfunc = njit(np_pyfunc)
@@ -6673,6 +6674,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for a, b in self._in1d_arrays():
             check(a, b)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.in1d removed in NumPy 2.4+")
     def test_in1d_3a(self):
         np_pyfunc = np_in1d_3a
         np_nbfunc = njit(np_pyfunc)
@@ -6691,6 +6693,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             if len(np.unique(a)) == len(a) and len(np.unique(b)) == len(b):
                 check(a, b, assume_unique=True)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.in1d removed in NumPy 2.4+")
     def test_in1d_3b(self):
         np_pyfunc = np_in1d_3b
         np_nbfunc = njit(np_pyfunc)
@@ -6708,6 +6711,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             check(a, b, invert=False)
             check(a, b, invert=True)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.in1d removed in NumPy 2.4+")
     def test_in1d_4(self):
         np_pyfunc = np_in1d_4
         np_nbfunc = njit(np_pyfunc)
@@ -6728,6 +6732,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 check(a, b, assume_unique=True, invert=False)
                 check(a, b, assume_unique=True, invert=True)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.in1d removed in NumPy 2.4+")
     def test_in1d_errors(self):
         np_pyfunc = np_in1d_4
         np_nbfunc = njit(np_pyfunc)
