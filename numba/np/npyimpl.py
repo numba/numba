@@ -868,12 +868,13 @@ def _make_dtype_object(typingctx, desc):
         return from_nb_type(nb_type)
 
 @overload(np.dtype)
-def numpy_dtype(desc):
+def numpy_dtype(dtype):
     """Provide an implementation so that numpy.dtype function can be lowered.
     """
-    if isinstance(desc, (types.Literal, types.functions.NumberClass)):
-        def imp(desc):
-            return _make_dtype_object(desc)
+    if isinstance(dtype, (types.Literal, types.functions.NumberClass)):
+        def imp(dtype):
+            return _make_dtype_object(dtype)
         return imp
     else:
-        raise errors.NumbaTypeError('unknown dtype descriptor: {}'.format(desc))
+        raise errors.NumbaTypeError(
+            'unknown dtype descriptor: {}'.format(dtype))
