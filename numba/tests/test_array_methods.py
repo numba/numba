@@ -751,6 +751,21 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         self.check_layout_dependent_func(np_asfortranarray)
         self.check_bad_array(np_asfortranarray)
         self.check_ascontiguousarray_scalar(np_asfortranarray)
+        # Test for issue #10357: asfortranarray should return writeable array
+        # when a copy is made, even if input is readonly.
+        def pyfunc(x):
+            cpy = np.asfortranarray(x)
+            cpy[0, 0] = 1
+            return cpy
+
+        cfunc = njit(pyfunc)
+        # Create readonly array that will trigger a copy (layout='A', not F-contiguous)
+        x = np.broadcast_to(np.zeros(2), (5, 2))
+        # Should succeed: copy is made, result is writeable
+        expected = pyfunc(x)
+        got = cfunc(x)
+        self.assertPreciseEqual(expected, got)
+        self.assertTrue(got.flags.writeable)
 
     def test_np_ascontiguousarray(self):
         self.check_layout_dependent_func(np_ascontiguousarray)
