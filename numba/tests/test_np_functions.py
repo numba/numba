@@ -4155,6 +4155,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_np_trapezoid_basic(self):
         self.test_np_trapz_basic(pyfunc=np_trapezoid)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.trapz removed in NumPy 2.4+")
     def test_np_trapz_basic(self, pyfunc=np_trapz):
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc)
@@ -4193,6 +4194,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_np_trapezoid_x_basic(self):
         self.test_np_trapz_x_basic(pyfunc=np_trapezoid_x)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.trapz removed in NumPy 2.4+")
     def test_np_trapz_x_basic(self, pyfunc=np_trapz_x):
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc)
@@ -4255,6 +4257,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_trapezoid_numpy_questionable(self):
         self.test_trapz_numpy_questionable(pyfunc=np_trapezoid)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.trapz removed in NumPy 2.4+")
     @unittest.skip('NumPy behaviour questionable')
     def test_trapz_numpy_questionable(self, pyfunc=np_trapz):
         # https://github.com/numpy/numpy/issues/12858
@@ -4273,6 +4276,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_np_trapezoid_dx_basic(self):
         self.test_np_trapz_dx_basic(pyfunc=np_trapezoid_dx)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.trapz removed in NumPy 2.4+")
     def test_np_trapz_dx_basic(self, pyfunc=np_trapz_dx):
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc)
@@ -4322,6 +4326,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_np_trapezoid_x_dx_basic(self):
         self.test_np_trapz_x_dx_basic(pyfunc=np_trapezoid_x_dx)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.trapz removed in NumPy 2.4+")
     def test_np_trapz_x_dx_basic(self, pyfunc=np_trapz_x_dx):
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc)
@@ -4350,6 +4355,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_np_trapezoid_x_dx_exceptions(self):
         self.test_np_trapz_x_dx_exceptions(pyfunc=np_trapezoid_x_dx)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.trapz removed in NumPy 2.4+")
     def test_np_trapz_x_dx_exceptions(self, pyfunc=np_trapz_x_dx):
         cfunc = jit(nopython=True)(pyfunc)
 
@@ -6651,6 +6657,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         yield [2, 3], np.arange(20)  # Test the "sorting" method.
         yield [2, 3], np.tile(np.arange(5), 4)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.in1d removed in NumPy 2.4+")
     def test_in1d_2(self):
         np_pyfunc = np_in1d_2
         np_nbfunc = njit(np_pyfunc)
@@ -6667,6 +6674,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for a, b in self._in1d_arrays():
             check(a, b)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.in1d removed in NumPy 2.4+")
     def test_in1d_3a(self):
         np_pyfunc = np_in1d_3a
         np_nbfunc = njit(np_pyfunc)
@@ -6685,6 +6693,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             if len(np.unique(a)) == len(a) and len(np.unique(b)) == len(b):
                 check(a, b, assume_unique=True)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.in1d removed in NumPy 2.4+")
     def test_in1d_3b(self):
         np_pyfunc = np_in1d_3b
         np_nbfunc = njit(np_pyfunc)
@@ -6702,6 +6711,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             check(a, b, invert=False)
             check(a, b, invert=True)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.in1d removed in NumPy 2.4+")
     def test_in1d_4(self):
         np_pyfunc = np_in1d_4
         np_nbfunc = njit(np_pyfunc)
@@ -6722,6 +6732,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 check(a, b, assume_unique=True, invert=False)
                 check(a, b, assume_unique=True, invert=True)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.in1d removed in NumPy 2.4+")
     def test_in1d_errors(self):
         np_pyfunc = np_in1d_4
         np_nbfunc = njit(np_pyfunc)
