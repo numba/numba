@@ -412,6 +412,8 @@ class BaseContext(object):
     def declare_function(self, module, fndesc):
         fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
         fn = cgutils.get_or_insert_function(module, fnty, fndesc.mangled_name)
+        # Call the target-specific attribute hook. Defined as a no-op, overwrriden in numba/core/cpu.py
+        self.apply_target_attributes(fn, fndesc.argtypes, fndesc.restype)
         self.call_conv.decorate_function(fn, fndesc.args, fndesc.argtypes, noalias=fndesc.noalias)
         if fndesc.inline:
             fn.attributes.add('alwaysinline')
@@ -419,6 +421,13 @@ class BaseContext(object):
             fn.attributes.discard('noinline')
             fn.attributes.discard('optnone')
         return fn
+
+    # Define the hook as a no-op so other contexts (like GPU) don't break
+    def apply_target_attributes(self, llvm_func, argtypes=None, restype=None):
+        """
+        Hook for subclasses to apply target-specific attributes (e.g. signext).
+        """
+        pass    
 
     def declare_external_function(self, module, fndesc):
         fnty = self.get_external_function_type(fndesc)
