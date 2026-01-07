@@ -7,6 +7,7 @@ import numpy as np
 import sys
 import ctypes
 import warnings
+from platform import machine as get_architecture
 from collections import namedtuple
 
 import llvmlite.binding as ll
@@ -448,9 +449,21 @@ def _build_hashsecret():
         ll.add_symbol(symbol_name, addr)
         info[name] = _hashsecret_entry(symbol=symbol_name, value=val)
 
-    inject('djbx33a_suffix', pyhashsecret.djbx33a.suffix)
-    inject('siphash_k0', pyhashsecret.siphash.k0)
-    inject('siphash_k1', pyhashsecret.siphash.k1)
+    # On s390x, the _Py_HashSecret struct is stored in big-endian
+    # order. Numba expects the values in little-endian format,
+    # so we must byte-swap manually
+    if get_architecture() == "s390x":
+        raw_bytes = bytes(pyhashsecret.uc)
+        inject('siphash_k0',
+               int.from_bytes(raw_bytes[0:8], byteorder='little'))
+        inject('siphash_k1',
+               int.from_bytes(raw_bytes[8:16], byteorder='little'))
+        inject('djbx33a_suffix',
+               int.from_bytes(raw_bytes[16:24], byteorder='little'))
+    else:
+        inject('djbx33a_suffix', pyhashsecret.djbx33a.suffix)
+        inject('siphash_k0', pyhashsecret.siphash.k0)
+        inject('siphash_k1', pyhashsecret.siphash.k1)
     return info
 
 

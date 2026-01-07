@@ -5,6 +5,7 @@ Implement the random and np.random module functions.
 
 import math
 import random
+from platform import machine as get_architecture
 
 import numpy as np
 
@@ -213,15 +214,17 @@ def seed_impl(seed):
 def _seed_impl(state_type):
     @intrinsic
     def _impl(typingcontext, seed):
+        intty = int64_t if get_architecture() == "s390x" else int32_t
+        uintty = types.uint64 if get_architecture() == "s390x" else types.uint32
         def codegen(context, builder, sig, args):
             seed_value, = args
-            fnty = ir.FunctionType(ir.VoidType(), (rnd_state_ptr_t, int32_t))
+            fnty = ir.FunctionType(ir.VoidType(), (rnd_state_ptr_t, intty))
             fn = cgutils.get_or_insert_function(builder.function.module, fnty,
                                                 'numba_rnd_init')
             builder.call(fn, (get_state_ptr(context, builder, state_type),
                               seed_value))
             return context.get_constant(types.none, None)
-        return signature(types.void, types.uint32), codegen
+        return signature(types.void, uintty), codegen
     return lambda seed: _impl(seed)
 
 

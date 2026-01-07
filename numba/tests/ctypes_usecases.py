@@ -1,5 +1,6 @@
 from ctypes import *
 import sys
+from platform import machine as get_architecture
 
 import numpy as np
 
@@ -32,11 +33,12 @@ def use_two_funcs(x):
 # Typed C functions accepting an array pointer
 # (either as a "void *" or as a typed pointer)
 
+intty = c_int64 if get_architecture() == "s390x" else c_int
 c_vsquare = libnumba._numba_test_vsquare
-c_vsquare.argtypes = [c_int, c_void_p, c_void_p]
+c_vsquare.argtypes = [intty, c_void_p, c_void_p]
 
 c_vcube = libnumba._numba_test_vsquare
-c_vcube.argtypes = [c_int, POINTER(c_double), POINTER(c_double)]
+c_vcube.argtypes = [intty, POINTER(c_double), POINTER(c_double)]
 
 def use_c_vsquare(x):
     out = np.empty_like(x)
