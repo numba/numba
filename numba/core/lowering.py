@@ -389,19 +389,25 @@ class Lower(BaseLower):
             for blk, vl in use_defs.usemap.items():
                 for var in vl:
                     var_use_map[var].add(blk)
+                    
+            # Compute number of assignments per variable per block so these can be accessed efficiently in next loop
+            assigns_by_defblk = {k: v.find_insts(ir.Assign) for k,v in self.blocks.items()}
+            num_assigns_by_defblk_and_var = {}
+            for defblk, assign_stmts in assigns_by_defblk.items():
+                num_assigns_for_blk = defaultdict(int)
+                for stmt in assign_stmts:
+                    num_assigns_for_blk[stmt.target.name] += 1
+                num_assigns_by_defblk_and_var[defblk] = num_assigns_for_blk
 
             # Keep only variables that are defined locally and used locally
             for var in var_assign_map:
                 if var not in alloca_vars and len(var_assign_map[var]) == 1:
                     # Usemap does not keep locally defined variables.
                     if len(var_use_map[var]) == 0:
+                        [defblk] = var_assign_map[var]
                         # Ensure that the variable is not defined multiple times
                         # in the block
-                        [defblk] = var_assign_map[var]
-                        assign_stmts = self.blocks[defblk].find_insts(ir.Assign)
-                        assigns = [stmt for stmt in assign_stmts
-                                   if stmt.target.name == var]
-                        if len(assigns) == 1:
+                        if num_assigns_by_defblk_and_var[defblk][var] == 1:
                             sav.add(var)
 
         self._singly_assigned_vars = sav
