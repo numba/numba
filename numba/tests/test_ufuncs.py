@@ -492,7 +492,13 @@ class TestUFuncs(BasicUFuncTest, TestCase):
         self.basic_ufunc_test(np.cosh, kinds='cf')
 
     def test_tanh_ufunc(self):
-        self.basic_ufunc_test(np.tanh, kinds='cf')
+        self.basic_ufunc_test(
+            np.tanh,
+            kinds='cf',
+            # overflow edge case that caused inconsistency; see
+            # https://github.com/numba/numba/issues/10394#issue-3786244133
+            additional_inputs=[(np.complex128(1e8 + 1j), types.complex128)]
+        )
 
     def test_arcsinh_ufunc(self):
         self.basic_ufunc_test(np.arcsinh, kinds='cf')
