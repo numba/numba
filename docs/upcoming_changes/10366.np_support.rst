@@ -1,0 +1,4 @@
+Add support for np.moveaxis
+---------------------------
+
+Support is added for NumPy ``moveaxis`` function. 
