@@ -355,33 +355,26 @@ def tan_impl(context, builder, sig, args):
 
 
 # @overload(cmath.tanh)
-def impl_cmath_tanh(z):
-    if not isinstance(z, types.Complex):
-        return
-
-    def tanh_impl(z):
-        """cmath.tanh(z)"""
-        x = z.real
-        y = z.imag
-        if math.isinf(x):
-            real = math.copysign(1., x)
-            if math.isinf(y):
-                imag = 0.
-            else:
-                imag = math.copysign(0., math.sin(2. * y))
-            return complex(real, imag)
-        # This is CPython's algorithm (see c_tanh() in cmathmodule.c).
-        # XXX how to force float constants into single precision?
-        tx = math.tanh(x)
-        ty = math.tan(y)
-        cx = 1. / math.cosh(x)
-        txty = tx * ty
-        denom = 1. + txty * txty
-        return complex(
-            tx * (1. + ty * ty) / denom,
-            ((ty / denom) * cx) * cx)
-
-    return tanh_impl
+@intrinsic_complex_unary
+def tanh_impl(x, y, x_is_finite, y_is_finite):
+    """cmath.tanh(z)"""
+    if not x_is_finite:
+        real = math.copysign(1., x)
+        if not y_is_finite:
+            imag = 0.
+        else:
+            imag = math.copysign(0., math.sin(2. * y))
+        return complex(real, imag)
+    # This is CPython's algorithm (see c_tanh() in cmathmodule.c).
+    # XXX how to force float constants into single precision?
+    tx = math.tanh(x)
+    ty = math.tan(y)
+    cx = 1. / math.cosh(x)
+    txty = tx * ty
+    denom = 1. + txty * txty
+    return complex(
+        tx * (1. + ty * ty) / denom,
+        ((ty / denom) * cx) * cx)
 
 
 # @lower(cmath.acos, types.Complex)
