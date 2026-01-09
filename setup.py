@@ -384,6 +384,27 @@ install_requires = [
     'numpy >={}'.format(min_numpy_run_version),
 ]
 
+
+# License handling
+
+# appdirs jquery.graphviz.svg
+LICENSE_TYPE_MIT = "MIT"
+# pythoncapi_compat
+LICENSE_TYPE_ZERO_BSD = "0BSD"
+# Numba itself
+LICENSE_TYPE_BSD_2_CLAUSE = "BSD-2-Clause"
+# NetworkX cloudpickle NumPy numba-cuda
+LICENSE_TYPE_BSD_3_CLAUSE = "BSD-3-Clause"
+# CPython CPython-unicode
+LICENSE_TYPE_PYTHON_20 = "Python-2.0"
+
+LICENSE_data = " AND ".join((LICENSE_TYPE_MIT,
+                             LICENSE_TYPE_ZERO_BSD,
+                             LICENSE_TYPE_BSD_2_CLAUSE,
+                             LICENSE_TYPE_BSD_3_CLAUSE,
+                             LICENSE_TYPE_PYTHON_20,
+                             ))
+
 metadata = dict(
     name='numba',
     description="compiling Python code using LLVM",
@@ -425,7 +446,7 @@ metadata = dict(
     setup_requires=build_requires,
     install_requires=install_requires,
     python_requires=">={}".format(min_python_version),
-    license="MIT AND 0BSD AND BSD-2-Clause AND BSD-3-Clause AND Python-2.0",
+    license=LICENSE_data,
     license_files=['LICENSE', 'LICENSES.thirdparty'],
     cmdclass=cmdclass,
 )
