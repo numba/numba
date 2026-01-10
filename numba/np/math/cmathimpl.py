@@ -355,10 +355,7 @@ def tan_impl(context, builder, sig, args):
 
 
 # @overload(cmath.tanh)
-def impl_cmath_tanh(z):
-    if not isinstance(z, types.Complex):
-        return
-
+def tanh_impl(context, builder, sig, args):
     def tanh_impl(z):
         """cmath.tanh(z)"""
         x = z.real
@@ -381,7 +378,8 @@ def impl_cmath_tanh(z):
             tx * (1. + ty * ty) / denom,
             ((ty / denom) * cx) * cx)
 
-    return tanh_impl
+    res = context.compile_internal(builder, tanh_impl, sig, args)
+    return impl_ret_untracked(context, builder, sig, res)
 
 
 # @lower(cmath.acos, types.Complex)
