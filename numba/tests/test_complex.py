@@ -304,7 +304,7 @@ class TestCMath(BaseComplexTest, TestCase):
         self.check_unary_func(tanh_usecase, enable_pyobj_flags, ulps=2)
 
     def test_tanh_npm(self):
-        self.check_unary_func(tanh_usecase, np_pyobj_flags, ulps=2)
+        self.check_unary_func(tanh_usecase, no_pyobj_flags, ulps=2)
 
 
 if __name__ == '__main__':
