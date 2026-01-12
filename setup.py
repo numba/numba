@@ -446,7 +446,7 @@ metadata = dict(
     setup_requires=build_requires,
     install_requires=install_requires,
     python_requires=">={}".format(min_python_version),
-    license=LICENSE_data,
+    license_expression=LICENSE_data,
     license_files=['LICENSE', 'LICENSES.thirdparty'],
     cmdclass=cmdclass,
 )
