@@ -5172,7 +5172,11 @@ def _as_layout_array_intrinsic(typingctx, a, output_layout):
     if not isinstance(output_layout, types.StringLiteral):
         raise errors.RequireLiteralValue(output_layout)
 
-    ret = a.copy(layout=output_layout.literal_value, ndim=max(a.ndim, 1))
+    # copies are writable
+    ret = a.copy(
+        layout=output_layout.literal_value,
+        ndim=max(a.ndim, 1),
+        readonly=False)
     sig = ret(a, output_layout)
 
     return sig, lambda c, b, s, a: _as_layout_array(

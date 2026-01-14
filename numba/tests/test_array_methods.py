@@ -752,10 +752,54 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         self.check_bad_array(np_asfortranarray)
         self.check_ascontiguousarray_scalar(np_asfortranarray)
 
+    def test_np_asfortranarray_readonly(self):
+        # Test for issue #10357: writeable if copied, else readonly preserved
+        pyfunc = np_asfortranarray
+        cfunc = njit(pyfunc)
+
+        def check(arr, set_readonly=True):
+            if set_readonly:
+                arr.flags.writeable = False
+            expected = pyfunc(arr)
+            got = cfunc(arr)
+            self.assertPreciseEqual(expected, got)
+            self.assertEqual(got.flags.writeable, expected.flags.writeable)
+
+        # A->F 2D readonly (copy made) - broadcast_to is already readonly
+        check(np.broadcast_to(np.zeros(2), (5, 2)), set_readonly=False)
+        # F->F 2D readonly (no copy, preserve readonly)
+        check(np.array([[1, 2], [3, 4], [5, 6]], order='F'))
+        # C->F 2D readonly (copy made)
+        check(np.array([[1, 2], [3, 4], [5, 6]], order='C'))
+        # C->F 1D readonly (1D special, no copy)
+        check(np.array([1, 2, 3, 4, 5], order='C'))
+
     def test_np_ascontiguousarray(self):
         self.check_layout_dependent_func(np_ascontiguousarray)
         self.check_bad_array(np_asfortranarray)
         self.check_ascontiguousarray_scalar(np_ascontiguousarray)
+
+    def test_np_ascontiguousarray_readonly(self):
+        # Test for PR #10390: writeable if copied, else readonly preserved
+        pyfunc = np_ascontiguousarray
+        cfunc = njit(pyfunc)
+
+        def check(arr, set_readonly=True):
+            if set_readonly:
+                arr.flags.writeable = False
+            expected = pyfunc(arr)
+            got = cfunc(arr)
+            self.assertPreciseEqual(expected, got)
+            self.assertEqual(got.flags.writeable, expected.flags.writeable)
+
+        # A->C 2D readonly (copy made) - broadcast_to.T is already readonly
+        check(np.broadcast_to(np.zeros(2), (5, 2)).T, set_readonly=False)
+        # C->C 2D readonly (no copy, preserve readonly)
+        check(np.array([[1, 2], [3, 4], [5, 6]], order='C'))
+        # F->C 2D readonly (copy made)
+        check(np.array([[1, 2], [3, 4], [5, 6]], order='F'))
+        # F->C 1D readonly (1D special, no copy)
+        check(np.array([1, 2, 3, 4, 5], order='F'))
 
     def check_np_frombuffer_allocated(self, pyfunc):
 
