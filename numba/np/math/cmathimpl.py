@@ -358,7 +358,8 @@ def tan_impl(context, builder, sig, args):
 def tanh_impl(context, builder, sig, args):
     TANH_HUGE = 42.0
     def tanh_impl(z):
-        """np.tanh(z) from numpy/_core/src/npymath/npy_math_complex.c.src"""
+        # Implementation based on NumPy
+        # https://github.com/numpy/numpy/blob/23cb680c9ca4695799ed373ab47624dc6b409fb6/numpy/_core/src/npymath/npy_math_complex.c.src#L862-L974
         x = z.real
         y = z.imag
 
