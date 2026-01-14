@@ -31,6 +31,8 @@ if "%PYTHON%" neq "3.13" (
 if "%NUMPY%" neq "2.1" (%CONDA_INSTALL% scipy)
 
 call activate %CONDA_ENV%
+@rem Python 3.14+ requires setuptools
+if "%PYTHON%" geq "3.14" (%CONDA_INSTALL% setuptools)
 @rem Install latest llvmlite build
 %CONDA_INSTALL% -c numba/label/dev llvmlite=0.47
 @rem Install dependencies for building the documentation
