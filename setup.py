@@ -397,12 +397,15 @@ LICENSE_TYPE_BSD_2_CLAUSE = "BSD-2-Clause"
 LICENSE_TYPE_BSD_3_CLAUSE = "BSD-3-Clause"
 # CPython CPython-unicode
 LICENSE_TYPE_PYTHON_20 = "Python-2.0"
+# FP16 headers per CUDA SUPPLEMENT 2020
+LICENSE_TYPE_CUDA_SUPPLEMENT_2020 = "LicenseRef-scancode-nvidia-cuda-supplement-2020"
 
 LICENSE_data = " AND ".join((LICENSE_TYPE_MIT,
                              LICENSE_TYPE_ZERO_BSD,
                              LICENSE_TYPE_BSD_2_CLAUSE,
                              LICENSE_TYPE_BSD_3_CLAUSE,
                              LICENSE_TYPE_PYTHON_20,
+                             LICENSE_TYPE_CUDA_SUPPLEMENT_2020,
                              ))
 
 metadata = dict(
