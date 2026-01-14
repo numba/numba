@@ -240,7 +240,9 @@ def int_power_impl(context, builder, sig, args):
             exp >>= 1
             a *= a
 
-        return 1.0 / r if invert else r
+        if invert:
+            return 1.0 / r
+        return r
 
     res = context.compile_internal(builder, int_power, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
