@@ -64,7 +64,7 @@ if [ "${VANILLA_INSTALL}" != "yes" ]; then
 fi
 
 # Python 3.14+ requires setuptools
-if [ $PYTHON \>= "3.14" ]; then
+if [ ! $PYTHON \< "3.14" ]; then
     $CONDA_INSTALL ${EXTRA_CHANNELS} setuptools
 fi
 
