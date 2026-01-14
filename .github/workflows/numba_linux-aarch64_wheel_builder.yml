@@ -1,6 +1,8 @@
 name: numba_linux-aarch64_wheel_builder
 
 on:
+  schedule:
+    - cron: '20 7 * * 6'  # Saturday 7:20 AM UTC - linux-aarch64 wheel
   pull_request:
     paths:
       - .github/workflows/numba_linux-aarch64_wheel_builder.yml
@@ -33,7 +35,7 @@ jobs:
       build-matrix-json: ${{ steps.load_matrix_json.outputs.build-matrix-json }}
       test-matrix-json: ${{ steps.load_matrix_json.outputs.test-matrix-json }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
       - id: load_matrix_json
         name: Load Workflow Matrix JSON
         run: |
@@ -68,13 +70,13 @@ jobs:
 
     steps:
       - name: Clone repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           fetch-depth: 0
 
       - name: Download llvmlite wheel
         if: inputs.llvmlite_wheel_runid != ''
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: llvmlite-linux-aarch64-py${{ matrix.python_canonical }}
           path: llvmlite_wheels
@@ -124,7 +126,7 @@ jobs:
           ls -la wheelhouse/
 
       - name: Upload numba wheel
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: numba_linux-aarch64_wheel_py${{ matrix.python_canonical }}
           path: wheelhouse/*.whl
@@ -147,20 +149,20 @@ jobs:
 
     steps:
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
         with:
           python-version: ${{ matrix.python-version }}
           allow-prereleases: true
 
       - name: Download Numba wheel artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: numba_linux-aarch64_wheel_py${{ matrix.python_canonical }}
           path: dist
 
       - name: Download llvmlite wheel
         if: inputs.llvmlite_wheel_runid != ''
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
         with:
           name: llvmlite-linux-aarch64-py${{ matrix.python_canonical }}
           path: llvmlite_wheels
@@ -176,7 +178,7 @@ jobs:
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
               $PYTHON_PATH -m pip install --no-cache-dir llvmlite_wheels/*.whl
           else
-              $PYTHON_PATH -m pip install --no-cache-dir -i $WHEELS_INDEX_URL llvmlite
+              $PYTHON_PATH -m pip install --no-cache-dir --pre -i $WHEELS_INDEX_URL llvmlite
           fi
           $PYTHON_PATH -m twine check dist/*.whl
           $PYTHON_PATH -m pip install dist/numba*.whl numpy==${{ matrix.numpy_test }} setuptools

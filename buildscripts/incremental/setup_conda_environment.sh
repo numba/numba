@@ -66,11 +66,11 @@ fi
 # Install the compiler toolchain and gdb (if available)
 if [[ $(uname) == Linux ]]; then
     if [ $PYTHON \< "3.12" ]; then
-        $CONDA_INSTALL gcc_linux-64 gxx_linux-64 gdb gdb-pretty-printer
+        $CONDA_INSTALL gcc_linux-64=11 gxx_linux-64=11 gdb gdb-pretty-printer
     else
         # At the time of writing gdb and gdb-pretty-printer were not available
         # for 3.12.
-        $CONDA_INSTALL gcc_linux-64 gxx_linux-64
+        $CONDA_INSTALL gcc_linux-64=11 gxx_linux-64=11
     fi
 elif  [[ $(uname) == Darwin ]]; then
     $CONDA_INSTALL clang_osx-64 clangxx_osx-64
@@ -80,7 +80,7 @@ elif  [[ $(uname) == Darwin ]]; then
 fi
 
 # Install latest correct build
-$CONDA_INSTALL -c numba/label/dev llvmlite=0.46
+$CONDA_INSTALL -c numba/label/dev llvmlite=0.47
 
 # Install dependencies for building the documentation
 if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx docutils sphinx_rtd_theme pygments numpydoc; fi

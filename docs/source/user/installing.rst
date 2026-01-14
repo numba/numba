@@ -8,12 +8,15 @@ Compatibility
 For software compatibility, please see the section on :ref:`version support
 information<numba_support_info>` for details.
 
+Support is provided in Tiers, for details see the
+:ref:`Support Tiers <support_tiers>` policy.
+
 Our supported platforms are:
 
 * Linux x86_64
 * Linux arm64/aarch-64
 * Windows 10 and later (64-bit)
-* OS X 10.9 and later (64-bit Intel and M1/Arm64)
+* OS X 11.0 and later (M1/Arm64)
 * NVIDIA GPUs of compute capability 5.0 and later
 
   * Compute capabilities 3.5 and 3.7 are supported, but deprecated.
@@ -104,8 +107,6 @@ Source archives of the latest release can also be found on
   * Linux ``x86_64``: ``gcc_linux-64`` and ``gxx_linux-64``
   * Linux ``POWER``: ``gcc_linux-ppc64le`` and ``gxx_linux-ppc64le``
   * Linux ``ARM``: no conda packages, use the system compiler
-  * Mac OSX: ``clang_osx-64`` and ``clangxx_osx-64`` or the system compiler at
-    ``/usr/bin/clang`` (Mojave onwards)
   * Mac OSX (M1): ``clang_osx-arm64`` and ``clangxx_osx-arm64``
   * Windows: a version of Visual Studio appropriate for the Python version in
     use
@@ -244,6 +245,12 @@ information.
 +----------++--------------+---------------------------+---------------------------------------------+------------------------------+-------------------+-----------------------------+
 | Numba     | Release date | Python                    | NumPy                                       | llvmlite                     | LLVM              | TBB                         |
 +===========+==============+===========================+=============================================+==============================+===================+=============================+
+| 0.63.1    | 2025-12-09   | 3.10.x <= version < 3.15  | 1.22 <= version < 1.27 ;                    | 0.46.x                       | 20.x              | 2021.6 <= version           |
+|           |              |                           | 2.0 <= version < 2.4 ;                      |                              |                   |                             |
++-----------+--------------+---------------------------+---------------------------------------------+------------------------------+-------------------+-----------------------------+
+| 0.63.0    | 2025-12-08   | 3.10.x <= version < 3.15  | 1.22 <= version < 1.27 ;                    | 0.46.x                       | 20.x              | 2021.6 <= version           |
+|           |              |                           | 2.0 <= version < 2.4 ;                      |                              |                   |                             |
++-----------+--------------+---------------------------+---------------------------------------------+------------------------------+-------------------+-----------------------------+
 | 0.62.1    | 2025-09-26   | 3.10.x <= version < 3.14  | 1.22 <= version < 1.27 ;                    | 0.45.x                       | 20.x              | 2021.6 <= version           |
 |           |              |                           | 2.0 <= version < 2.4 ;                      |                              |                   |                             |
 +-----------+--------------+---------------------------+---------------------------------------------+------------------------------+-------------------+-----------------------------+
