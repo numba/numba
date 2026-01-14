@@ -3,5 +3,3 @@ Fix ``np.asfortranarray`` and ``np.ascontiguousarray`` readonly handling
 
 Fix readonly input producing readonly output even when a copy is made
 using ``np.asfortranarray`` or ``np.ascontiguousarray``.
-
-(`PR-#10390 <https://github.com/numba/numba/pull/10390>`__)
