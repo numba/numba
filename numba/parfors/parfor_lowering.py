@@ -106,6 +106,18 @@ def _lower_parfor_parallel_std(lowerer, parfor):
     loc = parfor.init_block.loc
     scope = parfor.init_block.scope
 
+    # If any arrays of StringDType are present in the function typemap,
+    # fall back to sequential lowering for correctness: the current
+    # parallel GUFunc path cannot propagate per-array StringDType
+    # descriptors/allocators into the kernel reliably. Sequential lowering
+    # uses the normal arrayobj paths which are descriptor-aware.
+    has_stringdtype = any(
+        isinstance(ty, types.Array) and isinstance(ty.dtype, types.StringDTypeType)
+        for ty in lowerer.fndesc.typemap.values()
+    )
+    if has_stringdtype:
+        parfor.sequential_parfor_lowering = True
+
     # produce instructions for init_block
     if config.DEBUG_ARRAY_OPT:
         print("init_block = ", parfor.init_block, " ", type(parfor.init_block))
