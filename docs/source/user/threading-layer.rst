@@ -154,8 +154,6 @@ and requirements are as follows:
 |                      | Windows   | MS OpenMP libraries (very likely this will|
 |                      |           | already exist)                            |
 |                      |           |                                           |
-|                      | OSX       | Either the ``intel-openmp`` package or the|
-|                      |           | ``llvm-openmp`` package                   |
 |                      | OSX       | The ``llvm-openmp`` package (``$ conda    |
 |                      | (arm64)   | install llvm-openmp``)                    |
 +----------------------+-----------+-------------------------------------------+
