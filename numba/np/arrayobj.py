@@ -301,6 +301,59 @@ def normalize_axis_overloads(func_name, arg_name, ndim, axis):
     return impl
 
 
+def normalize_axis_tuple(func_name, arg_name, ndim, axis):
+    """Normalizes an axis argument into a tuple of non-negative integer axes."""
+    raise NotImplementedError()
+
+
+@overload(normalize_axis_tuple)
+def normalize_axis_tuple_overloads(func_name, arg_name, ndim, axis):
+    if not isinstance(func_name, StringLiteral):
+        raise errors.TypingError("func_name must be a str literal.")
+    if not isinstance(arg_name, StringLiteral):
+        raise errors.TypingError("arg_name must be a str literal.")
+
+    invalid_axis_msg = (
+        f"{func_name.literal_value}: Argument {arg_name.literal_value} "
+        "out of bounds for dimensions of the array"
+    )
+
+    repeated_axis_msg = (
+        f"{func_name.literal_value}: repeated axis in "
+        f"{arg_name.literal_value} argument"
+    )
+
+    if isinstance(axis, types.Integer):
+
+        def impl(func_name, arg_name, ndim, axis):
+            if axis < 0:
+                axis += ndim
+            if axis < 0 or axis >= ndim:
+                raise ValueError(invalid_axis_msg)
+
+            return (axis,)
+
+    else:
+        axis_len = len(axis)
+        norm_axis_init = (0,) * axis_len
+
+        def impl(func_name, arg_name, ndim, axis):
+            norm_axis = norm_axis_init
+            for i, ax in enumerate(axis):
+                if ax < 0:
+                    ax += ndim
+                if ax < 0 or ax >= ndim:
+                    raise ValueError(invalid_axis_msg)
+                norm_axis = tuple_setitem(norm_axis, i, ax)
+
+            if len(set(norm_axis)) != axis_len:
+                raise ValueError(repeated_axis_msg)
+
+            return norm_axis
+
+    return impl
+
+
 @lower_builtin('getiter', types.Buffer)
 def getiter_array(context, builder, sig, args):
     [arrayty] = sig.args
@@ -6979,16 +7032,64 @@ def numpy_swapaxes(a, axis1, axis2):
     def impl(a, axis1, axis2):
         axis1 = normalize_axis("np.swapaxes", "axis1", ndim, axis1)
         axis2 = normalize_axis("np.swapaxes", "axis2", ndim, axis2)
-
-        # to ensure tuple_setitem support of negative values
-        if axis1 < 0:
-            axis1 += ndim
-        if axis2 < 0:
-            axis2 += ndim
-
         axes_tuple = tuple_setitem(axes_list, axis1, axis2)
         axes_tuple = tuple_setitem(axes_tuple, axis2, axis1)
         return np.transpose(a, axes_tuple)
+
+    return impl
+
+
+@overload(np.moveaxis)
+def numpy_moveaxis(a, source, destination):
+    if not isinstance(a, types.Array):
+        raise errors.TypingError('The first argument "a" must be an array')
+    if not (
+        isinstance(source, types.Integer)
+        or (
+            isinstance(source, types.Sequence)
+            and isinstance(source.dtype, types.Integer)
+        )
+    ):
+        raise errors.TypingError(
+            'The second argument "source" must be an integer '
+            'or sequence of integers'
+        )
+    if not (
+        isinstance(destination, types.Integer)
+        or (
+            isinstance(destination, types.Sequence)
+            and isinstance(destination.dtype, types.Integer)
+        )
+    ):
+        raise errors.TypingError(
+            'The third argument "destination" must be an integer '
+            'or sequence of integers'
+        )
+
+    ndim = a.ndim
+    order_init = (1,) * a.ndim
+
+    def impl(a, source, destination):
+        source = normalize_axis_tuple("np.moveaxis", "source", ndim, source)
+        destination = normalize_axis_tuple(
+            "np.moveaxis", "destination", ndim, destination
+        )
+        if len(source) != len(destination):
+            raise ValueError(
+                "`source` and `destination` arguments must have "
+                "the same number of parameters"
+            )
+
+        order_list = [n for n in range(a.ndim) if n not in source]
+
+        for dest, src in sorted(zip(destination, source)):
+            order_list.insert(dest, src)
+
+        order = order_init
+        for i, o in enumerate(order_list):
+            order = tuple_setitem(order, i, o)
+
+        return a.transpose(order)
 
     return impl
 

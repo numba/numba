@@ -478,6 +478,10 @@ def swapaxes(a, a1, a2):
     return np.swapaxes(a, a1, a2)
 
 
+def moveaxis(a, source, destination):
+    return np.moveaxis(a, source, destination)
+
+
 def nan_to_num(X, copy=True, nan=0.0, posinf=None, neginf=None):
     return np.nan_to_num(X, copy=copy, nan=nan, posinf=posinf, neginf=neginf)
 
@@ -6262,6 +6266,74 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc(np.arange(8).reshape(2, 4), 0, -3)
 
         self.assertIn('np.swapaxes: Argument axis2 out of bounds',
+                      str(raises.exception))
+
+    def test_moveaxis_basic(self):
+        pyfunc = moveaxis
+        cfunc = jit(nopython=True)(pyfunc)
+
+        a = np.arange(120).reshape(1, 2, 3, 4, 5)
+
+        for source, destination in (
+            (0, -1),
+            (1, 3),
+            ((0, 1), (-1, -2)),
+            ((0, 1), (-2, -1)),
+            ((1, -3), (-2, 4)),
+        ):
+            expected = pyfunc(a, source, destination)
+            got = cfunc(a, source, destination)
+            self.assertPreciseEqual(expected, got)
+
+    def test_moveaxis_exception(self):
+        pyfunc = moveaxis
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc('abc', 0, 1)
+
+        self.assertIn('The first argument "a" must be an array',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.arange(4), 'abc', 0)
+
+        self.assertIn(
+            'second argument "source" must be an integer or sequence',
+            str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.arange(4), 0, 'abc')
+
+        self.assertIn(
+            'third argument "destination" must be an integer or sequence',
+            str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(np.arange(4), 1, 0)
+
+        self.assertIn('np.moveaxis: Argument source out of bounds',
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(np.arange(8).reshape(2, 4), (0, 1), (1, -3,))
+
+        self.assertIn('np.moveaxis: Argument destination out of bounds',
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(np.arange(8).reshape(2, 4), (0, 0), (0, 1))
+
+        self.assertIn('np.moveaxis: repeated axis in source argument',
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(np.arange(8).reshape(2, 4), (0, 1), (1, -1))
+
+        self.assertIn('np.moveaxis: repeated axis in destination argument',
                       str(raises.exception))
 
     def test_take_along_axis(self):
