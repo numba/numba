@@ -156,7 +156,8 @@ and requirements are as follows:
 |                      |           |                                           |
 |                      | OSX       | Either the ``intel-openmp`` package or the|
 |                      |           | ``llvm-openmp`` package                   |
-|                      |           | (``conda install`` the package as named). |
+|                      | OSX       | The ``llvm-openmp`` package (``$ conda    |
+|                      | (arm64)   | install llvm-openmp``)                    |
 +----------------------+-----------+-------------------------------------------+
 | ``workqueue``        | All       | None                                      |
 +----------------------+-----------+-------------------------------------------+
