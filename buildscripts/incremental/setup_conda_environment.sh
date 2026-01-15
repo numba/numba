@@ -50,7 +50,7 @@ if [ "${VANILLA_INSTALL}" != "yes" ]; then
     # ipykernel is used for testing ipython behaviours.
     if [ $PYTHON \< "3.12" ]; then
         $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython ipykernel pygments pexpect
-    elif [ $PYTHON \< "3.13" ]; then 
+    elif [ $PYTHON \< "3.13" ]; then
         # At the time of writing `ipykernel` was not available for Python 3.12
         $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython pygments pexpect
     else
@@ -61,6 +61,11 @@ if [ "${VANILLA_INSTALL}" != "yes" ]; then
     if [ $NUMPY \< "2.0" ]; then
         $CONDA_INSTALL ${EXTRA_CHANNELS} scipy
     fi
+fi
+
+# Python 3.14+ requires setuptools
+if [ ! $PYTHON \< "3.14" ]; then
+    $CONDA_INSTALL ${EXTRA_CHANNELS} setuptools
 fi
 
 # Install the compiler toolchain and gdb (if available)
