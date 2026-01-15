@@ -441,6 +441,44 @@ The following polynomial functions are supported:
 * :func:`numpy.polynomial.polyutils.as_series()`
 * :func:`numpy.polynomial.polyutils.trimseq()`
 
+String Operations
+-----------------
+
+The following functions are supported on scalars and 1-D contiguous arrays of strings or bytes:
+
+Comparison operators:
+
+* :func:`numpy.char.compare_chararrays`
+* :func:`numpy.char.equal`
+* :func:`numpy.char.greater_equal`
+* :func:`numpy.char.greater`
+* :func:`numpy.char.less_equal`
+* :func:`numpy.char.less`
+* :func:`numpy.char.not_equal`
+
+Occurrence information:
+
+* :func:`numpy.char.count`
+* :func:`numpy.char.endswith`
+* :func:`numpy.char.find`
+* :func:`numpy.char.index`
+* :func:`numpy.char.rfind`
+* :func:`numpy.char.rindex`
+* :func:`numpy.char.startswith`
+
+Property information:
+
+* :func:`numpy.char.isalnum` (up to extended ASCII)
+* :func:`numpy.char.isalpha` (up to extended ASCII)
+* :func:`numpy.char.isdecimal` (up to extended ASCII)
+* :func:`numpy.char.isdigit` (up to extended ASCII)
+* :func:`numpy.char.islower` (up to extended ASCII)
+* :func:`numpy.char.isnumeric` (up to extended ASCII)
+* :func:`numpy.char.isspace`
+* :func:`numpy.char.istitle` (up to extended ASCII)
+* :func:`numpy.char.isupper` (up to extended ASCII)
+* :func:`numpy.char.str_len`
+
 Other functions
 ---------------
 
