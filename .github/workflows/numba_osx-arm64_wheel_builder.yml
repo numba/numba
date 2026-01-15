@@ -117,6 +117,7 @@ jobs:
 
       - name: Build wheel
         env:
+          NUMBA_PACKAGE_FORMAT: "wheel"
           MACOSX_DEPLOYMENT_TARGET: "11.0"
         run: arch -arm64 python -m build --wheel --no-isolation
 
@@ -201,10 +202,13 @@ jobs:
           echo "Set DYLD_FALLBACK_LIBRARY_PATH to: $(brew --prefix libomp)/lib"
 
       - name: Validate and test wheel
+        env:
+          NUMBA_DIST_TEST: 1
+          TESTS_TO_RUN: "numba.tests.test_dist_validation"
         run: |
           PYTHON_PATH=$(which python${{ matrix.python_canonical }})
           "$PYTHON_PATH" -m venv .venv && source .venv/bin/activate
-          arch -arm64 python -m pip install --upgrade pip twine
+          arch -arm64 python -m pip install --upgrade pip twine lief
           ls -l dist
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
               arch -arm64 python -m pip install llvmlite_wheels/*.whl
@@ -218,4 +222,4 @@ jobs:
           arch -arm64 python -m numba -s
 
           # run tests
-          arch -arm64 python -m numba.runtests -m 4 -v
+          arch -arm64 python -m numba.runtests $TESTS_TO_RUN -m 4 -v

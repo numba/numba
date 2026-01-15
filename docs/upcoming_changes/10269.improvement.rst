@@ -1,0 +1,7 @@
+Add Distribution linkage validation tests
+-----------------------------------------
+
+Adds automated testing to validate that Numba wheel distributions link against
+the expected set of system and runtime libraries across different platforms.
+This will help make sure consistent and correct distribution packaging, 
+preventing unexpected runtime dependencies or missing libraries by flagging them on tests.
