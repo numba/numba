@@ -44,7 +44,7 @@ jobs:
   osx-arm64-build-conda:
     name: osx-arm64-build-conda (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
     needs: load-matrix
-    runs-on: macos-14
+    runs-on: macos-15
     env:
       EXTRA_CHANNELS: ''
     defaults:
@@ -119,7 +119,7 @@ jobs:
   osx-arm64-test:
     name: osx-arm64-test-conda (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
     needs: [load-matrix, osx-arm64-build-conda]
-    runs-on: macos-14
+    runs-on: macos-15
     env:
       EXTRA_CHANNELS: ''
     defaults:
