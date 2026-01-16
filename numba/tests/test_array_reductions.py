@@ -355,6 +355,9 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             yield a
             a[a % 4 >= 1] = 3.5
             yield a
+            a[0] = np.nan
+            yield a
+            a[0] = a[-1]
             a[-1] = np.nan
             yield a
 

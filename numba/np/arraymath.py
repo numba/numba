@@ -1577,6 +1577,8 @@ def _median_inner(temp_arry, n, supports_nans=False):
     high = n - 1
     half = n >> 1
     if supports_nans:
+        # Implementation based on NumPy
+        # https://github.com/numpy/numpy/blob/508943d1070d8f4e0712b98db2379d49304e4e38/numpy/_core/src/npysort/selection.cpp#L367-L376
         maxval = temp_arry[low]
         for k in range(low + 1, n):
             if not nan_aware_less_than(temp_arry[k], maxval):
