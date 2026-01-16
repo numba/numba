@@ -1579,7 +1579,7 @@ def _median_inner(temp_arry, n, supports_nans=False):
     if supports_nans:
         maxval = temp_arry[low]
         for k in range(low + 1, n):
-            if not less_than(temp_arry[k], maxval):
+            if not nan_aware_less_than(temp_arry[k], maxval):
                 maxval = temp_arry[k]
         if np.isnan(maxval):
             return maxval
