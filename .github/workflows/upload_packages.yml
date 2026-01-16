@@ -253,29 +253,27 @@ jobs:
         env:
           ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_ORG_GITHUB_NUMBA_UPLOAD }}
         run: |
-          echo "Publishing conda packages to: ${{ env.ANACONDA_USER }}/label/${{ env.ANACONDA_LABEL }}"
+          LABELS="-l ${{ env.ANACONDA_LABEL }}"
+          if [ "${{ inputs.copy_conda_to_main }}" = "true" ]; then
+            LABELS="$LABELS -l main"
+          fi
+          echo "Publishing conda packages to: ${{ env.ANACONDA_USER }} with labels: $LABELS"
           find conda_packages -name "*.conda" -type f | while read -r pkg; do
             echo "Uploading: $pkg"
-            anaconda -t "$ANACONDA_API_TOKEN" upload --force -u ${{ env.ANACONDA_USER }} -l ${{ env.ANACONDA_LABEL }} "$pkg"
+            anaconda -t "$ANACONDA_API_TOKEN" upload --force -u ${{ env.ANACONDA_USER }} $LABELS "$pkg"
           done
 
       - name: Publish wheels to Anaconda.org
         env:
           ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_ORG_GITHUB_NUMBA_UPLOAD }}
         run: |
-          echo "Publishing wheels to: ${{ env.ANACONDA_USER }}/label/${{ env.ANACONDA_LABEL }}"
+          LABELS="-l ${{ env.ANACONDA_LABEL }}"
+          if [ "${{ inputs.copy_conda_to_main }}" = "true" ]; then
+            LABELS="$LABELS -l main"
+          fi
+          echo "Publishing wheels to: ${{ env.ANACONDA_USER }} with labels: $LABELS"
           find dist -name "*.whl" -type f | while read -r pkg; do
             echo "Uploading: $pkg"
-            anaconda -t "$ANACONDA_API_TOKEN" upload --force -u ${{ env.ANACONDA_USER }} -l ${{ env.ANACONDA_LABEL }} "$pkg"
+            anaconda -t "$ANACONDA_API_TOKEN" upload --force -u ${{ env.ANACONDA_USER }} $LABELS "$pkg"
           done
 
-      - name: Copy packages to main label
-        if: inputs.copy_conda_to_main
-        env:
-          ANACONDA_API_TOKEN: ${{ secrets.ANACONDA_ORG_GITHUB_NUMBA_UPLOAD }}
-        run: |
-          VERSION="${{ inputs.tag }}"
-          VERSION="${VERSION#v}"
-          PACKAGE_NAME="numba"
-          echo "Copying all packages for version $VERSION from ${{ env.ANACONDA_LABEL }} to main"
-          anaconda -t "$ANACONDA_API_TOKEN" copy ${{ env.ANACONDA_USER }}/$PACKAGE_NAME/$VERSION --from-label ${{ env.ANACONDA_LABEL }} --to-label main --replace
