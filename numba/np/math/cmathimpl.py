@@ -355,33 +355,43 @@ def tan_impl(context, builder, sig, args):
 
 
 # @overload(cmath.tanh)
-def impl_cmath_tanh(z):
-    if not isinstance(z, types.Complex):
-        return
-
+def tanh_impl(context, builder, sig, args):
+    TANH_HUGE = 42.0
     def tanh_impl(z):
-        """cmath.tanh(z)"""
+        # Implementation based on NumPy
+        # https://github.com/numpy/numpy/blob/23cb680c9ca4695799ed373ab47624dc6b409fb6/numpy/_core/src/npymath/npy_math_complex.c.src#L862-L974
         x = z.real
         y = z.imag
-        if math.isinf(x):
-            real = math.copysign(1., x)
-            if math.isinf(y):
-                imag = 0.
-            else:
-                imag = math.copysign(0., math.sin(2. * y))
-            return complex(real, imag)
-        # This is CPython's algorithm (see c_tanh() in cmathmodule.c).
-        # XXX how to force float constants into single precision?
-        tx = math.tanh(x)
-        ty = math.tan(y)
-        cx = 1. / math.cosh(x)
-        txty = tx * ty
-        denom = 1. + txty * txty
-        return complex(
-            tx * (1. + ty * ty) / denom,
-            ((ty / denom) * cx) * cx)
 
-    return tanh_impl
+        if not math.isfinite(x):
+            if math.isnan(x):
+                return complex(x, y if y == 0. else x * y)
+
+            real = math.copysign(1., x)
+            imag = math.copysign(
+                0., y if math.isinf(y) else math.sin(y) * math.cos(y)
+            )
+            return complex(real, imag)
+
+        if not math.isfinite(y):
+            return complex(y - y, y - y)
+
+        if abs(x) >= TANH_HUGE:
+            exp_mx = math.exp(-abs(x))
+            return complex(
+                math.copysign(1., x),
+                4 * math.sin(y) * math.cos(y) * exp_mx * exp_mx
+            )
+
+        t = math.tan(y)
+        beta = 1 + t * t
+        s = math.sinh(x)
+        rho = math.sqrt(1 + s * s)
+        denom = 1 + beta * s * s
+        return complex((beta * rho * s) / denom, t / denom)
+
+    res = context.compile_internal(builder, tanh_impl, sig, args)
+    return impl_ret_untracked(context, builder, sig, res)
 
 
 # @lower(cmath.acos, types.Complex)
