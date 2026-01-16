@@ -1568,7 +1568,7 @@ def _select_two(arry, k, low, high):
 
 
 @register_jitable
-def _median_inner(temp_arry, n):
+def _median_inner(temp_arry, n, supports_nans=False):
     """
     The main logic of the median() call.  *temp_arry* must be disposable,
     as this function will mutate it.
@@ -1576,6 +1576,16 @@ def _median_inner(temp_arry, n):
     low = 0
     high = n - 1
     half = n >> 1
+    if supports_nans:
+        # Implementation based on NumPy
+        # https://github.com/numpy/numpy/blob/508943d1070d8f4e0712b98db2379d49304e4e38/numpy/_core/src/npysort/selection.cpp#L367-L376
+        maxval = temp_arry[low]
+        for k in range(low + 1, n):
+            if not nan_aware_less_than(temp_arry[k], maxval):
+                maxval = temp_arry[k]
+        if np.isnan(maxval):
+            return maxval
+
     if n & 1 == 0:
         a, b = _select_two(temp_arry, half - 1, low, high)
         return (a + b) / 2
@@ -1589,6 +1599,7 @@ def np_median(a):
         return
 
     is_datetime = as_dtype(a.dtype).char in 'mM'
+    supports_nans = np.issubdtype(as_dtype(a.dtype), np.inexact)
 
     def median_impl(a):
         # np.median() works on the flattened array, and we need a temporary
@@ -1597,7 +1608,7 @@ def np_median(a):
         n = temp_arry.shape[0]
         if not is_datetime and n == 0:
             return np.nan
-        return _median_inner(temp_arry, n)
+        return _median_inner(temp_arry, n, supports_nans)
     return median_impl
 
 

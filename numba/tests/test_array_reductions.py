@@ -347,13 +347,18 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         pyfunc = array_median_global
 
         def variations(a):
-            # Sorted, reversed, random, many duplicates
+            # Sorted, reversed, random, many duplicates, nan
             yield a
             a = a[::-1].copy()
             yield a
             np.random.shuffle(a)
             yield a
             a[a % 4 >= 1] = 3.5
+            yield a
+            a[0] = np.nan
+            yield a
+            a[0] = a[-1]
+            a[-1] = np.nan
             yield a
 
         self.check_median_basic(pyfunc, variations)
