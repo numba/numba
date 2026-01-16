@@ -1,7 +1,7 @@
 """
 Define @jit and related decorators.
 """
-
+from functools import wraps
 
 import sys
 import warnings
@@ -19,13 +19,22 @@ _logger = logging.getLogger(__name__)
 # -----------------------------------------------------------------------------
 # Decorators
 
-_msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
-                                 "Signatures should be passed as the first "
-                                 "positional argument.")
+_msg_deprecated_signature_arg = (
+    "Deprecated keyword argument `{0}`. "
+    "Signatures should be passed as the first "
+    "positional argument."
+)
 
 
-def jit(signature_or_function=None, locals=MappingProxyType({}), cache=False,
-        pipeline_class=None, boundscheck=None, **options):
+def jit(
+    signature_or_function=None,
+    locals=MappingProxyType({}),
+    cache=False,
+    pipeline_class=None,
+    boundscheck=None,
+    allow_further_signature_compilation=False,
+    **options,
+):
     """
     This decorator is used to compile a Python function into native code.
 
@@ -42,8 +51,33 @@ def jit(signature_or_function=None, locals=MappingProxyType({}), cache=False,
         Mapping of local variable names to Numba types. Used to override the
         types deduced by Numba's type inference engine.
 
+    cache: bool
+        Set to True to enable caching of the compiled function to disk.  The
+        default is False.  Note that caching requires the presence of a
+        working LLVM setup.
+
     pipeline_class: type numba.compiler.CompilerBase
             The compiler pipeline type for customizing the compilation stages.
+
+    boundscheck: bool or None
+        Set to True to enable bounds checking for array indices. Out
+        of bounds accesses will raise IndexError. The default is to
+        not do bounds checking. If False, bounds checking is disabled,
+        out of bounds accesses can produce garbage results or segfaults.
+        However, enabling bounds checking will slow down typical
+        functions, so it is recommended to only use this flag for
+        debugging. You can also set the NUMBA_BOUNDSCHECK environment
+        variable to 0 or 1 to globally override this flag. The default
+        value is None, which under normal execution equates to False,
+        but if debug is set to True then bounds checking will be
+        enabled. Note that bounds checking is only supported in nopython mode.
+
+    enable_further_compilation: bool
+        If a signature or list of signatures is passed, the default behaviour is
+        to disable further compilation of the function with other signatures.
+        This is to help catch cases where the user may have forgotten to
+        provide a required signature. If this is set to True, further
+        compilation will be allowed.
 
     options:
         For a cpu target, valid options are:
@@ -80,19 +114,6 @@ def jit(signature_or_function=None, locals=MappingProxyType({}), cache=False,
                 return Truthy as to whether to inline.
                 NOTE: This inlining is performed at the Numba IR level and is in
                 no way related to LLVM inlining.
-
-            boundscheck: bool or None
-                Set to True to enable bounds checking for array indices. Out
-                of bounds accesses will raise IndexError. The default is to
-                not do bounds checking. If False, bounds checking is disabled,
-                out of bounds accesses can produce garbage results or segfaults.
-                However, enabling bounds checking will slow down typical
-                functions, so it is recommended to only use this flag for
-                debugging. You can also set the NUMBA_BOUNDSCHECK environment
-                variable to 0 or 1 to globally override this flag. The default
-                value is None, which under normal execution equates to False,
-                but if debug is set to True then bounds checking will be
-                enabled.
 
     Returns
     --------
@@ -187,18 +208,34 @@ def jit(signature_or_function=None, locals=MappingProxyType({}), cache=False,
 
     dispatcher_args = {}
     if pipeline_class is not None:
-        dispatcher_args['pipeline_class'] = pipeline_class
-    wrapper = _jit(sigs, locals=locals, target=target, cache=cache,
-                   targetoptions=options, **dispatcher_args)
+        dispatcher_args["pipeline_class"] = pipeline_class
+    wrapper = _jit(
+        sigs,
+        locals=locals,
+        target=target,
+        cache=cache,
+        targetoptions=options,
+        allow_further_signature_compilation=allow_further_signature_compilation,
+        **dispatcher_args,
+    )
     if pyfunc is not None:
         return wrapper(pyfunc)
     else:
         return wrapper
 
 
-def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
+def _jit(
+    sigs,
+    locals,
+    target,
+    cache,
+    targetoptions,
+    allow_further_signature_compilation,
+    **dispatcher_args,
+):
 
     from numba.core.target_extension import resolve_dispatcher_from_str
+
     dispatcher = resolve_dispatcher_from_str(target)
 
     def wrapper(func):
@@ -232,12 +269,14 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
             with typeinfer.register_dispatcher(disp):
                 for sig in sigs:
                     disp.compile(sig)
-                disp.disable_compile()
+                if not allow_further_signature_compilation:
+                    disp.disable_compile()
         return disp
 
     return wrapper
 
 
+@wraps(jit)
 def njit(*args, **kws):
     """
     Equivalent to jit(nopython=True)
