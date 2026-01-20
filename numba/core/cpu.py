@@ -67,8 +67,8 @@ class CPUContext(BaseContext):
         The callee can then safely assume the high-order bits of the register
         are correctly filled (sign-extended or zero-extended).
         Without these attributes, LLVM may leave garbage in the high bits,
-        leading to undefined behavior e.g.segfaults when the callee performs 64-bit operations
-        on 32-bit values.
+        leading to undefined behavior (e.g., segfaults) when the callee
+        performs 64-bit operations on 32-bit values.
         """
         if self.address_size == 64 and platform.machine() == 's390x':
             def get_ext_attr(numba_ty):
@@ -84,14 +84,16 @@ class CPUContext(BaseContext):
             # Handle Arguments: i32 and smaller must be extended to 64-bit
             for i, arg in enumerate(llvm_func.args):
                 if isinstance(arg.type, ir.IntType) and arg.type.width < 64:
-                    n_ty = argtypes[i] if (argtypes and i < len(argtypes)) else None
+                    n_ty = None
+                    if argtypes and i < len(argtypes):
+                        n_ty = argtypes[i]
                     arg.add_attribute(get_ext_attr(n_ty))
 
             # Handle Return Value
             retty = llvm_func.return_value.type
             if isinstance(retty, ir.IntType) and retty.width < 64:
                 llvm_func.return_value.add_attribute(get_ext_attr(restype))
-    
+
     def load_additional_registries(self):
         # Only initialize the NRT once something is about to be compiled. The
         # "initialized" state doesn't need to be threadsafe, there's a lock
