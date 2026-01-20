@@ -285,6 +285,12 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(np.bool_(True))
         check(np.bool_(False))
 
+        # Test special values
+        check(np.nan)
+        check(np.inf)
+        check(-np.inf)
+        check(-0.0)
+
         # Test numpy array cases
         check(np.array([True, True, True]))
         check(np.array([True, False, True]))
