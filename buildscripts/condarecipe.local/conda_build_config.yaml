@@ -1,11 +1,13 @@
 # Numba/llvmlite stack needs an older compiler for backwards compatibility.
-c_compiler_version:         # [linux]
+c_compiler_version:         # [linux or osx]
   - 7                       # [linux and (x86_64 or ppc64le)]
   - 11                      # [linux and aarch64]
+  - 19                      # [osx]
 
-cxx_compiler_version:       # [linux]
+cxx_compiler_version:       # [linux or osx]
   - 7                       # [linux and (x86_64 or ppc64le)]
   - 11                      # [linux and aarch64]
+  - 19                      # [osx]
 
 fortran_compiler_version:   # [linux]
   - 7                       # [linux and (x86_64 or ppc64le)]

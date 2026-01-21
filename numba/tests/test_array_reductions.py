@@ -238,6 +238,52 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(arr)
         check(arr[::-1])
 
+    def test_array_all(self):
+        cfunc = jit(nopython=True)(array_all)
+
+        def check(arg):
+            expected = array_all(arg)
+            got = cfunc(arg)
+            self.assertPreciseEqual(got, expected)
+
+        # Test numpy array cases
+        check(np.array([True, True, True]))
+        check(np.array([True, False, True]))
+        check(np.array([1.0, 2.0, 3.0]))
+        check(np.array([0.0, 1.0, 2.0]))
+
+        with self.assertTypingError() as e:
+            cfunc('hello')
+
+    def test_np_all(self):
+        cfunc = jit(nopython=True)(array_all_global)
+
+        def check(arg):
+            expected = array_all_global(arg)
+            got = cfunc(arg)
+            self.assertPreciseEqual(got, expected)
+
+        # Test numpy scalar cases
+        check(np.float64(0.0))
+        check(np.float64(0.2))
+        check(np.bool_(True))
+        check(np.bool_(False))
+
+        # Test special values
+        check(np.nan)
+        check(np.inf)
+        check(-np.inf)
+        check(-0.0)
+
+        # Test numpy array cases
+        check(np.array([True, True, True]))
+        check(np.array([True, False, True]))
+        check(np.array([1.0, 2.0, 3.0]))
+        check(np.array([0.0, 1.0, 2.0]))
+
+        with self.assertTypingError() as e:
+            cfunc([1,2,3])
+
     def test_any_basic(self, pyfunc=array_any):
         cfunc = jit(nopython=True)(pyfunc)
         def check(arr):
@@ -254,6 +300,51 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         arr = arr.reshape((2, 2))
         check(arr)
         check(arr[::-1])
+
+    def test_array_any(self):
+        cfunc = jit(nopython=True)(array_any)
+        def check(arg):
+            expected = array_any(arg)
+            got = cfunc(arg)
+            self.assertPreciseEqual(got, expected)
+
+        # Test numpy array cases
+        check(np.array([True, True, True]))
+        check(np.array([True, False, True]))
+        check(np.array([1.0, 2.0, 3.0]))
+        check(np.array([0.0, 1.0, 2.0]))
+
+        with self.assertTypingError() as e:
+            cfunc('hello')
+
+    def test_np_any(self):
+        cfunc = jit(nopython=True)(array_any_global)
+
+        def check(arg):
+            expected = array_any_global(arg)
+            got = cfunc(arg)
+            self.assertPreciseEqual(got, expected)
+
+        # Test numpy scalar cases
+        check(np.float64(0.0))
+        check(np.float64(0.2))
+        check(np.bool_(True))
+        check(np.bool_(False))
+
+        # Test special values
+        check(np.nan)
+        check(np.inf)
+        check(-np.inf)
+        check(-0.0)
+
+        # Test numpy array cases
+        check(np.array([True, True, True]))
+        check(np.array([True, False, True]))
+        check(np.array([1.0, 2.0, 3.0]))
+        check(np.array([0.0, 1.0, 2.0]))
+
+        with self.assertTypingError() as e:
+            cfunc([1,2,3])
 
     def test_sum_basic(self):
         self.check_reduction_basic(array_sum)
@@ -306,6 +397,9 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             expected = pyfunc(arr)
             got = cfunc(arr)
             self.assertPreciseEqual(got, expected)
+
+        # Empty array case
+        check(np.array([]))
 
         # Odd sizes
         def check_odd(a):

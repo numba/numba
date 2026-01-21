@@ -19,7 +19,6 @@ Build and Packaging
   installed package from git tags
 - :ghfile:`.flake8` - Preferences for code formatting.  Files should be
   fixed and removed from the exception list as time allows.
-- :ghfile:`.pre-commit-config.yaml` - Configuration file for pre-commit hooks.
 - :ghfile:`.readthedocs.yml` - Configuration file for Read the Docs.
 - :ghfile:`buildscripts/condarecipe.local` - Conda build recipe
 
@@ -52,8 +51,6 @@ Documentation
 - :ghfile:`docs/source` - ReST source for Numba documentation
 - :ghfile:`docs/_static/` - Static CSS and image assets for Numba docs
 - :ghfile:`docs/make.bat` - Not used (remove?)
-- :ghfile:`docs/requirements.txt` - Pip package requirements for building docs
-  with Read the Docs.
 - :ghfile:`numba/scripts/generate_lower_listing.py` - Dump all registered
   implementations decorated with ``@lower*`` for reference
   documentation.  Currently misses implementations from the higher
@@ -154,7 +151,6 @@ Type Management
 
 - :ghfile:`numba/core/typeconv/` - Implementation of type casting and type
   signature matching in both C++ and Python
-- :ghfile:`numba/capsulethunk.h` - Used by typeconv
 - :ghfile:`numba/core/types/` - definition of the Numba type hierarchy, used
   everywhere in compiler to select implementations
 - :ghfile:`numba/core/consts.py` - Constant inference (used to make constant

@@ -161,6 +161,15 @@ These variables influence what is printed out during compilation of
 
    If set to non-zero, print out debugging information about type inference.
 
+.. envvar:: NUMBA_DISABLE_TYPEINFER_FAIL_CACHE
+
+   If set to truthy value, disable the cache of failed function resolutions in 
+   the type inference. The default value is false.
+   
+   Disabling the cache is **not recommended** for normal use. 
+   The cache should only be disabled temporarily for debugging purposes. 
+   Relying on disabled cache behavior is not supported and could break 
+   in future releases.
 
 .. envvar:: NUMBA_ENABLE_SYS_MONITORING
 
@@ -278,6 +287,11 @@ These variables influence what is printed out during compilation of
     See :ref:`developer-llvm-timings`.
 
     *Default value*: ``0`` (Off)
+
+.. envvar:: NUMBA_JIT_COVERAGE
+
+   Set to ``1`` to enable coverage data reporting by the JIT compiler on 
+   compiled source lines. Default to ``0`` (Off).
 
 .. seealso::
    :ref:`numba-troubleshooting` and :ref:`architecture`.
@@ -450,6 +464,25 @@ Options for the compilation cache.
 
     Also see :ref:`docs on cache sharing <cache-sharing>` and
     :ref:`docs on cache clearing <cache-clearing>`
+
+.. envvar:: NUMBA_CACHE_LOCATOR_CLASSES
+
+    Override the default cache locator classes and their order. If defined,
+    this should be a comma-separated list of cache locator class names.
+
+    Available locator classes include:
+
+    - ``InTreeCacheLocator`` - Cache next to source files in ``__pycache__``
+    - ``InTreeCacheLocatorFsAgnostic`` - Like ``InTreeCacheLocator`` but
+      agnostic to filesystem timestamp precision differences
+    - ``UserWideCacheLocator`` - Cache in user-wide application directory
+    - ``IPythonCacheLocator`` - Cache in IPython-specific directory
+    - ``ZipCacheLocator`` - Cache for functions in zip files
+
+    Custom locator classes can also be specified using their full module path
+    (e.g., ``mymodule.MyCustomLocator``).
+
+    If not defined, Numba uses the default locator order.
 
 
 .. _numba-envvars-gpu-support:

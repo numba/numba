@@ -360,7 +360,9 @@ def to_dtype(ty):
 
 
 class DeviceVectorize(_BaseUFuncBuilder):
-    def __init__(self, func, identity=None, cache=False, targetoptions={}):
+    def __init__(self, func, identity=None, cache=False, targetoptions=None):
+        if targetoptions is None:
+            targetoptions = {}
         if cache:
             raise TypeError("caching is not supported")
         for opt in targetoptions:
@@ -421,8 +423,17 @@ class DeviceVectorize(_BaseUFuncBuilder):
 
 
 class DeviceGUFuncVectorize(_BaseUFuncBuilder):
-    def __init__(self, func, sig, identity=None, cache=False, targetoptions={},
-                 writable_args=()):
+    def __init__(
+        self,
+        func,
+        sig,
+        identity=None,
+        cache=False,
+        targetoptions=None,
+        writable_args=(),
+    ):
+        if targetoptions is None:
+            targetoptions = {}
         if cache:
             raise TypeError("caching is not supported")
         if writable_args:

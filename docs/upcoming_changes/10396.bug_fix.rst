@@ -1,0 +1,6 @@
+Support integer type promotion in Python API
+--------------------------------------------
+
+Fixes a segmentation fault on s390x (IBM Z) by ensuring integer types are
+properly promoted to full register width in the CPU and Python API lowering
+layers, as required by the SystemZ ABI.

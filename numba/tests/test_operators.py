@@ -766,7 +766,7 @@ class TestOperators(TestCase):
             cres(4j, 2j)
 
         # error message depends on Python version.
-        if utils.PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+        if utils.PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13), (3, 14)):
             msg = "unsupported operand type(s) for %"
         else:
             raise NotImplementedError(utils.PYVERSION)
@@ -1335,6 +1335,17 @@ class TestMixedInts(TestCase):
                         if u.signed and v.signed]
         self.run_binary(pyfunc, control_signed,
                         samples, signed_pairs, **extra_cast)
+
+    def test_pow_precision(self):
+        @njit
+        def pow2(x):
+            return x ** 2
+
+        x = 94906267
+        expected = x * x
+        result = pow2(x)
+        self.assertEqual(result, expected)
+        self.assertEqual(result, pow2.py_func(x))
 
     def test_truediv(self):
 

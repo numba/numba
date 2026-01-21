@@ -1,7 +1,0 @@
-Make Numba internally compliant under "new_style" error handling.
------------------------------------------------------------------
-
-Numba now uses ``new_style`` error handling by default with no alternative
-available. Numba's internal code is now compliant with this error handling
-style, this to continue to allow extension writers the ability to add further
-implementations of "overloads" without the compiler encountering "hard errors".

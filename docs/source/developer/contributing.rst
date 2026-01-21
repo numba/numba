@@ -290,19 +290,6 @@ with ``pip`` or ``conda`` and then run from the root of the Numba repository::
 
     flake8 numba
 
-Optionally, you may wish to setup `pre-commit hooks <https://pre-commit.com/>`_
-to automatically run ``flake8`` when you make a git commit. This can be
-done by installing ``pre-commit``::
-
-    pip install pre-commit
-
-and then running::
-
-    pre-commit install
-
-from the root of the Numba repository. Now ``flake8`` will be run each time
-you commit changes. You can skip this check with ``git commit --no-verify``.
-
 Numba has started the process of using `type hints <https://www.python.org/dev/peps/pep-0484/>`_ in its code base. This
 will be a gradual process of extending the number of files that use type hints, as well as going from voluntary to
 mandatory type hints for new features. `Mypy <http://mypy-lang.org/>`_ is used for automated static checking.

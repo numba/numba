@@ -146,17 +146,17 @@ def make_array_astype(newtype):
     return array_astype
 
 
-def np_frombuffer(b):
+def np_frombuffer(b, dtype: np.dtype = np.float64, count=-1, offset=0):
     """
     np.frombuffer() on a Python-allocated buffer.
     """
-    return np.frombuffer(b)
+    return np.frombuffer(b, dtype=dtype, count=count, offset=offset)
 
-def np_frombuffer_dtype(b):
-    return np.frombuffer(b, dtype=np.complex64)
+def np_frombuffer_dtype(b, count=-1, offset=0):
+    return np.frombuffer(b, dtype=np.complex64, count=count, offset=offset)
 
-def np_frombuffer_dtype_str(b):
-    return np.frombuffer(b, dtype='complex64')
+def np_frombuffer_dtype_str(b, count=-1, offset=0):
+    return np.frombuffer(b, dtype='complex64', count=count, offset=offset)
 
 def np_frombuffer_allocated(shape):
     """
@@ -171,6 +171,9 @@ def np_frombuffer_allocated_dtype(shape):
 
 def identity_usecase(a, b):
     return (a is b), (a is not b)
+
+def array_tobytes(a):
+    return a.tobytes()
 
 def array_nonzero(a):
     return a.nonzero()
@@ -457,10 +460,19 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         dt2 = np.dtype([('u', np.int16), ('v', np.int8)])
         dt3 = np.dtype([('x', np.int16), ('y', np.int16)])
 
-        check_error_larger_dt = check_err_larger_dtype
-        check_error_smaller_dt = check_err_smaller_dtype
-        check_error_noncontig = check_err_noncontig_last_axis
-        check_error_0d = check_err_0d
+        # The checking routines are much more specific from NumPy 1.23 onwards
+        # as the granularity of error reporing is improved in Numba to match
+        # that of NumPy.
+        if numpy_version >= (1, 23):
+            check_error_larger_dt = check_err_larger_dtype
+            check_error_smaller_dt = check_err_smaller_dtype
+            check_error_noncontig = check_err_noncontig_last_axis
+            check_error_0d = check_err_0d
+        else:
+            check_error_larger_dt = check_err
+            check_error_smaller_dt = check_err
+            check_error_noncontig = check_err
+            check_error_0d = check_err
 
         # C-contiguous
         arr = np.arange(24, dtype=np.int8)
@@ -487,7 +499,12 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # neither F or C contiguous
         not_f_or_c_arr = np.zeros((4, 4)).T[::2, ::2]
 
-        check_maybe_error = check_err_noncontig_last_axis
+        # NumPy 1.23 does not allow views with different size dtype for
+        # non-contiguous last axis.
+        if numpy_version >= (1, 23):
+            check_maybe_error = check_err_noncontig_last_axis
+        else:
+            check_maybe_error = check
 
         check(f_arr, np.int8)
         check(not_f_or_c_arr, np.uint64)
@@ -591,6 +608,12 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         self.assertIn('array.astype if dtype is a string it must be constant',
                       str(raises.exception))
 
+    def test_array_tobytes(self):
+        self.check_layout_dependent_func(
+            array_tobytes,
+            memoryaddr=lambda x: np.frombuffer(x, dtype=np.uint8).ctypes.data,
+        )
+
     def check_np_frombuffer(self, pyfunc):
 
         cfunc = njit(pyfunc)
@@ -658,15 +681,19 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         with self.assertRaisesRegex(TypingError, msg) as raises:
             func(None)
 
-    def check_layout_dependent_func(self, pyfunc, fac=np.arange):
-        def is_same(a, b):
-            return a.ctypes.data == b.ctypes.data
+    def check_layout_dependent_func(
+        self, pyfunc, fac=np.arange, memoryaddr=lambda x: x.ctypes.data
+    ):
         def check_arr(arr):
             cfunc = njit((typeof(arr),))(pyfunc)
             expected = pyfunc(arr)
             got = cfunc(arr)
             self.assertPreciseEqual(expected, got)
-            self.assertEqual(is_same(expected, arr), is_same(got, arr))
+            self.assertEqual(
+                arr.ctypes.data == memoryaddr(expected),
+                arr.ctypes.data == memoryaddr(got),
+            )
+
         arr = fac(24)
         check_arr(arr)
         check_arr(arr.reshape((3, 8)))
@@ -687,8 +714,24 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_array_copy(self):
         self.check_layout_dependent_func(array_copy)
 
+    def check_object_copy(self, pyfunc):
+        def check_obj(obj):
+            cfunc = njit((typeof(obj),))(pyfunc)
+            expected = pyfunc(obj)
+            got = cfunc(obj)
+            self.assertPreciseEqual(expected, got)
+
+        check_obj((1, 2, 3))
+        check_obj([1.0, 2.0, 3.0])
+        check_obj(6)
+
+        msg = '.*The argument "a" must be array-like.*'
+        with self.assertRaisesRegex(TypingError, msg) as raises:
+            njit((typeof('hello'), ))(pyfunc)
+
     def test_np_copy(self):
         self.check_layout_dependent_func(np_copy)
+        self.check_object_copy(np_copy)
 
     def check_ascontiguousarray_scalar(self, pyfunc):
         def check_scalar(x):
@@ -709,10 +752,54 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         self.check_bad_array(np_asfortranarray)
         self.check_ascontiguousarray_scalar(np_asfortranarray)
 
+    def test_np_asfortranarray_readonly(self):
+        # Test for issue #10357: writeable if copied, else readonly preserved
+        pyfunc = np_asfortranarray
+        cfunc = njit(pyfunc)
+
+        def check(arr, set_readonly=True):
+            if set_readonly:
+                arr.flags.writeable = False
+            expected = pyfunc(arr)
+            got = cfunc(arr)
+            self.assertPreciseEqual(expected, got)
+            self.assertEqual(got.flags.writeable, expected.flags.writeable)
+
+        # A->F 2D readonly (copy made) - broadcast_to is already readonly
+        check(np.broadcast_to(np.zeros(2), (5, 2)), set_readonly=False)
+        # F->F 2D readonly (no copy, preserve readonly)
+        check(np.array([[1, 2], [3, 4], [5, 6]], order='F'))
+        # C->F 2D readonly (copy made)
+        check(np.array([[1, 2], [3, 4], [5, 6]], order='C'))
+        # C->F 1D readonly (1D special, no copy)
+        check(np.array([1, 2, 3, 4, 5], order='C'))
+
     def test_np_ascontiguousarray(self):
         self.check_layout_dependent_func(np_ascontiguousarray)
         self.check_bad_array(np_asfortranarray)
         self.check_ascontiguousarray_scalar(np_ascontiguousarray)
+
+    def test_np_ascontiguousarray_readonly(self):
+        # Test for PR #10390: writeable if copied, else readonly preserved
+        pyfunc = np_ascontiguousarray
+        cfunc = njit(pyfunc)
+
+        def check(arr, set_readonly=True):
+            if set_readonly:
+                arr.flags.writeable = False
+            expected = pyfunc(arr)
+            got = cfunc(arr)
+            self.assertPreciseEqual(expected, got)
+            self.assertEqual(got.flags.writeable, expected.flags.writeable)
+
+        # A->C 2D readonly (copy made) - broadcast_to.T is already readonly
+        check(np.broadcast_to(np.zeros(2), (5, 2)).T, set_readonly=False)
+        # C->C 2D readonly (no copy, preserve readonly)
+        check(np.array([[1, 2], [3, 4], [5, 6]], order='C'))
+        # F->C 2D readonly (copy made)
+        check(np.array([[1, 2], [3, 4], [5, 6]], order='F'))
+        # F->C 1D readonly (1D special, no copy)
+        check(np.array([1, 2, 3, 4, 5], order='F'))
 
     def check_np_frombuffer_allocated(self, pyfunc):
 
@@ -1761,6 +1848,12 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check(np.array(np.zeros(5)))
         check(np.array([[3.1, 3.1], [1.7, 2.29], [3.3, 1.7]]))
         check(np.array([]))
+        check(np.array([np.nan, np.nan]))
+        check(np.array(['A', 'A', 'B'], dtype='<U16'))  # issue 10250
+        check(np.array([np.datetime64("2001-01-01"),
+                        np.datetime64("2001-01-01"),
+                        np.datetime64("2001-01-02"),
+                        np.datetime64("NAT")]))
 
     @needs_blas
     def test_array_dot(self):
@@ -1791,6 +1884,55 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         np.testing.assert_array_equal(pyfunc(*args), cfunc(*args))
         args = n, np.dtype('f4')
         np.testing.assert_array_equal(pyfunc(*args), cfunc(*args))
+
+    def test_frombuffer_offset(self):
+        # Expect to skip the first two elements (offset = 2 bytes)
+        buffer = np.arange(8, dtype=np.uint8)
+        offset = 2
+        result = np_frombuffer(buffer, dtype=buffer.dtype, offset=offset)
+        expected = np.array([2, 3, 4, 5, 6, 7], dtype=buffer.dtype)
+        np.testing.assert_array_equal(result, expected)
+
+    def test_frombuffer_count(self):
+        # Expect to read only 4 elements
+        buffer = np.arange(24, dtype=np.uint8)
+        count = 4
+        result = np_frombuffer(buffer, dtype=buffer.dtype, count=count)
+        expected = np.array([0, 1, 2, 3], dtype=buffer.dtype)
+        np.testing.assert_array_equal(result, expected)
+
+    def test_frombuffer_count_negative_means_all(self):
+        # Expect to read only 4 elements
+        buffer = np.arange(8, dtype=np.uint8)
+        result = np_frombuffer(buffer, dtype=buffer.dtype, count=-1)
+        expected = np.array([0, 1, 2, 3, 4, 5, 6, 7], dtype=buffer.dtype)
+        np.testing.assert_array_equal(result, expected)
+
+    def test_frombuffer_offset_and_count(self):
+        # Skip first 2 bytes and read 3 elements
+        buffer = np.arange(24, dtype=np.uint8)
+        offset = 2
+        count = 3
+        result = np_frombuffer(buffer, dtype=buffer.dtype, offset=offset, count=count)
+        expected = np.array([2, 3, 4], dtype=buffer.dtype)
+        np.testing.assert_array_equal(result, expected)
+
+    def test_frombuffer_invalid_offset(self):
+        # Test behavior when offset exceeds buffer size
+        buffer = np.arange(24, dtype=np.uint8)
+        offset = len(buffer) + 1  # Invalid offset
+        msg = "offset must be non-negative and no greater than buffer length"
+        with self.assertRaisesRegex(ValueError, msg):
+            np_frombuffer(buffer, dtype=buffer.dtype, offset=offset)
+
+    def test_frombuffer_invalid_count(self):
+        # Test behavior when count exceeds the possible number of elements
+        buffer = np.arange(24, dtype=np.uint8)
+        count = len(buffer) + 1  # Count exceeds buffer size
+        msg = "buffer is smaller than requested size"
+        with self.assertRaisesRegex(ValueError, msg):
+            np.frombuffer(buffer, dtype=buffer.dtype, count=count)
+
 
 class TestArrayComparisons(TestCase):
 

@@ -7,6 +7,7 @@ from numba.core import types, errors, utils
 from numba.tests.support import (TestCase, expected_failure_py311,
                                  expected_failure_py312,
                                  expected_failure_py313,
+                                 expected_failure_py314,
                                  )
 import unittest
 
@@ -188,7 +189,7 @@ class TestRaising(TestCase):
         self.check_against_python(flags, pyfunc, cfunc, MyError, 1)
         self.check_against_python(flags, pyfunc, cfunc, ValueError, 2)
         self.check_against_python(flags, pyfunc, cfunc,
-                                  np.linalg.linalg.LinAlgError, 3)
+                                  np.linalg.LinAlgError, 3)
 
     def test_raise_class_nopython(self):
         self.check_raise_class(flags=no_pyobj_flags)
@@ -206,7 +207,7 @@ class TestRaising(TestCase):
             self.check_against_python(flags, pyfunc, cfunc, clazz, 1)
             self.check_against_python(flags, pyfunc, cfunc, ValueError, 2)
             self.check_against_python(flags, pyfunc, cfunc,
-                                      np.linalg.linalg.LinAlgError, 3)
+                                      np.linalg.LinAlgError, 3)
 
     def test_raise_instance_objmode(self):
         self.check_raise_instance(flags=force_pyobj_flags)
@@ -373,7 +374,7 @@ class TestRaising(TestCase):
             self.check_against_python(flags, pyfunc, cfunc, ValueError, 2,
                                       'world')
             self.check_against_python(flags, pyfunc, cfunc,
-                                      np.linalg.linalg.LinAlgError, 3, 'linalg')
+                                      np.linalg.LinAlgError, 3, 'linalg')
 
     def test_raise_instance_with_runtime_args_objmode(self):
         self.check_raise_instance_with_runtime_args(flags=force_pyobj_flags)
@@ -442,6 +443,7 @@ class TestRaising(TestCase):
     @expected_failure_py311
     @expected_failure_py312
     @expected_failure_py313
+    @expected_failure_py314
     def test_dynamic_raise(self):
 
         @njit

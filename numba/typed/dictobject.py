@@ -775,7 +775,7 @@ def impl_getitem(d, key):
         castedkey = _cast(key, keyty)
         ix, val = _dict_lookup(d, castedkey, hash(castedkey))
         if ix == DKIX.EMPTY:
-            raise KeyError()
+            raise KeyError(key)
         elif ix < DKIX.EMPTY:
             raise AssertionError("internal dict error during lookup")
         else:

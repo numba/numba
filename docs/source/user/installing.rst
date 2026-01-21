@@ -8,11 +8,15 @@ Compatibility
 For software compatibility, please see the section on :ref:`version support
 information<numba_support_info>` for details.
 
+Support is provided in Tiers, for details see the
+:ref:`Support Tiers <support_tiers>` policy.
+
 Our supported platforms are:
 
 * Linux x86_64
+* Linux arm64/aarch-64
 * Windows 10 and later (64-bit)
-* OS X 10.9 and later (64-bit and unofficial support on M1/Arm64)
+* OS X 11.0 and later (M1/Arm64)
 * NVIDIA GPUs of compute capability 5.0 and later
 
   * Compute capabilities 3.5 and 3.7 are supported, but deprecated.
@@ -57,8 +61,8 @@ For CUDA 11, ``cudatoolkit`` is required::
 
 You do not need to install the CUDA SDK from NVIDIA.
 
-Installing using pip on x86/x86_64 Platforms
---------------------------------------------
+Installing using ``pip``
+------------------------
 
 Binary wheels for Windows, Mac, and Linux are also available from `PyPI
 <https://pypi.org/project/numba/>`_.  You can install Numba using ``pip``::
@@ -74,29 +78,6 @@ To use CUDA with Numba installed by ``pip``, you need to install the `CUDA SDK
 <https://developer.nvidia.com/cuda-downloads>`_ from NVIDIA.  Please refer to
 :ref:`cudatoolkit-lookup` for details. Numba can also detect CUDA libraries
 installed system-wide on Linux.
-
-
-Installing on Linux ARMv8 (AArch64) Platforms
----------------------------------------------
-
-We build and test conda packages on the `NVIDIA Jetson TX2
-<https://www.nvidia.com/en-us/autonomous-machines/embedded-systems-dev-kits-modules/>`_,
-but they are likely to work for other AArch64 platforms.  (Note that while the
-CPUs in the Raspberry Pi 3, 4, and Zero 2 W are 64-bit, Raspberry Pi OS may be
-running in 32-bit mode depending on the OS image in use).
-
-Conda-forge support for AArch64 is still quite experimental and packages are limited,
-but it does work enough for Numba to build and pass tests.  To set up the environment:
-
-* Install `miniforge <https://github.com/conda-forge/miniforge>`_.
-  This will create a minimal conda environment.
-
-* Then you can install Numba from the ``numba`` channel::
-
-    $ conda install -c numba numba
-
-On CUDA-enabled systems, like the Jetson, the CUDA toolkit should be
-automatically detected in the environment.
 
 .. _numba-source-install-instructions:
 
@@ -126,8 +107,6 @@ Source archives of the latest release can also be found on
   * Linux ``x86_64``: ``gcc_linux-64`` and ``gxx_linux-64``
   * Linux ``POWER``: ``gcc_linux-ppc64le`` and ``gxx_linux-ppc64le``
   * Linux ``ARM``: no conda packages, use the system compiler
-  * Mac OSX: ``clang_osx-64`` and ``clangxx_osx-64`` or the system compiler at
-    ``/usr/bin/clang`` (Mojave onwards)
   * Mac OSX (M1): ``clang_osx-arm64`` and ``clangxx_osx-arm64``
   * Windows: a version of Visual Studio appropriate for the Python version in
     use
@@ -266,7 +245,24 @@ information.
 +----------++--------------+---------------------------+---------------------------------------------+------------------------------+-------------------+-----------------------------+
 | Numba     | Release date | Python                    | NumPy                                       | llvmlite                     | LLVM              | TBB                         |
 +===========+==============+===========================+=============================================+==============================+===================+=============================+
-| 0.61.0rc1 | 2024-11-25   | 3.10.x <= version < 3.14  | 1.24 <= version < 1.27 ;                    | 0.44.x                       | 15.x              | 2021.6 <= version           |
+| 0.63.1    | 2025-12-09   | 3.10.x <= version < 3.15  | 1.22 <= version < 1.27 ;                    | 0.46.x                       | 20.x              | 2021.6 <= version           |
+|           |              |                           | 2.0 <= version < 2.4 ;                      |                              |                   |                             |
++-----------+--------------+---------------------------+---------------------------------------------+------------------------------+-------------------+-----------------------------+
+| 0.63.0    | 2025-12-08   | 3.10.x <= version < 3.15  | 1.22 <= version < 1.27 ;                    | 0.46.x                       | 20.x              | 2021.6 <= version           |
+|           |              |                           | 2.0 <= version < 2.4 ;                      |                              |                   |                             |
++-----------+--------------+---------------------------+---------------------------------------------+------------------------------+-------------------+-----------------------------+
+| 0.62.1    | 2025-09-26   | 3.10.x <= version < 3.14  | 1.22 <= version < 1.27 ;                    | 0.45.x                       | 20.x              | 2021.6 <= version           |
+|           |              |                           | 2.0 <= version < 2.4 ;                      |                              |                   |                             |
++-----------+--------------+---------------------------+---------------------------------------------+------------------------------+-------------------+-----------------------------+
+| 0.62.0    | 2025-09-18   | 3.10.x <= version < 3.14  | 1.22 <= version < 1.27 ;                    | 0.45.x                       | 20.x              | 2021.6 <= version           |
+|           |              |                           | 2.0 <= version < 2.4 ;                      |                              |                   |                             |
++-----------+--------------+---------------------------+---------------------------------------------+------------------------------+-------------------+-----------------------------+
+| 0.61.2    | 2025-04-07   | 3.10.x <= version < 3.14  | 1.24 <= version < 1.27 ;                    | 0.44.x                       | 15.x              | 2021.6 <= version           |
+|           |              |                           | 2.0 <= version < 2.3 ;                      |                              |                   |                             |
++-----------+--------------+---------------------------+---------------------------------------------+------------------------------+-------------------+-----------------------------+
+| 0.61.1    | NO RELEASE   |                           |                                             |                              |                   |                             |
++-----------+--------------+---------------------------+---------------------------------------------+------------------------------+-------------------+-----------------------------+
+| 0.61.0    | 2025-01-16   | 3.10.x <= version < 3.14  | 1.24 <= version < 1.27 ;                    | 0.44.x                       | 15.x              | 2021.6 <= version           |
 |           |              |                           | 2.0 <= version < 2.2 ;                      |                              |                   |                             |
 +-----------+--------------+---------------------------+---------------------------------------------+------------------------------+-------------------+-----------------------------+
 | 0.60.0    | 2024-06-13   | 3.9.x <= version < 3.13   | 1.22 <= version < 1.27 ; version == 2.0 †   | 0.43.x                       | 14.x              | 2021.6 <= version           |

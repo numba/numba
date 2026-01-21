@@ -1,0 +1,6 @@
+Fix scalar handling in ``np.any``
+---------------------------------
+
+Fix scalar handling in ``np.any`` function. Previously, this function would
+fail when called with scalar inputs. Now it properly handles both scalar
+and array inputs, converting scalars to boolean values as expected.

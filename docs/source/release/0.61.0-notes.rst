@@ -1,6 +1,6 @@
 
-Version 0.61.0rc1 (25 November 2024)
-====================================
+Version 0.61.0 (16 January 2025)
+================================
 
 .. contents:: Table of Contents
    :depth: 2
@@ -296,9 +296,36 @@ updated following the switch to use new-style error handling by default.
 
 (`PR-#9799 <https://github.com/numba/numba/pull/9799>`__)
 
+Make Numba internally compliant under "new_style" error handling.
+-----------------------------------------------------------------
+
+Numba now uses ``new_style`` error handling by default with no alternative
+available. Numba's internal code is now compliant with this error handling
+style, this to continue to allow extension writers the ability to add further
+implementations of "overloads" without the compiler encountering "hard errors".
+
+(`PR-#9837 <https://github.com/numba/numba/pull/9837>`__)
+
+Fix for Python 3.13.1 comprehension bytecode change
+---------------------------------------------------
+
+Python 3.13.1 introduces an extra ``GET_ITER`` bytecode in comprehension 
+processing. This change breaks Numba's comprehension support.
+This patch adds logic to ignore the new ``GET_ITER`` bytecode to maintain 
+compatibility. 
+
+(`PR-#9848 <https://github.com/numba/numba/pull/9848>`__)
 
 Changes
 ~~~~~~~
+
+Add ``NUMBA_JIT_COVERAGE`` to control coverage support
+------------------------------------------------------
+
+The new ``NUMBA_JIT_COVERAGE`` environment variable enables or disables coverage
+support. Coverage is disabled by default.
+
+(`PR-#9887 <https://github.com/numba/numba/pull/9887>`__)
 
 Removal of experimental RVSDG frontend
 --------------------------------------
@@ -432,6 +459,10 @@ Pull-Requests:
 * PR `#9774 <https://github.com/numba/numba/pull/9774>`_: Test on gpuCI with supported NumPy and Python versions (`gmarkall <https://github.com/gmarkall>`_)
 * PR `#9780 <https://github.com/numba/numba/pull/9780>`_: Default to turn off `sys.monitoring` (`sklam <https://github.com/sklam>`_)
 * PR `#9799 <https://github.com/numba/numba/pull/9799>`_: Fix regression in exception handling against 0.60. (`stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#9821 <https://github.com/numba/numba/pull/9821>`_: Add debug print to debug test_monitoring_multiple_threads failing on win-02 (`sklam <https://github.com/sklam>`_)
+* PR `#9837 <https://github.com/numba/numba/pull/9837>`_: Replace "hard-errors" with NumbaErrors. (`stuartarchibald <https://github.com/stuartarchibald>`_ `lericson <https://github.com/lericson>`_ for `#9816 <https://github.com/numba/numba/pull/9816>`_)
+* PR `#9887 <https://github.com/numba/numba/pull/9887>`_: Add env-var NUMBA_JIT_COVERAGE to disable coverage (`sklam <https://github.com/sklam>`_)
+* PR `#9848 <https://github.com/numba/numba/pull/9848>`_: Fix #9846. GET_ITER in comprehension changed to NOP. (`sklam <https://github.com/sklam>`_)
 
 Authors:
 ~~~~~~~~
@@ -455,3 +486,4 @@ Authors:
 * `stuartarchibald <https://github.com/stuartarchibald>`_
 * `synapticarbors <https://github.com/synapticarbors>`_
 * `yashssh <https://github.com/yashssh>`_
+* `lericson <https://github.com/lericson>`_

@@ -412,6 +412,7 @@ class BaseContext(object):
     def declare_function(self, module, fndesc):
         fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
         fn = cgutils.get_or_insert_function(module, fnty, fndesc.mangled_name)
+        self.apply_target_attributes(fn, fndesc.argtypes, fndesc.restype)
         self.call_conv.decorate_function(fn, fndesc.args, fndesc.argtypes, noalias=fndesc.noalias)
         if fndesc.inline:
             fn.attributes.add('alwaysinline')
@@ -419,6 +420,13 @@ class BaseContext(object):
             fn.attributes.discard('noinline')
             fn.attributes.discard('optnone')
         return fn
+
+    # Define the hook as a no-op so other contexts (like GPU) don't break
+    def apply_target_attributes(self, llvm_func, argtypes=None, restype=None):
+        """
+        Hook for subclasses to apply target-specific attributes (e.g. signext).
+        """
+        pass    
 
     def declare_external_function(self, module, fndesc):
         fnty = self.get_external_function_type(fndesc)
@@ -806,7 +814,7 @@ class BaseContext(object):
     def get_dummy_type(self):
         return GENERIC_POINTER
 
-    def _compile_subroutine_no_cache(self, builder, impl, sig, locals={},
+    def _compile_subroutine_no_cache(self, builder, impl, sig, locals=None,
                                      flags=None):
         """
         Invoke the compiler to compile a function to be used inside a
@@ -818,6 +826,8 @@ class BaseContext(object):
         # Compile
         from numba.core import compiler
 
+        if locals is None:
+            locals = {}
         with global_compiler_lock:
             codegen = self.codegen()
             library = codegen.create_library(impl.__name__)
@@ -844,7 +854,7 @@ class BaseContext(object):
             self.active_code_library.add_linking_library(cres.library)
             return cres
 
-    def compile_subroutine(self, builder, impl, sig, locals={}, flags=None,
+    def compile_subroutine(self, builder, impl, sig, locals=None, flags=None,
                            caching=True):
         """
         Compile the function *impl* for the given *sig* (in nopython mode).
@@ -853,6 +863,8 @@ class BaseContext(object):
         If *caching* evaluates True, the function keeps the compiled function
         for reuse in *.cached_internal_func*.
         """
+        if locals is None:
+            locals = {}
         cache_key = (impl.__code__, sig, type(self.error_model))
         if not caching:
             cached = None
@@ -873,11 +885,13 @@ class BaseContext(object):
         self.active_code_library.add_linking_library(cres.library)
         return cres
 
-    def compile_internal(self, builder, impl, sig, args, locals={}):
+    def compile_internal(self, builder, impl, sig, args, locals=None):
         """
         Like compile_subroutine(), but also call the function with the given
         *args*.
         """
+        if locals is None:
+            locals = {}
         cres = self.compile_subroutine(builder, impl, sig, locals)
         return self.call_internal(builder, cres.fndesc, sig, args)
 

@@ -1262,7 +1262,7 @@ class TestIsinstanceBuiltin(TestCase):
         self.assertTrue(cfunc(3.4))
 
         # invalid type
-        msg = 'Cannot infer numba type of python type'
+        msg = 'Cannot infer Numba type of Python type'
 
         with self.assertRaises(errors.TypingError) as raises:
             cfunc(100)
@@ -1272,7 +1272,7 @@ class TestIsinstanceBuiltin(TestCase):
     def test_isinstance_exceptions(self):
         fns = [
             (invalid_isinstance_usecase,
-             'Cannot infer numba type of python type'),
+             'Cannot infer Numba type of Python type'),
             (invalid_isinstance_usecase_phi_nopropagate,
              ('isinstance() cannot determine the type of variable "z" due to a '
              'branch.')),

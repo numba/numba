@@ -9,6 +9,7 @@ from numba.misc.coverage_support import NotifyLocBase, _the_registry
 
 
 class TestMiscCoverageSupport(TestCase):
+    @TestCase.run_test_in_subprocess(envvars={"NUMBA_JIT_COVERAGE": "1"})
     def test_custom_loc_notifier(self):
         class MyNotify(NotifyLocBase):
             records = []

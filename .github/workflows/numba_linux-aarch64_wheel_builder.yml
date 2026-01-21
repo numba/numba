@@ -1,0 +1,190 @@
+name: numba_linux-aarch64_wheel_builder
+
+on:
+  schedule:
+    - cron: '20 7 * * 6'  # Saturday 7:20 AM UTC - linux-aarch64 wheel
+  pull_request:
+    paths:
+      - .github/workflows/numba_linux-aarch64_wheel_builder.yml
+      - .github/workflows/wheel_workflow_matrix.json
+      - buildscripts/github/build_wheel_linux.sh
+      - buildscripts/github/repair_wheel_linux.sh
+      - setup.py
+  workflow_dispatch:
+    inputs:
+      llvmlite_wheel_runid:
+        description: 'llvmlite wheel workflow run ID (optional)'
+        required: false
+        type: string
+
+# Add concurrency control
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+env:
+  ARTIFACT_RETENTION_DAYS: 7
+  WHEELS_INDEX_URL: https://pypi.anaconda.org/numba/label/dev/simple
+  CONDA_CHANNEL_NUMBA: numba/label/dev
+  MANYLINUX_IMAGE: "manylinux_2_28_aarch64"
+
+jobs:
+  load-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      build-matrix-json: ${{ steps.load_matrix_json.outputs.build-matrix-json }}
+      test-matrix-json: ${{ steps.load_matrix_json.outputs.test-matrix-json }}
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - id: load_matrix_json
+        name: Load Workflow Matrix JSON
+        run: |
+          BUILD_MATRIX_JSON=$(jq -c .wheel_build_matrix .github/workflows/wheel_workflow_matrix.json)
+          TEST_MATRIX_JSON=$(jq -c .wheel_test_matrix .github/workflows/wheel_workflow_matrix.json)
+
+          # Add canonical python versions to both matrices
+          BUILD_MATRIX_EXTENDED=$(echo "$BUILD_MATRIX_JSON" | jq -c '
+            map(. + {"python_canonical": (.["python-version"] | split(".") | .[:2] | join("."))})
+          ')
+
+          TEST_MATRIX_EXTENDED=$(echo "$TEST_MATRIX_JSON" | jq -c '
+            map(. + {"python_canonical": (.["python-version"] | split(".") | .[:2] | join("."))})
+          ')
+
+          echo "Build Matrix JSON: $BUILD_MATRIX_EXTENDED"
+          echo "Test Matrix JSON: $TEST_MATRIX_EXTENDED"
+          echo "build-matrix-json=$BUILD_MATRIX_EXTENDED" >> $GITHUB_OUTPUT
+          echo "test-matrix-json=$TEST_MATRIX_EXTENDED" >> $GITHUB_OUTPUT
+
+  linux-aarch64-build:
+    name: linux-aarch64-build-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
+    needs: load-matrix
+    runs-on: ubuntu-24.04-arm
+    defaults:
+      run:
+        shell: bash -elx {0}
+    strategy:
+      matrix:
+        include: ${{ fromJson(needs.load-matrix.outputs.build-matrix-json) }}
+      fail-fast: false
+
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Download llvmlite wheel
+        if: inputs.llvmlite_wheel_runid != ''
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: llvmlite-linux-aarch64-py${{ matrix.python_canonical }}
+          path: llvmlite_wheels
+          run-id: ${{ inputs.llvmlite_wheel_runid }}
+          repository: numba/llvmlite
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build wheel in manylinux docker container
+        run: |
+          # Construct the expected Python executable path inside the container
+          PYTHON_EXECUTABLE="/opt/python/${{ matrix.python_tag }}-${{ matrix.python_tag }}/bin/python"
+          echo "Using Python executable: $PYTHON_EXECUTABLE"
+
+          # Prepare build environment
+          mkdir -p dist wheelhouse
+
+          # Run the build script inside Docker container
+          docker run --rm \
+            -v ${{ github.workspace }}:/io \
+            quay.io/pypa/${{ env.MANYLINUX_IMAGE }} \
+            bash /io/buildscripts/github/build_wheel_linux.sh \
+            "${PYTHON_EXECUTABLE}" \
+            "false" \
+            "${{ matrix.numpy_build }}" \
+            "/io/llvmlite_wheels" \
+            "${WHEELS_INDEX_URL}"
+
+          # List built wheels
+          ls -la wheelhouse/
+
+      - name: Repair and patch wheel in manylinux docker container
+        run: |
+          # Construct the expected Python executable path inside the container
+          PYTHON_EXECUTABLE="/opt/python/${{ matrix.python_tag }}-${{ matrix.python_tag }}/bin/python"
+          echo "Using Python executable: $PYTHON_EXECUTABLE"
+
+          # Run the repair script in Docker
+          docker run --rm \
+            -v ${{ github.workspace }}:/io \
+            quay.io/pypa/${{ env.MANYLINUX_IMAGE }} \
+            bash /io/buildscripts/github/repair_wheel_linux.sh \
+            "${PYTHON_EXECUTABLE}" \
+            "false" \
+            "/io/wheelhouse"
+
+          # List repaired wheels
+          ls -la wheelhouse/
+
+      - name: Upload numba wheel
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: numba_linux-aarch64_wheel_py${{ matrix.python_canonical }}
+          path: wheelhouse/*.whl
+          compression-level: 0
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+          if-no-files-found: error
+
+
+  linux-aarch64-test:
+    name: linux-aarch64-test (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
+    needs: [load-matrix, linux-aarch64-build]
+    runs-on: ubuntu-24.04-arm
+    defaults:
+      run:
+        shell: bash -elx {0}
+    strategy:
+      matrix:
+        include: ${{ fromJson(needs.load-matrix.outputs.test-matrix-json) }}
+      fail-fast: false
+
+    steps:
+      - name: Setup Python
+        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
+
+      - name: Download Numba wheel artifact
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: numba_linux-aarch64_wheel_py${{ matrix.python_canonical }}
+          path: dist
+
+      - name: Download llvmlite wheel
+        if: inputs.llvmlite_wheel_runid != ''
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: llvmlite-linux-aarch64-py${{ matrix.python_canonical }}
+          path: llvmlite_wheels
+          run-id: ${{ inputs.llvmlite_wheel_runid }}
+          repository: numba/llvmlite
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate and test wheel
+        run: |
+          PYTHON_PATH=$(which python${{ matrix.python_canonical }})
+          $PYTHON_PATH -m pip install --upgrade pip twine
+          ls -l dist
+          if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
+              $PYTHON_PATH -m pip install --no-cache-dir llvmlite_wheels/*.whl
+          else
+              $PYTHON_PATH -m pip install --no-cache-dir --pre -i $WHEELS_INDEX_URL llvmlite
+          fi
+          $PYTHON_PATH -m twine check dist/*.whl
+          $PYTHON_PATH -m pip install dist/numba*.whl numpy==${{ matrix.numpy_test }} setuptools
+
+          # print Numba system information
+          $PYTHON_PATH -m numba -s
+
+          # run tests
+          $PYTHON_PATH -m numba.runtests -m 4 -v

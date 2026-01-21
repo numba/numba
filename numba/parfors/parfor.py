@@ -566,7 +566,9 @@ class Parfor(ir.Expr, ir.Stmt):
             flags,
             *,  #only specify the options below by keyword
             no_sequential_lowering=False,
-            races=set()):
+            races=None):
+        if races is None:
+            races = set()
         super(Parfor, self).__init__(
             op='parfor',
             loc=loc
@@ -1434,7 +1436,9 @@ class PreParforPass(object):
     implementations of numpy functions if available.
     """
     def __init__(self, func_ir, typemap, calltypes, typingctx, targetctx,
-                 options, swapped={}, replace_functions_map=None):
+                 options, swapped=None, replace_functions_map=None):
+        if swapped is None:
+            swapped = {}
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
@@ -3232,7 +3236,7 @@ def _arrayexpr_tree_to_ir(
                 ir_expr = ir.Expr.binop(op, arg_vars[0], arg_vars[1], loc)
                 if op == operator.truediv:
                     func_typ, ir_expr = _gen_np_divide(
-                        arg_vars[0], arg_vars[1], out_ir, typemap)
+                        arg_vars[0], arg_vars[1], out_ir, typemap, typingctx)
             else:
                 func_typ = typingctx.resolve_function_type(op, (el_typ1,), {})
                 ir_expr = ir.Expr.unary(op, arg_vars[0], loc)
@@ -3298,7 +3302,7 @@ def _arrayexpr_tree_to_ir(
     return out_ir
 
 
-def _gen_np_divide(arg1, arg2, out_ir, typemap):
+def _gen_np_divide(arg1, arg2, out_ir, typemap, typingctx):
     """generate np.divide() instead of / for array_expr to get numpy error model
     like inf for division by zero (test_division_by_zero).
     """
@@ -3312,13 +3316,13 @@ def _gen_np_divide(arg1, arg2, out_ir, typemap):
     # attr call: div_attr = getattr(g_np_var, divide)
     div_attr_call = ir.Expr.getattr(g_np_var, "divide", loc)
     attr_var = ir.Var(scope, mk_unique_var("$div_attr"), loc)
-    func_var_typ = get_np_ufunc_typ(numpy.divide)
+    func_var_typ = get_np_ufunc_typ(numpy.divide, typingctx)
     typemap[attr_var.name] = func_var_typ
     attr_assign = ir.Assign(div_attr_call, attr_var, loc)
     # divide call:  div_attr(arg1, arg2)
     div_call = ir.Expr.call(attr_var, [arg1, arg2], (), loc)
     func_typ = func_var_typ.get_call_type(
-        typing.Context(), [typemap[arg1.name], typemap[arg2.name]], {})
+        typingctx, [typemap[arg1.name], typemap[arg2.name]], {})
     out_ir.extend([g_np_assign, attr_assign])
     return func_typ, div_call
 

@@ -406,7 +406,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                 val = arg.value if isinstance(arg, OmittedArg) else arg
                 try:
                     tp = typeof(val, Purpose.argument)
-                except ValueError as typeof_exc:
+                except (errors.NumbaValueError, ValueError) as typeof_exc:
                     failed_args.append((i, str(typeof_exc)))
                 else:
                     if tp is None:
@@ -685,7 +685,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         """
         try:
             tp = typeof(val, Purpose.argument)
-        except ValueError:
+        except (errors.NumbaValueError, ValueError):
             tp = types.pyobject
         else:
             if tp is None:
@@ -754,7 +754,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
 
     __numba__ = 'py_func'
 
-    def __init__(self, py_func, locals={}, targetoptions={},
+    def __init__(self, py_func, locals=None, targetoptions=None,
                  pipeline_class=compiler.Compiler):
         """
         Parameters
@@ -768,6 +768,10 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         pipeline_class: type numba.compiler.CompilerBase
             The compiler pipeline type.
         """
+        if locals is None:
+            locals = {}
+        if targetoptions is None:
+            targetoptions = {}
         self.typingctx = self.targetdescr.typing_context
         self.targetctx = self.targetdescr.target_context
 

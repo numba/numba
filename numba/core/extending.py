@@ -3,6 +3,7 @@ import uuid
 import weakref
 import collections
 import functools
+from types import MappingProxyType
 
 import numba
 from numba.core import types, errors, utils, config
@@ -59,8 +60,14 @@ _overload_default_jit_options = {'no_cpython_wrapper': True,
                                  'nopython':True}
 
 
-def overload(func, jit_options={}, strict=True, inline='never',
-             prefer_literal=False, **kwargs):
+def overload(
+    func,
+    jit_options=MappingProxyType({}),
+    strict=True,
+    inline='never',
+    prefer_literal=False,
+    **kwargs,
+):
     """
     A decorator marking the decorated function as typing and implementing
     *func* in nopython mode.
@@ -120,6 +127,7 @@ def overload(func, jit_options={}, strict=True, inline='never',
     from numba.core.typing.templates import make_overload_template, infer_global
 
     # set default options
+    jit_options = dict(jit_options)
     opts = _overload_default_jit_options.copy()
     opts.update(jit_options)  # let user options override
 
@@ -315,10 +323,11 @@ class _Intrinsic(ReduceMixin):
     """
     Dummy callable for intrinsic
     """
-    _memo = weakref.WeakValueDictionary()
+    _memo: weakref.WeakValueDictionary = weakref.WeakValueDictionary()
+    __cache_size = config.FUNCTION_CACHE_SIZE # type: ignore
     # hold refs to last N functions deserialized, retaining them in _memo
     # regardless of whether there is another reference
-    _recent = collections.deque(maxlen=config.FUNCTION_CACHE_SIZE)
+    _recent: collections.deque = collections.deque(maxlen=__cache_size)
 
     __uuid = None
 

@@ -1,3 +1,4 @@
+import sys
 from collections import namedtuple, OrderedDict
 import dis
 import inspect
@@ -9,7 +10,7 @@ from numba.core import errors, utils, serialize
 from numba.core.utils import PYVERSION
 
 
-if PYVERSION in ((3, 12), (3, 13)):
+if PYVERSION in ((3, 12), (3, 13), (3, 14)):
     from opcode import _inline_cache_entries
     # Instruction/opcode length in bytes
     INSTR_LEN = 2
@@ -104,7 +105,7 @@ class ByteCodeInst(object):
         # https://bugs.python.org/issue27129
         # https://github.com/python/cpython/pull/25069
         assert self.is_jump
-        if PYVERSION in ((3, 13),):
+        if PYVERSION in ((3, 13), (3, 14)):
             if self.opcode in (dis.opmap[k]
                                for k in ["JUMP_BACKWARD",
                                          "JUMP_BACKWARD_NO_INTERRUPT"]):
@@ -126,7 +127,7 @@ class ByteCodeInst(object):
         else:
             raise NotImplementedError(PYVERSION)
 
-        if PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+        if PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13), (3, 14)):
             if self.opcode in JREL_OPS:
                 return self.next + self.arg * 2
             else:
@@ -158,7 +159,7 @@ NO_ARG_LEN = 1
 OPCODE_NOP = dis.opname.index('NOP')
 
 
-if PYVERSION in ((3, 13),):
+if PYVERSION in ((3, 13), (3, 14)):
 
     def _unpack_opargs(code):
         buf = []
@@ -382,7 +383,7 @@ class _ByteCode(object):
 
 
 def _fix_LOAD_GLOBAL_arg(arg):
-    if PYVERSION in ((3, 11), (3, 12), (3, 13)):
+    if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
         return arg >> 1
     elif PYVERSION in ((3, 10),):
         return arg
@@ -479,6 +480,10 @@ class ByteCodePy312(ByteCodePy311):
             END_FOR
             POP_TOP
             SWAP(2)
+
+            Update for Python 3.13.1, there's now a GET_ITER before FOR_ITER.
+            This patch the GET_ITER to NOP to minimize changes downstream
+            (e.g. array-comprehension).
         """
         def pop_and_merge_exceptions(entries: list,
                                      entry_to_remove: _ExceptionTableEntry):
@@ -505,11 +510,13 @@ class ByteCodePy312(ByteCodePy311):
                        if not e.start == entry_to_remove.target]
             return entries
 
+        change_to_nop = set()
         work_remaining = True
         while work_remaining:
             # Temporarily set work_remaining to False, if we find a pattern
             # then work is not complete, hence we set it again to True.
             work_remaining = False
+            current_nop_fixes = set()
             for entry in entries.copy():
                 # Check start of pattern, three instructions.
                 # Work out the index of the instruction.
@@ -528,10 +535,23 @@ class ByteCodePy312(ByteCodePy311):
                     continue
                 next_inst = self.table[self.ordered_offsets[index + 2]]
                 # Check if the SWAP is followed by a FOR_ITER
+                # BUT Python3.13.1 introduced an extra GET_ITER.
+                # If we see a GET_ITER here, check if the next thing is a
+                # FOR_ITER.
+                if next_inst.opname == "GET_ITER":
+                    # In Python 3.13.4, this becomes the only GET_ITER,
+                    # so don't turn it into a NOP.
+                    # Python 3.13.5 reverted the change.
+                    if sys.version_info[:3] != (3, 13, 4):
+                        # Add the inst to potentially be replaced to NOP.
+                        current_nop_fixes.add(next_inst)
+                    # Loop up next instruction.
+                    next_inst = self.table[self.ordered_offsets[index + 3]]
+
                 if not next_inst.opname == "FOR_ITER":
                     continue
 
-                if PYVERSION in ((3, 13),):
+                if PYVERSION in ((3, 13), (3, 14)):
                     # Check end of pattern, two instructions.
                     # Check for the corresponding END_FOR, exception table end
                     # is non-inclusive, so subtract one.
@@ -540,8 +560,14 @@ class ByteCodePy312(ByteCodePy311):
                     if not curr_inst.opname == "END_FOR":
                         continue
                     next_inst = self.table[self.ordered_offsets[index - 1]]
-                    if not next_inst.opname == "POP_TOP":
-                        continue
+                    if PYVERSION in ((3, 13), ):
+                        if not next_inst.opname == "POP_TOP":
+                            continue
+                    elif PYVERSION in ((3, 14), ):
+                        if not next_inst.opname == "POP_ITER":
+                            continue
+                    else:
+                        raise NotImplementedError(PYVERSION)
                     # END_FOR must be followed by SWAP(2)
                     next_inst = self.table[self.ordered_offsets[index]]
                     if not next_inst.opname == "SWAP" and next_inst.arg == 2:
@@ -567,12 +593,23 @@ class ByteCodePy312(ByteCodePy311):
                 # a single bigger exception block.
                 entries = pop_and_merge_exceptions(entries, entry)
                 work_remaining = True
+
+                # Commit NOP fixes since we confirmed the suspects belong to
+                # a comprehension code.
+                change_to_nop |= current_nop_fixes
+
+        # Complete fixes to NOPs
+        for inst in change_to_nop:
+            self.table[inst.offset] = ByteCodeInst(inst.offset,
+                                                   dis.opmap["NOP"],
+                                                   None,
+                                                   inst.next)
         return entries
 
 
 if PYVERSION == (3, 11):
     ByteCode = ByteCodePy311
-elif PYVERSION in ((3, 12), (3, 13),):
+elif PYVERSION in ((3, 12), (3, 13), (3, 14)):
     ByteCode = ByteCodePy312
 elif PYVERSION < (3, 11):
     ByteCode = _ByteCode
