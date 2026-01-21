@@ -1935,7 +1935,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
 
 class TestArrayComparisons(TestCase):
-
     def test_identity(self):
         def check(a, b, expected):
             cfunc = njit((typeof(a), typeof(b)))(pyfunc)
@@ -1952,7 +1951,30 @@ class TestArrayComparisons(TestCase):
         check(arr, arr.T, False)
         check(arr, arr[:-1], False)
 
-    # Other comparison operators ('==', etc.) are tested in test_ufuncs
+    
+    def test_record_is(self):
+        def check(a, b):
+            pyfunc = identity_usecase
+            cfunc=njit(pyfunc)
+            result = cfunc(a, b)
+            expected = pyfunc(a, b)
+            self.assertEqual(result, expected)
+        
+        record_type = np.dtype([("a", "i4"), ("b", "i4")])
+
+        # Test case: Same records
+        a = np.zeros(1, dtype=record_type)[0]
+        b = a.copy()
+        check(a, b)
+
+        # Test case: Different records
+        c = np.ones(1, dtype=record_type)[0]
+        check(a, c)
+
+        # Test case: Same records with different values
+        d = np.zeros(1, dtype=record_type)[0]
+        d['a'] = 42
+        check(a, d)
 
 
 if __name__ == '__main__':
