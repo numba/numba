@@ -50,8 +50,8 @@ class CPUContext(BaseContext):
         self.is32bit = (utils.MACHINE_BITS == 32)
         self._internal_codegen = codegen.JITCPUCodegen("numba.exec")
 
-        # Add ARM or s390x ABI functions from libgcc_s
-        if platform.machine() == 'armv7l' or platform.machine() == 's390x':
+        # Add s390x ABI functions from libgcc_s
+        if platform.machine() == 's390x':
             ll.load_library_permanently('libgcc_s.so.1')
 
         # Map external C functions.
