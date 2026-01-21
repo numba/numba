@@ -412,7 +412,6 @@ class BaseContext(object):
     def declare_function(self, module, fndesc):
         fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
         fn = cgutils.get_or_insert_function(module, fnty, fndesc.mangled_name)
-        # Call the target-specific attribute hook. Defined as a no-op, overwrriden in numba/core/cpu.py
         self.apply_target_attributes(fn, fndesc.argtypes, fndesc.restype)
         self.call_conv.decorate_function(fn, fndesc.args, fndesc.argtypes, noalias=fndesc.noalias)
         if fndesc.inline:
