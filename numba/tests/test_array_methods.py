@@ -584,6 +584,13 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                           [0xdeadbeefcafebabe, 0x0102030405060708]], np.uint64).astype(dt)
             np.testing.assert_array_equal(pyfunc(a), cfunc(a))
 
+    def test_array_byteswap_unsupported_type(self):
+        cfunc = jit(nopython=True)(array_byteswap)
+        with self.assertTypingError() as raises:
+            cfunc(np.array(["not a number"]))
+        self.assertIn('byteswap is only implemented for Number and Boolean types.',
+                      str(raises.exception))
+
     def test_array_astype(self):
 
         def run(arr, dtype):
