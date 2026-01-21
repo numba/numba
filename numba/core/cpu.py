@@ -50,12 +50,49 @@ class CPUContext(BaseContext):
         self.is32bit = (utils.MACHINE_BITS == 32)
         self._internal_codegen = codegen.JITCPUCodegen("numba.exec")
 
-        # Add ARM ABI functions from libgcc_s
-        if platform.machine() == 'armv7l':
+        # Add s390x ABI functions from libgcc_s
+        if platform.machine() == 's390x':
             ll.load_library_permanently('libgcc_s.so.1')
 
         # Map external C functions.
         externals.c_math_functions.install(self)
+
+    def apply_target_attributes(self, llvm_func, argtypes=None, restype=None):
+        """
+        Implementation of caller Type Promotions for s390x ABI requirement.
+        See https://github.com/numba/numba/issues/9640
+
+        On s390x, the ABI requires that any integer argument or return
+        value smaller than 64 bits must be promoted to 64 bits by the caller.
+        The callee can then safely assume the high-order bits of the register
+        are correctly filled (sign-extended or zero-extended).
+        Without these attributes, LLVM may leave garbage in the high bits,
+        leading to undefined behavior (e.g., segfaults) when the callee
+        performs 64-bit operations on 32-bit values.
+        """
+        if self.address_size == 64 and platform.machine() == 's390x':
+            def get_ext_attr(numba_ty):
+                """
+                Map Numba types to LLVM extension attributes.
+                Signed integers -> signext (sign extension)
+                Unsigned/Booleans -> zeroext (zero extension)
+                """
+                if isinstance(numba_ty, types.Integer):
+                    return 'signext' if numba_ty.signed else 'zeroext'
+                return 'signext' # Default fallback
+
+            # Handle Arguments: i32 and smaller must be extended to 64-bit
+            for i, arg in enumerate(llvm_func.args):
+                if isinstance(arg.type, ir.IntType) and arg.type.width < 64:
+                    n_ty = None
+                    if argtypes and i < len(argtypes):
+                        n_ty = argtypes[i]
+                    arg.add_attribute(get_ext_attr(n_ty))
+
+            # Handle Return Value
+            retty = llvm_func.return_value.type
+            if isinstance(retty, ir.IntType) and retty.width < 64:
+                llvm_func.return_value.add_attribute(get_ext_attr(restype))
 
     def load_additional_registries(self):
         # Only initialize the NRT once something is about to be compiled. The
