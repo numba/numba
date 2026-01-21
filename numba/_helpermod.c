@@ -271,6 +271,11 @@ MOD_INIT(_helperlib) {
     PyModule_AddIntConstant(m, "py_unicode_wchar_kind", PyUnicode_WCHAR_KIND);
 #endif
 #endif
+#ifdef NUMBA_PACKAGE_FORMAT
+    PyModule_AddStringConstant(m, "package_format", NUMBA_PACKAGE_FORMAT);
+#else
+    PyModule_AddStringConstant(m, "package_format", "unknown");
+#endif
     numba_rnd_ensure_global_init();
 
     return MOD_SUCCESS_VAL(m);
