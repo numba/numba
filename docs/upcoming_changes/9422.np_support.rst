@@ -1,5 +1,5 @@
-Added support for byteswap.
-===========================
+Added support for ``.byteswap()`` method for numerical scalars and arrays.
+==========================================================================
 
-Support is added for the numpy ``byteswap`` method on numbers, booleans, and
+Added support for the NumPy ``byteswap`` method on Numbers, Booleans and
 arrays thereof.
