@@ -231,6 +231,11 @@ def list_iteration(n):
         res += i * v
     return res
 
+def list_reversed(n):
+    l = list(range(n))
+    rev = reversed(l)
+    return list(rev)
+
 def list_contains(n):
     l = list(range(n))
     return (0 in l, 1 in l, n - 1 in l, n in l,
@@ -750,6 +755,10 @@ request more memory than can be provided###\n".encode("UTF-8"))
         cfunc = jit(nopython=True)(pyfunc)
         self.assertPreciseEqual(cfunc(), pyfunc())
 
+    def test_list_reversed(self):
+        pyfunc = list_reversed
+        cfunc = jit(nopython=True)(pyfunc)
+        self.assertPreciseEqual(cfunc(5), pyfunc(5))
 
 class TestUnboxing(MemoryLeakMixin, TestCase):
     """
