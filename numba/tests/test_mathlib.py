@@ -9,6 +9,7 @@ import numpy as np
 from numba import njit, types
 from numba.tests.support import TestCase
 from numba.np import numpy_support
+from numba.core.utils import PYVERSION
 
 
 def sin(x):
@@ -74,6 +75,8 @@ def npy_sqrt(x):
 def exp(x):
     return math.exp(x)
 
+def exp2(x):
+    return math.exp2(x)
 
 def expm1(x):
     return math.expm1(x)
@@ -89,6 +92,10 @@ def log1p(x):
 
 def log10(x):
     return math.log10(x)
+
+
+def log2(x):
+    return math.log2(x)
 
 
 def floor(x):
@@ -117,6 +124,10 @@ def isfinite(x):
 
 def hypot(x, y):
     return math.hypot(x, y)
+
+
+def nextafter(x, y):
+    return math.nextafter(x, y)
 
 
 def degrees(x):
@@ -253,6 +264,15 @@ class TestMathLib(TestCase):
         x_values = [-2, -1, -2, 2, 1, 2, .1, .2]
         self.run_unary(pyfunc, x_types, x_values)
 
+    @unittest.skipUnless(PYVERSION >= (3, 11), "needs Python 3.11+")
+    def test_exp2(self):
+        pyfunc = exp2
+        x_types = [types.int16, types.int32, types.int64,
+                   types.uint16, types.uint32, types.uint64,
+                   types.float32, types.float64]
+        x_values = [-2, -1, -2, 2, 1, 2, .1, .2]
+        self.run_unary(pyfunc, x_types, x_values)
+
     def test_expm1(self):
         pyfunc = expm1
         x_types = [types.int16, types.int32, types.int64,
@@ -279,6 +299,14 @@ class TestMathLib(TestCase):
 
     def test_log10(self):
         pyfunc = log10
+        x_types = [types.int16, types.int32, types.int64,
+                   types.uint16, types.uint32, types.uint64,
+                   types.float32, types.float64]
+        x_values = [1, 10, 100, 1000, 100000, 1000000, 0.1, 1.1]
+        self.run_unary(pyfunc, x_types, x_values)
+
+    def test_log2(self):
+        pyfunc = log2
         x_types = [types.int16, types.int32, types.int64,
                    types.uint16, types.uint32, types.uint64,
                    types.float32, types.float64]
@@ -427,6 +455,25 @@ class TestMathLib(TestCase):
                 self.assertRaisesRegex(RuntimeWarning,
                                         'overflow encountered in .*scalar',
                                         naive_hypot, val, val)
+
+    def test_nextafter(self):
+        pyfunc = nextafter
+        x_types = [types.float32, types.float64,
+                   types.int32, types.int64,
+                   types.uint32, types.uint64]
+        x_values = [0.0, .21, .34, 1005382.042, -25.328]
+        y1_values = [x + 2 for x in x_values]
+        y2_values = [x - 2 for x in x_values]
+
+        self.run_binary(pyfunc, x_types, x_values, y1_values)
+        self.run_binary(pyfunc, x_types, x_values, y2_values)
+
+        # Test using pos/neg inf
+        self.run_binary(pyfunc, x_types, [0.0, -.5, .5], [math.inf]*3)
+        self.run_binary(pyfunc, x_types, [0.0, -.5, .5], [-math.inf]*3)
+
+        # if both args to nextafter are equal, then it is returned unchanged.
+        self.run_binary(pyfunc, x_types, x_values, x_values)
 
     def test_degrees(self):
         pyfunc = degrees

@@ -1,8 +1,8 @@
 from numba import cuda
 from numpy import array as np_array
-from numba.np.ufunc import deviceufunc
-from numba.np.ufunc.deviceufunc import (UFuncMechanism, GeneralizedUFunc,
-                                        GUFuncCallSteps)
+from numba.cuda import deviceufunc
+from numba.cuda.deviceufunc import (UFuncMechanism, GeneralizedUFunc,
+                                    GUFuncCallSteps)
 
 
 class CUDAUFuncDispatcher(object):

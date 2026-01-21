@@ -89,26 +89,6 @@ class TranslateByteCode(FunctionPass):
 
 
 @register_pass(mutates_CFG=True, analysis_only=False)
-class RVSDGFrontend(FunctionPass):
-    _name = "rvsdg_frontend"
-
-    def __init__(self):
-        FunctionPass.__init__(self)
-
-    def run_pass(self, state):
-        from numba.core.rvsdg_frontend import bcinterp
-        from numba.core.bytecode import FunctionIdentity
-
-        func_id: FunctionIdentity = state['func_id']
-        # Bytecode object is unused here
-        # bc = state['bc']
-
-        func_ir = bcinterp.run_frontend(func_id.func)
-        state["func_ir"] = func_ir
-        return True
-
-
-@register_pass(mutates_CFG=True, analysis_only=False)
 class FixupArgs(FunctionPass):
     _name = "fixup_args"
 
@@ -491,6 +471,7 @@ class CanonicalizeLoopEntry(FunctionPass):
     This is needed for loop-lifting; esp in py3.8
     """
     _name = "canonicalize_loop_entry"
+    _supported_globals = {range, enumerate, zip}
 
     def __init__(self):
         FunctionPass.__init__(self)
@@ -540,7 +521,8 @@ class CanonicalizeLoopEntry(FunctionPass):
                         if isinstance(defn, ir.Global):
                             if expr.func.is_temp:
                                 deps.add(expr.func)
-                elif isinstance(rhs, ir.Global) and rhs.value is range:
+                elif (isinstance(rhs, ir.Global)
+                        and rhs.value in self._supported_globals):
                     startpt = assign
 
         if startpt is None:

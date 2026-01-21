@@ -13,26 +13,29 @@ labels: task
     - [ ] "remaining Pull-Requests from milestone".
 * [ ] Check Numba's version support table documentation. Update via PR if
       needed.
-* [ ] Review deprecation schedule and notices. Make PRs if need be.
+* [ ] Review deprecation schedule and notices. Make PRs if need be. (Note that
+  deprecation notices for features that have been removed are kept in the
+  documentation for two more releases.)
+* [ ] Create changelog using instructions at: `docs/source/developer/release.rst`
 * [ ] Merge change log changes.
     - [ ] "PR with changelog entries".
 * [ ] Create X.Y release branch.
 * [ ] Create PR against the release branch to make `numba/testing/main.py`
       to refer to `origin/releaseX.Y` instead of `origin/main`.
-* [ ] Dependency version pinning on release branch
+* [ ] Dependency version pinning on release branch:
   * [ ] Pin llvmlite to `0.A.*`.
-  * [ ] Pin NumPy if needed
-  * [ ] Pin TBB if needed
-* [ ] Run the HEAD of the release branch through the build farm and confirm:
-  * [ ] Build farm CPU testing has passed.
-  * [ ] Build farm CUDA testing has passed.
-  * [ ] Build farm wheel testing has passed.
+  * [ ] Pin NumPy if needed (see previous release for details).
+    * [ ] `buildscripts/condarecipe.local/meta.yaml`
+    * [ ] `numba/__init__.py`
+    * [ ] `setup.py`
+    * [ ] `docs/environment.yml`
+  * [ ] Pin TBB if needed.
+* [ ] Run the HEAD of the release branch through GHA and confirm:
+  * [ ] conda build and test has passed.
+  * [ ] wheel build and test has passed.
 * [ ] Annotated tag `X.Y.Zrc1` on release branch (no `v` prefix).
-* [ ] Build and upload conda packages on buildfarm (check "upload").
-* [ ] Build wheels and sdist on the buildfarm (check "upload").
-* [ ] Verify packages uploaded to Anaconda Cloud and move to `numba/label/main`.
-* [ ] Upload wheels and sdist to PyPI (upload from `ci_artifacts`).
-* [ ] Verify wheels for all platforms arrived on PyPi.
+* [ ] Upload conda packages, wheels and sdist using GHA.
+* [ ] Make sure that packages arrived on PyPI and on anaconda.org on labels `numba/label/dev` and `numba/label/main`.
 * [ ] Initialize and verify ReadTheDocs build.
 * [ ] Post announcement to discourse group and ping the release testers group
   using `@RC_Testers`.
@@ -40,7 +43,6 @@ labels: task
 
 ### Post Release:
 
-* [ ] Clean up `ci_artifacts` by moving files to sub-directories
 * [ ] Tag `X.Y+1.0dev0` to start new development cycle on `main`.
 * [ ] Update llvmlite dependency via PR to `main`, PR includes version updates
       to:

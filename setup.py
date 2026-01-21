@@ -19,12 +19,12 @@ except ImportError:
         pass
 
 
-min_python_version = "3.9"
-max_python_version = "3.13"  # exclusive
+min_python_version = "3.10"
+max_python_version = "3.15"  # exclusive
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.22"
-min_llvmlite_version = "0.42.0dev0"
-max_llvmlite_version = "0.43"
+min_llvmlite_version = "0.47.0dev0"
+max_llvmlite_version = "0.48"
 
 if sys.platform.startswith('linux'):
     # Patch for #2555 to make wheels without libpython
@@ -118,12 +118,13 @@ def is_building():
         # User forgot to give an argument probably, let setuptools handle that.
         return True
 
-    build_commands = ['build', 'build_py', 'build_ext', 'build_clib'
+    build_commands = ['build', 'build_py', 'build_ext', 'build_clib',
                       'build_scripts', 'install', 'install_lib',
                       'install_headers', 'install_scripts', 'install_data',
                       'sdist', 'bdist', 'bdist_dumb', 'bdist_rpm',
                       'bdist_wininst', 'check', 'build_doc', 'bdist_wheel',
-                      'bdist_egg', 'develop', 'easy_install', 'test']
+                      'bdist_egg', 'develop', 'easy_install', 'test',
+                      'editable_wheel', ]
     return any(bc in sys.argv[1:] for bc in build_commands)
 
 
@@ -152,11 +153,14 @@ def get_ext_modules():
                             depends=['numba/_pymodule.h',
                                      'numba/_dynfunc.c'])
 
+    dispatcher_sources = [
+        'numba/_dispatcher.cpp',
+        'numba/_typeof.cpp',
+        'numba/_hashtable.cpp',
+        'numba/core/typeconv/typeconv.cpp',
+    ]
     ext_dispatcher = Extension(name="numba._dispatcher",
-                               sources=['numba/_dispatcher.cpp',
-                                        'numba/_typeof.cpp',
-                                        'numba/_hashtable.cpp',
-                                        'numba/core/typeconv/typeconv.cpp'],
+                               sources=dispatcher_sources,
                                depends=["numba/_pymodule.h",
                                         "numba/_typeof.h",
                                         "numba/_hashtable.h"],
@@ -210,6 +214,7 @@ def get_ext_modules():
         """
         found = None
         path2check = [os.path.split(os.path.split(sys.executable)[0])[0]]
+        path2check += [os.path.dirname(sys.executable)]    # for GHA win toolcache: ...\Python\<ver>\x64
         path2check += [os.getenv(n, '') for n in ['CONDA_PREFIX', 'PREFIX']]
         if sys.platform.startswith('win'):
             path2check += [os.path.join(p, 'Library') for p in path2check]
@@ -251,8 +256,18 @@ def get_ext_modules():
         # They are binary compatible and may not safely coexist in a process, as
         # libiomp5 is more prevalent and often linked in for NumPy it is used
         # here!
-        ompcompileflags = ['-fopenmp']
-        omplinkflags = ['-fopenmp=libiomp5']
+        # Apple clang requires -Xclang -fopenmp, conda clang uses -fopenmp
+        try:
+            is_apple_clang = b'Apple' in subprocess.check_output(['clang', '--version'])
+        except:
+            is_apple_clang = False
+
+        if is_apple_clang:
+            ompcompileflags = ['-Xclang', '-fopenmp']
+            omplinkflags = ['-Xclang', '-fopenmp', '-liomp5']
+        else:
+            ompcompileflags = ['-fopenmp']
+            omplinkflags = ['-fopenmp=libiomp5']
         omppath = ['lib', 'clang', '*', 'include', 'omp.h']
         have_openmp = check_file_at_path(omppath)
     else:
@@ -380,10 +395,11 @@ metadata = dict(
         "Operating System :: OS Independent",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
+        "Programming Language :: Python :: 3.13",
+        "Programming Language :: Python :: 3.14",
         "Topic :: Software Development :: Compilers",
     ],
     package_data={

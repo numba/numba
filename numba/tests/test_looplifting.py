@@ -555,6 +555,41 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
         [lifted] = foo.overloads[foo.signatures[0]].lifted
         self.assertEqual(len(lifted.nopython_signatures), 1)
 
+    def test_lift_zip_and_enumerate(self):
+        # From issue https://github.com/numba/numba/issues/10076
+        from numba import jit
+
+        @jit(forceobj=True)
+        def udt_zip(X, Y):
+            i = 0
+            for x, y in zip(X, Y):
+                i = i + x
+            return i
+
+
+        @jit(forceobj=True)
+        def udt_enumerate(X, Y):
+            i = 0
+            for n, x in enumerate(X):
+                i = i + x
+            return i
+
+
+        @jit(forceobj=True)
+        def udt_enumerate_zip(X, Y):
+            i = 0
+            for n, (x, y) in enumerate(zip(X, Y)):
+                i = i + x
+            return i
+
+        X = np.ones(5)
+        Y = np.ones(5)
+
+        self.assertEqual(udt_zip(X, Y), udt_zip.py_func(X, Y))
+        self.assertEqual(udt_enumerate(X, Y), udt_enumerate.py_func(X, Y))
+        self.assertEqual(udt_enumerate_zip(X, Y),
+                         udt_enumerate_zip.py_func(X, Y))
+
 
 if __name__ == '__main__':
     unittest.main()

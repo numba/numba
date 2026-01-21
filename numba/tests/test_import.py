@@ -1,5 +1,7 @@
 import unittest
 from numba.tests.support import TestCase, run_in_subprocess
+from numba.core import utils
+import os
 
 
 class TestNumbaImport(TestCase):
@@ -22,9 +24,12 @@ class TestNumbaImport(TestCase):
                    'numba.core.typing.listdecl',
                    'numba.core.typing.npdatetime',
                    ]
+
         # Sanity check the modules still exist...
         for mod in banlist:
-            if mod not in ('cffi',):
+            distutils_check = (mod != 'distutils' or
+                               utils.PYVERSION < (3, 12))
+            if mod not in ('cffi',) and distutils_check:
                 __import__(mod)
 
         code = """if 1:
@@ -100,7 +105,7 @@ class TestNumbaImport(TestCase):
         # See: https://github.com/numba/numba/issues/6831
         # bug in setuptools/packaging causing a deprecation warning
         flags = ["-Werror", "-Wignore::DeprecationWarning:packaging.version:"]
-        run_in_subprocess(code, flags)
+        run_in_subprocess(code, flags, env=os.environ.copy())
 
     def test_import_star(self):
         # checks that "from numba import *" works.

@@ -56,7 +56,7 @@ def int_cast_usecase(x):
     if x > int16(RequestError.internal_error):
         return x - int32(RequestError.not_found)
     else:
-        return x + int8(Shape.circle)
+        return x + int16(Shape.circle)
 
 
 def vectorize_usecase(x):

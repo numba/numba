@@ -1,6 +1,8 @@
 import multiprocessing
 import os
 import shutil
+import subprocess
+import sys
 import unittest
 import warnings
 
@@ -169,6 +171,37 @@ class CUDACachingTest(SerialMixin, DispatcherCacheUsecasesTest):
 
         # Check the code runs ok from another process
         self.run_in_separate_process()
+
+    @skip_unless_cc_60
+    @skip_if_cudadevrt_missing
+    @skip_if_mvc_enabled('CG not supported with MVC')
+    def test_cache_cg_clean_run(self):
+        # See Issue #9432: https://github.com/numba/numba/issues/9432
+        # If a cached function using CG sync was the first thing to compile,
+        # the compile would fail.
+        self.check_pycache(0)
+
+        # This logic is modelled on run_in_separate_process(), but executes the
+        # CG usecase directly in the subprocess.
+        code = """if 1:
+            import sys
+
+            sys.path.insert(0, %(tempdir)r)
+            mod = __import__(%(modname)r)
+            mod.cg_usecase(0)
+            """ % dict(tempdir=self.tempdir, modname=self.modname)
+
+        popen = subprocess.Popen([sys.executable, "-c", code],
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE)
+        out, err = popen.communicate(timeout=60)
+        if popen.returncode != 0:
+            raise AssertionError(
+                "process failed with code %s: \n"
+                "stdout follows\n%s\n"
+                "stderr follows\n%s\n"
+                % (popen.returncode, out.decode(), err.decode()),
+            )
 
     def _test_pycache_fallback(self):
         """

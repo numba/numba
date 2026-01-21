@@ -146,8 +146,9 @@ class StencilFunc(object):
         else:
             need_to_calc_kernel = False
             if len(neighborhood) != ndim:
-                raise ValueError("%d dimensional neighborhood specified for %d " \
-                    "dimensional input array" % (len(neighborhood), ndim))
+                raise NumbaValueError("%d dimensional neighborhood specified "
+                                      "for %d dimensional input array" %
+                                      (len(neighborhood), ndim))
 
         tuple_table = ir_utils.get_tuple_table(kernel.blocks)
 
@@ -171,8 +172,8 @@ class StencilFunc(object):
                         and stmt.value.value.name in kernel.arg_names) or
                    (isinstance(stmt, ir.SetItem)
                         and stmt.target.name in kernel.arg_names)):
-                    raise ValueError("Assignments to arrays passed to stencil " \
-                        "kernels is not allowed.")
+                    raise NumbaValueError("Assignments to arrays passed to " \
+                                          "stencil kernels is not allowed.")
                 if (isinstance(stmt, ir.Assign)
                         and isinstance(stmt.value, ir.Expr)
                         and stmt.value.op in ['getitem', 'static_getitem']
@@ -402,8 +403,9 @@ class StencilFunc(object):
         sig = signature(real_ret, *argtys_extra)
         dummy_text = ("def __numba_dummy_stencil({}{}):\n    pass\n".format(
                         ",".join(self.kernel_ir.arg_names), sig_extra))
-        exec(dummy_text) in globals(), locals()
-        dummy_func = eval("__numba_dummy_stencil")
+        dct = {}
+        exec(dummy_text, dct)
+        dummy_func = dct["__numba_dummy_stencil"]
         sig = sig.replace(pysig=utils.pysignature(dummy_func))
         self._targetctx.insert_func_defn([(self._lower_me, self, argtys_extra)])
         self._type_cache[argtys_extra] = (sig, result, typemap, calltypes)
@@ -659,8 +661,10 @@ class StencilFunc(object):
             print(func_text)
 
         # Force the new stencil function into existence.
-        exec(func_text) in globals(), locals()
-        stencil_func = eval(stencil_func_name)
+        dct = {}
+        dct.update(globals())
+        exec(func_text, dct)
+        stencil_func = dct[stencil_func_name]
         if sigret is not None:
             pysig = utils.pysignature(stencil_func)
             sigret.pysig = pysig
@@ -767,9 +771,9 @@ class StencilFunc(object):
         self._typingctx.refresh()
         if (self.neighborhood is not None and
             len(self.neighborhood) != args[0].ndim):
-            raise ValueError("{} dimensional neighborhood specified for {} "
-                             "dimensional input array".format(
-                                len(self.neighborhood), args[0].ndim))
+            raise NumbaValueError("{} dimensional neighborhood specified for "
+                                  "{} dimensional input array".format(
+                                  len(self.neighborhood), args[0].ndim))
 
         if 'out' in kwargs:
             result = kwargs['out']
@@ -808,7 +812,7 @@ def stencil(func_or_mode='constant', **options):
 
     for option in options:
         if option not in ["cval", "standard_indexing", "neighborhood"]:
-            raise ValueError("Unknown stencil option " + option)
+            raise NumbaValueError("Unknown stencil option " + option)
 
     wrapper = _stencil(mode, options)
     if func is not None:
@@ -817,7 +821,7 @@ def stencil(func_or_mode='constant', **options):
 
 def _stencil(mode, options):
     if mode != 'constant':
-        raise ValueError("Unsupported mode style " + mode)
+        raise NumbaValueError("Unsupported mode style " + mode)
 
     def decorated(func):
         from numba.core import compiler

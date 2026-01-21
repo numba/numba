@@ -3,9 +3,11 @@ import sys
 import traceback
 
 from numba import jit, njit
-from numba.core import types, errors
+from numba.core import types, errors, utils
 from numba.tests.support import (TestCase, expected_failure_py311,
                                  expected_failure_py312,
+                                 expected_failure_py313,
+                                 expected_failure_py314,
                                  )
 import unittest
 
@@ -187,7 +189,7 @@ class TestRaising(TestCase):
         self.check_against_python(flags, pyfunc, cfunc, MyError, 1)
         self.check_against_python(flags, pyfunc, cfunc, ValueError, 2)
         self.check_against_python(flags, pyfunc, cfunc,
-                                  np.linalg.linalg.LinAlgError, 3)
+                                  np.linalg.LinAlgError, 3)
 
     def test_raise_class_nopython(self):
         self.check_raise_class(flags=no_pyobj_flags)
@@ -205,7 +207,7 @@ class TestRaising(TestCase):
             self.check_against_python(flags, pyfunc, cfunc, clazz, 1)
             self.check_against_python(flags, pyfunc, cfunc, ValueError, 2)
             self.check_against_python(flags, pyfunc, cfunc,
-                                      np.linalg.linalg.LinAlgError, 3)
+                                      np.linalg.LinAlgError, 3)
 
     def test_raise_instance_objmode(self):
         self.check_raise_instance(flags=force_pyobj_flags)
@@ -309,9 +311,18 @@ class TestRaising(TestCase):
         # issue #3428
         simple_raise = "def f(a):\n  raise exc('msg', 10)"
         assert_raise = "def f(a):\n  assert a != 1"
-        for f_text, exc in [(assert_raise, AssertionError),
-                            (simple_raise, UDEArgsToSuper),
-                            (simple_raise, UDENoArgSuper)]:
+        py312_pep695_raise = "def f[T: int](a: T) -> T:\n  assert a != 1"
+        py312_pep695_raise_2 = "def f[T: int\n](a: T) -> T:\n  assert a != 1"
+        test_cases = [
+            (assert_raise, AssertionError),
+            (simple_raise, UDEArgsToSuper),
+            (simple_raise, UDENoArgSuper),
+        ]
+        if utils.PYVERSION >= (3, 12):
+            # Added for https://github.com/numba/numba/issues/9443
+            test_cases.append((py312_pep695_raise, AssertionError))
+            test_cases.append((py312_pep695_raise_2, AssertionError))
+        for f_text, exc in test_cases:
             loc = {}
             exec(f_text, {'exc': exc}, loc)
             pyfunc = loc['f']
@@ -363,7 +374,7 @@ class TestRaising(TestCase):
             self.check_against_python(flags, pyfunc, cfunc, ValueError, 2,
                                       'world')
             self.check_against_python(flags, pyfunc, cfunc,
-                                      np.linalg.linalg.LinAlgError, 3, 'linalg')
+                                      np.linalg.LinAlgError, 3, 'linalg')
 
     def test_raise_instance_with_runtime_args_objmode(self):
         self.check_raise_instance_with_runtime_args(flags=force_pyobj_flags)
@@ -431,6 +442,8 @@ class TestRaising(TestCase):
 
     @expected_failure_py311
     @expected_failure_py312
+    @expected_failure_py313
+    @expected_failure_py314
     def test_dynamic_raise(self):
 
         @njit

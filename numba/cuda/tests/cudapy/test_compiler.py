@@ -1,7 +1,8 @@
 from math import sqrt
 from numba import cuda, float32, int16, int32, int64, uint32, void
-from numba.cuda import compile_ptx, compile_ptx_for_current_device
-
+from numba.cuda import (compile, compile_for_current_device, compile_ptx,
+                        compile_ptx_for_current_device)
+from numba.cuda.cudadrv import runtime
 from numba.cuda.testing import skip_on_cudasim, unittest, CUDATestCase
 
 
@@ -12,7 +13,7 @@ def f_module(x, y):
 
 
 @skip_on_cudasim('Compilation unsupported in the simulator')
-class TestCompileToPTX(unittest.TestCase):
+class TestCompile(unittest.TestCase):
     def test_global_kernel(self):
         def f(r, x, y):
             i = cuda.grid(1)
@@ -192,15 +193,45 @@ class TestCompileToPTX(unittest.TestCase):
         self.assertRegex(ptx, r"\.visible\s+\.func\s+\(\.param\s+\.b32\s+"
                               r"func_retval0\)\s+_Z4funcii\(")
 
+    def test_compile_defaults_to_c_abi(self):
+        ptx, resty = compile(f_module, int32(int32, int32), device=True)
+
+        # The function name should match the Python function name, and its
+        # return value should be 32 bits
+        self.assertRegex(ptx, r"\.visible\s+\.func\s+\(\.param\s+\.b32\s+"
+                              r"func_retval0\)\s+f_module\(")
+
+    def test_compile_to_ltoir(self):
+        if runtime.get_version() < (11, 5):
+            self.skipTest("-gen-lto unavailable in this toolkit version")
+
+        ltoir, resty = compile(f_module, int32(int32, int32), device=True,
+                               output="ltoir")
+
+        # There are no tools to interpret the LTOIR output, but we can check
+        # that we appear to have obtained an LTOIR file. This magic number is
+        # not documented, but is expected to remain consistent.
+        LTOIR_MAGIC = 0x7F4E43ED
+        header = int.from_bytes(ltoir[:4], byteorder='little')
+        self.assertEqual(header, LTOIR_MAGIC)
+        self.assertEqual(resty, int32)
+
+    def test_compile_to_invalid_error(self):
+        illegal_output = "illegal"
+        msg = f"Unsupported output type: {illegal_output}"
+        with self.assertRaisesRegex(NotImplementedError, msg):
+            compile(f_module, int32(int32, int32), device=True,
+                    output=illegal_output)
+
 
 @skip_on_cudasim('Compilation unsupported in the simulator')
-class TestCompileToPTXForCurrentDevice(CUDATestCase):
-    def test_compile_ptx_for_current_device(self):
+class TestCompileForCurrentDevice(CUDATestCase):
+    def _check_ptx_for_current_device(self, compile_function):
         def add(x, y):
             return x + y
 
         args = (float32, float32)
-        ptx, resty = compile_ptx_for_current_device(add, args, device=True)
+        ptx, resty = compile_function(add, args, device=True)
 
         # Check we target the current device's compute capability, or the
         # closest compute capability supported by the current toolkit.
@@ -208,6 +239,12 @@ class TestCompileToPTXForCurrentDevice(CUDATestCase):
         cc = cuda.cudadrv.nvvm.find_closest_arch(device_cc)
         target = f'.target sm_{cc[0]}{cc[1]}'
         self.assertIn(target, ptx)
+
+    def test_compile_ptx_for_current_device(self):
+        self._check_ptx_for_current_device(compile_ptx_for_current_device)
+
+    def test_compile_for_current_device(self):
+        self._check_ptx_for_current_device(compile_for_current_device)
 
 
 @skip_on_cudasim('Compilation unsupported in the simulator')

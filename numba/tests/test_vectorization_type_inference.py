@@ -1,4 +1,4 @@
-from numba import vectorize, jit, bool_, double, int_, float_, typeof, int8
+from numba import vectorize, jit, bool_, double, int_, float32, typeof, int8
 import unittest
 import numpy as np
 
@@ -22,7 +22,7 @@ class TestVectTypeInfer(unittest.TestCase):
         vector_add = vectorize([
             bool_(double, int_),
             double(double, double),
-            float_(double, float_),
+            float32(double, float32),
         ])(add)
 
         def numba_type_equal(a, b):

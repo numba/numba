@@ -1,23 +1,35 @@
+import importlib
 import inspect
-import llvmlite.binding as ll
 import multiprocessing
-import numpy as np
 import os
-import stat
 import shutil
+import stat
 import subprocess
 import sys
 import traceback
 import unittest
 import warnings
+import zipfile
+from pathlib import Path
+
+import llvmlite.binding as ll
+import numpy as np
+from math import floor
+
 from numba import njit
 from numba.core import codegen
-from numba.core.caching import _UserWideCacheLocator
+from numba.core.caching import (
+    UserWideCacheLocator,
+    ZipCacheLocator,
+    FunctionCache,
+    InTreeCacheLocator,
+    InTreeCacheLocatorFsAgnostic,
+)
 from numba.core.errors import NumbaWarning
 from numba.parfors import parfor
 from numba.tests.support import (
-    TestCase,
     SerialMixin,
+    TestCase,
     capture_cache_log,
     import_dynamic,
     override_config,
@@ -25,7 +37,10 @@ from numba.tests.support import (
     skip_if_typeguard,
     skip_parfors_unsupported,
     temp_directory,
+    override_env_config,
 )
+
+from numba.core.registry import cpu_target
 
 try:
     import ipykernel
@@ -254,10 +269,12 @@ class DispatcherCacheUsecasesTest(BaseCacheTest):
     usecases_file = os.path.join(here, "cache_usecases.py")
     modname = "dispatcher_caching_test_fodder"
 
-    def run_in_separate_process(self, *, envvars={}):
+    def run_in_separate_process(self, *, envvars=None):
         # Cached functions can be run from a distinct process.
         # Also stresses issue #1603: uncached function calling cached function
         # shouldn't fail compiling.
+        if envvars is None:
+            envvars = {}
         code = """if 1:
             import sys
 
@@ -529,14 +546,14 @@ class TestCache(DispatcherCacheUsecasesTest):
             source = inspect.getfile(function)
             # doesn't return anything, since it cannot find the module
             # fails unless the executable is frozen
-            locator = _UserWideCacheLocator.from_function(function, source)
+            locator = UserWideCacheLocator.from_function(function, source)
             self.assertIsNone(locator)
 
             sys.frozen = True
             # returns a cache locator object, only works when the executable
             # is frozen
-            locator = _UserWideCacheLocator.from_function(function, source)
-            self.assertIsInstance(locator, _UserWideCacheLocator)
+            locator = UserWideCacheLocator.from_function(function, source)
+            self.assertIsInstance(locator, UserWideCacheLocator)
 
         finally:
             function.__code__ = old_code
@@ -702,6 +719,92 @@ class TestCache(DispatcherCacheUsecasesTest):
         self.assertIn("cache hits = 1", err.strip())
 
 
+class TestCacheZip(DispatcherCacheUsecasesTest):
+
+    def setUp(self):
+        super().setUp()
+
+        # Create a simple Python module to be zipped
+        mod_content = """
+from numba import jit
+
+@jit(cache=True)
+def add(x, y):
+    return x + y
+"""
+        mod_filename = "test_module.py"
+        zip_filename = "test_archive.zip"
+
+        # Create a zip file containing the module
+        zip_path = os.path.join(self.tempdir, zip_filename)
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr(mod_filename, mod_content)
+
+        # Add the zip file to sys.path
+        sys.path.insert(0, zip_path)
+        self.modname = "test_module"
+
+    def tearDown(self):
+        # Clean up: remove the zip file from sys.path
+        sys.path.pop(0)
+        # Remove the module from sys.modules to clean up
+        sys.modules.pop("test_module", None)
+
+    def test_zip_caching(self):
+        # (note that `self.import_module()` fails because its checks are
+        # incompatible
+        # with the zip file, so we just use normal imports here)
+
+        # First import and call
+        import test_module  # type: ignore
+
+        result1 = test_module.add(2, 3)
+        self.assertEqual(result1, 5)
+        self.check_hits(test_module.add, 0, 1)
+
+        # Record the initial cache hits
+        self.check_hits(test_module.add, 0)
+
+        # Remove the module and reimport
+        del sys.modules["test_module"]
+        importlib.invalidate_caches()
+        import test_module  # type: ignore
+
+        # Second call: should use the cache
+        result2 = test_module.add(2, 3)
+        self.assertEqual(result2, 5)
+
+        # Check if the cache was hit
+        self.check_hits(test_module.add, 1)
+
+
+class TestCacheZipLib(DispatcherCacheUsecasesTest):
+    """
+    ZipCache tests that don't require the setup/teardown from `TestCacheZip`
+    """
+    def test_zip_locator_creation(self):
+
+        def mock_func():
+            pass
+
+        zip_path = "/path/to/archive.zip/module.py"
+
+        locator = ZipCacheLocator.from_function(mock_func, zip_path)
+        self.assertIsNotNone(locator)
+        self.assertEqual(locator._zip_path, str(Path("/path/to/archive.zip")))
+        self.assertEqual(locator._internal_path, "module.py")
+
+    def test_zip_locator_non_zip_path(self):
+
+        def mock_func():
+            pass
+
+        non_zip_path = "/path/to/module.py"
+
+        locator = ZipCacheLocator.from_function(mock_func, non_zip_path)
+        self.assertIsNone(locator)
+
+
 @skip_parfors_unsupported
 class TestSequentialParForsCache(DispatcherCacheUsecasesTest):
     def setUp(self):
@@ -739,44 +842,59 @@ class TestCacheWithCpuSetting(DispatcherCacheUsecasesTest):
         self.assertGreater(match_count, 0,
                            msg='nothing to compare')
 
+    @unittest.skipIf(ll.get_host_cpu_name() == "generic",
+                     "LLVM detected 'generic' CPU")
     def test_user_set_cpu_name(self):
         self.check_pycache(0)
-        mod = self.import_module()
-        mod.self_test()
+
+        # Run initial test without NUMBA_CPU_NAME to ensure host CPU
+        self.run_in_separate_process(
+            envvars={'NUMBA_CPU_NAME': ll.get_host_cpu_name(),
+                     'NUMBA_CPU_FEATURES': ''}
+        )
+        mtimes = self.get_cache_mtimes()
         cache_size = len(self.cache_contents())
 
-        mtimes = self.get_cache_mtimes()
         # Change CPU name to generic
-        self.run_in_separate_process(envvars={'NUMBA_CPU_NAME': 'generic'})
+        self.run_in_separate_process(envvars={
+            'NUMBA_CPU_NAME': 'generic',
+            'NUMBA_CPU_FEATURES': '',
+        })
 
         self.check_later_mtimes(mtimes)
         self.assertGreater(len(self.cache_contents()), cache_size)
         # Check cache index
+        mod = self.import_module()
         cache = mod.add_usecase._cache
         cache_file = cache._cache_file
         cache_index = cache_file._load_index()
         self.assertEqual(len(cache_index), 2)
         [key_a, key_b] = cache_index.keys()
-        if key_a[1][1] == ll.get_host_cpu_name():
-            key_host, key_generic = key_a, key_b
+        if key_a[1][1] == 'generic':
+            key_generic, key_host = key_a, key_b
         else:
-            key_host, key_generic = key_b, key_a
+            key_host, key_generic = key_a, key_b
         self.assertEqual(key_host[1][1], ll.get_host_cpu_name())
-        self.assertEqual(key_host[1][2], codegen.get_host_cpu_features())
+        self.assertEqual(key_host[1][2], '')
         self.assertEqual(key_generic[1][1], 'generic')
         self.assertEqual(key_generic[1][2], '')
 
     def test_user_set_cpu_features(self):
         self.check_pycache(0)
-        mod = self.import_module()
-        mod.self_test()
+
+        cpu_codegen = cpu_target.target_context.codegen()
+
+        system_features = codegen.get_host_cpu_features()
+
+        # Run initial testing with default CPU features
+        self.run_in_separate_process(
+            envvars={'NUMBA_CPU_FEATURES': system_features}
+        )
         cache_size = len(self.cache_contents())
 
         mtimes = self.get_cache_mtimes()
         # Change CPU feature
         my_cpu_features = '-sse;-avx'
-
-        system_features = codegen.get_host_cpu_features()
 
         self.assertNotEqual(system_features, my_cpu_features)
         self.run_in_separate_process(
@@ -785,21 +903,22 @@ class TestCacheWithCpuSetting(DispatcherCacheUsecasesTest):
         self.check_later_mtimes(mtimes)
         self.assertGreater(len(self.cache_contents()), cache_size)
         # Check cache index
+        mod = self.import_module()
         cache = mod.add_usecase._cache
         cache_file = cache._cache_file
         cache_index = cache_file._load_index()
         self.assertEqual(len(cache_index), 2)
         [key_a, key_b] = cache_index.keys()
 
-        if key_a[1][2] == system_features:
-            key_host, key_generic = key_a, key_b
+        if key_a[1][2] == my_cpu_features:
+            key_modified, key_host = key_a, key_b
         else:
-            key_host, key_generic = key_b, key_a
+            key_host, key_modified = key_a, key_b
 
-        self.assertEqual(key_host[1][1], ll.get_host_cpu_name())
+        self.assertEqual(key_host[1][1], cpu_codegen._get_host_cpu_name())
         self.assertEqual(key_host[1][2], system_features)
-        self.assertEqual(key_generic[1][1], ll.get_host_cpu_name())
-        self.assertEqual(key_generic[1][2], my_cpu_features)
+        self.assertEqual(key_modified[1][1], cpu_codegen._get_host_cpu_name())
+        self.assertEqual(key_modified[1][2], my_cpu_features)
 
 
 class TestMultiprocessCache(BaseCacheTest):
@@ -1069,6 +1188,137 @@ class TestCFuncCache(BaseCacheTest):
         self.check_module(mod)
 
         self.run_in_separate_process()
+
+
+class TestLocator(InTreeCacheLocator):
+    pass
+
+
+class TestCacheLocatorEnvironmentIntegration(TestCase):
+    """Integration tests for environment variable functionality."""
+
+    def test_locators_env_override_unknown(self):
+        def mock_func():
+            return 42
+
+        with override_env_config(
+            "NUMBA_CACHE_LOCATOR_CLASSES",
+            "foo,bar",
+        ):
+            with self.assertRaises(RuntimeError):
+                FunctionCache(mock_func)
+
+    def test_locators_env_override_single(self):
+        def mock_func():
+            return 42
+
+        with override_env_config(
+            "NUMBA_CACHE_LOCATOR_CLASSES",
+            "InTreeCacheLocatorFsAgnostic",
+        ):
+            cache = FunctionCache(mock_func)
+            expectedLocator = InTreeCacheLocatorFsAgnostic
+            self.assertIsInstance(cache._impl.locator,
+                                  expectedLocator)
+
+    def test_locators_env_override_custom(self):
+        def mock_func():
+            return 42
+
+        with override_env_config(
+            "NUMBA_CACHE_LOCATOR_CLASSES",
+            f"{__name__}.TestLocator",
+        ):
+            cache = FunctionCache(mock_func)
+            expectedLocator = TestLocator
+            self.assertIsInstance(cache._impl.locator,
+                                  expectedLocator)
+
+    def test_locators_env_override_list(self):
+        def mock_func():
+            return 42
+
+        locatorClasses = ("InTreeCacheLocatorFsAgnostic,InTreeCacheLocator,"
+                          "IPythonCacheLocator,UserWideCacheLocator")
+        expectedLocator = InTreeCacheLocatorFsAgnostic
+
+        with override_env_config(
+            "NUMBA_CACHE_LOCATOR_CLASSES",
+            locatorClasses,
+        ):
+            cache = FunctionCache(mock_func)
+            self.assertIsInstance(cache._impl.locator, expectedLocator)
+
+    def test_default_locators(self):
+        def mock_func():
+            return 42
+
+        cache = FunctionCache(mock_func)
+        expectedLocator = InTreeCacheLocator
+        self.assertIsInstance(cache._impl.locator, expectedLocator)
+
+
+class TestInTreeCacheLocatorFsAgnostic(TestCase):
+    """Test _InTreeCacheLocatorFsAgnostic class functionality."""
+
+    def test_source_stamp_precision(self):
+        """Test that FsAgnostic locator floors timestamp to seconds."""
+        from .dummy_module import function
+
+        source = inspect.getfile(function)
+
+        # Create regular and FsAgnostic locators
+        regular_locator = InTreeCacheLocator.from_function(function, source)
+        fs_agnostic_locator = InTreeCacheLocatorFsAgnostic.from_function(
+            function, source
+        )
+
+        # Both should be valid locators
+        self.assertIsNotNone(regular_locator)
+        self.assertIsNotNone(fs_agnostic_locator)
+
+        # Get source stamps
+        regular_stamp = regular_locator.get_source_stamp()
+        fs_agnostic_stamp = fs_agnostic_locator.get_source_stamp()
+
+        # Verify structure: (timestamp, size)
+        self.assertEqual(len(regular_stamp), 2)
+        self.assertEqual(len(fs_agnostic_stamp), 2)
+
+        # The second element (size) should be the same
+        self.assertEqual(regular_stamp[1], fs_agnostic_stamp[1])
+
+        # The first element (timestamp) in fs_agnostic should be floored
+        self.assertEqual(fs_agnostic_stamp[0], floor(regular_stamp[0]))
+
+        # Verify that fs_agnostic timestamp is always <= regular timestamp
+        self.assertLessEqual(fs_agnostic_stamp[0], regular_stamp[0])
+
+    def test_timestamp_precision_on_fs(self):
+        """Test FsAgnostic timestamp handling using filesystem mtime."""
+
+        from .dummy_module import function
+
+        source = inspect.getfile(function)
+
+        # Test with a file that has a precise timestamp
+        fs_agnostic_locator = InTreeCacheLocatorFsAgnostic.from_function(
+            function, source
+        )
+
+        # Get file stat
+        stat_result = os.stat(source)
+        original_mtime = stat_result.st_mtime
+
+        # Get stamp from locator
+        stamp = fs_agnostic_locator.get_source_stamp()
+
+        # Verify that the timestamp is floored
+        expected_timestamp = floor(original_mtime)
+        self.assertEqual(stamp[0], expected_timestamp)
+
+        # Verify size is correct
+        self.assertEqual(stamp[1], stat_result.st_size)
 
 
 if __name__ == '__main__':

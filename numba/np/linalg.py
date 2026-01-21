@@ -15,7 +15,7 @@ from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.core.typing import signature
 from numba.core.extending import intrinsic, overload, register_jitable
-from numba.core import types, cgutils
+from numba.core import types, cgutils, config
 from numba.core.errors import TypingError, NumbaTypeError, \
     NumbaPerformanceWarning
 from .arrayobj import make_array, _empty_nd_impl, array_copy
@@ -34,21 +34,32 @@ ll_intp_p = intp_t.as_pointer()
 # _lapack.c and is present to accommodate potential future 64bit int
 # based LAPACK use.
 F_INT_nptype = np.int32
-F_INT_nbtype = types.int32
+if config.USE_LEGACY_TYPE_SYSTEM:
+    F_INT_nbtype = types.int32
 
-# BLAS kinds as letters
-_blas_kinds = {
-    types.float32: 's',
-    types.float64: 'd',
-    types.complex64: 'c',
-    types.complex128: 'z',
-}
+    # BLAS kinds as letters
+    _blas_kinds = {
+        types.float32: 's',
+        types.float64: 'd',
+        types.complex64: 'c',
+        types.complex128: 'z',
+    }
+else:
+    F_INT_nbtype = types.np_int32
+
+    # BLAS kinds as letters
+    _blas_kinds = {
+        types.np_float32: 's',
+        types.np_float64: 'd',
+        types.np_complex64: 'c',
+        types.np_complex128: 'z',
+    }
 
 
 def get_blas_kind(dtype, func_name="<BLAS function>"):
     kind = _blas_kinds.get(dtype)
     if kind is None:
-        raise TypeError("unsupported dtype for %s()" % (func_name,))
+        raise NumbaTypeError("unsupported dtype for %s()" % (func_name,))
     return kind
 
 
@@ -523,26 +534,26 @@ def dot_2_vv(context, builder, sig, args, conjugate=False):
 
 
 @overload(np.dot)
-def dot_2(left, right):
+def dot_2(a, b):
     """
     np.dot(a, b)
     """
-    return dot_2_impl('np.dot()', left, right)
+    return dot_2_impl('np.dot()', a, b)
 
 
 @overload(operator.matmul)
-def matmul_2(left, right):
+def matmul_2(a, b):
     """
     a @ b
     """
-    return dot_2_impl("'@'", left, right)
+    return dot_2_impl("'@'", a, b)
 
 
-def dot_2_impl(name, left, right):
-    if isinstance(left, types.Array) and isinstance(right, types.Array):
+def dot_2_impl(name, a, b):
+    if isinstance(a, types.Array) and isinstance(b, types.Array):
         @intrinsic
-        def _impl(typingcontext, left, right):
-            ndims = (left.ndim, right.ndim)
+        def _impl(typingcontext, a, b):
+            ndims = (a.ndim, b.ndim)
 
             def _dot2_codegen(context, builder, sig, args):
                 ensure_blas()
@@ -559,27 +570,27 @@ def dot_2_impl(name, left, right):
                     else:
                         raise AssertionError('unreachable')
 
-            if left.dtype != right.dtype:
+            if a.dtype != b.dtype:
                 raise TypingError(
                     "%s arguments must all have the same dtype" % name)
 
             if ndims == (2, 2):
-                return_type = types.Array(left.dtype, 2, 'C')
+                return_type = types.Array(a.dtype, 2, 'C')
             elif ndims == (2, 1) or ndims == (1, 2):
-                return_type = types.Array(left.dtype, 1, 'C')
+                return_type = types.Array(a.dtype, 1, 'C')
             elif ndims == (1, 1):
-                return_type = left.dtype
+                return_type = a.dtype
             else:
                 raise TypingError(("%s: inputs must have compatible "
                                    "dimensions") % name)
-            return signature(return_type, left, right), _dot2_codegen
+            return signature(return_type, a, b), _dot2_codegen
 
-        if left.layout not in 'CF' or right.layout not in 'CF':
+        if a.layout not in 'CF' or b.layout not in 'CF':
             warnings.warn(
                 "%s is faster on contiguous arrays, called on %s" % (
-                    name, (left, right),), NumbaPerformanceWarning)
+                    name, (a, b),), NumbaPerformanceWarning)
 
-        return lambda left, right: _impl(left, right)
+        return lambda a, b: _impl(a, b)
 
 
 @overload(np.vdot)
@@ -782,14 +793,14 @@ def dot_3_mm(context, builder, sig, args):
 
 
 @overload(np.dot)
-def dot_3(left, right, out):
+def dot_3(a, b, out):
     """
     np.dot(a, b, out)
     """
-    if (isinstance(left, types.Array) and isinstance(right, types.Array) and
+    if (isinstance(a, types.Array) and isinstance(b, types.Array) and
             isinstance(out, types.Array)):
         @intrinsic
-        def _impl(typingcontext, left, right, out):
+        def _impl(typingcontext, a, b, out):
             def codegen(context, builder, sig, args):
                 ensure_blas()
 
@@ -802,22 +813,25 @@ def dot_3(left, right, out):
                         return dot_3_vm(context, builder, sig, args)
                     else:
                         raise AssertionError('unreachable')
-            if left.dtype != right.dtype or left.dtype != out.dtype:
+            if a.dtype != b.dtype or a.dtype != out.dtype:
                 raise TypingError(
                     "np.dot() arguments must all have the same dtype")
 
-            return signature(out, left, right, out), codegen
+            return signature(out, a, b, out), codegen
 
-        if left.layout not in 'CF' or right.layout not in 'CF' or out.layout\
+        if a.layout not in 'CF' or b.layout not in 'CF' or out.layout\
             not in 'CF':
             warnings.warn(
                 "np.vdot() is faster on contiguous arrays, called on %s"
-                % ((left, right),), NumbaPerformanceWarning)
+                % ((a, b),), NumbaPerformanceWarning)
 
-        return lambda left, right, out: _impl(left, right, out)
+        return lambda a, b, out: _impl(a, b, out)
 
 
-fatal_error_func = types.ExternalFunction("numba_fatal_error", types.intc())
+if config.USE_LEGACY_TYPE_SYSTEM:
+    fatal_error_func = types.ExternalFunction("numba_fatal_error", types.intc())
+else:
+    fatal_error_func = types.ExternalFunction("numba_fatal_error", types.c_intp())
 
 
 @register_jitable

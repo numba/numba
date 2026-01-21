@@ -4,8 +4,9 @@ import pickle
 import numpy as np
 
 from numba import void, float32, float64, int32, int64, jit, guvectorize
+from numba.core.errors import TypingError
 from numba.np.ufunc import GUVectorize
-from numba.tests.support import tag, TestCase
+from numba.tests.support import TestCase, MemoryLeakMixin
 
 
 def matmulcore(A, B, C):
@@ -23,7 +24,7 @@ def axpy(a, x, y, out):
     out[0] = a * x  + y
 
 
-class TestGUFunc(TestCase):
+class TestGUFunc(MemoryLeakMixin, TestCase):
     target = 'cpu'
 
     def check_matmul_gufunc(self, gufunc):
@@ -96,7 +97,7 @@ class TestGUFunc(TestCase):
         self.assertEqual("docstring for gufunc", gufunc.__doc__)
 
 
-class TestMultipleOutputs(TestCase):
+class TestMultipleOutputs(MemoryLeakMixin, TestCase):
     target = 'cpu'
 
     def test_multiple_outputs_same_type_passed_in(self):
@@ -170,7 +171,7 @@ class TestGUFuncParallel(TestGUFunc):
     target = 'parallel'
 
 
-class TestDynamicGUFunc(TestCase):
+class TestDynamicGUFunc(MemoryLeakMixin, TestCase):
     target = 'cpu'
 
     def test_dynamic_matmul(self):
@@ -333,7 +334,7 @@ class TestDynamicGUFunc(TestCase):
         self.assertPreciseEqual(x, np.array([2, 4, 3, 4]))
 
 
-class TestGUVectorizeScalar(TestCase):
+class TestGUVectorizeScalar(MemoryLeakMixin, TestCase):
     """
     Nothing keeps user from out-of-bound memory access
     """
@@ -431,7 +432,7 @@ class TestGUVectorizeScalarParallel(TestGUVectorizeScalar):
     target = 'parallel'
 
 
-class TestGUVectorizePickling(TestCase):
+class TestGUVectorizePickling(MemoryLeakMixin, TestCase):
     def test_pickle_gufunc_non_dyanmic(self):
         """Non-dynamic gufunc.
         """
@@ -543,6 +544,326 @@ class TestGUVectorizePickling(TestCase):
         double(arr, out=expect)
         cloned(arr, out=got)
         self.assertPreciseEqual(expect, got)
+
+
+class TestGUVectorizeJit(MemoryLeakMixin, TestCase):
+    target = 'cpu'
+
+    def check_add_gufunc(self, gufunc):
+        @jit(nopython=True)
+        def jit_add(x, y, res):
+            gufunc(x, y, res)
+
+        x = np.arange(40, dtype='i8').reshape(4, 2, 5)
+        y = np.int32(100)
+        res = np.zeros_like(x)
+        jit_add(x, y, res)
+        self.assertPreciseEqual(res, x + y)
+
+    def test_add_static(self):
+        @guvectorize('int64[:], int64, int64[:]', '(n),()->(n)',
+                     target=self.target)
+        def add(x, y, res):
+            for i in range(x.shape[0]):
+                res[i] = x[i] + y
+
+        self.check_add_gufunc(add)
+
+    def test_add_static_cast_args(self):
+        # cast the second argument from i32 -> i64
+        @guvectorize('int64[:], int64, int64[:]', '(n),()->(n)',
+                     target=self.target)
+        def add(x, y, res):
+            for i in range(x.shape[0]):
+                res[i] = x[i] + y
+
+        self.check_add_gufunc(add)
+
+    def test_add_dynamic(self):
+        @guvectorize('(n),()->(n)', target=self.target)
+        def add(x, y, res):
+            for i in range(x.shape[0]):
+                res[i] = x[i] + y
+
+        self.check_add_gufunc(add)
+
+    @unittest.expectedFailure
+    def test_object_mode(self):
+        @guvectorize('(n),()->(n)', target=self.target, forceobj=True)
+        def add(x, y, res):
+            for i in range(x.shape[0]):
+                res[i] = x[i] + y
+
+        self.check_add_gufunc(add)
+
+    def check_matmul(self, jit_func):
+        matrix_ct = 1001
+        A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2, 4)
+        B = np.arange(matrix_ct * 4 * 5, dtype=np.float32).reshape(matrix_ct, 4, 5)
+        C = np.arange(matrix_ct * 2 * 5, dtype=np.float32).reshape(matrix_ct, 2, 5)
+
+        jit_func(A, B, C)
+        Gold = np.matmul(A, B)
+
+        np.testing.assert_allclose(C, Gold, rtol=1e-5, atol=1e-8)
+
+    def test_njit_matmul_call(self):
+
+        gufunc = guvectorize('(m,n),(n,p)->(m,p)',
+                             target=self.target)(matmulcore)
+
+        @jit(nopython=True)
+        def matmul_jit(A, B, C):
+            return gufunc(A, B, C)
+
+        self.check_matmul(matmul_jit)
+
+    def test_axpy(self):
+        gufunc = GUVectorize(axpy, '(),(),() -> ()', target=self.target,
+                             is_dynamic=True)
+
+        @jit(nopython=True)
+        def axpy_jit(a, x, y, out):
+            gufunc(a, x, y, out)
+
+        x = np.arange(10, dtype=np.intp)
+        out = np.zeros_like(x)
+        axpy_jit(x, x, x, out)
+        self.assertPreciseEqual(out, x * x + x)
+
+    def test_output_scalar(self):
+
+        @guvectorize('(n),(m) -> ()')
+        def gufunc(x, y, res):
+            res[0] = x.sum() + y.sum()
+
+        @jit(nopython=True)
+        def jit_func(x, y, res):
+            gufunc(x, y, res)
+
+        x = np.arange(40, dtype='i8').reshape(4, 10)
+        y = np.arange(20, dtype='i8')
+        res = np.zeros(4, dtype='i8')
+        jit_func(x, y, res)
+        expected = np.zeros_like(res)
+        gufunc(x, y, expected)
+        self.assertPreciseEqual(res, expected)
+
+    def test_input_scalar(self):
+
+        @guvectorize('() -> ()')
+        def gufunc(x, res):
+            res[0] = x + 100
+
+        @jit(nopython=True)
+        def jit_func(x, res):
+            gufunc(x, res)
+
+        x = np.arange(40, dtype='i8').reshape(5, 2, 4)
+        res = np.zeros_like(x)
+        jit_func(x, res)
+        expected = np.zeros_like(res)
+        gufunc(x, expected)
+        self.assertPreciseEqual(res, expected)
+
+    def test_gufunc_ndim_mismatch(self):
+        signature = "(n, m), (n, n, n) -> (m), (n, n)"
+        @guvectorize(signature)
+        def bar(x, y, res, out):
+            res[0] = 123
+            out[0] = 456
+
+        @jit(nopython=True)
+        def foo(x, y, res, out):
+            bar(x, y, res, out)
+
+        N, M = 2, 3
+        x = np.arange(N**2).reshape(N, N)
+        y = np.arange(N**3).reshape(N, N, N)
+        res = np.arange(M)
+        out = np.arange(N**2).reshape(N, N)
+
+        # calling with a 1d array should result in an error
+        with self.assertRaises(TypingError) as raises:
+            x_ = np.arange(N * N)
+            foo(x_, y, res, out)
+        msg = ('bar: Input operand 0 does not have enough dimensions (has '
+               f'1, gufunc core with signature {signature} requires 2)')
+        self.assertIn(msg, str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            y_ = np.arange(N * N).reshape(N, N)
+            foo(x, y_, res, out)
+        msg = ('bar: Input operand 1 does not have enough dimensions (has '
+               f'2, gufunc core with signature {signature} requires 3)')
+        self.assertIn(msg, str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            res_ = np.array(3)
+            foo(x, y, res_, out)
+        msg = ('bar: Output operand 0 does not have enough dimensions (has '
+               f'0, gufunc core with signature {signature} requires 1)')
+        self.assertIn(msg, str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            out_ = np.arange(N)
+            foo(x, y, res, out_)
+        msg = ('bar: Output operand 1 does not have enough dimensions (has '
+               f'1, gufunc core with signature {signature} requires 2)')
+        self.assertIn(msg, str(raises.exception))
+
+    def test_mismatch_inner_dimensions(self):
+        @guvectorize('(n),(n) -> ()')
+        def bar(x, y, res):
+            res[0] = 123
+
+        @jit(nopython=True)
+        def foo(x, y, res):
+            bar(x, y, res)
+
+        N = 2
+        M = 3
+        x = np.empty((5, 3, N))
+        y = np.empty((M,))
+        res = np.zeros((5, 3))
+
+        # ensure that NumPy raises an exception
+        with self.assertRaises(ValueError) as np_raises:
+            bar(x, y, res)
+        msg = ('Input operand 1 has a mismatch in its core dimension 0, with '
+               'gufunc signature (n),(n) -> () (size 3 is different from 2)')
+        self.assertIn(msg, str(np_raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            foo(x, y, res)
+        msg = ('Operand has a mismatch in one of its core dimensions')
+        self.assertIn(msg, str(raises.exception))
+
+    def test_mismatch_inner_dimensions_input_output(self):
+        @guvectorize('(n),(m) -> (n)')
+        def bar(x, y, res):
+            res[0] = 123
+
+        @jit(nopython=True)
+        def foo(x, y, res):
+            bar(x, y, res)
+
+        N = 2
+        M = 3
+        x = np.empty((5, 3, N))
+        y = np.empty((M,))
+        res = np.zeros((5, 3))
+
+        # ensure that NumPy raises an exception
+        with self.assertRaises(ValueError) as np_raises:
+            bar(x, y, res)
+        msg = ('Output operand 0 has a mismatch in its core dimension 0, with '
+               'gufunc signature (n),(m) -> (n) (size 3 is different from 2)')
+        self.assertIn(msg, str(np_raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            foo(x, y, res)
+        msg = ('Operand has a mismatch in one of its core dimensions')
+        self.assertIn(msg, str(raises.exception))
+
+    def test_mismatch_inner_dimensions_output(self):
+        @guvectorize('(n),(m) -> (m),(m)')
+        def bar(x, y, res, out):
+            res[0] = 123
+            out[0] = 456
+
+        @jit(nopython=True)
+        def foo(x, y, res, out):
+            bar(x, y, res, out)
+
+        N = 2
+        M = 3
+        x = np.empty((N,))
+        y = np.empty((M,))
+        res = np.zeros((N,))
+        out = np.zeros((M,))
+
+        # ensure that NumPy raises an exception
+        with self.assertRaises(ValueError) as np_raises:
+            bar(x, y, res, out)
+        msg = ('Output operand 0 has a mismatch in its core dimension 0, with '
+               'gufunc signature (n),(m) -> (m),(m) (size 2 is different from 3)')
+        self.assertIn(msg, str(np_raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            foo(x, y, res, out)
+        msg = ('Operand has a mismatch in one of its core dimensions')
+        self.assertIn(msg, str(raises.exception))
+
+    def test_mismatch_loop_shape(self):
+        @guvectorize('(n),(n) -> ()')
+        def bar(x, y, res):
+            res[0] = 123
+
+        @jit(nopython=True)
+        def foo(x, y, res):
+            bar(x, y, res)
+
+        N = 2
+        x = np.empty((1, 5, 3, N,))
+        y = np.empty((5, 3, N,))
+        res = np.zeros((5, 3))
+
+        with self.assertRaises(ValueError) as raises:
+            foo(x, y, res)
+        msg = ('Loop and array shapes are incompatible')
+        self.assertIn(msg, str(raises.exception))
+
+    def test_mismatch_loop_shape_2(self):
+        @guvectorize('(n),(n) -> (), (n)')
+        def gufunc(x, y, res, out):
+            res[0] = x.sum()
+            for i in range(x.shape[0]):
+                out[i] += x[i] + y.sum()
+
+        @jit
+        def jit_func(x, y, res, out):
+            gufunc(x, y, res, out)
+
+        N = 2
+
+        x = np.arange(4*N).reshape((4, N))
+        y = np.arange(N)
+        res = np.empty((3,))
+        out = np.zeros((3, N))
+
+        # ensure that NumPy raises an exception
+        with self.assertRaises(ValueError) as np_raises:
+            gufunc(x, y, res, out)
+        msg = ('operands could not be broadcast together with remapped shapes '
+               '[original->remapped]: (4,2)->(4,newaxis) (2,)->() '
+               '(3,)->(3,newaxis) (3,2)->(3,2)  and requested shape (2)')
+        self.assertIn(msg, str(np_raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            jit_func(x, y, res, out)
+        msg = ('Loop and array shapes are incompatible')
+        self.assertIn(msg, str(raises.exception))
+
+    def test_issue_10287(self):
+        @guvectorize([(float64[:], int64, float64[:])], "(n),()->(n)")
+        def guve(x, n, res):
+            pass
+
+
+        @jit
+        def njit_guve(x, n):
+            res = np.zeros_like(x)
+            guve(x, n, res)
+            return res
+
+
+        rng = np.random.default_rng(69)
+
+        for _ in range(20000):
+            x = rng.random(65)
+            y = np.repeat(x[None], 130, axis=0)
+            njit_guve(y, 5)
 
 
 if __name__ == '__main__':

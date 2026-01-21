@@ -99,7 +99,49 @@ skip_unless_py10 = unittest.skipUnless(
     "needs Python 3.10"
 )
 
+skip_unless_py312 = unittest.skipUnless(
+    utils.PYVERSION == (3, 12),
+    "needs Python 3.12"
+)
+
+skip_if_py313plus_on_windows = unittest.skipIf(
+     utils.PYVERSION >= (3, 13) and sys.platform.startswith('win'),
+     "Not supported on Python 3.13+ on Windows"
+ )
+
+skip_if_py314= unittest.skipIf(
+     utils.PYVERSION == (3, 14), "Test unstable on 3.14"
+ )
+
+skip_if_linux_aarch64 = unittest.skipIf(
+    sys.platform.startswith('linux') and platform.machine() == 'aarch64',
+    "Not supported on Linux aarch64"
+)
+
 skip_if_32bit = unittest.skipIf(_32bit, "Not supported on 32 bit")
+
+IS_NUMPY_2 = numpy_support.numpy_version >= (2, 0)
+skip_if_numpy_2 = unittest.skipIf(IS_NUMPY_2,
+                                  "Not supported on numpy 2.0+")
+
+REDUCED_TESTING = bool(int(os.environ.get('_NUMBA_REDUCED_TESTING', 0)))
+"""
+Set to truthy to reduce the amount of testing. This can reduce memory use by
+tests on resource-limited machines.
+"""
+
+skip_if_reduced_testing = unittest.skipIf(REDUCED_TESTING,
+                                          "Skipped for reduced testing")
+
+
+_free_threading = not getattr(sys, "_is_gil_enabled", lambda: True)()
+
+
+skip_if_freethreading = unittest.skipIf(_free_threading,
+                                        ("Skipped [NOT APPLICABLE] if using a "
+                                         "free-threading build and "
+                                         "free-threading is enabled."))
+
 
 def expected_failure_py311(fn):
     if utils.PYVERSION == (3, 11):
@@ -107,8 +149,29 @@ def expected_failure_py311(fn):
     else:
         return fn
 
+
 def expected_failure_py312(fn):
     if utils.PYVERSION == (3, 12):
+        return unittest.expectedFailure(fn)
+    else:
+        return fn
+
+
+def expected_failure_py313(fn):
+    if utils.PYVERSION == (3, 13):
+        return unittest.expectedFailure(fn)
+    else:
+        return fn
+
+def expected_failure_py314(fn):
+    if utils.PYVERSION == (3, 14):
+        return unittest.expectedFailure(fn)
+    else:
+        return fn
+
+
+def expected_failure_np2(fn):
+    if numpy_support.numpy_version == (2, 0):
         return unittest.expectedFailure(fn)
     else:
         return fn
@@ -150,12 +213,21 @@ skip_ppc64le_issue6465 = unittest.skipIf(platform.machine() == 'ppc64le',
                                           "parameter area' in "
                                           "LowerCall_64SVR4"))
 
+# LLVM PPC issue.
+# Sample error message:
+#   Invalid PPC CTR loop!
+#   UNREACHABLE executed at /llvm/lib/Target/PowerPC/PPCCTRLoops.cpp:179!
+skip_ppc64le_invalid_ctr_loop = unittest.skipIf(
+    platform.machine() == 'ppc64le',
+    "Invalid PPC CTR loop")
+
 # fenv.h on M1 may have various issues:
 # https://github.com/numba/numba/issues/7822#issuecomment-1065356758
 _uname = platform.uname()
-IS_OSX_ARM64 = _uname.system == 'Darwin' and _uname.machine == 'arm64'
-skip_m1_fenv_errors = unittest.skipIf(IS_OSX_ARM64,
-    "fenv.h-like functionality unreliable on OSX arm64")
+IS_MACOS = _uname.system == 'Darwin'
+skip_macos_fenv_errors = unittest.skipIf(IS_MACOS,
+    "fenv.h-like functionality unreliable on macOS")
+IS_MACOS_ARM64 = IS_MACOS and _uname.machine == 'arm64'
 
 try:
     import scipy.linalg.cython_lapack
@@ -185,7 +257,8 @@ needs_subprocess = unittest.skipUnless(_exec_cond, "needs subprocess harness")
 try:
     import setuptools
     has_setuptools = True
-except ImportError:
+except (ImportError, OSError):
+    # Suppress error caused by https://github.com/python/cpython/issues/118234
     has_setuptools = False
 
 
@@ -247,8 +320,14 @@ class TestCase(unittest.TestCase):
         same reference counts before and after executing the
         enclosed block.
         """
+        # Collect before counting references. Note that in free-threading builds
+        # there are some object types that are only collected during garbage
+        # collection e.g. classes and code objects.
+        gc.collect()
         old_refcounts = [sys.getrefcount(x) for x in objects]
+        # Yield to test code
         yield
+        # Collect again before counting references.
         gc.collect()
         new_refcounts = [sys.getrefcount(x) for x in objects]
         for old, new, obj in zip(old_refcounts, new_refcounts, objects):
@@ -549,7 +628,8 @@ class TestCase(unittest.TestCase):
             _assertNumberEqual(first, second, delta)
 
     def subprocess_test_runner(self, test_module, test_class=None,
-                               test_name=None, envvars=None, timeout=60):
+                               test_name=None, envvars=None, timeout=60,
+                               flags=None, _subproc_test_env="1"):
         """
         Runs named unit test(s) as specified in the arguments as:
         test_module.test_class.test_name. test_module must always be supplied
@@ -558,9 +638,12 @@ class TestCase(unittest.TestCase):
         subprocess with environment variables specified in `envvars`.
         If given, envvars must be a map of form:
             environment variable name (str) -> value (str)
+        If given, flags must be a map of form:
+            flag including the `-` (str) -> value (str)
         It is most convenient to use this method in conjunction with
         @needs_subprocess as the decorator will cause the decorated test to be
-        skipped unless the `SUBPROC_TEST` environment variable is set to 1
+        skipped unless the `SUBPROC_TEST` environment variable is set to
+        the same value of ``_subproc_test_env``
         (this special environment variable is set by this method such that the
         specified test(s) will not be skipped in the subprocess).
 
@@ -573,9 +656,15 @@ class TestCase(unittest.TestCase):
         thecls = type(self).__name__
         parts = (test_module, test_class, test_name)
         fully_qualified_test = '.'.join(x for x in parts if x is not None)
-        cmd = [sys.executable, '-m', 'numba.runtests', fully_qualified_test]
+        flags_args = []
+        if flags is not None:
+            for flag, value in flags.items():
+                flags_args.append(f'{flag}')
+                flags_args.append(f'{value}')
+        cmd = [sys.executable, *flags_args, '-m', 'numba.runtests',
+               fully_qualified_test]
         env_copy = os.environ.copy()
-        env_copy['SUBPROC_TEST'] = '1'
+        env_copy['SUBPROC_TEST'] = _subproc_test_env
         try:
             env_copy['COVERAGE_PROCESS_START'] = os.environ['COVERAGE_RCFILE']
         except KeyError:
@@ -594,6 +683,7 @@ class TestCase(unittest.TestCase):
             self.skipTest(no_tests_ran)
         else:
             self.assertIn('OK', status.stderr)
+        return status
 
     def run_test_in_subprocess(maybefunc=None, timeout=60, envvars=None):
         """Runs the decorated test in a subprocess via invoking numba's test
@@ -601,15 +691,18 @@ class TestCase(unittest.TestCase):
         subprocess_test_runner."""
         def wrapper(func):
             def inner(self, *args, **kwargs):
-                if os.environ.get("SUBPROC_TEST", None) != "1":
+                if os.environ.get("SUBPROC_TEST", None) != func.__name__:
                     # Not in a subprocess test env, so stage the call to run the
                     # test in a subprocess which will set the env var.
                     class_name = self.__class__.__name__
-                    self.subprocess_test_runner(test_module=self.__module__,
-                                                test_class=class_name,
-                                                test_name=func.__name__,
-                                                timeout=timeout,
-                                                envvars=envvars,)
+                    self.subprocess_test_runner(
+                        test_module=self.__module__,
+                        test_class=class_name,
+                        test_name=func.__name__,
+                        timeout=timeout,
+                        envvars=envvars,
+                        _subproc_test_env=func.__name__,
+                    )
                 else:
                     # env var is set, so we're in the subprocess, run the
                     # actual test.
@@ -933,6 +1026,13 @@ def redirect_c_stdout():
     """Redirect C stdout
     """
     fd = sys.__stdout__.fileno()
+    return redirect_fd(fd)
+
+
+def redirect_c_stderr():
+    """Redirect C stderr
+    """
+    fd = sys.__stderr__.fileno()
     return redirect_fd(fd)
 
 

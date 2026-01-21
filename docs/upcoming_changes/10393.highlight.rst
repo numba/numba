@@ -1,0 +1,9 @@
+Support for NumPy 2.4
+---------------------
+
+Numba now supports NumPy 2.4, with the following notable changes:
+
+- ``np.trapz`` has been removed in NumPy 2.4. Use ``np.trapezoid`` instead
+  (available since NumPy 2.0).
+
+- ``np.in1d`` has been removed in NumPy 2.4. Use ``np.isin`` instead.

@@ -167,23 +167,6 @@ class ConstraintNetwork(object):
                         highlighting=False,
                     )
                     errors.append(utils.chain_exception(new_exc, e))
-                except Exception as e:
-                    if utils.use_old_style_errors():
-                        _logger.debug("captured error", exc_info=e)
-                        msg = ("Internal error at {con}.\n{err}\n"
-                               "Enable logging at debug level for details.")
-                        new_exc = TypingError(
-                            msg.format(con=constraint, err=str(e)),
-                            loc=constraint.loc,
-                            highlighting=False,
-                        )
-                        errors.append(utils.chain_exception(new_exc, e))
-                    elif utils.use_new_style_errors():
-                        raise e
-                    else:
-                        msg = ("Unknown CAPTURED_ERRORS style: "
-                               f"'{config.CAPTURED_ERRORS}'.")
-                        assert 0, msg
 
         return errors
 
@@ -199,7 +182,7 @@ class Propagate(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        with new_error_context("typing of assignment at {0}", self.loc,
+        with new_error_context("typing of assignment at {loc}",
                                loc=self.loc):
             typeinfer.copy_type(self.src, self.dst, loc=self.loc)
             # If `dst` is refined, notify us
@@ -220,7 +203,7 @@ class ArgConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        with new_error_context("typing of argument at {0}", self.loc):
+        with new_error_context("typing of argument at {loc}", loc=self.loc):
             typevars = typeinfer.typevars
             src = typevars[self.src]
             if not src.defined:
@@ -242,7 +225,7 @@ class BuildTupleConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        with new_error_context("typing of tuple at {0}", self.loc):
+        with new_error_context("typing of tuple at {loc}", loc=self.loc):
             typevars = typeinfer.typevars
             tsets = [typevars[i.name].get() for i in self.items]
             for vals in itertools.product(*tsets):
@@ -263,8 +246,9 @@ class _BuildContainerConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        with new_error_context("typing of {0} at {1}",
-                               self.container_type, self.loc):
+        with new_error_context("typing of {container_type} at {loc}",
+                               container_type=self.container_type,
+                               loc=self.loc):
             typevars = typeinfer.typevars
             tsets = [typevars[i.name].get() for i in self.items]
             if not tsets:
@@ -288,8 +272,8 @@ class BuildListConstraint(_BuildContainerConstraint):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        with new_error_context("typing of {0} at {1}",
-                               types.List, self.loc):
+        with new_error_context("typing of {container_type} at {loc}",
+                               container_type=types.List, loc=self.loc):
             typevars = typeinfer.typevars
             tsets = [typevars[i.name].get() for i in self.items]
             if not tsets:
@@ -330,7 +314,7 @@ class BuildMapConstraint(object):
 
     def __call__(self, typeinfer):
 
-        with new_error_context("typing of dict at {0}", self.loc):
+        with new_error_context("typing of dict at {loc}", loc=self.loc):
             typevars = typeinfer.typevars
 
             # figure out what sort of dict is being dealt with
@@ -396,7 +380,8 @@ class ExhaustIterConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        with new_error_context("typing of exhaust iter at {0}", self.loc):
+        with new_error_context("typing of exhaust iter at {loc}",
+                               loc=self.loc):
             typevars = typeinfer.typevars
             for tp in typevars[self.iterator.name].get():
                 # unpack optional
@@ -428,7 +413,8 @@ class PairFirstConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        with new_error_context("typing of pair-first at {0}", self.loc):
+        with new_error_context("typing of pair-first at {loc}",
+                               loc=self.loc):
             typevars = typeinfer.typevars
             for tp in typevars[self.pair.name].get():
                 if not isinstance(tp, types.Pair):
@@ -446,7 +432,8 @@ class PairSecondConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        with new_error_context("typing of pair-second at {0}", self.loc):
+        with new_error_context("typing of pair-second at {loc}",
+                               loc=self.loc):
             typevars = typeinfer.typevars
             for tp in typevars[self.pair.name].get():
                 if not isinstance(tp, types.Pair):
@@ -470,7 +457,8 @@ class StaticGetItemConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        with new_error_context("typing of static-get-item at {0}", self.loc):
+        with new_error_context("typing of static-get-item at {loc}",
+                               loc=self.loc):
             typevars = typeinfer.typevars
             for ty in typevars[self.value.name].get():
                 sig = typeinfer.context.resolve_static_getitem(
@@ -499,7 +487,8 @@ class TypedGetItemConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        with new_error_context("typing of typed-get-item at {0}", self.loc):
+        with new_error_context("typing of typed-get-item at {loc}",
+                               loc=self.loc):
             typevars = typeinfer.typevars
             idx_ty = typevars[self.index.name].get()
             ty = typevars[self.value.name].get()
@@ -535,14 +524,14 @@ def fold_arg_vars(typevars, args, vararg, kws):
             const_val = args[-1].literal_value
             # Is the constant value a tuple?
             if not isinstance(const_val, tuple):
-                raise TypeError(errmsg % (args[-1],))
+                raise TypingError(errmsg % (args[-1],))
             # Append the elements in the const tuple to the positional args
             pos_args += const_val
         # Handle non-constant
         elif not isinstance(args[-1], types.BaseTuple):
             # Unsuitable for *args
             # (Python is more lenient and accepts all iterables)
-            raise TypeError(errmsg % (args[-1],))
+            raise TypingError(errmsg % (args[-1],))
         else:
             # Append the elements in the tuple to the positional args
             pos_args += args[-1].types
@@ -573,13 +562,13 @@ class CallConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        msg = "typing of call at {0}\n".format(self.loc)
-        with new_error_context(msg):
+        with new_error_context("typing of call at {loc}", loc=self.loc):
             typevars = typeinfer.typevars
             with new_error_context(
-                    "resolving caller type: {}".format(self.func)):
+                    "resolving caller type: {func}", func=self.func):
                 fnty = typevars[self.func].getone()
-            with new_error_context("resolving callee type: {0}", fnty):
+            with new_error_context("resolving callee type: {fnty}",
+                                   fnty=fnty):
                 self.resolve(typeinfer, typevars, fnty)
 
     def resolve(self, typeinfer, typevars, fnty):
@@ -702,7 +691,8 @@ class CallConstraint(object):
 
 class IntrinsicCallConstraint(CallConstraint):
     def __call__(self, typeinfer):
-        with new_error_context("typing of intrinsic-call at {0}", self.loc):
+        with new_error_context("typing of intrinsic-call at {loc}",
+                               loc=self.loc):
             fnty = self.func
             if fnty in utils.OPERATORS_TO_BUILTINS:
                 fnty = typeinfer.resolve_value_type(None, fnty)
@@ -718,7 +708,8 @@ class GetAttrConstraint(object):
         self.inst = inst
 
     def __call__(self, typeinfer):
-        with new_error_context("typing of get attribute at {0}", self.loc):
+        with new_error_context("typing of get attribute at {loc}",
+                               loc=self.loc):
             typevars = typeinfer.typevars
             valtys = typevars[self.value.name].get()
             for ty in valtys:
@@ -779,7 +770,7 @@ class SetItemConstraint(SetItemRefinement):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        with new_error_context("typing of setitem at {0}", self.loc):
+        with new_error_context("typing of setitem at {loc}", loc=self.loc):
             typevars = typeinfer.typevars
             if not all(typevars[var.name].defined
                        for var in (self.target, self.index, self.value)):
@@ -809,7 +800,8 @@ class StaticSetItemConstraint(SetItemRefinement):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        with new_error_context("typing of staticsetitem at {0}", self.loc):
+        with new_error_context("typing of staticsetitem at {loc}",
+                               loc=self.loc):
             typevars = typeinfer.typevars
             if not all(typevars[var.name].defined
                        for var in (self.target, self.index_var, self.value)):
@@ -839,7 +831,7 @@ class DelItemConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        with new_error_context("typing of delitem at {0}", self.loc):
+        with new_error_context("typing of delitem at {loc}", loc=self.loc):
             typevars = typeinfer.typevars
             if not all(typevars[var.name].defined
                        for var in (self.target, self.index)):
@@ -865,8 +857,8 @@ class SetAttrConstraint(object):
         self.loc = loc
 
     def __call__(self, typeinfer):
-        with new_error_context("typing of set attribute {0!r} at {1}",
-                               self.attr, self.loc):
+        with new_error_context("typing of set attribute {attr!r} at {loc}",
+                               attr=self.attr, loc=self.loc):
             typevars = typeinfer.typevars
             if not all(typevars[var.name].defined
                        for var in (self.target, self.value)):

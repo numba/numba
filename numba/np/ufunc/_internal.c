@@ -34,9 +34,9 @@ cleaner_dealloc(PyUFuncCleaner *self)
     if (ufunc->functions)
         PyArray_free(ufunc->functions);
     if (ufunc->types)
-        PyArray_free(ufunc->types);
+        PyArray_free((void *)ufunc->types);
     if (ufunc->data)
-        PyArray_free(ufunc->data);
+        PyArray_free((void *)ufunc->data);
     PyObject_Del(self);
 }
 
@@ -90,17 +90,23 @@ PyTypeObject PyUFuncCleaner_Type = {
     0,                                          /* tp_version_tag */
     0,                                          /* tp_finalize */
     0,                                          /* tp_vectorcall */
-#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 12)
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION >= 12)
 /* This was introduced first in 3.12
  * https://github.com/python/cpython/issues/91051
  */
     0,                                           /* tp_watched */
 #endif
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION >= 13)
+/* This was introduced in 3.13
+ * https://github.com/python/cpython/pull/114900
+ */
+    0,                                           /* tp_versions_used */
+#endif
 
 /* WARNING: Do not remove this, only modify it! It is a version guard to
  * act as a reminder to update this struct on Python version update! */
 #if (PY_MAJOR_VERSION == 3)
-#if ! ((PY_MINOR_VERSION == 9) || (PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11) || (PY_MINOR_VERSION == 12))
+#if ! (NB_SUPPORTED_PYTHON_MINOR)
 #error "Python minor version is not supported."
 #endif
 #else
@@ -496,7 +502,6 @@ dufunc__add_loop(PyDUFuncObject * self, PyObject * args)
     int idx=-1, usertype=NPY_VOID;
     int *arg_types_arr=NULL;
     PyObject *arg_types=NULL, *loop_obj=NULL, *data_obj=NULL;
-    PyUFuncGenericFunction old_func=NULL;
 
     if (self->frozen) {
         PyErr_SetString(PyExc_ValueError,
@@ -544,16 +549,6 @@ dufunc__add_loop(PyDUFuncObject * self, PyObject * args)
                                         (PyUFuncGenericFunction)loop_ptr,
                                         arg_types_arr, data_ptr) < 0) {
             goto _dufunc__add_loop_fail;
-        }
-    } else if (PyUFunc_ReplaceLoopBySignature(ufunc,
-                                              (PyUFuncGenericFunction)loop_ptr,
-                                              arg_types_arr, &old_func) == 0) {
-        /* TODO: Consider freeing any memory held by the old loop (somehow) */
-        for (idx = 0; idx < ufunc->ntypes; idx++) {
-            if (ufunc->functions[idx] == (PyUFuncGenericFunction)loop_ptr) {
-                ufunc->data[idx] = data_ptr;
-                break;
-            }
         }
     } else {
         /* The following is an attempt to loosely follow the allocation
@@ -754,17 +749,23 @@ PyTypeObject PyDUFunc_Type = {
     0,                                          /* tp_version_tag */
     0,                                          /* tp_finalize */
     0,                                          /* tp_vectorcall */
-#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 12)
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION >= 12)
 /* This was introduced first in 3.12
  * https://github.com/python/cpython/issues/91051
  */
     0,                                           /* tp_watched */
 #endif
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION >= 13)
+/* This was introduced in 3.13
+ * https://github.com/python/cpython/pull/114900
+ */
+    0,                                           /* tp_versions_used */
+#endif
 
 /* WARNING: Do not remove this, only modify it! It is a version guard to
  * act as a reminder to update this struct on Python version update! */
 #if (PY_MAJOR_VERSION == 3)
-#if ! ((PY_MINOR_VERSION == 9) || (PY_MINOR_VERSION == 10) || (PY_MINOR_VERSION == 11) || (PY_MINOR_VERSION == 12))
+#if ! (NB_SUPPORTED_PYTHON_MINOR)
 #error "Python minor version is not supported."
 #endif
 #else

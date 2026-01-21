@@ -4,6 +4,8 @@
 Numba for CUDA GPUs
 ===================
 
+.. cuda-deprecated::
+
 .. toctree::
 
    overview.rst

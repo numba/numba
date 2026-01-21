@@ -655,7 +655,7 @@ class _NumbaTypeHelper(object):
     def __enter__(self):
         c = self.c
         numba_name = c.context.insert_const_string(c.builder.module, 'numba')
-        numba_mod = c.pyapi.import_module_noblock(numba_name)
+        numba_mod = c.pyapi.import_module(numba_name)
         typeof_fn = c.pyapi.object_getattr_string(numba_mod, 'typeof')
         self.typeof_fn = typeof_fn
         c.pyapi.decref(numba_mod)
@@ -1196,7 +1196,7 @@ def unbox_numpy_random_bitgenerator(typ, obj, c):
         interface_state = object_getattr_safely(ctypes_binding, 'state')
         with cgutils.early_exit_if_null(c.builder, stack, interface_state):
             handle_failure()
-    
+
         interface_state_value = object_getattr_safely(
             interface_state, 'value')
         with cgutils.early_exit_if_null(c.builder, stack, interface_state_value):
@@ -1213,7 +1213,7 @@ def unbox_numpy_random_bitgenerator(typ, obj, c):
         # store the results.
         # First find ctypes.cast, and ctypes.c_void_p
         ctypes_name = c.context.insert_const_string(c.builder.module, 'ctypes')
-        ctypes_module = c.pyapi.import_module_noblock(ctypes_name)
+        ctypes_module = c.pyapi.import_module(ctypes_name)
         extra_refs.append(ctypes_module)
         with cgutils.early_exit_if_null(c.builder, stack, ctypes_module):
             handle_failure()
@@ -1241,9 +1241,11 @@ def unbox_numpy_random_bitgenerator(typ, obj, c):
             args = c.pyapi.tuple_pack([interface_next_fn, ct_voidptr_ty])
             with cgutils.early_exit_if_null(c.builder, stack, args):
                 handle_failure()
+            extra_refs.append(args)
 
             # Call ctypes.cast()
             interface_next_fn_casted = c.pyapi.call(ct_cast, args)
+            extra_refs.append(interface_next_fn_casted)
 
             # Fetch the .value attr on the resulting ctypes.c_void_p for storage
             # in the function pointer slot.
@@ -1277,7 +1279,7 @@ def unbox_numpy_random_generator(typ, obj, c):
     * ('meminfo', types.MemInfoPointer(types.voidptr)): The information about the memory
         stored at the pointer (to the original Generator PyObject). This is useful for
         keeping track of reference counts within the Python runtime. Helps prevent cases
-        where deletion happens in Python runtime without NRT being awareness of it. 
+        where deletion happens in Python runtime without NRT being awareness of it.
     """
     is_error_ptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
 

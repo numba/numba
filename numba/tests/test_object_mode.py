@@ -6,8 +6,9 @@ Testing object mode specifics.
 import numpy as np
 
 import unittest
-from numba import jit
+from numba import jit, types
 from numba.core import utils
+from numba.core.utils import PYVERSION
 from numba.tests.support import TestCase
 
 
@@ -88,7 +89,16 @@ class TestObjectMode(TestCase):
         with self.assertRaises(TypeError) as raises:
             foo(None, None)
 
-        self.assertIn("is not iterable", str(raises.exception))
+        # This tests 'None in None' with the python interpreter. The error
+        # message has changed in 3.14.
+        if PYVERSION in ((3, 14), ):
+            expected_snippet = "is not a container or iterable"
+        elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+            expected_snippet = "is not iterable"
+        else:
+            raise NotImplementedError(PYVERSION)
+
+        self.assertIn(expected_snippet, str(raises.exception))
 
     def test_delitem(self):
         pyfunc = delitem_usecase
@@ -185,6 +195,19 @@ class TestObjectModeInvalidRewrite(TestCase):
         func = loc_vars['func']
         jitted = jit(forceobj=True)(func)
         jitted()
+
+    def test_issue_9725_label_renaming(self):
+        # Test issue https://github.com/numba/numba/issues/9725
+        # this should compile via fallback
+        @jit(forceobj=True)
+        def f():
+            for _ in (): # cannot lift this loop as a nopython loop
+                [0 for k in (None,)]
+        f()
+        self._ensure_objmode(f)
+        lifted = f.overloads[f.signatures[0]].lifted[0]
+        self.assertFalse(lifted.nopython_signatures)
+        self.assertEqual(lifted.signatures, [(types.Tuple(()),)])
 
 
 if __name__ == '__main__':

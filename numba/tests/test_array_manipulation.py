@@ -174,6 +174,9 @@ def numpy_fill_diagonal(arr, val, wrap=False):
 def numpy_shape(arr):
     return np.shape(arr)
 
+def numpy_size(arr):
+    return np.size(arr)
+
 
 def numpy_flatnonzero(a):
     return np.flatnonzero(a)
@@ -561,6 +564,19 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
     def test_as_strided(self):
         self.check_as_strided(as_strided1)
         self.check_as_strided(as_strided2)
+
+    def test_as_strided_stride_none(self):
+
+        @jit
+        def foo():
+            arr = np.arange(24).reshape((6, 4))
+            return np.lib.stride_tricks.as_strided(arr, strides=None)
+
+        with self.assertRaises(errors.TypingError) as raises:
+            foo()
+
+        msg = "strides argument cannot be None"
+        self.assertIn(msg, str(raises.exception))
 
     def test_sliding_window_view(self):
         def check(arr, window_shape, axis):
@@ -1217,6 +1233,30 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             cfunc('a')
 
         self.assertIn("The argument to np.shape must be array-like",
+                      str(raises.exception))
+
+    def test_size(self):
+        pyfunc = numpy_size
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(x):
+            expected = pyfunc(x)
+            got = cfunc(x)
+            self.assertPreciseEqual(got, expected)
+
+        # check arrays
+        for t in [(), (1,), (2, 3,), (4, 5, 6)]:
+            arr = np.empty(t)
+            check(arr)
+
+        # check scalar values
+        for t in [1, False, 3.14, np.int8(4), np.float32(2.718)]:
+            check(t)
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc('a')
+
+        self.assertIn("The argument to np.size must be array-like",
                       str(raises.exception))
 
     def test_flatnonzero_basic(self):

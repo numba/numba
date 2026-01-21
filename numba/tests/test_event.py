@@ -6,6 +6,7 @@ import numpy as np
 from numba import njit, jit, literal_unroll
 from numba.core import event as ev
 from numba.tests.support import TestCase, override_config
+from numba.core.utils import _lazy_pformat
 
 
 class TestEvent(TestCase):
@@ -69,7 +70,7 @@ class TestEvent(TestCase):
             self.assertIsInstance(data['name'], str)
             self.assertIsInstance(data['qualname'], str)
             self.assertIsInstance(data['module'], str)
-            self.assertIsInstance(data['flags'], str)
+            self.assertIsInstance(data['flags'], _lazy_pformat)
             self.assertIsInstance(data['args'], str)
             self.assertIsInstance(data['return_type'], str)
 

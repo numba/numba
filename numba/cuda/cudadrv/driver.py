@@ -365,6 +365,10 @@ class Driver(object):
         else:
             variants = ('_v2', '')
 
+        # workaround from https://github.com/NVIDIA/numba-cuda/commit/6e08c9d08e9de59c7af28b720289debbbd384764  # noqa: E501
+        if fname in ("cuCtxGetDevice", "cuCtxSynchronize"):
+            return getattr(self.lib, fname)
+
         for variant in variants:
             try:
                 return getattr(self.lib, f'{fname}{variant}')
@@ -2604,7 +2608,9 @@ class Linker(metaclass=ABCMeta):
 
     @abstractmethod
     def __init__(self, max_registers, lineinfo, cc):
-        pass
+        # LTO unsupported in Numba at present, but the pynvjitlink linker
+        # (https://github.com/rapidsai/pynvjitlink) supports it,
+        self.lto = False
 
     @property
     @abstractmethod
@@ -2691,6 +2697,8 @@ class MVCLinker(Linker):
             raise RuntimeError("MVCLinker requires Compute Capability to be "
                                "specified, but cc is None")
 
+        super().__init__(max_registers, lineinfo, cc)
+
         arch = f"sm_{cc[0] * 10 + cc[1]}"
         ptx_compile_opts = ['--gpu-name', arch, '-c']
         if max_registers:
@@ -2768,6 +2776,8 @@ class CtypesLinker(Linker):
     Links for current device if no CC given
     """
     def __init__(self, max_registers=0, lineinfo=False, cc=None):
+        super().__init__(max_registers, lineinfo, cc)
+
         logsz = config.CUDA_LOG_SIZE
         linkerinfo = (c_char * logsz)()
         linkererrors = (c_char * logsz)()
@@ -2862,6 +2872,8 @@ class CudaPythonLinker(Linker):
     Links for current device if no CC given
     """
     def __init__(self, max_registers=0, lineinfo=False, cc=None):
+        super().__init__(max_registers, lineinfo, cc)
+
         logsz = config.CUDA_LOG_SIZE
         linkerinfo = bytearray(logsz)
         linkererrors = bytearray(logsz)

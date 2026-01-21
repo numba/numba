@@ -1,7 +1,8 @@
 
 name: Check Release Notes
 on:
-  pull_request: {}
+  pull_request: 
+    types: [labeled, unlabeled, opened, reopened, synchronize]
 
 env:
   GITHUB_PR_NUMBER: ${{github.event.pull_request.number}}
@@ -9,16 +10,16 @@ env:
 jobs:
   check:
     name: Check release notes
-    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip_release_notes') }}
+    if: ${{ github.event.pull_request.state == 'open' && !contains(github.event.pull_request.labels.*.name, 'skip_release_notes') }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           fetch-depth: 0
-      - name: Set up Python 3.9
-        uses: actions/setup-python@v4
+      - name: Set up Python 3.10
+        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
         with:
-          python-version: 3.9
+          python-version: '3.14'
       - name: Install towncrier
         run: |
           python3 -m pip install towncrier==23.6 "importlib_resources<6" rstcheck

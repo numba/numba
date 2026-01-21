@@ -16,7 +16,6 @@ from numba.core import types, utils, targetconfig
 from numba.core.errors import (
     TypingError,
     InternalError,
-    InternalTargetMismatchError,
 )
 from numba.core.cpu_options import InlineOptions
 
@@ -218,7 +217,15 @@ def fold_arguments(pysig, args, kws, normal_handler, default_handler,
             bind_kws[n] = args[len(kwonly) + idx]
 
     # now bind
-    ba = pysig.bind(*bind_args, **bind_kws)
+    try:
+        ba = pysig.bind(*bind_args, **bind_kws)
+    except TypeError as e:
+        # The binding attempt can raise if the args don't match up, this needs
+        # to be converted to a TypingError so that e.g. partial type inference
+        # doesn't just halt.
+        msg = (f"Cannot bind 'args={bind_args} kws={bind_kws}' to "
+               f"signature '{pysig}' due to \"{type(e).__name__}: {e}\".")
+        raise TypingError(msg)
     for i, param in enumerate(pysig.parameters.values()):
         name = param.name
         default = param.default
@@ -1096,24 +1103,18 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
         """
         attr = self._attr
 
-        try:
-            registry = self._get_target_registry('method')
-        except InternalTargetMismatchError:
-            # Target mismatch. Do not register attribute lookup here.
-            pass
-        else:
-            lower_builtin = registry.lower
+        registry = self._get_target_registry('method')
 
-            @lower_builtin((self.key, attr), self.key, types.VarArg(types.Any))
-            def method_impl(context, builder, sig, args):
-                typ = sig.args[0]
-                typing_context = context.typing_context
-                fnty = self._get_function_type(typing_context, typ)
-                sig = self._get_signature(typing_context, fnty, sig.args, {})
-                call = context.get_function(fnty, sig)
-                # Link dependent library
-                context.add_linking_libs(getattr(call, 'libs', ()))
-                return call(builder, args)
+        @registry.lower((self.key, attr), self.key, types.VarArg(types.Any))
+        def method_impl(context, builder, sig, args):
+            typ = sig.args[0]
+            typing_context = context.typing_context
+            fnty = self._get_function_type(typing_context, typ)
+            sig = self._get_signature(typing_context, fnty, sig.args, {})
+            call = context.get_function(fnty, sig)
+            # Link dependent library
+            context.add_linking_libs(getattr(call, 'libs', ()))
+            return call(builder, args)
 
     def _resolve(self, typ, attr):
         if self._attr != attr:
@@ -1162,7 +1163,7 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
         return types.BoundFunction(MethodTemplate, typ)
 
 
-def make_overload_attribute_template(typ, attr, overload_func, inline,
+def make_overload_attribute_template(typ, attr, overload_func, inline='never',
                                      prefer_literal=False,
                                      base=_OverloadAttributeTemplate,
                                      **kwargs):

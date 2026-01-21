@@ -1,7 +1,7 @@
 {% set title = "Version {} (Release Date)".format(versiondata.version) %}
 
 {{ title }}
-{{ "-" * title|length }}
+{{ "=" * title|length }}
 
 {% for section, _ in sections.items() %}
 {% if section %}{{ section }}

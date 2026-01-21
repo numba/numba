@@ -260,6 +260,18 @@ class TestUFuncs(BasicUFuncTest, TestCase):
     # when the second argument is a negative. See the comment in
     # numba/tests/test_ufuncs.py for more details.
 
+    ############################################################################
+    # Mathematical Functions
+
+    def test_log_ufunc(self):
+        self.basic_ufunc_test(np.log, kinds='cf')
+
+    def test_log2_ufunc(self):
+        self.basic_ufunc_test(np.log2, kinds='cf')
+
+    def test_log10_ufunc(self):
+        self.basic_ufunc_test(np.log10, kinds='cf')
+
 
 if __name__ == '__main__':
     unittest.main()

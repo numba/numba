@@ -55,6 +55,7 @@ _python_locale = 'Python Locale'
 _llvmlite_version = 'llvmlite Version'
 _llvm_version = 'LLVM Version'
 # CUDA info
+_cu_target_impl = 'CUDA Target Impl'
 _cu_dev_init = 'CUDA Device Init'
 _cu_drv_ver = 'CUDA Driver Version'
 _cu_rt_ver = 'CUDA Runtime Version'
@@ -102,8 +103,10 @@ def get_os_spec_info(os_name):
     # Linux man page for `/proc`:
     # http://man7.org/linux/man-pages/man5/proc.5.html
 
-    # Windows documentation for `wmic OS`:
-    # https://docs.microsoft.com/en-us/windows/win32/cimwin32prov/cim-operatingsystem
+    # WMIC is deprecated in windows-2025, using powershell instead
+    # https://techcommunity.microsoft.com/t5/windows-it-pro-blog/wmi-command-line-wmic-utility-deprecation-next-steps/ba-p/4039242
+    # Windows documentation for `powershell`:
+    # https://learn.microsoft.com/en-us/powershell/
 
     # MacOS man page for `sysctl`:
     # https://www.unix.com/man-page/osx/3/sysctl/
@@ -139,8 +142,14 @@ def get_os_spec_info(os_name):
         'Windows': {
             'cmd': (),
             'cmd_optional': (
-                CmdBufferOut(('wmic', 'OS', 'get', 'TotalVirtualMemorySize')),
-                CmdBufferOut(('wmic', 'OS', 'get', 'FreeVirtualMemory')),
+                CmdBufferOut(('powershell', '-NoProfile', '-Command',
+                              "'TotalVirtualMemorySize ' + "
+                              "(Get-CimInstance -ClassName "
+                              "Win32_OperatingSystem).TotalVirtualMemorySize")),
+                CmdBufferOut(('powershell', '-NoProfile', '-Command',
+                              "'FreeVirtualMemory ' + "
+                              "(Get-CimInstance -ClassName "
+                              "Win32_OperatingSystem).FreeVirtualMemory")),
             ),
             'kwds': {
                 # output string fragment -> result dict key
@@ -332,6 +341,13 @@ def get_sysinfo():
         _error_log.append(f'Error (locale): {e}')
 
     # CUDA information
+    try:
+        sys_info[_cu_target_impl] = cu.implementation
+    except AttributeError:
+        # On the offchance an out-of-tree target did not set the
+        # implementation, we can try to continue
+        pass
+
     try:
         cu.list_devices()[0]  # will a device initialise?
     except Exception as e:
@@ -594,6 +610,7 @@ def display_sysinfo(info=None, sep_pos=45):
         ("LLVM Version", info.get(_llvm_version, '?')),
         ("",),
         ("__CUDA Information__",),
+        ("CUDA Target Implementation", info.get(_cu_target_impl, '?')),
         ("CUDA Device Initialized", info.get(_cu_dev_init, '?')),
         ("CUDA Driver Version", info.get(_cu_drv_ver, '?')),
         ("CUDA Runtime Version", info.get(_cu_rt_ver, '?')),

@@ -1,4 +1,5 @@
 import math
+import sys
 from numba.core import types, utils
 from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                          signature, Registry)
@@ -14,6 +15,7 @@ infer_global = registry.register_global
 @infer_global(math.log)
 @infer_global(math.log1p)
 @infer_global(math.log10)
+@infer_global(math.log2)
 @infer_global(math.sin)
 @infer_global(math.cos)
 @infer_global(math.tan)
@@ -39,7 +41,8 @@ class Math_unary(ConcreteTemplate):
         signature(types.float32, types.float32),
         signature(types.float64, types.float64),
     ]
-
+if sys.version_info >= (3, 11):
+    Math_unary = infer_global(math.exp2)(Math_unary)
 
 @infer_global(math.atan2)
 class Math_atan2(ConcreteTemplate):
@@ -83,6 +86,14 @@ class Math_hypot(ConcreteTemplate):
         signature(types.float64, types.uint64, types.uint64),
         signature(types.float32, types.float32, types.float32),
         signature(types.float64, types.float64, types.float64),
+    ]
+
+
+@infer_global(math.nextafter)
+class Math_nextafter(ConcreteTemplate):
+    cases = [
+        signature(types.float64, types.float64, types.float64),
+        signature(types.float32, types.float32, types.float32),
     ]
 
 
