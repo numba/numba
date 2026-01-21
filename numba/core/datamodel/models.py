@@ -878,6 +878,7 @@ class ArrayModel(StructModel):
             ('nitems', types.intp),
             ('itemsize', types.intp),
             ('data', types.CPointer(fe_type.dtype)),
+            ('descr', types.voidptr),
             ('shape', types.UniTuple(types.intp, ndim)),
             ('strides', types.UniTuple(types.intp, ndim)),
 
@@ -1033,6 +1034,124 @@ class CharSeq(DataModel):
 
     def from_data(self, builder, value):
         return value
+
+    def as_return(self, builder, value):
+        return value
+
+    def from_return(self, builder, value):
+        return value
+
+    def as_argument(self, builder, value):
+        return value
+
+    def from_argument(self, builder, value):
+        return value
+
+
+@register_default(types.StringDTypeType)
+class StringDTypeModel(DataModel):
+    # Traits for array I/O integration. These are consulted by array
+    # implementations to decide how to handle element load/store and
+    # bulk-ops behaviors without hard-coding dtype classes at call sites.
+    #
+    # - requires_array_descr: element values require the owning array's
+    #   descriptor pointer to be attached on load and used on store.
+    # - requires_zero_initialized_storage: backing storage should be zeroed
+    #   on allocation to ensure packed headers start from a clean state.
+    # - prohibits_raw_memcpy: bulk memcpy is unsafe; elements must be cloned
+    #   via the dtype's allocator API.
+    requires_array_descr = True
+    requires_zero_initialized_storage = True
+    prohibits_raw_memcpy = True
+
+    # Optional array I/O hooks to avoid hard-coding dtype checks at call sites
+    def array_load(self, context, builder, arrayty, ary, ptr):
+        """Load a value and attach the array's descriptor pointer.
+
+        The storage contains only the packed record; the value representation
+        is (void* descr, packed_bytes). We must insert the owning array's
+        descriptor pointer into the value before returning it.
+        """
+        align = None if arrayty.aligned else 1
+        raw = context.unpack_value(builder, arrayty.dtype, ptr, align=align)
+        ll_value_ty = raw.type
+        descr_ptr = ary.descr
+        descr_ptr = builder.bitcast(descr_ptr, ll_value_ty.elements[0])
+        return builder.insert_value(raw, descr_ptr, 0)
+
+    def array_store(self, context, builder, arrayty, val, ptr, ary=None, descr=None):
+        """Store a value by cloning via NumPy's String allocator API.
+
+        Returns True on handled; False to let caller fall back.
+        """
+        # Resolve descriptor pointer
+        if descr is None:
+            if ary is None:
+                raise AssertionError("StringDType store requires array struct or descr")
+            descr = ary.descr
+
+        # Extract descriptor and packed bytes from value
+        src_descr = builder.extract_value(val, 0)
+        data_value = builder.extract_value(val, 1)
+
+        # Clear destination storage to avoid lingering header bits
+        i8ptr = ir.IntType(8).as_pointer()
+        elem_llty = context.get_data_type(arrayty.dtype)
+        elem_size = context.get_abi_sizeof(elem_llty)
+        cgutils.memset(builder, builder.bitcast(ptr, i8ptr),
+                       context.get_constant(types.intp, elem_size), 0)
+
+        # Call clone helper: int numba_stringdtype_clone_nogil(void*, i8*, void*, i8*)
+        ll_voidptr = context.get_value_type(types.voidptr)
+        ll_i8_ptr = ir.IntType(8).as_pointer()
+        tmp_storage = cgutils.alloca_once_value(builder, data_value)
+        src_packed_ptr = builder.bitcast(tmp_storage, ll_i8_ptr)
+        fn_clone_ty = ir.FunctionType(ir.IntType(32), [ll_voidptr, ll_i8_ptr,
+                                                      ll_voidptr, ll_i8_ptr])
+        clone_fn = cgutils.get_or_insert_function(builder.module, fn_clone_ty,
+                                                  name="numba_stringdtype_clone")
+        rc = builder.call(clone_fn, [
+            builder.bitcast(src_descr, ll_voidptr),
+            src_packed_ptr,
+            builder.bitcast(descr, ll_voidptr),
+            builder.bitcast(ptr, ll_i8_ptr),
+        ])
+        with builder.if_then(builder.icmp_signed('==', rc, ir.Constant(rc.type, -1)), likely=False):
+            context.call_conv.return_user_exc(
+                builder, RuntimeError,
+                ("failed to clone StringDType value during store",))
+        return True
+
+    def array_descr_ptr(self, context, builder):
+        """Return a void* pointer to the PyArray_Descr for this dtype.
+
+        Used by array struct population to set the `descr` field without
+        importing dtype-specific helpers at array sites.
+        """
+        ll_voidptr = context.get_value_type(types.voidptr)
+        addr = context.add_dynamic_addr(builder, self.fe_type.descr_pointer,
+                                        info="dtype.descr")
+        return builder.bitcast(addr, ll_voidptr)
+    def __init__(self, dmm, fe_type):
+        super(StringDTypeModel, self).__init__(dmm, fe_type)
+        data_type = ir.ArrayType(ir.IntType(8), fe_type.itemsize)
+        voidptr_type = ir.IntType(8).as_pointer()
+        self._value_type = ir.LiteralStructType([voidptr_type, data_type])
+        self._data_type = data_type
+
+    def get_value_type(self):
+        return self._value_type
+
+    def get_data_type(self):
+        return self._data_type
+
+    def as_data(self, builder, value):
+        return builder.extract_value(value, 1)
+
+    def from_data(self, builder, value):
+        voidptr_type = self._value_type.elements[0]
+        zero_ptr = ir.Constant(voidptr_type, None)
+        return cgutils.pack_struct(builder, [zero_ptr, value])
 
     def as_return(self, builder, value):
         return value

@@ -91,6 +91,17 @@ def _from_str_dtype(dtype):
         raise errors.NumbaNotImplementedError(dtype)
 
 
+def _from_string_dtype(dtype):
+    if numpy_version < (2, 0):
+        msg = "StringDType requires NumPy 2.0 or newer"
+        raise errors.NumbaNotImplementedError(msg)
+
+    na_object = getattr(dtype, 'na_object', None)
+    coerce = getattr(dtype, 'coerce', True)
+    return types.StringDTypeType(dtype.itemsize, coerce=coerce,
+                                 na_object=na_object, numpy_dtype=dtype)
+
+
 def _from_datetime_dtype(dtype):
     m = re_datetimestr.match(dtype.str)
     if not m:
@@ -128,6 +139,8 @@ def from_dtype(dtype):
     else:
         if char in 'SU':
             return _from_str_dtype(dtype)
+        if char in 'T':
+            return _from_string_dtype(dtype)
         if char in 'mM':
             return _from_datetime_dtype(dtype)
         if char in 'V' and dtype.subdtype is not None:
@@ -164,6 +177,11 @@ def as_dtype(nbtype):
     if isinstance(nbtype, (types.CharSeq, types.UnicodeCharSeq)):
         letter = _as_dtype_letters[type(nbtype)]
         return np.dtype('%s%d' % (letter, nbtype.count))
+    if isinstance(nbtype, types.StringDTypeType):
+        if numpy_version < (2, 0):
+            msg = "StringDType requires NumPy 2.0 or newer"
+            raise errors.NumbaNotImplementedError(msg)
+        return nbtype.numpy_dtype
     if isinstance(nbtype, types.Record):
         return as_struct_dtype(nbtype)
     if isinstance(nbtype, types.EnumMember):

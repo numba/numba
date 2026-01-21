@@ -559,7 +559,8 @@ class TestDebugInfoEmission(TestCase):
         # data model.
         # !{!35, !36, !37, !39, !40, !43, !45}'
         struct_markers = metadata_definition_map[elem_match]
-        struct_pattern = '!{' + '(![0-9]+), ' * 6 + '(![0-9]+)}'
+        # Updated to reflect 8 struct members (incl. 'descr')
+        struct_pattern = '!{' + '(![0-9]+), ' * 7 + '(![0-9]+)}'
         match_struct = re.compile(struct_pattern)
         struct_member_matches = match_struct.match(struct_markers).groups()
         self.assertIsNotNone(struct_member_matches is not None)
@@ -581,6 +582,7 @@ class TestDebugInfoEmission(TestCase):
                     'nitems': int_re,
                     'itemsize': int_re,
                     'data': ptr_re,
+                    'descr': ptr_re,
                     'shape': utuple_re,
                     'strides': utuple_re}
 
