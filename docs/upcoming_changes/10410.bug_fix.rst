@@ -1,0 +1,5 @@
+Fix s390x array alignment to prevent segmentation faults
+-------------------------------------------------------
+Adjusted the preferred array alignment for s390x from 32 bytes to 
+16 bytes in numba/core/base.py to match the requirements of the 
+s390x Vector Facility.
