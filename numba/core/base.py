@@ -1,6 +1,7 @@
 from collections import defaultdict
 import copy
 import sys
+import platform
 from itertools import permutations, takewhile
 from contextlib import contextmanager
 from functools import cached_property
@@ -1129,6 +1130,10 @@ class BaseContext(object):
         """
         Get preferred array alignment for Numba type *ty*.
         """
+        # s390x Vector Facility (VF) uses 16-byte alignment.
+        if platform.machine() == 's390x':
+            return 16
+
         # AVX prefers 32-byte alignment
         return 32
 
