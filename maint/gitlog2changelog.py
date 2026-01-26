@@ -62,10 +62,9 @@ if __name__ == '__main__':
     prmatch = re.compile(
         f'^Merge pull request #(\\d+) from.*')
 
-    # Then, using the list, we use the GitHub API via pygithub to obtain the
-    # corresponding `github.PullRequest` objects.
-    # `pull_requests` is a dictionary mapping pull-request ID to description:
-    # int -> string.
+    # Then, using the list, we use the regular expression above to extract the
+    # ID of the pull-requests and build a dictionary mapping the Pull-Request
+    # ID to it's description.
     pull_requests = {}
     for m in merge_commits:
         match = prmatch.match(m.message)
