@@ -452,7 +452,13 @@ class CFGraph(object):
 
         return post_order
 
-    def _find_immediate_dominators(self, preds=None, entry_point=None, succs=None, back_edges=None):
+    def _find_immediate_dominators(
+        self,
+        preds=None,
+        entry_point=None,
+        succs=None,
+        back_edges=None,
+    ):
         # The algorithm implemented computes the immediate dominator
         # for each node in the CFG which is equivalent to build a dominator tree
         # Based on the implementation from NetworkX
@@ -479,9 +485,11 @@ class CFGraph(object):
         else:
             entry = entry_point
 
-        order = self._find_postorder(succs=self._succs if succs is None else succs,
-                                     back_edges=self._back_edges if back_edges is None else back_edges,
-                                     entry_point=entry)
+        order = self._find_postorder(
+            succs=self._succs if succs is None else succs,
+            back_edges=self._back_edges if back_edges is None else back_edges,
+            entry_point=entry
+        )
         idx = {e: i for i, e in enumerate(order)} # index of each node
         idom = {entry : entry}
         order.pop()
@@ -527,14 +535,16 @@ class CFGraph(object):
                     v = idom[v]
 
         return df
-    
+
     def _find_dominators_from_immediate_doms(self, immediate_doms):
         # See theoretical description in
         # http://en.wikipedia.org/wiki/Dominator_%28graph_theory%29
         # The algorithm implemented here uses a DFS through immediate dominators
         # to build the list of dominators for each node.
-        
-        immediate_doms = self._idom if immediate_doms is None else immediate_doms
+
+        if immediate_doms is None:
+            immediate_doms = self._idom
+
         result = {}
         stack = list(immediate_doms.keys())  # ensures every node is visited
         while stack:
@@ -562,26 +572,33 @@ class CFGraph(object):
         return self._find_dominators_from_immediate_doms(self._idom)
 
     def _find_post_dominators(self):
-        # To handle infinite loops and multiple exit points correctly, we need to add a dummy
-        # exit point, and link i) all existing entry points and ii) members of infinite loops to it.
+        # To handle infinite loops and multiple exit points correctly, we:
+        # i) add a dummy exit point
+        # ii) link all existing entry points to the dummy exit point
+        # iii) link members of infinite loops to the dummy exit point
         dummy_exit = object()
         original_exits = set(self._exit_points)
-        self._exit_points= set([dummy_exit])
+        self._exit_points = set([dummy_exit])
         for exit in original_exits:
             self._add_edge(exit, dummy_exit)
         for loop in self._loops.values():
             if not loop.exits:
                 for b in loop.body:
                     self._add_edge(b, dummy_exit)
-                    
+
         # find immediate post dominators
-        reversed_back_edges = self._find_back_edges(entry_point=dummy_exit, succs=self._preds)
-        im_pdoms = self._find_immediate_dominators(entry_point=dummy_exit,
-                                                   preds=self._succs,
-                                                   succs=self._preds,
-                                                   back_edges=reversed_back_edges)
+        reversed_back_edges = self._find_back_edges(
+            entry_point=dummy_exit,
+            succs=self._preds
+        )
+        im_pdoms = self._find_immediate_dominators(
+            entry_point=dummy_exit,
+            preds=self._succs,
+            succs=self._preds,
+            back_edges=reversed_back_edges
+        )
         pdoms = self._find_dominators_from_immediate_doms(im_pdoms)
-        
+
         # Fix the _post_doms table to make no reference to the dummy exit
         del pdoms[dummy_exit]
         for doms in pdoms.values():
@@ -603,7 +620,7 @@ class CFGraph(object):
             if not isinstance(stats, dict):
                 raise TypeError(f"*stats* must be a dict; got {type(stats)}")
             stats.setdefault('iteration_count', 0)
-            
+
         if entry_point is None:
             entry_point = self.entry_point()
         if succs is None:
@@ -666,16 +683,22 @@ class CFGraph(object):
                 for dest in succs[node]:
                     if (node, dest) not in back_edges:
                         additions.append(( _dfs_rec, dest))
-                # order of additions should not matter, but test_flow_control.TestCfGraph.test_topo_order with "loopless2" graph
-                # appears to not account for a possible ordering and fails if we don't reverse here (to mimic the previous recursive implementation)
-                stack.extend(additions[::-1])  
-        
+                # Order of additions should not matter, but the following test
+                # "test_flow_control.TestCfGraph.test_topo_order"
+                # when run on the "loopless2" graph case
+                # appears to not account for a possible ordering and fails
+                # if we don't reverse here.
+                # So reversing here has been done to
+                # mimic the previous recursive implementation)
+                # It would probably be better to fix the test instead.
+                stack.extend(additions[::-1])
+
         # use a stack based approach to avoid recursion limit issue
         stack = [( _dfs_rec, self._entry_point)]
         while stack:
             cb, data = stack.pop()
             cb(data)
-            
+
         post_order.reverse()
         return post_order
 
