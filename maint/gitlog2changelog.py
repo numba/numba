@@ -69,8 +69,6 @@ if __name__ == '__main__':
     pull_requests = {}
     for m in merge_commits:
         match = prmatch.match(m.message)
-        if not match:
-            breakpoint()
         number = int(match.group(1))
         # There are very rare cases where the commit message of the merge
         # commit created when merging a pull-request on GitHub does not include
