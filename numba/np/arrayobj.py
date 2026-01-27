@@ -2891,7 +2891,9 @@ def array_byteswap(arr, inplace=False):
         return out
 
     if not isinstance(arr.dtype, (types.Number, types.Boolean)):
-        raise errors.TypingError("byteswap is only implemented for Number and Boolean types.")
+        raise errors.TypingError(
+            "byteswap is only implemented for Number and Boolean types."
+        )
     return impl
 
 
