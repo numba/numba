@@ -675,29 +675,30 @@ class CFGraph(object):
         post_order = []
         seen = set()
 
-        def _dfs_rec(node):
+        def _dfs_callback(node):
             if node not in seen:
                 seen.add(node)
                 stack.append((post_order.append, node))
                 additions = []
                 for dest in succs[node]:
                     if (node, dest) not in back_edges:
-                        additions.append(( _dfs_rec, dest))
+                        additions.append(( _dfs_callback, dest))
                 # Order of additions should not matter, but the following test
                 # "test_flow_control.TestCfGraph.test_topo_order"
                 # when run on the "loopless2" graph case
                 # appears to not account for a possible ordering and fails
                 # if we don't reverse here.
                 # So reversing here has been done to
-                # mimic the previous recursive implementation)
+                # mimic the previous recursive implementation.
                 # It would probably be better to fix the test instead.
-                stack.extend(additions[::-1])
+                additions.reverse()
+                stack.extend(additions)
 
         # use a stack based approach to avoid recursion limit issue
-        stack = [( _dfs_rec, self._entry_point)]
+        stack = [( _dfs_callback, self._entry_point)]
         while stack:
-            cb, data = stack.pop()
-            cb(data)
+            callback, data = stack.pop()
+            callback(data)
 
         post_order.reverse()
         return post_order
