@@ -104,7 +104,7 @@ if __name__ == '__main__':
                       else repo.commit(str(c.sha)).author.name)
             assert author is not None and author != ""
             pr_authors.add(author)
-            committer = (c.committer 
+            committer = (c.committer
                          if (c.committer is not None
                              and c.committer.login != "web-flow")
                          else repo.commit(str(c.sha)).committer.name)
