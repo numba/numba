@@ -22,7 +22,7 @@ from numba.np.numpy_support import (
 )
 from numba.np.arrayobj import _getitem_array_generic
 from numba.core.typing import npydecl
-from numba.core.extending import overload, intrinsic
+from numba.core.extending import overload, intrinsic, register_jitable
 
 from numba.core import errors
 
@@ -266,7 +266,8 @@ class _ArrayGUHelper(namedtuple('_ArrayHelper', ('context', 'builder',
                context.make_tuple(builder, sig.args[1], self.shape))
         context.compile_internal(builder, raise_impl, sig, tup)
 
-    def guard_match_core_dims(self, other: '_ArrayGUHelper', ndims: int):
+    def guard_match_core_dims(self, ufunc, other: '_ArrayGUHelper',
+                              idx_self: int, idx_other: int):
         # arguments with the same signature should match their core dimensions
         #
         # @guvectorize('(n,m), (n,m) -> (n)')
@@ -274,22 +275,30 @@ class _ArrayGUHelper(namedtuple('_ArrayHelper', ('context', 'builder',
         #     ...
         #
         # x and y should have the same core (2D) dimensions
+        name = ufunc.__name__
+        signature = ufunc.gufunc_builder.signature
+        ndims = len(signature[idx_self])
+        n_args = len(parse_signature(signature)[0])
+        kind = 'Input' if idx_other < n_args else 'Output'
+
+        @register_jitable
         def raise_impl(self_shape, other_shape):
-            same = True
             a, b = len(self_shape) - ndims, len(other_shape) - ndims
             for i in range(ndims):
-                same &= self_shape[a + i] == other_shape[b + i]
-            if not same:
-                # NumPy raises the following:
-                # ValueError: gufunc: Input operand 1 has a mismatch in its
-                # core dimension 0, with gufunc signature (n),(n) -> ()
-                # (size 3 is different from 2)
-                # But since we cannot raise a dynamic exception here, we just
-                # (try) something meaninful
-                msg = ('Operand has a mismatch in one of its core dimensions. '
-                       'Please, check if all arguments to a @guvectorize '
-                       'function have the same core dimensions.')
-                raise ValueError(msg)
+                same = self_shape[a + i] == other_shape[b + i]
+                if not same:
+                    # NumPy raises the following:
+                    # ValueError: gufunc: Input operand 1 has a mismatch in its
+                    # core dimension 0, with gufunc signature (n),(n) -> ()
+                    # (size 3 is different from 2)
+                    pos = idx_other - n_args
+                    pos = pos if pos >= 0 else idx_other
+                    msg = (f'{name}: {kind} operand {pos} '
+                           f'has a mismatch in its core dimension {i}, '
+                           f'with gufunc signature {signature} '
+                           f'(size {other_shape[b + i]} is different from '
+                           f'{self_shape[a + i]})')
+                    raise ValueError(msg)
 
         context, builder = self.context, self.builder
         sig = types.none(
@@ -298,7 +307,7 @@ class _ArrayGUHelper(namedtuple('_ArrayHelper', ('context', 'builder',
         )
         tup = (context.make_tuple(builder, sig.args[0], self.shape),
                context.make_tuple(builder, sig.args[1], other.shape),)
-        context.compile_internal(builder, raise_impl, sig, tup)
+        context.call_overload(builder, raise_impl, sig, tup)
 
 
 def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
@@ -619,7 +628,7 @@ def numpy_gufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
         if sig_a == sig_b and \
                 all(isinstance(x, _ArrayGUHelper) for x in (arg_a, arg_b)):
             arg_a, arg_b = arguments[idx_a], arguments[idx_b]
-            arg_a.guard_match_core_dims(arg_b, len(sig_a))
+            arg_a.guard_match_core_dims(ufunc, arg_b, idx_a, idx_b)
 
     for arg in arguments[:ufunc.nin]:
         if isinstance(arg, _ArrayGUHelper):
