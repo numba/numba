@@ -2882,6 +2882,21 @@ def array_view(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
+@overload_method(types.Array, 'byteswap')
+def array_byteswap(arr, inplace=False):
+    def impl(arr, inplace=False):
+        out = arr if inplace else np.empty_like(arr)
+        for index in np.ndindex(arr.shape):
+            out[index] = arr[index].byteswap()
+        return out
+
+    if not isinstance(arr.dtype, (types.Number, types.Boolean)):
+        raise errors.TypingError(
+            "byteswap is only implemented for Number and Boolean types."
+        )
+    return impl
+
+
 # ------------------------------------------------------------------------------
 # Array attributes
 
