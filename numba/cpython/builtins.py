@@ -137,7 +137,10 @@ def gen_non_eq(val):
             return impl
         elif a_none ^ b_none:
             def impl(a, b):
-                return not val
+                if val:
+                    return a is b
+                else:
+                    return not a is b
             return impl
     return none_equality
 
