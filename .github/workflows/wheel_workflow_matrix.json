@@ -19,5 +19,17 @@
         { "python-version": "3.13", "numpy_test": "2.2" },
         { "python-version": "3.13", "numpy_test": "2.3" },
         { "python-version": "3.14", "numpy_test": "2.4" }
+      ],
+      "wheel_build_winarm64_matrix": [
+        { "python-version": "3.11", "numpy_build": "2.3.0", "python_tag": "cp311" },
+        { "python-version": "3.12", "numpy_build": "2.3.0", "python_tag": "cp312" },
+        { "python-version": "3.13", "numpy_build": "2.3.0", "python_tag": "cp313" },
+        { "python-version": "3.14", "numpy_build": "2.3.3", "python_tag": "cp314" }
+      ],
+    "wheel_test_winarm64_matrix": [
+        { "python-version": "3.11", "numpy_test": "2.3" },
+        { "python-version": "3.12", "numpy_test": "2.3" },
+        { "python-version": "3.13", "numpy_test": "2.3" },
+        { "python-version": "3.14", "numpy_test": "2.3.3" }
       ]
 }
