@@ -1,0 +1,132 @@
+
+Version 0.64.0 (TBD)
+===================================
+
+This is a major Numba release. Numba now supports NumPy 2.4.
+
+Please find a summary of all noteworthy items below.
+
+Highlights
+~~~~~~~~~~
+
+Support for NumPy 2.4
+---------------------
+
+Numba now supports NumPy 2.4, with the following notable changes:
+
+- ``np.trapz`` has been removed in NumPy 2.4. Use ``np.trapezoid`` instead
+  (available since NumPy 2.0).
+
+- ``np.in1d`` has been removed in NumPy 2.4. Use ``np.isin`` instead.
+
+(`PR-#10393 <https://github.com/numba/numba/pull/10393>`__)
+
+
+NumPy Support
+~~~~~~~~~~~~~
+
+Add support for np.moveaxis
+---------------------------
+
+Support is added for NumPy ``moveaxis`` function.
+
+(`PR-#10366 <https://github.com/numba/numba/pull/10366>`__)
+
+
+Bug Fixes
+~~~~~~~~~
+
+Fix scalar handling in ``np.all``
+---------------------------------
+
+Fixed scalar handling in the ``np.all`` function. Previously, this
+function would fail when called with scalar inputs. Now it properly handles
+both scalar and array inputs, converting scalars to boolean values as
+expected.
+
+(`PR-#10223 <https://github.com/numba/numba/pull/10223>`__)
+
+Fix scalar handling in ``np.any``
+---------------------------------
+
+Fix scalar handling in ``np.any`` function. Previously, this function would
+fail when called with scalar inputs. Now it properly handles both scalar
+and array inputs, converting scalars to boolean values as expected.
+
+(`PR-#10224 <https://github.com/numba/numba/pull/10224>`__)
+
+Fix ``np.asfortranarray`` and ``np.ascontiguousarray`` readonly handling
+------------------------------------------------------------------------
+
+Fix readonly input producing readonly output even when a copy is made
+using ``np.asfortranarray`` or ``np.ascontiguousarray``.
+
+(`PR-#10390 <https://github.com/numba/numba/pull/10390>`__)
+
+Support integer type promotion in Python API
+--------------------------------------------
+
+Fixes a segmentation fault on s390x (IBM Z) by ensuring integer types are
+properly promoted to full register width in the CPU and Python API lowering
+layers, as required by the SystemZ ABI.
+
+(`PR-#10396 <https://github.com/numba/numba/pull/10396>`__)
+
+Fix precision loss in integer power operations on Python 3.11
+-------------------------------------------------------------
+
+Fixed precision loss in integer power operations (e.g., ``x ** 2``) for large
+integer values on Python 3.11. Integer results now preserve full precision
+for values greater than 2^53.
+
+(`PR-#10398 <https://github.com/numba/numba/pull/10398>`__)
+
+Pull-Requests:
+
+* PR `#9172 <https://github.com/numba/numba/pull/9172>`_: Remove an undefined name (`munahaf <https://github.com/munahaf>`_)
+* PR `#10154 <https://github.com/numba/numba/pull/10154>`_: Revert "Merge pull request #10152 from kc611/ci_fix" (`esc <https://github.com/esc>`_)
+* PR `#10223 <https://github.com/numba/numba/pull/10223>`_: Fix: add scalar handling for `np.all` overload (`swap357 <https://github.com/swap357>`_)
+* PR `#10224 <https://github.com/numba/numba/pull/10224>`_: Fix: scalar handling for `np.any` overload (`swap357 <https://github.com/swap357>`_)
+* PR `#10256 <https://github.com/numba/numba/pull/10256>`_: GHA/ cleanup on python 3.14 official support (`swap357 <https://github.com/swap357>`_)
+* PR `#10324 <https://github.com/numba/numba/pull/10324>`_: gha/ numba scheduled testing (`swap357 <https://github.com/swap357>`_)
+* PR `#10339 <https://github.com/numba/numba/pull/10339>`_: Update dependency python to 3.14 (`renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10342 <https://github.com/numba/numba/pull/10342>`_: Update actions/checkout action to v6 (`renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10345 <https://github.com/numba/numba/pull/10345>`_: update numba first release checklist post `0.63.0rc1` (`swap357 <https://github.com/swap357>`_)
+* PR `#10347 <https://github.com/numba/numba/pull/10347>`_: Extend PR#10344 to remove osx64 azure and some fixes (`sklam <https://github.com/sklam>`_ `swap357 <https://github.com/swap357>`_)
+* PR `#10348 <https://github.com/numba/numba/pull/10348>`_: Update actions/setup-python action to v6.1.0 (`renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10351 <https://github.com/numba/numba/pull/10351>`_: remove pre-commit (`esc <https://github.com/esc>`_)
+* PR `#10359 <https://github.com/numba/numba/pull/10359>`_: gha/ add version constraint for conda-libmamba-solver `<25.11` (`swap357 <https://github.com/swap357>`_)
+* PR `#10362 <https://github.com/numba/numba/pull/10362>`_: Update actions/stale action to v10.1.1 (`renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10366 <https://github.com/numba/numba/pull/10366>`_: Support for np.moveaxis (`kc611 <https://github.com/kc611>`_ `ricardoV94 <https://github.com/ricardoV94>`_)
+* PR `#10369 <https://github.com/numba/numba/pull/10369>`_: minor docs fix: `omp` requirement on macOS updated to match the text above (`AgnieszkaZaba <https://github.com/AgnieszkaZaba>`_)
+* PR `#10371 <https://github.com/numba/numba/pull/10371>`_: Cherry pick 0.63.0 (`swap357 <https://github.com/swap357>`_)
+* PR `#10378 <https://github.com/numba/numba/pull/10378>`_: Cherry pick 0.63.1 (`swap357 <https://github.com/swap357>`_)
+* PR `#10382 <https://github.com/numba/numba/pull/10382>`_: Update GitHub Artifact Actions (major) (`renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10384 <https://github.com/numba/numba/pull/10384>`_: adding osx-64 to the Tier 2 listing (`esc <https://github.com/esc>`_)
+* PR `#10390 <https://github.com/numba/numba/pull/10390>`_: Fix #10357 `np.asfortranarray` mutability (`swap357 <https://github.com/swap357>`_)
+* PR `#10391 <https://github.com/numba/numba/pull/10391>`_: update wheel builder workflows to install pre-release llvmlite versions (`swap357 <https://github.com/swap357>`_)
+* PR `#10393 <https://github.com/numba/numba/pull/10393>`_: add Numpy 2.4 support (`mscheltienne <https://github.com/mscheltienne>`_ `swap357 <https://github.com/swap357>`_)
+* PR `#10396 <https://github.com/numba/numba/pull/10396>`_: Add missing type promotions for pythonapi (`MarkVeerasingam <https://github.com/MarkVeerasingam>`_)
+* PR `#10398 <https://github.com/numba/numba/pull/10398>`_: Fix #9931 integer power precision issue for python3.11 (`swap357 <https://github.com/swap357>`_)
+* PR `#10401 <https://github.com/numba/numba/pull/10401>`_: Fix: add main label on upload workflow (`swap357 <https://github.com/swap357>`_)
+* PR `#10405 <https://github.com/numba/numba/pull/10405>`_: Update conda-incubator/setup-miniconda action to v3.3.0 (`renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10409 <https://github.com/numba/numba/pull/10409>`_: Update actions/setup-python action to v6.2.0 (`renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10411 <https://github.com/numba/numba/pull/10411>`_: Update actions/checkout action to v6.0.2 (`renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10413 <https://github.com/numba/numba/pull/10413>`_: Improve gitlog2changelog.py (`esc <https://github.com/esc>`_)
+* PR `#10417 <https://github.com/numba/numba/pull/10417>`_: Fix: NumPy2.4 CI test error (`swap357 <https://github.com/swap357>`_)
+* PR `#10419 <https://github.com/numba/numba/pull/10419>`_: Enh: refactor array reshaping in tests to use reshape method (`swap357 <https://github.com/swap357>`_)
+* PR `#10422 <https://github.com/numba/numba/pull/10422>`_: update version support table for `0.64.0rc1` (`swap357 <https://github.com/swap357>`_)
+* PR `#10423 <https://github.com/numba/numba/pull/10423>`_: Changelog 0.64 (`swap357 <https://github.com/swap357>`_)
+
+Authors:
+
+* `AgnieszkaZaba <https://github.com/AgnieszkaZaba>`_
+* `esc <https://github.com/esc>`_
+* `kc611 <https://github.com/kc611>`_
+* `MarkVeerasingam <https://github.com/MarkVeerasingam>`_
+* `mscheltienne <https://github.com/mscheltienne>`_
+* `munahaf <https://github.com/munahaf>`_
+* `renovate[bot] <https://github.com/apps/renovate>`_
+* `ricardoV94 <https://github.com/ricardoV94>`_
+* `sklam <https://github.com/sklam>`_
+* `swap357 <https://github.com/swap357>`_
