@@ -1,6 +1,0 @@
-Fix precision loss in integer power operations on Python 3.11
--------------------------------------------------------------
-
-Fixed precision loss in integer power operations (e.g., ``x ** 2``) for large
-integer values on Python 3.11. Integer results now preserve full precision
-for values greater than 2^53.
