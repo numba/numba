@@ -34,7 +34,7 @@ call activate %CONDA_ENV%
 @rem Python 3.14+ requires setuptools
 if "%PYTHON%" geq "3.14" (%CONDA_INSTALL% setuptools)
 @rem Install latest llvmlite build
-%CONDA_INSTALL% -c numba/label/dev llvmlite=0.47
+%CONDA_INSTALL% -c numba/label/dev llvmlite=0.46
 @rem Install dependencies for building the documentation
 if "%BUILD_DOC%" == "yes" (%CONDA_INSTALL% sphinx sphinx_rtd_theme pygments)
 @rem Install dependencies for code coverage (codecov.io)
