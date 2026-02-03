@@ -115,6 +115,7 @@ Pull-Requests:
 * PR `#10413 <https://github.com/numba/numba/pull/10413>`_: Improve gitlog2changelog.py (`esc <https://github.com/esc>`_)
 * PR `#10417 <https://github.com/numba/numba/pull/10417>`_: Fix: NumPy2.4 CI test error (`swap357 <https://github.com/swap357>`_)
 * PR `#10419 <https://github.com/numba/numba/pull/10419>`_: Enh: refactor array reshaping in tests to use reshape method (`swap357 <https://github.com/swap357>`_)
+* PR `#10422 <https://github.com/numba/numba/pull/10422>`_: update version support table for `0.64.0rc1` (`swap357 <https://github.com/swap357>`_)
 
 Authors:
 
