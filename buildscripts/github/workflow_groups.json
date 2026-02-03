@@ -10,7 +10,8 @@
       "numba_linux-64_wheel_builder.yml",
       "numba_linux-aarch64_wheel_builder.yml",
       "numba_osx-arm64_wheel_builder.yml",
-      "numba_win-64_wheel_builder.yml"
+      "numba_win-64_wheel_builder.yml",
+      "numba_win-arm64_wheel_builder.yml"
     ]
   }
 }

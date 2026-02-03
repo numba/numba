@@ -1,0 +1,159 @@
+name: numba_win-arm64_wheel_builder
+on:
+  pull_request:
+    paths:
+      - .github/workflows/numba_win-arm64_wheel_builder.yml
+      - .github/workflows/wheel_workflow_matrix.json
+      - setup.py
+  workflow_dispatch:
+
+# Add concurrency control
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+env:
+  ARTIFACT_RETENTION_DAYS: 7
+  WHEELS_INDEX_URL: https://pypi.anaconda.org/numba/label/dev/simple
+  LLVMLITE_RELEASE_TAG: llvmlite-0.47.0-win_arm64
+  LLVMLITE_REPO: khmyznikov/PyEnv-WoA-State
+
+jobs:
+  load-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      build-matrix-json: ${{ steps.load_matrix_json.outputs.build-matrix-json }}
+      test-matrix-json: ${{ steps.load_matrix_json.outputs.test-matrix-json }}
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - id: load_matrix_json
+        name: Load Workflow Matrix JSON
+        run: |
+          BUILD_MATRIX_JSON=$(jq -c .wheel_build_winarm64_matrix .github/workflows/wheel_workflow_matrix.json)
+          TEST_MATRIX_JSON=$(jq -c .wheel_test_winarm64_matrix .github/workflows/wheel_workflow_matrix.json)
+          
+          # Add canonical python versions to both matrices
+          BUILD_MATRIX_EXTENDED=$(echo "$BUILD_MATRIX_JSON" | jq -c '
+            map(. + {"python_canonical": (.["python-version"] | split(".") | .[:2] | join("."))})
+          ')
+          
+          TEST_MATRIX_EXTENDED=$(echo "$TEST_MATRIX_JSON" | jq -c '
+            map(. + {"python_canonical": (.["python-version"] | split(".") | .[:2] | join("."))})
+          ')
+          
+          echo "Build Matrix JSON: $BUILD_MATRIX_EXTENDED"
+          echo "Test Matrix JSON: $TEST_MATRIX_EXTENDED"
+          
+          echo "build-matrix-json=$BUILD_MATRIX_EXTENDED" >> $GITHUB_OUTPUT
+          echo "test-matrix-json=$TEST_MATRIX_EXTENDED" >> $GITHUB_OUTPUT
+  win-arm64-build:
+    name: win-arm64-build-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
+    needs: load-matrix
+    runs-on: windows-11-arm
+    defaults:
+      run:
+        shell: bash -el {0}
+    strategy:
+      matrix:
+        include: ${{ fromJson(needs.load-matrix.outputs.build-matrix-json) }}
+      fail-fast: false
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
+
+      - name: Download llvmlite wheel from release
+        run: |
+          # Determine the wheel filename based on Python version
+          PYTHON_VERSION="${{ matrix.python_canonical }}"
+          PYTHON_TAG="cp${PYTHON_VERSION//.}"
+          WHEEL_NAME="llvmlite-0.47.0.dev0+39.gbf28f754.dirty-${PYTHON_TAG}-${PYTHON_TAG}-win_arm64.whl"
+          
+          # Download the wheel from GitHub release
+          mkdir -p llvmlite_wheels
+          curl -L -o "llvmlite_wheels/${WHEEL_NAME}" \
+            "https://github.com/${{ env.LLVMLITE_REPO }}/releases/download/${{ env.LLVMLITE_RELEASE_TAG }}/${WHEEL_NAME}"
+          
+          echo "Downloaded wheel: ${WHEEL_NAME}"
+          ls -lh llvmlite_wheels/
+      
+      - name: Install build dependencies
+        run: |
+          python -m pip install llvmlite_wheels/*.whl
+          python -m pip install build numpy==${{ matrix.numpy_build }} setuptools wheel
+      
+      - name: Build wheel
+        run: python -m build --wheel --no-isolation
+
+      - name: Upload numba wheel
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: numba_win-arm64_wheel_py${{ matrix.python_canonical }}
+          path: dist/*.whl
+          compression-level: 0
+          retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+          if-no-files-found: error
+
+  win-arm64-test:
+    name: win-arm64-test-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
+    needs: [load-matrix, win-arm64-build]
+    runs-on: windows-11-arm
+    defaults:
+      run:
+        shell: bash -el {0}
+    strategy:
+      matrix:
+        include: ${{ fromJson(needs.load-matrix.outputs.test-matrix-json) }}
+      fail-fast: false
+    steps:
+      - name: Setup Python
+        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
+
+      - name: Download Numba wheel artifact
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: numba_win-arm64_wheel_py${{ matrix.python_canonical }}
+          path: dist
+
+      - name: Download llvmlite wheel from release
+        run: |
+          # Determine the wheel filename based on Python version
+          PYTHON_VERSION="${{ matrix.python_canonical }}"
+          PYTHON_TAG="cp${PYTHON_VERSION//.}"
+          WHEEL_NAME="llvmlite-0.47.0.dev0+39.gbf28f754.dirty-${PYTHON_TAG}-${PYTHON_TAG}-win_arm64.whl"
+          
+          # Download the wheel from GitHub release
+          mkdir -p llvmlite_wheels
+          curl -L -o "llvmlite_wheels/${WHEEL_NAME}" \
+            "https://github.com/${{ env.LLVMLITE_REPO }}/releases/download/${{ env.LLVMLITE_RELEASE_TAG }}/${WHEEL_NAME}"
+          
+          echo "Downloaded wheel: ${WHEEL_NAME}"
+          ls -lh llvmlite_wheels/
+      
+      - name: Validate and test wheel
+        env:
+          NUMBA_CPU_NAME: generic
+          _NUMBA_REDUCED_TESTING: 1
+        run: |
+          python -m pip install --upgrade pip twine
+          python -m pip install numpy==${{ matrix.numpy_test }}
+          python -m pip install llvmlite_wheels/*.whl
+          python -m twine check dist/*.whl
+          python -m pip install dist/*.whl
+          
+          # print Numba system information
+          python -m numba -s
+          
+          # run tests
+          python -m numba.runtests -m 4 -v
