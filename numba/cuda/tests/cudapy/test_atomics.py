@@ -1272,7 +1272,7 @@ class TestCudaAtomics(CUDATestCase):
         np.random.shuffle(res)
         res = np.asarray(res, dtype=dtype)
         if ndim == 2:
-            res.shape = (10, -1)
+            res = res.reshape((10, -1))
         out = np.zeros_like(res)
         ary = np.random.randint(1, 10, size=res.shape).astype(res.dtype)
 
