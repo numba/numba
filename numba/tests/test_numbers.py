@@ -88,3 +88,37 @@ class TestViewIntFloat(TestCase):
     def test_exceptions64(self):
         for pair in ((np.int32, np.int64), (np.int64, np.int32)):
             self.do_testing_exceptions(pair)
+
+
+@njit
+def swap(x):
+    return x.byteswap()
+
+
+class TestByteswap(TestCase):
+    """Test the 'byteswap' method on NumPy scalars."""
+
+    def do_test(self, x):
+        self.assertEqual(swap(x), x.byteswap())
+
+    def test_int(self):
+        self.do_test(np.int8(123))
+        self.do_test(np.uint8(234))
+        self.do_test(np.int16(0x0102))
+        self.do_test(np.uint16(0xcafe))
+        self.do_test(np.int32(0x01020304))
+        self.do_test(np.uint32(0xdeadcafe))
+        self.do_test(np.int64(0x0102030405060708))
+        self.do_test(np.uint64(0xdeadcafe01020304))
+
+    def test_float(self):
+        self.do_test(np.float32(123.4))
+        self.do_test(np.float64(-123.45))
+
+    def test_bool(self):
+        self.do_test(np.bool_(False))
+        self.do_test(np.bool_(True))
+
+    def test_complex(self):
+        self.do_test(np.complex64(123.4 - 567.8j))
+        self.do_test(np.complex128(123.4 - 567.8j))
