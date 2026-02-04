@@ -1,6 +1,7 @@
 from collections import namedtuple
 
 import numpy as np
+from platform import machine as get_architecture
 
 from llvmlite.ir import Constant, IRBuilder
 from llvmlite import ir
@@ -518,7 +519,10 @@ def _prepare_call_to_object_mode(context, builder, pyapi, func,
     #       int type_num,
     #       int itemsize)
 
-    ll_int = context.get_value_type(types.int32)
+    if get_architecture() == "s390x":
+        ll_int = context.get_value_type(types.int64)
+    else:
+        ll_int = context.get_value_type(types.int32)
     ll_intp = context.get_value_type(types.intp)
     ll_intp_ptr = ir.PointerType(ll_intp)
     ll_voidptr = context.get_value_type(types.voidptr)

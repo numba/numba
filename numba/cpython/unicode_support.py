@@ -9,6 +9,7 @@ from enum import IntEnum
 
 import llvmlite.ir
 import numpy as np
+from platform import machine as get_architecture
 
 from numba.core import types, cgutils, config
 from numba.core.imputils import (impl_ret_untracked)
@@ -165,16 +166,18 @@ def _PyUnicode_ExtendedCase(typingctx, index):
     if not isinstance(index, types.Integer):
         raise TypingError("Expected an index")
 
+    intty = types.int64 if get_architecture() == "s390x" else types.intc
+
     def details(context, builder, signature, args):
         ll_Py_UCS4 = context.get_value_type(_Py_UCS4)
-        ll_intc = context.get_value_type(types.intc)
+        ll_intc = context.get_value_type(intty)
         fnty = llvmlite.ir.FunctionType(ll_Py_UCS4, [ll_intc])
         fn = cgutils.get_or_insert_function(
             builder.module,
             fnty, name="numba_get_PyUnicode_ExtendedCase")
         return builder.call(fn, [args[0]])
 
-    sig = _Py_UCS4(types.intc)
+    sig = _Py_UCS4(intty)
     return sig, details
 
 # The following functions are replications of the functions with the same name
