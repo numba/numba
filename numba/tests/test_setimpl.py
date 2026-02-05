@@ -225,7 +225,7 @@ class TestSetImpl(TestCase):
     def test_add_check(self):
         # Test adding keys to a set
 
-        for key in [3, 'a', "abc"]:
+        for key in ["eight000", "12345678", "abcefghi"]:
             s = Set(self, 8, 8)
             # Add key to the set
             s.add(key)
@@ -238,7 +238,7 @@ class TestSetImpl(TestCase):
     def test_remove_check(self):
         # Test removal of keys from a set
 
-        for key in [3, 'a', "abc"]:
+        for key in ["eight000", "12345678", "abcefghi"]:
             s = Set(self, 8, 8)
             # Add key to the set
             s.add(key)
