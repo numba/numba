@@ -542,7 +542,8 @@ def getitem_arraynd_intp(context, builder, sig, args):
     aryty, idxty = sig.args
     ary, idx = args
 
-    assert aryty.ndim >= 1
+    if not isinstance(idxty, types.NoneType):
+        assert aryty.ndim >= 1
     ary = make_array(aryty)(context, builder, ary)
 
     res = _getitem_array_generic(context, builder, sig.return_type,
