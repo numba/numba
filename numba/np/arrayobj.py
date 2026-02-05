@@ -534,9 +534,10 @@ def _getitem_array_generic(context, builder, return_type, aryty, ary,
 
 @lower_builtin(operator.getitem, types.Buffer, types.Integer)
 @lower_builtin(operator.getitem, types.Buffer, types.SliceType)
+@lower_builtin(operator.getitem, types.Buffer, types.NoneType)
 def getitem_arraynd_intp(context, builder, sig, args):
     """
-    Basic indexing with an integer or a slice.
+    Basic indexing with an integer, slice, or None.
     """
     aryty, idxty = sig.args
     ary, idx = args
