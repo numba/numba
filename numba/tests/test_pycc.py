@@ -290,8 +290,8 @@ class TestCC(BasePYCCTest):
                 lib.do_setitem1(a, b)
 
             self.assertIn(
-                f"cannot assign slice of shape {b.shape} from "
-                f"input of shape {a.shape}",
+                f"cannot assign slice of shape {a.shape} from "
+                f"input of shape {b.shape}",
                 str(raises.exception))
 
             a = np.zeros((4, 6), dtype=np.float64)
@@ -300,8 +300,8 @@ class TestCC(BasePYCCTest):
                 lib.do_setitem2(a, b)
 
             self.assertIn(
-                f"cannot assign slice of shape {b.shape} from "
-                f"input of shape {a.shape}",
+                f"cannot assign slice of shape {a.shape} from "
+                f"input of shape {b.shape}",
                 str(raises.exception))
 
 

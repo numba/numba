@@ -1710,8 +1710,8 @@ def ol_raise_with_shape_context_cpu(src_shapes, index_shape):
                 index_str = f"({index_shape[0]},)"
             else:
                 index_str = f"({', '.join([str(x) for x in index_shape])})"
-            msg = (f"cannot assign slice of shape {shape_str} from input of "
-                   f"shape {index_str}")
+            msg = (f"cannot assign slice of shape {index_str} from input of "
+                   f"shape {shape_str}")
             raise ValueError(msg)
         return impl
 
