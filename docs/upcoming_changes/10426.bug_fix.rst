@@ -1,0 +1,5 @@
+Add support for ``None`` indexing
+---------------------------------
+
+Support ``a[None]`` indexing, including for 0d arrays. This fixes a
+``NotImplementedError`` when lowering ``None`` indexing.
