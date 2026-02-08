@@ -223,6 +223,11 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         arr = np.float64(['nan', 'nan'])
         check(arr)
 
+    def check_scalar_reduction(self, pyfunc, values, **kwargs):
+        cfunc = jit(nopython=True)(pyfunc)
+        for val in values:
+            self.assertPreciseEqual(pyfunc(val), cfunc(val), **kwargs)
+
     def test_all_basic(self, pyfunc=array_all):
         cfunc = jit(nopython=True)(pyfunc)
         def check(arr):
@@ -351,6 +356,33 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
     def test_mean_basic(self):
         self.check_reduction_basic(array_mean)
+
+    def test_scalar_reductions(self):
+        numeric_vals = [
+            np.float64(3.0),
+            np.float64(-1.25),
+            np.int64(3),
+            np.int32(-4),
+            np.bool_(True),
+            np.bool_(False),
+        ]
+        complex_vals = [np.complex128(1.5 + 2.25j)]
+        mean_vals = numeric_vals + complex_vals
+
+        self.check_scalar_reduction(array_mean_global, mean_vals)
+        self.check_scalar_reduction(array_prod_global, mean_vals)
+        self.check_scalar_reduction(array_var_global, mean_vals)
+        self.check_scalar_reduction(array_std_global, mean_vals)
+        self.check_scalar_reduction(array_min_global, mean_vals)
+        self.check_scalar_reduction(array_max_global, mean_vals)
+
+        nan_vals = [np.float64(2.0), np.float64(np.nan)]
+        self.check_scalar_reduction(array_nanmin, nan_vals)
+        self.check_scalar_reduction(array_nanmax, nan_vals)
+        self.check_scalar_reduction(array_nanmean, nan_vals)
+        self.check_scalar_reduction(array_nanvar, nan_vals)
+        self.check_scalar_reduction(array_nanstd, nan_vals)
+        self.check_scalar_reduction(array_nanprod, nan_vals)
 
     def test_var_basic(self):
         self.check_reduction_basic(array_var, prec='double')
