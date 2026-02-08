@@ -1,0 +1,8 @@
+Fix scalar handling in reductions
+---------------------------------
+
+Fixed scalar handling in reduction functions including ``np.mean``,
+``np.prod``, ``np.var``, ``np.std``, ``np.min``, ``np.max``, ``np.nanmin``,
+``np.nanmax``, ``np.nanmean``, ``np.nanvar``, ``np.nanstd``, and
+``np.nanprod``. Previously, these functions could fail when called with
+scalar inputs. They now properly handle both scalar and array inputs.
