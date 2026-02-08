@@ -355,9 +355,17 @@ def get_accumulator(dtype, value):
     return acc_init
 
 
+def _scalar_to_array_reduction(np_func):
+    def scalar_impl(a):
+        return np_func(np.asarray(a))
+    return scalar_impl
+
+
 @overload(np.prod)
 @overload_method(types.Array, "prod")
 def array_prod(a):
+    if type_is_scalar(a):
+        return _scalar_to_array_reduction(np.prod)
     if isinstance(a, types.Array):
         dtype = as_dtype(a.dtype)
 
@@ -425,6 +433,9 @@ def array_cumprod(a):
 @overload(np.mean)
 @overload_method(types.Array, "mean")
 def array_mean(a):
+    if type_is_scalar(a):
+        return _scalar_to_array_reduction(np.mean)
+
     if isinstance(a, types.Array):
         is_number = a.dtype in types.integer_domain | frozenset([types.bool_])
         if is_number:
@@ -444,10 +455,14 @@ def array_mean(a):
 
         return array_mean_impl
 
+    return None
+
 
 @overload(np.var)
 @overload_method(types.Array, "var")
 def array_var(a):
+    if type_is_scalar(a):
+        return _scalar_to_array_reduction(np.var)
     if isinstance(a, types.Array):
         def array_var_impl(a):
             # Compute the mean
@@ -466,6 +481,8 @@ def array_var(a):
 @overload(np.std)
 @overload_method(types.Array, "std")
 def array_std(a):
+    if type_is_scalar(a):
+        return _scalar_to_array_reduction(np.std)
     if isinstance(a, types.Array):
         def array_std_impl(a):
             return a.var() ** 0.5
@@ -492,6 +509,8 @@ def return_false(a):
 @overload(np.amin)
 @overload_method(types.Array, "min")
 def npy_min(a):
+    if type_is_scalar(a):
+        return _scalar_to_array_reduction(np.min)
     if not isinstance(a, types.Array):
         return
 
@@ -542,6 +561,8 @@ def npy_min(a):
 @overload(np.amax)
 @overload_method(types.Array, "max")
 def npy_max(a):
+    if type_is_scalar(a):
+        return _scalar_to_array_reduction(np.max)
     if not isinstance(a, types.Array):
         return
 
@@ -1195,6 +1216,8 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 
 @overload(np.nanmin)
 def np_nanmin(a):
+    if type_is_scalar(a):
+        return _scalar_to_array_reduction(np.nanmin)
     dt = determine_dtype(a)
     if np.issubdtype(dt, np.complexfloating):
         return complex_nanmin
@@ -1204,6 +1227,8 @@ def np_nanmin(a):
 
 @overload(np.nanmax)
 def np_nanmax(a):
+    if type_is_scalar(a):
+        return _scalar_to_array_reduction(np.nanmax)
     dt = determine_dtype(a)
     if np.issubdtype(dt, np.complexfloating):
         return complex_nanmax
@@ -1213,6 +1238,8 @@ def np_nanmax(a):
 
 @overload(np.nanmean)
 def np_nanmean(a):
+    if type_is_scalar(a):
+        return _scalar_to_array_reduction(np.nanmean)
     if not isinstance(a, types.Array):
         return
     isnan = get_isnan(a.dtype)
@@ -1233,6 +1260,8 @@ def np_nanmean(a):
 
 @overload(np.nanvar)
 def np_nanvar(a):
+    if type_is_scalar(a):
+        return _scalar_to_array_reduction(np.nanvar)
     if not isinstance(a, types.Array):
         return
     isnan = get_isnan(a.dtype)
@@ -1258,6 +1287,8 @@ def np_nanvar(a):
 
 @overload(np.nanstd)
 def np_nanstd(a):
+    if type_is_scalar(a):
+        return _scalar_to_array_reduction(np.nanstd)
     if not isinstance(a, types.Array):
         return
 
@@ -1291,6 +1322,8 @@ def np_nansum(a):
 
 @overload(np.nanprod)
 def np_nanprod(a):
+    if type_is_scalar(a):
+        return _scalar_to_array_reduction(np.nanprod)
     if not isinstance(a, types.Array):
         return
     if isinstance(a.dtype, types.Integer):
