@@ -665,6 +665,19 @@ class TestUFuncs(BasicUFuncTest, TestCase):
         self.basic_ufunc_test(np.spacing, kinds='f',
                               additional_inputs=additional)
 
+    def test_ufunc_out_keyword_scalar_inputs(self):
+        # Scalar inputs with array out=
+        @njit
+        def maximum_out(a, b, out):
+            return np.maximum(a, b, out=out)
+
+        out = np.empty(1)
+        expected = np.empty(1)
+        ret = maximum_out(1.0, 2.0, out)
+        np.maximum(1.0, 2.0, out=expected)
+        np.testing.assert_array_equal(out, expected)
+        self.assertIs(ret, out)
+
     ############################################################################
     # Other tests
 
