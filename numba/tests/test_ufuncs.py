@@ -678,6 +678,21 @@ class TestUFuncs(BasicUFuncTest, TestCase):
         np.testing.assert_array_equal(out, expected)
         self.assertIs(ret, out)
 
+    def test_ufunc_out_keyword_2d(self):
+        # 2D arrays with out=
+        @njit
+        def maximum_out(a, b, out):
+            return np.maximum(a, b, out=out)
+
+        a = np.arange(6, dtype=np.float64).reshape(2, 3)
+        b = np.arange(6, dtype=np.float64).reshape(2, 3) * 10
+        out = np.empty((2, 3))
+        expected = np.empty((2, 3))
+        ret = maximum_out(a, b, out)
+        np.maximum(a, b, out=expected)
+        np.testing.assert_array_equal(out, expected)
+        self.assertIs(ret, out)
+
     ############################################################################
     # Other tests
 
