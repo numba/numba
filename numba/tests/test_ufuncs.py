@@ -693,6 +693,62 @@ class TestUFuncs(BasicUFuncTest, TestCase):
         np.testing.assert_array_equal(out, expected)
         self.assertIs(ret, out)
 
+    def test_ufunc_out_keyword_positional_and_keyword(self):
+        # Positional and keyword out= must produce identical results
+        @njit
+        def maximum_positional(a, b, out):
+            return np.maximum(a, b, out)
+
+        @njit
+        def maximum_keyword(a, b, out):
+            return np.maximum(a, b, out=out)
+
+        a = np.array([1.0, 5.0, 3.0])
+        b = np.array([2.0, 1.0, 4.0])
+        out_pos = np.empty(3)
+        out_kw = np.empty(3)
+        maximum_positional(a, b, out_pos)
+        maximum_keyword(a, b, out_kw)
+        np.testing.assert_array_equal(out_pos, out_kw)
+
+    def test_ufunc_out_keyword_comparison_bool_output(self):
+        # Comparison ufunc: output dtype (bool) differs from input dtype
+        @njit
+        def greater_out(a, b, out):
+            return np.greater(a, b, out=out)
+
+        a = np.array([1.0, 5.0, 3.0])
+        b = np.array([2.0, 1.0, 4.0])
+        out = np.empty(3, dtype=np.bool_)
+        expected = np.empty(3, dtype=np.bool_)
+        ret = greater_out(a, b, out)
+        np.greater(a, b, out=expected)
+        np.testing.assert_array_equal(out, expected)
+        self.assertIs(ret, out)
+
+    def test_ufunc_out_keyword_none(self):
+        # out=None should allocate a new array, same as omitting out
+        @njit
+        def maximum_out_none(a, b):
+            return np.maximum(a, b, out=None)
+
+        a = np.array([1.0, 5.0, 3.0])
+        b = np.array([2.0, 1.0, 4.0])
+        result = maximum_out_none(a, b)
+        expected = np.maximum(a, b)
+        np.testing.assert_array_equal(result, expected)
+
+    def test_ufunc_out_keyword_unsupported_kwargs(self):
+        # Unsupported kwargs should raise TypingError
+        with self.assertRaises(TypingError) as raises:
+            @njit
+            def maximum_where(a, b):
+                return np.maximum(a, b, where=True)
+            a = np.array([1.0, 5.0, 3.0])
+            b = np.array([2.0, 1.0, 4.0])
+            maximum_where(a, b)
+        self.assertIn("unsupported keyword", str(raises.exception))
+
     ############################################################################
     # Other tests
 
