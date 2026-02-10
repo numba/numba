@@ -856,8 +856,13 @@ class Lower(BaseLower):
         pysig = signature.pysig
         if pysig is None:
             if kw_args:
-                raise NotImplementedError("unsupported keyword arguments "
-                                          "when calling %s" % (fnty,))
+                # Handle 'out' kwarg for ufuncs by converting to positional
+                kw_dict = dict(kw_args)
+                if 'out' in kw_dict:
+                    pos_args = list(pos_args) + [kw_dict.pop('out')]
+                if kw_dict:  # raise for unsupported kwargs
+                    raise NotImplementedError("unsupported keyword arguments "
+                                              "when calling %s" % (fnty,))
             argvals = [self._cast_var(var, sigty)
                        for var, sigty in zip(pos_args, signature.args)]
         else:
