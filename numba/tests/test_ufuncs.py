@@ -1861,6 +1861,17 @@ class TestUFuncBadArgs(TestCase):
         with self.assertRaises(TypingError):
             njit([types.float64(types.float64)])(func)
 
+    def test_ufunc_out_keyword_unsupported_kwargs(self):
+        def func(a, b):
+            """error: unsupported keyword arguments"""
+            return np.maximum(a, b, where=True)
+
+        array_type = types.Array(types.float64, 1, 'C')
+        sig = array_type(array_type, array_type)
+
+        with self.assertRaises(TypingError):
+            njit(sig)(func)
+
 
 class TestUFuncCompilationThreadSafety(TestCase):
 
