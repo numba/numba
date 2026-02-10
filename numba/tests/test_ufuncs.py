@@ -668,10 +668,10 @@ class TestUFuncs(BasicUFuncTest, TestCase):
     def test_ufunc_out_keyword_positional_and_keyword(self):
         # Positional and keyword out= must produce identical results
         def maximum_positional(a, b, out):
-            return np.maximum(a, b, out)
+            np.maximum(a, b, out)
 
         def maximum_keyword(a, b, out):
-            return np.maximum(a, b, out=out)
+            np.maximum(a, b, out=out)
 
         arr_ty = types.Array(types.float64, 1, 'C')
         argtys = (arr_ty, arr_ty, arr_ty)
