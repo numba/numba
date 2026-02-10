@@ -709,7 +709,6 @@ class TestGetItem(TestCase):
     def test_none_index(self, flags=enable_pyobj_flags):
         pyfunc = none_index_usecase
         arraytype = types.Array(types.int32, 2, 'C')
-        # TODO should be enable to handle this in NoPython mode
         argtys = (arraytype,)
         cfunc = jit(argtys, **flags)(pyfunc)
 
@@ -717,8 +716,19 @@ class TestGetItem(TestCase):
         self.assertPreciseEqual(pyfunc(a), cfunc(a))
 
     def test_none_index_npm(self):
-        with self.assertTypingError():
-            self.test_none_index(flags=Noflags)
+        self.test_none_index(flags=Noflags)
+
+    def test_none_index_0d(self, flags=enable_pyobj_flags):
+        pyfunc = none_index_usecase
+        arraytype = types.Array(types.int32, 0, 'C')
+        argtys = (arraytype,)
+        cfunc = jit(argtys, **flags)(pyfunc)
+
+        a = np.arange(1, dtype='i4').reshape(())
+        self.assertPreciseEqual(pyfunc(a), cfunc(a))
+
+    def test_none_index_0d_npm(self):
+        self.test_none_index_0d(flags=Noflags)
 
     def test_empty_tuple_indexing(self, flags=enable_pyobj_flags):
         pyfunc = empty_tuple_usecase
