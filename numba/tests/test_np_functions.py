@@ -2630,7 +2630,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         # check axis handling for multidimensional empty arrays
         a = np.array([])
-        a.shape = (3, 2, 1, 0)
+        a = a.reshape((3, 2, 1, 0))
 
         # include this with some other empty data structures
         for arr in a, (), np.array([]):
@@ -2649,7 +2649,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         # check axis handling for multidimensional empty arrays
         a = np.array([])
-        a.shape = (3, 2, 1, 0)
+        a = a.reshape((3, 2, 1, 0))
 
         # include this with some other empty data structures
         for arr in a, (), np.array([]):
