@@ -665,6 +665,30 @@ class TestUFuncs(BasicUFuncTest, TestCase):
         self.basic_ufunc_test(np.spacing, kinds='f',
                               additional_inputs=additional)
 
+    def test_ufunc_out_keyword_positional_and_keyword(self):
+        # Positional and keyword out= must produce identical results
+        def maximum_positional(a, b, out):
+            return np.maximum(a, b, out)
+
+        def maximum_keyword(a, b, out):
+            return np.maximum(a, b, out=out)
+
+        arr_ty = types.Array(types.float64, 1, 'C')
+        argtys = (arr_ty, arr_ty, arr_ty)
+        cfunc_pos = self._compile(maximum_positional, argtys)
+        cfunc_kw = self._compile(maximum_keyword, argtys)
+
+        a = np.array([1.0, 5.0, 3.0])
+        b = np.array([2.0, 1.0, 4.0])
+        out_pos = np.empty(3)
+        out_kw = np.empty(3)
+        expected = np.empty(3)
+        maximum_positional(a, b, expected)
+        cfunc_pos(a, b, out_pos)
+        cfunc_kw(a, b, out_kw)
+        self.assertPreciseEqual(out_pos, out_kw)
+        self.assertPreciseEqual(out_pos, expected)
+
     ############################################################################
     # Other tests
 
