@@ -948,7 +948,12 @@ class TestUfuncKeywordArgs(TestCase):
         out_pos = np.empty(3)
         out_kw = np.empty(3)
         expected = np.empty(3)
-        maximum_positional(a, b, expected)
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                'ignore',
+                message='Passing more than 2 positional arguments',
+                category=DeprecationWarning)
+            maximum_positional(a, b, expected)
         cfunc_pos(a, b, out_pos)
         cfunc_kw(a, b, out_kw)
         self.assertPreciseEqual(out_pos, out_kw)
