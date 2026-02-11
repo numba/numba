@@ -1,0 +1,8 @@
+Improve CFG algo performance
+----------------------------
+
+Improve performance of some CFG algorithms so that large graphs 
+can be parsed faster and without throwing recursion errors.
+
+Implemented by switching to a stack-based implementation for CFGraph._find_topo_order
+and building dominators/post-dominators from a DFS on "immediate dominators".
