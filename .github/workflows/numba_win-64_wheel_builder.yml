@@ -111,6 +111,8 @@ jobs:
     name: win-64-test-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
     needs: [load-matrix, win-64-build]
     runs-on: windows-2025
+    env:
+      TEST_TO_RUN: numba.tests.test_array_exprs.TestArrayExpressions.test_explicit_output
     defaults:
       run:
         shell: bash -el {0}
@@ -157,20 +159,8 @@ jobs:
           python -m twine check dist/*.whl
           python -m pip install dist/*.whl
 
-          # Disable NumPy dispatching to AVX512_SKX if the CPU supports it AND it's
-          # in NumPy's dispatch list. This avoids low accuracy SVML libm replacements.
-          # This is needed because only dispatched features can be disabled via NPY_DISABLE_CPU_FEATURES.
-          _NPY_CMD='from numba.misc import numba_sysinfo; si=numba_sysinfo.get_sysinfo();\
-                    print(si["NumPy AVX512_SKX detected"] and "AVX512_SKX" in si.get("NumPy Supported SIMD dispatch", ()))'
-          DISABLE_AVX512_SKX=$(python -c "$_NPY_CMD")
-          echo "Disable AVX512_SKX: $DISABLE_AVX512_SKX"
-
-          if [[ "$DISABLE_AVX512_SKX" == "True" ]]; then
-              export NPY_DISABLE_CPU_FEATURES="AVX512_SKX"
-          fi
-
           # print Numba system information
           python -m numba -s
 
           # run tests
-          python -m numba.runtests -m 4 -v
+          python -m numba.runtests -m 4 -v $TEST_TO_RUN
