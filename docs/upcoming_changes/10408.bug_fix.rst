@@ -1,1 +1,0 @@
-Fix scalar handling in ``np.mean``
