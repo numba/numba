@@ -427,7 +427,6 @@ def array_cumprod(a):
 def array_mean(a):
     if isinstance(a, (types.Number, types.Boolean)):
         def _scalar_mean(a):
-            # related open issue with numpy https://github.com/numpy/numpy/issues/29485
             if a == -0.0:
                 a = 0.0
             return np.float64(a)
