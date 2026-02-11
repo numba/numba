@@ -1,6 +1,8 @@
 name: numba_osx-arm64_conda_builder
 
 on:
+  schedule:
+    - cron: '0 7 * * 6'  # Saturday 7:00 AM UTC - osx-arm64 conda (starts first to manage osx runner limit)
   pull_request:
     paths:
       - .github/workflows/numba_osx-arm64_conda_builder.yml
@@ -28,7 +30,7 @@ jobs:
       build-matrix-json: ${{ steps.parse_matrix.outputs.build-matrix-json }}
       test-matrix-json: ${{ steps.parse_matrix.outputs.test-matrix-json }}
     steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - id: parse_matrix
         name: Parse Workflow Matrix JSON
         run: |
@@ -44,7 +46,7 @@ jobs:
     needs: load-matrix
     runs-on: macos-14
     env:
-      EXTRA_CHANNELS: ${{ matrix.python-version == '3.14' && '-c ad-testing/label/py314' || '' }}
+      EXTRA_CHANNELS: ''
     defaults:
       run:
         shell: bash -elx {0}
@@ -55,12 +57,12 @@ jobs:
 
     steps:
       - name: Clone repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
 
       - name: Setup Miniconda
-        uses: conda-incubator/setup-miniconda@835234971496cad1653abb28a638a281cf32541f # v3.2.0
+        uses: conda-incubator/setup-miniconda@fc2d68f6413eb2d87b895e92f8584b5b94a10167 # v3.3.0
         with:
           python-version: 3.12
           auto-update-conda: true
@@ -69,7 +71,7 @@ jobs:
 
       - name: Download llvmlite Artifact
         if: ${{ inputs.llvmlite_run_id != '' }}
-        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: llvmlite-osx-arm64-py${{ matrix.python-version }}
           path: llvmlite_conda
@@ -78,7 +80,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install conda-build
-        run: conda install conda-build
+        run: conda install conda-build "conda-libmamba-solver<25.11"
 
       - name: Build Numba conda package
         env:
@@ -108,7 +110,7 @@ jobs:
             --no-test
 
       - name: Upload numba conda package
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: numba_osx-arm64_conda_py${{ matrix.python-version }}
           path: conda_channel_dir
@@ -121,7 +123,7 @@ jobs:
     needs: [load-matrix, osx-arm64-build-conda]
     runs-on: macos-14
     env:
-      EXTRA_CHANNELS: ${{ matrix.python-version == '3.14' && '-c ad-testing/label/py314' || '' }}
+      EXTRA_CHANNELS: ''
     defaults:
       run:
         shell: bash -elx {0}
@@ -132,12 +134,12 @@ jobs:
 
     steps:
       - name: Clone repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
 
       - name: Setup Miniconda
-        uses: conda-incubator/setup-miniconda@835234971496cad1653abb28a638a281cf32541f # v3.2.0
+        uses: conda-incubator/setup-miniconda@fc2d68f6413eb2d87b895e92f8584b5b94a10167 # v3.3.0
         with:
           python-version: 3.12
           auto-update-conda: true
@@ -146,7 +148,7 @@ jobs:
 
       - name: Download llvmlite artifact
         if: ${{ inputs.llvmlite_run_id != '' }}
-        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: llvmlite-osx-arm64-py${{ matrix.python-version }}
           path: llvmlite_conda
@@ -155,13 +157,13 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download numba artifact
-        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: numba_osx-arm64_conda_py${{ matrix.python-version }}
 
       - name: Install conda-build
         run: |
-          conda install conda-build
+          conda install conda-build "conda-libmamba-solver<25.11"
 
       - name: Run tests
         env:

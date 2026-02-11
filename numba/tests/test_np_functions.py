@@ -478,6 +478,10 @@ def swapaxes(a, a1, a2):
     return np.swapaxes(a, a1, a2)
 
 
+def moveaxis(a, source, destination):
+    return np.moveaxis(a, source, destination)
+
+
 def nan_to_num(X, copy=True, nan=0.0, posinf=None, neginf=None):
     return np.nan_to_num(X, copy=copy, nan=nan, posinf=posinf, neginf=neginf)
 
@@ -2626,7 +2630,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         # check axis handling for multidimensional empty arrays
         a = np.array([])
-        a.shape = (3, 2, 1, 0)
+        a = a.reshape((3, 2, 1, 0))
 
         # include this with some other empty data structures
         for arr in a, (), np.array([]):
@@ -2645,7 +2649,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         # check axis handling for multidimensional empty arrays
         a = np.array([])
-        a.shape = (3, 2, 1, 0)
+        a = a.reshape((3, 2, 1, 0))
 
         # include this with some other empty data structures
         for arr in a, (), np.array([]):
@@ -4155,6 +4159,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_np_trapezoid_basic(self):
         self.test_np_trapz_basic(pyfunc=np_trapezoid)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.trapz removed in NumPy 2.4+")
     def test_np_trapz_basic(self, pyfunc=np_trapz):
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc)
@@ -4193,6 +4198,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_np_trapezoid_x_basic(self):
         self.test_np_trapz_x_basic(pyfunc=np_trapezoid_x)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.trapz removed in NumPy 2.4+")
     def test_np_trapz_x_basic(self, pyfunc=np_trapz_x):
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc)
@@ -4255,6 +4261,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_trapezoid_numpy_questionable(self):
         self.test_trapz_numpy_questionable(pyfunc=np_trapezoid)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.trapz removed in NumPy 2.4+")
     @unittest.skip('NumPy behaviour questionable')
     def test_trapz_numpy_questionable(self, pyfunc=np_trapz):
         # https://github.com/numpy/numpy/issues/12858
@@ -4273,6 +4280,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_np_trapezoid_dx_basic(self):
         self.test_np_trapz_dx_basic(pyfunc=np_trapezoid_dx)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.trapz removed in NumPy 2.4+")
     def test_np_trapz_dx_basic(self, pyfunc=np_trapz_dx):
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc)
@@ -4322,6 +4330,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_np_trapezoid_x_dx_basic(self):
         self.test_np_trapz_x_dx_basic(pyfunc=np_trapezoid_x_dx)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.trapz removed in NumPy 2.4+")
     def test_np_trapz_x_dx_basic(self, pyfunc=np_trapz_x_dx):
         cfunc = jit(nopython=True)(pyfunc)
         _check = partial(self._check_output, pyfunc, cfunc)
@@ -4350,6 +4359,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_np_trapezoid_x_dx_exceptions(self):
         self.test_np_trapz_x_dx_exceptions(pyfunc=np_trapezoid_x_dx)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.trapz removed in NumPy 2.4+")
     def test_np_trapz_x_dx_exceptions(self, pyfunc=np_trapz_x_dx):
         cfunc = jit(nopython=True)(pyfunc)
 
@@ -6258,6 +6268,74 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertIn('np.swapaxes: Argument axis2 out of bounds',
                       str(raises.exception))
 
+    def test_moveaxis_basic(self):
+        pyfunc = moveaxis
+        cfunc = jit(nopython=True)(pyfunc)
+
+        a = np.arange(120).reshape(1, 2, 3, 4, 5)
+
+        for source, destination in (
+            (0, -1),
+            (1, 3),
+            ((0, 1), (-1, -2)),
+            ((0, 1), (-2, -1)),
+            ((1, -3), (-2, 4)),
+        ):
+            expected = pyfunc(a, source, destination)
+            got = cfunc(a, source, destination)
+            self.assertPreciseEqual(expected, got)
+
+    def test_moveaxis_exception(self):
+        pyfunc = moveaxis
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc('abc', 0, 1)
+
+        self.assertIn('The first argument "a" must be an array',
+                      str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.arange(4), 'abc', 0)
+
+        self.assertIn(
+            'second argument "source" must be an integer or sequence',
+            str(raises.exception))
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.arange(4), 0, 'abc')
+
+        self.assertIn(
+            'third argument "destination" must be an integer or sequence',
+            str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(np.arange(4), 1, 0)
+
+        self.assertIn('np.moveaxis: Argument source out of bounds',
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(np.arange(8).reshape(2, 4), (0, 1), (1, -3,))
+
+        self.assertIn('np.moveaxis: Argument destination out of bounds',
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(np.arange(8).reshape(2, 4), (0, 0), (0, 1))
+
+        self.assertIn('np.moveaxis: repeated axis in source argument',
+                      str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            cfunc(np.arange(8).reshape(2, 4), (0, 1), (1, -1))
+
+        self.assertIn('np.moveaxis: repeated axis in destination argument',
+                      str(raises.exception))
+
     def test_take_along_axis(self):
         a = np.arange(24).reshape((3, 1, 4, 2))
 
@@ -6651,6 +6729,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         yield [2, 3], np.arange(20)  # Test the "sorting" method.
         yield [2, 3], np.tile(np.arange(5), 4)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.in1d removed in NumPy 2.4+")
     def test_in1d_2(self):
         np_pyfunc = np_in1d_2
         np_nbfunc = njit(np_pyfunc)
@@ -6667,6 +6746,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for a, b in self._in1d_arrays():
             check(a, b)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.in1d removed in NumPy 2.4+")
     def test_in1d_3a(self):
         np_pyfunc = np_in1d_3a
         np_nbfunc = njit(np_pyfunc)
@@ -6685,6 +6765,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             if len(np.unique(a)) == len(a) and len(np.unique(b)) == len(b):
                 check(a, b, assume_unique=True)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.in1d removed in NumPy 2.4+")
     def test_in1d_3b(self):
         np_pyfunc = np_in1d_3b
         np_nbfunc = njit(np_pyfunc)
@@ -6702,6 +6783,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             check(a, b, invert=False)
             check(a, b, invert=True)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.in1d removed in NumPy 2.4+")
     def test_in1d_4(self):
         np_pyfunc = np_in1d_4
         np_nbfunc = njit(np_pyfunc)
@@ -6722,6 +6804,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 check(a, b, assume_unique=True, invert=False)
                 check(a, b, assume_unique=True, invert=True)
 
+    @unittest.skipIf(numpy_version >= (2, 4), "np.in1d removed in NumPy 2.4+")
     def test_in1d_errors(self):
         np_pyfunc = np_in1d_4
         np_nbfunc = njit(np_pyfunc)

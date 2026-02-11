@@ -1,5 +1,0 @@
-Fix ``np.ndenumerate`` support for zero-dimensional arrays
-----------------------------------------------------------
-
-``np.ndenumerate()`` now correctly handles zero-dimensional arrays in 
-JIT-compiled functions. Previously this would raise an ``IndexError``.

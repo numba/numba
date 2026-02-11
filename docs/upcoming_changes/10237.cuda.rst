@@ -1,9 +1,0 @@
-Fix CUDA target crash bug with NVIDIA driver version 580
---------------------------------------------------------
-
-Fixes a bug in the CUDA driver wrapper that caused the CUDA target to
-crash with NVIDIA driver version 580 and later.  This was already
-fixed in the `numba-cuda` package, but has been backported here for
-users who haven't migrated yet.  (We still encourage all CUDA users to
-switch to the `numba-cuda` package for the most up to date CUDA
-support in Numba.)
