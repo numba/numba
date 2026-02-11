@@ -1045,7 +1045,9 @@ class FancyIndexer(object):
         indexers = []
         num_newaxes = len([idx for idx in index_types if is_nonelike(idx)])
 
-        ax = 0
+        ax = 0 # keeps track of position of original axes
+        new_ax = 0 # keeps track of position for inserting new axes
+
         subspace_allocated=False
         for indexval, idxty in zip(indices, index_types):
             if idxty is types.ellipsis:
