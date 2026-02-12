@@ -426,8 +426,14 @@ def array_cumprod(a):
 @overload_method(types.Array, "mean")
 def array_mean(a):
     if isinstance(a, (types.Number, types.Boolean)):
-        def _scalar_mean(a):
-            return np.float64(a) + 0.0
+        if isinstance(a, (types.Integer, types.Boolean)):
+            # Integers and Booleans default to float64 in numpy.mean
+            def _scalar_mean(a):
+                return np.float64(a) + 0.0
+        else:
+            def _scalar_mean(a):
+                return a + 0.0
+        
         return _scalar_mean
     elif isinstance(a, types.Array):
         is_number = a.dtype in types.integer_domain | frozenset([types.bool_])
