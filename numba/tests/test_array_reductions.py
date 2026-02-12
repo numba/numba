@@ -371,6 +371,10 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(np.float32(1.25))
         check(np.float64(-2.5))
 
+        # Complex values
+        np.complex64(7+0j)
+        np.complex128(61+74j)
+
         # Special floating values
         check(np.nan)
         check(np.inf)
