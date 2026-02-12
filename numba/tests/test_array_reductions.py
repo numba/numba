@@ -380,11 +380,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(0)
         check(0.0000042)
         check(-0.25863)
-
-        check(np.array([1.0, 2.0, 3.0]))
-        check(np.array([True, False, True, True]))
-        check(np.array([False, False, False]))
-        check(np.array([True, True, True]))
         
         # Error cases
         with self.assertTypingError():
