@@ -433,7 +433,6 @@ def array_mean(a):
         else:
             def _scalar_mean(a):
                 return a + 0.0
-        
         return _scalar_mean
     elif isinstance(a, types.Array):
         is_number = a.dtype in types.integer_domain | frozenset([types.bool_])
