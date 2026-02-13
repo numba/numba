@@ -1,0 +1,6 @@
+Fix scalar handling in ``np.min`` and ``np.max``
+---------------------------------
+
+Fix scalar handling in ``np.min`` and ``np.max`` functions. Previously, these functions would
+fail when called with scalar inputs. They now properly handle both scalar
+and array inputs, returning the original value when a scalar is provided.
