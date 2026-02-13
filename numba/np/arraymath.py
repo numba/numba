@@ -527,7 +527,7 @@ def npy_min(a):
         def impl_min(a):
             if a.size == 0:
                 raise ValueError("zero-size array to reduction operation "
-                                "minimum which has no identity")
+                                 "minimum which has no identity")
 
             it = np.nditer(a)
             min_value = next(it).take(0)
@@ -543,7 +543,6 @@ def npy_min(a):
             return min_value
 
         return impl_min
-
 
 
 @overload(np.max)
@@ -587,7 +586,7 @@ def npy_max(a):
         def impl_max(a):
             if a.size == 0:
                 raise ValueError("zero-size array to reduction operation "
-                                "maximum which has no identity")
+                                 "maximum which has no identity")
 
             it = np.nditer(a)
             max_value = next(it).take(0)
