@@ -432,6 +432,7 @@ def array_mean(a):
                 return np.float64(a) + 0.0
         elif isinstance(a, (types.Float, types.Complex)):
             typed_zero = as_dtype(a).type(0)
+            
             def _scalar_mean(a):
                 return a + typed_zero
         return _scalar_mean
