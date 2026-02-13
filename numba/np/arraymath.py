@@ -430,10 +430,10 @@ def array_mean(a):
             # Integers and Booleans default to float64 in numpy.mean
             def _scalar_mean(a):
                 return np.float64(a) + 0.0
-        else:
+        elif isinstance(a, (types.Float, types.Complex)):
+            typed_zero = as_dtype(a).type(0)
             def _scalar_mean(a):
-                dtype = type(a)
-                return a + dtype(0.0)
+                return a + typed_zero
         return _scalar_mean
     elif isinstance(a, types.Array):
         is_number = a.dtype in types.integer_domain | frozenset([types.bool_])
