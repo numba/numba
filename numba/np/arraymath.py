@@ -425,16 +425,16 @@ def array_cumprod(a):
 @overload(np.mean)
 @overload_method(types.Array, "mean")
 def array_mean(a):
-    if isinstance(a, (types.Number, types.Boolean)):
-        if isinstance(a, (types.Integer, types.Boolean)):
-            # Integers and Booleans default to float64 in numpy.mean
-            def _scalar_mean(a):
-                return np.float64(a) + 0.0
-        elif isinstance(a, (types.Float, types.Complex)):
-            typed_zero = as_dtype(a).type(0)
+    if isinstance(a, (types.Integer, types.Boolean)):
+        # Integers and Booleans default to float64 in numpy.mean
+        def _scalar_mean(a):
+            return np.float64(a) + 0.0
+        return _scalar_mean
+    elif isinstance(a, (types.Float, types.Complex)):
+        typed_zero = as_dtype(a).type(0)
 
-            def _scalar_mean(a):
-                return a + typed_zero
+        def _scalar_mean(a):
+            return a + typed_zero
         return _scalar_mean
     elif isinstance(a, types.Array):
         is_number = a.dtype in types.integer_domain | frozenset([types.bool_])
