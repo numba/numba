@@ -799,10 +799,9 @@ class IntegerArrayIndexer(Indexer):
     Compute indices from an array of integer indices.
     """
 
-    def __init__(self, context, builder, idxty, idxary, size, subspace_allocated, global_ary_idx):
+    def __init__(self, context, builder, idxty, idxary, size, global_ary_idx):
         self.context = context
         self.builder = builder
-        self.subspace_allocated = subspace_allocated
         self.global_ary_idx = global_ary_idx
 
         self.idx_shape = cgutils.unpack_tuple(builder, idxary.shape)
@@ -848,7 +847,7 @@ class IntegerArrayIndexer(Indexer):
         return self.idx_size
 
     def get_shape(self):
-        return tuple(self.idx_shape)
+        return ()
 
     def get_index_bounds(self):
         # Pessimal heuristic, as we don't want to scan for the min and max
@@ -860,13 +859,6 @@ class IntegerArrayIndexer(Indexer):
         builder.branch(self.bb_start)
         builder.position_at_end(self.bb_start)
         cur_index = builder.load(self.global_ary_idx)
-        if not self.subspace_allocated:
-            with builder.if_then(
-                builder.icmp_signed('>=', cur_index, self.idx_size),
-                likely=False
-            ):
-                self.builder.store(Constant(self.ll_intp, 0), self.global_ary_idx)
-                builder.branch(self.bb_end)
         # Load the actual index from the array of indices
         index = _getitem_array_single_int(
             self.context, builder, self.idxty.dtype, self.idxty, self.idxary,
@@ -878,13 +870,7 @@ class IntegerArrayIndexer(Indexer):
 
     def loop_tail(self):
         builder = self.builder
-        if not self.subspace_allocated:
-            next_index = cgutils.increment_index(builder,
-                                                builder.load(self.global_ary_idx))
-            builder.store(next_index, self.global_ary_idx)
-            builder.branch(self.bb_start)
-        else:
-            builder.branch(self.bb_end)
+        builder.branch(self.bb_end)
         builder.position_at_end(self.bb_end)
 
 
@@ -1026,6 +1012,53 @@ class SliceIndexer(Indexer):
         builder.branch(self.bb_start)
         builder.position_at_end(self.bb_end)
 
+class SubspaceIndexer(object):
+    def __init__(self, context, builder, shape_tuple, global_ary_idx):
+        self.context = context
+        self.builder = builder
+        self.global_ary_idx = global_ary_idx
+
+        self.shape_tuple = shape_tuple
+        self.ll_intp = self.context.get_value_type(types.intp)
+        self.size = self.ll_intp(1)
+        for _shape in self.shape_tuple:
+            self.size = self.builder.mul(self.size, _shape)
+
+    def prepare(self):
+        builder = self.builder
+        self.bb_start = builder.append_basic_block()
+        self.bb_end = builder.append_basic_block()
+
+    def get_size(self):
+        return None
+
+    def get_shape(self):
+        return self.shape_tuple
+
+    def get_index_bounds(self):
+        # Pessimal heuristic, as we don't want to scan for the min and max
+        return (self.ll_intp(0), self.size)
+
+    def loop_head(self):
+        builder = self.builder
+        # Initialize loop variable
+        builder.branch(self.bb_start)
+        builder.position_at_end(self.bb_start)
+        cur_index = builder.load(self.global_ary_idx)
+        with builder.if_then(
+            builder.icmp_signed('>=', cur_index, self.size),
+            likely=False
+        ):
+            self.builder.store(Constant(self.ll_intp, 0), self.global_ary_idx)
+            builder.branch(self.bb_end)
+
+    def loop_tail(self):
+        builder = self.builder
+        next_index = cgutils.increment_index(builder,
+                                            builder.load(self.global_ary_idx))
+        builder.store(next_index, self.global_ary_idx)
+        builder.branch(self.bb_start)
+        builder.position_at_end(self.bb_end)
 
 class FancyIndexer(object):
     """
@@ -1044,11 +1077,9 @@ class FancyIndexer(object):
         self.builder.store(Constant(self.ll_intp, 0), self.global_ary_idx)
         indexers = []
         num_newaxes = len([idx for idx in index_types if is_nonelike(idx)])
-
         ax = 0 # keeps track of position of original axes
         new_ax = 0 # keeps track of position for inserting new axes
 
-        subspace_allocated=False
         for indexval, idxty in zip(indices, index_types):
             if idxty is types.ellipsis:
                 # Fill up missing dimensions at the middle
@@ -1077,9 +1108,7 @@ class FancyIndexer(object):
                     indexer = IntegerArrayIndexer(context, builder,
                                                   idxty, idxary,
                                                   self.shapes[ax],
-                                                  subspace_allocated,
                                                   self.global_ary_idx)
-                    subspace_allocated = True
                 elif isinstance(idxty.dtype, types.Boolean):
                     indexer = BooleanArrayIndexer(context, builder,
                                                   idxty, idxary)
@@ -1102,6 +1131,29 @@ class FancyIndexer(object):
             ax += 1
 
         assert len(indexers) == aryty.ndim, (len(indexers), aryty.ndim)
+
+        self.subspace_indexer = SubspaceIndexer(context, builder, subspace_shape_tuple, self.global_ary_idx)
+
+        num_subspaces = 0
+        in_subspace = False
+        subspace_index = -1
+        for idx, i in enumerate(indexers):
+            if isinstance(i, IntegerArrayIndexer):
+                if in_subspace == False:
+                    in_subspace = True
+                    num_subspaces += 1
+                if subspace_index == -1:
+                    subspace_index = idx
+            else:
+                if in_subspace == True:
+                    in_subspace = False
+        
+        if num_subspaces > 1:
+            subspace_index = 0
+
+        self.subspace_index = subspace_index
+        indexers.insert(subspace_index, self.subspace_indexer)
+
         self.indexers = indexers
 
     def prepare(self):
@@ -1109,16 +1161,8 @@ class FancyIndexer(object):
             i.prepare()
         # Compute the resulting shape
         res_shape = []
-        subspace_added=False
         for i in self.indexers:
-            # Shape of subspace i.e. cumulative shape of indexing
-            # arrays only needs to be considered once
-            if isinstance(i, IntegerArrayIndexer):
-                if not subspace_added:
-                    res_shape.append(self.subspace_shape)
-                    subspace_added = True
-            else:
-                res_shape.append(i.get_shape())
+            res_shape.append(i.get_shape())
         self.indexers_shape = sum(res_shape, ())
 
     def get_shape(self):
@@ -1166,8 +1210,9 @@ class FancyIndexer(object):
         return lower, upper
 
     def begin_loops(self):
-        indices = tuple(i.loop_head() for i in self.indexers)
-        return indices
+        indices = list(i.loop_head() for i in self.indexers)
+        indices.pop(self.subspace_index)
+        return tuple(indices)
 
     def end_loops(self):
         for i in reversed(self.indexers):
