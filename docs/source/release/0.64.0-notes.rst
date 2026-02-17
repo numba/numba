@@ -1,6 +1,6 @@
 
-Version 0.64.0 (TBD)
-===================================
+Version 0.64.0 (18 February 2026)
+=================================
 
 This is a major Numba release. Numba now supports NumPy 2.4.
 
