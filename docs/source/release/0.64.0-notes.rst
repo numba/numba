@@ -117,6 +117,7 @@ Pull-Requests:
 * PR `#10419 <https://github.com/numba/numba/pull/10419>`_: Enh: refactor array reshaping in tests to use reshape method (`swap357 <https://github.com/swap357>`_)
 * PR `#10422 <https://github.com/numba/numba/pull/10422>`_: update version support table for `0.64.0rc1` (`swap357 <https://github.com/swap357>`_)
 * PR `#10423 <https://github.com/numba/numba/pull/10423>`_: Changelog 0.64 (`swap357 <https://github.com/swap357>`_)
+* PR `#10438 <https://github.com/numba/numba/pull/10438>`_: update release date and version table 0.64 (`swap357 <https://github.com/swap357>`_)
 
 Authors:
 
