@@ -174,28 +174,6 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
             with self.subTest(idx=idx):
                 self.check_setitem_indices(self.shape, idx)
 
-    def test_unsupported_condition_exceptions(self):
-        # Cases with more than one indexing array
-        idx = (0, 3, np.array([1, 2]), np.array([1, 2]))
-        with self.assertRaises(TypingError) as raises:
-            self.check_getitem_indices(self.shape, idx)
-        self.assertIn(
-            'Using more than one non-scalar array index is unsupported.',
-            str(raises.exception)
-        )
-
-        # Cases with more than one indexing subspace
-        # (The subspaces here are separated by slice(None))
-        idx = (0, np.array([1, 2]), slice(None), 3, 4)
-        with self.assertRaises(TypingError) as raises:
-            self.check_getitem_indices(self.shape, idx)
-        msg = "Using more than one indexing subspace (consecutive group " +\
-                "of integer or array indices) is unsupported."
-        self.assertIn(
-            msg,
-            str(raises.exception)
-        )
-
     def test_setitem_0d(self):
         @njit     
         def set_item(array, idx, item):
@@ -301,6 +279,8 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         self.disable_leak_check()
 
     def test_np_take_axis(self):
+        def np_take_kws(A, indices, axis):
+            return np.take(A, indices, axis=axis)
         pyfunc = np_take_kws
         cfunc = jit(nopython=True)(pyfunc)
 
@@ -354,6 +334,8 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
 
 
     def test_np_take_axis_exception(self):
+        def np_take_kws(A, indices, axis):
+            return np.take(A, indices, axis=axis)
         cfunc = jit(nopython=True)(np_take_kws)
         arr = np.arange(9).reshape(3, 3)
         msg = 'axis 2 is out of bounds for array of dimension 2'
@@ -565,31 +547,6 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
         for idx in indices:
             with self.subTest(idx=idx):
                 self.check_setitem_indices(self.shape, idx)
-
-    def test_unsupported_condition_exceptions(self):
-        err_idx_cases = [
-            # Cases with multi-dimensional indexing array
-            ('Multi-dimensional indices are not supported.',
-             (0, 3, np.array([[1, 2], [2, 3]]))),
-            # Cases with more than one indexing array
-            ('Using more than one non-scalar array index is unsupported.',
-             (0, 3, np.array([1, 2]), np.array([1, 2]))),
-            # Cases with more than one indexing subspace
-            # (The subspaces here are separated by slice(None))
-            ("Using more than one indexing subspace is unsupported." + \
-             " An indexing subspace is a group of one or more consecutive" + \
-             " indices comprising integer or array types.",
-             (0, np.array([1, 2]), slice(None), 3, 4))
-        ]
-        
-        for err, idx in err_idx_cases:
-            with self.assertRaises(TypingError) as raises:
-                self.check_getitem_indices(self.shape, idx)
-            self.assertIn(
-                err,
-                str(raises.exception)
-            )
-
 
 if __name__ == '__main__':
     unittest.main()

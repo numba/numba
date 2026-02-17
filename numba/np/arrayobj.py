@@ -1079,6 +1079,7 @@ class FancyIndexer(object):
         num_newaxes = len([idx for idx in index_types if is_nonelike(idx)])
         ax = 0 # keeps track of position of original axes
         new_ax = 0 # keeps track of position for inserting new axes
+        self.newaxes = []
 
         for indexval, idxty in zip(indices, index_types):
             if idxty is types.ellipsis:
@@ -1136,33 +1137,44 @@ class FancyIndexer(object):
 
         num_subspaces = 0
         in_subspace = False
-        subspace_index = -1
+        subspace_index = None
         for idx, i in enumerate(indexers):
             if isinstance(i, IntegerArrayIndexer):
                 if in_subspace == False:
                     in_subspace = True
                     num_subspaces += 1
-                if subspace_index == -1:
+                if subspace_index is None:
                     subspace_index = idx
             else:
                 if in_subspace == True:
                     in_subspace = False
         
-        if num_subspaces > 1:
-            subspace_index = 0
+        if num_subspaces:
+            if num_subspaces > 1:
+                subspace_index = 0
+
+            indexers.insert(subspace_index, self.subspace_indexer)
 
         self.subspace_index = subspace_index
-        indexers.insert(subspace_index, self.subspace_indexer)
-
         self.indexers = indexers
 
     def prepare(self):
+        one = self.context.get_constant(types.intp, 1)
         for i in self.indexers:
             i.prepare()
         # Compute the resulting shape
         res_shape = []
         for i in self.indexers:
             res_shape.append(i.get_shape())
+
+        # At every position where newaxis/None is present insert
+        # one as a constant shape in the resulting list of shapes.
+        for i in self.newaxes:
+            res_shape.insert(i, (one,))
+
+        # Store the shape as a tuple, we can't do a simple
+        # tuple(res_shape) here since res_shape is a list
+        # of tuples which may be differently sized.
         self.indexers_shape = sum(res_shape, ())
 
     def get_shape(self):
@@ -1211,7 +1223,8 @@ class FancyIndexer(object):
 
     def begin_loops(self):
         indices = list(i.loop_head() for i in self.indexers)
-        indices.pop(self.subspace_index)
+        if self.subspace_index is not None:
+            indices.pop(self.subspace_index)
         return tuple(indices)
 
     def end_loops(self):
@@ -1843,8 +1856,27 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
     dest_strides = cgutils.unpack_tuple(builder, ary.strides)
     dest_data = ary.data
 
+    array_indices = []
+    for i, idxty in enumerate(index_types):
+        idx = indices[i]
+        if isinstance(idxty, types.Array):
+            idx_make = make_array(idxty)(context, builder, idx)
+            array_indices.append((i, idx, idxty, idx_make))
+
+    if len(array_indices):
+        bdcast_indices, subspace_shape_tuple = \
+            get_bdcast_idx(context, builder, array_indices)
+
+        indices = list(indices)
+        index_types = list(index_types)
+        for i, bdcast_idx, bdcast_idxty in bdcast_indices:
+            indices[i] = bdcast_idx
+            index_types[i] = bdcast_idxty
+    else:
+        subspace_shape_tuple = ()
+
     indexer = FancyIndexer(context, builder, aryty, ary,
-                           index_types, indices)
+                           index_types, indices, subspace_shape_tuple)
     indexer.prepare()
 
     def raise_shape_mismatch_error(context, builder, src_shapes, index_shape):
