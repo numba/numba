@@ -5,6 +5,7 @@ from numba.tests.support import TestCase
 from numba import typeof
 from numba.core import types
 from numba.typed import List, Dict
+from numba.np.numpy_support import numpy_version
 
 NB_TYPES = [
     types.Array,
@@ -13,6 +14,7 @@ NB_TYPES = [
     types.unicode_type,
     types.Record,
     types.UnicodeCharSeq,
+    types.StringDTypeType,
     types.UniTuple,
     types.List,
     types.Tuple,
@@ -54,6 +56,10 @@ class TestRepr(TestCase):
             List([1, 2]),
             {1, 2},
         ] + [number(1.1) for number in types.number_domain]
+        if numpy_version >= (2, 0):
+            val_types_cases.append(
+                np.array(['a', None], dtype=np.dtypes.StringDType())
+            )
 
         for val in val_types_cases:
             self.check_repr(val)

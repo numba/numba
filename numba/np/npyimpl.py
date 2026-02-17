@@ -146,16 +146,33 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder',
                                          inds=indices)
 
     def load_data(self, indices):
-        model = self.context.data_model_manager[self.base_type]
+        context, builder = self.context, self.builder
         ptr = self._load_effective_address(indices)
-        return model.load_from_data_pointer(self.builder, ptr)
+        dm = context.data_model_manager[self.base_type]
+        if getattr(dm, 'array_load', None) is not None:
+            arrty = types.Array(self.base_type, self.ndim, self.layout)
+            # Pass the full array struct so dtype hooks (e.g. StringDType)
+            # can safely access descriptor and other fields.
+            arr = context.make_array(arrty)(context, builder, self.return_val)
+            return arrayobj.load_item(context, builder, arrty, ptr, arr)
+        return dm.load_from_data_pointer(builder, ptr)
 
     def store_data(self, indices, value):
         ctx = self.context
         bld = self.builder
+        arrty = types.Array(self.base_type, self.ndim, self.layout)
+        ptr = self._load_effective_address(indices)
+        dm = ctx.data_model_manager[self.base_type]
+        # If the dtype provides an array_store hook (e.g., StringDType),
+        # delegate to it to ensure proper cloning/NA semantics using the
+        # owning array's descriptor. Otherwise, fall back to raw store.
+        if getattr(dm, 'array_store', None) is not None:
+            arr = ctx.make_array(arrty)(ctx, bld, self.return_val)
+            arrayobj.store_item(ctx, bld, arrty, value, ptr, ary=arr)
+            return
         store_value = ctx.get_value_as_data(bld, self.base_type, value)
         assert ctx.get_data_type(self.base_type) == store_value.type
-        bld.store(store_value, self._load_effective_address(indices))
+        bld.store(store_value, ptr)
 
 
 class _ArrayGUHelper(namedtuple('_ArrayHelper', ('context', 'builder',
@@ -223,7 +240,8 @@ class _ArrayGUHelper(namedtuple('_ArrayHelper', ('context', 'builder',
                 strides=cgutils.pack_array(builder, [itemsize]),
                 itemsize=arr_from.itemsize,
                 meminfo=arr_from.meminfo,
-                parent=arr_from.parent)
+                parent=arr_from.parent,
+                descr=arr_from.descr)
             return arr_to._getvalue()
         else:
             # generic case
@@ -237,6 +255,14 @@ class _ArrayGUHelper(namedtuple('_ArrayHelper', ('context', 'builder',
             # NOTE: don't call impl_ret_borrowed since the caller doesn't handle
             #       references; but this is a borrow.
             return res
+
+    def store_data(self, indices, value):
+        ctx = self.context
+        bld = self.builder
+        arrty = types.Array(self.base_type, self.ndim, self.layout)
+        ptr = self._load_effective_address(indices)
+        arr = ctx.make_array(arrty)(ctx, bld, self.data)
+        arrayobj.store_item(ctx, bld, arrty, value, ptr, ary=arr)
 
     def guard_shape(self, loopshape):
         inner_ndim = self.inner_arr_ty.ndim

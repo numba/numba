@@ -297,6 +297,7 @@ NRT_adapt_ndarray_from_python(PyObject *obj, arystruct_t* arystruct) {
     arystruct->nitems = PyArray_SIZE(ndary);
     arystruct->itemsize = PyArray_ITEMSIZE(ndary);
     arystruct->parent = obj;
+    arystruct->descr = (void*)PyArray_DESCR(ndary);
     p = arystruct->shape_and_strides;
     for (i = 0; i < ndim; i++, p++) {
         *p = PyArray_DIM(ndary, i);
@@ -468,6 +469,7 @@ NRT_adapt_buffer_from_python(Py_buffer *buf, arystruct_t *arystruct)
     arystruct->data = buf->buf;
     arystruct->itemsize = buf->itemsize;
     arystruct->parent = buf->obj;
+    arystruct->descr = NULL;
     arystruct->nitems = 1;
     p = arystruct->shape_and_strides;
     for (i = 0; i < buf->ndim; i++, p++) {

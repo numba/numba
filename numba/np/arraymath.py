@@ -3318,7 +3318,7 @@ def array_nonzero(context, builder, sig, args):
     with cgutils.loop_nest(builder, shape, zero.type) as indices:
         ptr = cgutils.get_item_pointer2(context, builder, data, shape, strides,
                                         layout, indices)
-        val = load_item(context, builder, aryty, ptr)
+        val = load_item(context, builder, aryty, ptr, ary)
         nz = context.is_true(builder, aryty.dtype, val)
         with builder.if_then(nz):
             builder.store(builder.add(builder.load(count), one), count)
@@ -3335,7 +3335,7 @@ def array_nonzero(context, builder, sig, args):
     with cgutils.loop_nest(builder, shape, zero.type) as indices:
         ptr = cgutils.get_item_pointer2(context, builder, data, shape, strides,
                                         layout, indices)
-        val = load_item(context, builder, aryty, ptr)
+        val = load_item(context, builder, aryty, ptr, ary)
         nz = context.is_true(builder, aryty.dtype, val)
         with builder.if_then(nz):
             # Store element indices in output arrays
@@ -3347,7 +3347,9 @@ def array_nonzero(context, builder, sig, args):
                 ptr = cgutils.get_item_pointer2(context, builder, out_datas[i],
                                                 out_shape, (),
                                                 'C', [cur])
-                store_item(context, builder, outaryty, indices[i], ptr)
+                store_item(
+                    context, builder, outaryty, indices[i], ptr, outarys[i]
+                )
             builder.store(builder.add(cur, one), index)
 
     tup = context.make_tuple(builder, sig.return_type, outs)
@@ -4891,7 +4893,7 @@ def np_trim_zeros(filt, trim='fb'):
     if filt.ndim > 1:
         raise NumbaTypeError('array must be 1D')
 
-    if not isinstance(trim, (str, types.UnicodeType)):
+    if not isinstance(trim, (types.UnicodeType, types.StringLiteral)):
         raise NumbaTypeError('The second argument must be a string')
 
     trim_escapes = numpy_version >= (2, 2)

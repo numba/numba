@@ -2,6 +2,7 @@ import sys
 import operator
 
 import numpy as np
+from llvmlite import ir
 from llvmlite.ir import IntType, Constant
 
 from numba.core.cgutils import is_nonelike
@@ -28,6 +29,17 @@ from numba.core.pythonapi import (
     PY_UNICODE_4BYTE_KIND,
 )
 from numba._helperlib import c_helpers
+from numba.np._stringdtype import (
+    get_descr_ptr as _get_stringdtype_descr_ptr,
+    NPYSTRING_STATUS_ERROR,
+    NPYSTRING_STATUS_NA,
+    alloc_packed_storage as _stringdtype_alloc_packed_storage,
+    pack_from_pyobject as _stringdtype_pack_from_pyobject,
+    unpack_to_pyobject as _stringdtype_unpack_to_pyobject,
+    unpack_utf8_status as _stringdtype_unpack_utf8_status,
+    utf8_status_pair as _stringdtype_utf8_status_pair,
+    prepare_from_value as _stringdtype_prepare_from_value,
+)
 from numba.cpython.hashing import _Py_hash_t
 from numba.core.unsafe.bytes import memcpy_region
 from numba.core.errors import TypingError
@@ -167,6 +179,208 @@ def cast_from_literal(context, builder, fromty, toty, val):
     )
 
 
+@lower_cast(types.StringDTypeType, types.unicode_type)
+def stringdtype_to_unicode(context, builder, fromty, toty, val):
+    pyapi = context.get_python_api(builder)
+    # Prepare packed pointer + descriptor
+    descr_voidptr, packed_ptr, _descr_ptr = _stringdtype_prepare_from_value(
+        context, builder, fromty, val
+    )
+
+    # Check NA / error via UTF-8 fast path
+    status = _stringdtype_unpack_utf8_status(
+        context, builder, descr_voidptr, packed_ptr
+    )
+    status_error = Constant(status.type, NPYSTRING_STATUS_ERROR)
+    status_na = Constant(status.type, NPYSTRING_STATUS_NA)
+
+    with builder.if_then(
+        builder.icmp_signed('==', status, status_error), likely=False
+    ):
+        context.call_conv.return_user_exc(
+            builder,
+            RuntimeError,
+            (
+                "failed to unpack StringDType value during strict unicode "
+                "conversion (non-NA value expected)",
+            ),
+        )
+    with builder.if_then(
+        builder.icmp_signed('==', status, status_na), likely=False
+    ):
+        context.call_conv.return_user_exc(
+            builder,
+            ValueError,
+            ("StringDType value represents missing data",),
+        )
+
+    # Not NA: box to Python and then convert to native unicode
+    pyobj = _stringdtype_unpack_to_pyobject(
+        context, builder, descr_voidptr, packed_ptr, pyapi
+    )
+    is_null = cgutils.is_null(builder, pyobj)
+    with builder.if_then(is_null, likely=False):
+        context.call_conv.return_user_exc(
+            builder,
+            RuntimeError,
+            (
+                "failed to unpack StringDType value to Python object during "
+                "strict unicode conversion",
+            ),
+        )
+
+    native = pyapi.to_native_value(toty, pyobj)
+    pyapi.decref(pyobj)
+
+    if native.cleanup is not None:
+        native.cleanup()
+
+    with builder.if_then(native.is_error, likely=False):
+        context.call_conv.return_user_exc(
+            builder,
+            RuntimeError,
+            (
+                "failed to convert StringDType Python object to native "
+                "unicode during strict conversion",
+            ),
+        )
+
+    return native.value
+
+
+@lower_cast(types.StringDTypeType, types.Optional(types.unicode_type))
+def stringdtype_to_optional_unicode(context, builder, fromty, toty, val):
+    """Cast StringDType to Optional[unicode].
+
+    - Missing values (NA) become Optional(None)
+    - Present values become Optional(str)
+    """
+    # First, use the UTF-8 helper to check NA status without allocating
+    # Prepare packed pointer + descriptor
+    descr_voidptr, packed_ptr, _descr_ptr = _stringdtype_prepare_from_value(
+        context, builder, fromty, val
+    )
+
+    status = _stringdtype_unpack_utf8_status(
+        context, builder, descr_voidptr, packed_ptr
+    )
+
+    status_error = Constant(status.type, NPYSTRING_STATUS_ERROR)
+    status_na = Constant(status.type, NPYSTRING_STATUS_NA)
+    failed = builder.icmp_signed('==', status, status_error)
+    with builder.if_then(failed, likely=False):
+        context.call_conv.return_user_exc(
+            builder,
+            RuntimeError,
+            (
+                "failed to unpack StringDType value during optional unicode "
+                "conversion",
+            ),
+        )
+
+    # Prepare optional return container
+    outopt = context.make_helper(builder, toty)
+
+    is_na = builder.icmp_signed('==', status, status_na)
+    with builder.if_else(is_na) as (then, other):
+        with then:
+            # NA -> Optional(None)
+            outopt.valid = cgutils.false_bit
+            outopt.data = cgutils.get_null_value(outopt.data.type)
+        with other:
+            # Not NA: go via Python to materialise unicode before casting
+            pyapi = context.get_python_api(builder)
+            pyobj = _stringdtype_unpack_to_pyobject(
+                context, builder, descr_voidptr, packed_ptr, pyapi
+            )
+
+            is_null = cgutils.is_null(builder, pyobj)
+            with builder.if_then(is_null, likely=False):
+                context.call_conv.return_user_exc(
+                    builder,
+                    RuntimeError,
+                    (
+                        "failed to unpack StringDType value to Python object "
+                        "during optional unicode conversion",
+                    ),
+                )
+
+            native = pyapi.to_native_value(types.unicode_type, pyobj)
+            pyapi.decref(pyobj)
+
+            if native.cleanup is not None:
+                native.cleanup()
+
+            with builder.if_then(native.is_error, likely=False):
+                context.call_conv.return_user_exc(
+                    builder,
+                    RuntimeError,
+                    (
+                        "failed to convert StringDType Python object to "
+                        "native unicode during optional conversion",
+                    ),
+                )
+
+            outopt.valid = cgutils.true_bit
+            outopt.data = native.value
+
+    return outopt._getvalue()
+
+
+@lower_cast(types.StringLiteral, types.StringDTypeType)
+def literal_to_stringdtype(context, builder, fromty, toty, val):
+    unicode_val = make_string_from_constant(
+        context, builder, types.unicode_type, fromty.literal_value,
+    )
+    return unicode_to_stringdtype(
+        context, builder, types.unicode_type, toty, unicode_val
+    )
+
+
+@lower_cast(types.UnicodeType, types.StringDTypeType)
+def unicode_to_stringdtype(context, builder, fromty, toty, val):
+    pyapi = context.get_python_api(builder)
+    pyobj = pyapi.from_native_value(fromty, val)
+    with builder.if_then(cgutils.is_null(builder, pyobj), likely=False):
+        context.call_conv.return_user_exc(
+            builder,
+            RuntimeError,
+            (
+                "failed to box native unicode value to Python object during "
+                "StringDType conversion",
+            ),
+        )
+    packed_storage, packed_ptr = _stringdtype_alloc_packed_storage(
+        context, builder, toty
+    )
+
+    descr_ptr = _get_stringdtype_descr_ptr(context, builder, toty)
+    descr_voidptr = builder.bitcast(
+        descr_ptr, context.get_value_type(types.voidptr)
+    )
+    status = _stringdtype_pack_from_pyobject(
+        context, builder, descr_voidptr, packed_ptr, pyapi, pyobj
+    )
+    pyapi.decref(pyobj)
+
+    status_error = Constant(status.type, NPYSTRING_STATUS_ERROR)
+    failed = builder.icmp_signed('==', status, status_error)
+    with builder.if_then(failed, likely=False):
+        context.call_conv.return_user_exc(
+            builder,
+            RuntimeError,
+            (
+                "failed to pack unicode value into StringDType during type "
+                "conversion",
+            ),
+        )
+
+    data_value = builder.load(packed_storage)
+    return _stringdtype_build_value(
+        context, builder, toty, descr_ptr, data_value
+    )
+
+
 # CONSTANT
 
 @lower_constant(types.unicode_type)
@@ -214,6 +428,39 @@ def box_unicode_str(typ, val, c):
     c.pyapi.object_hash(res)
     c.context.nrt.decref(c.builder, typ, val)
     return res
+
+
+@unbox(types.StringDTypeType)
+def unbox_stringdtype_value(typ, obj, c):
+    packed_storage, packed_ptr = _stringdtype_alloc_packed_storage(
+        c.context, c.builder, typ
+    )
+
+    descr_ptr = _get_stringdtype_descr_ptr(c.context, c.builder, typ)
+    descr_voidptr = c.builder.bitcast(
+        descr_ptr, c.context.get_value_type(types.voidptr)
+    )
+    status = _stringdtype_pack_from_pyobject(
+        c.context, c.builder, descr_voidptr, packed_ptr, c.pyapi, obj
+    )
+    status_error = Constant(status.type, NPYSTRING_STATUS_ERROR)
+    failed = c.builder.icmp_signed('==', status, status_error)
+
+    data_value = c.builder.load(packed_storage)
+    value = _stringdtype_build_value(
+        c.context, c.builder, typ, descr_ptr, data_value
+    )
+    return NativeValue(value, is_error=failed)
+
+
+@box(types.StringDTypeType)
+def box_stringdtype_value(typ, val, c):
+    descr_voidptr, packed_ptr, _descr_ptr = _stringdtype_prepare_from_value(
+        c.context, c.builder, typ, val
+    )
+    return _stringdtype_unpack_to_pyobject(
+        c.context, c.builder, descr_voidptr, packed_ptr, c.pyapi
+    )
 
 
 # HELPER FUNCTIONS
@@ -2564,6 +2811,20 @@ def unicode_repr(s):
     return lambda s: "'" + s + "'"
 
 
+@intrinsic
+def _stringdtype_to_unicode(typingctx, s):
+    if not isinstance(s, types.StringDTypeType):
+        return None
+    sig = types.unicode_type(s)
+
+    def codegen(context, builder, signature, args):
+        (fromty,) = signature.args
+        (val,) = args
+        return context.cast(builder, val, fromty, types.unicode_type)
+
+    return sig, codegen
+
+
 @overload_method(types.Integer, "__str__")
 def integer_str(n):
 
@@ -2632,6 +2893,28 @@ def getiter_unicode(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
+@lower_builtin('getiter', types.StringDTypeType)
+def getiter_stringdtype(context, builder, sig, args):
+    # Decode to unicode and reuse unicode iterator semantics
+    [sdt_ty] = sig.args
+    [sdt_val] = args
+
+    uni_val = context.cast(builder, sdt_val, sdt_ty, types.unicode_type)
+
+    iterobj = context.make_helper(builder, sig.return_type)
+
+    zero = context.get_constant(types.uintp, 0)
+    indexptr = cgutils.alloca_once_value(builder, zero)
+    iterobj.index = indexptr
+    iterobj.data = uni_val
+
+    if context.enable_nrt:
+        context.nrt.incref(builder, types.unicode_type, uni_val)
+
+    res = iterobj._getvalue()
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
+
+
 @lower_builtin('iternext', types.UnicodeIteratorType)
 # a new ref counted object is put into result._yield so set the new_ref to True!
 @iternext_impl(RefType.NEW)
@@ -2673,3 +2956,1346 @@ def iternext_unicode(context, builder, sig, args, result):
         # bump index for next cycle
         nindex = cgutils.increment_index(builder, index)
         builder.store(nindex, iterobj.index)
+
+
+def _stringdtype_ensure_descr(context, builder, typ, descr_val):
+    tmp = cgutils.alloca_once_value(builder, descr_val)
+    null_ptr = cgutils.get_null_value(descr_val.type)
+    is_null = builder.icmp_unsigned('==', descr_val, null_ptr)
+    with builder.if_then(is_null, likely=False):
+        fallback = _get_stringdtype_descr_ptr(context, builder, typ)
+        fallback = builder.bitcast(fallback, descr_val.type)
+        builder.store(fallback, tmp)
+    return builder.load(tmp)
+
+
+def _stringdtype_build_value(context, builder, typ, descr_ptr, data_value):
+    ll_value_ty = context.get_value_type(typ)
+    target_ptr_ty = ll_value_ty.elements[0]
+    if descr_ptr.type != target_ptr_ty:
+        descr_cast = builder.bitcast(descr_ptr, target_ptr_ty)
+    else:
+        descr_cast = descr_ptr
+    value = cgutils.get_null_value(ll_value_ty)
+    value = builder.insert_value(value, descr_cast, 0)
+    value = builder.insert_value(value, data_value, 1)
+    return value
+
+
+@intrinsic
+def _stringdtype_len(typingctx, s):
+    if not isinstance(s, types.StringDTypeType):
+        return None
+    sig = types.intp(s)
+
+    def codegen(context, builder, signature, args):
+        (typ,) = signature.args
+        (val,) = args
+        # Cast to unicode (raises on NA) then call len(unicode)
+        uval = context.cast(builder, val, typ, types.unicode_type)
+        tyctx = context.typing_context
+        fnty = tyctx.resolve_value_type(len)
+        lsig = fnty.get_call_type(tyctx, (types.unicode_type,), {})
+        fn = context.get_function(fnty, lsig)
+        return fn(builder, (uval,))
+
+    return sig, codegen
+
+
+@overload(len)
+def stringdtype_len_overload(s):
+    if isinstance(s, types.StringDTypeType):
+        def len_impl(s):
+            return _stringdtype_len(s)
+        return len_impl
+
+
+def _stringdtype_cmp_core(context, builder, a_ty, a_val, b_ty, b_val, op):
+    """Comparator for StringDType scalars using unicode semantics.
+
+    NA semantics:
+    - eq: NA==NA True; NA with value False
+    - order (<,>,<=,>=): any NA -> False
+    """
+    st_a, st_b = _stringdtype_utf8_status_pair(
+        context, builder, a_ty, a_val, b_ty, b_val
+    )
+    status_error = Constant(st_a.type, NPYSTRING_STATUS_ERROR)
+    status_na = Constant(st_a.type, NPYSTRING_STATUS_NA)
+
+    with builder.if_then(
+        builder.icmp_signed('==', st_a, status_error), likely=False
+    ):
+        context.call_conv.return_user_exc(
+            builder,
+            RuntimeError,
+            ("failed to unpack StringDType LHS for comparison",),
+        )
+    with builder.if_then(
+        builder.icmp_signed('==', st_b, status_error), likely=False
+    ):
+        context.call_conv.return_user_exc(
+            builder,
+            RuntimeError,
+            ("failed to unpack StringDType RHS for comparison",),
+        )
+
+    a_is_na = builder.icmp_signed('==', st_a, status_na)
+    b_is_na = builder.icmp_signed('==', st_b, status_na)
+    any_na = builder.or_(a_is_na, b_is_na)
+    both_na = builder.and_(a_is_na, b_is_na)
+
+    res = cgutils.alloca_once_value(builder, ir.Constant(ir.IntType(1), 0))
+    if op == 'eq':
+        with builder.if_else(any_na) as (then, other):
+            with then:
+                r = builder.select(
+                    both_na,
+                    ir.Constant(ir.IntType(1), 1),
+                    ir.Constant(ir.IntType(1), 0),
+                )
+                builder.store(r, res)
+            with other:
+                # Use nogil UTF-8 equality comparator directly
+                ll_voidptr = context.get_value_type(types.voidptr)
+                ll_i8_ptr = ir.IntType(8).as_pointer()
+                a_descr = _stringdtype_ensure_descr(
+                    context, builder, a_ty, builder.extract_value(a_val, 0)
+                )
+                b_descr = _stringdtype_ensure_descr(
+                    context, builder, b_ty, builder.extract_value(b_val, 0)
+                )
+                a_data = builder.extract_value(a_val, 1)
+                b_data = builder.extract_value(b_val, 1)
+                a_storage = cgutils.alloca_once_value(builder, a_data)
+                b_storage = cgutils.alloca_once_value(builder, b_data)
+                a_packed_ptr = builder.bitcast(a_storage, ll_i8_ptr)
+                b_packed_ptr = builder.bitcast(b_storage, ll_i8_ptr)
+                fn_ty = ir.FunctionType(
+                    ir.IntType(32),
+                    [ll_voidptr, ll_i8_ptr, ll_voidptr, ll_i8_ptr],
+                )
+                eq_fn = cgutils.get_or_insert_function(
+                    builder.module, fn_ty, name="numba_stringdtype_utf8_eq"
+                )
+                eqv = builder.call(
+                    eq_fn,
+                    [
+                        builder.bitcast(a_descr, ll_voidptr),
+                        a_packed_ptr,
+                        builder.bitcast(b_descr, ll_voidptr),
+                        b_packed_ptr,
+                    ],
+                )
+                # eqv: -1 on error, else 0/1. Treat -1 as error -> raise.
+                with builder.if_then(
+                    builder.icmp_signed('==', eqv, ir.Constant(eqv.type, -1)),
+                    likely=False,
+                ):
+                    context.call_conv.return_user_exc(
+                        builder,
+                        RuntimeError,
+                        ("failed to compare StringDType values",),
+                    )
+                r = builder.trunc(eqv, ir.IntType(1))
+                builder.store(r, res)
+        return builder.load(res)
+
+    with builder.if_else(any_na) as (then, other):
+        with then:
+            builder.store(ir.Constant(ir.IntType(1), 0), res)
+        with other:
+            # Use nogil UTF-8 comparator directly
+            ll_voidptr = context.get_value_type(types.voidptr)
+            ll_i8_ptr = ir.IntType(8).as_pointer()
+
+            # Ensure descriptors (fallback to global if NULL)
+            a_descr = _stringdtype_ensure_descr(
+                context, builder, a_ty, builder.extract_value(a_val, 0)
+            )
+            b_descr = _stringdtype_ensure_descr(
+                context, builder, b_ty, builder.extract_value(b_val, 0)
+            )
+
+            # Get pointers to packed records
+            a_data = builder.extract_value(a_val, 1)
+            b_data = builder.extract_value(b_val, 1)
+            a_storage = cgutils.alloca_once_value(builder, a_data)
+            b_storage = cgutils.alloca_once_value(builder, b_data)
+            a_packed_ptr = builder.bitcast(a_storage, ll_i8_ptr)
+            b_packed_ptr = builder.bitcast(b_storage, ll_i8_ptr)
+
+            # Call ordering comparator: -1,0,1 result
+            fn_ty = ir.FunctionType(
+                ir.IntType(32),
+                [ll_voidptr, ll_i8_ptr, ll_voidptr, ll_i8_ptr],
+            )
+            ord_fn = cgutils.get_or_insert_function(
+                builder.module, fn_ty, name="numba_stringdtype_utf8_ord"
+            )
+            ordv = builder.call(
+                ord_fn,
+                [
+                    builder.bitcast(a_descr, ll_voidptr),
+                    a_packed_ptr,
+                    builder.bitcast(b_descr, ll_voidptr),
+                    b_packed_ptr,
+                ],
+            )
+
+            # Error check (-2 signals error in helper)
+            with builder.if_then(
+                builder.icmp_signed('==', ordv, ir.Constant(ordv.type, -2)),
+                likely=False,
+            ):
+                context.call_conv.return_user_exc(
+                    builder,
+                    RuntimeError,
+                    ("failed to compare StringDType values",),
+                )
+
+            # Map ord result to boolean based on op
+            i32 = ordv.type
+            zero = ir.Constant(i32, 0)
+            if op == 'lt':
+                r = builder.icmp_signed('<', ordv, zero)
+            elif op == 'gt':
+                r = builder.icmp_signed('>', ordv, zero)
+            elif op == 'le':
+                r = builder.icmp_signed('<=', ordv, zero)
+            elif op == 'ge':
+                r = builder.icmp_signed('>=', ordv, zero)
+            else:
+                # Fallback shouldn't happen here for ordering ops
+                r = ir.Constant(ir.IntType(1), 0)
+            builder.store(r, res)
+    return builder.load(res)
+
+
+def _stringdtype_choose_descr(context, builder, a_ty, a_val, b_ty, b_val):
+    """Choose a descriptor pointer for result values.
+
+    Prefer LHS descr if non-NULL, else RHS descr, else global descr for a_ty.
+    Returns (typed_descr_ptr, voidptr_descr).
+    """
+    ll_value_ty = context.get_value_type(a_ty)
+    target_ptr_ty = ll_value_ty.elements[0]
+    null_typed = cgutils.get_null_value(target_ptr_ty)
+
+    a_descr = builder.extract_value(a_val, 0)
+    b_descr = builder.extract_value(b_val, 0)
+
+    tmp = cgutils.alloca_once(builder, target_ptr_ty)
+
+    a_is_null = builder.icmp_unsigned('==', a_descr, null_typed)
+    with builder.if_else(a_is_null) as (then, other):
+        with then:
+            b_is_null = builder.icmp_unsigned('==', b_descr, null_typed)
+            with builder.if_else(b_is_null) as (then2, other2):
+                with then2:
+                    # Fallback to global descr for a_ty
+                    g = _get_stringdtype_descr_ptr(context, builder, a_ty)
+                    g_cast = builder.bitcast(g, target_ptr_ty)
+                    builder.store(g_cast, tmp)
+                with other2:
+                    builder.store(b_descr, tmp)
+        with other:
+            builder.store(a_descr, tmp)
+
+    typed = builder.load(tmp)
+    voidp = builder.bitcast(typed, context.get_value_type(types.voidptr))
+    return typed, voidp
+
+
+@intrinsic
+def _stringdtype_add(typingctx, a, b):
+    if not (
+        isinstance(a, types.StringDTypeType)
+        and isinstance(b, types.StringDTypeType)
+    ):
+        return None
+    sig = a(a, b)
+
+    def codegen(context, builder, signature, args):
+        (a_ty, b_ty) = signature.args
+        (a_val, b_val) = args
+
+        st_a, st_b = _stringdtype_utf8_status_pair(
+            context, builder, a_ty, a_val, b_ty, b_val
+        )
+        status_error = Constant(st_a.type, NPYSTRING_STATUS_ERROR)
+        with builder.if_then(
+            builder.icmp_signed('==', st_a, status_error), likely=False
+        ):
+            context.call_conv.return_user_exc(
+                builder,
+                RuntimeError,
+                ("failed to unpack StringDType LHS for concatenation",),
+            )
+        with builder.if_then(
+            builder.icmp_signed('==', st_b, status_error), likely=False
+        ):
+            context.call_conv.return_user_exc(
+                builder,
+                RuntimeError,
+                ("failed to unpack StringDType RHS for concatenation",),
+            )
+
+        typed_descr, void_descr = _stringdtype_choose_descr(
+            context, builder, a_ty, a_val, b_ty, b_val
+        )
+        dm = context.data_model_manager[a_ty]
+        data_type = dm.get_data_type()
+        packed_storage = cgutils.alloca_once(builder, data_type)
+
+        # Set up source packed pointers
+        ll_voidptr = context.get_value_type(types.voidptr)
+        ll_i8_ptr = ir.IntType(8).as_pointer()
+        a_descr = _stringdtype_ensure_descr(
+            context, builder, a_ty, builder.extract_value(a_val, 0)
+        )
+        b_descr = _stringdtype_ensure_descr(
+            context, builder, b_ty, builder.extract_value(b_val, 0)
+        )
+        a_data = builder.extract_value(a_val, 1)
+        b_data = builder.extract_value(b_val, 1)
+        a_storage = cgutils.alloca_once_value(builder, a_data)
+        b_storage = cgutils.alloca_once_value(builder, b_data)
+        a_packed_ptr = builder.bitcast(a_storage, ll_i8_ptr)
+        b_packed_ptr = builder.bitcast(b_storage, ll_i8_ptr)
+
+        # Call nogil concatenation helper (handles NA semantics internally)
+        packed_ptr = builder.bitcast(packed_storage, ll_i8_ptr)
+        fn_ty = ir.FunctionType(
+            ir.IntType(32),
+            [
+                ll_voidptr,
+                ll_i8_ptr,
+                ll_voidptr,
+                ll_i8_ptr,
+                ll_voidptr,
+                ll_i8_ptr,
+            ],
+        )
+        concat_fn = cgutils.get_or_insert_function(
+            builder.module, fn_ty, name="numba_stringdtype_concat"
+        )
+        rc = builder.call(
+            concat_fn,
+            [
+                void_descr,
+                packed_ptr,
+                builder.bitcast(a_descr, ll_voidptr),
+                a_packed_ptr,
+                builder.bitcast(b_descr, ll_voidptr),
+                b_packed_ptr,
+            ],
+        )
+        with builder.if_then(
+            builder.icmp_signed('==', rc, ir.Constant(rc.type, -1)),
+            likely=False,
+        ):
+            context.call_conv.return_user_exc(
+                builder,
+                RuntimeError,
+                ("failed to concatenate StringDType values",),
+            )
+
+        data_value = builder.load(packed_storage)
+        return _stringdtype_build_value(
+            context, builder, a_ty, typed_descr, data_value
+        )
+
+    return sig, codegen
+
+
+@overload(operator.add)
+def stringdtype_add_overload(a, b):
+    if isinstance(a, types.StringDTypeType) and isinstance(
+        b, types.StringDTypeType
+    ):
+        def add_impl(a, b):
+            return _stringdtype_add(a, b)
+        return add_impl
+
+
+# startswith/endswith/contains implemented via unicode delegation below
+
+
+@overload_method(types.StringDTypeType, 'startswith')
+def stringdtype_startswith_overload(a, prefix, start=None, end=None):
+    if isinstance(prefix, types.StringDTypeType):
+        if (
+            start is None
+            or isinstance(start, (types.Omitted, types.Integer, types.NoneType))
+        ) and (
+            end is None
+            or isinstance(end, (types.Omitted, types.Integer, types.NoneType))
+        ):
+            def startswith_impl(a, prefix, start=None, end=None):
+                if _stringdtype_is_na(a) or _stringdtype_is_na(prefix):
+                    return False
+                ua = _stringdtype_to_unicode(a)
+                up = _stringdtype_to_unicode(prefix)
+                if start is None and end is None:
+                    return ua.startswith(up)
+                elif end is None:
+                    return ua.startswith(up, start)
+                elif start is None:
+                    return ua.startswith(up, 0, end)
+                else:
+                    return ua.startswith(up, start, end)
+            return startswith_impl
+    if isinstance(prefix, types.UnicodeType):
+        if (
+            start is None
+            or isinstance(start, (types.Omitted, types.Integer, types.NoneType))
+        ) and (
+            end is None
+            or isinstance(end, (types.Omitted, types.Integer, types.NoneType))
+        ):
+            def startswith_impl(a, prefix, start=None, end=None):
+                if _stringdtype_is_na(a):
+                    return False
+                ua = _stringdtype_to_unicode(a)
+                if start is None and end is None:
+                    return ua.startswith(prefix)
+                elif end is None:
+                    return ua.startswith(prefix, start)
+                elif start is None:
+                    return ua.startswith(prefix, 0, end)
+                else:
+                    return ua.startswith(prefix, start, end)
+            return startswith_impl
+
+
+# NA detector for StringDType scalars
+@intrinsic
+def _stringdtype_is_na(typingctx, s):
+    if not isinstance(s, types.StringDTypeType):
+        return None
+    sig = types.boolean(s)
+
+    def codegen(context, builder, signature, args):
+        (typ,) = signature.args
+        (val,) = args
+        descr_voidptr, packed_ptr, _descr_ptr = _stringdtype_prepare_from_value(
+            context, builder, typ, val
+        )
+        status = _stringdtype_unpack_utf8_status(
+            context, builder, descr_voidptr, packed_ptr
+        )
+        status_na = Constant(status.type, NPYSTRING_STATUS_NA)
+        return builder.icmp_signed('==', status, status_na)
+
+    return sig, codegen
+
+
+# Pack a Unicode value back into a StringDType scalar using the source's
+# descriptor (or global descriptor if NULL).
+@intrinsic
+def _stringdtype_from_unicode(typingctx, s, u):
+    if not (
+        isinstance(s, types.StringDTypeType)
+        and isinstance(u, types.UnicodeType)
+    ):
+        return None
+    sig = s(s, u)
+
+    def codegen(context, builder, signature, args):
+        (s_ty, _u_ty) = signature.args
+        (s_val, u_val) = args
+
+        # Resolve descriptor from s (fallback to global if NULL)
+        a_descr_val = builder.extract_value(s_val, 0)
+        descr_ptr = _stringdtype_ensure_descr(
+            context, builder, s_ty, a_descr_val
+        )
+
+        ll_voidptr = context.get_value_type(types.voidptr)
+        void_descr = builder.bitcast(descr_ptr, ll_voidptr)
+
+        # Prepare destination packed storage
+        packed_storage, packed_ptr = _stringdtype_alloc_packed_storage(
+            context, builder, s_ty
+        )
+
+        # Box unicode and pack via helper
+        pyapi = context.get_python_api(builder)
+        pyobj = pyapi.from_native_value(types.unicode_type, u_val)
+
+        rc = _stringdtype_pack_from_pyobject(
+            context, builder, void_descr, packed_ptr, pyapi, pyobj
+        )
+        pyapi.decref(pyobj)
+        status_error = ir.Constant(rc.type, NPYSTRING_STATUS_ERROR)
+        with builder.if_then(
+            builder.icmp_signed('==', rc, status_error), likely=False
+        ):
+            context.call_conv.return_user_exc(
+                builder,
+                RuntimeError,
+                ("failed to pack unicode result into StringDType",),
+            )
+
+        data_value = builder.load(packed_storage)
+        return _stringdtype_build_value(
+            context, builder, s_ty, descr_ptr, data_value
+        )
+
+    return sig, codegen
+
+
+# -----------------------------------------------------------------------------
+# StringDType scalar method overloads via unicode delegation
+# -----------------------------------------------------------------------------
+
+def _sdt_unicode_unary_delegate(unicode_method):
+    def _overload(s):
+        if isinstance(s, types.StringDTypeType):
+            def impl(s):
+                if _stringdtype_is_na(s):
+                    raise ValueError(
+                        "StringDType value represents missing data"
+                    )
+                u = _stringdtype_to_unicode(s)
+                m = getattr(u, unicode_method)
+                return m()
+            return impl
+    return _overload
+
+
+@overload_method(types.StringDTypeType, 'lower')
+def sdt_lower(s):
+    return _sdt_unicode_unary_delegate('lower')(s)
+
+
+@overload_method(types.StringDTypeType, 'upper')
+def sdt_upper(s):
+    return _sdt_unicode_unary_delegate('upper')(s)
+
+
+@overload_method(types.StringDTypeType, 'casefold')
+def sdt_casefold(s):
+    return _sdt_unicode_unary_delegate('casefold')(s)
+
+
+@overload_method(types.StringDTypeType, 'title')
+def sdt_title(s):
+    return _sdt_unicode_unary_delegate('title')(s)
+
+
+@overload_method(types.StringDTypeType, 'capitalize')
+def sdt_capitalize(s):
+    return _sdt_unicode_unary_delegate('capitalize')(s)
+
+
+@overload_method(types.StringDTypeType, 'swapcase')
+def sdt_swapcase(s):
+    return _sdt_unicode_unary_delegate('swapcase')(s)
+
+
+def _justify_delegate(method):
+    def _ol(s, width, fillchar=' '):
+        if not (
+            isinstance(s, types.StringDTypeType)
+            and isinstance(
+                width, (types.Integer, types.IntegerLiteral, types.Omitted)
+            )
+        ):
+            return None
+
+        if fillchar is None or isinstance(
+            fillchar, (types.Omitted, types.NoneType)
+        ):
+            def impl(s, width, fillchar=' '):
+                if _stringdtype_is_na(s):
+                    raise ValueError(
+                        "StringDType value represents missing data"
+                    )
+                u = _stringdtype_to_unicode(s)
+                m = getattr(u, method)
+                return m(width)
+            return impl
+
+        if isinstance(fillchar, types.StringDTypeType):
+            def impl(s, width, fillchar=' '):
+                if _stringdtype_is_na(s) or _stringdtype_is_na(fillchar):
+                    raise ValueError(
+                        "StringDType value represents missing data"
+                    )
+                u = _stringdtype_to_unicode(s)
+                fc = _stringdtype_to_unicode(fillchar)
+                m = getattr(u, method)
+                return m(width, fc)
+            return impl
+
+        if isinstance(fillchar, types.UnicodeType):
+            def impl(s, width, fillchar=' '):
+                if _stringdtype_is_na(s):
+                    raise ValueError(
+                        "StringDType value represents missing data"
+                    )
+                u = _stringdtype_to_unicode(s)
+                m = getattr(u, method)
+                return m(width, fillchar)
+            return impl
+    return _ol
+
+
+@overload_method(types.StringDTypeType, 'center')
+def sdt_center(s, width, fillchar=' '):
+    return _justify_delegate('center')(s, width, fillchar)
+
+
+@overload_method(types.StringDTypeType, 'ljust')
+def sdt_ljust2(s, width, fillchar=' '):
+    return _justify_delegate('ljust')(s, width, fillchar)
+
+
+@overload_method(types.StringDTypeType, 'rjust')
+def sdt_rjust2(s, width, fillchar=' '):
+    return _justify_delegate('rjust')(s, width, fillchar)
+
+
+@overload_method(types.StringDTypeType, 'expandtabs')
+def sdt_expandtabs(s, tabsize=8):
+    if isinstance(s, types.StringDTypeType) and (
+        tabsize == 8
+        or isinstance(
+            tabsize,
+            (types.Omitted, types.Integer, types.IntegerLiteral),
+        )
+    ):
+        def impl(s, tabsize=8):
+            if _stringdtype_is_na(s):
+                raise ValueError(
+                    "StringDType value represents missing data"
+                )
+            u = _stringdtype_to_unicode(s)
+            return u.expandtabs(tabsize)
+        return impl
+
+
+def _sdt_strip_delegate(method):
+    def _ol(s, chars=None):
+        if chars is None or isinstance(chars, (types.Omitted, types.NoneType)):
+            if isinstance(s, types.StringDTypeType):
+                def impl(s, chars=None):
+                    if _stringdtype_is_na(s):
+                        raise ValueError(
+                            "StringDType value represents missing data"
+                        )
+                    u = _stringdtype_to_unicode(s)
+                    m = getattr(u, method)
+                    return m()
+                return impl
+            return None
+        if isinstance(chars, types.StringDTypeType):
+            if isinstance(s, types.StringDTypeType):
+                def impl(s, chars):
+                    if _stringdtype_is_na(s) or _stringdtype_is_na(chars):
+                        raise ValueError(
+                            "StringDType value represents missing data"
+                        )
+                    u = _stringdtype_to_unicode(s)
+                    c = _stringdtype_to_unicode(chars)
+                    m = getattr(u, method)
+                    return m(c)
+                return impl
+            return None
+        if isinstance(chars, types.UnicodeType):
+            if isinstance(s, types.StringDTypeType):
+                def impl(s, chars=None):
+                    if _stringdtype_is_na(s):
+                        raise ValueError(
+                            "StringDType value represents missing data"
+                        )
+                    u = _stringdtype_to_unicode(s)
+                    m = getattr(u, method)
+                    return m(chars)
+                return impl
+            return None
+    return _ol
+
+
+@overload_method(types.StringDTypeType, 'strip')
+def sdt_strip(s, chars=None):
+    return _sdt_strip_delegate('strip')(s, chars)
+
+
+@overload_method(types.StringDTypeType, 'lstrip')
+def sdt_lstrip(s, chars=None):
+    return _sdt_strip_delegate('lstrip')(s, chars)
+
+
+@overload_method(types.StringDTypeType, 'rstrip')
+def sdt_rstrip(s, chars=None):
+    return _sdt_strip_delegate('rstrip')(s, chars)
+
+
+@overload_method(types.StringDTypeType, 'replace')
+def sdt_replace(s, old, new, count=None):
+    if isinstance(old, types.StringDTypeType) and isinstance(
+        new, types.StringDTypeType
+    ):
+        if count is None or isinstance(
+            count, (types.Omitted, types.Integer, types.NoneType)
+        ):
+            def impl(s, old, new, count=None):
+                if (
+                    _stringdtype_is_na(s)
+                    or _stringdtype_is_na(old)
+                    or _stringdtype_is_na(new)
+                ):
+                    raise ValueError(
+                        "StringDType value represents missing data"
+                    )
+                u = _stringdtype_to_unicode(s)
+                o = _stringdtype_to_unicode(old)
+                n = _stringdtype_to_unicode(new)
+                if count is None:
+                    return u.replace(o, n)
+                else:
+                    return u.replace(o, n, count)
+            return impl
+    if isinstance(old, types.UnicodeType) and isinstance(
+        new, types.UnicodeType
+    ):
+        if count is None or isinstance(
+            count, (types.Omitted, types.Integer, types.NoneType)
+        ):
+            def impl(s, old, new, count=None):
+                if _stringdtype_is_na(s):
+                    raise ValueError(
+                        "StringDType value represents missing data"
+                    )
+                u = _stringdtype_to_unicode(s)
+                if count is None:
+                    return u.replace(old, new)
+                else:
+                    return u.replace(old, new, count)
+            return impl
+
+
+# Bool-returning methods
+#
+# These methods all share the same structure:
+# - Return False on NA
+# - Delegate to the corresponding unicode method otherwise
+# Reduce duplication by delegating through a helper, following the
+# pattern used elsewhere in this module (e.g. _justify_delegate).
+
+def _sdt_bool_unary_delegate(unicode_method):
+    def _overload(s):
+        if isinstance(s, types.StringDTypeType):
+            def impl(s):
+                if _stringdtype_is_na(s):
+                    return False
+                u = _stringdtype_to_unicode(s)
+                m = getattr(u, unicode_method)
+                return m()
+            return impl
+    return _overload
+
+
+@overload_method(types.StringDTypeType, 'isalpha')
+def sdt_isalpha(s):
+    return _sdt_bool_unary_delegate('isalpha')(s)
+
+
+@overload_method(types.StringDTypeType, 'isalnum')
+def sdt_isalnum(s):
+    return _sdt_bool_unary_delegate('isalnum')(s)
+
+
+@overload_method(types.StringDTypeType, 'isspace')
+def sdt_isspace(s):
+    return _sdt_bool_unary_delegate('isspace')(s)
+
+
+@overload_method(types.StringDTypeType, 'isnumeric')
+def sdt_isnumeric(s):
+    return _sdt_bool_unary_delegate('isnumeric')(s)
+
+
+@overload_method(types.StringDTypeType, 'isdecimal')
+def sdt_isdecimal(s):
+    return _sdt_bool_unary_delegate('isdecimal')(s)
+
+
+@overload_method(types.StringDTypeType, 'isdigit')
+def sdt_isdigit(s):
+    return _sdt_bool_unary_delegate('isdigit')(s)
+
+
+@overload_method(types.StringDTypeType, 'isprintable')
+def sdt_isprintable(s):
+    return _sdt_bool_unary_delegate('isprintable')(s)
+
+
+@overload_method(types.StringDTypeType, 'isascii')
+def sdt_isascii(s):
+    return _sdt_bool_unary_delegate('isascii')(s)
+
+
+@overload_method(types.StringDTypeType, 'isidentifier')
+def sdt_isidentifier(s):
+    return _sdt_bool_unary_delegate('isidentifier')(s)
+
+
+@overload_method(types.StringDTypeType, 'islower')
+def sdt_islower(s):
+    return _sdt_bool_unary_delegate('islower')(s)
+
+
+@overload_method(types.StringDTypeType, 'isupper')
+def sdt_isupper(s):
+    return _sdt_bool_unary_delegate('isupper')(s)
+
+
+@overload_method(types.StringDTypeType, 'istitle')
+def sdt_istitle(s):
+    return _sdt_bool_unary_delegate('istitle')(s)
+
+
+# Numeric-returning methods: raise on NA
+def _sdt_int_unary_delegate(unicode_method):
+    def _overload(s, *args):
+        if isinstance(s, types.StringDTypeType):
+            def impl(s, *args):
+                if _stringdtype_is_na(s):
+                    raise ValueError(
+                        "StringDType value represents missing data"
+                    )
+                u = _stringdtype_to_unicode(s)
+                m = getattr(u, unicode_method)
+                return m(*args)
+            return impl
+    return _overload
+
+
+# 2-arg string search/count with optional bounds: raise on NA
+# Consolidates duplicated logic in count/find/rfind/index/rindex.
+def _sdt_search_with_bounds_delegate(unicode_method):
+    def _overload(s, sub, start=None, end=None):
+        bounds_types = (types.Omitted, types.Integer, types.NoneType)
+
+        def _bounds_ok(start, end):
+            start_ok = (
+                start is None
+                or isinstance(start, bounds_types)
+            )
+            end_ok = (
+                end is None
+                or isinstance(end, bounds_types)
+            )
+            return start_ok and end_ok
+
+        def make_impl_sdt():
+            def impl(s, sub, start=None, end=None):
+                if _stringdtype_is_na(s) or _stringdtype_is_na(sub):
+                    raise ValueError(
+                        "StringDType value represents missing data"
+                    )
+                u = _stringdtype_to_unicode(s)
+                v = _stringdtype_to_unicode(sub)
+                m = getattr(u, unicode_method)
+                if start is None and end is None:
+                    return m(v)
+                elif end is None:
+                    return m(v, start)
+                elif start is None:
+                    return m(v, 0, end)
+                else:
+                    return m(v, start, end)
+            return impl
+
+        def make_impl_uni():
+            def impl(s, sub, start=None, end=None):
+                if _stringdtype_is_na(s):
+                    raise ValueError(
+                        "StringDType value represents missing data"
+                    )
+                u = _stringdtype_to_unicode(s)
+                m = getattr(u, unicode_method)
+                if start is None and end is None:
+                    return m(sub)
+                elif end is None:
+                    return m(sub, start)
+                elif start is None:
+                    return m(sub, 0, end)
+                else:
+                    return m(sub, start, end)
+            return impl
+
+        if isinstance(sub, types.StringDTypeType) and _bounds_ok(start, end):
+            return make_impl_sdt()
+        if isinstance(sub, types.UnicodeType) and _bounds_ok(start, end):
+            return make_impl_uni()
+    return _overload
+
+
+@overload_method(types.StringDTypeType, 'count')
+def sdt_count(s, sub, start=None, end=None):
+    return _sdt_search_with_bounds_delegate('count')(s, sub, start, end)
+
+
+@overload_method(types.StringDTypeType, 'find')
+def sdt_find(s, sub, start=None, end=None):
+    return _sdt_search_with_bounds_delegate('find')(s, sub, start, end)
+
+
+@overload_method(types.StringDTypeType, 'rfind')
+def sdt_rfind(s, sub, start=None, end=None):
+    return _sdt_search_with_bounds_delegate('rfind')(s, sub, start, end)
+
+
+@overload_method(types.StringDTypeType, 'index')
+def sdt_index(s, sub, start=None, end=None):
+    return _sdt_search_with_bounds_delegate('index')(s, sub, start, end)
+
+
+@overload_method(types.StringDTypeType, 'rindex')
+def sdt_rindex(s, sub, start=None, end=None):
+    return _sdt_search_with_bounds_delegate('rindex')(s, sub, start, end)
+# (3/4-arg variants are handled by the single overload above)
+
+
+## endswith handled by overload via unicode delegation
+
+
+@overload_method(types.StringDTypeType, 'endswith')
+def stringdtype_endswith_overload(a, suffix, start=None, end=None):
+    if isinstance(suffix, types.StringDTypeType):
+        if (
+            start is None
+            or isinstance(start, (types.Omitted, types.Integer, types.NoneType))
+        ) and (
+            end is None
+            or isinstance(end, (types.Omitted, types.Integer, types.NoneType))
+        ):
+            def endswith_impl(a, suffix, start=None, end=None):
+                if _stringdtype_is_na(a) or _stringdtype_is_na(suffix):
+                    return False
+                ua = _stringdtype_to_unicode(a)
+                us = _stringdtype_to_unicode(suffix)
+                if start is None and end is None:
+                    return ua.endswith(us)
+                elif end is None:
+                    return ua.endswith(us, start)
+                elif start is None:
+                    return ua.endswith(us, 0, end)
+                else:
+                    return ua.endswith(us, start, end)
+            return endswith_impl
+    if isinstance(suffix, types.UnicodeType):
+        if (
+            start is None
+            or isinstance(start, (types.Omitted, types.Integer, types.NoneType))
+        ) and (
+            end is None
+            or isinstance(end, (types.Omitted, types.Integer, types.NoneType))
+        ):
+            def endswith_impl(a, suffix, start=None, end=None):
+                if _stringdtype_is_na(a):
+                    return False
+                ua = _stringdtype_to_unicode(a)
+                if start is None and end is None:
+                    return ua.endswith(suffix)
+                elif end is None:
+                    return ua.endswith(suffix, start)
+                elif start is None:
+                    return ua.endswith(suffix, 0, end)
+                else:
+                    return ua.endswith(suffix, start, end)
+            return endswith_impl
+
+
+# (3/4-arg variants are handled by the single overload above)
+
+
+@overload(operator.contains)
+def stringdtype_contains_overload(container, item):
+    if isinstance(container, types.StringDTypeType) and isinstance(
+        item, types.StringDTypeType
+    ):
+        def contains_impl(container, item):
+            if _stringdtype_is_na(container) or _stringdtype_is_na(item):
+                return False
+            uc = _stringdtype_to_unicode(container)
+            ui = _stringdtype_to_unicode(item)
+            return ui in uc
+        return contains_impl
+    if isinstance(container, types.StringDTypeType) and isinstance(
+        item, types.UnicodeType
+    ):
+        def contains_impl(container, item):
+            if _stringdtype_is_na(container):
+                return False
+            uc = _stringdtype_to_unicode(container)
+            return item in uc
+        return contains_impl
+
+
+# Provide scalar indexing/slicing by decoding then delegating to unicode
+# to unicode getitem.
+@lower_builtin(operator.getitem, types.StringDTypeType, types.Integer)
+def stringdtype_getitem_int(context, builder, sig, args):
+    sdt_ty, idx_ty = sig.args
+    sdt_val, idx_val = args
+    uni_val = context.cast(builder, sdt_val, sdt_ty, types.unicode_type)
+    tyctx = context.typing_context
+    fnty = tyctx.resolve_value_type(operator.getitem)
+    getitem_sig = fnty.get_call_type(tyctx, (types.unicode_type, idx_ty), {})
+    getitem_impl = context.get_function(fnty, getitem_sig)
+    return getitem_impl(builder, (uni_val, idx_val))
+
+
+@lower_builtin(operator.getitem, types.StringDTypeType, types.SliceType)
+def stringdtype_getitem_slice(context, builder, sig, args):
+    sdt_ty, idx_ty = sig.args
+    sdt_val, slc_val = args
+    uni_val = context.cast(builder, sdt_val, sdt_ty, types.unicode_type)
+    tyctx = context.typing_context
+    fnty = tyctx.resolve_value_type(operator.getitem)
+    getitem_sig = fnty.get_call_type(tyctx, (types.unicode_type, idx_ty), {})
+    getitem_impl = context.get_function(fnty, getitem_sig)
+    return getitem_impl(builder, (uni_val, slc_val))
+
+
+@intrinsic
+def _stringdtype_eq(typingctx, a, b):
+    if not (
+        isinstance(a, types.StringDTypeType)
+        and isinstance(b, types.StringDTypeType)
+    ):
+        return None
+    sig = types.boolean(a, b)
+
+    def codegen(context, builder, signature, args):
+        (a_ty, b_ty) = signature.args
+        (a_val, b_val) = args
+        return _stringdtype_cmp_core(
+            context, builder, a_ty, a_val, b_ty, b_val, 'eq'
+        )
+
+    return sig, codegen
+
+
+@intrinsic
+def _stringdtype_lt(typingctx, a, b):
+    if not (
+        isinstance(a, types.StringDTypeType)
+        and isinstance(b, types.StringDTypeType)
+    ):
+        return None
+    sig = types.boolean(a, b)
+
+    def codegen(context, builder, signature, args):
+        (a_ty, b_ty) = signature.args
+        (a_val, b_val) = args
+        return _stringdtype_cmp_core(
+            context, builder, a_ty, a_val, b_ty, b_val, 'lt'
+        )
+
+    return sig, codegen
+
+
+@intrinsic
+def _stringdtype_gt(typingctx, a, b):
+    if not (
+        isinstance(a, types.StringDTypeType)
+        and isinstance(b, types.StringDTypeType)
+    ):
+        return None
+    sig = types.boolean(a, b)
+
+    def codegen(context, builder, signature, args):
+        (a_ty, b_ty) = signature.args
+        (a_val, b_val) = args
+        return _stringdtype_cmp_core(
+            context, builder, a_ty, a_val, b_ty, b_val, 'gt'
+        )
+
+    return sig, codegen
+
+
+@intrinsic
+def _stringdtype_le(typingctx, a, b):
+    if not (
+        isinstance(a, types.StringDTypeType)
+        and isinstance(b, types.StringDTypeType)
+    ):
+        return None
+    sig = types.boolean(a, b)
+
+    def codegen(context, builder, signature, args):
+        (a_ty, b_ty) = signature.args
+        (a_val, b_val) = args
+        return _stringdtype_cmp_core(
+            context, builder, a_ty, a_val, b_ty, b_val, 'le'
+        )
+
+    return sig, codegen
+
+
+@intrinsic
+def _stringdtype_ge(typingctx, a, b):
+    if not (
+        isinstance(a, types.StringDTypeType)
+        and isinstance(b, types.StringDTypeType)
+    ):
+        return None
+    sig = types.boolean(a, b)
+
+    def codegen(context, builder, signature, args):
+        (a_ty, b_ty) = signature.args
+        (a_val, b_val) = args
+        return _stringdtype_cmp_core(
+            context, builder, a_ty, a_val, b_ty, b_val, 'ge'
+        )
+
+    return sig, codegen
+
+
+@overload(operator.eq)
+def stringdtype_eq_overload(a, b):
+    if isinstance(a, types.StringDTypeType) and isinstance(
+        b, types.StringDTypeType
+    ):
+        def eq_impl(a, b):
+            return _stringdtype_eq(a, b)
+        return eq_impl
+
+
+@overload(operator.ne)
+def stringdtype_ne_overload(a, b):
+    if isinstance(a, types.StringDTypeType) and isinstance(
+        b, types.StringDTypeType
+    ):
+        def ne_impl(a, b):
+            return not _stringdtype_eq(a, b)
+        return ne_impl
+
+
+@overload(operator.lt)
+def stringdtype_lt_overload(a, b):
+    if isinstance(a, types.StringDTypeType) and isinstance(
+        b, types.StringDTypeType
+    ):
+        def lt_impl(a, b):
+            return _stringdtype_lt(a, b)
+        return lt_impl
+
+
+@overload(operator.gt)
+def stringdtype_gt_overload(a, b):
+    if isinstance(a, types.StringDTypeType) and isinstance(
+        b, types.StringDTypeType
+    ):
+        def gt_impl(a, b):
+            return _stringdtype_gt(a, b)
+        return gt_impl
+
+
+@overload(operator.le)
+def stringdtype_le_overload(a, b):
+    if isinstance(a, types.StringDTypeType) and isinstance(
+        b, types.StringDTypeType
+    ):
+        def le_impl(a, b):
+            return _stringdtype_le(a, b)
+        return le_impl
+
+
+@overload(operator.ge)
+def stringdtype_ge_overload(a, b):
+    if isinstance(a, types.StringDTypeType) and isinstance(
+        b, types.StringDTypeType
+    ):
+        def ge_impl(a, b):
+            return _stringdtype_ge(a, b)
+        return ge_impl
+
+
+@overload_method(types.StringDTypeType, 'split')
+def sdt_split(s, sep=None, maxsplit=-1):
+    if not (
+        maxsplit == -1
+        or isinstance(
+            maxsplit,
+            (types.Omitted, types.Integer, types.IntegerLiteral),
+        )
+    ):
+        return None
+
+    # sep=None (whitespace)
+    if sep is None or isinstance(sep, (types.NoneType, types.Omitted)):
+        def impl(s, sep=None, maxsplit=-1):
+            if _stringdtype_is_na(s):
+                raise ValueError(
+                    "StringDType value represents missing data"
+                )
+            u = _stringdtype_to_unicode(s)
+            return u.split(None, maxsplit)
+        return impl
+
+    # sep as StringDType scalar
+    if isinstance(sep, types.StringDTypeType):
+        def impl(s, sep=None, maxsplit=-1):
+            if _stringdtype_is_na(s) or _stringdtype_is_na(sep):
+                raise ValueError(
+                    "StringDType value represents missing data"
+                )
+            u = _stringdtype_to_unicode(s)
+            v = _stringdtype_to_unicode(sep)
+            return u.split(v, maxsplit)
+        return impl
+
+    # sep as unicode
+    if isinstance(sep, types.UnicodeType):
+        def impl(s, sep=None, maxsplit=-1):
+            if _stringdtype_is_na(s):
+                raise ValueError(
+                    "StringDType value represents missing data"
+                )
+            u = _stringdtype_to_unicode(s)
+            return u.split(sep, maxsplit)
+        return impl
+
+    # sep as UnicodeCharSeq
+    if isinstance(sep, types.UnicodeCharSeq):
+        def impl(s, sep=None, maxsplit=-1):
+            if _stringdtype_is_na(s):
+                raise ValueError(
+                    "StringDType value represents missing data"
+                )
+            u = _stringdtype_to_unicode(s)
+            return u.split(str(sep), maxsplit)
+        return impl
+
+
+@overload_method(types.StringDTypeType, 'rsplit')
+def sdt_rsplit(s, sep=None, maxsplit=-1):
+    if not (
+        maxsplit == -1
+        or isinstance(
+            maxsplit,
+            (types.Omitted, types.Integer, types.IntegerLiteral),
+        )
+    ):
+        return None
+
+    if sep is None or isinstance(sep, (types.NoneType, types.Omitted)):
+        def impl(s, sep=None, maxsplit=-1):
+            if _stringdtype_is_na(s):
+                raise ValueError(
+                    "StringDType value represents missing data"
+                )
+            u = _stringdtype_to_unicode(s)
+            return u.rsplit(None, maxsplit)
+        return impl
+
+    if isinstance(sep, types.StringDTypeType):
+        def impl(s, sep=None, maxsplit=-1):
+            if _stringdtype_is_na(s) or _stringdtype_is_na(sep):
+                raise ValueError(
+                    "StringDType value represents missing data"
+                )
+            u = _stringdtype_to_unicode(s)
+            v = _stringdtype_to_unicode(sep)
+            return u.rsplit(v, maxsplit)
+        return impl
+
+    if isinstance(sep, types.UnicodeType):
+        def impl(s, sep=None, maxsplit=-1):
+            if _stringdtype_is_na(s):
+                raise ValueError(
+                    "StringDType value represents missing data"
+                )
+            u = _stringdtype_to_unicode(s)
+            return u.rsplit(sep, maxsplit)
+        return impl
+
+    if isinstance(sep, types.UnicodeCharSeq):
+        def impl(s, sep=None, maxsplit=-1):
+            if _stringdtype_is_na(s):
+                raise ValueError(
+                    "StringDType value represents missing data"
+                )
+            u = _stringdtype_to_unicode(s)
+            return u.rsplit(str(sep), maxsplit)
+        return impl
+
+
+@overload_method(types.StringDTypeType, 'join')
+def sdt_join(sep, iterable):
+    # sep must be StringDTypeType
+    if not isinstance(sep, types.StringDTypeType):
+        return None
+
+    # list[unicode]
+    if isinstance(iterable, types.ListType) and isinstance(
+        iterable.item_type, types.UnicodeType
+    ):
+        def impl(sep, iterable):
+            if _stringdtype_is_na(sep):
+                raise ValueError(
+                    "StringDType value represents missing data"
+                )
+            u_sep = _stringdtype_to_unicode(sep)
+            return u_sep.join(iterable)
+        return impl
+
+    # tuple[StringDType]
+    if isinstance(iterable, types.BaseTuple) and all(
+        isinstance(t, types.StringDTypeType) for t in iterable.types
+    ):
+        def impl(sep, iterable):
+            if _stringdtype_is_na(sep):
+                raise ValueError(
+                    "StringDType value represents missing data"
+                )
+            u_sep = _stringdtype_to_unicode(sep)
+            parts = []
+            for i in range(len(iterable)):
+                x = iterable[i]
+                if _stringdtype_is_na(x):
+                    raise ValueError(
+                        "StringDType value represents missing data"
+                    )
+                parts.append(_stringdtype_to_unicode(x))
+            return u_sep.join(parts)
+        return impl
+
+    # list[StringDType] (or imprecise list resolved to SDT elements)
+    if isinstance(iterable, types.ListType):
+        def impl(sep, iterable):
+            if _stringdtype_is_na(sep):
+                raise ValueError(
+                    "StringDType value represents missing data"
+                )
+            u_sep = _stringdtype_to_unicode(sep)
+            parts = []
+            for x in iterable:
+                if _stringdtype_is_na(x):
+                    raise ValueError(
+                        "StringDType value represents missing data"
+                    )
+                parts.append(_stringdtype_to_unicode(x))
+            return u_sep.join(parts)
+        return impl
+
+    # tuple[unicode]
+    if isinstance(iterable, types.BaseTuple) and all(
+        isinstance(t, types.UnicodeType) for t in iterable.types
+    ):
+        def impl(sep, iterable):
+            if _stringdtype_is_na(sep):
+                raise ValueError(
+                    "StringDType value represents missing data"
+                )
+            u_sep = _stringdtype_to_unicode(sep)
+            return u_sep.join(iterable)
+        return impl

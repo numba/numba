@@ -14,6 +14,7 @@ class ArrayStruct3D(Structure):
         ("nitems", c_ssize_t),
         ("itemsize", c_ssize_t),
         ("data", c_void_p),
+        ("descr", c_void_p),
         ("shape", (c_ssize_t * 3)),
         ("strides", (c_ssize_t * 3)),
     ]

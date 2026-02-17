@@ -78,7 +78,7 @@ class UfuncAtIterator:
 
         ptr = cgutils.get_item_pointer2(context, builder, data, shapes, strides,
                                         array_ty.layout, loop_indices)
-        val = load_item(context, builder, array_ty, ptr)
+        val = load_item(context, builder, array_ty, ptr, array)
         return ptr, val
 
     def _load_flat(self, context, builder, indices, array, array_ty):
@@ -99,7 +99,7 @@ class UfuncAtIterator:
         fromty = self.cres.signature.return_type
         toty = array_ty.dtype
         val = context.cast(builder, val, fromty, toty)
-        store_item(context, builder, array_ty, val, ptr)
+        store_item(context, builder, array_ty, val, ptr, array)
 
     def _compile_ufunc(self, context, builder):
         ufunc = self.ufunc.key[0]
