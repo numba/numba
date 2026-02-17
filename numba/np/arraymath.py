@@ -492,116 +492,112 @@ def return_false(a):
 @overload(np.amin)
 @overload_method(types.Array, "min")
 def npy_min(a):
-
-    if not isinstance(a, (types.Array,types.Number)):
-        return
-
-    if isinstance(a, types.Number):
+    #scalar case
+    if isinstance(a, (types.Number,types.Boolean)):
         def scalar_min(a):
             return a
         return scalar_min
 
-    if isinstance(a,types.Array):
-        if isinstance(a.dtype, (types.NPDatetime, types.NPTimedelta)):
-            pre_return_func = np.isnat
-            comparator = min_comparator
-        elif isinstance(a.dtype, types.Complex):
-            pre_return_func = return_false
+    if not isinstance(a, types.Array):
+        return
 
-            def comp_func(a, min_val):
-                if a.real < min_val.real:
+    if isinstance(a.dtype, (types.NPDatetime, types.NPTimedelta)):
+        pre_return_func = np.isnat
+        comparator = min_comparator
+    elif isinstance(a.dtype, types.Complex):
+        pre_return_func = return_false
+
+        def comp_func(a, min_val):
+            if a.real < min_val.real:
+                return True
+            elif a.real == min_val.real:
+                if a.imag < min_val.imag:
                     return True
-                elif a.real == min_val.real:
-                    if a.imag < min_val.imag:
-                        return True
-                return False
+            return False
 
-            comparator = register_jitable(comp_func)
-        elif isinstance(a.dtype, types.Float):
-            pre_return_func = np.isnan
-            comparator = min_comparator
-        else:
-            pre_return_func = return_false
-            comparator = min_comparator
+        comparator = register_jitable(comp_func)
+    elif isinstance(a.dtype, types.Float):
+        pre_return_func = np.isnan
+        comparator = min_comparator
+    else:
+        pre_return_func = return_false
+        comparator = min_comparator
 
-        def impl_min(a):
-            if a.size == 0:
-                raise ValueError("zero-size array to reduction operation "
-                                 "minimum which has no identity")
+    def impl_min(a):
+        if a.size == 0:
+            raise ValueError("zero-size array to reduction operation "
+                             "minimum which has no identity")
 
-            it = np.nditer(a)
-            min_value = next(it).take(0)
-            if pre_return_func(min_value):
-                return min_value
-
-            for view in it:
-                v = view.item()
-                if pre_return_func(v):
-                    return v
-                if comparator(v, min_value):
-                    min_value = v
+        it = np.nditer(a)
+        min_value = next(it).take(0)
+        if pre_return_func(min_value):
             return min_value
 
-        return impl_min
+        for view in it:
+            v = view.item()
+            if pre_return_func(v):
+                return v
+            if comparator(v, min_value):
+                min_value = v
+        return min_value
+
+    return impl_min
 
 
 @overload(np.max)
 @overload(np.amax)
 @overload_method(types.Array, "max")
 def npy_max(a):
-
-    if not isinstance(a, (types.Array,types.Number)):
-        return
-
     #scalar case
-    if isinstance(a, types.Number):
+    if isinstance(a, (types.Number,types.Boolean)):
         def scalar_max(a):
             return a
         return scalar_max
 
-    #array case
-    if isinstance(a, types.Array):
-        if isinstance(a.dtype, (types.NPDatetime, types.NPTimedelta)):
-            pre_return_func = np.isnat
-            comparator = max_comparator
-        elif isinstance(a.dtype, types.Complex):
-            pre_return_func = return_false
+    if not isinstance(a, types.Array):
+        return
 
-            def comp_func(a, max_val):
-                if a.real > max_val.real:
+    if isinstance(a.dtype, (types.NPDatetime, types.NPTimedelta)):
+        pre_return_func = np.isnat
+        comparator = max_comparator
+    elif isinstance(a.dtype, types.Complex):
+        pre_return_func = return_false
+
+        def comp_func(a, max_val):
+            if a.real > max_val.real:
+                return True
+            elif a.real == max_val.real:
+                if a.imag > max_val.imag:
                     return True
-                elif a.real == max_val.real:
-                    if a.imag > max_val.imag:
-                        return True
-                return False
+            return False
 
-            comparator = register_jitable(comp_func)
-        elif isinstance(a.dtype, types.Float):
-            pre_return_func = np.isnan
-            comparator = max_comparator
-        else:
-            pre_return_func = return_false
-            comparator = max_comparator
+        comparator = register_jitable(comp_func)
+    elif isinstance(a.dtype, types.Float):
+        pre_return_func = np.isnan
+        comparator = max_comparator
+    else:
+        pre_return_func = return_false
+        comparator = max_comparator
 
-        def impl_max(a):
-            if a.size == 0:
-                raise ValueError("zero-size array to reduction operation "
-                                 "maximum which has no identity")
+    def impl_max(a):
+        if a.size == 0:
+            raise ValueError("zero-size array to reduction operation "
+                             "maximum which has no identity")
 
-            it = np.nditer(a)
-            max_value = next(it).take(0)
-            if pre_return_func(max_value):
-                return max_value
-
-            for view in it:
-                v = view.item()
-                if pre_return_func(v):
-                    return v
-                if comparator(v, max_value):
-                    max_value = v
+        it = np.nditer(a)
+        max_value = next(it).take(0)
+        if pre_return_func(max_value):
             return max_value
 
-        return impl_max
+        for view in it:
+            v = view.item()
+            if pre_return_func(v):
+                return v
+            if comparator(v, max_value):
+                max_value = v
+        return max_value
+
+    return impl_max
 
 
 @register_jitable
