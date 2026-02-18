@@ -26,12 +26,46 @@
  * exception state is preserved correctly).
  *
  */
-
 #if (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 12) || (PY_MINOR_VERSION == 13) || (PY_MINOR_VERSION == 14))
 
 #ifndef Py_BUILD_CORE
     #define Py_BUILD_CORE 1
 #endif
+
+// Workaround for Windows ARM64 atomic operations in Python 3.12
+#if defined(_M_ARM64) && defined(_MSC_VER)
+    // Prevent pycore_atomic.h from being included - it has broken definitions for ARM64
+    #ifndef Py_ATOMIC_H
+        #define Py_ATOMIC_H 1
+    #endif
+    
+    // Define the atomic types that pycore_interp.h needs
+    typedef struct _Py_atomic_address {
+        uintptr_t _value;
+    } _Py_atomic_address;
+    
+    typedef struct _Py_atomic_int {
+        int _value;
+    } _Py_atomic_int;
+    
+    // C++ function overloads for atomic operations
+    static inline uintptr_t _Py_atomic_load_relaxed(const _Py_atomic_address *obj) {
+        return obj->_value;
+    }
+    
+    static inline int _Py_atomic_load_relaxed(const _Py_atomic_int *obj) {
+        return obj->_value;
+    }
+    
+    static inline void _Py_atomic_store_relaxed(_Py_atomic_address *obj, uintptr_t value) {
+        obj->_value = value;
+    }
+    
+    static inline void _Py_atomic_store_relaxed(_Py_atomic_int *obj, int value) {
+        obj->_value = value;
+    }
+#endif
+
 #include "internal/pycore_frame.h"
 // This is a fix suggested in the comments in https://github.com/python/cpython/issues/108216
 // specifically https://github.com/python/cpython/issues/108216#issuecomment-1696565797
@@ -46,7 +80,10 @@
  */
 #include "dynamic_annotations.h"
 #if (PY_MINOR_VERSION == 12)
-    #include "internal/pycore_atomic.h"
+    // pycore_atomic.h is already handled above for Windows ARM64
+    #if !(defined(_M_ARM64) && defined(_MSC_VER))
+        #include "internal/pycore_atomic.h"
+    #endif
 #endif
 #include "internal/pycore_interp.h"
 #include "internal/pycore_pyerrors.h"
