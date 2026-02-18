@@ -248,8 +248,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(arr)
         arr = np.float64('nan')
         check(arr)
-        arr = np.float64('nan')
-        check(arr)
 
         #booleans
         arr = np.bool_(True)
