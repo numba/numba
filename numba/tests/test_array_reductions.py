@@ -222,6 +222,42 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         # Only NaNs
         arr = np.float64(['nan', 'nan'])
         check(arr)
+    
+    def check_scalar_basic(self, pyfunc, **kwargs):
+        cfunc = jit(nopython=True)(pyfunc)
+        def check(arr):
+            self.assertPreciseEqual(pyfunc(arr), cfunc(arr), **kwargs)
+        #numpy values
+        arr = np.float64(0.0)
+        check(arr)
+        arr = np.float64(-0.0)
+        check(arr)
+        arr = np.float32(21.0)
+        check(arr)
+        arr = np.float32(-21.0)
+        check(arr)
+        arr = np.int32(21)
+        check(arr)
+        arr = np.int32(-21)
+        check(arr)
+
+        #special values
+        arr = np.float64(np.inf)
+        check(arr)
+        arr = np.float64(-np.inf)
+        check(arr)
+        arr = np.float64('nan')
+        check(arr)
+
+        #booleans
+        arr = np.bool_(True)
+        check(arr)
+        arr = np.bool_(False)
+        check(arr)
+
+        #string negative test case
+        with self.assertTypingError() as e:
+            cfunc('string')
 
     def test_all_basic(self, pyfunc=array_all):
         cfunc = jit(nopython=True)(pyfunc)
@@ -359,10 +395,29 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_reduction_basic(array_std)
 
     def test_min_basic(self):
+        #scalar testing
+        self.check_scalar_basic(array_min_global)
+        #array testing
         self.check_reduction_basic(array_min)
 
+    def test_amin_basic(self):
+        #scalar testing
+        self.check_scalar_basic(array_amin)
+        #array testing
+        self.check_reduction_basic(array_amin)
+    
+
     def test_max_basic(self):
+        #array testing
         self.check_reduction_basic(array_max)
+        #scalar testing
+        self.check_scalar_basic(array_max_global)
+
+    def test_amax_basic(self):
+        #array testing
+        self.check_reduction_basic(array_amax)
+        #scalar testing
+        self.check_scalar_basic(array_amax)
 
     def test_argmin_basic(self):
         self.check_reduction_basic(array_argmin)

@@ -492,6 +492,12 @@ def return_false(a):
 @overload(np.amin)
 @overload_method(types.Array, "min")
 def npy_min(a):
+    #scalar case
+    if isinstance(a, (types.Number,types.Boolean)):
+        def scalar_min(a):
+            return a
+        return scalar_min
+
     if not isinstance(a, types.Array):
         return
 
@@ -542,6 +548,12 @@ def npy_min(a):
 @overload(np.amax)
 @overload_method(types.Array, "max")
 def npy_max(a):
+    #scalar case
+    if isinstance(a, (types.Number,types.Boolean)):
+        def scalar_max(a):
+            return a
+        return scalar_max
+
     if not isinstance(a, types.Array):
         return
 
