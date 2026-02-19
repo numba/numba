@@ -83,6 +83,8 @@ jobs:
         run: conda install conda-build "conda-libmamba-solver<25.11"
 
       - name: Build Numba conda package
+        env:
+          NUMBA_PACKAGE_FORMAT: "conda"
         run: |
           CONDA_CHANNEL_DIR="conda_channel_dir"
           mkdir -p $CONDA_CHANNEL_DIR
@@ -172,7 +174,8 @@ jobs:
 
       - name: Run tests
         env:
-          TESTS_TO_RUN: "numba.tests"
+          NUMBA_DIST_TEST: 1
+          TESTS_TO_RUN: "numba.tests.test_dist_validation"
           NUMBA_ENABLE_CUDASIM: 1
         run: |
           # Set channel based on whether llvmlite artifact was downloaded

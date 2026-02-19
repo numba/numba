@@ -82,6 +82,8 @@ test:
     - ipykernel                # [not py==312]
     # For memory monitoring
     - psutil
+    # For distribution validation tests
+    - py-lief                  # [py<314]
     # Need these for AOT. Do not init msvc as it may not be present
     - {{ compiler('c') }}      # [not (win or aarch64)]
     - {{ compiler('cxx') }}    # [not (win or aarch64)]
