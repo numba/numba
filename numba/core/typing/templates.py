@@ -1198,7 +1198,7 @@ def make_overload_method_template(typ, attr, overload_func, inline,
     )
 
 
-def bound_function(template_key):
+def bound_function(template_key, prefer_literal=False):
     """
     Wrap an AttributeTemplate resolve_* method to allow it to
     resolve an instance method's signature rather than a instance attribute.
@@ -1215,11 +1215,14 @@ def bound_function(template_key):
     *template_key* (e.g. "complex.conjugate" above) will be used by the
     target to look up the method's implementation, as a regular function.
     """
+    prefer_lit = prefer_literal
+
     def wrapper(method_resolver):
         @functools.wraps(method_resolver)
         def attribute_resolver(self, ty):
             class MethodTemplate(AbstractTemplate):
                 key = template_key
+                prefer_literal = prefer_lit
 
                 def generic(_, args, kws):
                     sig = method_resolver(self, ty, args, kws)
