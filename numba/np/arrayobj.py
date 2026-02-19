@@ -1139,7 +1139,7 @@ class FancyIndexer(object):
         in_subspace = False
         subspace_index = None
         for idx, i in enumerate(indexers):
-            if isinstance(i, IntegerArrayIndexer):
+            if isinstance(i, (IntegerArrayIndexer, IntegerIndexer)):
                 if in_subspace == False:
                     in_subspace = True
                     num_subspaces += 1
@@ -1165,18 +1165,18 @@ class FancyIndexer(object):
         # Compute the resulting shape
         res_shape = []
         for i in self.indexers:
-            res_shape.append(i.get_shape())
-
-        # At every position where newaxis/None is present insert
-        # one as a constant shape in the resulting list of shapes.
-        for i in self.newaxes:
-            res_shape.insert(i, (one,))
+            res_shape.append(list(i.get_shape()))
 
         # Store the shape as a tuple, we can't do a simple
         # tuple(res_shape) here since res_shape is a list
         # of tuples which may be differently sized.
-        self.indexers_shape = sum(res_shape, ())
+        self.indexers_shape = sum(res_shape, [])
 
+        # At every position where newaxis/None is present insert
+        # one as a constant shape in the resulting list of shapes.
+        for i in self.newaxes:
+            self.indexers_shape.insert(i, one)
+        
     def get_shape(self):
         """
         Get the resulting data shape as Python tuple.
