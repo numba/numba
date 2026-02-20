@@ -5779,8 +5779,8 @@ def impl_np_array(object, dtype=None):
 
 
 def _normalize_axis(context, builder, func_name, ndim, axis):
-    zero = axis.type(0)
-    ll_ndim = axis.type(ndim)
+    zero = cgutils.intp_t(0)
+    ll_ndim = cgutils.intp_t(ndim)
 
     # Normalize negative axis
     is_neg_axis = builder.icmp_signed('<', axis, zero)
@@ -5797,80 +5797,76 @@ def _normalize_axis(context, builder, func_name, ndim, axis):
     return axis
 
 
-def _insert_axis_in_shape(context, builder, orig_shape, ndim, axis):
-    """
-    Compute shape with the new axis inserted
-    e.g. given original shape (2, 3, 4) and axis=2,
-    the returned new shape is (2, 3, 1, 4).
-    """
-    assert len(orig_shape) == ndim - 1
-
-    ll_shty = ir.ArrayType(cgutils.intp_t, ndim)
-    shapes = cgutils.alloca_once(builder, ll_shty)
-
-    one = cgutils.intp_t(1)
-
-    # 1. copy original sizes at appropriate places
-    for dim in range(ndim - 1):
-        ll_dim = cgutils.intp_t(dim)
-        after_axis = builder.icmp_signed('>=', ll_dim, axis)
-        sh = orig_shape[dim]
-        idx = builder.select(after_axis,
-                             builder.add(ll_dim, one),
-                             ll_dim)
-        builder.store(sh, cgutils.gep_inbounds(builder, shapes, 0, idx))
-
-    # 2. insert new size (1) at axis dimension
-    builder.store(one, cgutils.gep_inbounds(builder, shapes, 0, axis))
-
-    return cgutils.unpack_tuple(builder, builder.load(shapes))
-
-
-def _insert_axis_in_strides(context, builder, orig_strides, ndim, axis):
-    """
-    Same as _insert_axis_in_shape(), but with a strides array.
-    """
-    assert len(orig_strides) == ndim - 1
-
-    ll_shty = ir.ArrayType(cgutils.intp_t, ndim)
-    strides = cgutils.alloca_once(builder, ll_shty)
-
-    one = cgutils.intp_t(1)
-    zero = cgutils.intp_t(0)
-
-    # 1. copy original strides at appropriate places
-    for dim in range(ndim - 1):
-        ll_dim = cgutils.intp_t(dim)
-        after_axis = builder.icmp_signed('>=', ll_dim, axis)
-        idx = builder.select(after_axis,
-                             builder.add(ll_dim, one),
-                             ll_dim)
-        builder.store(orig_strides[dim],
-                      cgutils.gep_inbounds(builder, strides, 0, idx))
-
-    # 2. insert new stride at axis dimension
-    # (the value is indifferent for a 1-sized dimension, we use 0)
-    builder.store(zero, cgutils.gep_inbounds(builder, strides, 0, axis))
-
-    return cgutils.unpack_tuple(builder, builder.load(strides))
-
-
-def expand_dims(context, builder, sig, args, axis):
+def expand_dims(context, builder, sig, args):
     """
     np.expand_dims() with the given axis.
     """
     retty = sig.return_type
     ndim = retty.ndim
     arrty = sig.args[0]
+    _empty_tuple = tuple([-1] * ndim)
+
+    if isinstance(sig.args[1], types.Integer):
+        to_tuple = register_jitable(lambda axis: (axis,))
+    else:
+        to_tuple = register_jitable(lambda axis: axis)
+
+    @register_jitable
+    def normalize_axis(axis, ndim):
+        for i in range(len(axis)):
+            # In case of negative axes, we wrap them around
+            if axis[i] < 0:
+                axis = tuple_setitem(axis, i, axis[i] + ndim)
+
+            # Check for out of bound axes
+            if axis[i] < 0 or axis[i] >= ndim:
+                raise IndexError("axis out of bounds")
+        return axis
+
+    def _build_shape_stride_tuples(_curr_tuple, ndim, axis, value):
+        axis = to_tuple(axis)
+        axis = normalize_axis(axis, ndim)
+        # 1. Initialize new tuple with -1
+        res = _empty_tuple
+
+        # 2. Replace the new tuple with given value using
+        # their index array i.e. axis
+        for i in axis:
+            if res[i] == value:
+                raise ValueError("An axis is being repeated")
+            res = tuple_setitem(res, i, value)
+
+        # 3. Incrementally put original tuple values into
+        # indices that are -1
+        idx = 0
+        for i in range(ndim):
+            if res[i] == -1:
+                res = tuple_setitem(res, i, _curr_tuple[idx])
+                idx = idx + 1
+
+        return res
 
     arr = make_array(arrty)(context, builder, value=args[0])
     ret = make_array(retty)(context, builder)
 
-    shapes = cgutils.unpack_tuple(builder, arr.shape)
-    strides = cgutils.unpack_tuple(builder, arr.strides)
+    temp_retty = types.UniTuple(types.intp, count=ndim)
+    temp_ty = types.UniTuple(types.intp, count=sig.args[0].ndim)
+    temp_sig = signature(temp_retty, temp_ty, types.intp,
+                         sig.args[1], types.intp)
 
-    new_shapes = _insert_axis_in_shape(context, builder, shapes, ndim, axis)
-    new_strides = _insert_axis_in_strides(context, builder, strides, ndim, axis)
+    ndim_const = context.get_constant(types.intp, ndim)
+    zero = context.get_constant(types.intp, 0)
+    one = context.get_constant(types.intp, 1)
+    new_shapes = context.compile_internal(builder,
+                                          _build_shape_stride_tuples,
+                                          temp_sig,
+                                          (arr.shape, ndim_const,
+                                           args[1], one))
+    new_strides = context.compile_internal(builder,
+                                           _build_shape_stride_tuples,
+                                           temp_sig,
+                                           (arr.strides, ndim_const,
+                                            args[1], zero))
 
     populate_array(ret,
                    data=arr.data,
@@ -5886,15 +5882,25 @@ def expand_dims(context, builder, sig, args, axis):
 @intrinsic
 def np_expand_dims(typingctx, a, axis):
     layout = a.layout if a.ndim <= 1 else 'A'
-    ret = a.copy(ndim=a.ndim + 1, layout=layout)
+
+    if isinstance(axis, types.UniTuple) and axis.count:
+        ret = a.copy(ndim=a.ndim + axis.count, layout=layout)
+    elif isinstance(axis, types.Integer):
+        ret = a.copy(ndim=a.ndim + 1, layout=layout)
+    else:
+        # An empty tuple
+        ret = a.copy(ndim=a.ndim, layout=layout)
     sig = ret(a, axis)
 
     def codegen(context, builder, sig, args):
-        axis = context.cast(builder, args[1], sig.args[1], types.intp)
-        axis = _normalize_axis(context, builder, "np.expand_dims",
-                               sig.return_type.ndim, axis)
+        axes_types = sig.args[1]
+        if (isinstance(axes_types, (types.UniTuple, types.Tuple))
+                and not axes_types.count):
+            # An empty tuple
+            return impl_ret_borrowed(context, builder,
+                                     sig.return_type, args[0])
 
-        ret = expand_dims(context, builder, sig, args, axis)
+        ret = expand_dims(context, builder, sig, args)
         return impl_ret_borrowed(context, builder, sig.return_type, ret)
 
     return sig, codegen
@@ -5906,8 +5912,13 @@ def impl_np_expand_dims(a, axis):
         msg = f'First argument "a" must be an array. Got {a}'
         raise errors.TypingError(msg)
 
-    if not isinstance(axis, types.Integer):
-        msg = f'Argument "axis" must be an integer. Got {axis}'
+    # Either an integer or a Tuple with all integer elements or an empty Tuple
+    if not isinstance(axis, types.Integer)\
+        and not (isinstance(axis, types.UniTuple)
+                 and isinstance(axis.dtype, types.Integer) and axis.count)\
+            and not (isinstance(axis, types.Tuple) and not axis.count):
+        msg = ('Argument "axis" must be an integer or tuple of integers.'
+               f' Got {axis}')
         raise errors.TypingError(msg)
 
     def impl(a, axis):
@@ -5954,8 +5965,9 @@ def _atleast_nd_transform(min_ndim, axes):
                 axis = cgutils.intp_t(axes[i])
                 newarrty = arrty.copy(ndim=arrty.ndim + 1)
                 arr = expand_dims(context, builder,
-                                  typing.signature(newarrty, arrty), (arr,),
-                                  axis)
+                                  typing.signature(newarrty, arrty,
+                                                   types.intp),
+                                  (arr, axis))
                 arrty = newarrty
 
         return arr
@@ -6259,8 +6271,8 @@ def np_column_stack(typingctx, tup):
                 # Convert 1d array to 2d column array: np.expand_dims(a, 1)
                 assert arrty.ndim == 1
                 newty = arrty.copy(ndim=2)
-                expand_sig = typing.signature(newty, arrty)
-                newarr = expand_dims(context, builder, expand_sig, (arr,), axis)
+                expand_sig = typing.signature(newty, arrty, types.intp)
+                newarr = expand_dims(context, builder, expand_sig, (arr, axis))
 
                 arrtys.append(newty)
                 arrs.append(newarr)
@@ -6422,8 +6434,8 @@ def _np_dstack(typingctx, tup):
                                          axis)
 
             axis = context.get_constant(types.intp, 0)
-            expand_sig = typing.signature(retty, stack_retty)
-            return expand_dims(context, builder, expand_sig, (stack_ret,), axis)
+            expand_sig = typing.signature(retty, stack_retty, types.intp)
+            return expand_dims(context, builder, expand_sig, (stack_ret, axis))
 
         elif ndim == 2:
             # np.stack(arrays, axis=2)
