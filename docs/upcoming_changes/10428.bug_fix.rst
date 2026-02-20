@@ -1,0 +1,6 @@
+Fix scalar handling in ``np.mean``
+----------------------------------
+
+Fix scalar handling in ``np.mean``. Previously, this function would
+fail when called with scalar inputs. Now it properly handles both scalar
+and array inputs.

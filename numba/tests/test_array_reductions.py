@@ -388,6 +388,43 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_mean_basic(self):
         self.check_reduction_basic(array_mean)
 
+    def test_np_mean_scalar(self):
+        cfunc = jit(nopython=True)(array_mean_global)
+
+        def check(arg):
+            expected = array_mean_global(arg)
+            got = cfunc(arg)
+            self.assertPreciseEqual(got, expected)
+
+        # NumPy integer and boolean scalars
+        check(np.int32(2))
+        check(np.int64(-3))
+        check(np.uint32(5))
+        check(np.bool_(True))
+        check(np.bool_(False))
+
+        # NumPy floating scalars
+        check(np.float32(1.25))
+        check(np.float64(-2.5))
+
+        # Complex values
+        check(np.complex64(7+0j))
+        check(np.complex128(61+74j))
+
+        # Special floating values
+        check(np.nan)
+        check(np.inf)
+        check(-np.inf)
+        check(-0.0)
+        check(0.0)
+        check(0)
+        check(0.0000042)
+        check(-0.25863)
+        
+        # Error cases
+        with self.assertTypingError():
+            cfunc('test String')
+
     def test_var_basic(self):
         self.check_reduction_basic(array_var, prec='double')
 
