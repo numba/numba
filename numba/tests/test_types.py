@@ -239,6 +239,15 @@ class TestTypes(TestCase):
         self.assertPreciseEqual(ty(5), np.timedelta64(5))
         self.assertPreciseEqual(ty('NaT'), np.timedelta64('NaT'))
 
+    def test_cant_modify_unit(self):
+        ty = types.NPDatetime('s')
+        with self.assertRaises(Exception):
+            ty.unit = ''
+
+        ty = types.NPTimedelta('s')
+        with self.assertRaises(Exception):
+            ty.unit = ''
+
     def test_list_type_getitem(self):
         for listty in (types.int64, types.Array(types.float64, 1, 'C')):
             l_int = types.List(listty)
@@ -290,6 +299,13 @@ class TestNumbers(TestCase):
         f = types.Integer.from_bitwidth
         self.assertIs(f(32), types.int32)
         self.assertIs(f(8, signed=False), types.uint8)
+
+    def test_cant_modify_Integer(self):
+        int16 = types.Integer.from_bitwidth(16)
+        with self.assertRaises(Exception):
+            int16.bitwidth = 32
+        with self.assertRaises(Exception):
+            int16.signed = False
 
     def test_ordering(self):
         def check_order(values):
