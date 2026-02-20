@@ -1,0 +1,5 @@
+Introduce ``context.call_overload`` and update the exception message raised in ``@guvectorize``
+-----------------------------------------------------------------------------------------------
+
+Previously, ``@guvectorize`` would raise a generic exception message. Now, the
+exception is raised with a meaningful message.

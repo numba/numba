@@ -44,6 +44,9 @@ def tuple_slice3(tup):
 def len_usecase(tup):
     return len(tup)
 
+def str_usecase(tup):
+    return str(tup)
+
 def add_usecase(a, b):
     return a + b
 
@@ -209,6 +212,16 @@ class TestTuplePassing(TestCase):
 
 
 class TestOperations(TestCase):
+
+    def test_str(self):
+        pyfunc = str_usecase
+        tups = [
+            (1, 2, 3),
+            (types.int32(1), types.int32(-1)),
+        ]
+        for tup in tups:
+            cfunc = njit(pyfunc)
+            self.assertEqual(cfunc(tup), pyfunc(tup))
 
     def test_len(self):
         pyfunc = len_usecase
