@@ -3327,7 +3327,8 @@ def record_setattr(context, builder, sig, args, attr):
         dest = cgutils.get_record_member(builder, target, offset,
                                          src.type.pointee)
         cgutils.memcpy(builder, dest, src,
-                       context.get_constant(types.intp, elemty.nitems))
+                       context.get_constant(types.intp, elemty.nitems),
+                       context.get_constant(types.intp, elemty.size))
     else:
         # Set the given scalar record member
         dptr = cgutils.get_record_member(builder, target, offset,
@@ -5108,8 +5109,7 @@ def _array_copy(context, builder, sig, args):
     assert rettype.layout in "CF"
     if arytype.layout == rettype.layout:
         # Fast path: memcpy
-        cgutils.raw_memcpy(builder, dest_data, src_data, ary.nitems,
-                           ary.itemsize, align=1)
+        cgutils.memcpy(builder, dest_data, src_data, ary.nitems, ary.itemsize)
 
     else:
         src_strides = cgutils.unpack_tuple(builder, ary.strides)

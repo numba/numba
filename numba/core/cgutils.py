@@ -1051,56 +1051,49 @@ def cbranch_or_continue(builder, cond, bbtrue):
     return bbcont
 
 
-def memcpy(builder, dst, src, count):
+def memcpy(builder, dst, src, count, itemsize=1):
     """
-    Emit a memcpy to the builder.
+    Emit a memcpy to the builder. Source and destination types can be any type.
 
-    Copies each element of dst to src. Unlike the C equivalent, each element
-    can be any LLVM type.
+    Call either as:
 
-    Assumes
-    -------
-    * dst.type == src.type
-    * count is positive
+    - memcpy(builder, dst, src, len), or
+    - memcpy(builder, dst, src, count, itemsize)
     """
-    # Note this does seem to be optimized as a raw memcpy() by LLVM
-    # whenever possible...
-    assert dst.type == src.type
-    with for_range(builder, count, intp=count.type) as loop:
-        out_ptr = builder.gep(dst, [loop.index])
-        in_ptr = builder.gep(src, [loop.index])
-        builder.store(builder.load(in_ptr), out_ptr)
+    _raw_mem_intrinsic(builder, 'llvm.memcpy', dst, src, count, itemsize)
 
 
-def _raw_memcpy(builder, func_name, dst, src, count, itemsize, align):
-    size_t = count.type
+def memmove(builder, dst, src, count, itemsize=1):
+    """
+    Emit a memmove to the builder. Source and destination types can be any type.
+
+    Call either as:
+
+    - memmove(builder, dst, src, len), or
+    - memmove(builder, dst, src, count, itemsize)
+    """
+    _raw_mem_intrinsic(builder, 'llvm.memmove', dst, src, count, itemsize)
+
+
+def _raw_mem_intrinsic(builder, func_name, dst, src, count, itemsize):
+    if isinstance(count, int):
+        count = ir.Constant(intp_t, count)
+
     if isinstance(itemsize, int):
-        itemsize = ir.Constant(size_t, itemsize)
+        itemsize = ir.Constant(intp_t, itemsize)
 
-    memcpy = builder.module.declare_intrinsic(func_name,
-                                              [voidptr_t, voidptr_t, size_t])
+    argtys = [voidptr_t, voidptr_t, intp_t]
+    func = builder.module.declare_intrinsic(func_name, argtys)
+    length = builder.mul(count, itemsize)
     is_volatile = false_bit
-    builder.call(memcpy, [builder.bitcast(dst, voidptr_t),
-                          builder.bitcast(src, voidptr_t),
-                          builder.mul(count, itemsize),
-                          is_volatile])
 
+    func.args[0].attributes.align = 1
+    func.args[1].attributes.align = 1
 
-def raw_memcpy(builder, dst, src, count, itemsize, align=1):
-    """
-    Emit a raw memcpy() call for `count` items of size `itemsize`
-    from `src` to `dest`.
-    """
-    return _raw_memcpy(builder, 'llvm.memcpy', dst, src, count, itemsize, align)
-
-
-def raw_memmove(builder, dst, src, count, itemsize, align=1):
-    """
-    Emit a raw memmove() call for `count` items of size `itemsize`
-    from `src` to `dest`.
-    """
-    return _raw_memcpy(builder, 'llvm.memmove', dst, src, count,
-                       itemsize, align)
+    builder.call(func, (builder.bitcast(dst, voidptr_t),
+                        builder.bitcast(src, voidptr_t),
+                        length,
+                        is_volatile))
 
 
 def muladd_with_overflow(builder, a, b, c):
