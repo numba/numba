@@ -1177,6 +1177,28 @@ class TestOperatorMixedTypes(TestCase):
             for x, y in itertools.product(things, things):
                 self.assertPreciseEqual(func.py_func(x, y), func(x, y))
 
+    def test_10414(self):
+        # test for https://github.com/numba/numba/issues/10414
+        @njit
+        def func_eq():
+            a = None
+            for _ in range(0):
+                a = 'b'
+            # a is now an OptionalType(unicode_type) -- we test that equals
+            # works correctly.
+            return a == None
+        self.assertEqual(func_eq(), func_eq.py_func())
+
+        @njit
+        def func_ne():
+            a = None
+            for _ in range(0):
+                a = 'b'
+            # a is now an OptionalType(unicode_type) -- we test that not equals
+            # works correctly.
+            return a != None
+        self.assertEqual(func_ne(), func_ne.py_func())
+
     def test_cmp(self):
         for opstr in ('gt', 'lt', 'ge', 'le', 'eq', 'ne'):
             op = getattr(operator, opstr)
