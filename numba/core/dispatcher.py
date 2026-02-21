@@ -49,118 +49,35 @@ class _FunctionCompiler(object):
         self.locals = locals
         self.pysig = utils.pysignature(self.py_func)
         self.pipeline_class = pipeline_class
+
         # Remember key=(args, return_type) combinations that will fail
         # compilation to avoid compilation attempt on them.  The values are
         # the exceptions.
         self._failed_cache = {}
 
-    def fold_argument_types(self, args, kws):
-        """
-        Given positional and named argument types, fold keyword arguments
-        and resolve defaults by inserting types.Omitted() instances.
-
-        A (pysig, argument types) tuple is returned.
-        """
-        def normal_handler(index, param, value):
-            return value
-
-        def default_handler(index, param, default):
-            return types.Omitted(default)
-
-        def stararg_handler(index, param, values):
-            return types.StarArgTuple(values)
-        # For now, we take argument values from the @jit function
-        args = fold_arguments(self.pysig, args, kws,
-                              normal_handler,
-                              default_handler,
-                              stararg_handler)
-        return self.pysig, args
-
     def compile(self, args, return_type):
-        status, retval = self._compile_cached(args, return_type)
-        if status:
-            return retval
-        else:
-            raise retval
-
-    def _compile_cached(self, args, return_type):
         key = tuple(args), return_type
-        try:
-            return False, self._failed_cache[key]
-        except KeyError:
-            pass
 
-        try:
-            retval = self._compile_core(args, return_type)
-        except errors.TypingError as e:
-            self._failed_cache[key] = e
-            return False, e
-        else:
-            return True, retval
+        if key in self._failed_cache:
+            raise self._failed_cache[key]
 
-    def _compile_core(self, args, return_type):
         flags = compiler.Flags()
         self.targetdescr.options.parse_as_flags(flags, self.targetoptions)
         flags = self._customize_flags(flags)
 
-        impl = self._get_implementation(args, {})
-        cres = compiler.compile_extra(self.targetdescr.typing_context,
-                                      self.targetdescr.target_context,
-                                      impl,
-                                      args=args, return_type=return_type,
-                                      flags=flags, locals=self.locals,
-                                      pipeline_class=self.pipeline_class)
-        # Check typing error if object mode is used
-        if cres.typing_error is not None and not flags.enable_pyobject:
-            raise cres.typing_error
-        return cres
-
-    def get_globals_for_reduction(self):
-        return serialize._get_function_globals_for_reduction(self.py_func)
-
-    def _get_implementation(self, args, kws):
-        return self.py_func
+        try:
+            return compiler.compile_extra(self.targetdescr.typing_context,
+                                          self.targetdescr.target_context,
+                                          self.py_func,
+                                          args=args, return_type=return_type,
+                                          flags=flags, locals=self.locals,
+                                          pipeline_class=self.pipeline_class)
+        except errors.TypingError as typing_error:
+            self._failed_cache[key] = typing_error
+            raise
 
     def _customize_flags(self, flags):
         return flags
-
-
-class _GeneratedFunctionCompiler(_FunctionCompiler):
-
-    def __init__(self, py_func, targetdescr, targetoptions, locals,
-                 pipeline_class):
-        super(_GeneratedFunctionCompiler, self).__init__(
-            py_func, targetdescr, targetoptions, locals, pipeline_class)
-        self.impls = set()
-
-    def get_globals_for_reduction(self):
-        # This will recursively get the globals used by any nested
-        # implementation function.
-        return serialize._get_function_globals_for_reduction(self.py_func)
-
-    def _get_implementation(self, args, kws):
-        impl = self.py_func(*args, **kws)
-        # Check the generating function and implementation signatures are
-        # compatible, otherwise compiling would fail later.
-        pysig = utils.pysignature(self.py_func)
-        implsig = utils.pysignature(impl)
-        ok = len(pysig.parameters) == len(implsig.parameters)
-        if ok:
-            for pyparam, implparam in zip(pysig.parameters.values(),
-                                          implsig.parameters.values()):
-                # We allow the implementation to omit default values, but
-                # if it mentions them, they should have the same value...
-                if (pyparam.name != implparam.name or
-                    pyparam.kind != implparam.kind or
-                    (implparam.default is not implparam.empty and
-                     implparam.default != pyparam.default)):
-                    ok = False
-        if not ok:
-            raise TypeError("generated implementation %s should be compatible "
-                            "with signature '%s', but has signature '%s'"
-                            % (impl, pysig, implsig))
-        self.impls.add(impl)
-        return impl
 
 
 _CompileStats = collections.namedtuple(
@@ -230,6 +147,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                                         exact_match_required)
 
         self.doc = py_func.__doc__
+        self.pysig = pysig
         self._compiling_counter = CompilingCounter()
         self._enable_sysmon = bool(config.ENABLE_SYS_MONITORING)
         weakref.finalize(self, self._make_finalizer())
@@ -299,7 +217,26 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         self.overloads[args] = cres
 
     def fold_argument_types(self, args, kws):
-        return self._compiler.fold_argument_types(args, kws)
+        """
+        Given positional and named argument types, fold keyword arguments
+        and resolve defaults by inserting types.Omitted() instances.
+
+        A (pysig, argument types) tuple is returned.
+        """
+        def normal_handler(index, param, value):
+            return value
+
+        def default_handler(index, param, default):
+            return types.Omitted(default)
+
+        def stararg_handler(index, param, values):
+            return types.StarArgTuple(values)
+        # For now, we take argument values from the @jit function
+        args = fold_arguments(self.pysig, args, kws,
+                              normal_handler,
+                              default_handler,
+                              stararg_handler)
+        return self.pysig, args
 
     def get_call_template(self, args, kws):
         """
@@ -312,7 +249,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         # following?
 
         # Fold keyword arguments and resolve default values
-        pysig, args = self._compiler.fold_argument_types(args, kws)
+        pysig, args = self.fold_argument_types(args, kws)
         kws = {}
         # Ensure an overload is available
         if self._can_compile:
@@ -908,8 +845,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
                         cres = self._compiler.compile(args, return_type)
                     except errors.ForceLiteralArg as e:
                         def folded(args, kws):
-                            return self._compiler.fold_argument_types(args,
-                                                                      kws)[1]
+                            return self.fold_argument_types(args, kws)[1]
                         raise e.bind_fold_arguments(folded)
                     self.add_overload(cres)
                 self._cache.save_overload(sig, cres)
