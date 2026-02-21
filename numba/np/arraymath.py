@@ -370,6 +370,15 @@ def array_prod(a):
             return c
 
         return array_prod_impl
+    elif isinstance(a, types.Number):
+        def scalar_prod_impl(a):
+            return a
+        return scalar_prod_impl
+    elif isinstance(a, types.Boolean):
+        # prod converts booleans to np.int64
+        def scalar_prod_impl(a):
+            return np.int64(a)
+        return scalar_prod_impl
 
 
 @overload(np.cumsum)
