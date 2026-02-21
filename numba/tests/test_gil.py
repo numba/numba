@@ -4,6 +4,7 @@ import os
 import sys
 import threading
 import warnings
+from platform import machine as get_architecture
 
 import numpy as np
 
@@ -26,8 +27,8 @@ if os.name == 'nt':
     sleep_factor = 1  # milliseconds
 else:
     sleep = ctypes.CDLL(ctypes.util.find_library("c")).usleep
-    sleep.argtypes = [ctypes.c_uint]
-    sleep.restype = ctypes.c_int
+    sleep.argtypes = [ctypes.c_uint64] if get_architecture() == "s390x" else [ctypes.c_uint]
+    sleep.restype = ctypes.c_int64 if get_architecture() == "s390x" else ctypes.c_int
     sleep_factor = 1000  # microseconds
 
 
