@@ -1,6 +1,6 @@
 Fix dispatch overhead when calling JIT-compiled functions that use default arguments
 ------------------------------------------------------------------------------------
 
-Fixes :issue:`7615` by removing the dispatch overhead for omitted keyword arguments.
-The ``OmittedArg`` wrapper is now a native C-extension, and a fingerprint cache collision
-in the C dispatcher has been resolved.
+Fixes :issue:`7615` and :issue:`6173` by removing the dispatch overhead for omitted
+keyword arguments. The ``OmittedArg`` wrapper is now a native C-extension, and a
+fingerprint cache collision in the C dispatcher has been resolved.
