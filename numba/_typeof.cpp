@@ -44,14 +44,11 @@ static int tc_intp;
 /* The type object for the numba .dispatcher.OmittedArg class
  * that wraps omitted arguments.
  */
-static PyObject *omittedarg_type;
-
 static PyObject *typecache;
 static PyObject *ndarray_typecache;
 static PyObject *structured_dtypes;
 
 static PyObject *str_typeof_pyval = NULL;
-static PyObject *str_value = NULL;
 static PyObject *str_numba_type = NULL;
 
 /* CUDA device array API */
@@ -1165,7 +1162,7 @@ int init_numpy(void) {
 
 
 /*
- * typeof_init(omittedarg_type, typecode_dict)
+ * typeof_init(typecode_dict)
  * (called from dispatcher.py to fill in missing information)
  */
 extern "C" PyObject *
@@ -1240,9 +1237,8 @@ typeof_init(PyObject *self, PyObject *args)
     memset(cached_arycode, 0xFF, sizeof(cached_arycode));
 
     str_typeof_pyval = PyString_InternFromString("typeof_pyval");
-    str_value = PyString_InternFromString("value");
     str_numba_type = PyString_InternFromString("_numba_type_");
-    if (!str_value || !str_typeof_pyval || !str_numba_type)
+    if (!str_typeof_pyval || !str_numba_type)
         return NULL;
 
     Py_RETURN_NONE;
