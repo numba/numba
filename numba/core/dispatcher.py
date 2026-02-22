@@ -11,6 +11,7 @@ from contextlib import ExitStack
 from abc import abstractmethod
 
 from numba import _dispatcher
+from numba._dispatcher import OmittedArg
 from numba.core import (
     utils, types, errors, typing, serialize, config, compiler, sigutils
 )
@@ -22,22 +23,6 @@ from numba.core.bytecode import get_code_object
 from numba.core.caching import NullCache, FunctionCache
 from numba.core import entrypoints
 import numba.core.event as ev
-
-
-class OmittedArg(object):
-    """
-    A placeholder for omitted arguments with a default value.
-    """
-
-    def __init__(self, value):
-        self.value = value
-
-    def __repr__(self):
-        return "omitted arg(%r)" % (self.value,)
-
-    @property
-    def _numba_type_(self):
-        return types.Omitted(self.value)
 
 
 class _FunctionCompiler(object):
@@ -1328,10 +1313,8 @@ class ObjModeLiftedWith(LiftedWith):
 if config.USE_LEGACY_TYPE_SYSTEM: # Old type system
     # Initialize typeof machinery
     _dispatcher.typeof_init(
-        OmittedArg,
         dict((str(t), t._code) for t in types.number_domain))
 else: # New type system
     # Initialize typeof machinery
     _dispatcher.typeof_init(
-        OmittedArg,
         dict((str(t).split('_')[-1], t._code) for t in types.np_number_domain))
