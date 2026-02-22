@@ -1674,5 +1674,11 @@ MOD_INIT(_dispatcher) {
     Py_INCREF(&DispatcherType);
     PyModule_AddObject(m, "Dispatcher", (PyObject*)(&DispatcherType));
 
+    if (PyType_Ready(&OmittedArgType) < 0) {
+        return MOD_ERROR_VAL;
+    }
+    Py_INCREF(&OmittedArgType);
+    PyModule_AddObject(m, "OmittedArg", (PyObject*)(&OmittedArgType));
+
     return MOD_SUCCESS_VAL(m);
 }

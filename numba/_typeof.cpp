@@ -44,18 +44,95 @@ static int tc_intp;
 /* The type object for the numba .dispatcher.OmittedArg class
  * that wraps omitted arguments.
  */
-static PyObject *omittedarg_type;
-
 static PyObject *typecache;
 static PyObject *ndarray_typecache;
 static PyObject *structured_dtypes;
 
 static PyObject *str_typeof_pyval = NULL;
-static PyObject *str_value = NULL;
 static PyObject *str_numba_type = NULL;
 
 /* CUDA device array API */
 void **DeviceArray_API;
+
+/* 
+ * Omitted Arg C-Extension
+ */
+
+// Memory Management (__del__)
+static void OmittedArg_dealloc(OmittedArgObject *self) {
+    Py_XDECREF(self->value);
+    Py_TYPE(self)->tp_free((PyObject *)self);
+}
+
+// Initialization (__init__)
+static int OmittedArg_init(OmittedArgObject *self, PyObject *args, PyObject *kwds) {
+    PyObject *val = NULL;
+    // Parse a single Python object "O"
+    if (!PyArg_ParseTuple(args, "O", &val)) {
+        return -1;
+    }
+    Py_INCREF(val);
+    self->value = val;
+    return 0;
+}
+
+// String representation (__repr__)
+static PyObject *OmittedArg_repr(OmittedArgObject *self) {
+    PyObject *val_repr = PyObject_Repr(self->value);
+    if (!val_repr) return NULL;
+    PyObject *res = PyUnicode_FromFormat("omitted arg(%U)", val_repr);
+    Py_DECREF(val_repr);
+    return res;
+}
+
+// Property Getters
+static PyObject* OmittedArg_get_value(OmittedArgObject *self, void *closure) {
+    Py_INCREF(self->value); // Getters must return a new reference
+    return self->value;
+}
+
+static PyObject* OmittedArg_get_numba_type(OmittedArgObject *self, void *closure) {
+    // Equivalent to python's: return types.Omitted(self.value)
+    PyObject *numba_types = PyImport_ImportModule("numba.core.types");
+    if (!numba_types) return NULL;
+    
+    PyObject *omitted_cls = PyObject_GetAttrString(numba_types, "Omitted");
+    Py_DECREF(numba_types);
+    if (!omitted_cls) return NULL;
+    
+    PyObject *args = PyTuple_Pack(1, self->value);
+    PyObject *res = PyObject_CallObject(omitted_cls, args);
+    Py_DECREF(args);
+    Py_DECREF(omitted_cls);
+    return res;
+}
+
+// Map the getters to Python properties (.value and ._numba_type_)
+static PyGetSetDef OmittedArg_getsetters[] = {
+    {(char*)"value", (getter)OmittedArg_get_value, NULL, (char*)"default value", NULL},
+    {(char*)"_numba_type_", (getter)OmittedArg_get_numba_type, NULL, (char*)"numba type", NULL},
+    {NULL}
+};
+
+// Type Definition
+PyTypeObject OmittedArgType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_dispatcher.OmittedArg",                  /* tp_name */
+    sizeof(OmittedArgObject),                  /* tp_basicsize */
+    0,                                         /* tp_itemsize */
+    (destructor)OmittedArg_dealloc,            /* tp_dealloc */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0,              
+    (reprfunc)OmittedArg_repr,                 /* tp_repr */
+    0, 0, 0,
+    Py_TPFLAGS_DEFAULT,                        /* tp_flags */
+    "A placeholder for omitted arguments with a default value.", /* tp_doc */
+    0, 0, 0, 0, 0, 0, 0, 0,
+    OmittedArg_getsetters,                     /* tp_getset */
+    0, 0, 0, 0, 0,
+    (initproc)OmittedArg_init,                 /* tp_init */
+    0,
+    PyType_GenericNew                          /* tp_new */
+};
 
 /*
  * Type fingerprint computation.
@@ -357,14 +434,27 @@ compute_fingerprint(string_writer_t *w, PyObject *val)
         return string_writer_put_char(w, OP_BYTES);
     if (PyByteArray_Check(val))
         return string_writer_put_char(w, OP_BYTEARRAY);
-    if ((PyObject *) Py_TYPE(val) == omittedarg_type) {
-        PyObject *default_val = PyObject_GetAttr(val, str_value);
-        if (default_val == NULL)
-            return -1;
+    if (Py_TYPE(val) == &OmittedArgType) {
+        // Cast to struct and access memory directly
+        OmittedArgObject *omitted = (OmittedArgObject *)val;
+        PyObject *default_val = omitted->value;
+        
         TRY(string_writer_put_char, w, OP_OMITTED);
+        
+        // Use a hash table to store and check the cache to avoid collisions (like Omitted(2) == Omitted(10))
+        Py_hash_t hash = PyObject_Hash(default_val);
+        if (hash == -1) {
+            PyErr_Clear(); // If it is somehow unhashable, fallback to Python
+            return fingerprint_unrecognized();
+        }
+        TRY(string_writer_put_intp, w, hash);
+        // compute_fingerprint does not consume the reference, 
+        // so borrowing the pointer from the struct is safe.
         TRY(compute_fingerprint, w, default_val);
-        Py_DECREF(default_val);
-        return 0;
+        
+        // The original method had a Py_DECREF because PyObject_GetAttr returned a new reference.
+        // The new direct access gives us a borrowed reference, eliminating the need to decref.
+        return 0; 
     }
     if (PyArray_IsScalar(val, Generic)) {
         /* Note: PyArray_DescrFromScalar() may be a bit slow on
@@ -1072,7 +1162,7 @@ int init_numpy(void) {
 
 
 /*
- * typeof_init(omittedarg_type, typecode_dict)
+ * typeof_init(typecode_dict)
  * (called from dispatcher.py to fill in missing information)
  */
 extern "C" PyObject *
@@ -1081,9 +1171,8 @@ typeof_init(PyObject *self, PyObject *args)
     PyObject *tmpobj;
     PyObject *dict;
     int index = 0;
-
-    if (!PyArg_ParseTuple(args, "O!O!:typeof_init",
-                          &PyType_Type, &omittedarg_type,
+    
+    if (!PyArg_ParseTuple(args, "O!:typeof_init",
                           &PyDict_Type, &dict))
         return NULL;
 
@@ -1148,9 +1237,8 @@ typeof_init(PyObject *self, PyObject *args)
     memset(cached_arycode, 0xFF, sizeof(cached_arycode));
 
     str_typeof_pyval = PyString_InternFromString("typeof_pyval");
-    str_value = PyString_InternFromString("value");
     str_numba_type = PyString_InternFromString("_numba_type_");
-    if (!str_value || !str_typeof_pyval || !str_numba_type)
+    if (!str_typeof_pyval || !str_numba_type)
         return NULL;
 
     Py_RETURN_NONE;
