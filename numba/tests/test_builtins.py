@@ -1180,7 +1180,7 @@ class TestOperatorMixedTypes(TestCase):
 
     def test_eq_ne_returns_literal_on_none(self):
 
-        counter = []
+        counter = [0]
 
         def bar(d, e, c):
             ...
@@ -1191,7 +1191,7 @@ class TestOperatorMixedTypes(TestCase):
             self.assertEqual(hasattr(d, 'literal_value'), True)
             # Assert that the result received has the correct literal_value
             self.assertEqual(d.literal_value, e.literal_value)
-            counter.append(True)
+            counter[0] += 1
             return lambda d, e, c: d
 
         @njit
@@ -1231,7 +1231,7 @@ class TestOperatorMixedTypes(TestCase):
         self.assertTrue(ne_int_none())
 
         # Assert that the overload was called a total of 6 times.
-        self.assertEqual(6, len(counter))
+        self.assertEqual(6, counter[0])
 
 
     def test_10414(self):
