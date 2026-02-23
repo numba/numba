@@ -1180,52 +1180,58 @@ class TestOperatorMixedTypes(TestCase):
 
     def test_eq_ne_returns_literal_on_none(self):
 
-        def bar(d, e):
+        counter = []
+
+        def bar(d, e, c):
             ...
 
         @overload(bar, prefer_literal=True)
-        def ol_bar(d, e):
+        def ol_bar(d, e, c):
             # Assert that the result received is a literal
             self.assertEqual(hasattr(d, 'literal_value'), True)
             # Assert that the result received has the correct literal_value
             self.assertEqual(d.literal_value, e.literal_value)
-            return lambda d, e: d
+            counter.append(True)
+            return lambda d, e, c: d
 
         @njit
         def eq_none_none():
-            return bar(None == None, True)
+            return bar(None == None, True, 0)
 
         self.assertTrue(eq_none_none())
 
         @njit
         def ne_none_none():
-            return bar(None != None, False)
+            return bar(None != None, False, 1)
 
         self.assertFalse(ne_none_none())
 
         @njit
         def eq_none_int():
-            return bar(None == 1, False)
+            return bar(None == 1, False, 2)
 
         self.assertFalse(eq_none_int())
 
         @njit
         def ne_none_int():
-            return bar(None != 1, True)
+            return bar(None != 1, True, 3)
 
         self.assertTrue(ne_none_int())
 
         @njit
         def eq_int_none():
-            return bar(1 == None, False)
+            return bar(1 == None, False, 4)
 
         self.assertFalse(eq_int_none())
 
         @njit
         def ne_int_none():
-            return bar(1 != None, True)
+            return bar(1 != None, True, 5)
 
         self.assertTrue(ne_int_none())
+
+        # Assert that the overload was called a total of 6 times.
+        self.assertEqual(6, len(counter))
 
 
     def test_10414(self):
