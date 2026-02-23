@@ -13,7 +13,8 @@ from numba import jit, typeof, njit, typed
 from numba.core import errors, types, config
 from numba.tests.support import (TestCase, tag, ignore_internal_warnings,
                                  MemoryLeakMixin)
-from numba.core.extending import overload_method, box, register_jitable
+from numba.core.extending import (overload_method, box, register_jitable,
+                                  overload)
 
 
 forceobj_flags = {'forceobj': True}
@@ -1177,27 +1178,40 @@ class TestOperatorMixedTypes(TestCase):
             for x, y in itertools.product(things, things):
                 self.assertPreciseEqual(func.py_func(x, y), func(x, y))
 
+    def test_eq_ne_returns_literal_on_none(self):
+
+        def bar():
+            ...
+
+        @overload(bar)
+        def ol_bar(d):
+            # Reject non-literal types to force retry with literal
+            if not isinstance(d, types.Literal):
+                return None
+            # Assert that the result received is a literal
+            self.assertEqual(hasattr(d, 'literal_value'), True)
+            return lambda d: d
+
+        @njit
+        def eq():
+            return bar(1)
+
+        self.assertTrue(eq())
+
+
     def test_10414(self):
         # test for https://github.com/numba/numba/issues/10414
         @njit
-        def func_eq():
+        def func(x):
             a = None
-            for _ in range(0):
-                a = 'b'
-            # a is now an OptionalType(unicode_type) -- we test that equals
-            # works correctly.
-            return a == None
-        self.assertEqual(func_eq(), func_eq.py_func())
+            if x:
+                a = 0
+            # a is an OptionalType(unicode_type) if x is False -- we test that
+            # equals and not-equals works correctly.
+            return a == None, a != None
+        self.assertEqual(func(True), func.py_func(True))
+        self.assertEqual(func(False), func.py_func(False))
 
-        @njit
-        def func_ne():
-            a = None
-            for _ in range(0):
-                a = 'b'
-            # a is now an OptionalType(unicode_type) -- we test that not equals
-            # works correctly.
-            return a != None
-        self.assertEqual(func_ne(), func_ne.py_func())
 
     def test_cmp(self):
         for opstr in ('gt', 'lt', 'ge', 'le', 'eq', 'ne'):
