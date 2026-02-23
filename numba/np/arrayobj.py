@@ -1138,22 +1138,23 @@ class FancyIndexer(object):
         num_subspaces = 0
         in_subspace = False
         subspace_index = None
-        for idx, i in enumerate(indexers):
-            if isinstance(i, (IntegerArrayIndexer, IntegerIndexer)):
-                if in_subspace == False:
-                    in_subspace = True
-                    num_subspaces += 1
-                if subspace_index is None:
-                    subspace_index = idx
-            else:
-                if in_subspace == True:
-                    in_subspace = False
-        
-        if num_subspaces:
-            if num_subspaces > 1:
-                subspace_index = 0
+        if any([isinstance(i, IntegerArrayIndexer) for i in indexers]):
+            for idx, i in enumerate(indexers):
+                if isinstance(i, (IntegerArrayIndexer, IntegerIndexer)):
+                    if in_subspace == False:
+                        in_subspace = True
+                        num_subspaces += 1
+                    if subspace_index is None:
+                        subspace_index = idx
+                else:
+                    if in_subspace == True:
+                        in_subspace = False
+            
+            if num_subspaces:
+                if num_subspaces > 1:
+                    subspace_index = 0
 
-            indexers.insert(subspace_index, self.subspace_indexer)
+                indexers.insert(subspace_index, self.subspace_indexer)
 
         self.subspace_index = subspace_index
         self.indexers = indexers
