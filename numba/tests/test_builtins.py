@@ -1180,23 +1180,52 @@ class TestOperatorMixedTypes(TestCase):
 
     def test_eq_ne_returns_literal_on_none(self):
 
-        def bar():
+        def bar(d, e):
             ...
 
-        @overload(bar)
-        def ol_bar(d):
-            # Reject non-literal types to force retry with literal
-            if not isinstance(d, types.Literal):
-                return None
+        @overload(bar, prefer_literal=True)
+        def ol_bar(d, e):
             # Assert that the result received is a literal
             self.assertEqual(hasattr(d, 'literal_value'), True)
-            return lambda d: d
+            # Assert that the result received has the correct literal_value
+            self.assertEqual(d.literal_value, e.literal_value)
+            return lambda d, e: d
 
         @njit
-        def eq():
-            return bar(1)
+        def eq_none_none():
+            return bar(None == None, True)
 
-        self.assertTrue(eq())
+        self.assertTrue(eq_none_none())
+
+        @njit
+        def ne_none_none():
+            return bar(None != None, False)
+
+        self.assertFalse(ne_none_none())
+
+        @njit
+        def eq_none_int():
+            return bar(None == 1, False)
+
+        self.assertFalse(eq_none_int())
+
+        @njit
+        def ne_none_int():
+            return bar(None != 1, True)
+
+        self.assertTrue(ne_none_int())
+
+        @njit
+        def eq_int_none():
+            return bar(1 == None, False)
+
+        self.assertFalse(eq_int_none())
+
+        @njit
+        def ne_int_none():
+            return bar(1 != None, True)
+
+        self.assertTrue(ne_int_none())
 
 
     def test_10414(self):
