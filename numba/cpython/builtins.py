@@ -133,14 +133,8 @@ def gen_non_eq(val):
         b_none = isinstance(b, types.NoneType)
         # Case: both are None.
         if a_none and b_none:
-            if val:
-                # Case None == None --> Always True.
-                def impl(a, b):
-                    return True
-            else:
-                # Case None != None --> Always False.
-                def impl(a, b):
-                    return False
+            def impl(a, b):
+                    return val
             return impl
         # Case: only one is None.
         elif a_none ^ b_none:
@@ -161,15 +155,9 @@ def gen_non_eq(val):
                 return impl
             # Otherwise one is None, the other isn't.
             else:
-                if val:
-                    # Case Any == None --> Always False
-                    def impl(a, b):
-                        return False
-                else:
-                    # Case Any != None --> Always True
-                    def impl(a, b):
-                        return True
-
+                nval = not val
+                def impl(a, b):
+                    return nval
                 return impl
     return none_equality
 
