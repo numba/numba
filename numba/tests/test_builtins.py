@@ -1188,7 +1188,9 @@ class TestOperatorMixedTypes(TestCase):
         @overload(bar, prefer_literal=True)
         def ol_bar(d, e, c):
             # Assert that the result received is a literal
-            self.assertEqual(hasattr(d, 'literal_value'), True)
+            self.assertIsInstance(d, types.Literal)
+            # Assert that the result received has the 'literal_value' attribute
+            self.assertTrue(hasattr(d, 'literal_value'))
             # Assert that the result received has the correct literal_value
             self.assertEqual(d.literal_value, e.literal_value)
             counter[0] += 1
