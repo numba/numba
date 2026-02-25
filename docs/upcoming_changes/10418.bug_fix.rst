@@ -1,0 +1,5 @@
+Fix and test for 10414
+----------------------
+
+Equality omparisons such as `==` and `!=`  between ``Optional(None)`` and
+``None`` are now handled correctly.
