@@ -1241,7 +1241,7 @@ class TestOperatorMixedTypes(TestCase):
             a = None
             if x:
                 a = 0
-            # a is an OptionalType(unicode_type) if x is False -- we test that
+            # a is an OptionalType(int) if x is False -- we test that
             # equals and not-equals works correctly.
             return a == None, a != None
         self.assertEqual(func(True), func.py_func(True))
