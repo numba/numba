@@ -43,7 +43,7 @@ def is_cffi_func(obj):
     except TypeError:
         try:
             return obj in _ool_func_types
-        except:
+        except Exception:
             return False
 
 def get_pointer(cffi_func):
