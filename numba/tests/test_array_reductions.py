@@ -778,6 +778,14 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             got = cfunc(arg)
             self.assertPreciseEqual(got, expected)
 
+        # check less precise integer cases are converted to platform integer
+        check(np.int8(2))
+        check(np.uint8(2))
+        check(np.int16(3))
+        check(np.uint16(3))
+        check(np.int32(4))
+        check(np.uint32(4))
+
         # handle complex cases not tested in self.check_scalar_basic
         check(np.complex64(1j))
         check(np.complex128(0j))
