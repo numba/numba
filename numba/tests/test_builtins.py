@@ -1182,8 +1182,10 @@ class TestOperatorMixedTypes(TestCase):
 
         def check(operator):
             for (x, y) in ((None, None), (None, 1), (1, None)):
+
                 def bar(result):
                     pass
+
                 @overload(bar, prefer_literal=True)
                 def ol_bar(result):
                     # compile expected result
@@ -1195,9 +1197,11 @@ class TestOperatorMixedTypes(TestCase):
                     # Assert that result has the correct literal_value
                     self.assertEqual(result, expect)
                     return lambda result: None
+
                 @jit
                 def check_eq(x, y):
                     bar(operator(x, y))
+
                 check_eq(x, y)
 
         check(operator.ne)
