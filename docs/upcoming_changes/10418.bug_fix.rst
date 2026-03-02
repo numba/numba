@@ -1,5 +1,5 @@
-Fix and test for 10414
-----------------------
+Fix comparison between ``Optional(None)`` and ``None``
+------------------------------------------------------
 
-Equality comparisons such as `==` and `!=`  between ``Optional(None)`` and
+Equality comparisons such as ``==`` and ``!=``  between ``Optional(None)`` and
 ``None`` are now handled correctly.
