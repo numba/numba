@@ -134,7 +134,7 @@ def gen_non_eq(val):
         # Case: both are None.
         if a_none and b_none:
             def impl(a, b):
-                    return val
+                return val
             return impl
         # Case: only one is None.
         elif a_none ^ b_none:
