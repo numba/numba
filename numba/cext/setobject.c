@@ -1000,6 +1000,10 @@ numba_test_set(void) {
     // They are always the last item
     status = numba_set_popitem(s, got_key);
     CHECK(status == OK);
+    CHECK(memcmp("bek", got_key, s->keys->key_size) == 0);
+
+    status = numba_set_popitem(s, got_key);
+    CHECK(status == OK);
     CHECK(memcmp("bej", got_key, s->keys->key_size) == 0);
 
     status = numba_set_popitem(s, got_key);
