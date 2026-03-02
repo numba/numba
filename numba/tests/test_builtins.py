@@ -1192,8 +1192,6 @@ class TestOperatorMixedTypes(TestCase):
                     expect = types.literal(operator(x,y))
                     # Assert the result is of type types.Literal
                     self.assertIsInstance(result, types.Literal)
-                    # Assert that result has 'literal_value' attribute
-                    self.assertTrue(hasattr(result, 'literal_value'))
                     # Assert that result has the correct literal_value
                     self.assertEqual(result, expect)
                     return lambda result: None
