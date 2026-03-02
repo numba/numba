@@ -129,21 +129,36 @@ class Set(MutableSet):
             return _length(self)
 
     def copy(self):
+        if not self._typed:
+            raise TypeError("cannot copy an untyped set")
+
         return _copy(self)
 
     def __contains__(self, key):
-        return _set_contains(self, key)
+        if not self._typed:
+            self._initialise_set(key)
+
+        if len(self) == 0:
+            return False
+
+        return bool(_set_contains(self, key))
 
     def __iter__(self):
         if not self._typed:
             return iter(())
-        else:
-            return iter(_iter(self))
+
+        return iter(_iter(self))
 
     def add(self, key):
+        if not self._typed:
+            self._initialise_set(key)
+
         return _additem(self, key)
 
     def discard(self, key):
+        if not self._typed:
+            self._initialise_set(key)
+
         return _discarditem(self, key)
 
 

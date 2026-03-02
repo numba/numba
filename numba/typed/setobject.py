@@ -593,6 +593,22 @@ def impl_contains(s, key):
     return impl
 
 
+@overload_method(types.SetType, 'copy')
+def impl_copy(s):
+    if not isinstance(s, types.SetType):
+        return
+
+    key_type = s.key_type
+
+    def impl(s):
+        newd = new_set(key_type, n_keys=len(s))
+        for k in s:
+            newd.add(k)
+        return newd
+
+    return impl
+
+
 @lower_builtin('getiter', types.SetIterableType)
 def impl_iterable_getiter(context, builder, sig, args):
     iterablety = sig.args[0]

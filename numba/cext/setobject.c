@@ -153,8 +153,8 @@ int mem_cmp_zeros(void *obj, size_t n){
 }
 #endif
 
-#define SET_MASK(dk) ((dk)->size-1)
-#define SET_GROWTH_RATE(d) ((d)->used*3)
+#define SET_MASK(sk) ((sk)->size-1)
+#define SET_GROWTH_RATE(s) ((s)->used*3)
 
 static int
 ix_size(Py_ssize_t size) {
@@ -175,9 +175,9 @@ aligned_pointer(void *ptr) {
 
 /* lookup indices.  returns SETK_EMPTY, SETK_DUMMY, or ix >=0 */
 static Py_ssize_t
-get_index(NB_SetKeys *dk, Py_ssize_t i)
+get_index(NB_SetKeys *sk, Py_ssize_t i)
 {
-    Py_ssize_t s = dk->size;
+    Py_ssize_t s = sk->size;
     Py_ssize_t ix;
 
     if (s==0) {
@@ -185,22 +185,22 @@ get_index(NB_SetKeys *dk, Py_ssize_t i)
         return SETK_EMPTY;
     }
     else if(s <= 0xff) {
-        int8_t *indices = (int8_t*)(dk->indices);
-        assert (i < dk->size);
+        int8_t *indices = (int8_t*)(sk->indices);
+        assert (i < sk->size);
         ix = indices[i];
     }
     else if (s <= 0xffff) {
-        int16_t *indices = (int16_t*)(dk->indices);
+        int16_t *indices = (int16_t*)(sk->indices);
         ix = indices[i];
     }
 #if SIZEOF_VOID_P > 4
     else if (s > 0xffffffff) {
-        int64_t *indices = (int64_t*)(dk->indices);
+        int64_t *indices = (int64_t*)(sk->indices);
         ix = indices[i];
     }
 #endif
     else {
-        int32_t *indices = (int32_t*)(dk->indices);
+        int32_t *indices = (int32_t*)(sk->indices);
         ix = indices[i];
     }
     assert(ix >= SETK_DUMMY);
@@ -209,30 +209,30 @@ get_index(NB_SetKeys *dk, Py_ssize_t i)
 
 /* write to indices. */
 static void
-set_index(NB_SetKeys *dk, Py_ssize_t i, Py_ssize_t ix)
+set_index(NB_SetKeys *sk, Py_ssize_t i, Py_ssize_t ix)
 {
-    Py_ssize_t s = dk->size;
+    Py_ssize_t s = sk->size;
 
     assert(ix >= SETK_DUMMY);
 
     if (s <= 0xff) {
-        int8_t *indices = (int8_t*)(dk->indices);
+        int8_t *indices = (int8_t*)(sk->indices);
         assert(ix <= 0x7f);
         indices[i] = (char)ix;
     }
     else if (s <= 0xffff) {
-        int16_t *indices = (int16_t*)(dk->indices);
+        int16_t *indices = (int16_t*)(sk->indices);
         assert(ix <= 0x7fff);
         indices[i] = (int16_t)ix;
     }
 #if SIZEOF_VOID_P > 4
     else if (s > 0xffffffff) {
-        int64_t *indices = (int64_t*)(dk->indices);
+        int64_t *indices = (int64_t*)(sk->indices);
         indices[i] = ix;
     }
 #endif
     else {
-        int32_t *indices = (int32_t*)(dk->indices);
+        int32_t *indices = (int32_t*)(sk->indices);
         assert(ix <= 0x7fffffff);
         indices[i] = (int32_t)ix;
     }
@@ -287,87 +287,87 @@ set_index(NB_SetKeys *dk, Py_ssize_t i, Py_ssize_t ix)
  * GROWTH_RATE was set to used*2 in version 3.3.0
  * GROWTH_RATE was set to used*2 + capacity/2 in 3.4.0-3.6.0.
  */
-#define GROWTH_RATE(d) ((d)->ma_used*3)
+#define GROWTH_RATE(s) ((s)->ma_used*3)
 
 
 static NB_SetEntry*
-get_entry(NB_SetKeys *dk, Py_ssize_t idx) {
+get_entry(NB_SetKeys *sk, Py_ssize_t idx) {
     Py_ssize_t offset;
     char *ptr;
 
-    assert (idx < dk->size);
-    offset = idx * dk->entry_size;
-    ptr = dk->indices + dk->entry_offset + offset;
+    assert (idx < sk->size);
+    offset = idx * sk->entry_size;
+    ptr = sk->indices + sk->entry_offset + offset;
     return (NB_SetEntry*)ptr;
 }
 
 static void
-zero_key(NB_SetKeys *dk, char *data){
-    memset(data, 0, dk->key_size);
+zero_key(NB_SetKeys *sk, char *data){
+    memset(data, 0, sk->key_size);
 }
 
 static void
-copy_key(NB_SetKeys *dk, char *dst, const char *src){
-    memcpy(dst, src, dk->key_size);
+copy_key(NB_SetKeys *sk, char *dst, const char *src){
+    memcpy(dst, src, sk->key_size);
 }
 
 /* Returns -1 for error; 0 for not equal; 1 for equal */
 static int
-key_equal(NB_SetKeys *dk, const char *lhs, const char *rhs) {
-    if ( dk->methods.key_equal ) {
-        return dk->methods.key_equal(lhs, rhs);
+key_equal(NB_SetKeys *sk, const char *lhs, const char *rhs) {
+    if ( sk->methods.key_equal ) {
+        return sk->methods.key_equal(lhs, rhs);
     } else {
-        return memcmp(lhs, rhs, dk->key_size) == 0;
+        return memcmp(lhs, rhs, sk->key_size) == 0;
     }
 }
 
 static char *
-entry_get_key(NB_SetKeys *dk, NB_SetEntry* entry) {
+entry_get_key(NB_SetKeys *sk, NB_SetEntry* entry) {
     char * out = entry->key;
     assert (out == aligned_pointer(out));
     return out;
 }
 
 static void
-dk_incref_key(NB_SetKeys *dk, const char *key) {
-    if ( dk->methods.key_incref ) {
-        dk->methods.key_incref(key);
+sk_incref_key(NB_SetKeys *sk, const char *key) {
+    if ( sk->methods.key_incref ) {
+        sk->methods.key_incref(key);
     }
 }
 
 static void
-dk_decref_key(NB_SetKeys *dk, const char *key) {
-    if ( dk->methods.key_decref ) {
-        dk->methods.key_decref(key);
+sk_decref_key(NB_SetKeys *sk, const char *key) {
+    if ( sk->methods.key_decref ) {
+        sk->methods.key_decref(key);
     }
 }
 
 
 void
-numba_setkeys_free(NB_SetKeys *dk) {
+numba_setkeys_free(NB_SetKeys *sk) {
     /* Clear all references from the entries */
     Py_ssize_t i;
     NB_SetEntry *ep;
 
-    for (i = 0; i < dk->nentries; i++) {
-        ep = get_entry(dk, i);
+    for (i = 0; i < sk->nentries; i++) {
+        ep = get_entry(sk, i);
         if (ep->hash != SETK_EMPTY) {
-            dk_decref_key(dk, entry_get_key(dk, ep));
+            sk_decref_key(sk, entry_get_key(sk, ep));
         }
     }
     /* Deallocate */
-    free(dk);
+    free(sk);
 }
 
 void
-numba_set_free(NB_Set *d) {
-    numba_setkeys_free(d->keys);
-    free(d);
+numba_set_free(NB_Set *s) {
+    numba_setkeys_free(s->keys);
+    free(s);
 }
 
 Py_ssize_t
-numba_set_length(NB_Set *d) {
-    return d->used;
+numba_set_length(NB_Set *s) {
+    return s->used;
 }
 
 /* Allocate new set keys
@@ -382,25 +382,25 @@ numba_setkeys_new(NB_SetKeys **out, Py_ssize_t size, Py_ssize_t key_size) {
     Py_ssize_t entry_offset = aligned_size(index_size * size);
     Py_ssize_t alloc_size = sizeof(NB_SetKeys) + entry_offset + entry_size * usable;
 
-    NB_SetKeys *dk = malloc(aligned_size(alloc_size));
-    if (!dk) return ERR_NO_MEMORY;
+    NB_SetKeys *sk = malloc(aligned_size(alloc_size));
+    if (!sk) return ERR_NO_MEMORY;
 
     assert ( size >= SET_MINSIZE );
 
-    dk->size = size;
-    dk->usable = usable;
-    dk->nentries = 0;
-    dk->key_size = key_size;
-    dk->entry_offset = entry_offset;
-    dk->entry_size = entry_size;
+    sk->size = size;
+    sk->usable = usable;
+    sk->nentries = 0;
+    sk->key_size = key_size;
+    sk->entry_offset = entry_offset;
+    sk->entry_size = entry_size;
 
-    assert (aligned_pointer(dk->indices) == dk->indices );
+    assert (aligned_pointer(sk->indices) == sk->indices );
     /* Ensure that the method table is all nulls */
-    memset(&dk->methods, 0x00, sizeof(set_type_based_methods_table));
+    memset(&sk->methods, 0x00, sizeof(set_type_based_methods_table));
     /* Ensure hash is (-1) for empty entry */
-    memset(dk->indices, 0xff, entry_offset + entry_size * usable);
+    memset(sk->indices, 0xff, entry_offset + entry_size * usable);
 
-    *out = dk;
+    *out = sk;
     return OK;
 }
 
@@ -408,20 +408,20 @@ numba_setkeys_new(NB_SetKeys **out, Py_ssize_t size, Py_ssize_t key_size) {
 /* Allocate new set */
 int
 numba_set_new(NB_Set **out, Py_ssize_t key_size, Py_ssize_t size) {
-    NB_SetKeys *dk;
-    NB_Set *d;
-    int status = numba_setkeys_new(&dk, size, key_size);
+    NB_SetKeys *sk;
+    NB_Set *s;
+    int status = numba_setkeys_new(&sk, size, key_size);
     if (status != OK) return status;
 
-    d = malloc(sizeof(NB_Set));
-    if (!d) {
-        numba_setkeys_free(dk);
+    s = malloc(sizeof(NB_Set));
+    if (!s) {
+        numba_setkeys_free(sk);
         return ERR_NO_MEMORY;
     }
 
-    d->used = 0;
-    d->keys = dk;
-    *out = d;
+    s->used = 0;
+    s->keys = sk;
+    *out = s;
     return OK;
 }
 
@@ -432,14 +432,14 @@ Adapted from CPython lookset_index().
 Search index of hash table from offset of entry table
 */
 static Py_ssize_t
-lookset_index(NB_SetKeys *dk, Py_hash_t hash, Py_ssize_t index)
+lookset_index(NB_SetKeys *sk, Py_hash_t hash, Py_ssize_t index)
 {
-    size_t mask = SET_MASK(dk);
+    size_t mask = SET_MASK(sk);
     size_t perturb = (size_t)hash;
     size_t i = (size_t)hash & mask;
 
     for (;;) {
-        Py_ssize_t ix = get_index(dk, i);
+        Py_ssize_t ix = get_index(sk, i);
         if (ix == index) {
             return i;
         }
@@ -480,26 +480,26 @@ the <dummy> value.
 For both, when the key isn't found a SETK_EMPTY is returned.
 */
 Py_ssize_t
-numba_set_lookup(NB_Set *d, const char *key_bytes, Py_hash_t hash)
+numba_set_lookup(NB_Set *s, const char *key_bytes, Py_hash_t hash)
 {
-    NB_SetKeys *dk = d->keys;
-    size_t mask = SET_MASK(dk);
+    NB_SetKeys *sk = s->keys;
+    size_t mask = SET_MASK(sk);
     size_t perturb = hash;
     size_t i = (size_t)hash & mask;
 
     for (;;) {
-        Py_ssize_t ix = get_index(dk, i);
+        Py_ssize_t ix = get_index(sk, i);
         if (ix == SETK_EMPTY) {
             return ix;
         }
         if (ix >= 0) {
-            NB_SetEntry *ep = get_entry(dk, ix);
+            NB_SetEntry *ep = get_entry(sk, ix);
             const char *startkey = NULL;
             if (ep->hash == hash) {
                 int cmp;
 
-                startkey = entry_get_key(dk, ep);
-                cmp = key_equal(dk, startkey, key_bytes);
+                startkey = entry_get_key(sk, ep);
+                cmp = key_equal(sk, startkey, key_bytes);
                 if (cmp < 0) {
                     // error'ed in comparison
                     return SETK_ERROR;
@@ -529,21 +529,21 @@ numba_set_contains(NB_Set *setp, char *key, Py_hash_t hash)
 
    The set must be combined. */
 static Py_ssize_t
-find_empty_slot(NB_SetKeys *dk, Py_hash_t hash){
+find_empty_slot(NB_SetKeys *sk, Py_hash_t hash){
     size_t mask;
     size_t i;
     Py_ssize_t ix;
     size_t perturb;
 
-    assert(dk != NULL);
+    assert(sk != NULL);
 
-    mask = SET_MASK(dk);
+    mask = SET_MASK(sk);
     i = hash & mask;
-    ix = get_index(dk, i);
+    ix = get_index(sk, i);
     for (perturb = hash; ix >= 0;) {
         perturb >>= PERTURB_SHIFT;
         i = (i*5 + perturb + 1) & mask;
-        ix = get_index(dk, i);
+        ix = get_index(sk, i);
     }
     return i;
 }
@@ -583,7 +583,7 @@ After resizing a table is always combined,
 but can be resplit by make_keys_shared().
 */
 int
-numba_set_resize(NB_Set *d, Py_ssize_t minsize) {
+numba_set_resize(NB_Set *s, Py_ssize_t minsize) {
     Py_ssize_t newsize, numentries;
     NB_SetKeys *oldkeys;
     int status;
@@ -596,33 +596,33 @@ numba_set_resize(NB_Set *d, Py_ssize_t minsize) {
     if (newsize <= 0) {
         return ERR_NO_MEMORY;
     }
-    oldkeys = d->keys;
+    oldkeys = s->keys;
 
     /* NOTE: Current oset checks mp->ma_keys to detect resize happen.
-     * So we can't reuse oldkeys even if oldkeys->dk_size == newsize.
+     * So we can't reuse oldkeys even if oldkeys->sk_size == newsize.
      * TODO: Try reusing oldkeys when reimplement oset.
      */
 
     /* Allocate a new table. */
     status = numba_setkeys_new(
-        &d->keys, newsize, oldkeys->key_size
+        &s->keys, newsize, oldkeys->key_size
     );
     if (status != OK) {
-        d->keys = oldkeys;
+        s->keys = oldkeys;
         return status;
     }
     // New table must be large enough.
-    assert(d->keys->usable >= d->used);
+    assert(s->keys->usable >= s->used);
     // Copy method table
-    memcpy(&d->keys->methods, &oldkeys->methods, sizeof(set_type_based_methods_table));
+    memcpy(&s->keys->methods, &oldkeys->methods, sizeof(set_type_based_methods_table));
 
-    numentries = d->used;
+    numentries = s->used;
 
     if (oldkeys->nentries == numentries) {
         NB_SetEntry *oldentries, *newentries;
 
         oldentries = get_entry(oldkeys, 0);
-        newentries = get_entry(d->keys, 0);
+        newentries = get_entry(s->keys, 0);
         memcpy(newentries, oldentries, numentries * oldkeys->entry_size);
         // to avoid decref
         memset(oldentries, 0xff, numentries * oldkeys->entry_size);
@@ -640,7 +640,7 @@ numba_set_resize(NB_Set *d, Py_ssize_t minsize) {
                 epi += 1;
             }
             memcpy(
-                get_entry(d->keys, i),
+                get_entry(s->keys, i),
                 get_entry(oldkeys, epi),
                 oldkeys->entry_size
             );
@@ -652,27 +652,27 @@ numba_set_resize(NB_Set *d, Py_ssize_t minsize) {
     }
     numba_setkeys_free(oldkeys);
 
-    build_indices_set(d->keys, numentries);
-    d->keys->usable -= numentries;
-    d->keys->nentries = numentries;
+    build_indices_set(s->keys, numentries);
+    s->keys->usable -= numentries;
+    s->keys->nentries = numentries;
     return OK;
 }
 
 static int
-insertion_resize(NB_Set *d)
+insertion_resize(NB_Set *s)
 {
-    return numba_set_resize(d, SET_GROWTH_RATE(d));
+    return numba_set_resize(s, SET_GROWTH_RATE(s));
 }
 
 int
 numba_set_add(
-    NB_Set    *d,
+    NB_Set    *s,
     const char *key_bytes,
     Py_hash_t   hash)
 {
-    NB_SetKeys *dk = d->keys;
+    NB_SetKeys *sk = s->keys;
 
-    Py_ssize_t ix = numba_set_lookup(d, key_bytes, hash);
+    Py_ssize_t ix = numba_set_lookup(s, key_bytes, hash);
     if (ix == SETK_ERROR) {
         // exception in key comparison in lookup.
         return ERR_CMP_FAILED;
@@ -683,27 +683,27 @@ numba_set_add(
         Py_ssize_t hashpos;
         NB_SetEntry *ep;
 
-        if (dk->usable <= 0) {
+        if (sk->usable <= 0) {
             /* Need to resize */
-            if (insertion_resize(d) != OK)
+            if (insertion_resize(s) != OK)
                 return ERR_NO_MEMORY;
             else
-                dk = d->keys;     // reload
+                sk = s->keys;     // reload
         }
-        hashpos = find_empty_slot(dk, hash);
-        ep = get_entry(dk, dk->nentries);
-        set_index(dk, hashpos, dk->nentries);
-        copy_key(dk, entry_get_key(dk, ep), key_bytes);
+        hashpos = find_empty_slot(sk, hash);
+        ep = get_entry(sk, sk->nentries);
+        set_index(sk, hashpos, sk->nentries);
+        copy_key(sk, entry_get_key(sk, ep), key_bytes);
         assert ( hash != -1 );
         ep->hash = hash;
 
         /* incref */
-        dk_incref_key(dk, key_bytes);
+        sk_incref_key(sk, key_bytes);
 
-        d->used += 1;
-        dk->usable -= 1;
-        dk->nentries += 1;
-        assert (dk->usable >= 0);
+        s->used += 1;
+        sk->usable -= 1;
+        sk->nentries += 1;
+        assert (sk->usable >= 0);
         return OK;
     } else {
         return OK_REPLACED;
@@ -711,84 +711,87 @@ numba_set_add(
 }
 
 int
-numba_set_discard(NB_Set *d, char *key_bytes, Py_hash_t hash)
+numba_set_discard(NB_Set *s, char *key_bytes, Py_hash_t hash)
 {
-    Py_ssize_t ix = numba_set_lookup(d, key_bytes, hash);
-    NB_SetEntry *ep = get_entry(d->keys, ix);
-    char *key_ptr = entry_get_key(d->keys, ep);
+    Py_ssize_t hashpos;
+    NB_SetEntry *ep;
+    NB_SetKeys *sk = s->keys;
 
-    Py_ssize_t j = lookset_index(d->keys, ep->hash, ix);
-    assert(j >= 0);
-    assert(get_index(d->keys, j) == ix);
-    set_index(d->keys, j, SETK_DUMMY);
+    Py_ssize_t ix = numba_set_lookup(s, key_bytes, hash);
+    hashpos = lookset_index(sk, hash, ix);
+    assert(hashpos >= 0);
 
-    zero_key(d->keys, key_ptr);
+    s->used -= 1;
+    ep = get_entry(sk, ix);
+    set_index(sk, hashpos, SETK_DUMMY);
 
-    /* We can't dk_usable++ since there is SETK_DUMMY in indices */
-    d->keys->nentries--;
-    d->keys->usable++;
-    d->used--;
+    /* decref */
+    sk_decref_key(sk, entry_get_key(sk, ep));
+
+    /* zero the entries */
+    zero_key(sk, entry_get_key(sk, ep));
+    ep->hash = SETK_EMPTY; // to mark it as empty;
 
     return OK;
 }
 
 
 int
-numba_set_popitem(NB_Set *d, char *key_bytes)
+numba_set_popitem(NB_Set *s, char *key_bytes)
 {
     Py_ssize_t i, j;
     char *key_ptr;
     NB_SetEntry *ep = NULL;
 
-    if (d->used == 0) {
+    if (s->used == 0) {
         return ERR_SET_EMPTY;
     }
 
     /* Pop last item */
-    i = d->keys->nentries - 1;
-    while (i >= 0 && (ep = get_entry(d->keys, i))->hash == SETK_EMPTY ) {
+    i = s->keys->nentries - 1;
+    while (i >= 0 && (ep = get_entry(s->keys, i))->hash == SETK_EMPTY ) {
         i--;
     }
     assert(i >= 0);
 
-    j = lookset_index(d->keys, ep->hash, i);
+    j = lookset_index(s->keys, ep->hash, i);
     assert(j >= 0);
-    assert(get_index(d->keys, j) == i);
-    set_index(d->keys, j, SETK_DUMMY);
+    assert(get_index(s->keys, j) == i);
+    set_index(s->keys, j, SETK_DUMMY);
 
-    key_ptr = entry_get_key(d->keys, ep);
+    key_ptr = entry_get_key(s->keys, ep);
 
-    copy_key(d->keys, key_bytes, key_ptr);
+    copy_key(s->keys, key_bytes, key_ptr);
 
-    zero_key(d->keys, key_ptr);
+    zero_key(s->keys, key_ptr);
 
-    /* We can't dk_usable++ since there is SETK_DUMMY in indices */
-    d->keys->nentries = i;
-    d->used--;
+    /* We can't sk_usable++ since there is SETK_DUMMY in indices */
+    s->keys->nentries = i;
+    s->used--;
 
     return OK;
 }
 
 void
-numba_set_dump(NB_Set *d) {
+numba_set_dump(NB_Set *s) {
     long long i, j, k;
     long long size, n;
     char *cp;
     NB_SetEntry *ep;
-    NB_SetKeys *dk = d->keys;
+    NB_SetKeys *sk = s->keys;
 
-    n = d->used;
-    size = dk->nentries;
+    n = s->used;
+    size = sk->nentries;
 
     printf("set dump\n");
-    printf("   key_size = %lld\n", (long long)d->keys->key_size);
+    printf("   key_size = %lld\n", (long long)s->keys->key_size);
 
     for (i = 0, j = 0; i < size; i++) {
-        ep = get_entry(dk, i);
+        ep = get_entry(sk, i);
         if (ep->hash != SETK_EMPTY) {
             long long hash = ep->hash;
             printf("  key=");
-            for (cp=entry_get_key(dk, ep), k=0; k < d->keys->key_size; ++k, ++cp){
+            for (cp=entry_get_key(sk, ep), k=0; k < s->keys->key_size; ++k, ++cp){
                 printf("%02x ", ((int)*cp) & 0xff);
             }
             printf(" hash=%llu", hash);
@@ -806,26 +809,26 @@ numba_set_iter_sizeof() {
 }
 
 void
-numba_set_iter(NB_SetIter *it, NB_Set *d) {
-    it->parent = d;
-    it->parent_keys = d->keys;
-    it->size = d->used;
+numba_set_iter(NB_SetIter *it, NB_Set *s) {
+    it->parent = s;
+    it->parent_keys = s->keys;
+    it->size = s->used;
     it->pos = 0;
 }
 
 int
 numba_set_iter_next(NB_SetIter *it, const char **key_ptr) {
     /* Detect set mutation during iteration */
-    NB_SetKeys *dk;
+    NB_SetKeys *sk;
     if (it->parent->keys != it->parent_keys ||
         it->parent->used != it->size) {
         return ERR_SET_MUTATED;
     }
-    dk = it->parent_keys;
-    while ( it->pos < dk->nentries ) {
-        NB_SetEntry *ep = get_entry(dk, it->pos++);
+    sk = it->parent_keys;
+    while ( it->pos < sk->nentries ) {
+        NB_SetEntry *ep = get_entry(sk, it->pos++);
         if ( ep->hash != SETK_EMPTY ) {
-            *key_ptr = entry_get_key(dk, ep);
+            *key_ptr = entry_get_key(sk, ep);
             return OK;
         }
     }
@@ -861,9 +864,9 @@ numba_set_new_sized(NB_Set **out, Py_ssize_t key_size, Py_ssize_t n_keys) {
 
 
 void
-numba_set_set_method_table(NB_Set *d, set_type_based_methods_table *methods)
+numba_set_set_method_table(NB_Set *s, set_type_based_methods_table *methods)
 {
-    memcpy(&d->keys->methods, methods, sizeof(set_type_based_methods_table));
+    memcpy(&s->keys->methods, methods, sizeof(set_type_based_methods_table));
 }
 
 
@@ -876,7 +879,7 @@ numba_set_set_method_table(NB_Set *d, set_type_based_methods_table *methods)
 
 int
 numba_test_set(void) {
-    NB_Set *d;
+    NB_Set *s;
     int status;
     Py_ssize_t ix;
     Py_ssize_t usable;
@@ -893,120 +896,120 @@ numba_test_set(void) {
 #endif
     puts("test_set");
 
-    status = numba_set_new(&d, 4, SET_MINSIZE);
+    status = numba_set_new(&s, 4, SET_MINSIZE);
     CHECK(status == OK);
-    CHECK(d->keys->size == SET_MINSIZE);
-    CHECK(d->keys->key_size == 4);
-    CHECK(ix_size(d->keys->size) == 1);
-    printf("aligned_size(index_size * size) = %d\n", (int)(aligned_size(ix_size(d->keys->size) * d->keys->size)));
+    CHECK(s->keys->size == SET_MINSIZE);
+    CHECK(s->keys->key_size == 4);
+    CHECK(ix_size(s->keys->size) == 1);
+    printf("aligned_size(index_size * size) = %d\n", (int)(aligned_size(ix_size(s->keys->size) * s->keys->size)));
 
-    printf("d %p\n", d);
-    printf("d->usable = %u\n", (int)d->keys->usable);
-    usable = d->keys->usable;
-    printf("d[0] %d\n", (int)((char*)get_entry(d->keys, 0) - (char*)d->keys));
-    CHECK ((char*)get_entry(d->keys, 0) - (char*)d->keys->indices == d->keys->entry_offset);
-    printf("d[1] %d\n", (int)((char*)get_entry(d->keys, 1) - (char*)d->keys));
-    CHECK ((char*)get_entry(d->keys, 1) - (char*)d->keys->indices == d->keys->entry_offset + d->keys->entry_size);
+    printf("s %p\n", s);
+    printf("s->usable = %u\n", (int)s->keys->usable);
+    usable = s->keys->usable;
+    printf("s[0] %d\n", (int)((char*)get_entry(s->keys, 0) - (char*)s->keys));
+    CHECK ((char*)get_entry(s->keys, 0) - (char*)s->keys->indices == s->keys->entry_offset);
+    printf("s[1] %d\n", (int)((char*)get_entry(s->keys, 1) - (char*)s->keys));
+    CHECK ((char*)get_entry(s->keys, 1) - (char*)s->keys->indices == s->keys->entry_offset + s->keys->entry_size);
 
-    ix = numba_set_lookup(d, "bef", 0xbeef);
+    ix = numba_set_lookup(s, "bef", 0xbeef);
     printf("ix = %d\n", (int)ix);
     CHECK (ix == SETK_EMPTY);
 
     // insert 1st key
-    status = numba_set_add(d, "bef", 0xbeef);
+    status = numba_set_add(s, "bef", 0xbeef);
     CHECK (status == OK);
-    CHECK (d->used == 1);
-    CHECK (d->keys->usable == usable - d->used);
+    CHECK (s->used == 1);
+    CHECK (s->keys->usable == usable - s->used);
 
     // insert same key
-    status = numba_set_add(d, "bef", 0xbeef);
+    status = numba_set_add(s, "bef", 0xbeef);
     CHECK (status == OK_REPLACED);
-    CHECK (d->used == 1);
-    CHECK (d->keys->usable == usable - d->used);
+    CHECK (s->used == 1);
+    CHECK (s->keys->usable == usable - s->used);
 
     // insert 2nd key
-    status = numba_set_add(d, "beg", 0xbeef);
+    status = numba_set_add(s, "beg", 0xbeef);
     CHECK (status == OK);
-    CHECK (d->used == 2);
-    CHECK (d->keys->usable == usable - d->used);
+    CHECK (s->used == 2);
+    CHECK (s->keys->usable == usable - s->used);
 
     // insert 3rd key
-    status = numba_set_add(d, "beh", 0xcafe);
+    status = numba_set_add(s, "beh", 0xcafe);
     CHECK (status == OK);
-    CHECK (d->used == 3);
-    CHECK (d->keys->usable == usable - d->used);
+    CHECK (s->used == 3);
+    CHECK (s->keys->usable == usable - s->used);
 
-    status = numba_set_add(d, "bef", 0xbeef);
+    status = numba_set_add(s, "bef", 0xbeef);
     CHECK (status == OK_REPLACED);
-    CHECK (d->used == 3);
-    CHECK (d->keys->usable == usable - d->used);
+    CHECK (s->used == 3);
+    CHECK (s->keys->usable == usable - s->used);
 
     // insert 4th key
-    status = numba_set_add(d, "bei", 0xcafe);
+    status = numba_set_add(s, "bei", 0xcafe);
     CHECK (status == OK);
-    CHECK (d->used == 4);
-    CHECK (d->keys->usable == usable - d->used);
+    CHECK (s->used == 4);
+    CHECK (s->keys->usable == usable - s->used);
 
     // insert 5th key
-    status = numba_set_add(d, "bej", 0xcafe);
+    status = numba_set_add(s, "bej", 0xcafe);
     CHECK (status == OK);
-    CHECK (d->used == 5);
-    CHECK (d->keys->usable == usable - d->used);
+    CHECK (s->used == 5);
+    CHECK (s->keys->usable == usable - s->used);
 
     // insert 6th key & triggers resize
-    status = numba_set_add(d, "bek", 0xcafe);
+    status = numba_set_add(s, "bek", 0xcafe);
     CHECK (status == OK);
-    CHECK (d->used == 6);
-    CHECK (d->keys->usable == USABLE_FRACTION(d->keys->size) - d->used);
+    CHECK (s->used == 6);
+    CHECK (s->keys->usable == USABLE_FRACTION(s->keys->size) - s->used);
 
     // Dump
-    numba_set_dump(d);
+    numba_set_dump(s);
 
     // Make sure everything are still in there
-    ix = numba_set_lookup(d, "bef", 0xbeef);
+    ix = numba_set_lookup(s, "bef", 0xbeef);
     CHECK (ix >= 0);
 
-    ix = numba_set_lookup(d, "beg", 0xbeef);
+    ix = numba_set_lookup(s, "beg", 0xbeef);
     CHECK (ix >= 0);
 
-    ix = numba_set_lookup(d, "beh", 0xcafe);
+    ix = numba_set_lookup(s, "beh", 0xcafe);
     printf("ix = %d\n", (int)ix);
     CHECK (ix >= 0);
 
-    ix = numba_set_lookup(d, "bei", 0xcafe);
+    ix = numba_set_lookup(s, "bei", 0xcafe);
     CHECK (ix >= 0);
 
-    ix = numba_set_lookup(d, "bej", 0xcafe);
+    ix = numba_set_lookup(s, "bej", 0xcafe);
     CHECK (ix >= 0);
 
-    ix = numba_set_lookup(d, "bek", 0xcafe);
+    ix = numba_set_lookup(s, "bek", 0xcafe);
     CHECK (ix >= 0);
 
     // Test delete
-    ix = numba_set_lookup(d, "beg", 0xbeef);
+    ix = numba_set_lookup(s, "beg", 0xbeef);
     CHECK (ix >= 0);
 
-    status = numba_set_discard(d, "beg", 0xbeef);
+    status = numba_set_discard(s, "beg", 0xbeef);
     CHECK (status == OK);
 
-    ix = numba_set_lookup(d, "bef", 0xbeef);
+    ix = numba_set_lookup(s, "bef", 0xbeef);
     CHECK (ix >= 0);
-    ix = numba_set_lookup(d, "beh", 0xcafe);
+    ix = numba_set_lookup(s, "beh", 0xcafe);
     CHECK (ix >= 0);
 
     // They are always the last item
-    status = numba_set_popitem(d, got_key);
+    status = numba_set_popitem(s, got_key);
     CHECK(status == OK);
-    CHECK(memcmp("bej", got_key, d->keys->key_size) == 0);
+    CHECK(memcmp("bej", got_key, s->keys->key_size) == 0);
 
-    status = numba_set_popitem(d, got_key);
+    status = numba_set_popitem(s, got_key);
     CHECK(status == OK);
 
-    CHECK(memcmp("bei", got_key, d->keys->key_size) == 0);
+    CHECK(memcmp("bei", got_key, s->keys->key_size) == 0);
 
     // Test iterator
-    CHECK( d->used > 0 );
-    numba_set_iter(&iter, d);
+    CHECK( s->used > 0 );
+    numba_set_iter(&iter, s);
     it_count = 0;
     while ( (status = numba_set_iter_next(&iter, &it_key)) == OK) {
         it_count += 1;  // valid items
@@ -1014,9 +1017,9 @@ numba_test_set(void) {
     }
 
     CHECK(status == ERR_ITER_EXHAUSTED);
-    CHECK(d->used == it_count);
+    CHECK(s->used == it_count);
 
-    numba_set_free(d);
+    numba_set_free(s);
 
     /* numba_set_new_sized() */
 
@@ -1027,28 +1030,28 @@ numba_test_set(void) {
     target_size = SET_MINSIZE;
     n_keys = 0;
 
-    numba_set_new_sized(&d, 1, n_keys);
-    CHECK(d->keys->size == target_size);
-    CHECK(d->keys->usable == USABLE_FRACTION(target_size));
-    numba_set_free(d);
+    numba_set_new_sized(&s, 1, n_keys);
+    CHECK(s->keys->size == target_size);
+    CHECK(s->keys->usable == USABLE_FRACTION(target_size));
+    numba_set_free(s);
 
     // Test sizing at power of 2 boundary
     target_size = SET_MINSIZE * 2;
     n_keys = USABLE_FRACTION(target_size);
 
-    numba_set_new_sized(&d, 1, n_keys);
-    CHECK(d->keys->size == target_size);
-    CHECK(d->keys->usable == n_keys);
-    numba_set_free(d);
+    numba_set_new_sized(&s, 1, n_keys);
+    CHECK(s->keys->size == target_size);
+    CHECK(s->keys->usable == n_keys);
+    numba_set_free(s);
 
     target_size *= 2;
     n_keys++;
 
-    numba_set_new_sized(&d, 1, n_keys);
-    CHECK(d->keys->size == target_size);
-    CHECK(d->keys->usable > n_keys);
-    CHECK(d->keys->usable == USABLE_FRACTION(target_size));
-    numba_set_free(d);
+    numba_set_new_sized(&s, 1, n_keys);
+    CHECK(s->keys->size == target_size);
+    CHECK(s->keys->usable > n_keys);
+    CHECK(s->keys->usable == USABLE_FRACTION(target_size));
+    numba_set_free(s);
 
     return 0;
 
