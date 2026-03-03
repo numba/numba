@@ -1,5 +1,5 @@
 Fix comparison between ``Optional`` and ``None``
--------------------------------------------------
+------------------------------------------------
 
 Comparisons ``==`` (``operator.eq``) and ``!=`` (``operator.ne``)  between
 ``Optional`` and ``None`` are now handled correctly.
