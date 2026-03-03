@@ -10,14 +10,10 @@ instruct Numba to compile them. When a call is made to a Numba-decorated
 function it is compiled to machine code "just-in-time" for execution and all or
 part of your code can subsequently run at native machine code speed!
 
-Out of the box Numba works with the following:
-
-* OS: Windows (64 bit), OSX, Linux (64 bit). Unofficial support on
-  \*BSD.
-* Architecture: x86, x86_64, ppc64le, armv8l (aarch64), M1/Arm64.
-* GPUs: Nvidia CUDA.
-* CPython
-* NumPy 1.22 - 1.26
+For information on supported platforms, operating systems, and architectures,
+please refer to the :ref:`version support table <version-support-information>`
+and the :ref:`support tiers <support-tiers>` documentation, if you would like
+to know if your specific platform is supported.
 
 How do I get it?
 ----------------
