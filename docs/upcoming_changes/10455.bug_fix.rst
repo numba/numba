@@ -1,0 +1,8 @@
+Fix scalar handling in ``np.median``
+-------------------------------------
+
+Fixed scalar handling in the ``np.median`` function. Previously, this
+function would fail when called with scalar inputs. Now it properly handles
+both scalar and array inputs, returning the scalar value directly with
+dtype preserved (matching NumPy's behaviour for a single-element array).
+

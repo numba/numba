@@ -1628,8 +1628,13 @@ def _median_inner(temp_arry, n):
 
 @overload(np.median)
 def np_median(a):
-    if not isinstance(a, types.Array):
-        return
+    # scalar case — median of a single value is the value itself, dtype preserved
+    if isinstance(a, (types.Integer, types.Boolean, types.Float, types.Complex)):
+        def scalar_median(a):
+            return a
+        return scalar_median
+    elif not isinstance(a, types.Array):
+        return None
 
     is_datetime = as_dtype(a.dtype).char in 'mM'
 
