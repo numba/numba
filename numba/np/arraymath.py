@@ -460,7 +460,19 @@ def array_mean(a):
 @overload(np.var)
 @overload_method(types.Array, "var")
 def array_var(a):
-    if isinstance(a, types.Array):
+    if isinstance(a, (types.Integer, types.Boolean)):
+        def _scalar_var(a):
+            return np.float64(0.0)
+        return _scalar_var
+    elif isinstance(a, types.Float):
+        def _scalar_var(a):
+            return type(a)(0.0)
+        return _scalar_var
+    elif isinstance(a, types.Complex):
+        def _scalar_var(a):
+            return np.float64(0.0)
+        return _scalar_var
+    elif isinstance(a, types.Array):
         def array_var_impl(a):
             # Compute the mean
             m = a.mean()
@@ -473,16 +485,30 @@ def array_var(a):
             return ssd / a.size
 
         return array_var_impl
+    return None
 
 
 @overload(np.std)
 @overload_method(types.Array, "std")
 def array_std(a):
-    if isinstance(a, types.Array):
+    if isinstance(a, (types.Integer, types.Boolean)):
+        def _scalar_std(a):
+            return np.float64(0.0)
+        return _scalar_std
+    elif isinstance(a, types.Float):
+        def _scalar_std(a):
+            return type(a)(0.0)
+        return _scalar_std
+    elif isinstance(a, types.Complex):
+        def _scalar_std(a):
+            return np.float64(0.0)
+        return _scalar_std
+    elif isinstance(a, types.Array):
         def array_std_impl(a):
             return a.var() ** 0.5
 
         return array_std_impl
+    return None
 
 
 @register_jitable

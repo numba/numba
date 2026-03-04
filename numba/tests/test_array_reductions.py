@@ -428,8 +428,72 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_var_basic(self):
         self.check_reduction_basic(array_var, prec='double')
 
+    def test_np_var_scalar(self):
+        cfunc = jit(nopython=True)(array_var_global)
+
+        def check(arg):
+            expected = array_var_global(arg)
+            got = cfunc(arg)
+            self.assertPreciseEqual(got, expected)
+
+        # NumPy integer and boolean scalars
+        check(np.int32(2))
+        check(np.int64(-3))
+        check(np.uint32(5))
+        check(np.bool_(True))
+        check(np.bool_(False))
+
+        # NumPy floating scalars
+        check(np.float32(1.25))
+        check(np.float64(-2.5))
+
+        # Complex values
+        check(np.complex64(7+0j))
+        check(np.complex128(61+74j))
+
+        # Special floating values
+        check(np.float64(0.0))
+        check(np.float64(0.0000042))
+        check(np.float64(-0.25863))
+
+        # Error cases
+        with self.assertTypingError():
+            cfunc('test String')
+
     def test_std_basic(self):
         self.check_reduction_basic(array_std)
+
+    def test_np_std_scalar(self):
+        cfunc = jit(nopython=True)(array_std_global)
+
+        def check(arg):
+            expected = array_std_global(arg)
+            got = cfunc(arg)
+            self.assertPreciseEqual(got, expected)
+
+        # NumPy integer and boolean scalars
+        check(np.int32(2))
+        check(np.int64(-3))
+        check(np.uint32(5))
+        check(np.bool_(True))
+        check(np.bool_(False))
+
+        # NumPy floating scalars
+        check(np.float32(1.25))
+        check(np.float64(-2.5))
+
+        # Complex values
+        check(np.complex64(7+0j))
+        check(np.complex128(61+74j))
+
+        # Special floating values
+        check(np.float64(0.0))
+        check(np.float64(0.0000042))
+        check(np.float64(-0.25863))
+
+        # Error cases
+        with self.assertTypingError():
+            cfunc('test String')
 
     def test_min_basic(self):
         #scalar testing
