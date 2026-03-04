@@ -1,0 +1,9 @@
+Fix scalar handling in ``np.nanstd`` and ``np.nanprod``
+-------------------------------------------------------
+
+Fix scalar handling in ``np.nanstd`` and ``np.nanprod`` functions. Previously,
+these functions would fail when called with scalar inputs. They now properly
+handle scalar arguments: ``np.nanstd`` returns ``float64(0.0)`` for a single
+non-NaN value (and ``nan`` if the scalar is ``NaN``), while ``np.nanprod``
+returns the scalar value cast to the appropriate accumulator type (treating
+``NaN`` as the identity element ``1``).

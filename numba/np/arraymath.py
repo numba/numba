@@ -1282,8 +1282,25 @@ def np_nanvar(a):
 
 @overload(np.nanstd)
 def np_nanstd(a):
-    if not isinstance(a, types.Array):
-        return
+    if isinstance(a, (types.Integer, types.Boolean)):
+        # Scalar integers/booleans cannot be NaN; std of a single value is 0
+        def nanstd_int_scalar(a):
+            return np.float64(0.0)
+        return nanstd_int_scalar
+    elif isinstance(a, (types.Float, types.Complex)):
+        # NaN scalar → NaN output; std of a single non-NaN value is 0
+        # Preserve the input dtype (e.g. float32 in → float32 out)
+        out_dtype = as_dtype(a)
+        zero = out_dtype.type(0)
+        nan_val = out_dtype.type(np.nan)
+        isnan = get_isnan(a)
+        def nanstd_float_scalar(a):
+            if isnan(a):
+                return nan_val
+            return zero
+        return nanstd_float_scalar
+    elif not isinstance(a, types.Array):
+        return None
 
     def nanstd_impl(a):
         return np.nanvar(a) ** 0.5
@@ -1315,8 +1332,29 @@ def np_nansum(a):
 
 @overload(np.nanprod)
 def np_nanprod(a):
-    if not isinstance(a, types.Array):
-        return
+    if isinstance(a, (types.Integer, types.Boolean)):
+        # Mirrors the array path: integer/bool dtype → intp accumulator, no NaN possible
+        out_dtype = as_dtype(types.intp)
+        acc_init = get_accumulator(out_dtype, 1)
+        def nanprod_int_scalar(a):
+            c = acc_init
+            c *= a
+            return c
+        return nanprod_int_scalar
+    elif isinstance(a, (types.Float, types.Complex)):
+        # NaN → treat as identity element (1); otherwise return the value
+        out_dtype = as_dtype(a)
+        acc_init = get_accumulator(out_dtype, 1)
+        isnan = get_isnan(a)
+        def nanprod_float_scalar(a):
+            c = acc_init
+            if not isnan(a):
+                c *= a
+            return c
+        return nanprod_float_scalar
+    elif not isinstance(a, types.Array):
+        return None
+
     if isinstance(a.dtype, types.Integer):
         retty = types.intp
     else:

@@ -477,8 +477,14 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_nanprod_basic(self):
         self.check_reduction_basic(array_nanprod)
 
+    def test_np_nanprod_scalar(self):
+        self.check_scalar_basic(array_nanprod)
+
     def test_nanstd_basic(self):
         self.check_reduction_basic(array_nanstd)
+
+    def test_np_nanstd_scalar(self):
+        self.check_scalar_basic(array_nanstd)
 
     def test_nanvar_basic(self):
         self.check_reduction_basic(array_nanvar, prec='double')
