@@ -1315,6 +1315,10 @@ def fancy_getitem(context, builder, sig, args,
 
     indexer.end_loops()
 
+    for indexer in indexer.indexers:
+        if isinstance(indexer, (IntegerArrayIndexer, BooleanArrayIndexer)):
+            context.nrt.decref(builder, indexer.idxty, indexer.idxary._getvalue())
+
     return impl_ret_new_ref(context, builder, out_ty, out._getvalue())
 
 
@@ -1980,6 +1984,13 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
     indexer.end_loops()
 
     context.nrt.decref(builder, retty, src_flat_instr)
+    for indexer in indexer.indexers:
+        if isinstance(indexer, (IntegerArrayIndexer, BooleanArrayIndexer)):
+            context.nrt.decref(builder, indexer.idxty, indexer.idxary._getvalue())
+
+    for i, idx, idxty, idx_make in array_indices:
+        if idxty.ndim > 1:
+            context.nrt.decref(builder, idxty, idx_make._getvalue())
 
     return context.get_dummy_value()
 
