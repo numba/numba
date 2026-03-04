@@ -679,6 +679,11 @@ def array_argmin_impl_generic(arry):
 @overload(np.argmin)
 @overload_method(types.Array, "argmin")
 def array_argmin(a, axis=None):
+    if isinstance(a, (types.Number, types.Boolean)):
+        def scalar_argmin_impl(a, axis=None):
+            return np.intp(0)
+        return scalar_argmin_impl
+
     if isinstance(a.dtype, (types.NPDatetime, types.NPTimedelta)):
         flatten_impl = array_argmin_impl_datetime
     elif isinstance(a.dtype, types.Float):
@@ -805,6 +810,11 @@ def build_argmax_or_argmin_with_axis_impl(a, axis, flatten_impl):
 @overload(np.argmax)
 @overload_method(types.Array, "argmax")
 def array_argmax(a, axis=None):
+    if isinstance(a, (types.Number, types.Boolean)):
+        def scalar_argmax_impl(a, axis=None):
+            return np.intp(0)
+        return scalar_argmax_impl
+
     if isinstance(a.dtype, (types.NPDatetime, types.NPTimedelta)):
         flatten_impl = array_argmax_impl_datetime
     elif isinstance(a.dtype, types.Float):

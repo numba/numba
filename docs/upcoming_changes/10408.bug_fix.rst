@@ -1,0 +1,7 @@
+Fix scalar handling in ``np.argmin`` and ``np.argmax``
+------------------------------------------------------
+
+Fix scalar handling in ``np.argmin`` and ``np.argmax``. Previously,
+these functions would fail when called with scalar inputs. Now they
+properly handle both scalar and array inputs, returning 0 for scalar
+argmin and argmax (consistent with NumPy behavior).

@@ -459,8 +459,14 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_argmin_basic(self):
         self.check_reduction_basic(array_argmin)
 
+    def test_np_argmin_scalar(self):
+        self.check_scalar_basic(array_argmin_global)
+
     def test_argmax_basic(self):
         self.check_reduction_basic(array_argmax)
+
+    def test_np_argmax_scalar(self):
+        self.check_scalar_basic(array_argmax_global)
 
     def test_nanmin_basic(self):
         self.check_reduction_basic(array_nanmin)
