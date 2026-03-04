@@ -1898,7 +1898,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
                                           src_shapes),
                        context.make_tuple(builder, raise_sig.args[1],
                                           index_shape)))
-
+    src_is_scalar = False
     if isinstance(srcty, types.Buffer):
         # Source is an array
         src_dtype = srcty.dtype
@@ -1940,50 +1940,63 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         # Source is a scalar (broadcast or not, depending on destination
         # shape).
         src_dtype = srcty
-
-    def flat_imp_nocopy(ary):
-        return ary.reshape(ary.size)
-
-    def flat_imp_copy(ary):
-        return ary.copy().reshape(ary.size)
-
-    # If the source array is contigous, use the nocopy version
-    if srcty.is_contig:
-        flat_imp = flat_imp_nocopy
-    # otherwise, use copy version since we don't support
-    # reshaping non-contigous arrays
+        src_is_scalar = True
+    
+    if src_is_scalar:
+        dest_indices = indexer.begin_loops()
+        # No need to check for wraparound, as the indexers all ensure
+        # a positive index is returned.
+        dest_ptr = cgutils.get_item_pointer2(context, builder, dest_data,
+                                            dest_shapes, dest_strides,
+                                            aryty.layout, dest_indices,
+                                            wraparound=False)
+        store_item(context, builder, aryty, src, dest_ptr)
+        indexer.end_loops()
     else:
-        flat_imp = flat_imp_copy
+        def flat_imp_nocopy(ary):
+            return ary.reshape(ary.size)
 
-    retty = types.Array(srcty.dtype, 1, srcty.layout, readonly=True)
-    sig = signature(retty, srcty)
-    src_flat_instr = context.compile_internal(builder, flat_imp, sig,
-                                              (src._getvalue(),))
-    src_flat = make_array(retty)(context, builder, src_flat_instr)
-    src_data = src_flat.data
-    src_idx = cgutils.alloca_once_value(builder,
-                                        context.get_constant(types.intp, 0))
-    # Loop on destination and copy from source to destination
-    dest_indices = indexer.begin_loops()
+        def flat_imp_copy(ary):
+            return ary.copy().reshape(ary.size)
 
-    # No need to check for wraparound, as the indexers all ensure
-    # a positive index is returned.
-    dest_ptr = cgutils.get_item_pointer2(context, builder, dest_data,
-                                         dest_shapes, dest_strides,
-                                         aryty.layout, dest_indices,
-                                         wraparound=False)
+        # If the source array is contigous, use the nocopy version
+        if srcty.is_contig:
+            flat_imp = flat_imp_nocopy
+        # otherwise, use copy version since we don't support
+        # reshaping non-contigous arrays
+        else:
+            flat_imp = flat_imp_copy
 
-    cur = builder.load(src_idx)
-    ptr = builder.gep(src_data, [cur])
-    val = builder.load(ptr)
-    val = context.cast(builder, val, src_dtype, aryty.dtype)
-    store_item(context, builder, aryty, val, dest_ptr)
-    next_idx = cgutils.increment_index(builder, cur)
-    builder.store(next_idx, src_idx)
+        retty = types.Array(srcty.dtype, 1, srcty.layout, readonly=True)
+        sig = signature(retty, srcty)
+        src_flat_instr = context.compile_internal(builder, flat_imp, sig,
+                                                (src._getvalue(),))
+        src_flat = make_array(retty)(context, builder, src_flat_instr)
+        src_data = src_flat.data
+        src_idx = cgutils.alloca_once_value(builder,
+                                            context.get_constant(types.intp, 0))
+        # Loop on destination and copy from source to destination
+        dest_indices = indexer.begin_loops()
 
-    indexer.end_loops()
+        # No need to check for wraparound, as the indexers all ensure
+        # a positive index is returned.
+        dest_ptr = cgutils.get_item_pointer2(context, builder, dest_data,
+                                            dest_shapes, dest_strides,
+                                            aryty.layout, dest_indices,
+                                            wraparound=False)
 
-    context.nrt.decref(builder, retty, src_flat_instr)
+        cur = builder.load(src_idx)
+        ptr = builder.gep(src_data, [cur])
+        val = builder.load(ptr)
+        val = context.cast(builder, val, src_dtype, aryty.dtype)
+        store_item(context, builder, aryty, val, dest_ptr)
+        next_idx = cgutils.increment_index(builder, cur)
+        builder.store(next_idx, src_idx)
+
+        indexer.end_loops()
+
+        context.nrt.decref(builder, retty, src_flat_instr)
+
     for indexer in indexer.indexers:
         if isinstance(indexer, (IntegerArrayIndexer, BooleanArrayIndexer)):
             context.nrt.decref(builder, indexer.idxty, indexer.idxary._getvalue())
