@@ -1,0 +1,4 @@
+Fix scalar handling in ``np.prod``
+----------------------------------
+
+Fixed scalar handling in the ``np.prod`` function. Previously scalar inputs would generate an error, and now both scalar and array inputs are properly handled.

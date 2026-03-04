@@ -370,6 +370,13 @@ def array_prod(a):
             return c
 
         return array_prod_impl
+    elif isinstance(a, (types.Number, types.Boolean)):
+        acc_init = as_dtype(a).type(1)
+
+        def scalar_prod_impl(a):
+            return acc_init * a
+
+        return scalar_prod_impl
 
 
 @overload(np.cumsum)

@@ -768,6 +768,28 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         cfunc = njit((arrty,))(array_prod_global)
         np.testing.assert_allclose(np.prod(arr), cfunc(arr))
 
+    def test_np_prod_scalar(self):
+        self.check_scalar_basic(array_prod_global)
+
+        cfunc = jit(nopython=True)(array_prod_global)
+
+        def check(arg):
+            expected = array_prod_global(arg)
+            got = cfunc(arg)
+            self.assertPreciseEqual(got, expected)
+
+        # check less precise integer cases are converted to platform integer
+        check(np.int8(2))
+        check(np.uint8(2))
+        check(np.int16(3))
+        check(np.uint16(3))
+        check(np.int32(4))
+        check(np.uint32(4))
+
+        # handle complex cases not tested in self.check_scalar_basic
+        check(np.complex64(1j))
+        check(np.complex128(0j))
+
     def check_cumulative(self, pyfunc):
         arr = np.arange(2, 10, dtype=np.int16)
         expected, got = run_comparative(pyfunc, arr)
