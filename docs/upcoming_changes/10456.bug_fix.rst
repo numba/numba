@@ -1,0 +1,9 @@
+Fix scalar handling in ``np.cumsum`` and ``np.cumprod``
+--------------------------------------------------------
+
+Fixed scalar handling in the ``np.cumsum`` and ``np.cumprod`` functions.
+Previously these functions would fail when called with scalar inputs in
+nopython mode. They now properly handle both scalar and array inputs,
+returning a 1-element array consistent with NumPy behaviour (integer and
+boolean scalars are upcast to the platform integer type; floating-point
+and complex scalars preserve their dtype).
