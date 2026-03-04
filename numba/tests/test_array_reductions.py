@@ -471,6 +471,9 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_nanmean_basic(self):
         self.check_reduction_basic(array_nanmean)
 
+    def test_np_nanmean_scalar(self):
+        self.check_scalar_basic(array_nanmean)
+
     def test_nansum_basic(self):
         self.check_reduction_basic(array_nansum)
 
@@ -482,6 +485,9 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
     def test_nanvar_basic(self):
         self.check_reduction_basic(array_nanvar, prec='double')
+
+    def test_np_nanvar_scalar(self):
+        self.check_scalar_basic(array_nanvar, prec='double')
 
     def check_median_basic(self, pyfunc, array_variations):
         cfunc = jit(nopython=True)(pyfunc)

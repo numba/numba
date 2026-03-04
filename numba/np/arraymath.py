@@ -1237,8 +1237,26 @@ def np_nanmax(a):
 
 @overload(np.nanmean)
 def np_nanmean(a):
-    if not isinstance(a, types.Array):
-        return
+    if isinstance(a, (types.Integer, types.Boolean)):
+        # No NaN possible; mirrors np.mean scalar — integers/booleans upcast to float64
+        def nanmean_int_scalar(a):
+            return np.float64(a)
+        return nanmean_int_scalar
+    elif isinstance(a, (types.Float, types.Complex)):
+        # NaN scalar: nanmean of all-NaN returns NaN; otherwise preserve dtype
+        out_dtype = as_dtype(a)
+        nan_val = out_dtype.type(np.nan)
+        zero = out_dtype.type(0)
+        isnan = get_isnan(a)
+
+        def nanmean_float_scalar(a):
+            if isnan(a):
+                return nan_val
+            return a + zero  # +0 normalises -0.0 → 0.0, matching NumPy
+        return nanmean_float_scalar
+    elif not isinstance(a, types.Array):
+        return None
+
     isnan = get_isnan(a.dtype)
 
     def nanmean_impl(a):
@@ -1257,8 +1275,27 @@ def np_nanmean(a):
 
 @overload(np.nanvar)
 def np_nanvar(a):
-    if not isinstance(a, types.Array):
-        return
+    if isinstance(a, (types.Integer, types.Boolean)):
+        # Variance of a single non-NaN value is always 0; int/bool can't be NaN
+        def nanvar_int_scalar(a):
+            return np.float64(0.0)
+        return nanvar_int_scalar
+    elif isinstance(a, (types.Float, types.Complex)):
+        # NaN scalar → NaN output; var of single non-NaN value is 0
+        out_dtype = as_dtype(a)
+        nan_val = out_dtype.type(np.nan)
+        isnan = get_isnan(a)
+
+        def nanvar_float_scalar(a):
+            if isnan(a):
+                return nan_val
+            # (a - a) is 0 for finite, nan for inf — matches NumPy
+            diff = a - a
+            return out_dtype.type(np.real(diff * np.conj(diff)))
+        return nanvar_float_scalar
+    elif not isinstance(a, types.Array):
+        return None
+
     isnan = get_isnan(a.dtype)
 
     def nanvar_impl(a):

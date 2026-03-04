@@ -1,0 +1,10 @@
+Fix scalar handling in ``np.nanmean`` and ``np.nanvar``
+-------------------------------------------------------
+
+Fix scalar handling in ``np.nanmean`` and ``np.nanvar`` functions. Previously,
+these functions would fail when called with scalar inputs. They now properly
+handle scalar arguments: ``np.nanmean`` returns the scalar value cast to the
+appropriate type (``float64`` for integer/boolean inputs, preserving the dtype
+for float/complex inputs, and returning ``NaN`` if the input is ``NaN``), while
+``np.nanvar`` returns ``0.0`` for a single non-NaN value (variance of a single
+value is zero by definition) and ``NaN`` if the input is ``NaN``.
