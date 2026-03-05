@@ -123,11 +123,12 @@ class TestSetObject(MemoryLeakMixin, TestCase):
         # Add elements to a set
         for i in range(4):
             s.add(i + 1)
+        self.assertEqual(len(s), 4)
 
         # Discard an element from the set
-        s.discard(1)
-        s.discard(5)
-        self.assertEqual(len(s), 4)
+        s.discard(1) # In the set
+        s.discard(5) # Not in the set
+        self.assertEqual(len(s), 3)
 
         @njit
         def foo(s):
