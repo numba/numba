@@ -79,9 +79,9 @@ Parameters
 NUMBA_EXPORT_FUNC(int)
 numba_set_new(NB_Set **out, Py_ssize_t key_size, Py_ssize_t size);
 
-/* Allocate a new dict with enough space to hold n_keys without resizing.
+/* Allocate a new set with enough space to hold n_keys without resizing.
 Parameters
-- NB_Dict **out
+- NB_Set **out
     Output for the new set.
 - Py_ssize_t size
     The number of keys to fit without needing resize.

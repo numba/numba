@@ -287,7 +287,7 @@ set_index(NB_SetKeys *sk, Py_ssize_t i, Py_ssize_t ix)
  * GROWTH_RATE was set to used*2 in version 3.3.0
  * GROWTH_RATE was set to used*2 + capacity/2 in 3.4.0-3.6.0.
  */
-#define GROWTH_RATE(s) ((s)->ma_used*3)
+#define GROWTH_RATE(s) ((s)->used*3)
 
 
 static NB_SetEntry*
@@ -598,11 +598,6 @@ numba_set_resize(NB_Set *s, Py_ssize_t minsize) {
     }
     oldkeys = s->keys;
 
-    /* NOTE: Current oset checks mp->ma_keys to detect resize happen.
-     * So we can't reuse oldkeys even if oldkeys->sk_size == newsize.
-     * TODO: Try reusing oldkeys when reimplement oset.
-     */
-
     /* Allocate a new table. */
     status = numba_setkeys_new(
         &s->keys, newsize, oldkeys->key_size
@@ -721,7 +716,12 @@ numba_set_discard(NB_Set *s, char *key_bytes, Py_hash_t hash)
     hashpos = lookset_index(sk, hash, ix);
     assert(hashpos >= 0);
 
-    s->used -= 1;
+    if (ix == SETK_EMPTY || ix == SETK_DUMMY) {
+        /* Not found */
+        return OK;
+    } else {
+        s->used -= 1;
+    }
     ep = get_entry(sk, ix);
     set_index(sk, hashpos, SETK_DUMMY);
 

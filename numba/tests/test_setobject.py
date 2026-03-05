@@ -126,11 +126,14 @@ class TestSetObject(MemoryLeakMixin, TestCase):
 
         # Discard an element from the set
         s.discard(1)
+        s.discard(5)
+        self.assertEqual(len(s), 4)
 
         @njit
         def foo(s):
             # Discard another element from the set
             # from within JIT compiled function
+            s.discard(1)
             s.discard(2)
             return s
 
