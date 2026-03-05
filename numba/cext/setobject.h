@@ -82,7 +82,7 @@ numba_set_new(NB_Set **out, Py_ssize_t key_size, Py_ssize_t size);
 /* Allocate a new dict with enough space to hold n_keys without resizing.
 Parameters
 - NB_Dict **out
-    Output for the new dictionary.
+    Output for the new set.
 - Py_ssize_t size
     The number of keys to fit without needing resize.
 - Py_ssize_t key_size

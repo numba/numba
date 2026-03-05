@@ -124,7 +124,7 @@ class TestSetObject(MemoryLeakMixin, TestCase):
         for i in range(4):
             s.add(i + 1)
 
-        # Disccard an element from the set
+        # Discard an element from the set
         s.discard(1)
 
         @njit
