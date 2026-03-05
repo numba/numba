@@ -452,13 +452,32 @@ def array_mean(a):
 
         acc_init = get_accumulator(dtype, 0)
 
-        def array_mean_impl(a):
-            # Can't use the naive `arr.sum() / arr.size`, as it would return
-            # a wrong result on integer sum overflow.
-            c = acc_init
-            for v in np.nditer(a):
-                c += v.item()
-            return c / a.size
+        # Check if this is a datetime/timedelta type
+        is_datetime_like = isinstance(a.dtype, (types.NPDatetime,
+                                                types.NPTimedelta))
+
+        if not is_datetime_like:
+            # For numeric types, handle empty arrays by returning nan
+            def array_mean_impl(a):
+                # Handle empty arrays as a special case to match NumPy
+                # behavior
+                if a.size == 0:
+                    return np.nan
+                # Can't use the naive `arr.sum() / arr.size`, as it would return
+                # a wrong result on integer sum overflow.
+                c = acc_init
+                for v in np.nditer(a):
+                    c += v.item()
+                return c / a.size
+        else:
+            # For datetime/timedelta, don't add special empty array handling
+            # Let it behave as before (NumPy itself raises error for empty
+            # datetime arrays)
+            def array_mean_impl(a):
+                c = acc_init
+                for v in np.nditer(a):
+                    c += v.item()
+                return c / a.size
 
         return array_mean_impl
     return None
