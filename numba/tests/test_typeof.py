@@ -558,11 +558,16 @@ class TestFingerprint(TestCase):
         v0 = OmittedArg(0.0)
         v1 = OmittedArg(1.0)
         v2 = OmittedArg(1)
+        v3 = OmittedArg(2)
 
-        s = compute_fingerprint(v0)
-        self.assertEqual(compute_fingerprint(v1), s)
-        distinct.add(s)
+        # Because we now hash the values in C to prevent cache collisions,
+        # ALL of these should produce distinct fingerprints.
+        distinct.add(compute_fingerprint(v0))
+        distinct.add(compute_fingerprint(v1))
         distinct.add(compute_fingerprint(v2))
+        distinct.add(compute_fingerprint(v3))
+
+        # Original base types should also be distinct from OmittedArgs
         distinct.add(compute_fingerprint(0.0))
         distinct.add(compute_fingerprint(1))
 

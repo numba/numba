@@ -567,6 +567,42 @@ class TestDispatcher(BaseTest):
         self.assertIn("The decorated object is not a function", err_msg)
         self.assertIn(f"{type(BaseTest)}", err_msg)
 
+    def test_multiple_omitted_args_cache_collision(self):
+        # Regression test for the OmittedArg fingerprint cache collision bug
+        # For context see https://github.com/numba/numba/issues/7615
+
+        @jit(nopython=True)
+        def calc_int(x, order_l=2, init_l=10):
+            return x + order_l + init_l
+
+        @jit(nopython=True)
+        def calc_float(x, order_l=2.5, init_l=10.5):
+            return x + order_l + init_l
+
+        @jit(nopython=True)
+        def calc_mix(x, order_l=2.5, init_l=10):
+            return x + order_l + init_l
+
+        tests = (
+            (2, 10, calc_int),
+            (2.5, 10.5, calc_float),
+            (2.5, 10, calc_mix))
+        for order_l_, init_l_, calc in tests:
+            # Call with explicitly provided default values
+            res_explicit = calc(0.1, order_l=order_l_, init_l=init_l_)
+
+            # Call again using the defaults.
+            # If the OmittedArg cache collides, this would previously fai
+            # to find the compiled version and fall back to object mode.
+            res_omitted = calc(0.1)
+
+            self.assertPreciseEqual(res_explicit, res_omitted)
+
+            # Ensure the dispatcher only compiled exactly two signatures
+            #  - one for explicit int/float variables.
+            #  - one for OmittedArg constants.
+            self.assertEqual(len(calc.signatures), 2)
+
 
 class TestSignatureHandling(BaseTest):
     """

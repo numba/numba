@@ -1,0 +1,6 @@
+Fix dispatch overhead when calling JIT-compiled functions that use default arguments
+------------------------------------------------------------------------------------
+
+Fixes poor performance when default arguments are omitted by removing the dispatch
+overhead for keyword arguments. The ``OmittedArg`` wrapper is now a native C-extension, and a
+fingerprint cache collision in the C dispatcher has been resolved.
