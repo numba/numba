@@ -3,7 +3,7 @@ Core Implementations for Generator/BitGenerator Models.
 """
 
 from llvmlite import ir
-from numba.core import cgutils, types, config
+from numba.core import cgutils, types
 from numba.core.extending import (intrinsic, make_attribute_wrapper, models,
                                   overload, register_jitable,
                                   register_model)
@@ -107,26 +107,14 @@ def next_uint64(bitgen):
     return bitgen.ctypes.next_uint64(bitgen.ctypes.state)
 
 
-if config.USE_LEGACY_TYPE_SYSTEM:
-    _generate_next_binding(next_double, types.double)
-    _generate_next_binding(next_uint32, types.uint32)
-    _generate_next_binding(next_uint64, types.uint64)
+_generate_next_binding(next_double, types.double)
+_generate_next_binding(next_uint32, types.uint32)
+_generate_next_binding(next_uint64, types.uint64)
 
-    # See: https://github.com/numpy/numpy/pull/20314
-    @register_jitable
-    def next_float(bitgen):
-        return types.float32(types.float32(next_uint32(bitgen) >> 8)
-                             * types.float32(1.0)
-                             / types.float32(16777216.0))
 
-else:
-    _generate_next_binding(next_double, types.np_double)
-    _generate_next_binding(next_uint32, types.np_uint32)
-    _generate_next_binding(next_uint64, types.np_uint64)
-
-    # See: https://github.com/numpy/numpy/pull/20314
-    @register_jitable
-    def next_float(bitgen):
-        return types.np_float32(types.np_float32(next_uint32(bitgen) >> 8)
-                                * types.np_float32(1.0)
-                                / types.np_float32(16777216.0))
+# See: https://github.com/numpy/numpy/pull/20314
+@register_jitable
+def next_float(bitgen):
+    return types.float32(types.float32(next_uint32(bitgen) >> 8)
+                         * types.float32(1.0)
+                         / types.float32(16777216.0))
