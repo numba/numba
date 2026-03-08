@@ -397,4 +397,6 @@ def structref_is(context, builder, sig, args):
     aty, bty = sig.args
     a_ptr = create_struct_proxy(aty)(context, builder, value=a).meminfo
     b_ptr = create_struct_proxy(bty)(context, builder, value=b).meminfo
-    return builder.icmp_unsigned("==", a_ptr, b_ptr)
+    ma = builder.ptrtoint(a_ptr, cgutils.intp_t)
+    mb = builder.ptrtoint(b_ptr, cgutils.intp_t)
+    return builder.icmp_signed('==', ma, mb)
