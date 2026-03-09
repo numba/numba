@@ -87,7 +87,10 @@ jobs:
       - name: Build wheel in manylinux docker container
         run: |
           # Construct the expected Python executable path inside the container
-          PYTHON_EXECUTABLE="/opt/python/${{ matrix.python_tag }}-${{ matrix.python_tag }}/bin/python"
+          # For free-threaded builds (e.g. cp314t), the manylinux path is cp314-cp314t
+          TAG="${{ matrix.python_tag }}"
+          VER_TAG="${TAG%t}"
+          PYTHON_EXECUTABLE="/opt/python/${VER_TAG}-${TAG}/bin/python"
           echo "Using Python executable: $PYTHON_EXECUTABLE"
 
           # Prepare build environment
@@ -110,7 +113,10 @@ jobs:
       - name: Repair and patch wheel in manylinux docker container
         run: |
           # Construct the expected Python executable path inside the container
-          PYTHON_EXECUTABLE="/opt/python/${{ matrix.python_tag }}-${{ matrix.python_tag }}/bin/python"
+          # For free-threaded builds (e.g. cp314t), the manylinux path is cp314-cp314t
+          TAG="${{ matrix.python_tag }}"
+          VER_TAG="${TAG%t}"
+          PYTHON_EXECUTABLE="/opt/python/${VER_TAG}-${TAG}/bin/python"
           echo "Using Python executable: $PYTHON_EXECUTABLE"
 
           # Run the repair script in Docker
