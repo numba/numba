@@ -12,8 +12,7 @@ part of your code can subsequently run at native machine code speed!
 
 For information on supported platforms, operating systems, and architectures,
 please refer to the :ref:`version support table <numba_support_info>`
-and the :ref:`support tiers <support_tiers>` documentation, if you would like
-to know if your specific platform is supported.
+and the :ref:`support tiers <support_tiers>` documentation.
 
 How do I get it?
 ----------------
