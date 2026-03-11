@@ -410,29 +410,27 @@ def array_cumsum(a):
             out[0] = c
             return out
         return scalar_cumsum_float
-    elif not isinstance(a, types.Array):
-        return None
 
-    # array case
-    is_integer = a.dtype in types.signed_domain
-    is_bool = a.dtype == types.bool_
-    if (is_integer and a.dtype.bitwidth < types.intp.bitwidth)\
-            or is_bool:
-        dtype = as_dtype(types.intp)
-    else:
-        dtype = as_dtype(a.dtype)
+    if isinstance(a, types.Array):
+        is_integer = a.dtype in types.signed_domain
+        is_bool = a.dtype == types.bool_
+        if (is_integer and a.dtype.bitwidth < types.intp.bitwidth)\
+                or is_bool:
+            dtype = as_dtype(types.intp)
+        else:
+            dtype = as_dtype(a.dtype)
 
-    acc_init = get_accumulator(dtype, 0)
+        acc_init = get_accumulator(dtype, 0)
 
-    def array_cumsum_impl(a):
-        out = np.empty(a.size, dtype)
-        c = acc_init
-        for idx, v in enumerate(a.flat):
-            c += v
-            out[idx] = c
-        return out
+        def array_cumsum_impl(a):
+            out = np.empty(a.size, dtype)
+            c = acc_init
+            for idx, v in enumerate(a.flat):
+                c += v
+                out[idx] = c
+            return out
 
-    return array_cumsum_impl
+        return array_cumsum_impl
 
 
 @overload(np.cumprod)
@@ -466,29 +464,27 @@ def array_cumprod(a):
             out[0] = c
             return out
         return scalar_cumprod_float
-    elif not isinstance(a, types.Array):
-        return None
 
-    # array case
-    is_integer = a.dtype in types.signed_domain
-    is_bool = a.dtype == types.bool_
-    if (is_integer and a.dtype.bitwidth < types.intp.bitwidth)\
-            or is_bool:
-        dtype = as_dtype(types.intp)
-    else:
-        dtype = as_dtype(a.dtype)
+    if isinstance(a, types.Array):
+        is_integer = a.dtype in types.signed_domain
+        is_bool = a.dtype == types.bool_
+        if (is_integer and a.dtype.bitwidth < types.intp.bitwidth)\
+                or is_bool:
+            dtype = as_dtype(types.intp)
+        else:
+            dtype = as_dtype(a.dtype)
 
-    acc_init = get_accumulator(dtype, 1)
+        acc_init = get_accumulator(dtype, 1)
 
-    def array_cumprod_impl(a):
-        out = np.empty(a.size, dtype)
-        c = acc_init
-        for idx, v in enumerate(a.flat):
-            c *= v
-            out[idx] = c
-        return out
+        def array_cumprod_impl(a):
+            out = np.empty(a.size, dtype)
+            c = acc_init
+            for idx, v in enumerate(a.flat):
+                c *= v
+                out[idx] = c
+            return out
 
-    return array_cumprod_impl
+        return array_cumprod_impl
 
 
 @overload(np.mean)

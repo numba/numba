@@ -1,5 +1,5 @@
 Fix scalar handling in ``np.cumsum`` and ``np.cumprod``
---------------------------------------------------------
+-------------------------------------------------------
 
 Fixed scalar handling in the ``np.cumsum`` and ``np.cumprod`` functions.
 Previously these functions would fail when called with scalar inputs in

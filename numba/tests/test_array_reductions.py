@@ -835,6 +835,10 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(np.float32(1.25))
         check(np.float64(-2.5))
 
+        # NumPy complex scalars (dtype preserved)
+        check(np.complex64(1.5+2.5j))
+        check(np.complex128(-1.0+3.0j))
+
         # Python scalars
         check(5)
         check(3.5)
@@ -869,6 +873,10 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         # NumPy floating scalars (dtype preserved)
         check(np.float32(1.25))
         check(np.float64(-2.5))
+
+        # NumPy complex scalars (dtype preserved)
+        check(np.complex64(1.5+2.5j))
+        check(np.complex128(-1.0+3.0j))
 
         # Python scalars
         check(5)
