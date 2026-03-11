@@ -11,8 +11,8 @@ function it is compiled to machine code "just-in-time" for execution and all or
 part of your code can subsequently run at native machine code speed!
 
 For information on supported platforms, operating systems, and architectures,
-please refer to the :ref:`version support table <version-support-information>`
-and the :ref:`support tiers <support-tiers>` documentation, if you would like
+please refer to the :ref:`version support table <numba_support_info>`
+and the :ref:`support tiers <support_tiers>` documentation, if you would like
 to know if your specific platform is supported.
 
 How do I get it?
