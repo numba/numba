@@ -17,11 +17,11 @@ ERR_SET_EMPTY = -4
 ERR_CMP_FAILED = -5
 
 
-def to_bytes(key):
+def to_bytes(key, key_size):
     if isinstance(key, str):
-        key_bytes = bytes(key.encode())
+        key_bytes = (key_size - len(key)) * b'\0' + key.encode()
     else:
-        key_bytes = bytes(key)
+        key_bytes = key.to_bytes(key_size, 'big')
     return key_bytes
 
 
@@ -66,7 +66,7 @@ class Set(object):
         return self.set_length()
 
     def __contains__(self, key):
-        key_bytes = to_bytes(key)
+        key_bytes = to_bytes(key, self.key_size)
         return self.set_contains(key_bytes=key_bytes)
 
     def __iter__(self):
@@ -76,11 +76,11 @@ class Set(object):
         self.tc.numba_set_free(self.setp)
 
     def add(self, key):
-        key_bytes = to_bytes(key)
+        key_bytes = to_bytes(key, self.key_size)
         self.set_add(key_bytes)
 
     def discard(self, key):
-        key_bytes = to_bytes(key)
+        key_bytes = to_bytes(key, self.key_size)
         self.set_discard(key_bytes)
 
     # The methods below are higher-level wrappers for the C-API wrappers
@@ -257,7 +257,7 @@ class TestSetImpl(TestCase):
         nmax = 1000
 
         # Add elements to the set
-        for i in range(nmax):
+        for i in range(100, nmax):
             s.add(f'{i}')
 
         keys = []
@@ -267,5 +267,5 @@ class TestSetImpl(TestCase):
 
         # Check every key was present in the iteration
         self.assertEqual(len(s), len(keys))
-        for i in range(nmax):
-            self.assertIn(to_bytes(f'{i}'), keys)
+        for i in range(100, nmax):
+            self.assertIn(to_bytes(f'{i}', 3), keys)
