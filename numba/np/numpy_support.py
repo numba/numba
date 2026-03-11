@@ -41,8 +41,6 @@ FROM_DTYPE = {
 re_typestr = re.compile(r'[<>=\|]([a-z])(\d+)?$', re.I)
 re_datetimestr = re.compile(r'[<>=\|]([mM])8?(\[([a-z]+)\])?$', re.I)
 
-sizeof_unicode_char = np.dtype('U1').itemsize
-
 
 def _from_str_dtype(dtype):
     m = re_typestr.match(dtype.str)
@@ -55,7 +53,7 @@ def _from_str_dtype(dtype):
         if dtype.byteorder not in '=|':
             raise errors.NumbaNotImplementedError("Does not support non-native "
                                                   "byteorder")
-        count = dtype.itemsize // sizeof_unicode_char
+        count = dtype.itemsize // types.sizeof_unicode_char
         assert count == int(groups[1]), "Unicode char size mismatch"
         return types.UnicodeCharSeq(count)
 
