@@ -391,6 +391,7 @@ def _set_add(typingctx, setp, key, hash_key):
 
         key_data = key_datamodel.as_data(builder, key)
         ptr_key = cgutils.alloca_once_value(builder, key_data)
+        cgutils.memset_padding(builder, ptr_key)
 
         set_ptr = _container_get_data(context, builder, set_ty, s)
         status = builder.call(
