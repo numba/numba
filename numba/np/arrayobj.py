@@ -1934,8 +1934,8 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         shape_error = builder.icmp_signed('!=', index_shape[0], seq_len)
 
         with builder.if_then(shape_error, likely=False):
-            msg = "cannot assign slice from input of different size"
-            context.call_conv.return_user_exc(builder, ValueError, (msg,))
+            raise_shape_mismatch_error(context, builder, (seq_len,),
+                                       (index_shape[0],))
     else:
         # Source is a scalar (broadcast or not, depending on destination
         # shape).
@@ -1953,28 +1953,52 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         store_item(context, builder, aryty, src, dest_ptr)
         indexer.end_loops()
     else:
-        def flat_imp_nocopy(ary):
-            return ary.reshape(ary.size)
+        is_flattened = False
+        if isinstance(srcty, types.Array):
+            def flat_imp_nocopy(ary):
+                return ary.reshape(ary.size)
 
-        def flat_imp_copy(ary):
-            return ary.copy().reshape(ary.size)
+            def flat_imp_copy(ary):
+                return ary.copy().reshape(ary.size)
 
-        # If the source array is contigous, use the nocopy version
-        if srcty.is_contig:
-            flat_imp = flat_imp_nocopy
-        # otherwise, use copy version since we don't support
-        # reshaping non-contigous arrays
+            # If the source array is contigous, use the nocopy version
+            if srcty.is_contig:
+                flat_imp = flat_imp_nocopy
+            # otherwise, use copy version since we don't support
+            # reshaping non-contigous arrays
+            else:
+                flat_imp = flat_imp_copy
+
+            retty = types.Array(srcty.dtype, 1, srcty.layout, readonly=True)
+            sig = signature(retty, srcty)
+            src_flat_instr = context.compile_internal(builder, flat_imp, sig,
+                                                    (src._getvalue(),))
+            src_flat = make_array(retty)(context, builder, src_flat_instr)
+            src_data = src_flat.data
+            is_flattened = True
+
+            def src_getitem(src_idx):
+                cur = builder.load(src_idx)
+                ptr = builder.gep(src_data, [cur])
+                val = builder.load(ptr)
+                next_idx = cgutils.increment_index(builder, cur)
+                builder.store(next_idx, src_idx)
+                return val
         else:
-            flat_imp = flat_imp_copy
+            retty = srcty
 
-        retty = types.Array(srcty.dtype, 1, srcty.layout, readonly=True)
-        sig = signature(retty, srcty)
-        src_flat_instr = context.compile_internal(builder, flat_imp, sig,
-                                                (src._getvalue(),))
-        src_flat = make_array(retty)(context, builder, src_flat_instr)
-        src_data = src_flat.data
-        src_idx = cgutils.alloca_once_value(builder,
-                                            context.get_constant(types.intp, 0))
+            def src_getitem(src_idx):
+                cur = builder.load(src_idx)
+                getitem_impl = context.get_function(
+                    operator.getitem,
+                    signature(src_dtype, srcty, types.intp),
+                )
+                val = getitem_impl(builder, (src, cur))
+                next_idx = cgutils.increment_index(builder, cur)
+                builder.store(next_idx, src_idx)
+                return val
+
+        src_idx = cgutils.alloca_once_value(builder, context.get_constant(types.intp, 0))
         # Loop on destination and copy from source to destination
         dest_indices = indexer.begin_loops()
 
@@ -1985,17 +2009,14 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
                                             aryty.layout, dest_indices,
                                             wraparound=False)
 
-        cur = builder.load(src_idx)
-        ptr = builder.gep(src_data, [cur])
-        val = builder.load(ptr)
+        val = src_getitem(src_idx)
         val = context.cast(builder, val, src_dtype, aryty.dtype)
         store_item(context, builder, aryty, val, dest_ptr)
-        next_idx = cgutils.increment_index(builder, cur)
-        builder.store(next_idx, src_idx)
 
         indexer.end_loops()
 
-        context.nrt.decref(builder, retty, src_flat_instr)
+        if is_flattened:
+            context.nrt.decref(builder, retty, src_flat_instr)
 
     for indexer in indexer.indexers:
         if isinstance(indexer, (IntegerArrayIndexer, BooleanArrayIndexer)):
