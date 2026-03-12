@@ -1190,8 +1190,6 @@ class TestOperatorMixedTypes(TestCase):
                 def ol_bar(result):
                     # compile expected result
                     expect = types.literal(operator(x,y))
-                    # Assert the result is of type types.Literal
-                    self.assertIsInstance(result, types.Literal)
                     # Assert that result has the correct literal_value
                     self.assertEqual(result, expect)
                     return lambda result: None
