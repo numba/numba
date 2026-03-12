@@ -71,11 +71,24 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Miniconda
+        if: ${{ !endsWith(matrix.python-version, 't') }}
         uses: conda-incubator/setup-miniconda@fc2d68f6413eb2d87b895e92f8584b5b94a10167 # v3.3.0
         with:
           python-version: ${{ matrix.python-version }}
           auto-update-conda: true
           auto-activate-base: true
+
+      - name: Setup Miniconda [free-threaded]
+        if: ${{ endsWith(matrix.python-version, 't') }}
+        uses: conda-incubator/setup-miniconda@fc2d68f6413eb2d87b895e92f8584b5b94a10167 # v3.3.0
+        with:
+          auto-update-conda: true
+          auto-activate-base: true
+
+      - name: Install free-threaded Python
+        if: ${{ endsWith(matrix.python-version, 't') }}
+        run: |
+          conda install -n test python-freethreading pip
 
       - name: Download llvmlite wheel
         if: inputs.llvmlite_wheel_runid != ''
