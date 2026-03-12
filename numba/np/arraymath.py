@@ -1303,14 +1303,17 @@ def np_nanmax(a):
 @overload(np.nanmean)
 def np_nanmean(a):
     if isinstance(a, (types.Integer, types.Boolean)):
-        # No NaN possible; mirrors np.mean scalar — integers/booleans upcast to float64
+        # No NaN possible; mirrors np.mean scalar —
+        # integers/booleans upcast to float64
         def nanmean_int_scalar(a):
             return np.float64(a)
         return nanmean_int_scalar
     elif isinstance(a, (types.Float, types.Complex)):
         # NaN scalar: nanmean of all-NaN returns NaN; otherwise preserve dtype
         out_dtype = as_dtype(a)
-        nan_val = out_dtype.type(np.nan)
+        nan_val = out_dtype.type(
+            np.nan
+        )
         zero = out_dtype.type(0)
         isnan = get_isnan(a)
 
