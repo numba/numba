@@ -503,6 +503,7 @@ def _set_discard(typingctx, s, key, hash_key):
         key_data = key_datamodel.as_data(builder, key)
 
         ptr_key = cgutils.alloca_once_value(builder, key_data)
+        cgutils.memset_padding(builder, ptr_key)
 
         setp = _container_get_data(context, builder, setp_ty, s)
         status = builder.call(
