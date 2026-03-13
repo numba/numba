@@ -154,7 +154,10 @@ def get_array_index_type(ary, idx):
         def keeps_contiguity(ty, is_innermost):
             # A slice can only keep an array contiguous if it is the
             # innermost index and it is not strided
+            # newaxis (None) always keeps contiguity as it just adds a
+            # dimension of size 1
             return (ty is types.ellipsis or isinstance(ty, types.Integer)
+                    or is_nonelike(ty)
                     or (is_innermost and isinstance(ty, types.SliceType)
                         and not ty.has_step))
 
