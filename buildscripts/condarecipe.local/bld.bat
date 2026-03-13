@@ -9,6 +9,8 @@ if not exist "%VSINSTALLDIR%" (
 )
 call "%VSINSTALLDIR%VC\Auxiliary\Build\vcvarsall.bat" x64
 
+set NUMBA_PACKAGE_FORMAT=conda
+
 %PYTHON% setup.py build install --single-version-externally-managed --record=record.txt
 
 exit /b %errorlevel%

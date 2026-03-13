@@ -96,6 +96,8 @@ jobs:
           python -m pip install build numpy==${{ matrix.numpy_build }} setuptools wheel tbb==2021.6 tbb-devel==2021.6
 
       - name: Build wheel
+        env:
+          NUMBA_PACKAGE_FORMAT: "wheel"
         run: python -m build --wheel --no-isolation
 
       - name: Upload numba wheel
@@ -146,8 +148,10 @@ jobs:
         env:
           NUMBA_CPU_NAME: generic
           _NUMBA_REDUCED_TESTING: 1
+          NUMBA_DIST_TEST: 1
+          TESTS_TO_RUN: "numba.tests.test_dist_validation"
         run: |
-          python -m pip install --upgrade pip twine
+          python -m pip install --upgrade pip twine lief
           python -m pip install numpy==${{ matrix.numpy_test }} tbb==2021.6 tbb-devel==2021.6
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
               python -m pip install llvmlite_wheels/*.whl
@@ -173,4 +177,4 @@ jobs:
           python -m numba -s
 
           # run tests
-          python -m numba.runtests -m 4 -v
+          python -m numba.runtests $TESTS_TO_RUN -m 4 -v
