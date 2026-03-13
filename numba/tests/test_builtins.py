@@ -13,7 +13,8 @@ from numba import jit, typeof, njit, typed
 from numba.core import errors, types, config
 from numba.tests.support import (TestCase, tag, ignore_internal_warnings,
                                  MemoryLeakMixin)
-from numba.core.extending import overload_method, box, register_jitable
+from numba.core.extending import (overload_method, box, register_jitable,
+                                  overload)
 
 
 forceobj_flags = {'forceobj': True}
@@ -1176,6 +1177,44 @@ class TestOperatorMixedTypes(TestCase):
             things = (1, 0, True, False, 1.0, 2.0, 1.1, 1j, None, "", "1")
             for x, y in itertools.product(things, things):
                 self.assertPreciseEqual(func.py_func(x, y), func(x, y))
+
+    def test_eq_ne_returns_literal_on_none(self):
+
+        def check(operator):
+            for (x, y) in ((None, None), (None, 1), (1, None)):
+
+                def bar(result):
+                    pass
+
+                @overload(bar, prefer_literal=True)
+                def ol_bar(result):
+                    # compile expected result
+                    expect = types.literal(operator(x,y))
+                    # Assert that result has the correct literal_value
+                    self.assertEqual(result, expect)
+                    return lambda result: None
+
+                @jit
+                def check_eq(x, y):
+                    bar(operator(x, y))
+
+                check_eq(x, y)
+
+        check(operator.ne)
+        check(operator.eq)
+
+    def test_10414(self):
+        # test for https://github.com/numba/numba/issues/10414
+
+        @njit
+        def func(x):
+            a = None
+            if x:
+                a = 0
+            return a == None, a != None
+
+        self.assertEqual(func(True), func.py_func(True))
+        self.assertEqual(func(False), func.py_func(False))
 
     def test_cmp(self):
         for opstr in ('gt', 'lt', 'ge', 'le', 'eq', 'ne'):

@@ -131,14 +131,34 @@ def gen_non_eq(val):
     def none_equality(a, b):
         a_none = isinstance(a, types.NoneType)
         b_none = isinstance(b, types.NoneType)
+        # Case: both are None.
         if a_none and b_none:
             def impl(a, b):
                 return val
             return impl
+        # Case: only one is None.
         elif a_none ^ b_none:
-            def impl(a, b):
-                return not val
-            return impl
+            a_optional = isinstance(a, types.Optional)
+            b_optional = isinstance(b, types.Optional)
+            # Special case, one optional, needs a runtime check.
+            # Using the implementation for `is` as the distinction between `is`
+            # and `==` is semantically irrelevant in the Numba context. Numba
+            # types can not override `__eq__` like Python objects can so the
+            # two comparisons are semantically equivalent.
+            if a_optional or b_optional:
+                if val:
+                    def impl(a, b):
+                        return a is b
+                else:
+                    def impl(a, b):
+                        return not a is b
+                return impl
+            # Otherwise one is None, the other isn't.
+            else:
+                nval = not val
+                def impl(a, b):
+                    return nval
+                return impl
     return none_equality
 
 overload(operator.eq)(gen_non_eq(True))
