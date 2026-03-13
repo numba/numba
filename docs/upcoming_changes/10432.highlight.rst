@@ -1,0 +1,4 @@
+Add support for Fancy Indexing in Numba
+---------------------------------------
+
+Support ``a[(idx_a, idx_b)]`` type fancy indexing, including for multidimensional arrays.
