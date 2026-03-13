@@ -124,6 +124,17 @@ build_c_helpers_dict(void)
     declmethod(gettyperecord);
     declmethod(get_PyUnicode_ExtendedCase);
 
+    /* StringDType support */
+#if NPY_ABI_VERSION >= 0x02000000
+    declmethod(stringdtype_unpack);
+    declmethod(stringdtype_pack);
+    declmethod(stringdtype_utf8_status);
+    declmethod(stringdtype_clone);
+    declmethod(stringdtype_utf8_eq);
+    declmethod(stringdtype_utf8_ord);
+    declmethod(stringdtype_concat);
+#endif
+
     /* for gdb breakpoint */
     declmethod(gdb_breakpoint);
 

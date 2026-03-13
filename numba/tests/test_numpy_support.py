@@ -85,6 +85,43 @@ class TestFromDtype(TestCase):
         check('a11', types.CharSeq(11))
         check('U12', types.UnicodeCharSeq(12))
 
+        if numpy_support.numpy_version >= (2, 0):
+            ctor = np.dtypes.StringDType
+            default_descr = np.dtype(ctor())
+            expected_default = types.StringDTypeType(
+                default_descr.itemsize,
+                coerce=default_descr.coerce,
+                na_object=getattr(default_descr, 'na_object', None),
+            )
+            self.assertEqual(
+                numpy_support.from_dtype(default_descr),
+                expected_default,
+            )
+            # as_dtype may return either the canonical default descriptor
+            # StringDType() or an equivalent descriptor with explicit
+            # na_object=None depending on prior interning. Accept both.
+            ret = numpy_support.as_dtype(expected_default)
+            if ret != default_descr:
+                self.assertTrue(
+                    hasattr(ret, 'na_object') and ret.na_object is None,
+                    msg=f"Unexpected descriptor for default StringDType: {ret}",
+                )
+
+            custom_descr = np.dtype(ctor(coerce=False, na_object=None))
+            expected_custom = types.StringDTypeType(
+                custom_descr.itemsize,
+                coerce=custom_descr.coerce,
+                na_object=getattr(custom_descr, 'na_object', None),
+            )
+            self.assertEqual(
+                numpy_support.from_dtype(custom_descr),
+                expected_custom,
+            )
+            self.assertEqual(
+                numpy_support.as_dtype(expected_custom),
+                custom_descr,
+            )
+
     def check_datetime_types(self, letter, nb_class):
         def check(dtype, numba_type, code):
             tp = numpy_support.from_dtype(dtype)
