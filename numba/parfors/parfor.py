@@ -3008,6 +3008,13 @@ class ParforFusionPass(ParforPassStates):
             simplify(self.func_ir, self.typemap, self.calltypes, self.metadata["parfors"])
 
     def fuse_parfors(self, array_analysis, blocks, func_ir, typemap):
+        alias_map, arg_aliases = find_potential_aliases(
+                                     blocks,
+                                     func_ir.arg_names,
+                                     typemap,
+                                     func_ir
+                                 )
+
         for label, block in blocks.items():
             equiv_set = array_analysis.get_equiv_set(label)
             fusion_happened = True
@@ -3025,7 +3032,8 @@ class ParforFusionPass(ParforPassStates):
                         stmt.equiv_set = equiv_set
                         next_stmt.equiv_set = equiv_set
                         fused_node, fuse_report = try_fuse(equiv_set, stmt, next_stmt,
-                            self.metadata["parfors"], func_ir, typemap)
+                            self.metadata["parfors"], func_ir, typemap, alias_map,
+                            arg_aliases)
                         # accumulate fusion reports
                         self.diagnostics.fusion_reports.append(fuse_report)
                         if fused_node is not None:
@@ -4232,7 +4240,14 @@ def get_parfor_writes(parfor):
 
 FusionReport = namedtuple('FusionReport', ['first', 'second', 'message'])
 
-def try_fuse(equiv_set, parfor1, parfor2, metadata, func_ir, typemap):
+def try_fuse(equiv_set,
+             parfor1,
+             parfor2,
+             metadata,
+             func_ir,
+             typemap,
+             alias_map,
+             arg_aliases):
     """try to fuse parfors and return a fused parfor, otherwise return None
     """
     dprint("try_fuse: trying to fuse \n", parfor1, "\n", parfor2)
@@ -4273,6 +4288,7 @@ def try_fuse(equiv_set, parfor1, parfor2, metadata, func_ir, typemap):
             return user_varname
         return v
 
+    # Check if the iteration count of each level of the loop nest is the same.
     for i in range(ndims):
         nest1 = parfor1.loop_nests[i]
         nest2 = parfor2.loop_nests[i]
@@ -4308,6 +4324,9 @@ def try_fuse(equiv_set, parfor1, parfor2, metadata, func_ir, typemap):
     # first after fusion as well
     p1_body_usedefs = compute_use_defs(parfor1.loop_body)
     p1_body_defs = set()
+    p1_body_uses = set()
+    for uses in p1_body_usedefs.usemap.values():
+        p1_body_uses |= uses
     for defs in p1_body_usedefs.defmap.values():
         p1_body_defs |= defs
     p1_body_defs |= get_parfor_writes(parfor1)
@@ -4316,9 +4335,52 @@ def try_fuse(equiv_set, parfor1, parfor2, metadata, func_ir, typemap):
     p1_body_defs |= set(parfor1.redvars)
 
     p2_usedefs = compute_use_defs(parfor2.loop_body)
+    p2_body_defs = set()
     p2_uses = compute_use_defs({0: parfor2.init_block}).usemap[0]
     for uses in p2_usedefs.usemap.values():
         p2_uses |= uses
+    for defs in p2_usedefs.defmap.values():
+        p2_body_defs |= defs
+    p2_body_defs |= get_parfor_writes(parfor2)
+
+    def it_types(s):
+        return {typemap[var] for var in s}
+
+    # Get the distinct types of the arguments that are used or defined
+    # in each parfor.
+    # Here, "arguments" means arguments or aliases of those created
+    # in the function.
+    it_p1_body_uses = it_types(p1_body_uses.intersection(arg_aliases))
+    it_p2_body_defs = it_types(p2_body_defs.intersection(arg_aliases))
+    it_p1_body_defs = it_types(p1_body_defs.intersection(arg_aliases))
+    it_p2_uses = it_types(p2_uses.intersection(arg_aliases))
+    # Compute the types of arguments written by second parfor and read
+    # by the first and vice versa.
+    write_after_read = it_p1_body_uses.intersection(it_p2_body_defs)
+    read_after_write = it_p1_body_defs.intersection(it_p2_uses)
+    # Compute the arguments names written by the second parfor and
+    # read by the first and vice versa.
+    war_vars = p1_body_uses.intersection(arg_aliases).union(p2_body_defs.intersection(arg_aliases))
+    raw_vars = p1_body_defs.intersection(arg_aliases).union(p2_uses.intersection(arg_aliases))
+    # Count how many arguments of each argument type are written by the
+    # second parfor and read by the first and vice versa.
+    var_count_war = [len([y for y in war_vars if typemap[y] == x]) > 1 for x in write_after_read]
+    var_count_raw = [len([y for y in raw_vars if typemap[y] == x]) > 1 for x in read_after_write]
+    # Both write-and-read and read-after-write can result in wrong answers
+    # if there is shifted aliasing.  Here, we segregate by type and make
+    # the assumption that arguments of different types do not alias.
+    # If there is only one argument of a type then there can't be a
+    # conflict.
+    # If there is more than one argument for a given type such that
+    # there is a potential write-after-read or read-after-write conflict
+    # then disallow fusion.
+    if any(var_count_war) or any(var_count_raw):
+        dprint("try_fuse: parfor arg aliasing dependency found")
+        msg = ("- fusion failed: arg aliasing dependency found "
+                "between loops #%s and #%s")
+        report = FusionReport(parfor1.id, parfor2.id,
+                                msg % (parfor1.id, parfor2.id))
+        return None, report
 
     overlap = p1_body_defs.intersection(p2_uses)
     # overlap are those variable defined in first parfor and used in the second
