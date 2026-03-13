@@ -1012,6 +1012,7 @@ class SliceIndexer(Indexer):
         builder.branch(self.bb_start)
         builder.position_at_end(self.bb_end)
 
+
 class SubspaceIndexer(object):
     def __init__(self, context, builder, shape_tuple, global_ary_idx):
         self.context = context
@@ -1055,17 +1056,19 @@ class SubspaceIndexer(object):
     def loop_tail(self):
         builder = self.builder
         next_index = cgutils.increment_index(builder,
-                                            builder.load(self.global_ary_idx))
+                                             builder.load(self.global_ary_idx))
         builder.store(next_index, self.global_ary_idx)
         builder.branch(self.bb_start)
         builder.position_at_end(self.bb_end)
+
 
 class FancyIndexer(object):
     """
     Perform fancy indexing on the given array.
     """
 
-    def __init__(self, context, builder, aryty, ary, index_types, indices, subspace_shape_tuple):
+    def __init__(self, context, builder, aryty, ary, index_types,
+                 indices, subspace_shape_tuple):
         self.context = context
         self.builder = builder
         self.aryty = aryty
@@ -1103,6 +1106,7 @@ class FancyIndexer(object):
                                         self.shapes[ax])
                 indexer = IntegerIndexer(context, builder, ind)
                 indexers.append(indexer)
+                new_ax -= 1
             elif isinstance(idxty, types.Array):
                 idxary = make_array(idxty)(context, builder, indexval)
                 if isinstance(idxty.dtype, types.Integer):
@@ -1133,7 +1137,9 @@ class FancyIndexer(object):
 
         assert len(indexers) == aryty.ndim, (len(indexers), aryty.ndim)
 
-        self.subspace_indexer = SubspaceIndexer(context, builder, subspace_shape_tuple, self.global_ary_idx)
+        self.subspace_indexer = SubspaceIndexer(
+            context, builder, subspace_shape_tuple, self.global_ary_idx
+        )
 
         num_subspaces = 0
         in_subspace = False
@@ -1141,15 +1147,15 @@ class FancyIndexer(object):
         if any([isinstance(i, IntegerArrayIndexer) for i in indexers]):
             for idx, i in enumerate(indexers):
                 if isinstance(i, (IntegerArrayIndexer, IntegerIndexer)):
-                    if in_subspace == False:
+                    if in_subspace is False:
                         in_subspace = True
                         num_subspaces += 1
                     if subspace_index is None:
                         subspace_index = idx
                 else:
-                    if in_subspace == True:
+                    if in_subspace is True:
                         in_subspace = False
-            
+
             if num_subspaces:
                 if num_subspaces > 1:
                     subspace_index = 0
@@ -1177,7 +1183,7 @@ class FancyIndexer(object):
         # one as a constant shape in the resulting list of shapes.
         for i in self.newaxes:
             self.indexers_shape.insert(i, one)
-        
+
     def get_shape(self):
         """
         Get the resulting data shape as Python tuple.
@@ -1238,22 +1244,32 @@ def get_bdcast_idx(context, builder, array_indices):
 
     def bdcast_idx_shapes(*args):
         return np.broadcast_shapes(*args)
-    
-    inpty = types.StarArgTuple(tuple(types.UniTuple(types.intp, count=ary_idx[2].ndim) for ary_idx in array_indices))
+
+    inpty = types.StarArgTuple(
+        tuple(types.UniTuple(
+            types.intp, count=ary_idx[2].ndim
+        ) for ary_idx in array_indices)
+    )
     retty = types.UniTuple(types.intp, count=max_dims)
-    subspace_shape = context.compile_internal(builder, bdcast_idx_shapes, signature(retty, inpty),
-                                                (cgutils.pack_struct(builder, tuple([ary_idx[3].shape for ary_idx in array_indices])),))
+    subspace_shape = context.compile_internal(
+        builder, bdcast_idx_shapes, signature(retty, inpty),
+        (cgutils.pack_struct(
+            builder, tuple([ary_idx[3].shape for ary_idx in array_indices])
+        ),)
+    )
 
     bdcast_indices = []
-    
+
     def bdcast_array(ary, shape):
         return np.broadcast_to(ary, shape)
-    
+
     for i, idx, idxty, _ in array_indices:
         inpty = (idxty, types.UniTuple(types.intp, count=max_dims))
         retty = types.Array(idxty.dtype, max_dims, 'A', readonly=True)
-        bdcast_idx = context.compile_internal(builder, bdcast_array, signature(retty, *inpty),
-                                                (idx, subspace_shape))
+        bdcast_idx = context.compile_internal(
+            builder, bdcast_array, signature(retty, *inpty),
+            (idx, subspace_shape)
+        )
         bdcast_indices.append((i, bdcast_idx, retty))
     subspace_shape = tuple(cgutils.unpack_tuple(builder, subspace_shape))
     return bdcast_indices, subspace_shape
@@ -1317,7 +1333,8 @@ def fancy_getitem(context, builder, sig, args,
 
     for indexer in indexer.indexers:
         if isinstance(indexer, (IntegerArrayIndexer, BooleanArrayIndexer)):
-            context.nrt.decref(builder, indexer.idxty, indexer.idxary._getvalue())
+            context.nrt.decref(builder, indexer.idxty,
+                               indexer.idxary._getvalue())
 
     return impl_ret_new_ref(context, builder, out_ty, out._getvalue())
 
@@ -1941,15 +1958,15 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         # shape).
         src_dtype = srcty
         src_is_scalar = True
-    
+
     if src_is_scalar:
         dest_indices = indexer.begin_loops()
         # No need to check for wraparound, as the indexers all ensure
         # a positive index is returned.
         dest_ptr = cgutils.get_item_pointer2(context, builder, dest_data,
-                                            dest_shapes, dest_strides,
-                                            aryty.layout, dest_indices,
-                                            wraparound=False)
+                                             dest_shapes, dest_strides,
+                                             aryty.layout, dest_indices,
+                                             wraparound=False)
         store_item(context, builder, aryty, src, dest_ptr)
         indexer.end_loops()
     else:
@@ -1972,7 +1989,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
             retty = types.Array(srcty.dtype, 1, srcty.layout, readonly=True)
             sig = signature(retty, srcty)
             src_flat_instr = context.compile_internal(builder, flat_imp, sig,
-                                                    (src._getvalue(),))
+                                                      (src._getvalue(),))
             src_flat = make_array(retty)(context, builder, src_flat_instr)
             src_data = src_flat.data
             is_flattened = True
@@ -1998,16 +2015,17 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
                 builder.store(next_idx, src_idx)
                 return val
 
-        src_idx = cgutils.alloca_once_value(builder, context.get_constant(types.intp, 0))
+        src_idx = cgutils.alloca_once_value(builder,
+                                            context.get_constant(types.intp, 0))
         # Loop on destination and copy from source to destination
         dest_indices = indexer.begin_loops()
 
         # No need to check for wraparound, as the indexers all ensure
         # a positive index is returned.
         dest_ptr = cgutils.get_item_pointer2(context, builder, dest_data,
-                                            dest_shapes, dest_strides,
-                                            aryty.layout, dest_indices,
-                                            wraparound=False)
+                                             dest_shapes, dest_strides,
+                                             aryty.layout, dest_indices,
+                                             wraparound=False)
 
         val = src_getitem(src_idx)
         val = context.cast(builder, val, src_dtype, aryty.dtype)
@@ -2020,7 +2038,8 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
 
     for indexer in indexer.indexers:
         if isinstance(indexer, (IntegerArrayIndexer, BooleanArrayIndexer)):
-            context.nrt.decref(builder, indexer.idxty, indexer.idxary._getvalue())
+            context.nrt.decref(builder, indexer.idxty,
+                               indexer.idxary._getvalue())
 
     for i, idx, idxty, idx_make in array_indices:
         if idxty.ndim > 1:

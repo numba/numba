@@ -43,7 +43,8 @@ class UfuncAtIterator:
         return isinstance(self.indices_ty, types.BaseTuple)
 
     def _prepare(self, context, builder):
-        from numba.np.arrayobj import normalize_indices, FancyIndexer, make_array, get_bdcast_idx
+        from numba.np.arrayobj import (normalize_indices, FancyIndexer,
+                                       make_array, get_bdcast_idx)
 
         a, indices = self.a, self.indices
         a_ty, indices_ty = self.a_ty, self.indices_ty
