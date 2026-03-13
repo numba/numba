@@ -1,0 +1,6 @@
+Support ``A`` type layout for array reshape
+-------------------------------------------
+
+This adds support for ``A`` layout for reshape function. 
+Internally a copy of the original array is made to prevent any
+illegal data access due to the array not being contiguous. 

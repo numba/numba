@@ -6405,10 +6405,12 @@ def _np_dstack(typingctx, tup):
         ndim = tupty[0].ndim
 
         if ndim == 0:
+            new_sig = typing.signature(retty.copy(ndim=retty.ndim, layout='A'), *sig.args)
+
             def np_vstack_impl(arrays):
                 return np.hstack(arrays).reshape(1, 1, -1)
 
-            return context.compile_internal(builder, np_vstack_impl, sig, args)
+            return context.compile_internal(builder, np_vstack_impl, new_sig, args)
 
         elif ndim == 1:
             # np.expand_dims(np.stack(arrays, axis=1), axis=0)
