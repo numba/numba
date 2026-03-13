@@ -1,0 +1,9 @@
+Add support for ``out`` keyword argument on NumPy ufuncs
+--------------------------------------------------------
+
+Numba now accepts the ``out=`` keyword argument on all supported NumPy
+ufuncs (e.g., ``np.add``, ``np.maximum``, ``np.sin``). Previously only
+the positional form worked, while the keyword argument raised
+``NotImplementedError``. This aligns with NumPy's deprecation of
+passing ``out`` as a positional argument for ``np.maximum`` and
+``np.minimum``.
