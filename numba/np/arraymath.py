@@ -461,7 +461,7 @@ def array_mean(a):
         if not is_datetime_like:
             if is_complex:
                 # For complex, both real and imag should be nan
-                nan_value = dtype.type(np.nan, np.nan)
+                nan_value = dtype.type(complex("nan+nanj"))
             else:
                 nan_value = np.nan
 
