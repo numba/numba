@@ -425,6 +425,60 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         with self.assertTypingError():
             cfunc('test String')
 
+    def test_mean_empty_array(self):
+        """Test that mean of empty array returns nan (issue #5502)"""
+        cfunc = jit(nopython=True)(array_mean)
+        
+        # Empty float64 array
+        arr = np.float64([])
+        expected = np.mean(arr)
+        result = cfunc(arr)
+        self.assertTrue(np.isnan(result))
+        self.assertTrue(np.isnan(expected))
+        
+        # Empty int array
+        arr = np.int64([])
+        expected = np.mean(arr)
+        result = cfunc(arr)
+        self.assertTrue(np.isnan(result))
+        self.assertTrue(np.isnan(expected))
+
+        # Empty complex array
+        arr = np.complex64([])
+        expected = np.mean(arr)
+        result = cfunc(arr)
+        self.assertTrue(np.isnan(result.real))
+        self.assertTrue(np.isnan(result.imag))
+        self.assertTrue(np.isnan(expected.real))
+        self.assertTrue(np.isnan(expected.imag))
+
+
+    def test_mean_empty_timedelta(self):
+        """Test that mean of empty timede`lta array returns NaT"""
+        cfunc = jit(nopython=True)(array_mean)
+        
+        # Empty timedelta64 array
+        arr = np.array([], dtype='timedelta64[D]')
+        expected = np.mean(arr)
+        result = cfunc(arr)
+        # Both should be NaT
+        self.assertTrue(np.isnat(result))
+        self.assertTrue(np.isnat(expected))
+
+    def test_mean_empty_datetime(self):
+        """Test that mean of empty datetime array raises error (matches NumPy behavior)"""
+        cfunc = jit(nopython=True)(array_mean)
+        
+        # Empty datetime64 array - both NumPy and Numba should error
+        arr = np.array([], dtype='datetime64[D]')
+        # NumPy raises _UFuncBinaryResolutionError
+        # ufunc 'add' cannot use operands with types dtype('<M8[D]') and dtype('<M8[D]')
+        with self.assertRaises(Exception):
+            np.mean(arr)
+        # ValueError: Converting an integer to a NumPy datetime requires a specified unit
+        with self.assertRaises(Exception):
+            cfunc(arr)
+
     def test_var_basic(self):
         self.check_reduction_basic(array_var, prec='double')
 
