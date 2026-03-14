@@ -455,14 +455,22 @@ def array_mean(a):
         # Check if this is a datetime/timedelta type
         is_datetime_like = isinstance(a.dtype, (types.NPDatetime,
                                                 types.NPTimedelta))
+        # Is complex array
+        is_complex = isinstance(a.dtype, types.Complex)
 
         if not is_datetime_like:
+            if is_complex:
+                # For complex, both real and imag should be nan
+                nan_value = dtype.type(np.nan, np.nan)
+            else:
+                nan_value = np.nan
+
             # For numeric types, handle empty arrays by returning nan
             def array_mean_impl(a):
                 # Handle empty arrays as a special case to match NumPy
                 # behavior
                 if a.size == 0:
-                    return np.nan
+                    return nan_value
                 # Can't use the naive `arr.sum() / arr.size`, as it would return
                 # a wrong result on integer sum overflow.
                 c = acc_init

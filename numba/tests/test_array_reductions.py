@@ -443,8 +443,18 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.assertTrue(np.isnan(result))
         self.assertTrue(np.isnan(expected))
 
+        # Empty complex array
+        arr = np.complex64([])
+        expected = np.mean(arr)
+        result = cfunc(arr)
+        self.assertTrue(np.isnan(result.real))
+        self.assertTrue(np.isnan(result.imag))
+        self.assertTrue(np.isnan(expected.real))
+        self.assertTrue(np.isnan(expected.imag))
+
+
     def test_mean_empty_timedelta(self):
-        """Test that mean of empty timedelta array returns NaT"""
+        """Test that mean of empty timede`lta array returns NaT"""
         cfunc = jit(nopython=True)(array_mean)
         
         # Empty timedelta64 array
