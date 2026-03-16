@@ -222,6 +222,42 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         # Only NaNs
         arr = np.float64(['nan', 'nan'])
         check(arr)
+    
+    def check_scalar_basic(self, pyfunc, **kwargs):
+        cfunc = jit(nopython=True)(pyfunc)
+        def check(arr):
+            self.assertPreciseEqual(pyfunc(arr), cfunc(arr), **kwargs)
+        #numpy values
+        arr = np.float64(0.0)
+        check(arr)
+        arr = np.float64(-0.0)
+        check(arr)
+        arr = np.float32(21.0)
+        check(arr)
+        arr = np.float32(-21.0)
+        check(arr)
+        arr = np.int32(21)
+        check(arr)
+        arr = np.int32(-21)
+        check(arr)
+
+        #special values
+        arr = np.float64(np.inf)
+        check(arr)
+        arr = np.float64(-np.inf)
+        check(arr)
+        arr = np.float64('nan')
+        check(arr)
+
+        #booleans
+        arr = np.bool_(True)
+        check(arr)
+        arr = np.bool_(False)
+        check(arr)
+
+        #string negative test case
+        with self.assertTypingError() as e:
+            cfunc('string')
 
     def test_all_basic(self, pyfunc=array_all):
         cfunc = jit(nopython=True)(pyfunc)
@@ -352,6 +388,43 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_mean_basic(self):
         self.check_reduction_basic(array_mean)
 
+    def test_np_mean_scalar(self):
+        cfunc = jit(nopython=True)(array_mean_global)
+
+        def check(arg):
+            expected = array_mean_global(arg)
+            got = cfunc(arg)
+            self.assertPreciseEqual(got, expected)
+
+        # NumPy integer and boolean scalars
+        check(np.int32(2))
+        check(np.int64(-3))
+        check(np.uint32(5))
+        check(np.bool_(True))
+        check(np.bool_(False))
+
+        # NumPy floating scalars
+        check(np.float32(1.25))
+        check(np.float64(-2.5))
+
+        # Complex values
+        check(np.complex64(7+0j))
+        check(np.complex128(61+74j))
+
+        # Special floating values
+        check(np.nan)
+        check(np.inf)
+        check(-np.inf)
+        check(-0.0)
+        check(0.0)
+        check(0)
+        check(0.0000042)
+        check(-0.25863)
+        
+        # Error cases
+        with self.assertTypingError():
+            cfunc('test String')
+
     def test_var_basic(self):
         self.check_reduction_basic(array_var, prec='double')
 
@@ -359,10 +432,29 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_reduction_basic(array_std)
 
     def test_min_basic(self):
+        #scalar testing
+        self.check_scalar_basic(array_min_global)
+        #array testing
         self.check_reduction_basic(array_min)
 
+    def test_amin_basic(self):
+        #scalar testing
+        self.check_scalar_basic(array_amin)
+        #array testing
+        self.check_reduction_basic(array_amin)
+    
+
     def test_max_basic(self):
+        #array testing
         self.check_reduction_basic(array_max)
+        #scalar testing
+        self.check_scalar_basic(array_max_global)
+
+    def test_amax_basic(self):
+        #array testing
+        self.check_reduction_basic(array_amax)
+        #scalar testing
+        self.check_scalar_basic(array_amax)
 
     def test_argmin_basic(self):
         self.check_reduction_basic(array_argmin)
@@ -675,6 +767,28 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
         cfunc = njit((arrty,))(array_prod_global)
         np.testing.assert_allclose(np.prod(arr), cfunc(arr))
+
+    def test_np_prod_scalar(self):
+        self.check_scalar_basic(array_prod_global)
+
+        cfunc = jit(nopython=True)(array_prod_global)
+
+        def check(arg):
+            expected = array_prod_global(arg)
+            got = cfunc(arg)
+            self.assertPreciseEqual(got, expected)
+
+        # check less precise integer cases are converted to platform integer
+        check(np.int8(2))
+        check(np.uint8(2))
+        check(np.int16(3))
+        check(np.uint16(3))
+        check(np.int32(4))
+        check(np.uint32(4))
+
+        # handle complex cases not tested in self.check_scalar_basic
+        check(np.complex64(1j))
+        check(np.complex128(0j))
 
     def check_cumulative(self, pyfunc):
         arr = np.arange(2, 10, dtype=np.int16)

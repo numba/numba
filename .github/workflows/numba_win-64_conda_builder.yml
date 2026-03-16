@@ -70,7 +70,7 @@ jobs:
 
       - name: Download llvmlite Artifact
         if: ${{ inputs.llvmlite_run_id != '' }}
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: llvmlite-win-64-py${{ matrix.python-version }}
           path: llvmlite_conda
@@ -107,7 +107,7 @@ jobs:
             --no-test
 
       - name: Upload numba conda package
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: numba_win-64_conda_py${{ matrix.python-version }}
           path: conda_channel_dir
@@ -135,7 +135,7 @@ jobs:
 
       - name: Download llvmlite artifact
         if: ${{ inputs.llvmlite_run_id != '' }}
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: llvmlite-win-64-py${{ matrix.python-version }}
           path: llvmlite_conda
@@ -144,7 +144,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download numba artifact
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: numba_win-64_conda_py${{ matrix.python-version }}
 

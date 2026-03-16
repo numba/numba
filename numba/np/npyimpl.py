@@ -328,12 +328,8 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
                                   str(tyinp)))
 
 
-if config.USE_LEGACY_TYPE_SYSTEM:
-    _broadcast_onto_sig = types.intp(types.intp, types.CPointer(types.intp),
-                                    types.intp, types.CPointer(types.intp))
-else:
-    _broadcast_onto_sig = types.np_intp(types.np_intp, types.CPointer(types.np_intp),
-                                    types.np_intp, types.CPointer(types.np_intp))
+_broadcast_onto_sig = types.intp(types.intp, types.CPointer(types.intp),
+                                types.intp, types.CPointer(types.intp))
 
 def _broadcast_onto(src_ndim, src_shape, dest_ndim, dest_shape):
     '''Low-level utility function used in calculating a shape for

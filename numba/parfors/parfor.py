@@ -1503,7 +1503,7 @@ class PreParforPass(object):
                             kws_typs = {k: self.typemap[x.name] for k, x in expr.kws}
                             try:
                                 new_func =  repl_func(lhs_typ, *typs, **kws_typs)
-                            except:
+                            except Exception:
                                 new_func = None
                             require(new_func is not None)
                             # bind arguments to the new_func

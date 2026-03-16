@@ -370,6 +370,13 @@ def array_prod(a):
             return c
 
         return array_prod_impl
+    elif isinstance(a, (types.Number, types.Boolean)):
+        acc_init = as_dtype(a).type(1)
+
+        def scalar_prod_impl(a):
+            return acc_init * a
+
+        return scalar_prod_impl
 
 
 @overload(np.cumsum)
@@ -425,7 +432,18 @@ def array_cumprod(a):
 @overload(np.mean)
 @overload_method(types.Array, "mean")
 def array_mean(a):
-    if isinstance(a, types.Array):
+    if isinstance(a, (types.Integer, types.Boolean)):
+        # Integers and Booleans default to float64 in numpy.mean
+        def _scalar_mean(a):
+            return np.float64(a) + 0.0
+        return _scalar_mean
+    elif isinstance(a, (types.Float, types.Complex)):
+        typed_zero = as_dtype(a).type(0)
+
+        def _scalar_mean(a):
+            return a + typed_zero
+        return _scalar_mean
+    elif isinstance(a, types.Array):
         is_number = a.dtype in types.integer_domain | frozenset([types.bool_])
         if is_number:
             dtype = as_dtype(types.float64)
@@ -443,6 +461,7 @@ def array_mean(a):
             return c / a.size
 
         return array_mean_impl
+    return None
 
 
 @overload(np.var)
@@ -492,6 +511,12 @@ def return_false(a):
 @overload(np.amin)
 @overload_method(types.Array, "min")
 def npy_min(a):
+    #scalar case
+    if isinstance(a, (types.Number,types.Boolean)):
+        def scalar_min(a):
+            return a
+        return scalar_min
+
     if not isinstance(a, types.Array):
         return
 
@@ -542,6 +567,12 @@ def npy_min(a):
 @overload(np.amax)
 @overload_method(types.Array, "max")
 def npy_max(a):
+    #scalar case
+    if isinstance(a, (types.Number,types.Boolean)):
+        def scalar_max(a):
+            return a
+        return scalar_max
+
     if not isinstance(a, types.Array):
         return
 

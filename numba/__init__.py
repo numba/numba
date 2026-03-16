@@ -222,7 +222,7 @@ def _try_enable_svml():
             # compiled in, set the vector library to SVML.
             llvmlite.binding.set_option('SVML', '-vector-library=SVML')
             return True
-        except:
+        except Exception:
             if platform.machine() == 'x86_64' and config.DEBUG:
                 warnings.warn("SVML was not found/could not be loaded.")
     return False

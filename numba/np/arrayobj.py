@@ -14,7 +14,7 @@ from llvmlite.ir import Constant
 import numpy as np
 
 from numba import pndindex, literal_unroll
-from numba.core import types, typing, errors, cgutils, extending, config
+from numba.core import types, typing, errors, cgutils, extending
 from numba.np.numpy_support import (as_dtype, from_dtype, carray, farray,
                                     is_contiguous, is_fortran,
                                     check_is_integer, type_is_scalar,
@@ -534,14 +534,17 @@ def _getitem_array_generic(context, builder, return_type, aryty, ary,
 
 @lower_builtin(operator.getitem, types.Buffer, types.Integer)
 @lower_builtin(operator.getitem, types.Buffer, types.SliceType)
+@lower_builtin(operator.getitem, types.Buffer, types.NoneType)
 def getitem_arraynd_intp(context, builder, sig, args):
     """
-    Basic indexing with an integer or a slice.
+    Basic indexing with an integer, slice, or None.
     """
     aryty, idxty = sig.args
     ary, idx = args
 
-    assert aryty.ndim >= 1
+    # for 0d arrays, a[None] is valid
+    if not isinstance(idxty, types.NoneType):
+        assert aryty.ndim >= 1
     ary = make_array(aryty)(context, builder, ary)
 
     res = _getitem_array_generic(context, builder, sig.return_type,
@@ -5055,10 +5058,7 @@ def numpy_linspace(start, stop, num=50):
         raise errors.TypingError(msg)
 
     if any(isinstance(arg, types.Complex) for arg in [start, stop]):
-        if config.USE_LEGACY_TYPE_SYSTEM:
-            dtype = types.complex128
-        else:
-            dtype = types.np_complex128
+        dtype = types.complex128
     else:
         dtype = types.float64
 

@@ -259,7 +259,7 @@ def get_ext_modules():
         # Apple clang requires -Xclang -fopenmp, conda clang uses -fopenmp
         try:
             is_apple_clang = b'Apple' in subprocess.check_output(['clang', '--version'])
-        except:
+        except Exception:
             is_apple_clang = False
 
         if is_apple_clang:
