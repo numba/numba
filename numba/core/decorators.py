@@ -95,7 +95,7 @@ def jit(signature_or_function=None, locals=MappingProxyType({}), cache=False,
                 enabled.
 
     Returns
-    --------
+    -------
     A callable usable as a compiled function.  Actual compiling will be
     done lazily if no explicit signatures are passed.
 
