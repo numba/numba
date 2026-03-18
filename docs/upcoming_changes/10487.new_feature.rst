@@ -1,0 +1,12 @@
+Add ``fma`` option to CUDA JIT compilation
+------------------------------------------
+
+A new ``fma`` keyword argument has been added to ``cuda.jit`` and
+``compile_ptx`` (and related functions) to control whether the compiler
+may contract multiply-add operations into fused multiply-add (FMA)
+instructions. Setting ``fma=False`` disables FMA contraction; the default
+is ``True``. Example usage::
+
+    @cuda.jit(fma=False)
+    def kernel(r, x, y, z):
+        r[0] = x * y + z
