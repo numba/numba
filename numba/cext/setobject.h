@@ -146,16 +146,6 @@ Parameters
 NUMBA_EXPORT_FUNC(int)
 numba_set_discard(NB_Set *setp, char *key_bytes, Py_hash_t hash);
 
-/* Remove an item from the set
-Parameters
-- NB_set *setp
-    The set
-- char *key_bytes
-    Output. The key as a byte buffer
-*/
-NUMBA_EXPORT_FUNC(int)
-numba_set_popitem(NB_Set *setp, char *key_bytes);
-
 /* Returns the sizeof a set iterator
 */
 NUMBA_EXPORT_FUNC(size_t)

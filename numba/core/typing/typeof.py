@@ -111,6 +111,10 @@ def _typeof_type(val, c):
     if issubclass(val, List):
         return types.TypeRef(types.ListType)
 
+    from numba.typed import Set
+    if issubclass(val, Set):
+        return types.TypeRef(types.SetType)
+
 
 if config.USE_LEGACY_TYPE_SYSTEM:
     @typeof_impl.register(bool)

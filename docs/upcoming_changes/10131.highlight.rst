@@ -1,10 +1,15 @@
-Added initial typed set implementation
---------------------------------------
+Add support for typed ``set`` containers
+----------------------------------------
 
-Initial support for typed sets has now been added. The following set methods are currently supported:
+Typed ``set`` containers have now been introduced in Numba. This can be initialised using ``numba.typed.Set`` and supports a subset of the Python set API.
+
+The following set methods are currently supported:
 
 - ``len(set())``
 - ``set().add()``
 - ``set().discard()``
 - ``set().__contains__()``
 - ``set().__iter__()``
+- ``set().__eq__()``
+
+For more details, see the [Numba documentation](https://numba.readthedocs.io/en/stable/reference/pysupported.html#typed-set).

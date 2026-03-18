@@ -130,14 +130,11 @@ class Set(MutableSet):
 
     def copy(self):
         if not self._typed:
-            raise TypeError("cannot copy an untyped set")
+            raise TypeError("Cannot copy an untyped set")
 
         return _copy(self)
 
     def __contains__(self, key):
-        if not self._typed:
-            self._initialise_set(key)
-
         if len(self) == 0:
             return False
 
@@ -157,9 +154,9 @@ class Set(MutableSet):
 
     def discard(self, key):
         if not self._typed:
-            self._initialise_set(key)
+            raise TypeError("Cannot discard from an untyped set")
 
-        return _discarditem(self, key)
+        _discarditem(self, key)
 
 
 @overload_classmethod(types.SetType, 'empty')

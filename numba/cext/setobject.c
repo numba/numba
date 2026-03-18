@@ -240,7 +240,7 @@ set_index(NB_SetKeys *sk, Py_ssize_t i, Py_ssize_t ix)
 
 
 /* USABLE_FRACTION is the maximum set load.
- * Increasing this ratio makes setionaries more dense resulting in more
+ * Increasing this ratio makes sets more dense resulting in more
  * collisions.  Decreasing it improves sparseness at the expense of spreading
  * indices over more cache lines and at the cost of total memory consumed.
  *
@@ -735,43 +735,6 @@ numba_set_discard(NB_Set *s, char *key_bytes, Py_hash_t hash)
     return OK;
 }
 
-
-int
-numba_set_popitem(NB_Set *s, char *key_bytes)
-{
-    Py_ssize_t i, j;
-    char *key_ptr;
-    NB_SetEntry *ep = NULL;
-
-    if (s->used == 0) {
-        return ERR_SET_EMPTY;
-    }
-
-    /* Pop last item */
-    i = s->keys->nentries - 1;
-    while (i >= 0 && (ep = get_entry(s->keys, i))->hash == SETK_EMPTY ) {
-        i--;
-    }
-    assert(i >= 0);
-
-    j = lookset_index(s->keys, ep->hash, i);
-    assert(j >= 0);
-    assert(get_index(s->keys, j) == i);
-    set_index(s->keys, j, SETK_DUMMY);
-
-    key_ptr = entry_get_key(s->keys, ep);
-
-    copy_key(s->keys, key_bytes, key_ptr);
-
-    zero_key(s->keys, key_ptr);
-
-    /* We can't sk_usable++ since there is SETK_DUMMY in indices */
-    s->keys->nentries = i;
-    s->used--;
-
-    return OK;
-}
-
 void
 numba_set_dump(NB_Set *s) {
     long long i, j, k;
@@ -996,20 +959,6 @@ numba_test_set(void) {
     CHECK (ix >= 0);
     ix = numba_set_lookup(s, "beh", 0xcafe);
     CHECK (ix >= 0);
-
-    // They are always the last item
-    status = numba_set_popitem(s, got_key);
-    CHECK(status == OK);
-    CHECK(memcmp("bek", got_key, s->keys->key_size) == 0);
-
-    status = numba_set_popitem(s, got_key);
-    CHECK(status == OK);
-    CHECK(memcmp("bej", got_key, s->keys->key_size) == 0);
-
-    status = numba_set_popitem(s, got_key);
-    CHECK(status == OK);
-
-    CHECK(memcmp("bei", got_key, s->keys->key_size) == 0);
 
     // Test iterator
     CHECK( s->used > 0 );

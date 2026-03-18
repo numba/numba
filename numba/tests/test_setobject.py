@@ -33,6 +33,22 @@ class TestSetObject(MemoryLeakMixin, TestCase):
         # Insert 100 entries
         self.assertEqual(foo(n=100), 100)
 
+        @njit
+        def foo(n):
+            s = Set.empty(int32)
+            for i in range(n):
+                s.add(i + 1)
+            return len(s)
+
+        # Insert nothing
+        self.assertEqual(foo(n=0), 0)
+        # Insert 1 entry
+        self.assertEqual(foo(n=1), 1)
+        # Insert 2 entries
+        self.assertEqual(foo(n=2), 2)
+        # Insert 100 entries
+        self.assertEqual(foo(n=100), 100)
+
     def test_box_unbox(self):
         """
         Test set boxing and unboxing
@@ -173,3 +189,19 @@ class TestSetObject(MemoryLeakMixin, TestCase):
         self.assertEqual(len(s), len(keys))
         for i in range(nmax):
             self.assertIn(i, keys)
+
+    def test_equality(self):
+        s1 = Set.empty(int32)
+        s2 = Set.empty(int32)
+
+        for i in range(10):
+            s1.add(i)
+            s2.add(i)
+
+        self.assertEqual(s1, s2)
+
+        @njit
+        def foo(s1, s2):
+            return s1 == s2
+
+        self.assertEqual(foo(s1, s2), True)

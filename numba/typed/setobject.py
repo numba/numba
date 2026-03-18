@@ -595,6 +595,31 @@ def impl_contains(s, key):
     return impl
 
 
+@overload(operator.eq)
+def impl_equal(set_a, set_b):
+    if not isinstance(set_a, types.SetType):
+        return
+    if not isinstance(set_b, types.SetType):
+        # If RHS is not a set, always returns False
+        def impl_type_mismatch(set_a, set_b):
+            return False
+        return impl_type_mismatch
+
+    otherkeyty = set_b.key_type
+
+    def impl_type_matched(set_a, set_b):
+        if len(set_a) != len(set_b):
+            return False
+        for element in set_a:
+            kb = _cast(element, otherkeyty)
+            ix = _set_contains(set_b, kb, hash(kb))
+            if ix is False:
+                return False
+        return True
+
+    return impl_type_matched
+
+
 @overload_method(types.SetType, 'copy')
 def impl_copy(s):
     if not isinstance(s, types.SetType):
