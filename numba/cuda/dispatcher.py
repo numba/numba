@@ -45,8 +45,8 @@ class _Kernel(serialize.ReduceMixin):
 
     @global_compiler_lock
     def __init__(self, py_func, argtypes, link=None, debug=False,
-                 lineinfo=False, inline=False, fastmath=False, extensions=None,
-                 max_registers=None, opt=True, device=False):
+                 lineinfo=False, inline=False, fastmath=False, fma=True,
+                 extensions=None, max_registers=None, opt=True, device=False):
 
         if device:
             raise RuntimeError('Cannot compile a device function as a kernel')
@@ -78,6 +78,8 @@ class _Kernel(serialize.ReduceMixin):
             'fastmath': fastmath,
             'opt': 3 if opt else 0
         }
+        if not fma:
+            nvvm_options['fma'] = False
 
         cc = get_current_device().compute_capability
         cres = compile_cuda(self.py_func, types.void, self.argtypes,
@@ -873,10 +875,12 @@ class CUDADispatcher(Dispatcher, serialize.ReduceMixin):
                 lineinfo = self.targetoptions.get('lineinfo')
                 inline = self.targetoptions.get('inline')
                 fastmath = self.targetoptions.get('fastmath')
+                fma = self.targetoptions.get('fma', True)
 
                 nvvm_options = {
                     'opt': 3 if self.targetoptions.get('opt') else 0,
-                    'fastmath': fastmath
+                    'fastmath': fastmath,
+                    'fma': fma
                 }
 
                 cc = get_current_device().compute_capability

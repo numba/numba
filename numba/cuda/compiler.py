@@ -254,7 +254,7 @@ def cabi_wrap_function(context, lib, fndesc, wrapper_function_name,
 
 @global_compiler_lock
 def compile(pyfunc, sig, debug=False, lineinfo=False, device=True,
-            fastmath=False, cc=None, opt=True, abi="c", abi_info=None,
+            fastmath=False, fma=True, cc=None, opt=True, abi="c", abi_info=None,
             output='ptx'):
     """Compile a Python function to PTX or LTO-IR for a given set of argument
     types.
@@ -318,6 +318,7 @@ def compile(pyfunc, sig, debug=False, lineinfo=False, device=True,
 
     nvvm_options = {
         'fastmath': fastmath,
+        'fma': fma,
         'opt': 3 if opt else 0
     }
 
@@ -360,37 +361,38 @@ def compile(pyfunc, sig, debug=False, lineinfo=False, device=True,
 
 
 def compile_for_current_device(pyfunc, sig, debug=False, lineinfo=False,
-                               device=True, fastmath=False, opt=True,
+                               device=True, fastmath=False, fma=True, opt=True,
                                abi="c", abi_info=None, output='ptx'):
     """Compile a Python function to PTX or LTO-IR for a given signature for the
     current device's compute capabilility. This calls :func:`compile` with an
     appropriate ``cc`` value for the current device."""
     cc = get_current_device().compute_capability
     return compile(pyfunc, sig, debug=debug, lineinfo=lineinfo, device=device,
-                   fastmath=fastmath, cc=cc, opt=opt, abi=abi,
+                   fastmath=fastmath, fma=fma, cc=cc, opt=opt, abi=abi,
                    abi_info=abi_info, output=output)
 
 
 def compile_ptx(pyfunc, sig, debug=False, lineinfo=False, device=False,
-                fastmath=False, cc=None, opt=True, abi="numba", abi_info=None):
+                fastmath=False, fma=True, cc=None, opt=True, abi="numba",
+                abi_info=None):
     """Compile a Python function to PTX for a given signature. See
     :func:`compile`. The defaults for this function are to compile a kernel
     with the Numba ABI, rather than :func:`compile`'s default of compiling a
     device function with the C ABI."""
     return compile(pyfunc, sig, debug=debug, lineinfo=lineinfo, device=device,
-                   fastmath=fastmath, cc=cc, opt=opt, abi=abi,
+                   fastmath=fastmath, fma=fma, cc=cc, opt=opt, abi=abi,
                    abi_info=abi_info, output='ptx')
 
 
 def compile_ptx_for_current_device(pyfunc, sig, debug=False, lineinfo=False,
-                                   device=False, fastmath=False, opt=True,
-                                   abi="numba", abi_info=None):
+                                   device=False, fastmath=False, fma=True,
+                                   opt=True, abi="numba", abi_info=None):
     """Compile a Python function to PTX for a given signature for the current
     device's compute capabilility. See :func:`compile_ptx`."""
     cc = get_current_device().compute_capability
     return compile_ptx(pyfunc, sig, debug=debug, lineinfo=lineinfo,
-                       device=device, fastmath=fastmath, cc=cc, opt=opt,
-                       abi=abi, abi_info=abi_info)
+                       device=device, fastmath=fastmath, fma=fma, cc=cc,
+                       opt=opt, abi=abi, abi_info=abi_info)
 
 
 def declare_device_function(name, restype, argtypes):
