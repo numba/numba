@@ -850,13 +850,6 @@ numba_test_set(void) {
     const char *it_key;
     NB_SetIter iter;
 
-#if defined(_MSC_VER)
-    /* So that VS2008 compiler is happy */
-    char *got_key;
-    got_key = _alloca(4);
-#else
-    char got_key[4];
-#endif
     puts("test_set");
 
     status = numba_set_new(&s, 4, SET_MINSIZE);
