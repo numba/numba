@@ -12,4 +12,4 @@ The following set methods are currently supported:
 - ``set().__iter__()``
 - ``set().__eq__()``
 
-For more details, see the [Numba documentation](https://numba.readthedocs.io/en/stable/reference/pysupported.html#typed-set).
+For more details, see the ::ref::`Numba documentation <https://numba.readthedocs.io/en/stable/reference/pysupported.html#typed-set>`.
