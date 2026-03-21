@@ -1,7 +1,8 @@
 """Implements operations on bytes and str (unicode) array items."""
 import operator
-import numpy as np
 from llvmlite import ir
+
+import ctypes
 
 from numba.core import types, cgutils
 from numba.core.extending import (overload, intrinsic, overload_method,
@@ -16,21 +17,13 @@ from numba.cpython import unicode
 # are defined in numpy/targets/boxing.py, see box_unicodecharseq,
 # unbox_unicodecharseq, box_charseq, unbox_charseq.
 
-s1_dtype = np.dtype('S1')
-assert s1_dtype.itemsize == 1
 bytes_type = types.Bytes(types.uint8, 1, "C", readonly=True)
 
 # Currently, NumPy supports only UTF-32 arrays but this may change in
 # future and the approach used here for supporting str arrays may need
 # a revision depending on how NumPy will support UTF-8 and UTF-16
 # arrays.
-u1_dtype = np.dtype('U1')
-unicode_byte_width = u1_dtype.itemsize
-unicode_uint = {1: np.uint8, 2: np.uint16, 4: np.uint32}[unicode_byte_width]
-unicode_kind = {1: unicode.PY_UNICODE_1BYTE_KIND,
-                2: unicode.PY_UNICODE_2BYTE_KIND,
-                4: unicode.PY_UNICODE_4BYTE_KIND}[unicode_byte_width]
-
+unicode_byte_width = ctypes.sizeof(ctypes.c_byte) * 4
 
 # this is modified version of numba.unicode.make_deref_codegen
 def make_deref_codegen(bitsize):
@@ -146,7 +139,7 @@ def unicode_charseq_get_value(a, i):
     if code == 0:
         raise IndexError('index out of range')
     # Return numpy equivalent of `chr(code)`
-    return np.array(code, unicode_uint).view(u1_dtype)[()]
+    return chr(code)
 
 
 #
