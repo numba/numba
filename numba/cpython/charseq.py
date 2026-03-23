@@ -25,6 +25,7 @@ bytes_type = types.Bytes(types.uint8, 1, "C", readonly=True)
 # arrays.
 unicode_byte_width = ctypes.sizeof(ctypes.c_byte) * 4
 
+
 # this is modified version of numba.unicode.make_deref_codegen
 def make_deref_codegen(bitsize):
     def codegen(context, builder, signature, args):
