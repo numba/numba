@@ -1,7 +1,7 @@
 """
 Regression test for issue #5611 / PR #10482.
 
-CFGraph._find_topo_order must be stack-based (not recursive) so that
+CFGraph._topo_order must be stack-based (not recursive) so that
 functions with large control-flow graphs do not exhaust the Python call
 stack.
 
@@ -15,7 +15,7 @@ import unittest
 
 from numba import njit
 from numba.core.controlflow import CFGraph
-from numba.tests.support import TestCase, needs_subprocess
+from numba.tests.support import TestCase
 
 
 # ---------------------------------------------------------------------------
@@ -79,42 +79,18 @@ def _measure_trivial_compile_depth():
 # ---------------------------------------------------------------------------
 
 class TestCFGTopoOrderNonRecursive(TestCase):
-    """
-    Regression tests for PR #10482: _find_topo_order must not use
-    recursive Python calls, so that large CFGs cannot exhaust the stack.
-    """
 
-    # ------------------------------------------------------------------
-    # Launcher — runs in the normal test process, forks a subprocess.
-    # ------------------------------------------------------------------
-
+    @TestCase.run_test_in_subprocess
     def test_topo_order_no_recursion_in_large_cfg(self):
         """
-        Subprocess launcher — the real assertions live in *_impl below.
-        Isolated in a subprocess so sys.setrecursionlimit changes are
-        invisible to any other concurrently-running test.
-        """
-        self.subprocess_test_runner(
-            test_module=__name__,
-            test_class=type(self).__name__,
-            test_name="test_topo_order_no_recursion_in_large_cfg_impl",
-            timeout=120,
-        )
-
-    # ------------------------------------------------------------------
-    # Implementation — executed only inside the subprocess.
-    # ------------------------------------------------------------------
-
-    @needs_subprocess
-    def test_topo_order_no_recursion_in_large_cfg_impl(self):
-        """
-        Regression test body (issue #5611 / PR #10482).
+        Regression tests for PR #10482: _find_topo_order must not use recursive
+        Python calls, so that large CFGs cannot exhaust the stack.
 
         Steps
         -----
         1.  Measure the frame depth at CFGraph.process() during a trivial
             njit compilation by patching the method to walk the frame
-            chain once; add 50 % headroom → Bsize.
+            chain once; add 100 % headroom → Bsize.
         2.  Lower sys.setrecursionlimit to Bsize.
         3.  Attempt to compile a function with 100 ternary-expression
             pairs (~600–800 CFG nodes).  The old recursive _dfs_rec
@@ -130,7 +106,7 @@ class TestCFGTopoOrderNonRecursive(TestCase):
 
         # ---- 1. Derive Bsize ------------------------------------------------
         depth_at_cfg_process = _measure_trivial_compile_depth()
-        Bsize = int(depth_at_cfg_process * 1.5)
+        Bsize = int(depth_at_cfg_process * 2.0)
 
         # ---- 2. Lower the recursion limit -----------------------------------
         original_limit = sys.getrecursionlimit()
@@ -173,7 +149,7 @@ class TestCFGTopoOrderNonRecursive(TestCase):
             msg=(
                 f"RecursionError originated in "
                 f"controlflow.{cfg_overflow_frames[0].name} — "
-                f"the iterative fix in _find_topo_order is not active.\n\n"
+                f"the iterative fix for _topo_order is not active.\n\n"
                 f"Full traceback:\n"
                 + "".join(traceback.format_tb(caught_exc.__traceback__))
             ) if cfg_overflow_frames else "",
