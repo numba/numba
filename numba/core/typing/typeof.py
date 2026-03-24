@@ -60,12 +60,13 @@ def typeof_impl(val, c):
         if cffi_utils.is_ffi_instance(val):
             return types.ffi
 
-    # Lazily import experimental function_type when seeing a WrapperAddressProtocol
-    # or CFunc, so it can register itself with typeof_impl.
+    # Lazily import experimental function_type when seeing a
+    # WrapperAddressProtocol or CFunc, so it can register itself
+    # with typeof_impl.
     from numba.core.types.function_type import WrapperAddressProtocol
     from numba.core.ccallback import CFunc
     if isinstance(val, (WrapperAddressProtocol, CFunc)):
-        import numba.experimental.function_type
+        import numba.experimental.function_type  # noqa: F401
         return typeof_impl(val, c)
 
     return None
