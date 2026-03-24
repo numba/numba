@@ -158,6 +158,17 @@ class Set(MutableSet):
 
         _discarditem(self, key)
 
+    def __str__(self):
+        buf = []
+        for k in self:
+            buf.append("{}".format(k))
+        return '{{{0}}}'.format(', '.join(buf))
+
+    def __repr__(self):
+        body = str(self)
+        prefix = str(self._set_type) if self._set_type else "UntypedSet"
+        return "{prefix}({body})".format(prefix=prefix, body=body)
+
 
 @overload_classmethod(types.SetType, 'empty')
 def typedset_empty(cls, key_type):

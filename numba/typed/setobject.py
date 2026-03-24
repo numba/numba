@@ -613,11 +613,22 @@ def impl_equal(set_a, set_b):
         for element in set_a:
             kb = _cast(element, otherkeyty)
             ix = _set_contains(set_b, kb, hash(kb))
-            if ix is False:
+            if ix == 0:
                 return False
         return True
 
     return impl_type_matched
+
+
+@overload(operator.ne)
+def impl_not_equal(da, db):
+    if not isinstance(da, types.SetType):
+        return
+
+    def impl(da, db):
+        return not (da == db)
+
+    return impl
 
 
 @overload_method(types.SetType, 'copy')
