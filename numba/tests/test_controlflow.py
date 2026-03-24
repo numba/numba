@@ -99,9 +99,8 @@ class TestCFGTopoOrderNonRecursive(TestCase):
             implementation needs no extra frames for graph traversal.
         4.  Catch any RecursionError.
         5.  Restore sys.setrecursionlimit unconditionally.
-        6.  Assert _find_topo_order / _dfs_rec are NOT in the traceback.
-            Any RecursionError that fires must originate in SSA or another
-            still-recursive path, not the fixed CFG traversal.
+        6.  Fail the test and print the traceback if a RecursionError was
+            raised.
         """
 
         # ---- 1. Derive Bsize ------------------------------------------------
@@ -135,42 +134,14 @@ class TestCFGTopoOrderNonRecursive(TestCase):
         if caught_exc is None:
             # The entire pipeline is iterative end-to-end: strongest result.
             return
-
-        tb_frames = traceback.extract_tb(caught_exc.__traceback__)
-
-        # 6a. The fixed functions must NOT appear in the traceback.
-        cfg_overflow_frames = [
-            f for f in tb_frames
-            if "controlflow" in f.filename
-            and f.name in ("_find_topo_order", "_dfs_rec")
-        ]
-        self.assertFalse(
-            cfg_overflow_frames,
-            msg=(
-                f"RecursionError originated in "
-                f"controlflow.{cfg_overflow_frames[0].name} — "
-                f"the iterative fix for _topo_order is not active.\n\n"
-                f"Full traceback:\n"
-                + "".join(traceback.format_tb(caught_exc.__traceback__))
-            ) if cfg_overflow_frames else "",
-        )
-
-        # 6b. The overflow must have come from SSA processing, confirming
-        #     the CFG phase completed without hitting the stack limit.
-        ssa_frames = [
-            f for f in tb_frames
-            if "ssa" in f.filename.lower()
-        ]
-        self.assertTrue(
-            ssa_frames,
-            msg=(
-                "Expected the RecursionError to originate in SSA processing "
-                "(numba/core/ssa.py), but no SSA frames appear in the "
-                "traceback.  The overflow may have come from an unexpected "
-                "location.\n\nTraceback:\n"
-                + "".join(traceback.format_tb(caught_exc.__traceback__))
-            ),
-        )
+        else:
+            # Fail
+            msg = (
+                "Unexpected RecursionError."
+                "Potential regression related to fiding toplogical order.\n\n"
+                "Full traceback:\n"
+                + "".join(traceback.format_tb(caught_exc.__traceback__)))
+            self.fail(msg)
 
 
 if __name__ == "__main__":
