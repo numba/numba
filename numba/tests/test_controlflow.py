@@ -46,7 +46,7 @@ def _measure_trivial_compile_depth():
     O(calls × depth) like settrace, so it is fast.
     """
     depth_sample = [0]
-    orig_process = CFGraph.process
+    orig_process = CFGraph.topo_order
 
     def _probing_process(self):
         f = sys._getframe()
@@ -58,7 +58,7 @@ def _measure_trivial_compile_depth():
             depth_sample[0] = d
         return orig_process(self)
 
-    CFGraph.process = _probing_process
+    CFGraph.topo_order = _probing_process
     try:
         @njit
         def _trivial(x):
