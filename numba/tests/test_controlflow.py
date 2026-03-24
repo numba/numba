@@ -24,13 +24,9 @@ from numba.tests.support import TestCase
 
 def _generate_large_cfg_source(count):
     """
-    Return Python source for a function whose CFG has O(count) nodes.
+    Return Python source for a function whose CFG has an unusually large
+    ammount of nodes.
 
-    Each ternary expression introduces a branch.  The old recursive
-    _dfs_rec in _find_topo_order needed ~1 frame per CFG node.
-    With 2 ternaries per iteration this creates roughly 6–8 CFG blocks
-    per iteration, so count=100 gives ~600–800 nodes — sufficient to
-    overflow a Bsize that is only enough for a trivial compile.
     """
     lines = ["def _large_cfg_func(x):"]
     for i in range(count):
@@ -93,10 +89,7 @@ class TestCFGTopoOrderNonRecursive(TestCase):
             chain once; add 100 % headroom → Bsize.
         2.  Lower sys.setrecursionlimit to Bsize.
         3.  Attempt to compile a function with 100 ternary-expression
-            pairs (~600–800 CFG nodes).  The old recursive _dfs_rec
-            would have needed ~600–800 extra frames — well over Bsize —
-            and blown up inside controlflow.py.  The new iterative
-            implementation needs no extra frames for graph traversal.
+            pairs.
         4.  Catch any RecursionError.
         5.  Restore sys.setrecursionlimit unconditionally.
         6.  Fail the test and print the traceback if a RecursionError was
