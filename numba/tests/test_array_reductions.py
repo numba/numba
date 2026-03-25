@@ -483,6 +483,43 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_nanvar_basic(self):
         self.check_reduction_basic(array_nanvar, prec='double')
 
+    def test_nanvar_scalar(self):
+        cfunc = jit(nopython=True)(array_nanvar)
+
+        def check(arg):
+            expected = array_nanvar(arg)
+            got = cfunc(arg)
+            self.assertPreciseEqual(got, expected)
+
+        # NumPy integer and boolean scalars
+        check(np.int32(2))
+        check(np.int64(-3))
+        check(np.uint32(5))
+        check(np.bool_(True))
+        check(np.bool_(False))
+
+        # NumPy floating scalars
+        check(np.float32(1.25))
+        check(np.float64(-2.5))
+
+        # Complex values
+        check(np.complex64(7+0j))
+        check(np.complex128(61+74j))
+
+        # Special floating values - nan returns nan for nanvar
+        check(np.nan)
+        check(np.inf)
+        check(-np.inf)
+        check(-0.0)
+        check(0.0)
+        check(0)
+        check(0.0000042)
+        check(-0.25863)
+
+        # Error cases
+        with self.assertTypingError():
+            cfunc('test String')
+
     def check_median_basic(self, pyfunc, array_variations):
         cfunc = jit(nopython=True)(pyfunc)
         def check(arr):
