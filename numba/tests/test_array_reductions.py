@@ -427,7 +427,43 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
     def test_var_basic(self):
         self.check_reduction_basic(array_var, prec='double')
+        
+    def test_var_scalar(self):
+        cfunc = jit(nopython = True)(array_var_global)
 
+        def check(arg):
+            expected = array_var_global(arg)
+            got = cfunc(arg)
+            self.assertPreciseEqual(got, expected)
+
+        # Scalar tests
+        # Integers and booleans
+        check(np.int32(1))
+        check(np.int64(-1))
+        check(np.uint32(2))
+        check(np.bool_(True))
+        check(np.bool_(False))
+
+        # Floating point numbers tests
+        check(np.float32(1.11111))
+        check(np.float64(-2.22222))
+
+        # Complex numbers tests
+        check(np.complex64(1+1j))
+        check(np.complex128(2+2j))
+
+        # Special cases
+        check(np.nan)
+        check(np.inf)
+        check(-np.inf)
+        check(-0.0)
+        check(0.0)
+        check(0)
+
+        # Error cases
+        with self.assertTypingError():
+            cfunc([1, 0, 1, 0])
+    
     def test_std_basic(self):
         self.check_reduction_basic(array_std)
 
