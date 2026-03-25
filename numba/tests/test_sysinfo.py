@@ -44,7 +44,6 @@ class TestSysInfo(TestCase):
                 nsi._tbb_thread,
                 nsi._openmp_thread,
                 nsi._wkq_thread,
-                nsi._numpy_AVX512_SKX_detected,
             ),
             list: (
                 nsi._errors,
