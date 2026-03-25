@@ -456,6 +456,7 @@ def bool_sequence(x):
         types.UnicodeCharSeq,
         types.DictType,
         types.ListType,
+        types.SetType,
         types.UnicodeType,
         types.Set,
     )
@@ -790,7 +791,8 @@ def ol_isinstance(var, typs):
                         types.Function, types.ClassType, types.UnicodeType,
                         types.ClassInstanceType, types.NoneType, types.Array,
                         types.Boolean, types.Float, types.UnicodeCharSeq,
-                        types.Complex, types.NPDatetime, types.NPTimedelta,)
+                        types.Complex, types.NPDatetime, types.NPTimedelta,
+                        types.SetType)
     if not isinstance(var_ty, supported_var_ty):
         msg = f'isinstance() does not support variables of type "{var_ty}".'
         raise NumbaTypeError(msg)
@@ -833,7 +835,7 @@ def ol_isinstance(var, typs):
         if isinstance(typ, types.TypeRef):
             # Use of Numba type classes is in general not supported as they do
             # not work when the jit is disabled.
-            if key not in (types.ListType, types.DictType):
+            if key not in (types.ListType, types.DictType, types.SetType):
                 msg = ("Numba type classes (except numba.typed.* container "
                        "types) are not supported.")
                 raise NumbaTypeError(msg)
