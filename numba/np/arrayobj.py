@@ -829,6 +829,8 @@ class IntegerArrayIndexer(Indexer):
                                            (idxary._getvalue(),))
             self.idxty = retty
             self.idxary = make_array(retty)(context, builder, res)
+            context.nrt.decref(builder, idxty,
+                    idxary._getvalue())
         else:
             self.idxty = idxty
             self.idxary = idxary
@@ -1164,6 +1166,9 @@ class FancyIndexer(object):
 
         self.subspace_index = subspace_index
         self.indexers = indexers
+        print(aryty)
+        print(indexers)
+        print(self.subspace_index)
 
     def prepare(self):
         one = self.context.get_constant(types.intp, 1)
