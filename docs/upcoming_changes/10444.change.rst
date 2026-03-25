@@ -1,0 +1,7 @@
+Remove ``NumPy AVX512_SKX support detected`` from ``numba -s`` output
+---------------------------------------------------------------------
+
+The ``NumPy AVX512_SKX support detected`` field has been removed from the
+``numba -s`` (system information) output. This field was added to provide
+debug information for an AVX512_SKX accuracy bug that can no longer be
+reproduced.
