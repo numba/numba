@@ -1341,6 +1341,10 @@ def fancy_getitem(context, builder, sig, args,
             context.nrt.decref(builder, indexer.idxty,
                                indexer.idxary._getvalue())
 
+    for i, idx, idxty, idx_make in array_indices:
+        if idxty.ndim > 1:
+            context.nrt.decref(builder, idxty, idx_make._getvalue())
+
     return impl_ret_new_ref(context, builder, out_ty, out._getvalue())
 
 
@@ -1876,7 +1880,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
     between the two for indexed assignment.
     """
     aryty, _, srcty = sig.args
-    ary, _, src = args
+    ary, _, src_orig = args
 
     ary = make_array(aryty)(context, builder, ary)
     dest_shapes = cgutils.unpack_tuple(builder, ary.shape)
@@ -1925,7 +1929,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         # Source is an array
         src_dtype = srcty.dtype
         index_shape = indexer.get_shape()
-        src = make_array(srcty)(context, builder, src)
+        src = make_array(srcty)(context, builder, src_orig)
         # Broadcast source array to shape
         srcty, src = _broadcast_to_shape(context, builder, srcty, src,
                                          index_shape)
@@ -1951,7 +1955,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         index_shape = indexer.get_shape()
         assert len(index_shape) == 1
         len_impl = context.get_function(len, signature(types.intp, srcty))
-        seq_len = len_impl(builder, (src,))
+        seq_len = len_impl(builder, (src_orig,))
 
         shape_error = builder.icmp_signed('!=', index_shape[0], seq_len)
 
