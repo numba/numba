@@ -56,12 +56,8 @@ def _complex_func(x):
 
 def _measure_trivial_compile_depth():
     """
-    Return the Python frame depth at CFGraph.process() during a trivial
+    Return the Python frame depth at CFGraph.topo_order() during a trivial
     njit compilation.
-
-    We monkey-patch CFGraph.process — called once per compilation — to
-    walk the frame chain a single time.  This is O(depth) total, not
-    O(calls × depth) like settrace, so it is fast.
     """
     depth_sample = [0]
     orig_process = CFGraph.topo_order
@@ -99,10 +95,10 @@ class TestCFGTopoOrderNonRecursive(TestCase):
 
         Steps
         -----
-        1.  Measure the frame depth at CFGraph.process() during a trivial
+        1.  Measure the frame depth at CFGraph.topo_order() during a trivial
             njit compilation by patching the method to walk the frame
-            chain once; add 100 % headroom → Bsize.
-        2.  Lower sys.setrecursionlimit to Bsize.
+            chain once; call this bsize.
+        2.  Lower sys.setrecursionlimit to bsize.
         3.  Attempt to compile a function with 100 ternary-expression
             pairs.
         4.  Catch any RecursionError.
