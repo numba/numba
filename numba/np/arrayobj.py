@@ -712,6 +712,12 @@ class Indexer(object):
         """
         raise NotImplementedError
 
+    def cleanup(self, context, builder):
+        """
+        Perform any cleanup required after the loop.
+        """
+        pass
+
 
 class EntireIndexer(Indexer):
     """
@@ -807,6 +813,7 @@ class IntegerArrayIndexer(Indexer):
         self.idx_shape = cgutils.unpack_tuple(builder, idxary.shape)
         self.size = size
         self.ll_intp = self.context.get_value_type(types.intp)
+        self._cleanup_items = []
 
         if idxty.ndim > 1:
             def flat_imp_nocopy(ary):
@@ -827,15 +834,16 @@ class IntegerArrayIndexer(Indexer):
             sig = signature(retty, idxty)
             res = context.compile_internal(builder, flat_imp, sig,
                                            (idxary._getvalue(),))
+            self._cleanup_items.append((idxty, idxary._getvalue()))
+
             self.idxty = retty
             self.idxary = make_array(retty)(context, builder, res)
-            context.nrt.decref(builder, idxty,
-                    idxary._getvalue())
         else:
             self.idxty = idxty
             self.idxary = idxary
 
         assert self.idxty.ndim == 1
+        self._cleanup_items.append((self.idxty, self.idxary._getvalue()))
 
     def prepare(self):
         builder = self.builder
@@ -875,6 +883,10 @@ class IntegerArrayIndexer(Indexer):
         builder.branch(self.bb_end)
         builder.position_at_end(self.bb_end)
 
+    def cleanup(self, context, builder):
+        for cleanup_type, value in self._cleanup_items:
+            context.nrt.decref(builder, cleanup_type, value)
+
 
 class BooleanArrayIndexer(Indexer):
     """
@@ -886,9 +898,11 @@ class BooleanArrayIndexer(Indexer):
         self.builder = builder
         self.idxty = idxty
         self.idxary = idxary
+        self._cleanup_items = []
         assert idxty.ndim == 1
         self.ll_intp = self.context.get_value_type(types.intp)
         self.zero = Constant(self.ll_intp, 0)
+        self._cleanup_items.append((idxty, self.idxary._getvalue()))
 
     def prepare(self):
         builder = self.builder
@@ -949,6 +963,10 @@ class BooleanArrayIndexer(Indexer):
         builder.store(next_index, self.idx_index)
         builder.branch(self.bb_start)
         builder.position_at_end(self.bb_end)
+
+    def cleanup(self, context, builder):
+        for cleanup_type, value in self._cleanup_items:
+            context.nrt.decref(builder, cleanup_type, value)
 
 
 class SliceIndexer(Indexer):
@@ -1063,6 +1081,9 @@ class SubspaceIndexer(object):
         builder.branch(self.bb_start)
         builder.position_at_end(self.bb_end)
 
+    def cleanup(self, context, builder):
+        pass
+
 
 class FancyIndexer(object):
     """
@@ -1166,9 +1187,6 @@ class FancyIndexer(object):
 
         self.subspace_index = subspace_index
         self.indexers = indexers
-        print(aryty)
-        print(indexers)
-        print(self.subspace_index)
 
     def prepare(self):
         one = self.context.get_constant(types.intp, 1)
@@ -1243,9 +1261,14 @@ class FancyIndexer(object):
         for i in reversed(self.indexers):
             i.loop_tail()
 
+    def cleanup(self, context, builder):
+        for i in self.indexers:
+            i.cleanup(context, builder)
+
 
 def get_bdcast_idx(context, builder, array_indices):
     max_dims = max([ary[2].ndim for ary in array_indices])
+    cleanup_items = []
 
     def bdcast_idx_shapes(*args):
         return np.broadcast_shapes(*args)
@@ -1276,8 +1299,15 @@ def get_bdcast_idx(context, builder, array_indices):
             (idx, subspace_shape)
         )
         bdcast_indices.append((i, bdcast_idx, retty))
+
+        # cleanup_items.append((idxty, idx))
     subspace_shape = tuple(cgutils.unpack_tuple(builder, subspace_shape))
-    return bdcast_indices, subspace_shape
+
+    def bdcast_cleanup(context, builder):
+        for bdcast_idx_ty, bdcast_idx in cleanup_items:
+            context.nrt.decref(builder, bdcast_idx_ty, bdcast_idx)
+
+    return bdcast_indices, subspace_shape, bdcast_cleanup
 
 
 def fancy_getitem(context, builder, sig, args,
@@ -1294,7 +1324,7 @@ def fancy_getitem(context, builder, sig, args,
             idx_make = make_array(idxty)(context, builder, idx)
             array_indices.append((i, idx, idxty, idx_make))
 
-    bdcast_indices, subspace_shape_tuple = \
+    bdcast_indices, subspace_shape_tuple, bdcast_cleanup = \
         get_bdcast_idx(context, builder, array_indices)
 
     indices = list(indices)
@@ -1336,14 +1366,8 @@ def fancy_getitem(context, builder, sig, args,
 
     indexer.end_loops()
 
-    for indexer in indexer.indexers:
-        if isinstance(indexer, (IntegerArrayIndexer, BooleanArrayIndexer)):
-            context.nrt.decref(builder, indexer.idxty,
-                               indexer.idxary._getvalue())
-
-    for i, idx, idxty, idx_make in array_indices:
-        if idxty.ndim > 1:
-            context.nrt.decref(builder, idxty, idx_make._getvalue())
+    indexer.cleanup(context, builder)
+    bdcast_cleanup(context, builder)
 
     return impl_ret_new_ref(context, builder, out_ty, out._getvalue())
 
@@ -1895,7 +1919,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
             array_indices.append((i, idx, idxty, idx_make))
 
     if len(array_indices):
-        bdcast_indices, subspace_shape_tuple = \
+        bdcast_indices, subspace_shape_tuple, bdcast_cleanup = \
             get_bdcast_idx(context, builder, array_indices)
 
         indices = list(indices)
@@ -1905,6 +1929,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
             index_types[i] = bdcast_idxty
     else:
         subspace_shape_tuple = ()
+        bdcast_cleanup = lambda context, builder: None
 
     indexer = FancyIndexer(context, builder, aryty, ary,
                            index_types, indices, subspace_shape_tuple)
@@ -2045,14 +2070,8 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         if is_flattened:
             context.nrt.decref(builder, retty, src_flat_instr)
 
-    for indexer in indexer.indexers:
-        if isinstance(indexer, (IntegerArrayIndexer, BooleanArrayIndexer)):
-            context.nrt.decref(builder, indexer.idxty,
-                               indexer.idxary._getvalue())
-
-    for i, idx, idxty, idx_make in array_indices:
-        if idxty.ndim > 1:
-            context.nrt.decref(builder, idxty, idx_make._getvalue())
+    indexer.cleanup(context, builder)
+    bdcast_cleanup(context, builder)
 
     return context.get_dummy_value()
 
