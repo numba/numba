@@ -123,7 +123,17 @@ class TestCFGTopoOrderNonRecursive(TestCase):
         # ---- 3 & 4. Compile large CFG; catch any overflow -------------------
         caught_exc = None
         try:
-            c = _create_cfg_from_function(_generate_large_cfg_source(100))
+            f = _generate_large_cfg_source(100)
+            ns = {}
+            exec(
+                compile(
+                    f,
+                    "<generated_large_cfg>",
+                    "exec",
+                ),
+                ns,
+            )
+            c = _create_cfg_from_function(ns["_large_cfg_func"])
             c.topo_order()
         except RecursionError as exc:
             caught_exc = exc
