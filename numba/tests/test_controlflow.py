@@ -13,7 +13,6 @@ import sys
 import traceback
 import unittest
 
-from numba import njit
 from numba.core.controlflow import CFGraph, ControlFlowAnalysis
 from numba.tests.support import TestCase
 from numba.core.bytecode import FunctionIdentity, ByteCode
@@ -49,9 +48,9 @@ def _create_cfg_from_function(func):
 # Complex test function with many branches
 def _complex_func(x):
     dep_0 = 1 if True else 0
-    val_0 = x if dep_0 else 0
+    val_0 = x if dep_0 else 0  # noqa: F841
     dep_1 = 1 if True else 0
-    val_1 = x if dep_1 else 0
+    val_1 = x if dep_1 else 0  # noqa: F841
     return x
 
 
