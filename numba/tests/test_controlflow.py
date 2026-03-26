@@ -14,8 +14,9 @@ import traceback
 import unittest
 
 from numba import njit
-from numba.core.controlflow import CFGraph
+from numba.core.controlflow import CFGraph, ControlFlowAnalysis
 from numba.tests.support import TestCase
+from numba.core.bytecode import FunctionIdentity, ByteCode
 
 
 # ---------------------------------------------------------------------------
@@ -34,6 +35,24 @@ def _generate_large_cfg_source(count):
         lines.append(f"    val_{i} = x if dep_{i} else 0")
     lines.append("    return x")
     return "\n".join(lines)
+
+
+def _create_cfg_from_function(func):
+    """Create a CFGraph from a Python function for direct testing."""
+    func_id = FunctionIdentity.from_function(func)
+    bc = ByteCode(func_id)
+    cfa = ControlFlowAnalysis(bc)
+    cfa.run()
+    return cfa.graph
+
+
+# Complex test function with many branches
+def _complex_func(x):
+    dep_0 = 1 if True else 0
+    val_0 = x if dep_0 else 0
+    dep_1 = 1 if True else 0
+    val_1 = x if dep_1 else 0
+    return x
 
 
 def _measure_trivial_compile_depth():
@@ -60,13 +79,10 @@ def _measure_trivial_compile_depth():
 
     CFGraph.topo_order = _probing_process
     try:
-        @njit
-        def _trivial(x):
-            return x + 1
-        _trivial(0)   # force compilation
+        c = _create_cfg_from_function(_complex_func)
+        c.topo_order()
     finally:
         CFGraph.process = orig_process   # always restore
-
     return depth_sample[0]
 
 
@@ -107,16 +123,8 @@ class TestCFGTopoOrderNonRecursive(TestCase):
         # ---- 3 & 4. Compile large CFG; catch any overflow -------------------
         caught_exc = None
         try:
-            ns = {}
-            exec(
-                compile(
-                    _generate_large_cfg_source(100),
-                    "<generated_large_cfg>",
-                    "exec",
-                ),
-                ns,
-            )
-            njit(ns["_large_cfg_func"])(1)
+            c = _create_cfg_from_function(_generate_large_cfg_source(100))
+            c.topo_order()
         except RecursionError as exc:
             caught_exc = exc
         finally:
