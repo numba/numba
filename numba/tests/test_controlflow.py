@@ -111,29 +111,29 @@ class TestCFGTopoOrderNonRecursive(TestCase):
             raised.
         """
 
-        # ---- 1. Derive Bsize ------------------------------------------------
-        depth_at_cfg_process = _measure_trivial_compile_depth()
-        Bsize = int(depth_at_cfg_process * 2.0)
+        # ---- 1. Derive bsize and setup input --------------------------------
+        bsize = int(_measure_trivial_compile_depth())
+        print(bsize)
+        fun = _generate_large_cfg_source(100)
+        env = {}
+        exec(
+            compile(
+                fun,
+                "<generated_large_cfg>",
+                "exec",
+            ),
+            env,
+        )
+        cfg = _create_cfg_from_function(env["_large_cfg_func"])
 
         # ---- 2. Lower the recursion limit -----------------------------------
         original_limit = sys.getrecursionlimit()
-        sys.setrecursionlimit(Bsize)
+        sys.setrecursionlimit(bsize)
 
         # ---- 3 & 4. Compile large CFG; catch any overflow -------------------
         caught_exc = None
         try:
-            f = _generate_large_cfg_source(100)
-            ns = {}
-            exec(
-                compile(
-                    f,
-                    "<generated_large_cfg>",
-                    "exec",
-                ),
-                ns,
-            )
-            c = _create_cfg_from_function(ns["_large_cfg_func"])
-            c.topo_order()
+            cfg.topo_order()
         except RecursionError as exc:
             caught_exc = exc
         finally:
@@ -148,7 +148,7 @@ class TestCFGTopoOrderNonRecursive(TestCase):
             # Fail
             msg = (
                 "Unexpected RecursionError."
-                "Potential regression related to fiding toplogical order.\n\n"
+                "Potential regression related to finding toplogical order.\n\n"
                 "Full traceback:\n"
                 + "".join(traceback.format_tb(caught_exc.__traceback__)))
             self.fail(msg)
