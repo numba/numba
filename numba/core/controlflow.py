@@ -645,6 +645,9 @@ class CFGraph(object):
             stats['iteration_count'] += iter_ct
         return back_edges
 
+    def _find_topo_order(self):
+        return self._find_reverse_postorder()
+
     def _find_descendents(self):
         descs = {}
         for node in reversed(self._topo_order):
@@ -701,9 +704,6 @@ class CFGraph(object):
             for n in loop.body:
                 in_loops[n].append(loop.header)
         return in_loops
-
-    def _find_topo_order(self):
-        return self._find_reverse_postorder()
 
     def _dump_adj_lists(self, file):
         adj_lists = dict((src, sorted(list(dests)))
