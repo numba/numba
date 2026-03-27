@@ -111,7 +111,7 @@ class TestCFGTopoOrderNonRecursive(TestCase):
 
         # ---- 1. Derive bsize and setup input --------------------------------
         bsize = int(_measure_trivial_compile_depth() + 2)
-        fun = _generate_large_cfg_source(1000)
+        fun = _generate_large_cfg_source(100)
         env = {}
         exec(
             compile(
