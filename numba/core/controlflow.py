@@ -427,26 +427,33 @@ class CFGraph(object):
     def _find_postorder(self):
         succs = self._succs
         back_edges = self._back_edges
-        post_order = []
-        seen = set()
 
-        post_order = []
+        seen = set([])
+        postorder = []
 
-        # DFS
-        def dfs_rec(node):
-            if node not in seen:
-                seen.add(node)
-                stack.append((post_order.append, node))
-                for dest in succs[node]:
-                    if (node, dest) not in back_edges:
-                        stack.append((dfs_rec, dest))
+        seen.add(self._entry_point)
+        stack = [(self._entry_point, False)]  # (node, children_pushed)
 
-        stack = [(dfs_rec, self._entry_point)]
         while stack:
-            cb, data = stack.pop()
-            cb(data)
+            node, children_pushed = stack.pop()
 
-        return post_order
+            if children_pushed:
+                postorder.append(node) # children done → record in postorder
+                continue
+
+            # Push node back as a "record me later" marker, then push children.
+            # When we pop node again, children_pushed=True and we just record
+            # it.
+            stack.append((node, True))
+            for child in succs[node]:
+                if (node, child) not in back_edges and child not in seen:
+                    seen.add(child)
+                    stack.append((child, False))
+
+        return postorder
+
+    def _find_reverse_postorder(self):
+        return list(reversed(self._find_postorder()))
 
     def _find_immediate_dominators(self):
         # The algorithm implemented computes the immediate dominator
@@ -639,22 +646,7 @@ class CFGraph(object):
         return back_edges
 
     def _find_topo_order(self):
-        succs = self._succs
-        back_edges = self._back_edges
-        post_order = []
-        seen = set()
-
-        def _dfs_rec(node):
-            if node not in seen:
-                seen.add(node)
-                for dest in succs[node]:
-                    if (node, dest) not in back_edges:
-                        _dfs_rec(dest)
-                post_order.append(node)
-
-        _dfs_rec(self._entry_point)
-        post_order.reverse()
-        return post_order
+        return self._find_reverse_postorder()
 
     def _find_descendents(self):
         descs = {}
