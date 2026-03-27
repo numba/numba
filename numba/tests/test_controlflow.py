@@ -60,9 +60,9 @@ def _measure_trivial_compile_depth():
     njit compilation.
     """
     depth_sample = [0]
-    orig_process = CFGraph.topo_order
+    original = CFGraph.topo_order
 
-    def _probing_process(self):
+    def _probing_topo_order(self):
         f = sys._getframe()
         d = 0
         while f is not None:
@@ -70,14 +70,14 @@ def _measure_trivial_compile_depth():
             f = f.f_back
         if d > depth_sample[0]:
             depth_sample[0] = d
-        return orig_process(self)
+        return original(self)
 
-    CFGraph.topo_order = _probing_process
+    CFGraph.topo_order = _probing_topo_order
+    cfg = _create_cfg_from_function(_complex_func)
     try:
-        c = _create_cfg_from_function(_complex_func)
-        c.topo_order()
+        cfg.topo_order()
     finally:
-        CFGraph.process = orig_process   # always restore
+        CFGraph.process = original  # always restore
     return depth_sample[0]
 
 
@@ -109,7 +109,6 @@ class TestCFGTopoOrderNonRecursive(TestCase):
 
         # ---- 1. Derive bsize and setup input --------------------------------
         bsize = int(_measure_trivial_compile_depth())
-        print(bsize)
         fun = _generate_large_cfg_source(100)
         env = {}
         exec(
