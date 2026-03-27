@@ -1,7 +1,7 @@
 """
 Regression test for issue #5611 / PR #10482.
 
-CFGraph._topo_order must be stack-based (not recursive) so that
+CFGraph._find_topo_order must be stack-based (not recursive) so that
 functions with large control-flow graphs do not exhaust the Python call
 stack.
 
@@ -23,11 +23,7 @@ from numba.core.bytecode import FunctionIdentity, ByteCode
 # ---------------------------------------------------------------------------
 
 def _generate_large_cfg_source(count):
-    """
-    Return Python source for a function whose CFG has an unusually large
-    ammount of nodes.
-
-    """
+    """ Source for function with unusually large CFG. """
     lines = ["def _large_cfg_func(x):"]
     for i in range(count):
         lines.append(f"    dep_{i} = 1 if True else 0")
@@ -45,8 +41,8 @@ def _create_cfg_from_function(func):
     return cfa.graph
 
 
-# Complex test function with many branches
 def _complex_func(x):
+    """ Test function for probing stack depth during compile. """
     dep_0 = 1 if True else 0
     val_0 = x if dep_0 else 0  # noqa: F841
     dep_1 = 1 if True else 0
@@ -56,7 +52,7 @@ def _complex_func(x):
 
 def _measure_trivial_compile_depth():
     """
-    Return the Python frame depth at CFGraph.topo_order() during a trivial
+    Return the Python frame depth at CFGraph._find_topo_order during a trivial
     njit compilation.
     """
     depth_sample = [0]
@@ -99,7 +95,7 @@ class TestCFGTopoOrderNonRecursive(TestCase):
         -----
         1.  Measure the frame depth at CFGraph.topo_order() during a trivial
             njit compilation by patching the method to walk the frame
-            chain once; call this bsize.
+            chain once; call this bsize. Add 2 for headroom.
         2.  Lower sys.setrecursionlimit to bsize.
         3.  Attempt to compile a function with 100 ternary-expression
             pairs.
