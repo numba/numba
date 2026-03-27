@@ -217,7 +217,7 @@ class CFGraph(object):
 
     @functools.cached_property
     def _topo_order(self):
-        return self._find_reverse_postorder()
+        return self._find_topo_order()
 
     @functools.cached_property
     def _descs(self):
@@ -702,6 +702,9 @@ class CFGraph(object):
                 in_loops[n].append(loop.header)
         return in_loops
 
+    def _find_topo_order(self):
+        return self._find_reverse_postorder()
+
     def _dump_adj_lists(self, file):
         adj_lists = dict((src, sorted(list(dests)))
                          for src, dests in self._succs.items())
@@ -966,3 +969,4 @@ class ControlFlowAnalysis(object):
     def op_BREAK_LOOP(self, inst):
         self.jump(self._blockstack[-1])
         self._force_new_block = True
+

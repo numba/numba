@@ -60,7 +60,8 @@ def _measure_trivial_compile_depth():
     njit compilation.
     """
     depth_sample = [0]
-    original = CFGraph.topo_order
+    cfg = _create_cfg_from_function(_complex_func)
+    original = CFGraph._find_topo_order
 
     def _probing_topo_order(self):
         f = sys._getframe()
@@ -72,12 +73,13 @@ def _measure_trivial_compile_depth():
             depth_sample[0] = d
         return original(self)
 
-    CFGraph.topo_order = _probing_topo_order
-    cfg = _create_cfg_from_function(_complex_func)
+    CFGraph._find_topo_order = _probing_topo_order
+
     try:
-        cfg.topo_order()
+        cfg._find_topo_order()
     finally:
         CFGraph.process = original  # always restore
+
     return depth_sample[0]
 
 
@@ -108,8 +110,8 @@ class TestCFGTopoOrderNonRecursive(TestCase):
         """
 
         # ---- 1. Derive bsize and setup input --------------------------------
-        bsize = int(_measure_trivial_compile_depth())
-        fun = _generate_large_cfg_source(100)
+        bsize = int(_measure_trivial_compile_depth() + 2)
+        fun = _generate_large_cfg_source(1000)
         env = {}
         exec(
             compile(
@@ -128,7 +130,7 @@ class TestCFGTopoOrderNonRecursive(TestCase):
         # ---- 3 & 4. Compile large CFG; catch any overflow -------------------
         caught_exc = None
         try:
-            cfg.topo_order()
+            cfg._find_topo_order()
         except RecursionError as exc:
             caught_exc = exc
         finally:
