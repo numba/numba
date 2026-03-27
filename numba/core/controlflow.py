@@ -969,4 +969,3 @@ class ControlFlowAnalysis(object):
     def op_BREAK_LOOP(self, inst):
         self.jump(self._blockstack[-1])
         self._force_new_block = True
-
