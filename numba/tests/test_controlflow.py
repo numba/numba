@@ -96,7 +96,8 @@ class TestCFGTopoOrderNonRecursive(TestCase):
         1.  Measure the frame depth at CFGraph.topo_order() during a trivial
             njit compilation by patching the method to walk the frame
             chain once; call this bsize. Add 2 for headroom.
-        2.  Lower sys.setrecursionlimit to bsize.
+        1a. Determine current frame_depth
+        2.  Lower sys.setrecursionlimit to bsize + frame_depth
         3.  Attempt to compile a function with 100 ternary-expression
             pairs.
         4.  Catch any RecursionError.
@@ -107,6 +108,15 @@ class TestCFGTopoOrderNonRecursive(TestCase):
 
         # ---- 1. Derive bsize and setup input --------------------------------
         bsize = int(_measure_trivial_compile_depth() + 2)
+
+        def frames():
+            f = sys._getframe(0)
+            while f is not None:
+                f = f.f_back
+                yield 1
+
+        frame_depth = sum(frames())
+
         fun = _generate_large_cfg_source(100)
         env = {}
         exec(
@@ -121,7 +131,7 @@ class TestCFGTopoOrderNonRecursive(TestCase):
 
         # ---- 2. Lower the recursion limit -----------------------------------
         original_limit = sys.getrecursionlimit()
-        sys.setrecursionlimit(bsize)
+        sys.setrecursionlimit(bsize + frame_depth)
 
         # ---- 3 & 4. Compile large CFG; catch any overflow -------------------
         caught_exc = None
