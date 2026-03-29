@@ -144,7 +144,7 @@ __all__ += types.__all__
 __all__ += errors.__all__
 
 
-_min_llvmlite_version = (0, 47, 0)
+_min_llvmlite_version = (0, 48, 0)
 _min_llvm_version = (14, 0, 0)
 
 def _ensure_llvm():
