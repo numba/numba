@@ -349,8 +349,6 @@ that must be matched during type inference.
   (maps Python object to Numba type)
 - :ghfile:`numba/core/typing/asnumbatype.py` - Implementation of
   ``as_numba_type`` operations (maps Python types to Numba type)
-- :ghfile:`numba/core/typing/npdatetime.py` - Datetime dtype support for NumPy
-  arrays
 
 
 Target Implementations (CPU)
@@ -423,7 +421,7 @@ typing and implementation to be specified together.
 - :ghfile:`numba/np/polynomial/polynomial_core.py` - Implementations of NumPy ``Polynomial`` class
 - :ghfile:`numba/np/ufunc_db.py` - Big table mapping types to ufunc
   implementations
-
+- :ghfile:`numba/np/types/datetime.py` - Datetime and timedelta datatype support
 
 Ufunc Compiler and Runtime
 ''''''''''''''''''''''''''
