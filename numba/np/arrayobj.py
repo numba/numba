@@ -41,6 +41,7 @@ from numba.core.typing.npydecl import (parse_dtype as ty_parse_dtype,
                                        _parse_nested_sequence,
                                        _sequence_of_arrays,
                                        _choose_concatenation_layout)
+from numba.np import types as npy_types
 
 
 def set_range_metadata(builder, load, lower_bound, upper_bound):
@@ -6798,8 +6799,8 @@ def array_to_array(context, builder, fromty, toty, val):
 @lower_cast(types.Array, types.Integer)
 @lower_cast(types.Array, types.Complex)
 @lower_cast(types.Array, types.Boolean)
-@lower_cast(types.Array, types.NPTimedelta)
-@lower_cast(types.Array, types.NPDatetime)
+@lower_cast(types.Array, npy_types.NPTimedelta)
+@lower_cast(types.Array, npy_types.NPDatetime)
 def array0d_to_scalar(context, builder, fromty, toty, val):
     def impl(a):
         # a is an array(T, 0d, O), T is type, O is order

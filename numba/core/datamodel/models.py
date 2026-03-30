@@ -1094,15 +1094,6 @@ class SliceModel(StructModel):
                    ]
         super(SliceModel, self).__init__(dmm, fe_type, members)
 
-
-@register_default(types.NPDatetime)
-@register_default(types.NPTimedelta)
-class NPDatetimeModel(PrimitiveModel):
-    def __init__(self, dmm, fe_type):
-        be_type = ir.IntType(64)
-        super(NPDatetimeModel, self).__init__(dmm, fe_type, be_type)
-
-
 @register_default(types.ArrayIterator)
 class ArrayIterator(StructModel):
     def __init__(self, dmm, fe_type):

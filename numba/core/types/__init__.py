@@ -222,3 +222,5 @@ __all__ = all_str.split()
 if numpy_version >= (2, 0):
     __all__.remove('float_')
     __all__.append('bool')
+
+from numba.np.types.datetime import NPDatetime, NPTimedelta
