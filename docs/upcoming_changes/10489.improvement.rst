@@ -1,0 +1,8 @@
+Shifted ``types.NPDatetime`` and ``types.NPTimedelta`` to ``numba.np.types.datetime`` module.
+---------------------------------------------------------------------------------------------
+
+This PR moves the definitions of ``types.NPDatetime`` and ``types.NPTimedelta`` from
+``numba.core.types`` to ``numba.np.types.datetime``. This change is part of a larger effort
+to refactor the NumPy support in Numba and to better organize the codebase.
+
+The datatypes can still be accessed via ``numba.core.types`` for backward compatibility.
