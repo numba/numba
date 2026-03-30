@@ -1,9 +1,10 @@
 Fix scalar handling in ``np.std``
--------------------------------------------------------
+---------------------------------
 
 Fix scalar handling in ``np.std`` function. 
-Previously, this function would fail when called with scalar inputs.
+Previously, this function would fail when 
+called with scalar inputs.
 Now scalar arguments are handled properly:
 - Integer and boolean inputs return ``float64(0.0)``
-- Float and complex inputs preserve the input dtype (e.g., ``np.float32`` in
-  returns ``float32(0.0)``)
+- Float and complex inputs preserve the input dtype 
+(e.g., ``np.float32`` in returns ``float32(0.0)``)
