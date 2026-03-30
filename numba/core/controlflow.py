@@ -583,9 +583,7 @@ class CFGraph(object):
         # ii) link all existing entry points to the dummy exit point
         # iii) link members of infinite loops to the dummy exit point
         dummy_exit = object()
-        original_exits = set(self._exit_points)
-        self._exit_points = set([dummy_exit])
-        for exit in original_exits:
+        for exit in self._exit_points:
             self._add_edge(exit, dummy_exit)
         for loop in self._loops.values():
             if not loop.exits:
@@ -610,7 +608,6 @@ class CFGraph(object):
         for doms in pdoms.values():
             doms.discard(dummy_exit)
         self._remove_node_edges(dummy_exit)
-        self._exit_points = original_exits
         return pdoms
 
     # Finding loops and back edges: see
