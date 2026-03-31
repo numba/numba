@@ -1,5 +1,5 @@
 Type annotations for ``jit``, ``njit``, ``cfunc``, and ``jit_module``
-----------------------------------------------------------------------
+---------------------------------------------------------------------
 
 Numba now ships type annotations for the ``jit``, ``njit``, and
 ``cfunc`` decorators, plus ``jit_module``. This improves type checker
