@@ -1,6 +1,6 @@
 
-Version 0.65.0 (TBD)
-====================
+Version 0.65.0 (31 March 2026)
+==============================
 
 This is a major Numba release. Numba now adds support for Python 3.14t
 free-threading build.
