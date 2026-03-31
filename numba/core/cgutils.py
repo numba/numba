@@ -415,11 +415,23 @@ def insert_pure_function(module, fnty, name):
     fn.attributes.add("nounwind")
     return fn
 
+def get_or_insert_foreign_function(context, module, fnty, name):
+    """
+    Apply target attributes (signext/zeroext) to foreign functions when called.
+    This makes Numba's ABI compliant with consistent with other architectures like s390x.
+    """
+    fn = get_or_insert_function(module, fnty, name)
+    context.apply_target_attributes(fn) 
+    return fn
 
 def get_or_insert_function(module, fnty, name):
     """
     Get the function named *name* with type *fnty* from *module*, or insert it
-    if it doesn't exist.
+    if it doesn't exist, then apply target-specific ABI attributes via
+    context.apply_target_attributes().
+   
+    Use this instead of get_or_insert_function for **every** call to a
+    function that is not itself jitted by Numba. 
     """
     fn = module.globals.get(name, None)
     if fn is None:
