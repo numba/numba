@@ -526,8 +526,6 @@ class _ActiveContext(object):
         """
         return self.context_handle is not None
 
-    __nonzero__ = __bool__
-
 
 driver = Driver()
 
