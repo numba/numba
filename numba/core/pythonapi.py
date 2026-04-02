@@ -1300,20 +1300,11 @@ class PythonAPI(object):
         return self.builder.call(fn, (buf, ptr))
 
     # ------ utils -----
-    # Simple placeholder to replace existing _get_function() this is to validate get_or_insert_foreign_function() functionality
     def _get_function(self, fnty, name):
         return cgutils.get_or_insert_foreign_function(
             self.context, self.module, fnty, name
         )
 
-    # commenting out - this does the same as get_or_insert_foreign_function()
-    """
-    def _get_function(self, fnty, name):
-        fn = cgutils.get_or_insert_function(self.module, fnty, name)
-        self.context.apply_target_attributes(fn)
-        return fn        
-    """
-    
     def alloca_obj(self):
         return self.builder.alloca(self.pyobj)
 
