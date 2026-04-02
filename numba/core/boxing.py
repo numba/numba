@@ -221,7 +221,7 @@ def box_unicodecharseq(typ, val, c):
     unicode_kind = {
         1: c.pyapi.py_unicode_1byte_kind,
         2: c.pyapi.py_unicode_2byte_kind,
-        4: c.pyapi.py_unicode_4byte_kind}[numpy_support.sizeof_unicode_char]
+        4: c.pyapi.py_unicode_4byte_kind}[types.sizeof_unicode_char]
     kind = c.context.get_constant(types.int32, unicode_kind)
     rawptr = cgutils.alloca_once_value(c.builder, value=val)
     strptr = c.builder.bitcast(rawptr, c.pyapi.cstring)
@@ -229,7 +229,7 @@ def box_unicodecharseq(typ, val, c):
     fullsize = c.context.get_constant(types.intp, typ.count)
     zero = fullsize.type(0)
     one = fullsize.type(1)
-    step = fullsize.type(numpy_support.sizeof_unicode_char)
+    step = fullsize.type(types.sizeof_unicode_char)
     count = cgutils.alloca_once_value(c.builder, zero)
     with cgutils.loop_nest(c.builder, [fullsize], fullsize.type) as [idx]:
         # Get char at idx
