@@ -13,7 +13,7 @@ lower = registry.lower
 
 
 @lower("print_item", types.Literal)
-def print_item_impl(context, builder, sig, args):
+def print_item_impl_Literal(context, builder, sig, args):
     """
     Print a single constant value.
     """
@@ -31,7 +31,7 @@ def print_item_impl(context, builder, sig, args):
 
 
 @lower("print_item", types.Any)
-def print_item_impl(context, builder, sig, args):
+def print_item_impl_Any(context, builder, sig, args):
     """
     Print a single native value by boxing it in a Python object and
     invoking the Python interpreter's print routine.
