@@ -2,4 +2,10 @@ Removed legacy NRT reference pruning pass ``removerefctpass``
 -------------------------------------------------------------
 
 The NRT reference pruning pass ``removerefctpass`` has been
-removed as it is no longer required.
+removed as it is no longer valid. It depends on an old assumption
+of Numba, removing refcounts (deemed unnecessary) from functions
+that return array object, take arguments that need refcounting
+except array or call function(s) that return refcounted object.
+Hence making it such that the function will not capture or create
+references that extend the lifetime of any refcounted objects
+beyond the lifetime of the function.
