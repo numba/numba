@@ -428,42 +428,31 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_mean_empty_array(self):
         """Test that mean of empty array returns nan (issue #5502)"""
         cfunc = jit(nopython=True)(array_mean)
-        
+
         # Empty float64 array
         arr = np.float64([])
         expected = np.mean(arr)
-        result = cfunc(arr)
-        self.assertTrue(np.isnan(result))
-        self.assertTrue(np.isnan(expected))
-        
+        self.assertPreciseEqual(cfunc(arr), expected)
+
         # Empty int array
         arr = np.int64([])
         expected = np.mean(arr)
-        result = cfunc(arr)
-        self.assertTrue(np.isnan(result))
-        self.assertTrue(np.isnan(expected))
+        self.assertPreciseEqual(cfunc(arr), expected)
 
         # Empty complex array
         arr = np.complex64([])
         expected = np.mean(arr)
-        result = cfunc(arr)
-        self.assertTrue(np.isnan(result.real))
-        self.assertTrue(np.isnan(result.imag))
-        self.assertTrue(np.isnan(expected.real))
-        self.assertTrue(np.isnan(expected.imag))
-
+        self.assertPreciseEqual(cfunc(arr), expected)
 
     def test_mean_empty_timedelta(self):
         """Test that mean of empty timede`lta array returns NaT"""
         cfunc = jit(nopython=True)(array_mean)
-        
+
         # Empty timedelta64 array
         arr = np.array([], dtype='timedelta64[D]')
         expected = np.mean(arr)
-        result = cfunc(arr)
         # Both should be NaT
-        self.assertTrue(np.isnat(result))
-        self.assertTrue(np.isnat(expected))
+        self.assertPreciseEqual(cfunc(arr), expected)
 
     def test_mean_empty_datetime(self):
         """Test that mean of empty datetime array raises error (matches NumPy behavior)"""
