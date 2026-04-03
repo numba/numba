@@ -7,7 +7,7 @@ import llvmlite.ir
 from llvmlite.ir import Constant, IRBuilder
 
 from numba.core import (typing, utils, types, ir, debuginfo, funcdesc,
-                        generators, config, ir_utils, cgutils, removerefctpass,
+                        generators, config, ir_utils, cgutils,
                         targetconfig)
 from numba.core.errors import (LoweringError, new_error_context, TypingError,
                                LiteralTypingError, UnsupportedError,
@@ -202,12 +202,6 @@ class BaseLower(object):
 
         if config.DUMP_LLVM:
             utils.dump_llvm(self.fndesc, self.module)
-
-        # Special optimization to remove NRT on functions that do not need it.
-        if self.context.enable_nrt and self.generator_info is None:
-            removerefctpass.remove_unnecessary_nrt_usage(self.function,
-                                                         context=self.context,
-                                                         fndesc=self.fndesc)
 
         # Run target specific post lowering transformation
         self.context.post_lowering(self.module, self.library)

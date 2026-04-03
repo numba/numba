@@ -1,0 +1,5 @@
+Removed legacy NRT reference pruning pass ``removerefctpass``
+-------------------------------------------------------------
+
+The NRT reference pruning pass ``removerefctpass`` has been
+removed as it is no longer required.

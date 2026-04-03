@@ -1369,6 +1369,9 @@ class TestArrayReductionsExceptions(MemoryLeakMixin, TestCase):
     zero_size = np.arange(0)
 
     def check_exception(self, pyfunc, msg):
+        # Disable leak check since we expect an error to be raised
+        self.disable_leak_check()
+
         cfunc = jit(nopython=True)(pyfunc)
         # make sure NumPy raises consistently/no behaviour change
         with self.assertRaises(BaseException):
