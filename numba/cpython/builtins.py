@@ -131,14 +131,34 @@ def gen_non_eq(val):
     def none_equality(a, b):
         a_none = isinstance(a, types.NoneType)
         b_none = isinstance(b, types.NoneType)
+        # Case: both are None.
         if a_none and b_none:
             def impl(a, b):
                 return val
             return impl
+        # Case: only one is None.
         elif a_none ^ b_none:
-            def impl(a, b):
-                return not val
-            return impl
+            a_optional = isinstance(a, types.Optional)
+            b_optional = isinstance(b, types.Optional)
+            # Special case, one optional, needs a runtime check.
+            # Using the implementation for `is` as the distinction between `is`
+            # and `==` is semantically irrelevant in the Numba context. Numba
+            # types can not override `__eq__` like Python objects can so the
+            # two comparisons are semantically equivalent.
+            if a_optional or b_optional:
+                if val:
+                    def impl(a, b):
+                        return a is b
+                else:
+                    def impl(a, b):
+                        return not a is b
+                return impl
+            # Otherwise one is None, the other isn't.
+            else:
+                nval = not val
+                def impl(a, b):
+                    return nval
+                return impl
     return none_equality
 
 overload(operator.eq)(gen_non_eq(True))
@@ -456,6 +476,7 @@ def bool_sequence(x):
         types.UnicodeCharSeq,
         types.DictType,
         types.ListType,
+        types.SetType,
         types.UnicodeType,
         types.Set,
     )
@@ -790,7 +811,8 @@ def ol_isinstance(var, typs):
                         types.Function, types.ClassType, types.UnicodeType,
                         types.ClassInstanceType, types.NoneType, types.Array,
                         types.Boolean, types.Float, types.UnicodeCharSeq,
-                        types.Complex, types.NPDatetime, types.NPTimedelta,)
+                        types.Complex, types.NPDatetime, types.NPTimedelta,
+                        types.SetType)
     if not isinstance(var_ty, supported_var_ty):
         msg = f'isinstance() does not support variables of type "{var_ty}".'
         raise NumbaTypeError(msg)
@@ -833,7 +855,7 @@ def ol_isinstance(var, typs):
         if isinstance(typ, types.TypeRef):
             # Use of Numba type classes is in general not supported as they do
             # not work when the jit is disabled.
-            if key not in (types.ListType, types.DictType):
+            if key not in (types.ListType, types.DictType, types.SetType):
                 msg = ("Numba type classes (except numba.typed.* container "
                        "types) are not supported.")
                 raise NumbaTypeError(msg)

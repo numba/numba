@@ -1,0 +1,81 @@
+
+Version 0.65.0 (31 March 2026)
+==============================
+
+This is a major Numba release. Numba now adds support for Python 3.14t
+free-threading build.
+
+Please note that the Intel SVML library remains unsupported as of this
+release. This loss of support was first noted in Numba 0.62.0 and was caused
+by the SVML patch not applying cleanly to the LLVM 20 code base when
+upgrading llvmlite. The impact is a loss of performance in cases where SVML
+would previously have been used. This will be addressed in a future release.
+
+Please find a summary of all noteworthy items below.
+
+Bug Fixes
+~~~~~~~~~
+
+Add support for ``None`` indexing
+---------------------------------
+
+Support ``a[None]`` indexing, including for 0d arrays. This fixes a
+``NotImplementedError`` when lowering ``None`` indexing.
+
+(`PR-#10426 <https://github.com/numba/numba/pull/10426>`__)
+
+Fix scalar handling in ``np.mean``
+----------------------------------
+
+Fix scalar handling in ``np.mean``. Previously, this function would
+fail when called with scalar inputs. Now it properly handles both scalar
+and array inputs.
+
+(`PR-#10428 <https://github.com/numba/numba/pull/10428>`__)
+
+Fix scalar handling in ``np.min`` and ``np.max``
+------------------------------------------------
+
+Fix scalar handling in ``np.min`` and ``np.max`` functions. Previously, these functions would
+fail when called with scalar inputs. They now properly handle both scalar
+and array inputs, returning the original value when a scalar is provided.
+
+(`PR-#10435 <https://github.com/numba/numba/pull/10435>`__)
+
+Fix scalar handling in ``np.prod``
+----------------------------------
+
+Fixed scalar handling in the ``np.prod`` function. Previously scalar inputs would generate an error, and now both scalar and array inputs are properly handled.
+
+(`PR-#10446 <https://github.com/numba/numba/pull/10446>`__)
+
+Pull-Requests:
+
+* PR `#10426 <https://github.com/numba/numba/pull/10426>`_: Fix: `None` index handling (`swap357 <https://github.com/swap357>`_)
+* PR `#10428 <https://github.com/numba/numba/pull/10428>`_: Add support for `np.mean` to handle scalar inputs  (`prakashsellathurai <https://github.com/prakashsellathurai>`_)
+* PR `#10435 <https://github.com/numba/numba/pull/10435>`_: Add support for np.min and np.max to handle scalar inputs #10408 (`davidmartinez-esc <https://github.com/davidmartinez-esc>`_)
+* PR `#10436 <https://github.com/numba/numba/pull/10436>`_: Update actions/stale action to v10.2.0 (`renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10439 <https://github.com/numba/numba/pull/10439>`_: Cherry pick 0.64.0 (`swap357 <https://github.com/swap357>`_)
+* PR `#10440 <https://github.com/numba/numba/pull/10440>`_: Update final release checklist template (`swap357 <https://github.com/swap357>`_)
+* PR `#10446 <https://github.com/numba/numba/pull/10446>`_: add scalar handling for np.prod overload (`mturiansky <https://github.com/mturiansky>`_)
+* PR `#10448 <https://github.com/numba/numba/pull/10448>`_: fix: replace 9 bare except clauses with except Exception (`haosenwang1018 <https://github.com/haosenwang1018>`_)
+* PR `#10450 <https://github.com/numba/numba/pull/10450>`_: chore(deps): update github artifact actions (major) (`renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10462 <https://github.com/numba/numba/pull/10462>`_: CI: pin conda to < 26 (`swap357 <https://github.com/swap357>`_)
+* PR `#10464 <https://github.com/numba/numba/pull/10464>`_: Removed all instances of new type system split (`kc611 <https://github.com/kc611>`_)
+* PR `#10468 <https://github.com/numba/numba/pull/10468>`_: CI: add support for py3.14t free threading wheels (`swap357 <https://github.com/swap357>`_)
+* PR `#10471 <https://github.com/numba/numba/pull/10471>`_: replace outdated section about supported platforms with links (`esc <https://github.com/esc>`_)
+* PR `#10474 <https://github.com/numba/numba/pull/10474>`_: chore(deps): update actions/download-artifact action to v8.0.1 (`renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10476 <https://github.com/numba/numba/pull/10476>`_: update version support table for `0.65.0rc1` (`swap357 <https://github.com/swap357>`_)
+* PR `#10477 <https://github.com/numba/numba/pull/10477>`_: remove deprecation notice for `NUMBA_CAPTURED_ERRORS` (`swap357 <https://github.com/swap357>`_)
+* PR `#10479 <https://github.com/numba/numba/pull/10479>`_: add changelog for 0.65.0rc1 (`swap357 <https://github.com/swap357>`_)
+
+Authors:
+
+* `davidmartinez-esc <https://github.com/davidmartinez-esc>`_
+* `esc <https://github.com/esc>`_
+* `haosenwang1018 <https://github.com/haosenwang1018>`_
+* `kc611 <https://github.com/kc611>`_
+* `mturiansky <https://github.com/mturiansky>`_
+* `prakashsellathurai <https://github.com/prakashsellathurai>`_
+* `renovate[bot] <https://github.com/apps/renovate>`_
+* `swap357 <https://github.com/swap357>`_

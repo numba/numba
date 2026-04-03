@@ -13,8 +13,51 @@ from collections import defaultdict
 from functools import wraps
 from abc import abstractmethod
 
-# Filled at the end
-__all__ = []
+__all__ = [
+    "ByteCodeSupportError",
+    "CompilerError",
+    "ConstantInferenceError",
+    "DeprecationError",
+    "ForbiddenConstruct",
+    "ForceLiteralArg",
+    "IRError",
+    "InternalError",
+    "InternalTargetMismatchError",
+    "LiteralTypingError",
+    "LoweringError",
+    "NonexistentTargetError",
+    "NotDefinedError",
+    "NumbaAssertionError",
+    "NumbaAttributeError",
+    "NumbaDebugInfoWarning",
+    "NumbaDeprecationWarning",
+    "NumbaError",
+    "NumbaExperimentalFeatureWarning",
+    "NumbaIRAssumptionWarning",
+    "NumbaIndexError",
+    "NumbaInvalidConfigWarning",
+    "NumbaKeyError",
+    "NumbaNotImplementedError",
+    "NumbaParallelSafetyWarning",
+    "NumbaPedanticWarning",
+    "NumbaPendingDeprecationWarning",
+    "NumbaPerformanceWarning",
+    "NumbaRuntimeError",
+    "NumbaSystemWarning",
+    "NumbaTypeError",
+    "NumbaTypeSafetyWarning",
+    "NumbaValueError",
+    "NumbaWarning",
+    "RedefinedError",
+    "RequireLiteralValue",
+    "TypingError",
+    "UnsupportedBytecodeError",
+    "UnsupportedError",
+    "UnsupportedParforsError",
+    "UnsupportedRewriteError",
+    "UntypedAttributeError",
+    "VerificationError",
+]
 
 
 def _is_numba_core_config_loaded():
@@ -868,8 +911,3 @@ def new_error_context(fmt_, *args, **kwargs):
     except NumbaError as e:
         e.add_context(_format_msg(fmt_, args, kwargs))
         raise
-
-
-__all__ += [name for (name, value) in globals().items()
-            if not name.startswith('_') and isinstance(value, type)
-            and issubclass(value, (Exception, Warning))]

@@ -14,7 +14,7 @@ from llvmlite.ir import Constant
 import numpy as np
 
 from numba import pndindex, literal_unroll
-from numba.core import types, typing, errors, cgutils, extending, config
+from numba.core import types, typing, errors, cgutils, extending
 from numba.np.numpy_support import (as_dtype, from_dtype, carray, farray,
                                     is_contiguous, is_fortran,
                                     check_is_integer, type_is_scalar,
@@ -1713,8 +1713,8 @@ def ol_raise_with_shape_context_cpu(src_shapes, index_shape):
                 index_str = f"({index_shape[0]},)"
             else:
                 index_str = f"({', '.join([str(x) for x in index_shape])})"
-            msg = (f"cannot assign slice of shape {shape_str} from input of "
-                   f"shape {index_str}")
+            msg = (f"cannot assign slice of shape {index_str} from input of "
+                   f"shape {shape_str}")
             raise ValueError(msg)
         return impl
 
@@ -5058,10 +5058,7 @@ def numpy_linspace(start, stop, num=50):
         raise errors.TypingError(msg)
 
     if any(isinstance(arg, types.Complex) for arg in [start, stop]):
-        if config.USE_LEGACY_TYPE_SYSTEM:
-            dtype = types.complex128
-        else:
-            dtype = types.np_complex128
+        dtype = types.complex128
     else:
         dtype = types.float64
 

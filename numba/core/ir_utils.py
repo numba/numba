@@ -222,10 +222,7 @@ def mk_range_block(typemap, start, stop, step, calltypes, scope, loc):
     range_call_assign = ir.Assign(range_call, range_call_var, loc)
     # iter_var = getiter(range_call_var)
     iter_call = ir.Expr.getiter(range_call_var, loc)
-    if config.USE_LEGACY_TYPE_SYSTEM:
-        calltype_sig = signature(types.range_iter64_type, types.range_state64_type)
-    else:
-        calltype_sig = signature(types.range_iter_type, types.range_state_type)
+    calltype_sig = signature(types.range_iter64_type, types.range_state64_type)
     calltypes[iter_call] = calltype_sig
     iter_var = ir.Var(scope, mk_unique_var("$iter_var"), loc)
     typemap[iter_var.name] = types.iterators.RangeIteratorType(types.intp)
@@ -298,10 +295,7 @@ def mk_loop_header(typemap, phi_var, calltypes, scope, loc):
     typemap[iternext_var.name] = types.containers.Pair(
         types.intp, types.boolean)
     iternext_call = ir.Expr.iternext(phi_var, loc)
-    if config.USE_LEGACY_TYPE_SYSTEM:
-        range_iter_type = types.range_iter64_type
-    else:
-        range_iter_type = types.range_iter_type
+    range_iter_type = types.range_iter64_type
     calltypes[iternext_call] = signature(
         types.containers.Pair(
             types.intp,
@@ -2163,7 +2157,7 @@ def raise_on_unsupported_feature(func_ir, typemap):
                        "compile-time constants and there is no known way to "
                        "compile a %s type as a constant.")
                 if (getattr(ty, 'reflected', False) or
-                    isinstance(ty, (types.DictType, types.ListType))):
+                    isinstance(ty, (types.DictType, types.ListType, types.SetType))):
                     raise TypingError(msg % (ty, stmt.value.name, ty), loc=stmt.loc)
 
             # checks for generator expressions (yield in use when func_ir has
