@@ -1268,7 +1268,6 @@ class FancyIndexer(object):
 
 def get_bdcast_idx(context, builder, array_indices):
     max_dims = max([ary[2].ndim for ary in array_indices])
-    cleanup_items = []
 
     def bdcast_idx_shapes(*args):
         return np.broadcast_shapes(*args)
@@ -1300,14 +1299,9 @@ def get_bdcast_idx(context, builder, array_indices):
         )
         bdcast_indices.append((i, bdcast_idx, retty))
 
-        # cleanup_items.append((idxty, idx))
     subspace_shape = tuple(cgutils.unpack_tuple(builder, subspace_shape))
 
-    def bdcast_cleanup(context, builder):
-        for bdcast_idx_ty, bdcast_idx in cleanup_items:
-            context.nrt.decref(builder, bdcast_idx_ty, bdcast_idx)
-
-    return bdcast_indices, subspace_shape, bdcast_cleanup
+    return bdcast_indices, subspace_shape
 
 
 def fancy_getitem(context, builder, sig, args,
@@ -1324,7 +1318,7 @@ def fancy_getitem(context, builder, sig, args,
             idx_make = make_array(idxty)(context, builder, idx)
             array_indices.append((i, idx, idxty, idx_make))
 
-    bdcast_indices, subspace_shape_tuple, bdcast_cleanup = \
+    bdcast_indices, subspace_shape_tuple = \
         get_bdcast_idx(context, builder, array_indices)
 
     indices = list(indices)
@@ -1367,7 +1361,6 @@ def fancy_getitem(context, builder, sig, args,
     indexer.end_loops()
 
     indexer.cleanup(context, builder)
-    bdcast_cleanup(context, builder)
 
     return impl_ret_new_ref(context, builder, out_ty, out._getvalue())
 
@@ -1919,7 +1912,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
             array_indices.append((i, idx, idxty, idx_make))
 
     if len(array_indices):
-        bdcast_indices, subspace_shape_tuple, bdcast_cleanup = \
+        bdcast_indices, subspace_shape_tuple = \
             get_bdcast_idx(context, builder, array_indices)
 
         indices = list(indices)
@@ -1929,7 +1922,6 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
             index_types[i] = bdcast_idxty
     else:
         subspace_shape_tuple = ()
-        bdcast_cleanup = lambda context, builder: None
 
     indexer = FancyIndexer(context, builder, aryty, ary,
                            index_types, indices, subspace_shape_tuple)
@@ -2071,7 +2063,6 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
             context.nrt.decref(builder, retty, src_flat_instr)
 
     indexer.cleanup(context, builder)
-    bdcast_cleanup(context, builder)
 
     return context.get_dummy_value()
 

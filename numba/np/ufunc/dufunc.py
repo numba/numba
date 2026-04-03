@@ -38,7 +38,6 @@ class UfuncAtIterator:
         loop_indices = self.indexer.begin_loops()
         self._call_ufunc(context, builder, loop_indices)
         self.indexer.end_loops()
-        self.bdcast_cleanup(context, builder)
 
     def need_advanced_indexing(self):
         return isinstance(self.indices_ty, types.BaseTuple)
@@ -75,7 +74,7 @@ class UfuncAtIterator:
                 array_indices.append((i, idx, idxty, idx_make))
 
         if array_indices:
-            bdcast_indices, subspace_shape_tuple, bdcast_cleanup = \
+            bdcast_indices, subspace_shape_tuple = \
                 get_bdcast_idx(context, builder, array_indices)
             indices = list(indices)
             index_types = list(index_types)
@@ -84,12 +83,10 @@ class UfuncAtIterator:
                 index_types[i] = bdcast_idxty
         else:
             subspace_shape_tuple = ()
-            bdcast_cleanup = lambda context, builder: None
         self.indexer = FancyIndexer(context, builder, a_ty, a,
                                     index_types, indices, subspace_shape_tuple)
         self.indexer.prepare()
         self.cres = self._compile_ufunc(context, builder)
-        self.bdcast_cleanup = bdcast_cleanup
 
     def _load_val(self, context, builder, loop_indices, array, array_ty):
         from numba.np.arrayobj import load_item
