@@ -687,7 +687,8 @@ def array_argmin_impl_generic(arry):
 @overload_method(types.Array, "argmin")
 def array_argmin(a, axis=None):
     # for scalar
-    if isinstance(a, (types.Number, types.Boolean, types.NPDatetime, types.NPTimedelta)):
+    if isinstance(a, (types.Number, types.Boolean, types.NPDatetime,
+                      types.NPTimedelta)):
         def scalar_argmin(a, axis=None):
             if axis is not None and axis != 0 and axis != -1:
                 raise ValueError("axis is out of bounds")
