@@ -207,6 +207,24 @@ class TestAsNumbaType(TestCase):
                 str(raises.exception),
             )
 
+    def test_native_no_args_throws(self):
+        # Native container types without arguments are not supported.
+        native_no_args_types = [
+            list,
+            set,
+            dict,
+            tuple,
+            tuple[int, list],
+        ]
+
+        for bad_py_type in native_no_args_types:
+            with self.assertRaises(TypingError) as raises:
+                as_numba_type(bad_py_type)
+            self.assertIn(
+                "Cannot infer Numba type of Python type",
+                str(raises.exception),
+            )
+
     def test_bad_union_throws(self):
         bad_unions = [
             py_typing.Union[str, int],
