@@ -1,8 +1,5 @@
 import functools
 
-import io
-import traceback
-
 from collections import namedtuple
 
 from llvmlite import ir
@@ -381,6 +378,8 @@ class NRTContext(object):
             trace_str = ""
 
             if config.DEBUG_NRT and config.DEBUG_NRT_STACK_LIMIT:
+                import io
+                import traceback
                 trace = io.StringIO()
                 traceback.print_stack(limit=config.DEBUG_NRT_STACK_LIMIT + 2,
                                       file=trace)
