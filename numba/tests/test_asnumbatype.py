@@ -53,6 +53,29 @@ class TestAsNumbaType(TestCase):
             self.assertEqual(as_numba_type(ty), ty)
 
     def test_single_containers(self):
+        # Native container types
+        self.assertEqual(
+            as_numba_type(list[float]),
+            types.ListType(self.float_nb_type),
+        )
+        self.assertEqual(
+            as_numba_type(dict[float, str]),
+            types.DictType(self.float_nb_type, self.str_nb_type),
+        )
+        self.assertEqual(
+            as_numba_type(set[complex]),
+            types.Set(self.complex_nb_type),
+        )
+        self.assertEqual(
+            as_numba_type(tuple[float, float]),
+            types.Tuple([self.float_nb_type, self.float_nb_type]),
+        )
+        self.assertEqual(
+            as_numba_type(tuple[float, complex]),
+            types.Tuple([self.float_nb_type, self.complex_nb_type]),
+        )
+
+        # Corresponding deprecated aliases
         self.assertEqual(
             as_numba_type(py_typing.List[float]),
             types.ListType(self.float_nb_type),
@@ -96,10 +119,32 @@ class TestAsNumbaType(TestCase):
                       str(raises.exception))
 
     def test_nested_containers(self):
-        IntList = py_typing.List[int]
         self.assertEqual(
-            as_numba_type(py_typing.List[IntList]),
+            as_numba_type(list[list[int]]),
             types.ListType(types.ListType(self.int_nb_type)),
+        )
+        self.assertEqual(
+            as_numba_type(list[py_typing.List[int]]),
+            types.ListType(types.ListType(self.int_nb_type)),
+        )
+        self.assertEqual(
+            as_numba_type(py_typing.List[list[int]]),
+            types.ListType(types.ListType(self.int_nb_type)),
+        )
+        self.assertEqual(
+            as_numba_type(py_typing.List[py_typing.List[int]]),
+            types.ListType(types.ListType(self.int_nb_type)),
+        )
+        self.assertEqual(
+            as_numba_type(list[dict[float, bool]]),
+            types.ListType(
+                types.DictType(self.float_nb_type, self.bool_nb_type)
+            ),
+        )
+        self.assertEqual(
+            as_numba_type(set[tuple[py_typing.Optional[int], float]]),
+            types.Set(types.Tuple(
+                [types.Optional(self.int_nb_type), self.float_nb_type])),
         )
         self.assertEqual(
             as_numba_type(py_typing.List[py_typing.Dict[float, bool]]),
