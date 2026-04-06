@@ -77,7 +77,6 @@ exclude =
     numba/cpython/slicing.py
     numba/cpython/numbers.py
     numba/cpython/listobj.py
-    numba/core/removerefctpass.py
     numba/core/boxing.py
     numba/misc/cffiimpl.py
     numba/np/linalg.py

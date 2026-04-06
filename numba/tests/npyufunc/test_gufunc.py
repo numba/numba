@@ -713,6 +713,9 @@ class TestGUVectorizeJit(MemoryLeakMixin, TestCase):
         self.assertIn(msg, str(raises.exception))
 
     def test_mismatch_inner_dimensions(self):
+        # Disable leak check since we expect an error to be raised
+        self.disable_leak_check()
+
         @guvectorize('(n),(n) -> ()')
         def bar(x, y, res):
             res[0] = 123
@@ -740,6 +743,10 @@ class TestGUVectorizeJit(MemoryLeakMixin, TestCase):
         self.assertIn(msg, str(raises.exception))
 
     def test_mismatch_inner_dimensions_input_output(self):
+        # Disable leak check since we expect an error to be raised
+        self.disable_leak_check()
+
+
         @guvectorize('(n),(m) -> (n)')
         def bar(x, y, res):
             res[0] = 123
@@ -767,6 +774,9 @@ class TestGUVectorizeJit(MemoryLeakMixin, TestCase):
         self.assertIn(msg, str(raises.exception))
 
     def test_mismatch_inner_dimensions_output(self):
+        # Disable leak check since we expect an error to be raised
+        self.disable_leak_check()
+
         @guvectorize('(n),(m) -> (m),(m)')
         def bar(x, y, res, out):
             res[0] = 123
@@ -796,6 +806,9 @@ class TestGUVectorizeJit(MemoryLeakMixin, TestCase):
         self.assertIn(msg, str(raises.exception))
 
     def test_mismatch_loop_shape(self):
+        # Disable leak check since we expect an error to be raised
+        self.disable_leak_check()
+
         @guvectorize('(n),(n) -> ()')
         def bar(x, y, res):
             res[0] = 123
@@ -815,6 +828,9 @@ class TestGUVectorizeJit(MemoryLeakMixin, TestCase):
         self.assertIn(msg, str(raises.exception))
 
     def test_mismatch_loop_shape_2(self):
+        # Disable leak check since we expect an error to be raised
+        self.disable_leak_check()
+
         @guvectorize('(n),(n) -> (), (n)')
         def gufunc(x, y, res, out):
             res[0] = x.sum()
