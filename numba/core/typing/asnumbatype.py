@@ -68,21 +68,28 @@ class AsNumbaTypeRegistry:
             # `typing._GenericAlias`, so that must be keept.
             #
             if not isinstance(py_type, (py_typing.Union,
+                                        py_typing.GenericAlias,
                                         py_typing._GenericAlias)):
                 return
         elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
-            # Use of underscore type `_GenericAlias`.
-            if not isinstance(py_type, py_typing._GenericAlias):
+            # Subscripting a class, e.g. `tuple[int, float]`, creates a
+            # `typing.GenericAlias`. Meanwhile, using deprecated aliases such
+            # as `typing.Tuple[int, float]` creates a `typing._GenericAlias`.
+            if not isinstance(py_type, (py_typing.GenericAlias,
+                                        py_typing._GenericAlias)):
                 return
         else:
             raise NotImplementedError(PYVERSION)
 
-        if getattr(py_type, "__origin__", None) is py_typing.Union:
-            if len(py_type.__args__) != 2:
+        origin = py_typing.get_origin(py_type)
+        args = py_typing.get_args(py_type)
+
+        if origin is py_typing.Union:
+            if len(args) != 2:
                 raise errors.TypingError(
                     "Cannot type Union of more than two types")
 
-            (arg_1_py, arg_2_py) = py_type.__args__
+            (arg_1_py, arg_2_py) = args
 
             if arg_2_py is type(None): # noqa: E721
                 return types.Optional(self.infer(arg_1_py))
@@ -93,20 +100,20 @@ class AsNumbaTypeRegistry:
                     "Cannot type Union that is not an Optional "
                     f"(neither type type {arg_2_py} is not NoneType")
 
-        if getattr(py_type, "__origin__", None) is list:
-            (element_py,) = py_type.__args__
+        if origin is list:
+            (element_py,) = args
             return types.ListType(self.infer(element_py))
 
-        if getattr(py_type, "__origin__", None) is dict:
-            key_py, value_py = py_type.__args__
+        if origin is dict:
+            key_py, value_py = args
             return types.DictType(self.infer(key_py), self.infer(value_py))
 
-        if getattr(py_type, "__origin__", None) is set:
-            (element_py,) = py_type.__args__
+        if origin is set:
+            (element_py,) = args
             return types.Set(self.infer(element_py))
 
-        if getattr(py_type, "__origin__", None) is tuple:
-            tys = tuple(map(self.infer, py_type.__args__))
+        if origin is tuple:
+            tys = tuple(map(self.infer, args))
             return types.BaseTuple.from_types(tys)
 
     def register(self, func_or_py_type, numba_type=None):
