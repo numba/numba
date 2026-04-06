@@ -1989,10 +1989,10 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         dest_indices = indexer.begin_loops()
         # No need to check for wraparound, as the indexers all ensure
         # a positive index is returned.
-        dest_ptr = cgutils.get_item_pointer2(context, builder, dest_data,
-                                             dest_shapes, dest_strides,
-                                             aryty.layout, dest_indices,
-                                             wraparound=False)
+        dest_ptr = cgutils.get_item_pointer2(
+            context, builder, dest_data, dest_shapes, dest_strides,
+            aryty.layout, dest_indices, wraparound=False,
+            boundscheck=context.enable_boundscheck)
         store_item(context, builder, aryty, src, dest_ptr)
         indexer.end_loops()
     else:
@@ -2048,10 +2048,10 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
 
         # No need to check for wraparound, as the indexers all ensure
         # a positive index is returned.
-        dest_ptr = cgutils.get_item_pointer2(context, builder, dest_data,
-                                             dest_shapes, dest_strides,
-                                             aryty.layout, dest_indices,
-                                             wraparound=False)
+        dest_ptr = cgutils.get_item_pointer2(
+            context, builder, dest_data, dest_shapes, dest_strides,
+            aryty.layout, dest_indices, wraparound=False,
+            boundscheck=context.enable_boundscheck)
 
         val = src_getitem(src_idx)
         val = context.cast(builder, val, src_dtype, aryty.dtype)
