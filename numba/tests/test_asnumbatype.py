@@ -208,7 +208,8 @@ class TestAsNumbaType(TestCase):
             )
 
     def test_native_no_args_throws(self):
-        # Native container types without arguments are not supported.
+        # Non-generic types of native container are not strictly homogeneous,
+        # therefore not supported.
         native_no_args_types = [
             list,
             set,
