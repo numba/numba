@@ -2011,8 +2011,26 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
             def flat_imp_copy(ary):
                 return ary.copy().reshape(ary.size)
 
+            # Check for array overlap
+            src_strides = cgutils.unpack_tuple(builder, src.strides)
+            src_start, src_end = get_array_memory_extents(
+                context, builder, srcty, src, src_shapes,
+                src_strides, src_data
+            )
+
+            dest_lower, dest_upper = indexer.get_offset_bounds(
+                dest_strides, ary.itemsize)
+            dest_start, dest_end = compute_memory_extents(
+                context, builder, dest_lower, dest_upper, dest_data
+            )
+
+            use_copy = extents_may_overlap(
+                context, builder, src_start, src_end,
+                dest_start, dest_end
+            )
+
             # If the source array is contigous, use the nocopy version
-            if srcty.is_contig:
+            if srcty.is_contig and not use_copy:
                 flat_imp = flat_imp_nocopy
             # otherwise, use copy version since we don't support
             # reshaping non-contigous arrays
