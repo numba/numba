@@ -1170,13 +1170,13 @@ class FancyIndexer(object):
         if any([isinstance(i, IntegerArrayIndexer) for i in indexers]):
             for idx, i in enumerate(indexers):
                 if isinstance(i, (IntegerArrayIndexer, IntegerIndexer)):
-                    if in_subspace is False:
+                    if not in_subspace:
                         in_subspace = True
                         num_subspaces += 1
                     if subspace_index is None:
                         subspace_index = idx
                 else:
-                    if in_subspace is True:
+                    if in_subspace:
                         in_subspace = False
 
             if num_subspaces:
