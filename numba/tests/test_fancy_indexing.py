@@ -398,6 +398,10 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
          1),
         (3, np.array([True, False, True, False, True, False]),
          slice(None), slice(4)),
+
+        # Mutiple multidimensional array indices
+        (3, np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]]), slice(None), np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]])),
+        (np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]]), 3, Ellipsis, np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]])),
     ]
 
     def setUp(self):
