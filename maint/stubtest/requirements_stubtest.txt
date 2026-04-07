@@ -1,0 +1,6 @@
+mypy >=1.20, <1.21
+scipy-stubs
+types-psutil
+types-pygments
+types-pyyaml
+types-setuptools
