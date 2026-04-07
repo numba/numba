@@ -4,9 +4,7 @@ import itertools
 import numpy as np
 
 import unittest
-from numba import jit, typeof, njit
-from numba import njit, typeof
-from numba.core import types
+from numba import jit, njit
 from numba.core.errors import TypingError
 from numba.tests.support import MemoryLeakMixin, TestCase
 
