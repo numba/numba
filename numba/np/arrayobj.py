@@ -1033,7 +1033,7 @@ class SliceIndexer(Indexer):
         builder.position_at_end(self.bb_end)
 
 
-class SubspaceIndexer(object):
+class SubspaceIndexer(Indexer):
     def __init__(self, context, builder, shape_tuple, global_ary_idx):
         self.context = context
         self.builder = builder
@@ -1061,6 +1061,13 @@ class SubspaceIndexer(object):
         return (self.ll_intp(0), self.size)
 
     def loop_head(self):
+        # Subspace index is being tracked globally within self.global_ary_idx
+        # and is used by the IntegerArrayIndexers to access the element
+        # of the respective index arrays. Over here we simply increment
+        # the global index and yield control to the next indexer,
+        # hence returning None, later we remove this None index from the
+        # final list of indices in the FancyIndexer.loop_head().
+
         builder = self.builder
         # Initialize loop variable
         builder.branch(self.bb_start)
