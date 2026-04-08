@@ -3,6 +3,7 @@ import math
 import sys
 
 from numba import jit, types
+from numba.core import utils
 from numba.tests.support import TestCase
 from .complex_usecases import *
 import unittest
@@ -116,6 +117,89 @@ class TestComplex(BaseComplexTest, TestCase):
 
     def test_div_npm(self):
         self.test_div(flags=no_pyobj_flags)
+
+
+@unittest.skipUnless(
+    utils.PYVERSION >= (3, 14),
+    "Complex NaN recovery only applies on Python 3.14+",
+)
+class TestComplexNaNRecovery(BaseComplexTest, TestCase):
+    """
+    Verify CPython NaN-recovery for complex mul / div.
+    """
+
+    def _check(self, pyfunc, a, b, flags=no_pyobj_flags):
+        value_types = [(types.complex128, types.complex128)]
+        self.run_binary(pyfunc, value_types, [(a, b)], flags=flags)
+
+    # Multiplication recovery
+
+    def test_mul_inf_times_real(self):
+        self._check(mul_usecase,
+                     complex(float('inf'), float('inf')), complex(1, 0))
+
+    def test_mul_inf_times_imag(self):
+        self._check(mul_usecase,
+                     complex(float('inf'), float('inf')), complex(0, 1))
+
+    def test_mul_inf_times_neg_real(self):
+        self._check(mul_usecase,
+                     complex(float('inf'), float('inf')), complex(-1, 0))
+
+    def test_mul_inf_times_neg_imag(self):
+        self._check(mul_usecase,
+                     complex(float('inf'), float('inf')), complex(0, -1))
+
+    def test_mul_neg_inf_times_real(self):
+        self._check(mul_usecase,
+                     complex(float('-inf'), float('-inf')), complex(1, 0))
+
+    def test_mul_mixed_inf_times_real(self):
+        self._check(mul_usecase,
+                     complex(float('inf'), float('-inf')), complex(1, 0))
+
+    # Division recovery
+
+    def test_div_real_over_inf(self):
+        self._check(div_usecase,
+                     complex(1, 0), complex(float('inf'), float('inf')))
+
+    def test_div_neg_over_inf(self):
+        self._check(div_usecase,
+                     complex(-1, 0), complex(float('inf'), float('inf')))
+
+    def test_div_inf_over_real(self):
+        self._check(div_usecase,
+                     complex(float('inf'), float('inf')), complex(1, 0))
+
+    def test_div_neg_inf_over_real(self):
+        self._check(div_usecase,
+                     complex(float('-inf'), float('-inf')), complex(1, 0))
+
+    # No recovery: partial infinities
+
+    def test_mul_partial_inf(self):
+        self._check(mul_usecase,
+                     complex(float('inf'), 0), complex(1, 0))
+
+    def test_div_partial_inf(self):
+        self._check(div_usecase,
+                     complex(float('inf'), 0), complex(1, 0))
+
+    # Indeterminate: should remain NaN
+
+    def test_mul_inf_times_zero(self):
+        self._check(mul_usecase,
+                     complex(float('inf'), float('inf')), complex(0, 0))
+
+    def test_mul_partial_inf_times_zero(self):
+        self._check(mul_usecase,
+                     complex(float('inf'), 0), complex(0, 0))
+
+    def test_div_inf_over_inf(self):
+        self._check(div_usecase,
+                     complex(float('inf'), float('inf')),
+                     complex(float('inf'), float('inf')))
 
 
 class TestCMath(BaseComplexTest, TestCase):
