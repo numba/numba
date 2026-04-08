@@ -230,8 +230,6 @@ exclude =
     numba/testing/main.py
     numba/np/unsafe/ndarray.py
     numba/np/ufunc/sigparse.py
-    numba/np/types/datetime.py
-    numba/np/types/datetime_registry.py
     numba/parfors/parfor_lowering.py
     numba/np/ufunc/array_exprs.py
     numba/np/ufunc/decorators.py
