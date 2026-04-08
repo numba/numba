@@ -1123,7 +1123,7 @@ def complex_div_impl(context, builder, sig, args):
                     (areal * ratio + aimag) / denom,
                     (aimag * ratio - areal) / denom)
 
-        if (utils.HAS_COMPLEX_DIV_NAN_RECOVERY
+        if (utils.PYVERSION >= (3, 14)
                 and math.isnan(res.real) and math.isnan(res.imag)):
             if ((math.isinf(areal) or math.isinf(aimag))
                     and math.isfinite(breal) and math.isfinite(bimag)):
