@@ -445,7 +445,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(cfunc(arr), expected)
 
     def test_mean_empty_timedelta(self):
-        """Test that mean of empty timede`lta array returns NaT"""
+        """Test that mean of empty timedelta array returns NaT"""
         cfunc = jit(nopython=True)(array_mean)
 
         # Empty timedelta64 array
