@@ -3,8 +3,7 @@ import math
 import sys
 
 from numba import jit, types
-from numba.core import utils
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, skip_unless_py314_or_later
 from .complex_usecases import *
 import unittest
 
@@ -119,10 +118,7 @@ class TestComplex(BaseComplexTest, TestCase):
         self.test_div(flags=no_pyobj_flags)
 
 
-@unittest.skipUnless(
-    utils.PYVERSION >= (3, 14),
-    "Complex NaN recovery only applies on Python 3.14+",
-)
+@skip_unless_py314_or_later
 class TestComplexNaNRecovery(BaseComplexTest, TestCase):
     """
     Verify CPython NaN-recovery for complex mul / div.
