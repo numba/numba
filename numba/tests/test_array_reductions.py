@@ -460,6 +460,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         
         # Empty datetime64 array - both NumPy and Numba should error
         arr = np.array([], dtype='datetime64[D]')
+        # Exceptions leak references
+        self.disable_leak_check()
         # NumPy raises _UFuncBinaryResolutionError
         # ufunc 'add' cannot use operands with types dtype('<M8[D]') and dtype('<M8[D]')
         with self.assertRaises(Exception):
