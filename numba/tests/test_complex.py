@@ -3,7 +3,7 @@ import math
 import sys
 
 from numba import jit, types
-from numba.tests.support import TestCase, skip_if_py314
+from numba.tests.support import TestCase
 from .complex_usecases import *
 import unittest
 
