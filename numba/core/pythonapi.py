@@ -1301,9 +1301,7 @@ class PythonAPI(object):
 
     # ------ utils -----
     def _get_function(self, fnty, name):
-        return cgutils.get_or_insert_foreign_function(
-            self.context, self.module, fnty, name
-        )
+        return self.context.get_or_insert_foreign_function(self.module, fnty, name)
 
     def alloca_obj(self):
         return self.builder.alloca(self.pyobj)
