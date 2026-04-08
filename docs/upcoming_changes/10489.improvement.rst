@@ -1,5 +1,5 @@
 Shifted ``NPDatetime`` and ``NPTimedelta`` to ``numba.np.types.datetime`` module.
----------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
 
 This PR moves the definitions of ``NPDatetime`` and ``NPTimedelta`` from
 ``numba.core.types`` to ``numba.np.types.datetime``. This change is part of a larger effort
