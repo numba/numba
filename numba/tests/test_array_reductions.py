@@ -2,7 +2,7 @@ from itertools import product, combinations_with_replacement
 
 import numpy as np
 
-from numba import jit, njit, typeof
+from numba import jit, njit, typeof, types
 from numba.np.numpy_support import numpy_version
 from numba.tests.support import TestCase, MemoryLeakMixin, tag, skip_if_numpy_2
 import unittest
@@ -429,18 +429,19 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         """Test that mean of empty array returns nan (issue #5502)"""
         cfunc = jit(nopython=True)(array_mean)
 
-        # Empty float64 array
-        arr = np.float64([])
-        expected = np.mean(arr)
-        self.assertPreciseEqual(cfunc(arr), expected)
+        # Empty float / complex array
+        for np_type, nb_type in [(np.float32, types.float32),
+                                 (np.float64, types.float64),
+                                 (np.complex64, types.complex64),
+                                 (np.complex128, types.complex128)]:
+            with self.subTest(np_type=np_type, nb_type=nb_type):
+                arr = np_type([])
+                expected = np.mean(arr)
+                self.assertPreciseEqual(cfunc(arr), expected)
+                self.assertEqual(cfunc.nopython_signatures[-1].return_type, nb_type)
 
         # Empty int array
         arr = np.int64([])
-        expected = np.mean(arr)
-        self.assertPreciseEqual(cfunc(arr), expected)
-
-        # Empty complex array
-        arr = np.complex64([])
         expected = np.mean(arr)
         self.assertPreciseEqual(cfunc(arr), expected)
 
@@ -457,7 +458,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_mean_empty_datetime(self):
         """Test that mean of empty datetime array raises error (matches NumPy behavior)"""
         cfunc = jit(nopython=True)(array_mean)
-        
+
         # Empty datetime64 array - both NumPy and Numba should error
         arr = np.array([], dtype='datetime64[D]')
         # Exceptions leak references
@@ -487,7 +488,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_scalar_basic(array_amin)
         #array testing
         self.check_reduction_basic(array_amin)
-    
+
 
     def test_max_basic(self):
         #array testing

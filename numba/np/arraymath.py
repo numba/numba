@@ -463,7 +463,7 @@ def array_mean(a):
                 # For complex, both real and imag should be nan
                 nan_value = dtype.type(complex("nan+nanj"))
             else:
-                nan_value = np.nan
+                nan_value = dtype.type(np.nan)
 
             # For numeric types, handle empty arrays by returning nan
             def array_mean_impl(a):
@@ -476,7 +476,7 @@ def array_mean(a):
                 c = acc_init
                 for v in np.nditer(a):
                     c += v.item()
-                return c / a.size
+                return c / dtype.type(a.size)
         else:
             # For datetime/timedelta, don't add special empty array handling
             # Let it behave as before (NumPy itself raises error for empty
