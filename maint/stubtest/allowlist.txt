@@ -35,8 +35,12 @@ numba\.testing\..*
 numba\.tests\..*
 numba\.typed\..*
 
+# numpy <2 compat
+numba\.(__all__|float_)
+numba\.core\.types\.(__all__|bool|float_)
+
 # TODO
-numba\.__all__
 numba\.core\.types\.functions\..*
 numba\.core\.types\.scalars\..*
 numba\.types\..*
+
