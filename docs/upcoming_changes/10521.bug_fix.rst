@@ -1,0 +1,7 @@
+Fix scalar handling in ``np.argmin``
+------------------------------------
+
+Fixed scalar handling in the ``np.argmin`` function. Previously, this
+function would fail when called with scalar inputs. Now it properly handles
+both scalar and array inputs. The supported scalar types are `types.Number`,
+`types.Boolean`, `types.NPDatetime`, and `types.NPTimedelta`.

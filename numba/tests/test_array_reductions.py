@@ -503,7 +503,41 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_scalar_basic(array_amax)
 
     def test_argmin_basic(self):
-        self.check_reduction_basic(array_argmin)
+        cfunc = jit(nopython=True)(array_argmin_global)
+
+        def check(arg):
+            expected = array_argmin_global(arg)
+            got = cfunc(arg)
+            self.assertPreciseEqual(got, expected)
+
+        # empty array
+        with self.assertRaises(ValueError):
+            check(np.array([]))
+
+        # scalars and special values
+        check(np.float64(1.0))
+        check(np.bool_(True))
+        check(np.nan)
+        check(np.inf)
+        check(-0.0)
+
+        # basic 1D arrays
+        check(np.array([0.0, -1.0, -1.0, 1.0, 1.0, 0.0]))
+        check(np.float64([-1.5, 2.5, 'inf']))
+        check(np.float64([-1.5, 2.5, '-inf']))
+        check(np.float64([-1.5, 2.5, 'inf', '-inf']))
+        check(np.array(['nan']))
+        check(np.array(['nan', 1, 2]))
+        check(np.array(['nan', '-inf']))
+        check(np.array(['nan', 'nan']))
+
+        # types with special treatment
+        check(np.datetime64(0, 'Y'))
+        check(np.timedelta64(10, 's'))
+
+        # invalid type
+        with self.assertTypingError():
+            check('string')
 
     def test_argmax_basic(self):
         self.check_reduction_basic(array_argmax)
@@ -1291,7 +1325,19 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             for cfunc in c_functions:
                 self.assertPreciseEqual(cfunc.py_func(arr), cfunc(arr))
 
+    def test_argmin_axis_scalar(self):
+        scalar = np.int64(1)
+        axes = [-1, 0]
+
+        py_functions = [lambda a, _axis=axis: np.argmin(a, axis=_axis)
+                        for axis in axes]
+        c_functions = [jit(nopython=True)(pyfunc) for pyfunc in py_functions]
+
+        for cfunc in c_functions:
+            self.assertPreciseEqual(cfunc.py_func(scalar), cfunc(scalar))
+
     def test_argmin_axis_out_of_range(self):
+        scalar = np.int64(1)
         arr1d = np.arange(6)
         arr2d = np.arange(6).reshape(2, 3)
 
@@ -1305,6 +1351,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             with self.assertRaisesRegex(ValueError, "axis.*out of bounds"):
                 jitargmin(arr, axis)
 
+        assert_raises(scalar, 1)
+        assert_raises(scalar, -2)
         assert_raises(arr1d, 1)
         assert_raises(arr1d, -2)
         assert_raises(arr2d, -3)
