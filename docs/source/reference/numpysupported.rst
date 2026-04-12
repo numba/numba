@@ -691,7 +691,8 @@ The following :py:class:`Generator` methods are supported:
 * :func:`numpy.random.Generator().permutation()` (Only accepts NumPy ndarrays and integers.)
 * :func:`numpy.random.Generator().poisson()`
 * :func:`numpy.random.Generator().power()`
-* :func:`numpy.random.Generator().random()`
+* :func:`numpy.random.Generator().random()` (In-place operation using the ``out`` 
+  keyword is not supported.)
 * :func:`numpy.random.Generator().rayleigh()`
 * :func:`numpy.random.Generator().shuffle()` (Only accepts NumPy ndarrays.)
 * :func:`numpy.random.Generator().standard_cauchy()`
