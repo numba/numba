@@ -259,6 +259,31 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         with self.assertTypingError() as e:
             cfunc('string')
 
+    def check_scalar_temporal(self, pyfunc, **kwargs):
+        cfunc = jit(nopython=True)(pyfunc)
+        def check(arr):
+            self.assertPreciseEqual(pyfunc(arr), cfunc(arr), **kwargs)
+
+        #check datetime
+        arr = np.datetime64('2020-01-01')
+        check(arr)
+        arr = np.datetime64('2020-01-01T12:00')
+        check(arr)
+        arr = np.datetime64('2020-01-01T12:00:00.000000')
+        check(arr)
+        arr = np.datetime64('2020-01-01T12:00:00.000000000')
+        check(arr)
+
+        #check timedelta
+        arr = np.timedelta64(5, 'D')
+        check(arr)
+        arr = np.timedelta64(5, 'm')
+        check(arr)
+        arr = np.timedelta64(5, 's')
+        check(arr)
+        arr = np.timedelta64(5, 'us')
+        check(arr)
+
     def test_all_basic(self, pyfunc=array_all):
         cfunc = jit(nopython=True)(pyfunc)
         def check(arr):
@@ -482,6 +507,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_scalar_basic(array_min_global)
         #array testing
         self.check_reduction_basic(array_min)
+        #temporal testing
+        self.check_scalar_temporal(array_min_global)
 
     def test_amin_basic(self):
         #scalar testing
@@ -495,6 +522,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_reduction_basic(array_max)
         #scalar testing
         self.check_scalar_basic(array_max_global)
+        #temporal testing
+        self.check_scalar_temporal(array_max_global)
 
     def test_amax_basic(self):
         #array testing
