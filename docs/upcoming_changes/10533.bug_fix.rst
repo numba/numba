@@ -1,0 +1,7 @@
+Fix temporal scalar handling in ``np.min`` and ``np.max``
+------------------------------------------------
+
+Fix temporal scalar handling in ``np.min`` and ``np.max`` functions. Previously, these
+functions would fail when called with temporal scalar inputs. They now properly handle
+both temporal scalar, scalar and array inputs, returning the original value when a
+temporal scalar is provided.
