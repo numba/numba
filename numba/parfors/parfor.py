@@ -267,7 +267,7 @@ def max_parallel_impl(return_type, arg):
         def max_1(in_arr):
             numba.parfors.parfor.init_prange()
             max_checker(len(in_arr))
-            val = numba.cpython.builtins.get_type_min_value(in_arr.dtype)
+            val = get_type_min_value(in_arr.dtype)
             for i in numba.pndindex(in_arr.shape):
                 val = max(val, in_arr[i])
             return val
@@ -288,7 +288,7 @@ def argmax_parallel_impl(in_arr):
     numba.parfors.parfor.init_prange()
     argmax_checker(len(in_arr))
     A = in_arr.ravel()
-    init_val = numba.cpython.builtins.get_type_min_value(A.dtype)
+    init_val = get_type_min_value(A.dtype)
     ival = typing.builtins.IndexValue(0, init_val)
     for i in numba.parfors.parfor.internal_prange(len(A)):
         curr_ival = typing.builtins.IndexValue(i, A[i])
