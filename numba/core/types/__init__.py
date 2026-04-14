@@ -2,6 +2,7 @@ import struct
 
 import numpy as np
 from numba.core import utils
+import ctypes
 
 from .abstract import *
 from .containers import *
@@ -147,21 +148,28 @@ np_double = double = float64
 if numpy_version < (2, 0):
     float_ = float32
 
-_make_signed = lambda x: globals()["int%d" % (np.dtype(x).itemsize * 8)]
-_make_unsigned = lambda x: globals()["uint%d" % (np.dtype(x).itemsize * 8)]
+_make_signed = lambda x: globals()["int%d" % (ctypes.sizeof(x) * 8)]
+_make_unsigned = lambda x: globals()["uint%d" % (ctypes.sizeof(x) * 8)]
 
-char = np_char = _make_signed(np.byte)
-uchar = np_uchar = byte = _make_unsigned(np.byte)
-short = np_short = _make_signed(np.short)
-ushort = np_ushort = _make_unsigned(np.short)
-int_ = np_int_ = _make_signed(np.int_)
-uint = np_uint = _make_unsigned(np.int_)
-intc = np_intc = _make_signed(np.intc) # C-compat int
-uintc = np_uintc = _make_unsigned(np.uintc) # C-compat uint
-long_ = np_long = _make_signed(np.int_)  # C-compat long
-ulong = np_ulong = _make_unsigned(np.int_)  # C-compat ulong
-longlong = np_longlong = _make_signed(np.longlong)
-ulonglong = np_ulonglong = _make_unsigned(np.longlong)
+char = np_char = _make_signed(ctypes.c_char)
+uchar = np_uchar = byte = _make_unsigned(ctypes.c_ubyte)
+short = np_short = _make_signed(ctypes.c_short)
+ushort = np_ushort = _make_unsigned(ctypes.c_ushort)
+int_ = np_int_ = _make_signed(ctypes.c_long)
+uint = np_uint = _make_unsigned(ctypes.c_long)
+intc = np_intc = _make_signed(ctypes.c_int) # C-compat int
+uintc = np_uintc = _make_unsigned(ctypes.c_uint) # C-compat uint
+long_ = np_long = _make_signed(ctypes.c_long)  # C-compat long
+ulong = np_ulong = _make_unsigned(ctypes.c_ulong)  # C-compat ulong
+longlong = np_longlong = _make_signed(ctypes.c_longlong)
+ulonglong = np_ulonglong = _make_unsigned(ctypes.c_ulonglong)
+
+# This is equivalent to NumPy's `np.dtype('U1').itemsize`,
+# which is the size of a single Unicode character in bytes.
+
+# We can't keep this as `ctypes.c_wchar` because its size 
+# is platform-dependent (2 bytes on Windows, 4 bytes on Unix).
+sizeof_unicode_char = ctypes.sizeof(ctypes.c_byte) * 4
 
 all_str = '''
 int8

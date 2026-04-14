@@ -1,0 +1,6 @@
+Removed NumPy based Unicode Character Sequence type width detection and indexing
+--------------------------------------------------------------------------------
+
+This PR removes the dependency of CPython module on NumPy for automatic detection of
+width of the Unicode Characters. This functionality is now provided by the ``ctypes``
+module.
