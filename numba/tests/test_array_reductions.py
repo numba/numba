@@ -119,6 +119,18 @@ def array_nanprod(arr):
 def array_nanstd(arr):
     return np.nanstd(arr)
 
+def array_nanstd_ddof0(arr):
+    return np.nanstd(arr, ddof=0)
+
+def array_nanstd_ddof1(arr):
+    return np.nanstd(arr, ddof=1)
+
+def array_nanvar_ddof0(arr):
+    return np.nanvar(arr, ddof=0)
+
+def array_nanvar_ddof1(arr):
+    return np.nanvar(arr, ddof=1)
+
 def array_nanvar(arr):
     return np.nanvar(arr)
 
@@ -479,6 +491,14 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
     def test_nanstd_basic(self):
         self.check_reduction_basic(array_nanstd)
+
+    def test_nanstd_ddof(self):
+        self.check_reduction_basic(array_nanstd_ddof0)
+        self.check_reduction_basic(array_nanstd_ddof1)
+
+    def test_nanvar_ddof(self):
+        self.check_reduction_basic(array_nanvar_ddof0, prec='double')
+        self.check_reduction_basic(array_nanvar_ddof1, prec='double')
 
     def test_nanvar_basic(self):
         self.check_reduction_basic(array_nanvar, prec='double')

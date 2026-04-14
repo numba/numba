@@ -1,0 +1,1 @@
+Added ``ddof`` argument to ``np.nanvar`` and ``np.nanstd`` in nopython mode (issue #6611).
