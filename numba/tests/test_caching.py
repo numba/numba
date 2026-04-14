@@ -1321,5 +1321,31 @@ class TestInTreeCacheLocatorFsAgnostic(TestCase):
         self.assertEqual(stamp[1], stat_result.st_size)
 
 
+class TestRebuildEnvNoneModule(TestCase):
+    """Tests for _rebuild_env behavior when modname is None (issue #10485).
+
+    Functions defined inside exec() without a '__name__' in their globals
+    produce modname=None when pickled. On cache load this used to crash with
+    a cryptic AttributeError deep inside importlib; now it should raise a
+    clear RuntimeError.
+    """
+
+    def test_rebuild_env_raises_on_none_modname(self):
+        from numba.core.environment import _rebuild_env
+        with self.assertRaises(RuntimeError) as cm:
+            _rebuild_env(None, [], "dummy_env_name")
+        self.assertIn("exec()", str(cm.exception))
+        self.assertIn("__name__", str(cm.exception))
+
+    def test_rebuild_env_error_message_is_actionable(self):
+        from numba.core.environment import _rebuild_env
+        with self.assertRaises(RuntimeError) as cm:
+            _rebuild_env(None, [], "dummy_env_name")
+        msg = str(cm.exception)
+        # Message must tell the user both what went wrong and how to fix it
+        self.assertIn("cache", msg.lower())
+        self.assertIn("__name__", msg)
+
+
 if __name__ == '__main__':
     unittest.main()
