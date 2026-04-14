@@ -7,11 +7,11 @@ import numpy as np
 from numba.core import errors, types
 from numba.core.typing.templates import signature
 from numba.core.errors import TypingError
+from numba.np import types as npy_types
+from numba.np.npdatetime_helpers import combine_datetime_timedelta_units
 
 # re-export
 from numba.core.cgutils import is_nonelike   # noqa: F401
-from numba.np import types as npy_types
-
 
 numpy_version = tuple(map(int, np.__version__.split('.')[:2]))
 
@@ -365,8 +365,6 @@ def ufunc_find_matching_loop(ufunc, arg_types):
     return value - A UFuncLoopSpec identifying the loop, or None
                    if no matching loop is found.
     """
-    from numba.np import npdatetime_helpers
-
     # Separate logical input from explicit output arguments
     input_types = arg_types[:ufunc.nin]
     output_types = arg_types[ufunc.nin:]
@@ -438,7 +436,7 @@ def ufunc_find_matching_loop(ufunc, arg_types):
             new_outputs = []
             for out in outputs:
                 if isinstance(out, npy_types.NPDatetime) and out.unit == "":
-                    unit = npdatetime_helpers.combine_datetime_timedelta_units(
+                    unit = combine_datetime_timedelta_units(
                         dt_unit, td_unit)
                     if unit is None:
                         raise TypingError(f"ufunc '{ufunc_name}' is not " +
