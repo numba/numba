@@ -120,11 +120,10 @@ def as_dtype(nbtype):
     Return a numpy dtype instance corresponding to the given Numba type.
     NumbaNotImplementedError is if no correspondence is known.
     """
-    from numba.np import types as np_types
 
     _as_dtype_letters = {
-        np_types.NPDatetime: 'M8',
-        np_types.NPTimedelta: 'm8',
+        npy_types.NPDatetime: 'M8',
+        npy_types.NPTimedelta: 'm8',
         types.CharSeq: 'S',
         types.UnicodeCharSeq: 'U',
     }
