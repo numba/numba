@@ -1,0 +1,8 @@
+Fix complex multiplication and division NaN recovery for Python 3.14+
+---------------------------------------------------------------------
+
+Complex number multiplication and division now match CPython 3.14+ behaviour
+when infinities produce ``nan+nanj`` under IEEE 754 arithmetic. The NaN
+recovery logic from CPython's ``_Py_c_prod()`` and ``_Py_c_quot()`` is
+applied for ``*`` and ``/`` on complex types when running on Python 3.14 and
+later.
