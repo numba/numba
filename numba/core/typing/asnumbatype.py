@@ -110,7 +110,7 @@ class AsNumbaTypeRegistry:
 
         if origin is set:
             (element_py,) = args
-            return types.Set(self.infer(element_py))
+            return types.SetType(self.infer(element_py))
 
         if origin is tuple:
             tys = tuple(map(self.infer, args))

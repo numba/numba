@@ -64,7 +64,7 @@ class TestAsNumbaType(TestCase):
         )
         self.assertEqual(
             as_numba_type(set[complex]),
-            types.Set(self.complex_nb_type),
+            types.SetType(self.complex_nb_type),
         )
         self.assertEqual(
             as_numba_type(tuple[float, float]),
@@ -86,7 +86,7 @@ class TestAsNumbaType(TestCase):
         )
         self.assertEqual(
             as_numba_type(py_typing.Set[complex]),
-            types.Set(self.complex_nb_type),
+            types.SetType(self.complex_nb_type),
         )
         self.assertEqual(
             as_numba_type(py_typing.Tuple[float, float]),
@@ -143,7 +143,7 @@ class TestAsNumbaType(TestCase):
         )
         self.assertEqual(
             as_numba_type(set[tuple[py_typing.Optional[int], float]]),
-            types.Set(types.Tuple(
+            types.SetType(types.Tuple(
                 [types.Optional(self.int_nb_type), self.float_nb_type])),
         )
         self.assertEqual(
@@ -155,7 +155,7 @@ class TestAsNumbaType(TestCase):
         self.assertEqual(
             as_numba_type(
                 py_typing.Set[py_typing.Tuple[py_typing.Optional[int], float]]),
-            types.Set(types.Tuple(
+            types.SetType(types.Tuple(
                 [types.Optional(self.int_nb_type), self.float_nb_type])),
         )
 
