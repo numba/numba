@@ -759,23 +759,6 @@ class NumberAttribute(AttributeTemplate):
         if not args:
             return signature(ty)
 
-
-@infer_getattr
-class NPTimedeltaAttribute(AttributeTemplate):
-    key = types.NPTimedelta
-
-    def resolve___class__(self, ty):
-        return types.NumberClass(ty)
-
-
-@infer_getattr
-class NPDatetimeAttribute(AttributeTemplate):
-    key = types.NPDatetime
-
-    def resolve___class__(self, ty):
-        return types.NumberClass(ty)
-
-
 @infer_getattr
 class SliceAttribute(AttributeTemplate):
     key = types.SliceType
@@ -818,6 +801,10 @@ class NumberClassAttribute(AttributeTemplate):
         ty = classty.instance_type
 
         def typer(val):
+            # TODO: When we refactor NumberClass, we should move this logic 
+            # to the NumPy module. For now, we special case the datetime-like 
+            # types here.
+            from numba.np.types.datetime import NPTimedelta, NPDatetime
             if isinstance(val, (types.BaseTuple, types.Sequence)):
                 # Array constructor, e.g. np.int32([1, 2])
                 fnty = self.context.resolve_value_type(np.array)
@@ -827,7 +814,7 @@ class NumberClassAttribute(AttributeTemplate):
             elif isinstance(val, (types.Number, types.Boolean, types.IntEnumMember)):
                  # Scalar constructor, e.g. np.int32(42)
                  return ty
-            elif isinstance(val, (types.NPDatetime, types.NPTimedelta)):
+            elif isinstance(val, (NPDatetime, NPTimedelta)):
                 # Constructor cast from datetime-like, e.g.
                 # > np.int64(np.datetime64("2000-01-01"))
                 if ty.bitwidth == 64:
@@ -897,8 +884,12 @@ class TypeRefAttribute(AttributeTemplate):
 class MinMaxBase(AbstractTemplate):
 
     def _unify_minmax(self, tys):
+        # TODO: When we refactor min and max, we should move datetime logic 
+        # to the NumPy module. For now, we special case the datetime-like 
+        # types here.
+        from numba.np.types.datetime import NPTimedelta, NPDatetime
         for ty in tys:
-            if not isinstance(ty, (types.Number, types.NPDatetime, types.NPTimedelta)):
+            if not isinstance(ty, (types.Number, NPDatetime, NPTimedelta)):
                 return
         return self.context.unify_types(*tys)
 
@@ -968,6 +959,10 @@ class Bool(AbstractTemplate):
 class Int(AbstractTemplate):
 
     def generic(self, args, kws):
+        # TODO: When we refactor min and max, we should move datetime logic 
+        # to the NumPy module. For now, we special case the datetime-like 
+        # types here.
+        from numba.np.types.datetime import NPTimedelta, NPDatetime
         if kws:
             raise errors.NumbaAssertionError('kws not supported')
 
@@ -977,12 +972,12 @@ class Int(AbstractTemplate):
             return signature(arg, arg)
         if isinstance(arg, (types.Float, types.Boolean)):
             return signature(types.intp, arg)
-        if isinstance(arg, types.NPDatetime):
+        if isinstance(arg, NPDatetime):
             if arg.unit == 'ns':
                 return signature(types.int64, arg)
             else:
                 raise errors.NumbaTypeError(f"Only datetime64[ns] can be converted, but got datetime64[{arg.unit}]")
-        if isinstance(arg, types.NPTimedelta):
+        if isinstance(arg, NPTimedelta):
             return signature(types.int64, arg)
 
 

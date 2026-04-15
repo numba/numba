@@ -23,6 +23,7 @@ from numba.tests.support import TestCase, create_temp_module
 from numba.tests.enum_usecases import Color, Shake, Shape
 import unittest
 from numba.np import numpy_support
+from numba.np import types as npy_types
 
 
 try:
@@ -229,13 +230,13 @@ class TestTypes(TestCase):
         # Value cast
         self.assertPreciseEqual(i(42.5), 42)
         self.assertPreciseEqual(d(-5), -5.0)
-        ty = types.NPDatetime('Y')
+        ty = npy_types.NPDatetime('Y')
         self.assertPreciseEqual(ty('1900'), np.datetime64('1900', 'Y'))
         self.assertPreciseEqual(ty('NaT'), np.datetime64('NaT', 'Y'))
-        ty = types.NPTimedelta('s')
+        ty = npy_types.NPTimedelta('s')
         self.assertPreciseEqual(ty(5), np.timedelta64(5, 's'))
         self.assertPreciseEqual(ty('NaT'), np.timedelta64('NaT', 's'))
-        ty = types.NPTimedelta('')
+        ty = npy_types.NPTimedelta('')
         self.assertPreciseEqual(ty(5), np.timedelta64(5))
         self.assertPreciseEqual(ty('NaT'), np.timedelta64('NaT'))
 
@@ -463,9 +464,9 @@ class TestPickling(TestCase):
 
     def test_atomic_types(self):
         for unit in ('M', 'ms'):
-            ty = types.NPDatetime(unit)
+            ty = npy_types.NPDatetime(unit)
             self.check_pickling(ty)
-            ty = types.NPTimedelta(unit)
+            ty = npy_types.NPTimedelta(unit)
             self.check_pickling(ty)
 
     def test_arrays(self):
