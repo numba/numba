@@ -475,6 +475,9 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_reduction_basic(array_var, prec='double')
 
     def test_std_basic(self):
+        #scalar testing
+        self.check_scalar_basic(array_std_global)
+        #array testing
         self.check_reduction_basic(array_std)
 
     def test_min_basic(self):

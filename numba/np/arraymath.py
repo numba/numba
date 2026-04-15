@@ -519,6 +519,25 @@ def array_std(a):
 
         return array_std_impl
 
+    # Integers and booleans default to float64(0.0) in numpy.std
+    elif isinstance(a, (types.Integer, types.Boolean)):
+
+        def std_scalar_integer_impl(a):
+            return np.float64(0.0)
+        return std_scalar_integer_impl
+
+    # Floats and numbers preserve types in numpy.std
+    elif isinstance(a, (types.Float, types.Complex)):
+        out_dtype = as_dtype(getattr(a,'underlying_float',a))
+        zero = out_dtype.type(0)
+        nan_val = out_dtype.type(np.nan)
+
+        def std_scalar_float_impl(a):
+            if not np.isfinite(a):
+                return nan_val
+            return zero
+        return std_scalar_float_impl
+
 
 @register_jitable
 def min_comparator(a, min_val):
