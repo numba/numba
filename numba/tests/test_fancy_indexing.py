@@ -400,8 +400,10 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
          slice(None), slice(4)),
 
         # Mutiple multidimensional array indices
-        (3, np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]]), slice(None), np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]])),
-        (np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]]), 3, Ellipsis, np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]])),
+        (3, np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]]), np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]]), slice(None)), # Consecutive multidimensional array indices
+        (3, np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]]), slice(None), np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]])), # Non-consecutive multidimensional array indices
+        (np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]]), np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]]), 3, Ellipsis), # Consecutive multidimensional array indices with Ellipsis
+        (np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]]), 3, Ellipsis, np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]])), # Non-consecutive multidimensional array indices with Ellipsis
     ]
 
     def setUp(self):

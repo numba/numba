@@ -1051,7 +1051,7 @@ class SubspaceIndexer(Indexer):
         self.bb_end = builder.append_basic_block()
 
     def get_size(self):
-        return None
+        return self.size
 
     def get_shape(self):
         return self.shape_tuple
@@ -1087,9 +1087,6 @@ class SubspaceIndexer(Indexer):
         builder.store(next_index, self.global_ary_idx)
         builder.branch(self.bb_start)
         builder.position_at_end(self.bb_end)
-
-    def cleanup(self, context, builder):
-        pass
 
 
 class FancyIndexer(object):
@@ -1190,19 +1187,26 @@ class FancyIndexer(object):
                 if num_subspaces > 1:
                     subspace_index = 0
 
-                indexers.insert(subspace_index, self.subspace_indexer)
-
         self.subspace_index = subspace_index
         self.indexers = indexers
 
     def prepare(self):
         one = self.context.get_constant(types.intp, 1)
-        for i in self.indexers:
+        for idx, i in enumerate(self.indexers):
+            if idx == self.subspace_index:
+                self.subspace_indexer.prepare()
             i.prepare()
+
         # Compute the resulting shape
         res_shape = []
         for i in self.indexers:
             res_shape.append(list(i.get_shape()))
+
+        if self.subspace_index is not None:
+            res_shape.insert(
+                self.subspace_index,
+                list(self.subspace_indexer.get_shape())
+            )
 
         # Store the shape as a tuple, we can't do a simple
         # tuple(res_shape) here since res_shape is a list
@@ -1259,14 +1263,20 @@ class FancyIndexer(object):
         return lower, upper
 
     def begin_loops(self):
-        indices = list(i.loop_head() for i in self.indexers)
-        if self.subspace_index is not None:
-            indices.pop(self.subspace_index)
+        indices = []
+        for idx, i in enumerate(self.indexers):
+            if idx == self.subspace_index:
+                self.subspace_indexer.loop_head()
+            indices.append(i.loop_head())
         return tuple(indices)
 
     def end_loops(self):
+        idx = len(self.indexers) - 1
         for i in reversed(self.indexers):
             i.loop_tail()
+            if idx == self.subspace_index:
+                self.subspace_indexer.loop_tail()
+            idx -= 1
 
     def cleanup(self, context, builder):
         for i in self.indexers:
@@ -2005,12 +2015,6 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
     else:
         is_flattened = False
         if isinstance(srcty, types.Array):
-            def flat_imp_nocopy(ary):
-                return ary.reshape(ary.size)
-
-            def flat_imp_copy(ary):
-                return ary.copy().reshape(ary.size)
-
             # Check for array overlap
             src_strides = cgutils.unpack_tuple(builder, src.strides)
             src_start, src_end = get_array_memory_extents(
@@ -2028,19 +2032,19 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
                 context, builder, src_start, src_end,
                 dest_start, dest_end
             )
+            srcty_contig = srcty.is_contig
 
-            # If the source array is contigous, use the nocopy version
-            if srcty.is_contig and not use_copy:
-                flat_imp = flat_imp_nocopy
-            # otherwise, use copy version since we don't support
-            # reshaping non-contigous arrays
-            else:
-                flat_imp = flat_imp_copy
+            def flat_imp(ary, use_copy):
+                if use_copy or not srcty_contig:
+                    return ary.copy().reshape(ary.size)
+                else:
+                    return ary.reshape(ary.size)
 
             retty = types.Array(srcty.dtype, 1, srcty.layout, readonly=True)
-            sig = signature(retty, srcty)
-            src_flat_instr = context.compile_internal(builder, flat_imp, sig,
-                                                      (src._getvalue(),))
+            sig = signature(retty, srcty, types.boolean)
+            src_flat_instr = context.compile_internal(
+                builder, flat_imp, sig, (src._getvalue(), use_copy)
+            )
             src_flat = make_array(retty)(context, builder, src_flat_instr)
             src_data = src_flat.data
             is_flattened = True
