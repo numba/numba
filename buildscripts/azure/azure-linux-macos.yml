@@ -54,5 +54,13 @@ jobs:
     - script: |
         set -e
         export PATH=$HOME/miniconda3/bin:$PATH
+        conda run -n $CONDA_ENV pip install -r maint/stubtest/requirements_stubtest.txt
+        conda run -n $CONDA_ENV python maint/stubtest.py
+      displayName: 'Stubtest'
+      condition: eq(variables['RUN_STUBTEST'], 'yes')
+
+    - script: |
+        set -e
+        export PATH=$HOME/miniconda3/bin:$PATH
         buildscripts/incremental/test.sh
       displayName: 'Test'
