@@ -1290,16 +1290,24 @@ def np_nanmean(a):
 
 
 @overload(np.nanvar)
-def np_nanvar(a, ddof=0):
+def np_nanvar(a, axis=None, dtype=None, out=None, ddof=0,
+              keepdims=np._NoValue):
     if not isinstance(a, types.Array):
         return
     if not isinstance(ddof, (types.Integer, types.Omitted, int)):
         return
+    if not is_nonelike(axis):
+        raise TypingError("np.nanvar: 'axis' argument is not supported")
+    if not is_nonelike(dtype):
+        raise TypingError("np.nanvar: 'dtype' argument is not supported")
+    if not is_nonelike(out):
+        raise TypingError("np.nanvar: 'out' argument is not supported")
 
     isnan = get_isnan(a.dtype)
 
     if isinstance(a.dtype, (types.Complex,)):
-        def nanvar_impl(a, ddof=0):
+        def nanvar_impl(a, axis=None, dtype=None, out=None, ddof=0,
+                        keepdims=np._NoValue):
             # For complex input NumPy uses abs(v - m)**2 (always real)
             m = np.nanmean(a)
             n = 0
@@ -1315,7 +1323,8 @@ def np_nanvar(a, ddof=0):
                 return np.nan
             return s / (n - ddof)
     else:
-        def nanvar_impl(a, ddof=0):
+        def nanvar_impl(a, axis=None, dtype=None, out=None, ddof=0,
+                        keepdims=np._NoValue):
             m = np.nanmean(a)
             n = 0
             s = 0.0
@@ -1333,14 +1342,22 @@ def np_nanvar(a, ddof=0):
 
 
 @overload(np.nanstd)
-def np_nanstd(a, ddof=0):
+def np_nanstd(a, axis=None, dtype=None, out=None, ddof=0,
+              keepdims=np._NoValue):
     if not isinstance(a, types.Array):
         return
     if not isinstance(ddof, (types.Integer, types.Omitted, int)):
         return
+    if not is_nonelike(axis):
+        raise TypingError("np.nanstd: 'axis' argument is not supported")
+    if not is_nonelike(dtype):
+        raise TypingError("np.nanstd: 'dtype' argument is not supported")
+    if not is_nonelike(out):
+        raise TypingError("np.nanstd: 'out' argument is not supported")
 
-    def nanstd_impl(a, ddof=0):
-        return np.nanvar(a, ddof) ** 0.5
+    def nanstd_impl(a, axis=None, dtype=None, out=None, ddof=0,
+                    keepdims=np._NoValue):
+        return np.nanvar(a, ddof=ddof) ** 0.5
 
     return nanstd_impl
 
