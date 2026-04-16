@@ -1087,40 +1087,6 @@ def complex_mul_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-NAN = float('nan')
-
-def complex_div_impl(context, builder, sig, args):
-    def complex_div(a, b):
-        # This is CPython's algorithm (in _Py_c_quot()).
-        areal = a.real
-        aimag = a.imag
-        breal = b.real
-        bimag = b.imag
-        if not breal and not bimag:
-            raise ZeroDivisionError("complex division by zero")
-        if abs(breal) >= abs(bimag):
-            # Divide tops and bottom by b.real
-            if not breal:
-                return complex(NAN, NAN)
-            ratio = bimag / breal
-            denom = breal + bimag * ratio
-            return complex(
-                (areal + aimag * ratio) / denom,
-                (aimag - areal * ratio) / denom)
-        else:
-            # Divide tops and bottom by b.imag
-            if not bimag:
-                return complex(NAN, NAN)
-            ratio = breal / bimag
-            denom = breal * ratio + bimag
-            return complex(
-                (a.real * ratio + a.imag) / denom,
-                (a.imag * ratio - a.real) / denom)
-
-    res = context.compile_internal(builder, complex_div, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
 def complex_negate_impl(context, builder, sig, args):
     from numba.cpython import mathimpl
     [typ] = sig.args
