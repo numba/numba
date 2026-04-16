@@ -954,33 +954,6 @@ class Bool(AbstractTemplate):
         # intrinsic.
         return self.context.resolve_function_type(operator.truth, args, kws)
 
-
-@infer_global(int)
-class Int(AbstractTemplate):
-
-    def generic(self, args, kws):
-        # TODO: When we refactor min and max, we should move datetime logic 
-        # to the NumPy module. For now, we special case the datetime-like 
-        # types here.
-        from numba.np.types.datetime import NPTimedelta, NPDatetime
-        if kws:
-            raise errors.NumbaAssertionError('kws not supported')
-
-        [arg] = args
-
-        if isinstance(arg, types.Integer):
-            return signature(arg, arg)
-        if isinstance(arg, (types.Float, types.Boolean)):
-            return signature(types.intp, arg)
-        if isinstance(arg, NPDatetime):
-            if arg.unit == 'ns':
-                return signature(types.int64, arg)
-            else:
-                raise errors.NumbaTypeError(f"Only datetime64[ns] can be converted, but got datetime64[{arg.unit}]")
-        if isinstance(arg, NPTimedelta):
-            return signature(types.int64, arg)
-
-
 @infer_global(float)
 class Float(AbstractTemplate):
 
