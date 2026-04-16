@@ -135,6 +135,10 @@ These variables influence what is printed out during compilation of
    operations. This environment variable has no effect unless the environment
    variable ``NUMBA_DEBUG_NRT`` is enabled. Default value is zero.
 
+   Note that this functionality isn't cache friendly, so it should be used with
+   caution. It changes ABI call interface so users are required to clean the cache
+   and recompile their code after setting the flag.
+
 .. envvar:: NUMBA_NRT_STATS
 
    If set to non-zero, enable the

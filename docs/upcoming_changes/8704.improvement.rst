@@ -1,0 +1,18 @@
+Added traceback printing capability while NRT debugging
+-------------------------------------------------------
+
+This improvement adds the capability to print the traceback of the NRT incref
+and decref calls. 
+
+This adds a flag ``NUMBA_DEBUG_NRT_STACK_LIMIT`` that helps user configure the
+stack limit for traceback. By default, the stack limit is set to 0, which means
+no traceback will be printed. Setting the stack limit to a positive integer will
+enable traceback printing up to that many frames. 
+
+This flag is only effective when the NRT debugging mode is enabled. i.e when the
+environment variable ``NUMBA_DEBUG_NRT`` is set to a non-empty value. Otherwise,
+the flag will be ignored and no traceback will be printed regardless of its value.
+
+Note that this functionality isn't cache friendly, so it should be used with caution.
+It changes ABI call interface so users are required to clean the cache and
+recompile their code after setting the flag.
