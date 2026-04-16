@@ -235,28 +235,6 @@ def do_minmax(context, builder, argtys, args, cmpop):
     resty, resval = reduce(binary_minmax, typvals)
     return resval
 
-
-@lower_builtin(max, types.BaseTuple)
-def max_iterable(context, builder, sig, args):
-    argtys = list(sig.args[0])
-    args = cgutils.unpack_tuple(builder, args[0])
-    return do_minmax(context, builder, argtys, args, operator.gt)
-
-@lower_builtin(max, types.VarArg(types.Any))
-def max_vararg(context, builder, sig, args):
-    return do_minmax(context, builder, sig.args, args, operator.gt)
-
-@lower_builtin(min, types.BaseTuple)
-def min_iterable(context, builder, sig, args):
-    argtys = list(sig.args[0])
-    args = cgutils.unpack_tuple(builder, args[0])
-    return do_minmax(context, builder, argtys, args, operator.lt)
-
-@lower_builtin(min, types.VarArg(types.Any))
-def min_vararg(context, builder, sig, args):
-    return do_minmax(context, builder, sig.args, args, operator.lt)
-
-
 def _round_intrinsic(tp):
     # round() rounds half to even
     return "llvm.rint.f%d" % (tp.bitwidth,)
@@ -581,6 +559,60 @@ def boolval_max(val1, val2):
         def bool_max_impl(val1, val2):
             return val1 or val2
         return bool_max_impl
+
+# -----------------------------------------------------------------------------
+
+@overload(max)
+def ol_max(*x):
+    for ty in x:
+        if not isinstance(ty, types.Number):
+            return None
+
+    def impl(*x):
+        return max_vararg(x)
+    return impl
+
+@overload(min)
+def ol_min(*x):
+    for ty in x:
+        if not isinstance(ty, types.Number):
+            return None
+
+    def impl(*x):
+        return min_vararg(x)
+    return impl
+
+@intrinsic
+def max_vararg(context, x):
+    def impl(context, builder, sig, args):
+        argtys = list(sig.args[0])
+        args = cgutils.unpack_tuple(builder, args[0])
+        return do_minmax(context, builder, argtys, args, operator.gt)
+
+    retty = context.unify_types(*x)
+
+    if retty is not None:
+        sig = signature(retty, x)
+        return sig, impl
+    else:
+        raise ValueError("Given types cannot be unified")
+
+@intrinsic
+def min_vararg(context, x):
+    def impl(context, builder, sig, args):
+        argtys = list(sig.args[0])
+        args = cgutils.unpack_tuple(builder, args[0])
+        return do_minmax(context, builder, argtys, args, operator.lt)
+
+    retty = context.unify_types(*x)
+    if retty is not None:
+        sig = retty(x)
+        return sig, impl
+    else:
+        raise ValueError("Given types cannot be unified")
+
+
+# -----------------------------------------------------------------------------
 
 
 greater_than = register_jitable(lambda a, b: a > b)
