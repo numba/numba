@@ -1,4 +1,4 @@
-Fix temporal scalar handling in ``np.min`` and ``np.max``
+arraymath: add temporal scalar support for np.min and np.max
 ------------------------------------------------
 
 Fix temporal scalar handling in ``np.min`` and ``np.max`` functions. Previously, these

@@ -13,6 +13,7 @@ import numpy as np
 
 from numba.core import types, cgutils
 from numba.core.extending import overload, overload_method, register_jitable
+from numba.core.types.scalars import NPDatetime, NPTimedelta
 from numba.np.numpy_support import (as_dtype, type_can_asarray, type_is_scalar,
                                     numpy_version, is_nonelike,
                                     check_is_integer, lt_floats, lt_complex)
@@ -540,7 +541,7 @@ def return_false(a):
 def npy_min(a):
     #scalar case
     if isinstance(a, (types.Number, types.Boolean,
-                      types.NPDatetime, types.NPTimedelta)):
+                      NPDatetime, NPTimedelta)):
         def scalar_min(a):
             return a
         return scalar_min
@@ -597,7 +598,7 @@ def npy_min(a):
 def npy_max(a):
     #scalar case
     if isinstance(a, (types.Number, types.Boolean,
-                      types.NPDatetime, types.NPTimedelta)):
+                      NPDatetime, NPTimedelta)):
         def scalar_max(a):
             return a
         return scalar_max
@@ -868,8 +869,18 @@ def np_all(a):
             return bool(a)
         return scalar_all
 
+    if isinstance(a, (NPDatetime, NPTimedelta)):
+        def temporal_scalar_all(a):
+            return np.bool_(True)
+        return temporal_scalar_all
+
     # for array
     if isinstance(a, types.Array):
+        if isinstance(a.dtype, (NPDatetime, NPTimedelta)):
+            def flat_all_datetime(a):
+                return np.bool_(True)
+            return flat_all_datetime
+
         def flat_all(a):
             for v in np.nditer(a):
                 if not v.item():
