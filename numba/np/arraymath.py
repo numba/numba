@@ -1290,8 +1290,7 @@ def np_nanmean(a):
 
 
 @overload(np.nanvar)
-def np_nanvar(a, axis=None, dtype=None, out=None, ddof=0,
-              keepdims=np._NoValue):
+def np_nanvar(a, axis=None, dtype=None, out=None, ddof=0):
     if not isinstance(a, types.Array):
         return
     if not isinstance(ddof, (types.Integer, types.Omitted, int)):
@@ -1306,8 +1305,7 @@ def np_nanvar(a, axis=None, dtype=None, out=None, ddof=0,
     isnan = get_isnan(a.dtype)
 
     if isinstance(a.dtype, (types.Complex,)):
-        def nanvar_impl(a, axis=None, dtype=None, out=None, ddof=0,
-                        keepdims=np._NoValue):
+        def nanvar_impl(a, axis=None, dtype=None, out=None, ddof=0):
             # For complex input NumPy uses abs(v - m)**2 (always real)
             m = np.nanmean(a)
             n = 0
@@ -1323,8 +1321,7 @@ def np_nanvar(a, axis=None, dtype=None, out=None, ddof=0,
                 return np.nan
             return s / (n - ddof)
     else:
-        def nanvar_impl(a, axis=None, dtype=None, out=None, ddof=0,
-                        keepdims=np._NoValue):
+        def nanvar_impl(a, axis=None, dtype=None, out=None, ddof=0):
             m = np.nanmean(a)
             n = 0
             s = 0.0
@@ -1342,8 +1339,7 @@ def np_nanvar(a, axis=None, dtype=None, out=None, ddof=0,
 
 
 @overload(np.nanstd)
-def np_nanstd(a, axis=None, dtype=None, out=None, ddof=0,
-              keepdims=np._NoValue):
+def np_nanstd(a, axis=None, dtype=None, out=None, ddof=0):
     if not isinstance(a, types.Array):
         return
     if not isinstance(ddof, (types.Integer, types.Omitted, int)):
@@ -1355,8 +1351,7 @@ def np_nanstd(a, axis=None, dtype=None, out=None, ddof=0,
     if not is_nonelike(out):
         raise TypingError("np.nanstd: 'out' argument is not supported")
 
-    def nanstd_impl(a, axis=None, dtype=None, out=None, ddof=0,
-                    keepdims=np._NoValue):
+    def nanstd_impl(a, axis=None, dtype=None, out=None, ddof=0):
         return np.nanvar(a, ddof=ddof) ** 0.5
 
     return nanstd_impl
