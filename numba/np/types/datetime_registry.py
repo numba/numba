@@ -28,7 +28,7 @@ def unbox_nptimedelta(typ, obj, c):
 
 
 @overload(max)
-def ol_max(*x):
+def ol_max_datetime(*x):
     if len(x) == 1 and (
         (isinstance(x[0], UniTuple) and isinstance(
             x[0].dtype, (NPDatetime, NPTimedelta)))
@@ -50,7 +50,7 @@ def ol_max(*x):
 
 
 @overload(min)
-def ol_min(*x):
+def ol_min_datetime(*x):
     if len(x) == 1 and (
         (isinstance(x[0], UniTuple) and isinstance(
             x[0].dtype, (NPDatetime, NPTimedelta)))

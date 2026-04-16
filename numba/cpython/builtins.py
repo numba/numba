@@ -609,7 +609,6 @@ def max_vararg(context, x):
         return do_minmax(context, builder, argtys, args, operator.gt)
 
     retty = context.unify_types(*x)
-
     if retty is not None:
         sig = signature(retty, x)
         return sig, impl
@@ -628,7 +627,7 @@ def min_vararg(context, x):
 
     retty = context.unify_types(*x)
     if retty is not None:
-        sig = retty(x)
+        sig = signature(x)
         return sig, impl
     else:
         raise ValueError("Given types cannot be unified")
