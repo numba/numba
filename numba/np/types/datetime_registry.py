@@ -1,5 +1,6 @@
 from numba.core.pythonapi import box, unbox, NativeValue
-from numba.np.types import NPDatetime, NPTimedelta, UniTuple, BaseTuple
+from numba.core.types import UniTuple, BaseTuple
+from numba.np.types import NPDatetime, NPTimedelta
 from numba.core.extending import overload
 from numba.cpython.builtins import max_vararg, min_vararg
 
