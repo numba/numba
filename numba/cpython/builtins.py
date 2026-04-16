@@ -564,26 +564,45 @@ def boolval_max(val1, val2):
 
 @overload(max)
 def ol_max(*x):
-    for ty in x:
-        if not isinstance(ty, types.Number):
-            return None
+    if len(x) == 1 and (
+        (isinstance(x[0], types.UniTuple) and isinstance(x[0].dtype, types.Number))
+        or (isinstance(x[0], types.BaseTuple) and all(isinstance(ty, types.Number) for ty in x[0].types))
+    ):
+        def impl(*x):
+            return max_vararg(x[0])
+        return impl
+    else:
+        for ty in x:
+            if not isinstance(ty, types.Number):
+                return None
 
-    def impl(*x):
-        return max_vararg(x)
-    return impl
+        def impl(*x):
+            return max_vararg(x)
+        return impl
 
 @overload(min)
 def ol_min(*x):
-    for ty in x:
-        if not isinstance(ty, types.Number):
-            return None
+    if len(x) == 1 and (
+        (isinstance(x[0], types.UniTuple) and isinstance(x[0].dtype, types.Number))
+        or (isinstance(x[0], types.BaseTuple) and all(isinstance(ty, types.Number) for ty in x[0].types))
+    ):
+        def impl(*x):
+            return min_vararg(x[0])
+        return impl
+    else:
+        for ty in x:
+            if not isinstance(ty, types.Number):
+                return None
 
-    def impl(*x):
-        return min_vararg(x)
-    return impl
+        def impl(*x):
+            return min_vararg(x)
+        return impl
 
 @intrinsic
 def max_vararg(context, x):
+    if len(x) == 0:
+        raise TypingError("max() argument is an empty tuple")
+
     def impl(context, builder, sig, args):
         argtys = list(sig.args[0])
         args = cgutils.unpack_tuple(builder, args[0])
@@ -599,6 +618,9 @@ def max_vararg(context, x):
 
 @intrinsic
 def min_vararg(context, x):
+    if len(x) == 0:
+        raise TypingError("min() argument is an empty tuple")
+
     def impl(context, builder, sig, args):
         argtys = list(sig.args[0])
         args = cgutils.unpack_tuple(builder, args[0])

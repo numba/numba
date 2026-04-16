@@ -1,5 +1,5 @@
 from numba.core.pythonapi import box, unbox, NativeValue
-from numba.np.types import NPDatetime, NPTimedelta
+from numba.np.types import NPDatetime, NPTimedelta, UniTuple, BaseTuple
 from numba.core.extending import overload
 from numba.cpython.builtins import max_vararg, min_vararg
 
@@ -28,25 +28,43 @@ def unbox_nptimedelta(typ, obj, c):
 
 @overload(max)
 def ol_max(*x):
-    for ty in x:
-        if not isinstance(ty, (
-            NPDatetime, NPTimedelta
-        )):
-            return None
+    if len(x) == 1 and (
+        (isinstance(x[0], UniTuple) and isinstance(
+            x[0].dtype, (NPDatetime, NPTimedelta)))
 
-    def impl(*x):
-        return max_vararg(x)
-    return impl
+        or (isinstance(x[0], BaseTuple) and all(
+            isinstance(ty, (NPDatetime, NPTimedelta)) for ty in x[0].types))
+    ):
+        def impl(*x):
+            return max_vararg(x[0])
+        return impl
+    else:
+        for ty in x:
+            if not isinstance(ty, (NPDatetime, NPTimedelta)):
+                return None
+
+        def impl(*x):
+            return max_vararg(x)
+        return impl
 
 
 @overload(min)
 def ol_min(*x):
-    for ty in x:
-        if not isinstance(ty, (
-            NPDatetime, NPTimedelta
-        )):
-            return None
+    if len(x) == 1 and (
+        (isinstance(x[0], UniTuple) and isinstance(
+            x[0].dtype, (NPDatetime, NPTimedelta)))
 
-    def impl(*x):
-        return min_vararg(x)
-    return impl
+        or (isinstance(x[0], BaseTuple) and all(
+            isinstance(ty, (NPDatetime, NPTimedelta)) for ty in x[0].types))
+    ):
+        def impl(*x):
+            return min_vararg(x[0])
+        return impl
+    else:
+        for ty in x:
+            if not isinstance(ty, (NPDatetime, NPTimedelta)):
+                return None
+
+        def impl(*x):
+            return min_vararg(x)
+        return impl
