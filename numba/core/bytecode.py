@@ -662,7 +662,8 @@ class FunctionIdentity(serialize.ReduceMixin):
         # Even the same function definition can be compiled into
         # several different function objects with distinct closure
         # variables, so we make sure to disambiguate using an unique id.
-        cls._unique_ids[self.func_qualname] = uid = cls._unique_ids[self.func_qualname] + 1
+        uid = cls._unique_ids[self.func_qualname] + 1
+        cls._unique_ids[self.func_qualname] = uid
         self.unique_name = '{}${}'.format(self.func_qualname, uid)
         self.unique_id = uid
 
