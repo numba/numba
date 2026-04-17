@@ -1,14 +1,10 @@
 import math
-import numbers
-
-import numpy as np
 
 from llvmlite import ir
 from llvmlite.ir import Constant
 
 from numba.core.imputils import impl_ret_untracked
-from numba.core import typing, types, errors, cgutils
-from numba.cpython.unsafe.numbers import viewer
+from numba.core import typing, types, cgutils
 
 def _int_arith_flags(rettype):
     """
@@ -104,71 +100,6 @@ def int_power_impl(context, builder, sig, args):
 
     res = context.compile_internal(builder, int_power, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-# @lower_builtin(operator.pow, types.Integer, types.IntegerLiteral)
-# @lower_builtin(operator.ipow, types.Integer, types.IntegerLiteral)
-# @lower_builtin(operator.pow, types.Float, types.IntegerLiteral)
-# @lower_builtin(operator.ipow, types.Float, types.IntegerLiteral)
-def static_power_impl(context, builder, sig, args):
-    """
-    a ^ b, where a is an integer or real, and b a constant integer
-    """
-    exp = sig.args[1].value
-    if not isinstance(exp, numbers.Integral):
-        raise NotImplementedError
-    if abs(exp) > 0x10000:
-        # Optimization cutoff: fallback on the generic algorithm above
-        raise NotImplementedError
-    invert = exp < 0
-    exp = abs(exp)
-
-    tp = sig.return_type
-    is_integer = isinstance(tp, types.Integer)
-    zerodiv_return = _get_power_zerodiv_return(context, tp)
-
-    val = context.cast(builder, args[0], sig.args[0], tp)
-    lty = val.type
-
-    def mul(a, b):
-        if is_integer:
-            return builder.mul(a, b)
-        else:
-            return builder.fmul(a, b)
-
-    # Unroll the exponentiation loop
-    res = lty(1)
-    a = val
-    while exp != 0:
-        if exp & 1:
-            res = mul(res, val)
-        exp >>= 1
-        val = mul(val, val)
-
-    if invert:
-        # If the exponent was negative, fix the result by inverting it
-        if is_integer:
-            # Integer inversion
-            def invert_impl(a):
-                if a == 0:
-                    if zerodiv_return:
-                        return zerodiv_return
-                    else:
-                        raise ZeroDivisionError("0 cannot be raised to a negative power")
-                if a != 1 and a != -1:
-                    return 0
-                else:
-                    return a
-
-        else:
-            # Real inversion
-            def invert_impl(a):
-                return 1.0 / a
-
-        res = context.compile_internal(builder, invert_impl,
-                                       typing.signature(tp, tp), (res,))
-
-    return res
 
 
 def int_slt_impl(context, builder, sig, args):
@@ -387,95 +318,6 @@ def int_sign_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-def bool_negate_impl(context, builder, sig, args):
-    [typ] = sig.args
-    [val] = args
-    res = context.cast(builder, val, typ, sig.return_type)
-    res = builder.neg(res)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-def bool_unary_positive_impl(context, builder, sig, args):
-    [typ] = sig.args
-    [val] = args
-    res = context.cast(builder, val, typ, sig.return_type)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-# lower_builtin(operator.eq, types.boolean, types.boolean)(int_eq_impl)
-# lower_builtin(operator.ne, types.boolean, types.boolean)(int_ne_impl)
-# lower_builtin(operator.lt, types.boolean, types.boolean)(int_ult_impl)
-# lower_builtin(operator.le, types.boolean, types.boolean)(int_ule_impl)
-# lower_builtin(operator.gt, types.boolean, types.boolean)(int_ugt_impl)
-# lower_builtin(operator.ge, types.boolean, types.boolean)(int_uge_impl)
-# lower_builtin(operator.neg, types.boolean)(bool_negate_impl)
-# lower_builtin(operator.pos, types.boolean)(bool_unary_positive_impl)
-
-
-# def _implement_integer_operators():
-#     ty = types.Integer
-
-#     lower_builtin(operator.add, ty, ty)(int_add_impl)
-#     lower_builtin(operator.iadd, ty, ty)(int_add_impl)
-#     lower_builtin(operator.sub, ty, ty)(int_sub_impl)
-#     lower_builtin(operator.isub, ty, ty)(int_sub_impl)
-#     lower_builtin(operator.mul, ty, ty)(int_mul_impl)
-#     lower_builtin(operator.imul, ty, ty)(int_mul_impl)
-#     lower_builtin(operator.eq, ty, ty)(int_eq_impl)
-#     lower_builtin(operator.ne, ty, ty)(int_ne_impl)
-
-#     lower_builtin(operator.lshift, ty, ty)(int_shl_impl)
-#     lower_builtin(operator.ilshift, ty, ty)(int_shl_impl)
-#     lower_builtin(operator.rshift, ty, ty)(int_shr_impl)
-#     lower_builtin(operator.irshift, ty, ty)(int_shr_impl)
-
-#     lower_builtin(operator.neg, ty)(int_negate_impl)
-#     lower_builtin(operator.pos, ty)(int_positive_impl)
-
-#     lower_builtin(operator.pow, ty, ty)(int_power_impl)
-#     lower_builtin(operator.ipow, ty, ty)(int_power_impl)
-#     lower_builtin(pow, ty, ty)(int_power_impl)
-
-#     for ty in types.unsigned_domain:
-#         lower_builtin(operator.lt, ty, ty)(int_ult_impl)
-#         lower_builtin(operator.le, ty, ty)(int_ule_impl)
-#         lower_builtin(operator.gt, ty, ty)(int_ugt_impl)
-#         lower_builtin(operator.ge, ty, ty)(int_uge_impl)
-#         lower_builtin(operator.pow, types.Float, ty)(int_power_impl)
-#         lower_builtin(operator.ipow, types.Float, ty)(int_power_impl)
-#         lower_builtin(pow, types.Float, ty)(int_power_impl)
-#         lower_builtin(abs, ty)(uint_abs_impl)
-
-#     lower_builtin(operator.lt, types.IntegerLiteral, types.IntegerLiteral)(int_slt_impl)
-#     lower_builtin(operator.gt, types.IntegerLiteral, types.IntegerLiteral)(int_slt_impl)
-#     lower_builtin(operator.le, types.IntegerLiteral, types.IntegerLiteral)(int_slt_impl)
-#     lower_builtin(operator.ge, types.IntegerLiteral, types.IntegerLiteral)(int_slt_impl)
-#     for ty in types.signed_domain:
-#         lower_builtin(operator.lt, ty, ty)(int_slt_impl)
-#         lower_builtin(operator.le, ty, ty)(int_sle_impl)
-#         lower_builtin(operator.gt, ty, ty)(int_sgt_impl)
-#         lower_builtin(operator.ge, ty, ty)(int_sge_impl)
-#         lower_builtin(operator.pow, types.Float, ty)(int_power_impl)
-#         lower_builtin(operator.ipow, types.Float, ty)(int_power_impl)
-#         lower_builtin(pow, types.Float, ty)(int_power_impl)
-#         lower_builtin(abs, ty)(int_abs_impl)
-
-# def _implement_bitwise_operators():
-#     for ty in (types.Boolean, types.Integer):
-#         lower_builtin(operator.and_, ty, ty)(int_and_impl)
-#         lower_builtin(operator.iand, ty, ty)(int_and_impl)
-#         lower_builtin(operator.or_, ty, ty)(int_or_impl)
-#         lower_builtin(operator.ior, ty, ty)(int_or_impl)
-#         lower_builtin(operator.xor, ty, ty)(int_xor_impl)
-#         lower_builtin(operator.ixor, ty, ty)(int_xor_impl)
-
-#         lower_builtin(operator.invert, ty)(int_invert_impl)
-
-# _implement_integer_operators()
-
-# _implement_bitwise_operators()
-
-
 def real_add_impl(context, builder, sig, args):
     res = builder.fadd(*args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
@@ -654,44 +496,6 @@ def real_divmod_impl(context, builder, sig, args, loc=None):
                               (builder.load(quot), builder.load(rem)))
 
 
-def real_mod_impl(context, builder, sig, args, loc=None):
-    x, y = args
-    res = cgutils.alloca_once(builder, x.type)
-    with builder.if_else(cgutils.is_scalar_zero(builder, y), likely=False
-                         ) as (if_zero, if_non_zero):
-        with if_zero:
-            if not context.error_model.fp_zero_division(
-                builder, ("modulo by zero",), loc):
-                # No exception raised => compute the nan result,
-                # and set the FP exception word for Numpy warnings.
-                rem = builder.frem(x, y)
-                builder.store(rem, res)
-        with if_non_zero:
-            _, rem = real_divmod(context, builder, x, y)
-            builder.store(rem, res)
-    return impl_ret_untracked(context, builder, sig.return_type,
-                              builder.load(res))
-
-
-def real_floordiv_impl(context, builder, sig, args, loc=None):
-    x, y = args
-    res = cgutils.alloca_once(builder, x.type)
-    with builder.if_else(cgutils.is_scalar_zero(builder, y), likely=False
-                         ) as (if_zero, if_non_zero):
-        with if_zero:
-            if not context.error_model.fp_zero_division(
-                builder, ("division by zero",), loc):
-                # No exception raised => compute the +/-inf or nan result,
-                # and set the FP exception word for Numpy warnings.
-                quot = builder.fdiv(x, y)
-                builder.store(quot, res)
-        with if_non_zero:
-            quot, _ = real_divmod(context, builder, x, y)
-            builder.store(quot, res)
-    return impl_ret_untracked(context, builder, sig.return_type,
-                              builder.load(res))
-
-
 def real_power_impl(context, builder, sig, args):
     x, y = args
     module = builder.module
@@ -784,51 +588,6 @@ def real_sign_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-# ty = types.Float
-
-# lower_builtin(operator.add, ty, ty)(real_add_impl)
-# lower_builtin(operator.iadd, ty, ty)(real_add_impl)
-# lower_builtin(operator.sub, ty, ty)(real_sub_impl)
-# lower_builtin(operator.isub, ty, ty)(real_sub_impl)
-# lower_builtin(operator.mul, ty, ty)(real_mul_impl)
-# lower_builtin(operator.imul, ty, ty)(real_mul_impl)
-# lower_builtin(operator.floordiv, ty, ty)(real_floordiv_impl)
-# lower_builtin(operator.ifloordiv, ty, ty)(real_floordiv_impl)
-# lower_builtin(operator.truediv, ty, ty)(real_div_impl)
-# lower_builtin(operator.itruediv, ty, ty)(real_div_impl)
-# lower_builtin(operator.mod, ty, ty)(real_mod_impl)
-# lower_builtin(operator.imod, ty, ty)(real_mod_impl)
-# lower_builtin(operator.pow, ty, ty)(real_power_impl)
-# lower_builtin(operator.ipow, ty, ty)(real_power_impl)
-# lower_builtin(pow, ty, ty)(real_power_impl)
-
-# lower_builtin(operator.eq, ty, ty)(real_eq_impl)
-# lower_builtin(operator.ne, ty, ty)(real_ne_impl)
-# lower_builtin(operator.lt, ty, ty)(real_lt_impl)
-# lower_builtin(operator.le, ty, ty)(real_le_impl)
-# lower_builtin(operator.gt, ty, ty)(real_gt_impl)
-# lower_builtin(operator.ge, ty, ty)(real_ge_impl)
-
-# lower_builtin(abs, ty)(real_abs_impl)
-
-# lower_builtin(operator.neg, ty)(real_negate_impl)
-# lower_builtin(operator.pos, ty)(real_positive_impl)
-
-# del ty
-
-
-# @lower_getattr(types.Complex, "real")
-def complex_real_impl(context, builder, typ, value):
-    cplx = context.make_complex(builder, typ, value=value)
-    res = cplx.real
-    return impl_ret_untracked(context, builder, typ, res)
-
-# @lower_getattr(types.Complex, "imag")
-def complex_imag_impl(context, builder, typ, value):
-    cplx = context.make_complex(builder, typ, value=value)
-    res = cplx.imag
-    return impl_ret_untracked(context, builder, typ, res)
-
 # @lower_builtin("complex.conjugate", types.Complex)
 def complex_conjugate_impl(context, builder, sig, args):
     from numba.cpython import mathimpl
@@ -837,12 +596,6 @@ def complex_conjugate_impl(context, builder, sig, args):
     res = z._getvalue()
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-def real_real_impl(context, builder, typ, value):
-    return impl_ret_untracked(context, builder, typ, value)
-
-def real_imag_impl(context, builder, typ, value):
-    res = cgutils.get_null_value(value.type)
-    return impl_ret_untracked(context, builder, typ, res)
 
 def real_conjugate_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, args[0])
@@ -993,28 +746,3 @@ def complex_abs_impl(context, builder, sig, args):
 
     res = context.compile_internal(builder, complex_abs, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
-
-#------------------------------------------------------------------------------
-
-def number_not_impl(context, builder, sig, args):
-    [typ] = sig.args
-    [val] = args
-    istrue = context.cast(builder, val, typ, sig.return_type)
-    res = builder.not_(istrue)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-#-------------------------------------------------------------------------------
-# View
-
-def scalar_view(scalar, viewty):
-    """ Typing for the np scalar 'view' method. """
-    if (isinstance(scalar, (types.Float, types.Integer))
-            and isinstance(viewty, types.abstract.DTypeSpec)):
-        if scalar.bitwidth != viewty.dtype.bitwidth:
-            raise errors.TypingError(
-                "Changing the dtype of a 0d array is only supported if the "
-                "itemsize is unchanged")
-
-        def impl(scalar, viewty):
-            return viewer(scalar, viewty)
-        return impl
