@@ -142,8 +142,6 @@ class TestCFunc(TestCase):
         f = cfunc(div_sig, locals={'c': types.int64})(div_usecase)
         self.assertPreciseEqual(f.ctypes(8, 3), 2.0)
 
-    @unittest.skip("Skipping test because might be no longer relevant, " \
-    "ZeroDivisionError not raised")
     def test_errors(self):
         f = cfunc(div_sig)(div_usecase)
 

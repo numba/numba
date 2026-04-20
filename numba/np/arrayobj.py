@@ -1958,7 +1958,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
                                           src_shapes),
                        context.make_tuple(builder, raise_sig.args[1],
                                           index_shape)))
-    src_is_scalar = False
+
     if isinstance(srcty, types.Buffer):
         # Source is an array
         src_dtype = srcty.dtype
@@ -1982,93 +1982,48 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
             raise_shape_mismatch_error(context, builder, src_shapes,
                                        index_shape)
 
-    elif isinstance(srcty, types.Sequence):
-        src_dtype = srcty.dtype
-
-        # Check shape is equal to sequence length
-        index_shape = indexer.get_shape()
-        assert len(index_shape) == 1
-        len_impl = context.get_function(len, signature(types.intp, srcty))
-        seq_len = len_impl(builder, (src,))
-
-        shape_error = builder.icmp_signed('!=', index_shape[0], seq_len)
-
-        with builder.if_then(shape_error, likely=False):
-            raise_shape_mismatch_error(context, builder, (seq_len,),
-                                       (index_shape[0],))
-    else:
-        # Source is a scalar (broadcast or not, depending on destination
-        # shape).
-        src_dtype = srcty
-        src_is_scalar = True
-
-    if src_is_scalar:
-        dest_indices = indexer.begin_loops()
-        # No need to check for wraparound, as the indexers all ensure
-        # a positive index is returned.
-        dest_ptr = cgutils.get_item_pointer2(
-            context, builder, dest_data, dest_shapes, dest_strides,
-            aryty.layout, dest_indices, wraparound=False,
-            boundscheck=context.enable_boundscheck)
-        store_item(context, builder, aryty, src, dest_ptr)
-        indexer.end_loops()
-    else:
         is_flattened = False
-        if isinstance(srcty, types.Array):
-            # Check for array overlap
-            src_strides = cgutils.unpack_tuple(builder, src.strides)
-            src_start, src_end = get_array_memory_extents(
-                context, builder, srcty, src, src_shapes,
-                src_strides, src_data
-            )
+        # Check for array overlap
+        src_strides = cgutils.unpack_tuple(builder, src.strides)
+        src_start, src_end = get_array_memory_extents(
+            context, builder, srcty, src, src_shapes,
+            src_strides, src_data
+        )
 
-            dest_lower, dest_upper = indexer.get_offset_bounds(
-                dest_strides, ary.itemsize)
-            dest_start, dest_end = compute_memory_extents(
-                context, builder, dest_lower, dest_upper, dest_data
-            )
+        dest_lower, dest_upper = indexer.get_offset_bounds(
+            dest_strides, ary.itemsize)
+        dest_start, dest_end = compute_memory_extents(
+            context, builder, dest_lower, dest_upper, dest_data
+        )
 
-            use_copy = extents_may_overlap(
-                context, builder, src_start, src_end,
-                dest_start, dest_end
-            )
-            srcty_contig = srcty.is_contig
+        use_copy = extents_may_overlap(
+            context, builder, src_start, src_end,
+            dest_start, dest_end
+        )
+        srcty_contig = srcty.is_contig
 
-            def flat_imp(ary, use_copy):
-                if use_copy or not srcty_contig:
-                    return ary.copy().reshape(ary.size)
-                else:
-                    return ary.reshape(ary.size)
+        def flat_imp(ary, use_copy):
+            if use_copy or not srcty_contig:
+                return ary.copy().reshape(ary.size)
+            else:
+                return ary.reshape(ary.size)
 
-            retty = types.Array(srcty.dtype, 1, srcty.layout, readonly=True)
-            sig = signature(retty, srcty, types.boolean)
-            src_flat_instr = context.compile_internal(
-                builder, flat_imp, sig, (src._getvalue(), use_copy)
-            )
-            src_flat = make_array(retty)(context, builder, src_flat_instr)
-            src_data = src_flat.data
-            is_flattened = True
+        retty = types.Array(srcty.dtype, 1, srcty.layout, readonly=True)
+        sig = signature(retty, srcty, types.boolean)
+        src_flat_instr = context.compile_internal(
+            builder, flat_imp, sig, (src._getvalue(), use_copy)
+        )
+        src_flat = make_array(retty)(context, builder, src_flat_instr)
+        src_data = src_flat.data
+        is_flattened = True
 
-            def src_getitem(src_idx):
-                cur = builder.load(src_idx)
-                ptr = builder.gep(src_data, [cur])
-                val = builder.load(ptr)
-                next_idx = cgutils.increment_index(builder, cur)
-                builder.store(next_idx, src_idx)
-                return val
-        else:
-            retty = srcty
-
-            def src_getitem(src_idx):
-                cur = builder.load(src_idx)
-                getitem_impl = context.get_function(
-                    operator.getitem,
-                    signature(src_dtype, srcty, types.intp),
-                )
-                val = getitem_impl(builder, (src, cur))
-                next_idx = cgutils.increment_index(builder, cur)
-                builder.store(next_idx, src_idx)
-                return val
+        def src_getitem(src_idx):
+            cur = builder.load(src_idx)
+            ptr = builder.gep(src_data, [cur])
+            val = builder.load(ptr)
+            next_idx = cgutils.increment_index(builder, cur)
+            builder.store(next_idx, src_idx)
+            return val
 
         src_idx = cgutils.alloca_once_value(builder,
                                             context.get_constant(types.intp, 0))
@@ -2090,6 +2045,67 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
 
         if is_flattened:
             context.nrt.decref(builder, retty, src_flat_instr)
+
+    elif isinstance(srcty, types.Sequence):
+        src_dtype = srcty.dtype
+
+        # Check shape is equal to sequence length
+        index_shape = indexer.get_shape()
+        assert len(index_shape) == 1
+        len_impl = context.get_function(len, signature(types.intp, srcty))
+        seq_len = len_impl(builder, (src,))
+
+        shape_error = builder.icmp_signed('!=', index_shape[0], seq_len)
+
+        with builder.if_then(shape_error, likely=False):
+            raise_shape_mismatch_error(context, builder, (seq_len,),
+                                       (index_shape[0],))
+
+        retty = srcty
+
+        def src_getitem(src_idx):
+            cur = builder.load(src_idx)
+            getitem_impl = context.get_function(
+                operator.getitem,
+                signature(src_dtype, srcty, types.intp),
+            )
+            val = getitem_impl(builder, (src, cur))
+            next_idx = cgutils.increment_index(builder, cur)
+            builder.store(next_idx, src_idx)
+            return val
+
+        src_idx = cgutils.alloca_once_value(builder,
+                                            context.get_constant(types.intp, 0))
+        # Loop on destination and copy from source to destination
+        dest_indices = indexer.begin_loops()
+
+        # No need to check for wraparound, as the indexers all ensure
+        # a positive index is returned.
+        dest_ptr = cgutils.get_item_pointer2(
+            context, builder, dest_data, dest_shapes, dest_strides,
+            aryty.layout, dest_indices, wraparound=False,
+            boundscheck=context.enable_boundscheck)
+
+        val = src_getitem(src_idx)
+        val = context.cast(builder, val, src_dtype, aryty.dtype)
+        store_item(context, builder, aryty, val, dest_ptr)
+
+        indexer.end_loops()
+
+        if is_flattened:
+            context.nrt.decref(builder, retty, src_flat_instr)
+    else:
+        # Source is a scalar (broadcast or not, depending on destination
+        # shape).
+        dest_indices = indexer.begin_loops()
+        # No need to check for wraparound, as the indexers all ensure
+        # a positive index is returned.
+        dest_ptr = cgutils.get_item_pointer2(
+            context, builder, dest_data, dest_shapes, dest_strides,
+            aryty.layout, dest_indices, wraparound=False,
+            boundscheck=context.enable_boundscheck)
+        store_item(context, builder, aryty, src, dest_ptr)
+        indexer.end_loops()
 
     indexer.cleanup(context, builder)
 
