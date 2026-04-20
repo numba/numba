@@ -49,10 +49,6 @@ class _JITWrapper(Protocol):
     def __call__(self, fn: _FunctionT, /) -> _FunctionT: ...
 
 @type_check_only
-class _CFuncOptions(TypedDict, total=False):
-    nogil: bool
-
-@type_check_only
 class _CFuncWrapper(Protocol):
     # TODO: Return `CFunc[_FunctionT]` once `CFunc` is annotated and generic.
     def __call__(self, fn: _FunctionT, /) -> _FunctionT: ...
