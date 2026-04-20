@@ -4,6 +4,7 @@ import sys
 import threading
 import traceback
 import unittest
+import warnings
 from collections import Counter
 from unittest.mock import Mock, call
 from numba.tests.support import TestCase
@@ -840,6 +841,27 @@ class TestMonitoringEnvVarControl(TestCase):
             return x + 1
 
         self.assertTrue(foo._enable_sysmon)
+
+    @unittest.skipUnless(PYVERSION >= (3, 14, 4), "needs Python 3.14.4+")
+    @TestCase.run_test_in_subprocess(
+        envvars={"NUMBA_ENABLE_SYS_MONITORING": '1'})
+    def test_userwarning_when_jit_sysmon_unavailable(self):
+        # C dispatcher warns once when hooks are off on 3.14.4+ (#10538).
+        from numba import jit
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always", UserWarning)
+
+            @jit(nopython=True)
+            def foo(x):
+                return x + 1
+
+            self.assertTrue(foo._enable_sysmon)
+            self.assertEqual(foo(1), 2)
+
+        self.assertEqual(len(w), 1)
+        msg = str(w[0].message)
+        self.assertIn("sys.monitoring", msg)
 
 
 if __name__ == '__main__':
