@@ -9,11 +9,11 @@ import operator
 import warnings
 
 import llvmlite.ir
+from numba.np.types.datetime import NPDatetime, NPTimedelta
 import numpy as np
 
 from numba.core import types, cgutils
 from numba.core.extending import overload, overload_method, register_jitable
-from numba.core.types.scalars import NPDatetime, NPTimedelta
 from numba.np.numpy_support import (as_dtype, type_can_asarray, type_is_scalar,
                                     numpy_version, is_nonelike,
                                     check_is_integer, lt_floats, lt_complex)
@@ -891,15 +891,11 @@ def np_all(a):
 
     if isinstance(a, (NPDatetime, NPTimedelta)):
         def temporal_scalar_all(a):
-            return np.bool_(True)
+            return np.int64(a) != 0
         return temporal_scalar_all
 
     # for array
     if isinstance(a, types.Array):
-        if isinstance(a.dtype, (NPDatetime, NPTimedelta)):
-            def flat_all_datetime(a):
-                return np.bool_(True)
-            return flat_all_datetime
 
         def flat_all(a):
             for v in np.nditer(a):

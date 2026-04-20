@@ -336,12 +336,13 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(np.datetime64('2020-01-01'))
         check(np.datetime64('2020-01-01T12:00'))
         check(np.datetime64('2020-01-01T12:00:00.000000'))
-        check(np.datetime64('2020-01-01T12:00:00.000000000'))
+        check(np.datetime64('1970-01-01'))
         check(np.datetime64('NaT'))
         check(np.timedelta64(5, 'D'))
         check(np.timedelta64(5, 'm'))
         check(np.timedelta64(5, 's'))
         check(np.timedelta64(5, 'us'))
+        check(np.timedelta64(0, 'ns'))
 
         # Test special values
         check(np.nan)
