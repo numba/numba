@@ -1,5 +1,5 @@
 Fix race condition in GUFunc caching that can cause segfaults
-----------------------------------------------------------
+-------------------------------------------------------------
 
 Fixed a race condition where concurrent processes compiling the same
 ``@guvectorize`` functions could produce inconsistent cache files, leading to
