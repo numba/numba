@@ -471,7 +471,14 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(0)
         check(0.0000042)
         check(-0.25863)
-        
+
+        # Temporal Scalar
+        check(np.timedelta64(5, 'D'))
+        check(np.timedelta64(5, 'm'))
+        check(np.timedelta64(5, 's'))
+        check(np.timedelta64(5, 'us'))
+        check(np.timedelta64(0, 'ns'))
+
         # Error cases
         with self.assertTypingError():
             cfunc('test String')

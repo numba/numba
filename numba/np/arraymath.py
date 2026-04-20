@@ -439,6 +439,10 @@ def array_mean(a):
         def _scalar_mean(a):
             return np.float64(a) + 0.0
         return _scalar_mean
+    elif isinstance(a, NPTimedelta):
+        def _temporal_scalar_mean(a):
+            return a
+        return _temporal_scalar_mean
     elif isinstance(a, (types.Float, types.Complex)):
         typed_zero = as_dtype(a).type(0)
 
