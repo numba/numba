@@ -285,6 +285,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(arr)
         arr = np.timedelta64(5, 'us')
         check(arr)
+        arr = np.timedelta64(0, 'ns')
+        check(arr)
 
     def test_all_basic(self, pyfunc=array_all):
         cfunc = jit(nopython=True)(pyfunc)
