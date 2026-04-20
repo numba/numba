@@ -1010,6 +1010,12 @@ def np_any(a):
             return bool(a)
         return scalar_any
 
+    # for temporal
+    if isinstance(a, (NPDatetime, NPTimedelta)):
+        def temporal_any(a):
+            return np.int64(a) != 0
+        return temporal_any
+
     # for array
     if isinstance(a, types.Array):
         def flat_any(a):
