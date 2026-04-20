@@ -627,7 +627,7 @@ def min_vararg(context, x):
 
     retty = context.unify_types(*x)
     if retty is not None:
-        sig = signature(x)
+        sig = signature(retty, x)
         return sig, impl
     else:
         raise ValueError("Given types cannot be unified")
