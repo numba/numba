@@ -19,6 +19,7 @@ from numba.core import types, config
 from numba.core.errors import TypingError
 from numba.tests.support import TestCase, tag, skip_parfors_unsupported
 from numba.np import npdatetime_helpers, numpy_support
+from numba.np import types as npy_types
 
 TIMEDELTA_M = np.dtype('timedelta64[M]')
 TIMEDELTA_Y = np.dtype('timedelta64[Y]')
@@ -227,7 +228,7 @@ class TestMiscCompiling(TestCase):
             self.assertPreciseEqual(f(*args), expected)
 
         # Test passing the signature in object form
-        sig = types.NPDatetime('us')(types.NPDatetime('ms'), types.NPTimedelta('us'))
+        sig = npy_types.NPDatetime('us')(npy_types.NPDatetime('ms'), npy_types.NPTimedelta('us'))
         _check_explicit_signature(sig)
         # Same with the signature in string form
         sig = "NPDatetime('us')(NPDatetime('ms'), NPTimedelta('us'))"
@@ -242,7 +243,7 @@ class TestMiscCompiling(TestCase):
             self.assertPreciseEqual(f(TD(2), 3), TD(6))
 
         # Test passing the signature in object form (issue #917)
-        sig = types.NPTimedelta('s')(types.NPTimedelta('s'), types.int64)
+        sig = npy_types.NPTimedelta('s')(npy_types.NPTimedelta('s'), types.int64)
         _check_explicit_signature(sig)
         # Same with the signature in string form
         sig = "NPTimedelta('s')(NPTimedelta('s'), int64)"

@@ -155,8 +155,8 @@ char = np_char = _make_signed(ctypes.c_char)
 uchar = np_uchar = byte = _make_unsigned(ctypes.c_ubyte)
 short = np_short = _make_signed(ctypes.c_short)
 ushort = np_ushort = _make_unsigned(ctypes.c_ushort)
-int_ = np_int_ = _make_signed(ctypes.c_long)
-uint = np_uint = _make_unsigned(ctypes.c_long)
+int_ = np_int_ = np_intp
+uint = np_uint = np_uintp
 intc = np_intc = _make_signed(ctypes.c_int) # C-compat int
 uintc = np_uintc = _make_unsigned(ctypes.c_uint) # C-compat uint
 long_ = np_long = _make_signed(ctypes.c_long)  # C-compat long
@@ -230,3 +230,5 @@ __all__ = all_str.split()
 if numpy_version >= (2, 0):
     __all__.remove('float_')
     __all__.append('bool')
+
+from numba.np.types.datetime import NPDatetime, NPTimedelta

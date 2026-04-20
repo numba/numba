@@ -28,6 +28,7 @@ from numba.core.errors import (RequireLiteralValue, TypingError,
                                NumbaValueError, NumbaNotImplementedError,
                                NumbaTypeError, NumbaDeprecationWarning)
 from numba.cpython.unsafe.tuple import tuple_setitem
+from numba.np import types as npy_types
 
 
 def _check_blas():
@@ -519,6 +520,25 @@ def array_std(a):
 
         return array_std_impl
 
+    # Integers and booleans default to float64(0.0) in numpy.std
+    elif isinstance(a, (types.Integer, types.Boolean)):
+
+        def std_scalar_integer_impl(a):
+            return np.float64(0.0)
+        return std_scalar_integer_impl
+
+    # Floats and numbers preserve types in numpy.std
+    elif isinstance(a, (types.Float, types.Complex)):
+        out_dtype = as_dtype(getattr(a,'underlying_float',a))
+        zero = out_dtype.type(0)
+        nan_val = out_dtype.type(np.nan)
+
+        def std_scalar_float_impl(a):
+            if not np.isfinite(a):
+                return nan_val
+            return zero
+        return std_scalar_float_impl
+
 
 @register_jitable
 def min_comparator(a, min_val):
@@ -549,7 +569,7 @@ def npy_min(a):
     if not isinstance(a, types.Array):
         return
 
-    if isinstance(a.dtype, (types.NPDatetime, types.NPTimedelta)):
+    if isinstance(a.dtype, (npy_types.NPDatetime, npy_types.NPTimedelta)):
         pre_return_func = np.isnat
         comparator = min_comparator
     elif isinstance(a.dtype, types.Complex):
@@ -606,7 +626,7 @@ def npy_max(a):
     if not isinstance(a, types.Array):
         return
 
-    if isinstance(a.dtype, (types.NPDatetime, types.NPTimedelta)):
+    if isinstance(a.dtype, (npy_types.NPDatetime, npy_types.NPTimedelta)):
         pre_return_func = np.isnat
         comparator = max_comparator
     elif isinstance(a.dtype, types.Complex):
@@ -716,7 +736,7 @@ def array_argmin_impl_generic(arry):
 @overload(np.argmin)
 @overload_method(types.Array, "argmin")
 def array_argmin(a, axis=None):
-    if isinstance(a.dtype, (types.NPDatetime, types.NPTimedelta)):
+    if isinstance(a.dtype, (npy_types.NPDatetime, npy_types.NPTimedelta)):
         flatten_impl = array_argmin_impl_datetime
     elif isinstance(a.dtype, types.Float):
         flatten_impl = array_argmin_impl_float
@@ -842,7 +862,7 @@ def build_argmax_or_argmin_with_axis_impl(a, axis, flatten_impl):
 @overload(np.argmax)
 @overload_method(types.Array, "argmax")
 def array_argmax(a, axis=None):
-    if isinstance(a.dtype, (types.NPDatetime, types.NPTimedelta)):
+    if isinstance(a.dtype, (npy_types.NPDatetime, npy_types.NPTimedelta)):
         flatten_impl = array_argmax_impl_datetime
     elif isinstance(a.dtype, types.Float):
         flatten_impl = array_argmax_impl_float
