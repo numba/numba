@@ -22,10 +22,10 @@ call deactivate
 conda list
 if "%PYTHON%" neq "3.13" (
     @rem CFFI, jinja2 and IPython are optional dependencies, but exercised in the test suite
-    conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip jinja2 ipython gitpython pyyaml psutil
+    conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip jinja2 ipython gitpython pyyaml psutil pytest
 ) else (
     @rem missing IPython for Python 3.13
-    conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip jinja2 gitpython pyyaml psutil
+    conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip jinja2 gitpython pyyaml psutil pytest
 )
 @rem Install SciPy only if NumPy is not 2.1
 if "%NUMPY%" neq "2.1" (%CONDA_INSTALL% scipy)

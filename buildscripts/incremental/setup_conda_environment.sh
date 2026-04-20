@@ -36,7 +36,7 @@ $CONDA_INSTALL "conda<26"
 # NOTE: gitpython is needed for CI testing to do the test slicing
 # NOTE: pyyaml is used to ensure that the Azure CI config is valid
 
-conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml psutil
+conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip gitpython pyyaml psutil pytest
 
 # Activate first
 set +v

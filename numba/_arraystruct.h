@@ -12,6 +12,12 @@ typedef struct {
     npy_intp nitems;
     npy_intp itemsize;
     void *data;
+    /* This is used to support NumPy 2.x StringDType. Pack/unpack
+     * operations for StringDType must go through the array's exact
+     * PyArray_Descr in order to access the dtype-managed string allocator and
+     * NA sentinel correctly.
+     */
+    void *descr;
 
     npy_intp shape_and_strides[];
 } arystruct_t;
