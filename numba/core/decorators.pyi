@@ -41,6 +41,7 @@ class _JITOptions(TypedDict, total=False):
     error_model: Literal["python", "numpy"]
     inline: Literal["never", "always"] | _FnInline
     forceinline: bool
+    debug: bool
 
 @type_check_only
 class _JITWrapper(Protocol):
