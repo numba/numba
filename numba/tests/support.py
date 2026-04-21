@@ -145,7 +145,7 @@ skip_if_freethreading = unittest.skipIf(_free_threading,
 
 skip_if_sysmon_unsupported = unittest.skipIf(
     sys.version_info >= (3, 14, 4),
-    "JIT sys.monitoring is not supported on Python 3.14.4+ ")
+    "JIT sys.monitoring is not supported on Python 3.14.4+")
 
 
 def expected_failure_py311(fn):

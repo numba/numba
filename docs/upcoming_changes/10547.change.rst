@@ -3,5 +3,5 @@ Disable JIT ``sys.monitoring`` on Python 3.14.4 and later
 
 Python 3.14.4 changed interpreter internals Numba relied on for
 ``sys.monitoring`` (`#10538 <https://github.com/numba/numba/issues/10538>`_).
-The feature is off from 3.14.4 onward; ``NUMBA_ENABLE_SYS_MONITORING`` has no
-effect and a ``UserWarning`` will be emitted when used.
+The feature is disabled from 3.14.4 onward; ``NUMBA_ENABLE_SYS_MONITORING`` has no
+effect and a ``UserWarning`` will be emitted if this variable is set to a non-zero value.
