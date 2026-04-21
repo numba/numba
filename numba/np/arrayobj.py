@@ -816,19 +816,11 @@ class IntegerArrayIndexer(Indexer):
         self._cleanup_items = []
 
         if idxty.ndim > 1:
-            def flat_imp_nocopy(ary):
-                return ary.reshape(ary.size)
-
-            def flat_imp_copy(ary):
+            # TODO: This is bad for performance reasons.
+            # Ideally we'd want to index non-broadcasted and non copied versions
+            # of the indexing array.
+            def flat_imp(ary):
                 return ary.copy().reshape(ary.size)
-
-            # If the index array is contigous, use the nocopy version
-            if idxty.is_contig:
-                flat_imp = flat_imp_nocopy
-            # otherwise, use copy version since we don't support
-            # reshaping non-contigous arrays
-            else:
-                flat_imp = flat_imp_copy
 
             retty = types.Array(idxty.dtype, 1, idxty.layout, readonly=True)
             sig = signature(retty, idxty)
@@ -1982,40 +1974,21 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
             raise_shape_mismatch_error(context, builder, src_shapes,
                                        index_shape)
 
-        is_flattened = False
-        # Check for array overlap
-        src_strides = cgutils.unpack_tuple(builder, src.strides)
-        src_start, src_end = get_array_memory_extents(
-            context, builder, srcty, src, src_shapes,
-            src_strides, src_data
-        )
-
-        dest_lower, dest_upper = indexer.get_offset_bounds(
-            dest_strides, ary.itemsize)
-        dest_start, dest_end = compute_memory_extents(
-            context, builder, dest_lower, dest_upper, dest_data
-        )
-
-        use_copy = extents_may_overlap(
-            context, builder, src_start, src_end,
-            dest_start, dest_end
-        )
-        srcty_contig = srcty.is_contig
-
-        def flat_imp(ary, use_copy):
-            if use_copy or not srcty_contig:
-                return ary.copy().reshape(ary.size)
-            else:
-                return ary.reshape(ary.size)
+        # TODO: This is bad for performance reasons.
+        # Ideally we'd want to index non-broadcasted and non copied versions
+        # of the source array. Only exception is when the source and
+        # destination arrays overlapin which case we'd want to index
+        # a non-broadcasted but copied version of the source array.
+        def flat_imp(ary):
+            return ary.copy().reshape(ary.size)
 
         retty = types.Array(srcty.dtype, 1, srcty.layout, readonly=True)
-        sig = signature(retty, srcty, types.boolean)
+        sig = signature(retty, srcty)
         src_flat_instr = context.compile_internal(
-            builder, flat_imp, sig, (src._getvalue(), use_copy)
+            builder, flat_imp, sig, (src._getvalue(),)
         )
         src_flat = make_array(retty)(context, builder, src_flat_instr)
         src_data = src_flat.data
-        is_flattened = True
 
         def src_getitem(src_idx):
             cur = builder.load(src_idx)
@@ -2043,8 +2016,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
 
         indexer.end_loops()
 
-        if is_flattened:
-            context.nrt.decref(builder, retty, src_flat_instr)
+        context.nrt.decref(builder, retty, src_flat_instr)
 
     elif isinstance(srcty, types.Sequence):
         src_dtype = srcty.dtype
@@ -2091,9 +2063,6 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         store_item(context, builder, aryty, val, dest_ptr)
 
         indexer.end_loops()
-
-        if is_flattened:
-            context.nrt.decref(builder, retty, src_flat_instr)
     else:
         # Source is a scalar (broadcast or not, depending on destination
         # shape).
