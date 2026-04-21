@@ -853,7 +853,10 @@ class TestMonitoringEnvVarControl(TestCase):
 
         self.assertTrue(foo._enable_sysmon)
 
-    @unittest.skipUnless(PYVERSION >= (3, 14, 4), "needs Python 3.14.4+")
+    @unittest.skipUnless(
+        sys.version_info >= (3, 14, 4),
+        "needs Python 3.14.4+",
+    )
     @TestCase.run_test_in_subprocess(
         envvars={"NUMBA_ENABLE_SYS_MONITORING": '1'})
     def test_userwarning_when_jit_sysmon_unavailable(self):
