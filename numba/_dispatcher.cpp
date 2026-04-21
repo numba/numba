@@ -834,14 +834,10 @@ jit_sysmon_supported(void)
     minor = (int)((v >> 16) & 0xFF);
     micro = (int)((v >> 8) & 0xFF);
 
-    ok = 1;
-    if (major == 3 && minor > 14) {
-        ok = 0;
-    } else if (major == 3 && minor == 14 && micro >= 4) {
-        ok = 0;
-    }
+// Exclude anything beyond 3.14.3.
+ok = !(major == 3 && (minor > 14 || (minor == 14 && micro > 3)));
 
-    cached = ok ? 1 : 0;
+    cached = ok;
 
     if (!ok && !warned) {
         warned = 1;
