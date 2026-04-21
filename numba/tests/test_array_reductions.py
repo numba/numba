@@ -520,6 +520,9 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_nanmean_basic(self):
         self.check_reduction_basic(array_nanmean)
 
+    def test_np_nanmean_scalar(self):
+        self.check_scalar_basic(array_nanmean)
+
     def test_nansum_basic(self):
         self.check_reduction_basic(array_nansum)
 
@@ -531,6 +534,9 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
     def test_nanvar_basic(self):
         self.check_reduction_basic(array_nanvar, prec='double')
+
+    def test_np_nanvar_scalar(self):
+        self.check_scalar_basic(array_nanvar, prec='double')
 
     def check_median_basic(self, pyfunc, array_variations):
         cfunc = jit(nopython=True)(pyfunc)
@@ -861,6 +867,84 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
     def test_array_cumprod_global(self):
         self.check_cumulative(array_cumprod_global)
+
+    def test_np_cumsum_scalar(self):
+        cfunc = jit(nopython=True)(array_cumsum_global)
+
+        def check(arg):
+            expected = array_cumsum_global(arg)
+            got = cfunc(arg)
+            self.assertPreciseEqual(got, expected)
+
+        # NumPy signed integer scalars (small → intp, large preserved)
+        check(np.int8(5))
+        check(np.int16(-2))
+        check(np.int32(5))
+        check(np.int64(-3))
+
+        # NumPy boolean scalars (upcast to intp)
+        check(np.bool_(True))
+        check(np.bool_(False))
+
+        # NumPy floating scalars (dtype preserved)
+        check(np.float32(1.25))
+        check(np.float64(-2.5))
+
+        # NumPy complex scalars (dtype preserved)
+        check(np.complex64(1.5+2.5j))
+        check(np.complex128(-1.0+3.0j))
+
+        # Python scalars
+        check(5)
+        check(3.5)
+
+        # Special floating values
+        check(np.float64(np.nan))
+        check(np.float64(np.inf))
+        check(np.float64(-np.inf))
+
+        # Error cases
+        with self.assertTypingError():
+            cfunc('test String')
+
+    def test_np_cumprod_scalar(self):
+        cfunc = jit(nopython=True)(array_cumprod_global)
+
+        def check(arg):
+            expected = array_cumprod_global(arg)
+            got = cfunc(arg)
+            self.assertPreciseEqual(got, expected)
+
+        # NumPy signed integer scalars (small → intp, large preserved)
+        check(np.int8(5))
+        check(np.int16(-2))
+        check(np.int32(5))
+        check(np.int64(-3))
+
+        # NumPy boolean scalars (upcast to intp)
+        check(np.bool_(True))
+        check(np.bool_(False))
+
+        # NumPy floating scalars (dtype preserved)
+        check(np.float32(1.25))
+        check(np.float64(-2.5))
+
+        # NumPy complex scalars (dtype preserved)
+        check(np.complex64(1.5+2.5j))
+        check(np.complex128(-1.0+3.0j))
+
+        # Python scalars
+        check(5)
+        check(3.5)
+
+        # Special floating values
+        check(np.float64(np.nan))
+        check(np.float64(np.inf))
+        check(np.float64(-np.inf))
+
+        # Error cases
+        with self.assertTypingError():
+            cfunc('test String')
 
     def check_aggregation_magnitude(self, pyfunc, is_prod=False):
         """
