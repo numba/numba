@@ -162,21 +162,60 @@ or layout.
    are not supported.
 
 
+.. _array-access:
+
 Array access
 ------------
 
 Arrays support normal iteration.  Full basic indexing and slicing is
 supported along with passing ``None`` / ``np.newaxis`` as indices for
-additional resulting dimensions. A subset of advanced indexing is also
-supported: only one advanced index is allowed, and it has to be a
-one-dimensional array (it can be combined with an arbitrary number
-of basic indices as well).
+additional resulting dimensions.
+
+Fancy indexing with multiple array indices and/or multidimensional 
+array indices is also supported in accordance with NumPy semantics.
+An example of this is as follows:
+
+.. code:: python
+
+    import numba
+    import numpy as np
+
+    @numba.njit
+    def non_shifted_subspace(x, idx, idx2):
+        return x[:, idx, idx2, :] # Consecutive fancy indices (idx, idx2) are adjacent.
+
+    @numba.njit
+    def shifted_subspace(x, idx, idx2):
+        return x[:, idx, :, idx2] # Non-consecutive fancy indices (idx, idx2) are separated by a slice.
+
+    a = np.random.randint(0, 100, (10, 11, 12, 13, 14))
+    b = np.random.randint(0, 4, (4, 5))  # Now supports multidimensional indices
+    c = np.random.randint(0, 4, (4, 5))  # Now supports multiple array indices
+
+    print(non_shifted_subspace(a, b, c).shape) 
+    # Output: (10, 4, 5, 13, 14) - Notice subspace (4, 5) is correctly indexed at position 1
+    print(np.allclose(non_shifted_subspace(a, b, c), non_shifted_subspace.py_func(a, b, c)))
+    # Output: True
+
+    print(shifted_subspace(a, b, c).shape) 
+    # Output: (4, 5, 10, 13, 14) - Notice subspace (4, 5) is correctly indexed at position 0
+    print(np.allclose(shifted_subspace(a, b, c), shifted_subspace.py_func(a, b, c)))
+    # Output: True
+
+Resrictions on the indices are the same as in NumPy, meaning that the indices must be within bounds of
+the array dimensions and must be of integer type. Additionally, the number of fancy indices must not
+exceed the number of dimensions in the array being indexed as well as the indices must be broadcastable
+to a common shape.
 
 .. seealso::
-   `NumPy indexing <http://docs.scipy.org/doc/numpy/reference/arrays.indexing.html>`_
+   `NumPy indexing <https://numpy.org/doc/stable/user/basics.indexing.html>`_
    reference.
 
-
+.. note::
+  Because of the way Numba logic is implemented, fancy indexing with multiple array indices
+  and/or multidimensional array indices can be slower than expected. This is currently being
+  investigated and optimized, but users should be aware of this when using these features.
+  
 .. _structured-array-access:
 
 Structured array access
