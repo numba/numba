@@ -4,9 +4,10 @@ import sys
 import threading
 import traceback
 import unittest
+import warnings
 from collections import Counter
 from unittest.mock import Mock, call
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, skip_if_sysmon_unsupported
 from numba import jit, objmode
 from numba.core.utils import PYVERSION
 from numba.core.serialize import _numba_unpickle
@@ -178,6 +179,7 @@ class TestMonitoring(TestCase):
             sys.monitoring.free_tool_id(_tool_id)
         return callbacks
 
+    @skip_if_sysmon_unsupported
     def test_start_event(self):
         # test event PY_START
         cb = self.run_with_events(self.call_foo, (self.arg,), (PY_START,))
@@ -185,6 +187,7 @@ class TestMonitoring(TestCase):
         self.assertEqual(len(cb), 1)
         self.check_py_start_calls(cb)
 
+    @skip_if_sysmon_unsupported
     def test_return_event(self):
         # test event PY_RETURN
         cb = self.run_with_events(self.call_foo, (self.arg,), (PY_RETURN,))
@@ -192,6 +195,7 @@ class TestMonitoring(TestCase):
         self.assertEqual(len(cb), 1)
         self.check_py_return_calls(cb)
 
+    @skip_if_sysmon_unsupported
     def test_call_event_chain(self):
         # test event PY_START and PY_RETURN monitored at the same time
         cb = self.run_with_events(self.call_foo, (self.arg,),
@@ -313,6 +317,7 @@ class TestMonitoring(TestCase):
             sys.monitoring.set_events(tool_id, NO_EVENTS)
             sys.monitoring.free_tool_id(tool_id)
 
+    @skip_if_sysmon_unsupported
     def test_disable_from_callback(self):
         # Event callbacks can disable a _local_ event at a specific location to
         # prevent it triggering in the future by returning
@@ -349,6 +354,7 @@ class TestMonitoring(TestCase):
             sys.monitoring.set_events(tool_id, NO_EVENTS)
             sys.monitoring.free_tool_id(tool_id)
 
+    @skip_if_sysmon_unsupported
     def test_mutation_from_objmode(self):
         try:
             # Check that it's possible to enable an event (mutate the event
@@ -391,6 +397,7 @@ class TestMonitoring(TestCase):
             sys.monitoring.register_callback(tool_id, event, None)
             sys.monitoring.free_tool_id(tool_id)
 
+    @skip_if_sysmon_unsupported
     def test_multiple_tool_id(self):
         # Check that multiple tools will work across different combinations of
         # events that Numba dispatcher supports, namely:
@@ -456,6 +463,7 @@ class TestMonitoring(TestCase):
         self.check_py_start_calls(opt_tool)
         self.check_py_return_calls(opt_tool)
 
+    @skip_if_sysmon_unsupported
     def test_raising_under_monitoring(self):
         # Check that Numba can raise an exception whilst monitoring is running
         # and that 1. `RAISE` is issued 2. `PY_UNWIND` is issued, 3. that
@@ -523,6 +531,7 @@ class TestMonitoring(TestCase):
 
         self.assertIn(msg, str(store_raised))
 
+    @skip_if_sysmon_unsupported
     def test_stop_iteration_under_monitoring(self):
         # Check that Numba can raise an StopIteration exception whilst
         # monitoring is running and that:
@@ -605,6 +614,7 @@ class TestMonitoring(TestCase):
 
         self.assertIn(msg, str(store_raised))
 
+    @skip_if_sysmon_unsupported
     def test_raising_callback_unwinds_from_jit_on_success_path(self):
         # An event callback can legitimately raise an exception, this test
         # makes sure Numba's dispatcher handles it ok on the "successful path",
@@ -632,6 +642,7 @@ class TestMonitoring(TestCase):
         callback.assert_called_once()
         self.assertIn(msg, str(store_raised))
 
+    @skip_if_sysmon_unsupported
     def test_raising_callback_unwinds_from_jit_on_raising_path(self):
         # An event callback can legitimately raise an exception, this test
         # makes sure Numba's dispatcher handles it ok on the
@@ -691,6 +702,7 @@ class TestMonitoring(TestCase):
         # check the stored exception is the expected exception
         self.assertIs(store_raised, callback.side_effect)
 
+    @skip_if_sysmon_unsupported
     def test_raising_callback_unwinds_from_jit_on_unwind_path(self):
         # An event callback can legitimately raise an exception, this test
         # makes sure Numba's dispatcher handles it ok on the
@@ -739,6 +751,7 @@ class TestMonitoring(TestCase):
         # check the stored_raise
         self.assertIs(store_raised, callback.side_effect)
 
+    @skip_if_sysmon_unsupported
     def test_monitoring_multiple_threads(self):
         # Two threads, different tools and events registered on each thread.
         # Each test creates a global event capturing. The threads use barriers
@@ -840,6 +853,31 @@ class TestMonitoringEnvVarControl(TestCase):
             return x + 1
 
         self.assertTrue(foo._enable_sysmon)
+
+    @unittest.skipUnless(
+        sys.version_info[:3] >= (3, 14, 4),
+        "needs Python 3.14.4+",
+    )
+    @TestCase.run_test_in_subprocess(
+        envvars={"NUMBA_ENABLE_SYS_MONITORING": '1'})
+    def test_userwarning_when_jit_sysmon_unavailable(self):
+        # C dispatcher warns once when hooks are off on 3.14.4+ (#10538).
+        from numba import jit
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always", UserWarning)
+
+            @jit(nopython=True)
+            def foo(x):
+                return x + 1
+
+            self.assertTrue(foo._enable_sysmon)
+            self.assertEqual(foo(1), 2)
+            self.assertEqual(foo(2), 3)
+
+        self.assertEqual(len(w), 1)
+        msg = str(w[0].message)
+        self.assertIn("sys.monitoring", msg)
 
 
 if __name__ == '__main__':
