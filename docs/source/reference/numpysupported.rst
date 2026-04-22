@@ -162,7 +162,7 @@ or layout.
    are not supported.
 
 
-.. _.. _structured-array-access::
+.. _array-access:
 
 Array access
 ------------
