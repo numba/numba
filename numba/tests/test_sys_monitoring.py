@@ -317,6 +317,7 @@ class TestMonitoring(TestCase):
             sys.monitoring.set_events(tool_id, NO_EVENTS)
             sys.monitoring.free_tool_id(tool_id)
 
+    @skip_if_sysmon_unsupported
     def test_disable_from_callback(self):
         # Event callbacks can disable a _local_ event at a specific location to
         # prevent it triggering in the future by returning
