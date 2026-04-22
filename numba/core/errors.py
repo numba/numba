@@ -533,21 +533,16 @@ class WarningsFixer(object):
         """
         Store warnings and optionally fix their filename and lineno.
         """
-        with warnings.catch_warnings(record=True) as wlist:
-            warnings.simplefilter('always', self._category)
+        with warnings.catch_warnings(record=True, action='always',
+                                     category=self._category) as wlist:
             yield
 
         for w in wlist:
-            msg = str(w.message)
-            if issubclass(w.category, self._category):
-                # Store warnings of this category for deduplication
-                filename = filename or w.filename
-                lineno = lineno or w.lineno
-                self._warnings[filename, lineno, w.category].add(msg)
-            else:
-                # Simply emit other warnings again
-                warnings.warn_explicit(msg, w.category,
-                                       w.filename, w.lineno)
+            msg = str(w.message)  # stringify in order to deduplicate
+            # Store warnings of this category for deduplication
+            filename = filename or w.filename
+            lineno = lineno or w.lineno
+            self._warnings[filename, lineno, w.category].add(msg)
 
     def flush(self):
         """
