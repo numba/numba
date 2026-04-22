@@ -7,6 +7,11 @@ Notes on ``sys.monitoring``
           versions of Python may behave differently. It is however hoped that
           most of the concepts herein will remain relevant.
 
+.. note:: From Python 3.14.4 onward the dispatcher behaviour described below is
+          disabled (`#10538 <https://github.com/numba/numba/issues/10538>`_).
+          ``NUMBA_ENABLE_SYS_MONITORING`` has no effect on those versions and a
+          ``UserWarning`` is emitted if this variable is set to a non-zero value.
+
 Python 3.12 introduced a new monitoring system under ``sys.monitoring``. This
 system lets users monitor a selection of events that may be interesting for e.g.
 performance profiling or debugging purposes. Event monitoring is set "per tool",

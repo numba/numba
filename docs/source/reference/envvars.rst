@@ -194,6 +194,12 @@ These variables influence what is printed out during compilation of
 
    Only available for Python 3.12 and above. Otherwise, it has no effect.
 
+   It also has no effect on Python 3.14.4 and newer: dispatcher support for
+   ``sys.monitoring`` is disabled, see this issue for more details
+   (`#10538 <https://github.com/numba/numba/issues/10538>`_). A
+   ``UserWarning`` is emitted if this variable is set to a
+   non-zero value.
+
 .. envvar:: NUMBA_ENABLE_PROFILING
 
    Enables JIT events of LLVM in order to support profiling of jitted functions.
