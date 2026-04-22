@@ -565,8 +565,13 @@ def boolval_max(val1, val2):
 @overload(max)
 def ol_max(*x):
     if len(x) == 1 and (
-        (isinstance(x[0], types.UniTuple) and isinstance(x[0].dtype, types.Number))
-        or (isinstance(x[0], types.BaseTuple) and all(isinstance(ty, types.Number) for ty in x[0].types))
+        (
+            isinstance(x[0], types.UniTuple) and
+            isinstance(x[0].dtype, types.Number)
+        ) or (
+            isinstance(x[0], types.BaseTuple) and
+            all(isinstance(ty, types.Number) for ty in x[0].types)
+        )
     ):
         def impl(*x):
             return max_vararg(x[0])
@@ -580,11 +585,17 @@ def ol_max(*x):
             return max_vararg(x)
         return impl
 
+
 @overload(min)
 def ol_min(*x):
     if len(x) == 1 and (
-        (isinstance(x[0], types.UniTuple) and isinstance(x[0].dtype, types.Number))
-        or (isinstance(x[0], types.BaseTuple) and all(isinstance(ty, types.Number) for ty in x[0].types))
+        (
+            isinstance(x[0], types.UniTuple) and
+            isinstance(x[0].dtype, types.Number)
+        ) or (
+            isinstance(x[0], types.BaseTuple) and
+            all(isinstance(ty, types.Number) for ty in x[0].types)
+        )
     ):
         def impl(*x):
             return min_vararg(x[0])
@@ -597,6 +608,7 @@ def ol_min(*x):
         def impl(*x):
             return min_vararg(x)
         return impl
+
 
 @intrinsic
 def max_vararg(context, x):
@@ -614,6 +626,7 @@ def max_vararg(context, x):
         return sig, impl
     else:
         raise ValueError("Given types cannot be unified")
+
 
 @intrinsic
 def min_vararg(context, x):
