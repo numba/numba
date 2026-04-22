@@ -873,6 +873,7 @@ class TestMonitoringEnvVarControl(TestCase):
 
             self.assertTrue(foo._enable_sysmon)
             self.assertEqual(foo(1), 2)
+            self.assertEqual(foo(2), 3)
 
         self.assertEqual(len(w), 1)
         msg = str(w[0].message)
