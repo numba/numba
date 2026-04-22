@@ -819,14 +819,12 @@ static inline int msb(uint8_t bits) {
 static int
 jit_sysmon_supported(void)
 {
-    static int cached = -1;
-    static int warned = 0;
+    static int support_flag = -1;
     unsigned long v;
     int major, minor, micro;
-    int ok;
 
-    if (cached != -1) {
-        return cached;
+    if (support_flag != -1) {
+        return support_flag;
     }
 
     v = Py_Version;
@@ -835,12 +833,9 @@ jit_sysmon_supported(void)
     micro = (int)((v >> 8) & 0xFF);
 
     // Exclude anything beyond 3.14.3.
-    ok = !(major == 3 && (minor > 14 || (minor == 14 && micro > 3)));
+    support_flag = !(major == 3 && (minor > 14 || (minor == 14 && micro > 3)));
 
-    cached = ok;
-
-    if (!ok && !warned) {
-        warned = 1;
+    if (!support_flag) {
         PyErr_WarnEx(PyExc_UserWarning,
             "Numba: JIT sys.monitoring integration is disabled on "
             "Python 3.14.4+ (https://github.com/numba/numba/"
@@ -850,7 +845,7 @@ jit_sysmon_supported(void)
         );
     }
 
-    return cached;
+    return support_flag;
 }
 
 
