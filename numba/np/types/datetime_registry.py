@@ -32,7 +32,7 @@ def ol_int(x):
     if not isinstance(x, (NPDatetime, NPTimedelta)):
         return
 
-    if x.unit != 'ns':
+    if isinstance(x, NPDatetime) and x.unit != 'ns':
         raise errors.NumbaTypeError(
             "Only datetime64[ns] can be converted,"
             f" but got datetime64[{x.unit}]"

@@ -320,13 +320,18 @@ def float_impl(context, builder, sig, args):
 
 @intrinsic
 def cast_int(typingctx, x):
+    if isinstance(x, types.Integer):
+        retty = x
+    else:
+        retty = types.intp
+
     def impl(context, builder, signature, args):
         [ty] = signature.args
         [val] = args
         res = context.cast(builder, val, ty, signature.return_type)
         return impl_ret_untracked(context, builder, signature.return_type, res)
 
-    sig = types.intp(x)
+    sig = signature(retty, x)
     return sig, impl
 
 @overload(int)
