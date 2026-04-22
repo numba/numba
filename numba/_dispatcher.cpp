@@ -819,6 +819,7 @@ static inline int msb(uint8_t bits) {
 static int
 jit_sysmon_supported(void)
 {
+    // support_flag states: -1 unknown, 0 unsupported (warn once), 1 supported
     static int support_flag = -1;
     unsigned long v;
     int major, minor, micro;
