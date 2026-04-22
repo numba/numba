@@ -30,6 +30,7 @@ Implement parallel vectorize workqueue on top of Intel TBB.
 #define _TRACE_SPLIT 0
 
 static tbb::task_group *tg = NULL;
+static tbb::task_arena *ta = NULL;
 
 static tbb::task_scheduler_handle tsh;
 static bool tsh_was_initialized = false;
@@ -102,10 +103,13 @@ void fix_tls_observer::on_scheduler_entry(bool worker) {
 static void
 add_task(void *fn, void *args, void *dims, void *steps, void *data)
 {
-    tg->run([=]
+    ta->enqueue([&]
     {
-        auto func = reinterpret_cast<void (*)(void *args, void *dims, void *steps, void *data)>(fn);
-        func(args, dims, steps, data);
+        tg->defer([=]
+        {
+            auto func = reinterpret_cast<void (*)(void *args, void *dims, void *steps, void *data)>(fn);
+            func(args, dims, steps, data);
+        });
     });
 }
 
@@ -268,11 +272,22 @@ static void unload_tbb(void)
     {
         if(_DEBUG)
         {
-            puts("Unloading TBB");
+            puts("Unloading TBB task_group");
         }
-        tg->wait();
+        ta->execute([&] {
+            tg->wait();
+        });
         delete tg;
         tg = NULL;
+    }
+    if (ta)
+    {
+        if(_DEBUG)
+        {
+            puts("Unloading TBB task_arena");
+        }
+        delete ta;
+        ta = NULL;
     }
     if (tsh_was_initialized)
     {
@@ -284,7 +299,7 @@ static void unload_tbb(void)
 
 static void launch_threads(int count)
 {
-    if(tg)
+    if(tg && ta)
         return;
 
     if(_DEBUG)
@@ -295,9 +310,11 @@ static void launch_threads(int count)
 
     tsh = tbb::attach();
     tsh_was_initialized = true;
-
+    ta = new tbb::task_arena(count);
     tg = new tbb::task_group;
-    tg->run([] {}); // start creating threads asynchronously
+    ta->execute([&] {
+        tg->run([] {}); // start creating threads asynchronously
+    });
 
     _INIT_NUM_THREADS = count;
 
@@ -310,7 +327,9 @@ static void launch_threads(int count)
 
 static void synchronize(void)
 {
-    tg->wait();
+    ta->execute([&] {
+        tg->wait();
+    });
 }
 
 static void ready(void)
