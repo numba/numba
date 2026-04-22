@@ -162,6 +162,8 @@ or layout.
    are not supported.
 
 
+.. _.. _structured-array-access::
+
 Array access
 ------------
 
@@ -206,7 +208,7 @@ exceed the number of dimensions in the array being indexed as well as the indice
 to a common shape.
 
 .. seealso::
-   `NumPy indexing <http://docs.scipy.org/doc/numpy/reference/arrays.indexing.html>`_
+   `NumPy indexing <https://numpy.org/doc/stable/user/basics.indexing.html>`_
    reference.
 
 .. note::
