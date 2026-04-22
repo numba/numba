@@ -590,6 +590,44 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
         self.check_median_basic(pyfunc, variations)
 
+    def test_np_median_scalar(self):
+        cfunc = jit(nopython=True)(array_median_global)
+
+        def check(arg):
+            expected = array_median_global(arg)
+            got = cfunc(arg)
+            self.assertPreciseEqual(got, expected)
+
+        # Scalar inputs: median of a single value returns the value,
+        # dtype is preserved (same as NumPy's 1-element array behaviour)
+        check(np.int32(2))
+        check(np.int64(-3))
+        check(np.uint32(5))
+
+        # NumPy boolean scalars
+        check(np.bool_(True))
+        check(np.bool_(False))
+
+        # NumPy floating scalars — dtype preserved
+        check(np.float32(1.25))
+        check(np.float64(-2.5))
+
+        # Python scalars
+        check(5)
+        check(True)
+        check(3.5)
+
+        # Special floating values
+        check(np.float64(np.nan))
+        check(np.float64(np.inf))
+        check(np.float64(-np.inf))
+        check(np.float64(-0.0))
+        check(np.float64(0.0))
+
+        # Error cases
+        with self.assertTypingError():
+            cfunc('test String')
+
     def check_percentile_and_quantile(self, pyfunc, q_upper_bound):
         cfunc = jit(nopython=True)(pyfunc)
 
