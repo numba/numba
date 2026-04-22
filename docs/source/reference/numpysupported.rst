@@ -213,6 +213,8 @@ to a common shape.
   Because of the way Numba logic is implemented, fancy indexing with multiple array indices
   and/or multidimensional array indices can be slower than expected. This is currently being
   investigated and optimized, but users should be aware of this when using these features.
+  
+.. _structured-array-access:
 
 Structured array access
 -----------------------
