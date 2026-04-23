@@ -1,6 +1,6 @@
 Document Tier 1.5 support policy
 --------------------------------
 
-The :ref:`support_tiers` documentation now describes a new "Tier 1.5" category
+The :ref:`Support Tiers <support_tiers>` documentation now describes a new "Tier 1.5" category
 covering experimental releases for emerging platforms.  This support tier
 currently includes the previously released Python 3.14 free-threading builds.
