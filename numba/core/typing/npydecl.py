@@ -93,6 +93,18 @@ class Numpy_rules_ufunc(AbstractTemplate):
         # First, strip optional types, ufunc loops are typed on concrete types
         args = [x.type if isinstance(x, types.Optional) else x for x in args]
 
+        # Handle 'out' keyword by converting to positional
+        if kws:
+            kws = dict(kws)
+            if 'out' in kws:
+                out_arg = kws.pop('out')
+                if not isinstance(out_arg, types.NoneType):
+                    args = tuple(args) + (out_arg,)
+            if kws:  # raise for other kwargs
+                raise TypingError(
+                    f"ufunc '{self.ufunc.__name__}': unsupported keyword "
+                    f"arguments: {', '.join(kws.keys())}")
+
         ufunc = self.ufunc
         base_types, explicit_outputs, ndims, layout = self._handle_inputs(
             ufunc, args, kws)

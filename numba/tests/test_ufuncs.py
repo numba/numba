@@ -924,6 +924,88 @@ class TestUFuncs(BasicUFuncTest, TestCase):
             np.testing.assert_array_equal(expected, result)
 
 
+class TestUfuncKeywordArgs(TestCase):
+    """Tests for ufunc keyword arguments"""
+
+    def _compile(self, pyfunc, argtys, nrt=False):
+        return njit(argtys, _nrt=nrt, no_rewrites=True)(pyfunc)
+
+    def test_out_keyword_vs_positional(self):
+        # Positional and keyword out= must produce identical results
+        def maximum_positional(a, b, out):
+            np.maximum(a, b, out)
+
+        def maximum_keyword(a, b, out):
+            np.maximum(a, b, out=out)
+
+        arr_ty = types.Array(types.float64, 1, 'C')
+        argtys = (arr_ty, arr_ty, arr_ty)
+        cfunc_pos = self._compile(maximum_positional, argtys)
+        cfunc_kw = self._compile(maximum_keyword, argtys)
+
+        a = np.array([1.0, 5.0, 3.0])
+        b = np.array([2.0, 1.0, 4.0])
+        out_pos = np.empty(3)
+        out_kw = np.empty(3)
+        expected = np.empty(3)
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                'ignore',
+                message='Passing more than 2 positional arguments',
+                category=DeprecationWarning)
+            maximum_positional(a, b, expected)
+        cfunc_pos(a, b, out_pos)
+        cfunc_kw(a, b, out_kw)
+        self.assertPreciseEqual(out_pos, out_kw)
+        self.assertPreciseEqual(out_pos, expected)
+
+    def test_out_binary_add(self):
+        # test ufunc with nin=2 and out= keyword
+        def add_with_out(a, b, out):
+            np.add(a, b, out=out)
+
+        arr_ty = types.Array(types.float64, 1, 'C')
+        cfunc = self._compile(add_with_out, (arr_ty, arr_ty, arr_ty))
+
+        a = np.array([1.0, 2.0, 3.0])
+        b = np.array([4.0, 5.0, 6.0])
+        out = np.empty(3)
+        expected = np.empty(3)
+        np.add(a, b, out=expected)
+        cfunc(a, b, out)
+        self.assertPreciseEqual(out, expected)
+
+    def test_out_unary_sqrt(self):
+        # test ufunc with nin=1 and out= keyword
+        def sqrt_with_out(a, out):
+            np.sqrt(a, out=out)
+
+        arr_ty = types.Array(types.float64, 1, 'C')
+        cfunc = self._compile(sqrt_with_out, (arr_ty, arr_ty))
+
+        a = np.array([1.0, 4.0, 9.0, 16.0])
+        out = np.empty(4)
+        expected = np.empty(4)
+        np.sqrt(a, out=expected)
+        cfunc(a, out)
+        self.assertPreciseEqual(out, expected)
+
+    def test_out_return_value_identity(self):
+        # ufunc with out= must return the out array itself
+        def add_return(a, b, out):
+            return np.add(a, b, out=out)
+
+        arr_ty = types.Array(types.float64, 1, 'C')
+        cfunc = self._compile(add_return, (arr_ty, arr_ty, arr_ty), nrt=True)
+
+        a = np.array([1.0, 2.0, 3.0])
+        b = np.array([4.0, 5.0, 6.0])
+        out = np.empty(3)
+        result = cfunc(a, b, out)
+        self.assertPreciseEqual(result, out)
+        self.assertIs(result, out)
+
+
 class TestArrayOperators(BaseUFuncTest, TestCase):
 
     def _check_results(self, expected, got):
@@ -1836,6 +1918,17 @@ class TestUFuncBadArgs(TestCase):
 
         with self.assertRaises(TypingError):
             njit([types.float64(types.float64)])(func)
+
+    def test_ufunc_out_keyword_unsupported_kwargs(self):
+        def func(a, b):
+            """error: unsupported keyword arguments"""
+            return np.maximum(a, b, where=True)
+
+        array_type = types.Array(types.float64, 1, 'C')
+        sig = array_type(array_type, array_type)
+
+        with self.assertRaises(TypingError):
+            njit(sig)(func)
 
 
 class TestUFuncCompilationThreadSafety(TestCase):
