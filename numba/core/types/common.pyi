@@ -1,4 +1,3 @@
-import functools
 from typing import ClassVar, Literal, TypeAlias
 
 from typing_extensions import Generic, Self, TypeVar, override
@@ -14,14 +13,14 @@ _Layout: TypeAlias = Literal["C", "F", "CS", "FS", "A"]
 
 class Opaque(Dummy): ...
 
-class SimpleIterableType(IterableType, Generic[_TypeT_co]):
+class SimpleIterableType(IterableType[_TypeT_co], Generic[_TypeT_co]):
     @override
-    def __init__(self, name: str, iterator_type: _TypeT_co): ...
+    def __init__(self, name: str, iterator_type: IteratorType[_TypeT_co]): ...
     @property
     @override
-    def iterator_type(self) -> _TypeT_co: ...
+    def iterator_type(self) -> IteratorType[_TypeT_co]: ...
 
-class SimpleIteratorType(IteratorType, Generic[_TypeT_co]):
+class SimpleIteratorType(IteratorType[_TypeT_co], Generic[_TypeT_co]):
     @override
     def __init__(self, name: str, yield_type: _TypeT_co): ...
     @property
@@ -29,7 +28,7 @@ class SimpleIteratorType(IteratorType, Generic[_TypeT_co]):
     def yield_type(self) -> _TypeT_co: ...
 
 class Buffer(IterableType, ArrayCompatible):
-    LAYOUTS: ClassVar[frozenset[str]] = ...
+    LAYOUTS: ClassVar[frozenset[_Layout]] = ...
 
     slice_is_copy: ClassVar[bool] = False
     aligned: ClassVar[bool] = True
@@ -54,9 +53,6 @@ class Buffer(IterableType, ArrayCompatible):
     @property
     @override
     def key(self) -> tuple[Type, int, _Layout, bool]: ...
-    @functools.cached_property
-    @override
-    def layout(self) -> _Layout: ...
 
     #
     @property
