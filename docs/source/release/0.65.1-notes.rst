@@ -1,0 +1,26 @@
+Version 0.65.1 (23 April 2026)
+==============================
+
+This is a patch release of Numba that disables JIT ``sys.monitoring`` integration
+on Python 3.14.4 and later (`#10538 <https://github.com/numba/numba/issues/10538>`_).
+
+Changes
+~~~~~~~
+
+Disable JIT ``sys.monitoring`` on Python 3.14.4 and later
+---------------------------------------------------------
+
+Python 3.14.4 changed interpreter internals Numba relied on for
+``sys.monitoring`` (`#10538 <https://github.com/numba/numba/issues/10538>`_).
+The feature is disabled from 3.14.4 onward; ``NUMBA_ENABLE_SYS_MONITORING`` has no
+effect and a ``UserWarning`` will be emitted if this variable is set to a non-zero value.
+
+(`PR-#10547 <https://github.com/numba/numba/pull/10547>`__)
+
+Pull-Requests:
+
+* PR `#10547 <https://github.com/numba/numba/pull/10547>`_: Disable `NUMBA_ENABLE_SYS_MONITORING` on python 3.14.4+ (`swap357 <https://github.com/swap357>`_)
+
+Authors:
+
+* `swap357 <https://github.com/swap357>`_
