@@ -132,6 +132,7 @@ _GLOBAL_INT_FOR_TESTING1 = 17
 _GLOBAL_INT_FOR_TESTING2 = 5
 
 TestNamedTuple = namedtuple('TestNamedTuple', ('part0', 'part1'))
+issue_10338_A = namedtuple("issue_10338_A", ("age",))
 
 
 def null_comparer(a, b):
@@ -252,6 +253,9 @@ class TestParforsBase(TestCase):
         parfor_args = copy_args(*args)
         parfor_output = cpfunc.entry_point(*parfor_args)
 
+        print("py_expected", py_expected)
+        print("njit", njit_output)
+        print("parfor", parfor_output)
         if check_args_for_equality is None:
             np.testing.assert_almost_equal(njit_output, py_expected, **kwargs)
             np.testing.assert_almost_equal(parfor_output, py_expected, **kwargs)
@@ -4361,6 +4365,16 @@ class TestPrangeSpecific(TestPrangeBase):
 
             return B
         self.prange_tester(test_impl, 1.0)
+
+    def test_issue_10338(self):
+        def test_impl(x, y):
+            for i in range(x.age.shape[0]):
+                y.age[i] = x.age[i]
+            return x, y
+
+        a = issue_10338_A(age=np.array([1, 2, 3]))
+        b = issue_10338_A(age=np.array([0, 0, 0]))
+        self.prange_tester(test_impl, a, b)
 
     def test_argument_alias_recarray_field(self):
         # Test for issue4007.
