@@ -818,7 +818,8 @@ class IntegerArrayIndexer(Indexer):
     Compute indices from an array of integer indices.
     """
 
-    def __init__(self, context, builder, idxty, idxary, size, global_ary_idx_list):
+    def __init__(self, context, builder, idxty,
+                 idxary, size, global_ary_idx_list):
         self.context = context
         self.builder = builder
         self.global_ary_idx_list = global_ary_idx_list
@@ -856,13 +857,22 @@ class IntegerArrayIndexer(Indexer):
         # Initialize loop variable
         builder.branch(self.bb_start)
         builder.position_at_end(self.bb_start)
-        # Load the actual index from the array of indices, last n indices from the global array index list
-        # TODO: Divide them by the respective shape otherwise might end up with out-of-bounds indices.
-        indices = [builder.load(idx) for idx in self.global_ary_idx_list[len(self.global_ary_idx_list) - len(self.idx_shape):]]
-        indices = [builder.srem(indices[i], self.idx_shape[i]) for i in range(len(self.idx_shape))]
+        # Load the actual index from the array of indices, last n indices
+        # from the global array index list
+        indices = [
+            builder.load(idx) for idx in self.global_ary_idx_list[
+                len(self.global_ary_idx_list) - len(self.idx_shape):]
+        ]
+        indices = [
+            builder.srem(indices[i], self.idx_shape[i])
+            for i in range(len(self.idx_shape))
+        ]
 
-        index = _getitem_array_generic(self.context, self.builder, self.idxty.dtype,
-                                 self.idxty, self.idxary, [types.intp for _ in self.idx_shape], tuple(indices))
+        index = _getitem_array_generic(
+            self.context, self.builder, self.idxty.dtype,
+            self.idxty, self.idxary,
+            [types.intp for _ in self.idx_shape], tuple(indices)
+        )
         index = fix_integer_index(self.context, builder,
                                   self.idxty.dtype, index, self.size)
         return index
@@ -871,7 +881,7 @@ class IntegerArrayIndexer(Indexer):
         builder = self.builder
         builder.branch(self.bb_end)
         builder.position_at_end(self.bb_end)
-    
+
     def get_src_idx(self):
         return ()
 
@@ -947,13 +957,17 @@ class BooleanArrayIndexer(Indexer):
 
     def loop_tail(self):
         builder = self.builder
-        src_idx = cgutils.increment_index(builder,
-                                             builder.load(self.src_idx))
+        src_idx = cgutils.increment_index(
+            builder,
+            builder.load(self.src_idx)
+        )
         builder.store(src_idx, self.src_idx)
         builder.branch(self.bb_tail)
         builder.position_at_end(self.bb_tail)
-        next_index = cgutils.increment_index(builder,
-                                             builder.load(self.idx_index))
+        next_index = cgutils.increment_index(
+            builder,
+            builder.load(self.idx_index)
+        )
         builder.store(next_index, self.idx_index)
         builder.branch(self.bb_start)
         builder.position_at_end(self.bb_end)
@@ -961,6 +975,7 @@ class BooleanArrayIndexer(Indexer):
     def get_src_idx(self):
         # TODO: Implement own addition src index
         return (self.builder.load(self.src_idx),)
+
 
 class SliceIndexer(Indexer):
     """
@@ -1022,15 +1037,21 @@ class SliceIndexer(Indexer):
 
     def loop_tail(self):
         builder = self.builder
-        next_index = builder.add(builder.load(self.index), self.slice.step,
-                                 flags=['nsw'])
-        next_src_idx = builder.add(builder.load(self.src_idx), self.ll_intp(1),
-                                  flags=['nsw'])
+        next_index = builder.add(
+            builder.load(self.index),
+            self.slice.step,
+            flags=['nsw']
+        )
+        next_src_idx = builder.add(
+            builder.load(self.src_idx),
+            self.ll_intp(1),
+            flags=['nsw']
+        )
         builder.store(next_src_idx, self.src_idx)
         builder.store(next_index, self.index)
         builder.branch(self.bb_start)
         builder.position_at_end(self.bb_end)
-    
+
     def get_src_idx(self):
         # TODO: Implement own addition src index
         return (self.builder.load(self.src_idx),)
@@ -1050,8 +1071,12 @@ class SubspaceIndexer(Indexer):
 
     def prepare(self):
         builder = self.builder
-        self.bb_starts = [builder.append_basic_block() for _ in self.global_ary_idx_list]
-        self.bb_ends = [builder.append_basic_block() for _ in self.global_ary_idx_list]
+        self.bb_starts = [
+            builder.append_basic_block() for _ in self.global_ary_idx_list
+        ]
+        self.bb_ends = [
+            builder.append_basic_block() for _ in self.global_ary_idx_list
+        ]
 
     def get_size(self):
         return self.size
@@ -1064,11 +1089,11 @@ class SubspaceIndexer(Indexer):
         return (self.ll_intp(0), self.size)
 
     def loop_head(self):
-        # Subspace indices are being tracked globally within self.global_ary_idx_list
-        # and are used by the IntegerArrayIndexers to access the elements
-        # of the respective index arrays. Over here we simply loop over
-        # the global indices and yield control to the next indexer,
-        # hence returning None.
+        # Subspace indices are being tracked globally within
+        # self.global_ary_idx_list and are used by the IntegerArrayIndexers
+        # to access the elements of the respective index arrays. Over here
+        # we simply loop over the global indices and yield control to the
+        # next indexer, hence returning None.
 
         builder = self.builder
         # Initialize loop variables
@@ -1081,21 +1106,24 @@ class SubspaceIndexer(Indexer):
                 builder.icmp_signed('>=', cur_index, self.shape_tuple[i]),
                 likely=False
             ):
-                self.builder.store(Constant(self.ll_intp, 0), self.global_ary_idx_list[i])
+                self.builder.store(
+                    Constant(self.ll_intp, 0),
+                    self.global_ary_idx_list[i]
+                )
                 builder.branch(self.bb_ends[i])
 
     def loop_tail(self):
         builder = self.builder
-        # TODO: Something wrong happening here, due to which we get misaligned tchache chunk.
-        # whenever we have more than one index array
         for i in reversed(range(len(self.global_ary_idx_list))):
-            next_index = cgutils.increment_index(builder,
-                                                builder.load(self.global_ary_idx_list[i]))
+            next_index = cgutils.increment_index(
+                builder,
+                builder.load(self.global_ary_idx_list[i])
+            )
             builder.store(next_index, self.global_ary_idx_list[i])
             builder.branch(self.bb_starts[i])
             builder.position_at_end(self.bb_ends[i])
             i -= 1
-    
+
     def get_src_idx(self):
         return tuple(self.builder.load(idx) for idx in self.global_ary_idx_list)
 
@@ -1114,7 +1142,10 @@ class FancyIndexer(object):
         self.strides = cgutils.unpack_tuple(builder, ary.strides, aryty.ndim)
         self.ll_intp = self.context.get_value_type(types.intp)
         self.subspace_shape = subspace_shape_tuple
-        self.global_ary_idx_list = [cgutils.alloca_once(builder, self.ll_intp) for _ in range(len(subspace_shape_tuple))]
+        self.global_ary_idx_list = [
+            cgutils.alloca_once(builder, self.ll_intp)
+            for _ in range(len(subspace_shape_tuple))
+        ]
         for idx in self.global_ary_idx_list:
             self.builder.store(Constant(self.ll_intp, 0), idx)
         indexers = []
@@ -1293,11 +1324,14 @@ class FancyIndexer(object):
     def cleanup(self, context, builder):
         for i in self.indexers:
             i.cleanup(context, builder)
-    
+
     def get_src_indices(self):
         indices = [list(idx.get_src_idx()) for idx in self.indexers]
         if self.subspace_index is not None:
-            indices.insert(self.subspace_index, list(self.subspace_indexer.get_src_idx()))
+            indices.insert(
+                self.subspace_index,
+                list(self.subspace_indexer.get_src_idx())
+            )
         indices = sum(indices, [])
         for i in self.newaxes:
             indices.insert(i, self.ll_intp(0))
@@ -1930,7 +1964,9 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
             array_indices.append((i, idx, idxty, idx_make))
 
     if len(array_indices):
-        subspace_shape_tuple = get_subspace_shape(context, builder, array_indices)
+        subspace_shape_tuple = get_subspace_shape(
+            context, builder, array_indices
+        )
     else:
         subspace_shape_tuple = ()
 
@@ -1962,12 +1998,15 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
 
         def src_getitem():
             src_indices = indexer.get_src_indices()[-len(src_shapes):]
-            src_indices = [builder.srem(src_indices[i], src_shapes[i]) for i in range(len(src_shapes))]
+            src_indices = [
+                builder.srem(src_indices[i], src_shapes[i])
+                for i in range(len(src_shapes))
+            ]
 
             val = _getitem_array_generic(
-                context, builder, 
-                src_dtype, srcty, src, 
-                [types.intp for _ in range(len(src_shapes))], 
+                context, builder,
+                src_dtype, srcty, src,
+                [types.intp for _ in range(len(src_shapes))],
                 tuple(src_indices)
             )
             return val
@@ -2002,8 +2041,6 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         with builder.if_then(shape_error, likely=False):
             raise_shape_mismatch_error(context, builder, (seq_len,),
                                        (index_shape[0],))
-
-        retty = srcty
 
         def src_getitem(src_idx):
             cur = builder.load(src_idx)
