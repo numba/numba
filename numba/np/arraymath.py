@@ -1291,6 +1291,15 @@ def np_nanmax(a):
 
 @overload(np.nanmean)
 def np_nanmean(a):
+    if isinstance(a, types.Float):
+        def scalar_nanmean_impl(a):
+            return a + 0.0
+        return scalar_nanmean_impl
+    if isinstance(a, (types.Integer, types.Boolean)):
+        def scalar_nanmean_impl(a):
+            return np.float64(a) + 0.0
+        return scalar_nanmean_impl
+
     if not isinstance(a, types.Array):
         return
     isnan = get_isnan(a.dtype)

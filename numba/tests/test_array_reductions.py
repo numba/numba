@@ -520,6 +520,34 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_nanmean_basic(self):
         self.check_reduction_basic(array_nanmean)
 
+    def test_nanmean_scalar(self):
+        cfunc = jit(nopython=True)(array_nanmean)
+
+        def check(arg):
+            expected = array_nanmean(arg)
+            got = cfunc(arg)
+            self.assertPreciseEqual(got, expected)
+
+        # numpy scalar cases
+        check(np.float64(3.0))
+        check(np.float32(-2.5))
+
+        # integer/bool scalars (NumPy promotes to float)
+        check(np.int32(7))
+        check(np.int64(-3))
+        check(np.bool_(True))
+        check(np.bool_(False))
+
+        # special values
+        check(np.nan)
+        check(np.inf)
+        check(-np.inf)
+        check(-0.0)
+
+        # negative test
+        with self.assertTypingError():
+            cfunc('string')
+
     def test_nansum_basic(self):
         self.check_reduction_basic(array_nansum)
 
