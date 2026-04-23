@@ -42,13 +42,13 @@ jobs:
           BUILD_MATRIX_JSON=$(jq -c .wheel_build_matrix .github/workflows/wheel_workflow_matrix.json)
           TEST_MATRIX_JSON=$(jq -c .wheel_test_matrix .github/workflows/wheel_workflow_matrix.json)
 
-          # Add canonical python versions to both matrices
+          # Add canonical python versions to both matrices (3.14.3t -> 3.14t, 3.14.3 -> 3.14)
           BUILD_MATRIX_EXTENDED=$(echo "$BUILD_MATRIX_JSON" | jq -c '
-            map(. + {"python_canonical": (.["python-version"] | split(".") | .[:2] | join("."))})
+            map(. + {"python_canonical": (.["python-version"] | capture("^(?<v>[0-9]+\\.[0-9]+).*?(?<t>t?)$") | .v + .t)})
           ')
 
           TEST_MATRIX_EXTENDED=$(echo "$TEST_MATRIX_JSON" | jq -c '
-            map(. + {"python_canonical": (.["python-version"] | split(".") | .[:2] | join("."))})
+            map(. + {"python_canonical": (.["python-version"] | capture("^(?<v>[0-9]+\\.[0-9]+).*?(?<t>t?)$") | .v + .t)})
           ')
 
           echo "Build Matrix JSON: $BUILD_MATRIX_EXTENDED"
