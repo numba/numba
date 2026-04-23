@@ -20,6 +20,7 @@ effect and a ``UserWarning`` will be emitted if this variable is set to a non-ze
 Pull-Requests:
 
 * PR `#10547 <https://github.com/numba/numba/pull/10547>`_: Disable `NUMBA_ENABLE_SYS_MONITORING` on python 3.14.4+ (`swap357 <https://github.com/swap357>`_)
+* PR `#10562 <https://github.com/numba/numba/pull/10562>`_: Cherry pick and changelog update for 0.65.1 (`swap357 <https://github.com/swap357>`_)
 
 Authors:
 
