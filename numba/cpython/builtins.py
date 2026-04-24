@@ -567,10 +567,10 @@ def ol_max(*x):
     if len(x) == 1 and (
         (
             isinstance(x[0], types.UniTuple) and
-            isinstance(x[0].dtype, types.Number)
+            isinstance(x[0].dtype, (types.Number, types.Boolean))
         ) or (
             isinstance(x[0], types.BaseTuple) and
-            all(isinstance(ty, types.Number) for ty in x[0].types)
+            all(isinstance(ty, (types.Number, types.Boolean)) for ty in x[0].types)
         )
     ):
         def impl(*x):
@@ -578,7 +578,7 @@ def ol_max(*x):
         return impl
     else:
         for ty in x:
-            if not isinstance(ty, types.Number):
+            if not isinstance(ty, (types.Number, types.Boolean)):
                 return None
 
         def impl(*x):
@@ -591,10 +591,10 @@ def ol_min(*x):
     if len(x) == 1 and (
         (
             isinstance(x[0], types.UniTuple) and
-            isinstance(x[0].dtype, types.Number)
+            isinstance(x[0].dtype, (types.Number, types.Boolean))
         ) or (
             isinstance(x[0], types.BaseTuple) and
-            all(isinstance(ty, types.Number) for ty in x[0].types)
+            all(isinstance(ty, (types.Number, types.Boolean)) for ty in x[0].types)
         )
     ):
         def impl(*x):
@@ -602,7 +602,7 @@ def ol_min(*x):
         return impl
     else:
         for ty in x:
-            if not isinstance(ty, types.Number):
+            if not isinstance(ty, (types.Number, types.Boolean)):
                 return None
 
         def impl(*x):

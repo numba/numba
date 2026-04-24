@@ -876,7 +876,17 @@ class TestBuiltins(TestCase):
 
     def test_min_empty_tuple(self):
         self.check_min_max_empty_tuple(min_usecase4, "min")
+    
+    def check_min_max_type_unification(self, pyfunc, func_name):
+        with self.assertTypingError() as raises:
+            njit(pyfunc)(np.bool_(True), np.datetime64('2020', 'Y'))
+        self.assertIn("Given types cannot be unified", str(raises.exception))
+    
+    def test_max_type_unification(self):
+        self.check_min_max_type_unification(max_usecase1, "max")
 
+    def test_min_type_unification(self):
+        self.check_min_max_type_unification(min_usecase1, "min")
 
     def test_oct(self, flags=forceobj_flags):
         pyfunc = oct_usecase
