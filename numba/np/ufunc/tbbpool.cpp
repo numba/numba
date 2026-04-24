@@ -103,14 +103,11 @@ void fix_tls_observer::on_scheduler_entry(bool worker) {
 static void
 add_task(void *fn, void *args, void *dims, void *steps, void *data)
 {
-    ta->enqueue([&]
+    ta->enqueue(tg->defer([=]
     {
-        tg->defer([=]
-        {
-            auto func = reinterpret_cast<void (*)(void *args, void *dims, void *steps, void *data)>(fn);
-            func(args, dims, steps, data);
-        });
-    });
+        auto func = reinterpret_cast<void (*)(void *args, void *dims, void *steps, void *data)>(fn);
+        func(args, dims, steps, data);
+    }));
 }
 
 static void
