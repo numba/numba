@@ -107,7 +107,7 @@ class _DispatcherBase(_dispatcher.Dispatcher[_FuncT_co], Generic[_FuncT_co]):
         py_func: _FuncT_co,
         pysig: inspect.Signature,
         can_fallback: bool,
-        exact_match_required,
+        exact_match_required: bool,
     ) -> None: ...
 
     #
@@ -186,7 +186,7 @@ class _DispatcherBase(_dispatcher.Dispatcher[_FuncT_co], Generic[_FuncT_co]):
         signature: None = None,
         show_wrapper: _WrapperKind | None = None,
         **kwargs: Unpack[_CFGKwargs],
-    ) -> dict[_InputSignature, str]: ...
+    ) -> dict[_InputSignature, codegen._CFG]: ...
     @overload  # signature=<given>
     def inspect_cfg(
         self,
