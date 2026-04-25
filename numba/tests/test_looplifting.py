@@ -3,7 +3,8 @@ import numpy as np
 
 from numba.core import types
 from numba.core.compiler import compile_extra, Flags
-from numba.tests.support import TestCase, tag, MemoryLeakMixin
+from numba.tests.support import (TestCase, tag, MemoryLeakMixin,
+                                 numpy_sincos_uses_svml)
 import unittest
 
 
@@ -550,8 +551,13 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
         kwargs = dict(a=1.7, b=1.7, c=0.6, d=1.2, x0=0, y0=0, n=200)
         got = foo(**kwargs)
         expected = foo.py_func(**kwargs)
-        self.assertPreciseEqual(got[0], expected[0])
-        self .assertPreciseEqual(got[1], expected[1])
+        ulps = 4 if numpy_sincos_uses_svml else 1
+        self.assertPreciseEqual(
+            got[0], expected[0], prec='double', ulps=ulps,
+        )
+        self .assertPreciseEqual(
+            got[1], expected[1], prec='double', ulps=ulps,
+        )
         [lifted] = foo.overloads[foo.signatures[0]].lifted
         self.assertEqual(len(lifted.nopython_signatures), 1)
 
