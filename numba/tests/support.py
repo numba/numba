@@ -124,6 +124,11 @@ IS_NUMPY_2 = numpy_support.numpy_version >= (2, 0)
 skip_if_numpy_2 = unittest.skipIf(IS_NUMPY_2,
                                   "Not supported on numpy 2.0+")
 
+numpy_sincos_uses_svml = (
+    sys.platform.startswith('linux') and platform.machine() == 'x86_64' and
+    numpy_support.numpy_version < (1, 25)
+)
+
 REDUCED_TESTING = bool(int(os.environ.get('_NUMBA_REDUCED_TESTING', 0)))
 """
 Set to truthy to reduce the amount of testing. This can reduce memory use by
