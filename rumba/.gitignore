@@ -1,0 +1,12 @@
+/target/
+/.venv/
+/.pytest_cache/
+*.so
+*.dylib
+*.dll
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv
+Cargo.lock
+uv.lock

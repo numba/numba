@@ -1,0 +1,28 @@
+[build-system]
+requires = ["maturin>=1.5,<2"]
+build-backend = "maturin"
+
+[project]
+name = "rumba"
+version = "0.1.0"
+description = "Experimental Rust and C based reimplementation of a small Numba-like subset"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "BSD-2-Clause" }
+authors = [{ name = "Rumba contributors" }]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+]
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest", "numpy"]
+
+[tool.maturin]
+module-name = "rumba"
+features = ["pyo3/extension-module"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
