@@ -103,19 +103,143 @@ impl PyScalarType {
     }
 }
 
-struct Expr {
+struct CExpr {
     code: String,
     typ: ScalarType,
 }
 
-struct FunctionIr<'py> {
+struct ParsedFunction {
     name: String,
     args: Vec<String>,
-    body: Bound<'py, PyList>,
+    body: Vec<StmtNode>,
 }
 
-struct Emitter<'py> {
-    function_ir: FunctionIr<'py>,
+enum StmtNode {
+    Return(ExprNode),
+    Assign {
+        name: String,
+        value: ExprNode,
+    },
+    AugAssign {
+        name: String,
+        op: BinOp,
+        value: ExprNode,
+    },
+    If {
+        test: ExprNode,
+        body: Vec<StmtNode>,
+        orelse: Vec<StmtNode>,
+    },
+    ForRange {
+        target: String,
+        start: ExprNode,
+        stop: ExprNode,
+        step: ExprNode,
+        body: Vec<StmtNode>,
+    },
+}
+
+impl StmtNode {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::Return(_) => "Return",
+            Self::Assign { .. } => "Assign",
+            Self::AugAssign { .. } => "AugAssign",
+            Self::If { .. } => "If",
+            Self::ForRange { .. } => "For",
+        }
+    }
+}
+
+enum ExprNode {
+    Constant(ConstantValue),
+    Name(String),
+    BinOp {
+        left: Box<ExprNode>,
+        op: BinOp,
+        right: Box<ExprNode>,
+    },
+    UnaryOp {
+        op: UnaryOp,
+        value: Box<ExprNode>,
+    },
+    Compare {
+        left: Box<ExprNode>,
+        op: CmpOp,
+        right: Box<ExprNode>,
+    },
+}
+
+enum ConstantValue {
+    Int(i64),
+    Float(f64),
+    Bool(bool),
+}
+
+#[derive(Clone, Copy)]
+enum BinOp {
+    Add,
+    Sub,
+    Mult,
+    Div,
+    FloorDiv,
+    Mod,
+}
+
+impl BinOp {
+    fn symbol(self) -> &'static str {
+        match self {
+            Self::Add => "+",
+            Self::Sub => "-",
+            Self::Mult => "*",
+            Self::Div => "/",
+            Self::FloorDiv => "/",
+            Self::Mod => "%",
+        }
+    }
+
+    fn type_name(self) -> &'static str {
+        match self {
+            Self::Add => "Add",
+            Self::Sub => "Sub",
+            Self::Mult => "Mult",
+            Self::Div => "Div",
+            Self::FloorDiv => "FloorDiv",
+            Self::Mod => "Mod",
+        }
+    }
+}
+
+enum UnaryOp {
+    Not,
+    USub,
+    UAdd,
+}
+
+enum CmpOp {
+    Eq,
+    NotEq,
+    Lt,
+    LtE,
+    Gt,
+    GtE,
+}
+
+impl CmpOp {
+    fn symbol(&self) -> &'static str {
+        match self {
+            Self::Eq => "==",
+            Self::NotEq => "!=",
+            Self::Lt => "<",
+            Self::LtE => "<=",
+            Self::Gt => ">",
+            Self::GtE => ">=",
+        }
+    }
+}
+
+struct Emitter {
+    function_ir: ParsedFunction,
     signature: Vec<ScalarType>,
     env: HashMap<String, ScalarType>,
     declared: HashSet<String>,
@@ -123,8 +247,8 @@ struct Emitter<'py> {
     return_type: Option<ScalarType>,
 }
 
-impl<'py> Emitter<'py> {
-    fn new(function_ir: FunctionIr<'py>, signature: Vec<ScalarType>) -> PyResult<Self> {
+impl Emitter {
+    fn new(function_ir: ParsedFunction, signature: Vec<ScalarType>) -> PyResult<Self> {
         if function_ir.args.len() != signature.len() {
             return Err(unsupported("argument count does not match signature"));
         }
@@ -164,15 +288,11 @@ impl<'py> Emitter<'py> {
             "__attribute__((visibility(\"default\"))) int64_t rumba_entry({params}) {{"
         ));
 
-        let body_items: Vec<Py<PyAny>> = self
-            .function_ir
-            .body
-            .iter()
-            .map(|item| item.unbind())
-            .collect();
-        for stmt in body_items {
-            self.stmt(stmt.bind(self.function_ir.body.py()), 1)?;
+        let body = std::mem::take(&mut self.function_ir.body);
+        for stmt in &body {
+            self.stmt(stmt, 1)?;
         }
+        self.function_ir.body = body;
 
         let return_type = self
             .return_type
@@ -186,14 +306,10 @@ impl<'py> Emitter<'py> {
         Ok((format!("{}\n", self.lines.join("\n")), return_type))
     }
 
-    fn stmt(&mut self, node: &Bound<'py, PyAny>, level: usize) -> PyResult<()> {
-        match class_name(node)?.as_str() {
-            "Return" => {
-                let value = getattr(node, "value")?;
-                if value.is_none() {
-                    return Err(unsupported("empty return is not supported"));
-                }
-                let expr = self.expr(&value)?;
+    fn stmt(&mut self, node: &StmtNode, level: usize) -> PyResult<()> {
+        match node {
+            StmtNode::Return(value) => {
+                let expr = self.expr(value)?;
                 self.return_type = Some(match self.return_type {
                     None => expr.typ,
                     Some(current) if current == expr.typ => current,
@@ -203,20 +319,10 @@ impl<'py> Emitter<'py> {
                     .push(format!("{}return {};", indent(level), expr.code));
                 Ok(())
             }
-            "Assign" => {
-                let targets = getattr(node, "targets")?.downcast_into::<PyList>()?;
-                if targets.len() != 1 {
-                    return Err(unsupported("only simple local assignments are supported"));
-                }
-                let target = targets.get_item(0)?;
-                if class_name(&target)? != "Name" {
-                    return Err(unsupported("only simple local assignments are supported"));
-                }
-                let name: String = getattr(&target, "id")?.extract()?;
-                let value = getattr(node, "value")?;
-                let expr = self.expr(&value)?;
+            StmtNode::Assign { name, value } => {
+                let expr = self.expr(value)?;
                 self.env.insert(name.clone(), expr.typ);
-                let prefix = if self.declared.contains(&name) {
+                let prefix = if self.declared.contains(name) {
                     String::new()
                 } else {
                     self.declared.insert(name.clone());
@@ -226,98 +332,64 @@ impl<'py> Emitter<'py> {
                     .push(format!("{}{prefix}{name} = {};", indent(level), expr.code));
                 Ok(())
             }
-            "AugAssign" => {
-                let target = getattr(node, "target")?;
-                if class_name(&target)? != "Name" {
-                    return Err(unsupported(
-                        "only augmented assignment to local names is supported",
-                    ));
-                }
-                let name: String = getattr(&target, "id")?.extract()?;
-                if !self.env.contains_key(&name) {
+            StmtNode::AugAssign { name, op, value } => {
+                if !self.env.contains_key(name) {
                     return Err(unsupported(format!(
                         "local variable {name:?} is used before assignment"
                     )));
                 }
-                let op = binop_symbol(&getattr(node, "op")?)?;
-                let value = getattr(node, "value")?;
-                let expr = self.expr(&value)?;
+                let expr = self.expr(value)?;
+                let op = op.symbol();
                 self.lines
                     .push(format!("{}{name} {op}= {};", indent(level), expr.code));
                 Ok(())
             }
-            "If" => {
-                let test = self.expr(&getattr(node, "test")?)?;
+            StmtNode::If { test, body, orelse } => {
+                let test = self.expr(test)?;
                 if test.typ != ScalarType::Bool {
                     return Err(unsupported("if condition must be boolean"));
                 }
                 self.lines
                     .push(format!("{}if ({}) {{", indent(level), test.code));
-                let body = getattr(node, "body")?.downcast_into::<PyList>()?;
-                for child in body.iter() {
-                    self.stmt(&child, level + 1)?;
+                for child in body {
+                    self.stmt(child, level + 1)?;
                 }
-                let orelse = getattr(node, "orelse")?.downcast_into::<PyList>()?;
                 if !orelse.is_empty() {
                     self.lines.push(format!("{}}} else {{", indent(level)));
-                    for child in orelse.iter() {
-                        self.stmt(&child, level + 1)?;
+                    for child in orelse {
+                        self.stmt(child, level + 1)?;
                     }
                 }
                 self.lines.push(format!("{}}}", indent(level)));
                 Ok(())
             }
-            "For" => self.for_range(node, level),
-            other => Err(unsupported(format!("unsupported statement {other}"))),
+            StmtNode::ForRange {
+                target,
+                start,
+                stop,
+                step,
+                body,
+            } => self.for_range(target, start, stop, step, body, level),
         }
     }
 
-    fn for_range(&mut self, node: &Bound<'py, PyAny>, level: usize) -> PyResult<()> {
-        let target = getattr(node, "target")?;
-        if class_name(&target)? != "Name" {
-            return Err(unsupported(
-                "only simple range loop variables are supported",
-            ));
-        }
-        let iter = getattr(node, "iter")?;
-        if class_name(&iter)? != "Call" {
-            return Err(unsupported("only range(...) loops are supported"));
-        }
-        let func = getattr(&iter, "func")?;
-        if class_name(&func)? != "Name" {
-            return Err(unsupported("only range(...) loops are supported"));
-        }
-        let func_name: String = getattr(&func, "id")?.extract()?;
-        if func_name != "range" {
-            return Err(unsupported("only range(...) loops are supported"));
-        }
-
-        let args = getattr(&iter, "args")?.downcast_into::<PyList>()?;
-        let (start, stop, step) = match args.len() {
-            1 => (
-                "0".to_string(),
-                self.expr(&args.get_item(0)?)?.code,
-                "1".to_string(),
-            ),
-            2 => (
-                self.expr(&args.get_item(0)?)?.code,
-                self.expr(&args.get_item(1)?)?.code,
-                "1".to_string(),
-            ),
-            3 => (
-                self.expr(&args.get_item(0)?)?.code,
-                self.expr(&args.get_item(1)?)?.code,
-                self.expr(&args.get_item(2)?)?.code,
-            ),
-            _ => return Err(unsupported("range accepts one to three arguments")),
-        };
-
-        let name: String = getattr(&target, "id")?.extract()?;
-        self.env.insert(name.clone(), ScalarType::Int64);
-        let decl = if self.declared.contains(&name) {
+    fn for_range(
+        &mut self,
+        name: &str,
+        start: &ExprNode,
+        stop: &ExprNode,
+        step: &ExprNode,
+        body: &[StmtNode],
+        level: usize,
+    ) -> PyResult<()> {
+        let start = self.expr(start)?.code;
+        let stop = self.expr(stop)?.code;
+        let step = self.expr(step)?.code;
+        self.env.insert(name.to_string(), ScalarType::Int64);
+        let decl = if self.declared.contains(name) {
             String::new()
         } else {
-            self.declared.insert(name.clone());
+            self.declared.insert(name.to_string());
             "int64_t ".to_string()
         };
         let cmp = if step.starts_with('-') { ">" } else { "<" };
@@ -325,91 +397,73 @@ impl<'py> Emitter<'py> {
             "{}for ({decl}{name} = {start}; {name} {cmp} {stop}; {name} += {step}) {{",
             indent(level)
         ));
-        let body = getattr(node, "body")?.downcast_into::<PyList>()?;
-        for child in body.iter() {
-            self.stmt(&child, level + 1)?;
+        for child in body {
+            self.stmt(child, level + 1)?;
         }
         self.lines.push(format!("{}}}", indent(level)));
         Ok(())
     }
 
-    fn expr(&mut self, node: &Bound<'py, PyAny>) -> PyResult<Expr> {
-        match class_name(node)?.as_str() {
-            "Constant" => {
-                let value = getattr(node, "value")?;
-                if let Ok(value) = value.extract::<bool>() {
-                    return Ok(Expr {
-                        code: if value { "true" } else { "false" }.to_string(),
-                        typ: ScalarType::Bool,
-                    });
-                }
-                if let Ok(value) = value.extract::<i64>() {
-                    return Ok(Expr {
-                        code: value.to_string(),
-                        typ: ScalarType::Int64,
-                    });
-                }
-                if let Ok(value) = value.extract::<f64>() {
-                    return Ok(Expr {
-                        code: value.to_string(),
-                        typ: ScalarType::Float64,
-                    });
-                }
-                Err(unsupported("unsupported constant"))
-            }
-            "Name" => {
-                let name: String = getattr(node, "id")?.extract()?;
+    fn expr(&mut self, node: &ExprNode) -> PyResult<CExpr> {
+        match node {
+            ExprNode::Constant(value) => match value {
+                ConstantValue::Bool(value) => Ok(CExpr {
+                    code: if *value { "true" } else { "false" }.to_string(),
+                    typ: ScalarType::Bool,
+                }),
+                ConstantValue::Int(value) => Ok(CExpr {
+                    code: value.to_string(),
+                    typ: ScalarType::Int64,
+                }),
+                ConstantValue::Float(value) => Ok(CExpr {
+                    code: value.to_string(),
+                    typ: ScalarType::Float64,
+                }),
+            },
+            ExprNode::Name(name) => {
                 let typ = self
                     .env
-                    .get(&name)
+                    .get(name)
                     .copied()
                     .ok_or_else(|| unsupported(format!("unknown name {name:?}")))?;
-                Ok(Expr { code: name, typ })
-            }
-            "BinOp" => {
-                let left = self.expr(&getattr(node, "left")?)?;
-                let right = self.expr(&getattr(node, "right")?)?;
-                let op_node = getattr(node, "op")?;
-                let op = binop_symbol(&op_node)?;
-                Ok(Expr {
-                    code: format!("({} {op} {})", left.code, right.code),
-                    typ: promote_numeric(left.typ, right.typ, class_name(&op_node)?),
+                Ok(CExpr {
+                    code: name.clone(),
+                    typ,
                 })
             }
-            "UnaryOp" => {
-                let op = getattr(node, "op")?;
-                let operand = self.expr(&getattr(node, "operand")?)?;
-                match class_name(&op)?.as_str() {
-                    "Not" => Ok(Expr {
+            ExprNode::BinOp { left, op, right } => {
+                let left = self.expr(left)?;
+                let right = self.expr(right)?;
+                Ok(CExpr {
+                    code: format!("({} {} {})", left.code, op.symbol(), right.code),
+                    typ: promote_numeric(left.typ, right.typ, op.type_name()),
+                })
+            }
+            ExprNode::UnaryOp { op, value } => {
+                let operand = self.expr(value)?;
+                match op {
+                    UnaryOp::Not => Ok(CExpr {
                         code: format!("(!{})", operand.code),
                         typ: ScalarType::Bool,
                     }),
-                    "USub" => Ok(Expr {
+                    UnaryOp::USub => Ok(CExpr {
                         code: format!("(-{})", operand.code),
                         typ: operand.typ,
                     }),
-                    "UAdd" => Ok(Expr {
+                    UnaryOp::UAdd => Ok(CExpr {
                         code: format!("(+{})", operand.code),
                         typ: operand.typ,
                     }),
-                    other => Err(unsupported(format!("unsupported unary operator {other}"))),
                 }
             }
-            "Compare" => {
-                let ops = getattr(node, "ops")?.downcast_into::<PyList>()?;
-                let comparators = getattr(node, "comparators")?.downcast_into::<PyList>()?;
-                if ops.len() != 1 || comparators.len() != 1 {
-                    return Err(unsupported("chained comparisons are not supported"));
-                }
-                let left = self.expr(&getattr(node, "left")?)?;
-                let right = self.expr(&comparators.get_item(0)?)?;
-                let op = cmpop_symbol(&ops.get_item(0)?)?;
-                Ok(Expr {
-                    code: format!("({} {op} {})", left.code, right.code),
+            ExprNode::Compare { left, op, right } => {
+                let left = self.expr(left)?;
+                let right = self.expr(right)?;
+                Ok(CExpr {
+                    code: format!("({} {} {})", left.code, op.symbol(), right.code),
                     typ: ScalarType::Bool,
                 })
             }
-            other => Err(unsupported(format!("unsupported expression {other}"))),
         }
     }
 }
@@ -538,7 +592,7 @@ impl Dispatcher {
         out.set_item("args", ir.args)?;
         let body = PyList::empty_bound(py);
         for stmt in ir.body.iter() {
-            body.append(class_name(&stmt)?)?;
+            body.append(stmt.kind())?;
         }
         out.set_item("body", body)?;
         Ok(out.into())
@@ -770,7 +824,7 @@ fn validate_function(func: &Bound<'_, PyAny>) -> PyResult<()> {
     }
 }
 
-fn build_rumba_ast<'py>(py: Python<'py>, func: &Bound<'py, PyAny>) -> PyResult<FunctionIr<'py>> {
+fn build_rumba_ast(py: Python<'_>, func: &Bound<'_, PyAny>) -> PyResult<ParsedFunction> {
     let code = func.getattr("__code__")?;
     let freevars = code.getattr("co_freevars")?.downcast_into::<PyTuple>()?;
     if !freevars.is_empty() {
@@ -815,14 +869,191 @@ fn build_rumba_ast<'py>(py: Python<'py>, func: &Bound<'py, PyAny>) -> PyResult<F
                 .iter()
                 .map(|arg| arg.getattr("arg")?.extract::<String>())
                 .collect::<PyResult<Vec<_>>>()?;
-            return Ok(FunctionIr {
+            let parsed_body = parse_stmt_list(&node.getattr("body")?.downcast_into::<PyList>()?)?;
+            return Ok(ParsedFunction {
                 name: node.getattr("name")?.extract()?,
                 args,
-                body: node.getattr("body")?.downcast_into::<PyList>()?,
+                body: parsed_body,
             });
         }
     }
     Err(unsupported("expected a Python function"))
+}
+
+fn parse_stmt_list(body: &Bound<'_, PyList>) -> PyResult<Vec<StmtNode>> {
+    body.iter().map(|stmt| parse_stmt(&stmt)).collect()
+}
+
+fn parse_stmt(node: &Bound<'_, PyAny>) -> PyResult<StmtNode> {
+    match class_name(node)?.as_str() {
+        "Return" => {
+            let value = getattr(node, "value")?;
+            if value.is_none() {
+                return Err(unsupported("empty return is not supported"));
+            }
+            Ok(StmtNode::Return(parse_expr(&value)?))
+        }
+        "Assign" => {
+            let targets = getattr(node, "targets")?.downcast_into::<PyList>()?;
+            if targets.len() != 1 {
+                return Err(unsupported("only simple local assignments are supported"));
+            }
+            let target = targets.get_item(0)?;
+            if class_name(&target)? != "Name" {
+                return Err(unsupported("only simple local assignments are supported"));
+            }
+            Ok(StmtNode::Assign {
+                name: getattr(&target, "id")?.extract()?,
+                value: parse_expr(&getattr(node, "value")?)?,
+            })
+        }
+        "AugAssign" => {
+            let target = getattr(node, "target")?;
+            if class_name(&target)? != "Name" {
+                return Err(unsupported(
+                    "only augmented assignment to local names is supported",
+                ));
+            }
+            Ok(StmtNode::AugAssign {
+                name: getattr(&target, "id")?.extract()?,
+                op: parse_binop(&getattr(node, "op")?)?,
+                value: parse_expr(&getattr(node, "value")?)?,
+            })
+        }
+        "If" => Ok(StmtNode::If {
+            test: parse_expr(&getattr(node, "test")?)?,
+            body: parse_stmt_list(&getattr(node, "body")?.downcast_into::<PyList>()?)?,
+            orelse: parse_stmt_list(&getattr(node, "orelse")?.downcast_into::<PyList>()?)?,
+        }),
+        "For" => parse_for_range(node),
+        other => Err(unsupported(format!("unsupported statement {other}"))),
+    }
+}
+
+fn parse_for_range(node: &Bound<'_, PyAny>) -> PyResult<StmtNode> {
+    let target = getattr(node, "target")?;
+    if class_name(&target)? != "Name" {
+        return Err(unsupported(
+            "only simple range loop variables are supported",
+        ));
+    }
+
+    let iter = getattr(node, "iter")?;
+    if class_name(&iter)? != "Call" {
+        return Err(unsupported("only range(...) loops are supported"));
+    }
+    let func = getattr(&iter, "func")?;
+    if class_name(&func)? != "Name" {
+        return Err(unsupported("only range(...) loops are supported"));
+    }
+    let func_name: String = getattr(&func, "id")?.extract()?;
+    if func_name != "range" {
+        return Err(unsupported("only range(...) loops are supported"));
+    }
+
+    let args = getattr(&iter, "args")?.downcast_into::<PyList>()?;
+    let (start, stop, step) = match args.len() {
+        1 => (
+            ExprNode::Constant(ConstantValue::Int(0)),
+            parse_expr(&args.get_item(0)?)?,
+            ExprNode::Constant(ConstantValue::Int(1)),
+        ),
+        2 => (
+            parse_expr(&args.get_item(0)?)?,
+            parse_expr(&args.get_item(1)?)?,
+            ExprNode::Constant(ConstantValue::Int(1)),
+        ),
+        3 => (
+            parse_expr(&args.get_item(0)?)?,
+            parse_expr(&args.get_item(1)?)?,
+            parse_expr(&args.get_item(2)?)?,
+        ),
+        _ => return Err(unsupported("range accepts one to three arguments")),
+    };
+
+    Ok(StmtNode::ForRange {
+        target: getattr(&target, "id")?.extract()?,
+        start,
+        stop,
+        step,
+        body: parse_stmt_list(&getattr(node, "body")?.downcast_into::<PyList>()?)?,
+    })
+}
+
+fn parse_expr(node: &Bound<'_, PyAny>) -> PyResult<ExprNode> {
+    match class_name(node)?.as_str() {
+        "Constant" => {
+            let value = getattr(node, "value")?;
+            if let Ok(value) = value.extract::<bool>() {
+                return Ok(ExprNode::Constant(ConstantValue::Bool(value)));
+            }
+            if let Ok(value) = value.extract::<i64>() {
+                return Ok(ExprNode::Constant(ConstantValue::Int(value)));
+            }
+            if let Ok(value) = value.extract::<f64>() {
+                return Ok(ExprNode::Constant(ConstantValue::Float(value)));
+            }
+            Err(unsupported("unsupported constant"))
+        }
+        "Name" => Ok(ExprNode::Name(getattr(node, "id")?.extract()?)),
+        "BinOp" => Ok(ExprNode::BinOp {
+            left: Box::new(parse_expr(&getattr(node, "left")?)?),
+            op: parse_binop(&getattr(node, "op")?)?,
+            right: Box::new(parse_expr(&getattr(node, "right")?)?),
+        }),
+        "UnaryOp" => Ok(ExprNode::UnaryOp {
+            op: parse_unary_op(&getattr(node, "op")?)?,
+            value: Box::new(parse_expr(&getattr(node, "operand")?)?),
+        }),
+        "Compare" => {
+            let ops = getattr(node, "ops")?.downcast_into::<PyList>()?;
+            let comparators = getattr(node, "comparators")?.downcast_into::<PyList>()?;
+            if ops.len() != 1 || comparators.len() != 1 {
+                return Err(unsupported("chained comparisons are not supported"));
+            }
+            Ok(ExprNode::Compare {
+                left: Box::new(parse_expr(&getattr(node, "left")?)?),
+                op: parse_cmpop(&ops.get_item(0)?)?,
+                right: Box::new(parse_expr(&comparators.get_item(0)?)?),
+            })
+        }
+        other => Err(unsupported(format!("unsupported expression {other}"))),
+    }
+}
+
+fn parse_binop(op: &Bound<'_, PyAny>) -> PyResult<BinOp> {
+    match class_name(op)?.as_str() {
+        "Add" => Ok(BinOp::Add),
+        "Sub" => Ok(BinOp::Sub),
+        "Mult" => Ok(BinOp::Mult),
+        "Div" => Ok(BinOp::Div),
+        "FloorDiv" => Ok(BinOp::FloorDiv),
+        "Mod" => Ok(BinOp::Mod),
+        other => Err(unsupported(format!("unsupported binary operator {other}"))),
+    }
+}
+
+fn parse_unary_op(op: &Bound<'_, PyAny>) -> PyResult<UnaryOp> {
+    match class_name(op)?.as_str() {
+        "Not" => Ok(UnaryOp::Not),
+        "USub" => Ok(UnaryOp::USub),
+        "UAdd" => Ok(UnaryOp::UAdd),
+        other => Err(unsupported(format!("unsupported unary operator {other}"))),
+    }
+}
+
+fn parse_cmpop(op: &Bound<'_, PyAny>) -> PyResult<CmpOp> {
+    match class_name(op)?.as_str() {
+        "Eq" => Ok(CmpOp::Eq),
+        "NotEq" => Ok(CmpOp::NotEq),
+        "Lt" => Ok(CmpOp::Lt),
+        "LtE" => Ok(CmpOp::LtE),
+        "Gt" => Ok(CmpOp::Gt),
+        "GtE" => Ok(CmpOp::GtE),
+        other => Err(unsupported(format!(
+            "unsupported comparison operator {other}"
+        ))),
+    }
 }
 
 fn inspect_bytecode(py: Python<'_>, func: &Bound<'_, PyAny>) -> PyResult<PyObject> {
@@ -1004,32 +1235,6 @@ fn getattr<'py>(obj: &Bound<'py, PyAny>, name: &str) -> PyResult<Bound<'py, PyAn
 
 fn class_name(obj: &Bound<'_, PyAny>) -> PyResult<String> {
     obj.get_type().name().map(|name| name.to_string())
-}
-
-fn binop_symbol(op: &Bound<'_, PyAny>) -> PyResult<&'static str> {
-    match class_name(op)?.as_str() {
-        "Add" => Ok("+"),
-        "Sub" => Ok("-"),
-        "Mult" => Ok("*"),
-        "Div" => Ok("/"),
-        "FloorDiv" => Ok("/"),
-        "Mod" => Ok("%"),
-        other => Err(unsupported(format!("unsupported binary operator {other}"))),
-    }
-}
-
-fn cmpop_symbol(op: &Bound<'_, PyAny>) -> PyResult<&'static str> {
-    match class_name(op)?.as_str() {
-        "Eq" => Ok("=="),
-        "NotEq" => Ok("!="),
-        "Lt" => Ok("<"),
-        "LtE" => Ok("<="),
-        "Gt" => Ok(">"),
-        "GtE" => Ok(">="),
-        other => Err(unsupported(format!(
-            "unsupported comparison operator {other}"
-        ))),
-    }
 }
 
 fn promote_numeric(left: ScalarType, right: ScalarType, op: impl AsRef<str>) -> ScalarType {
