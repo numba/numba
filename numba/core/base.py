@@ -428,6 +428,22 @@ class BaseContext(object):
         """
         pass    
 
+    def get_or_insert_foreign_function(self, module, fnty, name):
+        """
+        Get the function named *name* with type *fnty* from *module*, or insert
+        it if it doesn't exist, then apply target-specific ABI attributes via
+        self.apply_target_attributes().
+
+        Use this instead of cgutils.get_or_insert_function() for every call to
+        a function that is not itself jitted by Numba — e.g. NRT helpers,
+        CPython API, libc, NumPy C helpers, typed container helpers, etc.
+
+        For jitted function declarations use cgutils.get_or_insert_function().
+        """
+        fn = cgutils.get_or_insert_function(module, fnty, name)
+        self.apply_target_attributes(fn)
+        return fn
+
     def declare_external_function(self, module, fndesc):
         fnty = self.get_external_function_type(fndesc)
         fn = cgutils.get_or_insert_function(module, fnty, fndesc.mangled_name)

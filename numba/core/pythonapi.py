@@ -1300,11 +1300,8 @@ class PythonAPI(object):
         return self.builder.call(fn, (buf, ptr))
 
     # ------ utils -----
-
     def _get_function(self, fnty, name):
-        fn = cgutils.get_or_insert_function(self.module, fnty, name)
-        self.context.apply_target_attributes(fn)
-        return fn        
+        return self.context.get_or_insert_foreign_function(self.module, fnty, name)
 
     def alloca_obj(self):
         return self.builder.alloca(self.pyobj)
