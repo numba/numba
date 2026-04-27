@@ -1,9 +1,11 @@
+#[derive(Clone)]
 pub(crate) struct ParsedFunction {
     pub(crate) name: String,
     pub(crate) args: Vec<String>,
     pub(crate) body: Vec<StmtNode>,
 }
 
+#[derive(Clone)]
 pub(crate) enum StmtNode {
     Return(ExprNode),
     Assign {
@@ -41,9 +43,14 @@ impl StmtNode {
     }
 }
 
+#[derive(Clone)]
 pub(crate) enum ExprNode {
     Constant(ConstantValue),
     Name(String),
+    Call {
+        function: Box<ParsedFunction>,
+        args: Vec<ExprNode>,
+    },
     BinOp {
         left: Box<ExprNode>,
         op: BinOp,
@@ -60,13 +67,14 @@ pub(crate) enum ExprNode {
     },
 }
 
+#[derive(Clone)]
 pub(crate) enum ConstantValue {
     Int(i64),
     Float(f64),
     Bool(bool),
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BinOp {
     Add,
     Sub,
@@ -100,12 +108,14 @@ impl BinOp {
     }
 }
 
+#[derive(Clone)]
 pub(crate) enum UnaryOp {
     Not,
     USub,
     UAdd,
 }
 
+#[derive(Clone)]
 pub(crate) enum CmpOp {
     Eq,
     NotEq,

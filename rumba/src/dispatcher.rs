@@ -4,9 +4,8 @@ use pyo3::types::{PyDict, PyList, PyTuple};
 use crate::artifact::{CompiledArtifact, PyCompiledArtifact};
 use crate::compile::compile_parsed_function;
 use crate::errors::unsupported;
-use crate::frontend::bytecode::inspect_bytecode;
+use crate::frontend::bytecode::{build_rumba_ast, inspect_bytecode};
 use crate::frontend::parse_function_input;
-use crate::frontend::python_ast::build_rumba_ast;
 use crate::runtime::call_native;
 use crate::types::{parse_signature_tuple, signature_tuple, ScalarType};
 

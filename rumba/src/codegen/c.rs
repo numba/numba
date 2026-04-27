@@ -17,6 +17,8 @@ pub(crate) struct Emitter {
     env: HashMap<String, ScalarType>,
     declared: HashSet<String>,
     lines: Vec<String>,
+    helper_sources: Vec<String>,
+    helper_cache: HashMap<String, (String, ScalarType)>,
     return_type: Option<ScalarType>,
 }
 
@@ -40,11 +42,25 @@ impl Emitter {
             env,
             declared,
             lines: Vec::new(),
+            helper_sources: Vec::new(),
+            helper_cache: HashMap::new(),
             return_type: None,
         })
     }
 
     pub(crate) fn emit(&mut self) -> PyResult<(String, ScalarType)> {
+        let (entry_source, return_type) = self.emit_function("rumba_entry", true)?;
+        let mut source = vec![
+            "#include <stdbool.h>".to_string(),
+            "#include <stdint.h>".to_string(),
+            String::new(),
+        ];
+        source.append(&mut self.helper_sources);
+        source.push(entry_source);
+        Ok((format!("{}\n", source.join("\n")), return_type))
+    }
+
+    fn emit_function(&mut self, c_name: &str, exported: bool) -> PyResult<(String, ScalarType)> {
         let params = self
             .function_ir
             .args
@@ -54,12 +70,14 @@ impl Emitter {
             .collect::<Vec<_>>()
             .join(", ");
 
-        self.lines.push("#include <stdbool.h>".to_string());
-        self.lines.push("#include <stdint.h>".to_string());
-        self.lines.push(String::new());
-        self.lines.push(format!(
-            "__attribute__((visibility(\"default\"))) int64_t rumba_entry({params}) {{"
-        ));
+        self.lines.clear();
+        let visibility = if exported {
+            "__attribute__((visibility(\"default\"))) "
+        } else {
+            "static "
+        };
+        self.lines
+            .push(format!("{visibility}int64_t {c_name}({params}) {{"));
 
         let body = std::mem::take(&mut self.function_ir.body);
         for stmt in &body {
@@ -70,10 +88,7 @@ impl Emitter {
         let return_type = self
             .return_type
             .ok_or_else(|| unsupported("function must return a scalar value"))?;
-        self.lines[3] = format!(
-            "__attribute__((visibility(\"default\"))) {} rumba_entry({params}) {{",
-            return_type.c_type()
-        );
+        self.lines[0] = format!("{visibility}{} {c_name}({params}) {{", return_type.c_type());
         self.lines.push("}".to_string());
 
         Ok((format!("{}\n", self.lines.join("\n")), return_type))
@@ -122,17 +137,29 @@ impl Emitter {
                 if test.typ != ScalarType::Bool {
                     return Err(unsupported("if condition must be boolean"));
                 }
+                let env_before = self.env.clone();
+                let declared_before = self.declared.clone();
                 self.lines
                     .push(format!("{}if ({}) {{", indent(level), test.code));
                 for child in body {
                     self.stmt(child, level + 1)?;
                 }
+                let body_env = self.env.clone();
+                let body_declared = self.declared.clone();
                 if !orelse.is_empty() {
+                    self.env = env_before.clone();
+                    self.declared = declared_before.clone();
                     self.lines.push(format!("{}}} else {{", indent(level)));
                     for child in orelse {
                         self.stmt(child, level + 1)?;
                     }
                 }
+                let else_env = self.env.clone();
+                let else_declared = self.declared.clone();
+                self.env = body_env;
+                self.env.extend(else_env);
+                self.declared = body_declared;
+                self.declared.extend(else_declared);
                 self.lines.push(format!("{}}}", indent(level)));
                 Ok(())
             }
@@ -204,6 +231,35 @@ impl Emitter {
                     typ,
                 })
             }
+            ExprNode::Call { function, args } => {
+                let args = args
+                    .iter()
+                    .map(|arg| self.expr(arg))
+                    .collect::<PyResult<Vec<_>>>()?;
+                let signature = args.iter().map(|arg| arg.typ).collect::<Vec<_>>();
+                let key = helper_key(function, &signature);
+                let (c_name, return_type) =
+                    if let Some((c_name, return_type)) = self.helper_cache.get(&key) {
+                        (c_name.clone(), *return_type)
+                    } else {
+                        let c_name = format!("rumba_helper_{}", self.helper_cache.len());
+                        let mut helper = Emitter::new((**function).clone(), signature)?;
+                        let (source, return_type) = helper.emit_function(&c_name, false)?;
+                        self.helper_sources.append(&mut helper.helper_sources);
+                        self.helper_sources.push(source);
+                        self.helper_cache.insert(key, (c_name.clone(), return_type));
+                        (c_name, return_type)
+                    };
+                let code = args
+                    .iter()
+                    .map(|arg| arg.code.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                Ok(CExpr {
+                    code: format!("{c_name}({code})"),
+                    typ: return_type,
+                })
+            }
             ExprNode::BinOp { left, op, right } => {
                 let left = self.expr(left)?;
                 let right = self.expr(right)?;
@@ -243,4 +299,15 @@ impl Emitter {
 
 fn indent(level: usize) -> String {
     "    ".repeat(level)
+}
+
+fn helper_key(function: &ParsedFunction, signature: &[ScalarType]) -> String {
+    let mut key = function.name.clone();
+    key.push('(');
+    for typ in signature {
+        key.push_str(typ.name());
+        key.push(',');
+    }
+    key.push(')');
+    key
 }
