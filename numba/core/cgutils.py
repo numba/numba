@@ -415,14 +415,12 @@ def insert_pure_function(module, fnty, name):
     fn.attributes.add("nounwind")
     return fn
 
+
 def get_or_insert_function(module, fnty, name):
     """
     Get the function named *name* with type *fnty* from *module*, or insert it
     if it doesn't exist, then apply target-specific ABI attributes via
     context.apply_target_attributes().
-   
-    Use this instead of get_or_insert_function for **every** call to a
-    function that is not itself jitted by Numba. 
     """
     fn = module.globals.get(name, None)
     if fn is None:
