@@ -46,8 +46,6 @@ jobs:
         NUMPY: '1.24'
         RUN_COVERAGE: yes
         RUN_FLAKE8: yes
-        RUN_MYPY: yes
-        RUN_STUBTEST: yes
         BUILD_DOC: yes
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 1
@@ -68,9 +66,11 @@ jobs:
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 4
 
-      py311_np124:
+      py311_np124_type_check:
         PYTHON: '3.11'
         NUMPY: '1.24'
+        RUN_MYPY: yes
+        RUN_STUBTEST: yes
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 5
       py311_np125:
