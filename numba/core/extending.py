@@ -324,7 +324,7 @@ class _Intrinsic(ReduceMixin):
     Dummy callable for intrinsic
     """
     _memo: weakref.WeakValueDictionary = weakref.WeakValueDictionary()
-    __cache_size = config.FUNCTION_CACHE_SIZE # type: ignore
+    __cache_size = config.FUNCTION_CACHE_SIZE  # type: ignore  # pyrefly:ignore[missing-attribute]
     # hold refs to last N functions deserialized, retaining them in _memo
     # regardless of whether there is another reference
     _recent: collections.deque = collections.deque(maxlen=__cache_size)
@@ -391,7 +391,7 @@ class _Intrinsic(ReduceMixin):
         return dict(uuid=self._uuid, name=self._name, defn=self._defn)
 
     @classmethod
-    def _rebuild(cls, uuid, name, defn):
+    def _rebuild(cls, uuid, name, defn):  # pyrefly:ignore[bad-override]
         """
         NOTE: part of ReduceMixin protocol
         """
