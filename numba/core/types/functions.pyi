@@ -204,7 +204,7 @@ class NamedTupleClass(Callable, Opaque, Generic[_TupleT_co]):
     def get_impl_key(self, sig: Signature) -> type[Self]: ...
 
 class NumberClass(Callable, DTypeSpec, Opaque, Generic[_T_co]):
-    instance_class: _T_co
+    instance_type: _T_co
 
     @override
     def __init__(self, instance_type: _T_co) -> None: ...
