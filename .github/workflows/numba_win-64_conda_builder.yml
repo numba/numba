@@ -72,7 +72,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Miniconda
-        uses: conda-incubator/setup-miniconda@fc2d68f6413eb2d87b895e92f8584b5b94a10167 # v3.3.0
+        uses: conda-incubator/setup-miniconda@8ee1f361103df19b6f8c8655fd3967a8ecb162d5 # v4.0.1
         with:
           auto-update-conda: true
           auto-activate-base: true
@@ -141,7 +141,7 @@ jobs:
 
     steps:
       - name: Setup miniconda
-        uses: conda-incubator/setup-miniconda@fc2d68f6413eb2d87b895e92f8584b5b94a10167 # v3.3.0
+        uses: conda-incubator/setup-miniconda@8ee1f361103df19b6f8c8655fd3967a8ecb162d5 # v4.0.1
 
       - name: Download llvmlite artifact
         if: ${{ inputs.llvmlite_run_id != '' }}
