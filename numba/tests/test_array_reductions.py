@@ -259,6 +259,35 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         with self.assertTypingError() as e:
             cfunc('string')
 
+    def check_scalar_temporal(self, pyfunc, **kwargs):
+        cfunc = jit(nopython=True)(pyfunc)
+        def check(arr):
+            self.assertPreciseEqual(pyfunc(arr), cfunc(arr), **kwargs)
+
+        #check datetime
+        arr = np.datetime64('2020-01-01')
+        check(arr)
+        arr = np.datetime64('2020-01-01T12:00')
+        check(arr)
+        arr = np.datetime64('2020-01-01T12:00:00.000000')
+        check(arr)
+        arr = np.datetime64('2020-01-01T12:00:00.000000000')
+        check(arr)
+        arr = np.datetime64('NaT')
+        check(arr)
+
+        #check timedelta
+        arr = np.timedelta64(5, 'D')
+        check(arr)
+        arr = np.timedelta64(5, 'm')
+        check(arr)
+        arr = np.timedelta64(5, 's')
+        check(arr)
+        arr = np.timedelta64(5, 'us')
+        check(arr)
+        arr = np.timedelta64(0, 'ns')
+        check(arr)
+
     def test_all_basic(self, pyfunc=array_all):
         cfunc = jit(nopython=True)(pyfunc)
         def check(arr):
@@ -304,6 +333,18 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(np.float64(0.2))
         check(np.bool_(True))
         check(np.bool_(False))
+
+        # Test temporal values
+        check(np.datetime64('2020-01-01'))
+        check(np.datetime64('2020-01-01T12:00'))
+        check(np.datetime64('2020-01-01T12:00:00.000000'))
+        check(np.datetime64('1970-01-01'))
+        check(np.datetime64('NaT'))
+        check(np.timedelta64(5, 'D'))
+        check(np.timedelta64(5, 'm'))
+        check(np.timedelta64(5, 's'))
+        check(np.timedelta64(5, 'us'))
+        check(np.timedelta64(0, 'ns'))
 
         # Test special values
         check(np.nan)
@@ -367,6 +408,18 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(np.bool_(True))
         check(np.bool_(False))
 
+        # Test temporal values
+        check(np.datetime64('2020-01-01'))
+        check(np.datetime64('2020-01-01T12:00'))
+        check(np.datetime64('2020-01-01T12:00:00.000000'))
+        check(np.datetime64('1970-01-01'))
+        check(np.datetime64('NaT'))
+        check(np.timedelta64(5, 'D'))
+        check(np.timedelta64(5, 'm'))
+        check(np.timedelta64(5, 's'))
+        check(np.timedelta64(5, 'us'))
+        check(np.timedelta64(0, 'ns'))
+
         # Test special values
         check(np.nan)
         check(np.inf)
@@ -420,7 +473,14 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(0)
         check(0.0000042)
         check(-0.25863)
-        
+
+        # Temporal Scalar
+        check(np.timedelta64(5, 'D'))
+        check(np.timedelta64(5, 'm'))
+        check(np.timedelta64(5, 's'))
+        check(np.timedelta64(5, 'us'))
+        check(np.timedelta64(0, 'ns'))
+
         # Error cases
         with self.assertTypingError():
             cfunc('test String')
@@ -485,25 +545,32 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_scalar_basic(array_min_global)
         #array testing
         self.check_reduction_basic(array_min)
+        #temporal testing
+        self.check_scalar_temporal(array_min_global)
 
     def test_amin_basic(self):
         #scalar testing
         self.check_scalar_basic(array_amin)
         #array testing
         self.check_reduction_basic(array_amin)
-
+        #temporal testing
+        self.check_scalar_temporal(array_amin)
 
     def test_max_basic(self):
         #array testing
         self.check_reduction_basic(array_max)
         #scalar testing
         self.check_scalar_basic(array_max_global)
+        #temporal testing
+        self.check_scalar_temporal(array_max_global)
 
     def test_amax_basic(self):
         #array testing
         self.check_reduction_basic(array_amax)
         #scalar testing
         self.check_scalar_basic(array_amax)
+        #temporal testing
+        self.check_scalar_temporal(array_amax)
 
     def test_argmin_basic(self):
         self.check_reduction_basic(array_argmin)

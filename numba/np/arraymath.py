@@ -9,6 +9,7 @@ import operator
 import warnings
 
 import llvmlite.ir
+from numba.np.types.datetime import NPDatetime, NPTimedelta
 import numpy as np
 
 from numba.core import types, cgutils
@@ -438,6 +439,10 @@ def array_mean(a):
         def _scalar_mean(a):
             return np.float64(a) + 0.0
         return _scalar_mean
+    elif isinstance(a, NPTimedelta):
+        def _temporal_scalar_mean(a):
+            return a
+        return _temporal_scalar_mean
     elif isinstance(a, (types.Float, types.Complex)):
         typed_zero = as_dtype(a).type(0)
 
@@ -559,7 +564,8 @@ def return_false(a):
 @overload_method(types.Array, "min")
 def npy_min(a):
     #scalar case
-    if isinstance(a, (types.Number,types.Boolean)):
+    if isinstance(a, (types.Number, types.Boolean,
+                      NPDatetime, NPTimedelta)):
         def scalar_min(a):
             return a
         return scalar_min
@@ -615,7 +621,8 @@ def npy_min(a):
 @overload_method(types.Array, "max")
 def npy_max(a):
     #scalar case
-    if isinstance(a, (types.Number,types.Boolean)):
+    if isinstance(a, (types.Number, types.Boolean,
+                      NPDatetime, NPTimedelta)):
         def scalar_max(a):
             return a
         return scalar_max
@@ -886,8 +893,14 @@ def np_all(a):
             return bool(a)
         return scalar_all
 
+    if isinstance(a, (NPDatetime, NPTimedelta)):
+        def temporal_scalar_all(a):
+            return np.int64(a) != 0
+        return temporal_scalar_all
+
     # for array
     if isinstance(a, types.Array):
+
         def flat_all(a):
             for v in np.nditer(a):
                 if not v.item():
@@ -1000,6 +1013,12 @@ def np_any(a):
         def scalar_any(a):
             return bool(a)
         return scalar_any
+
+    # for temporal
+    if isinstance(a, (NPDatetime, NPTimedelta)):
+        def temporal_any(a):
+            return np.int64(a) != 0
+        return temporal_any
 
     # for array
     if isinstance(a, types.Array):
