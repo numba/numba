@@ -4,6 +4,7 @@ project-includes = [
     "numba/core/datamodel/*",
     "numba/core/rewrites/*",
     "numba/core/unsafe/*",
+    "numba/**/*.pyi",
 ]
 ignore-missing-imports = ["llvmlite.*", "winreg.*", "graphviz.*"]
 enabled-ignores = ["pyrefly"]
@@ -18,8 +19,15 @@ unused-ignore = "error"
 variance-mismatch = "error"
 
 [[sub-config]]
-matches = "numba/**/*.pyi"
+# TODO: remove this sub-config and fix the errors
+matches = "numba/core/extending.pyi"
+[sub-config.errors]
+invalid-annotation = "ignore"
+invalid-inheritance = "ignore"
+bad-override = "ignore"
 
+[[sub-config]]
+matches = "numba/**/*.pyi"
 [sub-config.errors]
 implicit-any = "error"
 implicitly-defined-attribute = "error"
