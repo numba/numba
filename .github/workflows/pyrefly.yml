@@ -1,0 +1,28 @@
+name: Pyrefly type checking
+permissions:
+  contents: read
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: facebook/pyrefly@74a09114d9520fd67ea7dfef454a0d1f95ac843c # 0.63.0
+        with:
+          version: "0.63.0"
+          python-version: "3.11"
