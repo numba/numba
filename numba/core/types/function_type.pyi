@@ -1,6 +1,15 @@
 import abc
 from collections.abc import Collection, Sequence
-from typing import Any, ClassVar, Final, Iterable, Never, TypeAlias, type_check_only
+from typing import (
+    Any,
+    ClassVar,
+    Final,
+    Iterable,
+    Never,
+    TypeAlias,
+    runtime_checkable,
+    type_check_only,
+)
 
 from typing_extensions import Protocol, Self, TypeVar, override
 
@@ -42,6 +51,7 @@ class FunctionType(Type):
     nargs: Final[int]
     signature: Final[Signature]
     ftype: Final[FunctionPrototype]
+    _key: str
 
     @override
     def __init__(self, signature: Signature | _LiteralLike[Signature]) -> None: ...
@@ -90,6 +100,7 @@ class FunctionPrototype(Type):
     @override
     def key(self) -> str: ...
 
+@runtime_checkable
 class WrapperAddressProtocol(Protocol):
     @abc.abstractmethod
     def __wrapper_address__(self) -> int: ...
