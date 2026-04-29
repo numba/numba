@@ -7,7 +7,7 @@ import sys
 import numpy as np
 
 from numba import jit, types
-from numba.tests.support import needs_blas, skip_if_sysmon_unsupported
+from numba.tests.support import needs_blas
 import unittest
 
 
@@ -86,12 +86,10 @@ class TestProfiler(unittest.TestCase):
         if caller is not cfunc:
             check_stats_for_key(stats, caller.__code__, n_calls)
 
-    @skip_if_sysmon_unsupported
     def test_profiler(self):
         dot, _ = generate_standard_dot_case()
         self.check_profiler_dot(dot, dot)
 
-    @skip_if_sysmon_unsupported
     def test_profiler_for_raising_function(self):
         raising_dot, call_raising_dot = generate_raising_dot_case()
         self.check_profiler_dot(call_raising_dot, raising_dot)

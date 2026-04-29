@@ -50,7 +50,6 @@
 #endif
 #include "internal/pycore_interp.h"
 #include "internal/pycore_pyerrors.h"
-#include "internal/pycore_instruments.h"
 #include "internal/pycore_call.h"
 #include "cpython/code.h"
 
@@ -791,10 +790,13 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
     }
 }
 
-#elif (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 12) || (PY_MINOR_VERSION == 13) || (PY_MINOR_VERSION == 14))
+#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 12)
+// Python 3.12 only: use invoke_monitoring() that reads
+// CPython internal struct fields directly.
+// NOTE: Do NOT extend this block to 3.13+. Use the public
+// PyMonitoring_Fire*Event API below instead.
 
-// Python 3.12 has a completely new approach to tracing and profiling due to
-// the new `sys.monitoring` system.
+#include "internal/pycore_instruments.h"
 
 // From: https://github.com/python/cpython/blob/0ab2384c5f56625e99bb35417cadddfe24d347e1/Python/instrumentation.c#L863-L868
 
@@ -810,43 +812,6 @@ static inline int msb(uint8_t bits) {
         return MOST_SIG_BIT[bits>>4]+4;
     }
     return MOST_SIG_BIT[bits];
-}
-
-/*
- * On Python 3.14.4+, skip JIT sys.monitoring (#10538).
- * https://github.com/numba/numba/issues/10538
- */
-static int
-jit_sysmon_supported(void)
-{
-    // support_flag states: -1 unknown, 0 unsupported (warn once), 1 supported
-    static int support_flag = -1;
-    unsigned long v;
-    int major, minor, micro;
-
-    if (support_flag != -1) {
-        return support_flag;
-    }
-
-    v = Py_Version;
-    major = (int)((v >> 24) & 0xFF);
-    minor = (int)((v >> 16) & 0xFF);
-    micro = (int)((v >> 8) & 0xFF);
-
-    // Exclude anything beyond 3.14.3.
-    support_flag = !(major == 3 && (minor > 14 || (minor == 14 && micro > 3)));
-
-    if (!support_flag) {
-        PyErr_WarnEx(PyExc_UserWarning,
-            "Numba: JIT sys.monitoring integration is disabled on "
-            "Python 3.14.4+ (https://github.com/numba/numba/"
-            "issues/10538). "
-            "Unset NUMBA_ENABLE_SYS_MONITORING to suppress this warning.",
-            1
-        );
-    }
-
-    return support_flag;
 }
 
 
@@ -939,10 +904,6 @@ static int invoke_monitoring(PyThreadState * tstate, int event, Dispatcher *self
     // https://github.com/python/cpython/blob/0ab2384c5f56625e99bb35417cadddfe24d347e1/Python/instrumentation.c#L945-L1008
     // https://github.com/python/cpython/blob/0ab2384c5f56625e99bb35417cadddfe24d347e1/Python/instrumentation.c#L1010-L1026
     // https://github.com/python/cpython/blob/0ab2384c5f56625e99bb35417cadddfe24d347e1/Python/instrumentation.c#L839-L861
-
-    if (!jit_sysmon_supported()) {
-        return 0;
-    }
 
     // TODO: check this, call_instrumentation_vector has this at the top.
     if (tstate->tracing){
@@ -1163,6 +1124,107 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
     if(enabled_sysmon && invoke_monitoring_PY_RETURN(tstate, self, pyresult) != 0){
         return NULL;
     }
+    return pyresult;
+}
+
+#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 13)
+
+// Monitoring event indices into local mon_states[].
+enum {
+    NUMBA_MON_PY_START   = 0,
+    NUMBA_MON_PY_RETURN  = 1,
+    NUMBA_MON_RAISE      = 2,
+    NUMBA_MON_PY_UNWIND  = 3,
+    NUMBA_MON_COUNT      = 4,
+};
+
+// The event types we care about, in the same order as the enum above.
+static const uint8_t numba_mon_event_types[NUMBA_MON_COUNT] = {
+    PY_MONITORING_EVENT_PY_START,
+    PY_MONITORING_EVENT_PY_RETURN,
+    PY_MONITORING_EVENT_RAISE,
+    PY_MONITORING_EVENT_PY_UNWIND,
+};
+
+// Refresh monitoring state via the public API. This reads the interpreter's
+// monitoring configuration through libpython at runtime.
+static int refresh_monitoring_scope(PyMonitoringState mon_states[],
+                                    uint64_t *mon_version) {
+    return PyMonitoring_EnterScope(
+        mon_states,
+        mon_version,
+        numba_mon_event_types,
+        NUMBA_MON_COUNT);
+}
+
+/* forward declaration */
+static bool is_sysmon_enabled(Dispatcher *self);
+
+static PyObject *
+call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyObject *locals)
+{
+    PyCFunctionWithKeywords fn = NULL;
+    PyObject *pyresult = NULL;
+    PyObject *codelike = NULL;
+    const bool enabled_sysmon = is_sysmon_enabled(self);
+    int in_scope = 0;
+    PyMonitoringState mon_states[NUMBA_MON_COUNT];
+    uint64_t mon_version = 0;
+
+    assert(PyCFunction_Check(cfunc));
+    assert(PyCFunction_GET_FLAGS(cfunc) == (METH_VARARGS | METH_KEYWORDS));
+    fn = (PyCFunctionWithKeywords) PyCFunction_GET_FUNCTION(cfunc);
+
+    if (enabled_sysmon) {
+        if (refresh_monitoring_scope(mon_states, &mon_version) < 0)
+            return NULL;
+        in_scope = 1;
+
+        codelike = PyObject_GetAttrString((PyObject*)self, "__code__");
+        if (!codelike)
+            goto exit_scope;
+
+        if (PyMonitoring_FirePyStartEvent(
+                &mon_states[NUMBA_MON_PY_START], codelike, 0) < 0)
+            goto exit_scope;
+    }
+
+    pyresult = fn(PyCFunction_GET_SELF(cfunc), args, kws);
+
+    if (enabled_sysmon && pyresult == NULL) {
+        // Exception path. Refresh scope — events may have been toggled
+        // during objmode. Leave the exception on the error indicator;
+        // Fire*Event reads it from tstate->current_exception internally.
+        if (refresh_monitoring_scope(mon_states, &mon_version) < 0)
+            goto exit_scope;
+        if (PyErr_Occurred()) {
+            if (PyMonitoring_FireRaiseEvent(
+                    &mon_states[NUMBA_MON_RAISE], codelike, 0) < 0)
+                goto exit_scope;
+            if (PyMonitoring_FirePyUnwindEvent(
+                    &mon_states[NUMBA_MON_PY_UNWIND], codelike, 0) < 0)
+                goto exit_scope;
+        }
+        goto exit_scope;
+    }
+
+    if (enabled_sysmon) {
+        // Normal return. Refresh scope — events may have been toggled
+        // during objmode.
+        if (refresh_monitoring_scope(mon_states, &mon_version) < 0)
+            goto exit_scope;
+        if (PyMonitoring_FirePyReturnEvent(
+                &mon_states[NUMBA_MON_PY_RETURN], codelike, 0,
+                pyresult) < 0) {
+            Py_CLEAR(pyresult);
+            goto exit_scope;
+        }
+    }
+
+exit_scope:
+    if (in_scope)
+        PyMonitoring_ExitScope();
+    Py_XDECREF(codelike);
     return pyresult;
 }
 #else
