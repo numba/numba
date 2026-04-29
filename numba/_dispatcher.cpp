@@ -27,7 +27,7 @@
  *
  */
 
-#if (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 12) || (PY_MINOR_VERSION == 13) || (PY_MINOR_VERSION == 14))
+#if (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 12) || (PY_MINOR_VERSION == 13) || (PY_MINOR_VERSION == 14) || (PY_MINOR_VERSION == 15))
 
 #ifndef Py_BUILD_CORE
     #define Py_BUILD_CORE 1
@@ -1644,7 +1644,7 @@ static PyTypeObject DispatcherType = {
 };
 
 
-#if (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 12) || (PY_MINOR_VERSION == 13) || (PY_MINOR_VERSION == 14))
+#if (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 12) || (PY_MINOR_VERSION == 13) || (PY_MINOR_VERSION == 14) || (PY_MINOR_VERSION == 15))
 static
 bool is_sysmon_enabled(Dispatcher * self) {
     return self->enable_sysmon;
