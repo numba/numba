@@ -12,6 +12,7 @@ from typing import (
 from typing_extensions import Unpack
 
 from . import compiler, ir, types, typing
+from .ccallback import CFunc
 from .typing.templates import _inline_info
 from .dispatcher import Dispatcher
 
@@ -50,8 +51,7 @@ class _JITWrapper(Protocol):
 
 @type_check_only
 class _CFuncWrapper(Protocol):
-    # TODO: Return `CFunc[_FunctionT]` once `CFunc` is annotated and generic.
-    def __call__(self, fn: _FunctionT, /) -> _FunctionT: ...
+    def __call__(self, fn: _FunctionT, /) -> CFunc[_FunctionT]: ...
 
 ###
 # stubs
