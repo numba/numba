@@ -48,6 +48,7 @@ register_model = register_default
 ###
 # stubs-only helpers
 
+_T = TypeVar("_T")
 _Pss = ParamSpec("_Pss")
 _ContextT = TypeVar("_ContextT", bound=BaseContext)
 _CallableT = TypeVar("_CallableT", bound=Callable[..., object])
@@ -205,5 +206,6 @@ class BoundLiteralArgs(NamedTuple):
 
     def bind(self, *args: object, **kwargs: object) -> None: ...
 
-# TODO: use generic typevar once https://github.com/numba/numba/pull/10551 is merged
-def is_jitted(function: object) -> TypeIs[Dispatcher]: ...
+def is_jitted(
+    function: Callable[_Pss, _T],
+) -> TypeIs[Dispatcher[Callable[_Pss, _T]]]: ...
