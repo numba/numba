@@ -812,43 +812,6 @@ static inline int msb(uint8_t bits) {
     return MOST_SIG_BIT[bits];
 }
 
-/*
- * On Python 3.14.4+, skip JIT sys.monitoring (#10538).
- * https://github.com/numba/numba/issues/10538
- */
-static int
-jit_sysmon_supported(void)
-{
-    // support_flag states: -1 unknown, 0 unsupported (warn once), 1 supported
-    static int support_flag = -1;
-    unsigned long v;
-    int major, minor, micro;
-
-    if (support_flag != -1) {
-        return support_flag;
-    }
-
-    v = Py_Version;
-    major = (int)((v >> 24) & 0xFF);
-    minor = (int)((v >> 16) & 0xFF);
-    micro = (int)((v >> 8) & 0xFF);
-
-    // Exclude anything beyond 3.14.3.
-    support_flag = !(major == 3 && (minor > 14 || (minor == 14 && micro > 3)));
-
-    if (!support_flag) {
-        PyErr_WarnEx(PyExc_UserWarning,
-            "Numba: JIT sys.monitoring integration is disabled on "
-            "Python 3.14.4+ (https://github.com/numba/numba/"
-            "issues/10538). "
-            "Unset NUMBA_ENABLE_SYS_MONITORING to suppress this warning.",
-            1
-        );
-    }
-
-    return support_flag;
-}
-
 
 static int invoke_monitoring(PyThreadState * tstate, int event, Dispatcher *self, PyObject* retval)
 {
@@ -939,10 +902,6 @@ static int invoke_monitoring(PyThreadState * tstate, int event, Dispatcher *self
     // https://github.com/python/cpython/blob/0ab2384c5f56625e99bb35417cadddfe24d347e1/Python/instrumentation.c#L945-L1008
     // https://github.com/python/cpython/blob/0ab2384c5f56625e99bb35417cadddfe24d347e1/Python/instrumentation.c#L1010-L1026
     // https://github.com/python/cpython/blob/0ab2384c5f56625e99bb35417cadddfe24d347e1/Python/instrumentation.c#L839-L861
-
-    if (!jit_sysmon_supported()) {
-        return 0;
-    }
 
     // TODO: check this, call_instrumentation_vector has this at the top.
     if (tstate->tracing){
