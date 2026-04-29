@@ -20,7 +20,7 @@ except ImportError:
 
 
 min_python_version = "3.10"
-max_python_version = "3.15"  # exclusive
+max_python_version = "3.16"  # exclusive
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.22"
 min_llvmlite_version = "0.49.0dev0"
@@ -403,6 +403,7 @@ metadata = dict(
         "Programming Language :: Python :: 3.12",
         "Programming Language :: Python :: 3.13",
         "Programming Language :: Python :: 3.14",
+        "Programming Language :: Python :: 3.15",
         "Topic :: Software Development :: Compilers",
     ],
     package_data={
