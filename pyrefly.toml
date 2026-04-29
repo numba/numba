@@ -1,0 +1,37 @@
+project-includes = [
+    "numba/core/types/*",
+    "numba/core/extending.py",
+    "numba/core/datamodel/*",
+    "numba/core/rewrites/*",
+    "numba/core/unsafe/*",
+    "numba/**/*.pyi",
+]
+ignore-missing-imports = ["llvmlite.*", "winreg.*", "graphviz.*"]
+enabled-ignores = ["pyrefly"]
+check-unannotated-defs = false
+
+[errors]
+implicit-abstract-class = "error"
+not-required-key-access = "error"
+open-unpacking = "error"
+untyped-import = "error"
+unused-ignore = "error"
+variance-mismatch = "error"
+
+[[sub-config]]
+# TODO: remove this sub-config and fix the errors
+matches = "numba/core/extending.pyi"
+[sub-config.errors]
+invalid-annotation = "ignore"
+invalid-inheritance = "ignore"
+bad-override = "ignore"
+
+[[sub-config]]
+matches = "numba/**/*.pyi"
+[sub-config.errors]
+implicit-any = "error"
+implicitly-defined-attribute = "error"
+missing-override-decorator = "error"
+unannotated-attribute = "error"
+unannotated-parameter = "error"
+unannotated-return = "error"

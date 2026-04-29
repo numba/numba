@@ -26,7 +26,7 @@ class FunctionType(Type):
         return self._key
 
     @property
-    def name(self):
+    def name(self):  # pyrefly:ignore[bad-override]
         return f'{type(self).__name__}[{self.key}]'
 
     def is_precise(self):
@@ -88,7 +88,7 @@ class FunctionType(Type):
         return (self.nargs == len(other_sig.args)
                 and (sig == other_sig or not sig.is_precise()))
 
-    def unify(self, context, other):
+    def unify(self, typingctx, other):
         if isinstance(other, types.UndefinedFunctionType) \
            and self.nargs == other.nargs:
             return self
