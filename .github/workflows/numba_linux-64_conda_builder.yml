@@ -110,7 +110,7 @@ jobs:
             extra_args=()
           fi
 
-          conda build --debug -c "${LLVMLITE_CHANNEL}" "${extra_args[@]}" -c defaults  \
+          conda-build --debug -c "${LLVMLITE_CHANNEL}" "${extra_args[@]}" -c defaults  \
             --python=${{ matrix.python-version }} \
             --numpy=${{ matrix.numpy_build }} blas=*=openblas \
             buildscripts/condarecipe.local/ \
@@ -198,7 +198,7 @@ jobs:
             extra_args=()
           fi
 
-          conda build -c "${LLVMLITE_CHANNEL}" "${extra_args[@]}" -c defaults \
+          conda-build -c "${LLVMLITE_CHANNEL}" "${extra_args[@]}" -c defaults \
             --python=${{ matrix.python-version }} \
             --extra-deps numpy=${{ matrix.numpy_test }} blas=*=openblas \
             --test \
