@@ -24,7 +24,7 @@ _NO_RAISE_OPS = frozenset({
     'PRECALL',
 })
 
-if PYVERSION in ((3, 12), (3, 13), (3, 14)):
+if PYVERSION in ((3, 12), (3, 13), (3, 14), (3, 15)):
     from enum import Enum
 
     # Operands for CALL_INTRINSIC_1
@@ -141,7 +141,7 @@ class Flow(object):
             self.block_infos[state.pc_initial] = si = adapt_state_infos(state)
             _logger.debug("block_infos %s:\n%s", state, si)
 
-    if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
+    if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14), (3, 15)):
         def _run_handle_exception(self, runner, state):
             if not state.in_with() and (
                     state.has_active_try() and
@@ -293,7 +293,7 @@ class Flow(object):
         else:
             return False
 
-    if PYVERSION in ((3, 14),):
+    if PYVERSION in ((3, 14), (3, 15)):
         def _guard_with_as(self, state):
             # Handled as part of `LOAD_SPECIAL` as of 3.14.
             pass
@@ -330,7 +330,7 @@ class TraceRunner(object):
         return Loc(self.debug_filename, lineno)
 
     def dispatch(self, state):
-        if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
+        if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14), (3, 15)):
             if state._blockstack:
                 state: State
                 while state._blockstack:
@@ -379,7 +379,7 @@ class TraceRunner(object):
     def op_NOP(self, state, inst):
         state.append(inst)
 
-    if PYVERSION in ((3,14), ):
+    if PYVERSION in ((3, 14), (3, 15)):
         # New in 3.14
         op_NOT_TAKEN = op_NOP
     elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
@@ -413,7 +413,7 @@ class TraceRunner(object):
         state.push(state.make_temp())
         state.append(inst)
 
-    if PYVERSION in ((3, 13), (3, 14)):
+    if PYVERSION in ((3, 13), (3, 14), (3, 15)):
         def op_FORMAT_SIMPLE(self, state, inst):
             value = state.pop()
             strvar = state.make_temp()
@@ -463,7 +463,7 @@ class TraceRunner(object):
     def op_POP_TOP(self, state, inst):
         state.pop()
 
-    if PYVERSION in ((3, 14), ):
+    if PYVERSION in ((3, 14), (3, 15)):
         # New in 3.14
         op_POP_ITER = op_POP_TOP
     elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
@@ -471,7 +471,7 @@ class TraceRunner(object):
     else:
         raise NotImplementedError(PYVERSION)
 
-    if PYVERSION in ((3, 13), (3,14)):
+    if PYVERSION in ((3, 13), (3, 14), (3, 15)):
         def op_TO_BOOL(self, state, inst):
             res = state.make_temp()
             tos = state.pop()
@@ -482,7 +482,7 @@ class TraceRunner(object):
     else:
         raise NotImplementedError(PYVERSION)
 
-    if PYVERSION in ((3, 13), (3, 14)):
+    if PYVERSION in ((3, 13), (3, 14), (3, 15)):
         def op_LOAD_GLOBAL(self, state, inst):
             # Ordering of the global value and NULL is swapped in Py3.13
             res = state.make_temp()
@@ -526,7 +526,7 @@ class TraceRunner(object):
         state.push(res)
         state.append(inst, res=res)
 
-    if PYVERSION in ((3, 14), ):
+    if PYVERSION in ((3, 14), (3, 15)):
         # New in 3.14
         def op_LOAD_SMALL_INT(self, state, inst):
             assert 0 <= inst.arg < 256
@@ -541,7 +541,7 @@ class TraceRunner(object):
     def op_LOAD_ATTR(self, state, inst):
         item = state.pop()
         res = state.make_temp()
-        if PYVERSION in ((3, 13), (3, 14)):
+        if PYVERSION in ((3, 13), (3, 14), (3, 15)):
             state.push(res)  # the attr
             if inst.arg & 1:
                 state.push(state.make_null())
@@ -556,7 +556,7 @@ class TraceRunner(object):
         state.append(inst, item=item, res=res)
 
     def op_LOAD_FAST(self, state, inst):
-        if PYVERSION in ((3, 13), (3, 14)):
+        if PYVERSION in ((3, 13), (3, 14), (3, 15)):
             try:
                 name = state.get_varname(inst)
             except IndexError:   # oparg is out of range
@@ -583,7 +583,7 @@ class TraceRunner(object):
         state.append(inst, res=res)
         state.push(res)
 
-    if PYVERSION in ((3, 13), (3, 14)):
+    if PYVERSION in ((3, 13), (3, 14), (3, 15)):
         def op_LOAD_FAST_LOAD_FAST(self, state, inst):
             oparg = inst.arg
             oparg1 = oparg >> 4
@@ -616,7 +616,7 @@ class TraceRunner(object):
     else:
         raise NotImplementedError(PYVERSION)
 
-    if PYVERSION in ((3, 12), (3, 13), (3, 14)):
+    if PYVERSION in ((3, 12), (3, 13), (3, 14), (3, 15)):
         op_LOAD_FAST_CHECK = op_LOAD_FAST
         op_LOAD_FAST_AND_CLEAR = op_LOAD_FAST
     elif PYVERSION in ((3, 10), (3, 11)):
@@ -624,7 +624,7 @@ class TraceRunner(object):
     else:
         raise NotImplementedError(PYVERSION)
 
-    if PYVERSION in ((3, 14),):
+    if PYVERSION in ((3, 14), (3, 15)):
         # New in 3.14.
         op_LOAD_FAST_BORROW = op_LOAD_FAST
         op_LOAD_FAST_BORROW_LOAD_FAST_BORROW = op_LOAD_FAST_LOAD_FAST
@@ -884,7 +884,7 @@ class TraceRunner(object):
         )
         state.push(res)
 
-    if PYVERSION in ((3, 12), (3, 13), (3, 14)):
+    if PYVERSION in ((3, 12), (3, 13), (3, 14), (3, 15)):
         def op_BINARY_SLICE(self, state, inst):
             end = state.pop()
             start = state.pop()
@@ -902,7 +902,7 @@ class TraceRunner(object):
     else:
         raise NotImplementedError(PYVERSION)
 
-    if PYVERSION in ((3, 12), (3, 13), (3, 14)):
+    if PYVERSION in ((3, 12), (3, 13), (3, 14), (3, 15)):
         def op_STORE_SLICE(self, state, inst):
             end = state.pop()
             start = state.pop()
@@ -935,7 +935,7 @@ class TraceRunner(object):
     op_POP_JUMP_IF_TRUE = _op_POP_JUMP_IF
     op_POP_JUMP_IF_FALSE = _op_POP_JUMP_IF
 
-    if PYVERSION in ((3, 12), (3, 13), (3, 14)):
+    if PYVERSION in ((3, 12), (3, 13), (3, 14), (3, 15)):
         op_POP_JUMP_IF_NONE = _op_POP_JUMP_IF
         op_POP_JUMP_IF_NOT_NONE = _op_POP_JUMP_IF
     elif PYVERSION in ((3, 10), (3, 11)):
@@ -1001,7 +1001,7 @@ class TraceRunner(object):
         state.append(inst, retval=state.pop(), castval=state.make_temp())
         state.terminate()
 
-    if PYVERSION in ((3, 12), (3, 13), (3, 14)):
+    if PYVERSION in ((3, 12), (3, 13), (3, 14), (3, 15)):
         def op_RETURN_CONST(self, state, inst):
             res = state.make_temp("const")
             state.append(inst, retval=res, castval=state.make_temp())
@@ -1017,7 +1017,7 @@ class TraceRunner(object):
         state.append(inst, value=val, res=res)
         state.push(res)
 
-    if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
+    if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14), (3, 15)):
         def op_RAISE_VARARGS(self, state, inst):
             if inst.arg == 0:
                 exc = None
@@ -1073,7 +1073,7 @@ class TraceRunner(object):
         blk = state.pop_block()
         state.reset_stack(blk['entry_stack'])
 
-    if PYVERSION in ((3, 13), (3, 14)):
+    if PYVERSION in ((3, 13), (3, 14), (3, 15)):
         def op_END_FOR(self, state, inst):
             state.pop()
     elif PYVERSION in ((3, 12),):
@@ -1115,7 +1115,7 @@ class TraceRunner(object):
                 end=inst.get_jump_target(),
             )
         )
-    if PYVERSION in ((3, 14), ):
+    if PYVERSION in ((3, 14), (3, 15)):
         # Replaced by LOAD_SPECIAL in 3.14.
         pass
     elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
@@ -1202,7 +1202,7 @@ class TraceRunner(object):
             'FINALLY', state, next=inst.next, end=inst.get_jump_target(),
         )
 
-    if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
+    if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14), (3, 15)):
         def op_POP_EXCEPT(self, state, inst):
             state.pop()
 
@@ -1230,7 +1230,7 @@ class TraceRunner(object):
             state.append(inst, kind='with')
         state.fork(pc=inst.next)
 
-    if PYVERSION in ((3, 14),):
+    if PYVERSION in ((3, 14), (3, 15)):
         # Removed in 3.14 -- replaced with BINARY_OP and []
         pass
     elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
@@ -1257,7 +1257,7 @@ class TraceRunner(object):
     def op_CALL(self, state, inst):
         narg = inst.arg
         args = list(reversed([state.pop() for _ in range(narg)]))
-        if PYVERSION in ((3, 13), (3, 14)):
+        if PYVERSION in ((3, 13), (3, 14), (3, 15)):
             null_or_self = state.pop()
             # position of the callable is fixed
             callable = state.pop()
@@ -1300,7 +1300,7 @@ class TraceRunner(object):
         state.append(inst, func=func, args=args, names=names, res=res)
         state.push(res)
 
-    if PYVERSION in ((3, 13), (3, 14)):
+    if PYVERSION in ((3, 13), (3, 14), (3, 15)):
         def op_CALL_KW(self, state, inst):
             narg = inst.arg
             kw_names = state.pop()
@@ -1320,7 +1320,7 @@ class TraceRunner(object):
     else:
         raise NotImplementedError(PYVERSION)
 
-    if PYVERSION in ((3, 14), ):
+    if PYVERSION in ((3, 14), (3, 15)):
         def op_CALL_FUNCTION_EX(self, state, inst):
             # (func, unused, callargs, kwargs -- result))
             # In 3.14 CALL_FUNCTION_EX always take a kwargs argument
@@ -1388,7 +1388,7 @@ class TraceRunner(object):
         for val in duped:
             state.push(val)
 
-    if PYVERSION in ((3, 12), (3, 13), (3, 14)):
+    if PYVERSION in ((3, 12), (3, 13), (3, 14), (3, 15)):
         def op_CALL_INTRINSIC_1(self, state, inst):
             # See https://github.com/python/cpython/blob/v3.12.0rc2/Include/
             # internal/pycore_intrinsics.h#L3-L17C36
@@ -1614,7 +1614,7 @@ class TraceRunner(object):
                      pred=pred)
         state.push(indval)
         end = inst.get_jump_target()
-        if PYVERSION in ((3, 12), (3, 13), (3, 14)):
+        if PYVERSION in ((3, 12), (3, 13), (3, 14), (3, 15)):
             # Changed in version 3.12: Up until 3.11 the iterator was
             # popped when it was exhausted. Now this is handled using END_FOR
             # op code.
@@ -1642,7 +1642,7 @@ class TraceRunner(object):
         lhs = state.pop()
         if op == '[]':
             # Special case 3.14 -- body of BINARY_SUBSCR now here
-            assert PYVERSION == (3, 14)
+            assert PYVERSION == (3, 15)
             res = state.make_temp()
             state.append(inst, op=op, lhs=lhs, rhs=rhs, res=res)
             state.push(res)
@@ -1707,7 +1707,7 @@ class TraceRunner(object):
     op_BINARY_XOR = _binaryop
 
     def op_MAKE_FUNCTION(self, state, inst, MAKE_CLOSURE=False):
-        if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
+        if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14), (3, 15)):
             # https://github.com/python/cpython/commit/2f180ce
             # name set via co_qualname
             name = None
@@ -1717,7 +1717,7 @@ class TraceRunner(object):
             raise NotImplementedError(PYVERSION)
         code = state.pop()
         closure = annotations = annotate = kwdefaults = defaults = None
-        if PYVERSION in ((3, 13), (3, 14)):
+        if PYVERSION in ((3, 13), (3, 14), (3, 15)):
             assert inst.arg is None
             # SET_FUNCTION_ATTRIBUTE is responsible for setting
             # closure, annotations, annotate, kwdefaults and defaults.
@@ -1745,7 +1745,7 @@ class TraceRunner(object):
         state.push(res)
 
     def op_SET_FUNCTION_ATTRIBUTE(self, state, inst):
-        assert PYVERSION in ((3, 13), (3, 14))
+        assert PYVERSION in ((3, 13), (3, 14), (3, 15))
         make_func_stack = state.pop()
         data = state.pop()
         if inst.arg & 0x01:
@@ -1777,7 +1777,7 @@ class TraceRunner(object):
         state.append(inst, res=res)
         state.push(res)
 
-    if PYVERSION in ((3, 14), ):
+    if PYVERSION in ((3, 14), (3, 15)):
         # Removed in 3.14
         pass
     elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
@@ -1805,7 +1805,7 @@ class TraceRunner(object):
         state.fork(pc=inst.next)
         state.fork(pc=inst.get_jump_target())
 
-    if PYVERSION in ((3, 11), (3, 12), (3, 13), (3,14)):
+    if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14), (3, 15)):
         def op_RERAISE(self, state, inst):
             # This isn't handled, but the state is set up anyway
             exc = state.pop()
@@ -1830,7 +1830,7 @@ class TraceRunner(object):
     # NOTE: Please see notes in `interpreter.py` surrounding the implementation
     # of LOAD_METHOD and CALL_METHOD.
 
-    if PYVERSION in ((3, 12), (3, 13), (3, 14)):
+    if PYVERSION in ((3, 12), (3, 13), (3, 14), (3, 15)):
         # LOAD_METHOD has become a pseudo-instruction in 3.12
         pass
     elif PYVERSION in ((3, 11), ):
@@ -1850,7 +1850,7 @@ class TraceRunner(object):
     def op_CALL_METHOD(self, state, inst):
         self.op_CALL_FUNCTION(state, inst)
 
-    if PYVERSION in ((3, 14), ):
+    if PYVERSION in ((3, 14), (3, 15)):
         # New in 3.14, replaces BEFORE_WITH.
         def op_LOAD_SPECIAL(self, state, inst):
 
@@ -1970,7 +1970,7 @@ class TraceRunner(object):
     else:
         raise NotImplementedError(PYVERSION)
 
-    if PYVERSION in ((3, 14), ):
+    if PYVERSION in ((3, 14), (3, 15)):
         def op_LOAD_COMMON_CONSTANT(self, state, inst):
             oparg = inst.arg
             if dis._common_constants[oparg] == AssertionError:
@@ -2246,7 +2246,7 @@ class _State(object):
                 stack.append(self.make_temp())
         # Handle changes on the blockstack
         blockstack = list(self._blockstack)
-        if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
+        if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14), (3, 15)):
             # pop expired block in destination pc
             while blockstack:
                 top = blockstack[-1]
@@ -2346,7 +2346,7 @@ class StatePy313(StatePy311):
         return self._make_func_attrs[make_func_res]
 
 
-if PYVERSION in ((3, 13), (3, 14)):
+if PYVERSION in ((3, 13), (3, 14), (3, 15)):
     State = StatePy313
 elif PYVERSION in ((3, 11), (3, 12)):
     State = StatePy311
@@ -2384,7 +2384,7 @@ def adapt_state_infos(state):
         if inst.opname == "MAKE_FUNCTION":
             data.update(state.get_function_attributes(data['res']))
         return offset, data
-    if PYVERSION in ((3, 13), (3, 14)):
+    if PYVERSION in ((3, 13), (3, 14), (3, 15)):
         insts = tuple(map(process_function_attributes, state.instructions))
     elif PYVERSION in ((3, 10), (3, 11), (3, 12)):
         insts = tuple(state.instructions)
