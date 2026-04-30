@@ -113,6 +113,7 @@ jobs:
           echo "linux-aarch64: $(find dist -type f -name "*manylinux*aarch64*.whl" | wc -l)"
           echo "osx-arm64: $(find dist -type f -name "*macosx*arm64*.whl" | wc -l)"
           echo "win-64: $(find dist -type f -name "*win_amd64*.whl" | wc -l)"
+          echo "win-arm64: $(find dist -type f -name "*win_amd64*.whl" | wc -l)"
           echo ""
           echo "=== Total wheels count ==="
           find dist -type f -name "*.whl" | wc -l
