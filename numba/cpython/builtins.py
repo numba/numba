@@ -311,14 +311,36 @@ def round_impl_binary(context, builder, sig, args):
 #-------------------------------------------------------------------------------
 # Numeric constructors
 
-@lower_builtin(int, types.Any)
 @lower_builtin(float, types.Any)
-def int_impl(context, builder, sig, args):
+def float_impl(context, builder, sig, args):
     [ty] = sig.args
     [val] = args
     res = context.cast(builder, val, ty, sig.return_type)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+@intrinsic
+def cast_int(typingctx, x):
+    if isinstance(x, types.Integer):
+        retty = x
+    else:
+        retty = types.intp
+
+    def impl(context, builder, signature, args):
+        [ty] = signature.args
+        [val] = args
+        res = context.cast(builder, val, ty, signature.return_type)
+        return impl_ret_untracked(context, builder, signature.return_type, res)
+
+    sig = signature(retty, x)
+    return sig, impl
+
+@overload(int)
+def ol_int(x):
+    if isinstance(x, (types.Integer, types.Boolean, types.Float)):
+        def impl(x):
+            return cast_int(x)
+
+        return impl
 
 @lower_builtin(float, types.StringLiteral)
 def float_literal_impl(context, builder, sig, args):
