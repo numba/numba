@@ -111,7 +111,7 @@ class Callable(Type):
 class DTypeSpec(Type):
     @property
     @abc.abstractmethod
-    def dtype(self) -> Type: ...
+    def dtype(self) -> Any: ...
 
 class IterableType(Type):
     @property
