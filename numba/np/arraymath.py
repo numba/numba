@@ -1329,37 +1329,69 @@ def np_nanmean(a):
 
 
 @overload(np.nanvar)
-def np_nanvar(a):
+def np_nanvar(a, axis=None, dtype=None, out=None, ddof=0):
     if not isinstance(a, types.Array):
         return
+    if not isinstance(ddof, (types.Integer, types.Omitted, int)):
+        return
+    if not is_nonelike(axis):
+        raise TypingError("np.nanvar: 'axis' argument is not supported")
+    if not is_nonelike(dtype):
+        raise TypingError("np.nanvar: 'dtype' argument is not supported")
+    if not is_nonelike(out):
+        raise TypingError("np.nanvar: 'out' argument is not supported")
+
     isnan = get_isnan(a.dtype)
 
-    def nanvar_impl(a):
-        # Compute the mean
-        m = np.nanmean(a)
-
-        # Compute the sum of square diffs
-        ssd = 0.0
-        count = 0
-        for view in np.nditer(a):
-            v = view.item()
-            if not isnan(v):
-                val = (v.item() - m)
-                ssd += np.real(val * np.conj(val))
-                count += 1
-        # np.divide() doesn't raise ZeroDivisionError
-        return np.divide(ssd, count)
+    if isinstance(a.dtype, (types.Complex,)):
+        def nanvar_impl(a, axis=None, dtype=None, out=None, ddof=0):
+            # For complex input NumPy uses abs(v - m)**2 (always real)
+            m = np.nanmean(a)
+            n = 0
+            s = 0.0
+            for view in np.nditer(a):
+                v = view.item()
+                if not isnan(v):
+                    d = v - m
+                    s += (d.real ** 2 + d.imag ** 2)
+                    n += 1
+            # When all elements are NaN, n==0; return nan to match NumPy
+            if n <= ddof:
+                return np.nan
+            return s / (n - ddof)
+    else:
+        def nanvar_impl(a, axis=None, dtype=None, out=None, ddof=0):
+            m = np.nanmean(a)
+            n = 0
+            s = 0.0
+            for view in np.nditer(a):
+                v = view.item()
+                if not isnan(v):
+                    s += (v - m) ** 2
+                    n += 1
+            # When all elements are NaN, n==0; return nan to match NumPy
+            if n <= ddof:
+                return np.nan
+            return s / (n - ddof)
 
     return nanvar_impl
 
 
 @overload(np.nanstd)
-def np_nanstd(a):
+def np_nanstd(a, axis=None, dtype=None, out=None, ddof=0):
     if not isinstance(a, types.Array):
         return
+    if not isinstance(ddof, (types.Integer, types.Omitted, int)):
+        return
+    if not is_nonelike(axis):
+        raise TypingError("np.nanstd: 'axis' argument is not supported")
+    if not is_nonelike(dtype):
+        raise TypingError("np.nanstd: 'dtype' argument is not supported")
+    if not is_nonelike(out):
+        raise TypingError("np.nanstd: 'out' argument is not supported")
 
-    def nanstd_impl(a):
-        return np.nanvar(a) ** 0.5
+    def nanstd_impl(a, axis=None, dtype=None, out=None, ddof=0):
+        return np.nanvar(a, ddof=ddof) ** 0.5
 
     return nanstd_impl
 
