@@ -123,6 +123,47 @@ maintainers either maintain or help to maintain these releases.
   * ``linux-aarch64`` (Linux on ``aarch64``)
   * ``win-64`` (Windows on ``x86_64``)
 
+Tier 1.5: Experimental releases for emerging platforms
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Tier 1.5 covers platforms that have limited usage today but, in the view of the
+maintainers, are likely to grow in importance and benefit from early binary
+package availability (for example, so that downstream projects can test against
+them). Tier 1.5 packages are considered experimental and may have significant
+bugs.  The expectation is that Tier 1.5 platforms will eventually graduate to
+Tier 1.
+
+Expectations for Tier 1.5:
+
+* Packages are built for a limited range of Python versions, possibly only the
+  most recent one.
+* The platform must be testable in the GitHub Actions CI system used by Numba
+  and llvmlite.
+* Only wheels *or* conda packages are built, depending on which ecosystem has
+  sufficient support (e.g. NumPy availability) to build Numba.
+* Failure of the ``main`` branch to build on a Tier 1.5 platform is a release 
+  blocker and should be addressed promptly, but maintainers are encouraged to
+  skip tests and document known issues rather than spend significant effort
+  debugging to return ``main`` to a healthy state.
+* Known issues on Tier 1.5 platforms can be resolved as time permits and do
+  not block a Numba release.
+
+Currently supported Tier 1.5 releases for the Numba and llvmlite projects:
+
+* Wheel packages on the PyPI distribution system for the free-threading build
+  of Python 3.14, on all Tier 1 platforms:
+
+  * ``osx-arm64`` (OSX on Apple silicon)
+  * ``linux-64`` (Linux on ``x86_64``)
+  * ``linux-aarch64`` (Linux on ``aarch64``)
+  * ``win-64`` (Windows on ``x86_64``)
+
+* Wheel packages on the PyPI distribution system for Python 3.14 only.
+  Support for additional Python versions may be added in the future.
+
+  * ``win-arm64`` (Windows on ``aarch64``/``arm64``)
+
+
 Tier 2a: Releases that are built by large software distributors
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -170,10 +211,6 @@ Examples include:
   * ``s390x``
   * ``ppc64le``
   * ``RISC-V``
-
-* Operating system/hardware target:
-
-  * Windows on ARM.
 
 
 How to move Tiers?
