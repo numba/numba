@@ -6,7 +6,7 @@ strange implementations of fundamental operations so as to make it identifiable
 in testing."""
 
 import unittest
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, numpy_sincos_uses_svml
 import ctypes
 import operator
 from functools import cached_property
@@ -771,7 +771,10 @@ class TestTargetOffload(TestCase):
         def foo(x):
             return np.sin(x)
 
-        self.assertPreciseEqual(foo(5), np.sin(5))
+        ulps = 4 if numpy_sincos_uses_svml else 1
+        self.assertPreciseEqual(
+            foo(5), np.sin(5), prec='double', ulps=ulps,
+        )
 
         @register_pass(mutates_CFG=False, analysis_only=False)
         class DispatcherSwitcher(FunctionPass):

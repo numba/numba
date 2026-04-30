@@ -22,7 +22,8 @@ from numba.tests.support import (TestCase, MemoryLeakMixin,
                                  needs_blas, run_in_subprocess,
                                  skip_if_numpy_2, IS_NUMPY_2,
                                  IS_MACOS_ARM64, REDUCED_TESTING,
-                                 skip_if_reduced_testing)
+                                 skip_if_reduced_testing,
+                                 numpy_sincos_uses_svml)
 import unittest
 
 
@@ -5618,11 +5619,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         def check_window(func):
             np_pyfunc = func
             np_nbfunc = njit(func)
+            ulps = 4 if numpy_sincos_uses_svml else 1
 
             for M in [0, 1, 5, 12]:
                 expected = np_pyfunc(M)
                 got = np_nbfunc(M)
-                self.assertPreciseEqual(expected, got, prec='double')
+                self.assertPreciseEqual(expected, got, prec='double',
+                                        ulps=ulps)
 
             for M in ['a', 1.1, 1j]:
                 with self.assertRaises(TypingError) as raises:

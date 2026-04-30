@@ -24,6 +24,7 @@ from numba.tests.support import (
     override_config,
     run_in_new_process_in_cache_dir,
     skip_if_typeguard,
+    numpy_sincos_uses_svml,
 )
 from numba.core.errors import LoweringError
 import unittest
@@ -637,7 +638,9 @@ class TestPandasLike(TestCase):
         cfunc = jit(nopython=True)(npyufunc_usecase)
         ii = cfunc(i)
         self.assertIsInstance(ii, Index)
-        self.assertPreciseEqual(ii._data, np.cos(np.sin(i._data)))
+        ulps = 4 if numpy_sincos_uses_svml else 1
+        self.assertPreciseEqual(ii._data, np.cos(np.sin(i._data)),
+                                prec='double', ulps=ulps)
 
     def test_index_get_data(self):
         # The _data attribute is exposed with make_attribute_wrapper()
