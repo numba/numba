@@ -41,6 +41,5 @@ numba\.core\.types\.(__all__|bool|float_)
 
 # TODO
 numba\.core\.types\.functions\..*
-numba\.core\.types\.scalars\..*
 numba\.types\..*
 
