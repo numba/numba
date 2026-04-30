@@ -1,7 +1,6 @@
 numba\.__main__
 numba\._helperlib\..*
 numba\.cloudpickle\..*
-numba\.core\.extending\..*
 numba\.core\.boxing\..*
 numba\.core\.bytecode\..*
 numba\.core\.byteflow\..*
