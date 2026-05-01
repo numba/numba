@@ -1998,6 +1998,13 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
 
         def src_getitem():
             src_indices = indexer.get_src_indices()[-len(src_shapes):]
+            if len(src_shapes) > len(src_indices):
+                # If the source has fewer dimensions than the indexer, we need
+                # to add some leading zeros to the indices to get the correct
+                # broadcasting behavior.
+                zero = context.get_constant(types.intp, 0)
+                src_indices = [zero] * (len(src_shapes) - len(src_indices)) + list(src_indices)
+
             src_indices = [
                 builder.srem(src_indices[i], src_shapes[i])
                 for i in range(len(src_shapes))
