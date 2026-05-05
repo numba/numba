@@ -463,7 +463,12 @@ class TraceRunner(object):
     def op_POP_TOP(self, state, inst):
         state.pop()
 
-    if PYVERSION in ((3, 14), (3, 15)):
+    if PYVERSION in ((3, 15), ):
+        # 3.15: POP_ITER pops both iterator and iterable (stack effect -2)
+        def op_POP_ITER(self, state, inst):
+            state.pop()
+            state.pop()
+    elif PYVERSION in ((3, 14), ):
         # New in 3.14
         op_POP_ITER = op_POP_TOP
     elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
@@ -1600,7 +1605,12 @@ class TraceRunner(object):
                      res=res)
 
     def op_GET_ITER(self, state, inst):
-        value = state.pop()
+        if PYVERSION >= (3, 15):
+            # 3.15+: GET_ITER keeps iterable on stack and pushes iterator
+            # on top. POP_ITER later cleans up both.
+            value = state.get_tos()
+        else:
+            value = state.pop()
         res = state.make_temp()
         state.append(inst, value=value, res=res)
         state.push(res)
@@ -1642,7 +1652,7 @@ class TraceRunner(object):
         lhs = state.pop()
         if op == '[]':
             # Special case 3.14 -- body of BINARY_SUBSCR now here
-            assert PYVERSION == (3, 15)
+            assert PYVERSION in ((3, 14), (3, 15))
             res = state.make_temp()
             state.append(inst, op=op, lhs=lhs, rhs=rhs, res=res)
             state.push(res)
