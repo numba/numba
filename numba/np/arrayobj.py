@@ -1514,7 +1514,7 @@ def extents_may_overlap(context, builder, a_start, a_end, b_start, b_end):
     return may_overlap
 
 
-def maybe_copy_source(context, builder, use_copy,
+def maybe_copy_source(context, builder, use_copy, indexer,
                       srcty, src, src_shapes, src_strides, src_data):
     ptrty = src_data.type
 
@@ -1545,22 +1545,37 @@ def maybe_copy_source(context, builder, use_copy,
                                                  copy_layout, indices)
             builder.store(builder.load(src_ptr), dest_ptr)
 
-    def src_getitem(source_indices):
+    def src_getitem():
         src_ptr = cgutils.alloca_once(builder, ptrty)
+        src_indices = indexer.get_src_indices()[-len(src_shapes):]
+        if len(src_shapes) > len(src_indices):
+            # If the source has fewer dimensions than the indexer, we need
+            # to add some leading zeros to the indices to get the correct
+            # broadcasting behavior.
+            zero = context.get_constant(types.intp, 0)
+            src_indices = (
+                [zero] * (len(src_shapes) -
+                          len(src_indices)) + list(src_indices)
+            )
+
+        src_indices = [
+            builder.srem(src_indices[i], src_shapes[i])
+            for i in range(len(src_shapes))
+        ]
         with builder.if_else(use_copy, likely=False) as (if_copy, otherwise):
             with if_copy:
                 builder.store(
                     cgutils.get_item_pointer2(context, builder,
                                               builder.load(copy_data),
                                               copy_shapes, copy_strides,
-                                              copy_layout, source_indices,
+                                              copy_layout, src_indices,
                                               wraparound=False),
                     src_ptr)
             with otherwise:
                 builder.store(
                     cgutils.get_item_pointer2(context, builder, src_data,
                                               src_shapes, src_strides,
-                                              srcty.layout, source_indices,
+                                              srcty.layout, src_indices,
                                               wraparound=False),
                     src_ptr)
         return load_item(context, builder, srcty, builder.load(src_ptr))
@@ -1995,28 +2010,24 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         index_shape = indexer.get_shape()
         src = make_array(srcty)(context, builder, src)
         src_shapes = cgutils.unpack_tuple(builder, src.shape)
+        src_strides = cgutils.unpack_tuple(builder, src.strides)
+        src_data = src.data
 
-        def src_getitem():
-            src_indices = indexer.get_src_indices()[-len(src_shapes):]
-            if len(src_shapes) > len(src_indices):
-                # If the source has fewer dimensions than the indexer, we need
-                # to add some leading zeros to the indices to get the correct
-                # broadcasting behavior.
-                zero = context.get_constant(types.intp, 0)
-                src_indices = [zero] * (len(src_shapes) - len(src_indices)) + list(src_indices)
-
-            src_indices = [
-                builder.srem(src_indices[i], src_shapes[i])
-                for i in range(len(src_shapes))
-            ]
-
-            val = _getitem_array_generic(
-                context, builder,
-                src_dtype, srcty, src,
-                [types.intp for _ in range(len(src_shapes))],
-                tuple(src_indices)
-            )
-            return val
+        # Check for array overlap
+        src_start, src_end = get_array_memory_extents(context, builder, srcty,
+                                                      src, src_shapes,
+                                                      src_strides, src_data)
+        dest_lower, dest_upper = indexer.get_offset_bounds(dest_strides,
+                                                           ary.itemsize)
+        dest_start, dest_end = compute_memory_extents(context, builder,
+                                                      dest_lower, dest_upper,
+                                                      dest_data)
+        use_copy = extents_may_overlap(context, builder, src_start, src_end,
+                                       dest_start, dest_end)
+        src_getitem, src_cleanup = maybe_copy_source(context, builder, use_copy,
+                                                     indexer,
+                                                     srcty, src, src_shapes,
+                                                     src_strides, src_data)
 
         # Loop on destination and copy from source to destination
         dest_indices = indexer.begin_loops()
@@ -2033,6 +2044,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         store_item(context, builder, aryty, val, dest_ptr)
 
         indexer.end_loops()
+        src_cleanup()
 
     elif isinstance(srcty, types.Sequence):
         src_dtype = srcty.dtype
