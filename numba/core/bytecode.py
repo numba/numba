@@ -542,7 +542,7 @@ class ByteCodePy312(ByteCodePy311):
                     # In Python 3.13.4, this becomes the only GET_ITER,
                     # so don't turn it into a NOP.
                     # Python 3.13.5 reverted the change.
-                    if sys.version_info[:3] != (3, 13, 4):
+                    if (sys.version_info[:3] != (3, 13, 4) and PYVERSION < (3, 15)):
                         # Add the inst to potentially be replaced to NOP.
                         current_nop_fixes.add(next_inst)
                     # Loop up next instruction.
