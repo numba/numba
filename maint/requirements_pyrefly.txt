@@ -1,1 +1,2 @@
 pyrefly==0.63.1
+types-cffi
