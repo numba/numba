@@ -45,9 +45,9 @@ jobs:
     - script: |
         set -e
         export PATH=$HOME/miniconda3/bin:$PATH
-        conda create -n pyrefly -y python=3.11
-        conda run -n pyrefly pip install -r maint/requirements_pyrefly.txt
-        conda run -n pyrefly pyrefly check --conda-environment $CONDA_ENV --no-progress-bar --summary=full
+        conda create -n pyrefly311 -y python=3.11
+        conda run -n pyrefly311 pip install -r maint/requirements_pyrefly.txt
+        conda run -n pyrefly311 pyrefly check --conda-environment $CONDA_ENV --no-progress-bar --summary=full
       displayName: 'Pyrefly check'
       condition: eq(variables['RUN_PYREFLY'], 'yes')
 
