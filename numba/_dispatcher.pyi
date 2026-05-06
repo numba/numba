@@ -37,7 +37,7 @@ _Fingerprintable: TypeAlias = (
     | bytes
     | bytearray
     | memoryview
-    | _array.array
+    | _array.array[Any]
     | _mmap.mmap
     | _HasValue
     | np.generic
