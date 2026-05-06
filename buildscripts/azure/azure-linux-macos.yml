@@ -45,12 +45,11 @@ jobs:
     - script: |
         set -e
         export PATH=$HOME/miniconda3/bin:$PATH
-        # using conda-forge because main only have version < 1.0
-        conda create -n mypy311 -y -c conda-forge python=3.11 mypy
-        conda run -n mypy311 pip install types-cffi
-        conda run -n mypy311 mypy
-      displayName: 'Mypy'
-      condition: eq(variables['RUN_MYPY'], 'yes')
+        conda create -n pyrefly -y python=3.11
+        conda run -n pyrefly pip install -r maint/requirements_pyrefly.txt
+        conda run -n pyrefly pyrefly check --conda-environment $CONDA_ENV --no-progress-bar --summary=full
+      displayName: 'Pyrefly check'
+      condition: eq(variables['RUN_PYREFLY'], 'yes')
 
     - script: |
         set -e

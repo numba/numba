@@ -69,7 +69,7 @@ jobs:
       py311_np124_type_check:
         PYTHON: '3.11'
         NUMPY: '1.24'
-        RUN_MYPY: yes
+        RUN_PYREFLY: yes
         RUN_STUBTEST: yes
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 5
