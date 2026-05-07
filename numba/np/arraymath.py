@@ -2219,6 +2219,148 @@ def np_triu_indices_from(arr, k=0):
     return np_triu_indices_from_impl
 
 
+@overload(np.unravel_index)
+def np_unravel_index(indices, shape, order='C'):
+    msg_shape = (
+        "np.unravel_index(): 'shape' argument must be a tuple of integers"
+    )
+    msg_indices = (
+        "np.unravel_index(): 'indices' must be an integer or boolean "
+        "scalar or array"
+    )
+    msg_oob = "index is out of bounds for array with given shape"
+    msg_size_one = "index is out of bounds for array with size 1"
+    msg_0d = "multiple indices are not supported for 0d arrays"
+    msg_neg = "negative dimensions are not allowed"
+    msg_large = (
+        "dimensions are too large; total size exceeds intp range"
+    )
+
+    # shape: BaseTuple of length 0, or UniTuple[Integer]
+    if not isinstance(shape, types.BaseTuple):
+        raise TypingError(msg_shape)
+    ndim = len(shape)
+    if ndim != 0:
+        if not isinstance(shape, types.UniTuple):
+            raise TypingError(msg_shape)
+        if not isinstance(shape.dtype, types.Integer):
+            raise TypingError(msg_shape)
+
+    # order: literal 'C' or 'F'
+    if isinstance(order, types.StringLiteral):
+        order_val = order.literal_value
+    elif isinstance(order, types.Omitted):
+        order_val = order.value
+    else:
+        raise TypingError(
+            "np.unravel_index(): 'order' must be a compile-time string "
+            "literal, either 'C' or 'F'"
+        )
+    if order_val not in ('C', 'F'):
+        raise TypingError(
+            "np.unravel_index(): 'order' must be 'C' or 'F'"
+        )
+
+    dim_order = (tuple(range(ndim - 1, -1, -1)) if order_val == 'C'
+                 else tuple(range(ndim)))
+    max_size = np.iinfo(np.intp).max
+    scalar_index = isinstance(indices, (types.Integer, types.Boolean))
+
+    # 0-D shape: size-1 array, only flat index 0 is valid.
+    if ndim == 0:
+        if scalar_index:
+            def impl(indices, shape, order='C'):
+                if np.intp(indices) != 0:
+                    raise ValueError(msg_size_one)
+                return ()
+            return impl
+
+        if isinstance(indices, types.Array):
+            if not isinstance(indices.dtype,
+                              (types.Integer, types.Boolean)):
+                raise TypingError(msg_indices)
+
+            if indices.ndim == 0:
+                def impl(indices, shape, order='C'):
+                    if np.intp(indices[()]) != 0:
+                        raise ValueError(msg_size_one)
+                    return ()
+                return impl
+
+            # 1-D+ index array into a 0-D shape: NumPy validates each
+            # value, then raises "multiple indices are not supported".
+            def impl(indices, shape, order='C'):
+                for ind in np.ndindex(indices.shape):
+                    idx = np.intp(indices[ind])
+                    if idx < 0 or idx >= 1:
+                        raise ValueError(msg_size_one)
+                raise ValueError(msg_0d)
+                return ()
+            return impl
+
+        raise TypingError(msg_indices)
+
+    # ndim >= 1, scalar index
+    if scalar_index:
+        def impl(indices, shape, order='C'):
+            size = np.intp(1)
+            for d in shape:
+                dim = np.intp(d)
+                if dim < 0:
+                    raise ValueError(msg_neg)
+                if dim != 0 and size > max_size // dim:
+                    raise ValueError(msg_large)
+                size *= dim
+
+            idx = np.intp(indices)
+            if idx < 0 or idx >= size:
+                raise ValueError(msg_oob)
+
+            out = (np.intp(0),) * ndim
+            for axis in dim_order:
+                dim = np.intp(shape[axis])
+                out = tuple_setitem(out, axis, idx % dim)
+                idx //= dim
+            return out
+        return impl
+
+    # ndim >= 1, integer/boolean array
+    if isinstance(indices, types.Array):
+        if not isinstance(indices.dtype, (types.Integer, types.Boolean)):
+            raise TypingError(msg_indices)
+
+        def impl(indices, shape, order='C'):
+            size = np.intp(1)
+            for d in shape:
+                dim = np.intp(d)
+                if dim < 0:
+                    raise ValueError(msg_neg)
+                if dim != 0 and size > max_size // dim:
+                    raise ValueError(msg_large)
+                size *= dim
+
+            # (np.empty(...),) * ndim aliases; replace 1..ndim-1 with
+            # fresh allocations so all ndim outputs are distinct.
+            out = (np.empty(indices.shape, dtype=np.intp),) * ndim
+            for axis in range(1, ndim):
+                out = tuple_setitem(
+                    out, axis, np.empty(indices.shape, dtype=np.intp))
+
+            for ind in np.ndindex(indices.shape):
+                idx = np.intp(indices[ind])
+                if idx < 0 or idx >= size:
+                    raise ValueError(msg_oob)
+                cur = idx
+                for axis in dim_order:
+                    dim = np.intp(shape[axis])
+                    out[axis][ind] = cur % dim
+                    cur //= dim
+            return out
+        return impl
+
+    raise TypingError(msg_indices)
+
+
 def _prepare_array(arr):
     pass
 

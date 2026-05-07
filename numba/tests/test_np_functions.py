@@ -7202,5 +7202,172 @@ class TestRegistryImports(TestCase):
         self.assertEqual(b"", error.strip(), msg=f"--ERROR--\n{error}\n")
 
 
+class TestNpUnravelIndex(MemoryLeakMixin, TestCase):
+
+    def _assert_equal(self, got, expected):
+        self.assertEqual(len(got), len(expected))
+        for g, e in zip(got, expected):
+            if isinstance(e, np.ndarray):
+                np.testing.assert_array_equal(g, e)
+                self.assertEqual(g.dtype, np.intp)
+            else:
+                self.assertEqual(g, e)
+
+    def _compare(self, idx, shape, order='C'):
+        # The overload requires `order` as a literal at the call site.
+        # Branch on the Python value so each @njit closure has a literal.
+        if order == 'C':
+            @njit
+            def f(idx_, sh_):
+                return np.unravel_index(idx_, sh_)
+        elif order == 'F':
+            @njit
+            def f(idx_, sh_):
+                return np.unravel_index(idx_, sh_, order='F')
+        else:
+            raise AssertionError("test helper only supports 'C' and 'F'")
+
+        self._assert_equal(
+            f(idx, shape),
+            np.unravel_index(idx, shape, order=order),
+        )
+
+    # ---- positive paths ----------------------------------------------
+
+    def test_scalar_c(self):
+        for idx, shape in [(0, (5,)), (4, (5,)), (22, (7, 6)),
+                           (1234, (10, 20, 30))]:
+            with self.subTest(idx=idx, shape=shape):
+                self._compare(idx, shape)
+
+    def test_scalar_f(self):
+        for idx, shape in [(0, (5,)), (22, (7, 6)), (100, (10, 20, 30))]:
+            with self.subTest(idx=idx, shape=shape):
+                self._compare(idx, shape, order='F')
+
+    def test_array_c(self):
+        cases = [
+            ((5,),         np.array([0, 1, 2, 3, 4], dtype=np.int64)),
+            ((7, 6),       np.array([0, 5, 17, 22, 30, 41], dtype=np.int64)),
+            ((3, 4, 5),    np.array([0, 7, 19, 23, 47, 59], dtype=np.int64)),
+            ((2, 3, 4, 5), np.array([0, 19, 60, 79, 100, 119],
+                                    dtype=np.int64)),
+        ]
+        for shape, indices in cases:
+            with self.subTest(shape=shape):
+                self._compare(indices, shape)
+
+    def test_array_f(self):
+        cases = [
+            ((5,),      np.array([0, 1, 2, 3, 4], dtype=np.int64)),
+            ((7, 6),    np.array([0, 5, 17, 22, 30, 41], dtype=np.int64)),
+            ((3, 4, 5), np.array([0, 7, 19, 23, 47, 59], dtype=np.int64)),
+        ]
+        for shape, indices in cases:
+            with self.subTest(shape=shape):
+                self._compare(indices, shape, order='F')
+
+    def test_array_dtypes(self):
+        for dt in (np.int8, np.int16, np.int32, np.int64,
+                   np.uint8, np.uint16, np.uint32, np.uint64):
+            with self.subTest(dtype=dt):
+                self._compare(
+                    np.array([0, 5, 10, 15, 20], dtype=dt), (3, 7))
+
+    def test_boolean_indices(self):
+        self._compare(True, (3, 4))
+        self._compare(False, (3, 4))
+        self._compare(
+            np.array([True, False, True], dtype=np.bool_), (2,))
+
+    def test_nd_index_array(self):
+        self._compare(
+            np.array([[0, 1], [10, 20], [22, 41]], dtype=np.int64),
+            (7, 6))
+
+    def test_empty_index_array(self):
+        self._compare(np.empty(0, dtype=np.int64), (10, 10))
+
+    def test_zero_d_shape_scalar(self):
+        self._compare(0, ())
+
+    def test_zero_d_shape_zero_d_array(self):
+        self._compare(np.array(0, dtype=np.int64), ())
+
+    def test_zero_size_dimension_empty_indices(self):
+        self._compare(np.empty(0, dtype=np.int64), (0, 5))
+
+    # ---- TypingError paths -------------------------------------------
+
+    def test_shape_must_be_tuple(self):
+        @njit
+        def f(idx, sh):
+            return np.unravel_index(idx, sh)
+        with self.assertRaises(TypingError) as cm:
+            f(0, [10, 10])
+        self.assertIn("'shape'", str(cm.exception))
+
+    def test_shape_elements_must_be_int(self):
+        @njit
+        def f(idx, sh):
+            return np.unravel_index(idx, sh)
+        with self.assertRaises(TypingError):
+            f(0, (10.0, 10))
+
+    def test_order_must_be_c_or_f(self):
+        @njit
+        def f(idx, sh):
+            return np.unravel_index(idx, sh, order='Q')
+        with self.assertRaises(TypingError) as cm:
+            f(0, (10, 10))
+        self.assertIn("'C' or 'F'", str(cm.exception))
+
+    def test_order_must_be_literal(self):
+        @njit
+        def f(idx, sh, o):
+            return np.unravel_index(idx, sh, order=o)
+        with self.assertRaises(TypingError) as cm:
+            f(0, (10, 10), 'C')
+        self.assertIn("compile-time string literal", str(cm.exception))
+
+    def test_indices_must_be_int_or_bool(self):
+        @njit
+        def f(idx, sh):
+            return np.unravel_index(idx, sh)
+        with self.assertRaises(TypingError):
+            f(1.5, (10, 10))
+
+    def test_indices_array_must_be_int_or_bool(self):
+        @njit
+        def f(idx, sh):
+            return np.unravel_index(idx, sh)
+        with self.assertRaises(TypingError):
+            f(np.array([1.0, 2.0]), (10, 10))
+
+    # ---- runtime ValueError paths ------------------------------------
+
+    def test_runtime_value_errors(self):
+        self.disable_leak_check()
+
+        @njit
+        def f(idx, sh):
+            return np.unravel_index(idx, sh)
+
+        with self.assertRaises(ValueError):     # negative scalar index
+            f(-1, (10, 10))
+        with self.assertRaises(ValueError):     # scalar index >= size
+            f(100, (10, 10))
+        with self.assertRaises(ValueError):     # array index out of bounds
+            f(np.array([0, 5, 200], dtype=np.int64), (10, 10))
+        with self.assertRaises(ValueError):     # negative dimension
+            f(0, (-1, 10))
+        with self.assertRaises(ValueError):     # nonzero scalar into 0-D
+            f(1, ())
+        with self.assertRaises(ValueError):     # 1-D array into 0-D shape
+            f(np.zeros(3, dtype=np.int64), ())
+        with self.assertRaises(ValueError):     # zero-size shape, nonempty
+            f(0, (0, 5))
+
+
 if __name__ == '__main__':
     unittest.main()
