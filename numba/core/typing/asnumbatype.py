@@ -67,6 +67,10 @@ class AsNumbaTypeRegistry:
             # However, other types, such as `typing.List[float]` remain as
             # `typing._GenericAlias`, so that must be keept.
             #
+            # Additionally, using the recommend e.g. `tuple[int, float]`,
+            # creates a `typing.GenericAlias`, so that must be included here
+            # too.
+            #
             if not isinstance(py_type, (py_typing.Union,
                                         py_typing.GenericAlias,
                                         py_typing._GenericAlias)):
