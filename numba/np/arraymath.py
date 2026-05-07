@@ -2377,7 +2377,9 @@ def np_unravel_index(indices, shape, order='C'):
         for a in axes_main:
             array_lines.append(f"        out_{a}[ind] = cur % d_{a}")
             array_lines.append(f"        cur //= d_{a}")
-        array_lines.append(f"        out_{axis_last}[ind] = cur % d_{axis_last}")
+        array_lines.append(
+            f"        out_{axis_last}[ind] = cur % d_{axis_last}"
+        )
         array_body = '\n'.join(array_lines)
 
         src = (
