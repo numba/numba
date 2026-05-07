@@ -7368,6 +7368,18 @@ class TestNpUnravelIndex(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError):     # zero-size shape, nonempty
             f(0, (0, 5))
 
+        # intp-overflow guard: max_intp * 2 cannot fit in intp.
+        huge_shape = (np.iinfo(np.intp).max, 2)
+        with self.assertRaises(ValueError):     # scalar branch
+            f(0, huge_shape)
+        with self.assertRaises(ValueError):     # array branch
+            f(np.array([0], dtype=np.int64), huge_shape)
+
+    def test_zero_d_index_array(self):
+        # indices.shape == () through the array branch with non-empty shape;
+        # output should be a tuple of 0-D intp arrays.
+        self._compare(np.array(22, dtype=np.int64), (7, 6))
+
 
 if __name__ == '__main__':
     unittest.main()
