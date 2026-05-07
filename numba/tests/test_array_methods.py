@@ -1752,6 +1752,21 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
                 self._lower_clip_result_test_util(cfunc, a, -5, 5)
 
+    def test_clip_type_promotion(self):
+        # tests fix for issue #10000
+        has_out = (np_clip, np_clip_kwargs, array_clip, array_clip_kwargs)
+        has_no_out = (np_clip_no_out, array_clip_no_out)
+        
+        a = np.array([1, 2], dtype=np.int64)
+        for pyfunc in has_out + has_no_out:
+            cfunc = jit(nopython=True)(pyfunc)
+            
+            expected = pyfunc(a, np.inf, np.inf)
+            got = cfunc(a, np.inf, np.inf)
+            
+            np.testing.assert_equal(expected, got)
+            self.assertEqual(expected.dtype, got.dtype)
+
     def test_clip_errors(self):
         # Disable leak check since we expect an error to be raised
         self.disable_leak_check()
