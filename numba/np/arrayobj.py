@@ -2656,11 +2656,9 @@ def np_clip(a, a_min, a_max, out=None):
     a_max_is_none = a_max is None or isinstance(a_max, types.NoneType)
 
     def _get_dtype(t):
-        if isinstance(t, types.Array):
+        if hasattr(t, 'dtype'):
             return as_dtype(t.dtype)
-        elif isinstance(t, types.Number):
-            return as_dtype(t)
-        return None
+        return as_dtype(t)
 
     dt_a = _get_dtype(a)
     dt_min = _get_dtype(a_min) if not a_min_is_none else None
@@ -2677,8 +2675,8 @@ def np_clip(a, a_min, a_max, out=None):
 
         return np_clip_nn
 
-    a_min_is_scalar = isinstance(a_min, types.Number)
-    a_max_is_scalar = isinstance(a_max, types.Number)
+    a_min_is_scalar = isinstance(a_min, (types.Number, types.Boolean))
+    a_max_is_scalar = isinstance(a_max, (types.Number, types.Boolean))
 
     if a_min_is_scalar and a_max_is_scalar:
         def np_clip_ss(a, a_min, a_max, out=None):
