@@ -147,6 +147,11 @@ class TestAsNumbaType(TestCase):
                 [types.Optional(self.int_nb_type), self.float_nb_type])),
         )
         self.assertEqual(
+            as_numba_type(set[tuple[int | None, float]]),
+            types.SetType(types.Tuple(
+                [types.Optional(self.int_nb_type), self.float_nb_type])),
+        )
+        self.assertEqual(
             as_numba_type(py_typing.List[py_typing.Dict[float, bool]]),
             types.ListType(
                 types.DictType(self.float_nb_type, self.bool_nb_type)
