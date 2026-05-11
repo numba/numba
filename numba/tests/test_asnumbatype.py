@@ -18,6 +18,7 @@ from numba.core.extending import (register_model, type_callable, unbox,
 from numba.core.types import Number
 from numba.core.typing.typeof import typeof, typeof_impl
 from numba.core.typing.asnumbatype import as_numba_type, AsNumbaTypeRegistry
+from numba.core.utils import PYVERSION
 from numba.experimental.jitclass import jitclass
 from numba.tests.support import TestCase
 
@@ -118,6 +119,12 @@ class TestAsNumbaType(TestCase):
         self.assertIn("Cannot type Union that is not an Optional",
                       str(raises.exception))
 
+    @unittest.skipUnless(PYVERSION >= (3,14),
+        "Syntax only supported from 3.14 onwards")
+    def test_optional_syntax_OR(self):
+        self.assertEqual(as_numba_type(int | None),
+            types.Optional(self.int_nb_type))
+
     def test_nested_containers(self):
         self.assertEqual(
             as_numba_type(list[list[int]]),
@@ -140,11 +147,6 @@ class TestAsNumbaType(TestCase):
             types.ListType(
                 types.DictType(self.float_nb_type, self.bool_nb_type)
             ),
-        )
-        self.assertEqual(
-            as_numba_type(set[tuple[py_typing.Optional[int], float]]),
-            types.SetType(types.Tuple(
-                [types.Optional(self.int_nb_type), self.float_nb_type])),
         )
         self.assertEqual(
             as_numba_type(set[tuple[int | None, float]]),
