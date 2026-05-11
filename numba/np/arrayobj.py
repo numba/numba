@@ -2013,6 +2013,38 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         src_strides = cgutils.unpack_tuple(builder, src.strides)
         src_data = src.data
 
+        # Pad 1s to either source or destination shape to make their
+        # dimensions match.
+        one = context.get_constant(types.uintp, 1)
+        if len(index_shape) > len(src_shapes):
+            new_src_shapes = (one,) * (
+                len(index_shape) - len(src_shapes)
+            ) + tuple(src_shapes)
+            new_index_shape = tuple(index_shape)
+        elif len(index_shape) < len(src_shapes):
+            new_index_shape = (one,) * (
+                len(src_shapes) - len(index_shape)
+            ) + tuple(index_shape)
+            new_src_shapes = tuple(src_shapes)
+        else:
+            new_src_shapes = tuple(src_shapes)
+            new_index_shape = tuple(index_shape)
+
+        # The resulting shapes should be broadcastable, so check that
+        # the source shape is either 1 or the same as the destination
+        # shape at every dimension.
+        for i in range(len(new_src_shapes)):
+            dim_match = builder.icmp_signed(
+                '==', new_src_shapes[i], new_index_shape[i]
+            )
+            src_dim_is_one = builder.icmp_signed('==', new_src_shapes[i], one)
+            shape_error = builder.not_(builder.or_(dim_match, src_dim_is_one))
+
+            with builder.if_then(shape_error, likely=False):
+                raise_shape_mismatch_error(
+                    context, builder, src_shapes, index_shape
+                )
+
         # Check for array overlap
         src_start, src_end = get_array_memory_extents(context, builder, srcty,
                                                       src, src_shapes,

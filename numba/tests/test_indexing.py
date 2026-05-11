@@ -998,7 +998,8 @@ class TestSetItem(TestCase):
         with self.assertRaises(ValueError) as raises:
             setitem_broadcast_usecase(dst, src)
         errmsg = str(raises.exception)
-        self.assertEqual('cannot broadcast source array for assignment',
+        self.assertEqual('cannot assign slice of shape (5,) from input of' +
+                         ' shape (2, 5)',
                          errmsg)
         # 3D -> 2D
         dst = np.arange(5).reshape(1, 5)
@@ -1007,7 +1008,7 @@ class TestSetItem(TestCase):
             setitem_broadcast_usecase(dst, src)
         errmsg = str(raises.exception)
         self.assertEqual(('cannot assign slice of shape (1, 5) from input of' +
-                         ' shape (2, 5)'),
+                         ' shape (1, 2, 5)'),
                          errmsg)
         # lower to higher
         # 1D -> 2D
@@ -1017,7 +1018,7 @@ class TestSetItem(TestCase):
             setitem_broadcast_usecase(dst, src)
         errmsg = str(raises.exception)
         self.assertEqual(('cannot assign slice of shape (2, 5) from input of' +
-                        ' shape (2, 4)'),
+                        ' shape (4,)'),
                         errmsg)
 
     def test_slicing_1d_broadcast(self):
