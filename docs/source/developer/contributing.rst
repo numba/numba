@@ -290,6 +290,11 @@ hints, as well as between Numba types---such as ``Dict`` or ``Literal``---and ``
 To mitigate the risk of confusion we use a naming convention by which objects of the built-in ``typing`` module are
 imported with an ``pt`` prefix. For example, ``typing.Dict`` is imported as ``from typing import Dict as ptDict``.
 
+Best practices and other non obvious conventions
+''''''''''''''''''''''''''''''''''''''''''''''''
+
+Read :doc:`coding_guidelines`.
+
 Release Notes
 '''''''''''''
 
