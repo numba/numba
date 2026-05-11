@@ -131,6 +131,18 @@ def array_nanvar_ddof0(arr):
 def array_nanvar_ddof1(arr):
     return np.nanvar(arr, ddof=1)
 
+def array_nanvar_ddof0_complex(arr):
+    return np.nanvar(arr, ddof=0)
+
+def array_nanvar_ddof1_complex(arr):
+    return np.nanvar(arr, ddof=1)
+
+def array_nanstd_ddof0_complex(arr):
+    return np.nanstd(arr, ddof=0)
+
+def array_nanstd_ddof1_complex(arr):
+    return np.nanstd(arr, ddof=1)
+
 def array_nanvar(arr):
     return np.nanvar(arr)
 
@@ -541,10 +553,16 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_nanstd_ddof(self):
         self.check_reduction_basic(array_nanstd_ddof0)
         self.check_reduction_basic(array_nanstd_ddof1)
+        # test complex branch
+        self.check_reduction_basic(array_nanstd_ddof0_complex)
+        self.check_reduction_basic(array_nanstd_ddof1_complex)
 
     def test_nanvar_ddof(self):
         self.check_reduction_basic(array_nanvar_ddof0, prec='double')
         self.check_reduction_basic(array_nanvar_ddof1, prec='double')
+        # test complex branch
+        self.check_reduction_basic(array_nanvar_ddof0_complex, prec='double')
+        self.check_reduction_basic(array_nanvar_ddof1_complex, prec='double')
 
     def test_nanvar_basic(self):
         self.check_reduction_basic(array_nanvar, prec='double')
