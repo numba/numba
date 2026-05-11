@@ -1,50 +1,53 @@
 Coding Style
 ============
 
+- Python code
+    - follows :pep:`8`
+    - use `Flake8 <http://flake8.pycqa.org/en/latest/>`_. Run ``flake8 numba``.
+- C code doesn't have a well-defined coding style (:pep:`7` would be nice).
+- Limits to 80 column for maximum readability with all existing tools
+  (such as code review UIs).
 
-All Python code should follow :pep:`8`.  Our C code doesn't have a
-well-defined coding style (would it be nice to follow :pep:`7`?).
-Code and documentation should generally fit within 80 columns, for
-maximum readability with all existing tools (such as code review UIs).
 
-Numba uses `Flake8 <http://flake8.pycqa.org/en/latest/>`_ to ensure a consistent
-Python code format throughout the project. ``flake8`` can be installed
-with ``pip`` or ``conda`` and then run from the root of the Numba repository::
+Typing annotations
+------------------
 
-    flake8 numba
+- Numba uses `Mypy <http://mypy-lang.org/>`_ to verify typing annotations in
+  the CI.
 
-Numba has started the process of using `type hints <https://www.python.org/dev/peps/pep-0484/>`_ in its code base. This
-will be a gradual process of extending the number of files that use type hints, as well as going from voluntary to
-mandatory type hints for new features. `Mypy <http://mypy-lang.org/>`_ is used for automated static checking.
+    - Only a subset of files are being tested (See ``mypy.ini``).
+    - Only in exceptional circumstances should ``type: ignore`` comments be
+      used.
 
-At the moment, only certain files are checked by mypy. The list can be found in ``mypy.ini``. When making changes to
-those files, it is necessary to add the required type hints such that mypy tests will pass. Only in exceptional
-circumstances should ``type: ignore`` comments be used.
+- Most of Numba code base do not use type hints. We welcome incremental PRs for
+  gradually adding type hints.
 
-If you are contributing a new feature, we encourage you to use type hints, even if the file is not currently in the
-checklist. If you want to contribute type hints to enable a new file to be in the checklist, please add the file to the
-``files`` variable in ``mypy.ini``, and decide what level of compliance you are targeting. Level 3 is basic static
-checks, while levels 2 and 1 represent stricter checking. The levels are described in details in ``mypy.ini``.
+- New features: use type hints even if the file isn't in the mypy checklist.
+- To add a file to the checklist: add it to ``files`` in ``mypy.ini`` and choose
+  a compliance level (3=basic static checks, 2/1=stricter; see ``mypy.ini``
+  for details).
 
-There is potential for confusion between the Numba module ``typing`` and Python built-in module ``typing`` used for type
-hints, as well as between Numba types---such as ``Dict`` or ``Literal``---and ``typing`` types of the same name.
-To mitigate the risk of confusion we use a naming convention by which objects of the built-in ``typing`` module are
-imported with an ``pt`` prefix. For example, ``typing.Dict`` is imported as ``from typing import Dict as ptDict``.
+Python's ``typing`` vs ``numba.core.typing``
+''''''''''''''''''''''''''''''''''''''''''''
+
+- ``typing`` name clash: Numba has its own ``typing`` module and
+  types (e.g. ``Dict``, ``Literal``) that conflict with Python's ``typing``.
+- Two options:
+    - prefix Python ``typing`` imports with ``pt`` (e.g.
+      ``from typing import Dict as ptDict``).
+    - or ``import typing as pt``.
 
 
 .. _type_anno_check:
 
-Type annotation and runtime type checking
-''''''''''''''''''''''''''''''''''''''''''
+Runtime type checking
+'''''''''''''''''''''
 
-Numba is slowly gaining type annotations. To facilitate the review of pull
-requests that are incrementally adding type annotations, the test suite uses
-`typeguard`_ to perform runtime type checking. This helps verify the validity
-of type annotations.
+Most code is unannotated, so runtime type checking complements mypy.
 
-To enable runtime type checking in the test suite, users can use
-`runtests.py`_ in the source root as the test runner and set environment
-variable ``NUMBA_USE_TYPEGUARD=1``. For example::
+- The test suite uses `typeguard`_ to validate type annotations at runtime.
+- To enable: use `runtests.py`_ as the test runner with
+  ``NUMBA_USE_TYPEGUARD=1``::
 
     $ NUMBA_USE_TYPEGUARD=1 python runtests.py numba.tests
 
