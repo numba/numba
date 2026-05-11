@@ -258,13 +258,11 @@ use of limited resources. Whilst it would be great to have an extremely tidy
 code base, priority is given to fixes and features over code formatting changes.
 
 
-Coding conventions
-''''''''''''''''''
+Coding style and conventions
+''''''''''''''''''''''''''''
 
-.. toctree::
-    :maxdepth: 1
-    coding_style.rst
-    coding_guidelines.rst
+Read :doc:`coding guidelines <coding_guidelines>` to understand the coding style
+and convention expected by code reviewers. 
 
 
 Release Notes
