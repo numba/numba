@@ -1310,6 +1310,9 @@ def np_nanvar(a, ddof=0):
                 val = (v.item() - m)
                 ssd += np.real(val * np.conj(val))
                 count += 1
+        # When count <= ddof, return nan to match NumPy behaviour
+        if count <= ddof:
+            return np.nan
         # np.divide() doesn't raise ZeroDivisionError
         return np.divide(ssd, count - ddof)
 
