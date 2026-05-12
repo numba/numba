@@ -119,11 +119,11 @@ class TestAsNumbaType(TestCase):
         self.assertIn("Cannot type Union that is not an Optional",
                       str(raises.exception))
 
-    @unittest.skipUnless(PYVERSION >= (3,14),
-        "Syntax only supported from 3.14 onwards")
+    @unittest.skipUnless(PYVERSION >= (3, 14),
+                         "Syntax only supported from 3.14 onwards")
     def test_optional_syntax_OR(self):
         self.assertEqual(as_numba_type(int | None),
-            types.Optional(self.int_nb_type))
+                         types.Optional(self.int_nb_type))
 
     def test_nested_containers(self):
         self.assertEqual(
