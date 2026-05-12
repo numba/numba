@@ -94,3 +94,9 @@ Use ``resolve_value_type``, ``get_call_type``, and ``get_function`` instead:
 
 .. _typeguard: https://typeguard.readthedocs.io/en/latest/
 .. _runtests.py: https://github.com/numba/numba/blob/main/runtests.py
+
+
+Avoid ``@njit``
+''''''''''''''''''''
+
+New code should use ``numba.jit`` instead of the legacy API ``numba.njit``.
