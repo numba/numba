@@ -1,0 +1,12 @@
+Use public ``PyMonitoring_*`` C API for ``sys.monitoring`` on Python 3.13+
+--------------------------------------------------------------------------
+
+Numba's dispatcher integration with ``sys.monitoring`` on Python 3.13 and
+later now goes through the public ``PyMonitoring_*`` C API instead of
+CPython internal headers. This restores ``sys.monitoring`` support on
+Python 3.14.4 and newer (`#10538
+<https://github.com/numba/numba/issues/10538>`_), which had been disabled
+due to ABI changes in interpreter internals Numba previously relied on.
+``NUMBA_ENABLE_SYS_MONITORING`` again takes effect on those versions and
+the associated ``UserWarning`` is no longer emitted. The Python 3.12 code
+path is unchanged.
