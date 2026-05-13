@@ -14,7 +14,7 @@ Style
     - use `Flake8 <http://flake8.pycqa.org/en/latest/>`_. Run ``flake8 numba``.
 
 - C code doesn't have a well-defined coding style (:pep:`7` would be nice).
-- Limit to 80 column for maximum readability with all existing tools
+- Limit to 80 columns for maximum readability with all existing tools
   (such as code review UIs).
 
 
@@ -28,7 +28,7 @@ Typing annotations
     - Only in exceptional circumstances should ``type: ignore`` comments be
       used.
 
-- Most of Numba code base do not use type hints. We welcome incremental PRs for
+- Most of Numba code base does not use type hints. We welcome incremental PRs for
   gradually adding type hints.
 - New features: use type hints even if the file isn't in the mypy checklist.
 - To add a file to the checklist: add it to ``files`` in ``mypy.ini`` and choose
