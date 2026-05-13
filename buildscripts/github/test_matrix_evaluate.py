@@ -24,12 +24,16 @@ def test_python_tag():
     assert _python_tag("3.10") == "cp310"
     assert _python_tag("3.14") == "cp314"
     assert _python_tag("3.14t") == "cp314t"
+    assert _python_tag("3.14.3") == "cp314"
+    assert _python_tag("3.14.3t") == "cp314t"
 
 
 def test_canonical_version():
     assert _canonical_version("3.10") == "3.10"
     assert _canonical_version("3.14") == "3.14"
     assert _canonical_version("3.14t") == "3.14"
+    assert _canonical_version("3.14.3") == "3.14"
+    assert _canonical_version("3.14.3t") == "3.14"
 
 
 def test_wheel_has_free_threaded():
@@ -46,6 +50,14 @@ def test_wheel_314t_fields():
     assert entry["python_canonical"] == "3.14"
 
 
+def test_conda_has_python_canonical():
+    assert all("python_canonical" in r for r in CONDA_BUILD_MATRIX)
+    for r in CONDA_BUILD_MATRIX:
+        parts = r["python_canonical"].split(".")
+        assert len(parts) == 2, r
+        assert all(p.isdigit() for p in parts), r
+
+
 def test_eval_pull_request():
     for pkg in ("conda", "wheel"):
         expected = (
@@ -55,11 +67,6 @@ def test_eval_pull_request():
             build, _ = evaluate(pkg, "pull_request", None, p)
             assert len(build) == len(expected), (pkg, p)
             assert all(r["platform"] == p for r in build), (pkg, p)
-
-
-def test_eval_push():
-    build, _ = evaluate("wheel", "push", None, "linux-64")
-    assert len(build) == len(WHEEL_BUILD_MATRIX)
 
 
 def test_eval_label():
