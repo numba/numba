@@ -72,7 +72,8 @@ Avoid ``@lower*``
 '''''''''''''''''
 
 Avoid the low-level ``lower_builtin``, ``lower_getattr``, ``lower_setattr``,
-``lower_cast``, and ``lower_constant`` decorators from
+``lower_getattr_generic``, ``lower_setattr_generic``, ``lower_cast``,
+and ``lower_constant`` decorators from
 ``numba/core/imputils.py``. Prefer the high-level extension API instead:
 ``@overload``, ``@overload_method``, or ``@overload_attribute`` from
 ``numba.core.extending``.
