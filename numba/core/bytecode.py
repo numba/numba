@@ -76,16 +76,20 @@ class ByteCodeInst(object):
         instruction arg
     - lineno:
         -1 means unknown
+    - colno:
+        -1 means unknown
     '''
-    __slots__ = 'offset', 'next', 'opcode', 'opname', 'arg', 'lineno'
+    __slots__ = ('offset', 'next', 'opcode', 'opname',
+                 'arg', 'lineno', 'colno')
 
-    def __init__(self, offset, opcode, arg, nextoffset):
+    def __init__(self, offset, opcode, arg, nextoffset, colno):
         self.offset = offset
         self.next = nextoffset
         self.opcode = opcode
         self.opname = dis.opname[opcode]
         self.arg = arg
         self.lineno = -1  # unknown line number
+        self.colno = colno
 
     @property
     def is_jump(self):
@@ -164,27 +168,29 @@ if PYVERSION in ((3, 13), (3, 14)):
     def _unpack_opargs(code):
         buf = []
         for i, start_offset, op, arg in dis._unpack_opargs(code):
-            buf.append((start_offset, op, arg))
-        for i, (start_offset, op, arg) in enumerate(buf):
+            buf.append((start_offset, op, arg, i // 2))
+        for i, (start_offset, op, arg, idx) in enumerate(buf):
             if i + 1 < len(buf):
                 next_offset = buf[i + 1][0]
             else:
                 next_offset = len(code)
-            yield (start_offset, op, arg, next_offset)
+            yield (start_offset, op, arg, next_offset, idx)
 
 elif PYVERSION in ((3, 10), (3, 11), (3, 12)):
 
     # Adapted from Lib/dis.py
     def _unpack_opargs(code):
         """
-        Returns a 4-int-tuple of
-        (bytecode offset, opcode, argument, offset of next bytecode).
+        Returns a 5-int-tuple of
+        (bytecode offset, opcode, argument,
+        offset of next bytecode, bytecode index).
         """
         extended_arg = 0
         n = len(code)
         offset = i = 0
         while i < n:
             op = code[i]
+            idx = i
             i += CODE_LEN
             if op >= HAVE_ARGUMENT:
                 arg = code[i] | extended_arg
@@ -210,7 +216,7 @@ elif PYVERSION in ((3, 10), (3, 11), (3, 12)):
                     # "skipped" they are replaced with NOPs so as to provide a
                     # legal jump target and also ensure that the bytecode
                     # offsets are correct.
-                    yield (offset, OPCODE_NOP, arg, i)
+                    yield (offset, OPCODE_NOP, arg, i, idx // 2)
                     extended_arg = arg << 8 * ARG_LEN
                     offset = i
                     continue
@@ -230,7 +236,7 @@ elif PYVERSION in ((3, 10), (3, 11), (3, 12)):
                     raise NotImplementedError(PYVERSION)
 
             extended_arg = 0
-            yield (offset, op, arg, i)
+            yield (offset, op, arg, i, idx // 2)
             offset = i  # Mark inst offset at first extended
 else:
     raise NotImplementedError(PYVERSION)
@@ -242,18 +248,23 @@ def _patched_opargs(bc_stream):
     - Adds a NOP bytecode at the start to avoid jump target being at the entry.
     """
     # Injected NOP
-    yield (0, OPCODE_NOP, None, _FIXED_OFFSET)
+    yield (0, OPCODE_NOP, None, _FIXED_OFFSET, 0)
     # Adjust bytecode offset for the rest of the stream
-    for offset, opcode, arg, nextoffset in bc_stream:
+    for offset, opcode, arg, nextoffset, idx in bc_stream:
         # If the opcode has an absolute jump target, adjust it.
         if opcode in JABS_OPS:
             arg += _FIXED_OFFSET
-        yield offset + _FIXED_OFFSET, opcode, arg, nextoffset + _FIXED_OFFSET
+        yield (offset + _FIXED_OFFSET, opcode, arg,
+               nextoffset + _FIXED_OFFSET, idx)
 
 
 class ByteCodeIter(object):
     def __init__(self, code):
         self.code = code
+        if (hasattr(code, "co_positions")):
+            self.co_positions = list(code.co_positions())
+        else:
+            self.co_positions = []
         self.iter = iter(_patched_opargs(_unpack_opargs(self.code.co_code)))
 
     def __iter__(self):
@@ -263,9 +274,13 @@ class ByteCodeIter(object):
         return next(self.iter)
 
     def next(self):
-        offset, opcode, arg, nextoffset = self._fetch_opcode()
+        offset, opcode, arg, nextoffset, idx = self._fetch_opcode()
+        if (idx < len(self.co_positions)):
+            colno = self.co_positions[idx][2]
+        else:
+            colno = None
         return offset, ByteCodeInst(offset=offset, opcode=opcode, arg=arg,
-                                    nextoffset=nextoffset)
+                                    nextoffset=nextoffset, colno=colno)
 
     __next__ = next
 
@@ -316,12 +331,18 @@ class _ByteCode(object):
                 table[adj_offset].lineno = lineno
         # Assign unfilled lineno
         # Start with first bytecode's lineno
-        known = code.co_firstlineno
+        known_lineno = code.co_firstlineno
+        known_colno = None
         for inst in table.values():
             if inst.lineno is not None and inst.lineno >= 0:
-                known = inst.lineno
+                known_lineno = inst.lineno
             else:
-                inst.lineno = known
+                inst.lineno = known_lineno
+
+            if (inst.colno is not None):
+                known_colno = inst.colno
+            elif (known_colno is not None):
+                inst.colno = known_colno
         return table
 
     def __iter__(self):
@@ -603,7 +624,8 @@ class ByteCodePy312(ByteCodePy311):
             self.table[inst.offset] = ByteCodeInst(inst.offset,
                                                    dis.opmap["NOP"],
                                                    None,
-                                                   inst.next)
+                                                   inst.next,
+                                                   inst.colno)
         return entries
 
 
