@@ -1290,15 +1290,21 @@ def np_nanmean(a):
 
 
 @overload(np.nanvar)
-def np_nanvar(a, ddof=0):
+def np_nanvar(a, axis=None, dtype=None, out=None, ddof=0):
     if not isinstance(a, types.Array):
         return
     if not isinstance(ddof, (types.Integer, types.Omitted, int)):
         return
+    if not is_nonelike(axis):
+        raise TypingError("Numba does not support nanvar with axis.")
+    if not is_nonelike(dtype):
+        raise TypingError("Numba does not support nanvar with dtype.")
+    if not is_nonelike(out):
+        raise TypingError("Numba does not support nanvar with out.")
 
     isnan = get_isnan(a.dtype)
 
-    def nanvar_impl(a, ddof=0):
+    def nanvar_impl(a, axis=None, dtype=None, out=None, ddof=0):
         # Compute the mean
         m = np.nanmean(a)
         # Compute the sum of square diffs
@@ -1320,14 +1326,20 @@ def np_nanvar(a, ddof=0):
 
 
 @overload(np.nanstd)
-def np_nanstd(a, ddof=0):
+def np_nanstd(a, axis=None, dtype=None, out=None, ddof=0):
     if not isinstance(a, types.Array):
         return
     if not isinstance(ddof, (types.Integer, types.Omitted, int)):
         return
+    if not is_nonelike(axis):
+        raise TypingError("Numba does not support nanstd with axis.")
+    if not is_nonelike(dtype):
+        raise TypingError("Numba does not support nanstd with dtype.")
+    if not is_nonelike(out):
+        raise TypingError("Numba does not support nanstd with out.")
 
-    def nanstd_impl(a, ddof=0):
-        return np.nanvar(a, ddof) ** 0.5
+    def nanstd_impl(a, axis=None, dtype=None, out=None, ddof=0):
+        return np.nanvar(a, ddof=ddof) ** 0.5
 
     return nanstd_impl
 
