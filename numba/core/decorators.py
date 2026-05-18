@@ -240,7 +240,7 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
 
 def njit(*args, **kws):
     """
-    Equivalent to jit(nopython=True)
+    Legacy decorator that is equivalent to the preferred API: jit().
 
     See documentation for jit function/decorator for full description.
     """
