@@ -209,9 +209,10 @@ class TestAsNumbaType(TestCase):
                 str(raises.exception),
             )
 
-    def test_native_no_args_throws(self):
+    def test_non_homogenous_type_throws(self):
         # Non-generic types of native container are not strictly homogeneous,
-        # therefore not supported.
+        # therefore not supported. Also, tuples with inhomogeneous types are
+        # excluded.
         native_no_args_types = [
             list,
             set,
