@@ -91,7 +91,8 @@ class AsNumbaTypeRegistry:
         if origin is py_typing.Union:
             if len(args) != 2:
                 raise errors.TypingError(
-                    "Cannot type Union of more than two types")
+                    "Cannot type Union of more than two types. "
+                    f"Attempted to unify '{len(args)}' types.")
 
             (arg_1_py, arg_2_py) = args
 
