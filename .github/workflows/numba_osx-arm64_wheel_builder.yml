@@ -142,6 +142,9 @@ jobs:
           # inspect the wheel
           find . -name "*.so" -o -name "*.dylib" | xargs -I {} otool -L {}
 
+      - name: Test patched wheel
+        run: arch -arm64 python buildscripts/github/test_wheel_osx-arm64.py dist/*.whl
+
       - name: Upload numba wheel
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
