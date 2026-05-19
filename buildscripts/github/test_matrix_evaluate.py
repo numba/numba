@@ -70,15 +70,27 @@ def test_eval_pull_request():
 
 
 def test_eval_label():
-    build, _ = evaluate("wheel", "label", "build_numba_wheel", "linux-64")
+    build, _ = evaluate(
+        "wheel", "pull_request", ["build_numba_wheel"], "linux-64",
+    )
     assert len(build) == len(WHEEL_BUILD_MATRIX)
-    build, _ = evaluate("wheel", "label", "wrong_label", "linux-64")
+    build, _ = evaluate(
+        "conda", "pull_request", ["build_numba_wheel"], "linux-64",
+    )
     assert build == []
+    build, _ = evaluate(
+        "wheel", "pull_request", ["foo"], "linux-64",
+    )
+    assert len(build) == len(WHEEL_BUILD_MATRIX)
+    build, _ = evaluate(
+        "conda", "pull_request", ["foo"], "linux-64",
+    )
+    assert len(build) == len(CONDA_BUILD_MATRIX)
 
 
 def test_eval_unknown_event_returns_empty():
     for pkg in ("conda", "wheel"):
-        build, test = evaluate(pkg, "schedule", None, "linux-64")
+        build, test = evaluate(pkg, "foo", None, "linux-64")
         assert build == [] and test == []
 
 
