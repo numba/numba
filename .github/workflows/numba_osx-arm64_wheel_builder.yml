@@ -7,6 +7,8 @@ on:
     paths:
       - .github/workflows/numba_osx-arm64_wheel_builder.yml
       - .github/workflows/wheel_workflow_matrix.json
+      - buildscripts/github/patch_wheel_dylib.py
+      - buildscripts/github/test_wheel_osx_arm64.py
       - setup.py
   workflow_dispatch:
     inputs:
