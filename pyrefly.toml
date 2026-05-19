@@ -19,14 +19,6 @@ unused-ignore = "error"
 variance-mismatch = "error"
 
 [[sub-config]]
-# TODO: remove this sub-config and fix the errors
-matches = "numba/core/extending.pyi"
-[sub-config.errors]
-invalid-annotation = "ignore"
-invalid-inheritance = "ignore"
-bad-override = "ignore"
-
-[[sub-config]]
 matches = "numba/**/*.pyi"
 [sub-config.errors]
 implicit-any = "error"
