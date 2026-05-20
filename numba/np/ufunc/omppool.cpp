@@ -17,10 +17,13 @@ Threading layer on top of OpenMP.
 
 #ifdef _WIN32
 #include <malloc.h>
+#include <windows.h>
+#include <psapi.h>
 #else
 #include <sys/types.h>
 #include <unistd.h>
 #include <signal.h>
+#include <dlfcn.h>
 #endif
 
 #define _DEBUG 0
@@ -207,6 +210,34 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
     }
 }
 
+// Look up `name` in any library already loaded into this process. Returns
+// NULL if the symbol is not present. The `omp_` prefix is reserved by the
+// OpenMP standard, so collisions with non-OpenMP libraries are not a
+// concern; in mixed-runtime environments (e.g. libgomp + libiomp5 both
+// loaded) this is best-effort and may resolve into a runtime other than
+// the one Numba statically links against.
+static void *find_loaded_symbol(const char *name)
+{
+#ifdef _WIN32
+    HMODULE modules[1024];
+    DWORD bytes_needed = 0;
+    if(!EnumProcessModules(GetCurrentProcess(), modules,
+                           sizeof(modules), &bytes_needed))
+        return NULL;
+    DWORD count = bytes_needed / sizeof(HMODULE);
+    if(count > sizeof(modules) / sizeof(modules[0]))
+        count = sizeof(modules) / sizeof(modules[0]);
+    for(DWORD i = 0; i < count; ++i)
+    {
+        FARPROC sym = GetProcAddress(modules[i], name);
+        if(sym) return (void *)sym;
+    }
+    return NULL;
+#else
+    return dlsym(RTLD_DEFAULT, name);
+#endif
+}
+
 static void launch_threads(int count)
 {
     // this must be called in a fork+thread safe region from Python
@@ -225,7 +256,23 @@ static void launch_threads(int count)
     if(count < 1)
         return;
     omp_set_num_threads(count);
-    omp_set_nested(0x1); // enable nesting, control depth with OMP env var
+
+    // The OpenMP runtime is dynamically linked; the build-time _OPENMP
+    // version does not predict which symbols exist in the loaded library.
+    // Probe omp_set_max_active_levels (OpenMP 5.0+) at runtime and fall
+    // back to the deprecated omp_set_nested if it isn't present.
+    typedef void (*set_max_active_levels_fn)(int);
+    typedef int  (*get_supported_active_levels_fn)(void);
+    set_max_active_levels_fn set_max_levels =
+        (set_max_active_levels_fn)find_loaded_symbol("omp_set_max_active_levels");
+    get_supported_active_levels_fn get_supported_levels =
+        (get_supported_active_levels_fn)find_loaded_symbol("omp_get_supported_active_levels");
+
+    if(set_max_levels)
+        set_max_levels(get_supported_levels ? get_supported_levels() : 32);
+    else
+        omp_set_nested(0x1);
+
     _INIT_NUM_THREADS = count;
 }
 
