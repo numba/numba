@@ -115,7 +115,9 @@ class CPUContext(BaseContext):
         from numba.np.polynomial import polynomial_core, polynomial_functions # noqa F401
         from numba.typed import typeddict, dictimpl # noqa F401
         from numba.typed import typedlist, listobject # noqa F401
+        from numba.typed import typedset, setobject # noqa F401
         from numba.experimental import jitclass, function_type # noqa F401
+        from numba.np.types import datetime_registry # noqa F401
         from numba.np import npdatetime # noqa F401
 
         # Add target specific implementations

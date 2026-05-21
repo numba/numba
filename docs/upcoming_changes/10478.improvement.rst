@@ -1,0 +1,6 @@
+Static ``__all__`` declarations
+-------------------------------
+
+``numba.__all__``  and ``numba.core.errors.__all__`` are now statically defined.
+This improves compatibility with type-checkers and IDE tooling, fixing missing
+autocomplete suggestions and false-positive diagnostics.

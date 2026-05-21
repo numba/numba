@@ -526,8 +526,6 @@ class _ActiveContext(object):
         """
         return self.context_handle is not None
 
-    __nonzero__ = __bool__
-
 
 driver = Driver()
 
@@ -550,7 +548,7 @@ class Device(object):
     object.  User should not construct devices directly.
     """
     @classmethod
-    def from_identity(self, identity):
+    def from_identity(cls, identity):
         """Create Device object from device identity created by
         ``Device.get_device_identity()``.
         """

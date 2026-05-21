@@ -1,0 +1,7 @@
+arraymath: add temporal scalar support for np.min, np.max, np.all, np.any and np.mean.
+--------------------------------------------------------------------------------------
+
+Fix temporal scalar handling in ``np.min``, ``np.max``, ``np.all``, ``np.any`` and
+``np.mean`` functions. Previously, these functions would fail when called with temporal
+scalar inputs. They now properly handle both temporal scalar, scalar and array inputs,
+returning the original value when a temporal scalar is provided.

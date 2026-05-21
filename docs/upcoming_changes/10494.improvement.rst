@@ -1,0 +1,9 @@
+Accelerate Processing for Large Control Flow Graphs
+---------------------------------------------------
+
+The asymptotic runtime of the algorithm to compute dominators in the control
+flow graph (CFG) is significantly improved. It now uses a memoization technique
+to avoid re-computing results by deriving the dominators from the immediate
+dominators as determined by the CHK (Cooper, Harvey & Kennedy) algorithm. This
+has a profound effect on the runtime of the CFG analysis for programs with
+large CFGs.

@@ -1,0 +1,6 @@
+Fix ZeroDivisionError for empty arrays in ``np.mean``
+-----------------------------------------------------
+
+Fixed a ``ZeroDivisionError`` that occurred when passing an empty array to
+the ``np.mean`` function. Empty arrays are now handled correctly and return
+``nan`` as expected.

@@ -4410,7 +4410,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         N = 100
         a = np.random.ranf(N) * 100
         w = np.random.ranf(N) * 100
-        w0 = np.zeros(N)
 
         #boolean array and weights
         a_bool = np.random.ranf(N) > 0.5
@@ -4453,6 +4452,19 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         #test case for average without weights
         self.assertAlmostEqual(pyfunc(a), cfunc(a), places=10)
         self.assertAlmostEqual(pyfunc(a_3d), cfunc(a_3d), places=10)
+
+    def test_average_exceptions(self):
+        # Disable leak check since we expect an error to be raised
+        self.disable_leak_check()
+
+        #array of random numbers
+        N = 100
+        a = np.random.ranf(N) * 100
+        w = np.random.ranf(N) * 100
+        w0 = np.zeros(N)
+
+        pyfunc = np_average
+        cfunc = jit(nopython=True)(pyfunc)
 
         def test_weights_zero_sum(data, weights):
             with self.assertRaises(ZeroDivisionError) as e:

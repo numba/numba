@@ -6,8 +6,6 @@ from .abstract import Dummy, Hashable, Literal, Number, Type
 from functools import total_ordering, cached_property
 from numba.core import utils
 from numba.core.typeconv import Conversion
-from numba.np import npdatetime_helpers
-
 
 class Boolean(Hashable):
 
@@ -149,42 +147,6 @@ class Complex(Number):
         if self.__class__ is not other.__class__:
             return NotImplemented
         return self.bitwidth < other.bitwidth
-
-
-class _NPDatetimeBase(Type):
-    """
-    Common base class for np.datetime64 and np.timedelta64.
-    """
-
-    def __init__(self, unit, *args, **kws):
-        name = '%s[%s]' % (self.type_name, unit)
-        self.unit = unit
-        self.unit_code = npdatetime_helpers.DATETIME_UNITS[self.unit]
-        super(_NPDatetimeBase, self).__init__(name, *args, **kws)
-
-    def __lt__(self, other):
-        if self.__class__ is not other.__class__:
-            return NotImplemented
-        # A coarser-grained unit is "smaller", i.e. less precise values
-        # can be represented (but the magnitude of representable values is
-        # also greater...).
-        return self.unit_code < other.unit_code
-
-    def cast_python_value(self, value):
-        cls = getattr(np, self.type_name)
-        if self.unit:
-            return cls(value, self.unit)
-        else:
-            return cls(value)
-
-
-@total_ordering
-class NPTimedelta(_NPDatetimeBase):
-    type_name = 'timedelta64'
-
-@total_ordering
-class NPDatetime(_NPDatetimeBase):
-    type_name = 'datetime64'
 
 
 class EnumClass(Dummy):

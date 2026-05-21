@@ -1,0 +1,4 @@
+Fix 1D pndindex error
+---------------------
+
+Made pndindex not force the use of a tuple for 1D.

@@ -1,0 +1,6 @@
+Precompute variable assignments
+-------------------------------
+
+Significantly improved compilation time for functions with many singly-assigned
+variables.
+

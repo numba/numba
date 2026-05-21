@@ -1,0 +1,7 @@
+Fix crash when running coverage with the ``sysmon`` core
+--------------------------------------------------------
+
+Fixed a ``TypeError`` that occurred when using ``NUMBA_JIT_COVERAGE=1``
+with ``coverage >= 7.13.1``, where the ``sysmon`` core (default on Python
+3.14) injects a ``tool_id`` keyword argument that ``NumbaTracer`` did not
+previously accept.

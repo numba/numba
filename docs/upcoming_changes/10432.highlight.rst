@@ -1,0 +1,11 @@
+Add support for Fancy Indexing with Multiple Multi-Dimensional Array Indices in Numba
+-------------------------------------------------------------------------------------
+
+This PR adds complete support for fancy indexing with multiple array indices and/or multidimensional
+array indices, in accordance with NumPy semantics. Cases that were previously unsupported,
+such as using multiple fancy indices simultaneously or using multidimensional fancy index
+arrays, are now fully supported along with inclusion of ``None`` / ``np.newaxis`` for
+additional resulting dimensions.
+
+For more details, and example usage see the ::ref::`Numba documentation <https://numba.readthedocs.io/en/stable/reference/numpysupported.html#array-access>`.
+

@@ -7,6 +7,8 @@ on:
     paths:
       - .github/workflows/numba_osx-arm64_wheel_builder.yml
       - .github/workflows/wheel_workflow_matrix.json
+      - buildscripts/github/patch_wheel_dylib.py
+      - buildscripts/github/test_wheel_osx_arm64.py
       - setup.py
   workflow_dispatch:
     inputs:
@@ -38,13 +40,13 @@ jobs:
           BUILD_MATRIX_JSON=$(jq -c .wheel_build_matrix .github/workflows/wheel_workflow_matrix.json)
           TEST_MATRIX_JSON=$(jq -c .wheel_test_matrix .github/workflows/wheel_workflow_matrix.json)
 
-          # Add canonical python versions to both matrices
+          # Add canonical python versions to both matrices (3.14.3t -> 3.14t, 3.14.3 -> 3.14)
           BUILD_MATRIX_EXTENDED=$(echo "$BUILD_MATRIX_JSON" | jq -c '
-            map(. + {"python_canonical": (.["python-version"] | split(".") | .[:2] | join("."))})
+            map(. + {"python_canonical": (.["python-version"] | capture("^(?<v>[0-9]+\\.[0-9]+).*?(?<t>t?)$") | .v + .t)})
           ')
 
           TEST_MATRIX_EXTENDED=$(echo "$TEST_MATRIX_JSON" | jq -c '
-            map(. + {"python_canonical": (.["python-version"] | split(".") | .[:2] | join("."))})
+            map(. + {"python_canonical": (.["python-version"] | capture("^(?<v>[0-9]+\\.[0-9]+).*?(?<t>t?)$") | .v + .t)})
           ')
 
           echo "Build Matrix JSON: $BUILD_MATRIX_EXTENDED"
@@ -72,7 +74,7 @@ jobs:
 
       - name: Setup Miniconda
         if: ${{ !endsWith(matrix.python-version, 't') }}
-        uses: conda-incubator/setup-miniconda@fc2d68f6413eb2d87b895e92f8584b5b94a10167 # v3.3.0
+        uses: conda-incubator/setup-miniconda@8ee1f361103df19b6f8c8655fd3967a8ecb162d5 # v4.0.1
         with:
           python-version: ${{ matrix.python-version }}
           auto-update-conda: true
@@ -80,7 +82,7 @@ jobs:
 
       - name: Setup Miniconda [free-threaded]
         if: ${{ endsWith(matrix.python-version, 't') }}
-        uses: conda-incubator/setup-miniconda@fc2d68f6413eb2d87b895e92f8584b5b94a10167 # v3.3.0
+        uses: conda-incubator/setup-miniconda@8ee1f361103df19b6f8c8655fd3967a8ecb162d5 # v4.0.1
         with:
           auto-update-conda: true
           auto-activate-base: true
@@ -142,8 +144,11 @@ jobs:
           # inspect the wheel
           find . -name "*.so" -o -name "*.dylib" | xargs -I {} otool -L {}
 
+      - name: Test patched wheel
+        run: arch -arm64 python buildscripts/github/test_wheel_osx_arm64.py dist/*.whl
+
       - name: Upload numba wheel
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: numba_osx-arm64_wheel_py${{ matrix.python_canonical }}
           path: dist/*.whl
@@ -153,7 +158,7 @@ jobs:
 
       - name: Upload numba sdist
         if: matrix.python-version == '3.10'
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
             name: numba-sdist
             path: dist/*.tar.gz

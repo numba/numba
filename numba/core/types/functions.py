@@ -568,7 +568,7 @@ class Dispatcher(WeakType, Callable, Dummy):
         """
         return self.get_overload(sig)
 
-    def unify(self, context, other):
+    def unify(self, typingctx, other):
         return utils.unified_function_type((self, other), require_precise=False)
 
     def can_convert_to(self, typingctx, other):

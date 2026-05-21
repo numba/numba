@@ -186,8 +186,6 @@ class CompilingCounter(object):
     def __bool__(self):
         return self.counter > 0
 
-    __nonzero__ = __bool__
-
 
 class _DispatcherBase(_dispatcher.Dispatcher):
     """

@@ -9,6 +9,7 @@ import operator
 import warnings
 
 import llvmlite.ir
+from numba.np.types.datetime import NPDatetime, NPTimedelta
 import numpy as np
 
 from numba.core import types, cgutils
@@ -27,6 +28,7 @@ from numba.core.errors import (RequireLiteralValue, TypingError,
                                NumbaValueError, NumbaNotImplementedError,
                                NumbaTypeError, NumbaDeprecationWarning)
 from numba.cpython.unsafe.tuple import tuple_setitem
+from numba.np import types as npy_types
 
 
 def _check_blas():
@@ -437,6 +439,10 @@ def array_mean(a):
         def _scalar_mean(a):
             return np.float64(a) + 0.0
         return _scalar_mean
+    elif isinstance(a, NPTimedelta):
+        def _temporal_scalar_mean(a):
+            return a
+        return _temporal_scalar_mean
     elif isinstance(a, (types.Float, types.Complex)):
         typed_zero = as_dtype(a).type(0)
 
@@ -452,13 +458,40 @@ def array_mean(a):
 
         acc_init = get_accumulator(dtype, 0)
 
-        def array_mean_impl(a):
-            # Can't use the naive `arr.sum() / arr.size`, as it would return
-            # a wrong result on integer sum overflow.
-            c = acc_init
-            for v in np.nditer(a):
-                c += v.item()
-            return c / a.size
+        # Check if this is a datetime/timedelta type
+        is_datetime_like = isinstance(a.dtype, (types.NPDatetime,
+                                                types.NPTimedelta))
+        # Is complex array
+        is_complex = isinstance(a.dtype, types.Complex)
+
+        if not is_datetime_like:
+            if is_complex:
+                # For complex, both real and imag should be nan
+                nan_value = dtype.type(complex("nan+nanj"))
+            else:
+                nan_value = dtype.type(np.nan)
+
+            # For numeric types, handle empty arrays by returning nan
+            def array_mean_impl(a):
+                # Handle empty arrays as a special case to match NumPy
+                # behavior
+                if a.size == 0:
+                    return nan_value
+                # Can't use the naive `arr.sum() / arr.size`, as it would return
+                # a wrong result on integer sum overflow.
+                c = acc_init
+                for v in np.nditer(a):
+                    c += v.item()
+                return c / dtype.type(a.size)
+        else:
+            # For datetime/timedelta, don't add special empty array handling
+            # Let it behave as before (NumPy itself raises error for empty
+            # datetime arrays)
+            def array_mean_impl(a):
+                c = acc_init
+                for v in np.nditer(a):
+                    c += v.item()
+                return c / a.size
 
         return array_mean_impl
     return None
@@ -491,6 +524,25 @@ def array_std(a):
 
         return array_std_impl
 
+    # Integers and booleans default to float64(0.0) in numpy.std
+    elif isinstance(a, (types.Integer, types.Boolean)):
+
+        def std_scalar_integer_impl(a):
+            return np.float64(0.0)
+        return std_scalar_integer_impl
+
+    # Floats and numbers preserve types in numpy.std
+    elif isinstance(a, (types.Float, types.Complex)):
+        out_dtype = as_dtype(getattr(a,'underlying_float',a))
+        zero = out_dtype.type(0)
+        nan_val = out_dtype.type(np.nan)
+
+        def std_scalar_float_impl(a):
+            if not np.isfinite(a):
+                return nan_val
+            return zero
+        return std_scalar_float_impl
+
 
 @register_jitable
 def min_comparator(a, min_val):
@@ -512,7 +564,8 @@ def return_false(a):
 @overload_method(types.Array, "min")
 def npy_min(a):
     #scalar case
-    if isinstance(a, (types.Number,types.Boolean)):
+    if isinstance(a, (types.Number, types.Boolean,
+                      NPDatetime, NPTimedelta)):
         def scalar_min(a):
             return a
         return scalar_min
@@ -520,7 +573,7 @@ def npy_min(a):
     if not isinstance(a, types.Array):
         return
 
-    if isinstance(a.dtype, (types.NPDatetime, types.NPTimedelta)):
+    if isinstance(a.dtype, (npy_types.NPDatetime, npy_types.NPTimedelta)):
         pre_return_func = np.isnat
         comparator = min_comparator
     elif isinstance(a.dtype, types.Complex):
@@ -568,7 +621,8 @@ def npy_min(a):
 @overload_method(types.Array, "max")
 def npy_max(a):
     #scalar case
-    if isinstance(a, (types.Number,types.Boolean)):
+    if isinstance(a, (types.Number, types.Boolean,
+                      NPDatetime, NPTimedelta)):
         def scalar_max(a):
             return a
         return scalar_max
@@ -576,7 +630,7 @@ def npy_max(a):
     if not isinstance(a, types.Array):
         return
 
-    if isinstance(a.dtype, (types.NPDatetime, types.NPTimedelta)):
+    if isinstance(a.dtype, (npy_types.NPDatetime, npy_types.NPTimedelta)):
         pre_return_func = np.isnat
         comparator = max_comparator
     elif isinstance(a.dtype, types.Complex):
@@ -686,7 +740,7 @@ def array_argmin_impl_generic(arry):
 @overload(np.argmin)
 @overload_method(types.Array, "argmin")
 def array_argmin(a, axis=None):
-    if isinstance(a.dtype, (types.NPDatetime, types.NPTimedelta)):
+    if isinstance(a.dtype, (npy_types.NPDatetime, npy_types.NPTimedelta)):
         flatten_impl = array_argmin_impl_datetime
     elif isinstance(a.dtype, types.Float):
         flatten_impl = array_argmin_impl_float
@@ -812,7 +866,7 @@ def build_argmax_or_argmin_with_axis_impl(a, axis, flatten_impl):
 @overload(np.argmax)
 @overload_method(types.Array, "argmax")
 def array_argmax(a, axis=None):
-    if isinstance(a.dtype, (types.NPDatetime, types.NPTimedelta)):
+    if isinstance(a.dtype, (npy_types.NPDatetime, npy_types.NPTimedelta)):
         flatten_impl = array_argmax_impl_datetime
     elif isinstance(a.dtype, types.Float):
         flatten_impl = array_argmax_impl_float
@@ -839,8 +893,14 @@ def np_all(a):
             return bool(a)
         return scalar_all
 
+    if isinstance(a, (NPDatetime, NPTimedelta)):
+        def temporal_scalar_all(a):
+            return np.int64(a) != 0
+        return temporal_scalar_all
+
     # for array
     if isinstance(a, types.Array):
+
         def flat_all(a):
             for v in np.nditer(a):
                 if not v.item():
@@ -953,6 +1013,12 @@ def np_any(a):
         def scalar_any(a):
             return bool(a)
         return scalar_any
+
+    # for temporal
+    if isinstance(a, (NPDatetime, NPTimedelta)):
+        def temporal_any(a):
+            return np.int64(a) != 0
+        return temporal_any
 
     # for array
     if isinstance(a, types.Array):

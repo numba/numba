@@ -205,7 +205,7 @@ def seed_impl(a):
 
 
 @overload(np.random.seed)
-def seed_impl(seed):
+def seed_impl_np(seed):
     if isinstance(seed, types.Integer):
         return _seed_impl('np')
 
@@ -734,7 +734,7 @@ def triangular_impl_3(low, high, mode):
 
 
 @overload(np.random.triangular)
-def triangular_impl_3(left, mode, right):
+def triangular_impl_np_3(left, mode, right):
     if (isinstance(left, (types.Float, types.Integer)) and isinstance(
             mode, (types.Float, types.Integer)) and
             isinstance(right, (types.Float, types.Integer))):
@@ -753,7 +753,7 @@ def triangular_impl_3(left, mode, right):
 
 
 @overload(np.random.triangular)
-def triangular_impl(left, mode, right, size=None):
+def triangular_impl_np_4(left, mode, right, size=None):
     if is_nonelike(size):
         return lambda left, mode, right, size=None: np.random.triangular(left,
                                                                          mode,
@@ -964,7 +964,7 @@ def expovariate_impl(lambd):
 
 
 @overload(np.random.exponential)
-def exponential_impl(scale):
+def exponential_impl_1(scale):
     if isinstance(scale, (types.Float, types.Integer)):
         def _impl(scale):
             return -math.log(1.0 - np.random.random()) * scale
@@ -972,7 +972,7 @@ def exponential_impl(scale):
 
 
 @overload(np.random.exponential)
-def exponential_impl(scale, size):
+def exponential_impl_2(scale, size):
     if is_nonelike(size):
         return lambda scale, size: np.random.exponential(scale)
     if is_empty_tuple(size):
@@ -992,7 +992,7 @@ def exponential_impl(scale, size):
 
 @overload(np.random.standard_exponential)
 @overload(np.random.exponential)
-def exponential_impl():
+def exponential_impl_0():
     def _impl():
         return -math.log(1.0 - np.random.random())
     return _impl
@@ -1091,7 +1091,7 @@ def pareto_impl(a):
 
 
 @overload(np.random.pareto)
-def pareto_impl(a, size):
+def pareto_impl_2(a, size):
     if is_nonelike(size):
         return lambda a, size: np.random.pareto(a)
     if is_empty_tuple(size):
@@ -1159,7 +1159,7 @@ def vonmisesvariate_impl(mu, kappa):
 
 
 @overload(np.random.vonmises)
-def vonmisesvariate_impl(mu, kappa):
+def vonmisesvariate_impl_np(mu, kappa):
     if isinstance(mu, types.Float) and isinstance(kappa, types.Float):
         return _vonmisesvariate_impl(np.random.random)
 
@@ -1284,7 +1284,7 @@ def binomial_impl(n, p):
 
 
 @overload(np.random.binomial)
-def binomial_impl(n, p, size):
+def binomial_impl_3(n, p, size):
     if is_nonelike(size):
         return lambda n, p, size: np.random.binomial(n, p)
     if is_empty_tuple(size):
@@ -1342,7 +1342,7 @@ def f_impl(dfnum, dfden):
 
 
 @overload(np.random.f)
-def f_impl(dfnum, dfden, size):
+def f_impl_3(dfnum, dfden, size):
     if (isinstance(dfnum, (types.Float, types.Integer)) and isinstance(
             dfden, (types.Float, types.Integer)) and
        is_nonelike(size)):
@@ -1389,7 +1389,7 @@ def geometric_impl(p):
 
 
 @overload(np.random.geometric)
-def geometric_impl(p, size):
+def geometric_impl_2(p, size):
     if is_nonelike(size):
         return lambda p, size: np.random.geometric(p)
     if is_empty_tuple(size):
@@ -1462,7 +1462,7 @@ def hypergeometric_impl(ngood, nbad, nsample):
 
 
 @overload(np.random.hypergeometric)
-def hypergeometric_impl(ngood, nbad, nsample, size):
+def hypergeometric_impl_4(ngood, nbad, nsample, size):
     if is_nonelike(size):
         return lambda ngood, nbad, nsample, size:\
             np.random.hypergeometric(ngood, nbad, nsample)
@@ -1597,7 +1597,7 @@ def logseries_impl(p):
 
 
 @overload(np.random.logseries)
-def logseries_impl(p, size):
+def logseries_impl_2(p, size):
     if is_nonelike(size):
         return lambda p, size: np.random.logseries(p)
     if is_empty_tuple(size):
@@ -1734,7 +1734,7 @@ def power_impl(a):
 
 
 @overload(np.random.power)
-def power_impl(a, size):
+def power_impl_2(a, size):
     if is_nonelike(size):
         return lambda a, size: np.random.power(a)
     if is_empty_tuple(size):
@@ -1897,7 +1897,7 @@ def zipf_impl(a):
                 U = 1.0 - np.random.random()
                 V = np.random.random()
                 X = int(math.floor(U ** (-1.0 / am1)))
-                
+
                 if (X > LONG_MAX or X < 1.0):
                     continue
 
@@ -1909,7 +1909,7 @@ def zipf_impl(a):
 
 
 @overload(np.random.zipf)
-def zipf_impl(a, size):
+def zipf_impl_2(a, size):
     if is_nonelike(size):
         return lambda a, size: np.random.zipf(a)
     if is_empty_tuple(size):
@@ -1961,7 +1961,7 @@ def shuffle_impl(x):
 
 
 @overload(np.random.shuffle)
-def shuffle_impl(x):
+def shuffle_impl_np(x):
     return do_shuffle_impl(x, "np")
 
 
@@ -2197,7 +2197,7 @@ def dirichlet(alpha):
 
 
 @overload(np.random.dirichlet)
-def dirichlet(alpha, size=None):
+def dirichlet_2(alpha, size=None):
     if not isinstance(alpha, (types.Sequence, types.Array)):
         raise NumbaTypeError(
             "np.random.dirichlet(): alpha should be an "
@@ -2278,7 +2278,7 @@ def noncentral_chisquare(df, nonc):
 
 
 @overload(np.random.noncentral_chisquare)
-def noncentral_chisquare(df, nonc, size=None):
+def noncentral_chisquare_3(df, nonc, size=None):
      if size in (None, types.none):
          def noncentral_chisquare_impl(df, nonc, size=None):
              validate_noncentral_chisquare_input(df, nonc)

@@ -1,0 +1,6 @@
+Remove Gitter
+-------------
+
+References to the Numba Gitter channels have been removed from the
+documentation and source code. Users seeking help should use the
+`Numba Discourse forum <https://numba.discourse.group/>`_ instead.

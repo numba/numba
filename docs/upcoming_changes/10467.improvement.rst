@@ -1,0 +1,4 @@
+Use ``ctypes`` instead of NumPy for checking the size of C types
+----------------------------------------------------------------
+
+This change replaces the use of NumPy's ``dtype`` to check the size of C types with the use of Python's built-in ``ctypes`` library.

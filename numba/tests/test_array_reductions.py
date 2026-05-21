@@ -2,7 +2,7 @@ from itertools import product, combinations_with_replacement
 
 import numpy as np
 
-from numba import jit, njit, typeof
+from numba import jit, njit, typeof, types
 from numba.np.numpy_support import numpy_version
 from numba.tests.support import TestCase, MemoryLeakMixin, tag, skip_if_numpy_2
 import unittest
@@ -259,6 +259,35 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         with self.assertTypingError() as e:
             cfunc('string')
 
+    def check_scalar_temporal(self, pyfunc, **kwargs):
+        cfunc = jit(nopython=True)(pyfunc)
+        def check(arr):
+            self.assertPreciseEqual(pyfunc(arr), cfunc(arr), **kwargs)
+
+        #check datetime
+        arr = np.datetime64('2020-01-01')
+        check(arr)
+        arr = np.datetime64('2020-01-01T12:00')
+        check(arr)
+        arr = np.datetime64('2020-01-01T12:00:00.000000')
+        check(arr)
+        arr = np.datetime64('2020-01-01T12:00:00.000000000')
+        check(arr)
+        arr = np.datetime64('NaT')
+        check(arr)
+
+        #check timedelta
+        arr = np.timedelta64(5, 'D')
+        check(arr)
+        arr = np.timedelta64(5, 'm')
+        check(arr)
+        arr = np.timedelta64(5, 's')
+        check(arr)
+        arr = np.timedelta64(5, 'us')
+        check(arr)
+        arr = np.timedelta64(0, 'ns')
+        check(arr)
+
     def test_all_basic(self, pyfunc=array_all):
         cfunc = jit(nopython=True)(pyfunc)
         def check(arr):
@@ -304,6 +333,18 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(np.float64(0.2))
         check(np.bool_(True))
         check(np.bool_(False))
+
+        # Test temporal values
+        check(np.datetime64('2020-01-01'))
+        check(np.datetime64('2020-01-01T12:00'))
+        check(np.datetime64('2020-01-01T12:00:00.000000'))
+        check(np.datetime64('1970-01-01'))
+        check(np.datetime64('NaT'))
+        check(np.timedelta64(5, 'D'))
+        check(np.timedelta64(5, 'm'))
+        check(np.timedelta64(5, 's'))
+        check(np.timedelta64(5, 'us'))
+        check(np.timedelta64(0, 'ns'))
 
         # Test special values
         check(np.nan)
@@ -367,6 +408,18 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(np.bool_(True))
         check(np.bool_(False))
 
+        # Test temporal values
+        check(np.datetime64('2020-01-01'))
+        check(np.datetime64('2020-01-01T12:00'))
+        check(np.datetime64('2020-01-01T12:00:00.000000'))
+        check(np.datetime64('1970-01-01'))
+        check(np.datetime64('NaT'))
+        check(np.timedelta64(5, 'D'))
+        check(np.timedelta64(5, 'm'))
+        check(np.timedelta64(5, 's'))
+        check(np.timedelta64(5, 'us'))
+        check(np.timedelta64(0, 'ns'))
+
         # Test special values
         check(np.nan)
         check(np.inf)
@@ -420,15 +473,71 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(0)
         check(0.0000042)
         check(-0.25863)
-        
+
+        # Temporal Scalar
+        check(np.timedelta64(5, 'D'))
+        check(np.timedelta64(5, 'm'))
+        check(np.timedelta64(5, 's'))
+        check(np.timedelta64(5, 'us'))
+        check(np.timedelta64(0, 'ns'))
+
         # Error cases
         with self.assertTypingError():
             cfunc('test String')
+
+    def test_mean_empty_array(self):
+        """Test that mean of empty array returns nan (issue #5502)"""
+        cfunc = jit(nopython=True)(array_mean)
+
+        # Empty float / complex array
+        for np_type, nb_type in [(np.float32, types.float32),
+                                 (np.float64, types.float64),
+                                 (np.complex64, types.complex64),
+                                 (np.complex128, types.complex128)]:
+            with self.subTest(np_type=np_type, nb_type=nb_type):
+                arr = np_type([])
+                expected = np.mean(arr)
+                self.assertPreciseEqual(cfunc(arr), expected)
+                self.assertEqual(cfunc.nopython_signatures[-1].return_type, nb_type)
+
+        # Empty int array
+        arr = np.int64([])
+        expected = np.mean(arr)
+        self.assertPreciseEqual(cfunc(arr), expected)
+
+    def test_mean_empty_timedelta(self):
+        """Test that mean of empty timedelta array returns NaT"""
+        cfunc = jit(nopython=True)(array_mean)
+
+        # Empty timedelta64 array
+        arr = np.array([], dtype='timedelta64[D]')
+        expected = np.mean(arr)
+        # Both should be NaT
+        self.assertPreciseEqual(cfunc(arr), expected)
+
+    def test_mean_empty_datetime(self):
+        """Test that mean of empty datetime array raises error (matches NumPy behavior)"""
+        cfunc = jit(nopython=True)(array_mean)
+
+        # Empty datetime64 array - both NumPy and Numba should error
+        arr = np.array([], dtype='datetime64[D]')
+        # Exceptions leak references
+        self.disable_leak_check()
+        # NumPy raises _UFuncBinaryResolutionError
+        # ufunc 'add' cannot use operands with types dtype('<M8[D]') and dtype('<M8[D]')
+        with self.assertRaises(Exception):
+            np.mean(arr)
+        # ValueError: Converting an integer to a NumPy datetime requires a specified unit
+        with self.assertRaises(Exception):
+            cfunc(arr)
 
     def test_var_basic(self):
         self.check_reduction_basic(array_var, prec='double')
 
     def test_std_basic(self):
+        #scalar testing
+        self.check_scalar_basic(array_std_global)
+        #array testing
         self.check_reduction_basic(array_std)
 
     def test_min_basic(self):
@@ -436,25 +545,32 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_scalar_basic(array_min_global)
         #array testing
         self.check_reduction_basic(array_min)
+        #temporal testing
+        self.check_scalar_temporal(array_min_global)
 
     def test_amin_basic(self):
         #scalar testing
         self.check_scalar_basic(array_amin)
         #array testing
         self.check_reduction_basic(array_amin)
-    
+        #temporal testing
+        self.check_scalar_temporal(array_amin)
 
     def test_max_basic(self):
         #array testing
         self.check_reduction_basic(array_max)
         #scalar testing
         self.check_scalar_basic(array_max_global)
+        #temporal testing
+        self.check_scalar_temporal(array_max_global)
 
     def test_amax_basic(self):
         #array testing
         self.check_reduction_basic(array_amax)
         #scalar testing
         self.check_scalar_basic(array_amax)
+        #temporal testing
+        self.check_scalar_temporal(array_amax)
 
     def test_argmin_basic(self):
         self.check_reduction_basic(array_argmin)
@@ -1369,6 +1485,9 @@ class TestArrayReductionsExceptions(MemoryLeakMixin, TestCase):
     zero_size = np.arange(0)
 
     def check_exception(self, pyfunc, msg):
+        # Disable leak check since we expect an error to be raised
+        self.disable_leak_check()
+
         cfunc = jit(nopython=True)(pyfunc)
         # make sure NumPy raises consistently/no behaviour change
         with self.assertRaises(BaseException):

@@ -38,13 +38,13 @@ jobs:
           BUILD_MATRIX_JSON=$(jq -c .wheel_build_matrix .github/workflows/wheel_workflow_matrix.json)
           TEST_MATRIX_JSON=$(jq -c .wheel_test_matrix .github/workflows/wheel_workflow_matrix.json)
 
-          # Add canonical python versions to both matrices
+          # Add canonical python versions to both matrices (3.14.3t -> 3.14t, 3.14.3 -> 3.14)
           BUILD_MATRIX_EXTENDED=$(echo "$BUILD_MATRIX_JSON" | jq -c '
-            map(. + {"python_canonical": (.["python-version"] | split(".") | .[:2] | join("."))})
+            map(. + {"python_canonical": (.["python-version"] | capture("^(?<v>[0-9]+\\.[0-9]+).*?(?<t>t?)$") | .v + .t)})
           ')
 
           TEST_MATRIX_EXTENDED=$(echo "$TEST_MATRIX_JSON" | jq -c '
-            map(. + {"python_canonical": (.["python-version"] | split(".") | .[:2] | join("."))})
+            map(. + {"python_canonical": (.["python-version"] | capture("^(?<v>[0-9]+\\.[0-9]+).*?(?<t>t?)$") | .v + .t)})
           ')
 
           echo "Build Matrix JSON: $BUILD_MATRIX_EXTENDED"
@@ -99,7 +99,7 @@ jobs:
         run: python -m build --wheel --no-isolation
 
       - name: Upload numba wheel
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: numba_win-64_wheel_py${{ matrix.python_canonical }}
           path: dist/*.whl
@@ -156,18 +156,6 @@ jobs:
           fi
           python -m twine check dist/*.whl
           python -m pip install dist/*.whl
-
-          # Disable NumPy dispatching to AVX512_SKX if the CPU supports it AND it's
-          # in NumPy's dispatch list. This avoids low accuracy SVML libm replacements.
-          # This is needed because only dispatched features can be disabled via NPY_DISABLE_CPU_FEATURES.
-          _NPY_CMD='from numba.misc import numba_sysinfo; si=numba_sysinfo.get_sysinfo();\
-                    print(si["NumPy AVX512_SKX detected"] and "AVX512_SKX" in si.get("NumPy Supported SIMD dispatch", ()))'
-          DISABLE_AVX512_SKX=$(python -c "$_NPY_CMD")
-          echo "Disable AVX512_SKX: $DISABLE_AVX512_SKX"
-
-          if [[ "$DISABLE_AVX512_SKX" == "True" ]]; then
-              export NPY_DISABLE_CPU_FEATURES="AVX512_SKX"
-          fi
 
           # print Numba system information
           python -m numba -s
