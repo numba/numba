@@ -15,7 +15,7 @@ concurrency:
 env:
   ARTIFACT_RETENTION_DAYS: 7
   WHEELS_INDEX_URL: https://pypi.anaconda.org/numba/label/dev/simple
-  LLVMLITE_RELEASE_TAG: llvmlite-0.47.0-win_arm64
+  LLVMLITE_RELEASE_TAG: llvmlite-0.48.0-win_arm64
   LLVMLITE_REPO: khmyznikov/PyEnv-WoA-State
 
 jobs:
@@ -75,7 +75,7 @@ jobs:
           # Determine the wheel filename based on Python version
           PYTHON_VERSION="${{ matrix.python_canonical }}"
           PYTHON_TAG="cp${PYTHON_VERSION//.}"
-          WHEEL_NAME="llvmlite-0.47.0.dev0+39.gbf28f754.dirty-${PYTHON_TAG}-${PYTHON_TAG}-win_arm64.whl"
+          WHEEL_NAME="llvmlite-0.48.0.dev0+20.gae1fa36b.dirty-${PYTHON_TAG}-${PYTHON_TAG}-win_arm64.whl"
           
           # Download the wheel from GitHub release
           mkdir -p llvmlite_wheels
@@ -131,7 +131,7 @@ jobs:
           # Determine the wheel filename based on Python version
           PYTHON_VERSION="${{ matrix.python_canonical }}"
           PYTHON_TAG="cp${PYTHON_VERSION//.}"
-          WHEEL_NAME="llvmlite-0.47.0.dev0+39.gbf28f754.dirty-${PYTHON_TAG}-${PYTHON_TAG}-win_arm64.whl"
+          WHEEL_NAME="llvmlite-0.48.0.dev0+20.gae1fa36b.dirty-${PYTHON_TAG}-${PYTHON_TAG}-win_arm64.whl"
           
           # Download the wheel from GitHub release
           mkdir -p llvmlite_wheels
