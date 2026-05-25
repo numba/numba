@@ -1381,15 +1381,29 @@ class PythonAPI(object):
         simply return a literal for structure:
         {i8* data, i32 length, i8* hashbuf, i8* func_ptr, i32 alloc_flag}
         """
-        # First make the array constant
         data = serialize.dumps(obj)
+        struct, _digest = self._serialize_data(data)
+        return struct
+
+    def _serialize_data(self, data):
+        """
+        Build a pickled-data struct literal from already-pickled ``data``
+        bytes. Returns ``(struct, digest)`` so that callers needing the
+        SHA1 digest (for example, to derive a deterministic name for the
+        enclosing global) can reuse it without re-hashing.
+        """
         assert len(data) < 2**31
-        name = ".const.pickledata.%s" % (id(obj) if config.DIFF_IR == 0 else "DIFF_IR")
-        bdata = cgutils.make_bytearray(data)
         # Make SHA1 hash on the pickled content
         # NOTE: update buffer size in numba_unpickle() when changing the
         #       hash algorithm.
-        hashed = cgutils.make_bytearray(hashlib.sha1(data).digest())
+        digest = hashlib.sha1(data).digest()
+        # Derive the global's name from the pickle content (instead of
+        # id(obj)) so that emitted binaries are reproducible across builds
+        # (see issue #10610).
+        suffix = digest.hex() if config.DIFF_IR == 0 else "DIFF_IR"
+        name = ".const.pickledata.%s" % suffix
+        bdata = cgutils.make_bytearray(data)
+        hashed = cgutils.make_bytearray(digest)
         arr = self.context.insert_unique_const(self.module, name, bdata)
         hasharr = self.context.insert_unique_const(
             self.module, f"{name}.sha1", hashed,
@@ -1402,7 +1416,7 @@ class PythonAPI(object):
             cgutils.get_null_value(self.voidptr),
             Constant(ir.IntType(32), 0),
             ])
-        return struct
+        return struct, digest
 
     def serialize_object(self, obj):
         """
@@ -1414,10 +1428,15 @@ class PythonAPI(object):
         try:
             gv = self.module.__serialized[obj]
         except KeyError:
-            struct = self.serialize_uncached(obj)
-            name = ".const.picklebuf.%s" % (id(obj) if config.DIFF_IR == 0 else "DIFF_IR")
+            data = serialize.dumps(obj)
+            struct, digest = self._serialize_data(data)
+            # Derive the global's name from the pickle content (instead of
+            # id(obj)) so that emitted binaries are reproducible across
+            # builds (see issue #10610).
+            suffix = digest.hex() if config.DIFF_IR == 0 else "DIFF_IR"
+            name = ".const.picklebuf.%s" % suffix
             gv = self.context.insert_unique_const(self.module, name, struct)
-            # Make the id() (and hence the name) unique while populating the module.
+            # Make the name unique while populating the module.
             self.module.__serialized[obj] = gv
         return gv
 

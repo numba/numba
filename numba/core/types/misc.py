@@ -1,3 +1,6 @@
+import collections
+import itertools
+
 from numba.core.types.abstract import Callable, Literal, Type, Hashable
 from numba.core.types.common import (Dummy, IterableType, Opaque,
                                      SimpleIteratorType)
@@ -423,6 +426,18 @@ class ClassType(Callable, Opaque):
     name_prefix = "jitclass"
     instance_type_class = ClassInstanceType
 
+    # Per-class-name monotonic counters used to disambiguate
+    # ``ClassType`` instances that share a class name (but legitimately
+    # represent different types -- e.g. two ``@jitclass`` definitions
+    # with the same ``__name__`` but different fields or methods).
+    # Replaces ``id(self)``-based naming so the type name is stable
+    # across processes and AOT-compiled binaries are reproducible (see
+    # issue #10610). Scoping the counter by class name (rather than
+    # using a single global counter) keeps unrelated classes from
+    # affecting one another's tags if user code happens to construct
+    # them in a non-deterministic order (e.g. iterating over a set).
+    _name_counters = collections.defaultdict(itertools.count)
+
     def __init__(self, class_def, ctor_template_cls, struct, jit_methods,
                  jit_props, jit_static_methods):
         self.class_name = class_def.__name__
@@ -433,8 +448,9 @@ class ClassType(Callable, Opaque):
         self.jit_static_methods = jit_static_methods
         self.struct = struct
         fielddesc = ','.join("{0}:{1}".format(k, v) for k, v in struct.items())
-        name = "{0}.{1}#{2:x}<{3}>".format(self.name_prefix, self.class_name,
-                                           id(self), fielddesc)
+        tag = next(self._name_counters[self.class_name])
+        name = "{0}.{1}#{2}<{3}>".format(self.name_prefix, self.class_name,
+                                         tag, fielddesc)
         super(ClassType, self).__init__(name)
 
     def get_call_type(self, context, args, kws):
@@ -473,9 +489,18 @@ class DeferredType(Type):
     behaves exactly as the type it is defining.
     """
 
+    # Per-class monotonic counter used to disambiguate ``DeferredType``
+    # instances within a process. Replaces ``id(self)``-based naming so
+    # the type name is stable across processes and AOT-compiled binaries
+    # are reproducible (see issue #10610). Two processes running the
+    # same user code build the same number of ``DeferredType`` instances
+    # in the same order and therefore assign the same counter values.
+    _name_counter = itertools.count()
+
     def __init__(self):
         self._define = None
-        name = "{0}#{1}".format(type(self).__name__, id(self))
+        name = "{0}#{1}".format(type(self).__name__,
+                                next(self._name_counter))
         super(DeferredType, self).__init__(name)
 
     def get(self):

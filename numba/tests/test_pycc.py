@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import textwrap
 from unittest import skip
 from ctypes import *
 
@@ -265,6 +266,171 @@ class TestCC(BasePYCCTest):
             got = lib.dict_usecase(arr)
             expect = arr * arr
             self.assertPreciseEqual(got, expect)
+
+    def _check_reproducible_build(self, build_script, out_name):
+        """Compile the CC defined by ``build_script`` in two fresh
+        subprocesses and return the MD5 of each produced shared object.
+
+        Re-running compilation in the same process re-uses the same
+        Python objects, so any ``id(obj)``-based names happen to match
+        by accident. To exercise the non-determinism path we must build
+        in two fresh subprocesses.
+        """
+        import hashlib
+
+        def build():
+            outdir = tempfile.mkdtemp(dir=self.tmpdir)
+            subprocess.check_call(
+                [sys.executable, "-c", build_script, outdir]
+            )
+            with open(os.path.join(outdir, out_name), "rb") as fh:
+                return hashlib.md5(fh.read()).hexdigest()
+
+        return build(), build()
+
+    def test_reproducible_build(self):
+        """See https://github.com/numba/numba/issues/10610
+
+        AOT-compiled extensions should be byte-for-byte reproducible
+        across independent processes that compile the same source.
+        """
+        script = (
+            "import sys\n"
+            "sys.path.insert(0, %r)\n"
+            "import importlib\n"
+            "from numba.tests import compile_with_pycc\n"
+            "importlib.reload(compile_with_pycc)\n"
+            "cc = compile_with_pycc.cc\n"
+            "cc.output_dir = sys.argv[1]\n"
+            "cc.compile()\n"
+        ) % (base_path,)
+        h1, h2 = self._check_reproducible_build(
+            script, self._test_module.cc.output_file,
+        )
+        self.assertEqual(h1, h2,
+                         "AOT binary is not reproducible across builds")
+
+    def test_reproducible_build_jitclass(self):
+        """See https://github.com/numba/numba/issues/10610
+
+        AOT modules that use ``@jitclass`` previously embedded
+        ``id(ClassType)`` into the mangled LLVM symbol names (via
+        ``numba.core.types.misc.ClassType.__init__``), making the
+        emitted binary non-reproducible.
+        """
+        script = textwrap.dedent("""
+            import sys
+            from numba.pycc import CC
+            from numba.experimental import jitclass
+            from numba import types
+
+            @jitclass([('x', types.int64)])
+            class Foo:
+                def __init__(self, v):
+                    self.x = v
+                def get(self):
+                    return self.x
+
+            cc = CC('aot_repro_jitclass')
+            cc.use_nrt = True
+
+            @cc.export('use_foo', 'i8(i8)')
+            def use_foo(v):
+                return Foo(v).get()
+
+            cc.output_dir = sys.argv[1]
+            cc.compile()
+        """)
+        from numba.pycc import CC
+        out_name = CC('aot_repro_jitclass').output_file
+        h1, h2 = self._check_reproducible_build(script, out_name)
+        self.assertEqual(h1, h2,
+                         "AOT jitclass binary is not reproducible")
+
+    def test_reproducible_build_recursive_type(self):
+        """See https://github.com/numba/numba/issues/10610
+
+        AOT modules that use a recursive (deferred) jitclass previously
+        embedded both ``id(ClassType)`` and ``id(DeferredType)`` into
+        the mangled LLVM symbol names (see ``numba.core.types.misc``),
+        making the emitted binary non-reproducible.
+        """
+        script = textwrap.dedent("""
+            import sys
+            from numba.pycc import CC
+            from numba.experimental import jitclass
+            from numba import types, deferred_type, optional
+
+            node_type = deferred_type()
+
+            @jitclass([('value', types.int64),
+                       ('next', optional(node_type))])
+            class Node:
+                def __init__(self, v):
+                    self.value = v
+                    self.next = None
+
+            node_type.define(Node.class_type.instance_type)
+
+            cc = CC('aot_repro_recursive')
+            cc.use_nrt = True
+
+            @cc.export('mklen', 'i8(i8)')
+            def mklen(n):
+                head = Node(0)
+                cur = head
+                for i in range(1, n):
+                    nxt = Node(i)
+                    cur.next = nxt
+                    cur = nxt
+                count = 0
+                p = head
+                while p is not None:
+                    count += 1
+                    p = p.next
+                return count
+
+            cc.output_dir = sys.argv[1]
+            cc.compile()
+        """)
+        from numba.pycc import CC
+        out_name = CC('aot_repro_recursive').output_file
+        h1, h2 = self._check_reproducible_build(script, out_name)
+        self.assertEqual(h1, h2,
+                         "AOT recursive-type binary is not reproducible")
+
+    def test_reproducible_build_stencil(self):
+        """See https://github.com/numba/numba/issues/10610
+
+        AOT modules that use ``@stencil`` previously embedded
+        ``hex(id(the_array))`` into the generated stencil function
+        name (see ``numba.stencils.stencil``), making the emitted
+        binary non-reproducible.
+        """
+        script = textwrap.dedent("""
+            import sys
+            from numba import stencil
+            from numba.pycc import CC
+
+            @stencil
+            def kernel(a):
+                return 0.25 * (a[-1] + a[1] + a[0] + a[0])
+
+            cc = CC('aot_repro_stencil')
+            cc.use_nrt = True
+
+            @cc.export('blur', 'f8[:](f8[:])')
+            def blur(a):
+                return kernel(a)
+
+            cc.output_dir = sys.argv[1]
+            cc.compile()
+        """)
+        from numba.pycc import CC
+        out_name = CC('aot_repro_stencil').output_file
+        h1, h2 = self._check_reproducible_build(script, out_name)
+        self.assertEqual(h1, h2,
+                         "AOT stencil binary is not reproducible")
 
     def test_dynamic_exc(self):
         """See https://github.com/numba/numba/issues/9948
