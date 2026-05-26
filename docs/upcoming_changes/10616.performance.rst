@@ -1,0 +1,8 @@
+Use topological iteration order in liveness fix-point analysis
+---------------------------------------------------------------
+
+Previously, ``compute_live_variables`` iterated over basic blocks in arbitrary
+order during the fix-point loop, which could require many iterations to converge.
+The analysis now iterates in topological order, reducing the number of fix-point
+iterations needed and improving compilation time.
+
