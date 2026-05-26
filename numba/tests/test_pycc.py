@@ -16,7 +16,8 @@ import llvmlite.binding as ll
 from numba.core import utils
 from numba.tests.support import (TestCase, tag, import_dynamic, temp_directory,
                                  has_blas, needs_setuptools, skip_if_py313plus_on_windows,
-                                 skip_if_linux_aarch64, skip_if_freethreading)
+                                 skip_if_linux_aarch64, skip_if_freethreading,
+                                 linux_only)
 
 import unittest
 
@@ -288,6 +289,9 @@ class TestCC(BasePYCCTest):
 
         return build(), build()
 
+    # Windows needs /Brepro to get deterministic TimeDateStamp, which is not
+    # related to the non-determinism issue reported in #10610
+    @linux_only
     def test_reproducible_build(self):
         """See https://github.com/numba/numba/issues/10610
 
@@ -310,6 +314,7 @@ class TestCC(BasePYCCTest):
         self.assertEqual(h1, h2,
                          "AOT binary is not reproducible across builds")
 
+    @linux_only
     def test_reproducible_build_jitclass(self):
         """See https://github.com/numba/numba/issues/10610
 
@@ -347,6 +352,7 @@ class TestCC(BasePYCCTest):
         self.assertEqual(h1, h2,
                          "AOT jitclass binary is not reproducible")
 
+    @linux_only
     def test_reproducible_build_recursive_type(self):
         """See https://github.com/numba/numba/issues/10610
 
@@ -399,6 +405,7 @@ class TestCC(BasePYCCTest):
         self.assertEqual(h1, h2,
                          "AOT recursive-type binary is not reproducible")
 
+    @linux_only
     def test_reproducible_build_stencil(self):
         """See https://github.com/numba/numba/issues/10610
 

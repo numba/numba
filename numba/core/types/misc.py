@@ -436,7 +436,7 @@ class ClassType(Callable, Opaque):
     # using a single global counter) keeps unrelated classes from
     # affecting one another's tags if user code happens to construct
     # them in a non-deterministic order (e.g. iterating over a set).
-    _name_counters = collections.defaultdict(itertools.count)
+    _name_counters: collections.defaultdict[str, itertools.count] = collections.defaultdict(itertools.count)
 
     def __init__(self, class_def, ctor_template_cls, struct, jit_methods,
                  jit_props, jit_static_methods):
