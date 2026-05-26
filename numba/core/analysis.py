@@ -220,10 +220,12 @@ def compute_live_variables(cfg, blocks, var_def_map, var_dead_map):
     #       of each block. The algorithm in compute_live_map() is finding
     #       the variable that must be available at the entry of each block.
     #       This is top-down in the dataflow.  The other one is bottom-up.
+    # Topological order lets this forward analysis converge in fewer passes.
+    topo_order = cfg.topo_order()
     while old_point != new_point:
         # We iterate until the result stabilizes.  This is necessary
         # because of loops in the graphself.
-        for offset in blocks:
+        for offset in topo_order:
             # vars available + variable defined
             avail = block_entry_vars[offset] | var_def_map[offset]
             # subtract variables deleted
