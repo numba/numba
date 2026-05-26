@@ -63,6 +63,12 @@ def compute_live_map(cfg, blocks, var_use_map, var_def_map):
     We use a simple fix-point algorithm that iterates until the set of
     live variables is unchanged for each block.
     """
+    # Topological order for forward analysis, reversed for backward.
+    # Proper ordering reduces fix-point iterations from O(loop_depth)
+    # to typically 2-3 passes on reducible CFGs.
+    topo_order = cfg.topo_order()
+    reverse_topo_order = list(reversed(topo_order))
+
     def fix_point_progress(dct):
         """Helper function to determine if a fix-point has been reached.
         """
@@ -81,7 +87,9 @@ def compute_live_map(cfg, blocks, var_use_map, var_def_map):
     def def_reach(dct):
         """Find all variable definition reachable at the entry of a block
         """
-        for offset in var_def_map:
+        for offset in topo_order:
+            if offset not in var_def_map:
+                continue
             used_or_defined = var_def_map[offset] | var_use_map[offset]
             dct[offset] |= used_or_defined
             # Propagate to outgoing nodes
@@ -93,7 +101,9 @@ def compute_live_map(cfg, blocks, var_use_map, var_def_map):
 
         Push var usage backward.
         """
-        for offset in dct:
+        for offset in reverse_topo_order:
+            if offset not in dct:
+                continue
             # Live vars here
             live_vars = dct[offset]
             for inc_blk, _data in cfg.predecessors(offset):
