@@ -109,13 +109,13 @@ def _unary_int_input_wrapper_impl(wrapped_impl):
     Return an implementation factory to convert the single integral input
     argument to a float64, then defer to the *wrapped_impl*.
     """
-    def implementer(context, builder, sig, args):
+    def implementer(context, builder, sig, args, loc=None):
         val, = args
         input_type = sig.args[0]
-        fpval = context.cast(builder, val, input_type, types.float64)
+        fpval = context.cast(builder, val, input_type, types.float64, loc)
         inner_sig = signature(types.float64, types.float64)
         res = wrapped_impl(context, builder, inner_sig, (fpval,))
-        return context.cast(builder, res, types.float64, sig.return_type)
+        return context.cast(builder, res, types.float64, sig.return_type, loc)
 
     return implementer
 
@@ -145,7 +145,7 @@ def unary_math_extern(fn, f32extern, f64extern, int_restype=False):
     """
     f_restype = types.int64 if int_restype else None
 
-    def float_impl(context, builder, sig, args):
+    def float_impl(context, builder, sig, args, loc=None):
         """
         Implement *fn* for a types.Float input.
         """
@@ -160,7 +160,7 @@ def unary_math_extern(fn, f32extern, f64extern, int_restype=False):
         fnty = llvmlite.ir.FunctionType(lty, [lty])
         fn = cgutils.insert_pure_function(builder.module, fnty, name=func_name)
         res = builder.call(fn, (val,))
-        res = context.cast(builder, res, input_type, sig.return_type)
+        res = context.cast(builder, res, input_type, sig.return_type, loc)
         return impl_ret_untracked(context, builder, sig.return_type, res)
 
     # lower(fn, types.Float)(float_impl)

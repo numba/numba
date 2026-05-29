@@ -51,7 +51,7 @@ def optional_getattr(context, builder, typ, value, attr, loc=None):
     inner_type = typ.type
     val = context.cast(builder, value, typ, inner_type, loc)
     imp = context.get_getattr(inner_type, attr)
-    return imp(context, builder, inner_type, val, attr)
+    return imp(context, builder, inner_type, val, attr, loc=loc)
 
 
 @lower_setattr_generic(types.Optional)

@@ -56,7 +56,7 @@ LINEAR_PROBES = 3
 DEBUG_ALLOCS = False
 
 
-def get_hash_value(context, builder, typ, value):
+def get_hash_value(context, builder, typ, value, loc=None):
     """
     Compute the hash of the given value.
     """
@@ -64,7 +64,7 @@ def get_hash_value(context, builder, typ, value):
     fnty = typingctx.resolve_value_type(hash)
     sig = fnty.get_call_type(typingctx, (typ,), {})
     fn = context.get_function(fnty, sig)
-    h = fn(builder, (value,))
+    h = fn(builder, (value,), loc=loc)
     # Fixup reserved values
     is_ok = is_hash_used(context, builder, h)
     fallback = ir.Constant(h.type, FALLBACK)
@@ -73,8 +73,8 @@ def get_hash_value(context, builder, typ, value):
 
 @intrinsic
 def _get_hash_value_intrinsic(typingctx, value):
-    def impl(context, builder, typ, args):
-        return get_hash_value(context, builder, value, args[0])
+    def impl(context, builder, typ, args, loc=None):
+        return get_hash_value(context, builder, value, args[0], loc=loc)
     fnty = typingctx.resolve_value_type(hash)
     sig = fnty.get_call_type(typingctx, (value,), {})
     return sig, impl
@@ -371,12 +371,13 @@ class _SetPayload(object):
 
 class SetInstance(object):
 
-    def __init__(self, context, builder, set_type, set_val):
+    def __init__(self, context, builder, set_type, set_val, loc=None):
         self._context = context
         self._builder = builder
         self._ty = set_type
         self._entrysize = get_entry_size(context, set_type)
         self._set = context.make_helper(builder, set_type, set_val)
+        self._loc = loc
 
     @property
     def dtype(self):
@@ -500,7 +501,7 @@ class SetInstance(object):
         builder = self._builder
 
         payload = self.payload
-        h = get_hash_value(context, builder, self._ty.dtype, item)
+        h = get_hash_value(context, builder, self._ty.dtype, item, self._loc)
         self._add_key(payload, item, h, do_resize)
 
     def add_pyapi(self, pyapi, item, do_resize=True):
@@ -537,7 +538,7 @@ class SetInstance(object):
         builder = self._builder
 
         payload = self.payload
-        h = get_hash_value(context, builder, self._ty.dtype, item)
+        h = get_hash_value(context, builder, self._ty.dtype, item, self._loc)
         found, i = payload._lookup(item, h)
         return found
 
@@ -546,7 +547,7 @@ class SetInstance(object):
         builder = self._builder
 
         payload = self.payload
-        h = get_hash_value(context, builder, self._ty.dtype, item)
+        h = get_hash_value(context, builder, self._ty.dtype, item, self._loc)
         found = self._remove_key(payload, item, h)
         return found
 
@@ -1176,8 +1177,8 @@ class SetIterInstance(object):
         self._payload = _SetPayload(context, builder, self._ty.container, ptr)
 
     @classmethod
-    def from_set(cls, context, builder, iter_type, set_val):
-        set_inst = SetInstance(context, builder, iter_type.container, set_val)
+    def from_set(cls, context, builder, iter_type, set_val, loc=None):
+        set_inst = SetInstance(context, builder, iter_type.container, set_val, loc)
         self = cls(context, builder, iter_type, None)
         index = context.get_constant(types.intp, 0)
         self._iter.index = cgutils.alloca_once_value(builder, index)
@@ -1248,7 +1249,7 @@ def set_empty_constructor(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, set_type, inst.value)
 
 @lower_builtin(set, types.IterableType)
-def set_constructor(context, builder, sig, args):
+def set_constructor(context, builder, sig, args, loc=None):
     set_type = sig.return_type
     items_type, = sig.args
     items, = args
@@ -1259,7 +1260,7 @@ def set_constructor(context, builder, sig, args):
     # iteration to balance. Because the `incref` from `.add` is dependent on
     # the item not already existing in the set, just removing its incref is not
     # enough to guarantee all memory is freed
-    n = call_len(context, builder, items_type, items)
+    n = call_len(context, builder, items_type, items, loc)
     inst = SetInstance.allocate(context, builder, set_type, n)
     with for_iter(context, builder, items_type, items) as loop:
         inst.add(loop.value)
@@ -1272,18 +1273,18 @@ def set_constructor(context, builder, sig, args):
 # Various operations
 
 @lower_builtin(len, types.Set)
-def set_len(context, builder, sig, args):
-    inst = SetInstance(context, builder, sig.args[0], args[0])
+def set_len(context, builder, sig, args, loc=None):
+    inst = SetInstance(context, builder, sig.args[0], args[0], loc)
     return inst.get_size()
 
 @lower_builtin(operator.contains, types.Set, types.Any)
-def in_set(context, builder, sig, args):
-    inst = SetInstance(context, builder, sig.args[0], args[0])
+def in_set(context, builder, sig, args, loc=None):
+    inst = SetInstance(context, builder, sig.args[0], args[0], loc)
     return inst.contains(args[1])
 
 @lower_builtin('getiter', types.Set)
-def getiter_set(context, builder, sig, args):
-    inst = SetIterInstance.from_set(context, builder, sig.return_type, args[0])
+def getiter_set(context, builder, sig, args, loc=None):
+    inst = SetIterInstance.from_set(context, builder, sig.return_type, args[0], loc)
     return impl_ret_borrowed(context, builder, sig.return_type, inst.value)
 
 @lower_builtin('iternext', types.SetIter)
@@ -1299,8 +1300,8 @@ def iternext_listiter(context, builder, sig, args, result):
 # One-item-at-a-time operations
 
 @lower_builtin("set.add", types.Set, types.Any)
-def set_add(context, builder, sig, args):
-    inst = SetInstance(context, builder, sig.args[0], args[0])
+def set_add(context, builder, sig, args, loc=None):
+    inst = SetInstance(context, builder, sig.args[0], args[0], loc)
     item = args[1]
     inst.add(item)
 
@@ -1311,8 +1312,8 @@ def set_add(context, builder, sig, args):
 def _set_discard(typingctx, s, item):
     sig = types.none(s, item)
 
-    def set_discard(context, builder, sig, args):
-        inst = SetInstance(context, builder, sig.args[0], args[0])
+    def set_discard(context, builder, sig, args, loc=None):
+        inst = SetInstance(context, builder, sig.args[0], args[0], loc)
         item = args[1]
         inst.discard(item)
 
@@ -1330,12 +1331,13 @@ def ol_set_discard(s, item):
 def _set_pop(typingctx, s):
     sig = s.dtype(s)
 
-    def set_pop(context, builder, sig, args):
-        inst = SetInstance(context, builder, sig.args[0], args[0])
+    def set_pop(context, builder, sig, args, loc=None):
+        inst = SetInstance(context, builder, sig.args[0], args[0], loc)
         used = inst.payload.used
         with builder.if_then(cgutils.is_null(builder, used), likely=False):
             context.call_conv.return_user_exc(builder, KeyError,
-                                            ("set.pop(): empty set",))
+                                            ("set.pop(): empty set",),
+                                            loc)
 
         return inst.pop()
 
@@ -1351,13 +1353,14 @@ def ol_set_pop(s):
 def _set_remove(typingctx, s, item):
     sig = types.none(s, item)
 
-    def set_remove(context, builder, sig, args):
-        inst = SetInstance(context, builder, sig.args[0], args[0])
+    def set_remove(context, builder, sig, args, loc=None):
+        inst = SetInstance(context, builder, sig.args[0], args[0], loc)
         item = args[1]
         found = inst.discard(item)
         with builder.if_then(builder.not_(found), likely=False):
             context.call_conv.return_user_exc(builder, KeyError,
-                                            ("set.remove(): key not in set",))
+                                            ("set.remove(): key not in set",),
+                                            loc)
 
         return context.get_dummy_value()
 
@@ -1376,8 +1379,8 @@ def ol_set_remove(s, item):
 def _set_clear(typingctx, s):
     sig = types.none(s)
 
-    def set_clear(context, builder, sig, args):
-        inst = SetInstance(context, builder, sig.args[0], args[0])
+    def set_clear(context, builder, sig, args, loc=None):
+        inst = SetInstance(context, builder, sig.args[0], args[0], loc)
         inst.clear()
         return context.get_dummy_value()
 
@@ -1393,8 +1396,8 @@ def ol_set_clear(s):
 def _set_copy(typingctx, s):
     sig = s(s)
 
-    def set_copy(context, builder, sig, args):
-        inst = SetInstance(context, builder, sig.args[0], args[0])
+    def set_copy(context, builder, sig, args, loc=None):
+        inst = SetInstance(context, builder, sig.args[0], args[0], loc)
         other = inst.copy()
         return impl_ret_new_ref(context, builder, sig.return_type, other.value)
 
@@ -1406,9 +1409,9 @@ def ol_set_copy(s):
     return lambda s: _set_copy(s)
 
 
-def set_difference_update(context, builder, sig, args):
-    inst = SetInstance(context, builder, sig.args[0], args[0])
-    other = SetInstance(context, builder, sig.args[1], args[1])
+def set_difference_update(context, builder, sig, args, loc=None):
+    inst = SetInstance(context, builder, sig.args[0], args[0], loc)
+    other = SetInstance(context, builder, sig.args[1], args[1], loc)
 
     inst.difference(other)
 
@@ -1427,9 +1430,9 @@ def set_difference_update_impl(a, b):
     return lambda a, b: _set_difference_update(a, b)
 
 
-def set_intersection_update(context, builder, sig, args):
-    inst = SetInstance(context, builder, sig.args[0], args[0])
-    other = SetInstance(context, builder, sig.args[1], args[1])
+def set_intersection_update(context, builder, sig, args, loc=None):
+    inst = SetInstance(context, builder, sig.args[0], args[0], loc)
+    other = SetInstance(context, builder, sig.args[1], args[1], loc)
     inst.intersect(other)
     return context.get_dummy_value()
 
@@ -1446,9 +1449,9 @@ def set_intersection_update_impl(a, b):
     return lambda a, b: _set_intersection_update(a, b)
 
 
-def set_symmetric_difference_update(context, builder, sig, args):
-    inst = SetInstance(context, builder, sig.args[0], args[0])
-    other = SetInstance(context, builder, sig.args[1], args[1])
+def set_symmetric_difference_update(context, builder, sig, args, loc=None):
+    inst = SetInstance(context, builder, sig.args[0], args[0], loc)
+    other = SetInstance(context, builder, sig.args[1], args[1], loc)
     inst.symmetric_difference(other)
     return context.get_dummy_value()
 
@@ -1466,14 +1469,14 @@ def set_symmetric_difference_update_impl(a, b):
 
 
 @lower_builtin("set.update", types.Set, types.IterableType)
-def set_update(context, builder, sig, args):
-    inst = SetInstance(context, builder, sig.args[0], args[0])
+def set_update(context, builder, sig, args, loc=None):
+    inst = SetInstance(context, builder, sig.args[0], args[0], loc)
     items_type = sig.args[1]
     items = args[1]
 
     # If the argument has a len(), assume there are few collisions and
     # presize to len(set) + len(items)
-    n = call_len(context, builder, items_type, items)
+    n = call_len(context, builder, items_type, items, loc)
     if n is not None:
         new_size = builder.add(inst.payload.used, n)
         inst.upsize(new_size)
@@ -1481,7 +1484,7 @@ def set_update(context, builder, sig, args):
     with for_iter(context, builder, items_type, items) as loop:
         # make sure that the items being added are of the same dtype as the
         # set instance
-        casted = context.cast(builder, loop.value, items_type.dtype, inst.dtype)
+        casted = context.cast(builder, loop.value, items_type.dtype, inst.dtype, loc)
         inst.add(casted)
         # decref each item to counter balance the incref from `for_iter`
         # `.add` will conditionally incref when the item does not already exist
@@ -1592,9 +1595,9 @@ def set_union(a, b):
 def _set_isdisjoint(typingctx, a, b):
     sig = types.boolean(a, b)
 
-    def codegen(context, builder, sig, args):
-        inst = SetInstance(context, builder, sig.args[0], args[0])
-        other = SetInstance(context, builder, sig.args[1], args[1])
+    def codegen(context, builder, sig, args, loc=None):
+        inst = SetInstance(context, builder, sig.args[0], args[0], loc)
+        other = SetInstance(context, builder, sig.args[1], args[1], loc)
 
         return inst.isdisjoint(other)
 
@@ -1612,9 +1615,9 @@ def set_isdisjoint(a, b):
 def _set_issubset(typingctx, a, b):
     sig = types.boolean(a, b)
 
-    def codegen(context, builder, sig, args):
-        inst = SetInstance(context, builder, sig.args[0], args[0])
-        other = SetInstance(context, builder, sig.args[1], args[1])
+    def codegen(context, builder, sig, args, loc=None):
+        inst = SetInstance(context, builder, sig.args[0], args[0], loc)
+        other = SetInstance(context, builder, sig.args[1], args[1], loc)
 
         return inst.issubset(other)
 
@@ -1642,9 +1645,9 @@ def set_issuperset(a, b):
 def _set_eq(typingctx, a, b):
     sig = types.boolean(a, b)
 
-    def codegen(context, builder, sig, args):
-        inst = SetInstance(context, builder, sig.args[0], args[0])
-        other = SetInstance(context, builder, sig.args[1], args[1])
+    def codegen(context, builder, sig, args, loc=None):
+        inst = SetInstance(context, builder, sig.args[0], args[0], loc)
+        other = SetInstance(context, builder, sig.args[1], args[1], loc)
 
         return inst.equals(other)
 
@@ -1669,9 +1672,9 @@ def set_ne(a, b):
 def _set_lt(typingctx, a, b):
     sig = types.boolean(a, b)
 
-    def codegen(context, builder, sig, args):
-        inst = SetInstance(context, builder, sig.args[0], args[0])
-        other = SetInstance(context, builder, sig.args[1], args[1])
+    def codegen(context, builder, sig, args, loc=None):
+        inst = SetInstance(context, builder, sig.args[0], args[0], loc)
+        other = SetInstance(context, builder, sig.args[1], args[1], loc)
 
         return inst.issubset(other, strict=True)
 
@@ -1693,9 +1696,9 @@ def set_gt(a, b):
     return gt_impl
 
 @lower_builtin(operator.is_, types.Set, types.Set)
-def set_is(context, builder, sig, args):
-    a = SetInstance(context, builder, sig.args[0], args[0])
-    b = SetInstance(context, builder, sig.args[1], args[1])
+def set_is(context, builder, sig, args, loc=None):
+    a = SetInstance(context, builder, sig.args[0], args[0], loc)
+    b = SetInstance(context, builder, sig.args[1], args[1], loc)
     ma = builder.ptrtoint(a.meminfo, cgutils.intp_t)
     mb = builder.ptrtoint(b.meminfo, cgutils.intp_t)
     return builder.icmp_signed('==', ma, mb)

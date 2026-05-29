@@ -66,8 +66,8 @@ def ensure_lapack():
         raise ImportError("scipy 0.16+ is required for linear algebra")
 
 
-def make_constant_slot(context, builder, ty, val):
-    const = context.get_constant_generic(builder, ty, val)
+def make_constant_slot(context, builder, ty, val, loc=None):
+    const = context.get_constant_generic(builder, ty, val, loc)
     return cgutils.alloca_once_value(builder, const)
 
 
@@ -361,7 +361,7 @@ def call_xxdot(context, builder, conjugate, dtype,
 
 
 def call_xxgemv(context, builder, do_trans,
-                m_type, m_shapes, m_data, v_data, out_data):
+                m_type, m_shapes, m_data, v_data, out_data, loc=None):
     """
     Call the BLAS matrix * vector product function for the given arguments.
     """
@@ -374,8 +374,8 @@ def call_xxgemv(context, builder, do_trans,
     fn = cgutils.get_or_insert_function(builder.module, fnty, "numba_xxgemv")
 
     dtype = m_type.dtype
-    alpha = make_constant_slot(context, builder, dtype, 1.0)
-    beta = make_constant_slot(context, builder, dtype, 0.0)
+    alpha = make_constant_slot(context, builder, dtype, 1.0, loc)
+    beta = make_constant_slot(context, builder, dtype, 0.0, loc)
 
     if m_type.layout == 'F':
         m, n = m_shapes
@@ -400,7 +400,7 @@ def call_xxgemv(context, builder, do_trans,
 def call_xxgemm(context, builder,
                 x_type, x_shapes, x_data,
                 y_type, y_shapes, y_data,
-                out_type, out_shapes, out_data):
+                out_type, out_shapes, out_data, loc=None):
     """
     Call the BLAS matrix * matrix product function for the given arguments.
     """
@@ -417,8 +417,8 @@ def call_xxgemm(context, builder,
     m, k = x_shapes
     _k, n = y_shapes
     dtype = x_type.dtype
-    alpha = make_constant_slot(context, builder, dtype, 1.0)
-    beta = make_constant_slot(context, builder, dtype, 0.0)
+    alpha = make_constant_slot(context, builder, dtype, 1.0, loc)
+    beta = make_constant_slot(context, builder, dtype, 0.0, loc)
 
     trans = ir.Constant(ll_char, ord('t'))
     notrans = ir.Constant(ll_char, ord('n'))
@@ -635,7 +635,7 @@ def dot_3_mv_check_args(a, b, out):
                          "np.dot(a, b, out) (matrix * vector)")
 
 
-def dot_3_vm(context, builder, sig, args):
+def dot_3_vm(context, builder, sig, args, loc=None):
     """
     np.dot(vector, matrix, out)
     np.dot(matrix, vector, out)
@@ -686,13 +686,13 @@ def dot_3_vm(context, builder, sig, args):
                            builder.mul(out.itemsize, out.nitems), 0)
         with nonempty:
             call_xxgemv(context, builder, do_trans, mty, m_shapes, m_data,
-                        v_data, out.data)
+                        v_data, out.data, loc)
 
     return impl_ret_borrowed(context, builder, sig.return_type,
                              out._getvalue())
 
 
-def dot_3_mm(context, builder, sig, args):
+def dot_3_mm(context, builder, sig, args, loc=None):
     """
     np.dot(matrix, matrix, out)
     """
@@ -762,20 +762,22 @@ def dot_3_mm(context, builder, sig, args):
                             # M * V
                             do_trans = xty.layout == outty.layout
                             call_xxgemv(context, builder, do_trans,
-                                        xty, x_shapes, x_data, y_data, out_data)
+                                        xty, x_shapes, x_data, y_data, 
+                                        out_data, loc)
                 with r_mat:
                     with builder.if_else(is_left_vec) as (v_m, m_m):
                         with v_m:
                             # V * M
                             do_trans = yty.layout != outty.layout
                             call_xxgemv(context, builder, do_trans,
-                                        yty, y_shapes, y_data, x_data, out_data)
+                                        yty, y_shapes, y_data, x_data,
+                                        out_data, loc)
                         with m_m:
                             # M * M
                             call_xxgemm(context, builder,
                                         xty, x_shapes, x_data,
                                         yty, y_shapes, y_data,
-                                        outty, out_shapes, out_data)
+                                        outty, out_shapes, out_data, loc)
 
     return impl_ret_borrowed(context, builder, sig.return_type,
                              out._getvalue())
@@ -790,16 +792,16 @@ def dot_3(a, b, out):
             isinstance(out, types.Array)):
         @intrinsic
         def _impl(typingcontext, a, b, out):
-            def codegen(context, builder, sig, args):
+            def codegen(context, builder, sig, args, loc=None):
                 ensure_blas()
 
                 with make_contiguous(context, builder, sig, args) as (sig,
                                                                       args):
                     ndims = set(x.ndim for x in sig.args[:2])
                     if ndims == {2}:
-                        return dot_3_mm(context, builder, sig, args)
+                        return dot_3_mm(context, builder, sig, args, loc)
                     elif ndims == {1, 2}:
-                        return dot_3_vm(context, builder, sig, args)
+                        return dot_3_vm(context, builder, sig, args, loc)
                     else:
                         raise AssertionError('unreachable')
             if a.dtype != b.dtype or a.dtype != out.dtype:

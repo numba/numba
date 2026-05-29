@@ -90,15 +90,17 @@ class ErrorHandler(object):
     Stores the state needed to raise an exception from nopython mode.
     """
 
-    def __init__(self, context):
+    def __init__(self, context, loc=None):
         self.context = context
+        self.loc = loc
 
     def __call__(self, builder, status, msg):
         ok_status = status.type(int(ListStatus.LIST_OK))
         with builder.if_then(builder.icmp_signed('!=', status, ok_status),
                              likely=True):
             self.context.call_conv.return_user_exc(
-                builder, RuntimeError, (msg,))
+                builder, RuntimeError, (msg,),
+                self.loc)
 
 
 def _check_for_none_typed(lst, method):
@@ -359,8 +361,8 @@ def _list_new(typingctx, itemty, allocated):
     resty = types.voidptr
     sig = resty(itemty, allocated)
 
-    def codegen(context, builder, sig, args):
-        error_handler = ErrorHandler(context)
+    def codegen(context, builder, sig, args, loc=None):
+        error_handler = ErrorHandler(context, loc)
         return _list_new_codegen(context,
                                  builder,
                                  itemty.instance_type,
@@ -1445,16 +1447,17 @@ def impl_greater_than_or_equal(this, other):
 
 class ListIterInstance(object):
 
-    def __init__(self, context, builder, iter_type, iter_val):
+    def __init__(self, context, builder, iter_type, iter_val, loc=None):
         self._context = context
         self._builder = builder
         self._iter_ty = iter_type
         self._list_ty = self._iter_ty.parent
         self._iter = context.make_helper(builder, iter_type, iter_val)
+        self._loc = loc
 
     @classmethod
-    def from_list(cls, context, builder, iter_type, list_val):
-        self = cls(context, builder, iter_type, None)
+    def from_list(cls, context, builder, iter_type, list_val, loc=None):
+        self = cls(context, builder, iter_type, None, loc)
         index = context.get_constant(types.intp, 0)
         self._iter.index = cgutils.alloca_once_value(builder, index)
         self._iter.parent = list_val
@@ -1496,7 +1499,8 @@ class ListIterInstance(object):
             raw_ty = self._list_ty.dtype
         else:
             raw_ty = retty.type
-        raw_item = self._context.cast(self._builder, item, retty, raw_ty)
+        raw_item = self._context.cast(self._builder, item, retty, raw_ty,
+                                      self._loc)
         return raw_item
 
     @property
@@ -1509,16 +1513,16 @@ class ListIterInstance(object):
 
 
 @lower_builtin('getiter', types.ListType)
-def getiter_list(context, builder, sig, args):
+def getiter_list(context, builder, sig, args, loc=None):
     inst = ListIterInstance.from_list(context, builder, sig.return_type,
-                                      args[0])
+                                      args[0], loc)
     return impl_ret_borrowed(context, builder, sig.return_type, inst.value)
 
 
 @lower_builtin('iternext', types.ListTypeIteratorType)
 @iternext_impl(RefType.BORROWED)
-def iternext_listiter(context, builder, sig, args, result):
-    inst = ListIterInstance(context, builder, sig.args[0], args[0])
+def iternext_listiter(context, builder, sig, args, result, loc=None):
+    inst = ListIterInstance(context, builder, sig.args[0], args[0], loc)
     index = inst.index
 
     nitems = inst.size # this is current size
@@ -1529,7 +1533,8 @@ def iternext_listiter(context, builder, sig, args, result):
     is_mutated = builder.icmp_signed('!=', init_size, nitems)
     with builder.if_then(is_mutated, likely=False):
         context.call_conv.return_user_exc(
-            builder, RuntimeError, ("list was mutated during iteration",))
+            builder, RuntimeError, ("list was mutated during iteration",),
+            loc)
 
     is_valid = builder.icmp_signed('<', index, nitems)
     result.set_valid(is_valid)

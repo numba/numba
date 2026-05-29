@@ -214,7 +214,7 @@ def charseq_to_bytes(context, builder, fromty, toty, val):
 
 
 @lower_cast(types.UnicodeType, types.Bytes)
-def unicode_to_bytes_cast(context, builder, fromty, toty, val):
+def unicode_to_bytes_cast(context, builder, fromty, toty, val, loc=None):
     uni_str = cgutils.create_struct_proxy(fromty)(context, builder, value=val)
     src1 = builder.bitcast(uni_str.data, ir.IntType(8).as_pointer())
     notkind1 = builder.icmp_unsigned('!=', uni_str.kind,
@@ -224,7 +224,8 @@ def unicode_to_bytes_cast(context, builder, fromty, toty, val):
     with builder.if_then(notkind1):
         context.call_conv.return_user_exc(
             builder, ValueError,
-            ("cannot cast higher than 8-bit unicode_type to bytes",))
+            ("cannot cast higher than 8-bit unicode_type to bytes",),
+            loc)
 
     bstr = _make_constant_bytes(context, builder, src_length)
     cgutils.memcpy(builder, bstr.data, src1, bstr.nitems)
@@ -244,7 +245,7 @@ def _unicode_to_bytes(typingctx, s):
 
 
 @lower_cast(types.UnicodeType, types.UnicodeCharSeq)
-def unicode_to_unicode_charseq(context, builder, fromty, toty, val):
+def unicode_to_unicode_charseq(context, builder, fromty, toty, val, loc=None):
     uni_str = cgutils.create_struct_proxy(fromty)(context, builder, value=val)
     src1 = builder.bitcast(uni_str.data, ir.IntType(8).as_pointer())
     src2 = builder.bitcast(uni_str.data, ir.IntType(16).as_pointer())
@@ -287,7 +288,7 @@ def unicode_to_unicode_charseq(context, builder, fromty, toty, val):
             context.call_conv.return_user_exc(
                 builder, ValueError,
                 ("cannot cast 16-bit unicode_type to %s-bit %s"
-                 % (unicode_byte_width * 8, toty)))
+                 % (unicode_byte_width * 8, toty)), loc)
 
     with builder.if_then(kind4):
         if unicode_byte_width >= 4:
@@ -299,7 +300,7 @@ def unicode_to_unicode_charseq(context, builder, fromty, toty, val):
             context.call_conv.return_user_exc(
                 builder, ValueError,
                 ("cannot cast 32-bit unicode_type to %s-bit %s"
-                 % (unicode_byte_width * 8, toty)))
+                 % (unicode_byte_width * 8, toty)), loc)
 
     return builder.load(dst_ptr)
 

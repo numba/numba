@@ -505,13 +505,13 @@ class BaseContext(object):
         dm = self.data_model_manager[ty]
         return dm.load_from_data_pointer(builder, ptr, align)
 
-    def get_constant_generic(self, builder, ty, val):
+    def get_constant_generic(self, builder, ty, val, loc=None):
         """
         Return a LLVM constant representing value *val* of Numba type *ty*.
         """
         try:
-            impl = self._get_constants.find((ty,))
-            return impl(self, builder, ty, val)
+            impl = utils.wrap_missing_loc(self._get_constants.find((ty,)))()
+            return impl(self, builder, ty, val, loc=loc)
         except NotImplementedError:
             raise NotImplementedError("Cannot lower constant of type '%s'" % (ty,))
 
@@ -600,21 +600,21 @@ class BaseContext(object):
                 return None
             else:
                 pyval = getattr(typ.pymod, attr)
-                def imp(context, builder, typ, val, attr):
-                    llval = self.get_constant_generic(builder, attrty, pyval)
+                def imp(context, builder, typ, val, attr, loc=None):
+                    llval = self.get_constant_generic(builder, attrty, pyval, loc=loc)
                     return impl_ret_borrowed(context, builder, attrty, llval)
                 return imp
 
         # Lookup specific getattr implementation for this type and attribute
         overloads = self._getattrs[attr]
         try:
-            return overloads.find((typ,))
+            return utils.wrap_missing_loc(overloads.find((typ,)))()
         except errors.NumbaNotImplementedError:
             pass
         # Lookup generic getattr implementation for this type
         overloads = self._getattrs[None]
         try:
-            return overloads.find((typ,))
+            return utils.wrap_missing_loc(overloads.find((typ,)))()
         except errors.NumbaNotImplementedError:
             pass
 
@@ -707,9 +707,8 @@ class BaseContext(object):
             return val
         try:
             impl = self._casts.find((fromty, toty))
-            if(_has_loc(impl)):
-                return impl(self, builder, fromty, toty, val, loc=loc)
-            return impl(self, builder, fromty, toty, val)
+            impl = utils.wrap_missing_loc(impl)()
+            return impl(self, builder, fromty, toty, val, loc=loc)
         except errors.NumbaNotImplementedError:
             raise errors.NumbaNotImplementedError(
                 "Cannot cast %s to %s: %s" % (fromty, toty, val))
@@ -1202,7 +1201,7 @@ class _wrap_impl(object):
     """
 
     def __init__(self, imp, context, sig):
-        self._callable = _wrap_missing_loc(imp)
+        self._callable = utils.wrap_missing_loc(imp)
         self._imp = self._callable()
         self._context = context
         self._sig = sig
@@ -1217,47 +1216,6 @@ class _wrap_impl(object):
 
     def __repr__(self):
         return "<wrapped %s>" % repr(self._callable)
-
-def _has_loc(fn):
-    """Does function *fn* take ``loc`` argument?
-    """
-    sig = utils.pysignature(fn)
-    return 'loc' in sig.parameters
-
-
-class _wrap_missing_loc(object):
-
-    def __init__(self, fn):
-        self.func = fn # store this to help with debug
-
-    def __call__(self):
-        """Wrap function for missing ``loc`` keyword argument.
-        Otherwise, return the original *fn*.
-        """
-        fn = self.func
-        if not _has_loc(fn):
-            def wrapper(*args, **kwargs):
-                kwargs.pop('loc')     # drop unused loc
-                return fn(*args, **kwargs)
-
-            # Copy the following attributes from the wrapped.
-            # Following similar implementation as functools.wraps but
-            # ignore attributes if not available (i.e fix py2.7)
-            attrs = '__name__', 'libs'
-            for attr in attrs:
-                try:
-                    val = getattr(fn, attr)
-                except AttributeError:
-                    pass
-                else:
-                    setattr(wrapper, attr, val)
-
-            return wrapper
-        else:
-            return fn
-
-    def __repr__(self):
-        return "<wrapped %s>" % self.func
 
 
 @utils.runonce

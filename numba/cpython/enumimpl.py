@@ -46,39 +46,39 @@ def enum_value(context, builder, ty, val):
 
 
 @lower_cast(types.IntEnumMember, types.Integer)
-def int_enum_to_int(context, builder, fromty, toty, val):
+def int_enum_to_int(context, builder, fromty, toty, val, loc=None):
     """
     Convert an IntEnum member to its raw integer value.
     """
-    return context.cast(builder, val, fromty.dtype, toty)
+    return context.cast(builder, val, fromty.dtype, toty, loc)
 
 
 @lower_constant(types.EnumMember)
-def enum_constant(context, builder, ty, pyval):
+def enum_constant(context, builder, ty, pyval, loc=None):
     """
     Return a LLVM constant representing enum member *pyval*.
     """
-    return context.get_constant_generic(builder, ty.dtype, pyval.value)
+    return context.get_constant_generic(builder, ty.dtype, pyval.value, loc)
 
 
 @lower_getattr_generic(types.EnumClass)
-def enum_class_getattr(context, builder, ty, val, attr):
+def enum_class_getattr(context, builder, ty, val, attr, loc=None):
     """
     Return an enum member by attribute name.
     """
     member = getattr(ty.instance_class, attr)
-    return context.get_constant_generic(builder, ty.dtype, member.value)
+    return context.get_constant_generic(builder, ty.dtype, member.value, loc)
 
 
 @lower_builtin('static_getitem', types.EnumClass, types.StringLiteral)
-def enum_class_getitem(context, builder, sig, args):
+def enum_class_getitem(context, builder, sig, args, loc=None):
     """
     Return an enum member by index name.
     """
     enum_cls_typ, idx = sig.args
     member = enum_cls_typ.instance_class[idx.literal_value]
     return context.get_constant_generic(builder, enum_cls_typ.dtype,
-                                        member.value)
+                                        member.value, loc)
 
 
 @overload_method(types.IntEnumMember, '__hash__')

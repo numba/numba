@@ -114,12 +114,12 @@ make_attribute_wrapper(DictKeysIterableType, "parent", "_parent")
 make_attribute_wrapper(DictValuesIterableType, "parent", "_parent")
 
 
-def _raise_if_error(context, builder, status, msg):
+def _raise_if_error(context, builder, status, msg, loc=None):
     """Raise an internal error depending on the value of *status*
     """
     ok_status = status.type(int(Status.OK))
     with builder.if_then(builder.icmp_signed('!=', status, ok_status)):
-        context.call_conv.return_user_exc(builder, RuntimeError, (msg,))
+        context.call_conv.return_user_exc(builder, RuntimeError, (msg,), loc)
 
 
 @intrinsic
@@ -233,7 +233,7 @@ def _dict_new_sized(typingctx, n_keys, keyty, valty):
     resty = types.voidptr
     sig = resty(n_keys, keyty, valty)
 
-    def codegen(context, builder, sig, args):
+    def codegen(context, builder, sig, args, loc=None):
         n_keys = builder.bitcast(args[0], ll_ssize_t)
 
         # Determine sizeof key and value types
@@ -252,7 +252,8 @@ def _dict_new_sized(typingctx, n_keys, keyty, valty):
         status = builder.call(fn, args)
 
         allocated_failed_msg = "Failed to allocate dictionary"
-        _raise_if_error(context, builder, status, msg=allocated_failed_msg)
+        _raise_if_error(context, builder, status, msg=allocated_failed_msg,
+                        loc=loc)
 
         dp = builder.load(refdp)
         return dp
@@ -1112,7 +1113,7 @@ def impl_iterator_iternext(context, builder, sig, args, result):
             raise AssertionError('unknown type: {}'.format(iter_type.iterable))
 
 
-def build_map(context, builder, dict_type, item_types, items):
+def build_map(context, builder, dict_type, item_types, items, loc=None):
 
     if isinstance(dict_type, types.LiteralStrKeyDict):
         unliteral_tys = [x for x in
@@ -1136,7 +1137,7 @@ def build_map(context, builder, dict_type, item_types, items):
         for i, ix in enumerate(value_indexer):
             val = values[ix]
             casted = context.cast(builder, val, literal_tys[i],
-                                  unliteral_tys[i])
+                                  unliteral_tys[i], loc)
             tup = builder.insert_value(tup, casted, i)
         d = tup
         context.nrt.incref(builder, nbty, d)
@@ -1339,7 +1340,7 @@ def literalstrkeydict_banned_impl_mutators(d, *args):
 
 @lower_cast(types.LiteralStrKeyDict, types.LiteralStrKeyDict)
 def cast_LiteralStrKeyDict_LiteralStrKeyDict(context, builder, fromty, toty,
-                                             val):
+                                             val, loc=None):
     # should have been picked up by typing
     for (k1, v1), (k2, v2) in zip(fromty.literal_value.items(),
                                   toty.literal_value.items()):
@@ -1356,7 +1357,7 @@ def cast_LiteralStrKeyDict_LiteralStrKeyDict(context, builder, fromty, toty,
         fromty = types.Tuple(fromty.types)
         toty = types.Tuple(toty.types)
         olditems = cgutils.unpack_tuple(builder, val, len(fromty))
-        items = [context.cast(builder, v, f, t)
+        items = [context.cast(builder, v, f, t, loc)
                  for v, f, t in zip(olditems, fromty, toty)]
         return context.make_tuple(builder, toty, items)
 

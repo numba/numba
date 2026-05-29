@@ -1734,11 +1734,11 @@ def _normalize_slice(typingctx, sliceobj, length):
     """
     sig = sliceobj(sliceobj, length)
 
-    def codegen(context, builder, sig, args):
+    def codegen(context, builder, sig, args, loc=None):
         [slicetype, lengthtype] = sig.args
         [sliceobj, length] = args
         slice = context.make_helper(builder, slicetype, sliceobj)
-        slicing.guard_invalid_slice(context, builder, slicetype, slice)
+        slicing.guard_invalid_slice(context, builder, slicetype, slice, loc)
         slicing.fix_slice(builder, slice, length)
         return slice._getvalue()
 
@@ -1783,7 +1783,7 @@ def _get_str_slice_view(typingctx, src_t, start_t, length_t):
     """
     assert src_t == types.unicode_type
 
-    def codegen(context, builder, sig, args):
+    def codegen(context, builder, sig, args, loc=None):
         src, start, length = args
         in_str = cgutils.create_struct_proxy(
             types.unicode_type)(context, builder, value=src)
@@ -1800,7 +1800,7 @@ def _get_str_slice_view(typingctx, src_t, start_t, length_t):
         bw_sig = bw_typ.get_call_type(
             context.typing_context, (types.int32,), {})
         bw_impl = context.get_function(bw_typ, bw_sig)
-        byte_width = bw_impl(builder, (in_str.kind,))
+        byte_width = bw_impl(builder, (in_str.kind,), loc=loc)
         offset = builder.mul(start, byte_width)
         view_str.data = builder.gep(in_str.data, [offset])
         # Set parent pyobject to NULL
@@ -2632,7 +2632,7 @@ def getiter_unicode(context, builder, sig, args):
 @lower_builtin('iternext', types.UnicodeIteratorType)
 # a new ref counted object is put into result._yield so set the new_ref to True!
 @iternext_impl(RefType.NEW)
-def iternext_unicode(context, builder, sig, args, result):
+def iternext_unicode(context, builder, sig, args, result, loc=None):
     [iterty] = sig.args
     [iter] = args
 
@@ -2653,7 +2653,7 @@ def iternext_unicode(context, builder, sig, args, result):
     iterobj = context.make_helper(builder, iterty, value=iter)
 
     # find the length of the string
-    strlen = len_impl(builder, (iterobj.data,))
+    strlen = len_impl(builder, (iterobj.data,), loc=loc)
 
     # find the current index
     index = builder.load(iterobj.index)
@@ -2664,7 +2664,7 @@ def iternext_unicode(context, builder, sig, args, result):
 
     with builder.if_then(is_valid):
         # return value at index
-        gotitem = getitem_impl(builder, (iterobj.data, index,))
+        gotitem = getitem_impl(builder, (iterobj.data, index,), loc=loc)
         result.yield_(gotitem)
 
         # bump index for next cycle

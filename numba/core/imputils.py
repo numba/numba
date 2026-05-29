@@ -182,14 +182,14 @@ lower_constant = builtin_registry.lower_constant
 
 
 def _decorate_getattr(impl, ty, attr):
-    real_impl = impl
+    real_impl = utils.wrap_missing_loc(impl)()
 
     if attr is not None:
-        def res(context, builder, typ, value, attr):
-            return real_impl(context, builder, typ, value)
+        def res(context, builder, typ, value, attr, loc=None):
+            return real_impl(context, builder, typ, value, loc=loc)
     else:
-        def res(context, builder, typ, value, attr):
-            return real_impl(context, builder, typ, value, attr)
+        def res(context, builder, typ, value, attr, loc=None):
+            return real_impl(context, builder, typ, value, attr, loc=loc)
 
     res.signature = (ty,)
     res.attr = attr
@@ -276,13 +276,13 @@ def iterator_impl(iterable_type, iterator_type):
 
     def wrapper(cls):
         # These are unbound methods
-        iternext = cls.iternext
+        iternext = utils.wrap_missing_loc(cls.iternext)()
 
         @iternext_impl(RefType.BORROWED)
-        def iternext_wrapper(context, builder, sig, args, result):
+        def iternext_wrapper(context, builder, sig, args, result, loc=None):
             (value,) = args
             iterobj = cls(context, builder, value)
-            return iternext(iterobj, context, builder, result)
+            return iternext(iterobj, context, builder, result, loc=loc)
 
         lower_builtin('iternext', iterator_type)(iternext_wrapper)
         return cls
@@ -370,11 +370,12 @@ def iternext_impl(ref_type=None):
         raise ValueError("ref_type must be an enum member of imputils.RefType")
 
     def outer(func):
-        def wrapper(context, builder, sig, args):
+        func = utils.wrap_missing_loc(func)()
+        def wrapper(context, builder, sig, args, loc=None):
             pair_type = sig.return_type
             pairobj = context.make_helper(builder, pair_type)
             func(context, builder, sig, args,
-                _IternextResult(context, builder, pairobj))
+                _IternextResult(context, builder, pairobj), loc=loc)
             if ref_type == RefType.NEW:
                 impl_ret = impl_ret_new_ref
             elif ref_type == RefType.BORROWED:
@@ -389,17 +390,17 @@ def iternext_impl(ref_type=None):
     return outer
 
 
-def call_getiter(context, builder, iterable_type, val):
+def call_getiter(context, builder, iterable_type, val, loc=None):
     """
     Call the `getiter()` implementation for the given *iterable_type*
     of value *val*, and return the corresponding LLVM inst.
     """
     getiter_sig = typing.signature(iterable_type.iterator_type, iterable_type)
     getiter_impl = context.get_function('getiter', getiter_sig)
-    return getiter_impl(builder, (val,))
+    return getiter_impl(builder, (val,), loc=loc)
 
 
-def call_iternext(context, builder, iterator_type, val):
+def call_iternext(context, builder, iterator_type, val, loc=None):
     """
     Call the `iternext()` implementation for the given *iterator_type*
     of value *val*, and return a convenience _IternextResult() object
@@ -409,12 +410,12 @@ def call_iternext(context, builder, iterator_type, val):
     pair_type = types.Pair(itemty, types.boolean)
     iternext_sig = typing.signature(pair_type, iterator_type)
     iternext_impl = context.get_function('iternext', iternext_sig)
-    val = iternext_impl(builder, (val,))
+    val = iternext_impl(builder, (val,), loc=loc)
     pairobj = context.make_helper(builder, pair_type, val)
     return _IternextResult(context, builder, pairobj)
 
 
-def call_len(context, builder, ty, val):
+def call_len(context, builder, ty, val, loc=None):
     """
     Call len() on the given value.  Return None if len() isn't defined on
     this type.
@@ -424,7 +425,7 @@ def call_len(context, builder, ty, val):
     except NotImplementedError:
         return None
     else:
-        return len_impl(builder, (val,))
+        return len_impl(builder, (val,), loc=loc)
 
 
 _ForIterLoop = collections.namedtuple('_ForIterLoop',
@@ -432,7 +433,7 @@ _ForIterLoop = collections.namedtuple('_ForIterLoop',
 
 
 @contextlib.contextmanager
-def for_iter(context, builder, iterable_type, val):
+def for_iter(context, builder, iterable_type, val, loc=None):
     """
     Simulate a for loop on the given iterable.  Yields a namedtuple with
     the given members:
@@ -451,7 +452,7 @@ def for_iter(context, builder, iterable_type, val):
     builder.branch(bb_body)
 
     with builder.goto_block(bb_body):
-        res = call_iternext(context, builder, iterator_type, iterval)
+        res = call_iternext(context, builder, iterator_type, iterval, loc)
         with builder.if_then(builder.not_(res.is_valid()), likely=False):
             builder.branch(bb_end)
         yield _ForIterLoop(res.yielded_value(), do_break)

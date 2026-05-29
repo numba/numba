@@ -705,7 +705,7 @@ def get_item_pointer(context, builder, aryty, ary, inds, wraparound=False,
                              wraparound=wraparound, boundscheck=boundscheck)
 
 
-def do_boundscheck(context, builder, ind, dimlen, axis=None):
+def do_boundscheck(context, builder, ind, dimlen, axis=None, loc=None):
     def _dbg():
         # Remove this when we figure out how to include this information
         # in the error message.
@@ -727,12 +727,12 @@ def do_boundscheck(context, builder, ind, dimlen, axis=None):
     with if_unlikely(builder, out_of_bounds_upper):
         if config.FULL_TRACEBACKS:
             _dbg()
-        context.call_conv.return_user_exc(builder, IndexError, (msg,))
+        context.call_conv.return_user_exc(builder, IndexError, (msg,), loc)
     out_of_bounds_lower = builder.icmp_signed('<', ind, ind.type(0))
     with if_unlikely(builder, out_of_bounds_lower):
         if config.FULL_TRACEBACKS:
             _dbg()
-        context.call_conv.return_user_exc(builder, IndexError, (msg,))
+        context.call_conv.return_user_exc(builder, IndexError, (msg,), loc)
 
 
 def get_item_pointer2(context, builder, data, shape, strides, layout, inds,
@@ -878,7 +878,7 @@ def early_exit_if_null(builder, stack, obj):
     return early_exit_if(builder, stack, is_null(builder, obj))
 
 
-def guard_null(context, builder, value, exc_tuple):
+def guard_null(context, builder, value, exc_tuple, loc=None):
     """
     Guard against *value* being null or zero.
     *exc_tuple* should be a (exception type, arguments...) tuple.
@@ -886,17 +886,17 @@ def guard_null(context, builder, value, exc_tuple):
     with builder.if_then(is_scalar_zero(builder, value), likely=False):
         exc = exc_tuple[0]
         exc_args = exc_tuple[1:] or None
-        context.call_conv.return_user_exc(builder, exc, exc_args)
+        context.call_conv.return_user_exc(builder, exc, exc_args, loc)
 
 
-def guard_memory_error(context, builder, pointer, msg=None):
+def guard_memory_error(context, builder, pointer, msg=None, loc=None):
     """
     Guard against *pointer* being NULL (and raise a MemoryError).
     """
     assert isinstance(pointer.type, ir.PointerType), pointer.type
     exc_args = (msg,) if msg else ()
     with builder.if_then(is_null(builder, pointer), likely=False):
-        context.call_conv.return_user_exc(builder, MemoryError, exc_args)
+        context.call_conv.return_user_exc(builder, MemoryError, exc_args, loc)
 
 
 @contextmanager

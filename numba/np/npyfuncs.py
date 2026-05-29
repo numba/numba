@@ -48,7 +48,7 @@ def _check_arity_and_homogeneity(sig, args, arity, return_type = None):
 cast_arg_ty = types.float64
 
 def _call_func_by_name_with_cast(context, builder, sig, args,
-                                 func_name, ty=cast_arg_ty):
+                                 func_name, ty=cast_arg_ty, loc=None):
     # it is quite common in NumPy to have loops implemented as a call
     # to the double version of the function, wrapped in casts. This
     # helper function facilitates that.
@@ -56,11 +56,11 @@ def _call_func_by_name_with_cast(context, builder, sig, args,
     lty = context.get_argument_type(ty)
     fnty = llvmlite.ir.FunctionType(lty, [lty]*len(sig.args))
     fn = cgutils.insert_pure_function(mod, fnty, name=func_name)
-    cast_args = [context.cast(builder, arg, argty, ty)
+    cast_args = [context.cast(builder, arg, argty, ty, loc)
                  for arg, argty in zip(args, sig.args) ]
 
     result = builder.call(fn, cast_args)
-    return context.cast(builder, result, types.float64, sig.return_type)
+    return context.cast(builder, result, types.float64, sig.return_type, loc)
 
 
 def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
@@ -401,13 +401,13 @@ def _npy_logaddexp(x1, x2):
 _generate_logaddexp(_npy_logaddexp, _NPY_LOGE2, np.log1p, np.exp)
 
 
-def np_real_logaddexp_impl(context, builder, sig, args):
+def np_real_logaddexp_impl(context, builder, sig, args, loc=None):
     _check_arity_and_homogeneity(sig, args, 2)
 
     fnty = context.typing_context.resolve_value_type(_npy_logaddexp)
     sig = fnty.get_call_type(context.typing_context, (*sig.args,), {})
     impl = context.get_function(fnty, sig)
-    return impl(builder, args)
+    return impl(builder, args, loc=loc)
 
 ########################################################################
 # NumPy logaddexp2
@@ -431,19 +431,19 @@ def ol_npy_log2_1p(x):
 _generate_logaddexp(_npy_logaddexp2, 1.0, npy_log2_1p, np.exp2)
 
 
-def np_real_logaddexp2_impl(context, builder, sig, args):
+def np_real_logaddexp2_impl(context, builder, sig, args, loc=None):
     _check_arity_and_homogeneity(sig, args, 2)
 
     fnty = context.typing_context.resolve_value_type(_npy_logaddexp2)
     sig = fnty.get_call_type(context.typing_context, (*sig.args,), {})
     impl = context.get_function(fnty, sig)
-    return impl(builder, args)
+    return impl(builder, args, loc=loc)
 
 
 ########################################################################
 # true div kernels
 
-def np_int_truediv_impl(context, builder, sig, args):
+def np_int_truediv_impl(context, builder, sig, args, loc=None):
     # in NumPy we don't check for 0 denominator... fdiv handles div by
     # 0 in the way NumPy expects..
     # integer truediv always yields double
@@ -452,8 +452,8 @@ def np_int_truediv_impl(context, builder, sig, args):
     assert all(i.type==lltype for i in args), "must have homogeneous types"
     numty, denty = sig.args
 
-    num = context.cast(builder, num, numty, types.float64)
-    den = context.cast(builder, den, denty, types.float64)
+    num = context.cast(builder, num, numty, types.float64, loc)
+    den = context.cast(builder, den, denty, types.float64, loc)
 
     return builder.fdiv(num,den)
 
@@ -855,7 +855,7 @@ def np_real_cbrt_impl(context, builder, sig, args):
 ########################################################################
 # NumPy reciprocal
 
-def np_int_reciprocal_impl(context, builder, sig, args):
+def np_int_reciprocal_impl(context, builder, sig, args, loc=None):
     # based on the implementation in loops.c.src
     # integer versions for reciprocal are performed via promotion
     # using double, and then converted back to the type
@@ -863,10 +863,10 @@ def np_int_reciprocal_impl(context, builder, sig, args):
     ty = sig.return_type
 
     binary_sig = typing.signature(*[ty]*3)
-    in_as_float = context.cast(builder, args[0], ty, types.float64)
+    in_as_float = context.cast(builder, args[0], ty, types.float64, loc)
     ONE = context.get_constant(types.float64, 1)
     result_as_float = builder.fdiv(ONE, in_as_float)
-    return context.cast(builder, result_as_float, types.float64, ty)
+    return context.cast(builder, result_as_float, types.float64, ty, loc)
 
 
 def np_real_reciprocal_impl(context, builder, sig, args):
@@ -1115,7 +1115,7 @@ def np_real_acosh_impl(context, builder, sig, args):
     return mathimpl.acosh_impl(context, builder, sig, args)
 
 
-def np_complex_acosh_impl(context, builder, sig, args):
+def np_complex_acosh_impl(context, builder, sig, args, loc=None):
     # npymath does not provide a complex acosh. The code in funcs.inc.src
     # is translated here...
     # log(x + sqrt(x+1) * sqrt(x-1))
@@ -1124,7 +1124,7 @@ def np_complex_acosh_impl(context, builder, sig, args):
     ty = sig.args[0]
     csig2 = typing.signature(*[ty]*3)
 
-    ONE = context.get_constant_generic(builder, ty, 1.0 + 0.0j)
+    ONE = context.get_constant_generic(builder, ty, 1.0 + 0.0j, loc)
     x = args[0]
 
     x_plus_one = numbers.complex_add_impl(context, builder, csig2, [x,
@@ -1689,7 +1689,7 @@ def np_real_spacing_impl(context, builder, sig, args):
     return builder.fsub(nextafter, args[0])
 
 
-def np_real_ldexp_impl(context, builder, sig, args):
+def np_real_ldexp_impl(context, builder, sig, args, loc=None):
     # this one is slightly different to other ufuncs.
     # arguments are not homogeneous and second arg may come as
     # an 'i' or an 'l'.
@@ -1699,6 +1699,6 @@ def np_real_ldexp_impl(context, builder, sig, args):
     ty1, ty2 = sig.args
     # note that types.intc should be equivalent to int_ that is
     # 'NumPy's default int')
-    x2 = context.cast(builder, x2, ty2, types.intc)
+    x2 = context.cast(builder, x2, ty2, types.intc, loc)
     f_fi_sig = typing.signature(ty1, ty1, types.intc)
     return mathimpl.ldexp_impl(context, builder, f_fi_sig, (x1, x2))

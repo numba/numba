@@ -27,29 +27,29 @@ def _int_arith_flags(rettype):
         return []
 
 
-def int_add_impl(context, builder, sig, args):
+def int_add_impl(context, builder, sig, args, loc=None):
     [va, vb] = args
     [ta, tb] = sig.args
-    a = context.cast(builder, va, ta, sig.return_type)
-    b = context.cast(builder, vb, tb, sig.return_type)
+    a = context.cast(builder, va, ta, sig.return_type, loc)
+    b = context.cast(builder, vb, tb, sig.return_type, loc)
     res = builder.add(a, b, flags=_int_arith_flags(sig.return_type))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-def int_sub_impl(context, builder, sig, args):
+def int_sub_impl(context, builder, sig, args, loc=None):
     [va, vb] = args
     [ta, tb] = sig.args
-    a = context.cast(builder, va, ta, sig.return_type)
-    b = context.cast(builder, vb, tb, sig.return_type)
+    a = context.cast(builder, va, ta, sig.return_type, loc)
+    b = context.cast(builder, vb, tb, sig.return_type, loc)
     res = builder.sub(a, b, flags=_int_arith_flags(sig.return_type))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-def int_mul_impl(context, builder, sig, args):
+def int_mul_impl(context, builder, sig, args, loc=None):
     [va, vb] = args
     [ta, tb] = sig.args
-    a = context.cast(builder, va, ta, sig.return_type)
-    b = context.cast(builder, vb, tb, sig.return_type)
+    a = context.cast(builder, va, ta, sig.return_type, loc)
+    b = context.cast(builder, vb, tb, sig.return_type, loc)
     res = builder.mul(a, b, flags=_int_arith_flags(sig.return_type))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
@@ -121,15 +121,15 @@ def int_divmod(context, builder, ty, x, y):
         return builder.udiv(x, y), builder.urem(x, y)
 
 
-def _int_divmod_impl(context, builder, sig, args, zerodiv_message):
+def _int_divmod_impl(context, builder, sig, args, loc, zerodiv_message):
     va, vb = args
     ta, tb = sig.args
 
     ty = sig.return_type
     if isinstance(ty, types.UniTuple):
         ty = ty.dtype
-    a = context.cast(builder, va, ta, ty)
-    b = context.cast(builder, vb, tb, ty)
+    a = context.cast(builder, va, ta, ty, loc)
+    b = context.cast(builder, vb, tb, ty, loc)
     quot = cgutils.alloca_once(builder, a.type, name="quot")
     rem = cgutils.alloca_once(builder, a.type, name="rem")
 
@@ -152,8 +152,8 @@ def _int_divmod_impl(context, builder, sig, args, zerodiv_message):
 
 
 # @lower_builtin(divmod, types.Integer, types.Integer)
-def int_divmod_impl(context, builder, sig, args):
-    quot, rem = _int_divmod_impl(context, builder, sig, args,
+def int_divmod_impl(context, builder, sig, args, loc=None):
+    quot, rem = _int_divmod_impl(context, builder, sig, args, loc,
                                  "integer divmod by zero")
 
     return cgutils.pack_array(builder,
@@ -162,19 +162,19 @@ def int_divmod_impl(context, builder, sig, args):
 
 # @lower_builtin(operator.floordiv, types.Integer, types.Integer)
 # @lower_builtin(operator.ifloordiv, types.Integer, types.Integer)
-def int_floordiv_impl(context, builder, sig, args):
-    quot, rem = _int_divmod_impl(context, builder, sig, args,
+def int_floordiv_impl(context, builder, sig, args, loc=None):
+    quot, rem = _int_divmod_impl(context, builder, sig, args, loc,
                                  "integer division by zero")
     return builder.load(quot)
 
 
 # @lower_builtin(operator.truediv, types.Integer, types.Integer)
 # @lower_builtin(operator.itruediv, types.Integer, types.Integer)
-def int_truediv_impl(context, builder, sig, args):
+def int_truediv_impl(context, builder, sig, args, loc=None):
     [va, vb] = args
     [ta, tb] = sig.args
-    a = context.cast(builder, va, ta, sig.return_type)
-    b = context.cast(builder, vb, tb, sig.return_type)
+    a = context.cast(builder, va, ta, sig.return_type, loc)
+    b = context.cast(builder, vb, tb, sig.return_type, loc)
     with cgutils.if_zero(builder, b):
         context.error_model.fp_zero_division(builder, ("division by zero",))
     res = builder.fdiv(a, b)
@@ -183,8 +183,8 @@ def int_truediv_impl(context, builder, sig, args):
 
 # @lower_builtin(operator.mod, types.Integer, types.Integer)
 # @lower_builtin(operator.imod, types.Integer, types.Integer)
-def int_rem_impl(context, builder, sig, args):
-    quot, rem = _int_divmod_impl(context, builder, sig, args,
+def int_rem_impl(context, builder, sig, args, loc=None):
+    quot, rem = _int_divmod_impl(context, builder, sig, args, loc,
                                  "integer modulo by zero")
     return builder.load(rem)
 
@@ -245,7 +245,7 @@ def int_power_impl(context, builder, sig, args):
 # @lower_builtin(operator.ipow, types.Integer, types.IntegerLiteral)
 # @lower_builtin(operator.pow, types.Float, types.IntegerLiteral)
 # @lower_builtin(operator.ipow, types.Float, types.IntegerLiteral)
-def static_power_impl(context, builder, sig, args):
+def static_power_impl(context, builder, sig, args, loc=None):
     """
     a ^ b, where a is an integer or real, and b a constant integer
     """
@@ -262,7 +262,7 @@ def static_power_impl(context, builder, sig, args):
     is_integer = isinstance(tp, types.Integer)
     zerodiv_return = _get_power_zerodiv_return(context, tp)
 
-    val = context.cast(builder, args[0], sig.args[0], tp)
+    val = context.cast(builder, args[0], sig.args[0], tp, loc)
     lty = val.type
 
     def mul(a, b):
@@ -407,20 +407,20 @@ def uint_abs_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, x)
 
 
-def int_shl_impl(context, builder, sig, args):
+def int_shl_impl(context, builder, sig, args, loc=None):
     [valty, amtty] = sig.args
     [val, amt] = args
-    val = context.cast(builder, val, valty, sig.return_type)
-    amt = context.cast(builder, amt, amtty, sig.return_type)
+    val = context.cast(builder, val, valty, sig.return_type, loc)
+    amt = context.cast(builder, amt, amtty, sig.return_type, loc)
     res = builder.shl(val, amt)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-def int_shr_impl(context, builder, sig, args):
+def int_shr_impl(context, builder, sig, args, loc=None):
     [valty, amtty] = sig.args
     [val, amt] = args
-    val = context.cast(builder, val, valty, sig.return_type)
-    amt = context.cast(builder, amt, amtty, sig.return_type)
+    val = context.cast(builder, val, valty, sig.return_type, loc)
+    amt = context.cast(builder, amt, amtty, sig.return_type, loc)
     if sig.return_type.signed:
         res = builder.ashr(val, amt)
     else:
@@ -428,55 +428,55 @@ def int_shr_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-def int_and_impl(context, builder, sig, args):
+def int_and_impl(context, builder, sig, args, loc=None):
     [at, bt] = sig.args
     [av, bv] = args
-    cav = context.cast(builder, av, at, sig.return_type)
-    cbc = context.cast(builder, bv, bt, sig.return_type)
+    cav = context.cast(builder, av, at, sig.return_type, loc)
+    cbc = context.cast(builder, bv, bt, sig.return_type, loc)
     res = builder.and_(cav, cbc)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-def int_or_impl(context, builder, sig, args):
+def int_or_impl(context, builder, sig, args, loc=None):
     [at, bt] = sig.args
     [av, bv] = args
-    cav = context.cast(builder, av, at, sig.return_type)
-    cbc = context.cast(builder, bv, bt, sig.return_type)
+    cav = context.cast(builder, av, at, sig.return_type, loc)
+    cbc = context.cast(builder, bv, bt, sig.return_type, loc)
     res = builder.or_(cav, cbc)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-def int_xor_impl(context, builder, sig, args):
+def int_xor_impl(context, builder, sig, args, loc=None):
     [at, bt] = sig.args
     [av, bv] = args
-    cav = context.cast(builder, av, at, sig.return_type)
-    cbc = context.cast(builder, bv, bt, sig.return_type)
+    cav = context.cast(builder, av, at, sig.return_type, loc)
+    cbc = context.cast(builder, bv, bt, sig.return_type, loc)
     res = builder.xor(cav, cbc)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-def int_negate_impl(context, builder, sig, args):
+def int_negate_impl(context, builder, sig, args, loc=None):
     [typ] = sig.args
     [val] = args
     # Negate before upcasting, for unsigned numbers
     res = builder.neg(val)
-    res = context.cast(builder, res, typ, sig.return_type)
+    res = context.cast(builder, res, typ, sig.return_type, loc)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-def int_positive_impl(context, builder, sig, args):
+def int_positive_impl(context, builder, sig, args, loc=None):
     [typ] = sig.args
     [val] = args
-    res = context.cast(builder, val, typ, sig.return_type)
+    res = context.cast(builder, val, typ, sig.return_type, loc)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-def int_invert_impl(context, builder, sig, args):
+def int_invert_impl(context, builder, sig, args, loc=None):
     [typ] = sig.args
     [val] = args
     # Invert before upcasting, for unsigned numbers
     res = builder.xor(val, Constant(val.type, int('1' * val.type.width, 2)))
-    res = context.cast(builder, res, typ, sig.return_type)
+    res = context.cast(builder, res, typ, sig.return_type, loc)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
@@ -522,18 +522,18 @@ def int_sign_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-def bool_negate_impl(context, builder, sig, args):
+def bool_negate_impl(context, builder, sig, args, loc=None):
     [typ] = sig.args
     [val] = args
-    res = context.cast(builder, val, typ, sig.return_type)
+    res = context.cast(builder, val, typ, sig.return_type, loc)
     res = builder.neg(res)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-def bool_unary_positive_impl(context, builder, sig, args):
+def bool_unary_positive_impl(context, builder, sig, args, loc=None):
     [typ] = sig.args
     [val] = args
-    res = context.cast(builder, val, typ, sig.return_type)
+    res = context.cast(builder, val, typ, sig.return_type, loc)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
@@ -882,10 +882,10 @@ def real_negate_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-def real_positive_impl(context, builder, sig, args):
+def real_positive_impl(context, builder, sig, args, loc=None):
     [typ] = sig.args
     [val] = args
-    res = context.cast(builder, val, typ, sig.return_type)
+    res = context.cast(builder, val, typ, sig.return_type, loc)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
@@ -1207,10 +1207,10 @@ def number_item_impl(context, builder, sig, args):
 #------------------------------------------------------------------------------
 
 
-def number_not_impl(context, builder, sig, args):
+def number_not_impl(context, builder, sig, args, loc=None):
     [typ] = sig.args
     [val] = args
-    istrue = context.cast(builder, val, typ, sig.return_type)
+    istrue = context.cast(builder, val, typ, sig.return_type, loc)
     res = builder.not_(istrue)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
@@ -1256,13 +1256,14 @@ def complex_as_bool(context, builder, sig, args):
 # @lower_cast(types.IntegerLiteral, types.Integer)
 # @lower_cast(types.IntegerLiteral, types.Float)
 # @lower_cast(types.IntegerLiteral, types.Complex)
-def literal_int_to_number(context, builder, fromty, toty, val):
+def literal_int_to_number(context, builder, fromty, toty, val, loc=None):
     lit = context.get_constant_generic(
         builder,
         fromty.literal_type,
         fromty.literal_value,
+        loc,
         )
-    return context.cast(builder, lit, fromty.literal_type, toty)
+    return context.cast(builder, lit, fromty.literal_type, toty, loc)
 
 
 # @lower_cast(types.Integer, types.Integer)
@@ -1310,8 +1311,8 @@ def float_to_integer(context, builder, fromty, toty, val):
 
 # @lower_cast(types.Float, types.Complex)
 # @lower_cast(types.Integer, types.Complex)
-def non_complex_to_complex(context, builder, fromty, toty, val):
-    real = context.cast(builder, val, fromty, toty.underlying_float)
+def non_complex_to_complex(context, builder, fromty, toty, val, loc=None):
+    real = context.cast(builder, val, fromty, toty.underlying_float, loc)
     imag = context.get_constant(toty.underlying_float, 0)
 
     cmplx = context.make_complex(builder, toty)
@@ -1320,14 +1321,14 @@ def non_complex_to_complex(context, builder, fromty, toty, val):
     return cmplx._getvalue()
 
 # @lower_cast(types.Complex, types.Complex)
-def complex_to_complex(context, builder, fromty, toty, val):
+def complex_to_complex(context, builder, fromty, toty, val, loc=None):
     srcty = fromty.underlying_float
     dstty = toty.underlying_float
 
     src = context.make_complex(builder, fromty, value=val)
     dst = context.make_complex(builder, toty)
-    dst.real = context.cast(builder, src.real, srcty, dstty)
-    dst.imag = context.cast(builder, src.imag, srcty, dstty)
+    dst.real = context.cast(builder, src.real, srcty, dstty, loc)
+    dst.imag = context.cast(builder, src.imag, srcty, dstty, loc)
     return dst._getvalue()
 
 # @lower_cast(types.Any, types.Boolean)
@@ -1335,18 +1336,19 @@ def any_to_boolean(context, builder, fromty, toty, val):
     return context.is_true(builder, fromty, val)
 
 # @lower_cast(types.Boolean, types.Number)
-def boolean_to_any(context, builder, fromty, toty, val):
+def boolean_to_any(context, builder, fromty, toty, val, loc=None):
     # Casting from boolean to anything first casts to int32
     asint = builder.zext(val, ir.IntType(32))
-    return context.cast(builder, asint, types.int32, toty)
+    return context.cast(builder, asint, types.int32, toty, loc)
 
 # @lower_cast(types.IntegerLiteral, types.Boolean)
 # @lower_cast(types.BooleanLiteral, types.Boolean)
-def literal_int_to_boolean(context, builder, fromty, toty, val):
+def literal_int_to_boolean(context, builder, fromty, toty, val, loc=None):
     lit = context.get_constant_generic(
         builder,
         fromty.literal_type,
         fromty.literal_value,
+        loc,
         )
     return context.is_true(builder, fromty.literal_type, lit)
 
@@ -1354,10 +1356,10 @@ def literal_int_to_boolean(context, builder, fromty, toty, val):
 # Constants
 
 # @lower_constant(types.Complex)
-def constant_complex(context, builder, ty, pyval):
+def constant_complex(context, builder, ty, pyval, loc=None):
     fty = ty.underlying_float
-    real = context.get_constant_generic(builder, fty, pyval.real)
-    imag = context.get_constant_generic(builder, fty, pyval.imag)
+    real = context.get_constant_generic(builder, fty, pyval.real, loc)
+    imag = context.get_constant_generic(builder, fty, pyval.imag, loc)
     return Constant.literal_struct((real, imag))
 
 # @lower_constant(types.Integer)

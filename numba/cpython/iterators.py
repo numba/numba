@@ -19,7 +19,7 @@ def iterator_getiter(context, builder, sig, args):
 
 @lower_builtin(enumerate, types.IterableType)
 @lower_builtin(enumerate, types.IterableType, types.Integer)
-def make_enumerate_object(context, builder, sig, args):
+def make_enumerate_object(context, builder, sig, args, loc=None):
     assert len(args) == 1 or len(args) == 2 # enumerate(it) or enumerate(it, start)
     srcty = sig.args[0]
 
@@ -28,9 +28,9 @@ def make_enumerate_object(context, builder, sig, args):
         start_val = context.get_constant(types.intp, 0)
     elif len(args) == 2:
         src = args[0]
-        start_val = context.cast(builder, args[1], sig.args[1], types.intp)
+        start_val = context.cast(builder, args[1], sig.args[1], types.intp, loc)
 
-    iterobj = call_getiter(context, builder, srcty, src)
+    iterobj = call_getiter(context, builder, srcty, src, loc)
 
     enum = context.make_helper(builder, sig.return_type)
 
@@ -45,7 +45,7 @@ def make_enumerate_object(context, builder, sig, args):
 
 @lower_builtin('iternext', types.EnumerateType)
 @iternext_impl(RefType.NEW)
-def iternext_enumerate(context, builder, sig, args, result):
+def iternext_enumerate(context, builder, sig, args, result, loc=None):
     [enumty] = sig.args
     [enum] = args
 
@@ -55,7 +55,7 @@ def iternext_enumerate(context, builder, sig, args, result):
     ncount = builder.add(count, context.get_constant(types.intp, 1))
     builder.store(ncount, enum.count)
 
-    srcres = call_iternext(context, builder, enumty.source_type, enum.iter)
+    srcres = call_iternext(context, builder, enumty.source_type, enum.iter, loc)
     is_valid = srcres.is_valid()
     result.set_valid(is_valid)
 
@@ -69,7 +69,7 @@ def iternext_enumerate(context, builder, sig, args, result):
 # builtin `zip` implementation
 
 @lower_builtin(zip, types.VarArg(types.Any))
-def make_zip_object(context, builder, sig, args):
+def make_zip_object(context, builder, sig, args, loc=None):
     zip_type = sig.return_type
 
     assert len(args) == len(zip_type.source_types)
@@ -77,14 +77,14 @@ def make_zip_object(context, builder, sig, args):
     zipobj = context.make_helper(builder, zip_type)
 
     for i, (arg, srcty) in enumerate(zip(args, sig.args)):
-        zipobj[i] = call_getiter(context, builder, srcty, arg)
+        zipobj[i] = call_getiter(context, builder, srcty, arg, loc)
 
     res = zipobj._getvalue()
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @lower_builtin('iternext', types.ZipType)
 @iternext_impl(RefType.NEW)
-def iternext_zip_ZipType(context, builder, sig, args, result):
+def iternext_zip_ZipType(context, builder, sig, args, result, loc=None):
     [zip_type] = sig.args
     [zipobj] = args
 
@@ -103,7 +103,7 @@ def iternext_zip_ZipType(context, builder, sig, args, result):
         is_valid = builder.load(p_is_valid)
         # Avoid calling the remaining iternext if a iterator has been exhausted
         with builder.if_then(is_valid):
-            srcres = call_iternext(context, builder, srcty, iterobj)
+            srcres = call_iternext(context, builder, srcty, iterobj, loc)
             is_valid = builder.and_(is_valid, srcres.is_valid())
             builder.store(is_valid, p_is_valid)
             val = srcres.yielded_value()

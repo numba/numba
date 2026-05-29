@@ -62,7 +62,7 @@ def print_item_impl_Any(context, builder, sig, args):
 
 
 @lower(print, types.VarArg(types.Any))
-def print_varargs_impl(context, builder, sig, args):
+def print_varargs_impl(context, builder, sig, args, loc=None):
     """
     A entire print() call.
     """
@@ -72,7 +72,7 @@ def print_varargs_impl(context, builder, sig, args):
     for i, (argtype, argval) in enumerate(zip(sig.args, args)):
         signature = typing.signature(types.none, argtype)
         imp = context.get_function("print_item", signature)
-        imp(builder, [argval])
+        imp(builder, [argval], loc=loc)
         if i < len(args) - 1:
             pyapi.print_string(' ')
     pyapi.print_string('\n')

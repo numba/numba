@@ -148,15 +148,15 @@ def store_item(context, builder, arrayty, val, ptr):
     return context.pack_value(builder, arrayty.dtype, val, ptr, align=align)
 
 
-def fix_integer_index(context, builder, idxty, idx, size):
+def fix_integer_index(context, builder, idxty, idx, size, loc=None):
     """
     Fix the integer index' type and value for the given dimension size.
     """
     if idxty.signed:
-        ind = context.cast(builder, idx, idxty, types.intp)
+        ind = context.cast(builder, idx, idxty, types.intp, loc)
         ind = slicing.fix_index(builder, ind, size)
     else:
-        ind = context.cast(builder, idx, idxty, types.uintp)
+        ind = context.cast(builder, idx, idxty, types.uintp, loc)
     return ind
 
 
@@ -429,7 +429,7 @@ def iternext_array(context, builder, sig, args, result):
 # Basic indexing (with integers and slices only)
 
 def basic_indexing(context, builder, aryty, ary, index_types, indices,
-                   boundscheck=None):
+                   boundscheck=None, loc=None):
     """
     Perform basic indexing on the given array.
     A (data pointer, shapes, strides) tuple is returned describing
@@ -460,7 +460,7 @@ def basic_indexing(context, builder, aryty, ary, index_types, indices,
         # Regular index value
         if isinstance(idxty, types.SliceType):
             slice = context.make_helper(builder, idxty, value=indexval)
-            slicing.guard_invalid_slice(context, builder, idxty, slice)
+            slicing.guard_invalid_slice(context, builder, idxty, slice, loc)
             slicing.fix_slice(builder, slice, shapes[ax])
             output_indices.append(slice.start)
             sh = slicing.get_slice_length(builder, slice)
@@ -469,9 +469,10 @@ def basic_indexing(context, builder, aryty, ary, index_types, indices,
             output_strides.append(st)
         elif isinstance(idxty, types.Integer):
             ind = fix_integer_index(context, builder, idxty, indexval,
-                                    shapes[ax])
+                                    shapes[ax], loc)
             if boundscheck:
-                cgutils.do_boundscheck(context, builder, ind, shapes[ax], ax)
+                cgutils.do_boundscheck(context, builder, ind, shapes[ax], ax,
+                                       loc)
             output_indices.append(ind)
         elif is_nonelike(idxty):
             output_shapes.append(one)
@@ -513,14 +514,14 @@ def make_view(context, builder, aryty, ary, return_type,
 
 
 def _getitem_array_generic(context, builder, return_type, aryty, ary,
-                           index_types, indices):
+                           index_types, indices, loc=None):
     """
     Return the result of indexing *ary* with the given *indices*,
     returning either a scalar or a view.
     """
     dataptr, view_shapes, view_strides = \
         basic_indexing(context, builder, aryty, ary, index_types, indices,
-                       boundscheck=context.enable_boundscheck)
+                       boundscheck=context.enable_boundscheck, loc=loc)
 
     if isinstance(return_type, types.Buffer):
         # Build array view
@@ -536,7 +537,7 @@ def _getitem_array_generic(context, builder, return_type, aryty, ary,
 @lower_builtin(operator.getitem, types.Buffer, types.Integer)
 @lower_builtin(operator.getitem, types.Buffer, types.SliceType)
 @lower_builtin(operator.getitem, types.Buffer, types.NoneType)
-def getitem_arraynd_intp(context, builder, sig, args):
+def getitem_arraynd_intp(context, builder, sig, args, loc=None):
     """
     Basic indexing with an integer, slice, or None.
     """
@@ -549,12 +550,12 @@ def getitem_arraynd_intp(context, builder, sig, args):
     ary = make_array(aryty)(context, builder, ary)
 
     res = _getitem_array_generic(context, builder, sig.return_type,
-                                 aryty, ary, (idxty,), (idx,))
+                                 aryty, ary, (idxty,), (idx,), loc)
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
 @lower_builtin(operator.getitem, types.Buffer, types.BaseTuple)
-def getitem_array_tuple(context, builder, sig, args):
+def getitem_array_tuple(context, builder, sig, args, loc=None):
     """
     Basic or advanced indexing with a tuple.
     """
@@ -571,15 +572,15 @@ def getitem_array_tuple(context, builder, sig, args):
     if any(isinstance(ty, types.Array) for ty in index_types):
         # Advanced indexing
         return fancy_getitem(context, builder, sig, args,
-                             aryty, ary, index_types, indices)
+                             aryty, ary, index_types, indices, loc)
 
     res = _getitem_array_generic(context, builder, sig.return_type,
-                                 aryty, ary, index_types, indices)
+                                 aryty, ary, index_types, indices, loc)
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
 @lower_builtin(operator.setitem, types.Buffer, types.Any, types.Any)
-def setitem_array(context, builder, sig, args):
+def setitem_array(context, builder, sig, args, loc=None):
     """
     array[a] = scalar_or_array
     array[a,..,b] = scalar_or_array
@@ -602,7 +603,7 @@ def setitem_array(context, builder, sig, args):
     try:
         dataptr, shapes, strides = \
             basic_indexing(context, builder, aryty, ary, index_types, indices,
-                           boundscheck=context.enable_boundscheck)
+                           boundscheck=context.enable_boundscheck, loc=loc)
     except NotImplementedError:
         use_fancy_indexing = True
     else:
@@ -612,7 +613,7 @@ def setitem_array(context, builder, sig, args):
         # Index describes a non-trivial view => use generic slice assignment
         # (NOTE: this also handles scalar broadcasting)
         return fancy_setslice(context, builder, sig, args,
-                              index_types, indices)
+                              index_types, indices, loc)
 
     # Store source value the given location
     val = context.cast(builder, val, valty, aryty.dtype)
@@ -631,7 +632,7 @@ def array_len(context, builder, sig, args):
 
 
 @lower_builtin("array.item", types.Array)
-def array_item(context, builder, sig, args):
+def array_item(context, builder, sig, args, loc=None):
     aryty, = sig.args
     ary, = args
     ary = make_array(aryty)(context, builder, ary)
@@ -640,14 +641,14 @@ def array_item(context, builder, sig, args):
     with builder.if_then(builder.icmp_signed('!=', nitems, nitems.type(1)),
                          likely=False):
         msg = "item(): can only convert an array of size 1 to a Python scalar"
-        context.call_conv.return_user_exc(builder, ValueError, (msg,))
+        context.call_conv.return_user_exc(builder, ValueError, (msg,), loc=loc)
 
     return load_item(context, builder, aryty, ary.data)
 
 
 if numpy_version < (2, 0):
     @lower_builtin("array.itemset", types.Array, types.Any)
-    def array_itemset(context, builder, sig, args):
+    def array_itemset(context, builder, sig, args, loc=None):
         aryty, valty = sig.args
         ary, val = args
         assert valty == aryty.dtype
@@ -657,7 +658,7 @@ if numpy_version < (2, 0):
         with builder.if_then(builder.icmp_signed('!=', nitems, nitems.type(1)),
                              likely=False):
             msg = "itemset(): can only write to an array of size 1"
-            context.call_conv.return_user_exc(builder, ValueError, (msg,))
+            context.call_conv.return_user_exc(builder, ValueError, (msg,), loc)
 
         store_item(context, builder, aryty, val, ary.data)
         return context.get_dummy_value()
@@ -967,7 +968,8 @@ class SliceIndexer(Indexer):
     Compute indices along a slice.
     """
 
-    def __init__(self, context, builder, aryty, ary, dim, idxty, slice):
+    def __init__(self, context, builder, aryty, ary, dim, idxty, slice,
+                 loc=None):
         self.context = context
         self.builder = builder
         self.aryty = aryty
@@ -977,13 +979,14 @@ class SliceIndexer(Indexer):
         self.slice = slice
         self.ll_intp = self.context.get_value_type(types.intp)
         self.zero = Constant(self.ll_intp, 0)
+        self.loc = loc
 
     def prepare(self):
         builder = self.builder
         # Fix slice for the dimension's size
         self.dim_size = builder.extract_value(self.ary.shape, self.dim)
         slicing.guard_invalid_slice(self.context, builder, self.idxty,
-                                    self.slice)
+                                    self.slice, self.loc)
         slicing.fix_slice(builder, self.slice, self.dim_size)
         self.is_step_negative = cgutils.is_neg_int(builder, self.slice.step)
         # Create loop entities
@@ -1088,7 +1091,7 @@ class FancyIndexer(object):
     """
 
     def __init__(self, context, builder, aryty, ary, index_types,
-                 indices, subspace_shape_tuple):
+                 indices, subspace_shape_tuple, loc=None):
         self.context = context
         self.builder = builder
         self.aryty = aryty
@@ -1119,7 +1122,7 @@ class FancyIndexer(object):
             if isinstance(idxty, types.SliceType):
                 slice = context.make_helper(builder, idxty, indexval)
                 indexer = SliceIndexer(context, builder, aryty, ary, ax,
-                                       idxty, slice)
+                                       idxty, slice, loc)
                 indexers.append(indexer)
             elif isinstance(idxty, types.Integer):
                 ind = fix_integer_index(context, builder, idxty, indexval,
@@ -1315,7 +1318,7 @@ def get_bdcast_idx(context, builder, array_indices):
 
 
 def fancy_getitem(context, builder, sig, args,
-                  aryty, ary, index_types, indices):
+                  aryty, ary, index_types, indices, loc=None):
 
     shapes = cgutils.unpack_tuple(builder, ary.shape)
     strides = cgutils.unpack_tuple(builder, ary.strides)
@@ -1338,14 +1341,14 @@ def fancy_getitem(context, builder, sig, args,
         index_types[i] = bdcast_idxty
 
     indexer = FancyIndexer(context, builder, aryty, ary,
-                           index_types, indices, subspace_shape_tuple)
+                           index_types, indices, subspace_shape_tuple, loc)
     indexer.prepare()
 
     # Construct output array
     out_ty = sig.return_type
     out_shapes = indexer.get_shape()
 
-    out = _empty_nd_impl(context, builder, out_ty, out_shapes)
+    out = _empty_nd_impl(context, builder, out_ty, out_shapes, loc)
     out_data = out.data
     out_idx = cgutils.alloca_once_value(builder,
                                         context.get_constant(types.intp, 0))
@@ -1376,7 +1379,7 @@ def fancy_getitem(context, builder, sig, args,
 
 
 @lower_builtin(operator.getitem, types.Buffer, types.Array)
-def fancy_getitem_array(context, builder, sig, args):
+def fancy_getitem_array(context, builder, sig, args, loc=None):
     """
     Advanced or basic indexing with an array.
     """
@@ -1387,12 +1390,12 @@ def fancy_getitem_array(context, builder, sig, args):
         # 0-d array index acts as a basic integer index
         idxty, idx = normalize_index(context, builder, idxty, idx)
         res = _getitem_array_generic(context, builder, sig.return_type,
-                                     aryty, ary, (idxty,), (idx,))
+                                     aryty, ary, (idxty,), (idx,), loc)
         return impl_ret_borrowed(context, builder, sig.return_type, res)
     else:
         # Advanced indexing
         return fancy_getitem(context, builder, sig, args,
-                             aryty, ary, (idxty,), (idx,))
+                             aryty, ary, (idxty,), (idx,), loc)
 
 
 def offset_bounds_from_strides(context, builder, arrty, arr, shapes, strides):
@@ -1533,7 +1536,8 @@ def maybe_copy_source(context, builder, use_copy,
     return src_getitem, src_cleanup
 
 
-def _bc_adjust_dimension(context, builder, shapes, strides, target_shape):
+def _bc_adjust_dimension(context, builder, shapes, strides, target_shape,
+                         loc=None):
     """
     Preprocess dimension for broadcasting.
     Returns (shapes, strides) such that the ndim match *target_shape*.
@@ -1562,7 +1566,7 @@ def _bc_adjust_dimension(context, builder, shapes, strides, target_shape):
         # Check error
         with builder.if_then(builder.not_(accepted), likely=False):
             msg = "cannot broadcast source array for assignment"
-            context.call_conv.return_user_exc(builder, ValueError, (msg,))
+            context.call_conv.return_user_exc(builder, ValueError, (msg,), loc)
         # Truncate extra shapes, strides
         shapes = shapes[nd_diff:]
         strides = strides[nd_diff:]
@@ -1593,7 +1597,7 @@ def _bc_adjust_shape_strides(context, builder, shapes, strides, target_shape):
     return bc_shapes, bc_strides
 
 
-def _broadcast_to_shape(context, builder, arrtype, arr, target_shape):
+def _broadcast_to_shape(context, builder, arrtype, arr, target_shape, loc=None):
     """
     Broadcast the given array to the target_shape.
     Returns (array_type, array)
@@ -1603,7 +1607,7 @@ def _broadcast_to_shape(context, builder, arrtype, arr, target_shape):
     strides = cgutils.unpack_tuple(builder, arr.strides)
 
     shapes, strides = _bc_adjust_dimension(context, builder, shapes, strides,
-                                           target_shape)
+                                           target_shape, loc)
     shapes, strides = _bc_adjust_shape_strides(context, builder, shapes,
                                                strides, target_shape)
     new_arrtype = arrtype.copy(ndim=len(target_shape), layout='A')
@@ -1624,13 +1628,13 @@ def _numpy_broadcast_to(typingctx, array, shape):
     ret = array.copy(ndim=shape.count, layout='A', readonly=True)
     sig = ret(array, shape)
 
-    def codegen(context, builder, sig, args):
+    def codegen(context, builder, sig, args, loc=None):
         src, shape_ = args
         srcty = sig.args[0]
 
         src = make_array(srcty)(context, builder, src)
         shape_ = cgutils.unpack_tuple(builder, shape_)
-        _, dest = _broadcast_to_shape(context, builder, srcty, src, shape_,)
+        _, dest = _broadcast_to_shape(context, builder, srcty, src, shape_, loc)
 
         # Hack to get np.broadcast_to to return a read-only array
         setattr(dest, 'parent', Constant(
@@ -1900,7 +1904,7 @@ def ol_raise_with_shape_context_cpu(src_shapes, index_shape):
         return impl
 
 
-def fancy_setslice(context, builder, sig, args, index_types, indices):
+def fancy_setslice(context, builder, sig, args, index_types, indices, loc=None):
     """
     Implement slice assignment for arrays.  This implementation works for
     basic as well as fancy indexing, since there's no functional difference
@@ -1934,7 +1938,8 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         subspace_shape_tuple = ()
 
     indexer = FancyIndexer(context, builder, aryty, ary,
-                           index_types, indices, subspace_shape_tuple)
+                           index_types, indices, subspace_shape_tuple,
+                           loc)
     indexer.prepare()
 
     def raise_shape_mismatch_error(context, builder, src_shapes, index_shape):
@@ -1950,7 +1955,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         func(builder, (context.make_tuple(builder, raise_sig.args[0],
                                           src_shapes),
                        context.make_tuple(builder, raise_sig.args[1],
-                                          index_shape)))
+                                          index_shape)), loc=loc)
 
     if isinstance(srcty, types.Buffer):
         # Source is an array
@@ -1959,7 +1964,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         src = make_array(srcty)(context, builder, src)
         # Broadcast source array to shape
         srcty, src = _broadcast_to_shape(context, builder, srcty, src,
-                                         index_shape)
+                                         index_shape, loc)
         src_shapes = cgutils.unpack_tuple(builder, src.shape)
         src_data = src.data
 
@@ -2012,7 +2017,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
             boundscheck=context.enable_boundscheck)
 
         val = src_getitem(src_idx)
-        val = context.cast(builder, val, src_dtype, aryty.dtype)
+        val = context.cast(builder, val, src_dtype, aryty.dtype, loc)
         store_item(context, builder, aryty, val, dest_ptr)
 
         indexer.end_loops()
@@ -2026,7 +2031,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
         index_shape = indexer.get_shape()
         assert len(index_shape) == 1
         len_impl = context.get_function(len, signature(types.intp, srcty))
-        seq_len = len_impl(builder, (src,))
+        seq_len = len_impl(builder, (src,), loc=loc)
 
         shape_error = builder.icmp_signed('!=', index_shape[0], seq_len)
 
@@ -2042,7 +2047,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
                 operator.getitem,
                 signature(src_dtype, srcty, types.intp),
             )
-            val = getitem_impl(builder, (src, cur))
+            val = getitem_impl(builder, (src, cur), loc=loc)
             next_idx = cgutils.increment_index(builder, cur)
             builder.store(next_idx, src_idx)
             return val
@@ -2060,7 +2065,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
             boundscheck=context.enable_boundscheck)
 
         val = src_getitem(src_idx)
-        val = context.cast(builder, val, src_dtype, aryty.dtype)
+        val = context.cast(builder, val, src_dtype, aryty.dtype, loc)
         store_item(context, builder, aryty, val, dest_ptr)
 
         indexer.end_loops()
@@ -2085,14 +2090,14 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
 # ------------------------------------------------------------------------------
 # Shape / layout altering
 
-def vararg_to_tuple(context, builder, sig, args):
+def vararg_to_tuple(context, builder, sig, args, loc=None):
     aryty = sig.args[0]
     dimtys = sig.args[1:]
     # values
     ary = args[0]
     dims = args[1:]
     # coerce all types to intp
-    dims = [context.cast(builder, val, ty, types.intp)
+    dims = [context.cast(builder, val, ty, types.intp, loc)
             for ty, val in zip(dimtys, dims)]
     # make a tuple
     shape = cgutils.pack_array(builder, dims, dims[0].type)
@@ -2180,8 +2185,8 @@ def array_transpose_tuple(context, builder, sig, args):
 
 
 @lower_builtin('array.transpose', types.Array, types.VarArg(types.Any))
-def array_transpose_vararg(context, builder, sig, args):
-    new_sig, new_args = vararg_to_tuple(context, builder, sig, args)
+def array_transpose_vararg(context, builder, sig, args, loc=None):
+    new_sig, new_args = vararg_to_tuple(context, builder, sig, args, loc)
     return array_transpose_tuple(context, builder, new_sig, new_args)
 
 
@@ -2407,7 +2412,7 @@ def normalize_reshape_value(origsize, shape):
 
 
 @lower_builtin('array.reshape', types.Array, types.BaseTuple)
-def array_reshape(context, builder, sig, args):
+def array_reshape(context, builder, sig, args, loc=None):
     aryty = sig.args[0]
     retty = sig.return_type
 
@@ -2457,7 +2462,8 @@ def array_reshape(context, builder, sig, args):
 
     with builder.if_then(fail):
         msg = "incompatible shape for array"
-        context.call_conv.return_user_exc(builder, NotImplementedError, (msg,))
+        context.call_conv.return_user_exc(builder, NotImplementedError, (msg,),
+                                          loc)
 
     ret = make_array(retty)(context, builder)
     populate_array(ret,
@@ -2472,8 +2478,8 @@ def array_reshape(context, builder, sig, args):
 
 
 @lower_builtin('array.reshape', types.Array, types.VarArg(types.Any))
-def array_reshape_vararg(context, builder, sig, args):
-    new_sig, new_args = vararg_to_tuple(context, builder, sig, args)
+def array_reshape_vararg(context, builder, sig, args, loc=None):
+    new_sig, new_args = vararg_to_tuple(context, builder, sig, args, loc)
     return array_reshape(context, builder, new_sig, new_args)
 
 
@@ -3057,7 +3063,7 @@ def ol_compatible_view(a, dtype):
 
 
 @lower_builtin('array.view', types.Array, types.DTypeSpec)
-def array_view(context, builder, sig, args):
+def array_view(context, builder, sig, args, loc=None):
     aryty = sig.args[0]
     retty = sig.return_type
 
@@ -3083,14 +3089,14 @@ def array_view(context, builder, sig, args):
         fnty = tyctx.resolve_value_type(_compatible_view)
         _compatible_view_sig = fnty.get_call_type(tyctx, (*sig.args,), {})
         impl = context.get_function(fnty, _compatible_view_sig)
-        impl(builder, args)
+        impl(builder, args, loc=loc)
 
     ok = _change_dtype(context, builder, aryty, retty, ret)
     fail = builder.icmp_unsigned('==', ok, Constant(ok.type, 0))
 
     with builder.if_then(fail):
         msg = "new type not compatible with array"
-        context.call_conv.return_user_exc(builder, ValueError, (msg,))
+        context.call_conv.return_user_exc(builder, ValueError, (msg,), loc)
 
     res = ret._getvalue()
     return impl_ret_borrowed(context, builder, sig.return_type, res)
@@ -3519,7 +3525,7 @@ def record_getattr(context, builder, typ, value, attr):
 
 
 @lower_setattr_generic(types.Record)
-def record_setattr(context, builder, sig, args, attr):
+def record_setattr(context, builder, sig, args, attr, loc=None):
     """
     Generic setattr() implementation for records: set the given record member.
     """
@@ -3543,22 +3549,22 @@ def record_setattr(context, builder, sig, args, attr):
         # Set the given scalar record member
         dptr = cgutils.get_record_member(builder, target, offset,
                                          context.get_data_type(elemty))
-        val = context.cast(builder, val, valty, elemty)
+        val = context.cast(builder, val, valty, elemty, loc)
         align = None if typ.aligned else 1
         context.pack_value(builder, elemty, val, dptr, align=align)
 
 
 @lower_builtin('static_getitem', types.Record, types.StringLiteral)
-def record_static_getitem_str(context, builder, sig, args):
+def record_static_getitem_str(context, builder, sig, args, loc=None):
     """
     Record.__getitem__ redirects to getattr()
     """
     impl = context.get_getattr(sig.args[0], args[1])
-    return impl(context, builder, sig.args[0], args[0], args[1])
+    return impl(context, builder, sig.args[0], args[0], args[1], loc=loc)
 
 
 @lower_builtin('static_getitem', types.Record, types.IntegerLiteral)
-def record_static_getitem_int(context, builder, sig, args):
+def record_static_getitem_int(context, builder, sig, args, loc=None):
     """
     Record.__getitem__ redirects to getattr()
     """
@@ -3566,7 +3572,7 @@ def record_static_getitem_int(context, builder, sig, args):
     fields = list(sig.args[0].fields)
     ll_field = context.insert_const_string(builder.module, fields[idx])
     impl = context.get_getattr(sig.args[0], ll_field)
-    return impl(context, builder, sig.args[0], args[0], fields[idx])
+    return impl(context, builder, sig.args[0], args[0], fields[idx], loc=loc)
 
 
 @lower_builtin('static_setitem', types.Record, types.StringLiteral, types.Any)
@@ -4432,9 +4438,9 @@ def iternext_numpy_nditer(context, builder, sig, args, result):
 
 @lower_builtin(pndindex, types.VarArg(types.Integer))
 @lower_builtin(np.ndindex, types.VarArg(types.Integer))
-def make_array_ndindex(context, builder, sig, args):
+def make_array_ndindex(context, builder, sig, args, loc=None):
     """ndindex(*shape)"""
-    shape = [context.cast(builder, arg, argty, types.intp)
+    shape = [context.cast(builder, arg, argty, types.intp, loc)
              for argty, arg in zip(sig.args, args)]
 
     nditercls = make_ndindex_cls(types.NumpyNdIndexType(len(shape)))
@@ -4447,7 +4453,7 @@ def make_array_ndindex(context, builder, sig, args):
 
 @lower_builtin(pndindex, types.BaseTuple)
 @lower_builtin(np.ndindex, types.BaseTuple)
-def make_array_ndindex_tuple(context, builder, sig, args):
+def make_array_ndindex_tuple(context, builder, sig, args, loc=None):
     """ndindex(shape)"""
     ndim = sig.return_type.ndim
     if ndim > 0:
@@ -4455,7 +4461,7 @@ def make_array_ndindex_tuple(context, builder, sig, args):
         tup = args[0]
 
         shape = cgutils.unpack_tuple(builder, tup, ndim)
-        shape = [context.cast(builder, idx, idxty, types.intp)
+        shape = [context.cast(builder, idx, idxty, types.intp, loc)
                  for idx in shape]
     else:
         shape = []
@@ -4520,7 +4526,7 @@ def dtype_eq_impl(context, builder, sig, args):
 # ------------------------------------------------------------------------------
 # Numpy array constructors
 
-def _empty_nd_impl(context, builder, arrtype, shapes):
+def _empty_nd_impl(context, builder, arrtype, shapes, loc=None):
     """Utility function used for allocating a new array during LLVM code
     generation (lowering).  Given a target context, builder, array
     type, and a tuple or list of lowered dimension sizes, returns a
@@ -4570,8 +4576,7 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
         context.call_conv.return_user_exc(
             builder, ValueError,
             ("array is too big; `arr.size * arr.dtype.itemsize` is larger than"
-             " the maximum possible size.",)
-        )
+             " the maximum possible size.",), loc)
 
     dtype = arrtype.dtype
     align_val = context.get_preferred_array_alignment(dtype)
@@ -4629,7 +4634,7 @@ def intrin_alloc(typingctx, allocsize, align):
     return sig, codegen
 
 
-def _parse_shape(context, builder, ty, val):
+def _parse_shape(context, builder, ty, val, loc=None):
     """
     Parse the shape argument to an array constructor.
     """
@@ -4646,8 +4651,7 @@ def _parse_shape(context, builder, ty, val):
             with builder.if_then(is_larger, likely=False):
                 context.call_conv.return_user_exc(
                     builder, ValueError,
-                    ("Cannot safely convert value to intp",)
-                )
+                    ("Cannot safely convert value to intp",), loc)
             if src_t.width > intp_width:
                 res = builder.trunc(src, intp_ir)
             else:
@@ -4656,7 +4660,7 @@ def _parse_shape(context, builder, ty, val):
 
     if isinstance(ty, types.Integer):
         ndim = 1
-        passed_shapes = [context.cast(builder, val, ty, types.intp)]
+        passed_shapes = [context.cast(builder, val, ty, types.intp, loc)]
     else:
         assert isinstance(ty, types.BaseTuple)
         ndim = ty.count
@@ -4666,12 +4670,14 @@ def _parse_shape(context, builder, ty, val):
     for s in passed_shapes:
         shapes.append(safecast_intp(context, builder, s.type, s))
 
-    zero = context.get_constant_generic(builder, types.intp, 0)
+    zero = context.get_constant_generic(builder, types.intp, 0, loc)
     for dim in range(ndim):
         is_neg = builder.icmp_signed('<', shapes[dim], zero)
         with cgutils.if_unlikely(builder, is_neg):
             context.call_conv.return_user_exc(
-                builder, ValueError, ("negative dimensions not allowed",)
+                builder, ValueError,
+                ("negative dimensions not allowed",),
+                loc
             )
 
     return shapes
@@ -5366,7 +5372,7 @@ def impl_numpy_copy(a):
     return numpy_copy
 
 
-def _as_layout_array(context, builder, sig, args, output_layout):
+def _as_layout_array(context, builder, sig, args, output_layout, loc=None):
     """
     Common logic for layout conversion function;
     e.g. ascontiguousarray and asfortranarray
@@ -5382,7 +5388,7 @@ def _as_layout_array(context, builder, sig, args, output_layout):
         ret = make_array(retty)(context, builder)
 
         shape = context.get_constant_generic(
-            builder, types.UniTuple(types.intp, 1), (1,),
+            builder, types.UniTuple(types.intp, 1), (1,), loc
         )
         strides = context.make_tuple(builder,
                                      types.UniTuple(types.intp, 1),
@@ -5443,8 +5449,8 @@ def _as_layout_array_intrinsic(typingctx, a, output_layout):
         readonly=False)
     sig = ret(a, output_layout)
 
-    return sig, lambda c, b, s, a: _as_layout_array(
-        c, b, s, a, output_layout=output_layout.literal_value)
+    return sig, lambda c, b, s, a, loc=None: _as_layout_array(
+        c, b, s, a, loc=loc, output_layout=output_layout.literal_value)
 
 
 @overload(np.ascontiguousarray)
@@ -5478,7 +5484,7 @@ def array_asfortranarray(a):
 
 @lower_builtin("array.astype", types.Array, types.DTypeSpec)
 @lower_builtin("array.astype", types.Array, types.StringLiteral)
-def array_astype(context, builder, sig, args):
+def array_astype(context, builder, sig, args, loc=None):
     arytype = sig.args[0]
     ary = make_array(arytype)(context, builder, value=args[0])
     shapes = cgutils.unpack_tuple(builder, ary.shape)
@@ -5501,7 +5507,7 @@ def array_astype(context, builder, sig, args):
                                              shapes, dest_strides,
                                              rettype.layout, indices)
         item = load_item(context, builder, arytype, src_ptr)
-        item = context.cast(builder, item, arytype.dtype, rettype.dtype)
+        item = context.cast(builder, item, arytype.dtype, rettype.dtype, loc)
         store_item(context, builder, rettype, item, dest_ptr)
 
     return impl_ret_new_ref(context, builder, sig.return_type, ret._getvalue())
@@ -5563,7 +5569,7 @@ def np_frombuffer(typingctx, buffer, dtype, count, offset, retty):
     ty = retty.instance_type
     sig = ty(buffer, dtype, count, offset, retty)
 
-    def codegen(context, builder, sig, args):
+    def codegen(context, builder, sig, args, loc=None):
         bufty = sig.args[0]
         arg_count = args[2]
         arg_offset = args[3]
@@ -5588,7 +5594,7 @@ def np_frombuffer(typingctx, buffer, dtype, count, offset, retty):
 
         msg = "offset must be non-negative and no greater than buffer length"
         with builder.if_then(nbytes_is_negative, likely=False):
-            context.call_conv.return_user_exc(builder, ValueError, (msg,))
+            context.call_conv.return_user_exc(builder, ValueError, (msg,), loc)
 
         ll_count_is_negative = builder.icmp_signed(
             '<',
@@ -5601,7 +5607,7 @@ def np_frombuffer(typingctx, buffer, dtype, count, offset, retty):
         is_incompatible = cgutils.is_not_null(builder, rem)
         with builder.if_then(is_incompatible, likely=False):
             msg = "buffer size must be a multiple of element size"
-            context.call_conv.return_user_exc(builder, ValueError, (msg,))
+            context.call_conv.return_user_exc(builder, ValueError, (msg,), loc)
 
         # Compute number of elements based on count
         with builder.if_else(ll_count_is_negative) as (then_block, else_block):
@@ -5621,7 +5627,7 @@ def np_frombuffer(typingctx, buffer, dtype, count, offset, retty):
 
         with builder.if_then(is_too_large, likely=False):
             msg = "buffer is smaller than requested size"
-            context.call_conv.return_user_exc(builder, ValueError, (msg,))
+            context.call_conv.return_user_exc(builder, ValueError, (msg,), loc)
 
         # Set shape and strides
         shape = cgutils.pack_array(builder, [ll_itemcount])
@@ -5743,7 +5749,7 @@ def get_cfarray_intrinsic(layout, dtype_):
     return intrinsic_cfarray
 
 
-def np_cfarray(context, builder, sig, args):
+def np_cfarray(context, builder, sig, args, loc=None):
     """
     numba.numpy_support.carray(...) and
     numba.numpy_support.farray(...).
@@ -5764,7 +5770,7 @@ def np_cfarray(context, builder, sig, args):
     else:
         shapety = (shapety,)
         shapes = (shape,)
-    shapes = [context.cast(builder, value, fromty, types.intp)
+    shapes = [context.cast(builder, value, fromty, types.intp, loc)
               for fromty, value in zip(shapety, shapes)]
 
     off = ll_itemsize
@@ -5795,17 +5801,17 @@ def np_cfarray(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
-def _get_seq_size(context, builder, seqty, seq):
+def _get_seq_size(context, builder, seqty, seq, loc=None):
     if isinstance(seqty, types.BaseTuple):
         return context.get_constant(types.intp, len(seqty))
     elif isinstance(seqty, types.Sequence):
         len_impl = context.get_function(len, signature(types.intp, seqty,))
-        return len_impl(builder, (seq,))
+        return len_impl(builder, (seq,), loc=loc)
     else:
         assert 0
 
 
-def _get_borrowing_getitem(context, seqty):
+def _get_borrowing_getitem(context, seqty, loc=None):
     """
     Return a getitem() implementation that doesn't incref its result.
     """
@@ -5814,7 +5820,7 @@ def _get_borrowing_getitem(context, seqty):
                                         signature(retty, seqty, types.intp))
 
     def wrap(builder, args):
-        ret = getitem_impl(builder, args)
+        ret = getitem_impl(builder, args, loc=loc)
         if context.enable_nrt:
             context.nrt.decref(builder, retty, ret)
         return ret
@@ -5822,7 +5828,7 @@ def _get_borrowing_getitem(context, seqty):
     return wrap
 
 
-def compute_sequence_shape(context, builder, ndim, seqty, seq):
+def compute_sequence_shape(context, builder, ndim, seqty, seq, loc=None):
     """
     Compute the likely shape of a nested sequence (possibly 0d).
     """
@@ -5836,7 +5842,7 @@ def compute_sequence_shape(context, builder, ndim, seqty, seq):
             else:
                 return seqty[0], builder.extract_value(seq, 0)
         else:
-            getitem_impl = _get_borrowing_getitem(context, seqty)
+            getitem_impl = _get_borrowing_getitem(context, seqty, loc)
             return seqty.dtype, getitem_impl(builder, (seq, zero))
 
     # Compute shape by traversing the first element of each nested
@@ -5847,25 +5853,26 @@ def compute_sequence_shape(context, builder, ndim, seqty, seq):
     for i in range(ndim):
         if i > 0:
             innerty, inner = get_first_item(innerty, inner)
-        shapes.append(_get_seq_size(context, builder, innerty, inner))
+        shapes.append(_get_seq_size(context, builder, innerty, inner, loc=loc))
 
     return tuple(shapes)
 
 
-def check_sequence_shape(context, builder, seqty, seq, shapes):
+def check_sequence_shape(context, builder, seqty, seq, shapes, loc=None):
     """
     Check the nested sequence matches the given *shapes*.
     """
 
     def _fail():
         context.call_conv.return_user_exc(builder, ValueError,
-                                          ("incompatible sequence shape",))
+                                          ("incompatible sequence shape",),
+                                          loc)
 
     def check_seq_size(seqty, seq, shapes):
         if len(shapes) == 0:
             return
 
-        size = _get_seq_size(context, builder, seqty, seq)
+        size = _get_seq_size(context, builder, seqty, seq, loc)
         expected = shapes[0]
         mismatch = builder.icmp_signed('!=', size, expected)
         with builder.if_then(mismatch, likely=False):
@@ -5875,7 +5882,7 @@ def check_sequence_shape(context, builder, seqty, seq, shapes):
             return
 
         if isinstance(seqty, types.Sequence):
-            getitem_impl = _get_borrowing_getitem(context, seqty)
+            getitem_impl = _get_borrowing_getitem(context, seqty, loc)
             with cgutils.for_range(builder, size) as loop:
                 innerty = seqty.dtype
                 inner = getitem_impl(builder, (seq, loop.index))
@@ -5894,7 +5901,7 @@ def check_sequence_shape(context, builder, seqty, seq, shapes):
 
 
 def assign_sequence_to_array(context, builder, data, shapes, strides,
-                             arrty, seqty, seq):
+                             arrty, seqty, seq, loc=None):
     """
     Assign a nested sequence contents to an array.  The shape must match
     the sequence's structure.
@@ -5903,7 +5910,7 @@ def assign_sequence_to_array(context, builder, data, shapes, strides,
     def assign_item(indices, valty, val):
         ptr = cgutils.get_item_pointer2(context, builder, data, shapes, strides,
                                         arrty.layout, indices, wraparound=False)
-        val = context.cast(builder, val, valty, arrty.dtype)
+        val = context.cast(builder, val, valty, arrty.dtype, loc)
         store_item(context, builder, arrty, val, ptr)
 
     def assign(seqty, seq, shapes, indices):
@@ -5915,7 +5922,7 @@ def assign_sequence_to_array(context, builder, data, shapes, strides,
         size = shapes[0]
 
         if isinstance(seqty, types.Sequence):
-            getitem_impl = _get_borrowing_getitem(context, seqty)
+            getitem_impl = _get_borrowing_getitem(context, seqty, loc)
             with cgutils.for_range(builder, size) as loop:
                 innerty = seqty.dtype
                 inner = getitem_impl(builder, (seq, loop.index))
@@ -5951,19 +5958,19 @@ def np_array(typingctx, obj, dtype):
     ret = np_array_typer(typingctx, obj, dtype)
     sig = ret(obj, dtype)
 
-    def codegen(context, builder, sig, args):
+    def codegen(context, builder, sig, args, loc=None):
         arrty = sig.return_type
         ndim = arrty.ndim
         seqty = sig.args[0]
         seq = args[0]
 
-        shapes = compute_sequence_shape(context, builder, ndim, seqty, seq)
+        shapes = compute_sequence_shape(context, builder, ndim, seqty, seq, loc)
         assert len(shapes) == ndim
 
-        check_sequence_shape(context, builder, seqty, seq, shapes)
+        check_sequence_shape(context, builder, seqty, seq, shapes, loc)
         arr = _empty_nd_impl(context, builder, arrty, shapes)
         assign_sequence_to_array(context, builder, arr.data, shapes,
-                                 arr.strides, arrty, seqty, seq)
+                                 arr.strides, arrty, seqty, seq, loc)
 
         return impl_ret_new_ref(context, builder, sig.return_type,
                                 arr._getvalue())
@@ -5986,7 +5993,7 @@ def impl_np_array(object, dtype=None):
     return impl
 
 
-def _normalize_axis(context, builder, func_name, ndim, axis):
+def _normalize_axis(context, builder, func_name, ndim, axis, loc=None):
     zero = axis.type(0)
     ll_ndim = axis.type(ndim)
 
@@ -6000,7 +6007,7 @@ def _normalize_axis(context, builder, func_name, ndim, axis):
         builder.icmp_signed('>=', axis, ll_ndim))
     with builder.if_then(axis_out_of_bounds, likely=False):
         msg = "%s(): axis out of bounds" % func_name
-        context.call_conv.return_user_exc(builder, IndexError, (msg,))
+        context.call_conv.return_user_exc(builder, IndexError, (msg,), loc)
 
     return axis
 
@@ -6097,10 +6104,10 @@ def np_expand_dims(typingctx, a, axis):
     ret = a.copy(ndim=a.ndim + 1, layout=layout)
     sig = ret(a, axis)
 
-    def codegen(context, builder, sig, args):
-        axis = context.cast(builder, args[1], sig.args[1], types.intp)
+    def codegen(context, builder, sig, args, loc=None):
+        axis = context.cast(builder, args[1], sig.args[1], types.intp, loc)
         axis = _normalize_axis(context, builder, "np.expand_dims",
-                               sig.return_type.ndim, axis)
+                               sig.return_type.ndim, axis, loc)
 
         ret = expand_dims(context, builder, sig, args, axis)
         return impl_ret_borrowed(context, builder, sig.return_type, ret)
@@ -6191,7 +6198,7 @@ def np_atleast_3d(*args):
 
 def _do_concatenate(context, builder, axis,
                     arrtys, arrs, arr_shapes, arr_strides,
-                    retty, ret_shapes):
+                    retty, ret_shapes, loc=None):
     """
     Concatenate arrays along the given axis.
     """
@@ -6238,7 +6245,7 @@ def _do_concatenate(context, builder, axis,
                                                 arr_sh, arr_st,
                                                 arrty.layout, indices)
             val = load_item(context, builder, arrty, src_ptr)
-            val = context.cast(builder, val, arrty.dtype, retty.dtype)
+            val = context.cast(builder, val, arrty.dtype, retty.dtype, loc)
             dest_ptr = cgutils.get_item_pointer2(context, builder, ret_data,
                                                  ret_shapes, ret_strides,
                                                  retty.layout, indices)
@@ -6250,13 +6257,13 @@ def _do_concatenate(context, builder, axis,
     return ret
 
 
-def _np_concatenate(context, builder, arrtys, arrs, retty, axis):
+def _np_concatenate(context, builder, arrtys, arrs, retty, axis, loc=None):
     ndim = retty.ndim
 
     arrs = [make_array(aty)(context, builder, value=a)
             for aty, a in zip(arrtys, arrs)]
 
-    axis = _normalize_axis(context, builder, "np.concatenate", ndim, axis)
+    axis = _normalize_axis(context, builder, "np.concatenate", ndim, axis, loc)
 
     # Get input shapes
     arr_shapes = [cgutils.unpack_tuple(builder, arr.shape) for arr in arrs]
@@ -6290,17 +6297,17 @@ def _np_concatenate(context, builder, arrtys, arrs, retty, axis):
                     context.call_conv.return_user_exc(
                         builder, ValueError,
                         ("np.concatenate(): input sizes over "
-                         "dimension %d do not match" % dim,))
+                         "dimension %d do not match" % dim,), loc)
 
     ret_shapes = [builder.load(sh) for sh in ret_shapes]
 
     ret = _do_concatenate(context, builder, axis,
                           arrtys, arrs, arr_shapes, arr_strides,
-                          retty, ret_shapes)
+                          retty, ret_shapes, loc)
     return impl_ret_new_ref(context, builder, retty, ret._getvalue())
 
 
-def _np_stack(context, builder, arrtys, arrs, retty, axis):
+def _np_stack(context, builder, arrtys, arrs, retty, axis, loc=None):
     ndim = retty.ndim
 
     zero = cgutils.intp_t(0)
@@ -6310,7 +6317,7 @@ def _np_stack(context, builder, arrtys, arrs, retty, axis):
     arrs = [make_array(aty)(context, builder, value=a)
             for aty, a in zip(arrtys, arrs)]
 
-    axis = _normalize_axis(context, builder, "np.stack", ndim, axis)
+    axis = _normalize_axis(context, builder, "np.stack", ndim, axis, loc)
 
     # Check input arrays have the same shape
     orig_shape = cgutils.unpack_tuple(builder, arrs[0].shape)
@@ -6323,7 +6330,8 @@ def _np_stack(context, builder, arrtys, arrs, retty, axis):
             with builder.if_then(builder.not_(is_ok), likely=False):
                 context.call_conv.return_user_exc(
                     builder, ValueError,
-                    ("np.stack(): all input arrays must have the same shape",))
+                    ("np.stack(): all input arrays must have the same shape",),
+                    loc)
 
     orig_strides = [cgutils.unpack_tuple(builder, arr.strides) for arr in arrs]
 
@@ -6385,7 +6393,7 @@ def _np_stack(context, builder, arrtys, arrs, retty, axis):
     # Create concatenated array
     ret = _do_concatenate(context, builder, axis,
                           arrtys, arrs, input_shapes, input_strides,
-                          retty, ret_shapes)
+                          retty, ret_shapes, loc)
     return impl_ret_new_ref(context, builder, retty, ret._getvalue())
 
 
@@ -6413,13 +6421,13 @@ def np_concatenate(typingctx, arrays, axis):
     assert isinstance(ret, types.Array)
     sig = ret(arrays, axis)
 
-    def codegen(context, builder, sig, args):
-        axis = context.cast(builder, args[1], sig.args[1], types.intp)
+    def codegen(context, builder, sig, args, loc=None):
+        axis = context.cast(builder, args[1], sig.args[1], types.intp, loc)
         return _np_concatenate(context, builder,
                                list(sig.args[0]),
                                cgutils.unpack_tuple(builder, args[0]),
                                sig.return_type,
-                               axis)
+                               axis, loc)
 
     return sig, codegen
 
@@ -6450,7 +6458,7 @@ def np_column_stack(typingctx, tup):
     ret = types.Array(dtype, ndim, layout)
     sig = ret(tup)
 
-    def codegen(context, builder, sig, args):
+    def codegen(context, builder, sig, args, loc=None):
         orig_arrtys = list(sig.args[0])
         orig_arrs = cgutils.unpack_tuple(builder, args[0])
 
@@ -6474,7 +6482,7 @@ def np_column_stack(typingctx, tup):
                 arrs.append(newarr)
 
         return _np_concatenate(context, builder, arrtys, arrs,
-                               sig.return_type, axis)
+                               sig.return_type, axis, loc)
 
     return sig, codegen
 
@@ -6487,7 +6495,7 @@ def impl_column_stack(tup):
         return impl
 
 
-def _np_stack_common(context, builder, sig, args, axis):
+def _np_stack_common(context, builder, sig, args, axis, loc=None):
     """
     np.stack() with the given axis value.
     """
@@ -6495,7 +6503,7 @@ def _np_stack_common(context, builder, sig, args, axis):
                      list(sig.args[0]),
                      cgutils.unpack_tuple(builder, args[0]),
                      sig.return_type,
-                     axis)
+                     axis, loc)
 
 
 @intrinsic
@@ -6507,9 +6515,9 @@ def np_stack_common(typingctx, arrays, axis):
     ret = types.Array(dtype, ndim + 1, layout)
     sig = ret(arrays, axis)
 
-    def codegen(context, builder, sig, args):
-        axis = context.cast(builder, args[1], sig.args[1], types.intp)
-        return _np_stack_common(context, builder, sig, args, axis)
+    def codegen(context, builder, sig, args, loc=None):
+        axis = context.cast(builder, args[1], sig.args[1], types.intp, loc)
+        return _np_stack_common(context, builder, sig, args, axis, loc)
 
     return sig, codegen
 
@@ -6536,14 +6544,14 @@ def _np_hstack(typingctx, tup):
     ret = NdStack_typer(typingctx, "np.hstack", tup, 1)
     sig = ret(tup)
 
-    def codegen(context, builder, sig, args):
+    def codegen(context, builder, sig, args, loc=None):
         tupty = sig.args[0]
         ndim = tupty[0].ndim
 
         if ndim == 0:
             # hstack() on 0-d arrays returns a 1-d array
             axis = context.get_constant(types.intp, 0)
-            return _np_stack_common(context, builder, sig, args, axis)
+            return _np_stack_common(context, builder, sig, args, axis, loc)
 
         else:
             # As a special case, dimension 0 of 1-dimensional arrays
@@ -6571,7 +6579,7 @@ def _np_vstack(typingctx, tup):
     ret = NdStack_typer(typingctx, "np.vstack", tup, 2)
     sig = ret(tup)
 
-    def codegen(context, builder, sig, args):
+    def codegen(context, builder, sig, args, loc=None):
         tupty = sig.args[0]
         ndim = tupty[0].ndim
 
@@ -6582,7 +6590,7 @@ def _np_vstack(typingctx, tup):
         elif ndim == 1:
             # np.stack(arrays, axis=0)
             axis = context.get_constant(types.intp, 0)
-            return _np_stack_common(context, builder, sig, args, axis)
+            return _np_stack_common(context, builder, sig, args, axis, loc)
 
         else:
             def np_vstack_impl(arrays):
@@ -6610,7 +6618,7 @@ def _np_dstack(typingctx, tup):
     ret = NdStack_typer(typingctx, "np.dstack", tup, 3)
     sig = ret(tup)
 
-    def codegen(context, builder, sig, args):
+    def codegen(context, builder, sig, args, loc=None):
         tupty = sig.args[0]
         retty = sig.return_type
         ndim = tupty[0].ndim
@@ -6627,7 +6635,7 @@ def _np_dstack(typingctx, tup):
             stack_retty = retty.copy(ndim=retty.ndim - 1)
             stack_sig = typing.signature(stack_retty, *sig.args)
             stack_ret = _np_stack_common(context, builder, stack_sig, args,
-                                         axis)
+                                         axis, loc)
 
             axis = context.get_constant(types.intp, 0)
             expand_sig = typing.signature(retty, stack_retty)
@@ -6636,7 +6644,8 @@ def _np_dstack(typingctx, tup):
         elif ndim == 2:
             # np.stack(arrays, axis=2)
             axis = context.get_constant(types.intp, 2)
-            return _np_stack_common(context, builder, sig, args, axis)
+            return _np_stack_common(context, builder, sig, args,
+                                    axis, loc)
 
         else:
             def np_vstack_impl(arrays):
