@@ -694,7 +694,7 @@ class BaseContext(object):
         pair = self.make_helper(builder, ty, val)
         return pair.second
 
-    def cast(self, builder, val, fromty, toty):
+    def cast(self, builder, val, fromty, toty, loc=None):
         """
         Cast a value of type *fromty* to type *toty*.
         This implements implicit conversions as can happen due to the
@@ -707,12 +707,14 @@ class BaseContext(object):
             return val
         try:
             impl = self._casts.find((fromty, toty))
+            if(_has_loc(impl)):
+                return impl(self, builder, fromty, toty, val, loc=loc)
             return impl(self, builder, fromty, toty, val)
         except errors.NumbaNotImplementedError:
             raise errors.NumbaNotImplementedError(
                 "Cannot cast %s to %s: %s" % (fromty, toty, val))
 
-    def generic_compare(self, builder, key, argtypes, args):
+    def generic_compare(self, builder, key, argtypes, args, loc=None):
         """
         Compare the given LLVM values of the given Numba types using
         the comparison *key* (e.g. '==').  The values are first cast to
@@ -722,8 +724,8 @@ class BaseContext(object):
         av, bv = args
         ty = self.typing_context.unify_types(at, bt)
         assert ty is not None
-        cav = self.cast(builder, av, at, ty)
-        cbv = self.cast(builder, bv, bt, ty)
+        cav = self.cast(builder, av, at, ty, loc)
+        cbv = self.cast(builder, bv, bt, ty, loc)
         fnty = self.typing_context.resolve_value_type(key)
         # the sig is homogeneous in the unified casted type
         cmpsig = fnty.get_call_type(self.typing_context, (ty, ty), {})

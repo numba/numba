@@ -44,25 +44,25 @@ lower_builtin(operator.is_, types.none, types.Optional)(optional_is_none)
 
 
 @lower_getattr_generic(types.Optional)
-def optional_getattr(context, builder, typ, value, attr):
+def optional_getattr(context, builder, typ, value, attr, loc=None):
     """
     Optional.__getattr__ => redirect to the wrapped type.
     """
     inner_type = typ.type
-    val = context.cast(builder, value, typ, inner_type)
+    val = context.cast(builder, value, typ, inner_type, loc)
     imp = context.get_getattr(inner_type, attr)
     return imp(context, builder, inner_type, val, attr)
 
 
 @lower_setattr_generic(types.Optional)
-def optional_setattr(context, builder, sig, args, attr):
+def optional_setattr(context, builder, sig, args, attr, loc=None):
     """
     Optional.__setattr__ => redirect to the wrapped type.
     """
     basety, valty = sig.args
     target, val = args
     target_type = basety.type
-    target = context.cast(builder, target, basety, target_type)
+    target = context.cast(builder, target, basety, target_type, loc)
 
     newsig = typing.signature(sig.return_type, target_type, valty)
     imp = context.get_setattr(attr, newsig)
@@ -70,7 +70,7 @@ def optional_setattr(context, builder, sig, args, attr):
 
 
 @lower_cast(types.Optional, types.Optional)
-def optional_to_optional(context, builder, fromty, toty, val):
+def optional_to_optional(context, builder, fromty, toty, val, loc=None):
     """
     The handling of optional->optional cast must be special cased for
     correct propagation of None value.  Given type T and U. casting of
@@ -89,7 +89,7 @@ def optional_to_optional(context, builder, fromty, toty, val):
             # Cast internal value
             outoptval.valid = cgutils.true_bit
             outoptval.data = context.cast(builder, optval.data,
-                                          fromty.type, toty.type)
+                                          fromty.type, toty.type, loc)
 
         with is_not_valid:
             # Store None to result
@@ -101,21 +101,21 @@ def optional_to_optional(context, builder, fromty, toty, val):
 
 
 @lower_cast(types.Any, types.Optional)
-def any_to_optional(context, builder, fromty, toty, val):
+def any_to_optional(context, builder, fromty, toty, val, loc=None):
     if fromty == types.none:
         return context.make_optional_none(builder, toty.type)
     else:
-        val = context.cast(builder, val, fromty, toty.type)
+        val = context.cast(builder, val, fromty, toty.type, loc)
         return context.make_optional_value(builder, toty.type, val)
 
 
 @lower_cast(types.Optional, types.Any)
 @lower_cast(types.Optional, types.Boolean)
-def optional_to_any(context, builder, fromty, toty, val):
+def optional_to_any(context, builder, fromty, toty, val, loc=None):
     optval = context.make_helper(builder, fromty, value=val)
     validbit = cgutils.as_bool_bit(builder, optval.valid)
     with builder.if_then(builder.not_(validbit), likely=False):
         msg = "expected %s, got None" % (fromty.type,)
-        context.call_conv.return_user_exc(builder, TypeError, (msg,))
+        context.call_conv.return_user_exc(builder, TypeError, (msg,), loc=loc)
 
-    return context.cast(builder, optval.data, fromty.type, toty)
+    return context.cast(builder, optval.data, fromty.type, toty, loc)
