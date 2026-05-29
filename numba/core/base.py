@@ -409,9 +409,19 @@ class BaseContext(object):
         fnty = llvmir.FunctionType(restype, argtypes)
         return fnty
 
-    def declare_function(self, module, fndesc):
+    def declare_function(self, module, fndesc, libs=()):
+        # If the callee's library has renamed its exported symbols (to avoid
+        # EE-level UID collisions across cached and freshly-compiled code), the
+        # caller must declare the callee under the renamed name. The library
+        # owns the rename; the context just consults its symbol map.
+        name = fndesc.mangled_name
+        for lib in libs:
+            renamed = getattr(lib, '_symbol_map', {}).get(name)
+            if renamed is not None:
+                name = renamed
+                break
         fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
-        fn = cgutils.get_or_insert_function(module, fnty, fndesc.mangled_name)
+        fn = cgutils.get_or_insert_function(module, fnty, name)
         self.apply_target_attributes(fn, fndesc.argtypes, fndesc.restype)
         self.call_conv.decorate_function(fn, fndesc.args, fndesc.argtypes, noalias=fndesc.noalias)
         if fndesc.inline:
