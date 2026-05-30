@@ -211,11 +211,12 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
 }
 
 // Look up `name` in any library already loaded into this process. Returns
-// NULL if the symbol is not present. The `omp_` prefix is reserved by the
-// OpenMP standard, so collisions with non-OpenMP libraries are not a
-// concern; in mixed-runtime environments (e.g. libgomp + libiomp5 both
-// loaded) this is best-effort and may resolve into a runtime other than
-// the one Numba statically links against.
+// NULL if the symbol is not present, or if the symbol's value is NULL (the
+// distinction is moot here, as the callers will not invoke a NULL fn).
+// The `omp_` prefix is reserved by the OpenMP standard, so collisions with
+// non-OpenMP libraries are not a concern; in mixed-runtime environments
+// (e.g. libgomp + libiomp5 both loaded) this is best-effort and may resolve
+// into a runtime other than the one Numba dynamically links against.
 static void *find_loaded_symbol(const char *name)
 {
 #ifdef _WIN32
@@ -224,17 +225,28 @@ static void *find_loaded_symbol(const char *name)
     if(!EnumProcessModules(GetCurrentProcess(), modules,
                            sizeof(modules), &bytes_needed))
         return NULL;
+    // EnumProcessModules sets bytes_needed to the total bytes required; if
+    // it exceeds our buffer the module list was truncated, so clamp the
+    // iteration count to the part that actually fits.
     DWORD count = bytes_needed / sizeof(HMODULE);
     if(count > sizeof(modules) / sizeof(modules[0]))
         count = sizeof(modules) / sizeof(modules[0]);
     for(DWORD i = 0; i < count; ++i)
     {
         FARPROC sym = GetProcAddress(modules[i], name);
-        if(sym) return (void *)sym;
+        if(sym != NULL) {
+            return (void *)sym;
+        }
     }
     return NULL;
 #else
-    return dlsym(RTLD_DEFAULT, name);
+    // POSIX dlsym idiom: clear any prior error, look up, then check
+    // dlerror() to distinguish "not present" from "found and is NULL".
+    (void)dlerror();
+    void *sym = dlsym(RTLD_DEFAULT, name);
+    if(dlerror() != NULL)
+        return NULL;
+    return sym;
 #endif
 }
 
@@ -261,17 +273,26 @@ static void launch_threads(int count)
     // version does not predict which symbols exist in the loaded library.
     // Probe omp_set_max_active_levels (OpenMP 5.0+) at runtime and fall
     // back to the deprecated omp_set_nested if it isn't present.
+    // Assign via a void** alias to avoid the implementation-defined
+    // void*-to-function-pointer conversion that POSIX permits for dlsym.
     typedef void (*set_max_active_levels_fn)(int);
     typedef int  (*get_supported_active_levels_fn)(void);
-    set_max_active_levels_fn set_max_levels =
-        (set_max_active_levels_fn)find_loaded_symbol("omp_set_max_active_levels");
-    get_supported_active_levels_fn get_supported_levels =
-        (get_supported_active_levels_fn)find_loaded_symbol("omp_get_supported_active_levels");
+    set_max_active_levels_fn set_max_levels = NULL;
+    get_supported_active_levels_fn get_supported_levels = NULL;
 
-    if(set_max_levels)
-        set_max_levels(get_supported_levels ? get_supported_levels() : 32);
+    *(void **)(&set_max_levels)
+        = find_loaded_symbol("omp_set_max_active_levels");
+    if(set_max_levels != NULL)
+    {
+        *(void **)(&get_supported_levels)
+            = find_loaded_symbol("omp_get_supported_active_levels");
+        set_max_levels((get_supported_levels != NULL)
+                       ? get_supported_levels() : 32);
+    }
     else
+    {
         omp_set_nested(0x1);
+    }
 
     _INIT_NUM_THREADS = count;
 }
