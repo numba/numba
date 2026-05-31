@@ -502,6 +502,41 @@ class TestInlinedClosure(TestCase):
 
         _inner()
 
+    def test_issue_10379(self):
+        # Assigning a nonlocal variable more than once inside an inlined
+        # closure used to silently drop every write after the first. It is now
+        # rejected rather than miscompiled.
+        @njit
+        def reassign_nonlocal():
+            x = 0
+
+            def bar():
+                nonlocal x
+                x = 1
+                x = 2
+
+            bar()
+            return x
+
+        with self.assertRaises(UnsupportedError) as raises:
+            reassign_nonlocal()
+        msg = "Reassigning the nonlocal variable"
+        self.assertIn(msg, str(raises.exception))
+
+        # A single assignment to a nonlocal is still supported.
+        @njit
+        def assign_nonlocal_once():
+            x = 0
+
+            def bar():
+                nonlocal x
+                x = 1
+
+            bar()
+            return x
+
+        self.assertEqual(assign_nonlocal_once(), 1)
+
 
 if __name__ == '__main__':
     unittest.main()
