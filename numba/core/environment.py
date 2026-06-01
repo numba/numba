@@ -48,8 +48,13 @@ def _rebuild_env(modname, consts, env_name):
     if env is not None:
         return env
 
-    mod = importlib.import_module(modname)
-    env = Environment(mod.__dict__)
+    if modname is None:
+        mod_dict = {}
+    else:
+        mod = importlib.import_module(modname)
+        mod_dict = mod.__dict__
+
+    env = Environment(mod_dict)
     env.consts[:] = consts
     env.env_name = env_name
     # Cache loaded object

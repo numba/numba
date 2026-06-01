@@ -718,6 +718,25 @@ class TestCache(DispatcherCacheUsecasesTest):
         err = execute_with_input()
         self.assertIn("cache hits = 1", err.strip())
 
+    def test_exec_module_none(self):
+        # Issue 10485: caching exec()'d functions with __module__=None
+        from numba import njit
+        
+        @njit
+        def add_one(x):
+            return x + 1
+
+        env = {"_inner": add_one}
+        exec(compile("def wrapper(x): return _inner(x)\n", "<string>", "exec"), env)
+        
+        # This will cache it
+        f1 = njit(cache=True)(env["wrapper"])
+        self.assertEqual(f1(10), 11)
+        
+        # Test loading the cache doesn't crash
+        f2 = njit(cache=True)(env["wrapper"])
+        self.assertEqual(f2(10), 11)
+
 
 class TestCacheZip(DispatcherCacheUsecasesTest):
 
