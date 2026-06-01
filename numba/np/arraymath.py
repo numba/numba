@@ -167,7 +167,7 @@ class EntireIterator():
     Compute ptr along an entire array dimension.
     """
 
-    def __init__(self, context, builder, aryty, ary, dim, ary_int_ptr, extra_variations=None, extra_int_ptrs=None):
+    def __init__(self, context, builder, aryty, ary, dim, ary_int_ptr, extra_variations=None, extra_variation_arys=None, extra_int_ptr_offsets=None):
         self.context = context
         self.builder = builder
         self.aryty = aryty
@@ -176,13 +176,15 @@ class EntireIterator():
         self.ll_intp = self.context.get_value_type(types.intp)
         self.ary_int_ptr = ary_int_ptr
         self.extra_variations = extra_variations if extra_variations else []
-        self.extra_int_ptrs = extra_int_ptrs if extra_int_ptrs else []
+        self.extra_variation_arys = extra_variation_arys if extra_variation_arys else []
+        self.extra_int_ptr_offsets = extra_int_ptr_offsets if extra_int_ptr_offsets else []
 
     def prepare(self):
         builder = self.builder
         self.size = builder.extract_value(self.ary.shape, self.dim)
         self.dim_stride = builder.extract_value(self.ary.strides, self.dim)
         self.index = cgutils.alloca_once(builder, self.ll_intp)
+        self.extra_dim_strides = [builder.extract_value(tuple_additem(self.context, builder, self.extra_variation_arys[i].strides.type, self.extra_variation_arys[i].strides, Constant(self.ll_intp, self.dim), Constant(self.ll_intp, 0)), self.dim) for i in range(len(self.extra_variations))]
         self.bb_start = builder.append_basic_block()
         self.bb_end = builder.append_basic_block()
 
@@ -205,20 +207,19 @@ class EntireIterator():
         cur_index = builder.load(self.index)
         with builder.if_then(builder.icmp_signed('>=', cur_index, self.size),
                              likely=False):
+            builder.store(builder.sub(builder.load(self.ary_int_ptr), builder.mul(self.dim_stride, builder.load(self.index))), self.ary_int_ptr)
+            for i in range(len(self.extra_variations)):
+                builder.store(builder.sub(builder.load(self.extra_int_ptr_offsets[i]), builder.mul(self.extra_dim_strides[i], builder.load(self.index))), self.extra_int_ptr_offsets[i])
             builder.branch(self.bb_end)
         return cur_index
 
     def loop_tail(self):
         builder = self.builder
         next_index = cgutils.increment_index(builder, builder.load(self.index))
-        self.ary_int_ptr = builder.add(self.ary_int_ptr, self.dim_stride)
 
+        builder.store(builder.add(builder.load(self.ary_int_ptr), self.dim_stride), self.ary_int_ptr)
         for i in range(len(self.extra_variations)):
-            self.extra_int_ptrs[i] = builder.add(
-                self.extra_int_ptrs[i],
-                # builder.select(builder.extract_value(self.extra_variations[i], self.dim), self.dim_stride, Constant(self.ll_intp, 0))
-                self.dim_stride
-            )
+            builder.store(builder.add(builder.load(self.extra_int_ptr_offsets[i]), self.extra_dim_strides[i]), self.extra_int_ptr_offsets[i])
 
         builder.store(next_index, self.index)
         builder.branch(self.bb_start)
@@ -226,17 +227,19 @@ class EntireIterator():
 
 
 class ArrayIterator:
-    def __init__(self, context, builder, aryty, ary, extra_variations=None):
+    def __init__(self, context, builder, aryty, ary, extra_variations=None, extra_variation_arys=None):
         self.context = context
         self.builder = builder
         self.aryty = aryty
         self.ary = ary
         self.ll_intp = self.context.get_value_type(types.intp)
-        self.int_ptr = builder.ptrtoint(ary.data, self.ll_intp)
+        zero = context.get_constant(types.intp, 0)
+        self.int_ptr_offsets = cgutils.alloca_once_value(builder, zero)
         if extra_variations:
-            self.extra_int_ptrs = [builder.ptrtoint(ary.data, self.ll_intp) for _ in extra_variations]
+            assert len(extra_variations) == len(extra_variation_arys)
+            self.extra_int_ptr_offsets = [cgutils.alloca_once_value(builder, zero) for _ in extra_variations]
         else:
-            self.extra_int_ptrs = None
+            self.extra_int_ptr_offsets = None
         self.indexers = [
             EntireIterator(
                 context, 
@@ -244,9 +247,10 @@ class ArrayIterator:
                 aryty, 
                 ary, 
                 dim,
-                self.int_ptr,
+                self.int_ptr_offsets,
                 extra_variations,
-                getattr(self, 'extra_int_ptrs', None),
+                extra_variation_arys,
+                getattr(self, 'extra_int_ptr_offsets', None),
             ) for dim in range(aryty.ndim)
         ]
 
@@ -267,10 +271,10 @@ class ArrayIterator:
         for indexer in self.indexers:
             indexer.loop_head()
         
-        if getattr(self, 'extra_int_ptrs', None):
-            return self.builder.inttoptr(self.int_ptr, self.ary.data.type), tuple(self.builder.inttoptr(ptr, self.ary.data.type) for ptr in self.extra_int_ptrs)
+        if getattr(self, 'extra_int_ptr_offsets', None):
+            return self.builder.load(self.int_ptr_offsets), tuple(self.builder.load(ptr) for ptr in self.extra_int_ptr_offsets)
         else:
-            return self.builder.inttoptr(self.int_ptr, self.ary.data.type)
+            return self.builder.load(self.int_ptr_offsets)
 
     def loop_tail(self):
         for indexer in reversed(self.indexers):
@@ -310,18 +314,77 @@ def get_spliced_tuple(context, builder, tuplety, tupleval, axis):
     # Loop through the original tuple and copy values to the resulting tuple
     # skipping the axis dimension.
     for i in range(tuplety.count):
-        # Get the value at the current index in the original tuple.
         idx = Constant(ll_intp, i)
-        val = builder.extract_value(tupleval, i)
+        # Get the value at the current index in the original tuple.
+        with builder.if_then(builder.icmp_signed('<', idx, axis)):
+            val = builder.extract_value(tupleval, i)
+            # Unsafe load on unchecked bounds.  Poison value maybe returned.
+            offptr = builder.gep(stack, [idx.type(0), idx], inbounds=True)
+            builder.store(val, offptr)
+        with builder.if_then(builder.icmp_signed('>', idx, axis)):
+            idx = Constant(ll_intp, i)
+            val = builder.extract_value(tupleval, i)
+            res_idx = builder.sub(idx, Constant(ll_intp, 1))
+            # Unsafe load on unchecked bounds.  Poison value maybe returned.
+            offptr = builder.gep(stack, [res_idx.type(0), res_idx], inbounds=True)
+            builder.store(val, offptr)
+    return builder.load(stack)
 
-        # Declare a zero index for the resulting tuple, if the current index is greater than the axis, decrement the index by 1.
-        res_idx = builder.select(builder.icmp_signed('>', idx, axis), builder.sub(idx, Constant(ll_intp, 1)), idx)
-        # Unsafe load on unchecked bounds.  Poison value maybe returned.
-        offptr = builder.gep(stack, [res_idx.type(0), res_idx], inbounds=True)
+def tuple_additem(context, builder, tuplety, tupleval, idx, val):
+    # Return a tuple with the same values as tupleval but with val added at idx. idx is a runtime value.
+
+    ll_intp = context.get_value_type(types.intp)
+
+    # Create an empty tuple to hold the result, the resulting tuple
+    # has one more dimension than the original tuple, initilize it with zeros.
+
+    # Create resulting tuple type
+    result_tuple_ty = types.UniTuple(types.intp, tuplety.count + 1)
+    result_tuple = cgutils.get_null_value(context.get_value_type(result_tuple_ty))
+    stack = cgutils.alloca_once(builder, result_tuple.type)
+    builder.store(result_tuple, stack)
+
+    # Loop through the original tuple and copy values to the resulting tuple
+    # adding val at idx.
+    for i in range(tuplety.count):
+        idx_i = Constant(ll_intp, i)
+        with builder.if_then(builder.icmp_signed('==', idx_i, idx)):
+            offptr = builder.gep(stack, [idx_i.type(0), idx_i], inbounds=True)
+            builder.store(val, offptr)
+        with builder.if_then(builder.icmp_signed('<', idx_i, idx)):
+            val_i = builder.extract_value(tupleval, i)
+            offptr = builder.gep(stack, [idx_i.type(0), idx_i], inbounds=True)
+            builder.store(val_i, offptr)
+        with builder.if_then(builder.icmp_signed('>', idx_i, idx)):
+            val_i = builder.extract_value(tupleval, i)
+            res_i = builder.add(idx_i, Constant(ll_intp, 1))
+            offptr = builder.gep(stack, [res_i.type(0), res_i], inbounds=True)
+            builder.store(val_i, offptr)
+    return builder.load(stack)
+
+
+def get_mask(context, builder, mask_length, axis):
+    # Return a tuple of booleans where the value is True if the dimension is not the axis and False if it is the axis. Axis is a runtime value.
+
+    ll_intp = context.get_value_type(types.intp)
+
+    # Create an empty tuple to hold the result, the resulting tuple
+    # has the same number of dimensions as the original tuple, but with boolean type.
+
+    # Create resulting tuple type
+    result_tuple_ty = types.UniTuple(types.boolean, mask_length)
+    result_tuple = cgutils.get_null_value(context.get_value_type(result_tuple_ty))
+    stack = cgutils.alloca_once(builder, result_tuple.type)
+    builder.store(result_tuple, stack)
+
+    for i in range(mask_length):
+        idx = Constant(ll_intp, i)
+        val = builder.icmp_signed('!=', idx, axis)
+        offptr = builder.gep(stack, [idx.type(0), idx], inbounds=True)
         builder.store(val, offptr)
 
     return builder.load(stack)
-    
+
 
 
 @intrinsic
@@ -337,8 +400,9 @@ def _numpy_sum(typingctx, aryty, axisty, dtypety):
         res = cgutils.alloca_once_value(builder, zero)
 
         # Loop on source and copy to destination
-        with ArrayIterator(context, builder, aryty, ary) as ptr:
-            val = load_item(context, builder, aryty, ptr)
+        with ArrayIterator(context, builder, aryty, ary) as offset:
+            iter_val_ptr = cgutils.pointer_add(builder, ary.data, offset)
+            val = load_item(context, builder, aryty, iter_val_ptr)
             builder.store(builder.add(builder.load(res), val), res)
 
         return impl_ret_borrowed(context, builder, sig.return_type, builder.load(res))
@@ -367,17 +431,14 @@ def _numpy_sum_axis(typingctx, aryty, axisty, dtypety):
         res = _empty_nd_impl(context, builder, sig.return_type, cgutils.unpack_tuple(builder, res_shape))
 
         # Create a variation tuple to indicate which dimensions are iterated over.
-        var_tup_type = types.UniTuple(types.boolean, ary.shape.type.count)
-        var_tup = cgutils.get_null_value(context.get_value_type(var_tup_type))
-
-        # Every value other than axis is true in the variation tuple to indicate that we are iterating over those dimensions.
-        for i in range(ary.shape.type.count):
-            var_tup = builder.insert_value(var_tup, builder.icmp_signed('!=', Constant(ll_intp, i), axis), 1)
+        var_tup = get_mask(context, builder, ary.shape.type.count, axis)
 
         # Loop on source and copy to destination
-        with ArrayIterator(context, builder, aryty, ary, (var_tup,)) as (ptr, res_var_tup):
-            res_ptr = res_var_tup[0]
-            val = load_item(context, builder, aryty, ptr)
+        with ArrayIterator(context, builder, aryty, ary, (var_tup,), (res,)) as (offset, res_offset_tup):
+            res_offset = res_offset_tup[0]
+            ary_iter_ptr = cgutils.pointer_add(builder, ary.data, offset)
+            res_ptr = cgutils.pointer_add(builder, res.data, res_offset)
+            val = load_item(context, builder, aryty, ary_iter_ptr)
             builder.store(builder.add(builder.load(res_ptr), val), res_ptr)
 
         return impl_ret_borrowed(context, builder, sig.return_type, res._getvalue())
