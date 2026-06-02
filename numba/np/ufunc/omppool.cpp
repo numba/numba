@@ -220,25 +220,52 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
 static void *find_loaded_symbol(const char *name)
 {
 #ifdef _WIN32
-    HMODULE modules[1024];
+    HMODULE stack_modules[1024];
+    HMODULE *modules = stack_modules;
+    HMODULE *heap_modules = NULL;
+    DWORD buf_size = sizeof(stack_modules);
     DWORD bytes_needed = 0;
-    if(!EnumProcessModules(GetCurrentProcess(), modules,
-                           sizeof(modules), &bytes_needed))
+    void *result = NULL;
+
+    if(!EnumProcessModules(GetCurrentProcess(), modules, buf_size,
+                           &bytes_needed))
         return NULL;
-    // EnumProcessModules sets bytes_needed to the total bytes required; if
-    // it exceeds our buffer the module list was truncated, so clamp the
-    // iteration count to the part that actually fits.
+
+    // EnumProcessModules sets bytes_needed to the total bytes required. If
+    // that exceeds our buffer the module list was truncated, so grow the
+    // buffer to the queried size and re-enumerate to avoid skipping a
+    // module. See the "increase the size of the array and call
+    // EnumProcessModules again" guidance in the Remarks at
+    // https://learn.microsoft.com/en-us/windows/win32/api/psapi/nf-psapi-enumprocessmodules
+    if(bytes_needed > buf_size)
+    {
+        heap_modules = (HMODULE *)malloc(bytes_needed);
+        if(heap_modules == NULL)
+            return NULL;
+        modules = heap_modules;
+        buf_size = bytes_needed;
+        if(!EnumProcessModules(GetCurrentProcess(), modules, buf_size,
+                               &bytes_needed))
+        {
+            free(heap_modules);
+            return NULL;
+        }
+    }
+
+    // Clamp in case more modules loaded between the two calls (TOCTOU).
     DWORD count = bytes_needed / sizeof(HMODULE);
-    if(count > sizeof(modules) / sizeof(modules[0]))
-        count = sizeof(modules) / sizeof(modules[0]);
+    if(count > buf_size / sizeof(HMODULE))
+        count = buf_size / sizeof(HMODULE);
     for(DWORD i = 0; i < count; ++i)
     {
         FARPROC sym = GetProcAddress(modules[i], name);
         if(sym != NULL) {
-            return (void *)sym;
+            result = (void *)sym;
+            break;
         }
     }
-    return NULL;
+    free(heap_modules); // free(NULL) is a no-op
+    return result;
 #else
     // POSIX dlsym idiom: clear any prior error, look up, then check
     // dlerror() to distinguish "not present" from "found and is NULL".
