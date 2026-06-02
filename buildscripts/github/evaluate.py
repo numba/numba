@@ -38,8 +38,11 @@ def _python_tag(py_version):
 
 def _entry(py_version, numpy_key, numpy_value, with_tag=False):
     row = {
-        "python-version": py_version,
-        "python_canonical": _canonical_version(py_version),
+        "python_version_full": py_version,
+        # MAJOR.MINOR, patch dropped but the free-threaded 't' kept:
+        # '3.14' -> '3.14', '3.14t' -> '3.14t', '3.14.3t' -> '3.14t'.
+        "python_major_minor": _canonical_version(py_version)
+        + ("t" if py_version.endswith("t") else ""),
         numpy_key: numpy_value,
     }
     if with_tag:
@@ -49,23 +52,23 @@ def _entry(py_version, numpy_key, numpy_value, with_tag=False):
 
 # _entry() expands each (py, np) tuple into a matrix row.  Fully-resolved
 # wheel-build row (evaluate() appends `platform`):
-#   {"python-version": "3.14t", "python_canonical": "3.14",
+#   {"python_version_full": "3.14t", "python_major_minor": "3.14",
 #    "numpy_build": "2.3.3", "python_tag": "cp314t",
 #    "platform": "linux-64"}
 # Conda / wheel-test rows are the same minus `python_tag`.
 #
 # Field usage in .github/workflows/*.yml:
-#   python-version   raw spec; setup-python input, conda-build --python=,
-#                    wheel artifact names, `endsWith(.., 't')` gates.
-#   python_canonical MAJOR.MINOR (no 't'); llvmlite artifact name (shared
-#                    by ft / non-ft), conda numba artifact name, and
-#                    `python<MAJOR.MINOR>` binary lookup on Linux.
-#   python_tag       cpXY[t]; only manylinux builders, to form the
-#                    /opt/python/<ver_tag>-<python_tag>/bin/python path.
-#   numpy_build      pinned numpy in build env (pip / conda-build --numpy=).
-#   numpy_test       pinned numpy in test env.
-#   platform         tagged on every row but unused in YAML today (one
-#                    workflow per platform); kept for downstream consumers.
+#   python_version_full   raw spec; setup-python input, conda-build --python=,
+#                        `endsWith(.., 't')` gates.
+#   python_major_minor    MAJOR.MINOR keeping the free-threaded 't' but no
+#                         patch (e.g. '3.14t'); all numba/llvmlite artifact
+#                         name and the `python<ver>` binary lookup.
+#   python_tag            cpXY[t]; only manylinux builders, to form the
+#                         /opt/python/<ver_tag>-<python_tag>/bin/python path.
+#   numpy_build          pinned numpy in build env (pip / conda-build --numpy=).
+#   numpy_test           pinned numpy in test env.
+#   platform             tagged on every row but unused in YAML today (one
+#                        workflow per platform); kept for downstream consumers.
 
 # ---- Conda matrices ----
 
@@ -176,8 +179,8 @@ def evaluate(pkg_type, event, pr_labels, platform, inputs="{}"):
     elif event == "workflow_dispatch":
         params = json.loads(inputs)
         pv = params.get("python_version")
-        build = _filter(list(base_build), "python-version", pv)
-        test = _filter(list(base_test), "python-version", pv)
+        build = _filter(list(base_build), "python_version_full", pv)
+        test = _filter(list(base_test), "python_version_full", pv)
         build = _filter(build, "numpy_build",
                         params.get("numpy_build_version"))
         test = _filter(test, "numpy_test",

@@ -43,28 +43,31 @@ def test_canonical_version():
 
 
 def test_wheel_has_free_threaded():
-    py_versions = {r["python-version"] for r in WHEEL_BUILD_MATRIX}
+    py_versions = {r["python_version_full"] for r in WHEEL_BUILD_MATRIX}
     # wheel matrix includes the free-threaded build
     assert "3.14t" in py_versions
     # conda matrix does not (no upstream FT conda package)
-    assert "3.14t" not in {r["python-version"] for r in CONDA_BUILD_MATRIX}
+    assert "3.14t" not in {
+        r["python_version_full"] for r in CONDA_BUILD_MATRIX
+    }
 
 
 def test_wheel_314t_fields():
     entry = next(
-        r for r in WHEEL_BUILD_MATRIX if r["python-version"] == "3.14t"
+        r for r in WHEEL_BUILD_MATRIX
+        if r["python_version_full"] == "3.14t"
     )
-    # python_tag keeps 't'; python_canonical strips it
+    # python_tag and python_major_minor both keep the 't'
     assert entry["python_tag"] == "cp314t"
-    assert entry["python_canonical"] == "3.14"
+    assert entry["python_major_minor"] == "3.14t"
 
 
-def test_conda_has_python_canonical():
+def test_conda_has_python_major_minor():
     # field present on every conda build row
-    assert all("python_canonical" in r for r in CONDA_BUILD_MATRIX)
+    assert all("python_major_minor" in r for r in CONDA_BUILD_MATRIX)
     # and its value is MAJOR.MINOR with both parts numeric
     for r in CONDA_BUILD_MATRIX:
-        parts = r["python_canonical"].split(".")
+        parts = r["python_major_minor"].split(".")
         assert len(parts) == 2, r
         assert all(p.isdigit() for p in parts), r
 
@@ -117,7 +120,7 @@ def test_eval_dispatch_filter_python():
     )
     assert len(build) == 1
     assert build[0]["python_tag"] == "cp314t"
-    assert build[0]["python_canonical"] == "3.14"
+    assert build[0]["python_major_minor"] == "3.14t"
 
 
 def test_eval_dispatch_filter_numpy():
