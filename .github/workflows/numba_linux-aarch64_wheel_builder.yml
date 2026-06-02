@@ -169,6 +169,8 @@ jobs:
 
       - name: Validate and test wheel
         run: |
+          # Pin to the setup-python interpreter: a login shell (bash -el) can
+          # re-source profiles and reorder PATH, so bare `python` is unreliable.
           PYTHON_PATH=$(which python${{ matrix.python_major_minor }})
           $PYTHON_PATH -m pip install --upgrade pip twine
           ls -l dist

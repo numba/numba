@@ -138,6 +138,9 @@ jobs:
           NUMBA_CPU_NAME: generic
           _NUMBA_REDUCED_TESTING: 1
         run: |
+          # No versioned `which python<ver>` here: Windows setup-python installs
+          # only `python.exe` (no python3.14[t]) and it's the sole interpreter,
+          # so bare `python` already resolves to the setup-python one.
           python -m pip install --upgrade pip twine
           python -m pip install numpy==${{ matrix.numpy_test }} tbb==2021.6 tbb-devel==2021.6
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
