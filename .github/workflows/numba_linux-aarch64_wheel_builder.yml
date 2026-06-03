@@ -28,6 +28,10 @@ env:
   CONDA_CHANNEL_NUMBA: numba/label/dev
   MANYLINUX_IMAGE: "manylinux_2_28_aarch64"
 
+permissions:
+  contents: read   # least-privilege default; jobs add more if needed
+  actions: read    # for cross-run artifact download (llvmlite)
+
 jobs:
   load-matrix:
     runs-on: ubuntu-latest

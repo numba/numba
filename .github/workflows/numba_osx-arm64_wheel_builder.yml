@@ -26,6 +26,10 @@ env:
   ARTIFACT_RETENTION_DAYS: 7
   WHEELS_INDEX_URL: https://pypi.anaconda.org/numba/label/dev/simple
 
+permissions:
+  contents: read   # least-privilege default; jobs add more if needed
+  actions: read    # for cross-run artifact download (llvmlite)
+
 jobs:
   load-matrix:
     runs-on: ubuntu-latest

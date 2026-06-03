@@ -34,6 +34,10 @@ env:
   # Set USE_TBB to true by default, only override if explicitly set to false
   USE_TBB: ${{ github.event_name == 'workflow_dispatch' && inputs.use_tbb != false || true }}
 
+permissions:
+  contents: read   # least-privilege default; jobs add more if needed
+  actions: read    # for cross-run artifact download (llvmlite)
+
 jobs:
   load-matrix:
     runs-on: ubuntu-latest
