@@ -17,7 +17,7 @@ from numba.core import utils
 from numba.tests.support import (TestCase, tag, import_dynamic, temp_directory,
                                  has_blas, needs_setuptools, skip_if_py313plus_on_windows,
                                  skip_if_linux_aarch64, skip_if_freethreading,
-                                 linux_only, skip_if_windows)
+                                 skip_if_windows)
 
 import unittest
 
@@ -353,7 +353,7 @@ class TestCC(BasePYCCTest):
         self.assertEqual(h1, h2,
                          "AOT jitclass binary is not reproducible")
 
-    @linux_only
+    @skip_if_windows
     def test_reproducible_build_recursive_type(self):
         """See https://github.com/numba/numba/issues/10610
 

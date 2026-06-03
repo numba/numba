@@ -4,7 +4,6 @@
 #
 
 import copy
-import hashlib
 
 import numpy as np
 from llvmlite import ir as lir
@@ -488,11 +487,10 @@ class StencilFunc(object):
             ir_utils.dump_blocks(kernel_copy.blocks)
 
         # We generate a Numba function to execute this stencil and here
-        # create the unique name of this function. Use a content-derived
-        # tag (instead of ``hex(id(the_array))``) so that AOT-compiled
-        # binaries are reproducible across processes (see issue #10610).
-        arr_tag = hashlib.sha1(repr(the_array).encode("utf-8")).hexdigest()[:12]
-        stencil_func_name = "__numba_stencil_%s_%s" % (arr_tag, self.id)
+        # create the unique name of this function.
+        stencil_func_name = "__numba_stencil_%s_%s" % (
+                                        hex(id(the_array)).replace("-", "_"),
+                                        self.id)
 
         # We will put a loop nest in the generated function for each
         # dimension in the input array.  Here we create the name for
