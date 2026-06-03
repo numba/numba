@@ -1,6 +1,3 @@
-import collections
-import itertools
-
 from numba.core.types.abstract import Callable, Literal, Type, Hashable
 from numba.core.types.common import (Dummy, IterableType, Opaque,
                                      SimpleIteratorType)
