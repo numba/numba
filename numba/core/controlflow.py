@@ -668,7 +668,7 @@ class CFGraph(object):
             else:
                 # Checked all successors. Pop
                 stack.pop()
-                on_stack.discard(tos)
+                on_stack.remove(tos)
                 checked.add(tos)
 
         if stats is not None:
