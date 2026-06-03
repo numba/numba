@@ -90,15 +90,19 @@ jobs:
         run: conda install conda-build
 
       - name: Build Numba conda package
+        env:
+          INPUTS_LLVMLITE_RUN_ID: ${{ inputs.llvmlite_run_id }}
+          MATRIX_PYTHON_VERSION_FULL: ${{ matrix.python_version_full }}
+          MATRIX_NUMPY_BUILD: ${{ matrix.numpy_build }}
         run: |
           CONDA_CHANNEL_DIR="conda_channel_dir"
           mkdir -p $CONDA_CHANNEL_DIR
 
           # Set channel based on whether llvmlite artifact was downloaded
-          if [ "${{ inputs.llvmlite_run_id }}" != "" ]; then
-            LLVMLITE_CHANNEL="${{ github.workspace }}/llvmlite_conda"
+          if [ "${INPUTS_LLVMLITE_RUN_ID}" != "" ]; then
+            LLVMLITE_CHANNEL="${GITHUB_WORKSPACE}/llvmlite_conda"
           else
-            LLVMLITE_CHANNEL="${{ env.CONDA_CHANNEL_NUMBA }}"
+            LLVMLITE_CHANNEL="${CONDA_CHANNEL_NUMBA}"
           fi
 
           if [ -n "${EXTRA_CHANNELS}" ]; then
@@ -108,8 +112,8 @@ jobs:
           fi
 
           conda-build --debug -c $LLVMLITE_CHANNEL "${extra_args[@]}" -c defaults \
-            --python=${{ matrix.python_version_full }} \
-            --numpy=${{ matrix.numpy_build }} \
+            --python="${MATRIX_PYTHON_VERSION_FULL}" \
+            --numpy="${MATRIX_NUMPY_BUILD}" \
             buildscripts/condarecipe.local/ \
             --output-folder=$CONDA_CHANNEL_DIR \
             --no-test
@@ -164,12 +168,15 @@ jobs:
         env:
           TESTS_TO_RUN: "numba.tests"
           NUMBA_ENABLE_CUDASIM: 1
+          INPUTS_LLVMLITE_RUN_ID: ${{ inputs.llvmlite_run_id }}
+          MATRIX_PYTHON_VERSION_FULL: ${{ matrix.python_version_full }}
+          MATRIX_NUMPY_TEST: ${{ matrix.numpy_test }}
         run: |
           # Set channel based on whether llvmlite artifact was downloaded
-          if [ "${{ inputs.llvmlite_run_id }}" != "" ]; then
-            LLVMLITE_CHANNEL="${{ github.workspace }}/llvmlite_conda"
+          if [ "${INPUTS_LLVMLITE_RUN_ID}" != "" ]; then
+            LLVMLITE_CHANNEL="${GITHUB_WORKSPACE}/llvmlite_conda"
           else
-            LLVMLITE_CHANNEL="${{ env.CONDA_CHANNEL_NUMBA }}"
+            LLVMLITE_CHANNEL="${CONDA_CHANNEL_NUMBA}"
           fi
 
           if [ -n "${EXTRA_CHANNELS}" ]; then
@@ -179,7 +186,7 @@ jobs:
           fi
 
           conda-build -c $LLVMLITE_CHANNEL "${extra_args[@]}" -c defaults \
-            --python=${{ matrix.python_version_full }} \
-            --extra-deps numpy=${{ matrix.numpy_test }} \
+            --python="${MATRIX_PYTHON_VERSION_FULL}" \
+            --extra-deps "numpy=${MATRIX_NUMPY_TEST}" \
             --test \
             win-64/numba*.conda
