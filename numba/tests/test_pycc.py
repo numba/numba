@@ -17,7 +17,7 @@ from numba.core import utils
 from numba.tests.support import (TestCase, tag, import_dynamic, temp_directory,
                                  has_blas, needs_setuptools, skip_if_py313plus_on_windows,
                                  skip_if_linux_aarch64, skip_if_freethreading,
-                                 linux_only)
+                                 linux_only, skip_if_windows)
 
 import unittest
 
@@ -291,7 +291,7 @@ class TestCC(BasePYCCTest):
 
     # Windows needs /Brepro to get deterministic TimeDateStamp, which is not
     # related to the non-determinism issue reported in #10610
-    @linux_only
+    @skip_if_windows
     def test_reproducible_build(self):
         """See https://github.com/numba/numba/issues/10610
 
@@ -314,7 +314,8 @@ class TestCC(BasePYCCTest):
         self.assertEqual(h1, h2,
                          "AOT binary is not reproducible across builds")
 
-    @linux_only
+    @unittest.expectedFailure
+    @skip_if_windows
     def test_reproducible_build_jitclass(self):
         """See https://github.com/numba/numba/issues/10610
 
@@ -405,7 +406,7 @@ class TestCC(BasePYCCTest):
         self.assertEqual(h1, h2,
                          "AOT recursive-type binary is not reproducible")
 
-    @linux_only
+    @skip_if_windows
     def test_reproducible_build_stencil(self):
         """See https://github.com/numba/numba/issues/10610
 
@@ -438,6 +439,75 @@ class TestCC(BasePYCCTest):
         h1, h2 = self._check_reproducible_build(script, out_name)
         self.assertEqual(h1, h2,
                          "AOT stencil binary is not reproducible")
+
+    @skip_if_windows
+    @unittest.expectedFailure
+    def test_reproducible_build_set_iteration_order(self):
+        """See https://github.com/numba/numba/issues/10610
+
+        AOT modules where two @jitclass classes share the same ``__name__``
+        and are created inside a set-of-strings iteration must produce
+        byte-for-byte identical binaries regardless of PYTHONHASHSEED.
+
+        Seeds 0 and 2 are known to produce different frozenset({"int64",
+        "float64"}) iteration orders on CPython, so they reliably expose any
+        counter-based (ordering-dependent) naming scheme.
+        """
+        import hashlib, os
+
+        script = textwrap.dedent("""
+            import sys
+            from numba.pycc import CC
+            from numba.experimental import jitclass
+            from numba import types
+
+            cc = CC('aot_counter_nondeterminism')
+            cc.use_nrt = True
+
+            # frozenset of strings: iteration order varies with PYTHONHASHSEED.
+            # Both strings map to a distinct field type; the jitclass named
+            # "Foo" is created for each in that (non-deterministic) order.
+            # A content-based naming scheme must assign the same tag to the
+            # int64 variant regardless of which string comes first.
+            int64_Foo = None
+            for key in frozenset({"int64", "float64"}):
+                ft = types.int64 if key == "int64" else types.float64
+
+                @jitclass([("x", ft)])
+                class Foo:
+                    def __init__(self, v):
+                        self.x = v
+                    def get(self):
+                        return self.x
+
+                if key == "int64":
+                    int64_Foo = Foo
+
+            @cc.export("use_int_foo", "i8(i8)")
+            def use_int_foo(v):
+                return int64_Foo(v).get()
+
+            cc.output_dir = sys.argv[1]
+            cc.compile()
+        """)
+
+        from numba.pycc import CC
+        out_name = CC('aot_counter_nondeterminism').output_file
+
+        def build_with_seed(seed):
+            outdir = tempfile.mkdtemp(dir=self.tmpdir)
+            env = {**os.environ, "PYTHONHASHSEED": str(seed)}
+            subprocess.check_call(
+                [sys.executable, "-c", script, outdir], env=env
+            )
+            with open(os.path.join(outdir, out_name), "rb") as fh:
+                return hashlib.md5(fh.read()).hexdigest()
+
+        h0 = build_with_seed(0)
+        h2 = build_with_seed(2)
+        self.assertEqual(h0, h2,
+                         "AOT binary differs across PYTHONHASHSEED values — "
+                         "ClassType naming is ordering-dependent")
 
     def test_dynamic_exc(self):
         """See https://github.com/numba/numba/issues/9948

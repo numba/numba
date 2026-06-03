@@ -192,6 +192,9 @@ linux_only = unittest.skipIf(not sys.platform.startswith('linux'), _lnx_reason)
 _win_reason = 'Windows-only test'
 windows_only = unittest.skipIf(not sys.platform.startswith('win'), _win_reason)
 
+_win_reason = 'non Windows test'
+skip_if_windows = unittest.skipIf(sys.platform.startswith('win'), _win_reason)
+
 _is_armv7l = platform.machine() == 'armv7l'
 
 disabled_test = unittest.skipIf(True, 'Test disabled')
