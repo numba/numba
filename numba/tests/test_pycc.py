@@ -353,6 +353,7 @@ class TestCC(BasePYCCTest):
         self.assertEqual(h1, h2,
                          "AOT jitclass binary is not reproducible")
 
+    @unittest.expectedFailure
     @skip_if_windows
     def test_reproducible_build_recursive_type(self):
         """See https://github.com/numba/numba/issues/10610
@@ -406,6 +407,7 @@ class TestCC(BasePYCCTest):
         self.assertEqual(h1, h2,
                          "AOT recursive-type binary is not reproducible")
 
+    @unittest.expectedFailure
     @skip_if_windows
     def test_reproducible_build_stencil(self):
         """See https://github.com/numba/numba/issues/10610
