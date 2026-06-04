@@ -2245,6 +2245,17 @@ def np_unravel_index(indices, shape, order='C'):
             raise TypingError(msg_shape)
         if not isinstance(shape.dtype, types.Integer):
             raise TypingError(msg_shape)
+    # Cap `ndim` to NumPy's maximum supported number of dimensions
+    # (64 on NumPy >= 2.0, 32 before). Beyond this NumPy itself errors,
+    # and the per-axis source generated below would grow unbounded.
+    # Checked after the element-type validation so an oversized
+    # non-integer shape reports the more specific message first.
+    max_ndim = 64 if numpy_version >= (2, 0) else 32
+    if ndim > max_ndim:
+        raise TypingError(
+            "np.unravel_index(): 'shape' has more than the maximum "
+            f"supported number of dimensions ({max_ndim})"
+        )
 
     # order: 'C' or 'F'. Accept Python str (default), StringLiteral
     # (literal call-site arg), and Omitted (default propagated by Numba).
@@ -2298,7 +2309,6 @@ def np_unravel_index(indices, shape, order='C'):
                     if idx < 0 or idx >= 1:
                         raise ValueError(msg_size_one)
                 raise ValueError(msg_0d)
-                return ()
             return impl
 
         raise TypingError(msg_indices)
@@ -2321,6 +2331,19 @@ def np_unravel_index(indices, shape, order='C'):
         '_max_size': max_size,
     }
 
+    # The size-validation preamble is identical in the scalar and array
+    # impls; generate it once and reuse it in both source strings.
+    size_check = (
+        "    size = np.intp(1)\n"
+        "    for d in shape:\n"
+        "        dim = np.intp(d)\n"
+        "        if dim < 0:\n"
+        "            raise ValueError(_msg_neg)\n"
+        "        if dim != 0 and size > _max_size // dim:\n"
+        "            raise ValueError(_msg_large)\n"
+        "        size *= dim\n"
+    )
+
     # Hoist `np.intp(shape[i])` per axis once.
     hoist_dims = '\n'.join(
         f"    d_{i} = np.intp(shape[{i}])" for i in range(ndim)
@@ -2341,14 +2364,7 @@ def np_unravel_index(indices, shape, order='C'):
 
         src = (
             "def impl(indices, shape, order='C'):\n"
-            "    size = np.intp(1)\n"
-            "    for d in shape:\n"
-            "        dim = np.intp(d)\n"
-            "        if dim < 0:\n"
-            "            raise ValueError(_msg_neg)\n"
-            "        if dim != 0 and size > _max_size // dim:\n"
-            "            raise ValueError(_msg_large)\n"
-            "        size *= dim\n"
+            f"{size_check}"
             "\n"
             "    idx = np.intp(indices)\n"
             "    if idx < 0 or idx >= size:\n"
@@ -2384,14 +2400,7 @@ def np_unravel_index(indices, shape, order='C'):
 
         src = (
             "def impl(indices, shape, order='C'):\n"
-            "    size = np.intp(1)\n"
-            "    for d in shape:\n"
-            "        dim = np.intp(d)\n"
-            "        if dim < 0:\n"
-            "            raise ValueError(_msg_neg)\n"
-            "        if dim != 0 and size > _max_size // dim:\n"
-            "            raise ValueError(_msg_large)\n"
-            "        size *= dim\n"
+            f"{size_check}"
             "\n"
             f"{allocs}\n"
             f"{hoist_dims}\n"

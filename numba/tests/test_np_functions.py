@@ -7344,6 +7344,19 @@ class TestNpUnravelIndex(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError):
             f(np.array([1.0, 2.0]), (10, 10))
 
+    def test_ndim_limit(self):
+        # Cap matches NumPy's max supported dimensions (64 on >= 2.0,
+        # 32 before); at the cap it works, one over is a TypingError.
+        max_ndim = 64 if numpy_version >= (2, 0) else 32
+
+        @njit
+        def f(idx, sh):
+            return np.unravel_index(idx, sh)
+
+        self.assertEqual(len(f(0, (1,) * max_ndim)), max_ndim)
+        with self.assertRaises(TypingError):
+            f(0, (1,) * (max_ndim + 1))
+
     # ---- runtime ValueError paths ------------------------------------
 
     def test_runtime_value_errors(self):
