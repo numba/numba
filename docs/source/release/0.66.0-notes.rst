@@ -321,7 +321,7 @@ Pull-Requests:
 * PR `#10523 <https://github.com/numba/numba/pull/10523>`_: Support native containers `list`, `dict`, `set`, `tuple` as Numba types (`esc <https://github.com/esc>`_ `izruff <https://github.com/izruff>`_)
 * PR `#10525 <https://github.com/numba/numba/pull/10525>`_: configure stubtest and add a `maint/stubtest.py` script (`jorenham <https://github.com/jorenham>`_ `swap357 <https://github.com/swap357>`_)
 * PR `#10526 <https://github.com/numba/numba/pull/10526>`_: Update pypa/gh-action-pypi-publish digest to cef2210 (`renovate[bot] <https://github.com/apps/renovate>`_)
-* PR `#10529 <https://github.com/numba/numba/pull/10529>`_: Updated int_ to map to int64 instead of `ctypes.c_long` (kc611)
+* PR `#10529 <https://github.com/numba/numba/pull/10529>`_: Updated ``int_`` to map to int64 instead of ``ctypes.c_long`` (kc611)
 * PR `#10531 <https://github.com/numba/numba/pull/10531>`_: Update actions/upload-artifact action to v7.0.1 (`renovate[bot] <https://github.com/apps/renovate>`_)
 * PR `#10532 <https://github.com/numba/numba/pull/10532>`_: CI: remove build-env LC_RPATH from osx-arm64 wheel (`swap357 <https://github.com/swap357>`_)
 * PR `#10533 <https://github.com/numba/numba/pull/10533>`_: arraymath: add temporal scalar support for np reduction functions (`amishhaa <https://github.com/amishhaa>`_)
