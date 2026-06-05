@@ -1,7 +1,18 @@
 
-Version 0.66.0 (Release Date)
-=============================
+Version 0.66.0 (TBD)
+====================
 
+This is a major Numba release. Numba now upgrades to llvmlite 0.48 with LLVM 22
+and restores ``sys.monitoring`` on Python 3.14.4 and later. This release also adds
+support for typed ``set`` containers and multi-dimensional fancy indexing.
+
+Please note that the Intel SVML library remains unsupported as of this
+release. This loss of support was first noted in Numba 0.62.0 and was caused
+by the SVML patch not applying cleanly to the LLVM 20 code base when
+upgrading llvmlite. The impact is a loss of performance in cases where SVML
+would previously have been used. This will be addressed in a future release.
+
+Please find a summary of all noteworthy items below.
 
 Highlights
 ~~~~~~~~~~
