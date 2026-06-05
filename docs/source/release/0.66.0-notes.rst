@@ -357,6 +357,7 @@ Pull-Requests:
 * PR `#10630 <https://github.com/numba/numba/pull/10630>`_: llvm 22 support: replace `nocapture` to `captures(none)` (`swap357 <https://github.com/swap357>`_)
 * PR `#10632 <https://github.com/numba/numba/pull/10632>`_: update version support table for `0.66.0rc1` (`swap357 <https://github.com/swap357>`_)
 * PR `#10633 <https://github.com/numba/numba/pull/10633>`_: update deprecation notice doc for `0.66` (`swap357 <https://github.com/swap357>`_)
+* PR `#10635 <https://github.com/numba/numba/pull/10635>`_: Changelog `0.66.0rc1` (`swap357 <https://github.com/swap357>`_)
 
 Authors:
 
