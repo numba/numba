@@ -456,6 +456,7 @@ class Lower(BaseLower):
 
     def lower_inst(self, inst):
         # Set debug location for all subsequent LL instructions
+        self.context._set_loc(self.loc)
         self.debuginfo.mark_location(self.builder, self.loc.line)
         self.notify_loc(self.loc)
         self.debug_print(str(inst))
@@ -467,6 +468,7 @@ class Lower(BaseLower):
             # that this is the arg
             if isinstance(inst.value, ir.Arg):
                 # NOTE: debug location is the `def <func>` line
+                self.context._set_loc(self.defn_loc)
                 self.debuginfo.mark_location(self.builder, self.defn_loc.line)
                 argidx = inst.value.index + 1 # args start at 1
             self.storevar(val, inst.target.name, argidx=argidx)
