@@ -238,10 +238,10 @@ structure.  Here is how the function start may look like in our example:
 .. code-block:: llvm
 
    define i32 @"__main__.gen.next"(
-      double* captures(none) %retptr,
-      { i8*, i32 }** captures(none) readnone %excinfo,
-      i8* captures(none) readnone %env,
-      { i32, { double, double }, { double, double, double, double } }* captures(none) %arg.gen)
+      double* nocapture %retptr,
+      { i8*, i32 }** nocapture readnone %excinfo,
+      i8* nocapture readnone %env,
+      { i32, { double, double }, { double, double, double, double } }* nocapture %arg.gen)
    {
      entry:
         %gen.resume_index = getelementptr { i32, { double, double }, { double, double, double, double } }* %arg.gen, i64 0, i32 0

@@ -691,9 +691,9 @@ generated above quite significantly:
 
 .. code-block:: llvm
 
-   define i32 @"__main__.add$1.int64.int64"(i64* captures(none) %retptr,
-                                            { i8*, i32 }** captures(none) readnone %excinfo,
-                                            i8* captures(none) readnone %env,
+   define i32 @"__main__.add$1.int64.int64"(i64* nocapture %retptr,
+                                            { i8*, i32 }** nocapture readnone %excinfo,
+                                            i8* nocapture readnone %env,
                                             i64 %arg.a, i64 %arg.b)
    {
       entry:
@@ -811,7 +811,7 @@ operations.  The optimized LLVM for our example ``add()`` function is:
    @PyExc_NameError = external global i8
    @".const.name_'b'_is_not_defined" = internal constant [24 x i8] c"name 'b' is not defined\00"
 
-   define i32 @"__main__.add$1.pyobject.pyobject"(i8** captures(none) %retptr, { i8*, i32 }** captures(none) readnone %excinfo, i8* readnone %env, i8* %arg.a, i8* %arg.b) {
+   define i32 @"__main__.add$1.pyobject.pyobject"(i8** nocapture %retptr, { i8*, i32 }** nocapture readnone %excinfo, i8* readnone %env, i8* %arg.a, i8* %arg.b) {
    entry:
      %.6 = icmp eq i8* %env, null
      br i1 %.6, label %entry.if, label %entry.endif, !prof !0
