@@ -287,3 +287,95 @@ guide. Added a best practices section in the new
 and code reviewers.
 
 (`PR-#10602 <https://github.com/numba/numba/pull/10602>`__)
+
+Pull-Requests:
+
+* PR `#8704 <https://github.com/numba/numba/pull/8704>`_: Added traceback printing capability while NRT debugging (`kc611 <https://github.com/kc611>`_)
+* PR `#10131 <https://github.com/numba/numba/pull/10131>`_: Added initial typed set implementation based on typed dict implementation (Kaustubh Milind Chaudhari `kc611 <https://github.com/kc611>`_ `swap357 <https://github.com/swap357>`_)
+* PR `#10387 <https://github.com/numba/numba/pull/10387>`_: Precompute variable assignments (`esc <https://github.com/esc>`_ `JonAnCla <https://github.com/JonAnCla>`_ `sklam <https://github.com/sklam>`_)
+* PR `#10418 <https://github.com/numba/numba/pull/10418>`_: fix and test for 10414 (`esc <https://github.com/esc>`_)
+* PR `#10432 <https://github.com/numba/numba/pull/10432>`_: Add support for Fancy Indexing in Numba (`kc611 <https://github.com/kc611>`_ `sklam <https://github.com/sklam>`_ `stuartarchibald <https://github.com/stuartarchibald>`_)
+* PR `#10444 <https://github.com/numba/numba/pull/10444>`_: CI: remove avx512 disabling logic from test steps (`swap357 <https://github.com/swap357>`_)
+* PR `#10467 <https://github.com/numba/numba/pull/10467>`_: Use `ctypes.itemsize()` to determine datatype length instead of NumPy `.itemsizes` attribute (`kc611 <https://github.com/kc611>`_)
+* PR `#10469 <https://github.com/numba/numba/pull/10469>`_: Fix ZeroDivisionError for np.mean([]) (`auderson <https://github.com/auderson>`_ `swap357 <https://github.com/swap357>`_)
+* PR `#10478 <https://github.com/numba/numba/pull/10478>`_: static `__all__` (`jorenham <https://github.com/jorenham>`_)
+* PR `#10482 <https://github.com/numba/numba/pull/10482>`_: fix `RecursionError` on large, generated CFGs (`esc <https://github.com/esc>`_)
+* PR `#10484 <https://github.com/numba/numba/pull/10484>`_: Fix jit decorator docstring formatting (`kyleaoman <https://github.com/kyleaoman>`_)
+* PR `#10489 <https://github.com/numba/numba/pull/10489>`_: Shifted Numpy Datetime to numba.np module (`esc <https://github.com/esc>`_ `kc611 <https://github.com/kc611>`_)
+* PR `#10490 <https://github.com/numba/numba/pull/10490>`_: Removed NumPy based unicode charseq type width detection and indexing (Kaustubh Milind Chaudhari)
+* PR `#10493 <https://github.com/numba/numba/pull/10493>`_: add scalar handling for np.std overload (Part of #10408) (`ElijahKas0 <https://github.com/ElijahKas0>`_)
+* PR `#10494 <https://github.com/numba/numba/pull/10494>`_: Accelerate CFG processing (`esc <https://github.com/esc>`_ `JonAnCla <https://github.com/JonAnCla>`_)
+* PR `#10496 <https://github.com/numba/numba/pull/10496>`_: update llvmlite version to 0.48.0dev (`swap357 <https://github.com/swap357>`_)
+* PR `#10499 <https://github.com/numba/numba/pull/10499>`_: Fix swapped shapes in slice assignment error message - Fixes #10402 (`Meenakshi-1802 <https://github.com/Meenakshi-1802>`_)
+* PR `#10500 <https://github.com/numba/numba/pull/10500>`_: Pin pypa/gh-action-pypi-publish action to ed0c539 (`renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10503 <https://github.com/numba/numba/pull/10503>`_: bump ubuntu image for RTD (`esc <https://github.com/esc>`_)
+* PR `#10505 <https://github.com/numba/numba/pull/10505>`_: type annotations for `jit`, `njit`, `cfunc`, and `jit_module` (`jorenham <https://github.com/jorenham>`_ `swap357 <https://github.com/swap357>`_)
+* PR `#10507 <https://github.com/numba/numba/pull/10507>`_: update release date and version support table 0.65 (`swap357 <https://github.com/swap357>`_)
+* PR `#10508 <https://github.com/numba/numba/pull/10508>`_: update `core/types/__init__.pyi` typing stubs (`jorenham <https://github.com/jorenham>`_)
+* PR `#10510 <https://github.com/numba/numba/pull/10510>`_: remove Python 2 `__nonzero__` methods (`jorenham <https://github.com/jorenham>`_)
+* PR `#10511 <https://github.com/numba/numba/pull/10511>`_: Removed special NRT refcount removal (`kc611 <https://github.com/kc611>`_)
+* PR `#10512 <https://github.com/numba/numba/pull/10512>`_: Cherry pick 0.65.0 (`swap357 <https://github.com/swap357>`_)
+* PR `#10513 <https://github.com/numba/numba/pull/10513>`_: type annotations for `numba.core.abstract.*` (`jorenham <https://github.com/jorenham>`_)
+* PR `#10515 <https://github.com/numba/numba/pull/10515>`_: unique overload function names in `numba.cpython` (`jorenham <https://github.com/jorenham>`_)
+* PR `#10516 <https://github.com/numba/numba/pull/10516>`_: rename classmethod param from ``self`` to ``cls`` in ``cuda.cudadrv.driver`` (`jorenham <https://github.com/jorenham>`_)
+* PR `#10523 <https://github.com/numba/numba/pull/10523>`_: Support native containers `list`, `dict`, `set`, `tuple` as Numba types (`esc <https://github.com/esc>`_ `izruff <https://github.com/izruff>`_)
+* PR `#10525 <https://github.com/numba/numba/pull/10525>`_: configure stubtest and add a `maint/stubtest.py` script (`jorenham <https://github.com/jorenham>`_ `swap357 <https://github.com/swap357>`_)
+* PR `#10526 <https://github.com/numba/numba/pull/10526>`_: Update pypa/gh-action-pypi-publish digest to cef2210 (`renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10529 <https://github.com/numba/numba/pull/10529>`_: Updated int_ to map to int64 instead of `ctypes.c_long` (kc611)
+* PR `#10531 <https://github.com/numba/numba/pull/10531>`_: Update actions/upload-artifact action to v7.0.1 (`renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10532 <https://github.com/numba/numba/pull/10532>`_: CI: remove build-env LC_RPATH from osx-arm64 wheel (`swap357 <https://github.com/swap357>`_)
+* PR `#10533 <https://github.com/numba/numba/pull/10533>`_: arraymath: add temporal scalar support for np reduction functions (`amishhaa <https://github.com/amishhaa>`_)
+* PR `#10541 <https://github.com/numba/numba/pull/10541>`_: GHA: replace json matrices with python evaluation scripts (`swap357 <https://github.com/swap357>`_)
+* PR `#10543 <https://github.com/numba/numba/pull/10543>`_: Refactored min/max functionality into overloads (`esc <https://github.com/esc>`_ `kc611 <https://github.com/kc611>`_)
+* PR `#10544 <https://github.com/numba/numba/pull/10544>`_: Refactored int constructor into overload API (`kc611 <https://github.com/kc611>`_)
+* PR `#10548 <https://github.com/numba/numba/pull/10548>`_: add tier 1.5 description as per #10406 (`seibert <https://github.com/seibert>`_)
+* PR `#10551 <https://github.com/numba/numba/pull/10551>`_: type annotations for `Dispatcher` (`jorenham <https://github.com/jorenham>`_ `swap357 <https://github.com/swap357>`_)
+* PR `#10552 <https://github.com/numba/numba/pull/10552>`_: type annotations for `CFunc` (Copilot `jorenham <https://github.com/jorenham>`_)
+* PR `#10558 <https://github.com/numba/numba/pull/10558>`_: `numba.core.types.function_type` type stubs (Guilherme Leobas `jorenham <https://github.com/jorenham>`_)
+* PR `#10562 <https://github.com/numba/numba/pull/10562>`_: Cherry pick and changelog update for 0.65.1 (`esc <https://github.com/esc>`_ `stuartarchibald <https://github.com/stuartarchibald>`_ `swap357 <https://github.com/swap357>`_)
+* PR `#10566 <https://github.com/numba/numba/pull/10566>`_: `numba.core.types.functions` type stubs (Guilherme Leobas `jorenham <https://github.com/jorenham>`_ `swap357 <https://github.com/swap357>`_)
+* PR `#10568 <https://github.com/numba/numba/pull/10568>`_: Update conda-incubator/setup-miniconda action to v4 (`renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10570 <https://github.com/numba/numba/pull/10570>`_: Cherry pick 0.65.1 (`swap357 <https://github.com/swap357>`_)
+* PR `#10575 <https://github.com/numba/numba/pull/10575>`_: Run stubtest and mypy with Python 3.11 in CI (`jorenham <https://github.com/jorenham>`_)
+* PR `#10577 <https://github.com/numba/numba/pull/10577>`_: refactor: conda build command on GHA workflows (`swap357 <https://github.com/swap357>`_)
+* PR `#10578 <https://github.com/numba/numba/pull/10578>`_: Fix for ABI changes on python 3.14.4 (`swap357 <https://github.com/swap357>`_)
+* PR `#10579 <https://github.com/numba/numba/pull/10579>`_: Fix and complete the type stubs for `core.extending` (`jorenham <https://github.com/jorenham>`_)
+* PR `#10583 <https://github.com/numba/numba/pull/10583>`_: `numba.np.ufunc.{ufunc_base,dufunc,gufunc}` type stubs (`jorenham <https://github.com/jorenham>`_ `swap357 <https://github.com/swap357>`_)
+* PR `#10584 <https://github.com/numba/numba/pull/10584>`_: Fix stubtest error on Python 3.12+ (`jorenham <https://github.com/jorenham>`_)
+* PR `#10585 <https://github.com/numba/numba/pull/10585>`_: Global ``py.typed`` (PEP 561) (`jorenham <https://github.com/jorenham>`_)
+* PR `#10586 <https://github.com/numba/numba/pull/10586>`_: Fixing Zenodo badge (`esc <https://github.com/esc>`_ `travishathaway <https://github.com/travishathaway>`_)
+* PR `#10587 <https://github.com/numba/numba/pull/10587>`_: Don't force tuple for single-dim pndindex. (`DrTodd13 <https://github.com/DrTodd13>`_)
+* PR `#10588 <https://github.com/numba/numba/pull/10588>`_: Update dependency mypy to v2 (`renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10590 <https://github.com/numba/numba/pull/10590>`_: Fixed accidentally excluded dtypes in sum tests and optimized tests for better test suite runtime (`kc611 <https://github.com/kc611>`_)
+* PR `#10592 <https://github.com/numba/numba/pull/10592>`_: Fix incorrect docstring for TypeRefAttribute (fixes #8023) (`lucap123 <https://github.com/lucap123>`_)
+* PR `#10595 <https://github.com/numba/numba/pull/10595>`_: remove code path for < cpython 3.10 (`esc <https://github.com/esc>`_)
+* PR `#10599 <https://github.com/numba/numba/pull/10599>`_: Remove gitter (`sklam <https://github.com/sklam>`_)
+* PR `#10602 <https://github.com/numba/numba/pull/10602>`_: Update contribution and coding convention guides (`esc <https://github.com/esc>`_ `sklam <https://github.com/sklam>`_)
+* PR `#10604 <https://github.com/numba/numba/pull/10604>`_: Fix coverage.py with sysmon support (`guilhermeleobas <https://github.com/guilhermeleobas>`_)
+* PR `#10613 <https://github.com/numba/numba/pull/10613>`_: Update actions/stale action to v10.3.0 (`renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10627 <https://github.com/numba/numba/pull/10627>`_: Update actions/checkout action to v6.0.3 (`renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10630 <https://github.com/numba/numba/pull/10630>`_: llvm 22 support: replace `nocapture` to `captures(none)` (`swap357 <https://github.com/swap357>`_)
+* PR `#10632 <https://github.com/numba/numba/pull/10632>`_: update version support table for `0.66.0rc1` (`swap357 <https://github.com/swap357>`_)
+* PR `#10633 <https://github.com/numba/numba/pull/10633>`_: update deprecation notice doc for `0.66` (`swap357 <https://github.com/swap357>`_)
+
+Authors:
+
+* `amishhaa <https://github.com/amishhaa>`_
+* `auderson <https://github.com/auderson>`_
+* `DrTodd13 <https://github.com/DrTodd13>`_
+* `ElijahKas0 <https://github.com/ElijahKas0>`_
+* `esc <https://github.com/esc>`_
+* `guilhermeleobas <https://github.com/guilhermeleobas>`_
+* `izruff <https://github.com/izruff>`_
+* `JonAnCla <https://github.com/JonAnCla>`_
+* `jorenham <https://github.com/jorenham>`_
+* `kc611 <https://github.com/kc611>`_
+* `kyleaoman <https://github.com/kyleaoman>`_
+* `lucap123 <https://github.com/lucap123>`_
+* `Meenakshi-1802 <https://github.com/Meenakshi-1802>`_
+* `renovate[bot] <https://github.com/apps/renovate>`_
+* `seibert <https://github.com/seibert>`_
+* `sklam <https://github.com/sklam>`_
+* `stuartarchibald <https://github.com/stuartarchibald>`_
+* `swap357 <https://github.com/swap357>`_
+* `travishathaway <https://github.com/travishathaway>`_
