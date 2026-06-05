@@ -1,0 +1,6 @@
+Update LLVM IR parameter attributes for LLVM 22 compatibility
+-------------------------------------------------------------
+
+Numba now emits ``captures(none)`` instead of the deprecated ``nocapture``
+parameter attribute when generating LLVM IR. This change is required for
+compatibility with LLVM 22 and the accompanying llvmlite upgrade (`numba/llvmlite#1421 <https://github.com/numba/llvmlite/pull/1421>`_).

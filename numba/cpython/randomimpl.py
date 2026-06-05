@@ -102,7 +102,7 @@ def get_rnd_shuffle(builder):
     fnty = ir.FunctionType(ir.VoidType(), (rnd_state_ptr_t,))
     fn = cgutils.get_or_insert_function(builder.function.module, fnty,
                                         "numba_rnd_shuffle")
-    fn.args[0].add_attribute("nocapture")
+    fn.args[0].add_attribute("captures(none)")
     return fn
 
 

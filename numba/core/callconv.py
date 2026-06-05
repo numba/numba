@@ -824,18 +824,18 @@ class CPUCallConv(BaseCallConv):
                              ['arg.' + a for a in args])
         retarg = self._get_return_argument(fn)
         retarg.name = "retptr"
-        retarg.add_attribute("nocapture")
+        retarg.add_attribute("captures(none)")
         retarg.add_attribute("noalias")
         excarg = self._get_excinfo_argument(fn)
         excarg.name = "excinfo"
-        excarg.add_attribute("nocapture")
+        excarg.add_attribute("captures(none)")
         excarg.add_attribute("noalias")
 
         if noalias:
             args = self.get_arguments(fn)
             for a in args:
                 if isinstance(a.type, ir.PointerType):
-                    a.add_attribute("nocapture")
+                    a.add_attribute("captures(none)")
                     a.add_attribute("noalias")
 
     def get_arguments(self, func):
