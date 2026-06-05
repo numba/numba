@@ -42,7 +42,7 @@ class TestIR(unittest.TestCase):
         more_orange = local.define('orange', loc=ir.Loc(filename=filename,
                                                         line=5))
         self.assertIs(top.get('orange'), orange)
-        self.assertIsNot(local.get('orange'), not orange)
+        self.assertIsNot(local.get('orange'), orange)
         self.assertIs(local.get('orange'), more_orange)
 
         try:
