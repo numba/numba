@@ -1,0 +1,278 @@
+
+Version 0.66.0 (Release Date)
+=============================
+
+
+Highlights
+~~~~~~~~~~
+
+Add support for typed ``set`` containers
+----------------------------------------
+
+Typed ``set`` containers have now been introduced in Numba. This can be initialised using ``numba.typed.Set`` and supports a subset of the Python set API.
+
+The following set methods are currently supported:
+
+- ``len(set())``
+- ``set().add()``
+- ``set().discard()``
+- ``set().__contains__()``
+- ``set().__iter__()``
+- ``set().__eq__()``
+
+For more details, see the ::ref::`Numba documentation <https://numba.readthedocs.io/en/stable/reference/pysupported.html#typed-set>`.
+
+(`PR-#10131 <https://github.com/numba/numba/pull/10131>`__)
+
+Add support for Fancy Indexing with Multiple Multi-Dimensional Array Indices in Numba
+-------------------------------------------------------------------------------------
+
+This PR adds complete support for fancy indexing with multiple array indices and/or multidimensional
+array indices, in accordance with NumPy semantics. Cases that were previously unsupported,
+such as using multiple fancy indices simultaneously or using multidimensional fancy index
+arrays, are now fully supported along with inclusion of ``None`` / ``np.newaxis`` for
+additional resulting dimensions.
+
+For more details, and example usage see the ::ref::`Numba documentation <https://numba.readthedocs.io/en/stable/reference/numpysupported.html#array-access>`.
+
+(`PR-#10432 <https://github.com/numba/numba/pull/10432>`__)
+
+
+Improvements
+~~~~~~~~~~~~
+
+Added traceback printing capability while NRT debugging
+-------------------------------------------------------
+
+This improvement adds the capability to print the traceback of the NRT incref
+and decref calls. 
+
+This adds a flag ``NUMBA_DEBUG_NRT_STACK_LIMIT`` that helps user configure the
+stack limit for traceback. By default, the stack limit is set to 0, which means
+no traceback will be printed. Setting the stack limit to a positive integer will
+enable traceback printing up to that many frames. 
+
+This flag is only effective when the NRT debugging mode is enabled. i.e when the
+environment variable ``NUMBA_DEBUG_NRT`` is set to a non-empty value. Otherwise,
+the flag will be ignored and no traceback will be printed regardless of its value.
+
+Note that this functionality isn't cache friendly, so it should be used with caution.
+It changes ABI call interface so users are required to clean the cache and
+recompile their code after setting the flag.
+
+(`PR-#8704 <https://github.com/numba/numba/pull/8704>`__)
+
+Use ``ctypes`` instead of NumPy for checking the size of C types
+----------------------------------------------------------------
+
+This change replaces the use of NumPy's ``dtype`` to check the size of C types with the use of Python's built-in ``ctypes`` library.
+
+(`PR-#10467 <https://github.com/numba/numba/pull/10467>`__)
+
+Static ``__all__`` declarations
+-------------------------------
+
+``numba.__all__``  and ``numba.core.errors.__all__`` are now statically defined.
+This improves compatibility with type-checkers and IDE tooling, fixing missing
+autocomplete suggestions and false-positive diagnostics.
+
+(`PR-#10478 <https://github.com/numba/numba/pull/10478>`__)
+
+Shifted ``NPDatetime`` and ``NPTimedelta`` to ``numba.np.types.datetime`` module.
+---------------------------------------------------------------------------------
+
+This PR moves the definitions of ``NPDatetime`` and ``NPTimedelta`` from
+``numba.core.types`` to ``numba.np.types.datetime``. This change is part of a larger effort
+to refactor the NumPy support in Numba and to better organize the codebase.
+
+The datatypes can still be accessed via ``numba.core.types`` for backward compatibility.
+
+(`PR-#10489 <https://github.com/numba/numba/pull/10489>`__)
+
+Removed NumPy based Unicode Character Sequence type width detection and indexing
+--------------------------------------------------------------------------------
+
+This PR removes the dependency of CPython module on NumPy for automatic detection of
+width of the Unicode Characters. This functionality is now provided by the ``ctypes``
+module.
+
+(`PR-#10490 <https://github.com/numba/numba/pull/10490>`__)
+
+Accelerate Processing for Large Control Flow Graphs
+---------------------------------------------------
+
+The asymptotic runtime of the algorithm to compute dominators in the control
+flow graph (CFG) is significantly improved. It now uses a memoization technique
+to avoid re-computing results by deriving the dominators from the immediate
+dominators as determined by the CHK (Cooper, Harvey & Kennedy) algorithm. This
+has a profound effect on the runtime of the CFG analysis for programs with
+large CFGs.
+
+(`PR-#10494 <https://github.com/numba/numba/pull/10494>`__)
+
+Type annotations for ``jit``, ``njit``, ``cfunc``, and ``jit_module``
+---------------------------------------------------------------------
+
+Numba now ships type annotations for the ``jit``, ``njit``, and
+``cfunc`` decorators, plus ``jit_module``. This improves type checker
+and IDE support for these APIs.
+
+(`PR-#10505 <https://github.com/numba/numba/pull/10505>`__)
+
+Removed legacy NRT reference pruning pass ``removerefctpass``
+-------------------------------------------------------------
+
+The NRT reference pruning pass ``removerefctpass`` has been
+removed as it is no longer valid. It depends on an old assumption
+of Numba, removing refcounts (deemed unnecessary) from functions
+that return array object, take arguments that need refcounting
+except array or call function(s) that return refcounted object.
+Hence making it such that the function will not capture or create
+references that extend the lifetime of any refcounted objects
+beyond the lifetime of the function.
+
+(`PR-#10511 <https://github.com/numba/numba/pull/10511>`__)
+
+
+Performance Improvements and Changes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Precompute variable assignments
+-------------------------------
+
+Significantly improved compilation time for functions with many singly-assigned
+variables.
+
+(`PR-#10387 <https://github.com/numba/numba/pull/10387>`__)
+
+
+Bug Fixes
+~~~~~~~~~
+
+Fix comparison between ``Optional`` and ``None``
+------------------------------------------------
+
+Comparisons ``==`` (``operator.eq``) and ``!=`` (``operator.ne``)  between
+``Optional`` and ``None`` are now handled correctly. Also, comparisons of any
+type other than ``Optional`` with ``None`` now yield a boolean literal.
+
+(`PR-#10418 <https://github.com/numba/numba/pull/10418>`__)
+
+Fix ZeroDivisionError for empty arrays in ``np.mean``
+-----------------------------------------------------
+
+Fixed a ``ZeroDivisionError`` that occurred when passing an empty array to
+the ``np.mean`` function. Empty arrays are now handled correctly and return
+``nan`` as expected.
+
+(`PR-#10469 <https://github.com/numba/numba/pull/10469>`__)
+
+Fix scalar handling in ``np.std``
+---------------------------------
+
+Fix scalar handling in ``np.std`` function. 
+Previously, this function would fail when 
+called with scalar inputs.
+Now scalar arguments are handled properly:
+- Integer and boolean inputs return ``float64(0.0)``
+- Float and complex inputs preserve the input dtype 
+(e.g., ``np.float32`` in returns ``float32(0.0)``)
+
+(`PR-#10493 <https://github.com/numba/numba/pull/10493>`__)
+
+arraymath: add temporal scalar support for np.min, np.max, np.all, np.any and np.mean.
+--------------------------------------------------------------------------------------
+
+Fix temporal scalar handling in ``np.min``, ``np.max``, ``np.all``, ``np.any`` and
+``np.mean`` functions. Previously, these functions would fail when called with temporal
+scalar inputs. They now properly handle both temporal scalar, scalar and array inputs,
+returning the original value when a temporal scalar is provided.
+
+(`PR-#10533 <https://github.com/numba/numba/pull/10533>`__)
+
+Fix 1D pndindex error
+---------------------
+
+Made pndindex not force the use of a tuple for 1D.
+
+(`PR-#10587 <https://github.com/numba/numba/pull/10587>`__)
+
+Fix crash when running coverage with the ``sysmon`` core
+--------------------------------------------------------
+
+Fixed a ``TypeError`` that occurred when using ``NUMBA_JIT_COVERAGE=1``
+with ``coverage >= 7.13.1``, where the ``sysmon`` core (default on Python
+3.14) injects a ``tool_id`` keyword argument that ``NumbaTracer`` did not
+previously accept.
+
+(`PR-#10604 <https://github.com/numba/numba/pull/10604>`__)
+
+
+Changes
+~~~~~~~
+
+Remove ``NumPy AVX512_SKX support detected`` from ``numba -s`` output
+---------------------------------------------------------------------
+
+The ``NumPy AVX512_SKX support detected`` field has been removed from the
+``numba -s`` (system information) output. This field was added to provide
+debug information for an AVX512_SKX accuracy bug that can no longer be
+reproduced.
+
+(`PR-#10444 <https://github.com/numba/numba/pull/10444>`__)
+
+Use public ``PyMonitoring_*`` C API for ``sys.monitoring`` on Python 3.13+
+--------------------------------------------------------------------------
+
+Numba's dispatcher integration with ``sys.monitoring`` on Python 3.13 and
+later now goes through the public ``PyMonitoring_*`` C API instead of
+CPython internal headers. This restores ``sys.monitoring`` support on
+Python 3.14.4 and newer (`#10538
+<https://github.com/numba/numba/issues/10538>`_), which had been disabled
+due to ABI changes in interpreter internals Numba previously relied on.
+``NUMBA_ENABLE_SYS_MONITORING`` again takes effect on those versions and
+the associated ``UserWarning`` is no longer emitted. The Python 3.12 code
+path is unchanged.
+
+(`PR-#10578 <https://github.com/numba/numba/pull/10578>`__)
+
+Update LLVM IR parameter attributes for LLVM 22 compatibility
+-------------------------------------------------------------
+
+Numba now emits ``captures(none)`` instead of the deprecated ``nocapture``
+parameter attribute when generating LLVM IR. This change is required for
+compatibility with LLVM 22 and the accompanying llvmlite upgrade (`numba/llvmlite#1421 <https://github.com/numba/llvmlite/pull/1421>`_).
+
+(`PR-#10630 <https://github.com/numba/numba/pull/10630>`__)
+
+
+Documentation Changes
+~~~~~~~~~~~~~~~~~~~~~
+
+Document Tier 1.5 support policy
+--------------------------------
+
+The :ref:`Support Tiers <support_tiers>` documentation now describes a new "Tier 1.5" category
+covering experimental releases for emerging release configurations.  This support tier
+currently includes the previously released Python 3.14 free-threading builds.
+
+(`PR-#10548 <https://github.com/numba/numba/pull/10548>`__)
+
+Remove Gitter
+-------------
+
+References to the Numba Gitter channels have been removed from the
+documentation and source code. Users seeking help should use the
+`Numba Discourse forum <https://numba.discourse.group/>`_ instead.
+
+(`PR-#10599 <https://github.com/numba/numba/pull/10599>`__)
+
+Update contribution and coding convention guides
+------------------------------------------------
+
+Consolidated coding style and convention documentation into the contribution
+guide. Added a best practices section in the new
+``docs/source/developer/coding_guidelines.rst``, aimed at both contributors
+and code reviewers.
+
+(`PR-#10602 <https://github.com/numba/numba/pull/10602>`__)
