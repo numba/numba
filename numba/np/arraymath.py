@@ -1330,6 +1330,21 @@ def np_nanmean(a):
 
 @overload(np.nanvar)
 def np_nanvar(a):
+    # Handle scalar inputs
+    if isinstance(a, (types.Number, types.Boolean)):
+        # For scalars, variance of a single value is 0.0, except for NaN which returns NaN
+        if isinstance(a, (types.Float, types.Complex)):
+            def nanvar_scalar_impl(a):
+                if np.isnan(a):
+                    return np.float64(np.nan)
+                return np.float64(0.0)
+            return nanvar_scalar_impl
+        else:
+            # Integer and boolean scalars always return 0.0
+            def nanvar_scalar_int_impl(a):
+                return np.float64(0.0)
+            return nanvar_scalar_int_impl
+
     if not isinstance(a, types.Array):
         return
     isnan = get_isnan(a.dtype)
