@@ -523,6 +523,11 @@ def _numpy_sum_axis(typingctx, aryty, axisty):
 
 
 @register_jitable
+def pass_through(val, dtype):
+    return val
+
+
+@register_jitable
 def cast_scalar(val, dtype):
     return dtype(val)
 
@@ -536,8 +541,10 @@ def cast_array(ary, dtype):
 def _to_dtype(typingctx, valuety, out_dtype):
     if is_nonelike(out_dtype):
         def codegen(context, builder, sig, args):
-            value_arg, _ = args
-            return value_arg
+            disp_type = context.typing_context.resolve_value_type(pass_through)
+            sig = disp_type.get_call_type(context.typing_context, sig.args, {})
+            impl = context.get_function(disp_type, sig)
+            return impl(builder, args)
         sig = valuety(valuety, out_dtype)
     else:
         if isinstance(valuety, types.Array):
