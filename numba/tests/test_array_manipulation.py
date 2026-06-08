@@ -497,7 +497,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(ValueError) as raises:
             cfunc(arr, (1, 1))
-        self.assertIn('repeated axis', str(raises.exception))
+        self.assertIn('An axis is being repeated', str(raises.exception))
 
         with self.assertRaises(IndexError) as raises:
             cfunc(arr, (4,))
