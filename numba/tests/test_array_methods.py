@@ -1531,17 +1531,15 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         pyfunc = array_sum
         cfunc = jit(nopython=True)(pyfunc)
 
-        a = np.ones((2, 3, 4, 5))
         b = np.ones((4, 3))
         # BAD: axis > dimensions
         with self.assertRaises(ValueError):
             cfunc(b, 2)
         # BAD: negative axis
         with self.assertRaises(ValueError):
-            cfunc(a, -1)
-        # BAD: axis greater than 3
-        with self.assertRaises(ValueError):
-            cfunc(a, 4)
+            cfunc(b, -5)
+        # Good for negative axis == -1
+        self.assertPreciseEqual(cfunc(b, -2), pyfunc(b, -2))
 
     def test_sum_const_negative(self):
         # Exceptions leak references
