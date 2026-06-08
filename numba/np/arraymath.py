@@ -5,7 +5,6 @@ Implementation of math operations on Array objects.
 
 import math
 from collections import namedtuple
-from multiprocessing import context
 import operator
 import warnings
 
@@ -31,7 +30,6 @@ from numba.core.errors import (RequireLiteralValue, TypingError,
 from numba.cpython.unsafe.tuple import tuple_setitem
 from numba.np import types as npy_types
 from llvmlite.ir import Constant
-from numba.np.arrayobj import _empty_nd_impl
 
 
 def _check_blas():
@@ -168,7 +166,9 @@ class EntireIterator():
     Compute ptr along an entire array dimension.
     """
 
-    def __init__(self, context, builder, aryty, ary, dim, ary_int_ptr, extra_variations=None, extra_strides=None, extra_iter_ptrs=None):
+    def __init__(self, context, builder, aryty, ary, dim, ary_int_ptr,
+                 extra_variations=None, extra_strides=None,
+                 extra_iter_ptrs=None):
         self.context = context
         self.builder = builder
         self.aryty = aryty
@@ -185,7 +185,10 @@ class EntireIterator():
         self.size = builder.extract_value(self.ary.shape, self.dim)
         self.dim_stride = builder.extract_value(self.ary.strides, self.dim)
         self.index = cgutils.alloca_once(builder, self.ll_intp)
-        self.extra_dim_strides = [builder.extract_value(self.extra_strides[i], self.dim) for i in range(len(self.extra_variations))]
+        self.extra_dim_strides = [
+            builder.extract_value(self.extra_strides[i], self.dim)
+            for i in range(len(self.extra_variations))
+        ]
         self.bb_start = builder.append_basic_block()
         self.bb_end = builder.append_basic_block()
 
@@ -208,9 +211,19 @@ class EntireIterator():
         cur_index = builder.load(self.index)
         with builder.if_then(builder.icmp_signed('>=', cur_index, self.size),
                              likely=False):
-            builder.store(builder.sub(builder.load(self.ary_int_ptr), builder.mul(self.dim_stride, builder.load(self.index))), self.ary_int_ptr)
+            builder.store(
+                builder.sub(
+                    builder.load(self.ary_int_ptr),
+                    builder.mul(self.dim_stride, builder.load(self.index))
+                ), self.ary_int_ptr
+            )
             for i in range(len(self.extra_variations)):
-                builder.store(builder.sub(builder.load(self.extra_iter_ptrs[i]), builder.mul(self.extra_dim_strides[i], builder.load(self.index))), self.extra_iter_ptrs[i])
+                builder.store(
+                    builder.sub(builder.load(self.extra_iter_ptrs[i]),
+                                builder.mul(self.extra_dim_strides[i],
+                                            builder.load(self.index))),
+                    self.extra_iter_ptrs[i]
+                )
             builder.branch(self.bb_end)
         return cur_index
 
@@ -218,9 +231,17 @@ class EntireIterator():
         builder = self.builder
         next_index = cgutils.increment_index(builder, builder.load(self.index))
 
-        builder.store(builder.add(builder.load(self.ary_int_ptr), self.dim_stride), self.ary_int_ptr)
+        builder.store(builder.add(
+            builder.load(self.ary_int_ptr), self.dim_stride
+        ), self.ary_int_ptr)
         for i in range(len(self.extra_variations)):
-            builder.store(builder.add(builder.load(self.extra_iter_ptrs[i]), self.extra_dim_strides[i]), self.extra_iter_ptrs[i])
+            builder.store(
+                builder.add(
+                    builder.load(self.extra_iter_ptrs[i]),
+                    self.extra_dim_strides[i]
+                ),
+                self.extra_iter_ptrs[i]
+            )
 
         builder.store(next_index, self.index)
         builder.branch(self.bb_start)
@@ -228,7 +249,8 @@ class EntireIterator():
 
 
 class ArrayIterator:
-    def __init__(self, context, builder, aryty, ary, extra_masks=None, extra_arys=None):
+    def __init__(self, context, builder, aryty, ary,
+                 extra_masks=None, extra_arys=None):
         self.context = context
         self.builder = builder
         self.aryty = aryty
@@ -241,34 +263,57 @@ class ArrayIterator:
         self.extra_variations = []
         self.extra_types = []
         if extra_masks:
-            # Create a variation tuple to indicate which dimensions are iterated over.
+            # Create a variation tuple to indicate which dimensions
+            # are iterated over.
             assert len(extra_masks) == len(extra_arys)
             extra_masks = list(extra_masks)
             for i in range(len(extra_masks)):
                 # Wraparound for negative axis, convert to positive axis
-                extra_masks[i] = builder.add(extra_masks[i], builder.select(builder.icmp_signed('<', extra_masks[i], Constant(self.ll_intp, 0)), Constant(self.ll_intp, aryty.ndim), Constant(self.ll_intp, 0)))
+                extra_masks[i] = builder.add(
+                    extra_masks[i],
+                    builder.select(
+                        builder.icmp_signed(
+                            '<', extra_masks[i], Constant(self.ll_intp, 0)
+                        ), Constant(self.ll_intp, aryty.ndim),
+                        Constant(self.ll_intp, 0)))
                 # Check if axis is valid for the given array
-                is_not_valid = builder.or_(builder.icmp_signed('>=', extra_masks[i], Constant(self.ll_intp, aryty.ndim)),
-                                           builder.icmp_signed('<', extra_masks[i], Constant(self.ll_intp, 0)))
+                is_not_valid = builder.or_(
+                    builder.icmp_signed(
+                        '>=', extra_masks[i],
+                        Constant(self.ll_intp, aryty.ndim)),
+                    builder.icmp_signed(
+                        '<', extra_masks[i],
+                        Constant(self.ll_intp, 0))
+                )
                 with builder.if_then(is_not_valid, likely=True):
                     context.call_conv.return_user_exc(
                         builder, ValueError,
                         ("Axis out of bounds.",))
-                mask_tup = get_mask(context, builder, ary.shape.type.count, extra_masks[i])
+                mask_tup = get_mask(
+                    context, builder,
+                    ary.shape.type.count, extra_masks[i]
+                )
                 self.extra_variations.append(mask_tup)
                 extra_ary = extra_arys[i]
                 extra_iter_ptr = cgutils.alloca_once(builder, self.ll_intp)
-                builder.store(builder.ptrtoint(extra_ary.data, self.ll_intp), extra_iter_ptr)
+                builder.store(
+                    builder.ptrtoint(extra_ary.data, self.ll_intp),
+                    extra_iter_ptr
+                )
                 self.extra_iter_ptrs.append(extra_iter_ptr)
                 self.extra_types.append(extra_ary.data.type)
-                self.extra_strides.append(tuple_additem(context, builder, extra_ary.strides.type, extra_ary.strides, extra_masks[i], Constant(context.get_value_type(types.intp), 0)))
+                self.extra_strides.append(tuple_additem(
+                    context, builder, extra_ary.strides.type,
+                    extra_ary.strides, extra_masks[i],
+                    Constant(context.get_value_type(types.intp), 0))
+                )
 
         self.indexers = [
             EntireIterator(
-                context, 
-                builder, 
-                aryty, 
-                ary, 
+                context,
+                builder,
+                aryty,
+                ary,
                 dim,
                 self.iter_ptr,
                 self.extra_variations,
@@ -293,17 +338,26 @@ class ArrayIterator:
     def loop_head(self):
         for indexer in self.indexers:
             indexer.loop_head()
-        
+
         if getattr(self, 'extra_iter_ptrs', None):
-            extra_ptrs = [self.builder.inttoptr(self.builder.load(self.extra_iter_ptrs[i]), self.extra_types[i]) for i in range(len(self.extra_iter_ptrs))]
-            return self.builder.inttoptr(self.builder.load(self.iter_ptr), self.ary.data.type), tuple(extra_ptrs)
+            extra_ptrs = [
+                self.builder.inttoptr(
+                    self.builder.load(self.extra_iter_ptrs[i]),
+                    self.extra_types[i]
+                ) for i in range(len(self.extra_iter_ptrs))
+            ]
+            return self.builder.inttoptr(
+                self.builder.load(self.iter_ptr), self.ary.data.type
+            ), tuple(extra_ptrs)
         else:
-            return self.builder.inttoptr(self.builder.load(self.iter_ptr), self.ary.data.type)
+            return self.builder.inttoptr(
+                self.builder.load(self.iter_ptr), self.ary.data.type
+            )
 
     def loop_tail(self):
         for indexer in reversed(self.indexers):
             indexer.loop_tail()
-    
+
     def __enter__(self):
         self.prepare()
         return self.loop_head()
@@ -327,10 +381,18 @@ def get_spliced_tuple(context, builder, tuplety, tupleval, axis):
     ll_intp = context.get_value_type(types.intp)
 
     # Wraparound for negative axis, convert to positive axis
-    axis = builder.add(axis, builder.select(builder.icmp_signed('<', axis, Constant(ll_intp, 0)), Constant(ll_intp, tuplety.count), Constant(ll_intp, 0)))
+    axis = builder.add(
+        axis,
+        builder.select(
+            builder.icmp_signed('<', axis, Constant(ll_intp, 0)),
+            Constant(ll_intp, tuplety.count), Constant(ll_intp, 0)
+        )
+    )
     # Check if axis is valid for the given array
-    is_not_valid = builder.or_(builder.icmp_signed('>=', axis, Constant(ll_intp, tuplety.count)),
-                                builder.icmp_signed('<', axis, Constant(ll_intp, 0)))
+    is_not_valid = builder.or_(
+        builder.icmp_signed('>=', axis, Constant(ll_intp, tuplety.count)),
+        builder.icmp_signed('<', axis, Constant(ll_intp, 0))
+    )
     with builder.if_then(is_not_valid, likely=True):
         context.call_conv.return_user_exc(
             builder, ValueError,
@@ -341,7 +403,9 @@ def get_spliced_tuple(context, builder, tuplety, tupleval, axis):
 
     # Create resulting tuple type
     result_tuple_ty = types.UniTuple(types.intp, tuplety.count - 1)
-    result_tuple = cgutils.get_null_value(context.get_value_type(result_tuple_ty))
+    result_tuple = cgutils.get_null_value(
+        context.get_value_type(result_tuple_ty)
+    )
     stack = cgutils.alloca_once(builder, result_tuple.type)
     builder.store(result_tuple, stack)
 
@@ -360,21 +424,28 @@ def get_spliced_tuple(context, builder, tuplety, tupleval, axis):
             val = builder.extract_value(tupleval, i)
             res_idx = builder.sub(idx, Constant(ll_intp, 1))
             # Unsafe load on unchecked bounds.  Poison value maybe returned.
-            offptr = builder.gep(stack, [res_idx.type(0), res_idx], inbounds=True)
+            offptr = builder.gep(
+                stack, [res_idx.type(0), res_idx], inbounds=True
+            )
             builder.store(val, offptr)
     return builder.load(stack)
 
+
 def tuple_additem(context, builder, tuplety, tupleval, idx, val):
-    # Return a tuple with the same values as tupleval but with val added at idx. idx is a runtime value.
+    # Return a tuple with the same values as tupleval but with
+    # val added at idx. idx is a runtime value.
 
     ll_intp = context.get_value_type(types.intp)
 
     # Create an empty tuple to hold the result, the resulting tuple
-    # has one more dimension than the original tuple, initilize it with zeros.
+    # has one more dimension than the original tuple, initilize
+    # it with zeros.
 
     # Create resulting tuple type
     result_tuple_ty = types.UniTuple(types.intp, tuplety.count + 1)
-    result_tuple = cgutils.get_null_value(context.get_value_type(result_tuple_ty))
+    result_tuple = cgutils.get_null_value(
+        context.get_value_type(result_tuple_ty)
+    )
     stack = cgutils.alloca_once(builder, result_tuple.type)
     builder.store(result_tuple, stack)
 
@@ -398,16 +469,21 @@ def tuple_additem(context, builder, tuplety, tupleval, idx, val):
 
 
 def get_mask(context, builder, mask_length, axis):
-    # Return a tuple of booleans where the value is True if the dimension is not the axis and False if it is the axis. Axis is a runtime value.
+    # Return a tuple of booleans where the value is True if the
+    # dimension is not the axis and False if it is the axis.
+    # Axis is a runtime value.
 
     ll_intp = context.get_value_type(types.intp)
 
     # Create an empty tuple to hold the result, the resulting tuple
-    # has the same number of dimensions as the original tuple, but with boolean type.
+    # has the same number of dimensions as the original tuple,
+    # but with boolean type.
 
     # Create resulting tuple type
     result_tuple_ty = types.UniTuple(types.boolean, mask_length)
-    result_tuple = cgutils.get_null_value(context.get_value_type(result_tuple_ty))
+    result_tuple = cgutils.get_null_value(
+        context.get_value_type(result_tuple_ty)
+    )
     stack = cgutils.alloca_once(builder, result_tuple.type)
     builder.store(result_tuple, stack)
 
@@ -425,10 +501,16 @@ def _numpy_sum(typingctx, aryty, axisty):
     ret_dtype = aryty.dtype
 
     if isinstance(ret_dtype, types.Float):
-        add_func = lambda builder, _,  res_ptr, value: builder.store(builder.fadd(builder.load(res_ptr), value), res_ptr)
+        add_func = lambda builder, _,  res_ptr, value: builder.store(
+            builder.fadd(builder.load(res_ptr), value), res_ptr
+        )
     elif ret_dtype == types.bool_:
         ret_dtype = types.intp
-        add_func = lambda builder, context, res_ptr, value: builder.store(builder.add(builder.load(res_ptr), builder.zext(value, context.get_value_type(types.intp))), res_ptr)
+        add_func = lambda builder, context, res_ptr, value: builder.store(
+            builder.add(builder.load(res_ptr),
+                        builder.zext(value, context.get_value_type(types.intp))
+                        ), res_ptr
+        )
         # Complex Number case
     elif isinstance(ret_dtype, types.Complex):
         def add_func(builder, context, res_ptr, value):
@@ -445,7 +527,9 @@ def _numpy_sum(typingctx, aryty, axisty):
             builder.store(new_res, res_ptr)
     else:
         # For non-floating point types, use builder.add
-        add_func = lambda builder, _, res_ptr, value: builder.store(builder.add(builder.load(res_ptr), value), res_ptr)
+        add_func = lambda builder, _, res_ptr, value: builder.store(
+            builder.add(builder.load(res_ptr), value), res_ptr
+        )
 
     sig = ret_dtype(aryty, axisty)
 
@@ -464,23 +548,33 @@ def _numpy_sum(typingctx, aryty, axisty):
             val = load_item(context, builder, aryty, iter_val_ptr)
             add_func(builder, context, result, val)
 
-        return impl_ret_borrowed(context, builder, sig.return_type, builder.load(result))
+        return impl_ret_borrowed(
+            context, builder, sig.return_type, builder.load(result)
+        )
 
     return sig, codegen
 
 
 @intrinsic
 def _numpy_sum_axis(typingctx, aryty, axisty):
-    assert isinstance(axisty, types.Integer), "Only integer axis supported for now"
+    assert isinstance(axisty, types.Integer), \
+        "Only integer axis supported for now"
 
     ret_dtype = aryty.dtype
 
     if isinstance(ret_dtype, types.Float):
-        add_func = lambda builder, _,  res_ptr, value: builder.store(builder.fadd(builder.load(res_ptr), value), res_ptr)
+        add_func = lambda builder, _,  res_ptr, value: builder.store(
+            builder.fadd(builder.load(res_ptr), value), res_ptr
+        )
     elif ret_dtype == types.bool_:
         ret_dtype = types.intp
-        add_func = lambda builder, context, res_ptr, value: builder.store(builder.add(builder.load(res_ptr), builder.zext(value, context.get_value_type(types.intp))), res_ptr)
-        # Complex Number case
+        add_func = lambda builder, context, res_ptr, value: builder.store(
+            builder.add(builder.load(res_ptr),
+                        builder.zext(value,
+                                     context.get_value_type(types.intp))),
+            res_ptr
+        )
+    # Complex Number case
     elif isinstance(ret_dtype, types.Complex):
         def add_func(builder, context, res_ptr, value):
             res_val = builder.load(res_ptr)
@@ -496,7 +590,9 @@ def _numpy_sum_axis(typingctx, aryty, axisty):
             builder.store(new_res, res_ptr)
     else:
         # For non-floating point types, use builder.add
-        add_func = lambda builder, _, res_ptr, value: builder.store(builder.add(builder.load(res_ptr), value), res_ptr)
+        add_func = lambda builder, _, res_ptr, value: builder.store(
+            builder.add(builder.load(res_ptr), value), res_ptr
+        )
 
     ret = types.Array(ret_dtype, aryty.ndim - 1, layout='C')
     sig = ret(aryty, axisty)
@@ -506,18 +602,31 @@ def _numpy_sum_axis(typingctx, aryty, axisty):
 
         ary = make_array(aryty)(context, builder, ary)
 
-        # Res shape will be a tuple one axis less than ndim and need appropriate shape calculations.
-        res_shape = get_spliced_tuple(context, builder, ary.shape.type, ary.shape, axis)
-        res = _empty_nd_impl(context, builder, sig.return_type, cgutils.unpack_tuple(builder, res_shape))
-        cgutils.memset(builder, res.data, builder.mul(res.itemsize, res.nitems), 0)
+        # Res shape will be a tuple one axis less than
+        # ndim and need appropriate shape calculations.
+        res_shape = get_spliced_tuple(
+            context, builder, ary.shape.type, ary.shape, axis
+        )
+        res = _empty_nd_impl(
+            context, builder, sig.return_type,
+            cgutils.unpack_tuple(builder, res_shape)
+        )
+        cgutils.memset(
+            builder, res.data,
+            builder.mul(res.itemsize, res.nitems), 0
+        )
 
         # Loop on source and copy to destination
-        with ArrayIterator(context, builder, aryty, ary, (axis,), (res,)) as (ary_iter_ptr, res_ptr_tup):
+        with ArrayIterator(
+            context, builder, aryty, ary, (axis,), (res,)
+        ) as (ary_iter_ptr, res_ptr_tup):
             res_ptr = res_ptr_tup[0]
             val = load_item(context, builder, aryty, ary_iter_ptr)
             add_func(builder, context, res_ptr, val)
 
-        return impl_ret_new_ref(context, builder, sig.return_type, res._getvalue())
+        return impl_ret_new_ref(
+            context, builder, sig.return_type, res._getvalue()
+        )
 
     return sig, codegen
 
@@ -549,15 +658,25 @@ def _to_dtype(typingctx, valuety, out_dtype):
     else:
         if isinstance(valuety, types.Array):
             def codegen(context, builder, sig, args):
-                disp_type = context.typing_context.resolve_value_type(cast_array)
-                sig = disp_type.get_call_type(context.typing_context, sig.args, {})
+                disp_type = context.typing_context.resolve_value_type(
+                    cast_array
+                )
+                sig = disp_type.get_call_type(
+                    context.typing_context, sig.args, {}
+                )
                 impl = context.get_function(disp_type, sig)
                 return impl(builder, args)
-            sig = types.Array(out_dtype.dtype, valuety.ndim, layout=valuety.layout)(valuety, out_dtype)
+            sig = types.Array(
+                out_dtype.dtype, valuety.ndim, layout=valuety.layout
+            )(valuety, out_dtype)
         else:
             def codegen(context, builder, sig, args):
-                disp_type = context.typing_context.resolve_value_type(cast_scalar)
-                sig = disp_type.get_call_type(context.typing_context, sig.args, {})
+                disp_type = context.typing_context.resolve_value_type(
+                    cast_scalar
+                )
+                sig = disp_type.get_call_type(
+                    context.typing_context, sig.args, {}
+                )
                 impl = context.get_function(disp_type, sig)
                 return impl(builder, args)
             sig = out_dtype.dtype(valuety, out_dtype)
@@ -580,6 +699,7 @@ def array_sum(a, axis=None, dtype=None):
         return array_sum_impl
     elif isinstance(a, (types.Number, types.Boolean)):
         acc_init = as_dtype(a).type(0)
+
         def scalar_sum_impl(a, axis=None, dtype=None):
             return _to_dtype(acc_init + a, dtype)
 
