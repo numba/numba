@@ -325,6 +325,16 @@ def get_spliced_tuple(context, builder, tuplety, tupleval, axis):
 
     ll_intp = context.get_value_type(types.intp)
 
+    # Wraparound for negative axis, convert to positive axis
+    axis = builder.add(axis, builder.select(builder.icmp_signed('<', axis, Constant(ll_intp, 0)), Constant(ll_intp, tuplety.count), Constant(ll_intp, 0)))
+    # Check if axis is valid for the given array
+    is_not_valid = builder.or_(builder.icmp_signed('>=', axis, Constant(ll_intp, tuplety.count)),
+                                builder.icmp_signed('<', axis, Constant(ll_intp, 0)))
+    with builder.if_then(is_not_valid, likely=True):
+        context.call_conv.return_user_exc(
+            builder, ValueError,
+            ("Axis out of bounds.",))
+
     # Create an empty tuple to hold the result, the resulting tuple
     # has one less dimension than the original tuple, initilize it with zeros.
 
@@ -442,7 +452,10 @@ def _numpy_sum(typingctx, aryty, axisty):
         ary, _ = args
 
         ary = make_array(aryty)(context, builder, ary)
-        zero = context.get_constant(ret_dtype, 0)
+        if isinstance(ret_dtype, types.NPTimedelta):
+            zero = context.get_constant(ret_dtype, ret_dtype(0))
+        else:
+            zero = context.get_constant(ret_dtype, 0)
         result = cgutils.alloca_once_value(builder, zero)
 
         # Loop on source and copy to destination
