@@ -1557,9 +1557,9 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(foo(a), foo.py_func(a))
         # ndim == 2, axis == -3, BAD
         a = np.ones((1, 2))
-        with self.assertRaises(NumbaValueError) as raises:
+        with self.assertRaises(ValueError) as raises:
             foo(a)
-        errmsg = "'axis' entry (-1) is out of bounds"
+        errmsg = "Axis out of bounds"
         self.assertIn(errmsg, str(raises.exception))
         with self.assertRaises(ValueError) as raises:
             foo.py_func(a)

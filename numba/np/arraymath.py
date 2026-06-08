@@ -31,6 +31,7 @@ from numba.core.errors import (RequireLiteralValue, TypingError,
 from numba.cpython.unsafe.tuple import tuple_setitem
 from numba.np import types as npy_types
 from llvmlite.ir import Constant
+from numba.np.arrayobj import _empty_nd_impl
 
 
 def _check_blas():
@@ -505,13 +506,10 @@ def _numpy_sum_axis(typingctx, aryty, axisty):
 
         ary = make_array(aryty)(context, builder, ary)
 
-        from numba.np.arrayobj import _empty_nd_impl
-
         # Res shape will be a tuple one axis less than ndim and need appropriate shape calculations.
         res_shape = get_spliced_tuple(context, builder, ary.shape.type, ary.shape, axis)
         res = _empty_nd_impl(context, builder, sig.return_type, cgutils.unpack_tuple(builder, res_shape))
-        cgutils.memset(builder, res.data, builder.mul(res.itemsize,
-                                                      res.nitems), 0)
+        cgutils.memset(builder, res.data, builder.mul(res.itemsize, res.nitems), 0)
 
         # Loop on source and copy to destination
         with ArrayIterator(context, builder, aryty, ary, (axis,), (res,)) as (ary_iter_ptr, res_ptr_tup):
@@ -519,7 +517,7 @@ def _numpy_sum_axis(typingctx, aryty, axisty):
             val = load_item(context, builder, aryty, ary_iter_ptr)
             add_func(builder, context, res_ptr, val)
 
-        return impl_ret_borrowed(context, builder, sig.return_type, res._getvalue())
+        return impl_ret_new_ref(context, builder, sig.return_type, res._getvalue())
 
     return sig, codegen
 
