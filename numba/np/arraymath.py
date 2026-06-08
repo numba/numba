@@ -497,44 +497,18 @@ def get_mask(context, builder, mask_length, axis):
 
 
 @intrinsic
-def _numpy_sum(typingctx, aryty, axisty):
-    ret_dtype = aryty.dtype
-
-    if isinstance(ret_dtype, types.Float):
-        add_func = lambda builder, _,  res_ptr, value: builder.store(
-            builder.fadd(builder.load(res_ptr), value), res_ptr
-        )
-    elif ret_dtype == types.bool_:
-        ret_dtype = types.intp
-        add_func = lambda builder, context, res_ptr, value: builder.store(
-            builder.add(builder.load(res_ptr),
-                        builder.zext(value, context.get_value_type(types.intp))
-                        ), res_ptr
-        )
-        # Complex Number case
-    elif isinstance(ret_dtype, types.Complex):
-        def add_func(builder, context, res_ptr, value):
-            res_val = builder.load(res_ptr)
-            real_a = builder.extract_value(res_val, 0)
-            imag_a = builder.extract_value(res_val, 1)
-            real_b = builder.extract_value(value, 0)
-            imag_b = builder.extract_value(value, 1)
-            real_res = builder.fadd(real_a, real_b)
-            imag_res = builder.fadd(imag_a, imag_b)
-            new_res = cgutils.get_null_value(res_val.type)
-            new_res = builder.insert_value(new_res, real_res, 0)
-            new_res = builder.insert_value(new_res, imag_res, 1)
-            builder.store(new_res, res_ptr)
+def _numpy_sum(typingctx, aryty, axisty, dtype):
+    if is_nonelike(dtype):
+        ret_dtype = aryty.dtype
+        if ret_dtype == types.bool_:
+            ret_dtype = types.intp
     else:
-        # For non-floating point types, use builder.add
-        add_func = lambda builder, _, res_ptr, value: builder.store(
-            builder.add(builder.load(res_ptr), value), res_ptr
-        )
+        ret_dtype = dtype.dtype
 
-    sig = ret_dtype(aryty, axisty)
+    sig = ret_dtype(aryty, axisty, dtype)
 
     def codegen(context, builder, sig, args):
-        ary, _ = args
+        ary, _, _ = args
 
         ary = make_array(aryty)(context, builder, ary)
         if isinstance(ret_dtype, types.NPTimedelta):
@@ -543,10 +517,21 @@ def _numpy_sum(typingctx, aryty, axisty):
             zero = context.get_constant(ret_dtype, 0)
         result = cgutils.alloca_once_value(builder, zero)
 
+        fnty = context.typing_context.resolve_value_type(operator.iadd)
+        fn_sig = fnty.get_call_type(
+            context.typing_context,
+            (sig.return_type, sig.return_type),
+            {}
+        )
+        add_funcfn = context.get_function(fnty, fn_sig)
+
         # Loop on source and copy to destination
         with ArrayIterator(context, builder, aryty, ary) as iter_val_ptr:
             val = load_item(context, builder, aryty, iter_val_ptr)
-            add_func(builder, context, result, val)
+            res_val = add_funcfn(builder, (
+                builder.load(result),
+                context.cast(builder, val, aryty.dtype, sig.return_type)))
+            builder.store(res_val, result)
 
         return impl_ret_borrowed(
             context, builder, sig.return_type, builder.load(result)
@@ -556,49 +541,22 @@ def _numpy_sum(typingctx, aryty, axisty):
 
 
 @intrinsic
-def _numpy_sum_axis(typingctx, aryty, axisty):
+def _numpy_sum_axis(typingctx, aryty, axisty, dtype):
     assert isinstance(axisty, types.Integer), \
         "Only integer axis supported for now"
 
-    ret_dtype = aryty.dtype
-
-    if isinstance(ret_dtype, types.Float):
-        add_func = lambda builder, _,  res_ptr, value: builder.store(
-            builder.fadd(builder.load(res_ptr), value), res_ptr
-        )
-    elif ret_dtype == types.bool_:
-        ret_dtype = types.intp
-        add_func = lambda builder, context, res_ptr, value: builder.store(
-            builder.add(builder.load(res_ptr),
-                        builder.zext(value,
-                                     context.get_value_type(types.intp))),
-            res_ptr
-        )
-    # Complex Number case
-    elif isinstance(ret_dtype, types.Complex):
-        def add_func(builder, context, res_ptr, value):
-            res_val = builder.load(res_ptr)
-            real_a = builder.extract_value(res_val, 0)
-            imag_a = builder.extract_value(res_val, 1)
-            real_b = builder.extract_value(value, 0)
-            imag_b = builder.extract_value(value, 1)
-            real_res = builder.fadd(real_a, real_b)
-            imag_res = builder.fadd(imag_a, imag_b)
-            new_res = cgutils.get_null_value(res_val.type)
-            new_res = builder.insert_value(new_res, real_res, 0)
-            new_res = builder.insert_value(new_res, imag_res, 1)
-            builder.store(new_res, res_ptr)
+    if is_nonelike(dtype):
+        ret_dtype = aryty.dtype
+        if ret_dtype == types.bool_:
+            ret_dtype = types.intp
     else:
-        # For non-floating point types, use builder.add
-        add_func = lambda builder, _, res_ptr, value: builder.store(
-            builder.add(builder.load(res_ptr), value), res_ptr
-        )
+        ret_dtype = dtype.dtype
 
     ret = types.Array(ret_dtype, aryty.ndim - 1, layout='C')
-    sig = ret(aryty, axisty)
+    sig = ret(aryty, axisty, dtype)
 
     def codegen(context, builder, sig, args):
-        ary, axis = args
+        ary, axis, _ = args
 
         ary = make_array(aryty)(context, builder, ary)
 
@@ -616,70 +574,30 @@ def _numpy_sum_axis(typingctx, aryty, axisty):
             builder.mul(res.itemsize, res.nitems), 0
         )
 
+        fnty = context.typing_context.resolve_value_type(operator.iadd)
+        fn_sig = fnty.get_call_type(
+            context.typing_context,
+            (sig.return_type.dtype, sig.return_type.dtype),
+            {}
+        )
+        add_funcfn = context.get_function(fnty, fn_sig)
+
         # Loop on source and copy to destination
         with ArrayIterator(
             context, builder, aryty, ary, (axis,), (res,)
         ) as (ary_iter_ptr, res_ptr_tup):
             res_ptr = res_ptr_tup[0]
             val = load_item(context, builder, aryty, ary_iter_ptr)
-            add_func(builder, context, res_ptr, val)
+            res_val = add_funcfn(builder, (
+                builder.load(res_ptr),
+                context.cast(builder, val, aryty.dtype, sig.return_type.dtype))
+            )
+            builder.store(res_val, res_ptr)
 
         return impl_ret_new_ref(
             context, builder, sig.return_type, res._getvalue()
         )
 
-    return sig, codegen
-
-
-@register_jitable
-def pass_through(val, dtype):
-    return val
-
-
-@register_jitable
-def cast_scalar(val, dtype):
-    return dtype(val)
-
-
-@register_jitable
-def cast_array(ary, dtype):
-    return ary.astype(dtype)
-
-
-@intrinsic
-def _to_dtype(typingctx, valuety, out_dtype):
-    if is_nonelike(out_dtype):
-        def codegen(context, builder, sig, args):
-            disp_type = context.typing_context.resolve_value_type(pass_through)
-            sig = disp_type.get_call_type(context.typing_context, sig.args, {})
-            impl = context.get_function(disp_type, sig)
-            return impl(builder, args)
-        sig = valuety(valuety, out_dtype)
-    else:
-        if isinstance(valuety, types.Array):
-            def codegen(context, builder, sig, args):
-                disp_type = context.typing_context.resolve_value_type(
-                    cast_array
-                )
-                sig = disp_type.get_call_type(
-                    context.typing_context, sig.args, {}
-                )
-                impl = context.get_function(disp_type, sig)
-                return impl(builder, args)
-            sig = types.Array(
-                out_dtype.dtype, valuety.ndim, layout=valuety.layout
-            )(valuety, out_dtype)
-        else:
-            def codegen(context, builder, sig, args):
-                disp_type = context.typing_context.resolve_value_type(
-                    cast_scalar
-                )
-                sig = disp_type.get_call_type(
-                    context.typing_context, sig.args, {}
-                )
-                impl = context.get_function(disp_type, sig)
-                return impl(builder, args)
-            sig = out_dtype.dtype(valuety, out_dtype)
     return sig, codegen
 
 
@@ -689,19 +607,20 @@ def array_sum(a, axis=None, dtype=None):
     if isinstance(a, types.Array):
         if is_nonelike(axis) or a.ndim == 1:
             def array_sum_impl(a, axis=None, dtype=None):
-                res = _numpy_sum(a, axis)
-                return _to_dtype(res, dtype)
+                return _numpy_sum(a, axis, dtype)
         else:
             def array_sum_impl(a, axis=None, dtype=None):
-                res = _numpy_sum_axis(a, axis)
-                return _to_dtype(res, dtype)
+                return _numpy_sum_axis(a, axis, dtype)
 
         return array_sum_impl
     elif isinstance(a, (types.Number, types.Boolean)):
-        acc_init = as_dtype(a).type(0)
+        if is_nonelike(dtype):
+            acc_init = as_dtype(a).type(0)
+        else:
+            acc_init = as_dtype(dtype).type(0)
 
         def scalar_sum_impl(a, axis=None, dtype=None):
-            return _to_dtype(acc_init + a, dtype)
+            return acc_init + a
 
         return scalar_sum_impl
 
