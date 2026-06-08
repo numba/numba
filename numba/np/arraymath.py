@@ -502,6 +502,10 @@ def _numpy_sum(typingctx, aryty, axisty, dtype):
         ret_dtype = aryty.dtype
         if ret_dtype == types.bool_:
             ret_dtype = types.intp
+        if isinstance(aryty.dtype, types.Integer) and aryty.dtype.bitwidth < types.intp.bitwidth:
+            # For signed integers smaller than intp,
+            # use intp as the accumulator
+            ret_dtype = types.intp
     else:
         ret_dtype = dtype.dtype
 
@@ -528,10 +532,18 @@ def _numpy_sum(typingctx, aryty, axisty, dtype):
         # Loop on source and copy to destination
         with ArrayIterator(context, builder, aryty, ary) as iter_val_ptr:
             val = load_item(context, builder, aryty, iter_val_ptr)
-            res_val = add_funcfn(builder, (
-                builder.load(result),
-                context.cast(builder, val, aryty.dtype, sig.return_type)))
-            builder.store(res_val, result)
+            if isinstance(ret_dtype, types.Boolean):
+                # This is required because NumPy booleans are stored as 8-bit
+                # integers whilst in llvm they are 1-bit, so we need to 
+                # zero-extend them instead of a builder.cast.
+                res_val = builder.load(result)
+                res_val = builder.or_(res_val, builder.zext(val, llvmlite.ir.IntType(res_val.type.width)))
+                builder.store(res_val, result)
+            else:
+                res_val = add_funcfn(builder, (
+                    builder.load(result),
+                    context.cast(builder, val, aryty.dtype, sig.return_type)))
+                builder.store(res_val, result)
 
         return impl_ret_borrowed(
             context, builder, sig.return_type, builder.load(result)
@@ -548,6 +560,11 @@ def _numpy_sum_axis(typingctx, aryty, axisty, dtype):
     if is_nonelike(dtype):
         ret_dtype = aryty.dtype
         if ret_dtype == types.bool_:
+            # This is required to match NumPy's behavior where bools are promoted to intp for sum
+            ret_dtype = types.intp
+        if isinstance(aryty.dtype, types.Integer) and aryty.dtype.bitwidth < types.intp.bitwidth:
+            # For signed integers smaller than intp,
+            # use intp as the accumulator
             ret_dtype = types.intp
     else:
         ret_dtype = dtype.dtype
@@ -588,11 +605,19 @@ def _numpy_sum_axis(typingctx, aryty, axisty, dtype):
         ) as (ary_iter_ptr, res_ptr_tup):
             res_ptr = res_ptr_tup[0]
             val = load_item(context, builder, aryty, ary_iter_ptr)
-            res_val = add_funcfn(builder, (
-                builder.load(res_ptr),
-                context.cast(builder, val, aryty.dtype, sig.return_type.dtype))
-            )
-            builder.store(res_val, res_ptr)
+            if isinstance(ret_dtype, types.Boolean):
+                # This is required because NumPy booleans are stored as 8-bit
+                # integers whilst in llvm they are 1-bit, so we need to 
+                # zero-extend them instead of a builder.cast.
+                res_val = builder.load(res_ptr)
+                res_val = builder.or_(res_val, builder.zext(val, llvmlite.ir.IntType(res_val.type.width)))
+                builder.store(res_val, res_ptr)
+            else:
+                res_val = add_funcfn(builder, (
+                    builder.load(res_ptr),
+                    context.cast(builder, val, aryty.dtype, sig.return_type.dtype))
+                )
+                builder.store(res_val, res_ptr)
 
         return impl_ret_new_ref(
             context, builder, sig.return_type, res._getvalue()
