@@ -1329,15 +1329,23 @@ def np_nanmean(a):
 
 
 @overload(np.nanvar)
-def np_nanvar(a):
+def np_nanvar(a, axis=None, dtype=None, out=None, ddof=0):
     if not isinstance(a, types.Array):
         return
+    if not isinstance(ddof, (types.Integer, types.Omitted, int)):
+        return
+    if not is_nonelike(axis):
+        raise TypingError("Numba does not support nanvar with axis.")
+    if not is_nonelike(dtype):
+        raise TypingError("Numba does not support nanvar with dtype.")
+    if not is_nonelike(out):
+        raise TypingError("Numba does not support nanvar with out.")
+
     isnan = get_isnan(a.dtype)
 
-    def nanvar_impl(a):
+    def nanvar_impl(a, axis=None, dtype=None, out=None, ddof=0):
         # Compute the mean
         m = np.nanmean(a)
-
         # Compute the sum of square diffs
         ssd = 0.0
         count = 0
@@ -1347,19 +1355,30 @@ def np_nanvar(a):
                 val = (v.item() - m)
                 ssd += np.real(val * np.conj(val))
                 count += 1
+        # When count <= ddof, return nan to match NumPy behaviour
+        if count <= ddof:
+            return np.nan
         # np.divide() doesn't raise ZeroDivisionError
-        return np.divide(ssd, count)
+        return np.divide(ssd, count - ddof)
 
     return nanvar_impl
 
 
 @overload(np.nanstd)
-def np_nanstd(a):
+def np_nanstd(a, axis=None, dtype=None, out=None, ddof=0):
     if not isinstance(a, types.Array):
         return
+    if not isinstance(ddof, (types.Integer, types.Omitted, int)):
+        return
+    if not is_nonelike(axis):
+        raise TypingError("Numba does not support nanstd with axis.")
+    if not is_nonelike(dtype):
+        raise TypingError("Numba does not support nanstd with dtype.")
+    if not is_nonelike(out):
+        raise TypingError("Numba does not support nanstd with out.")
 
-    def nanstd_impl(a):
-        return np.nanvar(a) ** 0.5
+    def nanstd_impl(a, axis=None, dtype=None, out=None, ddof=0):
+        return np.nanvar(a, ddof=ddof) ** 0.5
 
     return nanstd_impl
 

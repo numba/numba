@@ -454,9 +454,11 @@ The following reduction functions are supported:
 * :func:`numpy.nanquantile` (only the 2 first arguments, complex dtypes
   unsupported)
 * :func:`numpy.nanprod` (only the first argument)
-* :func:`numpy.nanstd` (only the first argument)
+* :func:`numpy.nanstd` (``a`` and ``ddof`` arguments supported; ``axis``,
+  ``dtype``, ``out`` and ``keepdims`` are not supported)
 * :func:`numpy.nansum` (only the first argument)
-* :func:`numpy.nanvar` (only the first argument)
+* :func:`numpy.nanvar` (``a`` and ``ddof`` arguments supported; ``axis``,
+  ``dtype``, ``out`` and ``keepdims`` are not supported)
 * :func:`numpy.percentile` (only the 2 first arguments, complex dtypes
   unsupported)
 * :func:`numpy.quantile` (only the 2 first arguments, complex dtypes
