@@ -22,7 +22,7 @@ call deactivate
 conda list
 @rem Collect all conda packages so the environment is created in a single solve
 @rem CFFI, jinja2 and IPython are optional dependencies, but exercised in the test suite
-set PKGS=python=%PYTHON% numpy=%NUMPY% cffi pip jinja2 gitpython pyyaml psutil llvmlite=0.48 "tbb>=2021.6" "tbb-devel>=2021.6"
+set PKGS=python=%PYTHON% numpy=%NUMPY% cffi pip jinja2 gitpython pyyaml psutil llvmlite=0.49 "tbb>=2021.6" "tbb-devel>=2021.6"
 @rem missing IPython for Python 3.13
 if "%PYTHON%" neq "3.13" set PKGS=%PKGS% ipython
 @rem Install SciPy only if NumPy is not 2.1
