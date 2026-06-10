@@ -21,7 +21,8 @@ from numba.np.extensions import cross2d
 from numba.tests.support import (TestCase, MemoryLeakMixin,
                                  needs_blas, run_in_subprocess,
                                  skip_if_numpy_2, IS_NUMPY_2,
-                                 IS_MACOS_ARM64, REDUCED_TESTING,
+                                 IS_MACOS_ARM64, IS_WIN_ARM64,
+                                 REDUCED_TESTING,
                                  skip_if_reduced_testing)
 import unittest
 
@@ -4971,7 +4972,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc(x, xp, fp)
             self.assertPreciseEqual(expected, got, abs_tol=atol)
 
-    @unittest.skipIf(IS_NUMPY_2 and IS_MACOS_ARM64, "NEP 50 interaction issue.")
+    @unittest.skipIf(IS_NUMPY_2 and (IS_MACOS_ARM64 or IS_WIN_ARM64),
+                     "NEP 50 interaction issue.")
     def test_interp_complex_stress_tests(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)

@@ -228,6 +228,7 @@ IS_MACOS = _uname.system == 'Darwin'
 skip_macos_fenv_errors = unittest.skipIf(IS_MACOS,
     "fenv.h-like functionality unreliable on macOS")
 IS_MACOS_ARM64 = IS_MACOS and _uname.machine == 'arm64'
+IS_WIN_ARM64 = _uname.system == 'Windows' and _uname.machine == 'ARM64'
 
 try:
     import scipy.linalg.cython_lapack
