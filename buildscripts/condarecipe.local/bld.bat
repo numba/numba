@@ -7,7 +7,11 @@ if not exist "%VSINSTALLDIR%" (
   echo "Could not find VS 2022"
   exit /B 1
 )
-call "%VSINSTALLDIR%VC\Auxiliary\Build\vcvarsall.bat" x64
+if "%ARCH%"=="arm64" (
+  call "%VSINSTALLDIR%VC\Auxiliary\Build\vcvarsall.bat" ARM64
+) else (
+  call "%VSINSTALLDIR%VC\Auxiliary\Build\vcvarsall.bat" x64
+)
 
 %PYTHON% setup.py build install --single-version-externally-managed --record=record.txt
 
