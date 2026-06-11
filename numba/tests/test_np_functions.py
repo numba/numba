@@ -5708,7 +5708,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 (
                     np.arange(36).reshape(6, 2, 3),
                     np.arange(4).reshape(2, 2)
-                )
+                ),
                 # 2x3 array-like (n-dims)
                 (
                     np.array([[1, 2, 3], [4, 5, 6]]),
