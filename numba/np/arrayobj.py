@@ -6032,7 +6032,7 @@ def expand_dims(context, builder, sig, args):
         for i in range(ndim):
             if res[i] == -1:
                 res = tuple_setitem(res, i, _curr_tuple[idx])
-                idx = idx + 1
+                idx += 1
 
         return res
 
@@ -6045,7 +6045,7 @@ def expand_dims(context, builder, sig, args):
     one = context.get_constant(types.intp, 1)
 
     fnty = context.typing_context.resolve_value_type(_build_shape_stride_tuples)
-    sig = fnty.get_call_type(
+    fsig = fnty.get_call_type(
         context.typing_context,
         (temp_ty, types.intp, sig.args[1], types.intp),
         {}
