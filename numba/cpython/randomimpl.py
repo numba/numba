@@ -1227,15 +1227,135 @@ def vonmises_impl(mu, kappa, size):
         return _impl
 
 
+@register_jitable
+def _binomial_btpe(n, p):
+    # Mirrors numba.np.random.distributions.random_binomial_btpe(), but draws
+    # from np.random's legacy state. The caller handles p > 0.5 by flipping.
+    q = 1.0 - p
+    fm = n * p + p
+    m = int(math.floor(fm))
+    p1 = math.floor(2.195 * math.sqrt(n * p * q) - 4.6 * q) + 0.5
+    xm = m + 0.5
+    xl = xm - p1
+    xr = xm + p1
+    c = 0.134 + 20.5 / (15.3 + m)
+    a = (fm - xl) / (fm - xl * p)
+    laml = a * (1.0 + a / 2.0)
+    a = (xr - fm) / (xr * q)
+    lamr = a * (1.0 + a / 2.0)
+    p2 = p1 * (1.0 + 2.0 * c)
+    p3 = p2 + c / laml
+    p4 = p3 + c / lamr
+
+    case = 10
+    y = k = 0
+    while 1:
+        if case == 10:
+            nrq = n * p * q
+            u = np.random.random() * p4
+            v = np.random.random()
+            if u > p1:
+                case = 20
+                continue
+            y = int(math.floor(xm - p1 * v + u))
+            case = 60
+            continue
+        elif case == 20:
+            if u > p2:
+                case = 30
+                continue
+            x = xl + (u - p1) / c
+            v = v * c + 1.0 - math.fabs(m - x + 0.5) / p1
+            if v > 1.0:
+                case = 10
+                continue
+            y = int(math.floor(x))
+            case = 50
+            continue
+        elif case == 30:
+            if u > p3:
+                case = 40
+                continue
+            y = int(math.floor(xl + math.log(v) / laml))
+            if (y < 0) or (v == 0.0):
+                case = 10
+                continue
+            v = v * (u - p2) * laml
+            case = 50
+            continue
+        elif case == 40:
+            y = int(math.floor(xr - math.log(v) / lamr))
+            if (y > n) or (v == 0.0):
+                case = 10
+                continue
+            v = v * (u - p3) * lamr
+            case = 50
+            continue
+        elif case == 50:
+            k = abs(y - m)
+            if (k > 20) and (k < (nrq / 2.0 - 1)):
+                case = 52
+                continue
+            s = p / q
+            a = s * (n + 1)
+            F = 1.0
+            if m < y:
+                for i in range(m + 1, y + 1):
+                    F = F * (a / i - s)
+            elif m > y:
+                for i in range(y + 1, m + 1):
+                    F = F / (a / i - s)
+            if v > F:
+                case = 10
+                continue
+            case = 60
+            continue
+        elif case == 52:
+            rho = (k / nrq) * ((k * (k / 3.0 + 0.625) +
+                                0.16666666666666666) / nrq + 0.5)
+            t = -k * k / (2 * nrq)
+            A = math.log(v)
+            if A < (t - rho):
+                case = 60
+                continue
+            if A > (t + rho):
+                case = 10
+                continue
+            x1 = y + 1
+            f1 = m + 1
+            z = n + 1 - m
+            w = n - y + 1
+            x2 = x1 * x1
+            f2 = f1 * f1
+            z2 = z * z
+            w2 = w * w
+            if (A > (xm * math.log(f1 / x1) +
+                     (n - m + 0.5) * math.log(z / w) +
+                     (y - m) * math.log(w * p / (x1 * q)) +
+                     (13680. - (462. - (132. - (99. - 140. / f2) / f2) / f2)
+                      / f2) / f1 / 166320. +
+                     (13680. - (462. - (132. - (99. - 140. / z2) / z2) / z2)
+                      / z2) / z / 166320. +
+                     (13680. - (462. - (132. - (99. - 140. / x2) / x2) / x2)
+                      / x2) / x1 / 166320. +
+                     (13680. - (462. - (132. - (99. - 140. / w2) / w2) / w2)
+                      / w2) / w / 66320.)):
+                case = 10
+                continue
+            case = 60
+            continue
+        elif case == 60:
+            return y
+
+
 @overload(np.random.binomial)
 def binomial_impl(n, p):
     if isinstance(n, types.Integer) and isinstance(
             p, (types.Float, types.Integer)):
         def _impl(n, p):
             """
-            Binomial distribution.  Numpy's variant of the BINV algorithm
-            is used.
-            (Numpy uses BTPE for n*p >= 30, though)
+            Binomial distribution.  Numpy's BINV algorithm is used for small
+            means; Numpy's BTPE algorithm is used for large means.
             """
             if n < 0:
                 raise ValueError("binomial(): n <= 0")
@@ -1251,17 +1371,20 @@ def binomial_impl(n, p):
                 p = 1.0 - p
             q = 1.0 - p
 
+            np_prod = n * p
+            if np_prod > 30.0:
+                X = _binomial_btpe(n, p)
+                return n - X if flipped else X
+
             niters = 1
             qn = q ** n
             while qn <= 1e-308:
                 # Underflow => split into several iterations
-                # Note this is much slower than Numpy's BTPE
                 niters <<= 2
                 n >>= 2
                 qn = q ** n
                 assert n > 0
 
-            np_prod = n * p
             bound = min(n, np_prod + 10.0 * math.sqrt(np_prod * q + 1))
 
             total = 0
