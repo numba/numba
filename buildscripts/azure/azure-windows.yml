@@ -9,7 +9,7 @@ jobs:
   strategy:
     matrix:
       py310_np124:
-        PYTHON: '3.10'
+        PYTHON: '3.11'
         NUMPY: '1.24'
         CONDA_ENV: 'testenv'
         TEST_START_INDEX: 17
