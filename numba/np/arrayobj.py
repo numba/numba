@@ -6602,6 +6602,7 @@ def impl_np_vstack(tup):
 
 
 if numpy_version >= (2, 0) and numpy_version < (2, 5):
+    # Numpy 2.5 removed np.row_stack, so only test it if it's present.
     overload(np.row_stack)(impl_np_vstack)
 
 
