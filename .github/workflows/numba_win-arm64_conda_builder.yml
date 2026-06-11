@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  CONDA_CHANNEL_LLVMLITE: swap357
+  CONDA_CHANNEL_LLVMLITE: numba/label/dev
   WIN_ARM64_CONDA_CHANNEL: bootstrap-win-arm64-round-2-native
   PYTHON_VERSION: "3.14"
   NUMPY_VERSION: "2.4"
