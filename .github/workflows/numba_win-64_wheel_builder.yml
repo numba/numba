@@ -86,7 +86,32 @@ jobs:
           fi
           python -m pip install build numpy==${{ matrix.numpy_build }} setuptools wheel tbb==2021.6 tbb-devel==2021.6
 
+      - name: Setup MSVC v14.44 (v143) environment
+        shell: cmd
+        run: |
+          REM Same locator as buildscripts/condarecipe.local/bld.bat: find
+          REM VS2022 or VS2026 and pin the MSVC v14.44 (v143) toolset, then
+          REM export the activated environment to the following steps.
+          for /F "usebackq tokens=*" %%i in (`vswhere.exe -nologo -products * -version "[17.0,19.0)" -property installationPath`) do (
+            set "VSINSTALLDIR=%%i\"
+          )
+          if not exist "%VSINSTALLDIR%" (
+            echo Could not find VS 2022 or VS 2026
+            exit /B 1
+          )
+          call "%VSINSTALLDIR%VC\Auxiliary\Build\vcvarsall.bat" x64 -vcvars_ver=14.44
+          if errorlevel 1 exit /B 1
+          >>"%GITHUB_ENV%" echo PATH=%PATH%
+          >>"%GITHUB_ENV%" echo INCLUDE=%INCLUDE%
+          >>"%GITHUB_ENV%" echo LIB=%LIB%
+
       - name: Build wheel
+        env:
+          # Use the pre-activated MSVC v14.44 environment instead of
+          # setuptools' own discovery, which would pick VS2026's native
+          # v14.5x toolset. use 14.44 instead.
+          DISTUTILS_USE_SDK: '1'
+          MSSdk: '1'
         run: python -m build --wheel --no-isolation
 
       - name: Upload numba wheel
