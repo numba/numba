@@ -705,7 +705,8 @@ class TestRandom(BaseTest):
     def test_numpy_binomial(self):
         binomial = jit_binary("np.random.binomial")
         r = self._follow_numpy(get_np_state_ptr(), 0)
-        self._check_dist(binomial, r.binomial, [(18, 0.25), (100, 0.4),
+        self._check_dist(binomial, r.binomial, [(18, 0.25), (60, 0.5),
+                                                (61, 0.5), (100, 0.4),
                                                 (100, 0.6)])
         # Sanity check many values
         for n in (100, 1000, 10000):
