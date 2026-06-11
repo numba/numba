@@ -16,7 +16,7 @@ jobs:
 #     matrix:
 #       py310_np123:
 #         PYTHON: '3.12'
-#         NUMPY: '1.23'
+#         NUMPY: '1.26'
 #         CONDA_ENV: 'azure_ci'
 #         TEST_THREADING: 'tbb'
 #         TEST_START_INDEX: 0
@@ -38,12 +38,12 @@ jobs:
     matrix:
       py310_np123:
         PYTHON: '3.12'
-        NUMPY: '1.23'
+        NUMPY: '1.26'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 0
       py310_np124_cov_doc:
         PYTHON: '3.12'
-        NUMPY: '1.24'
+        NUMPY: '1.26'
         RUN_COVERAGE: yes
         RUN_FLAKE8: yes
         BUILD_DOC: yes
@@ -51,7 +51,7 @@ jobs:
         TEST_START_INDEX: 1
       py310_np125_typeguard:
         PYTHON: '3.12'
-        NUMPY: '1.25'
+        NUMPY: '1.26'
         CONDA_ENV: azure_ci
         RUN_TYPEGUARD: no
         TEST_START_INDEX: 2
@@ -68,14 +68,14 @@ jobs:
 
       py311_np124_type_check:
         PYTHON: '3.12'
-        NUMPY: '1.24'
+        NUMPY: '1.26'
         RUN_MYPY: yes
         RUN_STUBTEST: yes
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 5
       py311_np125:
         PYTHON: '3.12'
-        NUMPY: '1.25'
+        NUMPY: '1.26'
         CONDA_ENV: azure_ci
         TEST_START_INDEX: 6
       py311_np126:
@@ -100,7 +100,7 @@ jobs:
         TEST_START_INDEX: 10
       py311_np125_svml:
         PYTHON: '3.12'
-        NUMPY: '1.25'
+        NUMPY: '1.26'
         CONDA_ENV: azure_ci
         TEST_SVML: yes
         TEST_START_INDEX: 11

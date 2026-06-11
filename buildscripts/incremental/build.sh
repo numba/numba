@@ -21,7 +21,7 @@ if [[ $(uname) == "Darwin" ]]; then
     export SDKROOT=`pwd`/MacOSX10.10.sdk
 fi
 
-python -m pip install numpy==2.5.0rc1
+python -m pip install numpy --pre
 python setup.py build_ext -q --inplace --debug $EXTRA_BUILD_EXT_FLAGS --verbose
 # (note we don't install to avoid problems with extra long Windows paths
 #  during distutils-dependent tests -- e.g. test_pycc)
