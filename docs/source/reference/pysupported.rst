@@ -107,6 +107,12 @@ and only called locally, but not passed as argument or returned as
 result. The use of closure variables (variables defined in outer scopes)
 within an inner function is also supported.
 
+Assigning a ``nonlocal`` variable more than once inside an inner function is
+not supported and raises an ``UnsupportedError``. The check is structural, so
+the error is raised even when the later assignment is in a branch that never
+runs. Assign the variable once, or return its value from the inner function and
+reassign it in the caller.
+
 Recursive calls
 '''''''''''''''
 

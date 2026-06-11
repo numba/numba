@@ -1,0 +1,6 @@
+Added ``ddof`` argument to ``np.nanvar`` and ``np.nanstd``
+----------------------------------------------------------
+
+The ``ddof`` (Delta Degrees of Freedom) argument is now supported in
+``np.nanvar`` and ``np.nanstd`` in nopython mode, matching NumPy behaviour.
+Default ``ddof=0`` preserves backward compatibility.
