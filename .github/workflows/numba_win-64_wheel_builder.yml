@@ -87,23 +87,21 @@ jobs:
           python -m pip install build numpy==${{ matrix.numpy_build }} setuptools wheel tbb==2021.6 tbb-devel==2021.6
 
       - name: Setup MSVC v14.44 (v143) environment
-        shell: cmd
         run: |
-          REM Same locator as buildscripts/condarecipe.local/bld.bat: find
-          REM VS2022 or VS2026 and pin the MSVC v14.44 (v143) toolset, then
-          REM export the activated environment to the following steps.
-          for /F "usebackq tokens=*" %%i in (`vswhere.exe -nologo -products * -version "[17.0,19.0)" -property installationPath`) do (
-            set "VSINSTALLDIR=%%i\"
-          )
-          if not exist "%VSINSTALLDIR%" (
-            echo Could not find VS 2022 or VS 2026
-            exit /B 1
-          )
-          call "%VSINSTALLDIR%VC\Auxiliary\Build\vcvarsall.bat" x64 -vcvars_ver=14.44
-          if errorlevel 1 exit /B 1
-          >>"%GITHUB_ENV%" echo PATH=%PATH%
-          >>"%GITHUB_ENV%" echo INCLUDE=%INCLUDE%
-          >>"%GITHUB_ENV%" echo LIB=%LIB%
+          # Same locator as buildscripts/condarecipe.local/bld.bat: find
+          # VS2022 or VS2026 and pin the MSVC v14.44 (v143) toolset, then
+          # export the activated environment to the following steps.
+          VSINSTALLDIR=$(vswhere.exe -nologo -latest -products '*' -version '[17.0,19.0)' -property installationPath | tr -d '\r')
+          if [ -z "$VSINSTALLDIR" ]; then
+            echo "Could not find VS 2022 or VS 2026"
+            exit 1
+          fi
+          cmd //s //c "\"$VSINSTALLDIR\VC\Auxiliary\Build\vcvarsall.bat\" x64 -vcvars_ver=14.44 >NUL && set" | tr -d '\r' > "$RUNNER_TEMP/msvc_env.txt"
+          grep -iE '^(PATH|INCLUDE|LIB)=' "$RUNNER_TEMP/msvc_env.txt" >> "$GITHUB_ENV"
+          # git-bash's login profile prepends Git\usr\bin to PATH in every
+          # bash step, so its GNU link.exe would shadow MSVC's linker no
+          # matter what PATH we export; remove the shadowing binary.
+          rm -f /usr/bin/link.exe
 
       - name: Build wheel
         env:
