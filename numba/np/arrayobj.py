@@ -723,7 +723,7 @@ class Indexer(object):
         """
         Return the source index for this dimension, if applicable.
         """
-        return NotImplementedError
+        raise NotImplementedError
 
 
 class EntireIndexer(Indexer):
@@ -1122,7 +1122,6 @@ class SubspaceIndexer(Indexer):
             builder.store(next_index, self.global_ary_idx_list[i])
             builder.branch(self.bb_starts[i])
             builder.position_at_end(self.bb_ends[i])
-            i -= 1
 
     def get_src_idx(self):
         return tuple(self.builder.load(idx) for idx in self.global_ary_idx_list)
