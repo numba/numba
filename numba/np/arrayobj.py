@@ -713,12 +713,6 @@ class Indexer(object):
         """
         raise NotImplementedError
 
-    def cleanup(self, context, builder):
-        """
-        Perform any cleanup required after the loop.
-        """
-        pass
-
     def get_src_idx(self):
         """
         Return the source index for this dimension, if applicable.
@@ -832,8 +826,6 @@ class IntegerArrayIndexer(Indexer):
         self.idxary = idxary
         self.src_idx = None
 
-        self._cleanup_items = [(self.idxty, self.idxary._getvalue())]
-
     def prepare(self):
         builder = self.builder
         self.idx_size = self.ll_intp(1)
@@ -896,11 +888,9 @@ class BooleanArrayIndexer(Indexer):
         self.builder = builder
         self.idxty = idxty
         self.idxary = idxary
-        self._cleanup_items = []
         assert idxty.ndim == 1
         self.ll_intp = self.context.get_value_type(types.intp)
         self.zero = Constant(self.ll_intp, 0)
-        self._cleanup_items.append((idxty, self.idxary._getvalue()))
 
     def prepare(self):
         builder = self.builder
@@ -1320,10 +1310,6 @@ class FancyIndexer(object):
                 self.subspace_indexer.loop_tail()
             idx -= 1
 
-    def cleanup(self, context, builder):
-        for i in self.indexers:
-            i.cleanup(context, builder)
-
     def get_src_indices(self):
         indices = [list(idx.get_src_idx()) for idx in self.indexers]
         if self.subspace_index is not None:
@@ -1410,8 +1396,6 @@ def fancy_getitem(context, builder, sig, args,
     builder.store(next_idx, out_idx)
 
     indexer.end_loops()
-
-    indexer.cleanup(context, builder)
 
     return impl_ret_new_ref(context, builder, out_ty, out._getvalue())
 
@@ -2132,8 +2116,6 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
             boundscheck=context.enable_boundscheck)
         store_item(context, builder, aryty, src, dest_ptr)
         indexer.end_loops()
-
-    indexer.cleanup(context, builder)
 
     return context.get_dummy_value()
 
