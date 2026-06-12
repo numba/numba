@@ -14,6 +14,7 @@ on:
         required: false
         type: string
 
+# Add concurrency control
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
@@ -53,7 +54,7 @@ jobs:
           name: llvmlite-win-arm64-py${{ env.PYTHON_VERSION }}
           path: llvmlite_wheels
           run-id: ${{ inputs.llvmlite_wheel_runid }}
-          repository: swap357/llvmlite
+          repository: numba/llvmlite
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install build dependencies
@@ -68,11 +69,9 @@ jobs:
           echo "${CONDA_PREFIX}" >> "${GITHUB_PATH}"
           echo "${CONDA_PREFIX}/Scripts" >> "${GITHUB_PATH}"
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
-            python -m pip install llvmlite_wheels/*.whl
-          elif ls ci_artifacts/wheels/llvmlite-*.whl >/dev/null 2>&1; then
-            python -m pip install ci_artifacts/wheels/llvmlite-*.whl
+              python -m pip install llvmlite_wheels/*.whl
           else
-            python -m pip install -i ${{ env.WHEELS_INDEX_URL }} llvmlite
+              python -m pip install -i ${{ env.WHEELS_INDEX_URL }} llvmlite
           fi
           python -m pip install --pre numpy==${NUMPY_VERSION}
           python -m pip install build setuptools wheel
@@ -89,81 +88,15 @@ jobs:
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           if-no-files-found: error
 
-  win-arm64-debug-sets:
-    name: win-arm64-debug-unicode-sets
-    needs: win-arm64-build
-    runs-on: windows-11-arm
-    defaults:
-      run:
-        shell: bash -el {0}
-
-    steps:
-      - name: Clone repository (ci dirs only)
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          sparse-checkout: |
-            ci_artifacts
-            ci_debug
-
-      - name: Set up conda-standalone
-        uses: conda-incubator/setup-conda-standalone@00a34805e93a8b640aee5f8a20e8f481ad77e3b4 # v0.1.0
-        with:
-          channel: ${{ env.WIN_ARM64_CONDA_CHANNEL }}
-          conda-standalone-version: 26.3.2.post1
-          destination-directory: ${{ runner.temp }}/conda-standalone
-
-      - name: Download Numba wheel artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: numba_win-arm64_wheel_py${{ env.PYTHON_VERSION }}
-          path: dist
-
-      - name: Install test dependencies
-        run: |
-          export CONDA_PREFIX="${RUNNER_TEMP}/conda-base"
-          "${CONDA_EXE}" create --prefix "${CONDA_PREFIX}" \
-            -c "${WIN_ARM64_CONDA_CHANNEL}" -c m2-winarm64 -c main \
-            --yes "python=${PYTHON_VERSION}" pip wheel tbb
-          echo "CONDA_PREFIX=${CONDA_PREFIX}" >> "${GITHUB_ENV}"
-          export PATH="${CONDA_PREFIX}/Scripts:${CONDA_PREFIX}/Library/bin:${CONDA_PREFIX}:${PATH}"
-          echo "${CONDA_PREFIX}/Library/bin" >> "${GITHUB_PATH}"
-          echo "${CONDA_PREFIX}" >> "${GITHUB_PATH}"
-          echo "${CONDA_PREFIX}/Scripts" >> "${GITHUB_PATH}"
-
-      - name: Run unicode sets reproducer
-        timeout-minutes: 40
-        env:
-          NUMBA_CPU_NAME: generic
-        run: |
-          python -m pip install --pre numpy==${NUMPY_VERSION}
-          python -m pip install ci_artifacts/wheels/llvmlite-*.whl
-          python -m pip install dist/*.whl
-          python ci_debug/repro_unicode_sets.py
-
   win-arm64-test:
-    name: win-arm64-test-wheel (py 3.14, np 2.4.6, shard ${{ matrix.shard }}/6)
+    name: win-arm64-test-wheel (py 3.14, np 2.4.6)
     needs: win-arm64-build
     runs-on: windows-11-arm
-    strategy:
-      fail-fast: false
-      matrix:
-        # azure-style sharding (buildscripts/azure/azure-windows.yml):
-        # runtests -j "index:count" slices the discovered test list
-        shard: [0, 1, 2, 3, 4, 5]
-    env:
-      SHARD_COUNT: 6
     defaults:
       run:
         shell: bash -el {0}
 
     steps:
-      - name: Clone repository (ci_artifacts only)
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          # sparse checkout so the numba source package dir is absent and
-          # cannot shadow the installed wheel when running python -m numba
-          sparse-checkout: ci_artifacts
-
       - name: Set up conda-standalone
         uses: conda-incubator/setup-conda-standalone@00a34805e93a8b640aee5f8a20e8f481ad77e3b4 # v0.1.0
         with:
@@ -184,7 +117,7 @@ jobs:
           name: llvmlite-win-arm64-py${{ env.PYTHON_VERSION }}
           path: llvmlite_wheels
           run-id: ${{ inputs.llvmlite_wheel_runid }}
-          repository: swap357/llvmlite
+          repository: numba/llvmlite
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install test dependencies
@@ -205,16 +138,17 @@ jobs:
           _NUMBA_REDUCED_TESTING: 1
         run: |
           python -m pip install --upgrade pip twine
-          python -m pip install --pre numpy==${NUMPY_VERSION}
+          python -m pip install numpy==${NUMPY_VERSION}
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
-            python -m pip install llvmlite_wheels/*.whl
-          elif ls ci_artifacts/wheels/llvmlite-*.whl >/dev/null 2>&1; then
-            python -m pip install ci_artifacts/wheels/llvmlite-*.whl
+              python -m pip install llvmlite_wheels/*.whl
           else
-            python -m pip install --pre -i ${{ env.WHEELS_INDEX_URL }} llvmlite
+              python -m pip install --pre -i ${{ env.WHEELS_INDEX_URL }} llvmlite
           fi
           python -m twine check dist/*.whl
           python -m pip install dist/*.whl
 
+          # print Numba system information
           python -m numba -s
-          python -m numba.runtests -b -m 4 -j "${{ matrix.shard }}:${SHARD_COUNT}" -- numba.tests
+
+          # run tests
+          python -m numba.runtests -m 4 -v
