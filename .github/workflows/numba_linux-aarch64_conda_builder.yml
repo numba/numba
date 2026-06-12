@@ -23,6 +23,10 @@ concurrency:
 env:
   CONDA_CHANNEL_NUMBA: numba/label/dev
 
+permissions:
+  contents: read   # least-privilege default; jobs add more if needed
+  actions: read    # for cross-run artifact download (llvmlite)
+
 jobs:
   load-matrix:
     runs-on: ubuntu-latest
@@ -31,6 +35,8 @@ jobs:
       test-matrix-json: ${{ steps.parse_matrix.outputs.test-matrix-json }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
       - id: parse_matrix
         name: Parse Workflow Matrix JSON
@@ -61,6 +67,7 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Miniconda
         uses: conda-incubator/setup-miniconda@8ee1f361103df19b6f8c8655fd3967a8ecb162d5 # v4.0.1
@@ -84,15 +91,19 @@ jobs:
         run: conda install conda-build "conda-libmamba-solver<25.11"
 
       - name: Build Numba conda package
+        env:
+          INPUTS_LLVMLITE_RUN_ID: ${{ inputs.llvmlite_run_id }}
+          MATRIX_PYTHON_VERSION_FULL: ${{ matrix.python_version_full }}
+          MATRIX_NUMPY_BUILD: ${{ matrix.numpy_build }}
         run: |
           CONDA_CHANNEL_DIR="conda_channel_dir"
           mkdir -p $CONDA_CHANNEL_DIR
 
           # Set channel based on whether llvmlite artifact was downloaded
-          if [ "${{ inputs.llvmlite_run_id }}" != "" ]; then
-            LLVMLITE_CHANNEL="file://${{ github.workspace }}/llvmlite_conda"
+          if [ "${INPUTS_LLVMLITE_RUN_ID}" != "" ]; then
+            LLVMLITE_CHANNEL="file://${GITHUB_WORKSPACE}/llvmlite_conda"
           else
-            LLVMLITE_CHANNEL="${{ env.CONDA_CHANNEL_NUMBA }}"
+            LLVMLITE_CHANNEL="${CONDA_CHANNEL_NUMBA}"
           fi
 
           if [ -n "${EXTRA_CHANNELS}" ]; then
@@ -102,8 +113,8 @@ jobs:
           fi
 
           conda-build --debug -c $LLVMLITE_CHANNEL "${extra_args[@]}" -c defaults \
-            --python=${{ matrix.python_version_full }} \
-            --numpy=${{ matrix.numpy_build }} blas=*=openblas \
+            --python="${MATRIX_PYTHON_VERSION_FULL}" \
+            --numpy="${MATRIX_NUMPY_BUILD}" blas=*=openblas \
             buildscripts/condarecipe.local/ \
             --output-folder=$CONDA_CHANNEL_DIR \
             --no-test
@@ -136,6 +147,7 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Miniconda
         uses: conda-incubator/setup-miniconda@8ee1f361103df19b6f8c8655fd3967a8ecb162d5 # v4.0.1
@@ -175,12 +187,15 @@ jobs:
         env:
           TESTS_TO_RUN: "numba.tests"
           NUMBA_ENABLE_CUDASIM: 1
+          INPUTS_LLVMLITE_RUN_ID: ${{ inputs.llvmlite_run_id }}
+          MATRIX_PYTHON_VERSION_FULL: ${{ matrix.python_version_full }}
+          MATRIX_NUMPY_TEST: ${{ matrix.numpy_test }}
         run: |
           # Set channel based on whether llvmlite artifact was downloaded
-          if [ "${{ inputs.llvmlite_run_id }}" != "" ]; then
-            LLVMLITE_CHANNEL="file://${{ github.workspace }}/llvmlite_conda"
+          if [ "${INPUTS_LLVMLITE_RUN_ID}" != "" ]; then
+            LLVMLITE_CHANNEL="file://${GITHUB_WORKSPACE}/llvmlite_conda"
           else
-            LLVMLITE_CHANNEL="${{ env.CONDA_CHANNEL_NUMBA }}"
+            LLVMLITE_CHANNEL="${CONDA_CHANNEL_NUMBA}"
           fi
 
           if [ -n "${EXTRA_CHANNELS}" ]; then
@@ -205,7 +220,7 @@ jobs:
 
           # Run the test with the found package
           conda-build -c $LLVMLITE_CHANNEL "${extra_args[@]}" -c defaults \
-            --python=${{ matrix.python_version_full }} \
-            --extra-deps numpy=${{ matrix.numpy_test }} blas=*=openblas \
+            --python="${MATRIX_PYTHON_VERSION_FULL}" \
+            --extra-deps "numpy=${MATRIX_NUMPY_TEST}" blas=*=openblas \
             --test \
             "$NUMBA_PKG"

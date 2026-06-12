@@ -24,6 +24,10 @@ env:
   ARTIFACT_RETENTION_DAYS: 7
   WHEELS_INDEX_URL: https://pypi.anaconda.org/numba/label/dev/simple
 
+permissions:
+  contents: read   # least-privilege default; jobs add more if needed
+  actions: read    # for cross-run artifact download (llvmlite)
+
 jobs:
   load-matrix:
     runs-on: ubuntu-latest
@@ -32,6 +36,8 @@ jobs:
       test-matrix-json: ${{ steps.load_matrix_json.outputs.test-matrix-json }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
       - id: load_matrix_json
         name: Load Workflow Matrix JSON
@@ -60,6 +66,7 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -78,13 +85,16 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install build dependencies
+        env:
+          INPUTS_LLVMLITE_WHEEL_RUNID: ${{ inputs.llvmlite_wheel_runid }}
+          MATRIX_NUMPY_BUILD: ${{ matrix.numpy_build }}
         run: |
-          if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
+          if [ "${INPUTS_LLVMLITE_WHEEL_RUNID}" != "" ]; then
               python -m pip install llvmlite_wheels/*.whl
           else
-              python -m pip install -i ${{ env.WHEELS_INDEX_URL }} llvmlite
+              python -m pip install -i ${WHEELS_INDEX_URL} llvmlite
           fi
-          python -m pip install build numpy==${{ matrix.numpy_build }} setuptools wheel tbb==2021.6 tbb-devel==2021.6
+          python -m pip install build numpy==${MATRIX_NUMPY_BUILD} setuptools wheel tbb==2021.6 tbb-devel==2021.6
 
       - name: Build wheel
         run: python -m build --wheel --no-isolation
@@ -137,16 +147,18 @@ jobs:
         env:
           NUMBA_CPU_NAME: generic
           _NUMBA_REDUCED_TESTING: 1
+          INPUTS_LLVMLITE_WHEEL_RUNID: ${{ inputs.llvmlite_wheel_runid }}
+          MATRIX_NUMPY_TEST: ${{ matrix.numpy_test }}
         run: |
           # No versioned `which python<ver>` here: Windows setup-python installs
           # only `python.exe` (no python3.14[t]) and it's the sole interpreter,
           # so bare `python` already resolves to the setup-python one.
           python -m pip install --upgrade pip twine
-          python -m pip install numpy==${{ matrix.numpy_test }} tbb==2021.6 tbb-devel==2021.6
-          if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
+          python -m pip install numpy==${MATRIX_NUMPY_TEST} tbb==2021.6 tbb-devel==2021.6
+          if [ "${INPUTS_LLVMLITE_WHEEL_RUNID}" != "" ]; then
               python -m pip install llvmlite_wheels/*.whl
           else
-              python -m pip install --pre -i ${{ env.WHEELS_INDEX_URL }} llvmlite
+              python -m pip install --pre -i ${WHEELS_INDEX_URL} llvmlite
           fi
           python -m twine check dist/*.whl
           python -m pip install dist/*.whl
