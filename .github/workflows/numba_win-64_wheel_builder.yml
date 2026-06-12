@@ -96,7 +96,14 @@ jobs:
             echo "Could not find VS 2022 or VS 2026"
             exit 1
           fi
-          cmd //s //c "\"$VSINSTALLDIR\VC\Auxiliary\Build\vcvarsall.bat\" x64 -vcvars_ver=14.44 >NUL && set" | tr -d '\r' > "$RUNNER_TEMP/msvc_env.txt"
+          # Quotes inside an inline `cmd //c` argument get mangled between
+          # bash and cmd, so activate via a temporary batch file instead.
+          {
+            printf '@call "%s\\VC\\Auxiliary\\Build\\vcvarsall.bat" x64 -vcvars_ver=14.44 >NUL || exit /b 1\r\n' "$VSINSTALLDIR"
+            printf '@set\r\n'
+          } > "$RUNNER_TEMP/msvc_env.bat"
+          set -o pipefail
+          cmd //c "$(cygpath -w "$RUNNER_TEMP/msvc_env.bat")" | tr -d '\r' > "$RUNNER_TEMP/msvc_env.txt"
           grep -iE '^(PATH|INCLUDE|LIB)=' "$RUNNER_TEMP/msvc_env.txt" >> "$GITHUB_ENV"
           # git-bash's login profile prepends Git\usr\bin to PATH in every
           # bash step, so its GNU link.exe would shadow MSVC's linker no
