@@ -86,7 +86,37 @@ jobs:
           fi
           python -m pip install build numpy==${{ matrix.numpy_build }} setuptools wheel tbb==2021.6 tbb-devel==2021.6
 
+      - name: Setup MSVC v14.44 (v143) environment
+        run: |
+          # Same locator as buildscripts/condarecipe.local/bld.bat: find
+          # VS2022 or VS2026 and pin the MSVC v14.44 (v143) toolset, then
+          # export the activated environment to the following steps.
+          VSINSTALLDIR=$(vswhere.exe -nologo -latest -products '*' -version '[17.0,19.0)' -property installationPath | tr -d '\r')
+          if [ -z "$VSINSTALLDIR" ]; then
+            echo "Could not find VS 2022 or VS 2026"
+            exit 1
+          fi
+          # Quotes inside an inline `cmd //c` argument get mangled between
+          # bash and cmd, so activate via a temporary batch file instead.
+          {
+            printf '@call "%s\\VC\\Auxiliary\\Build\\vcvarsall.bat" x64 -vcvars_ver=14.44 >NUL || exit /b 1\r\n' "$VSINSTALLDIR"
+            printf '@set\r\n'
+          } > "$RUNNER_TEMP/msvc_env.bat"
+          set -o pipefail
+          cmd //c "$(cygpath -w "$RUNNER_TEMP/msvc_env.bat")" | tr -d '\r' > "$RUNNER_TEMP/msvc_env.txt"
+          grep -iE '^(PATH|INCLUDE|LIB)=' "$RUNNER_TEMP/msvc_env.txt" >> "$GITHUB_ENV"
+          # git-bash's login profile prepends Git\usr\bin to PATH in every
+          # bash step, so its GNU link.exe would shadow MSVC's linker no
+          # matter what PATH we export; remove the shadowing binary.
+          rm -f /usr/bin/link.exe
+
       - name: Build wheel
+        env:
+          # Use the pre-activated MSVC v14.44 environment instead of
+          # setuptools' own discovery, which would pick VS2026's native
+          # v14.5x toolset. use 14.44 instead.
+          DISTUTILS_USE_SDK: '1'
+          MSSdk: '1'
         run: python -m build --wheel --no-isolation
 
       - name: Upload numba wheel
