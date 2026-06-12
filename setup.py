@@ -274,10 +274,12 @@ def get_ext_modules():
     else:
         cpp11flags = ['-std=c++11']
         ompcompileflags = ['-fopenmp']
+        # -ldl is needed because omppool.cpp uses dlsym() to probe for
+        # OpenMP 5.0+ symbols at runtime.
         if platform.machine() == 'ppc64le':
-            omplinkflags = ['-fopenmp']
+            omplinkflags = ['-fopenmp', '-ldl']
         else:
-            omplinkflags = ['-fopenmp']
+            omplinkflags = ['-fopenmp', '-ldl']
 
     # Disable tbb if forced by user with NUMBA_DISABLE_TBB=1
     if os.getenv("NUMBA_DISABLE_TBB"):
