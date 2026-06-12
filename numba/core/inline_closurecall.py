@@ -998,10 +998,11 @@ def length_of_iterator(typingctx, val):
                                       builder.load(iterobj.count))
         return signature(val_type, val), codegen
     elif isinstance(val, types.ListIter):
-        def codegen(context, builder, sig, args):
+        def codegen(context, builder, sig, args, loc=None):
             (value,) = args
             intp_t = context.get_value_type(types.intp)
-            iterobj = ListIterInstance(context, builder, sig.args[0], value)
+            iterobj = ListIterInstance(context, builder, sig.args[0], value,
+                                       loc)
             return impl_ret_untracked(context, builder, intp_t, iterobj.size)
         return signature(types.intp, val), codegen
     elif isinstance(val, types.ArrayIterator):
@@ -1026,11 +1027,12 @@ def length_of_iterator(typingctx, val):
 
         return signature(types.intp, val), codegen
     elif isinstance(val, types.ListTypeIteratorType):
-        def codegen(context, builder, sig, args):
+        def codegen(context, builder, sig, args, loc=None):
             (value,) = args
             intp_t = context.get_value_type(types.intp)
             from numba.typed.listobject import ListIterInstance
-            iterobj = ListIterInstance(context, builder, sig.args[0], value)
+            iterobj = ListIterInstance(context, builder, sig.args[0], value,
+                                       loc)
             return impl_ret_untracked(context, builder, intp_t, iterobj.size)
         return signature(types.intp, val), codegen
     else:

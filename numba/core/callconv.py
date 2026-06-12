@@ -60,7 +60,7 @@ class BaseCallConv(object):
     def __init__(self, context):
         self.context = context
 
-    def return_optional_value(self, builder, retty, valty, value):
+    def return_optional_value(self, builder, retty, valty, value, loc=None):
         if valty == types.none:
             # Value is none
             self.return_native_none(builder)
@@ -81,7 +81,7 @@ class BaseCallConv(object):
             # Value is not an optional, need a cast
             if valty != retty.type:
                 value = self.context.cast(builder, value, fromty=valty,
-                                          toty=retty.type)
+                                          toty=retty.type, loc=loc)
             retval = self.context.get_return_value(builder, retty.type, value)
             self.return_value(builder, retval)
 

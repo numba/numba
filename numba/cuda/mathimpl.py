@@ -72,11 +72,11 @@ def math_isinf_isnan_int(context, builder, sig, args):
 
 
 @lower(operator.truediv, types.float32, types.float32)
-def maybe_fast_truediv(context, builder, sig, args):
+def maybe_fast_truediv(context, builder, sig, args, loc=None):
     if context.fastmath:
         sig = typing.signature(float32, float32, float32)
         impl = context.get_function(libdevice.fast_fdividef, sig)
-        return impl(builder, args)
+        return impl(builder, args, loc=loc)
     else:
         with cgutils.if_zero(builder, args[1]):
             context.error_model.fp_zero_division(builder, ("division by zero",))
@@ -178,17 +178,17 @@ def fp16_trunc_impl(context, builder, sig, args):
 
 
 def impl_boolean(key, ty, libfunc):
-    def lower_boolean_impl(context, builder, sig, args):
+    def lower_boolean_impl(context, builder, sig, args, loc=None):
         libfunc_impl = context.get_function(libfunc,
                                             typing.signature(types.int32, ty))
-        result = libfunc_impl(builder, args)
-        return context.cast(builder, result, types.int32, types.boolean)
+        result = libfunc_impl(builder, args, loc=loc)
+        return context.cast(builder, result, types.int32, types.boolean, loc)
 
     lower(key, ty)(lower_boolean_impl)
 
 
 def get_lower_unary_impl(key, ty, libfunc):
-    def lower_unary_impl(context, builder, sig, args):
+    def lower_unary_impl(context, builder, sig, args, loc=None):
         actual_libfunc = libfunc
         fast_replacement = None
         if ty == float32 and context.fastmath:
@@ -199,7 +199,7 @@ def get_lower_unary_impl(key, ty, libfunc):
 
         libfunc_impl = context.get_function(actual_libfunc,
                                             typing.signature(ty, ty))
-        return libfunc_impl(builder, args)
+        return libfunc_impl(builder, args, loc=loc)
     return lower_unary_impl
 
 
@@ -227,7 +227,7 @@ def impl_unary(key, ty, libfunc):
 
 
 def impl_unary_int(key, ty, libfunc):
-    def lower_unary_int_impl(context, builder, sig, args):
+    def lower_unary_int_impl(context, builder, sig, args, loc=None):
         if sig.args[0] == int64:
             convert = builder.sitofp
         elif sig.args[0] == uint64:
@@ -239,13 +239,13 @@ def impl_unary_int(key, ty, libfunc):
         arg = convert(args[0], ir.DoubleType())
         sig = typing.signature(float64, float64)
         libfunc_impl = context.get_function(libfunc, sig)
-        return libfunc_impl(builder, [arg])
+        return libfunc_impl(builder, [arg], loc=loc)
 
     lower(key, ty)(lower_unary_int_impl)
 
 
 def get_lower_binary_impl(key, ty, libfunc):
-    def lower_binary_impl(context, builder, sig, args):
+    def lower_binary_impl(context, builder, sig, args, loc=None):
         actual_libfunc = libfunc
         fast_replacement = None
         if ty == float32 and context.fastmath:
@@ -256,7 +256,7 @@ def get_lower_binary_impl(key, ty, libfunc):
 
         libfunc_impl = context.get_function(actual_libfunc,
                                             typing.signature(ty, ty, ty))
-        return libfunc_impl(builder, args)
+        return libfunc_impl(builder, args, loc=loc)
     return lower_binary_impl
 
 
@@ -279,7 +279,7 @@ def impl_binary(key, ty, libfunc):
 
 
 def impl_binary_int(key, ty, libfunc):
-    def lower_binary_int_impl(context, builder, sig, args):
+    def lower_binary_int_impl(context, builder, sig, args, loc=None):
         if sig.args[0] == int64:
             convert = builder.sitofp
         elif sig.args[0] == uint64:
@@ -291,7 +291,7 @@ def impl_binary_int(key, ty, libfunc):
         args = [convert(arg, ir.DoubleType()) for arg in args]
         sig = typing.signature(float64, float64, float64)
         libfunc_impl = context.get_function(libfunc, sig)
-        return libfunc_impl(builder, args)
+        return libfunc_impl(builder, args, loc=loc)
 
     lower(key, ty, ty)(lower_binary_int_impl)
 
@@ -322,10 +322,10 @@ for fname64, fname32, key in binarys:
 
 
 def impl_pow_int(ty, libfunc):
-    def lower_pow_impl_int(context, builder, sig, args):
+    def lower_pow_impl_int(context, builder, sig, args, loc=None):
         powi_sig = typing.signature(ty, ty, types.int32)
         libfunc_impl = context.get_function(libfunc, powi_sig)
-        return libfunc_impl(builder, args)
+        return libfunc_impl(builder, args, loc=loc)
 
     lower(math.pow, ty, types.int32)(lower_pow_impl_int)
 
@@ -337,10 +337,10 @@ impl_pow_int(types.float64, libdevice.powi)
 def impl_modf(ty, libfunc):
     retty = types.UniTuple(ty, 2)
 
-    def lower_modf_impl(context, builder, sig, args):
+    def lower_modf_impl(context, builder, sig, args, loc=None):
         modf_sig = typing.signature(retty, ty)
         libfunc_impl = context.get_function(libfunc, modf_sig)
-        return libfunc_impl(builder, args)
+        return libfunc_impl(builder, args, loc=loc)
 
     lower(math.modf, ty)(lower_modf_impl)
 
@@ -352,10 +352,10 @@ impl_modf(types.float64, libdevice.modf)
 def impl_frexp(ty, libfunc):
     retty = types.Tuple((ty, types.int32))
 
-    def lower_frexp_impl(context, builder, sig, args):
+    def lower_frexp_impl(context, builder, sig, args, loc=None):
         frexp_sig = typing.signature(retty, ty)
         libfunc_impl = context.get_function(libfunc, frexp_sig)
-        return libfunc_impl(builder, args)
+        return libfunc_impl(builder, args, loc=loc)
 
     lower(math.frexp, ty)(lower_frexp_impl)
 
@@ -365,10 +365,10 @@ impl_frexp(types.float64, libdevice.frexp)
 
 
 def impl_ldexp(ty, libfunc):
-    def lower_ldexp_impl(context, builder, sig, args):
+    def lower_ldexp_impl(context, builder, sig, args, loc=None):
         ldexp_sig = typing.signature(ty, ty, types.int32)
         libfunc_impl = context.get_function(libfunc, ldexp_sig)
-        return libfunc_impl(builder, args)
+        return libfunc_impl(builder, args, loc=loc)
 
     lower(math.ldexp, ty, types.int32)(lower_ldexp_impl)
 
@@ -378,7 +378,7 @@ impl_ldexp(types.float64, libdevice.ldexp)
 
 
 def impl_tanh(ty, libfunc):
-    def lower_tanh_impl(context, builder, sig, args):
+    def lower_tanh_impl(context, builder, sig, args, loc=None):
         def get_compute_capability():
             flags = targetconfig.ConfigStack().top()
             return flags.compute_capability
@@ -386,7 +386,7 @@ def impl_tanh(ty, libfunc):
         def tanh_impl_libdevice():
             tanh_sig = typing.signature(ty, ty)
             libfunc_impl = context.get_function(libfunc, tanh_sig)
-            return libfunc_impl(builder, args)
+            return libfunc_impl(builder, args, loc=loc)
 
         def tanhf_impl_fastmath():
             fnty = ir.FunctionType(ir.FloatType(), [ir.FloatType()])

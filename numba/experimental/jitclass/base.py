@@ -354,7 +354,7 @@ class ClassBuilder(object):
     def _implement_method(self, registry, attr):
         # create a separate instance of imp method to avoid closure clashing
         def get_imp():
-            def imp(context, builder, sig, args):
+            def imp(context, builder, sig, args, loc=None):
                 instance_type = sig.args[0]
 
                 if attr in instance_type.jit_methods:
@@ -368,7 +368,7 @@ class ClassBuilder(object):
 
                 disp_type = types.Dispatcher(method)
                 call = context.get_function(disp_type, sig)
-                out = call(builder, args)
+                out = call(builder, args, loc=loc)
                 _add_linking_libs(context, call)
                 return imputils.impl_ret_new_ref(context, builder,
                                                  sig.return_type, out)
@@ -461,7 +461,7 @@ class ClassAttribute(templates.AttributeTemplate):
 
 
 @ClassBuilder.class_impl_registry.lower_getattr_generic(types.ClassInstanceType)
-def get_attr_impl(context, builder, typ, value, attr):
+def get_attr_impl(context, builder, typ, value, attr, loc=None):
     """
     Generic getattr() for @jitclass instances.
     """
@@ -481,7 +481,7 @@ def get_attr_impl(context, builder, typ, value, attr):
         dispatcher = types.Dispatcher(getter)
         sig = dispatcher.get_call_type(context.typing_context, [typ], {})
         call = context.get_function(dispatcher, sig)
-        out = call(builder, [value])
+        out = call(builder, [value], loc=loc)
         _add_linking_libs(context, call)
         return imputils.impl_ret_new_ref(context, builder, sig.return_type, out)
 
@@ -489,7 +489,7 @@ def get_attr_impl(context, builder, typ, value, attr):
 
 
 @ClassBuilder.class_impl_registry.lower_setattr_generic(types.ClassInstanceType)
-def set_attr_impl(context, builder, sig, args, attr):
+def set_attr_impl(context, builder, sig, args, attr, loc=None):
     """
     Generic setattr() for @jitclass instances.
     """
@@ -521,7 +521,7 @@ def set_attr_impl(context, builder, sig, args, attr):
         sig = disp_type.get_call_type(context.typing_context,
                                       (typ, valty), {})
         call = context.get_function(disp_type, sig)
-        call(builder, (target, val))
+        call(builder, (target, val), loc=loc)
         _add_linking_libs(context, call)
     else:
         raise NotImplementedError(
@@ -555,7 +555,7 @@ def imp_dtor(context, module, instance_type):
 
 @ClassBuilder.class_impl_registry.lower(types.ClassType,
                                         types.VarArg(types.Any))
-def ctor_impl(context, builder, sig, args):
+def ctor_impl(context, builder, sig, args, loc=None):
     """
     Generic constructor (__new__) for jitclasses.
     """
@@ -590,7 +590,7 @@ def ctor_impl(context, builder, sig, args):
     call = context.get_function(disp_type, types.void(*init_sig))
     _add_linking_libs(context, call)
     realargs = [inst_struct._getvalue()] + list(args)
-    call(builder, realargs)
+    call(builder, realargs, loc=loc)
 
     # Prepare return value
     ret = inst_struct._getvalue()

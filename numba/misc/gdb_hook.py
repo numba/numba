@@ -78,7 +78,7 @@ def hook_gdb_init(*args):
 
 
 def init_gdb_codegen(cgctx, builder, signature, args,
-                     const_args, do_break=False):
+                     const_args, do_break=False, loc=None):
 
     int8_t = ir.IntType(8)
     int32_t = ir.IntType(32)
@@ -150,14 +150,14 @@ def init_gdb_codegen(cgctx, builder, signature, args,
     invalid_write = builder.icmp_signed('>', stat, int32_t(12))
     with builder.if_then(invalid_write, likely=False):
         msg = "Internal error: `snprintf` buffer would have overflowed."
-        cgctx.call_conv.return_user_exc(builder, RuntimeError, (msg,))
+        cgctx.call_conv.return_user_exc(builder, RuntimeError, (msg,), loc)
 
     # fork, check pids etc
     child_pid = builder.call(fork, tuple())
     fork_failed = builder.icmp_signed('==', child_pid, int32_t(-1))
     with builder.if_then(fork_failed, likely=False):
         msg = "Internal error: `fork` failed."
-        cgctx.call_conv.return_user_exc(builder, RuntimeError, (msg,))
+        cgctx.call_conv.return_user_exc(builder, RuntimeError, (msg,), loc)
 
     is_child = builder.icmp_signed('==', child_pid, zero_i32t)
     with builder.if_else(is_child) as (then, orelse):
@@ -190,9 +190,9 @@ def gen_gdb_impl(const_args, do_break):
     def gdb_internal(tyctx):
         function_sig = types.void()
 
-        def codegen(cgctx, builder, signature, args):
+        def codegen(cgctx, builder, signature, args, loc=None):
             init_gdb_codegen(cgctx, builder, signature, args, const_args,
-                             do_break=do_break)
+                             do_break=do_break, loc=loc)
             return cgctx.get_constant(types.none, None)
         return function_sig, codegen
     return gdb_internal

@@ -435,7 +435,7 @@ def getrandbits_impl(k):
     if isinstance(k, types.Integer):
         @intrinsic
         def _impl(typingcontext, k):
-            def codegen(context, builder, sig, args):
+            def codegen(context, builder, sig, args, loc=None):
                 nbits, = args
 
                 too_large = builder.icmp_unsigned(">=", nbits, const_int(65))
@@ -444,14 +444,14 @@ def getrandbits_impl(k):
                                                               too_small)):
                     msg = "getrandbits() limited to 64 bits"
                     context.call_conv.return_user_exc(builder, OverflowError,
-                                                      (msg,))
+                                                      (msg,), loc)
                 state_ptr = get_state_ptr(context, builder, "py")
                 return get_next_int(context, builder, state_ptr, nbits, False)
             return signature(types.uint64, k), codegen
         return lambda k: _impl(k)
 
 
-def _randrange_impl(context, builder, start, stop, step, ty, signed, state):
+def _randrange_impl(context, builder, start, stop, step, ty, signed, state, loc=None):
     state_ptr = get_state_ptr(context, builder, state)
     zero = ir.Constant(ty, 0)
     one = ir.Constant(ty, 1)
@@ -475,7 +475,7 @@ def _randrange_impl(context, builder, start, stop, step, ty, signed, state):
     with cgutils.if_unlikely(builder, builder.icmp_signed('<=', n, zero)):
         # n <= 0
         msg = "empty range for randrange()"
-        context.call_conv.return_user_exc(builder, ValueError, (msg,))
+        context.call_conv.return_user_exc(builder, ValueError, (msg,), loc)
 
     fnty = ir.FunctionType(ty, [ty, cgutils.true_bit.type])
     fn = cgutils.get_or_insert_function(builder.function.module, fnty,
@@ -556,14 +556,14 @@ def randrange_impl_3(start, stop, step):
 
         @intrinsic
         def _impl(typingcontext, start, stop, step):
-            def codegen(context, builder, sig, args):
+            def codegen(context, builder, sig, args, loc=None):
                 start, stop, step = args
 
                 start = start_preprocessor(builder, start, llvm_type)
                 stop = stop_preprocessor(builder, stop, llvm_type)
                 step = step_preprocessor(builder, step, llvm_type)
                 return _randrange_impl(context, builder, start, stop, step,
-                                       llvm_type, signed, 'py')
+                                       llvm_type, signed, 'py', loc)
             return signature(int_ty, start, stop, step), codegen
         return lambda start, stop, step: _impl(start, stop, step)
 
@@ -593,14 +593,14 @@ def np_randint_impl_2(low, high):
 
         @intrinsic
         def _impl(typingcontext, low, high):
-            def codegen(context, builder, sig, args):
+            def codegen(context, builder, sig, args, loc=None):
                 start, stop = args
 
                 start = start_preprocessor(builder, start, llvm_type)
                 stop = stop_preprocessor(builder, stop, llvm_type)
                 step = ir.Constant(llvm_type, 1)
                 return _randrange_impl(context, builder, start, stop, step,
-                                       llvm_type, signed, 'np')
+                                       llvm_type, signed, 'np', loc)
             return signature(int_ty, low, high), codegen
         return lambda low, high: _impl(low, high)
 

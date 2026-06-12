@@ -671,6 +671,43 @@ def unified_function_type(numba_types, require_precise=True):
     return function
 
 
+class wrap_missing_loc(object):
+
+    def __init__(self, fn):
+        self.func = fn # store this to help with debug
+
+    def __call__(self):
+        """Wrap function for missing ``loc`` keyword argument.
+        Otherwise, return the original *fn*.
+        """
+        fn = self.func
+        sig = pysignature(fn)
+        has_loc = 'loc' in sig.parameters
+        if not has_loc:
+            def wrapper(*args, **kwargs):
+                kwargs.pop('loc')     # drop unused loc
+                return fn(*args, **kwargs)
+
+            # Copy the following attributes from the wrapped.
+            # Following similar implementation as functools.wraps but
+            # ignore attributes if not available (i.e fix py2.7)
+            attrs = '__name__', 'libs'
+            for attr in attrs:
+                try:
+                    val = getattr(fn, attr)
+                except AttributeError:
+                    pass
+                else:
+                    setattr(wrapper, attr, val)
+
+            return wrapper
+        else:
+            return fn
+
+    def __repr__(self):
+        return "<wrapped %s>" % self.func
+
+
 class _RedirectSubpackage(ModuleType):
     """Redirect a subpackage to a subpackage.
 

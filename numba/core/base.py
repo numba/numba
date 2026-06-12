@@ -505,13 +505,13 @@ class BaseContext(object):
         dm = self.data_model_manager[ty]
         return dm.load_from_data_pointer(builder, ptr, align)
 
-    def get_constant_generic(self, builder, ty, val):
+    def get_constant_generic(self, builder, ty, val, loc=None):
         """
         Return a LLVM constant representing value *val* of Numba type *ty*.
         """
         try:
-            impl = self._get_constants.find((ty,))
-            return impl(self, builder, ty, val)
+            impl = utils.wrap_missing_loc(self._get_constants.find((ty,)))()
+            return impl(self, builder, ty, val, loc=loc)
         except NotImplementedError:
             raise NotImplementedError("Cannot lower constant of type '%s'" % (ty,))
 
@@ -600,21 +600,21 @@ class BaseContext(object):
                 return None
             else:
                 pyval = getattr(typ.pymod, attr)
-                def imp(context, builder, typ, val, attr):
-                    llval = self.get_constant_generic(builder, attrty, pyval)
+                def imp(context, builder, typ, val, attr, loc=None):
+                    llval = self.get_constant_generic(builder, attrty, pyval, loc=loc)
                     return impl_ret_borrowed(context, builder, attrty, llval)
                 return imp
 
         # Lookup specific getattr implementation for this type and attribute
         overloads = self._getattrs[attr]
         try:
-            return overloads.find((typ,))
+            return utils.wrap_missing_loc(overloads.find((typ,)))()
         except errors.NumbaNotImplementedError:
             pass
         # Lookup generic getattr implementation for this type
         overloads = self._getattrs[None]
         try:
-            return overloads.find((typ,))
+            return utils.wrap_missing_loc(overloads.find((typ,)))()
         except errors.NumbaNotImplementedError:
             pass
 
@@ -694,7 +694,7 @@ class BaseContext(object):
         pair = self.make_helper(builder, ty, val)
         return pair.second
 
-    def cast(self, builder, val, fromty, toty):
+    def cast(self, builder, val, fromty, toty, loc=None):
         """
         Cast a value of type *fromty* to type *toty*.
         This implements implicit conversions as can happen due to the
@@ -707,12 +707,13 @@ class BaseContext(object):
             return val
         try:
             impl = self._casts.find((fromty, toty))
-            return impl(self, builder, fromty, toty, val)
+            impl = utils.wrap_missing_loc(impl)()
+            return impl(self, builder, fromty, toty, val, loc=loc)
         except errors.NumbaNotImplementedError:
             raise errors.NumbaNotImplementedError(
                 "Cannot cast %s to %s: %s" % (fromty, toty, val))
 
-    def generic_compare(self, builder, key, argtypes, args):
+    def generic_compare(self, builder, key, argtypes, args, loc=None):
         """
         Compare the given LLVM values of the given Numba types using
         the comparison *key* (e.g. '==').  The values are first cast to
@@ -722,8 +723,8 @@ class BaseContext(object):
         av, bv = args
         ty = self.typing_context.unify_types(at, bt)
         assert ty is not None
-        cav = self.cast(builder, av, at, ty)
-        cbv = self.cast(builder, bv, bt, ty)
+        cav = self.cast(builder, av, at, ty, loc)
+        cbv = self.cast(builder, bv, bt, ty, loc)
         fnty = self.typing_context.resolve_value_type(key)
         # the sig is homogeneous in the unified casted type
         cmpsig = fnty.get_call_type(self.typing_context, (ty, ty), {})
@@ -1200,7 +1201,7 @@ class _wrap_impl(object):
     """
 
     def __init__(self, imp, context, sig):
-        self._callable = _wrap_missing_loc(imp)
+        self._callable = utils.wrap_missing_loc(imp)
         self._imp = self._callable()
         self._context = context
         self._sig = sig
@@ -1215,47 +1216,6 @@ class _wrap_impl(object):
 
     def __repr__(self):
         return "<wrapped %s>" % repr(self._callable)
-
-def _has_loc(fn):
-    """Does function *fn* take ``loc`` argument?
-    """
-    sig = utils.pysignature(fn)
-    return 'loc' in sig.parameters
-
-
-class _wrap_missing_loc(object):
-
-    def __init__(self, fn):
-        self.func = fn # store this to help with debug
-
-    def __call__(self):
-        """Wrap function for missing ``loc`` keyword argument.
-        Otherwise, return the original *fn*.
-        """
-        fn = self.func
-        if not _has_loc(fn):
-            def wrapper(*args, **kwargs):
-                kwargs.pop('loc')     # drop unused loc
-                return fn(*args, **kwargs)
-
-            # Copy the following attributes from the wrapped.
-            # Following similar implementation as functools.wraps but
-            # ignore attributes if not available (i.e fix py2.7)
-            attrs = '__name__', 'libs'
-            for attr in attrs:
-                try:
-                    val = getattr(fn, attr)
-                except AttributeError:
-                    pass
-                else:
-                    setattr(wrapper, attr, val)
-
-            return wrapper
-        else:
-            return fn
-
-    def __repr__(self):
-        return "<wrapped %s>" % self.func
 
 
 @utils.runonce

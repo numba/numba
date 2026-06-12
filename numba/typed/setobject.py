@@ -98,12 +98,12 @@ make_attribute_wrapper(SetIteratorType, "parent", "_parent")
 make_attribute_wrapper(SetIterableType, "parent", "_parent")
 
 
-def _raise_if_error(context, builder, status, msg):
+def _raise_if_error(context, builder, status, msg, loc=None):
     """Raise an internal error depending on the value of *status*
     """
     ok_status = status.type(int(Status.OK))
     with builder.if_then(builder.icmp_signed('!=', status, ok_status)):
-        context.call_conv.return_user_exc(builder, RuntimeError, (msg,))
+        context.call_conv.return_user_exc(builder, RuntimeError, (msg,), loc)
 
 
 @intrinsic
@@ -142,7 +142,7 @@ def _set_new_sized(typingctx, n_keys, keyty):
     resty = types.voidptr
     sig = resty(n_keys, keyty)
 
-    def codegen(context, builder, sig, args):
+    def codegen(context, builder, sig, args, loc=None):
         n_keys = builder.bitcast(args[0], ll_ssize_t)
 
         # Determine sizeof value type
@@ -164,6 +164,7 @@ def _set_new_sized(typingctx, n_keys, keyty):
         _raise_if_error(
             context, builder, status,
             msg="Failed to allocate set",
+            loc=loc
         )
         setp = builder.load(refsetp)
         return setp

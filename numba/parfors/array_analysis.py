@@ -167,7 +167,7 @@ def assert_equiv(typingctx, *val):
     if not isinstance(val[0][0], types.StringLiteral):
         raise errors.TypingError('first argument must be a StringLiteral')
 
-    def codegen(context, builder, sig, args):
+    def codegen(context, builder, sig, args, loc=None):
         assert len(args) == 1  # it is a vararg tuple
         tup = cgutils.unpack_tuple(builder, args[0])
         tup_type = sig.args[0]
@@ -193,12 +193,12 @@ def assert_equiv(typingctx, *val):
                         pass
                     with orelse:
                         context.call_conv.return_user_exc(
-                            builder, AssertionError, (msg,)
+                            builder, AssertionError, (msg,), loc
                         )
 
         for i in range(1, len(tup_type) - 1):
             pairwise(tup[i], tup_type[i], tup[i + 1], tup_type[i + 1])
-        r = context.get_constant_generic(builder, types.NoneType, None)
+        r = context.get_constant_generic(builder, types.NoneType, None, loc)
         return r
 
     return signature(types.none, *val), codegen

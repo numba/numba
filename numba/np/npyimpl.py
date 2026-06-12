@@ -372,7 +372,7 @@ def _broadcast_onto(src_ndim, src_shape, dest_ndim, dest_shape):
             dest_index += 1
     return dest_index
 
-def _build_array(context, builder, array_ty, input_types, inputs):
+def _build_array(context, builder, array_ty, input_types, inputs, loc=None):
     """Utility function to handle allocation of an implicit output array
     given the target context, builder, output array type, and a list of
     _ArrayHelper instances.
@@ -422,7 +422,7 @@ def _build_array(context, builder, array_ty, input_types, inputs):
             if loc is not None:
                 msg += '\nFile "%s", line %d, ' % (loc.filename, loc.line)
 
-            context.call_conv.return_user_exc(builder, ValueError, (msg,))
+            context.call_conv.return_user_exc(builder, ValueError, (msg,), loc)
 
     real_array_ty = array_ty.as_array
 
@@ -478,7 +478,7 @@ def _pack_output_values(ufunc, context, builder, typ, values):
         return context.make_tuple(builder, typ, values)
 
 
-def numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
+def numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel_class, loc=None):
     # This is the code generator that builds all the looping needed
     # to execute a numpy functions over several dimensions (including
     # scalar cases).
@@ -502,7 +502,7 @@ def numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
         if ufunc.nin + out_i >= len(arguments):
             # this out argument is not provided
             if isinstance(ret_ty, types.ArrayCompatible):
-                output = _build_array(context, builder, ret_ty, sig.args, arguments)
+                output = _build_array(context, builder, ret_ty, sig.args, arguments, loc)
             else:
                 output = _prepare_argument(
                     context, builder,
@@ -520,7 +520,7 @@ def numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
         [a.base_type for a in outputs],
         [a.base_type for a in inputs]
     )
-    kernel = kernel_class(context, builder, outer_sig)
+    kernel = kernel_class(context, builder, outer_sig, loc=loc)
     intpty = context.get_value_type(types.intp)
 
     indices = [inp.create_iter_indices() for inp in inputs]
@@ -558,7 +558,7 @@ def numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
     return impl_ret_new_ref(context, builder, sig.return_type, out)
 
 
-def numpy_gufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
+def numpy_gufunc_kernel(context, builder, sig, args, ufunc, kernel_class, loc=None):
     arguments = []
     expected_ndims = kernel_class.dufunc.expected_ndims()
     expected_ndims = expected_ndims[0] + expected_ndims[1]
@@ -636,10 +636,11 @@ def numpy_gufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
 
 # Kernels are the code to be executed inside the multidimensional loop.
 class _Kernel(object):
-    def __init__(self, context, builder, outer_sig):
+    def __init__(self, context, builder, outer_sig, loc=None):
         self.context = context
         self.builder = builder
         self.outer_sig = outer_sig
+        self.loc = loc
 
     def cast(self, val, fromty, toty):
         """Numpy uses cast semantics that are different from standard Python
@@ -655,11 +656,11 @@ class _Kernel(object):
             # note that NumPy issues a warning in this kind of conversions
             newty = fromty.underlying_float
             attr = self.context.get_getattr(fromty, 'real')
-            val = attr(self.context, self.builder, fromty, val, 'real')
+            val = attr(self.context, self.builder, fromty, val, 'real', loc=self.loc)
             fromty = newty
             # let the regular cast do the rest...
 
-        return self.context.cast(self.builder, val, fromty, toty)
+        return self.context.cast(self.builder, val, fromty, toty, self.loc)
 
     def generate(self, *args):
         isig = self.inner_sig
@@ -708,8 +709,8 @@ def _ufunc_db_function(ufunc):
     """
 
     class _KernelImpl(_Kernel):
-        def __init__(self, context, builder, outer_sig):
-            super(_KernelImpl, self).__init__(context, builder, outer_sig)
+        def __init__(self, context, builder, outer_sig, loc=None):
+            super(_KernelImpl, self).__init__(context, builder, outer_sig, loc=loc)
             loop = ufunc_find_matching_loop(
                 ufunc, outer_sig.args + tuple(_unpack_output_types(ufunc, outer_sig)))
             self.fn = context.get_ufunc_info(ufunc).get(loop.ufunc_sig)
@@ -739,8 +740,8 @@ def _ufunc_db_function(ufunc):
 # Helper functions that register the ufuncs
 
 def register_ufunc_kernel(ufunc, kernel, lower):
-    def do_ufunc(context, builder, sig, args):
-        return numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel)
+    def do_ufunc(context, builder, sig, args, loc=None):
+        return numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel, loc)
 
     _any = types.Any
     in_args = (_any,) * ufunc.nin
@@ -756,23 +757,23 @@ def register_ufunc_kernel(ufunc, kernel, lower):
 def register_unary_operator_kernel(operator, ufunc, kernel, lower,
                                    inplace=False):
     assert not inplace  # are there any inplace unary operators?
-    def lower_unary_operator(context, builder, sig, args):
-        return numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel)
+    def lower_unary_operator(context, builder, sig, args, loc=None):
+        return numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel, loc)
     _arr_kind = types.Array
     lower(operator, _arr_kind)(lower_unary_operator)
 
 
 def register_binary_operator_kernel(op, ufunc, kernel, lower, inplace=False):
-    def lower_binary_operator(context, builder, sig, args):
-        return numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel)
+    def lower_binary_operator(context, builder, sig, args, loc=None):
+        return numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel, loc)
 
-    def lower_inplace_operator(context, builder, sig, args):
+    def lower_inplace_operator(context, builder, sig, args, loc=None):
         # The visible signature is (A, B) -> A
         # The implementation's signature (with explicit output)
         # is (A, B, A) -> A
         args = tuple(args) + (args[0],)
         sig = typing.signature(sig.return_type, *sig.args + (sig.args[0],))
-        return numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel)
+        return numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel, loc)
 
     _any = types.Any
     _arr_kind = types.Array
@@ -788,7 +789,7 @@ def register_binary_operator_kernel(op, ufunc, kernel, lower, inplace=False):
 # Use the contents of ufunc_db to initialize the supported ufuncs
 
 @registry.lower(operator.pos, types.Array)
-def array_positive_impl(context, builder, sig, args):
+def array_positive_impl(context, builder, sig, args, loc=None):
     '''Lowering function for +(array) expressions.  Defined here
     (numba.targets.npyimpl) since the remaining array-operator
     lowering functions are also registered in this module.
@@ -799,7 +800,7 @@ def array_positive_impl(context, builder, sig, args):
             return val
 
     return numpy_ufunc_kernel(context, builder, sig, args, np.positive,
-                              _UnaryPositiveKernel)
+                              _UnaryPositiveKernel, loc)
 
 
 def register_ufuncs(ufuncs, lower):

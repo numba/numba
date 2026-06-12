@@ -75,30 +75,30 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
                                   state._getvalue())
 
     @lower_builtin(len, range_state_type)
-    def range_len(context, builder, sig, args):
+    def range_len(context, builder, sig, args, loc=None):
         """
         len(range)
         """
         (value,) = args
         state = RangeState(context, builder, value)
-        res = RangeIter.from_range_state(context, builder, state)
+        res = RangeIter.from_range_state(context, builder, state, loc)
         return impl_ret_untracked(context, builder, int_type, builder.load(res.count))
 
     @lower_builtin('getiter', range_state_type)
-    def getiter_range32_impl(context, builder, sig, args):
+    def getiter_range32_impl(context, builder, sig, args, loc=None):
         """
         range.__iter__
         """
         (value,) = args
         state = RangeState(context, builder, value)
-        res = RangeIter.from_range_state(context, builder, state)._getvalue()
+        res = RangeIter.from_range_state(context, builder, state, loc)._getvalue()
         return impl_ret_untracked(context, builder, range_iter_type, res)
 
     @iterator_impl(range_state_type, range_iter_type)
     class RangeIter(make_range_iterator(range_iter_type)):
 
         @classmethod
-        def from_range_state(cls, context, builder, state):
+        def from_range_state(cls, context, builder, state, loc=None):
             """
             Create a RangeIter initialized from the given RangeState *state*.
             """
@@ -128,7 +128,8 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
             with cgutils.if_unlikely(builder, zero_step):
                 # step shouldn't be zero
                 context.call_conv.return_user_exc(builder, ValueError,
-                                                  ("range() arg 3 must not be zero",))
+                                                  ("range() arg 3 must not be zero",),
+                                                  loc)
 
             with builder.if_else(sign_differs) as (then, orelse):
                 with then:
@@ -169,9 +170,9 @@ for int_type, state_types in range_impl_map.items():
     make_range_impl(int_type, *state_types)
 
 @lower_cast(types.RangeType, types.RangeType)
-def range_to_range(context, builder, fromty, toty, val):
+def range_to_range(context, builder, fromty, toty, val, loc=None):
     olditems = cgutils.unpack_tuple(builder, val, 3)
-    items = [context.cast(builder, v, fromty.dtype, toty.dtype)
+    items = [context.cast(builder, v, fromty.dtype, toty.dtype, loc)
              for v in olditems]
     return cgutils.make_anonymous_struct(builder, items)
 

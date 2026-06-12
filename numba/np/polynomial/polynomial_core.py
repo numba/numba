@@ -95,7 +95,7 @@ def impl_polynomial1(context, builder, sig, args):
 
 
 @lower_builtin(Polynomial, types.Array, types.Array, types.Array)
-def impl_polynomial3(context, builder, sig, args):
+def impl_polynomial3(context, builder, sig, args, loc=None):
 
     def to_double(coef):
         return np.asarray(coef, dtype=np.double)
@@ -134,12 +134,14 @@ def impl_polynomial3(context, builder, sig, args):
     with cgutils.if_unlikely(builder, pred1):
         context.call_conv.return_user_exc(
             builder, ValueError,
-            ("Domain has wrong number of elements.",))
+            ("Domain has wrong number of elements.",),
+            loc)
 
     with cgutils.if_unlikely(builder, pred2):
         context.call_conv.return_user_exc(
             builder, ValueError,
-            ("Window has wrong number of elements.",))
+            ("Window has wrong number of elements.",),
+            loc)
 
     polynomial.coef = coef_cast
     polynomial.domain = domain_helper._getvalue()

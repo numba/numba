@@ -160,8 +160,8 @@ def make_dufunc_kernel(_dufunc):
         """
         dufunc = _dufunc
 
-        def __init__(self, context, builder, outer_sig):
-            super().__init__(context, builder, outer_sig)
+        def __init__(self, context, builder, outer_sig, loc=None):
+            super().__init__(context, builder, outer_sig, loc=loc)
             self.inner_sig, self.cres = self.dufunc.find_ewise_function(
                 outer_sig.args)
 

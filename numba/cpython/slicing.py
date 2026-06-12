@@ -126,13 +126,14 @@ def fix_stride(builder, slice, stride):
     """
     return builder.mul(slice.step, stride)
 
-def guard_invalid_slice(context, builder, typ, slicestruct):
+def guard_invalid_slice(context, builder, typ, slicestruct, loc=None):
     """
     Guard against *slicestruct* having a zero step (and raise ValueError).
     """
     if typ.has_step:
         cgutils.guard_null(context, builder, slicestruct.step,
-                           (ValueError, "slice step cannot be zero"))
+                           (ValueError, "slice step cannot be zero"), 
+                           loc)
 
 
 def get_defaults(context):
@@ -216,19 +217,21 @@ def slice_step_impl(context, builder, typ, value):
 
 
 @lower_builtin("slice.indices", types.SliceType, types.Integer)
-def slice_indices(context, builder, sig, args):
+def slice_indices(context, builder, sig, args, loc=None):
     length = args[1]
     sli = context.make_helper(builder, sig.args[0], args[0])
 
     with builder.if_then(cgutils.is_neg_int(builder, length), likely=False):
         context.call_conv.return_user_exc(
             builder, ValueError,
-            ("length should not be negative",)
+            ("length should not be negative",),
+            loc
         )
     with builder.if_then(cgutils.is_scalar_zero(builder, sli.step), likely=False):
         context.call_conv.return_user_exc(
             builder, ValueError,
-            ("slice step cannot be zero",)
+            ("slice step cannot be zero",),
+            loc
         )
 
     fix_slice(builder, sli, length)

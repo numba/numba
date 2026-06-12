@@ -13,14 +13,14 @@ from numba.core.extending import overload_method, overload, intrinsic
 
 
 @lower_builtin(types.NamedTupleClass, types.VarArg(types.Any))
-def namedtuple_constructor(context, builder, sig, args):
+def namedtuple_constructor(context, builder, sig, args, loc=None):
     # A namedtuple has the same representation as a regular tuple
     # the arguments need casting (lower_cast) from the types in the ctor args
     # to those in the ctor return type, this is to handle cases such as a
     # literal present in the args, but a type present in the return type.
     newargs = []
     for i, arg in enumerate(args):
-        casted = context.cast(builder, arg, sig.args[i], sig.return_type[i])
+        casted = context.cast(builder, arg, sig.args[i], sig.return_type[i], loc)
         newargs.append(casted)
     res = context.make_tuple(builder, sig.return_type, tuple(newargs))
     # The tuple's contents are borrowed
@@ -109,11 +109,11 @@ def namedtuple_getattr(context, builder, typ, value, attr):
 
 @lower_constant(types.UniTuple)
 @lower_constant(types.NamedUniTuple)
-def unituple_constant(context, builder, ty, pyval):
+def unituple_constant(context, builder, ty, pyval, loc=None):
     """
     Create a homogeneous tuple constant.
     """
-    consts = [context.get_constant_generic(builder, ty.dtype, v)
+    consts = [context.get_constant_generic(builder, ty.dtype, v, loc)
               for v in pyval]
     return impl_ret_borrowed(
         context, builder, ty, cgutils.pack_array(builder, consts),
@@ -121,11 +121,11 @@ def unituple_constant(context, builder, ty, pyval):
 
 @lower_constant(types.Tuple)
 @lower_constant(types.NamedTuple)
-def tuple_constant(context, builder, ty, pyval):
+def tuple_constant(context, builder, ty, pyval, loc=None):
     """
     Create a heterogeneous tuple constant.
     """
-    consts = [context.get_constant_generic(builder, ty.types[i], v)
+    consts = [context.get_constant_generic(builder, ty.types[i], v, loc)
               for i, v in enumerate(pyval)]
     return impl_ret_borrowed(
         context, builder, ty, cgutils.pack_struct(builder, consts),
@@ -204,7 +204,7 @@ def getitem_literal_idx(tup, idx):
 
 
 @lower_builtin('typed_getitem', types.BaseTuple, types.Any)
-def getitem_typed(context, builder, sig, args):
+def getitem_typed(context, builder, sig, args, loc=None):
     tupty, _ = sig.args
     tup, idx = args
     errmsg_oob = ("tuple index out of range",)
@@ -215,7 +215,7 @@ def getitem_typed(context, builder, sig, args):
         # Always branch and raise IndexError
         with builder.if_then(cgutils.true_bit):
             context.call_conv.return_user_exc(builder, IndexError,
-                                              errmsg_oob)
+                                              errmsg_oob, loc)
         # This is unreachable in runtime,
         # but it exists to not terminate the current basicblock.
         res = context.get_constant_null(sig.return_type)
@@ -230,7 +230,7 @@ def getitem_typed(context, builder, sig, args):
 
         with builder.goto_block(bbelse):
             context.call_conv.return_user_exc(builder, IndexError,
-                                            errmsg_oob)
+                                            errmsg_oob, loc)
 
         lrtty = context.get_value_type(sig.return_type)
         voidptrty = context.get_value_type(types.voidptr)
@@ -272,7 +272,7 @@ def getitem_typed(context, builder, sig, args):
                     value_slot = builder.alloca(lrtty,
                                                 name="TYPED_VALUE_SLOT%s" % i)
                     casted = context.cast(builder, value, sig.args[0][i],
-                                        sig.return_type)
+                                        sig.return_type, loc)
                     builder.store(casted, value_slot)
                 else:
                     value_slot = builder.alloca(value.type,
@@ -292,7 +292,7 @@ def getitem_typed(context, builder, sig, args):
 @lower_builtin(operator.getitem, types.UniTuple, types.uintp)
 @lower_builtin(operator.getitem, types.NamedUniTuple, types.intp)
 @lower_builtin(operator.getitem, types.NamedUniTuple, types.uintp)
-def getitem_unituple(context, builder, sig, args):
+def getitem_unituple(context, builder, sig, args, loc=None):
     tupty, _ = sig.args
     tup, idx = args
 
@@ -304,7 +304,7 @@ def getitem_unituple(context, builder, sig, args):
         # Always branch and raise IndexError
         with builder.if_then(cgutils.true_bit):
             context.call_conv.return_user_exc(builder, IndexError,
-                                              errmsg_oob)
+                                              errmsg_oob, loc)
         # This is unreachable in runtime,
         # but it exists to not terminate the current basicblock.
         res = context.get_constant_null(sig.return_type)
@@ -318,7 +318,7 @@ def getitem_unituple(context, builder, sig, args):
 
         with builder.goto_block(bbelse):
             context.call_conv.return_user_exc(builder, IndexError,
-                                              errmsg_oob)
+                                              errmsg_oob, loc)
 
         lrtty = context.get_value_type(tupty.dtype)
         with builder.goto_block(bbend):
@@ -375,7 +375,7 @@ def static_getitem_tuple(context, builder, sig, args):
 # Implicit conversion
 
 @lower_cast(types.BaseTuple, types.BaseTuple)
-def tuple_to_tuple(context, builder, fromty, toty, val):
+def tuple_to_tuple(context, builder, fromty, toty, val, loc=None):
     if (isinstance(fromty, types.BaseNamedTuple)
         or isinstance(toty, types.BaseNamedTuple)):
         # Disallowed by typing layer
@@ -386,7 +386,7 @@ def tuple_to_tuple(context, builder, fromty, toty, val):
         raise NotImplementedError
 
     olditems = cgutils.unpack_tuple(builder, val, len(fromty))
-    items = [context.cast(builder, v, f, t)
+    items = [context.cast(builder, v, f, t, loc)
              for v, f, t in zip(olditems, fromty, toty)]
     return context.make_tuple(builder, toty, items)
 

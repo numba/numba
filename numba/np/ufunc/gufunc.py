@@ -21,8 +21,8 @@ def make_gufunc_kernel(_dufunc):
         """
         dufunc = _dufunc
 
-        def __init__(self, context, builder, outer_sig):
-            super().__init__(context, builder, outer_sig)
+        def __init__(self, context, builder, outer_sig, loc=None):
+            super().__init__(context, builder, outer_sig, loc=loc)
             ewise_types = self.dufunc._get_ewise_dtypes(outer_sig.args)
             self.inner_sig, self.cres = self.dufunc.find_ewise_function(
                 ewise_types)

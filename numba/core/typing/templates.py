@@ -1063,12 +1063,12 @@ class _OverloadAttributeTemplate(_TemplateTargetHelperMixin, AttributeTemplate):
         lower_getattr = self._get_target_registry('attribute').lower_getattr
 
         @lower_getattr(cls.key, attr)
-        def getattr_impl(context, builder, typ, value):
+        def getattr_impl(context, builder, typ, value, loc=None):
             typingctx = context.typing_context
             fnty = cls._get_function_type(typingctx, typ)
             sig = cls._get_signature(typingctx, fnty, (typ,), {})
             call = context.get_function(fnty, sig)
-            return call(builder, (value,))
+            return call(builder, (value,), loc=loc)
 
     def _resolve(self, typ, attr):
         if self._attr != attr:
@@ -1106,7 +1106,7 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
         registry = self._get_target_registry('method')
 
         @registry.lower((self.key, attr), self.key, types.VarArg(types.Any))
-        def method_impl(context, builder, sig, args):
+        def method_impl(context, builder, sig, args, loc=None):
             typ = sig.args[0]
             typing_context = context.typing_context
             fnty = self._get_function_type(typing_context, typ)
@@ -1114,7 +1114,7 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
             call = context.get_function(fnty, sig)
             # Link dependent library
             context.add_linking_libs(getattr(call, 'libs', ()))
-            return call(builder, args)
+            return call(builder, args, loc=loc)
 
     def _resolve(self, typ, attr):
         if self._attr != attr:

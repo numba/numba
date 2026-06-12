@@ -35,16 +35,16 @@ def ol_truth(val):
 
 
 @lower_builtin(operator.is_not, types.Any, types.Any)
-def generic_is_not(context, builder, sig, args):
+def generic_is_not(context, builder, sig, args, loc=None):
     """
     Implement `x is not y` as `not (x is y)`.
     """
     is_impl = context.get_function(operator.is_, sig)
-    return builder.not_(is_impl(builder, args))
+    return builder.not_(is_impl(builder, args, loc=loc))
 
 
 @lower_builtin(operator.is_, types.Any, types.Any)
-def generic_is(context, builder, sig, args):
+def generic_is(context, builder, sig, args, loc=None):
     """
     Default implementation for `x is y`
     """
@@ -64,7 +64,7 @@ def generic_is(context, builder, sig, args):
                     # no `==` implemented for this type
                     return cgutils.false_bit
                 else:
-                    return eq_impl(builder, args)
+                    return eq_impl(builder, args, loc=loc)
     else:
         return cgutils.false_bit
 
@@ -86,7 +86,7 @@ def opaque_is(context, builder, sig, args):
 
 
 @lower_builtin(operator.is_, types.Boolean, types.Boolean)
-def bool_is_impl(context, builder, sig, args):
+def bool_is_impl(context, builder, sig, args, loc=None):
     """
     Implementation for `x is y` for types derived from types.Boolean
     (e.g. BooleanLiteral), and cross-checks between literal and non-literal
@@ -94,13 +94,13 @@ def bool_is_impl(context, builder, sig, args):
     """
     arg1, arg2 = args
     arg1_type, arg2_type = sig.args
-    _arg1 = context.cast(builder, arg1, arg1_type, types.boolean)
-    _arg2 = context.cast(builder, arg2, arg2_type, types.boolean)
+    _arg1 = context.cast(builder, arg1, arg1_type, types.boolean, loc)
+    _arg2 = context.cast(builder, arg2, arg2_type, types.boolean, loc)
     eq_impl = context.get_function(
         operator.eq,
         typing.signature(types.boolean, types.boolean, types.boolean)
     )
-    return eq_impl(builder, (_arg1, _arg2))
+    return eq_impl(builder, (_arg1, _arg2), loc=loc)
 
 
 # keep types.IntegerLiteral, as otherwise there's ambiguity between this and int_eq_impl
@@ -167,30 +167,30 @@ overload(operator.ne)(gen_non_eq(False))
 #-------------------------------------------------------------------------------
 
 @lower_getattr_generic(types.DeferredType)
-def deferred_getattr(context, builder, typ, value, attr):
+def deferred_getattr(context, builder, typ, value, attr, loc=None):
     """
     Deferred.__getattr__ => redirect to the actual type.
     """
     inner_type = typ.get()
-    val = context.cast(builder, value, typ, inner_type)
+    val = context.cast(builder, value, typ, inner_type, loc)
     imp = context.get_getattr(inner_type, attr)
-    return imp(context, builder, inner_type, val, attr)
+    return imp(context, builder, inner_type, val, attr, loc=loc)
 
 @lower_cast(types.Any, types.DeferredType)
 @lower_cast(types.Optional, types.DeferredType)
 @lower_cast(types.Boolean, types.DeferredType)
-def any_to_deferred(context, builder, fromty, toty, val):
-    actual = context.cast(builder, val, fromty, toty.get())
+def any_to_deferred(context, builder, fromty, toty, val, loc=None):
+    actual = context.cast(builder, val, fromty, toty.get(), loc)
     model = context.data_model_manager[toty]
     return model.set(builder, model.make_uninitialized(), actual)
 
 @lower_cast(types.DeferredType, types.Any)
 @lower_cast(types.DeferredType, types.Boolean)
 @lower_cast(types.DeferredType, types.Optional)
-def deferred_to_any(context, builder, fromty, toty, val):
+def deferred_to_any(context, builder, fromty, toty, val, loc=None):
     model = context.data_model_manager[fromty]
     val = model.get(builder, val)
-    return context.cast(builder, val, fromty.get(), toty)
+    return context.cast(builder, val, fromty.get(), toty, loc)
 
 
 #------------------------------------------------------------------------------
@@ -212,7 +212,7 @@ def setitem_cpointer(context, builder, sig, args):
 
 #-------------------------------------------------------------------------------
 
-def do_minmax(context, builder, argtys, args, cmpop):
+def do_minmax(context, builder, argtys, args, cmpop, loc=None):
     assert len(argtys) == len(args), (argtys, args)
     assert len(args) > 0
 
@@ -223,11 +223,11 @@ def do_minmax(context, builder, argtys, args, cmpop):
         vty, v = value
         ty = context.typing_context.unify_types(accty, vty)
         assert ty is not None
-        acc = context.cast(builder, acc, accty, ty)
-        v = context.cast(builder, v, vty, ty)
+        acc = context.cast(builder, acc, accty, ty, loc)
+        v = context.cast(builder, v, vty, ty, loc)
         cmpsig = typing.signature(types.boolean, ty, ty)
         ge = context.get_function(cmpop, cmpsig)
-        pred = ge(builder, (v, acc))
+        pred = ge(builder, (v, acc), loc=loc)
         res = builder.select(pred, v, acc)
         return ty, res
 
@@ -290,10 +290,10 @@ def round_impl_binary(context, builder, sig, args):
 # Numeric constructors
 
 @lower_builtin(float, types.Any)
-def float_impl(context, builder, sig, args):
+def float_impl(context, builder, sig, args, loc=None):
     [ty] = sig.args
     [val] = args
-    res = context.cast(builder, val, ty, sig.return_type)
+    res = context.cast(builder, val, ty, sig.return_type, loc)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @intrinsic
@@ -303,10 +303,10 @@ def cast_int(typingctx, x):
     else:
         retty = types.intp
 
-    def impl(context, builder, signature, args):
+    def impl(context, builder, signature, args, loc=None):
         [ty] = signature.args
         [val] = args
-        res = context.cast(builder, val, ty, signature.return_type)
+        res = context.cast(builder, val, ty, signature.return_type, loc)
         return impl_ret_untracked(context, builder, signature.return_type, res)
 
     sig = signature(retty, x)
@@ -328,7 +328,7 @@ def float_literal_impl(context, builder, sig, args):
 
 
 @lower_builtin(complex, types.VarArg(types.Any))
-def complex_impl(context, builder, sig, args):
+def complex_impl(context, builder, sig, args, loc=None):
     complex_type = sig.return_type
     float_type = complex_type.underlying_float
     if len(sig.args) == 1:
@@ -336,17 +336,17 @@ def complex_impl(context, builder, sig, args):
         [arg] = args
         if isinstance(argty, types.Complex):
             # Cast Complex* to Complex*
-            res = context.cast(builder, arg, argty, complex_type)
+            res = context.cast(builder, arg, argty, complex_type, loc)
             return impl_ret_untracked(context, builder, sig.return_type, res)
         else:
-            real = context.cast(builder, arg, argty, float_type)
+            real = context.cast(builder, arg, argty, float_type, loc)
             imag = context.get_constant(float_type, 0)
 
     elif len(sig.args) == 2:
         [realty, imagty] = sig.args
         [real, imag] = args
-        real = context.cast(builder, real, realty, float_type)
-        imag = context.cast(builder, imag, imagty, float_type)
+        real = context.cast(builder, real, realty, float_type, loc)
+        imag = context.cast(builder, imag, imagty, float_type, loc)
 
     cmplx = context.make_complex(builder, complex_type)
     cmplx.real = real
@@ -356,7 +356,7 @@ def complex_impl(context, builder, sig, args):
 
 
 @lower_builtin(types.NumberClass, types.Any)
-def number_constructor(context, builder, sig, args):
+def number_constructor(context, builder, sig, args, loc=None):
     """
     Call a number class, e.g. np.int32(...)
     """
@@ -371,7 +371,7 @@ def number_constructor(context, builder, sig, args):
         # Scalar constructor
         [val] = args
         [valty] = sig.args
-        return context.cast(builder, val, valty, sig.return_type)
+        return context.cast(builder, val, valty, sig.return_type, loc)
 
 
 #-------------------------------------------------------------------------------
@@ -409,22 +409,22 @@ def type_impl(context, builder, sig, args):
 
 
 @lower_builtin(iter, types.IterableType)
-def iter_impl(context, builder, sig, args):
+def iter_impl(context, builder, sig, args, loc=None):
     ty, = sig.args
     val, = args
-    iterval = call_getiter(context, builder, ty, val)
+    iterval = call_getiter(context, builder, ty, val, loc)
     return iterval
 
 
 @lower_builtin(next, types.IteratorType)
-def next_impl(context, builder, sig, args):
+def next_impl(context, builder, sig, args, loc=None):
     iterty, = sig.args
     iterval, = args
 
-    res = call_iternext(context, builder, iterty, iterval)
+    res = call_iternext(context, builder, iterty, iterval, loc)
 
     with builder.if_then(builder.not_(res.is_valid()), likely=False):
-        context.call_conv.return_user_exc(builder, StopIteration, ())
+        context.call_conv.return_user_exc(builder, StopIteration, (), loc)
 
     return res.yielded_value()
 
@@ -637,10 +637,10 @@ def max_vararg(context, x):
     if len(x) == 0:
         raise TypingError("max() argument is an empty tuple")
 
-    def impl(context, builder, sig, args):
+    def impl(context, builder, sig, args, loc=None):
         argtys = list(sig.args[0])
         args = cgutils.unpack_tuple(builder, args[0])
-        return do_minmax(context, builder, argtys, args, operator.gt)
+        return do_minmax(context, builder, argtys, args, operator.gt, loc)
 
     retty = context.unify_types(*x)
     if retty is not None:
@@ -655,10 +655,10 @@ def min_vararg(context, x):
     if len(x) == 0:
         raise TypingError("min() argument is an empty tuple")
 
-    def impl(context, builder, sig, args):
+    def impl(context, builder, sig, args, loc=None):
         argtys = list(sig.args[0])
         args = cgutils.unpack_tuple(builder, args[0])
-        return do_minmax(context, builder, argtys, args, operator.lt)
+        return do_minmax(context, builder, argtys, args, operator.lt, loc)
 
     retty = context.unify_types(*x)
     if retty is not None:
@@ -963,9 +963,9 @@ def resolve_getattr(tyctx, obj, name, default):
             # Else it's some other type of attribute.
             # Ensure typing calls occur at typing time, not at lowering
             attrty = tyctx.resolve_getattr(obj, lname)
-            def impl(cgctx, builder, sig, ll_args):
+            def impl(cgctx, builder, sig, ll_args, loc=None):
                 attr_impl = cgctx.get_getattr(obj, lname)
-                res = attr_impl(cgctx, builder, obj, ll_args[0], lname)
+                res = attr_impl(cgctx, builder, obj, ll_args[0], lname, loc=loc)
                 casted = cgctx.cast(builder, res, attrty, fn)
                 cgctx.nrt.incref(builder, fn, casted)
                 return casted
