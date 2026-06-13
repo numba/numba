@@ -1,4 +1,5 @@
 import decimal
+from enum import IntEnum, auto
 import itertools
 
 import numpy as np
@@ -148,6 +149,12 @@ def slicing_1d_usecase_add(a, b, start, stop):
 def slicing_2d_usecase_set(a, b, start, stop, step, start2, stop2, step2):
     a[start:stop:step,start2:stop2:step2] = b
     return a
+
+
+class EnumIndex(IntEnum):
+    INDEX0 = 0
+    INDEX1 = auto()
+    INDEX_NEG1 = -1
 
 
 class TestGetItem(TestCase):
@@ -526,6 +533,22 @@ class TestGetItem(TestCase):
 
     def test_1d_integer_indexing_npm(self):
         self.test_1d_integer_indexing(flags=Noflags)
+
+    def test_1d_enum_indexing(self, flags=enable_pyobj_flags):
+        # C layout
+        pyfunc = integer_indexing_1d_usecase
+        arraytype = types.Array(types.int32, 1, 'C')
+        idxtype = types.IntEnumMember(EnumIndex, types.intp)
+        argtys = (arraytype, idxtype)
+        cfunc = jit(argtys, **flags)(pyfunc)
+
+        a = np.arange(10, dtype='i4')
+        self.assertEqual(pyfunc(a, EnumIndex.INDEX0), cfunc(a, EnumIndex.INDEX0))
+        self.assertEqual(pyfunc(a, EnumIndex.INDEX1), cfunc(a, EnumIndex.INDEX1))
+        self.assertEqual(pyfunc(a, EnumIndex.INDEX_NEG1), cfunc(a, EnumIndex.INDEX_NEG1))
+
+    def test_1d_enum_indexing_npm(self):
+        self.test_1d_enum_indexing(flags=Noflags)
 
     def test_integer_indexing_1d_for_2d(self, flags=enable_pyobj_flags):
         # Test partial (1d) indexing of a 2d array
