@@ -1628,10 +1628,21 @@ def _median_inner(temp_arry, n):
 
 @overload(np.median)
 def np_median(a):
-    # scalar case — median of a single value is the value itself, dtype preserved
-    if isinstance(a, (types.Integer, types.Boolean, types.Float, types.Complex)):
+    # Scalar case: the median of a single value is that value. NumPy promotes
+    # integer and boolean scalars to float64, while floating-point and complex
+    # scalars keep their dtype.
+    if isinstance(a, (types.Integer, types.Boolean)):
         def scalar_median(a):
-            return a
+            return np.float64(a)
+        return scalar_median
+    elif isinstance(a, (types.Float, types.Complex)):
+        # Adding a same-dtype zero matches NumPy: its median goes through a mean
+        # reduction that normalises negative zero to positive zero, while the
+        # dtype is left unchanged (and inf/nan are untouched).
+        zero = as_dtype(a).type(0)
+
+        def scalar_median(a):
+            return a + zero
         return scalar_median
     elif not isinstance(a, types.Array):
         return None
