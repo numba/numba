@@ -1,0 +1,9 @@
+Fix performance regression in Fancy Indexing
+--------------------------------------------
+
+The implementation of Fancy indexing in Numba was refactored to fix
+performance regressions introduced due to generalization of Fancy Indexing
+to support more use cases. 
+
+The current implementation of Fancy Indexing is more efficient than before
+whilst at same time supporting all indexing cases supported by NumPy.
