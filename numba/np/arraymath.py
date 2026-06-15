@@ -482,7 +482,7 @@ def array_mean(a):
                 c = acc_init
                 for v in np.nditer(a):
                     c += v.item()
-                return c / dtype.type(a.size)
+                return dtype.type(c / a.size)
         else:
             # For datetime/timedelta, don't add special empty array handling
             # Let it behave as before (NumPy itself raises error for empty
