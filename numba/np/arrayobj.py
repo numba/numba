@@ -2996,6 +2996,145 @@ def array_repeat(a, repeats):
     return array_repeat_impl
 
 
+@register_jitable
+def _np_tile_repeat_along_axis(arr, reps, axis):
+    if reps == 1:
+        return arr
+    result = np.concatenate((arr, arr), axis=axis)
+    for _ in range(reps - 2):
+        result = np.concatenate((result, arr), axis=axis)
+    return result
+
+
+@overload(np.tile)
+def np_tile(A, reps):
+
+    if not type_can_asarray(A):
+        msg = 'The argument "A" must be array-like'
+        raise errors.TypingError(msg)
+
+    if isinstance(reps, types.Integer):
+        if isinstance(A, types.Array):
+            ndim = A.ndim
+            if ndim == 0:
+                # 0-d array, expand to 1-d then tile
+                def np_tile_scalar_int_impl(A, reps):
+                    if reps < 0:
+                        raise ValueError(
+                            "negative dimensions are not allowed")
+                    arr = np.asarray(A)
+                    if reps == 0:
+                        return np.empty(0, dtype=arr.dtype)
+                    arr = np.expand_dims(arr, 0)
+                    return _np_tile_repeat_along_axis(arr, reps, 0)
+
+                return np_tile_scalar_int_impl
+
+            elif ndim == 1:
+                def np_tile_1d_int_impl(A, reps):
+                    if reps < 0:
+                        raise ValueError(
+                            "negative dimensions are not allowed")
+                    arr = np.asarray(A)
+                    if reps == 0:
+                        return np.empty(0, dtype=arr.dtype)
+                    return _np_tile_repeat_along_axis(arr, reps, 0)
+
+                return np_tile_1d_int_impl
+
+            elif ndim == 2:
+                def np_tile_2d_int_impl(A, reps):
+                    if reps < 0:
+                        raise ValueError(
+                            "negative dimensions are not allowed")
+                    arr = np.asarray(A)
+                    if reps == 0:
+                        return np.empty((arr.shape[0], 0), dtype=arr.dtype)
+                    return _np_tile_repeat_along_axis(arr, reps, 1)
+
+                return np_tile_2d_int_impl
+
+            elif ndim == 3:
+                def np_tile_3d_int_impl(A, reps):
+                    if reps < 0:
+                        raise ValueError(
+                            "negative dimensions are not allowed")
+                    arr = np.asarray(A)
+                    if reps == 0:
+                        return np.empty((arr.shape[0], arr.shape[1], 0),
+                                        dtype=arr.dtype)
+                    return _np_tile_repeat_along_axis(arr, reps, 2)
+
+                return np_tile_3d_int_impl
+
+            else:
+                msg = ('np.tile with integer reps is only supported for '
+                       'arrays up to 3-D')
+                raise errors.TypingError(msg)
+        else:
+            # Non-array input (e.g. Python scalar, tuple).
+            # asarray on scalars gives 0-d, on tuples/lists gives 1-d.
+            # Split to keep return types unified.
+            if isinstance(A, (types.Integer, types.Float, types.Boolean,
+                              types.Complex)):
+                # Scalar (0-d after asarray)
+                def np_tile_nonarray_int_impl(A, reps):
+                    if reps < 0:
+                        raise ValueError(
+                            "negative dimensions are not allowed")
+                    arr = np.asarray(A)
+                    if reps == 0:
+                        return np.empty(0, dtype=arr.dtype)
+                    arr = np.expand_dims(arr, 0)
+                    return _np_tile_repeat_along_axis(arr, reps, 0)
+
+                return np_tile_nonarray_int_impl
+            else:
+                # Tuple/list (1-d after asarray)
+                def np_tile_seq_int_impl(A, reps):
+                    if reps < 0:
+                        raise ValueError(
+                            "negative dimensions are not allowed")
+                    arr = np.asarray(A)
+                    if reps == 0:
+                        return np.empty(0, dtype=arr.dtype)
+                    return _np_tile_repeat_along_axis(arr, reps, 0)
+
+                return np_tile_seq_int_impl
+
+    elif (isinstance(reps, types.UniTuple)
+          and isinstance(reps.dtype, types.Integer)):
+        if isinstance(A, types.Array) and A.ndim > 1:
+            msg = ('np.tile with tuple reps is only supported for '
+                   '1-D arrays and scalars')
+            raise errors.TypingError(msg)
+
+        def np_tile_tuple_impl(A, reps):
+            for r in reps:
+                if r < 0:
+                    raise ValueError(
+                        "negative dimensions are not allowed")
+            arr = np.asarray(A)
+            sz = arr.size
+            out_shape = reps[:-1] + (reps[-1] * sz,)
+            num_copies = 1
+            for r in reps:
+                num_copies *= r
+            if sz == 0 or num_copies == 0:
+                return np.empty(out_shape, dtype=arr.dtype)
+            out = np.empty(num_copies * sz, dtype=arr.dtype)
+            arr_flat = arr.flatten()
+            for i in range(num_copies):
+                out[i * sz : (i + 1) * sz] = arr_flat
+            return np.reshape(out, out_shape)
+
+        return np_tile_tuple_impl
+    else:
+        msg = ('The argument "reps" must be an integer or '
+               'a tuple of integers')
+        raise errors.TypingError(msg)
+
+
 @intrinsic
 def _intrin_get_itemsize(tyctx, dtype):
     """Computes the itemsize of the dtype"""
