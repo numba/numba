@@ -505,6 +505,17 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         expected = np.mean(arr)
         self.assertPreciseEqual(cfunc(arr), expected)
 
+    def test_mean_count_rounding(self):
+        # Reproducer from issue #10647: 2**24 + 1 is the smallest length
+        # not exactly representable as float32, so any incorrect cast
+        # in the computation will mismatch the np result.
+        n = 2**24 + 1
+        for dtype in (np.float32, np.complex64):
+            arr = np.zeros(n, dtype=dtype)
+            arr[0] = dtype(2**24 - 1)
+            npr, nbr = run_comparative(array_mean, arr)
+            self.assertPreciseEqual(npr, nbr)
+
     def test_mean_empty_timedelta(self):
         """Test that mean of empty timedelta array returns NaT"""
         cfunc = jit(nopython=True)(array_mean)
