@@ -1,0 +1,1 @@
+``np.tile`` is now supported in nopython mode.
