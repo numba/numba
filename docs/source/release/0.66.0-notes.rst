@@ -144,6 +144,18 @@ beyond the lifetime of the function.
 
 (`PR-#10511 <https://github.com/numba/numba/pull/10511>`__)
 
+Fix performance regression in Fancy Indexing
+--------------------------------------------
+
+The implementation of Fancy indexing in Numba was refactored to fix
+performance regressions introduced due to generalization of Fancy Indexing
+to support more use cases. 
+
+The current implementation of Fancy Indexing is more efficient than before
+whilst at same time supporting all indexing cases supported by NumPy.
+
+(`PR-#10567 <https://github.com/numba/numba/pull/10567>`__)
+
 
 Performance Improvements and Changes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -217,6 +229,16 @@ with ``coverage >= 7.13.1``, where the ``sysmon`` core (default on Python
 previously accept.
 
 (`PR-#10604 <https://github.com/numba/numba/pull/10604>`__)
+
+Fix rounding error in ``mean`` for integer and boolean arrays
+-------------------------------------------------------------
+
+Computing ``np.mean`` over an integer or boolean array cast the element count
+to the array's dtype before dividing, which could narrow the divisor and
+produce a slightly incorrect result. The division is now performed in full
+precision and only the final mean is cast, matching NumPy's result.
+
+(`PR-#10649 <https://github.com/numba/numba/pull/10649>`__)
 
 
 Changes
@@ -334,6 +356,7 @@ Pull-Requests:
 * PR `#10558 <https://github.com/numba/numba/pull/10558>`_: `numba.core.types.function_type` type stubs (Guilherme Leobas `jorenham <https://github.com/jorenham>`_)
 * PR `#10562 <https://github.com/numba/numba/pull/10562>`_: Cherry pick and changelog update for 0.65.1 (`esc <https://github.com/esc>`_ `stuartarchibald <https://github.com/stuartarchibald>`_ `swap357 <https://github.com/swap357>`_)
 * PR `#10566 <https://github.com/numba/numba/pull/10566>`_: `numba.core.types.functions` type stubs (Guilherme Leobas `jorenham <https://github.com/jorenham>`_ `swap357 <https://github.com/swap357>`_)
+* PR `#10567 <https://github.com/numba/numba/pull/10567>`_: Fix performance regression in Fancy Indexing (`kc611 <https://github.com/kc611>`_)
 * PR `#10568 <https://github.com/numba/numba/pull/10568>`_: Update conda-incubator/setup-miniconda action to v4 (`renovate[bot] <https://github.com/apps/renovate>`_)
 * PR `#10570 <https://github.com/numba/numba/pull/10570>`_: Cherry pick 0.65.1 (`swap357 <https://github.com/swap357>`_)
 * PR `#10575 <https://github.com/numba/numba/pull/10575>`_: Run stubtest and mypy with Python 3.11 in CI (`jorenham <https://github.com/jorenham>`_)
@@ -358,6 +381,8 @@ Pull-Requests:
 * PR `#10632 <https://github.com/numba/numba/pull/10632>`_: update version support table for `0.66.0rc1` (`swap357 <https://github.com/swap357>`_)
 * PR `#10633 <https://github.com/numba/numba/pull/10633>`_: update deprecation notice doc for `0.66` (`swap357 <https://github.com/swap357>`_)
 * PR `#10635 <https://github.com/numba/numba/pull/10635>`_: Changelog `0.66.0rc1` (`swap357 <https://github.com/swap357>`_)
+* PR `#10648 <https://github.com/numba/numba/pull/10648>`_: update Numba CI and builds for Windows with VS2026 (`swap357 <https://github.com/swap357>`_)
+* PR `#10649 <https://github.com/numba/numba/pull/10649>`_: Fix rounding error in mean for integer and boolean arrays (`swap357 <https://github.com/swap357>`_)
 
 Authors:
 
