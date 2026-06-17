@@ -5518,16 +5518,22 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         # 1-D arrays and scalars with integer and tuple reps
         for a in (np.arange(5), np.array([]), 3.0, True, np.array([1, 2]),
-                  (1, 2, 3)):
-            for reps in (2, 0, (6,), (3, 3), (2, 1, 4)):
+                  (1, 2, 3), [1, 2, 3]):
+            for reps in (2, 0, 1, (6,), (3, 3), (2, 1, 4)):
                 expected = pyfunc(a, reps)
                 got = cfunc(a, reps)
                 self.assertPreciseEqual(expected, got)
 
-        # Multi-dimensional arrays with integer reps (concatenate path)
+        # Multi-dimensional arrays with integer and tuple reps
         for a in (np.arange(6).reshape(2, 3),
-                  np.arange(24).reshape(4, 3, 2)):
-            for reps in range(0, 4):
+                  np.arange(24).reshape(4, 3, 2),
+                  np.arange(16).reshape(2, 2, 2, 2)):
+            for reps in (0, 1, 2, 3):
+                expected = pyfunc(a, reps)
+                got = cfunc(a, reps)
+                self.assertPreciseEqual(expected, got)
+            # Tuple reps for multi-dim arrays
+            for reps in ((2,), (1, 2), (2, 1), (2, 3), (3, 2, 1)):
                 expected = pyfunc(a, reps)
                 got = cfunc(a, reps)
                 self.assertPreciseEqual(expected, got)
@@ -5553,16 +5559,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertTypingError() as raises:
             cfunc(np.arange(3), 1.5)
         self.assertIn("reps", str(raises.exception))
-
-        # Multi-dimensional array with tuple reps (not supported)
-        with self.assertTypingError() as raises:
-            cfunc(np.arange(6).reshape(2, 3), (2, 1))
-        self.assertIn("1-D", str(raises.exception))
-
-        # High-dimensional array with integer reps (not supported)
-        with self.assertTypingError() as raises:
-            cfunc(np.arange(16).reshape(2, 2, 2, 2), 2)
-        self.assertIn("3-D", str(raises.exception))
 
     def test_select(self):
         np_pyfunc = np_select

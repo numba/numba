@@ -602,11 +602,9 @@ The following top-level functions are supported:
 * :func:`numpy.split`
 * :func:`numpy.stack` (only the first two arguments are supported)
 * :func:`numpy.swapaxes`
-* :func:`numpy.tile` (when ``reps`` is an integer, arrays up to 3-D are
-  supported; when ``reps`` is a tuple, only 1-D arrays and scalars are
-  supported; ``reps`` must be an integer or a tuple of integers)
 * :func:`numpy.take` (only the 2 first arguments)
 * :func:`numpy.take_along_axis` (the axis argument must be a literal value)
+* :func:`numpy.tile` (``reps`` must be an integer or a tuple of integers)
 * :func:`numpy.transpose`
 * :func:`numpy.trapezoid` (only the 3 first arguments)
 * :func:`numpy.trapz` (only the 3 first arguments)
