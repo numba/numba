@@ -24,11 +24,11 @@ env:
   WHEELS_INDEX_URL: https://pypi.anaconda.org/numba/label/dev/simple
   WIN_ARM64_CONDA_CHANNEL: bootstrap-win-arm64-round-2-native
   PYTHON_VERSION: "3.14"
-  NUMPY_VERSION: "2.4.6"
+  NUMPY_VERSION: "2.3.0"
 
 jobs:
   win-arm64-build:
-    name: win-arm64-build-wheel (py 3.14, np 2.4.6)
+    name: win-arm64-build-wheel (py 3.14, np 2.3.0)
     runs-on: windows-11-arm
     defaults:
       run:
@@ -89,7 +89,7 @@ jobs:
           if-no-files-found: error
 
   win-arm64-test:
-    name: win-arm64-test-wheel (py 3.14, np 2.4.6)
+    name: win-arm64-test-wheel (py 3.14, np 2.3.0)
     needs: win-arm64-build
     runs-on: windows-11-arm
     defaults:
