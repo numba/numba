@@ -10,6 +10,7 @@ from numba.tests.support import (
     TestCase,
     MemoryLeakMixin,
     skip_unless_py10_or_later,
+    skip_if_win_arm64,
 )
 
 
@@ -186,6 +187,9 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
         b = cfunc(*total_args)
         self.assertEqual(a, b)
 
+    # >= 40-arg calls crash LLVM 22 AArch64 frame lowering on win-arm64
+    # (llvm/llvm-project#204060).
+    @skip_if_win_arm64
     @skip_unless_py10_or_later
     def test_small_args_small_kws(self):
         """
@@ -202,6 +206,7 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
         b = cfunc(*total_args)
         self.assertEqual(a, b)
 
+    @skip_if_win_arm64
     @skip_unless_py10_or_later
     def test_small_args_large_kws(self):
         """
@@ -218,6 +223,7 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
         b = cfunc(*total_args)
         self.assertEqual(a, b)
 
+    @skip_if_win_arm64
     @skip_unless_py10_or_later
     def test_large_args_small_kws(self):
         """
@@ -234,6 +240,7 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
         b = cfunc(*total_args)
         self.assertEqual(a, b)
 
+    @skip_if_win_arm64
     @skip_unless_py10_or_later
     def test_large_args_large_kws(self):
         """
@@ -395,6 +402,7 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
             str(raises.exception)
         )
 
+    @skip_if_win_arm64
     @skip_unless_py10_or_later
     def test_large_args_noninlined_controlflow(self):
         """
