@@ -165,12 +165,10 @@ class _SourceFileBackedLocatorMixin(object):
 
     def get_source_stamp(self):
         if getattr(sys, 'frozen', False):
-            st = os.stat(sys.executable)
-        else:
-            st = os.stat(self._py_file)
-        # We use both timestamp and size as some filesystems only have second
-        # granularity.
-        return st.st_mtime, st.st_size
+            with open(sys.executable, 'rb') as f:
+                return hashlib.sha256(f.read()).digest()
+        with open(self._py_file, 'rb') as f:
+            return hashlib.sha256(f.read()).digest()
 
     def get_disambiguator(self):
         return str(self._lineno)
@@ -356,8 +354,9 @@ class ZipCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
         return self._cache_path
 
     def get_source_stamp(self):
-        st = os.stat(self._zip_path)
-        return st.st_mtime, st.st_size
+        with zipfile.ZipFile(self._zip_path) as zf:
+            with zf.open(self._internal_path) as f:
+                return hashlib.sha256(f.read()).digest()
 
     @classmethod
     def from_function(cls, py_func, py_file):

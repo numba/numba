@@ -1,11 +1,13 @@
 import importlib
 import inspect
+import hashlib
 import multiprocessing
 import os
 import shutil
 import stat
 import subprocess
 import sys
+import time
 import traceback
 import unittest
 import warnings
@@ -583,6 +585,38 @@ class TestCache(DispatcherCacheUsecasesTest):
         # The __pycache__ is empty (otherwise the test's preconditions
         # wouldn't be met)
         self.check_pycache(0)
+
+    def test_nbi_reproducible_after_touch(self):
+        def nbi_hashes():
+            return {
+                fn: hashlib.md5(
+                    open(os.path.join(self.cache_dir, fn), "rb").read()
+                ).hexdigest()
+                for fn in self.cache_contents()
+                if fn.endswith(".nbi")
+            }
+
+        # Compile and cache
+        mod = self.import_module()
+        mod.add_usecase(2, 3)
+        h1 = nbi_hashes()
+        self.assertTrue(h1, "No .nbi files found after compilation")
+
+        # Touch source file (mtime changes, content unchanged), clear cache
+        time.sleep(1)
+        os.utime(self.modfile, None)
+        shutil.rmtree(self.cache_dir)
+
+        # Recompile — same source content, new mtime
+        mod = self.import_module()
+        mod.add_usecase(2, 3)
+        h2 = nbi_hashes()
+
+        self.assertEqual(
+            h1, h2,
+            ".nbi file differs after touch with unchanged content — "
+            "source stamp embeds mtime instead of content hash"
+        )
 
     @skip_bad_access
     @unittest.skipIf(os.name == "nt",
