@@ -555,6 +555,8 @@ The following top-level functions are supported:
 * :func:`numpy.hstack`
 * :func:`numpy.identity`
 * :func:`numpy.indices` (only the first argument)
+* :func:`numpy.insert` (only the 3 first arguments; the insertion is performed
+  on the flattened array)
 * :func:`numpy.isclose`
 * :func:`numpy.kaiser`
 * :func:`numpy.iscomplex`

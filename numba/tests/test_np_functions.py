@@ -62,6 +62,10 @@ def delete(arr, obj):
     return np.delete(arr, obj)
 
 
+def insert(arr, obj, values):
+    return np.insert(arr, obj, values)
+
+
 def diff1(a):
     return np.diff(a)
 
@@ -1051,6 +1055,78 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc([1, 2], 3)
         self.assertIn(
             'obj must be less than the len(arr)',
+            str(raises.exception),
+        )
+        # Exceptions leak references
+        self.disable_leak_check()
+
+    def test_insert(self):
+
+        def arrays():
+            # array, obj, values
+            #
+            # array-like input, scalar obj/value
+            yield [1, 2, 3, 4, 5], 2, 99
+            # scalar obj, multiple values
+            yield [1, 2, 3, 4, 5], 2, [99, 98]
+            # 1d array, scalar obj
+            yield np.arange(10), 3, 99
+            # negative obj
+            yield np.arange(10), -3, 99
+            yield np.arange(10), -1, 99
+            # append at the end
+            yield np.arange(10), 10, 99
+            # 1d array, list obj with matching list of values
+            yield np.arange(10), [2, 5, 8], [100, 200, 300]
+            # list obj, scalar value broadcast across insert points
+            yield np.arange(10), [2, 5, 8], 99
+            # repeated indices (ties keep input order)
+            yield np.arange(5), [1, 1], [10, 20]
+            # unsorted indices
+            yield np.arange(5), [4, 0, 2], [40, 0, 20]
+            # negative indices in a list
+            yield np.arange(10), [-1, -4], [11, 22]
+            # multi-dim input is flattened first (matches np.delete)
+            yield np.arange(3 * 4).reshape(3, 4), 5, 99
+
+        pyfunc = insert
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for arr, obj, values in arrays():
+            expected = pyfunc(arr, obj, values)
+            got = cfunc(arr, obj, values)
+            self.assertPreciseEqual(expected, got)
+
+    def test_insert_exceptions(self):
+        pyfunc = insert
+        cfunc = jit(nopython=True)(pyfunc)
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(2, 0, 9)
+        self.assertIn(
+            'arr must be either an Array or a Sequence',
+            str(raises.exception)
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.arange(5), 2.5, 9)
+        self.assertIn(
+            'obj should be an Integer, an Array or a Sequence',
+            str(raises.exception)
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.arange(5), [1.5, 2.5], 9)
+        self.assertIn(
+            'obj should be of Integer dtype',
+            str(raises.exception)
+        )
+
+        with self.assertRaises(IndexError) as raises:
+            cfunc(np.arange(5), 10, 9)
+        self.assertIn(
+            'index is out of bounds for the given array size',
             str(raises.exception),
         )
         # Exceptions leak references

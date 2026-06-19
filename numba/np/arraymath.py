@@ -3685,6 +3685,89 @@ def np_delete(arr, obj):
         return np_delete_scalar_impl
 
 
+@overload(np.insert)
+def np_insert(arr, obj, values, axis=None):
+    # Implementation based on NumPy:
+    # https://github.com/numpy/numpy/blob/maintenance/2.2.x/numpy/lib/_function_base_impl.py#L5417-L5587    # noqa: E501
+    # Like np.delete, this implementation operates on the flattened array;
+    # the ``axis`` argument is not currently supported.
+
+    if not isinstance(arr, (types.Array, types.Sequence)):
+        raise TypingError("arr must be either an Array or a Sequence")
+
+    if not isinstance(values, (types.Number, types.Boolean, types.Array,
+                               types.Sequence)):
+        raise TypingError("values must be a scalar, an Array or a Sequence")
+
+    if isinstance(obj, types.Integer):
+
+        def np_insert_scalar_impl(arr, obj, values, axis=None):
+            arr = np.ravel(np.asarray(arr))
+            N = arr.size
+            pos = obj
+
+            if pos < -N or pos > N:
+                raise IndexError('index is out of bounds for the given '
+                                 'array size')
+            if pos < 0:
+                pos += N
+
+            vals = np.ravel(np.asarray(values))
+            n_ins = vals.size
+
+            out = np.empty(N + n_ins, dtype=arr.dtype)
+            out[:pos] = arr[:pos]
+            out[pos:pos + n_ins] = vals
+            out[pos + n_ins:] = arr[pos:]
+            return out
+        return np_insert_scalar_impl
+
+    elif isinstance(obj, (types.Array, types.Sequence)):
+        if not isinstance(obj.dtype, types.Integer):
+            raise TypingError('obj should be of Integer dtype')
+
+        def np_insert_array_impl(arr, obj, values, axis=None):
+            arr = np.ravel(np.asarray(arr))
+            N = arr.size
+            indices = np.ravel(np.asarray(obj)).astype(np.int64)
+            n_ins = indices.size
+
+            # normalise negative indices and bounds-check
+            for i in range(n_ins):
+                if indices[i] < -N or indices[i] > N:
+                    raise IndexError('index is out of bounds for the '
+                                     'given array size')
+                if indices[i] < 0:
+                    indices[i] += N
+
+            vals = np.ravel(np.asarray(values))
+
+            # Shift each insertion index by the number of items that are
+            # inserted before it (stable sort keeps ties in input order),
+            # mirroring NumPy's algorithm.
+            order = np.argsort(indices, kind='mergesort')
+            for i in range(n_ins):
+                indices[order[i]] += i
+
+            out = np.empty(N + n_ins, dtype=arr.dtype)
+            mask = np.ones(N + n_ins, dtype=np.bool_)
+            for i in range(n_ins):
+                mask[indices[i]] = False
+            out[mask] = arr
+
+            # A single scalar value is broadcast across all insert points.
+            for i in range(n_ins):
+                if vals.size == 1:
+                    out[indices[i]] = vals[0]
+                else:
+                    out[indices[i]] = vals[i]
+            return out
+        return np_insert_array_impl
+
+    else:
+        raise TypingError('obj should be an Integer, an Array or a Sequence')
+
+
 @overload(np.diff)
 def np_diff_impl(a, n=1):
     if not isinstance(a, types.Array) or a.ndim == 0:
