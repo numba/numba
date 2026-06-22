@@ -281,58 +281,39 @@ def get_accumulator(dtype, value):
 
 def get_spliced_tuple(context, builder, tuplety, tupleval, axis):
     # Return a tuple with the same values as tupleval but with the
-    # axis dimension removed. Axis is a runtime value.
+    # axis dimension(s) removed. Axis is a runtime value.
 
     ll_intp = context.get_value_type(types.intp)
 
-    # Wraparound for negative axis, convert to positive axis
-    axis = builder.add(
-        axis,
-        builder.select(
-            builder.icmp_signed('<', axis, Constant(ll_intp, 0)),
-            Constant(ll_intp, tuplety.count), Constant(ll_intp, 0)
-        )
-    )
-    # Check if axis is valid for the given array
-    is_not_valid = builder.or_(
-        builder.icmp_signed('>=', axis, Constant(ll_intp, tuplety.count)),
-        builder.icmp_signed('<', axis, Constant(ll_intp, 0))
-    )
-    with builder.if_then(is_not_valid, likely=True):
-        context.call_conv.return_user_exc(
-            builder, ValueError,
-            ("Axis out of bounds.",))
+    if not isinstance(axis, (list, tuple)):
+        axis = [axis]
+    mask = get_mask(context, builder, tuplety.count, axis)
 
     # Create an empty tuple to hold the result, the resulting tuple
     # has one less dimension than the original tuple, initilize it with zeros.
 
     # Create resulting tuple type
-    result_tuple_ty = types.UniTuple(types.intp, tuplety.count - 1)
+    result_tuple_ty = types.UniTuple(types.intp, tuplety.count - len(axis))
     result_tuple = cgutils.get_null_value(
         context.get_value_type(result_tuple_ty)
     )
     stack = cgutils.alloca_once(builder, result_tuple.type)
     builder.store(result_tuple, stack)
 
+    idx = cgutils.alloca_once(builder, ll_intp)
+    zero = Constant(ll_intp, 0)
+    builder.store(zero, idx)
+
     # Loop through the original tuple and copy values to the resulting tuple
     # skipping the axis dimension.
     for i in range(tuplety.count):
-        idx = Constant(ll_intp, i)
-        # Get the value at the current index in the original tuple.
-        with builder.if_then(builder.icmp_signed('<', idx, axis)):
-            val = builder.extract_value(tupleval, i)
-            # Unsafe load on unchecked bounds.  Poison value maybe returned.
-            offptr = builder.gep(stack, [idx.type(0), idx], inbounds=True)
-            builder.store(val, offptr)
-        with builder.if_then(builder.icmp_signed('>', idx, axis)):
-            idx = Constant(ll_intp, i)
-            val = builder.extract_value(tupleval, i)
-            res_idx = builder.sub(idx, Constant(ll_intp, 1))
-            # Unsafe load on unchecked bounds.  Poison value maybe returned.
-            offptr = builder.gep(
-                stack, [res_idx.type(0), res_idx], inbounds=True
-            )
-            builder.store(val, offptr)
+        with builder.if_then(builder.extract_value(mask, i)):
+            val_i = builder.extract_value(tupleval, i)
+            offptr = builder.gep(stack, [zero.type(0), builder.load(idx)],
+                                 inbounds=True)
+            builder.store(val_i, offptr)
+            builder.store(builder.add(builder.load(idx), Constant(ll_intp, 1)),
+                          idx)
     return builder.load(stack)
 
 
@@ -396,6 +377,12 @@ def get_mask(context, builder, mask_length, axis, inverted=False):
     stack = cgutils.alloca_once(builder, result_tuple.type)
     builder.store(result_tuple, stack)
 
+    for i in range(mask_length):
+        idx = Constant(ll_intp, i)
+        val = Constant(ll_bool, 1)
+        offptr = builder.gep(stack, [idx.type(0), idx], inbounds=True)
+        builder.store(val, offptr)
+
     for _axis in axis:
         if _axis is not None:
             # Wraparound for negative axis, convert to positive axis
@@ -420,13 +407,21 @@ def get_mask(context, builder, mask_length, axis, inverted=False):
                     ("Axis out of bounds.",))
         for i in range(mask_length):
             idx = Constant(ll_intp, i)
+            offptr = builder.gep(stack, [idx.type(0), idx], inbounds=True)
+
             if _axis is not None:
                 val = builder.icmp_signed('!=', idx, _axis)
             else:
                 val = Constant(ll_bool, 1)
-            if inverted:
-                val = builder.not_(val)
+
+            val = builder.and_(builder.load(offptr), val)
+            builder.store(val, offptr)
+
+    if inverted:
+        for i in range(mask_length):
+            idx = Constant(ll_intp, i)
             offptr = builder.gep(stack, [idx.type(0), idx], inbounds=True)
+            val = builder.not_(builder.load(offptr))
             builder.store(val, offptr)
 
     return builder.load(stack)
@@ -499,9 +494,6 @@ def _numpy_sum(typingctx, aryty, axisty, dtype):
 
 @intrinsic
 def _numpy_sum_axis(typingctx, aryty, axisty, dtype):
-    assert isinstance(axisty, types.Integer), \
-        "Only integer axis supported for now"
-
     if is_nonelike(dtype):
         ret_dtype = aryty.dtype
         if ret_dtype == types.bool_:
@@ -518,13 +510,16 @@ def _numpy_sum_axis(typingctx, aryty, axisty, dtype):
     else:
         ret_dtype = dtype.dtype
 
-    ret = types.Array(ret_dtype, aryty.ndim - 1, layout='C')
+    axis_length = axisty.count if isinstance(axisty, types.UniTuple) else 1
+    ret = types.Array(ret_dtype, aryty.ndim - axis_length, layout='C')
     sig = ret(aryty, axisty, dtype)
 
     def codegen(context, builder, sig, args):
         ary, axis, _ = args
 
         ary = make_array(aryty)(context, builder, ary)
+        if isinstance(axisty, types.UniTuple):
+            axis = cgutils.unpack_tuple(builder, axis)
 
         # Res shape will be a tuple one axis less than
         # ndim and need appropriate shape calculations.
@@ -588,7 +583,8 @@ def _numpy_sum_axis(typingctx, aryty, axisty, dtype):
 @overload_method(types.Array, "sum")
 def array_sum(a, axis=None, dtype=None):
     if isinstance(a, types.Array):
-        if is_nonelike(axis) or a.ndim == 1:
+        axis_length = axis.count if isinstance(axis, types.UniTuple) else 1
+        if is_nonelike(axis) or a.ndim == axis_length:
             def array_sum_impl(a, axis=None, dtype=None):
                 return _numpy_sum(a, axis, dtype)
         else:
