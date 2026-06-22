@@ -766,10 +766,9 @@ def _numpy_cumsum_axis(typingctx, aryty, axisty, dtype):
         acc_shape = get_spliced_tuple(
             context, builder, ary.shape.type, ary.shape, axis
         )
+        acc_type = types.Array(ret_dtype, aryty.ndim - 1, layout='C')
         acc = _empty_nd_impl(
-            context, builder, types.Array(
-                ret_dtype, aryty.ndim - 1, layout='C'
-            ),
+            context, builder, acc_type,
             cgutils.unpack_tuple(builder, acc_shape)
         )
         cgutils.memset(
@@ -816,6 +815,8 @@ def _numpy_cumsum_axis(typingctx, aryty, axisty, dtype):
                 )
                 builder.store(res_val, acc_ptr)
             builder.store(builder.load(acc_ptr), res_ptr)
+
+        context.nrt.decref(builder, acc_type, acc._getvalue())
 
         return impl_ret_new_ref(
             context, builder, sig.return_type, res._getvalue()
