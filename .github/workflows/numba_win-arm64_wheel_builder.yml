@@ -89,7 +89,7 @@ jobs:
           if-no-files-found: error
 
   win-arm64-test:
-    name: win-arm64-test-wheel (py 3.14, np 2.3.0)
+    name: win-arm64-test-wheel (py 3.14, np 2.3.5)
     needs: win-arm64-build
     runs-on: windows-11-arm
     defaults:
