@@ -3,7 +3,7 @@ import numpy as np
 
 from numba.tests.support import (TestCase, MemoryLeakMixin,
                                  skip_parfors_unsupported, captured_stdout,
-                                 skip_if_win_arm64)
+                                 skip_win_arm64_40args_problem)
 from numba import njit, typed, literal_unroll, prange
 from numba.core import types, errors, ir
 from numba.testing import unittest
@@ -581,7 +581,7 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
 
     # >= 40-arg calls crash LLVM 22 AArch64 frame lowering on win-arm64
     # (llvm/llvm-project#204060).
-    @skip_if_win_arm64
+    @skip_win_arm64_40args_problem
     def test_07(self):
         # A mix bag of stuff as an arg to a function that unifies as `intp`.
         @njit
@@ -805,7 +805,9 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
 
         self.assertEqual(foo(), foo.py_func())
 
-    @skip_if_win_arm64
+    # >= 40-arg calls crash LLVM 22 AArch64 frame lowering on win-arm64
+    # (llvm/llvm-project#204060).
+    @skip_win_arm64_40args_problem
     def test_15(self):
         # mixed tuple unroll cannot return derivative of the induction var
 
