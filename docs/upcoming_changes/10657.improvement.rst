@@ -1,0 +1,6 @@
+``np.cumsum`` now supports dynamic ``axis`` argument.
+-----------------------------------------------------
+
+The ``np.cumsum`` function now supports a dynamic ``axis`` argument,
+allowing users to specify the axis along which to perform the
+operation at runtime. 
