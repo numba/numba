@@ -117,7 +117,7 @@ def make_function_type(cfnptr):
     # platforms, explicit conversion to a int64 should match.
     if cret == types.voidptr:
         cret = types.uintp
-    if (sys.platform == 'win32' and platform.machine() != 'ARM64'
+    if (sys.platform == 'win32' and platform.machine() == 'AMD64'
             and not cfnptr._flags_ & ctypes._FUNCFLAG_CDECL):
         # 'stdcall' calling convention under x86_64 Windows.
         cconv = 'x86_stdcallcc'
