@@ -555,7 +555,7 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(
             got[0], expected[0], prec='double', ulps=ulps,
         )
-        self .assertPreciseEqual(
+        self.assertPreciseEqual(
             got[1], expected[1], prec='double', ulps=ulps,
         )
         [lifted] = foo.overloads[foo.signatures[0]].lifted
