@@ -65,7 +65,7 @@ jobs:
           name: llvmlite-win-arm64-py${{ env.PYTHON_VERSION }}
           path: llvmlite_conda
           run-id: ${{ inputs.llvmlite_run_id }}
-          repository: swap357/llvmlite
+          repository: numba/llvmlite
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Numba conda package
@@ -87,7 +87,7 @@ jobs:
             extra_args=()
           fi
 
-          conda-build --debug -c $LLVMLITE_CHANNEL "${extra_args[@]}" \
+          conda-build -c $LLVMLITE_CHANNEL "${extra_args[@]}" \
             -c "${WIN_ARM64_CONDA_CHANNEL}" -c m2-winarm64 -c defaults \
             --python=${PYTHON_VERSION} \
             --numpy=${NUMPY_VERSION} \
@@ -147,7 +147,7 @@ jobs:
           name: llvmlite-win-arm64-py${{ env.PYTHON_VERSION }}
           path: llvmlite_conda
           run-id: ${{ inputs.llvmlite_run_id }}
-          repository: swap357/llvmlite
+          repository: numba/llvmlite
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download numba artifact
