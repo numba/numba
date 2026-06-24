@@ -5,7 +5,7 @@ import numpy as np
 from numba import jit, njit, typeof, types
 from numba.np.numpy_support import numpy_version
 from numba.tests.support import (TestCase, MemoryLeakMixin, tag,
-                                 skip_if_numpy_2, skip_win_arm64_40args_problem)
+                                 skip_if_numpy_2, skip_if_win_arm64)
 import unittest
 
 
@@ -919,24 +919,24 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     # tuple input crashes LLVM 22 AArch64 frame lowering on win-arm64
     # (llvm/llvm-project#204060); extracted from check_percentile_and_quantile
     # so it can be skipped on that target.
-    @skip_win_arm64_40args_problem
+    @skip_if_win_arm64
     def test_percentile_tuple_input(self):
         pyfunc = array_percentile_global
         self.check_percentile_and_quantile_tuple_input(pyfunc,
                                                         q_upper_bound=100)
 
-    @skip_win_arm64_40args_problem
+    @skip_if_win_arm64
     def test_nanpercentile_tuple_input(self):
         pyfunc = array_nanpercentile_global
         self.check_percentile_and_quantile_tuple_input(pyfunc,
                                                         q_upper_bound=100)
 
-    @skip_win_arm64_40args_problem
+    @skip_if_win_arm64
     def test_quantile_tuple_input(self):
         pyfunc = array_quantile_global
         self.check_percentile_and_quantile_tuple_input(pyfunc, q_upper_bound=1)
 
-    @skip_win_arm64_40args_problem
+    @skip_if_win_arm64
     def test_nanquantile_tuple_input(self):
         pyfunc = array_nanquantile_global
         self.check_percentile_and_quantile_tuple_input(pyfunc, q_upper_bound=1)

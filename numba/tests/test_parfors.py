@@ -48,7 +48,7 @@ from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                                  needs_lapack, disabled_test, skip_unless_scipy,
                                  needs_subprocess,
                                  skip_ppc64le_invalid_ctr_loop,
-                                 skip_win_arm64_40args_problem)
+                                 skip_if_win_arm64)
 from numba.core.extending import register_jitable
 from numba.core.bytecode import _fix_LOAD_GLOBAL_arg
 from numba.core import utils
@@ -1325,7 +1325,7 @@ class TestParfors(TestParforsBase):
 
     # crashes LLVM 22 AArch64 frame lowering on win-arm64
     # (llvm/llvm-project#204060).
-    @skip_win_arm64_40args_problem
+    @skip_if_win_arm64
     def test_arraymap(self):
         def test_impl(a, x, y):
             return a * x + y
@@ -1609,7 +1609,7 @@ class TestParfors(TestParforsBase):
 
     # crashes LLVM 22 AArch64 frame lowering on win-arm64
     # (llvm/llvm-project#204060).
-    @skip_win_arm64_40args_problem
+    @skip_if_win_arm64
     @needs_blas
     def test_parfor_generate_fuse(self):
         # issue #2857
@@ -1967,7 +1967,7 @@ class TestParfors(TestParforsBase):
 
     # crashes LLVM 22 AArch64 frame lowering on win-arm64
     # (llvm/llvm-project#204060).
-    @skip_win_arm64_40args_problem
+    @skip_if_win_arm64
     def test_high_dimension1(self):
         # issue6749
         def test_impl(x):

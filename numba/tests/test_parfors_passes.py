@@ -21,7 +21,7 @@ from numba.core import (
 )
 from numba.core.registry import cpu_target
 from numba.tests.support import (TestCase, is_parfors_unsupported,
-                                 skip_win_arm64_40args_problem)
+                                 skip_if_win_arm64)
 
 
 class MyPipeline(object):
@@ -310,7 +310,7 @@ class TestConvertNumpyPass(BaseTest):
 
     # crashes LLVM 22 AArch64 frame lowering on win-arm64
     # (llvm/llvm-project#204060).
-    @skip_win_arm64_40args_problem
+    @skip_if_win_arm64
     def test_numpy_arrayexpr_boardcast(self):
         def test_impl(a, b):
             return a + b + np.array(1)

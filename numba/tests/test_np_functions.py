@@ -22,7 +22,7 @@ from numba.tests.support import (TestCase, MemoryLeakMixin,
                                  needs_blas, run_in_subprocess,
                                  skip_if_numpy_2, IS_NUMPY_2,
                                  IS_MACOS_ARM64, IS_WIN_ARM64,
-                                 skip_win_arm64_40args_problem,
+                                 skip_if_win_arm64,
                                  REDUCED_TESTING,
                                  skip_if_reduced_testing)
 import unittest
@@ -2784,7 +2784,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     # large tuple input crashes LLVM 22 AArch64 frame lowering on win-arm64
     # (llvm/llvm-project#204060)
-    @skip_win_arm64_40args_problem
+    @skip_if_win_arm64
     def test_partition_tuple_input(self):
         self._check_partition_tuple_input(partition)
 
@@ -2909,7 +2909,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     # large tuple input crashes LLVM 22 AArch64 frame lowering on win-arm64
     # (llvm/llvm-project#204060)
-    @skip_win_arm64_40args_problem
+    @skip_if_win_arm64
     def test_argpartition_tuple_input(self):
         self._check_argpartition_tuple_input(argpartition)
 
@@ -3972,11 +3972,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     # large tuple input crashes LLVM 22 AArch64 frame lowering on win-arm64
     # (llvm/llvm-project#204060); extracted from _check_split.
-    @skip_win_arm64_40args_problem
+    @skip_if_win_arm64
     def test_split_tuple_input(self):
         self._check_split_tuple_input(split)
 
-    @skip_win_arm64_40args_problem
+    @skip_if_win_arm64
     def test_array_split_tuple_input(self):
         self._check_split_tuple_input(array_split)
 
