@@ -110,11 +110,11 @@ export NUMBA_CPU_NAME=generic
 export NUMBA_CPU_FEATURES=''
 
 # Now run tests based on the changes identified via git
-NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -g -m $TEST_NPROCS -- numba.tests
+# NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -v -g -m $TEST_NPROCS -- numba.tests
 
 # List the tests found
-echo "INFO: All discovered tests:"
-python -m numba.runtests -l
+# echo "INFO: All discovered tests:"
+# python -m numba.runtests -l
 
 # Now run the Numba test suite with sharding
 # Note that coverage is run from the checkout dir to match the "source"
