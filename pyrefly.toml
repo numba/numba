@@ -11,7 +11,6 @@ enabled-ignores = ["pyrefly"]
 check-unannotated-defs = false
 
 [errors]
-implicit-abstract-class = "error"
 not-required-key-access = "error"
 open-unpacking = "error"
 untyped-import = "error"
