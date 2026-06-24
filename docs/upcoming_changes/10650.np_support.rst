@@ -1,1 +1,4 @@
+``np.tile`` is now supported in nopython mode
+---------------------------------------------
+
 ``np.tile`` is now supported in nopython mode.
