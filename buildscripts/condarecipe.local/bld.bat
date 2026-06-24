@@ -7,9 +7,14 @@ if not exist "%VSINSTALLDIR%" (
   echo "Could not find VS 2022 or VS 2026"
   exit /B 1
 )
+
 REM Pin MSVC v14.44 (v143) to keep the vs2015_runtime >=14.44 run-dependency
 REM pins valid; VS2026 would otherwise default to its native v14.5x toolset.
-call "%VSINSTALLDIR%VC\Auxiliary\Build\vcvarsall.bat" x64 -vcvars_ver=14.44
+if "%ARCH%"=="arm64" (
+  call "%VSINSTALLDIR%VC\Auxiliary\Build\vcvarsall.bat" ARM64 -vcvars_ver=14.44
+) else (
+  call "%VSINSTALLDIR%VC\Auxiliary\Build\vcvarsall.bat" x64 -vcvars_ver=14.44
+)
 
 %PYTHON% setup.py build install --single-version-externally-managed --record=record.txt
 

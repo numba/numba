@@ -11,7 +11,11 @@ from numba import njit, stencil
 from numba.core import types, registry
 from numba.core.compiler import compile_extra, Flags
 from numba.core.cpu import ParallelOptions
-from numba.tests.support import skip_parfors_unsupported, _32bit
+from numba.tests.support import (
+    skip_parfors_unsupported,
+    skip_win_arm64_40args_problem,
+    _32bit,
+)
 from numba.core.errors import LoweringError, TypingError, NumbaValueError
 import unittest
 
@@ -359,6 +363,9 @@ class TestStencil(TestStencilBase):
         self.check(test_impl_seq, test_seq, n)
 
     @skip_unsupported
+    # crashes LLVM 22 AArch64 frame lowering on win-arm64
+    # (llvm/llvm-project#204060).
+    @skip_win_arm64_40args_problem
     def test_stencil_mixed_types(self):
         def test_impl_seq(n):
             A = np.arange(n ** 2).reshape((n, n))
@@ -1910,6 +1917,9 @@ class TestManyStencils(TestStencilBase):
         self.check_exceptions(kernel, a, b, expected_exception=[NumbaValueError,
                                                                 LoweringError])
 
+    # crashes LLVM 22 AArch64 frame lowering on win-arm64
+    # (llvm/llvm-project#204060).
+    @skip_win_arm64_40args_problem
     def test_basic47(self):
         """3 args"""
         def kernel(a, b, c):
@@ -2003,6 +2013,9 @@ class TestManyStencils(TestStencilBase):
                               options={'standard_indexing': ['a', 'b']},
                               expected_exception=[ValueError, NumbaValueError])
 
+    # crashes LLVM 22 AArch64 frame lowering on win-arm64
+    # (llvm/llvm-project#204060).
+    @skip_win_arm64_40args_problem
     def test_basic52(self):
         """3 args, standard_indexing on middle arg """
         def kernel(a, b, c):

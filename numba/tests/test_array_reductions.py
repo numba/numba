@@ -4,7 +4,8 @@ import numpy as np
 
 from numba import jit, njit, typeof, types
 from numba.np.numpy_support import numpy_version
-from numba.tests.support import TestCase, MemoryLeakMixin, tag, skip_if_numpy_2
+from numba.tests.support import (TestCase, MemoryLeakMixin, tag,
+                                 skip_if_numpy_2, skip_win_arm64_40args_problem)
 import unittest
 
 
@@ -739,7 +740,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         a = a.flatten().tolist()
         q = q.flatten().tolist()
         check(a, q)
-        check(tuple(a), tuple(q))
 
         a = self.random.choice([1, 2, 3, 4], 10)
         q = np.linspace(0, q_upper_bound, 5)
@@ -772,6 +772,27 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         a = np.array([2, 3, 4, 1])
         cfunc(a, [q_upper_bound / 2])
         np.testing.assert_equal(a, np.array([2, 3, 4, 1]))
+
+    def check_percentile_and_quantile_tuple_input(self, pyfunc, q_upper_bound):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(a, q, abs_tol=1e-12):
+            expected = pyfunc(a, q)
+            got = cfunc(a, q)
+            # NOTE: inf/nan is not checked, seems to be susceptible to upstream
+            # changes
+            finite = np.isfinite(expected)
+            if np.all(finite):
+                self.assertPreciseEqual(got, expected, abs_tol=abs_tol)
+            else:
+                self.assertPreciseEqual(got[finite], expected[finite],
+                                        abs_tol=abs_tol)
+
+        a = self.random.randn(27).reshape(3, 3, 3)
+        q = np.linspace(0, q_upper_bound, 14)[::-1]
+        a = a.flatten().tolist()
+        q = q.flatten().tolist()
+        check(tuple(a), tuple(q))
 
     def check_percentile_edge_cases(self, pyfunc, q_upper_bound=100):
         cfunc = jit(nopython=True)(pyfunc)
@@ -894,6 +915,31 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_percentile_and_quantile(pyfunc, q_upper_bound=1)
         self.check_percentile_edge_cases(pyfunc, q_upper_bound=1)
         self.check_quantile_exceptions(pyfunc)
+
+    # tuple input crashes LLVM 22 AArch64 frame lowering on win-arm64
+    # (llvm/llvm-project#204060); extracted from check_percentile_and_quantile
+    # so it can be skipped on that target.
+    @skip_win_arm64_40args_problem
+    def test_percentile_tuple_input(self):
+        pyfunc = array_percentile_global
+        self.check_percentile_and_quantile_tuple_input(pyfunc,
+                                                        q_upper_bound=100)
+
+    @skip_win_arm64_40args_problem
+    def test_nanpercentile_tuple_input(self):
+        pyfunc = array_nanpercentile_global
+        self.check_percentile_and_quantile_tuple_input(pyfunc,
+                                                        q_upper_bound=100)
+
+    @skip_win_arm64_40args_problem
+    def test_quantile_tuple_input(self):
+        pyfunc = array_quantile_global
+        self.check_percentile_and_quantile_tuple_input(pyfunc, q_upper_bound=1)
+
+    @skip_win_arm64_40args_problem
+    def test_nanquantile_tuple_input(self):
+        pyfunc = array_nanquantile_global
+        self.check_percentile_and_quantile_tuple_input(pyfunc, q_upper_bound=1)
 
     def test_nanmedian_basic(self):
         pyfunc = array_nanmedian_global
