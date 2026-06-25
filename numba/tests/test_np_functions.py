@@ -22,7 +22,6 @@ from numba.tests.support import (TestCase, MemoryLeakMixin,
                                  needs_blas, run_in_subprocess,
                                  skip_if_numpy_2, IS_NUMPY_2,
                                  IS_MACOS_ARM64, IS_WIN_ARM64,
-                                 skip_win_arm64_40args_problem,
                                  REDUCED_TESTING,
                                  skip_if_reduced_testing)
 import unittest
@@ -2657,16 +2656,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for arr in a, (), np.array([]):
             check(arr)
 
-    def _check_partition_tuple_input(self, pyfunc):
-        cfunc = jit(nopython=True)(pyfunc)
-        d = np.arange(47)[::-1]
-        a = tuple(d.tolist())
-        self.assertEqual(cfunc(a, 6)[6], 6)
-        self.assertEqual(cfunc(a, 16)[16], 16)
-        self.assertPreciseEqual(cfunc(a, -6), cfunc(a, 41))
-        self.assertPreciseEqual(cfunc(a, -16), cfunc(a, 31))
-        self.partition_sanity_check(pyfunc, cfunc, d, -16)
-
     def test_partition_basic(self):
         # inspired by the test of the same name in:
         # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py    # noqa: E501
@@ -2711,9 +2700,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.assertEqual(cfunc(d, k)[k], k)
             self.partition_sanity_check(pyfunc, cfunc, d, k)
 
-        # rsorted, with input flavours: array and list
+        # rsorted, with input flavours: array, list and tuple
         d = np.arange(47)[::-1]
-        for a in d, d.tolist():
+        for a in d, d.tolist(), tuple(d.tolist()):
             self.assertEqual(cfunc(a, 6)[6], 6)
             self.assertEqual(cfunc(a, 16)[16], 16)
             self.assertPreciseEqual(cfunc(a, -6), cfunc(a, 41))
@@ -2782,12 +2771,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 # sanity check
                 self.partition_sanity_check(pyfunc, cfunc, d, i)
 
-    # large tuple input crashes LLVM 22 AArch64 frame lowering on win-arm64
-    # (llvm/llvm-project#204060)
-    @skip_win_arm64_40args_problem
-    def test_partition_tuple_input(self):
-        self._check_partition_tuple_input(partition)
-
     def test_argpartition_basic(self):
         # inspired by the test of the same name in:
         # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py    # noqa: E501
@@ -2834,9 +2817,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.assertEqual(cfunc(d, k)[k], k)
             self.partition_sanity_check(pyfunc, cfunc, d, k)
 
-        # rsorted, with input flavours: array and list
+        # rsorted, with input flavours: array, list and tuple
         d = np.arange(47)[::-1]
-        for a in d, d.tolist():
+        for a in d, d.tolist(), tuple(d.tolist()):
             self.assertEqual(cfunc(a, 6)[6], 40)
             self.assertEqual(cfunc(a, 16)[16], 30)
             self.assertPreciseEqual(cfunc(a, -6), cfunc(a, 41))
@@ -2896,22 +2879,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 np.testing.assert_array_less(p[i], p[i + 1:])
                 # sanity check
                 self.argpartition_sanity_check(pyfunc, cfunc, d, i)
-
-    def _check_argpartition_tuple_input(self, pyfunc):
-        cfunc = jit(nopython=True)(pyfunc)
-        d = np.arange(47)[::-1]
-        a = tuple(d.tolist())
-        self.assertEqual(cfunc(a, 6)[6], 40)
-        self.assertEqual(cfunc(a, 16)[16], 30)
-        self.assertPreciseEqual(cfunc(a, -6), cfunc(a, 41))
-        self.assertPreciseEqual(cfunc(a, -16), cfunc(a, 31))
-        self.argpartition_sanity_check(pyfunc, cfunc, d, -16)
-
-    # large tuple input crashes LLVM 22 AArch64 frame lowering on win-arm64
-    # (llvm/llvm-project#204060)
-    @skip_win_arm64_40args_problem
-    def test_argpartition_tuple_input(self):
-        self._check_argpartition_tuple_input(argpartition)
 
     def assert_partitioned(self, pyfunc, cfunc, d, kth):
         prev = 0
@@ -3878,8 +3845,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield a, 2, 0
             yield a, [1, 4, 72]
             yield list(a), [1, 4, 72]
+            yield tuple(a), [1, 4, 72]
             yield a, [1, 4, 72], 0
             yield list(a), [1, 4, 72], 0
+            yield tuple(a), [1, 4, 72], 0
 
             a = np.arange(64).reshape(4, 4, 4)
             yield a, 2
@@ -3923,16 +3892,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
             np.testing.assert_equal(expected, list(got))
 
-    def _check_split_tuple_input(self, func):
-        pyfunc = func
-        cfunc = jit(nopython=True)(pyfunc)
-        a = np.arange(100)
-        for args in ((tuple(a), [1, 4, 72]),
-                     (tuple(a), [1, 4, 72], 0)):
-            expected = pyfunc(*args)
-            got = cfunc(*args)
-            np.testing.assert_equal(expected, list(got))
-
     def _check_array_split(self, func):
         # array_split specific checks, mainly dealing with `int`s
         pyfunc = func
@@ -3969,16 +3928,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             njit(split)(np.ones(5), [3], axis=-3)
         self.assertIn("np.split: Argument axis out of bounds",
                       str(raises.exception))
-
-    # large tuple input crashes LLVM 22 AArch64 frame lowering on win-arm64
-    # (llvm/llvm-project#204060); extracted from _check_split.
-    @skip_win_arm64_40args_problem
-    def test_split_tuple_input(self):
-        self._check_split_tuple_input(split)
-
-    @skip_win_arm64_40args_problem
-    def test_array_split_tuple_input(self):
-        self._check_split_tuple_input(array_split)
 
     def test_vhdsplit_basic(self):
         # split and array_split have more comprehensive tests of splitting.
