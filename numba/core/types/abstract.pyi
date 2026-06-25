@@ -3,7 +3,6 @@ import functools
 from collections.abc import Hashable as _CanHash, Mapping, Sequence as _Sequence
 from typing import (
     Any,
-    Final,
     Literal as _Literal,
     Protocol,
     TypeAlias,
@@ -45,7 +44,7 @@ class Type(metaclass=_TypeMetaclass):
     mutable: ClassVar[bool] = False
     reflected: ClassVar[bool] = False
 
-    name: Final[str]
+    name: str
 
     def __init__(self, name: str) -> None: ...
 
@@ -59,7 +58,7 @@ class Type(metaclass=_TypeMetaclass):
 
     #
     def __getitem__(
-        self, args: _SpecSlice | tuple[_SpecSlice, ...] | list[_SpecSlice]
+        self, args: _SpecSlice | tuple[_SpecSlice, ...] | list[_SpecSlice], /
     ) -> Array: ...
 
     #
@@ -81,7 +80,7 @@ class Type(metaclass=_TypeMetaclass):
         typingctx: context.Context,
         other: Type,
     ) -> castgraph.Conversion | None: ...
-    def cast_python_value(self, args: Never) -> Any: ...
+    def cast_python_value(self, args: Never, /) -> Any: ...
 
     #
     def is_precise(self) -> bool: ...
@@ -93,6 +92,7 @@ class Dummy(Type): ...
 class Hashable(Type): ...
 
 class Number(Hashable):
+    @override
     @overload
     def unify(self, typingctx: context.Context, other: Number) -> Number: ...
     @overload
@@ -130,6 +130,7 @@ class IteratorType(IterableType):
     @abc.abstractmethod
     def yield_type(self) -> Type: ...
     @property
+    @override
     def iterator_type(self) -> Self: ...
 
 class Container(Sized, IterableType): ...

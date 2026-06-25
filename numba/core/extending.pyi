@@ -169,10 +169,11 @@ class _Intrinsic(ReduceMixin, Generic[_CallableT_co]):
 
     #
     def __deepcopy__(self, memo: Unused) -> Self: ...
+    @override
     def _reduce_states(self) -> dict[str, typing.Any]: ...
     @classmethod
     @override
-    def _rebuild(  # type:ignore[override]
+    def _rebuild(  # type:ignore[override]  # pyrefly:ignore[bad-override]
         cls, uuid: str, name: str, defn: _CallableT
     ) -> _Intrinsic[_CallableT]: ...
 

@@ -262,8 +262,7 @@ Coding style and conventions
 ''''''''''''''''''''''''''''
 
 Read :doc:`coding guidelines <coding_guidelines>` to understand the coding style
-and convention expected by code reviewers. 
-
+and convention expected by code reviewers.
 
 Release Notes
 '''''''''''''

@@ -21,6 +21,7 @@ from typing_extensions import (
     TypeVar,
     TypedDict,
     Unpack,
+    override,
 )
 from _typeshed import Incomplete, SupportsWrite
 
@@ -58,6 +59,7 @@ class _CFGKwargs(TypedDict, total=False):
 @type_check_only
 class _DisasmCFG(Protocol):
     def _repr_svg_(self) -> str: ...
+    @override
     def __repr__(self) -> str: ...
 
 ###
@@ -227,6 +229,7 @@ class Dispatcher(_DispatcherBase[_FuncT_co], Generic[_FuncT_co], metaclass=abc.A
         targetoptions: dict[str, Any] | None = None,
         pipeline_class: type[compiler.CompilerBase] = compiler.Compiler,
     ) -> None: ...
+    @override
     def __reduce__(self) -> tuple[Any, Any]: ...
     def dump(self, tab: str = "") -> None: ...
 
