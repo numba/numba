@@ -6,7 +6,7 @@ import subprocess
 import sys
 import tempfile
 import textwrap
-from unittest import skip
+from unittest import mock
 from ctypes import *
 
 import numpy as np
@@ -14,10 +14,11 @@ import numpy as np
 import llvmlite.binding as ll
 
 from numba.core import utils
-from numba.tests.support import (TestCase, tag, import_dynamic, temp_directory,
-                                 has_blas, needs_setuptools, skip_if_py313plus_on_windows,
+from numba.tests.support import (TestCase, import_dynamic, temp_directory, has_blas,
+                                 needs_setuptools, skip_if_py313plus_on_windows,
                                  skip_if_linux_aarch64, skip_if_freethreading,
                                  skip_if_windows)
+from numba import cext
 
 import unittest
 
@@ -56,6 +57,22 @@ class TestCompilerChecks(TestCase):
         if is_running_conda_build:
             if os.environ.get('VSINSTALLDIR', None) is not None:
                 self.assertTrue(external_compiler_works())
+
+
+class TestExtensionLibs(TestCase):
+
+    def test_get_extension_libs_is_sorted(self):
+        fake_listing = ['setobject.c', 'listobject.c', 'utils.c',
+                        'dictobject.c', 'README.txt']
+        base = cext.get_path()
+        with mock.patch('numba.cext.os.listdir', return_value=fake_listing):
+            libs = cext.get_extension_libs()
+
+        expected = sorted(
+            os.path.join(base, fn) for fn in fake_listing if fn.endswith('.c')
+        )
+        self.assertEqual(libs, expected)
+        self.assertEqual(libs, sorted(libs))
 
 
 @skip_if_freethreading
