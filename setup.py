@@ -384,7 +384,6 @@ build_requires = ['numpy >={},<{}'.format(min_numpy_build_version,
                                           max_numpy_run_version)]
 install_requires = [
     'llvmlite >={},<{}'.format(min_llvmlite_version, max_llvmlite_version),
-    'numpy >={}'.format(min_numpy_run_version),
     'numpy >={},<{}'.format(min_numpy_run_version, max_numpy_run_version),
 ]
 
