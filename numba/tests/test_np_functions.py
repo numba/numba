@@ -1086,6 +1086,14 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.arange(5), [4, 0, 2], [40, 0, 20]
             # negative indices in a list
             yield np.arange(10), [-1, -4], [11, 22]
+            # single-element obj list behaves like a scalar obj
+            yield np.arange(5), [2], [98, 99]
+            # float dtype arrays, parity with NumPy
+            yield np.array([1.5, 2.5, 3.5]), 1, 9.9
+            yield np.array([1.5, 2.5, 3.5]), [0, 2], [7.1, 8.2]
+            # boolean dtype arrays, parity with NumPy
+            yield np.array([True, False, True]), 1, False
+            yield np.array([True, False, True]), [0, 2], [False, True]
             # multi-dim input is flattened first (matches np.delete)
             yield np.arange(3 * 4).reshape(3, 4), 5, 99
 
@@ -1127,6 +1135,34 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc(np.arange(5), 10, 9)
         self.assertIn(
             'index is out of bounds for the given array size',
+            str(raises.exception),
+        )
+
+        # more values than insertion indices raises, matching NumPy
+        with self.assertRaises(ValueError) as raises:
+            cfunc(np.arange(5), [1, 2], [6, 7, 8])
+        self.assertIn(
+            'shape mismatch',
+            str(raises.exception),
+        )
+
+        # fewer values than insertion indices also raises
+        with self.assertRaises(ValueError) as raises:
+            cfunc(np.arange(5), [1, 2, 3], [6, 7])
+        self.assertIn(
+            'shape mismatch',
+            str(raises.exception),
+        )
+
+        # a non-None axis is not supported
+        @jit(nopython=True)
+        def insert_with_axis(arr, obj, values, axis):
+            return np.insert(arr, obj, values, axis)
+
+        with self.assertRaises(TypingError) as raises:
+            insert_with_axis(np.arange(2 * 3).reshape(2, 3), 1, 9, 1)
+        self.assertIn(
+            "The 'axis' argument is not supported",
             str(raises.exception),
         )
         # Exceptions leak references

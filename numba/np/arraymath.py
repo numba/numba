@@ -3689,8 +3689,7 @@ def np_delete(arr, obj):
 def np_insert(arr, obj, values, axis=None):
     # Implementation based on NumPy:
     # https://github.com/numpy/numpy/blob/maintenance/2.2.x/numpy/lib/_function_base_impl.py#L5417-L5587    # noqa: E501
-    # Like np.delete, this implementation operates on the flattened array;
-    # the ``axis`` argument is not currently supported.
+    # Like np.delete, this implementation operates on the flattened array.
 
     if not isinstance(arr, (types.Array, types.Sequence)):
         raise TypingError("arr must be either an Array or a Sequence")
@@ -3698,6 +3697,12 @@ def np_insert(arr, obj, values, axis=None):
     if not isinstance(values, (types.Number, types.Boolean, types.Array,
                                types.Sequence)):
         raise TypingError("values must be a scalar, an Array or a Sequence")
+
+    # The ``axis`` argument is not supported: insertion is always performed
+    # on the flattened array. Reject a non-None axis rather than silently
+    # producing results that differ from NumPy.
+    if not is_nonelike(axis):
+        raise TypingError("The 'axis' argument is not supported")
 
     if isinstance(obj, types.Integer):
 
@@ -3731,6 +3736,31 @@ def np_insert(arr, obj, values, axis=None):
             N = arr.size
             indices = np.ravel(np.asarray(obj)).astype(np.int64)
             n_ins = indices.size
+            vals = np.ravel(np.asarray(values))
+
+            # A single insertion index behaves like the scalar case: every
+            # value is inserted at that one position (matches NumPy).
+            if n_ins == 1:
+                pos = indices[0]
+                if pos < -N or pos > N:
+                    raise IndexError('index is out of bounds for the given '
+                                     'array size')
+                if pos < 0:
+                    pos += N
+                n_vals = vals.size
+                out = np.empty(N + n_vals, dtype=arr.dtype)
+                out[:pos] = arr[:pos]
+                out[pos:pos + n_vals] = vals
+                out[pos + n_vals:] = arr[pos:]
+                return out
+
+            # With multiple insertion points, ``values`` must either be a
+            # single scalar (broadcast to every point) or match the number
+            # of indices exactly. Otherwise NumPy raises a ValueError.
+            if vals.size != 1 and vals.size != n_ins:
+                raise ValueError('shape mismatch: the number of values '
+                                 'does not match the number of insertion '
+                                 'indices')
 
             # normalise negative indices and bounds-check
             for i in range(n_ins):
@@ -3739,8 +3769,6 @@ def np_insert(arr, obj, values, axis=None):
                                      'given array size')
                 if indices[i] < 0:
                     indices[i] += N
-
-            vals = np.ravel(np.asarray(values))
 
             # Shift each insertion index by the number of items that are
             # inserted before it (stable sort keeps ties in input order),
