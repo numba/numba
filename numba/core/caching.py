@@ -580,7 +580,13 @@ class IndexDataCacheFile(object):
         except (EOFError, pickle.UnpicklingError):
             # The data file is corrupt or truncated (e.g. an interrupted
             # write), so treat it as a miss and recompile it.
+            self._warn_corrupt(self._data_path(data_name))
             return
+
+    def _warn_corrupt(self, path):
+        msg = f"Cache file {path!r} is corrupt and will be rebuilt."
+        warnings.warn(msg, NumbaWarning)
+        _cache_log("[cache] cache file %r is corrupt; rebuilding", path)
 
     def _load_index(self):
         """
@@ -596,6 +602,7 @@ class IndexDataCacheFile(object):
             return {}
         except (EOFError, pickle.UnpicklingError):
             # Index is corrupt or truncated, so rebuild the cache.
+            self._warn_corrupt(self._index_path)
             return {}
         if version != self._version:
             # This is another version.  Avoid trying to unpickling the
@@ -605,6 +612,7 @@ class IndexDataCacheFile(object):
             stamp, overloads = pickle.loads(data)
         except (EOFError, pickle.UnpicklingError):
             # Index is corrupt or truncated, so rebuild the cache.
+            self._warn_corrupt(self._index_path)
             return {}
         _cache_log("[cache] index loaded from %r", self._index_path)
         if stamp != self._source_stamp:
