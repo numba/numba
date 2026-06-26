@@ -14,15 +14,13 @@ _Layout: TypeAlias = Literal["C", "F", "CS", "FS", "A"]
 class Opaque(Dummy): ...
 
 class SimpleIterableType(IterableType[_TypeT_co], Generic[_TypeT_co]):
-    @override
-    def __init__(self, name: str, iterator_type: IteratorType[_TypeT_co]): ...
+    def __init__(self, name: str, iterator_type: IteratorType[_TypeT_co]) -> None: ...
     @property
     @override
     def iterator_type(self) -> IteratorType[_TypeT_co]: ...
 
 class SimpleIteratorType(IteratorType[_TypeT_co], Generic[_TypeT_co]):
-    @override
-    def __init__(self, name: str, yield_type: _TypeT_co): ...
+    def __init__(self, name: str, yield_type: _TypeT_co) -> None: ...
     @property
     @override
     def yield_type(self) -> _TypeT_co: ...
@@ -35,7 +33,6 @@ class Buffer(IterableType, ArrayCompatible):
 
     mutable: bool = True
 
-    @override
     def __init__(
         self,
         dtype: Type,
