@@ -142,11 +142,11 @@ def type_is_scalar(
 def check_is_integer(v: int | types.Integer, name: str) -> None: ...
 
 # undocumented
-def lt_floats(a: float | np.floating, b: float | np.floating) -> bool: ...
+def lt_floats(a: float | np.floating[Any], b: float | np.floating[Any]) -> bool: ...
 
 # undocumented
 def lt_complex(
-    a: complex | np.complexfloating, b: complex | np.complexfloating
+    a: complex | np.complexfloating[Any, Any], b: complex | np.complexfloating[Any, Any]
 ) -> bool: ...
 
 #
