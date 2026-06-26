@@ -10,7 +10,6 @@ import hashlib
 import importlib
 import inspect
 import itertools
-from math import floor
 import os
 import pickle
 import sys
@@ -23,7 +22,7 @@ import zipfile
 from pathlib import Path
 
 import numba
-from numba.core.errors import NumbaWarning
+from numba.core.errors import NumbaWarning, NumbaDeprecationWarning
 from numba.core.base import BaseContext
 from numba.core.codegen import CodeLibrary
 from numba.core.compiler import CompileResult
@@ -229,11 +228,21 @@ class InTreeCacheLocatorFsAgnostic(InTreeCacheLocator):
     A locator for functions backed by a regular Python module with a
     writable __pycache__ directory. This version is agnostic to filesystem differences,
     e.g. timestamp precision with milliseconds.
+
+    .. deprecated::
+        Source stamps are now content hashes, which are already
+        filesystem-agnostic. Use :class:`InTreeCacheLocator` instead.
     """
 
-    def get_source_stamp(self):
-        st = super().get_source_stamp()
-        return floor(st[0]), st[1]
+    def __init__(self, *args, **kwargs):
+        warnings.warn(
+            "InTreeCacheLocatorFsAgnostic is deprecated; source stamps are "
+            "now content hashes, which are already filesystem-agnostic. "
+            "Use InTreeCacheLocator instead.",
+            NumbaDeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(*args, **kwargs)
 
 
 class UserWideCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):

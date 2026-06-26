@@ -1,0 +1,10 @@
+Make ``.nbi`` cache index files reproducible
+--------------------------------------------
+
+Source freshness stamps in the on-disk cache (``.nbi`` files) now use a
+content hash of the source instead of the file's modification time. The
+modification time varies across hosts and filesystems (and its precision
+differs between filesystems), which made cache index files
+non-reproducible. Using a content hash makes the stamps deterministic and
+filesystem-agnostic. As a result, ``InTreeCacheLocatorFsAgnostic`` is now
+deprecated in favour of ``InTreeCacheLocator``.
