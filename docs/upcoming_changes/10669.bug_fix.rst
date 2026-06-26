@@ -1,0 +1,11 @@
+Make ``pycc`` AOT-compiled extensions reproducible on macOS with debug builds
+-----------------------------------------------------------------------------
+
+Extension modules produced by ``numba.pycc`` on macOS are now byte-for-byte
+identical across independent builds even when the interpreter's ``sysconfig``
+compiles extensions with debug information (``-g``). Previously, the macOS
+linker embedded an ``N_OSO`` debug-map entry per object file holding the
+object's absolute path inside a randomly-named temporary build directory
+(and its modification time), so two builds of the same module produced AOT
+binaries with different hashes. The macOS link step now passes ``-Wl,-S`` to
+strip the debug map while preserving the symbols required at runtime.
