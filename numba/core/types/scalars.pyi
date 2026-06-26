@@ -35,7 +35,6 @@ class Boolean(Hashable):
     def cast_python_value(self, value: object) -> bool: ...
 
 class BooleanLiteral(Literal[bool], Boolean):
-    @override
     def __init__(self, value: bool) -> None: ...
 
 @functools.total_ordering
@@ -44,7 +43,6 @@ class Integer(Number, Generic[_NumpyIntT_co]):
     def from_bitwidth(cls, bitwidth: int, signed: bool = True) -> Self: ...
 
     #
-    @override
     def __init__(
         self,
         name: str,
@@ -62,14 +60,12 @@ class Integer(Number, Generic[_NumpyIntT_co]):
     def minval(self) -> int: ...
 
 class IntegerLiteral(Literal[int], Integer[_NumpyIntT_co], Generic[_NumpyIntT_co]):
-    @override
     def __init__(self, value: int) -> None: ...
 
 @functools.total_ordering
 class Float(Number, Generic[_NumpyFloatT_co]):
     bitwidth: Final[int]
 
-    @override
     def __init__(self, name: str) -> None: ...
     @override
     def cast_python_value(
@@ -83,7 +79,6 @@ class Complex(Number, Generic[_NumpyComplexT_co, _NumpyFloatT_co]):
     bitwidth: Final[int]
     underlying_float: Float[_NumpyFloatT_co]
 
-    @override
     def __init__(self, name: str, underlying_float: Float[_NumpyFloatT_co]) -> None: ...
     @override
     def cast_python_value(
@@ -98,7 +93,6 @@ class EnumClass(Dummy):
     instance_class: Final[type]
     dtype: Final[Type]
 
-    @override
     def __init__(self, cls: type, dtype: Type) -> None: ...
 
     #
@@ -122,7 +116,6 @@ class EnumMember(Type):
     instance_class: Final[type]
     dtype: Final[Type]
 
-    @override
     def __init__(self, cls: type, dtype: Type) -> None: ...
 
     #
