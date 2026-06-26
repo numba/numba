@@ -1,7 +1,7 @@
 from collections.abc import Callable, Iterable
 from typing import Any, Final, Protocol, TypeAlias
 
-from typing_extensions import Generic, Self, TypeVar, override
+from typing_extensions import Generic, Self, TypeVar
 
 from .ir import Loc
 from .target_extension import Target
@@ -72,7 +72,6 @@ class NumbaWarning(Warning):
     msg: str
     loc: Loc | None
 
-    @override
     def __init__(
         self,
         msg: str,
@@ -89,7 +88,6 @@ class NumbaExperimentalFeatureWarning(NumbaWarning): ...
 class NumbaInvalidConfigWarning(NumbaWarning): ...
 
 class NumbaPedanticWarning(NumbaWarning):
-    @override
     def __init__(self, msg: str) -> None: ...
 
 class NumbaIRAssumptionWarning(NumbaPedanticWarning): ...
@@ -97,7 +95,6 @@ class NumbaDebugInfoWarning(NumbaWarning): ...
 class NumbaSystemWarning(NumbaWarning): ...
 
 class NumbaError(Exception):
-    @override
     def __init__(
         self,
         msg: str,
@@ -112,7 +109,6 @@ class NumbaError(Exception):
 class UnsupportedError(NumbaError): ...
 
 class UnsupportedBytecodeError(Exception):
-    @override
     def __init__(self, msg: str, loc: Loc | None = None) -> None: ...
 
 class UnsupportedRewriteError(UnsupportedError): ...
@@ -120,14 +116,12 @@ class IRError(NumbaError): ...
 class RedefinedError(IRError): ...
 
 class NotDefinedError(IRError):
-    @override
     def __init__(self, name: str, loc: Loc | None = None) -> None: ...
 
 class VerificationError(IRError): ...
 class DeprecationError(NumbaError): ...
 
 class LoweringError(NumbaError):
-    @override
     def __init__(self, msg: str, loc: Loc | None = None) -> None: ...
 
 class UnsupportedParforsError(NumbaError): ...
@@ -135,27 +129,22 @@ class ForbiddenConstruct(LoweringError): ...
 class TypingError(NumbaError): ...
 
 class UntypedAttributeError(TypingError):
-    @override
     def __init__(self, value: Type, attr: str, loc: Loc | None = None) -> None: ...
 
 class ByteCodeSupportError(NumbaError):
-    @override
     def __init__(self, msg: str, loc: Loc | None = None) -> None: ...
 
 class CompilerError(NumbaError): ...
 
 class ConstantInferenceError(NumbaError):
-    @override
     def __init__(self, value: str, loc: Loc | None = None) -> None: ...
 
 class InternalError(NumbaError, Generic[_ExceptionT_co]):
     old_exception: _ExceptionT_co
 
-    @override
     def __init__(self, exception: _ExceptionT_co) -> None: ...
 
 class InternalTargetMismatchError(InternalError[str]):
-    @override
     def __init__(self, kind: str, target_hw: str, hw_clazz: type[Target]) -> None: ...
 
 class NonexistentTargetError(InternalError[_ExceptionT_co]): ...
@@ -165,7 +154,6 @@ class ForceLiteralArg(NumbaError):
     requested_args: Final[frozenset[int]]
     fold_arguments: Final[_FoldArgumentsFn | None]
 
-    @override
     def __init__(
         self,
         arg_indices: Iterable[int],
