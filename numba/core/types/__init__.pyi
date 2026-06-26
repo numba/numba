@@ -6,6 +6,8 @@
 #   - mypy numba/core/types/__init__.pyi
 # Testing with mypy.stubtest does not work due to other mypy errors in the code
 # base.
+from typing import Any as Any_py
+
 import numpy as np
 
 from .abstract import *
@@ -163,8 +165,8 @@ range_state32_type: RangeType = ...
 range_state64_type: RangeType = ...
 unsigned_range_state64_type: RangeType = ...
 
-signed_domain: frozenset[Integer[np.signedinteger]] = ...
-unsigned_domain: frozenset[Integer[np.unsignedinteger]] = ...
+signed_domain: frozenset[Integer[np.signedinteger[Any_py]]] = ...
+unsigned_domain: frozenset[Integer[np.unsignedinteger[Any_py]]] = ...
 integer_domain: frozenset[Integer] = ...
 real_domain: frozenset[Float] = ...
 complex_domain: frozenset[Complex] = ...
@@ -209,14 +211,14 @@ py_int: Integer[np.intp] = intp
 py_float: Float[np.float64] = float64
 py_complex: Complex[np.complex128, np.float64] = complex128
 
-py_signed_domain: frozenset[Integer[np.signedinteger]] = signed_domain
+py_signed_domain: frozenset[Integer[np.signedinteger[Any_py]]] = signed_domain
 py_integer_domain: frozenset[Integer] = integer_domain
 py_real_domain: frozenset[Float] = real_domain
 py_complex_domain: frozenset[Complex] = complex_domain
 py_number_domain: frozenset[Integer | Float | Complex] = number_domain
 
-np_signed_domain: frozenset[Integer[np.signedinteger]] = signed_domain
-np_unsigned_domain: frozenset[Integer[np.unsignedinteger]] = unsigned_domain
+np_signed_domain: frozenset[Integer[np.signedinteger[Any_py]]] = signed_domain
+np_unsigned_domain: frozenset[Integer[np.unsignedinteger[Any_py]]] = unsigned_domain
 np_integer_domain: frozenset[Integer] = integer_domain
 np_real_domain: frozenset[Float] = real_domain
 np_complex_domain: frozenset[Complex] = complex_domain

@@ -1,27 +1,27 @@
 import functools
-from typing import ClassVar, Final, SupportsComplex, SupportsFloat, SupportsIndex, override
+from typing import Any, ClassVar, Final, SupportsComplex, SupportsFloat, SupportsIndex
 
 import numpy as np
-from typing_extensions import Generic, Self, TypeVar
+from typing_extensions import Generic, Self, TypeVar, override
 
 from .abstract import Dummy, Hashable, Literal, Number, Type
 
 _NumpyIntT_co = TypeVar(
     "_NumpyIntT_co",
-    bound=np.integer,
-    default=np.integer,
+    bound=np.integer[Any],
+    default=np.integer[Any],
     covariant=True,
 )
 _NumpyFloatT_co = TypeVar(
     "_NumpyFloatT_co",
-    bound=np.floating,
-    default=np.floating,
+    bound=np.floating[Any],
+    default=np.floating[Any],
     covariant=True,
 )
 _NumpyComplexT_co = TypeVar(
     "_NumpyComplexT_co",
-    bound=np.complexfloating,
-    default=np.complexfloating,
+    bound=np.complexfloating[Any, Any],
+    default=np.complexfloating[Any, Any],
     covariant=True,
 )
 
