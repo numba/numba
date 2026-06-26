@@ -1165,8 +1165,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             "The 'axis' argument is not supported",
             str(raises.exception),
         )
-        # Exceptions leak references
-        self.disable_leak_check()
 
     def diff_arrays(self):
         """

@@ -3699,8 +3699,7 @@ def np_insert(arr, obj, values, axis=None):
         raise TypingError("values must be a scalar, an Array or a Sequence")
 
     # The ``axis`` argument is not supported: insertion is always performed
-    # on the flattened array. Reject a non-None axis rather than silently
-    # producing results that differ from NumPy.
+    # on the flattened array.
     if not is_nonelike(axis):
         raise TypingError("The 'axis' argument is not supported")
 
