@@ -1,0 +1,7 @@
+Fix cryptic ``AttributeError`` when reloading cache for ``exec()``-defined functions
+------------------------------------------------------------------------------------
+
+Fixed a cryptic ``AttributeError`` raised deep inside importlib when
+reloading a cached JIT function that was defined inside ``exec()`` without a
+``'__name__'`` key in its globals. A ``RuntimeError`` with an actionable
+message is now raised instead.

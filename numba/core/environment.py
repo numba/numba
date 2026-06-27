@@ -48,6 +48,14 @@ def _rebuild_env(modname, consts, env_name):
     if env is not None:
         return env
 
+    if modname is None:
+        raise RuntimeError(
+            "Cannot load cached JIT function: the function's globals have no "
+            "'__name__', which usually means it was defined inside exec() or "
+            "eval() without a module name. Either disable caching for this "
+            "function or add '__name__' to the globals passed to exec()."
+        )
+
     mod = importlib.import_module(modname)
     env = Environment(mod.__dict__)
     env.consts[:] = consts
