@@ -1,9 +1,10 @@
 from numba.core.pythonapi import box, unbox, NativeValue
-from numba.core.types import UniTuple, BaseTuple, Number, Boolean
+from numba.core.types import UniTuple, BaseTuple, Number, Boolean, int64
 from numba.np.types import NPDatetime, NPTimedelta
 from numba.core.extending import overload
 from numba.cpython.builtins import max_vararg, min_vararg, cast_int
 from numba.core import errors
+from numba.extending import overload_method, intrinsic
 
 
 @box(NPDatetime)
@@ -88,4 +89,28 @@ def ol_int(x):
     def impl(x):
         return cast_int(x)
 
+    return impl
+
+
+################################################################################
+# hash support
+
+@intrinsic
+def hash_datetime(typingctx, inst):
+    if not isinstance(inst, (NPDatetime, NPTimedelta)):
+        return
+
+    def codegen(context, builder, sig, args):
+        val = args[0]
+        return context.cast(builder, val, inst, int64)
+
+    sig = int64(inst)
+    return sig, codegen
+
+
+@overload_method(NPDatetime, '__hash__')
+@overload_method(NPTimedelta, '__hash__')
+def _hash_NPDatetime(inst):
+    def impl(inst):
+        return hash(hash_datetime(inst))
     return impl

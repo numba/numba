@@ -21,7 +21,7 @@ from numba.core.datamodel.models import PrimitiveModel
 numpy_version = tuple(map(int, np.__version__.split('.')[:2]))
 
 
-class _NPDatetimeBase(types.Type):
+class _NPDatetimeBase(types.Hashable):
     """
     Common base class for np.datetime64 and np.timedelta64.
     """

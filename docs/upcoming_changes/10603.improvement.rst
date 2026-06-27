@@ -1,0 +1,6 @@
+Implement hash functionality for ``np.timedelta64`` and ``np.datetime64``.
+--------------------------------------------------------------------------
+
+Numba now supports hash functionality for ``np.timedelta64`` and ``np.datetime64``
+types, (e.g. ``hash(np.timedelta64(1, 'D'))``) allowing their usage in hash-based
+collections like sets and dictionaries.
