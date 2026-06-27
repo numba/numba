@@ -1,0 +1,7 @@
+Fix scalar handling in ``np.median``
+------------------------------------
+
+Fixed scalar handling in the ``np.median`` function. Previously, this
+function would fail when called with a scalar input. It now accepts scalar
+inputs, matching NumPy by promoting integer and boolean scalars to
+``float64`` while preserving the dtype of floating-point and complex scalars.
