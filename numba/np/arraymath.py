@@ -2238,6 +2238,206 @@ def np_triu_indices_from(arr, k=0):
     return np_triu_indices_from_impl
 
 
+@overload(np.unravel_index)
+def np_unravel_index(indices, shape, order='C'):
+    msg_shape = (
+        "np.unravel_index(): 'shape' argument must be a tuple of integers"
+    )
+    msg_indices = (
+        "np.unravel_index(): 'indices' must be an integer or boolean "
+        "scalar or array"
+    )
+    msg_oob = "index is out of bounds for array with given shape"
+    msg_size_one = "index is out of bounds for array with size 1"
+    msg_0d = "multiple indices are not supported for 0d arrays"
+    msg_neg = "negative dimensions are not allowed"
+    msg_large = (
+        "dimensions are too large; total size exceeds intp range"
+    )
+
+    # shape: BaseTuple of length 0, or UniTuple[Integer]
+    if not isinstance(shape, types.BaseTuple):
+        raise TypingError(msg_shape)
+    ndim = len(shape)
+    if ndim != 0:
+        if not isinstance(shape, types.UniTuple):
+            raise TypingError(msg_shape)
+        if not isinstance(shape.dtype, types.Integer):
+            raise TypingError(msg_shape)
+    # Cap `ndim` to NumPy's maximum supported number of dimensions
+    # (64 on NumPy >= 2.0, 32 before). Beyond this NumPy itself errors,
+    # and the per-axis source generated below would grow unbounded.
+    # Checked after the element-type validation so an oversized
+    # non-integer shape reports the more specific message first.
+    max_ndim = 64 if numpy_version >= (2, 0) else 32
+    if ndim > max_ndim:
+        raise TypingError(
+            "np.unravel_index(): 'shape' has more than the maximum "
+            f"supported number of dimensions ({max_ndim})"
+        )
+
+    # order: 'C' or 'F'. Accept Python str (default), StringLiteral
+    # (literal call-site arg), and Omitted (default propagated by Numba).
+    if isinstance(order, str):
+        order_val = order
+    elif isinstance(order, types.StringLiteral):
+        order_val = order.literal_value
+    elif isinstance(order, types.Omitted):
+        order_val = order.value
+    else:
+        raise TypingError(
+            "np.unravel_index(): 'order' must be a compile-time string "
+            "literal, either 'C' or 'F'"
+        )
+    if order_val not in ('C', 'F'):
+        raise TypingError(
+            "np.unravel_index(): 'order' must be 'C' or 'F'"
+        )
+
+    dim_order = (tuple(range(ndim - 1, -1, -1)) if order_val == 'C'
+                 else tuple(range(ndim)))
+    max_size = np.iinfo(np.intp).max
+    scalar_index = isinstance(indices, (types.Integer, types.Boolean))
+
+    # 0-D shape: size-1 array, only flat index 0 is valid.
+    if ndim == 0:
+        if scalar_index:
+            def impl(indices, shape, order='C'):
+                if np.intp(indices) != 0:
+                    raise ValueError(msg_size_one)
+                return ()
+            return impl
+
+        if isinstance(indices, types.Array):
+            if not isinstance(indices.dtype,
+                              (types.Integer, types.Boolean)):
+                raise TypingError(msg_indices)
+
+            if indices.ndim == 0:
+                def impl(indices, shape, order='C'):
+                    if np.intp(indices[()]) != 0:
+                        raise ValueError(msg_size_one)
+                    return ()
+                return impl
+
+            # 1-D+ index array into a 0-D shape: NumPy validates each
+            # value, then raises "multiple indices are not supported".
+            def impl(indices, shape, order='C'):
+                for ind in np.ndindex(indices.shape):
+                    idx = np.intp(indices[ind])
+                    if idx < 0 or idx >= 1:
+                        raise ValueError(msg_size_one)
+                raise ValueError(msg_0d)
+            return impl
+
+        raise TypingError(msg_indices)
+
+    # For ndim >= 1 the impl constructs a UniTuple of length `ndim`.
+    # We generate the impl source with the per-axis computation
+    # unrolled, dim values hoisted out of the hot loop, and outputs
+    # held in named locals (no UniTuple-indexed access in the inner
+    # body). The same source-generation pattern (build a Python source
+    # string then exec) is used elsewhere in numba, e.g.
+    # ``numba.core.ir_utils._create_function_from_code_obj``,
+    # ``numba.experimental.structref`` (constructor synthesis),
+    # ``numba.experimental.jitclass.base`` (ctor wrapper), and
+    # ``numba.cuda.deviceufunc`` (vectorize/gufunc kernels).
+    common_globals = {
+        'np': np,
+        '_msg_neg': msg_neg,
+        '_msg_large': msg_large,
+        '_msg_oob': msg_oob,
+        '_max_size': max_size,
+    }
+
+    # The size-validation preamble is identical in the scalar and array
+    # impls; generate it once and reuse it in both source strings.
+    size_check = (
+        "    size = np.intp(1)\n"
+        "    for d in shape:\n"
+        "        dim = np.intp(d)\n"
+        "        if dim < 0:\n"
+        "            raise ValueError(_msg_neg)\n"
+        "        if dim != 0 and size > _max_size // dim:\n"
+        "            raise ValueError(_msg_large)\n"
+        "        size *= dim\n"
+    )
+
+    # Hoist `np.intp(shape[i])` per axis once.
+    hoist_dims = '\n'.join(
+        f"    d_{i} = np.intp(shape[{i}])" for i in range(ndim)
+    )
+    return_tup = "(" + ", ".join(f"out_{i}" for i in range(ndim)) + ",)"
+    # Last axis in `dim_order` doesn't need the trailing `//= dim`
+    # (the running quotient is unused after the last assignment).
+    axes_main = tuple(dim_order[:-1])
+    axis_last = dim_order[-1]
+
+    if scalar_index:
+        scalar_lines = []
+        for a in axes_main:
+            scalar_lines.append(f"    out_{a} = idx % d_{a}")
+            scalar_lines.append(f"    idx //= d_{a}")
+        scalar_lines.append(f"    out_{axis_last} = idx % d_{axis_last}")
+        scalar_body = '\n'.join(scalar_lines)
+
+        src = (
+            "def impl(indices, shape, order='C'):\n"
+            f"{size_check}"
+            "\n"
+            "    idx = np.intp(indices)\n"
+            "    if idx < 0 or idx >= size:\n"
+            "        raise ValueError(_msg_oob)\n"
+            "\n"
+            f"{hoist_dims}\n"
+            f"{scalar_body}\n"
+            f"    return {return_tup}\n"
+        )
+        ns = dict(common_globals)
+        exec(src, ns)
+        return ns['impl']
+
+    # ndim >= 1, integer/boolean array. Each output array is allocated
+    # into its own named local; the inner loop body is unrolled per
+    # axis with `cur` carried in a register.
+    if isinstance(indices, types.Array):
+        if not isinstance(indices.dtype, (types.Integer, types.Boolean)):
+            raise TypingError(msg_indices)
+
+        allocs = '\n'.join(
+            f"    out_{i} = np.empty(indices.shape, dtype=np.intp)"
+            for i in range(ndim)
+        )
+        array_lines = []
+        for a in axes_main:
+            array_lines.append(f"        out_{a}[ind] = cur % d_{a}")
+            array_lines.append(f"        cur //= d_{a}")
+        array_lines.append(
+            f"        out_{axis_last}[ind] = cur % d_{axis_last}"
+        )
+        array_body = '\n'.join(array_lines)
+
+        src = (
+            "def impl(indices, shape, order='C'):\n"
+            f"{size_check}"
+            "\n"
+            f"{allocs}\n"
+            f"{hoist_dims}\n"
+            "\n"
+            "    for ind in np.ndindex(indices.shape):\n"
+            "        cur = np.intp(indices[ind])\n"
+            "        if cur < 0 or cur >= size:\n"
+            "            raise ValueError(_msg_oob)\n"
+            f"{array_body}\n"
+            f"    return {return_tup}\n"
+        )
+        ns = dict(common_globals)
+        exec(src, ns)
+        return ns['impl']
+
+    raise TypingError(msg_indices)
+
+
 def _prepare_array(arr):
     pass
 
