@@ -1,0 +1,9 @@
+Fix ``np.clip`` type promotion to match NumPy behavior
+------------------------------------------------------
+
+Fixed ``np.clip`` to follow NumPy's type promotion rules when ``a_min`` or
+``a_max`` are of a different type than the input array ``a``. Previously,
+the output was always allocated using the dtype of ``a`` via
+``np.empty_like(a)``, which could silently produce incorrect results.
+The output dtype is now determined by promoting all operand types together,
+matching NumPy's behavior.
