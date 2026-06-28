@@ -1151,6 +1151,41 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
         self.inplace_int_op_test(operator.irshift, [0, 5, -10, -51],
                                  [0, 1, 4, 14])
 
+    def test_inplace_broadcast_mismatch(self):
+        # Issue #9166: an in-place operator whose operands do not broadcast
+        # must raise like NumPy, not silently ignore the shape mismatch.
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        @njit
+        def inplace_and(a, b):
+            a &= b
+            return a
+
+        @njit
+        def inplace_add(a, b):
+            a += b
+            return a
+
+        with self.assertRaises(ValueError) as raises:
+            inplace_and(np.array([True, False, True]),
+                        np.array([True, False]))
+        self.assertIn("unable to broadcast", str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            inplace_add(np.ones((3, 4)), np.ones(3))
+        self.assertIn("unable to broadcast", str(raises.exception))
+
+        # The input must not have more dimensions than the output either.
+        with self.assertRaises(ValueError):
+            inplace_add(np.ones(4), np.ones((3, 4)))
+
+        # Valid broadcasts keep working: right-aligned and size-1.
+        got = inplace_add(np.ones((3, 4)), np.arange(4.0))
+        np.testing.assert_array_equal(got, np.ones((3, 4)) + np.arange(4.0))
+        got = inplace_add(np.ones((3, 4)), np.ones(1))
+        np.testing.assert_array_equal(got, np.full((3, 4), 2.0))
+
     def test_unary_positive_array_op_2(self):
         '''
         Verify that the unary positive operator copies values, and doesn't
