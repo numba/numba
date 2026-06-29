@@ -16,8 +16,7 @@ class Boolean(Hashable):
 def parse_integer_bitwidth(name):
     for prefix in ('int', 'uint'):
         if name.startswith(prefix):
-            bitwidth = int(name[len(prefix):])
-    return bitwidth
+            return int(name[len(prefix):])
 
 
 def parse_integer_signed(name):

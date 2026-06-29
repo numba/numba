@@ -9,6 +9,7 @@ import operator
 import warnings
 
 import llvmlite.ir
+from numba.np.types.datetime import NPDatetime, NPTimedelta
 import numpy as np
 
 from numba.core import types, cgutils
@@ -438,6 +439,10 @@ def array_mean(a):
         def _scalar_mean(a):
             return np.float64(a) + 0.0
         return _scalar_mean
+    elif isinstance(a, NPTimedelta):
+        def _temporal_scalar_mean(a):
+            return a
+        return _temporal_scalar_mean
     elif isinstance(a, (types.Float, types.Complex)):
         typed_zero = as_dtype(a).type(0)
 
@@ -477,7 +482,7 @@ def array_mean(a):
                 c = acc_init
                 for v in np.nditer(a):
                     c += v.item()
-                return c / dtype.type(a.size)
+                return dtype.type(c / a.size)
         else:
             # For datetime/timedelta, don't add special empty array handling
             # Let it behave as before (NumPy itself raises error for empty
@@ -559,7 +564,8 @@ def return_false(a):
 @overload_method(types.Array, "min")
 def npy_min(a):
     #scalar case
-    if isinstance(a, (types.Number,types.Boolean)):
+    if isinstance(a, (types.Number, types.Boolean,
+                      NPDatetime, NPTimedelta)):
         def scalar_min(a):
             return a
         return scalar_min
@@ -615,7 +621,8 @@ def npy_min(a):
 @overload_method(types.Array, "max")
 def npy_max(a):
     #scalar case
-    if isinstance(a, (types.Number,types.Boolean)):
+    if isinstance(a, (types.Number, types.Boolean,
+                      NPDatetime, NPTimedelta)):
         def scalar_max(a):
             return a
         return scalar_max
@@ -886,8 +893,14 @@ def np_all(a):
             return bool(a)
         return scalar_all
 
+    if isinstance(a, (NPDatetime, NPTimedelta)):
+        def temporal_scalar_all(a):
+            return np.int64(a) != 0
+        return temporal_scalar_all
+
     # for array
     if isinstance(a, types.Array):
+
         def flat_all(a):
             for v in np.nditer(a):
                 if not v.item():
@@ -1000,6 +1013,12 @@ def np_any(a):
         def scalar_any(a):
             return bool(a)
         return scalar_any
+
+    # for temporal
+    if isinstance(a, (NPDatetime, NPTimedelta)):
+        def temporal_any(a):
+            return np.int64(a) != 0
+        return temporal_any
 
     # for array
     if isinstance(a, types.Array):
@@ -1310,15 +1329,23 @@ def np_nanmean(a):
 
 
 @overload(np.nanvar)
-def np_nanvar(a):
+def np_nanvar(a, axis=None, dtype=None, out=None, ddof=0):
     if not isinstance(a, types.Array):
         return
+    if not isinstance(ddof, (types.Integer, types.Omitted, int)):
+        return
+    if not is_nonelike(axis):
+        raise TypingError("Numba does not support nanvar with axis.")
+    if not is_nonelike(dtype):
+        raise TypingError("Numba does not support nanvar with dtype.")
+    if not is_nonelike(out):
+        raise TypingError("Numba does not support nanvar with out.")
+
     isnan = get_isnan(a.dtype)
 
-    def nanvar_impl(a):
+    def nanvar_impl(a, axis=None, dtype=None, out=None, ddof=0):
         # Compute the mean
         m = np.nanmean(a)
-
         # Compute the sum of square diffs
         ssd = 0.0
         count = 0
@@ -1328,19 +1355,30 @@ def np_nanvar(a):
                 val = (v.item() - m)
                 ssd += np.real(val * np.conj(val))
                 count += 1
+        # When count <= ddof, return nan to match NumPy behaviour
+        if count <= ddof:
+            return np.nan
         # np.divide() doesn't raise ZeroDivisionError
-        return np.divide(ssd, count)
+        return np.divide(ssd, count - ddof)
 
     return nanvar_impl
 
 
 @overload(np.nanstd)
-def np_nanstd(a):
+def np_nanstd(a, axis=None, dtype=None, out=None, ddof=0):
     if not isinstance(a, types.Array):
         return
+    if not isinstance(ddof, (types.Integer, types.Omitted, int)):
+        return
+    if not is_nonelike(axis):
+        raise TypingError("Numba does not support nanstd with axis.")
+    if not is_nonelike(dtype):
+        raise TypingError("Numba does not support nanstd with dtype.")
+    if not is_nonelike(out):
+        raise TypingError("Numba does not support nanstd with out.")
 
-    def nanstd_impl(a):
-        return np.nanvar(a) ** 0.5
+    def nanstd_impl(a, axis=None, dtype=None, out=None, ddof=0):
+        return np.nanvar(a, ddof=ddof) ** 0.5
 
     return nanstd_impl
 
@@ -3645,6 +3683,116 @@ def np_delete(arr, obj):
 
             return np.concatenate((arr[:pos], arr[pos + 1:]))
         return np_delete_scalar_impl
+
+
+@overload(np.insert)
+def np_insert(arr, obj, values, axis=None):
+    # Implementation based on NumPy:
+    # https://github.com/numpy/numpy/blob/maintenance/2.2.x/numpy/lib/_function_base_impl.py#L5417-L5587    # noqa: E501
+    # Like np.delete, this implementation operates on the flattened array.
+
+    if not isinstance(arr, (types.Array, types.Sequence)):
+        raise TypingError("arr must be either an Array or a Sequence")
+
+    if not isinstance(values, (types.Number, types.Boolean, types.Array,
+                               types.Sequence)):
+        raise TypingError("values must be a scalar, an Array or a Sequence")
+
+    # The ``axis`` argument is not supported: insertion is always performed
+    # on the flattened array.
+    if not is_nonelike(axis):
+        raise TypingError("The 'axis' argument is not supported")
+
+    if isinstance(obj, types.Integer):
+
+        def np_insert_scalar_impl(arr, obj, values, axis=None):
+            arr = np.ravel(np.asarray(arr))
+            N = arr.size
+            pos = obj
+
+            if pos < -N or pos > N:
+                raise IndexError('index is out of bounds for the given '
+                                 'array size')
+            if pos < 0:
+                pos += N
+
+            vals = np.ravel(np.asarray(values))
+            n_ins = vals.size
+
+            out = np.empty(N + n_ins, dtype=arr.dtype)
+            out[:pos] = arr[:pos]
+            out[pos:pos + n_ins] = vals
+            out[pos + n_ins:] = arr[pos:]
+            return out
+        return np_insert_scalar_impl
+
+    elif isinstance(obj, (types.Array, types.Sequence)):
+        if not isinstance(obj.dtype, types.Integer):
+            raise TypingError('obj should be of Integer dtype')
+
+        def np_insert_array_impl(arr, obj, values, axis=None):
+            arr = np.ravel(np.asarray(arr))
+            N = arr.size
+            indices = np.ravel(np.asarray(obj)).astype(np.int64)
+            n_ins = indices.size
+            vals = np.ravel(np.asarray(values))
+
+            # A single insertion index behaves like the scalar case: every
+            # value is inserted at that one position (matches NumPy).
+            if n_ins == 1:
+                pos = indices[0]
+                if pos < -N or pos > N:
+                    raise IndexError('index is out of bounds for the given '
+                                     'array size')
+                if pos < 0:
+                    pos += N
+                n_vals = vals.size
+                out = np.empty(N + n_vals, dtype=arr.dtype)
+                out[:pos] = arr[:pos]
+                out[pos:pos + n_vals] = vals
+                out[pos + n_vals:] = arr[pos:]
+                return out
+
+            # With multiple insertion points, ``values`` must either be a
+            # single scalar (broadcast to every point) or match the number
+            # of indices exactly. Otherwise NumPy raises a ValueError.
+            if vals.size != 1 and vals.size != n_ins:
+                raise ValueError('shape mismatch: the number of values '
+                                 'does not match the number of insertion '
+                                 'indices')
+
+            # normalise negative indices and bounds-check
+            for i in range(n_ins):
+                if indices[i] < -N or indices[i] > N:
+                    raise IndexError('index is out of bounds for the '
+                                     'given array size')
+                if indices[i] < 0:
+                    indices[i] += N
+
+            # Shift each insertion index by the number of items that are
+            # inserted before it (stable sort keeps ties in input order),
+            # mirroring NumPy's algorithm.
+            order = np.argsort(indices, kind='mergesort')
+            for i in range(n_ins):
+                indices[order[i]] += i
+
+            out = np.empty(N + n_ins, dtype=arr.dtype)
+            mask = np.ones(N + n_ins, dtype=np.bool_)
+            for i in range(n_ins):
+                mask[indices[i]] = False
+            out[mask] = arr
+
+            # A single scalar value is broadcast across all insert points.
+            for i in range(n_ins):
+                if vals.size == 1:
+                    out[indices[i]] = vals[0]
+                else:
+                    out[indices[i]] = vals[i]
+            return out
+        return np_insert_array_impl
+
+    else:
+        raise TypingError('obj should be an Integer, an Array or a Sequence')
 
 
 @overload(np.diff)

@@ -1,0 +1,6 @@
+Fix silent miscompile when reassigning a nonlocal in an inner function
+----------------------------------------------------------------------
+
+Assigning a ``nonlocal`` variable more than once inside an inner function
+dropped every write after the first without error. Numba now raises an
+``UnsupportedError`` at compile time instead of miscompiling.

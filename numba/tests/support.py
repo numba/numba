@@ -151,11 +151,6 @@ skip_if_freethreading = unittest.skipIf(_free_threading,
                                          "free-threading is enabled."))
 
 
-skip_if_sysmon_unsupported = unittest.skipIf(
-    sys.version_info[:3] >= (3, 14, 4),
-    "JIT sys.monitoring is not supported on Python 3.14.4+")
-
-
 def expected_failure_py311(fn):
     if utils.PYVERSION == (3, 11):
         return unittest.expectedFailure(fn)
@@ -200,6 +195,9 @@ linux_only = unittest.skipIf(not sys.platform.startswith('linux'), _lnx_reason)
 _win_reason = 'Windows-only test'
 windows_only = unittest.skipIf(not sys.platform.startswith('win'), _win_reason)
 
+_non_win_reason = 'non Windows test'
+skip_if_windows = unittest.skipIf(sys.platform.startswith('win'), _non_win_reason)
+
 _is_armv7l = platform.machine() == 'armv7l'
 
 disabled_test = unittest.skipIf(True, 'Test disabled')
@@ -241,6 +239,14 @@ IS_MACOS = _uname.system == 'Darwin'
 skip_macos_fenv_errors = unittest.skipIf(IS_MACOS,
     "fenv.h-like functionality unreliable on macOS")
 IS_MACOS_ARM64 = IS_MACOS and _uname.machine == 'arm64'
+IS_WIN_ARM64 = _uname.system == 'Windows' and _uname.machine == 'ARM64'
+# AArch64 uimm12 fixup failure on win-arm64 for large UniTuple(unicode)
+# arguments. https://github.com/numba/numba/issues/10619
+skip_win_arm64_unittuple_uimm12 = unittest.skipIf(
+    IS_WIN_ARM64,
+    "AArch64 uimm12 fixup failure on win-arm64 for large UniTuple(unicode) "
+    "arguments",
+)
 
 try:
     import scipy.linalg.cython_lapack

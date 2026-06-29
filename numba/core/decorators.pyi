@@ -12,7 +12,9 @@ from typing import (
 from typing_extensions import Unpack
 
 from . import compiler, ir, types, typing
+from .ccallback import CFunc
 from .typing.templates import _inline_info
+from .dispatcher import Dispatcher
 
 ###
 # type-check only helpers
@@ -45,13 +47,11 @@ class _JITOptions(TypedDict, total=False):
 
 @type_check_only
 class _JITWrapper(Protocol):
-    # TODO: Return `Dispatcher[_FunctionT]` once `Dispatcher` is annotated and generic.
-    def __call__(self, fn: _FunctionT, /) -> _FunctionT: ...
+    def __call__(self, fn: _FunctionT, /) -> Dispatcher[_FunctionT]: ...
 
 @type_check_only
 class _CFuncWrapper(Protocol):
-    # TODO: Return `CFunc[_FunctionT]` once `CFunc` is annotated and generic.
-    def __call__(self, fn: _FunctionT, /) -> _FunctionT: ...
+    def __call__(self, fn: _FunctionT, /) -> CFunc[_FunctionT]: ...
 
 ###
 # stubs
@@ -79,7 +79,7 @@ def jit(
     nopython: bool = True,
     forceobj: bool = False,
     **options: Unpack[_JITOptions],
-) -> _FunctionT: ...
+) -> Dispatcher[_FunctionT]: ...
 
 #
 @overload  # signature
@@ -99,7 +99,7 @@ def njit(
     pipeline_class: type[compiler.CompilerBase] | None = None,
     boundscheck: bool | None = None,
     **options: Unpack[_JITOptions],
-) -> _FunctionT: ...
+) -> Dispatcher[_FunctionT]: ...
 
 #
 def cfunc(

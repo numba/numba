@@ -1,0 +1,8 @@
+Add Windows on ARM64 CI and build support
+-----------------------------------------
+
+Added GitHub Actions workflows to build and test Numba conda packages and
+wheels on ``win-arm64`` runners. The conda recipe now supports ARM64
+Windows builds with VS2022. Several tests that trigger an LLVM 22
+AArch64 frame lowering assertion on ``win-arm64`` are skipped pending
+fix (`llvm/llvm-project#204060 <https://github.com/llvm/llvm-project/issues/204060>`_).

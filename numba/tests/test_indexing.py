@@ -6,7 +6,7 @@ import numpy as np
 import unittest
 from numba import jit, njit, typeof
 from numba.core import utils, types, errors
-from numba.tests.support import TestCase, tag
+from numba.tests.support import TestCase, tag, MemoryLeakMixin
 from numba.core.typing import arraydecl
 from numba.core.types import intp, ellipsis, slice2_type, slice3_type
 
@@ -150,7 +150,7 @@ def slicing_2d_usecase_set(a, b, start, stop, step, start2, stop2, step2):
     return a
 
 
-class TestGetItem(TestCase):
+class TestGetItem(MemoryLeakMixin, TestCase):
     """
     Test basic indexed load from an array (returning a view or a scalar).
     Note fancy indexing is tested in test_fancy_indexing.
@@ -743,7 +743,7 @@ class TestGetItem(TestCase):
         self.test_empty_tuple_indexing(flags=Noflags)
 
 
-class TestSetItem(TestCase):
+class TestSetItem(MemoryLeakMixin, TestCase):
     """
     Test basic indexed store into an array.
     Note fancy indexing is tested in test_fancy_indexing.
@@ -794,6 +794,8 @@ class TestSetItem(TestCase):
         # Mismatching input size and slice length
         with self.assertRaises(ValueError):
             cfunc(np.zeros_like(arg, dtype=np.int32), arg, 0, 0, 1)
+        
+        self.disable_leak_check()
 
     def check_1d_slicing_set_sequence(self, flags, seqty, seq):
         """
@@ -818,6 +820,7 @@ class TestSetItem(TestCase):
         args = (seq, 1, -N + k, 1)
         with self.assertRaises(ValueError) as raises:
             cfunc(arg.copy(), *args)
+        self.disable_leak_check()
 
         if flags.get('nopython', False):
             # if in nopython mode, check the error message from Numba
@@ -998,7 +1001,8 @@ class TestSetItem(TestCase):
         with self.assertRaises(ValueError) as raises:
             setitem_broadcast_usecase(dst, src)
         errmsg = str(raises.exception)
-        self.assertEqual('cannot broadcast source array for assignment',
+        self.assertEqual('cannot assign slice of shape (5,) from input of' +
+                         ' shape (2, 5)',
                          errmsg)
         # 3D -> 2D
         dst = np.arange(5).reshape(1, 5)
@@ -1007,7 +1011,7 @@ class TestSetItem(TestCase):
             setitem_broadcast_usecase(dst, src)
         errmsg = str(raises.exception)
         self.assertEqual(('cannot assign slice of shape (1, 5) from input of' +
-                         ' shape (2, 5)'),
+                         ' shape (1, 2, 5)'),
                          errmsg)
         # lower to higher
         # 1D -> 2D
@@ -1017,8 +1021,9 @@ class TestSetItem(TestCase):
             setitem_broadcast_usecase(dst, src)
         errmsg = str(raises.exception)
         self.assertEqual(('cannot assign slice of shape (2, 5) from input of' +
-                        ' shape (2, 4)'),
+                        ' shape (4,)'),
                         errmsg)
+        self.disable_leak_check()
 
     def test_slicing_1d_broadcast(self):
         # 1D -> 2D sliced (1)
@@ -1046,7 +1051,7 @@ class TestSetItem(TestCase):
                       str(raises.exception))
 
 
-class TestTyping(TestCase):
+class TestTyping(MemoryLeakMixin, TestCase):
     """
     Check typing of basic indexing operations
     """

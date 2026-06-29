@@ -1,0 +1,9 @@
+Make ``pycc`` AOT-compiled extensions reproducible
+--------------------------------------------------
+
+Extension modules produced by ``numba.pycc`` are now byte-for-byte
+identical across independent builds of the same source on Linux and MacOS.
+Previously, several mangled LLVM symbol names and global names
+embedded process-specific values (``id(obj)``, the default ``object.__repr__``
+of ``CPUContext``), so two builds of the same module produced AOT binaries with
+different MD5 hashes.

@@ -1,0 +1,12 @@
+Use topological iteration order in liveness fix-point analysis
+--------------------------------------------------------------
+
+Previously, ``compute_live_map`` and ``compute_live_variables`` iterated over
+basic blocks in dict-insertion order during their fix-point loops, which could
+require a number of iterations proportional to the loop-nesting depth (or to how
+far block order had drifted from topological order after inlining/merging) to
+converge. Both fix-points now iterate in topological order (and reverse
+topological order for the backward liveness pass), which converges in a small
+constant number of iterations regardless of graph size. This is a
+behavior-preserving change that reduces compilation time, most noticeably on
+large generated or unrolled functions with many basic blocks.
