@@ -662,8 +662,24 @@ class FunctionIdentity(serialize.ReduceMixin):
 
         # Even the same function definition can be compiled into
         # several different function objects with distinct closure
-        # variables, so we make sure to disambiguate using an unique id.
-        uid = next(cls._unique_ids)
+        # variables, so we disambiguate using a unique id.
+        #
+        # Was: `uid = next(cls._unique_ids)` — a process-global
+        # itertools.count. After os.fork() that counter is duplicated, so
+        # parent and child could independently assign the same uid to
+        # different wrappers; on cache replay across the fork, parent's
+        # fresh wrapper would collide on (qualname, argtypes, uid) with
+        # the child's cached entry and trip an LLVM type-mismatch when
+        # the impls differed (see open_questions.md Q5).
+        #
+        # `id()` is process-local but fork-stable (same address survives
+        # fork). It also embeds in mangled_name which is serialized into
+        # the cache verbatim, so cross-process referential integrity is
+        # preserved through the cached string, not through the id at
+        # load time. Caveat: id() is reused after GC; Numba's dispatcher
+        # pins its wrapper for its lifetime so this is benign in
+        # practice.
+        uid = id(func)
         self.unique_name = '{}${}'.format(self.func_qualname, uid)
         self.unique_id = uid
 
