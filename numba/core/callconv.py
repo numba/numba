@@ -9,7 +9,7 @@ import hashlib
 
 from llvmlite import ir
 
-from numba.core import types, cgutils, errors
+from numba.core import types, cgutils, errors, config, pythonapi, serialize
 from numba.core.base import PYOBJECT, GENERIC_POINTER
 
 
@@ -338,15 +338,15 @@ class _MinimalCallHelper(object):
             return exc, exc_args, locinfo
 
 
-# The structure type constructed by PythonAPI.serialize_uncached()
-# i.e a {i8* pickle_buf, i32 pickle_bufsz, i8* hash_buf, i8* fn, i32 alloc_flag}
-PICKLE_BUF_IDX = 0
-PICKLE_BUFSZ_IDX = 1
-HASH_BUF_IDX = 2
-UNWRAP_FUNC_IDX = 3
-ALLOC_FLAG_IDX = 4
+# The structure type constructed by CPUCallConv.build_excinfo_struct()
+# i.e a {i32 exc_id, i8* str, i32 strlen, i8* pickled_exc_class}
+EXC_ID_IDX = 0
+STR_IDX = 1
+STRLEN_IDX = 2
+EXC_SERIALIZED_IDX = 3
+
 excinfo_t = ir.LiteralStructType(
-    [GENERIC_POINTER, int32_t, GENERIC_POINTER, GENERIC_POINTER, int32_t])
+    [int64_t, GENERIC_POINTER, int32_t, pythonapi.pyobj_ptr_t])
 excinfo_ptr_t = ir.PointerType(excinfo_t)
 
 
@@ -368,7 +368,13 @@ class CPUCallConv(BaseCallConv):
     _status_ids = itertools.count(1)
 
     def _make_call_helper(self, builder):
-        return None
+        return _CPUCallHelper()
+
+    def _get_call_helper(self, builder):
+        try:
+            return super()._get_call_helper(builder)
+        except AttributeError:
+            return self._make_call_helper(builder)
 
     def return_value(self, builder, retval):
         retptr = self._get_return_argument(builder.function)
@@ -377,7 +383,13 @@ class CPUCallConv(BaseCallConv):
         builder.store(retval, retptr)
         self._return_errcode_raw(builder, RETCODE_OK)
 
-    def build_excinfo_struct(self, exc, exc_args, loc, func_name):
+    def build_excinfo_struct(self, builder, exc, exc_id, exc_args, loc,
+                             func_name):
+        module = builder.module
+        try:
+            builder.module._exceptions
+        except AttributeError:
+            builder.module._exceptions = {}
         # Build excinfo struct
         if loc is not None:
             fname = loc._raw_function_name()
@@ -390,9 +402,34 @@ class CPUCallConv(BaseCallConv):
                 locinfo = None
         else:
             locinfo = None
+        key = (exc, exc_args, locinfo)
+        key_digest = hashlib.sha1(serialize.dumps(key)).digest()
+        key_suffix = key_digest.hex() if config.DIFF_IR == 0 else "DIFF_IR"
+        try:
+            gv = module._exceptions[key]
+        except KeyError:
+            exc_args_static = tuple([arg for arg in exc_args
+                                     if not isinstance(arg, ir.Value)])
+            strval = ",".join([str(x) for x in exc_args_static])
+            strlen = len(strval)
 
-        exc = (exc, exc_args, locinfo)
-        return exc
+            strdata = cgutils.make_bytearray(strval.encode("utf-8"))
+            arr_name = ".const.except_custom_arr.%s" % key_suffix
+            arr = self.context.insert_unique_const(module, arr_name, strdata)
+
+            pyapi = self.context.get_python_api(builder)
+            serialized_key = pyapi.serialize_object(key)
+
+            struct = ir.Constant.literal_struct([
+                ir.Constant(int64_t, exc_id),
+                arr.bitcast(cgutils.voidptr_t),
+                ir.Constant(int32_t, strlen),
+                serialized_key,
+            ])
+            name = ".const.except_custom.%s" % key_suffix
+            gv = self.context.insert_unique_const(module, name, struct)
+            module._exceptions[key] = gv
+        return gv
 
     def set_static_user_exc(self, builder, exc, exc_args=None, loc=None,
                             func_name=None):
@@ -442,14 +479,66 @@ class CPUCallConv(BaseCallConv):
         # {___, ___, ___, ___, i32}
         #                       ^  Number of dynamic args in the exception. For
         #                          static exceptions, this value is "0"
+        call_helper = self._get_call_helper(builder)
+        exc_id = call_helper._add_exception(exc)
 
-        pyapi = self.context.get_python_api(builder)
-        exc = self.build_excinfo_struct(exc, exc_args, loc, func_name)
-        struct_gv = pyapi.serialize_object(exc)
+        struct_gv = self.build_excinfo_struct(builder, exc, exc_id, exc_args,
+                                              loc, func_name)
         excptr = self._get_excinfo_argument(builder.function)
         store = builder.store(struct_gv, excptr)
         md = builder.module.add_metadata([ir.IntType(1)(1)])
         store.set_metadata("numba_exception_output", md)
+
+    def match_user_exc(self, builder, exc):
+        """Matches the exception in the try_state with exc
+
+        This is a mutator,
+        If there is a match, it clears the current exception
+        """
+        ret = cgutils.alloca_once(builder, cgutils.bool_t, zfill=True)
+
+        call_helper = self._get_call_helper(builder)
+        exc_id = call_helper._add_exception(exc)
+
+        try_state_ptr = self._get_try_state(builder)
+        try_excinfo_ptr = cgutils.gep(builder, try_state_ptr, 0, 1)
+        excinfo = builder.load(try_excinfo_ptr)
+
+        with cgutils.if_unlikely(builder,
+                                 cgutils.is_not_null(builder, excinfo)):
+            exc_id_ptr = cgutils.gep(builder, excinfo, 0, EXC_ID_IDX)
+            if exc is Exception:
+                builder.store(cgutils.bool_t(1), ret)
+            else:
+                b = builder.icmp_signed('==', builder.load(exc_id_ptr),
+                                        _const_int(exc_id))
+                builder.store(b, ret)
+            # clear the try_state exception if match is successful
+            with cgutils.if_likely(builder, builder.load(ret)):
+                null = cgutils.get_null_value(try_excinfo_ptr.type.pointee)
+                builder.store(null, try_excinfo_ptr)
+        return builder.load(ret)
+
+    def reraise_try(self, builder):
+        match_info = getattr(builder, '_in_match_block', False)
+
+        try_state_ptr = self._get_try_state(builder)
+        try_excinfo_ptr = cgutils.gep(builder, try_state_ptr, 0, 1)
+        try_excinfo = builder.load(try_excinfo_ptr)
+
+        with cgutils.if_likely(builder,
+                               cgutils.is_not_null(builder, try_excinfo)):
+
+            excptr = self._get_excinfo_argument(builder.function)
+            builder.store(try_excinfo, excptr)
+
+            if match_info:
+                # This is a hack for old-style impl.
+                # We will branch directly to the exception handler.
+                builder.branch(match_info['target'])
+            else:
+                # Return from the current function
+                self._return_errcode_raw(builder, RETCODE_USEREXC)
 
     def return_user_exc(self, builder, exc, exc_args=None, loc=None,
                         func_name=None):
@@ -467,21 +556,22 @@ class CPUCallConv(BaseCallConv):
 
     def unpack_dynamic_exception(self, builder, pyapi, status):
         excinfo_ptr = status.excinfoptr
-
+        serialized_ptr = builder.load(cgutils.gep(builder, excinfo_ptr, 0,
+                                                  EXC_SERIALIZED_IDX))
         # load the serialized exception buffer from the module and create
         # a python bytes object
         picklebuf = builder.extract_value(
-            builder.load(excinfo_ptr), PICKLE_BUF_IDX)
+            builder.load(serialized_ptr), pythonapi.PICKLE_BUF_IDX)
         picklebuf_sz = builder.extract_value(
-            builder.load(excinfo_ptr), PICKLE_BUFSZ_IDX)
+            builder.load(serialized_ptr), pythonapi.PICKLE_BUFSZ_IDX)
         static_exc_bytes = pyapi.bytes_from_string_and_size(
             picklebuf, builder.sext(picklebuf_sz, pyapi.py_ssize_t))
 
         # Load dynamic args (i8*) and the unwrap function
         dyn_args = builder.extract_value(
-            builder.load(excinfo_ptr), HASH_BUF_IDX)
+            builder.load(serialized_ptr), pythonapi.HASH_BUF_IDX)
         func_ptr = builder.extract_value(
-            builder.load(excinfo_ptr), UNWRAP_FUNC_IDX)
+            builder.load(serialized_ptr), pythonapi.UNWRAP_FUNC_IDX)
 
         # Convert the unwrap function to a function pointer and call it.
         # Function returns a python tuple with dynamic arguments converted to
@@ -507,12 +597,15 @@ class CPUCallConv(BaseCallConv):
                 builder.ret_void()
 
         # merge static and dynamic variables
-        excinfo = pyapi.build_dynamic_excinfo_struct(static_exc_bytes, py_tuple)
+        excinfo = pyapi.build_dynamic_excinfo_struct(static_exc_bytes,
+                                                     py_tuple)
 
-        # At this point, one can free the entire excinfo_ptr struct
+        # At this point, one can free the entire serialized_ptr struct
         if self.context.enable_nrt:
             # One can safely emit a free instruction as it is only executed
             # if its in a dynamic exception branch
+            self.context.nrt.free(
+                builder, builder.bitcast(serialized_ptr, pyapi.voidptr))
             self.context.nrt.free(
                 builder, builder.bitcast(excinfo_ptr, pyapi.voidptr))
         return excinfo
@@ -526,15 +619,17 @@ class CPUCallConv(BaseCallConv):
         #     (static) unserialize the exception using pythonapi.unserialize
 
         excinfo_ptr = status.excinfoptr
-        alloc_flag = builder.extract_value(builder.load(excinfo_ptr),
-                                           ALLOC_FLAG_IDX)
+        serialized_ptr = builder.load(cgutils.gep(builder, excinfo_ptr, 0,
+                                                  EXC_SERIALIZED_IDX))
+        alloc_flag = builder.extract_value(builder.load(serialized_ptr),
+                                           pythonapi.ALLOC_FLAG_IDX)
         gt = builder.icmp_signed('>', alloc_flag, int32_t(0))
         with builder.if_else(gt) as (then, otherwise):
             with then:
                 dyn_exc = self.unpack_dynamic_exception(builder, pyapi, status)
                 bb_then = builder.block
             with otherwise:
-                static_exc = pyapi.unserialize(excinfo_ptr)
+                static_exc = pyapi.unserialize(serialized_ptr)
                 bb_else = builder.block
         phi = builder.phi(static_exc.type)
         phi.add_incoming(dyn_exc, bb_then)
@@ -683,15 +778,18 @@ class CPUCallConv(BaseCallConv):
         #    {___, ___, i8*, i8*, i32} of excinfo_t
         # 3) Allocate a new excinfo_t struct
         # 4) Fill excinfo_t struct and copy the pointer to the excinfo** arg
+        call_helper = self._get_call_helper(builder)
+        exc_id = call_helper._add_exception(exc)
 
         # serialize comp. time args
         pyapi = self.context.get_python_api(builder)
         dummy = self.context.get_dummy_value()
         exc_args_static = tuple(
             [dummy if isinstance(arg, ir.Value) else arg for arg in exc_args])
-        exc = self.build_excinfo_struct(exc, exc_args_static, loc, func_name)
+        struct_gv = self.build_excinfo_struct(builder, exc, exc_id,
+                                              exc_args_static, loc, func_name)
         excinfo_pp = self._get_excinfo_argument(builder.function)
-        struct_gv = builder.load(pyapi.serialize_object(exc))
+        struct_gv = builder.load(struct_gv)
 
         # Create the struct for runtime args and emit a function to convert it
         # into a Python tuple
@@ -708,13 +806,38 @@ class CPUCallConv(BaseCallConv):
             self.context.nrt.allocate(builder, exc_size),
             excinfo_ptr_t)
 
+        ser_size = pyapi.py_ssize_t(
+            self.context.get_abi_sizeof(pythonapi.pyobj_t))
+        serialized_ptr = builder.bitcast(
+            self.context.nrt.allocate(builder, ser_size),
+            pythonapi.pyobj_ptr_t
+        )
+
         # fill the args
         zero = int32_t(0)
-        exc_fields = (builder.extract_value(struct_gv, PICKLE_BUF_IDX),
-                      builder.extract_value(struct_gv, PICKLE_BUFSZ_IDX),
-                      builder.bitcast(st_ptr, GENERIC_POINTER),
-                      builder.bitcast(unwrap_fn, GENERIC_POINTER),
-                      int32_t(len(struct_type)))
+
+        serialized_ptr_original = builder.load(
+            builder.extract_value(struct_gv, EXC_SERIALIZED_IDX))
+        ser_fields = (
+            builder.extract_value(serialized_ptr_original,
+                                  pythonapi.PICKLE_BUF_IDX),
+            builder.extract_value(serialized_ptr_original,
+                                  pythonapi.PICKLE_BUFSZ_IDX),
+            builder.bitcast(st_ptr, GENERIC_POINTER),
+            builder.bitcast(unwrap_fn, GENERIC_POINTER),
+            int32_t(len(struct_type))
+        )
+
+        for idx, arg in enumerate(ser_fields):
+            builder.store(arg, builder.gep(serialized_ptr,
+                                           [zero, int32_t(idx)]))
+        builder.store(serialized_ptr,
+                      builder.gep(excinfo_p,
+                                  [zero, int32_t(EXC_SERIALIZED_IDX)]))
+
+        exc_fields = (builder.extract_value(struct_gv, EXC_ID_IDX),
+                      builder.extract_value(struct_gv, STR_IDX),
+                      builder.extract_value(struct_gv, STRLEN_IDX))
         for idx, arg in enumerate(exc_fields):
             builder.store(arg, builder.gep(excinfo_p, [zero, int32_t(idx)]))
         builder.store(excinfo_p, excinfo_pp)
@@ -733,14 +856,15 @@ class CPUCallConv(BaseCallConv):
             return builder.__eh_try_state
         except AttributeError:
             ptr = cgutils.alloca_once(
-                builder, cgutils.intp_t, name='try_state', zfill=True,
+                builder, ir.LiteralStructType([cgutils.intp_t, excinfo_ptr_t]),
+                name='try_state', zfill=True,
             )
             builder.__eh_try_state = ptr
             return ptr
 
     def check_try_status(self, builder):
         try_state_ptr = self._get_try_state(builder)
-        try_depth = builder.load(try_state_ptr)
+        try_depth = builder.load(cgutils.gep(builder, try_state_ptr, 0, 0))
         # try_depth > 0
         in_try = builder.icmp_unsigned('>', try_depth, try_depth.type(0))
 
@@ -751,21 +875,27 @@ class CPUCallConv(BaseCallConv):
 
     def set_try_status(self, builder):
         try_state_ptr = self._get_try_state(builder)
+        try_depth_ptr = cgutils.gep(builder, try_state_ptr, 0, 0)
         # Increment try depth
-        old = builder.load(try_state_ptr)
+        old = builder.load(try_depth_ptr)
         new = builder.add(old, old.type(1))
-        builder.store(new, try_state_ptr)
+        builder.store(new, try_depth_ptr)
 
     def unset_try_status(self, builder):
         try_state_ptr = self._get_try_state(builder)
+        try_depth_ptr = cgutils.gep(builder, try_state_ptr, 0, 0)
+        try_excinfo_ptr = cgutils.gep(builder, try_state_ptr, 0, 1)
         # Decrement try depth
-        old = builder.load(try_state_ptr)
+        old = builder.load(try_depth_ptr)
         new = builder.sub(old, old.type(1))
-        builder.store(new, try_state_ptr)
+        builder.store(new, try_depth_ptr)
 
         # Needs to reset the exception state so that the exception handler
         # will run normally.
         excinfoptr = self._get_excinfo_argument(builder.function)
+        excinfo = builder.load(excinfoptr)
+        with cgutils.if_likely(builder, cgutils.is_not_null(builder, excinfo)):
+            builder.store(excinfo, try_excinfo_ptr)
         null = cgutils.get_null_value(excinfoptr.type.pointee)
         builder.store(null, excinfoptr)
 
@@ -892,6 +1022,29 @@ class CPUCallConv(BaseCallConv):
         retval = builder.load(retvaltmp)
         out = self.context.get_returned_value(builder, resty, retval)
         return status, out
+
+
+class _CPUCallHelper(object):
+    """
+    A call helper object for the "cpu" calling convention.
+    User exceptions are represented as integer codes
+    """
+
+    def _add_exception(self, exc):
+        """
+        Add a new user exception type to this helper.
+            Returns an integer that can be used to refer
+            to the added exception type in future.
+
+        Parameters
+        ----------
+        exc :
+            exception type
+        """
+        exc_dump = serialize.dumps(exc)
+        digest = hashlib.sha1(exc_dump).digest()
+        exc_id = int.from_bytes(bytes(digest[:16]), 'little')
+        return exc_id
 
 
 class ErrorModel(object):
