@@ -1,6 +1,6 @@
 
-Version 0.66.0 (TBD)
-====================
+Version 0.66.0 (30 June 2026)
+=============================
 
 This is a major Numba release. Numba now upgrades to llvmlite 0.48 with LLVM 22
 and restores ``sys.monitoring`` on Python 3.14.4 and later. This release also adds
