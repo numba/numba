@@ -1229,8 +1229,8 @@ def vonmises_impl(mu, kappa, size):
 
 @register_jitable
 def _binomial_btpe(n, p):
-    # Mirrors numba.np.random.distributions.random_binomial_btpe(), but draws
-    # from np.random's legacy state. The caller handles p > 0.5 by flipping.
+    # Port of NumPy's legacy_random_binomial_btpe(), but draws from
+    # np.random's legacy state. The caller handles p > 0.5 by flipping.
     q = 1.0 - p
     fm = n * p + p
     m = int(math.floor(fm))
@@ -1339,7 +1339,7 @@ def _binomial_btpe(n, p):
                      (13680. - (462. - (132. - (99. - 140. / x2) / x2) / x2)
                       / x2) / x1 / 166320. +
                      (13680. - (462. - (132. - (99. - 140. / w2) / w2) / w2)
-                      / w2) / w / 66320.)):
+                      / w2) / w / 166320.)):
                 case = 10
                 continue
             case = 60
