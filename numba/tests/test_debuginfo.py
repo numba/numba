@@ -91,7 +91,9 @@ class TestDebugInfo(TestCase):
         # check the LLVM IR has bar marked as 'alwaysinline' and baz as noinline
         full_ir = foo.inspect_llvm(foo.signatures[0])
         module = llvm.parse_assembly(full_ir)
-        name = foo.overloads[foo.signatures[0]].fndesc.mangled_name
+        foo_ol = foo.overloads[foo.signatures[0]]
+        name = foo_ol.fndesc.mangled_name
+        name = foo_ol.library._symbol_map.get(name, name)
         funcs = [x for x in module.functions if x.name == name]
         self.assertEqual(len(funcs), 1)
         func = funcs[0]
@@ -109,7 +111,9 @@ class TestDebugInfo(TestCase):
         # 2. a call to the baz function, this is from the noinline baz
         found_sin = False
         found_baz = False
-        baz_name = baz.overloads[baz.signatures[0]].fndesc.mangled_name
+        baz_ol = baz.overloads[baz.signatures[0]]
+        baz_name = baz_ol.fndesc.mangled_name
+        baz_name = baz_ol.library._symbol_map.get(baz_name, baz_name)
         for x in f_names:
             if not found_sin and re.match('.*llvm.sin.f64.*', x):
                 found_sin = True
@@ -215,7 +219,9 @@ class TestDebugInfoEmission(TestCase):
 
         module = llvm.parse_assembly(full_ir)
 
-        name = foo.overloads[foo.signatures[0]].fndesc.mangled_name
+        foo_ol = foo.overloads[foo.signatures[0]]
+        name = foo_ol.fndesc.mangled_name
+        name = foo_ol.library._symbol_map.get(name, name)
         funcs = [x for x in module.functions if x.name == name]
         self.assertEqual(len(funcs), 1)
         func = funcs[0]
@@ -339,7 +345,9 @@ class TestDebugInfoEmission(TestCase):
         # }
 
         module = llvm.parse_assembly(full_ir)
-        name = foo.overloads[foo.signatures[0]].fndesc.mangled_name
+        foo_ol = foo.overloads[foo.signatures[0]]
+        name = foo_ol.fndesc.mangled_name
+        name = foo_ol.library._symbol_map.get(name, name)
         funcs = [x for x in module.functions if x.name == name]
         self.assertEqual(len(funcs), 1)
         func = funcs[0]
@@ -610,7 +618,7 @@ class TestDebugInfoEmission(TestCase):
         def get_func_attrs(fn):
             cres = fn.overloads[fn.signatures[0]]
             lib = cres.library
-            fn = lib._final_module.get_function(cres.fndesc.mangled_name)
+            fn = lib.get_function(cres.fndesc.mangled_name)
             attrs = set(b' '.join(fn.attributes).split())
             return attrs
 
