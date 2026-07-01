@@ -1,0 +1,6 @@
+Use BTPE for large legacy binomial draws
+----------------------------------------
+
+``np.random.binomial`` now uses NumPy's BTPE algorithm for large means while
+keeping the existing BINV algorithm for small means. This preserves behavior and
+improves performance for large ``n`` or mid-range probabilities.
