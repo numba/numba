@@ -24,7 +24,7 @@ from numba.tests.support import (TestCase, MemoryLeakMixin,
                                  IS_MACOS_ARM64, IS_WIN_ARM64,
                                  REDUCED_TESTING,
                                  skip_if_reduced_testing,
-                                 numpy_sincos_uses_svml)
+                                 numpy_sincos_low_precision)
 import unittest
 
 
@@ -5731,7 +5731,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         def check_window(func):
             np_pyfunc = func
             np_nbfunc = njit(func)
-            ulps = 4 if numpy_sincos_uses_svml else 1
+            ulps = 4 if numpy_sincos_low_precision else 1
 
             for M in [0, 1, 5, 12]:
                 expected = np_pyfunc(M)

@@ -124,10 +124,12 @@ IS_NUMPY_2 = numpy_support.numpy_version >= (2, 0)
 skip_if_numpy_2 = unittest.skipIf(IS_NUMPY_2,
                                   "Not supported on numpy 2.0+")
 
-# True when NumPy sin/cos use SVML : Linux+x86_64+NumPy<1.25.
-# Replaced in 1.25 (https://github.com/numpy/numpy/commit/fe5472f).
-# Numba uses libm; tests allow 4 ULP when True, 1 ULP otherwise.
-numpy_sincos_uses_svml = (
+# On Linux + x86_64 with NumPy < 1.25, NumPy's sin/cos are less accurate
+# (up to ~4 ULP). NumPy 1.25 improved these to ~1 ULP
+# (https://github.com/numpy/numpy/commit/fe5472f), so results agree more
+# closely. When this flag is True, tests comparing against NumPy sin/cos
+# allow 4 ULP of difference; otherwise they require 1 ULP.
+numpy_sincos_low_precision = (
     sys.platform.startswith('linux') and platform.machine() == 'x86_64' and
     numpy_support.numpy_version < (1, 25)
 )

@@ -9,7 +9,7 @@ from numba.core import utils, types, typing, ir, compiler, cpu, cgutils
 from numba.core.compiler import Compiler, Flags
 from numba.core.registry import cpu_target
 from numba.tests.support import (MemoryLeakMixin, TestCase, temp_directory,
-                                 create_temp_module, numpy_sincos_uses_svml)
+                                 create_temp_module, numpy_sincos_low_precision)
 from numba.extending import (
     overload,
     models,
@@ -247,7 +247,7 @@ class TestArrayExpressions(MemoryLeakMixin, TestCase):
             fn(A, B, out)
             return out
 
-        ulps = 4 if numpy_sincos_uses_svml else 1
+        ulps = 4 if numpy_sincos_low_precision else 1
         expected = run_func(fn)
         self.assertPreciseEqual(expected, run_func(control_cfunc),
                                 prec='double', ulps=ulps)
