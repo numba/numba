@@ -1303,7 +1303,7 @@ class PythonAPI(object):
     def _get_function(self, fnty, name):
         fn = cgutils.get_or_insert_function(self.module, fnty, name)
         self.context.apply_target_attributes(fn)
-        return fn        
+        return fn
 
     def alloca_obj(self):
         return self.builder.alloca(self.pyobj)
@@ -1436,7 +1436,7 @@ class PythonAPI(object):
             suffix = digest.hex() if config.DIFF_IR == 0 else "DIFF_IR"
             name = ".const.picklebuf.%s" % suffix
             gv = self.context.insert_unique_const(self.module, name, struct)
-            # Make the name unique while populating the module.
+            # Make the id() (and hence the name) unique while populating the module.
             self.module.__serialized[obj] = gv
         return gv
 
