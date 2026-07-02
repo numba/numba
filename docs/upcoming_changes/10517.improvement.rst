@@ -1,3 +1,6 @@
+Add ``get_or_insert_foreign_function`` helper to cgutils
+---------------------------------------------------------
+
 Add ``get_or_insert_foreign_function`` helper to cgutils to centralize application of
 target-specific ABI attributes for foreign function declarations.
 
