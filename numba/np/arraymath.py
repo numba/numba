@@ -513,7 +513,20 @@ def array_var(a):
             return ssd / a.size
 
         return array_var_impl
-
+    elif isinstance(a, (types.Integer, types.Boolean)):
+        def _scalar_var(a):
+            return np.float64(0)
+        return _scalar_var
+    elif isinstance(a, types.Float):
+        def _scalar_var(a):
+            return a - a
+        return _scalar_var
+    elif isinstance(a, types.Complex):
+        typed_zero = as_dtype(a).type(0).real
+        def _scalar_var(a):
+            return typed_zero
+        return _scalar_var
+    return None
 
 @overload(np.std)
 @overload_method(types.Array, "std")
