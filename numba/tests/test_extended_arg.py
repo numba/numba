@@ -4,7 +4,6 @@ import dis
 import struct
 
 from numba import jit
-from numba.core import utils
 from numba.tests.support import TestCase
 
 
@@ -26,12 +25,10 @@ class TestExtendedArg(TestCase):
         consts = f.__code__.co_consts
         bytecode_format = "<BB"
         consts = consts + (None,) * self.bytecode_len + (42,)
-        if utils.PYVERSION >= (3, 11):
-            # Python 3.11 has a RESUME op code at the start of a function, need
-            # to inject the EXTENDED_ARG after this to influence the LOAD_CONST
-            offset = 2 # 2 byte op code
-        else:
-            offset = 0
+        offset = next(
+            i for i in range(0, len(b), 2)
+            if b[i] == dis.opmap['LOAD_CONST']
+        )
 
         packed_extend_arg = struct.pack(bytecode_format, dis.EXTENDED_ARG, 1)
         b[:] = b[:offset] + packed_extend_arg + b[offset:]
