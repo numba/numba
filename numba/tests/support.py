@@ -242,13 +242,6 @@ skip_macos_fenv_errors = unittest.skipIf(IS_MACOS,
     "fenv.h-like functionality unreliable on macOS")
 IS_MACOS_ARM64 = IS_MACOS and _uname.machine == 'arm64'
 IS_WIN_ARM64 = _uname.system == 'Windows' and _uname.machine == 'ARM64'
-# AArch64 uimm12 fixup failure on win-arm64 for large UniTuple(unicode)
-# arguments. https://github.com/numba/numba/issues/10619
-skip_win_arm64_unittuple_uimm12 = unittest.skipIf(
-    IS_WIN_ARM64,
-    "AArch64 uimm12 fixup failure on win-arm64 for large UniTuple(unicode) "
-    "arguments",
-)
 
 try:
     import scipy.linalg.cython_lapack
