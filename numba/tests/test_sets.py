@@ -10,8 +10,7 @@ import numpy as np
 
 from numba import jit, njit
 from numba.tests.support import (TestCase, enable_pyobj_flags, MemoryLeakMixin,
-                                 compile_function,
-                                 skip_win_arm64_unittuple_uimm12)
+                                 compile_function)
 
 
 Point = namedtuple('Point', ('a', 'b'))
@@ -624,19 +623,6 @@ class TestUnicodeSets(TestSets):
     """
     def _range(self, stop):
         return ['A{}'.format(i) for i in range(int(stop))]
-
-    # https://github.com/numba/numba/issues/10619
-    @skip_win_arm64_unittuple_uimm12
-    def test_isdisjoint(self):
-        super().test_isdisjoint()
-
-    @skip_win_arm64_unittuple_uimm12
-    def test_issubset(self):
-        super().test_issubset()
-
-    @skip_win_arm64_unittuple_uimm12
-    def test_issuperset(self):
-        super().test_issuperset()
 
 
 class TestSetsInvalidDtype(TestSets):
