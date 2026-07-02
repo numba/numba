@@ -1,0 +1,4 @@
+Add ``get_or_insert_foreign_function`` helper for consistent ABI handling across all foreign function declarations.
+
+This ensures target-specific ABI attributes are applied consistently for non-jitted symbols,
+avoiding discrepancies between call sites and simplifying future maintenance of foreign function handling.
