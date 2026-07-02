@@ -205,6 +205,9 @@ def array_sum_dtype_kws(a, dtype):
 def array_sum_axis_dtype_kws(a, dtype, axis):
     return a.sum(axis=axis, dtype=dtype)
 
+def array_cumsum_axis_dtype_kws(a, dtype, axis):
+    return a.cumsum(axis=axis, dtype=dtype)
+
 def array_sum_axis_dtype_pos(a, a1, a2):
     return a.sum(a1, a2)
 
@@ -1490,6 +1493,15 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                         py_res = pyfunc(arr, axis=axis, dtype=out_dtype)
                         nb_res = cfunc(arr, axis=axis, dtype=out_dtype)
                         self.assertPreciseEqual(py_res, nb_res)
+    
+    def test_sum_axis_tuple(self):
+        """ test sum with axis as a tuple """
+        pyfunc = array_sum_axis_kws
+        cfunc = jit(nopython=True)(pyfunc)
+        a = np.ones((2, 3, 4))
+        self.assertPreciseEqual(pyfunc(a, (0, 1)), cfunc(a, (0, 1)))
+        self.assertPreciseEqual(pyfunc(a, (0, 2)), cfunc(a, (0, 2)))
+        self.assertPreciseEqual(pyfunc(a, (1, 2)), cfunc(a, (1, 2)))
 
     def test_sum_axis_dtype_pos_arg(self):
         """ testing that axis and dtype inputs work when passed as positional """
@@ -1531,17 +1543,15 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         pyfunc = array_sum
         cfunc = jit(nopython=True)(pyfunc)
 
-        a = np.ones((2, 3, 4, 5))
         b = np.ones((4, 3))
         # BAD: axis > dimensions
         with self.assertRaises(ValueError):
             cfunc(b, 2)
         # BAD: negative axis
         with self.assertRaises(ValueError):
-            cfunc(a, -1)
-        # BAD: axis greater than 3
-        with self.assertRaises(ValueError):
-            cfunc(a, 4)
+            cfunc(b, -5)
+        # Good for negative axis == -1
+        self.assertPreciseEqual(cfunc(b, -2), pyfunc(b, -2))
 
     def test_sum_const_negative(self):
         # Exceptions leak references
@@ -1559,28 +1569,44 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(foo(a), foo.py_func(a))
         # ndim == 2, axis == -3, BAD
         a = np.ones((1, 2))
-        with self.assertRaises(NumbaValueError) as raises:
+        with self.assertRaises(ValueError) as raises:
             foo(a)
-        errmsg = "'axis' entry (-1) is out of bounds"
+        errmsg = "Axis out of bounds"
         self.assertIn(errmsg, str(raises.exception))
         with self.assertRaises(ValueError) as raises:
             foo.py_func(a)
         self.assertIn("out of bounds", str(raises.exception))
 
     def test_cumsum(self):
-        pyfunc = array_cumsum
+        """ test cumsum with axis and dtype parameters over a whole range of dtypes """
+        pyfunc = array_cumsum_axis_dtype_kws
         cfunc = jit(nopython=True)(pyfunc)
-        # OK
-        a = np.ones((2, 3))
-        self.assertPreciseEqual(pyfunc(a), cfunc(a))
-        # BAD: with axis
-        with self.assertRaises(TypingError):
-            cfunc(a, 1)
-        # BAD: with kw axis
-        pyfunc = array_cumsum_kws
-        cfunc = jit(nopython=True)(pyfunc)
-        with self.assertRaises(TypingError):
-            cfunc(a, axis=1)
+        signed_dtypes = [np.float64, np.float32, np.int64, np.int32,
+                      np.complex64, np.complex128]
+
+        unsigned_dtypes = [np.uint32, np.uint64, np.bool_]
+
+        out_dtypes = {np.dtype('float64'): [np.float64],
+                      np.dtype('float32'): [np.float64, np.float32],
+                      np.dtype('int64'): [np.float64, np.int64, np.float32],
+                      np.dtype('int32'): [np.float64, np.int64, np.float32, np.int32],
+                      np.dtype('uint32'): [np.float64, np.int64, np.float32],
+                      np.dtype('uint64'): [np.float64, np.uint64],
+                      np.dtype('bool'): [np.float64, np.int64, np.float32, np.int32, np.bool_],
+                      np.dtype('complex64'): [np.complex64, np.complex128],
+                      np.dtype('complex128'): [np.complex128]}
+
+        for arr in self.gen_sum_array_cases(signed_dtypes, unsigned_dtypes):
+            for out_dtype in out_dtypes[arr.dtype]:
+                for axis in (0, 1, 2):
+                    if axis > len(arr.shape) - 1:
+                        continue
+                    subtest_str = ("Testing np.cumsum with {} input and {} output "
+                                    .format(arr.dtype, out_dtype))
+                    with self.subTest(subtest_str):
+                        py_res = pyfunc(arr, axis=axis, dtype=out_dtype)
+                        nb_res = cfunc(arr, axis=axis, dtype=out_dtype)
+                        self.assertPreciseEqual(py_res, nb_res)
 
     def test_take(self):
         pyfunc = array_take

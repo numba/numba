@@ -406,7 +406,7 @@ def _numpy_redirect(fname):
     infer_global(numpy_function, types.Function(cls))
 
 
-for func in ['sum', 'argsort', 'nonzero', 'ravel']:
+for func in ['argsort', 'nonzero', 'ravel']:
     _numpy_redirect(func)
 
 
