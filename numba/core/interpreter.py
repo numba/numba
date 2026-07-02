@@ -3536,13 +3536,15 @@ class Interpreter(object):
 
     if PYVERSION in ((3, 14), (3, 15)):
         def op_LOAD_COMMON_CONSTANT(self, inst, res, idx):
-            if dis._common_constants[idx] == AssertionError:
-                gv_fn = ir.Global("AssertionError",
-                                  AssertionError,
-                                  loc=self.loc)
-                self.store(value=gv_fn, name=res)
+            const = dis._common_constants[idx]
+            # In 3.15 `_common_constants` also holds builtins/types (e.g.
+            # tuple, list, all) and plain literals (None, '', True, -1). The
+            # former behave like LOAD_GLOBAL, the latter like LOAD_CONST.
+            if isinstance(const, type) or callable(const):
+                value = ir.Global(const.__name__, const, loc=self.loc)
             else:
-                raise NotImplementedError
+                value = ir.Const(const, loc=self.loc)
+            self.store(value=value, name=res)
     elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
         pass
     else:
