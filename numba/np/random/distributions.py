@@ -16,7 +16,7 @@ from numba.np.random._constants import (wi_double, ki_double,
                                         we_float, ke_float,
                                         ziggurat_exp_r_f, fe_float,
                                         INT64_MAX, ziggurat_nor_inv_r)
-from numba.np.random._binomial import make_binomial_btpe
+from numba.cpython._binomial import make_binomial_btpe
 from numba.np.random.generator_core import (next_double, next_float,
                                             next_uint32, next_uint64)
 from numba import float32, int64

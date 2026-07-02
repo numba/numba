@@ -16,7 +16,7 @@ from numba.core.imputils import Registry
 from numba.core.typing import signature
 from numba.core import types, cgutils
 from numba.core.errors import NumbaTypeError
-from numba.np.random._binomial import make_binomial_btpe
+from numba.cpython._binomial import make_binomial_btpe
 from numba.np.random._constants import LONG_MAX
 
 registry = Registry('randomimpl')
