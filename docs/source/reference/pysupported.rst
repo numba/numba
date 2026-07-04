@@ -1127,6 +1127,8 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.gamma`
 * :func:`math.gcd`
 * :func:`math.hypot`
+* :func:`math.isclose`: ``rel_tol`` and ``abs_tol`` may also be passed
+  positionally, whereas CPython requires them to be passed by keyword
 * :func:`math.isfinite`
 * :func:`math.isinf`
 * :func:`math.isnan`
