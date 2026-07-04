@@ -1,0 +1,8 @@
+Add support for ``math.isclose()``
+----------------------------------
+
+``numpy.isclose()`` was already supported, but the standard library
+``math.isclose()`` had no implementation in Numba's ``nopython`` mode.
+This adds an implementation that mirrors CPython's behaviour, including
+handling of NaNs and infinities and validation that ``rel_tol`` and
+``abs_tol`` are non-negative.
