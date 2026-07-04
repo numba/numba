@@ -4,5 +4,5 @@ Fix ``cfunc`` type stub to accept ``nopython`` keyword argument
 The type stub for ``@cfunc`` was missing the ``nopython`` keyword argument that
 the runtime decorator accepts and documents. This caused ``mypy`` to report
 ``Unexpected keyword argument "nopython" for "cfunc"`` on valid code. The stub
-now includes ``nopython: bool = False`` as a keyword-only argument
+now includes ``nopython: bool = False`` as a keyword-only argument.
 (`#10679 <https://github.com/numba/numba/issues/10679>`_).
