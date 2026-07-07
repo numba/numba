@@ -1,5 +1,5 @@
 Fix false ``NumbaPerformanceWarning`` when indexing with ``newaxis``
----------------------------------------------------------------------
+--------------------------------------------------------------------
 
 Indexing a contiguous array with ``np.newaxis`` (for example
 ``x[:, None]``) was incorrectly treated as breaking contiguity, since the
