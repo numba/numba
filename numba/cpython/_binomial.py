@@ -7,6 +7,7 @@ The two paths differ only in (1) how a uniform double is drawn and (2) the
 legacy values for ``np.random`` but track NumPy's corrected values for
 ``Generator``). Both are injected, so the ~100 lines of rejection scaffolding
 live here once. Keep in sync with NumPy's ``random_binomial_btpe``.
+https://github.com/numpy/numpy/blob/2538439951286e1e8be2c66c9648bd58cea6e849/numpy/random/src/distributions/distributions.c#L622-L806
 """
 import math
 
