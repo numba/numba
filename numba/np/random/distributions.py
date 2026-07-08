@@ -599,7 +599,7 @@ def _binomial_btpe_squeeze(A, xm, m, n, y, r, q):
                (13680. - (462. - (132. - (99. - 140. / x2) / x2) / x2)
                 / x2) / x1 / 166320. +
                (13680. - (462. - (132. - (99. - 140. / w2) / w2) / w2)
-                / w2) / w / 66320.)
+                / w2) / w / 166320.)
 
 
 _binomial_btpe_impl = make_binomial_btpe(next_double, _binomial_btpe_squeeze)
