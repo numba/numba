@@ -449,11 +449,6 @@ def _numpy_sum(typingctx, aryty, axisty, dtype):
 
 @intrinsic
 def _numpy_sum_axis(typingctx, aryty, axisty, dtype):
-    if not isinstance(axisty, types.Integer):
-        raise TypingError(
-            "Only integer axis supported for now"
-        )
-
     if is_nonelike(dtype):
         ret_dtype = aryty.dtype
         if ret_dtype == types.bool_:
@@ -540,10 +535,19 @@ def _numpy_sum_axis(typingctx, aryty, axisty, dtype):
 @overload(np.sum)
 @overload_method(types.Array, "sum")
 def array_sum(a, axis=None, dtype=None):
+    if not isinstance(axis, types.Integer):
+        raise TypingError(
+            "NumPy sum only suppports integer axis value"
+        )
     if isinstance(a, types.Array):
-        axis_length = axis.count if isinstance(axis, types.UniTuple) else 1
+        axis_length = 1
         if is_nonelike(axis) or a.ndim == axis_length:
             def array_sum_impl(a, axis=None, dtype=None):
+                if axis is not None and (axis < -a.ndim or axis >= a.ndim):
+                    raise ValueError(
+                        f"axis {axis} is out of bounds for "
+                        f"array of dimension {a.ndim}"
+                    )
                 return _numpy_sum(a, axis, dtype)
         else:
             def array_sum_impl(a, axis=None, dtype=None):
