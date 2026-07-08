@@ -578,28 +578,55 @@ def random_logseries(bitgen, p):
             return 2
 
 
-@register_jitable
-def _binomial_btpe_squeeze(A, xm, m, n, y, r, q):
-    # Generator path's case-52 Stirling squeeze. Keep
-    # in sync with NumPy's random_binomial_btpe.
-    x1 = y + 1
-    f1 = m + 1
-    z = n + 1 - m
-    w = n - y + 1
-    x2 = x1 * x1
-    f2 = f1 * f1
-    z2 = z * z
-    w2 = w * w
-    return A > (xm * np.log(f1 / x1) + (n - m + 0.5) * np.log(z / w) +
-               (y - m) * np.log(w * r / (x1 * q)) +
-               (13680. - (462. - (132. - (99. - 140. / f2) / f2) / f2)
-                / f2) / f1 / 166320. +
-               (13680. - (462. - (132. - (99. - 140. / z2) / z2) / z2)
-                / z2) / z / 166320. +
-               (13680. - (462. - (132. - (99. - 140. / x2) / x2) / x2)
-                / x2) / x1 / 166320. +
-               (13680. - (462. - (132. - (99. - 140. / w2) / w2) / w2)
-                / w2) / w / 166320.)
+if numpy_version < (2, 5):
+    @register_jitable
+    def _binomial_btpe_squeeze(A, xm, m, n, y, r, q):
+        # Generator path's case-52 Stirling squeeze, pre-2.5 form: all terms
+        # added, constant 13680. Deliberately matches NumPy < 2.5's
+        # random_binomial_btpe. Do not fix here.
+        x1 = y + 1
+        f1 = m + 1
+        z = n + 1 - m
+        w = n - y + 1
+        x2 = x1 * x1
+        f2 = f1 * f1
+        z2 = z * z
+        w2 = w * w
+        return A > (xm * np.log(f1 / x1) + (n - m + 0.5) * np.log(z / w) +
+                   (y - m) * np.log(w * r / (x1 * q)) +
+                   (13680. - (462. - (132. - (99. - 140. / f2) / f2) / f2)
+                    / f2) / f1 / 166320. +
+                   (13680. - (462. - (132. - (99. - 140. / z2) / z2) / z2)
+                    / z2) / z / 166320. +
+                   (13680. - (462. - (132. - (99. - 140. / x2) / x2) / x2)
+                    / x2) / x1 / 166320. +
+                   (13680. - (462. - (132. - (99. - 140. / w2) / w2) / w2)
+                    / w2) / w / 166320.)
+else:
+    @register_jitable
+    def _binomial_btpe_squeeze(A, xm, m, n, y, r, q):
+        # Generator path's case-52 Stirling squeeze, NumPy >= 2.5 form. Keep in
+        # sync with NumPy's random_binomial_btpe, which fixed the Stirling
+        # constant (13680 -> 13860) and subtracts the x1 and w terms.
+        # https://github.com/numpy/numpy/pull/31238
+        x1 = y + 1
+        f1 = m + 1
+        z = n + 1 - m
+        w = n - y + 1
+        x2 = x1 * x1
+        f2 = f1 * f1
+        z2 = z * z
+        w2 = w * w
+        return A > (xm * np.log(f1 / x1) + (n - m + 0.5) * np.log(z / w) +
+                   (y - m) * np.log(w * r / (x1 * q)) +
+                   (13860. - (462. - (132. - (99. - 140. / f2) / f2) / f2)
+                    / f2) / f1 / 166320. +
+                   (13860. - (462. - (132. - (99. - 140. / z2) / z2) / z2)
+                    / z2) / z / 166320. -
+                   (13860. - (462. - (132. - (99. - 140. / x2) / x2) / x2)
+                    / x2) / x1 / 166320. -
+                   (13860. - (462. - (132. - (99. - 140. / w2) / w2) / w2)
+                    / w2) / w / 166320.)
 
 
 _binomial_btpe_impl = make_binomial_btpe(next_double, _binomial_btpe_squeeze)
