@@ -26,9 +26,6 @@ source deactivate
 # Display root environment (for debugging)
 conda list
 
-# Pin conda<26 to work around conda 26 regression, issue #10461
-$CONDA_INSTALL "conda<26"
-
 # If VANILLA_INSTALL is yes, then only Python, NumPy and pip are installed, this
 # is to catch tests/code paths that require an optional package and are not
 # guarding against the possibility that it does not exist in the environment.
