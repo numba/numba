@@ -68,7 +68,7 @@ fi
 
 # Python 3.14+ requires setuptools
 if [ ! $PYTHON \< "3.14" ]; then
-    $CONDA_INSTALL ${EXTRA_CHANNELS} setuptools
+    $CONDA_INSTALL ${EXTRA_CHANNELS} "setuptools>=69.0.0"
 fi
 
 # Install the compiler toolchain and gdb (if available)

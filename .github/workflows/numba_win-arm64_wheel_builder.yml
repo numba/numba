@@ -74,7 +74,7 @@ jobs:
               python -m pip install -i ${{ env.WHEELS_INDEX_URL }} llvmlite
           fi
           python -m pip install --pre numpy==${NUMPY_VERSION}
-          python -m pip install build setuptools wheel
+          python -m pip install build "setuptools>=69.0.0" wheel
 
       - name: Build wheel
         run: python -m build --wheel --no-isolation

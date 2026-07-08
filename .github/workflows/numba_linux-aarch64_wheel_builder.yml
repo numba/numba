@@ -180,7 +180,7 @@ jobs:
               $PYTHON_PATH -m pip install --no-cache-dir --pre -i $WHEELS_INDEX_URL llvmlite
           fi
           $PYTHON_PATH -m twine check dist/*.whl
-          $PYTHON_PATH -m pip install dist/numba*.whl numpy==${{ matrix.numpy_test }} setuptools
+          $PYTHON_PATH -m pip install dist/numba*.whl numpy==${{ matrix.numpy_test }} "setuptools>=69.0.0"
 
           # print Numba system information
           $PYTHON_PATH -m numba -s

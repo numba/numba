@@ -100,7 +100,7 @@ jobs:
           else
               arch -arm64 python -m pip install -i ${{ env.WHEELS_INDEX_URL }} llvmlite
           fi
-          python -m pip install build numpy==${{ matrix.numpy_build }} setuptools wheel
+          python -m pip install build numpy==${{ matrix.numpy_build }} "setuptools>=69.0.0" wheel
 
       - name: Setup llvm-openmp for build
         run: |
