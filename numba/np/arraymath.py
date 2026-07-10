@@ -551,6 +551,11 @@ def array_sum(a, axis=None, dtype=None):
                 return _numpy_sum(a, axis, dtype)
         else:
             def array_sum_impl(a, axis=None, dtype=None):
+                if axis is not None and (axis < -a.ndim or axis >= a.ndim):
+                    raise ValueError(
+                        f"axis {axis} is out of bounds for "
+                        f"array of dimension {a.ndim}"
+                    )
                 return _numpy_sum_axis(a, axis, dtype)
 
         return array_sum_impl

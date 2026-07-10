@@ -1533,11 +1533,21 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
         b = np.ones((4, 3))
         # BAD: axis > dimensions
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as raises:
             cfunc(b, 2)
+        self.assertIn(
+            "axis 2 is out of bounds "
+            "for array of dimension 2",
+            str(raises.exception)
+        )
         # BAD: negative axis
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as raises:
             cfunc(b, -5)
+        self.assertIn(
+            "axis -5 is out of bounds "
+            "for array of dimension 2",
+            str(raises.exception)
+        )
         # Good for negative axis == -1
         self.assertPreciseEqual(cfunc(b, -2), pyfunc(b, -2))
 
