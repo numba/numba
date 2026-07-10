@@ -978,7 +978,7 @@ class _IntrinsicTemplate(_TemplateTargetHelperMixin, AbstractTemplate):
         parameters = list(pysig.parameters.values())[1:]
         sig = sig.replace(pysig=pysig.replace(parameters=parameters))
         self._impl_cache[cache_key] = sig
-        self._overload_cache[sig.args] = imp
+        self._overload_cache[(self.context, sig.args)] = imp
         # register the lowering
         lower_builtin(imp, *sig.args)(imp)
         return sig
@@ -988,7 +988,7 @@ class _IntrinsicTemplate(_TemplateTargetHelperMixin, AbstractTemplate):
         Return the key for looking up the implementation for the given
         signature on the target context.
         """
-        return self._overload_cache[sig.args]
+        return self._overload_cache[(self.context, sig.args)]
 
     def get_template_info(self):
         basepath = os.path.dirname(os.path.dirname(numba.__file__))
