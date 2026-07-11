@@ -361,13 +361,10 @@ class BitwiseXor(BitwiseLogicOperation):
 
 @infer_global(operator.invert)
 class BitwiseInvert(ConcreteTemplate):
-    # Note: Numba follows CPython semantics for operator.invert on booleans,
-    # returning intp (~True == -2).  This is inconsistent with np.invert
-    # which follows NumPy semantics and returns bool (~True == False).
-    # The divergence is intentional: operator.invert is a Python operator
-    # and should match CPython, while np.invert is a NumPy ufunc whose
-    # behavior is determined by the ufunc loop selection.
-    cases = [signature(types.intp, types.boolean)]
+    # Note Numba follows the Numpy semantics of returning a bool,
+    # while Python returns an int.  This makes it consistent with
+    # np.invert() and makes array expressions correct.
+    cases = [signature(types.boolean, types.boolean)]
     cases += [signature(choose_result_int(op), op) for op in sorted(types.unsigned_domain)]
     cases += [signature(choose_result_int(op), op) for op in sorted(types.signed_domain)]
 

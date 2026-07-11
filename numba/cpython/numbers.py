@@ -542,8 +542,11 @@ def bool_unary_positive_impl(context, builder, sig, args):
 def bool_invert_impl(context, builder, sig, args):
     [typ] = sig.args
     [val] = args
-    res = context.cast(builder, val, typ, sig.return_type)
-    res = builder.xor(res, Constant(res.type, int('1' * res.type.width, 2)))
+    # Convert to boolean (i1) representation and flip the bit.
+    # This is equivalent to logical NOT: ~True == False, ~False == True.
+    # XOR with 1 flips only the boolean bit (not all bits as int_invert does).
+    istrue = context.cast(builder, val, typ, types.boolean)
+    res = builder.not_(istrue)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
