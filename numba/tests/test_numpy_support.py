@@ -369,12 +369,22 @@ class TestUFuncs(TestCase):
         check(np_add, (types.complex64, types.float64), 'DD->D')
         check(np_add, (types.float64, types.complex64), 'DD->D')
         # Integers, when used together with floating-point numbers,
-        # should cast to any real or complex (see #2006)
-        int_types = [types.int32, types.uint32, types.int64, types.uint64]
-        for intty in int_types:
+        # should cast according to NEP 50 weak promotion rules.
+        # Small integers (<= 16-bit) fit in float32's mantissa and
+        # preserve float32/complex64 output.
+        small_int_types = [types.int8, types.uint8, types.int16, types.uint16]
+        for intty in small_int_types:
             check(np_add, (types.float32, intty), 'ff->f')
             check(np_add, (types.float64, intty), 'dd->d')
             check(np_add, (types.complex64, intty), 'FF->F')
+            check(np_add, (types.complex128, intty), 'DD->D')
+        # Larger integers (>= 32-bit) cannot safely cast to float32,
+        # so float64 is used.
+        int_types = [types.int32, types.uint32, types.int64, types.uint64]
+        for intty in int_types:
+            check(np_add, (types.float32, intty), 'dd->d')
+            check(np_add, (types.float64, intty), 'dd->d')
+            check(np_add, (types.complex64, intty), 'DD->D')
             check(np_add, (types.complex128, intty), 'DD->D')
         # However, when used alone, they should cast only to
         # floating-point types of sufficient precision

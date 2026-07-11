@@ -539,6 +539,14 @@ def bool_unary_positive_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
+def bool_invert_impl(context, builder, sig, args):
+    [typ] = sig.args
+    [val] = args
+    res = context.cast(builder, val, typ, sig.return_type)
+    res = builder.xor(res, Constant(res.type, int('1' * res.type.width, 2)))
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
 lower_builtin(operator.eq, types.boolean, types.boolean)(int_eq_impl)
 lower_builtin(operator.ne, types.boolean, types.boolean)(int_ne_impl)
 lower_builtin(operator.lt, types.boolean, types.boolean)(int_ult_impl)
@@ -611,6 +619,8 @@ def _implement_bitwise_operators():
 _implement_integer_operators()
 
 _implement_bitwise_operators()
+
+lower_builtin(operator.invert, types.boolean)(bool_invert_impl)
 
 
 def real_add_impl(context, builder, sig, args):
