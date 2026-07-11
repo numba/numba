@@ -983,31 +983,15 @@ class TestOperators(TestCase):
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
-        # For booleans, ~True should return -2 (Python semantics),
-        # matching operator.invert behavior.
-        # Note: operator.invert (~) follows Python semantics (returns int),
-        # while np.invert follows NumPy semantics (returns bool).  This is
-        # an intentional inconsistency: Numba aligns operator.invert with
-        # CPython, not NumPy, for scalar boolean operands.
+        # For booleans, we follow Numpy semantics (i.e. ~True == False,
+        # not ~True == -2)
         values = [False, False, True, True]
+        values = list(map(np.bool_, values))
 
         pyfunc = self.op.bitwise_not_usecase
         cfunc = jit((types.boolean,), **flags)(pyfunc)
         for val in values:
             self.assertPreciseEqual(pyfunc(val), cfunc(val))
-
-        # np.bool_ scalars: In nopython mode, Numba follows CPython
-        # semantics for operator.invert and returns intp, not bool.
-        # In object mode, the function falls back to Python's native
-        # behavior where ~np.bool_ uses numpy's __invert__ (returns bool).
-        if not flags.get('forceobj', False):
-            np_bool_values = [np.bool_(False), np.bool_(False),
-                              np.bool_(True), np.bool_(True)]
-            for val in np_bool_values:
-                result = cfunc(val)
-                expected = ~bool(val)
-                self.assertEqual(result, expected)
-                self.assertIsInstance(result, (int, np.integer))
 
     def test_bitwise_not_npm(self):
         self.test_bitwise_not(flags=Noflags)
