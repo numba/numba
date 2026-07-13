@@ -24,7 +24,16 @@ numba\.core\.utils\..*
 numba\.cpython\..*
 numba\.cuda\..*
 numba\.experimental\..*
-numba\.misc\..*
+numba\.misc\.POST
+numba\.misc\.appdirs\..*
+numba\.misc\.coverage_support\..*
+numba\.misc\.dump_style.*
+numba\.misc\.gdb_print_extension
+numba\.misc\.help\..*
+numba\.misc\.numba_entry
+numba\.misc\.numba_gdbinfo
+numba\.misc\.numba_sysinfo
+numba\.misc\.timsort
 numba\.mviewbuf
 numba\.np\.(arraymath|arrayobj|linalg|npyimpl|random|types|ufunc_db|unsafe)\..*
 numba\.np\.extensions
