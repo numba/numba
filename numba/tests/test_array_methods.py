@@ -1531,17 +1531,25 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         pyfunc = array_sum
         cfunc = jit(nopython=True)(pyfunc)
 
-        a = np.ones((2, 3, 4, 5))
         b = np.ones((4, 3))
         # BAD: axis > dimensions
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as raises:
             cfunc(b, 2)
+        self.assertIn(
+            "axis 2 is out of bounds "
+            "for array of dimension 2",
+            str(raises.exception)
+        )
         # BAD: negative axis
-        with self.assertRaises(ValueError):
-            cfunc(a, -1)
-        # BAD: axis greater than 3
-        with self.assertRaises(ValueError):
-            cfunc(a, 4)
+        with self.assertRaises(ValueError) as raises:
+            cfunc(b, -5)
+        self.assertIn(
+            "axis -5 is out of bounds "
+            "for array of dimension 2",
+            str(raises.exception)
+        )
+        # Good for negative axis == -1
+        self.assertPreciseEqual(cfunc(b, -2), pyfunc(b, -2))
 
     def test_sum_const_negative(self):
         # Exceptions leak references
@@ -1559,13 +1567,16 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(foo(a), foo.py_func(a))
         # ndim == 2, axis == -3, BAD
         a = np.ones((1, 2))
-        with self.assertRaises(NumbaValueError) as raises:
+        with self.assertRaises(ValueError) as raises:
             foo(a)
-        errmsg = "'axis' entry (-1) is out of bounds"
+        errmsg = "axis -3 is out of bounds for array of dimension 2"
         self.assertIn(errmsg, str(raises.exception))
         with self.assertRaises(ValueError) as raises:
             foo.py_func(a)
-        self.assertIn("out of bounds", str(raises.exception))
+        self.assertIn(
+            "axis -3 is out of bounds for array of dimension 2",
+            str(raises.exception)
+        )
 
     def test_cumsum(self):
         pyfunc = array_cumsum
