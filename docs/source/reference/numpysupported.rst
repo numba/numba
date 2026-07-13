@@ -358,7 +358,8 @@ The following methods of NumPy arrays are supported:
 * :meth:`~numpy.ndarray.ravel` (no order argument; 'C' order only)
 * :meth:`~numpy.ndarray.repeat` (no axis argument)
 * :meth:`~numpy.ndarray.reshape` (only the 1-argument form)
-* :meth:`~numpy.ndarray.sort` (without arguments)
+* :meth:`~numpy.ndarray.sort` (``kind`` key word argument supported for
+  values ``'quicksort'`` and ``'mergesort'``)
 * :meth:`~numpy.ndarray.sum` (with or without the ``axis`` and/or ``dtype``
   arguments.)
 
