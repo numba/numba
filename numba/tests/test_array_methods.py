@@ -1569,11 +1569,14 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         a = np.ones((1, 2))
         with self.assertRaises(ValueError) as raises:
             foo(a)
-        errmsg = "Axis out of bounds"
+        errmsg = "axis -3 is out of bounds for array of dimension 2"
         self.assertIn(errmsg, str(raises.exception))
         with self.assertRaises(ValueError) as raises:
             foo.py_func(a)
-        self.assertIn("out of bounds", str(raises.exception))
+        self.assertIn(
+            "axis -3 is out of bounds for array of dimension 2",
+            str(raises.exception)
+        )
 
     def test_cumsum(self):
         pyfunc = array_cumsum
