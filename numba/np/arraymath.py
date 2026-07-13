@@ -535,7 +535,7 @@ def _numpy_sum_axis(typingctx, aryty, axisty, dtype):
 @overload(np.sum)
 @overload_method(types.Array, "sum")
 def array_sum(a, axis=None, dtype=None):
-    if not isinstance(axis, types.Integer):
+    if not (isinstance(axis, types.Integer) or is_nonelike(axis)):
         raise TypingError(
             "NumPy sum only suppports integer axis value"
         )
