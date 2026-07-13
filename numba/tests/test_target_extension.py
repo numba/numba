@@ -641,6 +641,47 @@ class TestTargetHierarchySelection(TestCase):
         for msg in msgs:
             self.assertIn(msg, str(raises.exception))
 
+    def test_intrinsic_generic_shared_across_targets(self):
+        """
+        Checks that a 'generic' intrinsic typed on more than one target
+        keeps its lowering on each of them. See issue #10688.
+        """
+
+        # NOTE: The actual operation performed by the intrinsic is
+        # irrelevant, the test is about the compilation sequence.
+        @intrinsic
+        def intrin_identity(tyctx, x):
+            sig = x(x)
+
+            def codegen(cgctx, builder, tyargs, llargs):
+                return llargs[0]
+
+            return sig, codegen
+
+        # Compile on the CPU: types the intrinsic in the CPU typing context
+        # and registers its lowering on the CPU target.
+        @njit
+        def cpu_first(x):
+            return intrin_identity(x)
+
+        self.assertPreciseEqual(cpu_first(3.14), 3.14)
+
+        # Compile on the DPU: types the intrinsic again, in the DPU typing
+        # context. This must not clobber the CPU target's implementation.
+        @djit(nopython=True)
+        def dpu_func(x):
+            return intrin_identity(x)
+
+        self.assertPreciseEqual(dpu_func(3.14), 3.14)
+
+        # A fresh CPU compile hits the per-context typing cache; lowering
+        # must still resolve to the impl registered on the CPU target.
+        @njit
+        def cpu_second(x):
+            return intrin_identity(x)
+
+        self.assertPreciseEqual(cpu_second(3.14), 3.14)
+
     def test_overload_allocation(self):
         def cast_integer(context, builder, val, fromty, toty):
             # XXX Shouldn't require this.
