@@ -9,6 +9,7 @@ on:
       - buildscripts/github/evaluate.py
       - buildscripts/github/build_wheel_linux.sh
       - buildscripts/github/repair_wheel_linux.sh
+      - buildscripts/github/test_wheel_contents.py
       - setup.py
   workflow_dispatch:
     inputs:
@@ -189,7 +190,7 @@ jobs:
           fi
           $PYTHON_PATH -m twine check dist/*.whl
 
-          $PYTHON_PATH -m pip install dist/numba*.whl numpy==${{ matrix.numpy_test }} setuptools
+          $PYTHON_PATH -m pip install dist/numba*.whl numpy==${{ matrix.numpy_test }} "setuptools>=69.0.0"
 
           if [ "$USE_TBB" = "true" ]; then
             $PYTHON_PATH -m pip install tbb

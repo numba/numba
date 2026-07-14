@@ -6,6 +6,7 @@ on:
   pull_request:
     paths:
       - .github/workflows/numba_win-arm64_wheel_builder.yml
+      - buildscripts/github/test_wheel_contents.py
       - setup.py
   workflow_dispatch:
     inputs:
@@ -74,10 +75,13 @@ jobs:
               python -m pip install -i ${{ env.WHEELS_INDEX_URL }} llvmlite
           fi
           python -m pip install --pre numpy==${NUMPY_VERSION}
-          python -m pip install build setuptools wheel
+          python -m pip install build "setuptools>=69.0.0" wheel
 
       - name: Build wheel
         run: python -m build --wheel --no-isolation
+
+      - name: Test wheel contents
+        run: python buildscripts/github/test_wheel_contents.py dist/*.whl
 
       - name: Upload numba wheel
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

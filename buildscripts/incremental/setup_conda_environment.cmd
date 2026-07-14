@@ -28,7 +28,7 @@ if "%PYTHON%" neq "3.13" set PKGS=%PKGS% ipython
 @rem Install SciPy only if NumPy is not 2.1
 if "%NUMPY%" neq "2.1" set PKGS=%PKGS% scipy
 @rem Python 3.14+ requires setuptools
-if "%PYTHON%" geq "3.14" set PKGS=%PKGS% setuptools
+if "%PYTHON%" geq "3.14" set PKGS=%PKGS% "setuptools>=69.0.0"
 @rem Install dependencies for building the documentation
 if "%BUILD_DOC%" == "yes" set PKGS=%PKGS% sphinx sphinx_rtd_theme pygments
 conda create -n %CONDA_ENV% -q -y -c numba/label/dev %PKGS%

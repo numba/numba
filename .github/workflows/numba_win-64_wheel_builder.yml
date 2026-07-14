@@ -7,6 +7,7 @@ on:
     paths:
       - .github/workflows/numba_win-64_wheel_builder.yml
       - buildscripts/github/evaluate.py
+      - buildscripts/github/test_wheel_contents.py
       - setup.py
   workflow_dispatch:
     inputs:
@@ -84,7 +85,7 @@ jobs:
           else
               python -m pip install -i ${{ env.WHEELS_INDEX_URL }} llvmlite
           fi
-          python -m pip install build numpy==${{ matrix.numpy_build }} setuptools wheel tbb==2021.6 tbb-devel==2021.6
+          python -m pip install build numpy==${{ matrix.numpy_build }} "setuptools>=69.0.0" wheel tbb==2021.6 tbb-devel==2021.6
 
       - name: Setup MSVC v14.44 (v143) environment
         run: |
@@ -118,6 +119,9 @@ jobs:
           DISTUTILS_USE_SDK: '1'
           MSSdk: '1'
         run: python -m build --wheel --no-isolation
+
+      - name: Test wheel contents
+        run: python buildscripts/github/test_wheel_contents.py dist/*.whl
 
       - name: Upload numba wheel
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
