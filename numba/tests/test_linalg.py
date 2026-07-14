@@ -10,6 +10,7 @@ import numpy as np
 
 from numba import jit, njit, typeof
 from numba.core import errors
+from numba.np.numpy_support import numpy_version
 from numba.tests.support import (TestCase, tag, needs_lapack, needs_blas,
                                  _is_armv7l, EnableNRTStatsMixin)
 from .matmul_usecase import matmul_usecase
@@ -1056,9 +1057,17 @@ class TestLinalgEigenSystems(TestLinalgBase):
             l, _ = func(A)
             self.assertTrue(np.any(l.imag))
 
-            # Now check that the computation fails in real space
+            # Behaviour in real space depends on the NumPy version.
             for ty in [np.float32, np.float64]:
-                self.assert_no_domain_change(name, cfunc, (A.astype(ty),))
+                if numpy_version < (2, 5):
+                    # Returning complex eigenvalues from a real input is a
+                    # domain change numba cannot represent, so it raises.
+                    self.assert_no_domain_change(name, cfunc, (A.astype(ty),))
+                else:
+                    # NumPy >= 2.5 always returns complex eigenvalues for real
+                    # input, so numba now computes the result instead of
+                    # raising (matching NumPy).
+                    check(A.astype(ty))
 
     @needs_lapack
     def test_linalg_eig(self):
