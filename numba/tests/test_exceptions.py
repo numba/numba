@@ -415,6 +415,25 @@ class TestRaising(TestCase):
         with self.assertRaisesRegex(ValueError, msg):
             raise_literal_dict2()
 
+    def test_dynamic_raise_literal_message(self):
+        @njit
+        def raise_literal_message(a):
+            if a == 0:
+                msg = "A was 0"
+                raise ValueError(msg)
+            if a == 1:
+                msg = "A was 1"
+                raise ValueError(msg)
+            if a == 2:
+                msg = "A was 2"
+                raise ValueError(msg)
+
+        for i in range(3):
+            with self.subTest(i=i):
+                with self.assertRaises(ValueError) as raises:
+                    raise_literal_message(i)
+                self.assertEqual(str(raises.exception), f"A was {i}")
+
     def test_disable_nrt(self):
         @njit(_nrt=False)
         def raise_with_no_nrt(i):
