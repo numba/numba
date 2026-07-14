@@ -1124,9 +1124,14 @@ def _fill_ufunc_db(ufunc_db):
     ufunc_db[np.absolute].update({
         'm->m': npdatetime.timedelta_abs_impl,
     })
-    ufunc_db[np.sign].update({
-        'm->m': npdatetime.timedelta_sign_impl,
-    })
+    if numpy_version >= (2, 5):
+        ufunc_db[np.sign].update({
+            'm->d': npdatetime.timedelta_sign_impl,
+        })
+    else:
+        ufunc_db[np.sign].update({
+            'm->m': npdatetime.timedelta_sign_impl,
+        })
     ufunc_db[np.add].update({
         'mm->m': npdatetime.timedelta_add_impl,
         'Mm->M': npdatetime.datetime_plus_timedelta,
