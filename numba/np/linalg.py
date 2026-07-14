@@ -1033,7 +1033,7 @@ def eig_impl(a):
 
     def real_eig_impl(a):
         """
-        eig() implementation for real arrays.
+        eig() implementation for real arrays (NumPy < 2.5).
         """
         n = a.shape[-1]
         if a.shape[-2] != n:
@@ -1066,6 +1066,7 @@ def eig_impl(a):
                             ldvl,
                             vr.ctypes,
                             ldvr)
+
         _handle_err_maybe_convergence_problem(r)
 
         # By design numba does not support dynamic return types, however,
@@ -1085,7 +1086,81 @@ def eig_impl(a):
         # put these in to help with liveness analysis,
         # `.ctypes` doesn't keep the vars alive
         _dummy_liveness_func([acpy.size, vl.size, vr.size, wr.size, wi.size])
+
         return (wr, vr.T)
+
+    # NumPy >= 2.5 always returns complex from eig for real input.
+    if a.dtype == types.float32:
+        _eig_cmplx_dtype = np.complex64
+    else:
+        _eig_cmplx_dtype = np.complex128
+
+    def real_eig_impl_complex_out(a):
+        """
+        eig() implementation for real arrays (NumPy >= 2.5).
+        """
+        n = a.shape[-1]
+        if a.shape[-2] != n:
+            msg = "Last 2 dimensions of the array must be square."
+            raise np.linalg.LinAlgError(msg)
+
+        _check_finite_matrix(a)
+
+        acpy = _copy_to_fortran_order(a)
+
+        ldvl = 1
+        ldvr = n
+        wr = np.empty(n, dtype=a.dtype)
+        wi = np.empty(n, dtype=a.dtype)
+        vl = np.empty((n, ldvl), dtype=a.dtype)
+        vr = np.empty((n, ldvr), dtype=a.dtype)
+        w = np.empty(n, dtype=_eig_cmplx_dtype)
+        # Pack eigenvectors as rows (C-order), return .T for F-contig columns
+        # matching the real-output path's vr.T convention.
+        v = np.empty((n, n), dtype=_eig_cmplx_dtype)
+
+        if n == 0:
+            return (w, v.T)
+
+        r = numba_ez_rgeev(kind,
+                            JOBVL,
+                            JOBVR,
+                            n,
+                            acpy.ctypes,
+                            n,
+                            wr.ctypes,
+                            wi.ctypes,
+                            vl.ctypes,
+                            ldvl,
+                            vr.ctypes,
+                            ldvr)
+
+        _handle_err_maybe_convergence_problem(r)
+
+        # Pack real LAPACK wr/wi and vr into complex eigenvalues/vectors.
+        # Conjugate pairs: LAPACK stores Re/Im parts in consecutive columns.
+        # vr rows hold eigenvectors (same layout as the real-output path).
+        i = 0
+        while i < n:
+            if wi[i] == 0.0:
+                w[i] = wr[i]
+                for j in range(n):
+                    v[i, j] = vr[i, j]
+                i += 1
+            else:
+                w[i] = wr[i] + 1j * wi[i]
+                w[i + 1] = wr[i + 1] + 1j * wi[i + 1]
+                for j in range(n):
+                    v[i, j] = vr[i, j] + 1j * vr[i + 1, j]
+                    v[i + 1, j] = vr[i, j] - 1j * vr[i + 1, j]
+                i += 2
+
+        # put these in to help with liveness analysis,
+        # `.ctypes` doesn't keep the vars alive
+        _dummy_liveness_func([acpy.size, vl.size, vr.size, wr.size, wi.size,
+                              w.size, v.size])
+
+        return (w, v.T)
 
     def cmplx_eig_impl(a):
         """
@@ -1129,6 +1204,8 @@ def eig_impl(a):
 
     if isinstance(a.dtype, types.scalars.Complex):
         return cmplx_eig_impl
+    elif np_support.numpy_version >= (2, 5):
+        return real_eig_impl_complex_out
     else:
         return real_eig_impl
 
@@ -1148,7 +1225,7 @@ def eigvals_impl(a):
 
     def real_eigvals_impl(a):
         """
-        eigvals() implementation for real arrays.
+        eigvals() implementation for real arrays (NumPy < 2.5).
         """
         n = a.shape[-1]
         if a.shape[-2] != n:
@@ -1205,6 +1282,62 @@ def eigvals_impl(a):
         _dummy_liveness_func([acpy.size, vl.size, vr.size, wr.size, wi.size])
         return wr
 
+    # NumPy >= 2.5 always returns complex from eigvals for real input.
+    if a.dtype == types.float32:
+        _eigvals_cmplx_dtype = np.complex64
+    else:
+        _eigvals_cmplx_dtype = np.complex128
+
+    def real_eigvals_impl_complex_out(a):
+        """
+        eigvals() implementation for real arrays (NumPy >= 2.5).
+        """
+        n = a.shape[-1]
+        if a.shape[-2] != n:
+            msg = "Last 2 dimensions of the array must be square."
+            raise np.linalg.LinAlgError(msg)
+
+        _check_finite_matrix(a)
+
+        acpy = _copy_to_fortran_order(a)
+
+        ldvl = 1
+        ldvr = 1
+        wr = np.empty(n, dtype=a.dtype)
+        w = np.empty(n, dtype=_eigvals_cmplx_dtype)
+
+        if n == 0:
+            return w
+
+        wi = np.empty(n, dtype=a.dtype)
+
+        # not referenced but need setting for MKL null check
+        vl = np.empty((1), dtype=a.dtype)
+        vr = np.empty((1), dtype=a.dtype)
+
+        r = numba_ez_rgeev(kind,
+                            JOBVL,
+                            JOBVR,
+                            n,
+                            acpy.ctypes,
+                            n,
+                            wr.ctypes,
+                            wi.ctypes,
+                            vl.ctypes,
+                            ldvl,
+                            vr.ctypes,
+                            ldvr)
+        _handle_err_maybe_convergence_problem(r)
+
+        for i in range(n):
+            w[i] = wr[i] + 1j * wi[i]
+
+        # put these in to help with liveness analysis,
+        # `.ctypes` doesn't keep the vars alive
+        _dummy_liveness_func([acpy.size, vl.size, vr.size, wr.size, wi.size,
+                              w.size])
+        return w
+
     def cmplx_eigvals_impl(a):
         """
         eigvals() implementation for complex arrays.
@@ -1248,6 +1381,8 @@ def eigvals_impl(a):
 
     if isinstance(a.dtype, types.scalars.Complex):
         return cmplx_eigvals_impl
+    elif np_support.numpy_version >= (2, 5):
+        return real_eigvals_impl_complex_out
     else:
         return real_eigvals_impl
 
