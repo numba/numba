@@ -1,7 +1,0 @@
-Fix rounding error in ``mean`` for integer and boolean arrays
--------------------------------------------------------------
-
-Computing ``np.mean`` over an integer or boolean array cast the element count
-to the array's dtype before dividing, which could narrow the divisor and
-produce a slightly incorrect result. The division is now performed in full
-precision and only the final mean is cast, matching NumPy's result.
