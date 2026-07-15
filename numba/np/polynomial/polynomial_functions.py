@@ -24,6 +24,8 @@ def roots_impl(p):
     else:
         cast_t = as_dtype(ty)
 
+    real_output = not isinstance(ty, types.Complex)
+
     def roots_impl(p):
         # impl based on numpy:
         # https://github.com/numpy/numpy/blob/master/numpy/lib/polynomial.py
@@ -49,6 +51,15 @@ def roots_impl(p):
             A = np.diag(np.ones((n - 2,), cast_t), 1).T
             A[0, :] = -p[1:] / p[0]  # normalize
             roots = np.linalg.eigvals(A)
+            # eigvals returns complex for real input from NumPy 2.5 on,
+            # but the roots of a real polynomial stay real: verify and
+            # drop the zero imaginary parts. Branch pruned for complex
+            # input; message in sync with linalg.eigvals.
+            if real_output:
+                if np.any(roots.imag):
+                    raise ValueError(
+                        "eigvals() argument must not cause a domain change.")
+                roots = roots.real.copy()
         else:
             roots = np.zeros(0, dtype=cast_t)
 
