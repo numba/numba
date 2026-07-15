@@ -9,6 +9,7 @@ import operator
 import warnings
 
 import llvmlite.ir
+from numba.core.typing import context
 from numba.np.types.datetime import NPDatetime, NPTimedelta
 import numpy as np
 
@@ -432,8 +433,7 @@ def get_mask(context, builder, mask_length, axis, inverted=False):
     return builder.load(stack)
 
 
-@intrinsic
-def _numpy_sum(typingctx, aryty, axisty, dtype):
+def get_ret_dtype_if_any(aryty, dtype):
     if is_nonelike(dtype):
         ret_dtype = aryty.dtype
         if ret_dtype == types.bool_:
@@ -447,7 +447,12 @@ def _numpy_sum(typingctx, aryty, axisty, dtype):
             ret_dtype = types.intp
     else:
         ret_dtype = dtype.dtype
+    return ret_dtype
 
+
+@intrinsic
+def _numpy_sum(typingctx, aryty, axisty, dtype):
+    ret_dtype = get_ret_dtype_if_any(aryty, dtype)
     sig = ret_dtype(aryty, axisty, dtype)
 
     def codegen(context, builder, sig, args):
@@ -466,29 +471,18 @@ def _numpy_sum(typingctx, aryty, axisty, dtype):
             (sig.return_type, sig.return_type),
             {}
         )
-        add_funcfn = context.get_function(fnty, fn_sig)
+        if context.data_model_manager[ret_dtype]._fe_type is bool:
+            add_funcfn = lambda builder, args: builder.or_(*args)
+        else:
+            add_funcfn = context.get_function(fnty, fn_sig)
 
         # Loop on source and copy to destination
         with ArrayIterator(context, builder, aryty, ary) as iter_val_ptr:
             val = load_item(context, builder, aryty, iter_val_ptr)
-            if isinstance(ret_dtype, types.Boolean):
-                # This is required because NumPy booleans are stored as 8-bit
-                # integers whilst in llvm they are 1-bit, so we need to
-                # zero-extend them instead of a builder.cast.
-                res_val = builder.load(result)
-                res_val = builder.or_(
-                    res_val,
-                    builder.zext(
-                        val,
-                        llvmlite.ir.IntType(res_val.type.width)
-                    )
-                )
-                builder.store(res_val, result)
-            else:
-                res_val = add_funcfn(builder, (
-                    builder.load(result),
-                    context.cast(builder, val, aryty.dtype, sig.return_type)))
-                builder.store(res_val, result)
+            res_val = add_funcfn(builder, (
+                context.data_model_manager[ret_dtype].from_data(builder, builder.load(result)),
+                context.data_model_manager[ret_dtype].from_data(builder, context.cast(builder, val, aryty.dtype, sig.return_type))))
+            builder.store(res_val, result)
 
         return impl_ret_borrowed(
             context, builder, sig.return_type, builder.load(result)
@@ -499,21 +493,7 @@ def _numpy_sum(typingctx, aryty, axisty, dtype):
 
 @intrinsic
 def _numpy_sum_axis(typingctx, aryty, axisty, dtype):
-    if is_nonelike(dtype):
-        ret_dtype = aryty.dtype
-        if ret_dtype == types.bool_:
-            # This is required to match NumPy's behavior where
-            # bools are promoted to intp for sum
-            ret_dtype = types.intp
-        if (
-            isinstance(aryty.dtype, types.Integer)
-            and aryty.dtype.bitwidth < types.intp.bitwidth
-        ):
-            # For signed integers smaller than intp,
-            # use intp as the accumulator
-            ret_dtype = types.intp
-    else:
-        ret_dtype = dtype.dtype
+    ret_dtype = get_ret_dtype_if_any(aryty, dtype)
 
     assert aryty.ndim > 0, \
         "Array must have at least 1 dimension for sum with axis"
@@ -545,7 +525,10 @@ def _numpy_sum_axis(typingctx, aryty, axisty, dtype):
             (sig.return_type.dtype, sig.return_type.dtype),
             {}
         )
-        add_funcfn = context.get_function(fnty, fn_sig)
+        if context.data_model_manager[ret_dtype]._fe_type is bool:
+            add_funcfn = lambda builder, args: builder.or_(*args)
+        else:
+            add_funcfn = context.get_function(fnty, fn_sig)
 
         mask = get_mask(context, builder, aryty.ndim, axis)
         # Loop on source and copy to destination
@@ -554,27 +537,10 @@ def _numpy_sum_axis(typingctx, aryty, axisty, dtype):
         ) as (ary_iter_ptr, res_ptr_tup):
             res_ptr = res_ptr_tup[0]
             val = load_item(context, builder, aryty, ary_iter_ptr)
-            if isinstance(ret_dtype, types.Boolean):
-                # This is required because NumPy booleans are stored as 8-bit
-                # integers whilst in llvm they are 1-bit, so we need to
-                # zero-extend them instead of a builder.cast.
-                res_val = builder.load(res_ptr)
-                res_val = builder.or_(
-                    res_val,
-                    builder.zext(
-                        val,
-                        llvmlite.ir.IntType(res_val.type.width)
-                    )
-                )
-                builder.store(res_val, res_ptr)
-            else:
-                res_val = add_funcfn(builder, (
-                    builder.load(res_ptr),
-                    context.cast(
-                        builder, val, aryty.dtype,
-                        sig.return_type.dtype))
-                )
-                builder.store(res_val, res_ptr)
+            res_val = add_funcfn(builder, (
+                context.data_model_manager[ret_dtype].from_data(builder, builder.load(res_ptr)),
+                context.data_model_manager[ret_dtype].from_data(builder, context.cast(builder, val, aryty.dtype, sig.return_type.dtype))))
+            builder.store(context.data_model_manager[ret_dtype].as_data(builder, res_val), res_ptr)
 
         return impl_ret_new_ref(
             context, builder, sig.return_type, res._getvalue()
@@ -648,19 +614,7 @@ def array_prod(a):
 
 @intrinsic
 def _numpy_cumsum(typingctx, aryty, axisty, dtype):
-    if is_nonelike(dtype):
-        ret_dtype = aryty.dtype
-        if ret_dtype == types.bool_:
-            ret_dtype = types.intp
-        if (
-            isinstance(aryty.dtype, types.Integer) and
-            aryty.dtype.bitwidth < types.intp.bitwidth
-        ):
-            # For signed integers smaller than intp,
-            # use intp as the accumulator
-            ret_dtype = types.intp
-    else:
-        ret_dtype = dtype.dtype
+    ret_dtype = get_ret_dtype_if_any(aryty, dtype)
 
     ret = types.Array(ret_dtype, aryty.ndim, layout='C')
     sig = ret(aryty, axisty, dtype)
@@ -690,33 +644,22 @@ def _numpy_cumsum(typingctx, aryty, axisty, dtype):
             (sig.return_type.dtype, sig.return_type.dtype),
             {}
         )
-        add_funcfn = context.get_function(fnty, fn_sig)
+        if context.data_model_manager[ret_dtype]._fe_type is bool:
+            add_funcfn = lambda builder, args: builder.or_(*args)
+        else:
+            add_funcfn = context.get_function(fnty, fn_sig)
+
         mask = get_mask(context, builder, aryty.ndim, None)
         # Loop on source and copy to destination
         with ArrayIterator(context, builder, aryty, ary,
                            (mask,), (res,)) as (iter_val_ptr, res_ptr_tup):
             res_ptr = res_ptr_tup[0]
             val = load_item(context, builder, aryty, iter_val_ptr)
-            if isinstance(ret_dtype, types.Boolean):
-                # This is required because NumPy booleans are stored as 8-bit
-                # integers whilst in llvm they are 1-bit, so we need to
-                # zero-extend them instead of a builder.cast.
-                res_val = builder.load(acc)
-                res_val = builder.or_(
-                    res_val,
-                    builder.zext(
-                        val,
-                        llvmlite.ir.IntType(res_val.type.width)
-                    )
-                )
-                builder.store(res_val, acc)
-            else:
-                res_val = add_funcfn(builder, (
-                    builder.load(acc),
-                    context.cast(builder, val, aryty.dtype,
-                                 sig.return_type.dtype)))
-                builder.store(res_val, acc)
-            builder.store(builder.load(acc), res_ptr)
+            res_val = add_funcfn(builder, (
+                context.data_model_manager[ret_dtype].from_data(builder, builder.load(acc)),
+                context.data_model_manager[ret_dtype].from_data(builder, context.cast(builder, val, aryty.dtype, sig.return_type.dtype))))
+            builder.store(res_val, acc)
+            builder.store(context.data_model_manager[ret_dtype].as_data(builder, builder.load(acc)), res_ptr)
 
         return impl_ret_new_ref(
             context, builder, sig.return_type, res._getvalue()
@@ -727,25 +670,7 @@ def _numpy_cumsum(typingctx, aryty, axisty, dtype):
 
 @intrinsic
 def _numpy_cumsum_axis(typingctx, aryty, axisty, dtype):
-    assert isinstance(axisty, types.Integer), \
-        "Only integer axis supported for now"
-
-    if is_nonelike(dtype):
-        ret_dtype = aryty.dtype
-        if ret_dtype == types.bool_:
-            # This is required to match NumPy's behavior where
-            # bools are promoted to intp for cumsum
-            ret_dtype = types.intp
-        if (
-            isinstance(aryty.dtype, types.Integer)
-            and aryty.dtype.bitwidth < types.intp.bitwidth
-        ):
-            # For signed integers smaller than intp,
-            # use intp as the accumulator
-            ret_dtype = types.intp
-    else:
-        ret_dtype = dtype.dtype
-
+    ret_dtype = get_ret_dtype_if_any(aryty, dtype)
     ret = types.Array(ret_dtype, aryty.ndim, layout='C')
     sig = ret(aryty, axisty, dtype)
 
@@ -782,7 +707,11 @@ def _numpy_cumsum_axis(typingctx, aryty, axisty, dtype):
             (sig.return_type.dtype, sig.return_type.dtype),
             {}
         )
-        add_funcfn = context.get_function(fnty, fn_sig)
+        if context.data_model_manager[ret_dtype]._fe_type is bool:
+            add_funcfn = lambda builder, args: builder.or_(*args)
+        else:
+            add_funcfn = context.get_function(fnty, fn_sig)
+
         mask = get_mask(context, builder, aryty.ndim, None)
         inverted_mask = get_mask(context, builder, aryty.ndim, axis)
 
@@ -793,27 +722,10 @@ def _numpy_cumsum_axis(typingctx, aryty, axisty, dtype):
         ) as (ary_iter_ptr, res_ptr_tup):
             res_ptr, acc_ptr = res_ptr_tup
             val = load_item(context, builder, aryty, ary_iter_ptr)
-            if isinstance(ret_dtype, types.Boolean):
-                # This is required because NumPy booleans are stored as 8-bit
-                # integers whilst in llvm they are 1-bit, so we need to
-                # zero-extend them instead of a builder.cast.
-                res_val = builder.load(acc_ptr)
-                res_val = builder.or_(
-                    res_val,
-                    builder.zext(
-                        val,
-                        llvmlite.ir.IntType(res_val.type.width)
-                    )
-                )
-                builder.store(res_val, acc_ptr)
-            else:
-                res_val = add_funcfn(builder, (
-                    builder.load(acc_ptr),
-                    context.cast(
-                        builder, val, aryty.dtype,
-                        sig.return_type.dtype))
-                )
-                builder.store(res_val, acc_ptr)
+            res_val = add_funcfn(builder, (
+                context.data_model_manager[ret_dtype].from_data(builder, builder.load(acc_ptr)),
+                context.data_model_manager[ret_dtype].from_data(builder, context.cast(builder, val, aryty.dtype, sig.return_type.dtype))))
+            builder.store(context.data_model_manager[ret_dtype].as_data(builder, res_val), acc_ptr)
             builder.store(builder.load(acc_ptr), res_ptr)
 
         context.nrt.decref(builder, acc_type, acc._getvalue())
@@ -828,12 +740,27 @@ def _numpy_cumsum_axis(typingctx, aryty, axisty, dtype):
 @overload(np.cumsum)
 @overload_method(types.Array, "cumsum")
 def array_cumsum(a, axis=None, dtype=None):
+    if not (isinstance(axis, types.Integer) or is_nonelike(axis)):
+        raise TypingError(
+            "NumPy cumsum only suppports integer axis value"
+        )
     if isinstance(a, types.Array):
-        if is_nonelike(axis):
+        axis_length = 1
+        if is_nonelike(axis) or a.ndim == axis_length:
             def array_cumsum_impl(a, axis=None, dtype=None):
-                return _numpy_cumsum(a, axis, dtype).reshape(a.size)
+                if axis is not None and (axis < -a.ndim or axis >= a.ndim):
+                    raise ValueError(
+                        f"axis {axis} is out of bounds for "
+                        f"array of dimension {a.ndim}"
+                    )
+                return _numpy_cumsum(a, axis, dtype)
         else:
             def array_cumsum_impl(a, axis=None, dtype=None):
+                if axis is not None and (axis < -a.ndim or axis >= a.ndim):
+                    raise ValueError(
+                        f"axis {axis} is out of bounds for "
+                        f"array of dimension {a.ndim}"
+                    )
                 return _numpy_cumsum_axis(a, axis, dtype)
 
         return array_cumsum_impl
