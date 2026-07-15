@@ -559,7 +559,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(np.bool_(True))
         check(np.bool_(False))
 
-        # NumPy floating scalars — dtype preserved
+        # NumPy floating scalars, dtype preserved
         check(np.float32(1.25))
         check(np.float64(-2.5))
 
@@ -575,9 +575,21 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(np.float64(-0.0))
         check(np.float64(0.0))
 
+        # NumPy timedelta64 scalars: the value is returned unchanged and the
+        # unit is preserved
+        check(np.timedelta64())
+        check(np.timedelta64(5, 'ms'))
+        check(np.timedelta64(-3, 'D'))
+        check(np.timedelta64('NaT', 's'))
+
         # Error cases
         with self.assertTypingError():
             cfunc('test String')
+
+        # NumPy raises a UFuncTypeError for datetime64 input because 'add' is
+        # undefined on two datetime64 operands, so this is rejected at typing
+        with self.assertTypingError():
+            cfunc(np.datetime64('2020-01-01'))
 
     def check_percentile_and_quantile(self, pyfunc, q_upper_bound):
         cfunc = jit(nopython=True)(pyfunc)
