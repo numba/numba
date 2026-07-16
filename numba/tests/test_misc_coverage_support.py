@@ -93,5 +93,33 @@ class TestNumbaTracerToolId(TestCase):
         NotifyCompilerCoverage(collector)
 
 
+class TestCoverageAvailableFakeModule(TestCase):
+    def test_fake_coverage_module_not_detected(self):
+        """Regression test for https://github.com/numba/numba/issues/10705.
+        An unrelated module named 'coverage' on sys.path (e.g. a directory
+        named 'coverage' in cwd) should not set coverage_available = True.
+        """
+        import importlib
+        import types
+        import sys
+        import numba.misc.coverage_support as cs
+
+        # Create a fake coverage module without the expected attributes
+        fake_coverage = types.ModuleType("coverage")
+
+        saved = sys.modules.get("coverage")
+        sys.modules["coverage"] = fake_coverage
+        try:
+            importlib.reload(cs)
+            self.assertFalse(cs.coverage_available)
+        finally:
+            # Restore original state
+            if saved is not None:
+                sys.modules["coverage"] = saved
+            else:
+                sys.modules.pop("coverage", None)
+            importlib.reload(cs)
+
+
 if __name__ == "__main__":
     unittest.main()

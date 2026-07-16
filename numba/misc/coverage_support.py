@@ -15,6 +15,8 @@ from numba.core import ir, config
 
 try:
     import coverage
+    if not (hasattr(coverage, 'types') and hasattr(coverage, 'Coverage')):
+        raise ImportError
 except ImportError:
     coverage_available = False
 else:
