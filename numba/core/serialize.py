@@ -152,7 +152,7 @@ def custom_rebuild(custom_pickled):
     return cls._rebuild(**states)
 
 
-def is_serialiable(obj):
+def is_serialiable(obj) -> bool:
     """Check if *obj* can be serialized.
 
     Parameters
@@ -164,10 +164,12 @@ def is_serialiable(obj):
     can_serialize : bool
     """
     with io.BytesIO() as fout:
-        pickler = NumbaPickler(fout)
+        dump = NumbaPickler(fout).dump
         try:
-            pickler.dump(obj)
-        except pickle.PicklingError:
+            dump(obj)
+        except Exception:
+            # Dill simply catches everything in safe mode
+            # https://github.com/uqfoundation/dill/blob/aa4409a06b908cb018936ba160de5a75b418c03f/dill/_dill.py#L2168-L2180
             return False
         else:
             return True
