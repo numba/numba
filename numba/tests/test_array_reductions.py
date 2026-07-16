@@ -709,52 +709,34 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_median_basic(pyfunc, variations)
 
     def test_np_median_scalar(self):
+        # The standard scalar matrix (int32, float32/float64, +/-0.0, inf, nan,
+        # booleans, and the string typing-error case) is exercised by the
+        # shared helper, matching the np.mean/np.std/np.min scalar tests.
+        self.check_scalar_basic(array_median_global)
+
+        # Extra cases not covered by check_scalar_basic:
         cfunc = jit(nopython=True)(array_median_global)
 
         def check(arg):
-            expected = array_median_global(arg)
-            got = cfunc(arg)
-            self.assertPreciseEqual(got, expected)
+            self.assertPreciseEqual(cfunc(arg), array_median_global(arg))
 
-        # Scalar inputs: median of a single value returns the value,
-        # dtype is preserved (same as NumPy's 1-element array behaviour)
-        check(np.int32(2))
+        # Wider integer widths, confirming integer scalars promote to float64.
         check(np.int64(-3))
         check(np.uint32(5))
 
-        # NumPy boolean scalars
-        check(np.bool_(True))
-        check(np.bool_(False))
-
-        # NumPy floating scalars, dtype preserved
-        check(np.float32(1.25))
-        check(np.float64(-2.5))
-
-        # Python scalars
+        # Python scalars.
         check(5)
         check(True)
         check(3.5)
 
-        # Special floating values
-        check(np.float64(np.nan))
-        check(np.float64(np.inf))
-        check(np.float64(-np.inf))
-        check(np.float64(-0.0))
-        check(np.float64(0.0))
-
-        # NumPy timedelta64 scalars: the value is returned unchanged and the
-        # unit is preserved
+        # NumPy timedelta64 scalars: returned unchanged, with unit preserved.
         check(np.timedelta64())
         check(np.timedelta64(5, 'ms'))
         check(np.timedelta64(-3, 'D'))
         check(np.timedelta64('NaT', 's'))
 
-        # Error cases
-        with self.assertTypingError():
-            cfunc('test String')
-
-        # NumPy raises a UFuncTypeError for datetime64 input because 'add' is
-        # undefined on two datetime64 operands, so this is rejected at typing
+        # datetime64 is rejected at typing: np.median goes through a mean
+        # reduction and 'add' is undefined on two datetime64 operands.
         with self.assertTypingError():
             cfunc(np.datetime64('2020-01-01'))
 
