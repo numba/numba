@@ -200,7 +200,7 @@ def fold_arguments(pysig, args, kws, normal_handler, default_handler,
         # Normalize dict kws
         kws = dict(kws)
 
-    # deal with kwonly args
+    # deal with kwonly args that might appear as the last positional arguments
     params = pysig.parameters
     kwonly = []
     for name, p in params.items():
@@ -214,7 +214,7 @@ def fold_arguments(pysig, args, kws, normal_handler, default_handler,
     bind_kws = kws.copy()
     if kwonly:
         for idx, n in enumerate(kwonly):
-            bind_kws[n] = args[len(kwonly) + idx]
+            bind_kws[n] = args[-len(kwonly) + idx]
 
     # now bind
     try:
