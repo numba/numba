@@ -50,7 +50,6 @@
 #endif
 #include "internal/pycore_interp.h"
 #include "internal/pycore_pyerrors.h"
-#include "internal/pycore_instruments.h"
 #include "internal/pycore_call.h"
 #include "cpython/code.h"
 
@@ -299,94 +298,6 @@ else                                                            \
         }                                                       \
     }                                                           \
 }
-
-#else  // Python <3.10
-
-/*
- * Code originally from:
- * https://github.com/python/cpython/blob/d5650a1738fe34f6e1db4af5f4c4edb7cae90a36/Python/ceval.c#L4242-L4257
- */
-static int
-call_trace(Py_tracefunc func, PyObject *obj,
-           PyThreadState *tstate, PyFrameObject *frame,
-           int what, PyObject *arg)
-{
-    int result;
-    if (tstate->tracing)
-        return 0;
-    tstate->tracing++;
-    tstate->use_tracing = 0;
-    result = func(obj, frame, what, arg);
-    tstate->use_tracing = ((tstate->c_tracefunc != NULL)
-                           || (tstate->c_profilefunc != NULL));
-    tstate->tracing--;
-    return result;
-}
-
-/*
- * Code originally from:
- * https://github.com/python/cpython/blob/d5650a1738fe34f6e1db4af5f4c4edb7cae90a36/Python/ceval.c#L4220-L4240
- */
-static int
-call_trace_protected(Py_tracefunc func, PyObject *obj,
-                     PyThreadState *tstate, PyFrameObject *frame,
-                     int what, PyObject *arg)
-{
-    PyObject *type, *value, *traceback;
-    int err;
-    PyErr_Fetch(&type, &value, &traceback);
-    err = call_trace(func, obj, tstate, frame, what, arg);
-    if (err == 0)
-    {
-        PyErr_Restore(type, value, traceback);
-        return 0;
-    }
-    else
-    {
-        Py_XDECREF(type);
-        Py_XDECREF(value);
-        Py_XDECREF(traceback);
-        return -1;
-    }
-}
-
-/*
- * Code originally from:
- * https://github.com/python/cpython/blob/d5650a1738fe34f6e1db4af5f4c4edb7cae90a36/Python/ceval.c#L4520-L4549
- * NOTE: The state test https://github.com/python/cpython/blob/d5650a1738fe34f6e1db4af5f4c4edb7cae90a36/Python/ceval.c#L4521
- * has been removed, it's dealt with in call_cfunc.
- */
-#define C_TRACE(x, call)                                        \
-if (call_trace(tstate->c_profilefunc, tstate->c_profileobj,     \
-               tstate, tstate->frame, PyTrace_CALL, cfunc))     \
-    x = NULL;                                                   \
-else                                                            \
-{                                                               \
-    x = call;                                                   \
-    if (tstate->c_profilefunc != NULL)                          \
-    {                                                           \
-        if (x == NULL)                                          \
-        {                                                       \
-            call_trace_protected(tstate->c_profilefunc,         \
-                                 tstate->c_profileobj,          \
-                                 tstate, tstate->frame,         \
-                                 PyTrace_RETURN, cfunc);        \
-            /* XXX should pass (type, value, tb) */             \
-        }                                                       \
-        else                                                    \
-        {                                                       \
-            if (call_trace(tstate->c_profilefunc,               \
-                           tstate->c_profileobj,                \
-                           tstate, tstate->frame,               \
-                           PyTrace_RETURN, cfunc))              \
-            {                                                   \
-                Py_DECREF(x);                                   \
-                x = NULL;                                       \
-            }                                                   \
-        }                                                       \
-    }                                                           \
-}
-
 
 #endif
 
@@ -705,11 +616,6 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
     trace_info.cframe.previous = prev_cframe;
 
     if (trace_info.cframe.use_tracing && tstate->c_profilefunc)
-#else
-    /*
-     * On Python prior to 3.10, tracing state is a member of the threadstate
-     */
-    if (tstate->use_tracing && tstate->c_profilefunc)
 #endif
     {
         /*
@@ -791,10 +697,13 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
     }
 }
 
-#elif (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 12) || (PY_MINOR_VERSION == 13) || (PY_MINOR_VERSION == 14))
+#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 12)
+// Python 3.12 only: use invoke_monitoring() that reads
+// CPython internal struct fields directly.
+// NOTE: Do NOT extend this block to 3.13+. Use the public
+// PyMonitoring_Fire*Event API below instead.
 
-// Python 3.12 has a completely new approach to tracing and profiling due to
-// the new `sys.monitoring` system.
+#include "internal/pycore_instruments.h"
 
 // From: https://github.com/python/cpython/blob/0ab2384c5f56625e99bb35417cadddfe24d347e1/Python/instrumentation.c#L863-L868
 
@@ -1124,6 +1033,118 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
     }
     return pyresult;
 }
+
+#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 13)
+
+// Monitoring event indices into local mon_states[].
+enum {
+    NUMBA_MON_PY_START   = 0,
+    NUMBA_MON_PY_RETURN  = 1,
+    NUMBA_MON_RAISE      = 2,
+    NUMBA_MON_PY_UNWIND  = 3,
+    NUMBA_MON_COUNT      = 4,
+};
+
+// The event types we care about, in the same order as the enum above.
+static const uint8_t numba_mon_event_types[NUMBA_MON_COUNT] = {
+    PY_MONITORING_EVENT_PY_START,
+    PY_MONITORING_EVENT_PY_RETURN,
+    PY_MONITORING_EVENT_RAISE,
+    PY_MONITORING_EVENT_PY_UNWIND,
+};
+
+// Refresh monitoring state via the public API. This reads the interpreter's
+// monitoring configuration through libpython at runtime.
+static int refresh_monitoring_scope(PyMonitoringState mon_states[],
+                                    uint64_t *mon_version) {
+    return PyMonitoring_EnterScope(
+        mon_states,
+        mon_version,
+        numba_mon_event_types,
+        NUMBA_MON_COUNT);
+}
+
+/* forward declaration */
+static bool is_sysmon_enabled(Dispatcher *self);
+
+static PyObject *
+call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyObject *locals)
+{
+    PyCFunctionWithKeywords fn = NULL;
+    PyObject *pyresult = NULL;
+    PyObject *codelike = NULL;
+    const bool enabled_sysmon = is_sysmon_enabled(self);
+    int in_scope = 0;
+    // initialize mon_states as inactive; refresh_monitoring_scope skips
+    // writing them when the monitoring version is unchanged.
+    PyMonitoringState mon_states[NUMBA_MON_COUNT] = {};
+    uint64_t mon_version = 0;
+
+    assert(PyCFunction_Check(cfunc));
+    assert(PyCFunction_GET_FLAGS(cfunc) == (METH_VARARGS | METH_KEYWORDS));
+    fn = (PyCFunctionWithKeywords) PyCFunction_GET_FUNCTION(cfunc);
+
+    if (!enabled_sysmon) {
+        return fn(PyCFunction_GET_SELF(cfunc), args, kws);
+    }
+
+    if (refresh_monitoring_scope(mon_states, &mon_version) != 0) {
+        return NULL;
+    }
+    in_scope = 1;
+
+    codelike = PyObject_GetAttrString((PyObject*)self, "__code__");
+    if (codelike == NULL) {
+        goto exit_scope;
+    }
+
+    if (PyMonitoring_FirePyStartEvent(
+                &mon_states[NUMBA_MON_PY_START], codelike, 0) != 0) {
+        goto exit_scope;
+    }
+
+    pyresult = fn(PyCFunction_GET_SELF(cfunc), args, kws);
+
+    if (pyresult == NULL) {
+        // Exception path. Refresh scope — events may have been toggled
+        // during objmode. Leave the exception on the error indicator;
+        // Fire*Event reads it from tstate->current_exception internally.
+        if (refresh_monitoring_scope(mon_states, &mon_version) != 0) {
+            goto exit_scope;
+        }
+        if (PyErr_Occurred()) {
+            if (PyMonitoring_FireRaiseEvent(
+                    &mon_states[NUMBA_MON_RAISE], codelike, 0) != 0) {
+                goto exit_scope;
+            }
+            if (PyMonitoring_FirePyUnwindEvent(
+                    &mon_states[NUMBA_MON_PY_UNWIND], codelike, 0) != 0) {
+                goto exit_scope;
+            }
+        }
+        goto exit_scope;
+    }
+
+    // Normal return. Refresh scope — events may have been toggled
+    // during objmode.
+    if (refresh_monitoring_scope(mon_states, &mon_version) != 0) {
+        Py_CLEAR(pyresult);
+        goto exit_scope;
+    }
+    if (PyMonitoring_FirePyReturnEvent(
+            &mon_states[NUMBA_MON_PY_RETURN], codelike, 0,
+            pyresult) != 0) {
+        Py_CLEAR(pyresult);
+        goto exit_scope;
+    }
+
+exit_scope:
+    if (in_scope) {
+        PyMonitoring_ExitScope();
+    }
+    Py_XDECREF(codelike);
+    return pyresult;
+}
 #else
 #error "Python version is not supported."
 #endif
@@ -1310,11 +1331,7 @@ Dispatcher_call(Dispatcher *self, PyObject *args, PyObject *kws)
      * not compile one */
     int exact_match_required = self->can_compile ? 1 : self->exact_match_required;
 
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 10)
     if (ts->tracing && ts->c_profilefunc) {
-#else
-    if (ts->use_tracing && ts->c_profilefunc) {
-#endif
         locals = PyEval_GetLocals();
         if (locals == NULL) {
             goto CLEANUP;
@@ -1428,11 +1445,7 @@ Dispatcher_cuda_call(Dispatcher *self, PyObject *args, PyObject *kws)
      * not compile one */
     int exact_match_required = self->can_compile ? 1 : self->exact_match_required;
 
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 10)
     if (ts->tracing && ts->c_profilefunc) {
-#else
-    if (ts->use_tracing && ts->c_profilefunc) {
-#endif
         locals = PyEval_GetLocals();
         if (locals == NULL) {
             goto CLEANUP;

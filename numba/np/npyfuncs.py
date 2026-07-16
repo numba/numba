@@ -45,10 +45,7 @@ def _check_arity_and_homogeneity(sig, args, arity, return_type = None):
         msg = '{0} called with invalid types: {1}'.format(fname, sig)
         assert False, msg
 
-if config.USE_LEGACY_TYPE_SYSTEM:
-    cast_arg_ty = types.float64
-else:
-    cast_arg_ty = types.np_float64
+cast_arg_ty = types.float64
 
 def _call_func_by_name_with_cast(context, builder, sig, args,
                                  func_name, ty=cast_arg_ty):

@@ -20,28 +20,23 @@ set PIP_INSTALL=pip install -q
 call deactivate
 @rem Display root environment (for debugging)
 conda list
-if "%PYTHON%" neq "3.13" (
-    @rem CFFI, jinja2 and IPython are optional dependencies, but exercised in the test suite
-    conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip jinja2 ipython gitpython pyyaml psutil
-) else (
-    @rem missing IPython for Python 3.13
-    conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip jinja2 gitpython pyyaml psutil
-)
+@rem Collect all conda packages so the environment is created in a single solve
+@rem CFFI, jinja2 and IPython are optional dependencies, but exercised in the test suite
+set PKGS=python=%PYTHON% numpy=%NUMPY% cffi pip jinja2 gitpython pyyaml psutil llvmlite=0.49 "tbb>=2021.6" "tbb-devel>=2021.6"
+@rem missing IPython for Python 3.13
+if "%PYTHON%" neq "3.13" set PKGS=%PKGS% ipython
 @rem Install SciPy only if NumPy is not 2.1
-if "%NUMPY%" neq "2.1" (%CONDA_INSTALL% scipy)
+if "%NUMPY%" neq "2.1" set PKGS=%PKGS% scipy
+@rem Python 3.14+ requires setuptools
+if "%PYTHON%" geq "3.14" set PKGS=%PKGS% "setuptools>=69.0.0"
+@rem Install dependencies for building the documentation
+if "%BUILD_DOC%" == "yes" set PKGS=%PKGS% sphinx sphinx_rtd_theme pygments
+conda create -n %CONDA_ENV% -q -y -c numba/label/dev %PKGS%
+if %errorlevel% neq 0 exit /b %errorlevel%
 
 call activate %CONDA_ENV%
-@rem Python 3.14+ requires setuptools
-if "%PYTHON%" geq "3.14" (%CONDA_INSTALL% setuptools)
-@rem Install latest llvmlite build
-%CONDA_INSTALL% -c numba/label/dev llvmlite=0.47
-@rem Install dependencies for building the documentation
-if "%BUILD_DOC%" == "yes" (%CONDA_INSTALL% sphinx sphinx_rtd_theme pygments)
 @rem Install dependencies for code coverage (codecov.io)
 if "%RUN_COVERAGE%" == "yes" (%PIP_INSTALL% codecov)
-@rem Install TBB
-%CONDA_INSTALL% "tbb>=2021.6" "tbb-devel>=2021.6"
-if %errorlevel% neq 0 exit /b %errorlevel%
 
 echo "DEBUG ENV:"
 echo "-------------------------------------------------------------------------"

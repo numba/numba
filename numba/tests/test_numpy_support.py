@@ -14,6 +14,7 @@ from numba.core.errors import NumbaNotImplementedError
 from numba.tests.support import TestCase
 from numba.tests.enum_usecases import Shake, RequestError
 from numba.np import numpy_support
+from numba.np import types as npy_types
 
 
 class TestFromDtype(TestCase):
@@ -100,13 +101,13 @@ class TestFromDtype(TestCase):
         """
         Test from_dtype() and as_dtype() with the datetime types.
         """
-        self.check_datetime_types('M', types.NPDatetime)
+        self.check_datetime_types('M', npy_types.NPDatetime)
 
     def test_timedelta_types(self):
         """
         Test from_dtype() and as_dtype() with the timedelta types.
         """
-        self.check_datetime_types('m', types.NPTimedelta)
+        self.check_datetime_types('m', npy_types.NPTimedelta)
 
     def test_struct_types(self):
         def check(dtype, fields, size, aligned):
@@ -200,14 +201,15 @@ class ValueTypingTestBase(object):
         """
         Test *func*() with np.datetime64 values.
         """
-        self._base_check_datetime_values(func, np.datetime64, types.NPDatetime)
+        self._base_check_datetime_values(func, np.datetime64,
+                                         npy_types.NPDatetime)
 
     def check_timedelta_values(self, func):
         """
         Test *func*() with np.timedelta64 values.
         """
         self._base_check_datetime_values(func, np.timedelta64,
-                                         types.NPTimedelta)
+                                         npy_types.NPTimedelta)
 
 
 class TestArrayScalars(ValueTypingTestBase, TestCase):
@@ -334,24 +336,31 @@ class TestUFuncs(TestCase):
         check_exact(np_add, (types.complex128, types.complex128), 'DD->D')
 
         # Exact matching for datetime64 and timedelta64 types
-        check_exact(np_add, (types.NPTimedelta('s'), types.NPTimedelta('s')),
-                    'mm->m', output_types=(types.NPTimedelta('s'),))
-        check_exact(np_add, (types.NPTimedelta('ms'), types.NPDatetime('s')),
-                    'mM->M', output_types=(types.NPDatetime('ms'),))
-        check_exact(np_add, (types.NPDatetime('s'), types.NPTimedelta('s')),
-                    'Mm->M', output_types=(types.NPDatetime('s'),))
-        check_exact(np_add, (types.NPDatetime('s'), types.NPTimedelta('')),
-                    'Mm->M', output_types=(types.NPDatetime('s'),))
-        check_exact(np_add, (types.NPDatetime('ns'), types.NPTimedelta('')),
-                    'Mm->M', output_types=(types.NPDatetime('ns'),))
-        check_exact(np_add, (types.NPTimedelta(''), types.NPDatetime('s')),
-                    'mM->M', output_types=(types.NPDatetime('s'),))
-        check_exact(np_add, (types.NPTimedelta(''), types.NPDatetime('ns')),
-                    'mM->M', output_types=(types.NPDatetime('ns'),))
-        check_exact(np_mul, (types.NPTimedelta('s'), types.int64),
-                    'mq->m', output_types=(types.NPTimedelta('s'),))
-        check_exact(np_mul, (types.float64, types.NPTimedelta('s')),
-                    'dm->m', output_types=(types.NPTimedelta('s'),))
+        check_exact(np_add, (npy_types.NPTimedelta('s'),
+                             npy_types.NPTimedelta('s')),
+                    'mm->m', output_types=(npy_types.NPTimedelta('s'),))
+        check_exact(np_add, (npy_types.NPTimedelta('ms'),
+                             npy_types.NPDatetime('s')),
+                    'mM->M', output_types=(npy_types.NPDatetime('ms'),))
+        check_exact(np_add, (npy_types.NPDatetime('s'),
+                             npy_types.NPTimedelta('s')),
+                    'Mm->M', output_types=(npy_types.NPDatetime('s'),))
+        check_exact(np_add, (npy_types.NPDatetime('s'),
+                             npy_types.NPTimedelta('')),
+                    'Mm->M', output_types=(npy_types.NPDatetime('s'),))
+        check_exact(np_add, (npy_types.NPDatetime('ns'),
+                             npy_types.NPTimedelta('')),
+                    'Mm->M', output_types=(npy_types.NPDatetime('ns'),))
+        check_exact(np_add, (npy_types.NPTimedelta(''),
+                             npy_types.NPDatetime('s')),
+                    'mM->M', output_types=(npy_types.NPDatetime('s'),))
+        check_exact(np_add, (npy_types.NPTimedelta(''),
+                             npy_types.NPDatetime('ns')),
+                    'mM->M', output_types=(npy_types.NPDatetime('ns'),))
+        check_exact(np_mul, (npy_types.NPTimedelta('s'), types.int64),
+                    'mq->m', output_types=(npy_types.NPTimedelta('s'),))
+        check_exact(np_mul, (types.float64, npy_types.NPTimedelta('s')),
+                    'dm->m', output_types=(npy_types.NPTimedelta('s'),))
 
         # Mix and match number types, with casting
         check(np_add, (types.bool_, types.int8), 'bb->b')
@@ -375,20 +384,21 @@ class TestUFuncs(TestCase):
             check(np_isnan, (intty,), 'd->?')
 
         # With some timedelta64 arguments as well
-        check(np_mul, (types.NPTimedelta('s'), types.int32),
-              'mq->m', output_types=(types.NPTimedelta('s'),))
-        check(np_mul, (types.NPTimedelta('s'), types.uint32),
-              'mq->m', output_types=(types.NPTimedelta('s'),))
-        check(np_mul, (types.NPTimedelta('s'), types.float32),
-              'md->m', output_types=(types.NPTimedelta('s'),))
-        check(np_mul, (types.float32, types.NPTimedelta('s')),
-              'dm->m', output_types=(types.NPTimedelta('s'),))
+        check(np_mul, (npy_types.NPTimedelta('s'), types.int32),
+              'mq->m', output_types=(npy_types.NPTimedelta('s'),))
+        check(np_mul, (npy_types.NPTimedelta('s'), types.uint32),
+              'mq->m', output_types=(npy_types.NPTimedelta('s'),))
+        check(np_mul, (npy_types.NPTimedelta('s'), types.float32),
+              'md->m', output_types=(npy_types.NPTimedelta('s'),))
+        check(np_mul, (types.float32, npy_types.NPTimedelta('s')),
+              'dm->m', output_types=(npy_types.NPTimedelta('s'),))
 
         # No match
-        check_no_match(np_add, (types.NPDatetime('s'), types.NPDatetime('s')))
+        check_no_match(np_add, (npy_types.NPDatetime('s'),
+                                npy_types.NPDatetime('s')))
         # No implicit casting from int64 to timedelta64 (Numpy would allow
         # this).
-        check_no_match(np_add, (types.NPTimedelta('s'), types.int64))
+        check_no_match(np_add, (npy_types.NPTimedelta('s'), types.int64))
 
     def test_layout_checker(self):
         def check_arr(arr):

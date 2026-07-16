@@ -41,6 +41,11 @@ class CPUContext(BaseContext):
     def __init__(self, typingctx, target='cpu'):
         super().__init__(typingctx, target)
 
+    def __repr__(self):
+        # Deterministic repr so it does not embed a process-specific
+        # object address into emitted binaries (see issue #10610).
+        return f"<{type(self).__module__}.{type(self).__name__}>"
+
     # Overrides
     def create_module(self, name):
         return self._internal_codegen._create_empty_module(name)
@@ -115,7 +120,9 @@ class CPUContext(BaseContext):
         from numba.np.polynomial import polynomial_core, polynomial_functions # noqa F401
         from numba.typed import typeddict, dictimpl # noqa F401
         from numba.typed import typedlist, listobject # noqa F401
+        from numba.typed import typedset, setobject # noqa F401
         from numba.experimental import jitclass, function_type # noqa F401
+        from numba.np.types import datetime_registry # noqa F401
         from numba.np import npdatetime # noqa F401
 
         # Add target specific implementations

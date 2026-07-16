@@ -824,39 +824,19 @@ class CPUCallConv(BaseCallConv):
                              ['arg.' + a for a in args])
         retarg = self._get_return_argument(fn)
         retarg.name = "retptr"
-        retarg.add_attribute("nocapture")
+        retarg.add_attribute("captures(none)")
         retarg.add_attribute("noalias")
         excarg = self._get_excinfo_argument(fn)
         excarg.name = "excinfo"
-        excarg.add_attribute("nocapture")
+        excarg.add_attribute("captures(none)")
         excarg.add_attribute("noalias")
 
         if noalias:
             args = self.get_arguments(fn)
             for a in args:
                 if isinstance(a.type, ir.PointerType):
-                    a.add_attribute("nocapture")
+                    a.add_attribute("captures(none)")
                     a.add_attribute("noalias")
-
-        # Add metadata to mark functions that may need NRT
-        # thus disabling aggressive refct pruning in removerefctpass.py
-        def type_may_always_need_nrt(ty):
-            # Returns True if it's a non-Array type that is contains MemInfo
-            if not isinstance(ty, types.Array):
-                dmm = self.context.data_model_manager
-                if dmm[ty].contains_nrt_meminfo():
-                    return True
-            return False
-
-        args_may_always_need_nrt = any(
-            map(type_may_always_need_nrt, fe_argtypes)
-        )
-
-        if args_may_always_need_nrt:
-            nmd = fn.module.add_named_metadata(
-                'numba_args_may_always_need_nrt',
-            )
-            nmd.add(fn.module.add_metadata([fn]))
 
     def get_arguments(self, func):
         """

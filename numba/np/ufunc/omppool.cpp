@@ -17,10 +17,13 @@ Threading layer on top of OpenMP.
 
 #ifdef _WIN32
 #include <malloc.h>
+#include <windows.h>
+#include <psapi.h>
 #else
 #include <sys/types.h>
 #include <unistd.h>
 #include <signal.h>
+#include <dlfcn.h>
 #endif
 
 #define _DEBUG 0
@@ -207,6 +210,73 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
     }
 }
 
+// Look up `name` in any library already loaded into this process. Returns
+// NULL if the symbol is not present, or if the symbol's value is NULL (the
+// distinction is moot here, as the callers will not invoke a NULL fn).
+// The `omp_` prefix is reserved by the OpenMP standard, so collisions with
+// non-OpenMP libraries are not a concern; in mixed-runtime environments
+// (e.g. libgomp + libiomp5 both loaded) this is best-effort and may resolve
+// into a runtime other than the one Numba dynamically links against.
+static void *find_loaded_symbol(const char *name)
+{
+#ifdef _WIN32
+    HMODULE stack_modules[1024];
+    HMODULE *modules = stack_modules;
+    HMODULE *heap_modules = NULL;
+    DWORD buf_size = sizeof(stack_modules);
+    DWORD bytes_needed = 0;
+    void *result = NULL;
+
+    if(!EnumProcessModules(GetCurrentProcess(), modules, buf_size,
+                           &bytes_needed))
+        return NULL;
+
+    // EnumProcessModules sets bytes_needed to the total bytes required. If
+    // that exceeds our buffer the module list was truncated, so grow the
+    // buffer to the queried size and re-enumerate to avoid skipping a
+    // module. See the "increase the size of the array and call
+    // EnumProcessModules again" guidance in the Remarks at
+    // https://learn.microsoft.com/en-us/windows/win32/api/psapi/nf-psapi-enumprocessmodules
+    if(bytes_needed > buf_size)
+    {
+        heap_modules = (HMODULE *)malloc(bytes_needed);
+        if(heap_modules == NULL)
+            return NULL;
+        modules = heap_modules;
+        buf_size = bytes_needed;
+        if(!EnumProcessModules(GetCurrentProcess(), modules, buf_size,
+                               &bytes_needed))
+        {
+            free(heap_modules);
+            return NULL;
+        }
+    }
+
+    // Clamp in case more modules loaded between the two calls (TOCTOU).
+    DWORD count = bytes_needed / sizeof(HMODULE);
+    if(count > buf_size / sizeof(HMODULE))
+        count = buf_size / sizeof(HMODULE);
+    for(DWORD i = 0; i < count; ++i)
+    {
+        FARPROC sym = GetProcAddress(modules[i], name);
+        if(sym != NULL) {
+            result = (void *)sym;
+            break;
+        }
+    }
+    free(heap_modules); // free(NULL) is a no-op
+    return result;
+#else
+    // POSIX dlsym idiom: clear any prior error, look up, then check
+    // dlerror() to distinguish "not present" from "found and is NULL".
+    (void)dlerror();
+    void *sym = dlsym(RTLD_DEFAULT, name);
+    if(dlerror() != NULL)
+        return NULL;
+    return sym;
+#endif
+}
+
 static void launch_threads(int count)
 {
     // this must be called in a fork+thread safe region from Python
@@ -225,7 +295,32 @@ static void launch_threads(int count)
     if(count < 1)
         return;
     omp_set_num_threads(count);
-    omp_set_nested(0x1); // enable nesting, control depth with OMP env var
+
+    // The OpenMP runtime is dynamically linked; the build-time _OPENMP
+    // version does not predict which symbols exist in the loaded library.
+    // Probe omp_set_max_active_levels (OpenMP 5.0+) at runtime and fall
+    // back to the deprecated omp_set_nested if it isn't present.
+    // Assign via a void** alias to avoid the implementation-defined
+    // void*-to-function-pointer conversion that POSIX permits for dlsym.
+    typedef void (*set_max_active_levels_fn)(int);
+    typedef int  (*get_supported_active_levels_fn)(void);
+    set_max_active_levels_fn set_max_levels = NULL;
+    get_supported_active_levels_fn get_supported_levels = NULL;
+
+    *(void **)(&set_max_levels)
+        = find_loaded_symbol("omp_set_max_active_levels");
+    if(set_max_levels != NULL)
+    {
+        *(void **)(&get_supported_levels)
+            = find_loaded_symbol("omp_get_supported_active_levels");
+        set_max_levels((get_supported_levels != NULL)
+                       ? get_supported_levels() : 32);
+    }
+    else
+    {
+        omp_set_nested(0x1);
+    }
+
     _INIT_NUM_THREADS = count;
 }
 

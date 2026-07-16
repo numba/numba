@@ -3,8 +3,7 @@
 Thanks for wanting to contribute to Numba :)
 
 First, if you need some help or want to chat to the core developers, please
-visit https://gitter.im/numba/numba for real time chat or post to the Numba
-forum https://numba.discourse.group/.
+post to the Numba forum https://numba.discourse.group/.
 
 Here's some guidelines to help the review process go smoothly.
 

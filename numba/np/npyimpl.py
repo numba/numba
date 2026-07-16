@@ -25,6 +25,7 @@ from numba.core.typing import npydecl
 from numba.core.extending import overload, intrinsic
 
 from numba.core import errors
+from numba.np import types as npy_types
 
 registry = Registry('npyimpl')
 
@@ -321,19 +322,15 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
         return _ArrayHelper(ctxt, bld, shape, strides, ary.data,
                             tyinp.layout, tyinp.dtype, tyinp.ndim, inp)
     elif (types.unliteral(tyinp) in types.number_domain | {types.boolean}
-          or isinstance(tyinp, types.scalars._NPDatetimeBase)):
+          or isinstance(tyinp, npy_types.datetime._NPDatetimeBase)):
         return _ScalarHelper(ctxt, bld, inp, tyinp)
     else:
         raise NotImplementedError('unsupported type for {0}: {1}'.format(where,
                                   str(tyinp)))
 
 
-if config.USE_LEGACY_TYPE_SYSTEM:
-    _broadcast_onto_sig = types.intp(types.intp, types.CPointer(types.intp),
-                                    types.intp, types.CPointer(types.intp))
-else:
-    _broadcast_onto_sig = types.np_intp(types.np_intp, types.CPointer(types.np_intp),
-                                    types.np_intp, types.CPointer(types.np_intp))
+_broadcast_onto_sig = types.intp(types.intp, types.CPointer(types.intp),
+                                types.intp, types.CPointer(types.intp))
 
 def _broadcast_onto(src_ndim, src_shape, dest_ndim, dest_shape):
     '''Low-level utility function used in calculating a shape for
