@@ -1033,10 +1033,9 @@ def eig_impl(a):
 
     # NumPy >= 2.5 always returns complex from eig for real input.
     _eig_always_complex = np_support.numpy_version >= (2, 5)
-    if a.dtype == types.float32:
-        _eig_cmplx_dtype = np.complex64
-    else:
-        _eig_cmplx_dtype = np.complex128
+    _eig_real_ty = getattr(a.dtype, "underlying_float", a.dtype)
+    _eig_cmplx_dtype = np_support.as_dtype(
+        getattr(types, f"complex{2 * _eig_real_ty.bitwidth}"))
 
     def real_eig_impl(a):
         """
@@ -1189,10 +1188,9 @@ def eigvals_impl(a):
 
     # NumPy >= 2.5 always returns complex from eigvals for real input.
     _eigvals_always_complex = np_support.numpy_version >= (2, 5)
-    if a.dtype == types.float32:
-        _eigvals_cmplx_dtype = np.complex64
-    else:
-        _eigvals_cmplx_dtype = np.complex128
+    _eigvals_real_ty = getattr(a.dtype, "underlying_float", a.dtype)
+    _eigvals_cmplx_dtype = np_support.as_dtype(
+        getattr(types, f"complex{2 * _eigvals_real_ty.bitwidth}"))
 
     def real_eigvals_impl(a):
         """
