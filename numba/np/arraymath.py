@@ -471,7 +471,7 @@ def _numpy_sum(typingctx, aryty, axisty, dtype):
             (sig.return_type, sig.return_type),
             {}
         )
-        if context.data_model_manager[ret_dtype]._fe_type is bool:
+        if context.data_model_manager[ret_dtype]._fe_type is types.boolean:
             add_funcfn = lambda builder, args: builder.or_(*args)
         else:
             add_funcfn = context.get_function(fnty, fn_sig)
@@ -525,7 +525,7 @@ def _numpy_sum_axis(typingctx, aryty, axisty, dtype):
             (sig.return_type.dtype, sig.return_type.dtype),
             {}
         )
-        if context.data_model_manager[ret_dtype]._fe_type is bool:
+        if context.data_model_manager[ret_dtype]._fe_type is types.boolean:
             add_funcfn = lambda builder, args: builder.or_(*args)
         else:
             add_funcfn = context.get_function(fnty, fn_sig)
