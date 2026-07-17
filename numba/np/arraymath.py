@@ -481,7 +481,7 @@ def _numpy_sum(typingctx, aryty, axisty, dtype):
             val = load_item(context, builder, aryty, iter_val_ptr)
             res_val = add_funcfn(builder, (
                 context.data_model_manager[ret_dtype].from_data(builder, builder.load(result)),
-                context.data_model_manager[ret_dtype].from_data(builder, context.cast(builder, val, aryty.dtype, sig.return_type))))
+                context.cast(builder, val, aryty.dtype, sig.return_type)))
             builder.store(res_val, result)
 
         return impl_ret_borrowed(
@@ -539,8 +539,8 @@ def _numpy_sum_axis(typingctx, aryty, axisty, dtype):
             val = load_item(context, builder, aryty, ary_iter_ptr)
             res_val = add_funcfn(builder, (
                 context.data_model_manager[ret_dtype].from_data(builder, builder.load(res_ptr)),
-                context.data_model_manager[ret_dtype].from_data(builder, context.cast(builder, val, aryty.dtype, sig.return_type.dtype))))
-            builder.store(context.data_model_manager[ret_dtype].as_data(builder, res_val), res_ptr)
+                context.cast(builder, val, aryty.dtype, sig.return_type.dtype)))
+            store_item(context, builder, sig.return_type, res_val, res_ptr)
 
         return impl_ret_new_ref(
             context, builder, sig.return_type, res._getvalue()
@@ -644,7 +644,7 @@ def _numpy_cumsum(typingctx, aryty, axisty, dtype):
             (sig.return_type.dtype, sig.return_type.dtype),
             {}
         )
-        if context.data_model_manager[ret_dtype]._fe_type is bool:
+        if context.data_model_manager[ret_dtype]._fe_type is types.boolean:
             add_funcfn = lambda builder, args: builder.or_(*args)
         else:
             add_funcfn = context.get_function(fnty, fn_sig)
@@ -657,9 +657,9 @@ def _numpy_cumsum(typingctx, aryty, axisty, dtype):
             val = load_item(context, builder, aryty, iter_val_ptr)
             res_val = add_funcfn(builder, (
                 context.data_model_manager[ret_dtype].from_data(builder, builder.load(acc)),
-                context.data_model_manager[ret_dtype].from_data(builder, context.cast(builder, val, aryty.dtype, sig.return_type.dtype))))
+                context.cast(builder, val, aryty.dtype, sig.return_type.dtype)))
             builder.store(res_val, acc)
-            builder.store(context.data_model_manager[ret_dtype].as_data(builder, builder.load(acc)), res_ptr)
+            store_item(context, builder, sig.return_type, builder.load(acc), res_ptr)
 
         return impl_ret_new_ref(
             context, builder, sig.return_type, res._getvalue()
@@ -707,7 +707,7 @@ def _numpy_cumsum_axis(typingctx, aryty, axisty, dtype):
             (sig.return_type.dtype, sig.return_type.dtype),
             {}
         )
-        if context.data_model_manager[ret_dtype]._fe_type is bool:
+        if context.data_model_manager[ret_dtype]._fe_type is types.boolean:
             add_funcfn = lambda builder, args: builder.or_(*args)
         else:
             add_funcfn = context.get_function(fnty, fn_sig)
@@ -724,9 +724,9 @@ def _numpy_cumsum_axis(typingctx, aryty, axisty, dtype):
             val = load_item(context, builder, aryty, ary_iter_ptr)
             res_val = add_funcfn(builder, (
                 context.data_model_manager[ret_dtype].from_data(builder, builder.load(acc_ptr)),
-                context.data_model_manager[ret_dtype].from_data(builder, context.cast(builder, val, aryty.dtype, sig.return_type.dtype))))
-            builder.store(context.data_model_manager[ret_dtype].as_data(builder, res_val), acc_ptr)
-            builder.store(builder.load(acc_ptr), res_ptr)
+                context.cast(builder, val, aryty.dtype, sig.return_type.dtype)))
+            store_item(context, builder, acc_type, res_val, acc_ptr)
+            store_item(context, builder, sig.return_type, builder.load(acc_ptr), res_ptr)
 
         context.nrt.decref(builder, acc_type, acc._getvalue())
 
@@ -753,7 +753,7 @@ def array_cumsum(a, axis=None, dtype=None):
                         f"axis {axis} is out of bounds for "
                         f"array of dimension {a.ndim}"
                     )
-                return _numpy_cumsum(a, axis, dtype)
+                return _numpy_cumsum(a, axis, dtype).reshape(a.size)
         else:
             def array_cumsum_impl(a, axis=None, dtype=None):
                 if axis is not None and (axis < -a.ndim or axis >= a.ndim):
