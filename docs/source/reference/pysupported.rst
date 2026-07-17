@@ -413,6 +413,9 @@ than to act as a token to permit the use of this feature. Example use:
       iteration.
     * Only one :func:`literal_unroll` call is permitted per loop nest (i.e.
       nested heterogeneous tuple iteration loops are forbidden).
+    * A variable that is indexed in the loop body must have a single
+      definition, for example its name cannot be reused elsewhere in the
+      function.
     * The usual type inference/stability rules still apply.
 
 A more involved use of :func:`literal_unroll` might be type specific dispatch,
