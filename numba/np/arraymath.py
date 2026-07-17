@@ -5056,6 +5056,12 @@ def np_cross(a, b):
                 "(dimension must be 2 or 3)"
             ))
 
+        if numpy_version >= (2, 5):
+            if a_.shape[-1] == 2 or b_.shape[-1] == 2:
+                raise ValueError(
+                    f"Both input arrays must be (arrays of) 3-dimensional"
+                    f" vectors, but they are {a_.shape[-1]} and "
+                    f"{b_.shape[-1]} dimensional instead.")
         if a_.shape[-1] == 3 or b_.shape[-1] == 3:
             return _cross(a_, b_)
         else:

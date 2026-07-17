@@ -5812,25 +5812,37 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             ),
         ]
 
-        if numpy_version < (2, 5):
-            pairs += [
-                #  2x3 (1-dim)
-                (
-                    np.array([1, 2]),
-                    np.array([4, 5, 6])
-                ),
-                # 3x2 (with higher order broadcasting)
-                (
-                    np.arange(36).reshape(6, 2, 3),
-                    np.arange(4).reshape(2, 2)
-                ),
-                # 2x3 array-like (n-dims)
-                (
-                    np.array([[1, 2, 3], [4, 5, 6]]),
-                    ((4, 5), (1, 2))
-                ),
-            ]
+        two_d_pairs = [
+            #  2x3 (1-dim)
+            (
+                np.array([1, 2]),
+                np.array([4, 5, 6])
+            ),
+            # 3x2 (with higher order broadcasting)
+            (
+                np.arange(36).reshape(6, 2, 3),
+                np.arange(4).reshape(2, 2)
+            ),
+            # 2x3 array-like (n-dims)
+            (
+                np.array([[1, 2, 3], [4, 5, 6]]),
+                ((4, 5), (1, 2))
+            ),
+        ]
 
+        if numpy_version < (2, 5):
+            pairs.extend(two_d_pairs)
+        else:
+            self.disable_leak_check()
+            for x, y in two_d_pairs:
+                with self.assertRaises(ValueError) as raises:
+                    cfunc(x, y)
+                x_dim, y_dim = np.array(x).shape[-1], np.array(y).shape[-1]
+                self.assertIn(
+                    f'Both input arrays must be (arrays of) 3-dimensional'
+                    f' vectors, but they are {x_dim} and {y_dim}'
+                    f' dimensional instead.',
+                    str(raises.exception))
         for x, y in pairs:
             expected = pyfunc(x, y)
             got = cfunc(x, y)
@@ -5858,16 +5870,29 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 np.array((1, 2)),
                 np.array((3, 4))
             )
-        self.assertIn(
-            'Dimensions for both inputs is 2.',
-            str(raises.exception)
-        )
+        if numpy_version < (2, 5):
+            self.assertIn(
+                'Dimensions for both inputs is 2.',
+                str(raises.exception)
+            )
+        else:
+            self.assertIn(
+                'Both input arrays must be (arrays of) 3-dimensional'
+                ' vectors, but they are 2 and 2 dimensional instead.',
+                str(raises.exception)
+            )
 
-        self.assertIn(
-            '`cross2d(a, b)` from `numba.np.extensions`.',
-            str(raises.exception)
-        )
-
+        if numpy_version < (2, 5):
+            self.assertIn(
+                '`cross2d(a, b)` from `numba.np.extensions`.',
+                str(raises.exception)
+            )
+        else:
+            self.assertIn(
+                'Both input arrays must be (arrays of) 3-dimensional'
+                ' vectors, but they are 2 and 2 dimensional instead.',
+                str(raises.exception)
+            )
         # test incompatible dimensions for ndim > 1
         with self.assertRaises(ValueError) as raises:
             cfunc(
@@ -5885,10 +5910,17 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 np.arange(8).reshape((4, 2)),
                 np.arange(8)[::-1].reshape((4, 2))
             )
-        self.assertIn(
-            'Dimensions for both inputs is 2',
-            str(raises.exception)
-        )
+        if numpy_version < (2, 5):
+            self.assertIn(
+                'Dimensions for both inputs is 2.',
+                str(raises.exception)
+            )
+        else:
+            self.assertIn(
+                'Both input arrays must be (arrays of) 3-dimensional'
+                ' vectors, but they are 2 and 2 dimensional instead.',
+                str(raises.exception)
+            )
 
         # test non-array-like input
         with self.assertRaises(TypingError) as raises:
