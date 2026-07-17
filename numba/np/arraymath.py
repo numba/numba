@@ -9,7 +9,6 @@ import operator
 import warnings
 
 import llvmlite.ir
-from numba.core.typing import context
 from numba.np.types.datetime import NPDatetime, NPTimedelta
 import numpy as np
 
@@ -480,7 +479,8 @@ def _numpy_sum(typingctx, aryty, axisty, dtype):
         with ArrayIterator(context, builder, aryty, ary) as iter_val_ptr:
             val = load_item(context, builder, aryty, iter_val_ptr)
             res_val = add_funcfn(builder, (
-                context.data_model_manager[ret_dtype].from_data(builder, builder.load(result)),
+                context.data_model_manager[ret_dtype].from_data(
+                    builder, builder.load(result)),
                 context.cast(builder, val, aryty.dtype, sig.return_type)))
             builder.store(res_val, result)
 
@@ -538,7 +538,8 @@ def _numpy_sum_axis(typingctx, aryty, axisty, dtype):
             res_ptr = res_ptr_tup[0]
             val = load_item(context, builder, aryty, ary_iter_ptr)
             res_val = add_funcfn(builder, (
-                context.data_model_manager[ret_dtype].from_data(builder, builder.load(res_ptr)),
+                context.data_model_manager[ret_dtype].from_data(
+                    builder, builder.load(res_ptr)),
                 context.cast(builder, val, aryty.dtype, sig.return_type.dtype)))
             store_item(context, builder, sig.return_type, res_val, res_ptr)
 
@@ -656,10 +657,12 @@ def _numpy_cumsum(typingctx, aryty, axisty, dtype):
             res_ptr = res_ptr_tup[0]
             val = load_item(context, builder, aryty, iter_val_ptr)
             res_val = add_funcfn(builder, (
-                context.data_model_manager[ret_dtype].from_data(builder, builder.load(acc)),
+                context.data_model_manager[ret_dtype].from_data(
+                    builder, builder.load(acc)),
                 context.cast(builder, val, aryty.dtype, sig.return_type.dtype)))
             builder.store(res_val, acc)
-            store_item(context, builder, sig.return_type, builder.load(acc), res_ptr)
+            store_item(context, builder, sig.return_type,
+                       builder.load(acc), res_ptr)
 
         return impl_ret_new_ref(
             context, builder, sig.return_type, res._getvalue()
@@ -723,10 +726,12 @@ def _numpy_cumsum_axis(typingctx, aryty, axisty, dtype):
             res_ptr, acc_ptr = res_ptr_tup
             val = load_item(context, builder, aryty, ary_iter_ptr)
             res_val = add_funcfn(builder, (
-                context.data_model_manager[ret_dtype].from_data(builder, builder.load(acc_ptr)),
+                context.data_model_manager[ret_dtype].from_data(
+                    builder, builder.load(acc_ptr)),
                 context.cast(builder, val, aryty.dtype, sig.return_type.dtype)))
             store_item(context, builder, acc_type, res_val, acc_ptr)
-            store_item(context, builder, sig.return_type, builder.load(acc_ptr), res_ptr)
+            store_item(context, builder, sig.return_type,
+                       builder.load(acc_ptr), res_ptr)
 
         context.nrt.decref(builder, acc_type, acc._getvalue())
 
