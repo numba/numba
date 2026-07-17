@@ -1089,16 +1089,18 @@ def eig_impl(a):
             i = 0
             while i < n:
                 if wi[i] == 0.0:
-                    w[i] = wr[i]
+                    w[i] = complex(wr[i], wi[i])
                     for j in range(n):
-                        v[i, j] = vr[i, j]
+                        v[i, j] = complex(vr[i, j], 0.0)
                     i += 1
                 else:
-                    w[i] = wr[i] + 1j * wi[i]
-                    w[i + 1] = wr[i + 1] + 1j * wi[i + 1]
+                    w[i] = complex(wr[i], wi[i])
+                    w[i + 1] = complex(wr[i + 1], wi[i + 1])
                     for j in range(n):
-                        v[i, j] = vr[i, j] + 1j * vr[i + 1, j]
-                        v[i + 1, j] = vr[i, j] - 1j * vr[i + 1, j]
+                        re = vr[i, j]
+                        im = vr[i + 1, j]
+                        v[i, j] = complex(re, im)
+                        v[i + 1, j] = complex(re, -im)
                     i += 2
 
             # put these in to help with liveness analysis,
@@ -1238,7 +1240,7 @@ def eigvals_impl(a):
         if _eigvals_always_complex:
             w = np.empty(n, dtype=_eigvals_cmplx_dtype)
             for i in range(n):
-                w[i] = wr[i] + 1j * wi[i]
+                w[i] = complex(wr[i], wi[i])
 
             # put these in to help with liveness analysis,
             # `.ctypes` doesn't keep the vars alive
