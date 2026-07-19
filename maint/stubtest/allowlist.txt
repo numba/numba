@@ -20,13 +20,14 @@ numba\.core\.tracing\..*
 numba\.core\.typeconv\..*
 numba\.core\.typing\..*
 numba\.core\.unsafe\..*
+numba\.core\.untyped_passes\..*
 numba\.core\.utils\..*
 numba\.cpython\..*
 numba\.cuda\..*
 numba\.experimental\..*
 numba\.misc\..*
 numba\.mviewbuf
-numba\.np\.(arraymath|arrayobj|linalg|npyimpl|random|types|ufunc_db|unsafe)\..*
+numba\.np\.(arraymath|arrayobj|linalg|npyimpl|numpy_support|random|types|ufunc_db|unsafe)\..*
 numba\.np\.extensions
 numba\.np\.polynomial\.polynomial_core\.type_polynomial
 numba\.np\.ufunc\.parallel\..*
