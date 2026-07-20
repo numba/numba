@@ -162,7 +162,7 @@ Currently supported Tier 1.5 releases for the Numba and llvmlite projects:
   Anaconda dot org distribution system for Python 3.14 only. Support for
   additional Python versions may be added in the future.
 
-  * ``win-arm64`` (Windows on ``aarch64``/``arm64``)
+  * ``win-arm64`` (Windows on 64-bit ARM)
 
 
 Tier 2a: Releases that are built by large software distributors
