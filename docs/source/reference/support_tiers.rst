@@ -158,6 +158,12 @@ Currently supported Tier 1.5 releases for the Numba and llvmlite projects:
   * ``linux-aarch64`` (Linux on ``aarch64``)
   * ``win-64`` (Windows on ``x86_64``)
 
+* Wheel packages on the PyPI distribution system and conda packages on the 
+  Anaconda dot org distribution system for Python 3.14 only. Support for
+  additional Python versions may be added in the future.
+
+  * ``win-arm64`` (Windows on 64-bit ARM)
+
 
 Tier 2a: Releases that are built by large software distributors
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -206,10 +212,6 @@ Examples include:
   * ``s390x``
   * ``ppc64le``
   * ``RISC-V``
-
-* Operating system/hardware target:
-
-  * Windows on ARM.
 
 
 How to move Tiers?
