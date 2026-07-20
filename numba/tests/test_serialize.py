@@ -14,7 +14,7 @@ from numba.core.errors import TypingError
 from numba.tests.support import TestCase
 from numba.core.target_extension import resolve_dispatcher_from_str
 from numba.cloudpickle import dumps, loads
-from numba.core.serialize import is_serialiable
+from numba.core.serialize import is_serializable
 
 
 class TestDispatcherPickling(TestCase):
@@ -220,13 +220,13 @@ class TestSerializationMisc(TestCase):
 
     def test_is_serializable(self):
         # Regular objects should work
-        self.assertTrue(is_serialiable({'key': 'value'}))
-        self.assertTrue(is_serialiable([1, 2, 3]))
-        self.assertTrue(is_serialiable("string"))
+        self.assertTrue(is_serializable({'key': 'value'}))
+        self.assertTrue(is_serializable([1, 2, 3]))
+        self.assertTrue(is_serializable("string"))
 
     def test_is_serializable_unpicklable_threading_lock(self):
         """
-        Test that is_serialiable correctly handles unpicklable objects
+        Test that is_serializable correctly handles unpicklable objects
         like thread locks that raise TypeError (issue #6270)
         """
         # Thread locks cannot be pickled and raise TypeError
@@ -238,11 +238,11 @@ class TestSerializationMisc(TestCase):
         self.assertIn("cannot pickle", str(raises.exception))
 
         # Test is_serializable()
-        self.assertFalse(is_serialiable(lock))
+        self.assertFalse(is_serializable(lock))
 
     def test_is_serializable_custom_unpicklable(self):
         """
-        Test that is_serialiable handles objects that raise TypeError
+        Test that is_serializable handles objects that raise TypeError
         in their __reduce__ or __getstate__ methods
         """
         # Object that raises TypeError in __reduce__
@@ -256,8 +256,8 @@ class TestSerializationMisc(TestCase):
                 raise TypeError('Cannot serialize state')
 
         # Both should be detected as unpicklable
-        self.assertFalse(is_serialiable(RejectReduce()))
-        self.assertFalse(is_serialiable(RejectGetstate()))
+        self.assertFalse(is_serializable(RejectReduce()))
+        self.assertFalse(is_serializable(RejectGetstate()))
 
 
 class TestCloudPickleIssues(TestCase):

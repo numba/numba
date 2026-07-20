@@ -1303,7 +1303,7 @@ class PythonAPI(object):
     def _get_function(self, fnty, name):
         fn = cgutils.get_or_insert_function(self.module, fnty, name)
         self.context.apply_target_attributes(fn)
-        return fn        
+        return fn
 
     def alloca_obj(self):
         return self.builder.alloca(self.pyobj)
@@ -1696,7 +1696,7 @@ class ObjModeUtils:
         # Make a basic-block to common exit
         bb_end = builder.append_basic_block("bb_end")
 
-        if serialize.is_serialiable(fnty.dispatcher):
+        if serialize.is_serializable(fnty.dispatcher):
             serialized_dispatcher = self.pyapi.serialize_object(
                 (fnty.dispatcher, tuple(argtypes)),
             )
@@ -1709,7 +1709,7 @@ class ObjModeUtils:
 
         cached = builder.load(gv)
         with builder.if_then(cgutils.is_null(builder, cached)):
-            if serialize.is_serialiable(fnty.dispatcher):
+            if serialize.is_serializable(fnty.dispatcher):
                 cls = type(self)
                 compiler = self.pyapi.unserialize(
                     self.pyapi.serialize_object(cls._call_objmode_dispatcher)
