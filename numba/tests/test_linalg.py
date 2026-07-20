@@ -1068,6 +1068,29 @@ class TestLinalgEigenSystems(TestLinalgBase):
                     # input, so numba now computes the result instead of
                     # raising (matching NumPy).
                     check(A.astype(ty))
+                    # Imag sign bits must match NumPy for both unpack
+                    # branches: real eigenvalues (wi == 0) and conjugate
+                    # pairs (wi != 0). The 4x4 is structuring of the two
+                    # 2x2 cases, so we hit both unpack branches.
+                    for az in (
+                        np.array([[1., 2.], [2., 1.]], dtype=ty),
+                        np.array([[1., -1.], [1., 1.]], dtype=ty),
+                        np.array([[1., 2., 0., 0.],
+                                  [2., 1., 0., 0.],
+                                  [0., 0., 1., -1.],
+                                  [0., 0., 1., 1.]], dtype=ty),
+                    ):
+                        expected = func(az)
+                        got = cfunc(az)
+                        if expected_res_len == 2:
+                            for k in range(2):
+                                np.testing.assert_array_equal(
+                                    np.signbit(got[k].imag),
+                                    np.signbit(expected[k].imag))
+                        else:
+                            np.testing.assert_array_equal(
+                                np.signbit(got.imag),
+                                np.signbit(expected.imag))
 
     @needs_lapack
     def test_linalg_eig(self):
