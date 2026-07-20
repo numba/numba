@@ -10,7 +10,6 @@ numba\.core\.config\..*
 numba\.core\.controlflow\..*
 numba\.core\.datamodel\..*
 numba\.core\.environment\..*
-numba\.core\.errors\..*
 numba\.core\.event\..*
 numba\.core\.inline_closurecall\..*
 numba\.core\.interpreter\..*
