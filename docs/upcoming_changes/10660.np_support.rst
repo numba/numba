@@ -1,0 +1,8 @@
+Added support for ``np.insert``
+-------------------------------
+
+``numpy.insert`` is now supported in nopython mode. The ``arr``, ``obj`` and
+``values`` arguments are supported, where ``obj`` may be an integer or a
+sequence/array of integers. As with ``numpy.delete``, the insertion is
+performed on the flattened input array (the ``axis`` argument is not yet
+supported).

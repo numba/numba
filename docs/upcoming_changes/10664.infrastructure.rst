@@ -1,0 +1,9 @@
+Re-enable win-arm64 tests after LLVM FrameLowering fix
+------------------------------------------------------
+
+Several tests that were temporarily skipped on ``win-arm64`` due to an LLVM 22
+AArch64 frame lowering assertion when JIT-compiling functions with 40 or more
+arguments are now run again. The ``win-arm64`` CI workflows use a patched
+LLVM build that includes the upstream fix (`llvm/llvm-project#204347
+<https://github.com/llvm/llvm-project/pull/204347>`_;
+`numba/llvmlite#1439 <https://github.com/numba/llvmlite/pull/1439>`_).

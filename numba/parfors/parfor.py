@@ -2653,7 +2653,7 @@ class ConvertLoopPass:
                         body_block = ir.Block(scope, loc)
                         index_var, index_var_typ = _make_index_var(
                             pass_states.typemap, scope, index_vars, body_block,
-                            force_tuple=True
+                            force_tuple=False
                         )
                         body = body_block.body + first_body_block.body
                         first_body_block.body = body

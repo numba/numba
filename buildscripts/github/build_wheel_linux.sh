@@ -14,7 +14,7 @@ WHEELS_INDEX_URL=${5:-"https://pypi.anaconda.org/numba/label/dev/simple"} # Adju
 git config --global --add safe.directory /io
 
 # Install dependencies
-$PYTHON_EXECUTABLE -m pip install build numpy==${NUMPY_VERSION} setuptools wheel
+$PYTHON_EXECUTABLE -m pip install build numpy==${NUMPY_VERSION} "setuptools>=69.0.0" wheel
 
 # Install TBB if enabled
 if [ "$USE_TBB" = "true" ]; then

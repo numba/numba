@@ -6,7 +6,8 @@ on:
   pull_request:
     paths:
       - .github/workflows/numba_win-64_wheel_builder.yml
-      - .github/workflows/wheel_workflow_matrix.json
+      - buildscripts/github/evaluate.py
+      - buildscripts/github/test_wheel_contents.py
       - setup.py
   workflow_dispatch:
     inputs:
@@ -31,29 +32,20 @@ jobs:
       build-matrix-json: ${{ steps.load_matrix_json.outputs.build-matrix-json }}
       test-matrix-json: ${{ steps.load_matrix_json.outputs.test-matrix-json }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
       - id: load_matrix_json
         name: Load Workflow Matrix JSON
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_WORKFLOW_INPUT: ${{ toJson(github.event.inputs) }}
+          GITHUB_PLATFORM: win-64
+          GITHUB_PKG_TYPE: wheel
         run: |
-          BUILD_MATRIX_JSON=$(jq -c .wheel_build_matrix .github/workflows/wheel_workflow_matrix.json)
-          TEST_MATRIX_JSON=$(jq -c .wheel_test_matrix .github/workflows/wheel_workflow_matrix.json)
-
-          # Add canonical python versions to both matrices
-          BUILD_MATRIX_EXTENDED=$(echo "$BUILD_MATRIX_JSON" | jq -c '
-            map(. + {"python_canonical": (.["python-version"] | split(".") | .[:2] | join("."))})
-          ')
-
-          TEST_MATRIX_EXTENDED=$(echo "$TEST_MATRIX_JSON" | jq -c '
-            map(. + {"python_canonical": (.["python-version"] | split(".") | .[:2] | join("."))})
-          ')
-
-          echo "Build Matrix JSON: $BUILD_MATRIX_EXTENDED"
-          echo "Test Matrix JSON: $TEST_MATRIX_EXTENDED"
-          echo "build-matrix-json=$BUILD_MATRIX_EXTENDED" >> $GITHUB_OUTPUT
-          echo "test-matrix-json=$TEST_MATRIX_EXTENDED" >> $GITHUB_OUTPUT
+          python buildscripts/github/evaluate.py
 
   win-64-build:
-    name: win-64-build-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
+    name: win-64-build-wheel (py ${{ matrix.python_version_full }}, np ${{ matrix.numpy_build }})
     needs: load-matrix
     runs-on: windows-2025
     defaults:
@@ -66,21 +58,21 @@ jobs:
 
     steps:
       - name: Clone repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ matrix.python_version_full }}
           allow-prereleases: true
 
       - name: Download llvmlite wheel
         if: inputs.llvmlite_wheel_runid != ''
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: llvmlite-win-64-py${{ matrix.python_canonical }}
+          name: llvmlite-win-64-py${{ matrix.python_major_minor }}
           path: llvmlite_wheels
           run-id: ${{ inputs.llvmlite_wheel_runid }}
           repository: numba/llvmlite
@@ -93,22 +85,55 @@ jobs:
           else
               python -m pip install -i ${{ env.WHEELS_INDEX_URL }} llvmlite
           fi
-          python -m pip install build numpy==${{ matrix.numpy_build }} setuptools wheel tbb==2021.6 tbb-devel==2021.6
+          python -m pip install build numpy==${{ matrix.numpy_build }} "setuptools>=69.0.0" wheel tbb==2021.6 tbb-devel==2021.6
+
+      - name: Setup MSVC v14.44 (v143) environment
+        run: |
+          # Same locator as buildscripts/condarecipe.local/bld.bat: find
+          # VS2022 or VS2026 and pin the MSVC v14.44 (v143) toolset, then
+          # export the activated environment to the following steps.
+          VSINSTALLDIR=$(vswhere.exe -nologo -latest -products '*' -version '[17.0,19.0)' -property installationPath | tr -d '\r')
+          if [ -z "$VSINSTALLDIR" ]; then
+            echo "Could not find VS 2022 or VS 2026"
+            exit 1
+          fi
+          # Quotes inside an inline `cmd //c` argument get mangled between
+          # bash and cmd, so activate via a temporary batch file instead.
+          {
+            printf '@call "%s\\VC\\Auxiliary\\Build\\vcvarsall.bat" x64 -vcvars_ver=14.44 >NUL || exit /b 1\r\n' "$VSINSTALLDIR"
+            printf '@set\r\n'
+          } > "$RUNNER_TEMP/msvc_env.bat"
+          set -o pipefail
+          cmd //c "$(cygpath -w "$RUNNER_TEMP/msvc_env.bat")" | tr -d '\r' > "$RUNNER_TEMP/msvc_env.txt"
+          grep -iE '^(PATH|INCLUDE|LIB)=' "$RUNNER_TEMP/msvc_env.txt" >> "$GITHUB_ENV"
+          # git-bash's login profile prepends Git\usr\bin to PATH in every
+          # bash step, so its GNU link.exe would shadow MSVC's linker no
+          # matter what PATH we export; remove the shadowing binary.
+          rm -f /usr/bin/link.exe
 
       - name: Build wheel
+        env:
+          # Use the pre-activated MSVC v14.44 environment instead of
+          # setuptools' own discovery, which would pick VS2026's native
+          # v14.5x toolset. use 14.44 instead.
+          DISTUTILS_USE_SDK: '1'
+          MSSdk: '1'
         run: python -m build --wheel --no-isolation
 
+      - name: Test wheel contents
+        run: python buildscripts/github/test_wheel_contents.py dist/*.whl
+
       - name: Upload numba wheel
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: numba_win-64_wheel_py${{ matrix.python_canonical }}
+          name: numba_win-64_wheel_py${{ matrix.python_major_minor }}
           path: dist/*.whl
           compression-level: 0
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           if-no-files-found: error
 
   win-64-test:
-    name: win-64-test-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
+    name: win-64-test-wheel (py ${{ matrix.python_version_full }}, np ${{ matrix.numpy_test }})
     needs: [load-matrix, win-64-build]
     runs-on: windows-2025
     defaults:
@@ -123,20 +148,20 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ matrix.python_version_full }}
           allow-prereleases: true
 
       - name: Download Numba wheel artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: numba_win-64_wheel_py${{ matrix.python_canonical }}
+          name: numba_win-64_wheel_py${{ matrix.python_major_minor }}
           path: dist
 
       - name: Download llvmlite wheel
         if: inputs.llvmlite_wheel_runid != ''
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: llvmlite-win-64-py${{ matrix.python_canonical }}
+          name: llvmlite-win-64-py${{ matrix.python_major_minor }}
           path: llvmlite_wheels
           run-id: ${{ inputs.llvmlite_wheel_runid }}
           repository: numba/llvmlite
@@ -147,6 +172,9 @@ jobs:
           NUMBA_CPU_NAME: generic
           _NUMBA_REDUCED_TESTING: 1
         run: |
+          # No versioned `which python<ver>` here: Windows setup-python installs
+          # only `python.exe` (no python3.14[t]) and it's the sole interpreter,
+          # so bare `python` already resolves to the setup-python one.
           python -m pip install --upgrade pip twine
           python -m pip install numpy==${{ matrix.numpy_test }} tbb==2021.6 tbb-devel==2021.6
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
