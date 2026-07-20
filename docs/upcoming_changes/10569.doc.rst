@@ -1,4 +1,4 @@
-Add Windows on ARM64 to support policy Tier 1.5 
+Add Windows on ARM64 to support policy Tier 1.5
 -----------------------------------------------
 
 The :ref:`Support Tiers <support_tiers>` documentation now lists ``win-arm64``
