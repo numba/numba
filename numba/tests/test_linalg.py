@@ -1068,7 +1068,7 @@ class TestLinalgEigenSystems(TestLinalgBase):
                     # input, so numba now computes the result instead of
                     # raising (matching NumPy).
                     check(A.astype(ty))
-                    # Imag sign bits must match NumPy for both unpack
+                    # Values and imag sign bits must match NumPy for both unpack
                     # branches: real eigenvalues (wi == 0) and conjugate
                     # pairs (wi != 0). The 4x4 is structuring of the two
                     # 2x2 cases, so we hit both unpack branches.
@@ -1080,6 +1080,7 @@ class TestLinalgEigenSystems(TestLinalgBase):
                                   [0., 0., 1., -1.],
                                   [0., 0., 1., 1.]], dtype=ty),
                     ):
+                        check(az)
                         expected = func(az)
                         got = cfunc(az)
                         if expected_res_len == 2:
