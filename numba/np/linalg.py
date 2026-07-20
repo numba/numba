@@ -1099,8 +1099,10 @@ def eig_impl(a):
                     for j in range(n):
                         re = vr[i, j]
                         im = vr[i + 1, j]
-                        v[i, j] = complex(re, im)
-                        v[i + 1, j] = complex(re, -im)
+                        v.real[i, j] = re
+                        v.imag[i, j] = im
+                        v.real[i + 1, j] = re
+                        v.imag[i + 1, j] = -im
                     i += 2
 
             # put these in to help with liveness analysis,
