@@ -304,6 +304,8 @@ def visit_vars_stmt(stmt, callback, cbdata):
         stmt.value = visit_vars_inner(stmt.value, callback, cbdata)
     elif isinstance(stmt, ir.Raise):
         stmt.exception = visit_vars_inner(stmt.exception, callback, cbdata)
+    elif isinstance(stmt, (ir.DynamicRaise, ir.DynamicTryRaise)):
+        stmt.exc_args = visit_vars_inner(stmt.exc_args, callback, cbdata)
     elif isinstance(stmt, ir.Branch):
         stmt.cond = visit_vars_inner(stmt.cond, callback, cbdata)
     elif isinstance(stmt, ir.Jump):
