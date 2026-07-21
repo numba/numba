@@ -309,12 +309,15 @@ class CompilationUnit(object):
 
 
 COMPUTE_CAPABILITIES = (
-    (3, 5), (3, 7),
-    (5, 0), (5, 2), (5, 3),
-    (6, 0), (6, 1), (6, 2),
-    (7, 0), (7, 2), (7, 5),
-    (8, 0), (8, 6), (8, 7), (8, 9),
-    (9, 0)
+    (3, 5), (3, 7),                 # Kepler
+    (5, 0), (5, 2), (5, 3),         # Maxwell
+    (6, 0), (6, 1), (6, 2),         # Pascal
+    (7, 0), (7, 2), (7, 5),         # Volta / Turing
+    (8, 0), (8, 6), (8, 7), (8, 9), # Ampere / Lovelace
+    (9, 0),                         # Hopper
+    (10, 0), (10, 1), (10, 3),      # Blackwell datacenter / Thor (pre-CUDA 13)
+    (11, 0),                        # Thor (renumbered from 10.1 in CUDA 13)
+    (12, 0), (12, 1),               # Blackwell consumer
 )
 
 # Maps CTK version -> (min supported cc, max supported cc) inclusive
@@ -331,6 +334,15 @@ CTK_SUPPORTED = {
     (12, 2): ((5, 0), (9, 0)),
     (12, 3): ((5, 0), (9, 0)),
     (12, 4): ((5, 0), (9, 0)),
+    (12, 5): ((5, 0), (9, 0)),
+    (12, 6): ((5, 0), (9, 0)),
+    # note: NVIDIA skipped CUDA 12.7
+    (12, 8): ((5, 0), (12, 0)),   # adds Blackwell sm_100, sm_101, sm_120
+    (12, 9): ((5, 0), (12, 1)),   # adds sm_103, sm_121 (12.1)
+    (13, 0): ((7, 5), (12, 1)),   # min bumped to Turing; sm_101 renumbered to sm_110
+    (13, 1): ((7, 5), (12, 1)),
+    (13, 2): ((7, 5), (12, 1)),
+    (13, 3): ((7, 5), (12, 1)),
 }
 
 
