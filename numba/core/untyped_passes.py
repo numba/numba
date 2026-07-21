@@ -1225,7 +1225,18 @@ class MixedContainerUnroller(FunctionPass):
                                   ir.Expr) and stmt.value.op == "getitem":
                         # try a couple of spellings... a[i] and ref(a)[i]
                         if stmt.value.value != getitem_target:
-                            dfn = func_ir.get_definition(stmt.value.value)
+                            try:
+                                dfn = func_ir.get_definition(stmt.value.value)
+                            except KeyError:
+                                # more than one definition reaches this
+                                # getitem, so it cannot be resolved against
+                                # the unroll target
+                                msg = ("Invalid use of literal_unroll, "
+                                       "found multiple definitions of "
+                                       'variable "%s".')
+                                name = stmt.value.value.unversioned_name
+                                raise errors.UnsupportedError(
+                                    msg % name, stmt.loc) from None
                             try:
                                 args = getattr(dfn, 'args', False)
                             except KeyError:
