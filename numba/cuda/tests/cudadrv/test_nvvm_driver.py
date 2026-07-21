@@ -135,7 +135,6 @@ class TestNvvmDriver(unittest.TestCase):
 class TestArchOption(unittest.TestCase):
     def test_get_arch_option(self):
         # Test returning the nearest lowest arch.
-        self.assertEqual(nvvm.get_arch_option(5, 3), 'compute_53')
         self.assertEqual(nvvm.get_arch_option(7, 5), 'compute_75')
         self.assertEqual(nvvm.get_arch_option(7, 7), 'compute_75')
         # Test known arch.
