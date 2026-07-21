@@ -97,19 +97,22 @@ class EntireIterator():
         cur_index = builder.load(self.index)
         with builder.if_then(builder.icmp_signed('>=', cur_index, self.size),
                              likely=False):
-            builder.store(
-                builder.sub(
-                    builder.load(self.ary_int_ptr),
-                    builder.mul(self.dim_stride, builder.load(self.index))
-                ), self.ary_int_ptr
+            # Reset pointer by subtracting total offset
+            offset = builder.mul(self.dim_stride, builder.load(self.index))
+            neg_offset = builder.sub(Constant(self.ll_intp, 0), offset)
+            new_ptr = cgutils.pointer_add(
+                builder, builder.load(self.ary_int_ptr), neg_offset
             )
+            builder.store(new_ptr, self.ary_int_ptr)
             for i in range(len(self.extra_variations)):
-                builder.store(
-                    builder.sub(builder.load(self.extra_iter_ptrs[i]),
-                                builder.mul(self.extra_dim_strides[i],
-                                            builder.load(self.index))),
-                    self.extra_iter_ptrs[i]
+                offset = builder.mul(
+                    self.extra_dim_strides[i], builder.load(self.index)
                 )
+                neg_offset = builder.sub(Constant(self.ll_intp, 0), offset)
+                new_ptr = cgutils.pointer_add(
+                    builder, builder.load(self.extra_iter_ptrs[i]), neg_offset
+                )
+                builder.store(new_ptr, self.extra_iter_ptrs[i])
             builder.branch(self.bb_end)
         return cur_index
 
@@ -117,17 +120,18 @@ class EntireIterator():
         builder = self.builder
         next_index = cgutils.increment_index(builder, builder.load(self.index))
 
-        builder.store(builder.add(
-            builder.load(self.ary_int_ptr), self.dim_stride
-        ), self.ary_int_ptr)
+        # Advance pointer using pointer_add
+        new_ptr = cgutils.pointer_add(
+            builder, builder.load(self.ary_int_ptr), self.dim_stride
+        )
+        builder.store(new_ptr, self.ary_int_ptr)
         for i in range(len(self.extra_variations)):
-            builder.store(
-                builder.add(
-                    builder.load(self.extra_iter_ptrs[i]),
-                    self.extra_dim_strides[i]
-                ),
-                self.extra_iter_ptrs[i]
+            new_ptr = cgutils.pointer_add(
+                builder,
+                builder.load(self.extra_iter_ptrs[i]),
+                self.extra_dim_strides[i]
             )
+            builder.store(new_ptr, self.extra_iter_ptrs[i])
 
         builder.store(next_index, self.index)
         builder.branch(self.bb_start)
@@ -142,8 +146,8 @@ class ArrayIterator:
         self.aryty = aryty
         self.ary = ary
         self.ll_intp = self.context.get_value_type(types.intp)
-        self.iter_ptr = cgutils.alloca_once(builder, self.ll_intp)
-        builder.store(builder.ptrtoint(ary.data, self.ll_intp), self.iter_ptr)
+        self.iter_ptr = cgutils.alloca_once(builder, ary.data.type)
+        builder.store(ary.data, self.iter_ptr)
         self.extra_iter_ptrs = []
         self.extra_strides = []
         self.extra_variations = []
@@ -162,11 +166,10 @@ class ArrayIterator:
                 )
                 self.extra_variations.append(extra_masks[i])
                 extra_ary = extra_arys[i]
-                extra_iter_ptr = cgutils.alloca_once(builder, self.ll_intp)
-                builder.store(
-                    builder.ptrtoint(extra_ary.data, self.ll_intp),
-                    extra_iter_ptr
+                extra_iter_ptr = cgutils.alloca_once(
+                    builder, extra_ary.data.type
                 )
+                builder.store(extra_ary.data, extra_iter_ptr)
                 self.extra_iter_ptrs.append(extra_iter_ptr)
                 self.extra_types.append(extra_ary.data.type)
 
@@ -246,18 +249,13 @@ class ArrayIterator:
 
         if getattr(self, 'extra_iter_ptrs', None):
             extra_ptrs = [
-                self.builder.inttoptr(
-                    self.builder.load(self.extra_iter_ptrs[i]),
-                    self.extra_types[i]
-                ) for i in range(len(self.extra_iter_ptrs))
+                self.builder.load(self.extra_iter_ptrs[i])
+                for i in range(len(self.extra_iter_ptrs))
             ]
-            return self.builder.inttoptr(
-                self.builder.load(self.iter_ptr), self.ary.data.type
-            ), tuple(extra_ptrs)
+            return self.builder.load(self.iter_ptr), tuple(extra_ptrs)
+
         else:
-            return self.builder.inttoptr(
-                self.builder.load(self.iter_ptr), self.ary.data.type
-            )
+            return self.builder.load(self.iter_ptr)
 
     def loop_tail(self):
         for indexer in reversed(self.indexers):
