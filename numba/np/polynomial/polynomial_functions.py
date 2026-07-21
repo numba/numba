@@ -55,12 +55,12 @@ def roots_impl(p):
             # input; domain-change raises were handled inside eigvals. From
             # NumPy 2.5 on, eigvals always returns complex, so roots must
             # check for a nonzero imag part and raise if needed, then drop
-            # the zero imag parts. Branch pruned for complex input; message
-            # kept in sync with linalg.eigvals.
+            # the zero imag parts. Branch pruned for complex input.
             if real_output:
                 if np.any(roots.imag):
                     raise ValueError(
-                        "eigvals() argument must not cause a domain change.")
+                        "a real domain argument to roots cannot produce "
+                        "a complex domain result")
                 roots = roots.real.copy()
         else:
             roots = np.zeros(0, dtype=cast_t)
