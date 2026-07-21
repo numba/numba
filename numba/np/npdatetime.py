@@ -178,6 +178,9 @@ def timedelta_sign_impl(context, builder, sig, args):
                 with lt_zero:
                     builder.store(Constant(TIMEDELTA64, -1), ret)
     res = builder.load(ret)
+    if sig.return_type == types.float64:
+        res = builder.sitofp(res, context.get_value_type(sig.return_type))
+        res = builder.select(builder.icmp_unsigned('==', val, NAT), Constant(res.type, float('nan')), res)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 

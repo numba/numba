@@ -405,12 +405,14 @@ floating-point and complex numbers:
 * :func:`numpy.linalg.cholesky`
 * :func:`numpy.linalg.cond` (only non string values in ``p``).
 * :func:`numpy.linalg.det`
-* :func:`numpy.linalg.eig` (only running with data that does not cause a domain
-  change is supported e.g. real input -> real
-  output, complex input -> complex output).
+* :func:`numpy.linalg.eig` (with NumPy >= 2.5 the result is always complex,
+  matching NumPy; with NumPy < 2.5 only running with data that does not
+  cause a domain change is supported e.g. real input -> real output,
+  complex input -> complex output).
 * :func:`numpy.linalg.eigh` (only the first argument).
-* :func:`numpy.linalg.eigvals` (only running with data that does not cause a
-  domain change is supported e.g. real input -> real output,
+* :func:`numpy.linalg.eigvals` (with NumPy >= 2.5 the result is always
+  complex, matching NumPy; with NumPy < 2.5 only running with data that does
+  not cause a domain change is supported e.g. real input -> real output,
   complex input -> complex output).
 * :func:`numpy.linalg.eigvalsh` (only the first argument).
 * :func:`numpy.linalg.inv`
@@ -518,6 +520,8 @@ The following top-level functions are supported:
 
   * If ``shape[-1] == 2`` for both inputs, please replace your
     :func:`numpy.cross` call with :func:`numba.np.extensions.cross2d`.
+    This is only available with NumPy < 2.5; NumPy 2.5 removed support for
+    the 2-dimensional cross product.
 
 * :func:`numpy.delete` (only the 2 first arguments)
 * :func:`numpy.diag`
@@ -583,8 +587,9 @@ The following top-level functions are supported:
   must be an integer)
 * :func:`numpy.roots`
 * :func:`numpy.rot90` (only the 2 first arguments)
-* :func:`numpy.round_`
-* :func:`numpy.row_stack`
+* :func:`numpy.round_` (NumPy < 2.0 only; removed in NumPy 2.0)
+* :func:`numpy.row_stack` (NumPy < 2.5 only; removed in NumPy 2.5, use
+  :func:`numpy.vstack`)
 * :func:`numpy.searchsorted` (only the 3 first arguments)
 * :func:`numpy.select` (only using homogeneous lists or tuples for the first
   two arguments, condlist and choicelist). Additionally, these two arguments

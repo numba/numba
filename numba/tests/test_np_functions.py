@@ -17,7 +17,6 @@ from numba.np.numpy_support import numpy_version
 from numba.core.errors import (TypingError, NumbaDeprecationWarning)
 from numba.core.config import IS_32BITS
 from numba.core.utils import pysignature
-from numba.np.extensions import cross2d
 from numba.tests.support import (TestCase, MemoryLeakMixin,
                                  needs_blas, run_in_subprocess,
                                  skip_if_numpy_2, IS_NUMPY_2,
@@ -438,10 +437,6 @@ def np_cross(a, b):
 
 def np_trim_zeros(a, trim='fb'):
     return np.trim_zeros(a, trim)
-
-
-def nb_cross2d(a, b):
-    return cross2d(a, b)
 
 
 def flip_lr(a):
@@ -1649,8 +1644,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             a = self.rnd.choice(element_pool, sample_size)
             v = self.rnd.choice(element_pool, sample_size + (i % 3 - 1))
 
-            # output should match numpy regardless of whether `a` is sorted
-            check(a, v)
+            if numpy_version < (2, 5):
+                # Output should match numpy regardless of whether `a`
+                # is sorted but numpy 2.5+ has a different searchsorted
+                # implementation that gives different results for unsorted `a`.
+                check(a, v)
             check(np.sort(a), v)
 
         ones = np.ones(5)
@@ -1728,12 +1726,19 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             a = self.rnd.choice(element_pool, sample_size)
             v = self.rnd.choice(element_pool, sample_size + (i % 3 - 1))
 
-            # output should match numpy regardless of whether `a` is sorted
-            check(a, v)
+            if numpy_version < (2, 5):
+                # Output should match numpy regardless of whether `a`
+                # is sorted but NumPy 2.5+ has a different searchsorted
+                # implementation that gives different results for
+                # unsorted `a`.
+                check(a, v)
             check(np.sort(a), v)
 
-        # check type promotion (a complex; v not so much)
-        check(a=np.array(element_pool), v=np.arange(2))
+        if numpy_version < (2, 5):
+            # check type promotion (a complex; v not so much)
+            check(a=np.array(element_pool), v=np.arange(2))
+        else:
+            check(a=np.sort(np.array(element_pool)), v=np.arange(2))
 
     def test_digitize(self):
         pyfunc = digitize
@@ -5785,11 +5790,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 np.array([[1, 2, 3], [4, 5, 6]]),
                 np.array([[4, 5, 6], [1, 2, 3]])
             ),
-            # 2x3 array-like (n-dims)
-            (
-                np.array([[1, 2, 3], [4, 5, 6]]),
-                ((4, 5), (1, 2))
-            ),
             # 3x3 (1-dim) with type promotion
             (
                 np.array([1, 2, 3], dtype=np.int64),
@@ -5799,11 +5799,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             (
                 (1, 2, 3),
                 (4, 5, 6)
-            ),
-            # 2x3 (1-dim)
-            (
-                np.array([1, 2]),
-                np.array([4, 5, 6])
             ),
             # 3x3 (with broadcasting 1d x 2d)
             (
@@ -5815,13 +5810,39 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 np.array([[1, 2, 3], [4, 5, 6]]),
                 np.array([1, 2, 3])
             ),
+        ]
+
+        two_d_pairs = [
+            #  2x3 (1-dim)
+            (
+                np.array([1, 2]),
+                np.array([4, 5, 6])
+            ),
             # 3x2 (with higher order broadcasting)
             (
                 np.arange(36).reshape(6, 2, 3),
                 np.arange(4).reshape(2, 2)
-            )
+            ),
+            # 2x3 array-like (n-dims)
+            (
+                np.array([[1, 2, 3], [4, 5, 6]]),
+                ((4, 5), (1, 2))
+            ),
         ]
 
+        if numpy_version < (2, 5):
+            pairs.extend(two_d_pairs)
+        else:
+            self.disable_leak_check()
+            for x, y in two_d_pairs:
+                with self.assertRaises(ValueError) as raises:
+                    cfunc(x, y)
+                x_dim, y_dim = np.array(x).shape[-1], np.array(y).shape[-1]
+                self.assertIn(
+                    f'Both input arrays must be (arrays of) 3-dimensional'
+                    f' vectors, but they are {x_dim} and {y_dim}'
+                    f' dimensional instead.',
+                    str(raises.exception))
         for x, y in pairs:
             expected = pyfunc(x, y)
             got = cfunc(x, y)
@@ -5849,16 +5870,29 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 np.array((1, 2)),
                 np.array((3, 4))
             )
-        self.assertIn(
-            'Dimensions for both inputs is 2.',
-            str(raises.exception)
-        )
+        if numpy_version < (2, 5):
+            self.assertIn(
+                'Dimensions for both inputs is 2.',
+                str(raises.exception)
+            )
+        else:
+            self.assertIn(
+                'Both input arrays must be (arrays of) 3-dimensional'
+                ' vectors, but they are 2 and 2 dimensional instead.',
+                str(raises.exception)
+            )
 
-        self.assertIn(
-            '`cross2d(a, b)` from `numba.np.extensions`.',
-            str(raises.exception)
-        )
-
+        if numpy_version < (2, 5):
+            self.assertIn(
+                '`cross2d(a, b)` from `numba.np.extensions`.',
+                str(raises.exception)
+            )
+        else:
+            self.assertIn(
+                'Both input arrays must be (arrays of) 3-dimensional'
+                ' vectors, but they are 2 and 2 dimensional instead.',
+                str(raises.exception)
+            )
         # test incompatible dimensions for ndim > 1
         with self.assertRaises(ValueError) as raises:
             cfunc(
@@ -5876,10 +5910,17 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 np.arange(8).reshape((4, 2)),
                 np.arange(8)[::-1].reshape((4, 2))
             )
-        self.assertIn(
-            'Dimensions for both inputs is 2',
-            str(raises.exception)
-        )
+        if numpy_version < (2, 5):
+            self.assertIn(
+                'Dimensions for both inputs is 2.',
+                str(raises.exception)
+            )
+        else:
+            self.assertIn(
+                'Both input arrays must be (arrays of) 3-dimensional'
+                ' vectors, but they are 2 and 2 dimensional instead.',
+                str(raises.exception)
+            )
 
         # test non-array-like input
         with self.assertRaises(TypingError) as raises:
@@ -5892,7 +5933,16 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             str(raises.exception)
         )
 
+    @unittest.skipIf(
+        numpy_version >= (2, 5),
+        "Support for 2D cross product was officially dropped in Numpy 2.5"
+    )
     def test_cross2d(self):
+        from numba.np.extensions import cross2d
+
+        def nb_cross2d(a, b):
+            return cross2d(a, b)
+
         pyfunc = np_cross
         cfunc = njit(nb_cross2d)
         pairs = [
@@ -5938,7 +5988,16 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc(x, y)
             self.assertPreciseEqual(expected, got)
 
+    @unittest.skipIf(
+        numpy_version >= (2, 5),
+        "Support for 2D cross product was officially dropped in Numpy 2.5"
+    )
     def test_cross2d_exceptions(self):
+        from numba.np.extensions import cross2d
+
+        def nb_cross2d(a, b):
+            return cross2d(a, b)
+
         cfunc = njit(nb_cross2d)
         self.disable_leak_check()
 
