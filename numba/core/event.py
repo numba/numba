@@ -260,18 +260,22 @@ class TimingListener(Listener):
     *END* events during the time this listener is active.
     """
     def __init__(self):
-        self._depth = 0
+        self._lock = threading.Lock()
+        with self._lock:
+            self._depth = 0
 
     def on_start(self, event):
-        if self._depth == 0:
-            self._ts = timer()
-        self._depth += 1
+        with self._lock:
+            if self._depth == 0:
+                self._ts = timer()
+            self._depth += 1
 
     def on_end(self, event):
-        self._depth -= 1
-        if self._depth == 0:
-            last = getattr(self, "_duration", 0)
-            self._duration = (timer() - self._ts) + last
+        with self._lock:
+            self._depth -= 1
+            if self._depth == 0:
+                last = getattr(self, "_duration", 0)
+                self._duration = (timer() - self._ts) + last
 
     @property
     def done(self):
@@ -281,7 +285,8 @@ class TimingListener(Listener):
         If and only if this returns ``True``, ``.duration`` can be read without
         error.
         """
-        return hasattr(self, "_duration")
+        with self._lock:
+            return hasattr(self, "_duration")
 
     @property
     def duration(self):
@@ -290,7 +295,8 @@ class TimingListener(Listener):
         This may raise ``AttributeError``. Users can use ``.done`` to check
         that a measurement has been made.
         """
-        return self._duration
+        with self._lock:
+            return self._duration
 
 
 class RecordingListener(Listener):
