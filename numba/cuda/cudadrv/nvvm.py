@@ -399,6 +399,9 @@ def find_closest_arch(mycc):
               "Please check your cudatoolkit version matches your CUDA version."
         raise NvvmSupportError(msg)
 
+    if mycc == config.CUDA_DEFAULT_PTX_CC:
+        return supported_ccs[0]  # choose lowest CC supported by this CUDA
+
     for i, cc in enumerate(supported_ccs):
         if cc == mycc:
             # Matches
