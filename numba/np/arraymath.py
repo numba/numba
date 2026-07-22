@@ -721,11 +721,11 @@ def _numpy_cumsum_axis(typingctx, aryty, axisty, dtype):
             res_ptr, acc_ptr = res_ptr_tup
             val = load_item(context, builder, aryty, ary_iter_ptr)
             res_val = add_funcfn(builder, (
-                load_item(context, builder, sig.return_type, acc_ptr),
+                load_item(context, builder, acc_type, acc_ptr),
                 context.cast(builder, val, aryty.dtype, sig.return_type.dtype)))
             store_item(context, builder, acc_type, res_val, acc_ptr)
             store_item(context, builder, sig.return_type,
-                       builder.load(acc_ptr), res_ptr)
+                       load_item(context, builder, acc_type, acc_ptr), res_ptr)
 
         context.nrt.decref(builder, acc_type, acc._getvalue())
 
