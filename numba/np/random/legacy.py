@@ -2,7 +2,7 @@ import math
 
 from llvmlite import ir
 
-from numba import np
+import numpy as np
 from numba.core.cgutils import is_nonelike, is_empty_tuple
 from numba.core.extending import intrinsic, overload, register_jitable
 from numba.core.typing import signature

@@ -637,7 +637,7 @@ def do_shuffle_impl(x, rand):
             i = x.shape[0] - 1
             while i > 0:
                 j = rand(i + 1)
-                x[i], x[j] = np.copy(x[j]), np.copy(x[i])
+                x[i], x[j] = x[j].copy(), x[i].copy()
                 i -= 1
 
     return impl
