@@ -10,6 +10,7 @@ import numpy as np
 
 from numba import jit, njit, typeof
 from numba.core import errors
+from numba.np.numpy_support import numpy_version
 from numba.tests.support import (TestCase, tag, needs_lapack, needs_blas,
                                  _is_armv7l, EnableNRTStatsMixin)
 from .matmul_usecase import matmul_usecase
@@ -1056,9 +1057,41 @@ class TestLinalgEigenSystems(TestLinalgBase):
             l, _ = func(A)
             self.assertTrue(np.any(l.imag))
 
-            # Now check that the computation fails in real space
+            # Behaviour in real space depends on the NumPy version.
             for ty in [np.float32, np.float64]:
-                self.assert_no_domain_change(name, cfunc, (A.astype(ty),))
+                if numpy_version < (2, 5):
+                    # Returning complex eigenvalues from a real input is a
+                    # domain change numba cannot represent, so it raises.
+                    self.assert_no_domain_change(name, cfunc, (A.astype(ty),))
+                else:
+                    # NumPy >= 2.5 always returns complex eigenvalues for real
+                    # input, so numba now computes the result instead of
+                    # raising (matching NumPy).
+                    check(A.astype(ty))
+                    # Values and imag sign bits must match NumPy for both unpack
+                    # branches: real eigenvalues (wi == 0) and conjugate
+                    # pairs (wi != 0). The 4x4 is structuring of the two
+                    # 2x2 cases, so we hit both unpack branches.
+                    for az in (
+                        np.array([[1., 2.], [2., 1.]], dtype=ty),
+                        np.array([[1., -1.], [1., 1.]], dtype=ty),
+                        np.array([[1., 2., 0., 0.],
+                                  [2., 1., 0., 0.],
+                                  [0., 0., 1., -1.],
+                                  [0., 0., 1., 1.]], dtype=ty),
+                    ):
+                        check(az)
+                        expected = func(az)
+                        got = cfunc(az)
+                        if expected_res_len == 2:
+                            for k in range(2):
+                                np.testing.assert_array_equal(
+                                    np.signbit(got[k].imag),
+                                    np.signbit(expected[k].imag))
+                        else:
+                            np.testing.assert_array_equal(
+                                np.signbit(got.imag),
+                                np.signbit(expected.imag))
 
     @needs_lapack
     def test_linalg_eig(self):

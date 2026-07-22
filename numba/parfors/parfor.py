@@ -40,7 +40,6 @@ from numba.core.extending import register_jitable, lower_builtin
 from numba.core.ir_utils import (
     mk_unique_var,
     next_label,
-    mk_alloc,
     get_np_ufunc_typ,
     mk_range_block,
     mk_loop_header,
@@ -91,6 +90,8 @@ from numba.core.types.functions import Function
 from numba.parfors.array_analysis import (random_int_args, random_1arg_size,
                                   random_2arg_sizelast, random_3arg_sizelast,
                                   random_calls, assert_equiv)
+from numba.parfors.ir_utils import mk_alloc
+from numba.np import types as npy_types
 from numba.core.extending import overload
 import copy
 import numpy
@@ -134,12 +135,12 @@ def min_parallel_impl(return_type, arg):
         def min_1(in_arr):
             return in_arr[()]
     elif arg.ndim == 1:
-        if isinstance(arg.dtype, (types.NPDatetime, types.NPTimedelta)):
+        if isinstance(arg.dtype, (npy_types.NPDatetime, npy_types.NPTimedelta)):
             # NaT is always returned if it is in the array
             def min_1(in_arr):
                 numba.parfors.parfor.init_prange()
                 min_checker(len(in_arr))
-                val = numba.cpython.builtins.get_type_max_value(in_arr.dtype)
+                val = get_type_max_value(in_arr.dtype)
                 for i in numba.parfors.parfor.internal_prange(len(in_arr)):
                     val = datetime_minimum(val, in_arr[i])
                 return val
@@ -147,7 +148,7 @@ def min_parallel_impl(return_type, arg):
             def min_1(in_arr):
                 numba.parfors.parfor.init_prange()
                 min_checker(len(in_arr))
-                val = numba.cpython.builtins.get_type_max_value(in_arr.dtype)
+                val = get_type_max_value(in_arr.dtype)
                 for i in numba.parfors.parfor.internal_prange(len(in_arr)):
                     val = min(val, in_arr[i])
                 return val
@@ -155,23 +156,102 @@ def min_parallel_impl(return_type, arg):
         def min_1(in_arr):
             numba.parfors.parfor.init_prange()
             min_checker(len(in_arr))
-            val = numba.cpython.builtins.get_type_max_value(in_arr.dtype)
+            val = get_type_max_value(in_arr.dtype)
             for i in numba.pndindex(in_arr.shape):
                 val = min(val, in_arr[i])
             return val
     return min_1
+
+# -----------------------------------------------------------------------------
+
+def get_type_max_value(typ):
+    if isinstance(typ, types.Float):
+        return np.inf
+    if isinstance(typ, types.Integer):
+        return typ.maxval
+    raise NotImplementedError("Unsupported type")
+
+def get_type_min_value(typ):
+    if isinstance(typ, types.Float):
+        return -np.inf
+    if isinstance(typ, types.Integer):
+        return typ.minval
+    raise NotImplementedError("Unsupported type")
+
+@infer_global(get_type_min_value)
+@infer_global(get_type_max_value)
+class MinValInfer(AbstractTemplate):
+    def generic(self, args, kws):
+        assert not kws
+        assert len(args) == 1
+        if isinstance(args[0], (types.DType, types.NumberClass)):
+            return signature(args[0].dtype, *args)
+
+@lower_builtin(get_type_min_value, types.NumberClass)
+@lower_builtin(get_type_min_value, types.DType)
+def lower_get_type_min_value(context, builder, sig, args):
+    typ = sig.args[0].dtype
+
+    if isinstance(typ, types.Integer):
+        bw = typ.bitwidth
+        lty = lir.IntType(bw)
+        val = typ.minval
+        res = lir.Constant(lty, val)
+    elif isinstance(typ, types.Float):
+        bw = typ.bitwidth
+        if bw == 32:
+            lty = lir.FloatType()
+        elif bw == 64:
+            lty = lir.DoubleType()
+        else:
+            raise NotImplementedError("llvmlite only supports 32 and 64 bit floats")
+        npty = getattr(np, 'float{}'.format(bw))
+        res = lir.Constant(lty, -np.inf)
+    elif isinstance(typ, (npy_types.NPDatetime, npy_types.NPTimedelta)):
+        bw = 64
+        lty = lir.IntType(bw)
+        val = types.int64.minval + 1 # minval is NaT, so minval + 1 is the smallest value
+        res = lir.Constant(lty, val)
+    return impl_ret_untracked(context, builder, lty, res)
+
+@lower_builtin(get_type_max_value, types.NumberClass)
+@lower_builtin(get_type_max_value, types.DType)
+def lower_get_type_max_value(context, builder, sig, args):
+    typ = sig.args[0].dtype
+
+    if isinstance(typ, types.Integer):
+        bw = typ.bitwidth
+        lty = lir.IntType(bw)
+        val = typ.maxval
+        res = lir.Constant(lty, val)
+    elif isinstance(typ, types.Float):
+        bw = typ.bitwidth
+        if bw == 32:
+            lty = lir.FloatType()
+        elif bw == 64:
+            lty = lir.DoubleType()
+        else:
+            raise NotImplementedError("llvmlite only supports 32 and 64 bit floats")
+        npty = getattr(np, 'float{}'.format(bw))
+        res = lir.Constant(lty, np.inf)
+    elif isinstance(typ, (npy_types.NPDatetime, npy_types.NPTimedelta)):
+        bw = 64
+        lty = lir.IntType(bw)
+        val = types.int64.maxval
+        res = lir.Constant(lty, val)
+    return impl_ret_untracked(context, builder, lty, res)
 
 def max_parallel_impl(return_type, arg):
     if arg.ndim == 0:
         def max_1(in_arr):
             return in_arr[()]
     elif arg.ndim == 1:
-        if isinstance(arg.dtype, (types.NPDatetime, types.NPTimedelta)):
+        if isinstance(arg.dtype, (npy_types.NPDatetime, npy_types.NPTimedelta)):
             # NaT is always returned if it is in the array
             def max_1(in_arr):
                 numba.parfors.parfor.init_prange()
                 max_checker(len(in_arr))
-                val = numba.cpython.builtins.get_type_min_value(in_arr.dtype)
+                val = get_type_min_value(in_arr.dtype)
                 for i in numba.parfors.parfor.internal_prange(len(in_arr)):
                     val = datetime_maximum(val, in_arr[i])
                 return val
@@ -179,7 +259,7 @@ def max_parallel_impl(return_type, arg):
             def max_1(in_arr):
                 numba.parfors.parfor.init_prange()
                 max_checker(len(in_arr))
-                val = numba.cpython.builtins.get_type_min_value(in_arr.dtype)
+                val = get_type_min_value(in_arr.dtype)
                 for i in numba.parfors.parfor.internal_prange(len(in_arr)):
                     val = max(val, in_arr[i])
                 return val
@@ -187,7 +267,7 @@ def max_parallel_impl(return_type, arg):
         def max_1(in_arr):
             numba.parfors.parfor.init_prange()
             max_checker(len(in_arr))
-            val = numba.cpython.builtins.get_type_min_value(in_arr.dtype)
+            val = get_type_min_value(in_arr.dtype)
             for i in numba.pndindex(in_arr.shape):
                 val = max(val, in_arr[i])
             return val
@@ -197,7 +277,7 @@ def argmin_parallel_impl(in_arr):
     numba.parfors.parfor.init_prange()
     argmin_checker(len(in_arr))
     A = in_arr.ravel()
-    init_val = numba.cpython.builtins.get_type_max_value(A.dtype)
+    init_val = get_type_max_value(A.dtype)
     ival = typing.builtins.IndexValue(0, init_val)
     for i in numba.parfors.parfor.internal_prange(len(A)):
         curr_ival = typing.builtins.IndexValue(i, A[i])
@@ -208,7 +288,7 @@ def argmax_parallel_impl(in_arr):
     numba.parfors.parfor.init_prange()
     argmax_checker(len(in_arr))
     A = in_arr.ravel()
-    init_val = numba.cpython.builtins.get_type_min_value(A.dtype)
+    init_val = get_type_min_value(A.dtype)
     ival = typing.builtins.IndexValue(0, init_val)
     for i in numba.parfors.parfor.internal_prange(len(A)):
         curr_ival = typing.builtins.IndexValue(i, A[i])
@@ -1503,7 +1583,7 @@ class PreParforPass(object):
                             kws_typs = {k: self.typemap[x.name] for k, x in expr.kws}
                             try:
                                 new_func =  repl_func(lhs_typ, *typs, **kws_typs)
-                            except:
+                            except Exception:
                                 new_func = None
                             require(new_func is not None)
                             # bind arguments to the new_func
@@ -2573,7 +2653,7 @@ class ConvertLoopPass:
                         body_block = ir.Block(scope, loc)
                         index_var, index_var_typ = _make_index_var(
                             pass_states.typemap, scope, index_vars, body_block,
-                            force_tuple=True
+                            force_tuple=False
                         )
                         body = body_block.body + first_body_block.body
                         first_body_block.body = body
@@ -3236,7 +3316,7 @@ def _arrayexpr_tree_to_ir(
                 ir_expr = ir.Expr.binop(op, arg_vars[0], arg_vars[1], loc)
                 if op == operator.truediv:
                     func_typ, ir_expr = _gen_np_divide(
-                        arg_vars[0], arg_vars[1], out_ir, typemap)
+                        arg_vars[0], arg_vars[1], out_ir, typemap, typingctx)
             else:
                 func_typ = typingctx.resolve_function_type(op, (el_typ1,), {})
                 ir_expr = ir.Expr.unary(op, arg_vars[0], loc)
@@ -3302,7 +3382,7 @@ def _arrayexpr_tree_to_ir(
     return out_ir
 
 
-def _gen_np_divide(arg1, arg2, out_ir, typemap):
+def _gen_np_divide(arg1, arg2, out_ir, typemap, typingctx):
     """generate np.divide() instead of / for array_expr to get numpy error model
     like inf for division by zero (test_division_by_zero).
     """
@@ -3316,13 +3396,13 @@ def _gen_np_divide(arg1, arg2, out_ir, typemap):
     # attr call: div_attr = getattr(g_np_var, divide)
     div_attr_call = ir.Expr.getattr(g_np_var, "divide", loc)
     attr_var = ir.Var(scope, mk_unique_var("$div_attr"), loc)
-    func_var_typ = get_np_ufunc_typ(numpy.divide)
+    func_var_typ = get_np_ufunc_typ(numpy.divide, typingctx)
     typemap[attr_var.name] = func_var_typ
     attr_assign = ir.Assign(div_attr_call, attr_var, loc)
     # divide call:  div_attr(arg1, arg2)
     div_call = ir.Expr.call(attr_var, [arg1, arg2], (), loc)
     func_typ = func_var_typ.get_call_type(
-        typing.Context(), [typemap[arg1.name], typemap[arg2.name]], {})
+        typingctx, [typemap[arg1.name], typemap[arg2.name]], {})
     out_ir.extend([g_np_assign, attr_assign])
     return func_typ, div_call
 

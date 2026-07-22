@@ -59,7 +59,7 @@ def range_contains(val, start, stop, step):
     return [val in r for r in (r1, r2, r3)]
 
 
-class TestRange(TestCase):
+class TestRange(unittest.TestCase):
 
     def test_loop1_int16(self):
         pyfunc = loop1
@@ -179,42 +179,22 @@ class TestRange(TestCase):
             for val in non_numeric_vals:
                 self.assertEqual(cfunc_obj(val, *arg), pyfunc(val, *arg))
 
-    def test_range1_unsafe_cast(self):
-        cfunc = jit(range_len1)
-        with self.assertTypingError() as raises:
-            cfunc(1.234)
 
-        exc_str = str(raises.exception)
-        self.assertIn("No implementation of function", exc_str)
-        self.assertIn("range(float64)", exc_str)
+@njit
+def my_arange(start, stop, step):
+    x = np.zeros(len(range(start, stop, step)), dtype=np.uint64)
+    i = 0
+    for v in range(start, stop, step):
+        x[i] = v
+        i += 1
+    return x
 
-    def test_range2_unsafe_cast(self):
-        cfunc = jit(range_len2)
-        with self.assertTypingError() as raises:
-            cfunc(1, 12.34)
 
-        exc_str = str(raises.exception)
-        self.assertIn("No implementation of function", exc_str)
-        self.assertIn("range(int64, float64)", exc_str)
-
-    def test_range3_unsafe_cast(self):
-        cfunc = jit(range_len3)
-        with self.assertTypingError() as raises:
-            cfunc(1, 10, 1.234)
-
-        exc_str = str(raises.exception)
-        self.assertIn("No implementation of function", exc_str)
-        self.assertIn("range(int64, int64, float64)", exc_str)
-
-    def test_range_safe_cast(self):
-        @jit
-        def foo():
-            n = np.uint8(10)
-            acc = 0
-            for i in range(n):
-                acc += 1
-
-        self.assertPreciseEqual(foo(), foo.py_func())
+class TestRangeNumpy(TestCase):
+    def test_range_safe_cast_mixed(self):
+        """Test that mixing `uint64` and `int64` works."""
+        a = my_arange(np.uint64(6), np.uint64(0), np.int64(-1))
+        self.assertPreciseEqual(a, np.arange(6, 0, -1, dtype=np.uint64))
 
 
 if __name__ == '__main__':

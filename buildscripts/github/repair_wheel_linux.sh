@@ -16,6 +16,14 @@ echo "WHEEL_DIR: $WHEEL_DIR"
 # Install required tools
 $PYTHON_EXECUTABLE -m pip install auditwheel patchelf twine wheel
 
+# Install TBB if enabled
+if [ "$USE_TBB" = "true" ]; then
+    $PYTHON_EXECUTABLE -m pip install tbb==2021.6 tbb-devel==2021.6
+    # Make TBB libraries available to dynamic linker
+    find /opt /usr -name "libtbb.so*" -exec cp {} /usr/local/lib/ \; 2>/dev/null
+    ldconfig
+fi
+
 # Make sure the wheelhouse directory exists
 mkdir -p $WHEEL_DIR
 
@@ -103,5 +111,6 @@ cp "$WHEEL_REPACKED" "$WHEEL_DIR/"
 
 # Verify the final wheel (in the temp dir before cleanup)
 $PYTHON_EXECUTABLE -m twine check "$WHEEL_REPACKED"
+$PYTHON_EXECUTABLE /io/buildscripts/github/test_wheel_contents.py "$WHEEL_DIR/$WHEEL_REPACKED"
 
 echo "Wheel repair and patch completed successfully"

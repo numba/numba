@@ -64,121 +64,6 @@ def next_label():
     return _the_max_label.next()
 
 
-def mk_alloc(typingctx, typemap, calltypes, lhs, size_var, dtype, scope, loc,
-             lhs_typ):
-    """generate an array allocation with np.empty() and return list of nodes.
-    size_var can be an int variable or tuple of int variables.
-    lhs_typ is the type of the array being allocated.
-    """
-    out = []
-    ndims = 1
-    size_typ = types.intp
-    if isinstance(size_var, tuple):
-        if len(size_var) == 1:
-            size_var = size_var[0]
-            size_var = convert_size_to_var(size_var, typemap, scope, loc, out)
-        else:
-            # tuple_var = build_tuple([size_var...])
-            ndims = len(size_var)
-            tuple_var = ir.Var(scope, mk_unique_var("$tuple_var"), loc)
-            if typemap:
-                typemap[tuple_var.name] = types.containers.UniTuple(
-                    types.intp, ndims)
-            # constant sizes need to be assigned to vars
-            new_sizes = [convert_size_to_var(s, typemap, scope, loc, out)
-                         for s in size_var]
-            tuple_call = ir.Expr.build_tuple(new_sizes, loc)
-            tuple_assign = ir.Assign(tuple_call, tuple_var, loc)
-            out.append(tuple_assign)
-            size_var = tuple_var
-            size_typ = types.containers.UniTuple(types.intp, ndims)
-    if hasattr(lhs_typ, "__allocate__"):
-        return lhs_typ.__allocate__(
-            typingctx,
-            typemap,
-            calltypes,
-            lhs,
-            size_var,
-            dtype,
-            scope,
-            loc,
-            lhs_typ,
-            size_typ,
-            out,
-        )
-    # g_np_var = Global(numpy)
-    g_np_var = ir.Var(scope, mk_unique_var("$np_g_var"), loc)
-    if typemap:
-        typemap[g_np_var.name] = types.misc.Module(numpy)
-    g_np = ir.Global('np', numpy, loc)
-    g_np_assign = ir.Assign(g_np, g_np_var, loc)
-    # attr call: empty_attr = getattr(g_np_var, empty)
-    empty_attr_call = ir.Expr.getattr(g_np_var, "empty", loc)
-    attr_var = ir.Var(scope, mk_unique_var("$empty_attr_attr"), loc)
-    if typemap:
-        typemap[attr_var.name] = get_np_ufunc_typ(numpy.empty)
-    attr_assign = ir.Assign(empty_attr_call, attr_var, loc)
-     # Assume str(dtype) returns a valid type
-    dtype_str = str(dtype)
-    # alloc call: lhs = empty_attr(size_var, typ_var)
-    typ_var = ir.Var(scope, mk_unique_var("$np_typ_var"), loc)
-    if typemap:
-        typemap[typ_var.name] = types.functions.NumberClass(dtype)
-    # If dtype is a datetime/timedelta with a unit,
-    # then it won't return a valid type and instead can be created
-    # with a string. i.e. "datetime64[ns]")
-    if (isinstance(dtype, (types.NPDatetime, types.NPTimedelta)) and
-        dtype.unit != ''):
-            typename_const = ir.Const(dtype_str, loc)
-            typ_var_assign = ir.Assign(typename_const, typ_var, loc)
-    else:
-        if dtype_str=='bool':
-            # empty doesn't like 'bool' sometimes (e.g. kmeans example)
-            dtype_str = 'bool_'
-        np_typ_getattr = ir.Expr.getattr(g_np_var, dtype_str, loc)
-        typ_var_assign = ir.Assign(np_typ_getattr, typ_var, loc)
-    alloc_call = ir.Expr.call(attr_var, [size_var, typ_var], (), loc)
-
-    if calltypes:
-        cac = typemap[attr_var.name].get_call_type(
-            typingctx, [size_typ, types.functions.NumberClass(dtype)], {})
-        # By default, all calls to "empty" are typed as returning a standard
-        # NumPy ndarray.  If we are allocating a ndarray subclass here then
-        # just change the return type to be that of the subclass.
-        cac._return_type = (lhs_typ.copy(layout='C')
-                            if lhs_typ.layout == 'F'
-                            else lhs_typ)
-        calltypes[alloc_call] = cac
-    if lhs_typ.layout == 'F':
-        empty_c_typ = lhs_typ.copy(layout='C')
-        empty_c_var = ir.Var(scope, mk_unique_var("$empty_c_var"), loc)
-        if typemap:
-            typemap[empty_c_var.name] = lhs_typ.copy(layout='C')
-        empty_c_assign = ir.Assign(alloc_call, empty_c_var, loc)
-
-        # attr call: asfortranarray = getattr(g_np_var, asfortranarray)
-        asfortranarray_attr_call = ir.Expr.getattr(g_np_var, "asfortranarray", loc)
-        afa_attr_var = ir.Var(scope, mk_unique_var("$asfortran_array_attr"), loc)
-        if typemap:
-            typemap[afa_attr_var.name] = get_np_ufunc_typ(numpy.asfortranarray)
-        afa_attr_assign = ir.Assign(asfortranarray_attr_call, afa_attr_var, loc)
-        # call asfortranarray
-        asfortranarray_call = ir.Expr.call(afa_attr_var, [empty_c_var], (), loc)
-        if calltypes:
-            calltypes[asfortranarray_call] = typemap[afa_attr_var.name].get_call_type(
-                typingctx, [empty_c_typ], {})
-
-        asfortranarray_assign = ir.Assign(asfortranarray_call, lhs, loc)
-
-        out.extend([g_np_assign, attr_assign, typ_var_assign, empty_c_assign,
-                    afa_attr_assign, asfortranarray_assign])
-    else:
-        alloc_assign = ir.Assign(alloc_call, lhs, loc)
-        out.extend([g_np_assign, attr_assign, typ_var_assign, alloc_assign])
-
-    return out
-
-
 def convert_size_to_var(size_var, typemap, scope, loc, nodes):
     if isinstance(size_var, int):
         new_size = ir.Var(scope, mk_unique_var("$alloc_size"), loc)
@@ -191,15 +76,15 @@ def convert_size_to_var(size_var, typemap, scope, loc, nodes):
     return size_var
 
 
-def get_np_ufunc_typ(func):
-    """get type of the incoming function from builtin registry"""
-    for (k, v) in typing.npydecl.registry.globals:
-        if k == func:
-            return v
-    for (k, v) in typing.templates.builtin_registry.globals:
-        if k == func:
-            return v
-    raise RuntimeError("type for func ", func, " not found")
+def get_np_ufunc_typ(func, typingctx):
+    """get type of the incoming function
+
+    Resolve using the context for target-awareness
+    """
+    try:
+        return typingctx.resolve_value_type(func)
+    except TypingError:
+        raise RuntimeError("type for func ", func, " not found")
 
 
 def mk_range_block(typemap, start, stop, step, calltypes, scope, loc):
@@ -222,10 +107,7 @@ def mk_range_block(typemap, start, stop, step, calltypes, scope, loc):
     range_call_assign = ir.Assign(range_call, range_call_var, loc)
     # iter_var = getiter(range_call_var)
     iter_call = ir.Expr.getiter(range_call_var, loc)
-    if config.USE_LEGACY_TYPE_SYSTEM:
-        calltype_sig = signature(types.range_iter64_type, types.range_state64_type)
-    else:
-        calltype_sig = signature(types.range_iter_type, types.range_state_type)
+    calltype_sig = signature(types.range_iter64_type, types.range_state64_type)
     calltypes[iter_call] = calltype_sig
     iter_var = ir.Var(scope, mk_unique_var("$iter_var"), loc)
     typemap[iter_var.name] = types.iterators.RangeIteratorType(types.intp)
@@ -298,10 +180,7 @@ def mk_loop_header(typemap, phi_var, calltypes, scope, loc):
     typemap[iternext_var.name] = types.containers.Pair(
         types.intp, types.boolean)
     iternext_call = ir.Expr.iternext(phi_var, loc)
-    if config.USE_LEGACY_TYPE_SYSTEM:
-        range_iter_type = types.range_iter64_type
-    else:
-        range_iter_type = types.range_iter_type
+    range_iter_type = types.range_iter64_type
     calltypes[iternext_call] = signature(
         types.containers.Pair(
             types.intp,
@@ -425,6 +304,8 @@ def visit_vars_stmt(stmt, callback, cbdata):
         stmt.value = visit_vars_inner(stmt.value, callback, cbdata)
     elif isinstance(stmt, ir.Raise):
         stmt.exception = visit_vars_inner(stmt.exception, callback, cbdata)
+    elif isinstance(stmt, (ir.DynamicRaise, ir.DynamicTryRaise)):
+        stmt.exc_args = visit_vars_inner(stmt.exc_args, callback, cbdata)
     elif isinstance(stmt, ir.Branch):
         stmt.cond = visit_vars_inner(stmt.cond, callback, cbdata)
     elif isinstance(stmt, ir.Jump):
@@ -910,12 +791,14 @@ def _add_alias(lhs, rhs, alias_map, arg_aliases):
     return
 
 def is_immutable_type(var, typemap):
+    from numba.np.types.datetime import _NPDatetimeBase
     # Conservatively, assume mutable if type not available
     if typemap is None or var not in typemap:
         return False
     typ = typemap[var]
     # TODO: add more immutable types
-    if isinstance(typ, (types.Number, types.scalars._NPDatetimeBase,
+    # TODO: Refactor and make use of .mutable attribute
+    if isinstance(typ, (types.Number, _NPDatetimeBase,
                         types.iterators.RangeType)):
         return True
     if typ==types.string:
@@ -1417,7 +1300,7 @@ def canonicalize_array_math(func_ir, typemap, calltypes, typingctx):
                     func_ir._definitions[g_np_var.name] = [g_np]
                     # update func var type
                     func = getattr(numpy, rhs.attr)
-                    func_typ = get_np_ufunc_typ(func)
+                    func_typ = get_np_ufunc_typ(func, typingctx)
                     typemap.pop(lhs)
                     typemap[lhs] = func_typ
                 if rhs.op == 'call' and rhs.func.name in saved_arr_arg:
@@ -1886,7 +1769,7 @@ def gen_np_call(func_as_str, func, lhs, args, typingctx, typemap, calltypes):
     # attr call: <something>_attr = getattr(g_np_var, func_as_str)
     np_attr_call = ir.Expr.getattr(g_np_var, func_as_str, loc)
     attr_var = ir.Var(scope, mk_unique_var("$np_attr_attr"), loc)
-    func_var_typ = get_np_ufunc_typ(func)
+    func_var_typ = get_np_ufunc_typ(func, typingctx)
     typemap[attr_var.name] = func_var_typ
     attr_assign = ir.Assign(np_attr_call, attr_var, loc)
     # np call: lhs = np_attr(*args)
@@ -2163,7 +2046,7 @@ def raise_on_unsupported_feature(func_ir, typemap):
                        "compile-time constants and there is no known way to "
                        "compile a %s type as a constant.")
                 if (getattr(ty, 'reflected', False) or
-                    isinstance(ty, (types.DictType, types.ListType))):
+                    isinstance(ty, (types.DictType, types.ListType, types.SetType))):
                     raise TypingError(msg % (ty, stmt.value.name, ty), loc=stmt.loc)
 
             # checks for generator expressions (yield in use when func_ir has

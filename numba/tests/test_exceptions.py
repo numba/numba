@@ -7,6 +7,7 @@ from numba.core import types, errors, utils
 from numba.tests.support import (TestCase, expected_failure_py311,
                                  expected_failure_py312,
                                  expected_failure_py313,
+                                 expected_failure_py314,
                                  )
 import unittest
 
@@ -188,7 +189,7 @@ class TestRaising(TestCase):
         self.check_against_python(flags, pyfunc, cfunc, MyError, 1)
         self.check_against_python(flags, pyfunc, cfunc, ValueError, 2)
         self.check_against_python(flags, pyfunc, cfunc,
-                                  np.linalg.linalg.LinAlgError, 3)
+                                  np.linalg.LinAlgError, 3)
 
     def test_raise_class_nopython(self):
         self.check_raise_class(flags=no_pyobj_flags)
@@ -206,7 +207,7 @@ class TestRaising(TestCase):
             self.check_against_python(flags, pyfunc, cfunc, clazz, 1)
             self.check_against_python(flags, pyfunc, cfunc, ValueError, 2)
             self.check_against_python(flags, pyfunc, cfunc,
-                                      np.linalg.linalg.LinAlgError, 3)
+                                      np.linalg.LinAlgError, 3)
 
     def test_raise_instance_objmode(self):
         self.check_raise_instance(flags=force_pyobj_flags)
@@ -373,7 +374,7 @@ class TestRaising(TestCase):
             self.check_against_python(flags, pyfunc, cfunc, ValueError, 2,
                                       'world')
             self.check_against_python(flags, pyfunc, cfunc,
-                                      np.linalg.linalg.LinAlgError, 3, 'linalg')
+                                      np.linalg.LinAlgError, 3, 'linalg')
 
     def test_raise_instance_with_runtime_args_objmode(self):
         self.check_raise_instance_with_runtime_args(flags=force_pyobj_flags)
@@ -414,6 +415,55 @@ class TestRaising(TestCase):
         with self.assertRaisesRegex(ValueError, msg):
             raise_literal_dict2()
 
+    def test_dynamic_raise_literal_message(self):
+        @njit
+        def raise_literal_message(a):
+            if a == 0:
+                msg = "A was 0"
+                raise ValueError(msg)
+            if a == 1:
+                msg = "A was 1"
+                raise ValueError(msg)
+            if a == 2:
+                msg = "A was 2"
+                raise ValueError(msg)
+
+        for i in range(3):
+            with self.subTest(i=i):
+                with self.assertRaises(ValueError) as raises:
+                    raise_literal_message(i)
+                self.assertEqual(str(raises.exception), f"A was {i}")
+
+    def test_dynamic_raise_single_literal_message(self):
+        @njit
+        def raise_single_literal_message(arg):
+            msg = "False"
+            if arg:
+                msg = "True"
+            raise ValueError(msg)
+
+        for arg in (False, True):
+            with self.subTest(arg=arg):
+                with self.assertRaises(ValueError) as raises:
+                    raise_single_literal_message(arg)
+                self.assertEqual(str(raises.exception), str(arg))
+
+    def test_dynamic_raise_mixed_int_width(self):
+        @njit
+        def raise_mixed_int_width(a):
+            if a == 0:
+                value = np.int64(-7)
+                raise ValueError(value)
+            value = np.uint64(2 ** 63)
+            raise ValueError(value)
+
+        cases = [(0, "-7"), (1, str(2 ** 63))]
+        for arg, expected in cases:
+            with self.subTest(arg=arg):
+                with self.assertRaises(ValueError) as raises:
+                    raise_mixed_int_width(arg)
+                self.assertEqual(str(raises.exception), expected)
+
     def test_disable_nrt(self):
         @njit(_nrt=False)
         def raise_with_no_nrt(i):
@@ -442,6 +492,7 @@ class TestRaising(TestCase):
     @expected_failure_py311
     @expected_failure_py312
     @expected_failure_py313
+    @expected_failure_py314
     def test_dynamic_raise(self):
 
         @njit

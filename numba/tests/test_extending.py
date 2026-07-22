@@ -24,6 +24,7 @@ from numba.tests.support import (
     override_config,
     run_in_new_process_in_cache_dir,
     skip_if_typeguard,
+    numpy_sincos_low_precision,
 )
 from numba.core.errors import LoweringError
 import unittest
@@ -637,7 +638,9 @@ class TestPandasLike(TestCase):
         cfunc = jit(nopython=True)(npyufunc_usecase)
         ii = cfunc(i)
         self.assertIsInstance(ii, Index)
-        self.assertPreciseEqual(ii._data, np.cos(np.sin(i._data)))
+        ulps = 4 if numpy_sincos_low_precision else 1
+        self.assertPreciseEqual(ii._data, np.cos(np.sin(i._data)),
+                                prec='double', ulps=ulps)
 
     def test_index_get_data(self):
         # The _data attribute is exposed with make_attribute_wrapper()
@@ -1506,7 +1509,7 @@ class TestIntrinsic(TestCase):
         self.assertEqual("void_func", void_func.__name__)
         self.assertEqual("TestIntrinsic.test_docstring.<locals>.void_func",
                          void_func.__qualname__)
-        self.assertDictEqual({'a': int}, void_func.__annotations__)
+        self.assertDictEqual({'a': int}, inspect.get_annotations(void_func))
         self.assertEqual("void_func docstring", void_func.__doc__)
 
 

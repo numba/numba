@@ -4,6 +4,8 @@ A mutable struct is passed by reference;
 hence, structref (a reference to a struct).
 
 """
+import operator
+from numba.core.cgutils import create_struct_proxy
 from numba import njit
 from numba.core import types, imputils, cgutils
 from numba.core.datamodel import default_manager, models
@@ -11,6 +13,7 @@ from numba.core.extending import (
     infer_getattr,
     lower_getattr_generic,
     lower_setattr_generic,
+    lower_builtin,
     box,
     unbox,
     NativeValue,
@@ -382,3 +385,16 @@ class StructRefProxy:
         Subclasses should NOT override.
         """
         return self._type
+
+
+@lower_builtin(operator.is_, types.StructRef, types.StructRef)
+def structref_is(context, builder, sig, args):
+    """
+    Define the 'is' operator for structrefs by comparing the memory addresses.
+    This is the identity check for structref objects.
+    """
+    a, b = args
+    aty, bty = sig.args
+    a_ptr = create_struct_proxy(aty)(context, builder, value=a).meminfo
+    b_ptr = create_struct_proxy(bty)(context, builder, value=b).meminfo
+    return builder.icmp_unsigned("==", a_ptr, b_ptr)

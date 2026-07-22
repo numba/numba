@@ -99,6 +99,7 @@ def _specialize_box(typ):
     # Inject methods as class members
     supported_dunders = {
         "__abs__",
+        "__annotate_func__",
         "__bool__",
         "__complex__",
         "__contains__",

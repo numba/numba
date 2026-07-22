@@ -1,10 +1,16 @@
 name: numba_osx-arm64_wheel_builder
 
 on:
+  schedule:
+    - cron: '5 7 * * 6'  # Saturday 7:05 AM UTC - osx-arm64 wheel (staggered to manage osx runner limit)
   pull_request:
     paths:
       - .github/workflows/numba_osx-arm64_wheel_builder.yml
-      - .github/workflows/wheel_workflow_matrix.json
+      - buildscripts/github/evaluate.py
+      - buildscripts/github/patch_wheel_dylib.py
+      - buildscripts/github/test_wheel_contents.py
+      - buildscripts/github/test_wheel_osx_arm64.py
+      - setup.py
   workflow_dispatch:
     inputs:
       llvmlite_wheel_runid:
@@ -20,7 +26,6 @@ concurrency:
 env:
   ARTIFACT_RETENTION_DAYS: 7
   WHEELS_INDEX_URL: https://pypi.anaconda.org/numba/label/dev/simple
-  CONDA_CHANNEL_NUMBA: numba/label/dev
 
 jobs:
   load-matrix:
@@ -29,29 +34,20 @@ jobs:
       build-matrix-json: ${{ steps.load_matrix_json.outputs.build-matrix-json }}
       test-matrix-json: ${{ steps.load_matrix_json.outputs.test-matrix-json }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
       - id: load_matrix_json
         name: Load Workflow Matrix JSON
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_WORKFLOW_INPUT: ${{ toJson(github.event.inputs) }}
+          GITHUB_PLATFORM: osx-arm64
+          GITHUB_PKG_TYPE: wheel
         run: |
-          BUILD_MATRIX_JSON=$(jq -c .wheel_build_matrix .github/workflows/wheel_workflow_matrix.json)
-          TEST_MATRIX_JSON=$(jq -c .wheel_test_matrix .github/workflows/wheel_workflow_matrix.json)
-
-          # Add canonical python versions to both matrices
-          BUILD_MATRIX_EXTENDED=$(echo "$BUILD_MATRIX_JSON" | jq -c '
-            map(. + {"python_canonical": (.["python-version"] | split(".") | .[:2] | join("."))})
-          ')
-
-          TEST_MATRIX_EXTENDED=$(echo "$TEST_MATRIX_JSON" | jq -c '
-            map(. + {"python_canonical": (.["python-version"] | split(".") | .[:2] | join("."))})
-          ')
-
-          echo "Build Matrix JSON: $BUILD_MATRIX_EXTENDED"
-          echo "Test Matrix JSON: $TEST_MATRIX_EXTENDED"
-          echo "build-matrix-json=$BUILD_MATRIX_EXTENDED" >> $GITHUB_OUTPUT
-          echo "test-matrix-json=$TEST_MATRIX_EXTENDED" >> $GITHUB_OUTPUT
+          python buildscripts/github/evaluate.py
 
   osx-arm64-build:
-    name: osx-arm64-build-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
+    name: osx-arm64-build-wheel (py ${{ matrix.python_version_full }}, np ${{ matrix.numpy_build }})
     needs: load-matrix
     runs-on: macos-14
     defaults:
@@ -64,23 +60,35 @@ jobs:
 
     steps:
       - name: Clone repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: Setup Miniconda
-        uses: conda-incubator/setup-miniconda@v3
+        if: ${{ !endsWith(matrix.python_version_full, 't') }}
+        uses: conda-incubator/setup-miniconda@8ee1f361103df19b6f8c8655fd3967a8ecb162d5 # v4.0.1
         with:
-          python-version: ${{ matrix.python-version }}
-          conda-remove-defaults: true
+          python-version: ${{ matrix.python_version_full }}
           auto-update-conda: true
           auto-activate-base: true
 
+      - name: Setup Miniconda [free-threaded]
+        if: ${{ endsWith(matrix.python_version_full, 't') }}
+        uses: conda-incubator/setup-miniconda@8ee1f361103df19b6f8c8655fd3967a8ecb162d5 # v4.0.1
+        with:
+          auto-update-conda: true
+          auto-activate-base: true
+
+      - name: Install free-threaded Python
+        if: ${{ endsWith(matrix.python_version_full, 't') }}
+        run: |
+          conda install -n test python-freethreading pip
+
       - name: Download llvmlite wheel
         if: inputs.llvmlite_wheel_runid != ''
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: llvmlite-osx-arm64-py${{ matrix.python_canonical }}
+          name: llvmlite-osx-arm64-py${{ matrix.python_major_minor }}
           path: llvmlite_wheels
           run-id: ${{ inputs.llvmlite_wheel_runid }}
           repository: numba/llvmlite
@@ -91,17 +99,33 @@ jobs:
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
               arch -arm64 python -m pip install llvmlite_wheels/*.whl
           else
-              conda install -c ${{ env.CONDA_CHANNEL_NUMBA }} llvmlite
+              arch -arm64 python -m pip install -i ${{ env.WHEELS_INDEX_URL }} llvmlite
           fi
-          conda install -c ${{ env.CONDA_CHANNEL_NUMBA }} python-build numpy==${{ matrix.numpy_build }} clang_osx-arm64 clangxx_osx-arm64
-          conda install --yes llvm-openmp
+          python -m pip install build numpy==${{ matrix.numpy_build }} "setuptools>=69.0.0" wheel
+
+      - name: Setup llvm-openmp for build
+        run: |
+          # Download and extract llvm-openmp conda package
+          curl -L "https://repo.anaconda.com/pkgs/main/osx-arm64/llvm-openmp-19.1.7-h3b2fb71_2.tar.bz2" -o llvm-openmp.tar.bz2
+          mkdir -p omp && tar -xjf llvm-openmp.tar.bz2 -C omp
+
+          # Create symlinks for setup.py OpenMP detection
+          mkdir -p omp/lib/clang/19/include
+          ln -s ${{ github.workspace }}/omp/include/omp.h omp/lib/clang/19/include/omp.h
+
+          # Export environment vars for build to detect OpenMP
+          echo "PREFIX=$PWD/omp" >> $GITHUB_ENV
+          echo "CPPFLAGS=-I$PWD/omp/include" >> $GITHUB_ENV
+          echo "LDFLAGS=-L$PWD/omp/lib" >> $GITHUB_ENV
 
       - name: Build sdist [once - py3.10]
-        if: matrix.python-version == '3.10'
+        if: matrix.python_version_full == '3.10'
         run: arch -arm64 python -m build --sdist
 
       - name: Build wheel
-        run: arch -arm64 python -m build
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "11.0"
+        run: arch -arm64 python -m build --wheel --no-isolation
 
       - name: Fix macOS wheel library paths
         run: |
@@ -112,18 +136,24 @@ jobs:
           # inspect the wheel
           find . -name "*.so" -o -name "*.dylib" | xargs -I {} otool -L {}
 
+      - name: Test patched wheel
+        run: arch -arm64 python buildscripts/github/test_wheel_osx_arm64.py dist/*.whl
+
+      - name: Test wheel contents
+        run: arch -arm64 python buildscripts/github/test_wheel_contents.py dist/*.whl
+
       - name: Upload numba wheel
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: numba-osx-arm64-py${{ matrix.python_canonical }}
+          name: numba_osx-arm64_wheel_py${{ matrix.python_major_minor }}
           path: dist/*.whl
           compression-level: 0
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
           if-no-files-found: error
 
       - name: Upload numba sdist
-        if: matrix.python-version == '3.10'
-        uses: actions/upload-artifact@v4
+        if: matrix.python_version_full == '3.10'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
             name: numba-sdist
             path: dist/*.tar.gz
@@ -132,7 +162,7 @@ jobs:
             if-no-files-found: error
 
   osx-arm64-test:
-    name: osx-arm64-test (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
+    name: osx-arm64-test (py ${{ matrix.python_version_full }}, np ${{ matrix.numpy_test }})
     needs: [load-matrix, osx-arm64-build]
     runs-on: macos-14
     defaults:
@@ -146,7 +176,7 @@ jobs:
     steps:
       - name: Set Python versions
         run: |
-          FULL_VERSION="${{ matrix.python-version }}"
+          FULL_VERSION="${{ matrix.python_version_full }}"
           CANONICAL_VERSION=$(echo "$FULL_VERSION" | cut -d. -f1,2)
 
           echo "PYTHON_INSTALL_VERSION=$FULL_VERSION" >> $GITHUB_ENV
@@ -156,21 +186,22 @@ jobs:
           echo "Using canonical version: $CANONICAL_VERSION"
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ matrix.python_version_full }}
+          allow-prereleases: true
 
       - name: Download Numba wheel artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: numba-osx-arm64-py${{ matrix.python_canonical }}
+          name: numba_osx-arm64_wheel_py${{ matrix.python_major_minor }}
           path: dist
 
       - name: Download llvmlite wheel
         if: inputs.llvmlite_wheel_runid != ''
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: llvmlite-osx-arm64-py${{ matrix.python_canonical }}
+          name: llvmlite-osx-arm64-py${{ matrix.python_major_minor }}
           path: llvmlite_wheels
           run-id: ${{ inputs.llvmlite_wheel_runid }}
           repository: numba/llvmlite
@@ -184,14 +215,16 @@ jobs:
 
       - name: Validate and test wheel
         run: |
-          PYTHON_PATH=$(which python${{ matrix.python_canonical }})
+          # Pin to the setup-python interpreter: a login shell (bash -el) can
+          # re-source profiles and reorder PATH, so bare `python` is unreliable.
+          PYTHON_PATH=$(which python${{ matrix.python_major_minor }})
           "$PYTHON_PATH" -m venv .venv && source .venv/bin/activate
           arch -arm64 python -m pip install --upgrade pip twine
           ls -l dist
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
               arch -arm64 python -m pip install llvmlite_wheels/*.whl
           else
-              arch -arm64 python -m pip install -i $WHEELS_INDEX_URL llvmlite
+              arch -arm64 python -m pip install --pre -i ${{ env.WHEELS_INDEX_URL }} llvmlite
           fi
           arch -arm64 python -m twine check dist/*.whl
           arch -arm64 python -m pip install dist/numba*.whl numpy==${{ matrix.numpy_test }}

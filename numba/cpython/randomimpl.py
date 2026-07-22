@@ -16,6 +16,7 @@ from numba.core.imputils import Registry
 from numba.core.typing import signature
 from numba.core import types, cgutils
 from numba.core.errors import NumbaTypeError
+from numba.cpython._binomial import make_binomial_btpe
 from numba.np.random._constants import LONG_MAX
 
 registry = Registry('randomimpl')
@@ -102,7 +103,7 @@ def get_rnd_shuffle(builder):
     fnty = ir.FunctionType(ir.VoidType(), (rnd_state_ptr_t,))
     fn = cgutils.get_or_insert_function(builder.function.module, fnty,
                                         "numba_rnd_shuffle")
-    fn.args[0].add_attribute("nocapture")
+    fn.args[0].add_attribute("captures(none)")
     return fn
 
 
@@ -205,7 +206,7 @@ def seed_impl(a):
 
 
 @overload(np.random.seed)
-def seed_impl(seed):
+def seed_impl_np(seed):
     if isinstance(seed, types.Integer):
         return _seed_impl('np')
 
@@ -734,7 +735,7 @@ def triangular_impl_3(low, high, mode):
 
 
 @overload(np.random.triangular)
-def triangular_impl_3(left, mode, right):
+def triangular_impl_np_3(left, mode, right):
     if (isinstance(left, (types.Float, types.Integer)) and isinstance(
             mode, (types.Float, types.Integer)) and
             isinstance(right, (types.Float, types.Integer))):
@@ -753,7 +754,7 @@ def triangular_impl_3(left, mode, right):
 
 
 @overload(np.random.triangular)
-def triangular_impl(left, mode, right, size=None):
+def triangular_impl_np_4(left, mode, right, size=None):
     if is_nonelike(size):
         return lambda left, mode, right, size=None: np.random.triangular(left,
                                                                          mode,
@@ -964,7 +965,7 @@ def expovariate_impl(lambd):
 
 
 @overload(np.random.exponential)
-def exponential_impl(scale):
+def exponential_impl_1(scale):
     if isinstance(scale, (types.Float, types.Integer)):
         def _impl(scale):
             return -math.log(1.0 - np.random.random()) * scale
@@ -972,7 +973,7 @@ def exponential_impl(scale):
 
 
 @overload(np.random.exponential)
-def exponential_impl(scale, size):
+def exponential_impl_2(scale, size):
     if is_nonelike(size):
         return lambda scale, size: np.random.exponential(scale)
     if is_empty_tuple(size):
@@ -992,7 +993,7 @@ def exponential_impl(scale, size):
 
 @overload(np.random.standard_exponential)
 @overload(np.random.exponential)
-def exponential_impl():
+def exponential_impl_0():
     def _impl():
         return -math.log(1.0 - np.random.random())
     return _impl
@@ -1091,7 +1092,7 @@ def pareto_impl(a):
 
 
 @overload(np.random.pareto)
-def pareto_impl(a, size):
+def pareto_impl_2(a, size):
     if is_nonelike(size):
         return lambda a, size: np.random.pareto(a)
     if is_empty_tuple(size):
@@ -1159,7 +1160,7 @@ def vonmisesvariate_impl(mu, kappa):
 
 
 @overload(np.random.vonmises)
-def vonmisesvariate_impl(mu, kappa):
+def vonmisesvariate_impl_np(mu, kappa):
     if isinstance(mu, types.Float) and isinstance(kappa, types.Float):
         return _vonmisesvariate_impl(np.random.random)
 
@@ -1227,15 +1228,51 @@ def vonmises_impl(mu, kappa, size):
         return _impl
 
 
+@register_jitable
+def _binomial_btpe_next_double(bitgen):
+    # Legacy np.random path: the BTPE core's ``bitgen`` is unused; draw from
+    # np.random's global MT19937 state.
+    return np.random.random()
+
+
+@register_jitable
+def _binomial_btpe_squeeze(A, xm, m, n, y, r, q):
+    # np.random's case-52 Stirling squeeze, frozen at NumPy's legacy constants
+    # for RandomState stream reproducibility, do
+    # not "correct" to the NumPy 2.5 Generator values. Keep in sync with NumPy's
+    # legacy_random_binomial_btpe.
+    x1 = y + 1
+    f1 = m + 1
+    z = n + 1 - m
+    w = n - y + 1
+    x2 = x1 * x1
+    f2 = f1 * f1
+    z2 = z * z
+    w2 = w * w
+    return A > (xm * math.log(f1 / x1) + (n - m + 0.5) * math.log(z / w) +
+               (y - m) * math.log(w * r / (x1 * q)) +
+               (13680. - (462. - (132. - (99. - 140. / f2) / f2) / f2)
+                / f2) / f1 / 166320. +
+               (13680. - (462. - (132. - (99. - 140. / z2) / z2) / z2)
+                / z2) / z / 166320. +
+               (13680. - (462. - (132. - (99. - 140. / x2) / x2) / x2)
+                / x2) / x1 / 166320. +
+               (13680. - (462. - (132. - (99. - 140. / w2) / w2) / w2)
+                / w2) / w / 166320.)
+
+
+_binomial_btpe = make_binomial_btpe(_binomial_btpe_next_double,
+                                    _binomial_btpe_squeeze)
+
+
 @overload(np.random.binomial)
 def binomial_impl(n, p):
     if isinstance(n, types.Integer) and isinstance(
             p, (types.Float, types.Integer)):
         def _impl(n, p):
             """
-            Binomial distribution.  Numpy's variant of the BINV algorithm
-            is used.
-            (Numpy uses BTPE for n*p >= 30, though)
+            Binomial distribution.  Numpy's BINV algorithm is used for small
+            means; Numpy's BTPE algorithm is used for large means.
             """
             if n < 0:
                 raise ValueError("binomial(): n <= 0")
@@ -1251,17 +1288,20 @@ def binomial_impl(n, p):
                 p = 1.0 - p
             q = 1.0 - p
 
+            np_prod = n * p
+            if np_prod > 30.0:
+                X = _binomial_btpe(0, n, p)  # bitgen arg unused for np.random
+                return n - X if flipped else X
+
             niters = 1
             qn = q ** n
             while qn <= 1e-308:
                 # Underflow => split into several iterations
-                # Note this is much slower than Numpy's BTPE
                 niters <<= 2
                 n >>= 2
                 qn = q ** n
                 assert n > 0
 
-            np_prod = n * p
             bound = min(n, np_prod + 10.0 * math.sqrt(np_prod * q + 1))
 
             total = 0
@@ -1284,7 +1324,7 @@ def binomial_impl(n, p):
 
 
 @overload(np.random.binomial)
-def binomial_impl(n, p, size):
+def binomial_impl_3(n, p, size):
     if is_nonelike(size):
         return lambda n, p, size: np.random.binomial(n, p)
     if is_empty_tuple(size):
@@ -1342,7 +1382,7 @@ def f_impl(dfnum, dfden):
 
 
 @overload(np.random.f)
-def f_impl(dfnum, dfden, size):
+def f_impl_3(dfnum, dfden, size):
     if (isinstance(dfnum, (types.Float, types.Integer)) and isinstance(
             dfden, (types.Float, types.Integer)) and
        is_nonelike(size)):
@@ -1389,7 +1429,7 @@ def geometric_impl(p):
 
 
 @overload(np.random.geometric)
-def geometric_impl(p, size):
+def geometric_impl_2(p, size):
     if is_nonelike(size):
         return lambda p, size: np.random.geometric(p)
     if is_empty_tuple(size):
@@ -1462,7 +1502,7 @@ def hypergeometric_impl(ngood, nbad, nsample):
 
 
 @overload(np.random.hypergeometric)
-def hypergeometric_impl(ngood, nbad, nsample, size):
+def hypergeometric_impl_4(ngood, nbad, nsample, size):
     if is_nonelike(size):
         return lambda ngood, nbad, nsample, size:\
             np.random.hypergeometric(ngood, nbad, nsample)
@@ -1597,7 +1637,7 @@ def logseries_impl(p):
 
 
 @overload(np.random.logseries)
-def logseries_impl(p, size):
+def logseries_impl_2(p, size):
     if is_nonelike(size):
         return lambda p, size: np.random.logseries(p)
     if is_empty_tuple(size):
@@ -1734,7 +1774,7 @@ def power_impl(a):
 
 
 @overload(np.random.power)
-def power_impl(a, size):
+def power_impl_2(a, size):
     if is_nonelike(size):
         return lambda a, size: np.random.power(a)
     if is_empty_tuple(size):
@@ -1897,7 +1937,7 @@ def zipf_impl(a):
                 U = 1.0 - np.random.random()
                 V = np.random.random()
                 X = int(math.floor(U ** (-1.0 / am1)))
-                
+
                 if (X > LONG_MAX or X < 1.0):
                     continue
 
@@ -1909,7 +1949,7 @@ def zipf_impl(a):
 
 
 @overload(np.random.zipf)
-def zipf_impl(a, size):
+def zipf_impl_2(a, size):
     if is_nonelike(size):
         return lambda a, size: np.random.zipf(a)
     if is_empty_tuple(size):
@@ -1961,7 +2001,7 @@ def shuffle_impl(x):
 
 
 @overload(np.random.shuffle)
-def shuffle_impl(x):
+def shuffle_impl_np(x):
     return do_shuffle_impl(x, "np")
 
 
@@ -2197,7 +2237,7 @@ def dirichlet(alpha):
 
 
 @overload(np.random.dirichlet)
-def dirichlet(alpha, size=None):
+def dirichlet_2(alpha, size=None):
     if not isinstance(alpha, (types.Sequence, types.Array)):
         raise NumbaTypeError(
             "np.random.dirichlet(): alpha should be an "
@@ -2278,7 +2318,7 @@ def noncentral_chisquare(df, nonc):
 
 
 @overload(np.random.noncentral_chisquare)
-def noncentral_chisquare(df, nonc, size=None):
+def noncentral_chisquare_3(df, nonc, size=None):
      if size in (None, types.none):
          def noncentral_chisquare_impl(df, nonc, size=None):
              validate_noncentral_chisquare_input(df, nonc)

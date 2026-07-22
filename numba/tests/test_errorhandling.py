@@ -465,5 +465,37 @@ class TestCapturedErrorHandling(SerialMixin, TestCase):
             self.assertIn(expected, str(raises.exception))
 
 
+class TestCurlyBracesInPaths(unittest.TestCase):
+    """
+    Test that error messages handle file paths with curly braces (issue #10094)
+    """
+
+    def test_placeholders_with_positional_args(self):
+
+        # used on typeinfer: placeholders with positional args
+        problematic_path = (
+            r"C:\\Users\\"
+            r"{fa977bf3384160bce9243175b380be8}"
+            r"\\file.py"
+        )
+        fmt = "Error at {0}"
+
+        result = errors._format_msg(fmt, (problematic_path,), {})
+
+        expected = f"Error at {problematic_path}"
+        self.assertEqual(result, expected)
+
+    def test_preformatted_string_no_args(self):
+
+        # used on compiler_machinery: preformatted string without args
+        name_with_braces = "{abc123}"
+        fmt = f"Pass {name_with_braces}"
+
+        result = errors._format_msg(fmt, (), {})
+
+        expected = f"Pass {name_with_braces}"
+        self.assertEqual(result, expected)
+
+
 if __name__ == '__main__':
     unittest.main()

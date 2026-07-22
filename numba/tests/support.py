@@ -104,9 +104,13 @@ skip_unless_py312 = unittest.skipUnless(
     "needs Python 3.12"
 )
 
-skip_if_py313_on_windows = unittest.skipIf(
-     utils.PYVERSION == (3, 13) and sys.platform.startswith('win'),
-     "Not supported on Python 3.13 on Windows"
+skip_if_py313plus_on_windows = unittest.skipIf(
+     utils.PYVERSION >= (3, 13) and sys.platform.startswith('win'),
+     "Not supported on Python 3.13+ on Windows"
+ )
+
+skip_if_py314= unittest.skipIf(
+     utils.PYVERSION == (3, 14), "Test unstable on 3.14"
  )
 
 skip_if_linux_aarch64 = unittest.skipIf(
@@ -119,6 +123,35 @@ skip_if_32bit = unittest.skipIf(_32bit, "Not supported on 32 bit")
 IS_NUMPY_2 = numpy_support.numpy_version >= (2, 0)
 skip_if_numpy_2 = unittest.skipIf(IS_NUMPY_2,
                                   "Not supported on numpy 2.0+")
+
+# On Linux + x86_64 with NumPy < 1.25, NumPy's sin/cos are less accurate
+# (up to ~4 ULP). NumPy 1.25 improved these to ~1 ULP
+# (https://github.com/numpy/numpy/commit/fe5472f), so results agree more
+# closely. When this flag is True, tests comparing against NumPy sin/cos
+# allow 4 ULP of difference; otherwise they require 1 ULP.
+numpy_sincos_low_precision = (
+    sys.platform.startswith('linux') and platform.machine() == 'x86_64' and
+    numpy_support.numpy_version < (1, 25)
+)
+
+REDUCED_TESTING = bool(int(os.environ.get('_NUMBA_REDUCED_TESTING', 0)))
+"""
+Set to truthy to reduce the amount of testing. This can reduce memory use by
+tests on resource-limited machines.
+"""
+
+skip_if_reduced_testing = unittest.skipIf(REDUCED_TESTING,
+                                          "Skipped for reduced testing")
+
+
+_free_threading = not getattr(sys, "_is_gil_enabled", lambda: True)()
+
+
+skip_if_freethreading = unittest.skipIf(_free_threading,
+                                        ("Skipped [NOT APPLICABLE] if using a "
+                                         "free-threading build and "
+                                         "free-threading is enabled."))
+
 
 def expected_failure_py311(fn):
     if utils.PYVERSION == (3, 11):
@@ -140,6 +173,12 @@ def expected_failure_py313(fn):
     else:
         return fn
 
+def expected_failure_py314(fn):
+    if utils.PYVERSION == (3, 14):
+        return unittest.expectedFailure(fn)
+    else:
+        return fn
+
 
 def expected_failure_np2(fn):
     if numpy_support.numpy_version == (2, 0):
@@ -157,6 +196,9 @@ linux_only = unittest.skipIf(not sys.platform.startswith('linux'), _lnx_reason)
 
 _win_reason = 'Windows-only test'
 windows_only = unittest.skipIf(not sys.platform.startswith('win'), _win_reason)
+
+_non_win_reason = 'non Windows test'
+skip_if_windows = unittest.skipIf(sys.platform.startswith('win'), _non_win_reason)
 
 _is_armv7l = platform.machine() == 'armv7l'
 
@@ -199,6 +241,14 @@ IS_MACOS = _uname.system == 'Darwin'
 skip_macos_fenv_errors = unittest.skipIf(IS_MACOS,
     "fenv.h-like functionality unreliable on macOS")
 IS_MACOS_ARM64 = IS_MACOS and _uname.machine == 'arm64'
+IS_WIN_ARM64 = _uname.system == 'Windows' and _uname.machine == 'ARM64'
+# AArch64 uimm12 fixup failure on win-arm64 for large UniTuple(unicode)
+# arguments. https://github.com/numba/numba/issues/10619
+skip_win_arm64_unittuple_uimm12 = unittest.skipIf(
+    IS_WIN_ARM64,
+    "AArch64 uimm12 fixup failure on win-arm64 for large UniTuple(unicode) "
+    "arguments",
+)
 
 try:
     import scipy.linalg.cython_lapack
@@ -228,7 +278,8 @@ needs_subprocess = unittest.skipUnless(_exec_cond, "needs subprocess harness")
 try:
     import setuptools
     has_setuptools = True
-except ImportError:
+except (ImportError, OSError):
+    # Suppress error caused by https://github.com/python/cpython/issues/118234
     has_setuptools = False
 
 
@@ -290,8 +341,14 @@ class TestCase(unittest.TestCase):
         same reference counts before and after executing the
         enclosed block.
         """
+        # Collect before counting references. Note that in free-threading builds
+        # there are some object types that are only collected during garbage
+        # collection e.g. classes and code objects.
+        gc.collect()
         old_refcounts = [sys.getrefcount(x) for x in objects]
+        # Yield to test code
         yield
+        # Collect again before counting references.
         gc.collect()
         new_refcounts = [sys.getrefcount(x) for x in objects]
         for old, new, obj in zip(old_refcounts, new_refcounts, objects):

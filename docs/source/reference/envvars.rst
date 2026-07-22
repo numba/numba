@@ -126,6 +126,19 @@ These variables influence what is printed out during compilation of
    allocation and ``0xDE`` on deallocation, both to help with debugging memory
    leaks.
 
+.. envvar:: NUMBA_DEBUG_NRT_STACK_LIMIT
+
+   :ref:`Numba run time (NRT) <arch-numba-runtime>` calls to reference counting
+   operations will print `n` frames of backtrace from the stack present at the time
+   the call was generated during compilation. The purpose of this is to make it
+   easier to locate the code responsible for generating reference counting
+   operations. This environment variable has no effect unless the environment
+   variable ``NUMBA_DEBUG_NRT`` is enabled. Default value is zero.
+
+   Note that this functionality isn't cache friendly, so it should be used with
+   caution. It changes ABI call interface so users are required to clean the cache
+   and recompile their code after setting the flag.
+
 .. envvar:: NUMBA_NRT_STATS
 
    If set to non-zero, enable the
@@ -279,13 +292,6 @@ These variables influence what is printed out during compilation of
 .. envvar:: NUMBA_DUMP_ASSEMBLY
 
    Dump the native assembly code of compiled functions.
-
-.. envvar:: NUMBA_USE_LLVM_LEGACY_PASS_MANAGER
-
-    Set to ``1`` to use the llvm's legacy pass manager instead;
-    e.g. ``NUMBA_USE_LLVM_LEGACY_PASS_MANAGER=1``.
-
-    *Default value*: ``0`` (Off)
 
 .. envvar:: NUMBA_LLVM_PASS_TIMINGS
 
@@ -471,6 +477,25 @@ Options for the compilation cache.
 
     Also see :ref:`docs on cache sharing <cache-sharing>` and
     :ref:`docs on cache clearing <cache-clearing>`
+
+.. envvar:: NUMBA_CACHE_LOCATOR_CLASSES
+
+    Override the default cache locator classes and their order. If defined,
+    this should be a comma-separated list of cache locator class names.
+
+    Available locator classes include:
+
+    - ``InTreeCacheLocator`` - Cache next to source files in ``__pycache__``
+    - ``InTreeCacheLocatorFsAgnostic`` - Like ``InTreeCacheLocator`` but
+      agnostic to filesystem timestamp precision differences
+    - ``UserWideCacheLocator`` - Cache in user-wide application directory
+    - ``IPythonCacheLocator`` - Cache in IPython-specific directory
+    - ``ZipCacheLocator`` - Cache for functions in zip files
+
+    Custom locator classes can also be specified using their full module path
+    (e.g., ``mymodule.MyCustomLocator``).
+
+    If not defined, Numba uses the default locator order.
 
 
 .. _numba-envvars-gpu-support:

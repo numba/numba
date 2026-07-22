@@ -63,6 +63,11 @@ def compute_live_map(cfg, blocks, var_use_map, var_def_map):
     We use a simple fix-point algorithm that iterates until the set of
     live variables is unchanged for each block.
     """
+    # Topological order for forward analysis, reversed for backward.
+    # Proper ordering reduces fix-point iterations from O(loop_depth)
+    # to typically 2-3 passes on reducible CFGs.
+    topo_order = cfg.topo_order()
+
     def fix_point_progress(dct):
         """Helper function to determine if a fix-point has been reached.
         """
@@ -81,7 +86,7 @@ def compute_live_map(cfg, blocks, var_use_map, var_def_map):
     def def_reach(dct):
         """Find all variable definition reachable at the entry of a block
         """
-        for offset in var_def_map:
+        for offset in topo_order:
             used_or_defined = var_def_map[offset] | var_use_map[offset]
             dct[offset] |= used_or_defined
             # Propagate to outgoing nodes
@@ -93,7 +98,9 @@ def compute_live_map(cfg, blocks, var_use_map, var_def_map):
 
         Push var usage backward.
         """
-        for offset in dct:
+        # Backward pass: fresh reverse iterator each call (fix_point may
+        # invoke this several times, so a one-shot iterator can't be reused).
+        for offset in reversed(topo_order):
             # Live vars here
             live_vars = dct[offset]
             for inc_blk, _data in cfg.predecessors(offset):
@@ -210,10 +217,12 @@ def compute_live_variables(cfg, blocks, var_def_map, var_dead_map):
     #       of each block. The algorithm in compute_live_map() is finding
     #       the variable that must be available at the entry of each block.
     #       This is top-down in the dataflow.  The other one is bottom-up.
+    # Topological order lets this forward analysis converge in fewer passes.
+    topo_order = cfg.topo_order()
     while old_point != new_point:
         # We iterate until the result stabilizes.  This is necessary
         # because of loops in the graphself.
-        for offset in blocks:
+        for offset in topo_order:
             # vars available + variable defined
             avail = block_entry_vars[offset] | var_def_map[offset]
             # subtract variables deleted

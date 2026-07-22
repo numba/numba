@@ -728,7 +728,6 @@ def set_parallel_chunksize(n):
     _launch_threads()
     if not isinstance(n, (int, np.integer)):
         raise TypeError("The parallel chunksize must be an integer")
-    global _set_parallel_chunksize
     if n < 0:
         raise ValueError("chunksize must be greater than or equal to zero")
     return _set_parallel_chunksize(n)
@@ -736,7 +735,6 @@ def set_parallel_chunksize(n):
 
 def get_parallel_chunksize():
     _launch_threads()
-    global _get_parallel_chunksize
     return _get_parallel_chunksize()
 
 

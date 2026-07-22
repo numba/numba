@@ -107,7 +107,12 @@ _Numba_hashtable_hash_int(const void *key)
 extern "C" Py_uhash_t
 _Numba_hashtable_hash_ptr(const void *key)
 {
+/* Use public API on Python 3.13+; _Py_HashPointer is deprecated on 3.14+ */
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION >= 13)
+    return (Py_uhash_t)Py_HashPointer((void *)key);
+#else
     return (Py_uhash_t)_Py_HashPointer((void *)key);
+#endif
 }
 
 extern "C" int

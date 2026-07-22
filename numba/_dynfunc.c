@@ -9,7 +9,7 @@
 
 
 // if python version is 3.13
-#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 13)
+#if ((PY_MAJOR_VERSION == 3) && ((PY_MINOR_VERSION == 13) || PY_MINOR_VERSION == 14))
     #include "pythoncapi_compat.h"
     #define _Py_IsFinalizing Py_IsFinalizing
 #endif
@@ -142,11 +142,17 @@ static PyTypeObject EnvironmentType = {
     0,                                       /* tp_version_tag */
     0,                                       /* tp_finalize */
     0,                                       /* tp_vectorcall */
-#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 12)
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION >= 12)
 /* This was introduced first in 3.12
  * https://github.com/python/cpython/issues/91051
  */
     0,                                           /* tp_watched */
+#endif
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION >= 13)
+/* This was introduced in 3.13
+ * https://github.com/python/cpython/pull/114900
+ */
+    0,                                           /* tp_versions_used */
 #endif
 
 /* WARNING: Do not remove this, only modify it! It is a version guard to
@@ -261,11 +267,17 @@ static PyTypeObject ClosureType = {
     0,                                       /* tp_version_tag */
     0,                                       /* tp_finalize */
     0,                                       /* tp_vectorcall */
-#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 12)
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION >= 12)
 /* This was introduced first in 3.12
  * https://github.com/python/cpython/issues/91051
  */
     0,                                           /* tp_watched */
+#endif
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION >= 13)
+/* This was introduced in 3.13
+ * https://github.com/python/cpython/pull/114900
+ */
+    0,                                           /* tp_versions_used */
 #endif
 
 /* WARNING: Do not remove this, only modify it! It is a version guard to
@@ -481,11 +493,17 @@ static PyTypeObject GeneratorType = {
     0,                                        /* tp_version_tag */
     0,                                        /* tp_finalize */
     0,                                        /* tp_vectorcall */
-#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 12)
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION >= 12)
 /* This was introduced first in 3.12
  * https://github.com/python/cpython/issues/91051
  */
     0,                                           /* tp_watched */
+#endif
+#if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION >= 13)
+/* This was introduced in 3.13
+ * https://github.com/python/cpython/pull/114900
+ */
+    0,                                           /* tp_versions_used */
 #endif
 
 /* WARNING: Do not remove this, only modify it! It is a version guard to

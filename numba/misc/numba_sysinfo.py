@@ -70,7 +70,6 @@ _numpy_version = 'NumPy Version'
 _numpy_supported_simd_features = 'NumPy Supported SIMD features'
 _numpy_supported_simd_dispatch = 'NumPy Supported SIMD dispatch'
 _numpy_supported_simd_baseline = 'NumPy Supported SIMD baseline'
-_numpy_AVX512_SKX_detected = 'NumPy AVX512_SKX detected'
 # SVML info
 _svml_state, _svml_loaded = 'SVML State', 'SVML Lib Loaded'
 _llvm_svml_patched = 'LLVM SVML Patched'
@@ -103,8 +102,10 @@ def get_os_spec_info(os_name):
     # Linux man page for `/proc`:
     # http://man7.org/linux/man-pages/man5/proc.5.html
 
-    # Windows documentation for `wmic OS`:
-    # https://docs.microsoft.com/en-us/windows/win32/cimwin32prov/cim-operatingsystem
+    # WMIC is deprecated in windows-2025, using powershell instead
+    # https://techcommunity.microsoft.com/t5/windows-it-pro-blog/wmi-command-line-wmic-utility-deprecation-next-steps/ba-p/4039242
+    # Windows documentation for `powershell`:
+    # https://learn.microsoft.com/en-us/powershell/
 
     # MacOS man page for `sysctl`:
     # https://www.unix.com/man-page/osx/3/sysctl/
@@ -140,8 +141,14 @@ def get_os_spec_info(os_name):
         'Windows': {
             'cmd': (),
             'cmd_optional': (
-                CmdBufferOut(('wmic', 'OS', 'get', 'TotalVirtualMemorySize')),
-                CmdBufferOut(('wmic', 'OS', 'get', 'FreeVirtualMemory')),
+                CmdBufferOut(('powershell', '-NoProfile', '-Command',
+                              "'TotalVirtualMemorySize ' + "
+                              "(Get-CimInstance -ClassName "
+                              "Win32_OperatingSystem).TotalVirtualMemorySize")),
+                CmdBufferOut(('powershell', '-NoProfile', '-Command',
+                              "'FreeVirtualMemory ' + "
+                              "(Get-CimInstance -ClassName "
+                              "Win32_OperatingSystem).FreeVirtualMemory")),
             ),
             'kwds': {
                 # output string fragment -> result dict key
@@ -416,14 +423,12 @@ def get_sysinfo():
                                                   __cpu_dispatch__,
                                                   __cpu_baseline__,)
     except ImportError:
-        sys_info[_numpy_AVX512_SKX_detected] = False
+        pass
     else:
         feat_filtered = [k for k, v in __cpu_features__.items() if v]
         sys_info[_numpy_supported_simd_features] = feat_filtered
         sys_info[_numpy_supported_simd_dispatch] = __cpu_dispatch__
         sys_info[_numpy_supported_simd_baseline] = __cpu_baseline__
-        sys_info[_numpy_AVX512_SKX_detected] = \
-            __cpu_features__.get("AVX512_SKX", False)
 
     # SVML information
     # Replicate some SVML detection logic from numba.__init__ here.
@@ -631,8 +636,6 @@ def display_sysinfo(info=None, sep_pos=45):
         ("NumPy Supported SIMD baseline",
          DisplaySeq(info.get(_numpy_supported_simd_baseline, [])
                     or ('None found.',))),
-        ("NumPy AVX512_SKX support detected",
-         info.get(_numpy_AVX512_SKX_detected, '?')),
         ("",),
         ("__SVML Information__",),
         ("SVML State, config.USING_SVML", info.get(_svml_state, '?')),

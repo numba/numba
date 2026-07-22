@@ -20,7 +20,7 @@ from numba.core.extending import (
 from numba.core.imputils import (lower_constant, lower_cast, lower_builtin,
                                  iternext_impl, impl_ret_new_ref, RefType)
 from numba.core.datamodel import register_default, StructModel
-from numba.core import types, cgutils, config
+from numba.core import types, cgutils
 from numba.core.utils import PYVERSION
 from numba.core.pythonapi import (
     PY_UNICODE_1BYTE_KIND,
@@ -71,10 +71,7 @@ if PYVERSION in ((3, 10), (3, 11)):
 _MAX_UNICODE = 0x10ffff
 
 # https://github.com/python/cpython/blob/1960eb005e04b7ad8a91018088cfdb0646bc1ca0/Objects/stringlib/fastsearch.h#L31    # noqa: E501
-if config.USE_LEGACY_TYPE_SYSTEM:
-    _BLOOM_WIDTH = types.intp.bitwidth
-else:
-    _BLOOM_WIDTH = types.py_int.bitwidth
+_BLOOM_WIDTH = types.intp.bitwidth
 
 # DATA MODEL
 
@@ -352,7 +349,7 @@ def _set_code_point(a, i, ch):
             "Unexpected unicode representation in _set_code_point")
 
 
-if PYVERSION in ((3, 12), (3, 13)):
+if PYVERSION in ((3, 12), (3, 13), (3, 14)):
     @register_jitable
     def _pick_kind(kind1, kind2):
         if kind1 == PY_UNICODE_1BYTE_KIND:
@@ -396,7 +393,7 @@ def _pick_ascii(is_ascii1, is_ascii2):
     return types.uint32(0)
 
 
-if PYVERSION in ((3, 12), (3, 13)):
+if PYVERSION in ((3, 12), (3, 13), (3, 14)):
     @register_jitable
     def _kind_to_byte_width(kind):
         if kind == PY_UNICODE_1BYTE_KIND:

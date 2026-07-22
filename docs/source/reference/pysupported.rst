@@ -107,6 +107,12 @@ and only called locally, but not passed as argument or returned as
 result. The use of closure variables (variables defined in outer scopes)
 within an inner function is also supported.
 
+Assigning a ``nonlocal`` variable more than once inside an inner function is
+not supported and raises an ``UnsupportedError``. The check is structural, so
+the error is raised even when the later assignment is in a branch that never
+runs. Assign the variable once, or return its value from the inner function and
+reassign it in the caller.
+
 Recursive calls
 '''''''''''''''
 
@@ -407,6 +413,9 @@ than to act as a token to permit the use of this feature. Example use:
       iteration.
     * Only one :func:`literal_unroll` call is permitted per loop nest (i.e.
       nested heterogeneous tuple iteration loops are forbidden).
+    * A variable that is indexed in the loop body must have a single
+      definition, for example its name cannot be reused elsewhere in the
+      function.
     * The usual type inference/stability rules still apply.
 
 A more involved use of :func:`literal_unroll` might be type specific dispatch,
@@ -710,6 +719,49 @@ The use of reference counted types, e.g. strings, in sets is unsupported.
    When passing a set into a JIT-compiled function, any modifications
    made to the set will not be visible to the Python interpreter until
    the function returns.
+
+.. _feature-typed-set:
+
+Typed Set
+----------
+
+.. note::
+  ``numba.typed.Set`` is an experimental feature, if you encounter any bugs in
+  functionality or suffer from unexpectedly bad performance, please report
+  this, ideally by opening an issue on the Numba issue tracker.
+
+As of version 0.65.0, a new implementation of the set data type is available,
+the *typed-set*. This is compiled library backed, type-homogeneous
+set data type that functions exactly like other typed data structures.
+You will need to import it explicitly from the `numba.typed` module::
+
+    In [1]: from numba.typed import Set
+
+    In [2]: from numba import njit, types
+
+    In [3]: @njit
+    ...: def foo(s):
+    ...:     s.add(23)
+    ...:     return s
+    ...:
+
+    In [4]: my_set = Set(types.intp)
+
+    In [5]: my_set.add(1)
+
+    In [6]: foo(my_set)
+    Out[6]: SetType[int64]([1, 23])
+
+Here's an example using ``Set()`` to create ``numba.typed.Set`` inside a
+jit-compiled function and letting the compiler infer the item type:
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_typed_set_usage.py
+   :language: python
+   :caption: from ``ex_inferred_set_jit`` of ``numba/tests/doc_examples/test_typed_set_usage.py``
+   :start-after: magictoken.ex_typed_set_from_cpython.begin
+   :end-before: magictoken.ex_typed_set_from_cpython.end
+   :dedent: 12
+   :linenos:
 
 .. _feature-typed-dict:
 
@@ -1070,6 +1122,7 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.erf`
 * :func:`math.erfc`
 * :func:`math.exp`
+* :func:`math.exp2`
 * :func:`math.expm1`
 * :func:`math.fabs`
 * :func:`math.floor`

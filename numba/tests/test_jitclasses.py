@@ -718,7 +718,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         spec = [("x", int32),
                 ("y", int32),
                 ("z", int32),
-                ("a", int32)]
+                ("a", float32)]
 
         TestClass = jitclass(TestClass1, spec)
 
@@ -734,11 +734,11 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(tc.z, 100)
         self.assertEqual(tc.a, 42)
 
-        tc = TestClass(y=4, x=2, a=42)
+        tc = TestClass(y=4, x=2, a=3.14)
         self.assertEqual(tc.x, 2)
         self.assertEqual(tc.y, 4)
         self.assertEqual(tc.z, 1)
-        self.assertEqual(tc.a, 42)
+        self.assertAlmostEqual(tc.a, 3.14, places=6)
 
         tc = TestClass(y=4, x=2)
         self.assertEqual(tc.x, 2)

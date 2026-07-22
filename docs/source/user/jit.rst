@@ -188,7 +188,7 @@ a file-based cache.  This is done by passing ``cache=True``::
     Caching of compiled functions has several known limitations:
 
     - The caching of compiled functions is not performed on a
-      function-by-function basis. The cached function is the the main jit
+      function-by-function basis. The cached function is the main jit
       function, and all secondary functions (those called by the main
       function) are incorporated in the cache of the main function.
     - Cache invalidation fails to recognize changes in functions defined in a

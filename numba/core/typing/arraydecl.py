@@ -46,7 +46,7 @@ def get_array_index_type(ary, idx):
     # contiguous groups.
     in_subspace = False
     num_subspaces = 0
-    array_indices = 0
+    array_indices = []
 
     # Walk indices
     for ty in idx:
@@ -90,14 +90,9 @@ def get_array_index_type(ary, idx):
                 in_subspace = True
         elif (isinstance(ty, types.Array)
               and isinstance(ty.dtype, (types.Integer, types.Boolean))):
-            if ty.ndim > 1:
-                # Advanced indexing limitation # 1
-                raise NumbaTypeError(
-                    "Multi-dimensional indices are not supported.")
-            array_indices += 1
-            # The condition for activating advanced indexing is simply
-            # having at least one array with size > 1.
+            array_indices.append(ty.ndim)
             advanced = True
+            ndim -= 1
             if not in_subspace:
                 num_subspaces += 1
                 in_subspace = True
@@ -110,17 +105,7 @@ def get_array_index_type(ary, idx):
         (right_indices if ellipsis_met else left_indices).append(ty)
 
     if advanced:
-        if array_indices > 1:
-            # Advanced indexing limitation # 2
-            msg = "Using more than one non-scalar array index is unsupported."
-            raise NumbaTypeError(msg)
-
-        if num_subspaces > 1:
-            # Advanced indexing limitation # 3
-            msg = ("Using more than one indexing subspace is unsupported."
-                   " An indexing subspace is a group of one or more"
-                   " consecutive indices comprising integer or array types.")
-            raise NumbaTypeError(msg)
+        ndim += max(array_indices)
 
     # Only Numpy arrays support advanced indexing
     if advanced and not isinstance(ary, types.Array):
@@ -722,155 +707,6 @@ class ArrayFlagsAttribute(AttributeTemplate):
 @infer_getattr
 class NestedArrayAttribute(ArrayAttribute):
     key = types.NestedArray
-
-
-def _expand_integer(ty):
-    """
-    If *ty* is an integer, expand it to a machine int (like Numpy).
-    """
-    if isinstance(ty, types.Integer):
-        if ty.signed:
-            return max(types.intp, ty)
-        else:
-            return max(types.uintp, ty)
-    elif isinstance(ty, types.Boolean):
-        return types.intp
-    else:
-        return ty
-
-
-def generic_homog(self, args, kws):
-    if args:
-        raise NumbaAssertionError("args not supported")
-    if kws:
-        raise NumbaAssertionError("kws not supported")
-
-    return signature(self.this.dtype, recvr=self.this)
-
-
-def generic_expand(self, args, kws):
-    assert not args
-    assert not kws
-    return signature(_expand_integer(self.this.dtype), recvr=self.this)
-
-
-def sum_expand(self, args, kws):
-    """
-    sum can be called with or without an axis parameter, and with or without
-    a dtype parameter
-    """
-    pysig = None
-    if 'axis' in kws and 'dtype' not in kws:
-        def sum_stub(axis):
-            pass
-        pysig = utils.pysignature(sum_stub)
-        # rewrite args
-        args = list(args) + [kws['axis']]
-    elif 'dtype' in kws and 'axis' not in kws:
-        def sum_stub(dtype):
-            pass
-        pysig = utils.pysignature(sum_stub)
-        # rewrite args
-        args = list(args) + [kws['dtype']]
-    elif 'dtype' in kws and 'axis' in kws:
-        def sum_stub(axis, dtype):
-            pass
-        pysig = utils.pysignature(sum_stub)
-        # rewrite args
-        args = list(args) + [kws['axis'], kws['dtype']]
-
-    args_len = len(args)
-    assert args_len <= 2
-    if args_len == 0:
-        # No axis or dtype parameter so the return type of the summation is a scalar
-        # of the type of the array.
-        out = signature(_expand_integer(self.this.dtype), *args,
-                        recvr=self.this)
-    elif args_len == 1 and 'dtype' not in kws:
-        # There is an axis parameter, either arg or kwarg
-        if self.this.ndim == 1:
-            # 1d reduces to a scalar
-            return_type = _expand_integer(self.this.dtype)
-        else:
-            # the return type of this summation is  an array of dimension one
-            # less than the input array.
-            return_type = types.Array(dtype=_expand_integer(self.this.dtype),
-                                    ndim=self.this.ndim-1, layout='C')
-        out = signature(return_type, *args, recvr=self.this)
-
-    elif args_len == 1 and 'dtype' in kws:
-        # No axis parameter so the return type of the summation is a scalar
-        # of the dtype parameter.
-        from .npydecl import parse_dtype
-        dtype, = args
-        dtype = parse_dtype(dtype)
-        out = signature(dtype, *args, recvr=self.this)
-
-    elif args_len == 2:
-        # There is an axis and dtype parameter, either arg or kwarg
-        from .npydecl import parse_dtype
-        dtype = parse_dtype(args[1])
-        return_type = dtype
-        if self.this.ndim != 1:
-            # 1d reduces to a scalar, 2d and above reduce dim by 1
-            # the return type of this summation is  an array of dimension one
-            # less than the input array.
-            return_type = types.Array(dtype=return_type,
-                                    ndim=self.this.ndim-1, layout='C')
-        out = signature(return_type, *args, recvr=self.this)
-    else:
-        pass
-    return out.replace(pysig=pysig)
-
-
-def generic_expand_cumulative(self, args, kws):
-    if args:
-        raise NumbaAssertionError("args unsupported")
-    if kws:
-        raise NumbaAssertionError("kwargs unsupported")
-    assert isinstance(self.this, types.Array)
-    return_type = types.Array(dtype=_expand_integer(self.this.dtype),
-                              ndim=1, layout='C')
-    return signature(return_type, recvr=self.this)
-
-
-def generic_hetero_real(self, args, kws):
-    assert not args
-    assert not kws
-    if isinstance(self.this.dtype, (types.Integer, types.Boolean)):
-        return signature(types.float64, recvr=self.this)
-    return signature(self.this.dtype, recvr=self.this)
-
-
-def generic_hetero_always_real(self, args, kws):
-    assert not args
-    assert not kws
-    if isinstance(self.this.dtype, (types.Integer, types.Boolean)):
-        return signature(types.float64, recvr=self.this)
-    if isinstance(self.this.dtype, types.Complex):
-        return signature(self.this.dtype.underlying_float, recvr=self.this)
-    return signature(self.this.dtype, recvr=self.this)
-
-
-def generic_index(self, args, kws):
-    assert not args
-    assert not kws
-    return signature(types.intp, recvr=self.this)
-
-
-def install_array_method(name, generic, prefer_literal=True):
-    my_attr = {"key": "array." + name, "generic": generic,
-               "prefer_literal": prefer_literal}
-    temp_class = type("Array_" + name, (AbstractTemplate,), my_attr)
-
-    def array_attribute_attachment(self, ary):
-        return types.BoundFunction(temp_class, ary)
-
-    setattr(ArrayAttribute, "resolve_" + name, array_attribute_attachment)
-
-
-# Functions that return a machine-width type, to avoid overflows
-install_array_method("sum", sum_expand, prefer_literal=True)
 
 
 @infer_global(operator.eq)

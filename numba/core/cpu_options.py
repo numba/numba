@@ -53,8 +53,6 @@ class FastMathOptions(AbstractOptionValue):
     def __bool__(self):
         return bool(self.flags)
 
-    __nonzero__ = __bool__
-
     def encode(self) -> str:
         return str(self.flags)
 

@@ -6,8 +6,10 @@ Implementation of math operations on Array objects.
 import math
 from collections import namedtuple
 import operator
+import warnings
 
 import llvmlite.ir
+from numba.np.types.datetime import NPDatetime, NPTimedelta
 import numpy as np
 
 from numba.core import types, cgutils
@@ -22,10 +24,12 @@ from numba.np.arrayobj import (make_array, load_item, store_item,
 from numba.np.linalg import ensure_blas
 
 from numba.core.extending import intrinsic
-from numba.core.errors import (RequireLiteralValue, TypingError,
+from numba.core.errors import (TypingError,
                                NumbaValueError, NumbaNotImplementedError,
-                               NumbaTypeError)
+                               NumbaTypeError, NumbaDeprecationWarning)
 from numba.cpython.unsafe.tuple import tuple_setitem
+from numba.np import types as npy_types
+from llvmlite.ir import Constant
 
 
 def _check_blas():
@@ -39,311 +43,230 @@ def _check_blas():
 
 _HAVE_BLAS = _check_blas()
 
-
-@intrinsic
-def _create_tuple_result_shape(tyctx, shape_list, shape_tuple):
-    """
-    This routine converts shape list where the axis dimension has already
-    been popped to a tuple for indexing of the same size.  The original shape
-    tuple is also required because it contains a length field at compile time
-    whereas the shape list does not.
-    """
-
-    # The new tuple's size is one less than the original tuple since axis
-    # dimension removed.
-    nd = len(shape_tuple) - 1
-    # The return type of this intrinsic is an int tuple of length nd.
-    tupty = types.UniTuple(types.intp, nd)
-    # The function signature for this intrinsic.
-    function_sig = tupty(shape_list, shape_tuple)
-
-    def codegen(cgctx, builder, signature, args):
-        lltupty = cgctx.get_value_type(tupty)
-        # Create an empty int tuple.
-        tup = cgutils.get_null_value(lltupty)
-
-        # Get the shape list from the args and we don't need shape tuple.
-        [in_shape, _] = args
-
-        def array_indexer(a, i):
-            return a[i]
-
-        # loop to fill the tuple
-        for i in range(nd):
-            dataidx = cgctx.get_constant(types.intp, i)
-            # compile and call array_indexer
-            data = cgctx.compile_internal(builder, array_indexer,
-                                          types.intp(shape_list, types.intp),
-                                          [in_shape, dataidx])
-            tup = builder.insert_value(tup, data, i)
-        return tup
-
-    return function_sig, codegen
-
-
-@intrinsic
-def _gen_index_tuple(tyctx, shape_tuple, value, axis):
-    """
-    Generates a tuple that can be used to index a specific slice from an
-    array for sum with axis.  shape_tuple is the size of the dimensions of
-    the input array.  'value' is the value to put in the indexing tuple
-    in the axis dimension and 'axis' is that dimension.  For this to work,
-    axis has to be a const.
-    """
-    if not isinstance(axis, types.Literal):
-        raise RequireLiteralValue('axis argument must be a constant')
-    # Get the value of the axis constant.
-    axis_value = axis.literal_value
-    # The length of the indexing tuple to be output.
-    nd = len(shape_tuple)
-
-    # If the axis value is impossible for the given size array then
-    # just fake it like it was for axis 0.  This will stop compile errors
-    # when it looks like it could be called from array_sum_axis but really
-    # can't because that routine checks the axis mismatch and raise an
-    # exception.
-    if axis_value >= nd:
-        axis_value = 0
-
-    # Calculate the type of the indexing tuple.  All the non-axis
-    # dimensions have slice2 type and the axis dimension has int type.
-    before = axis_value
-    after = nd - before - 1
-
-    types_list = []
-    types_list += [types.slice2_type] * before
-    types_list += [types.intp]
-    types_list += [types.slice2_type] * after
-
-    # Creates the output type of the function.
-    tupty = types.Tuple(types_list)
-    # Defines the signature of the intrinsic.
-    function_sig = tupty(shape_tuple, value, axis)
-
-    def codegen(cgctx, builder, signature, args):
-        lltupty = cgctx.get_value_type(tupty)
-        # Create an empty indexing tuple.
-        tup = cgutils.get_null_value(lltupty)
-
-        # We only need value of the axis dimension here.
-        # The rest are constants defined above.
-        [_, value_arg, _] = args
-
-        def create_full_slice():
-            return slice(None, None)
-
-        # loop to fill the tuple with slice(None,None) before
-        # the axis dimension.
-
-        # compile and call create_full_slice
-        slice_data = cgctx.compile_internal(builder, create_full_slice,
-                                            types.slice2_type(),
-                                            [])
-        for i in range(0, axis_value):
-            tup = builder.insert_value(tup, slice_data, i)
-
-        # Add the axis dimension 'value'.
-        tup = builder.insert_value(tup, value_arg, axis_value)
-
-        # loop to fill the tuple with slice(None,None) after
-        # the axis dimension.
-        for i in range(axis_value + 1, nd):
-            tup = builder.insert_value(tup, slice_data, i)
-        return tup
-
-    return function_sig, codegen
-
-
 #----------------------------------------------------------------------------
 # Basic stats and aggregates
 
-@lower_builtin(np.sum, types.Array)
-@lower_builtin("array.sum", types.Array)
-def array_sum(context, builder, sig, args):
-    zero = sig.return_type(0)
 
-    def array_sum_impl(arr):
-        c = zero
-        for v in np.nditer(arr):
-            c += v.item()
-        return c
+class EntireIterator():
+    """
+    Compute ptr along an entire array dimension.
+    """
 
-    res = context.compile_internal(builder, array_sum_impl, sig, args,
-                                   locals=dict(c=sig.return_type))
-    return impl_ret_borrowed(context, builder, sig.return_type, res)
+    def __init__(self, context, builder, aryty, ary, dim, ary_int_ptr,
+                 extra_variations=None, extra_strides=None,
+                 extra_iter_ptrs=None):
+        self.context = context
+        self.builder = builder
+        self.aryty = aryty
+        self.ary = ary
+        self.dim = dim
+        self.ll_intp = self.context.get_value_type(types.intp)
+        self.ary_int_ptr = ary_int_ptr
+        self.extra_variations = extra_variations if extra_variations else []
+        self.extra_strides = extra_strides if extra_strides else []
+        self.extra_iter_ptrs = extra_iter_ptrs if extra_iter_ptrs else []
 
+    def prepare(self):
+        builder = self.builder
+        self.size = builder.extract_value(self.ary.shape, self.dim)
+        self.dim_stride = builder.extract_value(self.ary.strides, self.dim)
+        self.index = cgutils.alloca_once(builder, self.ll_intp)
+        self.extra_dim_strides = [
+            builder.extract_value(self.extra_strides[i], self.dim)
+            for i in range(len(self.extra_variations))
+        ]
+        self.bb_start = builder.append_basic_block()
+        self.bb_end = builder.append_basic_block()
 
-@register_jitable
-def _array_sum_axis_nop(arr, v):
-    return arr
+    def get_size(self):
+        return self.size
 
+    def get_shape(self):
+        return (self.size,)
 
-def gen_sum_axis_impl(is_axis_const, const_axis_val, op, zero):
-    def inner(arr, axis):
-        """
-        function that performs sums over one specific axis
+    def get_index_bounds(self):
+        # [0, size)
+        return (self.ll_intp(0), self.size)
 
-        The third parameter to gen_index_tuple that generates the indexing
-        tuples has to be a const so we can't just pass "axis" through since
-        that isn't const.  We can check for specific values and have
-        different instances that do take consts.  Supporting axis summation
-        only up to the fourth dimension for now.
+    def loop_head(self):
+        builder = self.builder
+        # Initialize loop variable
+        self.builder.store(Constant(self.ll_intp, 0), self.index)
+        builder.branch(self.bb_start)
+        builder.position_at_end(self.bb_start)
+        cur_index = builder.load(self.index)
+        with builder.if_then(builder.icmp_signed('>=', cur_index, self.size),
+                             likely=False):
+            # Reset pointer by subtracting total offset
+            offset = builder.mul(self.dim_stride, builder.load(self.index))
+            neg_offset = builder.sub(Constant(self.ll_intp, 0), offset)
+            new_ptr = cgutils.pointer_add(
+                builder, builder.load(self.ary_int_ptr), neg_offset
+            )
+            builder.store(new_ptr, self.ary_int_ptr)
+            for i in range(len(self.extra_variations)):
+                offset = builder.mul(
+                    self.extra_dim_strides[i], builder.load(self.index)
+                )
+                neg_offset = builder.sub(Constant(self.ll_intp, 0), offset)
+                new_ptr = cgutils.pointer_add(
+                    builder, builder.load(self.extra_iter_ptrs[i]), neg_offset
+                )
+                builder.store(new_ptr, self.extra_iter_ptrs[i])
+            builder.branch(self.bb_end)
+        return cur_index
 
-        typing/arraydecl.py:sum_expand defines the return type for sum with
-        axis. It is one dimension less than the input array.
-        """
-        ndim = arr.ndim
+    def loop_tail(self):
+        builder = self.builder
+        next_index = cgutils.increment_index(builder, builder.load(self.index))
 
-        if not is_axis_const:
-            # Catch where axis is negative or greater than 3.
-            if axis < 0 or axis > 3:
-                raise ValueError("Numba does not support sum with axis "
-                                 "parameter outside the range 0 to 3.")
+        # Advance pointer using pointer_add
+        new_ptr = cgutils.pointer_add(
+            builder, builder.load(self.ary_int_ptr), self.dim_stride
+        )
+        builder.store(new_ptr, self.ary_int_ptr)
+        for i in range(len(self.extra_variations)):
+            new_ptr = cgutils.pointer_add(
+                builder,
+                builder.load(self.extra_iter_ptrs[i]),
+                self.extra_dim_strides[i]
+            )
+            builder.store(new_ptr, self.extra_iter_ptrs[i])
 
-        # Catch the case where the user misspecifies the axis to be
-        # more than the number of the array's dimensions.
-        if axis >= ndim:
-            raise ValueError("axis is out of bounds for array")
-
-        # Convert the shape of the input array to a list.
-        ashape = list(arr.shape)
-        # Get the length of the axis dimension.
-        axis_len = ashape[axis]
-        # Remove the axis dimension from the list of dimensional lengths.
-        ashape.pop(axis)
-        # Convert this shape list back to a tuple using above intrinsic.
-        ashape_without_axis = _create_tuple_result_shape(ashape, arr.shape)
-        # Tuple needed here to create output array with correct size.
-        result = np.full(ashape_without_axis, zero, type(zero))
-
-        # Iterate through the axis dimension.
-        for axis_index in range(axis_len):
-            if is_axis_const:
-                # constant specialized version works for any valid axis value
-                index_tuple_generic = _gen_index_tuple(arr.shape, axis_index,
-                                                       const_axis_val)
-                result += arr[index_tuple_generic]
-            else:
-                # Generate a tuple used to index the input array.
-                # The tuple is ":" in all dimensions except the axis
-                # dimension where it is "axis_index".
-                if axis == 0:
-                    index_tuple1 = _gen_index_tuple(arr.shape, axis_index, 0)
-                    result += arr[index_tuple1]
-                elif axis == 1:
-                    index_tuple2 = _gen_index_tuple(arr.shape, axis_index, 1)
-                    result += arr[index_tuple2]
-                elif axis == 2:
-                    index_tuple3 = _gen_index_tuple(arr.shape, axis_index, 2)
-                    result += arr[index_tuple3]
-                elif axis == 3:
-                    index_tuple4 = _gen_index_tuple(arr.shape, axis_index, 3)
-                    result += arr[index_tuple4]
-        return op(result, 0)
-    return inner
-
-
-@lower_builtin(np.sum, types.Array, types.intp, types.DTypeSpec)
-@lower_builtin(np.sum, types.Array, types.IntegerLiteral, types.DTypeSpec)
-@lower_builtin("array.sum", types.Array, types.intp, types.DTypeSpec)
-@lower_builtin("array.sum", types.Array, types.IntegerLiteral, types.DTypeSpec)
-def array_sum_axis_dtype(context, builder, sig, args):
-    retty = sig.return_type
-    zero = getattr(retty, 'dtype', retty)(0)
-    # if the return is scalar in type then "take" the 0th element of the
-    # 0d array accumulator as the return value
-    if getattr(retty, 'ndim', None) is None:
-        op = np.take
-    else:
-        op = _array_sum_axis_nop
-    [ty_array, ty_axis, ty_dtype] = sig.args
-    is_axis_const = False
-    const_axis_val = 0
-    if isinstance(ty_axis, types.Literal):
-        # this special-cases for constant axis
-        const_axis_val = ty_axis.literal_value
-        # fix negative axis
-        if const_axis_val < 0:
-            const_axis_val = ty_array.ndim + const_axis_val
-        if const_axis_val < 0 or const_axis_val > ty_array.ndim:
-            raise ValueError("'axis' entry is out of bounds")
-
-        ty_axis = context.typing_context.resolve_value_type(const_axis_val)
-        axis_val = context.get_constant(ty_axis, const_axis_val)
-        # rewrite arguments
-        args = args[0], axis_val, args[2]
-        # rewrite sig
-        sig = sig.replace(args=[ty_array, ty_axis, ty_dtype])
-        is_axis_const = True
-
-    gen_impl = gen_sum_axis_impl(is_axis_const, const_axis_val, op, zero)
-    compiled = register_jitable(gen_impl)
-
-    def array_sum_impl_axis(arr, axis, dtype):
-        return compiled(arr, axis)
-
-    res = context.compile_internal(builder, array_sum_impl_axis, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
+        builder.store(next_index, self.index)
+        builder.branch(self.bb_start)
+        builder.position_at_end(self.bb_end)
 
 
-@lower_builtin(np.sum, types.Array,  types.DTypeSpec)
-@lower_builtin("array.sum", types.Array, types.DTypeSpec)
-def array_sum_dtype(context, builder, sig, args):
-    zero = sig.return_type(0)
+class ArrayIterator:
+    def __init__(self, context, builder, aryty, ary,
+                 extra_masks=None, extra_arys=None):
+        self.context = context
+        self.builder = builder
+        self.aryty = aryty
+        self.ary = ary
+        self.ll_intp = self.context.get_value_type(types.intp)
+        self.iter_ptr = cgutils.alloca_once(builder, ary.data.type)
+        builder.store(ary.data, self.iter_ptr)
+        self.extra_iter_ptrs = []
+        self.extra_strides = []
+        self.extra_variations = []
+        self.extra_types = []
+        if extra_masks:
+            # Create a variation tuple to indicate which dimensions
+            # are iterated over.
+            assert len(extra_masks) == len(extra_arys)
+            extra_masks = list(extra_masks)
+            for i in range(len(extra_masks)):
+                self.extra_strides.append(
+                    self.make_stride_from_mask(
+                        context, builder, extra_masks[i],
+                        extra_arys[i].strides
+                    )
+                )
+                self.extra_variations.append(extra_masks[i])
+                extra_ary = extra_arys[i]
+                extra_iter_ptr = cgutils.alloca_once(
+                    builder, extra_ary.data.type
+                )
+                builder.store(extra_ary.data, extra_iter_ptr)
+                self.extra_iter_ptrs.append(extra_iter_ptr)
+                self.extra_types.append(extra_ary.data.type)
 
-    def array_sum_impl(arr, dtype):
-        c = zero
-        for v in np.nditer(arr):
-            c += v.item()
-        return c
+        self.indexers = [
+            EntireIterator(
+                context,
+                builder,
+                aryty,
+                ary,
+                dim,
+                self.iter_ptr,
+                self.extra_variations,
+                self.extra_strides,
+                self.extra_iter_ptrs,
+            ) for dim in range(aryty.ndim)
+        ]
 
-    res = context.compile_internal(builder, array_sum_impl, sig, args,
-                                   locals=dict(c=sig.return_type))
-    return impl_ret_borrowed(context, builder, sig.return_type, res)
+    def make_stride_from_mask(self, context, builder, mask, strides):
+        # Create resulting tuple type
+        result_tuple_ty = types.UniTuple(types.intp, mask.type.count)
+        result_tuple = cgutils.get_null_value(
+            context.get_value_type(result_tuple_ty)
+        )
+        stack = cgutils.alloca_once(builder, result_tuple.type)
+        builder.store(result_tuple, stack)
+        strides_stack = cgutils.alloca_once(builder, strides.type)
+        builder.store(strides, strides_stack)
+        zero = Constant(self.ll_intp, 0)
+        acc = cgutils.alloca_once(builder, self.ll_intp)
+        builder.store(zero, acc)
 
+        for i in range(mask.type.count):
+            with builder.if_then(builder.extract_value(mask, i)):
+                # Get the stride at the current index in the original tuple.
+                offptr = builder.gep(
+                    strides_stack, [zero.type(0), builder.load(acc)],
+                    inbounds=True
+                )
+                stride_val = builder.load(offptr)
+                # Store the stride value in the result tuple
+                offptr = builder.gep(
+                    stack, [zero.type(0), Constant(self.ll_intp, i)],
+                    inbounds=True
+                )
+                builder.store(stride_val, offptr)
+                # Increment the index
+                builder.store(builder.add(
+                    builder.load(acc), Constant(self.ll_intp, 1)
+                ), acc)
 
-@lower_builtin(np.sum, types.Array, types.intp)
-@lower_builtin(np.sum, types.Array, types.IntegerLiteral)
-@lower_builtin("array.sum", types.Array, types.intp)
-@lower_builtin("array.sum", types.Array, types.IntegerLiteral)
-def array_sum_axis(context, builder, sig, args):
-    retty = sig.return_type
-    zero = getattr(retty, 'dtype', retty)(0)
-    # if the return is scalar in type then "take" the 0th element of the
-    # 0d array accumulator as the return value
-    if getattr(retty, 'ndim', None) is None:
-        op = np.take
-    else:
-        op = _array_sum_axis_nop
-    [ty_array, ty_axis] = sig.args
-    is_axis_const = False
-    const_axis_val = 0
-    if isinstance(ty_axis, types.Literal):
-        # this special-cases for constant axis
-        const_axis_val = ty_axis.literal_value
-        # fix negative axis
-        if const_axis_val < 0:
-            const_axis_val = ty_array.ndim + const_axis_val
-        if const_axis_val < 0 or const_axis_val > ty_array.ndim:
-            msg = f"'axis' entry ({const_axis_val}) is out of bounds"
-            raise NumbaValueError(msg)
+            with builder.if_then(builder.not_(builder.extract_value(mask, i))):
+                # Set the stride to 0 in the result tuple
+                offptr = builder.gep(
+                    stack, [zero.type(0), Constant(self.ll_intp, i)],
+                    inbounds=True
+                )
+                builder.store(Constant(self.ll_intp, 0), offptr)
 
-        ty_axis = context.typing_context.resolve_value_type(const_axis_val)
-        axis_val = context.get_constant(ty_axis, const_axis_val)
-        # rewrite arguments
-        args = args[0], axis_val
-        # rewrite sig
-        sig = sig.replace(args=[ty_array, ty_axis])
-        is_axis_const = True
+        return builder.load(stack)
 
-    gen_impl = gen_sum_axis_impl(is_axis_const, const_axis_val, op, zero)
-    compiled = register_jitable(gen_impl)
+    def prepare(self):
+        for indexer in self.indexers:
+            indexer.prepare()
 
-    def array_sum_impl_axis(arr, axis):
-        return compiled(arr, axis)
+    def get_size(self):
+        return
 
-    res = context.compile_internal(builder, array_sum_impl_axis, sig, args)
-    return impl_ret_new_ref(context, builder, sig.return_type, res)
+    def get_shape(self):
+        return
+
+    def get_index_bounds(self):
+        return
+
+    def loop_head(self):
+        for indexer in self.indexers:
+            indexer.loop_head()
+
+        if getattr(self, 'extra_iter_ptrs', None):
+            extra_ptrs = [
+                self.builder.load(self.extra_iter_ptrs[i])
+                for i in range(len(self.extra_iter_ptrs))
+            ]
+            return self.builder.load(self.iter_ptr), tuple(extra_ptrs)
+
+        else:
+            return self.builder.load(self.iter_ptr)
+
+    def loop_tail(self):
+        for indexer in reversed(self.indexers):
+            indexer.loop_tail()
+
+    def __enter__(self):
+        self.prepare()
+        return self.loop_head()
+
+    def __exit__(self, exc_type, exc, tb):
+        return self.loop_tail()
 
 
 def get_accumulator(dtype, value):
@@ -352,6 +275,314 @@ def get_accumulator(dtype, value):
     else:
         acc_init = dtype.type(value)
     return acc_init
+
+
+def get_spliced_tuple(context, builder, tuplety, tupleval, axis):
+    # Return a tuple with the same values as tupleval but with the
+    # axis dimension removed. Axis is a runtime value.
+
+    ll_intp = context.get_value_type(types.intp)
+
+    # Wraparound for negative axis, convert to positive axis
+    axis = builder.add(
+        axis,
+        builder.select(
+            builder.icmp_signed('<', axis, Constant(ll_intp, 0)),
+            Constant(ll_intp, tuplety.count), Constant(ll_intp, 0)
+        )
+    )
+    # Check if axis is valid for the given array
+    is_not_valid = builder.or_(
+        builder.icmp_signed('>=', axis, Constant(ll_intp, tuplety.count)),
+        builder.icmp_signed('<', axis, Constant(ll_intp, 0))
+    )
+    with builder.if_then(is_not_valid, likely=True):
+        context.call_conv.return_user_exc(
+            builder, ValueError,
+            ("Axis out of bounds.",))
+
+    # Create an empty tuple to hold the result, the resulting tuple
+    # has one less dimension than the original tuple, initilize it with zeros.
+
+    # Create resulting tuple type
+    result_tuple_ty = types.UniTuple(types.intp, tuplety.count - 1)
+    result_tuple = cgutils.get_null_value(
+        context.get_value_type(result_tuple_ty)
+    )
+    stack = cgutils.alloca_once(builder, result_tuple.type)
+    builder.store(result_tuple, stack)
+
+    # Loop through the original tuple and copy values to the resulting tuple
+    # skipping the axis dimension.
+    for i in range(tuplety.count):
+        idx = Constant(ll_intp, i)
+        # Get the value at the current index in the original tuple.
+        with builder.if_then(builder.icmp_signed('<', idx, axis)):
+            val = builder.extract_value(tupleval, i)
+            # Unsafe load on unchecked bounds.  Poison value maybe returned.
+            offptr = builder.gep(stack, [idx.type(0), idx], inbounds=True)
+            builder.store(val, offptr)
+        with builder.if_then(builder.icmp_signed('>', idx, axis)):
+            idx = Constant(ll_intp, i)
+            val = builder.extract_value(tupleval, i)
+            res_idx = builder.sub(idx, Constant(ll_intp, 1))
+            # Unsafe load on unchecked bounds.  Poison value maybe returned.
+            offptr = builder.gep(
+                stack, [res_idx.type(0), res_idx], inbounds=True
+            )
+            builder.store(val, offptr)
+    return builder.load(stack)
+
+
+def tuple_additem(context, builder, tuplety, tupleval, idx, val):
+    # Return a tuple with the same values as tupleval but with
+    # val added at idx. idx is a runtime value.
+
+    ll_intp = context.get_value_type(types.intp)
+
+    # Create an empty tuple to hold the result, the resulting tuple
+    # has one more dimension than the original tuple, initilize
+    # it with zeros.
+
+    # Create resulting tuple type
+    result_tuple_ty = types.UniTuple(types.intp, tuplety.count + 1)
+    result_tuple = cgutils.get_null_value(
+        context.get_value_type(result_tuple_ty)
+    )
+    stack = cgutils.alloca_once(builder, result_tuple.type)
+    builder.store(result_tuple, stack)
+
+    # Loop through the original tuple and copy values to the resulting tuple
+    # adding val at idx.
+    for i in range(tuplety.count):
+        idx_i = Constant(ll_intp, i)
+        with builder.if_then(builder.icmp_signed('==', idx_i, idx)):
+            offptr = builder.gep(stack, [idx_i.type(0), idx_i], inbounds=True)
+            builder.store(val, offptr)
+        with builder.if_then(builder.icmp_signed('<', idx_i, idx)):
+            val_i = builder.extract_value(tupleval, i)
+            offptr = builder.gep(stack, [idx_i.type(0), idx_i], inbounds=True)
+            builder.store(val_i, offptr)
+        with builder.if_then(builder.icmp_signed('>=', idx_i, idx)):
+            val_i = builder.extract_value(tupleval, i)
+            res_i = builder.add(idx_i, Constant(ll_intp, 1))
+            offptr = builder.gep(stack, [res_i.type(0), res_i], inbounds=True)
+            builder.store(val_i, offptr)
+    return builder.load(stack)
+
+
+def get_mask(context, builder, mask_length, axis, inverted=False):
+    # Return a tuple of booleans where the value is True if the
+    # dimension is not the axis and False if it is the axis.
+    # Axis is a runtime value.
+
+    if not isinstance(axis, (list, tuple)):
+        axis = [axis]
+
+    ll_intp = context.get_value_type(types.intp)
+    ll_bool = context.get_value_type(types.boolean)
+
+    # Create an empty tuple to hold the result, the resulting tuple
+    # has the same number of dimensions as the original tuple,
+    # but with boolean type.
+
+    # Create resulting tuple type
+    result_tuple_ty = types.UniTuple(types.boolean, mask_length)
+    result_tuple = cgutils.get_null_value(
+        context.get_value_type(result_tuple_ty)
+    )
+    stack = cgutils.alloca_once(builder, result_tuple.type)
+    builder.store(result_tuple, stack)
+
+    for _axis in axis:
+        if _axis is not None:
+            # Wraparound for negative axis, convert to positive axis
+            _axis = builder.add(
+                _axis,
+                builder.select(
+                    builder.icmp_signed('<', _axis, Constant(ll_intp, 0)),
+                    Constant(ll_intp, mask_length), Constant(ll_intp, 0)
+                )
+            )
+            # Check if axis is valid for the given array
+            is_not_valid = builder.or_(
+                builder.icmp_signed(
+                    '>=', _axis,
+                    Constant(ll_intp, mask_length)
+                ),
+                builder.icmp_signed('<', _axis, Constant(ll_intp, 0))
+            )
+            with builder.if_then(is_not_valid, likely=True):
+                context.call_conv.return_user_exc(
+                    builder, ValueError,
+                    ("Axis out of bounds.",))
+        for i in range(mask_length):
+            idx = Constant(ll_intp, i)
+            if _axis is not None:
+                val = builder.icmp_signed('!=', idx, _axis)
+            else:
+                val = Constant(ll_bool, 1)
+            if inverted:
+                val = builder.not_(val)
+            offptr = builder.gep(stack, [idx.type(0), idx], inbounds=True)
+            builder.store(val, offptr)
+
+    return builder.load(stack)
+
+
+def get_ret_dtype_if_any(aryty, dtype):
+    if is_nonelike(dtype):
+        ret_dtype = aryty.dtype
+        if ret_dtype == types.bool_:
+            ret_dtype = types.intp
+        if (
+            isinstance(aryty.dtype, types.Integer) and
+            aryty.dtype.bitwidth < types.intp.bitwidth
+        ):
+            # For signed integers smaller than intp,
+            # use intp as the accumulator
+            ret_dtype = types.intp
+    else:
+        ret_dtype = dtype.dtype
+    return ret_dtype
+
+
+@intrinsic
+def _numpy_sum(typingctx, aryty, axisty, dtype):
+    ret_dtype = get_ret_dtype_if_any(aryty, dtype)
+    sig = ret_dtype(aryty, axisty, dtype)
+
+    def codegen(context, builder, sig, args):
+        ary, _, _ = args
+
+        ary = make_array(aryty)(context, builder, ary)
+        if isinstance(ret_dtype, types.NPTimedelta):
+            zero = context.get_constant(ret_dtype, ret_dtype(0))
+        else:
+            zero = context.get_constant(ret_dtype, 0)
+        result = cgutils.alloca_once_value(builder, zero)
+
+        fnty = context.typing_context.resolve_value_type(operator.iadd)
+        fn_sig = fnty.get_call_type(
+            context.typing_context,
+            (sig.return_type, sig.return_type),
+            {}
+        )
+        if isinstance(ret_dtype, types.Boolean):
+            add_funcfn = lambda builder, args: builder.or_(*args)
+        else:
+            add_funcfn = context.get_function(fnty, fn_sig)
+
+        # Loop on source and copy to destination
+        with ArrayIterator(context, builder, aryty, ary) as iter_val_ptr:
+            val = load_item(context, builder, aryty, iter_val_ptr)
+            res_val = add_funcfn(builder, (
+                builder.load(result),
+                context.cast(builder, val, aryty.dtype, sig.return_type)))
+            builder.store(res_val, result)
+
+        return impl_ret_borrowed(
+            context, builder, sig.return_type, builder.load(result)
+        )
+
+    return sig, codegen
+
+
+@intrinsic
+def _numpy_sum_axis(typingctx, aryty, axisty, dtype):
+    ret_dtype = get_ret_dtype_if_any(aryty, dtype)
+
+    assert aryty.ndim > 0, \
+        "Array must have at least 1 dimension for sum with axis"
+    ret = types.Array(ret_dtype, aryty.ndim - 1, layout='C')
+    sig = ret(aryty, axisty, dtype)
+
+    def codegen(context, builder, sig, args):
+        ary, axis, _ = args
+
+        ary = make_array(aryty)(context, builder, ary)
+
+        # Res shape will be a tuple one axis less than
+        # ndim and need appropriate shape calculations.
+        res_shape = get_spliced_tuple(
+            context, builder, ary.shape.type, ary.shape, axis
+        )
+        res = _empty_nd_impl(
+            context, builder, sig.return_type,
+            cgutils.unpack_tuple(builder, res_shape)
+        )
+        cgutils.memset(
+            builder, res.data,
+            builder.mul(res.itemsize, res.nitems), 0
+        )
+
+        fnty = context.typing_context.resolve_value_type(operator.iadd)
+        fn_sig = fnty.get_call_type(
+            context.typing_context,
+            (sig.return_type.dtype, sig.return_type.dtype),
+            {}
+        )
+        if isinstance(ret_dtype, types.Boolean):
+            add_funcfn = lambda builder, args: builder.or_(*args)
+        else:
+            add_funcfn = context.get_function(fnty, fn_sig)
+
+        mask = get_mask(context, builder, aryty.ndim, axis)
+        # Loop on source and copy to destination
+        with ArrayIterator(
+            context, builder, aryty, ary, (mask,), (res,)
+        ) as (ary_iter_ptr, res_ptr_tup):
+            res_ptr = res_ptr_tup[0]
+            val = load_item(context, builder, aryty, ary_iter_ptr)
+            res_val = add_funcfn(builder, (
+                load_item(context, builder, sig.return_type, res_ptr),
+                context.cast(builder, val, aryty.dtype, sig.return_type.dtype)))
+            store_item(context, builder, sig.return_type, res_val, res_ptr)
+
+        return impl_ret_new_ref(
+            context, builder, sig.return_type, res._getvalue()
+        )
+
+    return sig, codegen
+
+
+@overload(np.sum)
+@overload_method(types.Array, "sum")
+def array_sum(a, axis=None, dtype=None):
+    if not (isinstance(axis, types.Integer) or is_nonelike(axis)):
+        raise TypingError(
+            "NumPy sum only suppports integer axis value"
+        )
+    if isinstance(a, types.Array):
+        axis_length = 1
+        if is_nonelike(axis) or a.ndim == axis_length:
+            def array_sum_impl(a, axis=None, dtype=None):
+                if axis is not None and (axis < -a.ndim or axis >= a.ndim):
+                    raise ValueError(
+                        f"axis {axis} is out of bounds for "
+                        f"array of dimension {a.ndim}"
+                    )
+                return _numpy_sum(a, axis, dtype)
+        else:
+            def array_sum_impl(a, axis=None, dtype=None):
+                if axis is not None and (axis < -a.ndim or axis >= a.ndim):
+                    raise ValueError(
+                        f"axis {axis} is out of bounds for "
+                        f"array of dimension {a.ndim}"
+                    )
+                return _numpy_sum_axis(a, axis, dtype)
+
+        return array_sum_impl
+    elif isinstance(a, (types.Number, types.Boolean)):
+        if is_nonelike(dtype):
+            acc_init = as_dtype(a).type(0)
+        else:
+            acc_init = as_dtype(dtype).type(0)
+
+        def scalar_sum_impl(a, axis=None, dtype=None):
+            return acc_init + a
+
+        return scalar_sum_impl
 
 
 @overload(np.prod)
@@ -369,31 +600,179 @@ def array_prod(a):
             return c
 
         return array_prod_impl
+    elif isinstance(a, (types.Number, types.Boolean)):
+        acc_init = as_dtype(a).type(1)
+
+        def scalar_prod_impl(a):
+            return acc_init * a
+
+        return scalar_prod_impl
+
+
+@intrinsic
+def _numpy_cumsum(typingctx, aryty, axisty, dtype):
+    ret_dtype = get_ret_dtype_if_any(aryty, dtype)
+
+    ret = types.Array(ret_dtype, aryty.ndim, layout='C')
+    sig = ret(aryty, axisty, dtype)
+
+    def codegen(context, builder, sig, args):
+        ary, _, _ = args
+
+        ary = make_array(aryty)(context, builder, ary)
+        if isinstance(ret_dtype, types.NPTimedelta):
+            zero = context.get_constant(ret_dtype, ret_dtype(0))
+        else:
+            zero = context.get_constant(ret_dtype, 0)
+        acc = cgutils.alloca_once_value(builder, zero)
+
+        res = _empty_nd_impl(
+            context, builder, sig.return_type,
+            cgutils.unpack_tuple(builder, ary.shape)
+        )
+        cgutils.memset(
+            builder, res.data,
+            builder.mul(res.itemsize, res.nitems), 0
+        )
+
+        fnty = context.typing_context.resolve_value_type(operator.iadd)
+        fn_sig = fnty.get_call_type(
+            context.typing_context,
+            (sig.return_type.dtype, sig.return_type.dtype),
+            {}
+        )
+        if isinstance(ret_dtype, types.Boolean):
+            add_funcfn = lambda builder, args: builder.or_(*args)
+        else:
+            add_funcfn = context.get_function(fnty, fn_sig)
+
+        mask = get_mask(context, builder, aryty.ndim, None)
+        # Loop on source and copy to destination
+        with ArrayIterator(context, builder, aryty, ary,
+                           (mask,), (res,)) as (iter_val_ptr, res_ptr_tup):
+            res_ptr = res_ptr_tup[0]
+            val = load_item(context, builder, aryty, iter_val_ptr)
+            res_val = add_funcfn(builder, (
+                builder.load(acc),
+                context.cast(builder, val, aryty.dtype, sig.return_type.dtype)))
+            builder.store(res_val, acc)
+            store_item(context, builder, sig.return_type,
+                       builder.load(acc), res_ptr)
+
+        return impl_ret_new_ref(
+            context, builder, sig.return_type, res._getvalue()
+        )
+
+    return sig, codegen
+
+
+@intrinsic
+def _numpy_cumsum_axis(typingctx, aryty, axisty, dtype):
+    ret_dtype = get_ret_dtype_if_any(aryty, dtype)
+    ret = types.Array(ret_dtype, aryty.ndim, layout='C')
+    sig = ret(aryty, axisty, dtype)
+
+    def codegen(context, builder, sig, args):
+        ary, axis, _ = args
+
+        ary = make_array(aryty)(context, builder, ary)
+
+        res = _empty_nd_impl(
+            context, builder, sig.return_type,
+            cgutils.unpack_tuple(builder, ary.shape)
+        )
+        cgutils.memset(
+            builder, res.data,
+            builder.mul(res.itemsize, res.nitems), 0
+        )
+
+        acc_shape = get_spliced_tuple(
+            context, builder, ary.shape.type, ary.shape, axis
+        )
+        acc_type = types.Array(ret_dtype, aryty.ndim - 1, layout='C')
+        acc = _empty_nd_impl(
+            context, builder, acc_type,
+            cgutils.unpack_tuple(builder, acc_shape)
+        )
+        cgutils.memset(
+            builder, acc.data,
+            builder.mul(acc.itemsize, acc.nitems), 0
+        )
+
+        fnty = context.typing_context.resolve_value_type(operator.iadd)
+        fn_sig = fnty.get_call_type(
+            context.typing_context,
+            (sig.return_type.dtype, sig.return_type.dtype),
+            {}
+        )
+        if isinstance(ret_dtype, types.Boolean):
+            add_funcfn = lambda builder, args: builder.or_(*args)
+        else:
+            add_funcfn = context.get_function(fnty, fn_sig)
+
+        mask = get_mask(context, builder, aryty.ndim, None)
+        inverted_mask = get_mask(context, builder, aryty.ndim, axis)
+
+        # Loop on source and copy to destination
+        with ArrayIterator(
+            context, builder, aryty, ary, (mask, inverted_mask),
+            (res, acc)
+        ) as (ary_iter_ptr, res_ptr_tup):
+            res_ptr, acc_ptr = res_ptr_tup
+            val = load_item(context, builder, aryty, ary_iter_ptr)
+            res_val = add_funcfn(builder, (
+                load_item(context, builder, acc_type, acc_ptr),
+                context.cast(builder, val, aryty.dtype, sig.return_type.dtype)))
+            store_item(context, builder, acc_type, res_val, acc_ptr)
+            store_item(context, builder, sig.return_type,
+                       load_item(context, builder, acc_type, acc_ptr), res_ptr)
+
+        context.nrt.decref(builder, acc_type, acc._getvalue())
+
+        return impl_ret_new_ref(
+            context, builder, sig.return_type, res._getvalue()
+        )
+
+    return sig, codegen
 
 
 @overload(np.cumsum)
 @overload_method(types.Array, "cumsum")
-def array_cumsum(a):
+def array_cumsum(a, axis=None, dtype=None):
+    if not (isinstance(axis, types.Integer) or is_nonelike(axis)):
+        raise TypingError(
+            "NumPy cumsum only suppports integer axis value"
+        )
     if isinstance(a, types.Array):
-        is_integer = a.dtype in types.signed_domain
-        is_bool = a.dtype == types.bool_
-        if (is_integer and a.dtype.bitwidth < types.intp.bitwidth)\
-                or is_bool:
-            dtype = as_dtype(types.intp)
+        axis_length = 1
+        if is_nonelike(axis) or a.ndim == axis_length:
+            def array_cumsum_impl(a, axis=None, dtype=None):
+                if axis is not None and (axis < -a.ndim or axis >= a.ndim):
+                    raise ValueError(
+                        f"axis {axis} is out of bounds for "
+                        f"array of dimension {a.ndim}"
+                    )
+                return _numpy_cumsum(a, axis, dtype).reshape(a.size)
         else:
-            dtype = as_dtype(a.dtype)
-
-        acc_init = get_accumulator(dtype, 0)
-
-        def array_cumsum_impl(a):
-            out = np.empty(a.size, dtype)
-            c = acc_init
-            for idx, v in enumerate(a.flat):
-                c += v
-                out[idx] = c
-            return out
+            def array_cumsum_impl(a, axis=None, dtype=None):
+                if axis is not None and (axis < -a.ndim or axis >= a.ndim):
+                    raise ValueError(
+                        f"axis {axis} is out of bounds for "
+                        f"array of dimension {a.ndim}"
+                    )
+                return _numpy_cumsum_axis(a, axis, dtype)
 
         return array_cumsum_impl
+    elif isinstance(a, (types.Number, types.Boolean)):
+        if is_nonelike(dtype):
+            acc_init = as_dtype(a).type(0)
+        else:
+            acc_init = as_dtype(dtype).type(0)
+
+        def scalar_cumsum_impl(a, axis=None, dtype=None):
+            return acc_init + a
+
+        return scalar_cumsum_impl
 
 
 @overload(np.cumprod)
@@ -424,7 +803,22 @@ def array_cumprod(a):
 @overload(np.mean)
 @overload_method(types.Array, "mean")
 def array_mean(a):
-    if isinstance(a, types.Array):
+    if isinstance(a, (types.Integer, types.Boolean)):
+        # Integers and Booleans default to float64 in numpy.mean
+        def _scalar_mean(a):
+            return np.float64(a) + 0.0
+        return _scalar_mean
+    elif isinstance(a, NPTimedelta):
+        def _temporal_scalar_mean(a):
+            return a
+        return _temporal_scalar_mean
+    elif isinstance(a, (types.Float, types.Complex)):
+        typed_zero = as_dtype(a).type(0)
+
+        def _scalar_mean(a):
+            return a + typed_zero
+        return _scalar_mean
+    elif isinstance(a, types.Array):
         is_number = a.dtype in types.integer_domain | frozenset([types.bool_])
         if is_number:
             dtype = as_dtype(types.float64)
@@ -433,15 +827,43 @@ def array_mean(a):
 
         acc_init = get_accumulator(dtype, 0)
 
-        def array_mean_impl(a):
-            # Can't use the naive `arr.sum() / arr.size`, as it would return
-            # a wrong result on integer sum overflow.
-            c = acc_init
-            for v in np.nditer(a):
-                c += v.item()
-            return c / a.size
+        # Check if this is a datetime/timedelta type
+        is_datetime_like = isinstance(a.dtype, (types.NPDatetime,
+                                                types.NPTimedelta))
+        # Is complex array
+        is_complex = isinstance(a.dtype, types.Complex)
+
+        if not is_datetime_like:
+            if is_complex:
+                # For complex, both real and imag should be nan
+                nan_value = dtype.type(complex("nan+nanj"))
+            else:
+                nan_value = dtype.type(np.nan)
+
+            # For numeric types, handle empty arrays by returning nan
+            def array_mean_impl(a):
+                # Handle empty arrays as a special case to match NumPy
+                # behavior
+                if a.size == 0:
+                    return nan_value
+                # Can't use the naive `arr.sum() / arr.size`, as it would return
+                # a wrong result on integer sum overflow.
+                c = acc_init
+                for v in np.nditer(a):
+                    c += v.item()
+                return dtype.type(c / a.size)
+        else:
+            # For datetime/timedelta, don't add special empty array handling
+            # Let it behave as before (NumPy itself raises error for empty
+            # datetime arrays)
+            def array_mean_impl(a):
+                c = acc_init
+                for v in np.nditer(a):
+                    c += v.item()
+                return c / a.size
 
         return array_mean_impl
+    return None
 
 
 @overload(np.var)
@@ -471,6 +893,25 @@ def array_std(a):
 
         return array_std_impl
 
+    # Integers and booleans default to float64(0.0) in numpy.std
+    elif isinstance(a, (types.Integer, types.Boolean)):
+
+        def std_scalar_integer_impl(a):
+            return np.float64(0.0)
+        return std_scalar_integer_impl
+
+    # Floats and numbers preserve types in numpy.std
+    elif isinstance(a, (types.Float, types.Complex)):
+        out_dtype = as_dtype(getattr(a,'underlying_float',a))
+        zero = out_dtype.type(0)
+        nan_val = out_dtype.type(np.nan)
+
+        def std_scalar_float_impl(a):
+            if not np.isfinite(a):
+                return nan_val
+            return zero
+        return std_scalar_float_impl
+
 
 @register_jitable
 def min_comparator(a, min_val):
@@ -491,10 +932,17 @@ def return_false(a):
 @overload(np.amin)
 @overload_method(types.Array, "min")
 def npy_min(a):
+    #scalar case
+    if isinstance(a, (types.Number, types.Boolean,
+                      NPDatetime, NPTimedelta)):
+        def scalar_min(a):
+            return a
+        return scalar_min
+
     if not isinstance(a, types.Array):
         return
 
-    if isinstance(a.dtype, (types.NPDatetime, types.NPTimedelta)):
+    if isinstance(a.dtype, (npy_types.NPDatetime, npy_types.NPTimedelta)):
         pre_return_func = np.isnat
         comparator = min_comparator
     elif isinstance(a.dtype, types.Complex):
@@ -541,10 +989,17 @@ def npy_min(a):
 @overload(np.amax)
 @overload_method(types.Array, "max")
 def npy_max(a):
+    #scalar case
+    if isinstance(a, (types.Number, types.Boolean,
+                      NPDatetime, NPTimedelta)):
+        def scalar_max(a):
+            return a
+        return scalar_max
+
     if not isinstance(a, types.Array):
         return
 
-    if isinstance(a.dtype, (types.NPDatetime, types.NPTimedelta)):
+    if isinstance(a.dtype, (npy_types.NPDatetime, npy_types.NPTimedelta)):
         pre_return_func = np.isnat
         comparator = max_comparator
     elif isinstance(a.dtype, types.Complex):
@@ -654,7 +1109,7 @@ def array_argmin_impl_generic(arry):
 @overload(np.argmin)
 @overload_method(types.Array, "argmin")
 def array_argmin(a, axis=None):
-    if isinstance(a.dtype, (types.NPDatetime, types.NPTimedelta)):
+    if isinstance(a.dtype, (npy_types.NPDatetime, npy_types.NPTimedelta)):
         flatten_impl = array_argmin_impl_datetime
     elif isinstance(a.dtype, types.Float):
         flatten_impl = array_argmin_impl_float
@@ -780,7 +1235,7 @@ def build_argmax_or_argmin_with_axis_impl(a, axis, flatten_impl):
 @overload(np.argmax)
 @overload_method(types.Array, "argmax")
 def array_argmax(a, axis=None):
-    if isinstance(a.dtype, (types.NPDatetime, types.NPTimedelta)):
+    if isinstance(a.dtype, (npy_types.NPDatetime, npy_types.NPTimedelta)):
         flatten_impl = array_argmax_impl_datetime
     elif isinstance(a.dtype, types.Float):
         flatten_impl = array_argmax_impl_float
@@ -800,13 +1255,29 @@ def array_argmax(a, axis=None):
 @overload(np.all)
 @overload_method(types.Array, "all")
 def np_all(a):
-    def flat_all(a):
-        for v in np.nditer(a):
-            if not v.item():
-                return False
-        return True
 
-    return flat_all
+    # for scalar
+    if isinstance(a, (types.Number, types.Boolean)):
+        def scalar_all(a):
+            return bool(a)
+        return scalar_all
+
+    if isinstance(a, (NPDatetime, NPTimedelta)):
+        def temporal_scalar_all(a):
+            return np.int64(a) != 0
+        return temporal_scalar_all
+
+    # for array
+    if isinstance(a, types.Array):
+
+        def flat_all(a):
+            for v in np.nditer(a):
+                if not v.item():
+                    return False
+            return True
+        return flat_all
+
+    return None
 
 
 @register_jitable
@@ -906,13 +1377,28 @@ def np_allclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 @overload(np.any)
 @overload_method(types.Array, "any")
 def np_any(a):
-    def flat_any(a):
-        for v in np.nditer(a):
-            if v.item():
-                return True
-        return False
+    # for scalar
+    if isinstance(a, (types.Number, types.Boolean)):
+        def scalar_any(a):
+            return bool(a)
+        return scalar_any
 
-    return flat_any
+    # for temporal
+    if isinstance(a, (NPDatetime, NPTimedelta)):
+        def temporal_any(a):
+            return np.int64(a) != 0
+        return temporal_any
+
+    # for array
+    if isinstance(a, types.Array):
+        def flat_any(a):
+            for v in np.nditer(a):
+                if v.item():
+                    return True
+            return False
+        return flat_any
+
+    return None
 
 
 @overload(np.average)
@@ -1212,15 +1698,23 @@ def np_nanmean(a):
 
 
 @overload(np.nanvar)
-def np_nanvar(a):
+def np_nanvar(a, axis=None, dtype=None, out=None, ddof=0):
     if not isinstance(a, types.Array):
         return
+    if not isinstance(ddof, (types.Integer, types.Omitted, int)):
+        return
+    if not is_nonelike(axis):
+        raise TypingError("Numba does not support nanvar with axis.")
+    if not is_nonelike(dtype):
+        raise TypingError("Numba does not support nanvar with dtype.")
+    if not is_nonelike(out):
+        raise TypingError("Numba does not support nanvar with out.")
+
     isnan = get_isnan(a.dtype)
 
-    def nanvar_impl(a):
+    def nanvar_impl(a, axis=None, dtype=None, out=None, ddof=0):
         # Compute the mean
         m = np.nanmean(a)
-
         # Compute the sum of square diffs
         ssd = 0.0
         count = 0
@@ -1230,19 +1724,30 @@ def np_nanvar(a):
                 val = (v.item() - m)
                 ssd += np.real(val * np.conj(val))
                 count += 1
+        # When count <= ddof, return nan to match NumPy behaviour
+        if count <= ddof:
+            return np.nan
         # np.divide() doesn't raise ZeroDivisionError
-        return np.divide(ssd, count)
+        return np.divide(ssd, count - ddof)
 
     return nanvar_impl
 
 
 @overload(np.nanstd)
-def np_nanstd(a):
+def np_nanstd(a, axis=None, dtype=None, out=None, ddof=0):
     if not isinstance(a, types.Array):
         return
+    if not isinstance(ddof, (types.Integer, types.Omitted, int)):
+        return
+    if not is_nonelike(axis):
+        raise TypingError("Numba does not support nanstd with axis.")
+    if not is_nonelike(dtype):
+        raise TypingError("Numba does not support nanstd with dtype.")
+    if not is_nonelike(out):
+        raise TypingError("Numba does not support nanstd with out.")
 
-    def nanstd_impl(a):
-        return np.nanvar(a) ** 0.5
+    def nanstd_impl(a, axis=None, dtype=None, out=None, ddof=0):
+        return np.nanvar(a, ddof=ddof) ** 0.5
 
     return nanstd_impl
 
@@ -1885,7 +2390,11 @@ def np_partition(a, kth):
         raise NumbaTypeError(msg)
 
     kthdt = getattr(kth, 'dtype', kth)
-    if not isinstance(kthdt, (types.Boolean, types.Integer)):
+    if numpy_version >= (2, 3):
+        kth_types = types.Integer
+    else:
+        kth_types = (types.Boolean, types.Integer)
+    if not isinstance(kthdt, kth_types):
         # bool gets cast to int subsequently
         raise NumbaTypeError('Partition index must be integer')
 
@@ -1911,7 +2420,11 @@ def np_argpartition(a, kth):
         raise NumbaTypeError(msg)
 
     kthdt = getattr(kth, 'dtype', kth)
-    if not isinstance(kthdt, (types.Boolean, types.Integer)):
+    if numpy_version >= (2, 3):
+        kth_types = types.Integer
+    else:
+        kth_types = (types.Boolean, types.Integer)
+    if not isinstance(kthdt, kth_types):
         # bool gets cast to int subsequently
         raise NumbaTypeError('Partition index must be integer')
 
@@ -2213,9 +2726,8 @@ def get_d_impl(x, dx):
     return impl
 
 
-@overload(np.trapz)
-def np_trapz(y, x=None, dx=1.0):
-
+def _trapz_impl(y, x=None, dx=1.0):
+    """Shared implementation for both np.trapz and np.trapezoid."""
     if isinstance(y, (types.Number, types.Boolean)):
         raise TypingError('y cannot be a scalar')
     elif isinstance(y, types.Array) and y.ndim == 0:
@@ -2235,9 +2747,18 @@ def np_trapz(y, x=None, dx=1.0):
     return impl
 
 
-# numpy 2.0 rename np.trapz to np.trapezoid
+# np.trapz exists in NumPy < 2.4 (deprecated in 2.0, removed in 2.4)
+if numpy_version < (2, 4):
+    @overload(np.trapz)
+    def np_trapz(y, x=None, dx=1.0):
+        return _trapz_impl(y, x, dx)
+
+
+# np.trapezoid introduced in NumPy 2.0 as replacement for np.trapz
 if numpy_version >= (2, 0):
-    overload(np.trapezoid)(np_trapz)
+    @overload(np.trapezoid)
+    def np_trapezoid(y, x=None, dx=1.0):
+        return _trapz_impl(y, x, dx)
 
 
 @register_jitable
@@ -3533,6 +4054,116 @@ def np_delete(arr, obj):
         return np_delete_scalar_impl
 
 
+@overload(np.insert)
+def np_insert(arr, obj, values, axis=None):
+    # Implementation based on NumPy:
+    # https://github.com/numpy/numpy/blob/maintenance/2.2.x/numpy/lib/_function_base_impl.py#L5417-L5587    # noqa: E501
+    # Like np.delete, this implementation operates on the flattened array.
+
+    if not isinstance(arr, (types.Array, types.Sequence)):
+        raise TypingError("arr must be either an Array or a Sequence")
+
+    if not isinstance(values, (types.Number, types.Boolean, types.Array,
+                               types.Sequence)):
+        raise TypingError("values must be a scalar, an Array or a Sequence")
+
+    # The ``axis`` argument is not supported: insertion is always performed
+    # on the flattened array.
+    if not is_nonelike(axis):
+        raise TypingError("The 'axis' argument is not supported")
+
+    if isinstance(obj, types.Integer):
+
+        def np_insert_scalar_impl(arr, obj, values, axis=None):
+            arr = np.ravel(np.asarray(arr))
+            N = arr.size
+            pos = obj
+
+            if pos < -N or pos > N:
+                raise IndexError('index is out of bounds for the given '
+                                 'array size')
+            if pos < 0:
+                pos += N
+
+            vals = np.ravel(np.asarray(values))
+            n_ins = vals.size
+
+            out = np.empty(N + n_ins, dtype=arr.dtype)
+            out[:pos] = arr[:pos]
+            out[pos:pos + n_ins] = vals
+            out[pos + n_ins:] = arr[pos:]
+            return out
+        return np_insert_scalar_impl
+
+    elif isinstance(obj, (types.Array, types.Sequence)):
+        if not isinstance(obj.dtype, types.Integer):
+            raise TypingError('obj should be of Integer dtype')
+
+        def np_insert_array_impl(arr, obj, values, axis=None):
+            arr = np.ravel(np.asarray(arr))
+            N = arr.size
+            indices = np.ravel(np.asarray(obj)).astype(np.int64)
+            n_ins = indices.size
+            vals = np.ravel(np.asarray(values))
+
+            # A single insertion index behaves like the scalar case: every
+            # value is inserted at that one position (matches NumPy).
+            if n_ins == 1:
+                pos = indices[0]
+                if pos < -N or pos > N:
+                    raise IndexError('index is out of bounds for the given '
+                                     'array size')
+                if pos < 0:
+                    pos += N
+                n_vals = vals.size
+                out = np.empty(N + n_vals, dtype=arr.dtype)
+                out[:pos] = arr[:pos]
+                out[pos:pos + n_vals] = vals
+                out[pos + n_vals:] = arr[pos:]
+                return out
+
+            # With multiple insertion points, ``values`` must either be a
+            # single scalar (broadcast to every point) or match the number
+            # of indices exactly. Otherwise NumPy raises a ValueError.
+            if vals.size != 1 and vals.size != n_ins:
+                raise ValueError('shape mismatch: the number of values '
+                                 'does not match the number of insertion '
+                                 'indices')
+
+            # normalise negative indices and bounds-check
+            for i in range(n_ins):
+                if indices[i] < -N or indices[i] > N:
+                    raise IndexError('index is out of bounds for the '
+                                     'given array size')
+                if indices[i] < 0:
+                    indices[i] += N
+
+            # Shift each insertion index by the number of items that are
+            # inserted before it (stable sort keeps ties in input order),
+            # mirroring NumPy's algorithm.
+            order = np.argsort(indices, kind='mergesort')
+            for i in range(n_ins):
+                indices[order[i]] += i
+
+            out = np.empty(N + n_ins, dtype=arr.dtype)
+            mask = np.ones(N + n_ins, dtype=np.bool_)
+            for i in range(n_ins):
+                mask[indices[i]] = False
+            out[mask] = arr
+
+            # A single scalar value is broadcast across all insert points.
+            for i in range(n_ins):
+                if vals.size == 1:
+                    out[indices[i]] = vals[0]
+                else:
+                    out[indices[i]] = vals[i]
+            return out
+        return np_insert_array_impl
+
+    else:
+        raise TypingError('obj should be an Integer, an Array or a Sequence')
+
+
 @overload(np.diff)
 def np_diff_impl(a, n=1):
     if not isinstance(a, types.Array) or a.ndim == 0:
@@ -3807,8 +4438,15 @@ def make_searchsorted_implementation(np_dtype, side):
         _impl = _searchsorted(lt)
         _cmp = lt
     else:
-        _impl = _searchsorted(le)
-        _cmp = le
+        if np.issubdtype(np_dtype, np.inexact) and numpy_version < (1, 23):
+            # change in behaviour for inexact types
+            # introduced by:
+            # https://github.com/numpy/numpy/pull/21867
+            _impl = _searchsorted(le)
+            _cmp = lt
+        else:
+            _impl = _searchsorted(le)
+            _cmp = le
 
     return register_jitable(_impl), register_jitable(_cmp)
 
@@ -4041,6 +4679,41 @@ finfo = namedtuple('finfo', _finfo_supported)
 _iinfo_supported = ('min', 'max', 'bits',)
 
 iinfo = namedtuple('iinfo', _iinfo_supported)
+
+
+# This module is imported under the compiler lock which should deal with the
+# lack of thread safety in the warning filter.
+def _gen_np_machar():
+    # NumPy 1.24 removed np.MachAr
+    if numpy_version >= (1, 24):
+        return
+
+    w = None
+    with warnings.catch_warnings(record=True) as w:
+        msg = r'`np.MachAr` is deprecated \(NumPy 1.22\)'
+        warnings.filterwarnings("always", message=msg,
+                                category=DeprecationWarning,
+                                module=r'.*numba.*arraymath')
+        np_MachAr = np.MachAr
+
+    @overload(np_MachAr)
+    def MachAr_impl():
+        f = np_MachAr()
+        _mach_ar_data = tuple([getattr(f, x) for x in _mach_ar_supported])
+
+        if w:
+            wmsg = w[0]
+            warnings.warn_explicit(wmsg.message.args[0],
+                                   NumbaDeprecationWarning,
+                                   wmsg.filename,
+                                   wmsg.lineno)
+
+        def impl():
+            return MachAr(*_mach_ar_data)
+        return impl
+
+
+_gen_np_machar()
 
 
 def generate_xinfo_body(arg, np_func, container, attr):
@@ -4752,6 +5425,12 @@ def np_cross(a, b):
                 "(dimension must be 2 or 3)"
             ))
 
+        if numpy_version >= (2, 5):
+            if a_.shape[-1] == 2 or b_.shape[-1] == 2:
+                raise ValueError(
+                    f"Both input arrays must be (arrays of) 3-dimensional"
+                    f" vectors, but they are {a_.shape[-1]} and "
+                    f"{b_.shape[-1]} dimensional instead.")
         if a_.shape[-1] == 3 or b_.shape[-1] == 3:
             return _cross(a_, b_)
         else:
@@ -4763,46 +5442,45 @@ def np_cross(a, b):
     return impl
 
 
-@register_jitable
-def _cross2d_operation(a, b):
+if numpy_version < (2, 5):
+    @register_jitable
+    def _cross2d_operation(a, b):
 
-    def _cross_preprocessing(x):
-        x0 = x[..., 0]
-        x1 = x[..., 1]
-        return x0, x1
+        def _cross_preprocessing(x):
+            x0 = x[..., 0]
+            x1 = x[..., 1]
+            return x0, x1
 
-    a0, a1 = _cross_preprocessing(a)
-    b0, b1 = _cross_preprocessing(b)
+        a0, a1 = _cross_preprocessing(a)
+        b0, b1 = _cross_preprocessing(b)
 
-    cp = np.multiply(a0, b1) - np.multiply(a1, b0)
-    # If ndim of a and b is 1, cp is a scalar.
-    # In this case np.cross returns a 0-D array, containing the scalar.
-    # np.asarray is used to reconcile this case, without introducing
-    # overhead in the case where cp is an actual N-D array.
-    # (recall that np.asarray does not copy existing arrays)
-    return np.asarray(cp)
+        cp = np.multiply(a0, b1) - np.multiply(a1, b0)
+        # If ndim of a and b is 1, cp is a scalar.
+        # In this case np.cross returns a 0-D array, containing the scalar.
+        # np.asarray is used to reconcile this case, without introducing
+        # overhead in the case where cp is an actual N-D array.
+        # (recall that np.asarray does not copy existing arrays)
+        return np.asarray(cp)
 
+    def cross2d(a, b):
+        pass
 
-def cross2d(a, b):
-    pass
+    @overload(cross2d)
+    def cross2d_impl(a, b):
+        if not type_can_asarray(a) or not type_can_asarray(b):
+            raise TypingError("Inputs must be array-like.")
 
+        def impl(a, b):
+            a_ = np.asarray(a)
+            b_ = np.asarray(b)
+            if a_.shape[-1] != 2 or b_.shape[-1] != 2:
+                raise ValueError((
+                    "Incompatible dimensions for 2D cross product\n"
+                    "(dimension must be 2 for both inputs)"
+                ))
+            return _cross2d_operation(a_, b_)
 
-@overload(cross2d)
-def cross2d_impl(a, b):
-    if not type_can_asarray(a) or not type_can_asarray(b):
-        raise TypingError("Inputs must be array-like.")
-
-    def impl(a, b):
-        a_ = np.asarray(a)
-        b_ = np.asarray(b)
-        if a_.shape[-1] != 2 or b_.shape[-1] != 2:
-            raise ValueError((
-                "Incompatible dimensions for 2D cross product\n"
-                "(dimension must be 2 for both inputs)"
-            ))
-        return _cross2d_operation(a_, b_)
-
-    return impl
+        return impl
 
 
 @overload(np.trim_zeros)
@@ -4873,6 +5551,67 @@ def jit_np_setxor1d(ar1, ar2, assume_unique=False):
     return np_setxor1d_impl
 
 
+# Internal helper for in1d functionality, used by isin and setdiff1d
+# This is needed because np.in1d was removed in NumPy 2.4
+@register_jitable
+def _in1d_impl(ar1, ar2, assume_unique=False, invert=False):
+    # https://github.com/numpy/numpy/blob/03b62604eead0f7d279a5a4c094743eb29647368/numpy/lib/arraysetops.py#L525 # noqa: E501
+
+    # Ravel both arrays, behavior for the first array could be different
+    ar1 = np.asarray(ar1).ravel()
+    ar2 = np.asarray(ar2).ravel()
+
+    # This code is run when it would make the code significantly faster
+    # Sorting is also not guaranteed to work on objects but numba does
+    # not support object arrays.
+    if len(ar2) < 10 * len(ar1) ** 0.145:
+        if invert:
+            mask = np.ones(len(ar1), dtype=np.bool_)
+            for a in ar2:
+                mask &= (ar1 != a)
+        else:
+            mask = np.zeros(len(ar1), dtype=np.bool_)
+            for a in ar2:
+                mask |= (ar1 == a)
+        return mask
+
+    # Otherwise use sorting
+    if not assume_unique:
+        # Equivalent to ar1, inv_idx = np.unique(ar1, return_inverse=True)
+        # https://github.com/numpy/numpy/blob/03b62604eead0f7d279a5a4c094743eb29647368/numpy/lib/arraysetops.py#L358C8-L358C8 # noqa: E501
+        order1 = np.argsort(ar1)
+        aux = ar1[order1]
+        mask = np.empty(aux.shape, dtype=np.bool_)
+        mask[:1] = True
+        mask[1:] = aux[1:] != aux[:-1]
+        ar1 = aux[mask]
+        imask = np.cumsum(mask) - 1
+        inv_idx = np.empty(mask.shape, dtype=np.intp)
+        inv_idx[order1] = imask
+        ar2 = np.unique(ar2)
+
+    ar = np.concatenate((ar1, ar2))
+    # We need this to be a stable sort, so always use 'mergesort'
+    # here. The values from the first array should always come before
+    # the values from the second array.
+    order = ar.argsort(kind='mergesort')
+    sar = ar[order]
+    flag = np.empty(sar.size, np.bool_)
+    if invert:
+        flag[:-1] = (sar[1:] != sar[:-1])
+    else:
+        flag[:-1] = (sar[1:] == sar[:-1])
+    flag[-1:] = invert
+    ret = np.empty(ar.shape, dtype=np.bool_)
+    ret[order] = flag
+
+    # return ret[:len(ar1)]
+    if assume_unique:
+        return ret[:len(ar1)]
+    else:
+        return ret[inv_idx]
+
+
 @overload(np.setdiff1d)
 def jit_np_setdiff1d(ar1, ar2, assume_unique=False):
     if not (type_can_asarray(ar1) or type_can_asarray(ar2)):
@@ -4890,12 +5629,11 @@ def jit_np_setdiff1d(ar1, ar2, assume_unique=False):
         else:
             ar1 = np.unique(ar1)
             ar2 = np.unique(ar2)
-        return ar1[np.in1d(ar1, ar2, assume_unique=True, invert=True)]
+        return ar1[_in1d_impl(ar1, ar2, assume_unique=True, invert=True)]
 
     return np_setdiff1d_impl
 
 
-@overload(np.in1d)
 def jit_np_in1d(ar1, ar2, assume_unique=False, invert=False):
     if not (type_can_asarray(ar1) or type_can_asarray(ar2)):
         raise TypingError('in1d: first two args must be array-like')
@@ -4905,63 +5643,14 @@ def jit_np_in1d(ar1, ar2, assume_unique=False, invert=False):
         raise TypingError('in1d: Argument "invert" must be boolean')
 
     def np_in1d_impl(ar1, ar2, assume_unique=False, invert=False):
-        # https://github.com/numpy/numpy/blob/03b62604eead0f7d279a5a4c094743eb29647368/numpy/lib/arraysetops.py#L525 # noqa: E501
-
-        # Ravel both arrays, behavior for the first array could be different
-        ar1 = np.asarray(ar1).ravel()
-        ar2 = np.asarray(ar2).ravel()
-
-        # This code is run when it would make the code significantly faster
-        # Sorting is also not guaranteed to work on objects but numba does
-        # not support object arrays.
-        if len(ar2) < 10 * len(ar1) ** 0.145:
-            if invert:
-                mask = np.ones(len(ar1), dtype=np.bool_)
-                for a in ar2:
-                    mask &= (ar1 != a)
-            else:
-                mask = np.zeros(len(ar1), dtype=np.bool_)
-                for a in ar2:
-                    mask |= (ar1 == a)
-            return mask
-
-        # Otherwise use sorting
-        if not assume_unique:
-            # Equivalent to ar1, inv_idx = np.unique(ar1, return_inverse=True)
-            # https://github.com/numpy/numpy/blob/03b62604eead0f7d279a5a4c094743eb29647368/numpy/lib/arraysetops.py#L358C8-L358C8 # noqa: E501
-            order1 = np.argsort(ar1)
-            aux = ar1[order1]
-            mask = np.empty(aux.shape, dtype=np.bool_)
-            mask[:1] = True
-            mask[1:] = aux[1:] != aux[:-1]
-            ar1 = aux[mask]
-            imask = np.cumsum(mask) - 1
-            inv_idx = np.empty(mask.shape, dtype=np.intp)
-            inv_idx[order1] = imask
-            ar2 = np.unique(ar2)
-
-        ar = np.concatenate((ar1, ar2))
-        # We need this to be a stable sort, so always use 'mergesort'
-        # here. The values from the first array should always come before
-        # the values from the second array.
-        order = ar.argsort(kind='mergesort')
-        sar = ar[order]
-        flag = np.empty(sar.size, np.bool_)
-        if invert:
-            flag[:-1] = (sar[1:] != sar[:-1])
-        else:
-            flag[:-1] = (sar[1:] == sar[:-1])
-        flag[-1:] = invert
-        ret = np.empty(ar.shape, dtype=np.bool_)
-        ret[order] = flag
-
-        # return ret[:len(ar1)]
-        if assume_unique:
-            return ret[:len(ar1)]
-        else:
-            return ret[inv_idx]
+        return _in1d_impl(ar1, ar2, assume_unique, invert)
 
     return np_in1d_impl
+
+
+# np.in1d was removed in NumPy 2.4
+if numpy_version < (2, 4):
+    overload(np.in1d)(jit_np_in1d)
 
 
 @overload(np.isin)
@@ -4977,7 +5666,7 @@ def jit_np_isin(element, test_elements, assume_unique=False, invert=False):
     def np_isin_impl(element, test_elements, assume_unique=False, invert=False):
 
         element = np.asarray(element)
-        return np.in1d(element, test_elements, assume_unique=assume_unique,
-                       invert=invert).reshape(element.shape)
+        return _in1d_impl(element, test_elements, assume_unique=assume_unique,
+                          invert=invert).reshape(element.shape)
 
     return np_isin_impl

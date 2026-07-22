@@ -365,6 +365,10 @@ class Driver(object):
         else:
             variants = ('_v2', '')
 
+        # workaround from https://github.com/NVIDIA/numba-cuda/commit/6e08c9d08e9de59c7af28b720289debbbd384764  # noqa: E501
+        if fname in ("cuCtxGetDevice", "cuCtxSynchronize"):
+            return getattr(self.lib, fname)
+
         for variant in variants:
             try:
                 return getattr(self.lib, f'{fname}{variant}')
@@ -522,8 +526,6 @@ class _ActiveContext(object):
         """
         return self.context_handle is not None
 
-    __nonzero__ = __bool__
-
 
 driver = Driver()
 
@@ -546,7 +548,7 @@ class Device(object):
     object.  User should not construct devices directly.
     """
     @classmethod
-    def from_identity(self, identity):
+    def from_identity(cls, identity):
         """Create Device object from device identity created by
         ``Device.get_device_identity()``.
         """

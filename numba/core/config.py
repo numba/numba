@@ -90,7 +90,7 @@ class _OptLevel(int):
 
     @property
     def is_opt_max(self):
-        """Returns True if the the optimisation level is "max" False
+        """Returns True if the optimisation level is "max" False
         otherwise."""
         return self._raw_value == "max"
 
@@ -194,11 +194,6 @@ class _EnvReloader(object):
         def optional_str(x):
             return str(x) if x is not None else None
 
-        # Type casting rules selection
-        USE_LEGACY_TYPE_SYSTEM = _readenv(
-            "NUMBA_USE_LEGACY_TYPE_SYSTEM", int, 1
-        )
-
         # developer mode produces full tracebacks, disables help instructions
         DEVELOPER_MODE = _readenv("NUMBA_DEVELOPER_MODE", int, 0)
 
@@ -264,6 +259,9 @@ class _EnvReloader(object):
         # Enable debug prints in nrtdynmod and use of "safe" API functions
         DEBUG_NRT = _readenv("NUMBA_DEBUG_NRT", int, 0)
 
+        # Stack Traceback limit when DEBUG_NRT is enabled
+        DEBUG_NRT_STACK_LIMIT = _readenv("NUMBA_DEBUG_NRT_STACK_LIMIT", int, 0)
+
         # Enable NRT statistics counters
         NRT_STATS = _readenv("NUMBA_NRT_STATS", int, 0)
 
@@ -282,6 +280,11 @@ class _EnvReloader(object):
         # Redirect cache directory
         # Contains path to the directory
         CACHE_DIR = _readenv("NUMBA_CACHE_DIR", str, "")
+
+        # Override default cache locators list including their order
+        # Comma separated list of locator class names,
+        # see _locator_classes in caching submodule
+        CACHE_LOCATOR_CLASSES = _readenv("NUMBA_CACHE_LOCATOR_CLASSES", str, "")
 
         # Enable tracing support
         TRACE = _readenv("NUMBA_TRACE", int, 0)
@@ -564,11 +567,6 @@ class _EnvReloader(object):
         # llvmlite memory manager
         USE_LLVMLITE_MEMORY_MANAGER = _readenv(
             "NUMBA_USE_LLVMLITE_MEMORY_MANAGER", int, None
-        )
-
-        # llvm pass manager switch
-        USE_LLVM_LEGACY_PASS_MANAGER = _readenv(
-            "NUMBA_USE_LLVM_LEGACY_PASS_MANAGER", int, 0
         )
 
         # Timing support.

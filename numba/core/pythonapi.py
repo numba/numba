@@ -12,12 +12,11 @@ from numba import _helperlib
 from numba.core import (
     types, utils, config, lowering, cgutils, imputils, serialize,
 )
-from numba.core.utils import PYVERSION
 
 PY_UNICODE_1BYTE_KIND = _helperlib.py_unicode_1byte_kind
 PY_UNICODE_2BYTE_KIND = _helperlib.py_unicode_2byte_kind
 PY_UNICODE_4BYTE_KIND = _helperlib.py_unicode_4byte_kind
-if PYVERSION in ((3, 10), (3, 11)):
+if sys.version_info < (3, 12):
     PY_UNICODE_WCHAR_KIND = _helperlib.py_unicode_wchar_kind
 
 
@@ -189,10 +188,7 @@ class PythonAPI(object):
         self.longlong = ir.IntType(ctypes.sizeof(ctypes.c_ulonglong) * 8)
         self.ulonglong = self.longlong
         self.double = ir.DoubleType()
-        if config.USE_LEGACY_TYPE_SYSTEM:
-            self.py_ssize_t = self.context.get_value_type(types.intp)
-        else:
-            self.py_ssize_t = self.context.get_value_type(types.c_intp)
+        self.py_ssize_t = self.context.get_value_type(types.intp)
         self.cstring = ir.PointerType(ir.IntType(8))
         self.gil_state = ir.IntType(_helperlib.py_gil_state_size * 8)
         self.py_buffer_t = ir.ArrayType(ir.IntType(8), _helperlib.py_buffer_size)
@@ -1226,7 +1222,7 @@ class PythonAPI(object):
         fnty = ir.FunctionType(self.pyobj,
                                [self.voidptr, self.pyobj, intty, intty, self.pyobj])
         fn = self._get_function(fnty, name="NRT_adapt_ndarray_to_python_acqref")
-        fn.args[0].add_attribute('nocapture')
+        fn.args[0].add_attribute('captures(none)')
 
         ndim = self.context.get_constant(types.int32, aryty.ndim)
         writable = self.context.get_constant(types.int32, int(aryty.mutable))
@@ -1252,8 +1248,8 @@ class PythonAPI(object):
             fnty,
             "NRT_meminfo_new_from_pyobject",
             )
-        fn.args[0].add_attribute('nocapture')
-        fn.args[1].add_attribute('nocapture')
+        fn.args[0].add_attribute('captures(none)')
+        fn.args[1].add_attribute('captures(none)')
         fn.return_value.add_attribute("noalias")
         return self.builder.call(fn, [data, pyobj])
 
@@ -1289,8 +1285,8 @@ class PythonAPI(object):
         assert self.context.enable_nrt
         fnty = ir.FunctionType(ir.IntType(32), [self.pyobj, self.voidptr])
         fn = self._get_function(fnty, name="NRT_adapt_ndarray_from_python")
-        fn.args[0].add_attribute('nocapture')
-        fn.args[1].add_attribute('nocapture')
+        fn.args[0].add_attribute('captures(none)')
+        fn.args[1].add_attribute('captures(none)')
         return self.builder.call(fn, (ary, ptr))
 
     def nrt_adapt_buffer_from_python(self, buf, ptr):
@@ -1298,14 +1294,16 @@ class PythonAPI(object):
         fnty = ir.FunctionType(ir.VoidType(), [ir.PointerType(self.py_buffer_t),
                                                self.voidptr])
         fn = self._get_function(fnty, name="NRT_adapt_buffer_from_python")
-        fn.args[0].add_attribute('nocapture')
-        fn.args[1].add_attribute('nocapture')
+        fn.args[0].add_attribute('captures(none)')
+        fn.args[1].add_attribute('captures(none)')
         return self.builder.call(fn, (buf, ptr))
 
     # ------ utils -----
 
     def _get_function(self, fnty, name):
-        return cgutils.get_or_insert_function(self.module, fnty, name)
+        fn = cgutils.get_or_insert_function(self.module, fnty, name)
+        self.context.apply_target_attributes(fn)
+        return fn
 
     def alloca_obj(self):
         return self.builder.alloca(self.pyobj)
@@ -1383,15 +1381,29 @@ class PythonAPI(object):
         simply return a literal for structure:
         {i8* data, i32 length, i8* hashbuf, i8* func_ptr, i32 alloc_flag}
         """
-        # First make the array constant
         data = serialize.dumps(obj)
+        struct, _digest = self._serialize_data(data)
+        return struct
+
+    def _serialize_data(self, data):
+        """
+        Build a pickled-data struct literal from already-pickled ``data``
+        bytes. Returns ``(struct, digest)`` so that callers needing the
+        SHA1 digest (for example, to derive a deterministic name for the
+        enclosing global) can reuse it without re-hashing.
+        """
         assert len(data) < 2**31
-        name = ".const.pickledata.%s" % (id(obj) if config.DIFF_IR == 0 else "DIFF_IR")
-        bdata = cgutils.make_bytearray(data)
         # Make SHA1 hash on the pickled content
         # NOTE: update buffer size in numba_unpickle() when changing the
         #       hash algorithm.
-        hashed = cgutils.make_bytearray(hashlib.sha1(data).digest())
+        digest = hashlib.sha1(data).digest()
+        # Derive the global's name from the pickle content (instead of
+        # id(obj)) so that emitted binaries are reproducible across builds
+        # (see issue #10610).
+        suffix = digest.hex() if config.DIFF_IR == 0 else "DIFF_IR"
+        name = ".const.pickledata.%s" % suffix
+        bdata = cgutils.make_bytearray(data)
+        hashed = cgutils.make_bytearray(digest)
         arr = self.context.insert_unique_const(self.module, name, bdata)
         hasharr = self.context.insert_unique_const(
             self.module, f"{name}.sha1", hashed,
@@ -1404,7 +1416,7 @@ class PythonAPI(object):
             cgutils.get_null_value(self.voidptr),
             Constant(ir.IntType(32), 0),
             ])
-        return struct
+        return struct, digest
 
     def serialize_object(self, obj):
         """
@@ -1416,10 +1428,15 @@ class PythonAPI(object):
         try:
             gv = self.module.__serialized[obj]
         except KeyError:
-            struct = self.serialize_uncached(obj)
-            name = ".const.picklebuf.%s" % (id(obj) if config.DIFF_IR == 0 else "DIFF_IR")
+            data = serialize.dumps(obj)
+            struct, digest = self._serialize_data(data)
+            # Derive the global's name from the pickle content (instead of
+            # id(obj)) so that emitted binaries are reproducible across
+            # builds (see issue #10610).
+            suffix = digest.hex() if config.DIFF_IR == 0 else "DIFF_IR"
+            name = ".const.picklebuf.%s" % suffix
             gv = self.context.insert_unique_const(self.module, name, struct)
-            # Make the id() (and hence the name) unique while populating the module.
+            # Make the name unique while populating the module.
             self.module.__serialized[obj] = gv
         return gv
 
@@ -1527,16 +1544,16 @@ class PythonAPI(object):
         assert not self.context.enable_nrt
         fnty = ir.FunctionType(ir.IntType(32), [self.pyobj, self.voidptr])
         fn = self._get_function(fnty, name="numba_adapt_ndarray")
-        fn.args[0].add_attribute('nocapture')
-        fn.args[1].add_attribute('nocapture')
+        fn.args[0].add_attribute('captures(none)')
+        fn.args[1].add_attribute('captures(none)')
         return self.builder.call(fn, (ary, ptr))
 
     def numba_buffer_adaptor(self, buf, ptr):
         fnty = ir.FunctionType(ir.VoidType(),
                              [ir.PointerType(self.py_buffer_t), self.voidptr])
         fn = self._get_function(fnty, name="numba_adapt_buffer")
-        fn.args[0].add_attribute('nocapture')
-        fn.args[1].add_attribute('nocapture')
+        fn.args[0].add_attribute('captures(none)')
+        fn.args[1].add_attribute('captures(none)')
         return self.builder.call(fn, (buf, ptr))
 
     def complex_adaptor(self, cobj, cmplx):
@@ -1679,7 +1696,7 @@ class ObjModeUtils:
         # Make a basic-block to common exit
         bb_end = builder.append_basic_block("bb_end")
 
-        if serialize.is_serialiable(fnty.dispatcher):
+        if serialize.is_serializable(fnty.dispatcher):
             serialized_dispatcher = self.pyapi.serialize_object(
                 (fnty.dispatcher, tuple(argtypes)),
             )
@@ -1692,7 +1709,7 @@ class ObjModeUtils:
 
         cached = builder.load(gv)
         with builder.if_then(cgutils.is_null(builder, cached)):
-            if serialize.is_serialiable(fnty.dispatcher):
+            if serialize.is_serializable(fnty.dispatcher):
                 cls = type(self)
                 compiler = self.pyapi.unserialize(
                     self.pyapi.serialize_object(cls._call_objmode_dispatcher)

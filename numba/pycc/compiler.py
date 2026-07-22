@@ -20,7 +20,7 @@ from numba.core.environment import lookup_environment
 
 logger = logging.getLogger(__name__)
 
-__all__ = ['Compiler']
+__all__ = ['ModuleCompiler']
 
 NULL = ir.Constant(lt._void_star, None)
 ZERO = ir.Constant(lt._int32, 0)

@@ -3,6 +3,7 @@ import typing as py_typing
 
 from numba.core.typing.typeof import typeof
 from numba.core import errors, types
+from numba.core.utils import PYVERSION
 
 
 class AsNumbaTypeRegistry:
@@ -40,15 +41,60 @@ class AsNumbaTypeRegistry:
             return py_type
 
     def _builtin_infer(self, py_type):
-        if not isinstance(py_type, py_typing._GenericAlias):
-            return
+        if PYVERSION in ((3, 14), ):
+            # As of 3.14 the typing module has been updated to return a
+            # different type when calling: `typing.Optional[X]`.
+            #
+            # On 3.14:
+            #
+            # >>> type(typing.Optional[float])
+            # <class 'typing.Union'>
+            #
+            #
+            # On 3.13 (and presumably below):
+            #
+            # >>> type(typing._UnionGenericAlias)
+            # <class 'typing._UnionGenericAlias'>
+            #
+            #
+            # The previous implementation of this predicate used
+            # `_GenericAlias`, which was possible because `_UnionGenericAlias`
+            # is a subclass of `_GenericAlias`...
+            #
+            # >>> issubclass(typing._UnionGenericAlias, typing._GenericAlias)
+            # True
+            #
+            # However, other types, such as `typing.List[float]` remain as
+            # `typing._GenericAlias`, so that must be keept.
+            #
+            # Additionally, using the recommend e.g. `tuple[int, float]`,
+            # creates a `typing.GenericAlias`, so that must be included here
+            # too.
+            #
+            if not isinstance(py_type, (py_typing.Union,
+                                        py_typing.GenericAlias,
+                                        py_typing._GenericAlias)):
+                return
+        elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
+            # Subscripting a class, e.g. `tuple[int, float]`, creates a
+            # `typing.GenericAlias`. Meanwhile, using deprecated aliases such
+            # as `typing.Tuple[int, float]` creates a `typing._GenericAlias`.
+            if not isinstance(py_type, (py_typing.GenericAlias,
+                                        py_typing._GenericAlias)):
+                return
+        else:
+            raise NotImplementedError(PYVERSION)
 
-        if getattr(py_type, "__origin__", None) is py_typing.Union:
-            if len(py_type.__args__) != 2:
+        origin = py_typing.get_origin(py_type)
+        args = py_typing.get_args(py_type)
+
+        if origin is py_typing.Union:
+            if len(args) != 2:
                 raise errors.TypingError(
-                    "Cannot type Union of more than two types")
+                    "Cannot type Union of more than two types. "
+                    f"Attempted to unify '{len(args)}' types.")
 
-            (arg_1_py, arg_2_py) = py_type.__args__
+            (arg_1_py, arg_2_py) = args
 
             if arg_2_py is type(None): # noqa: E721
                 return types.Optional(self.infer(arg_1_py))
@@ -59,20 +105,20 @@ class AsNumbaTypeRegistry:
                     "Cannot type Union that is not an Optional "
                     f"(neither type type {arg_2_py} is not NoneType")
 
-        if getattr(py_type, "__origin__", None) is list:
-            (element_py,) = py_type.__args__
+        if origin is list:
+            (element_py,) = args
             return types.ListType(self.infer(element_py))
 
-        if getattr(py_type, "__origin__", None) is dict:
-            key_py, value_py = py_type.__args__
+        if origin is dict:
+            key_py, value_py = args
             return types.DictType(self.infer(key_py), self.infer(value_py))
 
-        if getattr(py_type, "__origin__", None) is set:
-            (element_py,) = py_type.__args__
-            return types.Set(self.infer(element_py))
+        if origin is set:
+            (element_py,) = args
+            return types.SetType(self.infer(element_py))
 
-        if getattr(py_type, "__origin__", None) is tuple:
-            tys = tuple(map(self.infer, py_type.__args__))
+        if origin is tuple:
+            tys = tuple(map(self.infer, args))
             return types.BaseTuple.from_types(tys)
 
     def register(self, func_or_py_type, numba_type=None):

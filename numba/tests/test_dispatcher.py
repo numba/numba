@@ -19,7 +19,6 @@ from numba.tests.support import needs_lapack, SerialMixin
 from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
 import unittest
 
-
 _TEST_TIMEOUT = _RUNNER_TIMEOUT - 60.
 
 

@@ -19,7 +19,6 @@ Build and Packaging
   installed package from git tags
 - :ghfile:`.flake8` - Preferences for code formatting.  Files should be
   fixed and removed from the exception list as time allows.
-- :ghfile:`.pre-commit-config.yaml` - Configuration file for pre-commit hooks.
 - :ghfile:`.readthedocs.yml` - Configuration file for Read the Docs.
 - :ghfile:`buildscripts/condarecipe.local` - Conda build recipe
 
@@ -152,7 +151,6 @@ Type Management
 
 - :ghfile:`numba/core/typeconv/` - Implementation of type casting and type
   signature matching in both C++ and Python
-- :ghfile:`numba/capsulethunk.h` - Used by typeconv
 - :ghfile:`numba/core/types/` - definition of the Numba type hierarchy, used
   everywhere in compiler to select implementations
 - :ghfile:`numba/core/consts.py` - Constant inference (used to make constant
@@ -351,8 +349,6 @@ that must be matched during type inference.
   (maps Python object to Numba type)
 - :ghfile:`numba/core/typing/asnumbatype.py` - Implementation of
   ``as_numba_type`` operations (maps Python types to Numba type)
-- :ghfile:`numba/core/typing/npdatetime.py` - Datetime dtype support for NumPy
-  arrays
 
 
 Target Implementations (CPU)
@@ -384,8 +380,6 @@ typing and implementation to be specified together.
   needed to link generated code
 - :ghfile:`numba/core/fastmathpass.py` - Rewrite pass to add fastmath
   attributes to function call sites and binary operations
-- :ghfile:`numba/core/removerefctpass.py` - Rewrite pass to remove
-  unnecessary incref/decref pairs
 - :ghfile:`numba/core/descriptors.py` - empty base class for all target
   descriptors (is this needed?)
 - :ghfile:`numba/cpython/builtins.py` - Python builtin functions and
@@ -425,7 +419,7 @@ typing and implementation to be specified together.
 - :ghfile:`numba/np/polynomial/polynomial_core.py` - Implementations of NumPy ``Polynomial`` class
 - :ghfile:`numba/np/ufunc_db.py` - Big table mapping types to ufunc
   implementations
-
+- :ghfile:`numba/np/types/datetime.py` - Datetime and timedelta datatype support
 
 Ufunc Compiler and Runtime
 ''''''''''''''''''''''''''

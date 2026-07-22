@@ -21,11 +21,10 @@ def set_refprune_flags(flags):
 class TestRefOpPruning(TestCase):
 
     _numba_parallel_test_ = False
-    _NUMBA_USE_LEGACY_PM_1_ENV = {'NUMBA_USE_LLVM_LEGACY_PASS_MANAGER': '1'}
 
     def check(self, func, *argtys, **prune_types):
         """
-        Asserts the the func compiled with argument types "argtys" reports
+        Asserts the func compiled with argument types "argtys" reports
         refop pruning statistics. The **prune_types** kwargs list each kind
         of pruning and whether the stat should be zero (False) or >0 (True).
 
