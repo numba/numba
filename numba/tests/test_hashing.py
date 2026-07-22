@@ -496,6 +496,39 @@ class TestUnicodeHashing(BaseTest):
         self.assertEqual(a, b)
 
 
+class TestDatetimeHashing(BaseTest):
+    """
+    Test hashing of np.datetime64 and np.timedelta64 types.
+    """
+
+    def test_datetime_hashing(self):
+        cases = [
+            np.datetime64('2000-01-02'),
+            np.datetime64('2000-01-02T12:34:56.789012345'),
+            np.datetime64('1970-01-01'),
+            np.datetime64('2000-01-01'),
+            np.datetime64('2000-01-03'),
+            np.datetime64('2000-01-02T00:00:00'),
+            np.datetime64('2000-01-02T12:34:56')
+        ]
+
+        self.check_hash_values(cases)
+
+
+    def test_timedelta_hashing(self):
+        cases = [
+            np.timedelta64(1, 'D'),
+            np.timedelta64(1, 'ns'),
+            np.timedelta64(-1, 'ns'),
+            np.timedelta64(123456789, 'ns'), 
+            np.timedelta64(-123456789, 'ns'),
+            np.timedelta64(0, 'D'),
+            np.timedelta64(0, 'ns'),
+        ]
+
+        self.check_hash_values(cases)
+
+
 class TestUnhashable(TestCase):
     # Tests that unhashable types behave correctly and raise a TypeError at
     # runtime.
