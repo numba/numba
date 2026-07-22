@@ -30,7 +30,7 @@ class TestNvvmDriver(unittest.TestCase):
             self.skipTest("-gen-lto unavailable in this toolkit version")
 
         nvvmir = self.get_nvvmir()
-        ltoir = nvvm.compile_ir(nvvmir, opt=3, gen_lto=None, arch="compute_52")
+        ltoir = nvvm.compile_ir(nvvmir, opt=3, gen_lto=None, arch="compute_75")
 
         # Verify we correctly passed the option by checking if we got LTOIR
         # from NVVM (by looking for the expected magic number for LTOIR)
