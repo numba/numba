@@ -350,8 +350,14 @@ def ccs_supported_by_ctk(ctk_version):
     try:
         # For supported versions, we look up the range of supported CCs
         min_cc, max_cc = CTK_SUPPORTED[ctk_version]
+        # NVIDIA relabeled CC 10.1 -> 11.0 in CUDA 13, so we need to filter out
+        # the other one
+        if ctk_version < (13, 0):
+            remove_cc = (11, 0)
+        else:
+            remove_cc = (10, 1)
         return tuple([cc for cc in COMPUTE_CAPABILITIES
-                      if min_cc <= cc <= max_cc])
+                      if min_cc <= cc <= max_cc and cc != remove_cc])
     except KeyError:
         # For unsupported CUDA toolkit versions, all we can do is assume all
         # non-deprecated versions we are aware of are supported.
