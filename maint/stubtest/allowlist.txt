@@ -36,7 +36,7 @@ numba\.pycc\..*
 numba\.scripts\..*
 numba\.testing\..*
 numba\.tests\..*
-numba\.typed\..*
+numba\.typed\.((dict|list|set)object|typed(dict|list|set|objectutils))\..*
 
 # numpy <2 compat
 numba\.(__all__|float_)
