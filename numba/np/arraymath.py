@@ -477,8 +477,7 @@ def _numpy_sum(typingctx, aryty, axisty, dtype):
         with ArrayIterator(context, builder, aryty, ary) as iter_val_ptr:
             val = load_item(context, builder, aryty, iter_val_ptr)
             res_val = add_funcfn(builder, (
-                context.data_model_manager[ret_dtype].load_from_data_pointer(
-                    builder, result),
+                builder.load(result),
                 context.cast(builder, val, aryty.dtype, sig.return_type)))
             builder.store(res_val, result)
 
@@ -536,8 +535,7 @@ def _numpy_sum_axis(typingctx, aryty, axisty, dtype):
             res_ptr = res_ptr_tup[0]
             val = load_item(context, builder, aryty, ary_iter_ptr)
             res_val = add_funcfn(builder, (
-                context.data_model_manager[ret_dtype].load_from_data_pointer(
-                    builder, res_ptr),
+                load_item(context, builder, sig.return_type, res_ptr),
                 context.cast(builder, val, aryty.dtype, sig.return_type.dtype)))
             store_item(context, builder, sig.return_type, res_val, res_ptr)
 
@@ -655,8 +653,7 @@ def _numpy_cumsum(typingctx, aryty, axisty, dtype):
             res_ptr = res_ptr_tup[0]
             val = load_item(context, builder, aryty, iter_val_ptr)
             res_val = add_funcfn(builder, (
-                context.data_model_manager[ret_dtype].load_from_data_pointer(
-                    builder, acc),
+                builder.load(acc),
                 context.cast(builder, val, aryty.dtype, sig.return_type.dtype)))
             builder.store(res_val, acc)
             store_item(context, builder, sig.return_type,
@@ -724,8 +721,7 @@ def _numpy_cumsum_axis(typingctx, aryty, axisty, dtype):
             res_ptr, acc_ptr = res_ptr_tup
             val = load_item(context, builder, aryty, ary_iter_ptr)
             res_val = add_funcfn(builder, (
-                context.data_model_manager[ret_dtype].load_from_data_pointer(
-                    builder, acc_ptr),
+                load_item(context, builder, sig.return_type, acc_ptr),
                 context.cast(builder, val, aryty.dtype, sig.return_type.dtype)))
             store_item(context, builder, acc_type, res_val, acc_ptr)
             store_item(context, builder, sig.return_type,
