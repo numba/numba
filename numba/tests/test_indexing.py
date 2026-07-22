@@ -547,6 +547,15 @@ class TestGetItem(MemoryLeakMixin, TestCase):
         self.assertEqual(pyfunc(a, EnumIndex.INDEX1), cfunc(a, EnumIndex.INDEX1))
         self.assertEqual(pyfunc(a, EnumIndex.INDEX_NEG1), cfunc(a, EnumIndex.INDEX_NEG1))
 
+        # Constant IntEnum member as index inside the function
+        def const_pyfunc(a):
+            return (a[EnumIndex.INDEX0],
+                    a[EnumIndex.INDEX1],
+                    a[EnumIndex.INDEX_NEG1])
+
+        const_cfunc = jit((arraytype,), **flags)(const_pyfunc)
+        self.assertEqual(const_pyfunc(a), const_cfunc(a))
+
     def test_1d_enum_indexing_npm(self):
         self.test_1d_enum_indexing(flags=Noflags)
 
