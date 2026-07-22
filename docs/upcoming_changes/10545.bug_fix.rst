@@ -1,0 +1,9 @@
+Fix race condition in GUFunc caching that can cause segfaults
+-------------------------------------------------------------
+
+Fixed a race condition where concurrent processes compiling the same
+``@guvectorize`` functions could produce inconsistent cache files, leading to
+segfaults. The root cause was a global counter (``itertools.count``) used to
+generate ABI version tags in ``FunctionIdentity``, which made the tags depend
+on compilation order. The counter is now per-function, ensuring deterministic
+ABI tags regardless of which other functions were compiled first.
