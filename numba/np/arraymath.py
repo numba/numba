@@ -2089,8 +2089,41 @@ def _median_inner(temp_arry, n):
 
 @overload(np.median)
 def np_median(a):
-    if not isinstance(a, types.Array):
-        return
+    # Scalar case: the median of a single value is that value. NumPy promotes
+    # integer and boolean scalars to float64, while floating-point and complex
+    # scalars keep their dtype.
+    if isinstance(a, (types.Integer, types.Boolean)):
+        def scalar_median(a):
+            return np.float64(a)
+        return scalar_median
+    elif isinstance(a, (types.Float, types.Complex)):
+        # Adding a same-dtype zero matches NumPy: its median goes through a mean
+        # reduction that normalises negative zero to positive zero, while the
+        # dtype is left unchanged (and inf/nan are untouched).
+        zero = as_dtype(a).type(0)
+
+        def scalar_median(a):
+            return a + zero
+        return scalar_median
+    elif isinstance(a, types.NPTimedelta):
+        # NumPy returns a timedelta64 scalar unchanged, preserving its unit.
+        # The mean reduction is well defined here because adding two
+        # timedelta64 operands and dividing by two are both supported, and NaT
+        # propagates.
+        def scalar_median(a):
+            return a
+        return scalar_median
+    elif isinstance(a, types.NPDatetime):
+        # NumPy does not support median on datetime64 input. Its median goes
+        # through a mean reduction, and 'add' is undefined for two datetime64
+        # operands, so np.median() raises a UFuncTypeError for both scalar and
+        # array datetime64 input. Reject at typing time to match that.
+        raise TypingError(
+            "np.median() does not support datetime64 input, matching NumPy, "
+            "for which 'add' is undefined on two datetime64 operands"
+        )
+    elif not isinstance(a, types.Array):
+        return None
 
     is_datetime = as_dtype(a.dtype).char in 'mM'
 
