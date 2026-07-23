@@ -66,7 +66,9 @@ def fallback_context(state, msg):
 
 
 def type_inference_stage(typingctx, targetctx, interp, args, return_type,
-                         locals={}, raise_errors=True):
+                         locals=None, raise_errors=True):
+    if locals is None:
+        locals = {}
     if len(args) != interp.arg_count:
         raise TypeError("Mismatch number of argument types")
     warnings = errors.WarningsFixer(errors.NumbaWarning)
@@ -450,7 +452,9 @@ class BaseNativeLowering(abc.ABC, LoweringPass):
         calltypes = state.calltypes
         flags = state.flags
         metadata = state.metadata
-        pre_stats = llvm.passmanagers.dump_refprune_stats()
+        pre_stats = llvm.newpassmanagers.dump_refprune_stats()
+        # Add reload functions to library
+        library._reload_init.update(state.reload_init)
 
         msg = ("Function %s failed at nopython "
                "mode lowering" % (state.func_id.func_name,))
@@ -496,11 +500,12 @@ class BaseNativeLowering(abc.ABC, LoweringPass):
                 # We also register its library to allow for inlining.
                 cfunc = targetctx.get_executable(library, fndesc, env)
                 targetctx.insert_user_function(cfunc, fndesc, [library])
+                state.reload_init.extend(library._reload_init)
                 state['cr'] = _LowerResult(fndesc, call_helper,
                                            cfunc=cfunc, env=env)
 
             # capture pruning stats
-            post_stats = llvm.passmanagers.dump_refprune_stats()
+            post_stats = llvm.newpassmanagers.dump_refprune_stats()
             metadata['prune_stats'] = post_stats - pre_stats
 
             # Save the LLVM pass timings

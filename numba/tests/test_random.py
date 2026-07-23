@@ -703,10 +703,11 @@ class TestRandom(BaseTest):
                                    get_np_state_ptr())
 
     def test_numpy_binomial(self):
-        # We follow Numpy's algorithm up to n*p == 30
         binomial = jit_binary("np.random.binomial")
         r = self._follow_numpy(get_np_state_ptr(), 0)
-        self._check_dist(binomial, r.binomial, [(18, 0.25)])
+        self._check_dist(binomial, r.binomial, [(18, 0.25), (60, 0.5),
+                                                (61, 0.5), (100, 0.4),
+                                                (100, 0.6)])
         # Sanity check many values
         for n in (100, 1000, 10000):
             self.assertEqual(binomial(n, 0.0), 0)
@@ -846,6 +847,8 @@ class TestRandom(BaseTest):
         self.assertEqual([negbin(1000, 0.1) for i in range(10)],
                          [9203, 8640, 9081, 9292, 8938,
                           9165, 9149, 8774, 8886, 9117])
+        self.assertEqual([negbin(0.3, 0.1) for i in range(10)],
+                         [0, 2, 15, 4, 4, 0, 0, 0, 1, 0])
         m = np.mean([negbin(1000000000, 0.1)
                      for i in range(50)])
         self.assertGreater(m, 9e9 * 0.99)

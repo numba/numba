@@ -214,6 +214,7 @@ The following dunder methods may be defined for jitclasses:
 * ``__getitem__``
 * ``__hash__``
 * ``__index__``
+* ``__invert__``
 * ``__int__``
 * ``__len__``
 * ``__setitem__``

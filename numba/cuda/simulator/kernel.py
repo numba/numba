@@ -62,7 +62,11 @@ class FakeCUDAKernel(object):
     Wraps a @cuda.jit-ed function.
     '''
 
-    def __init__(self, fn, device, fastmath=False, extensions=[], debug=False):
+    def __init__(
+        self, fn, device, fastmath=False, extensions=None, debug=False
+    ):
+        if extensions is None:
+            extensions = []
         self.fn = fn
         self._device = device
         self._fastmath = fastmath

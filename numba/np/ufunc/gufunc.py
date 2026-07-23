@@ -65,7 +65,9 @@ class GUFunc(serialize.ReduceMixin, UfuncBase):
     """
 
     def __init__(self, py_func, signature, identity=None, cache=None,
-                 is_dynamic=False, targetoptions={}, writable_args=()):
+                 is_dynamic=False, targetoptions=None, writable_args=()):
+        if targetoptions is None:
+            targetoptions = {}
         self.ufunc = None
         self._frozen = False
         self._is_dynamic = is_dynamic

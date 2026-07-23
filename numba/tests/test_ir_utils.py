@@ -50,9 +50,18 @@ class TestIrUtils(TestCase):
         class Tester(CompilerBase):
 
             @classmethod
-            def mk_pipeline(cls, args, return_type=None, flags=None, locals={},
-                            library=None, typing_context=None,
-                            target_context=None):
+            def mk_pipeline(
+                cls,
+                args,
+                return_type=None,
+                flags=None,
+                locals=None,
+                library=None,
+                typing_context=None,
+                target_context=None,
+            ):
+                if locals is None:
+                    locals = {}
                 if not flags:
                     flags = Flags()
                 flags.nrt = True

@@ -124,9 +124,9 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         self.assert_no_memory_leak()
         # disable leak check for exception test
         self.disable_leak_check()
-        with self.assertRaises(KeyError):
+        with self.assertRaisesRegex(KeyError, "0"):
             foo(keys, vals, 0)
-        with self.assertRaises(KeyError):
+        with self.assertRaisesRegex(KeyError, "4"):
             foo(keys, vals, 4)
 
     def test_dict_popitem(self):

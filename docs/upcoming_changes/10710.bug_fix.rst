@@ -1,0 +1,6 @@
+Fix internal ``KeyError`` in ``literal_unroll`` when a variable name is reused
+------------------------------------------------------------------------------
+
+Iterating with ``literal_unroll`` failed with an internal ``KeyError`` when a
+variable indexed in the loop body had its name reused elsewhere in the
+function. Numba now raises an ``UnsupportedError`` naming the variable.

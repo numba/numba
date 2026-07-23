@@ -19,6 +19,7 @@ from numba.core import types, config
 from numba.core.errors import TypingError
 from numba.tests.support import TestCase, tag, skip_parfors_unsupported
 from numba.np import npdatetime_helpers, numpy_support
+from numba.np import types as npy_types
 
 TIMEDELTA_M = np.dtype('timedelta64[M]')
 TIMEDELTA_Y = np.dtype('timedelta64[Y]')
@@ -227,7 +228,7 @@ class TestMiscCompiling(TestCase):
             self.assertPreciseEqual(f(*args), expected)
 
         # Test passing the signature in object form
-        sig = types.NPDatetime('us')(types.NPDatetime('ms'), types.NPTimedelta('us'))
+        sig = npy_types.NPDatetime('us')(npy_types.NPDatetime('ms'), npy_types.NPTimedelta('us'))
         _check_explicit_signature(sig)
         # Same with the signature in string form
         sig = "NPDatetime('us')(NPDatetime('ms'), NPTimedelta('us'))"
@@ -242,7 +243,7 @@ class TestMiscCompiling(TestCase):
             self.assertPreciseEqual(f(TD(2), 3), TD(6))
 
         # Test passing the signature in object form (issue #917)
-        sig = types.NPTimedelta('s')(types.NPTimedelta('s'), types.int64)
+        sig = npy_types.NPTimedelta('s')(npy_types.NPTimedelta('s'), types.int64)
         _check_explicit_signature(sig)
         # Same with the signature in string form
         sig = "NPTimedelta('s')(NPTimedelta('s'), int64)"
@@ -334,8 +335,10 @@ class TestTimedeltaArithmetic(TestCase):
         check(TD(-7), -1.5, TD(10))
         check(TD('NaT', 'ps'), -1.5, TD('NaT', 'ps'))
         check(TD(7, 'ps'), float('nan'), TD('NaT', 'ps'))
-        # wraparound on overflow
-        check(TD(2**62, 'ps'), 16, TD(0, 'ps'))
+        if numpy_version < (2, 5):
+            # wraparound on overflow, post NumPy 2.5, 
+            # timedelta64s raise on overflow instead.
+            check(TD(2**62, 'ps'), 16, TD(0, 'ps'))
 
     def test_div(self):
         div = self.jit(div_usecase)
@@ -541,7 +544,23 @@ class TestTimedeltaArithmetic(TestCase):
     def test_hash(self):
         f = self.jit(hash_usecase)
         def check(a):
-            self.assertPreciseEqual(f(a), hash(a))
+            if numpy_version >= (2, 2):
+                # Generic timedeltas (those without a unit)
+                # are no longer hashable beyond NumPy 2.2
+                # Non-generic timedeltas will have dtype name
+                # as timedelta64[<unit>]
+                if a.dtype.name == 'timedelta64':
+                    return
+
+                # If the function is not being compiled in objmode
+                # then the hash should be equal to the hash of the
+                # integer representation of the timedelta
+                if self.jitargs.get('nopython', False):
+                    self.assertPreciseEqual(f(a), a.astype(int))
+                else:
+                    self.assertPreciseEqual(f(a), hash(a))
+            else:
+                self.assertPreciseEqual(f(a), hash(a))
 
         TD_CASES = ((3,), (-4,), (3, 'ms'), (-4, 'ms'), (27, 'D'),
                     (2, 'D'), (2, 'W'), (2, 'Y'), (3, 'W'),
@@ -557,6 +576,11 @@ class TestTimedeltaArithmetic(TestCase):
         for case, typ in zip(TD_CASES + DT_CASES,
                              (TD,) * len(TD_CASES) + (DT,) * len(TD_CASES)):
             check(typ(*case))
+
+        if numpy_version >= (2, 2):
+            with self.assertRaises(ValueError) as raises:
+                f(TD(3))
+            self.assertIn("Can't hash generic timedelta64", str(raises.exception))
 
     def _test_min_max(self, usecase):
         f = self.jit(usecase)
@@ -814,6 +838,14 @@ class TestDatetimeArithmetic(TestCase):
             i = all_units.index(a_unit)
             units = all_units[i:i+6]
             for unit in units:
+                if numpy_version >= (2, 5):
+                    try:
+                        # Post NumPy 2.5 it is possible for
+                        # astype to raise on overflow, pre 
+                        # 2.5 it wraps around.
+                        b = a.astype('M8[%s]' % unit)
+                    except OverflowError:
+                        continue
                 # Force conversion
                 b = a.astype('M8[%s]' % unit)
                 if (not npdatetime_helpers.same_kind(value_unit(a),
@@ -852,7 +884,9 @@ class TestMetadataScalingFactor(TestCase):
     and timedelta64 dtypes.
     """
 
-    def test_datetime(self, jitargs={'forceobj':True}):
+    def test_datetime(self, jitargs=None):
+        if jitargs is None:
+            jitargs = {'forceobj': True}
         eq = jit(**jitargs)(eq_usecase)
         self.assertTrue(eq(DT('2014', '10Y'), DT('2010')))
 
@@ -860,7 +894,9 @@ class TestMetadataScalingFactor(TestCase):
         with self.assertTypingError():
             self.test_datetime(jitargs={'nopython':True})
 
-    def test_timedelta(self, jitargs={'forceobj':True}):
+    def test_timedelta(self, jitargs=None):
+        if jitargs is None:
+            jitargs = {'forceobj': True}
         eq = jit(**jitargs)(eq_usecase)
         self.assertTrue(eq(TD(2, '10Y'), TD(20, 'Y')))
 
@@ -1174,6 +1210,26 @@ class TestDatetimeTypeOps(TestCase):
         ]
         for fn, arg in itertools.product(fns, args):
             check(fn, arg)
+
+
+class TestDatetimeIssues(TestCase):
+    def test_10y_issue_9585(self):
+        @njit
+        def f(x):
+            return x + 1
+
+        arr = np.array('2010', dtype='datetime64[10Y]')
+
+        with self.assertRaises(TypingError) as e:
+            f(arr)
+
+        message = e.exception.args[0]
+
+        argument_index = "argument 0"
+        self.assertIn(argument_index, message)
+
+        unsupported_type = "Unsupported array dtype: datetime64[10Y]"
+        self.assertIn(unsupported_type, message)
 
 
 if __name__ == '__main__':

@@ -34,8 +34,8 @@ def _ensure_critical_deps():
     import numpy as np
     numpy_version = extract_version(np)
 
-    if numpy_version < (1, 24):
-        msg = (f"Numba needs NumPy 1.24 or greater. Got NumPy "
+    if numpy_version < (1, 22):
+        msg = (f"Numba needs NumPy 1.22 or greater. Got NumPy "
                f"{numpy_version[0]}.{numpy_version[1]}.")
         raise ImportError(msg)
 
@@ -117,32 +117,34 @@ def test(argv, **kwds):
     from numba.testing import _runtests as runtests
     return runtests.main(argv, **kwds)
 
-__all__ = """
-    cfunc
-    from_dtype
-    guvectorize
-    jit
-    experimental
-    njit
-    stencil
-    jit_module
-    typeof
-    prange
-    gdb
-    gdb_breakpoint
-    gdb_init
-    vectorize
-    objmode
-    literal_unroll
-    get_num_threads
-    set_num_threads
-    set_parallel_chunksize
-    get_parallel_chunksize
-    parallel_chunksize
-    """.split() + types.__all__ + errors.__all__
+__all__ = [
+    "cfunc",
+    "from_dtype",
+    "guvectorize",
+    "jit",
+    "experimental",
+    "njit",
+    "stencil",
+    "jit_module",
+    "typeof",
+    "prange",
+    "gdb",
+    "gdb_breakpoint",
+    "gdb_init",
+    "vectorize",
+    "objmode",
+    "literal_unroll",
+    "get_num_threads",
+    "set_num_threads",
+    "set_parallel_chunksize",
+    "get_parallel_chunksize",
+    "parallel_chunksize",
+]
+__all__ += types.__all__
+__all__ += errors.__all__
 
 
-_min_llvmlite_version = (0, 44, 0)
+_min_llvmlite_version = (0, 49, 0)
 _min_llvm_version = (14, 0, 0)
 
 def _ensure_llvm():
@@ -152,7 +154,7 @@ def _ensure_llvm():
     import warnings
     import llvmlite
 
-    # Only look at the the major, minor and bugfix version numbers.
+    # Only look at the major, minor and bugfix version numbers.
     # Ignore other stuffs
     regex = re.compile(r'(\d+)\.(\d+).(\d+)')
     m = regex.match(llvmlite.__version__)
@@ -197,7 +199,7 @@ def _try_enable_svml():
             # The SVML library is loaded, therefore SVML *could* be supported.
             # Now see if LLVM has been compiled with the SVML support patch.
             # If llvmlite has the checking function `has_svml` and it returns
-            # True, then LLVM was compiled with SVML support and the the setup
+            # True, then LLVM was compiled with SVML support and the setup
             # for SVML can proceed. We err on the side of caution and if the
             # checking function is missing, regardless of that being fine for
             # most 0.23.{0,1} llvmlite instances (i.e. conda or pip installed),
@@ -222,7 +224,7 @@ def _try_enable_svml():
             # compiled in, set the vector library to SVML.
             llvmlite.binding.set_option('SVML', '-vector-library=SVML')
             return True
-        except:
+        except Exception:
             if platform.machine() == 'x86_64' and config.DEBUG:
                 warnings.warn("SVML was not found/could not be loaded.")
     return False

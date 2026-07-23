@@ -1,0 +1,7 @@
+Add Windows on ARM64 to support policy Tier 1.5
+-----------------------------------------------
+
+The :ref:`Support Tiers <support_tiers>` documentation now lists ``win-arm64``
+(Windows on 64-bit ARM) as a Tier 1.5 release configuration.  Wheel and conda
+packages are initially provided for Python 3.14 only; support for additional
+Python versions may be added in the future.

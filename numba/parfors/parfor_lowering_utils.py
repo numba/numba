@@ -31,7 +31,7 @@ class ParforLoweringBuilder:
     def _calltypes(self):
         return self._lowerer.fndesc.calltypes
 
-    def bind_global_function(self, fobj, ftype, args, kws={}):
+    def bind_global_function(self, fobj, ftype, args, kws=None):
         """Binds a global function to a variable.
 
         Parameters
@@ -46,6 +46,8 @@ class ParforLoweringBuilder:
         -------
         callable: _CallableNode
         """
+        if kws is None:
+            kws = {}
         loc = self._loc
         varname = f"{fobj.__name__}_func"
         gvname = f"{fobj.__name__}"
@@ -143,7 +145,7 @@ class ParforLoweringBuilder:
         self._lowerer.lower_inst(assign)
         return var
 
-    def call(self, callable_node, args, kws={}) -> ir.Expr:
+    def call(self, callable_node, args, kws=None) -> ir.Expr:
         """Call a bound callable
 
         Parameters
@@ -158,6 +160,8 @@ class ParforLoweringBuilder:
         res : ir.Expr
             The expression node for the return value of the call
         """
+        if kws is None:
+            kws = {}
         call = ir.Expr.call(callable_node.func, args, kws, loc=self._loc)
         self._calltypes[call] = callable_node.sig
         return call

@@ -210,8 +210,10 @@ def build_ufunc_wrapper(library, ctx, fname, signature, cres):
 
 class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
     def __init__(self, py_func, signature, identity=None, cache=False,
-                 targetoptions={}, writable_args=()):
+                 targetoptions=None, writable_args=()):
         # Force nopython mode
+        if targetoptions is None:
+            targetoptions = {}
         targetoptions.update(dict(nopython=True))
         super(
             ParallelGUFuncBuilder,
@@ -726,7 +728,6 @@ def set_parallel_chunksize(n):
     _launch_threads()
     if not isinstance(n, (int, np.integer)):
         raise TypeError("The parallel chunksize must be an integer")
-    global _set_parallel_chunksize
     if n < 0:
         raise ValueError("chunksize must be greater than or equal to zero")
     return _set_parallel_chunksize(n)
@@ -734,7 +735,6 @@ def set_parallel_chunksize(n):
 
 def get_parallel_chunksize():
     _launch_threads()
-    global _get_parallel_chunksize
     return _get_parallel_chunksize()
 
 

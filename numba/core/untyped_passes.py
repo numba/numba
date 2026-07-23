@@ -471,6 +471,7 @@ class CanonicalizeLoopEntry(FunctionPass):
     This is needed for loop-lifting; esp in py3.8
     """
     _name = "canonicalize_loop_entry"
+    _supported_globals = {range, enumerate, zip}
 
     def __init__(self):
         FunctionPass.__init__(self)
@@ -520,7 +521,8 @@ class CanonicalizeLoopEntry(FunctionPass):
                         if isinstance(defn, ir.Global):
                             if expr.func.is_temp:
                                 deps.add(expr.func)
-                elif isinstance(rhs, ir.Global) and rhs.value is range:
+                elif (isinstance(rhs, ir.Global)
+                        and rhs.value in self._supported_globals):
                     startpt = assign
 
         if startpt is None:
@@ -1223,7 +1225,18 @@ class MixedContainerUnroller(FunctionPass):
                                   ir.Expr) and stmt.value.op == "getitem":
                         # try a couple of spellings... a[i] and ref(a)[i]
                         if stmt.value.value != getitem_target:
-                            dfn = func_ir.get_definition(stmt.value.value)
+                            try:
+                                dfn = func_ir.get_definition(stmt.value.value)
+                            except KeyError:
+                                # more than one definition reaches this
+                                # getitem, so it cannot be resolved against
+                                # the unroll target
+                                msg = ("Invalid use of literal_unroll, "
+                                       "found multiple definitions of "
+                                       'variable "%s".')
+                                name = stmt.value.value.unversioned_name
+                                raise errors.UnsupportedError(
+                                    msg % name, stmt.loc) from None
                             try:
                                 args = getattr(dfn, 'args', False)
                             except KeyError:

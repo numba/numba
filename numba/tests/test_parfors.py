@@ -2047,6 +2047,14 @@ class TestParfors(TestParforsBase):
             return x
         self.check(test_impl, np.zeros((10, 10)), 3)
 
+    def test_partial_sum_1d_parallel(self):
+        def test_impl(A):
+            result = np.zeros(A.shape, dtype=A.dtype)
+            for idx in numba.pndindex(A.shape):
+                result[idx] = A[idx]
+            return result
+        self.check(test_impl, np.random.random((2,)))
+
     def test_prange_unknown_call1(self):
         @register_jitable
         def issue7854_proc(u, i, even, size):
@@ -3567,7 +3575,7 @@ class TestPrangeBase(TestParforsBase):
             prange_names.append('prange')
             prange_names = tuple(prange_names)
             prange_idx = len(prange_names) - 1
-            if utils.PYVERSION in ((3, 11), (3, 12), (3, 13)):
+            if utils.PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
                 # this is the inverse of _fix_LOAD_GLOBAL_arg
                 prange_idx = 1 + (prange_idx << 1)
             elif utils.PYVERSION in ((3, 10),):
@@ -4227,6 +4235,7 @@ class TestPrangeSpecific(TestPrangeBase):
         msg = 'Only constant step size of 1 is supported for prange'
         self.assertIn(msg, str(raises.exception))
 
+    @unittest.skip("skip due to issue #10203: https://github.com/numba/numba/issues/10203")
     def test_prange_fastmath_check_works(self):
         # this function will benefit from `fastmath`, the div will
         # get optimised to a multiply by reciprocal and the accumulator

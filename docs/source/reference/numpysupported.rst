@@ -162,21 +162,60 @@ or layout.
    are not supported.
 
 
+.. _array-access:
+
 Array access
 ------------
 
 Arrays support normal iteration.  Full basic indexing and slicing is
 supported along with passing ``None`` / ``np.newaxis`` as indices for
-additional resulting dimensions. A subset of advanced indexing is also
-supported: only one advanced index is allowed, and it has to be a
-one-dimensional array (it can be combined with an arbitrary number
-of basic indices as well).
+additional resulting dimensions.
+
+Fancy indexing with multiple array indices and/or multidimensional 
+array indices is also supported in accordance with NumPy semantics.
+An example of this is as follows:
+
+.. code:: python
+
+    import numba
+    import numpy as np
+
+    @numba.njit
+    def non_shifted_subspace(x, idx, idx2):
+        return x[:, idx, idx2, :] # Consecutive fancy indices (idx, idx2) are adjacent.
+
+    @numba.njit
+    def shifted_subspace(x, idx, idx2):
+        return x[:, idx, :, idx2] # Non-consecutive fancy indices (idx, idx2) are separated by a slice.
+
+    a = np.random.randint(0, 100, (10, 11, 12, 13, 14))
+    b = np.random.randint(0, 4, (4, 5))  # Now supports multidimensional indices
+    c = np.random.randint(0, 4, (4, 5))  # Now supports multiple array indices
+
+    print(non_shifted_subspace(a, b, c).shape) 
+    # Output: (10, 4, 5, 13, 14) - Notice subspace (4, 5) is correctly indexed at position 1
+    print(np.allclose(non_shifted_subspace(a, b, c), non_shifted_subspace.py_func(a, b, c)))
+    # Output: True
+
+    print(shifted_subspace(a, b, c).shape) 
+    # Output: (4, 5, 10, 13, 14) - Notice subspace (4, 5) is correctly indexed at position 0
+    print(np.allclose(shifted_subspace(a, b, c), shifted_subspace.py_func(a, b, c)))
+    # Output: True
+
+Resrictions on the indices are the same as in NumPy, meaning that the indices must be within bounds of
+the array dimensions and must be of integer type. Additionally, the number of fancy indices must not
+exceed the number of dimensions in the array being indexed as well as the indices must be broadcastable
+to a common shape.
 
 .. seealso::
-   `NumPy indexing <http://docs.scipy.org/doc/numpy/reference/arrays.indexing.html>`_
+   `NumPy indexing <https://numpy.org/doc/stable/user/basics.indexing.html>`_
    reference.
 
-
+.. note::
+  Because of the way Numba logic is implemented, fancy indexing with multiple array indices
+  and/or multidimensional array indices can be slower than expected. This is currently being
+  investigated and optimized, but users should be aware of this when using these features.
+  
 .. _structured-array-access:
 
 Structured array access
@@ -324,12 +363,6 @@ The following methods of NumPy arrays are supported:
   arguments.)
 
   * ``axis`` only supports ``integer`` values.
-  * If the ``axis`` argument is a compile-time constant, all valid values
-    are supported.
-    An out-of-range value will result in a ``LoweringError`` at compile-time.
-  * If the ``axis`` argument is not a compile-time constant, only values
-    from 0 to 3 are supported.
-    An out-of-range value will result in a runtime exception.
   * All numeric ``dtypes`` are supported in the ``dtype`` parameter.
     ``timedelta`` arrays can be used as input arrays but ``timedelta`` is not
     supported as ``dtype`` parameter.
@@ -341,6 +374,7 @@ The following methods of NumPy arrays are supported:
     inputs), while NumPy would use a 32-bit accumulator in those cases.
 
 
+* :meth:`~numpy.ndarray.tobytes` (without arguments)
 * :meth:`~numpy.ndarray.transpose`
 * :meth:`~numpy.ndarray.view` (only the 1-argument form)
 * :meth:`~numpy.ndarray.__contains__`
@@ -371,12 +405,14 @@ floating-point and complex numbers:
 * :func:`numpy.linalg.cholesky`
 * :func:`numpy.linalg.cond` (only non string values in ``p``).
 * :func:`numpy.linalg.det`
-* :func:`numpy.linalg.eig` (only running with data that does not cause a domain
-  change is supported e.g. real input -> real
-  output, complex input -> complex output).
+* :func:`numpy.linalg.eig` (with NumPy >= 2.5 the result is always complex,
+  matching NumPy; with NumPy < 2.5 only running with data that does not
+  cause a domain change is supported e.g. real input -> real output,
+  complex input -> complex output).
 * :func:`numpy.linalg.eigh` (only the first argument).
-* :func:`numpy.linalg.eigvals` (only running with data that does not cause a
-  domain change is supported e.g. real input -> real output,
+* :func:`numpy.linalg.eigvals` (with NumPy >= 2.5 the result is always
+  complex, matching NumPy; with NumPy < 2.5 only running with data that does
+  not cause a domain change is supported e.g. real input -> real output,
   complex input -> complex output).
 * :func:`numpy.linalg.eigvalsh` (only the first argument).
 * :func:`numpy.linalg.inv`
@@ -414,13 +450,17 @@ The following reduction functions are supported:
 * :func:`numpy.nanquantile` (only the 2 first arguments, complex dtypes
   unsupported)
 * :func:`numpy.nanprod` (only the first argument)
-* :func:`numpy.nanstd` (only the first argument)
+* :func:`numpy.nanstd` (``a`` and ``ddof`` arguments supported; ``axis``,
+  ``dtype``, ``out`` and ``keepdims`` are not supported)
 * :func:`numpy.nansum` (only the first argument)
-* :func:`numpy.nanvar` (only the first argument)
+* :func:`numpy.nanvar` (``a`` and ``ddof`` arguments supported; ``axis``,
+  ``dtype``, ``out`` and ``keepdims`` are not supported)
 * :func:`numpy.percentile` (only the 2 first arguments, complex dtypes
   unsupported)
 * :func:`numpy.quantile` (only the 2 first arguments, complex dtypes
   unsupported)
+* :func:`np.average` (`axis` argument is not supported)
+
 
 Polynomials
 -----------
@@ -480,6 +520,8 @@ The following top-level functions are supported:
 
   * If ``shape[-1] == 2`` for both inputs, please replace your
     :func:`numpy.cross` call with :func:`numba.np.extensions.cross2d`.
+    This is only available with NumPy < 2.5; NumPy 2.5 removed support for
+    the 2-dimensional cross product.
 
 * :func:`numpy.delete` (only the 2 first arguments)
 * :func:`numpy.diag`
@@ -511,6 +553,8 @@ The following top-level functions are supported:
 * :func:`numpy.hstack`
 * :func:`numpy.identity`
 * :func:`numpy.indices` (only the first argument)
+* :func:`numpy.insert` (only the 3 first arguments; the insertion is performed
+  on the flattened array)
 * :func:`numpy.isclose`
 * :func:`numpy.kaiser`
 * :func:`numpy.iscomplex`
@@ -526,7 +570,8 @@ The following top-level functions are supported:
 * :func:`numpy.in1d` (matching pre-1.24 behaviour without the ``kind`` keyword)
 * :func:`numpy.linspace` (only the 3-argument form)
 * :func:`numpy.logspace` (only the 3 first arguments)
-* :func:`numpy.nan_to_num` (only the 3 first arguments)
+* :func:`numpy.moveaxis`
+* :func:`numpy.nan_to_num`
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`
 * :class:`numpy.nditer` (only the first argument)
@@ -542,8 +587,9 @@ The following top-level functions are supported:
   must be an integer)
 * :func:`numpy.roots`
 * :func:`numpy.rot90` (only the 2 first arguments)
-* :func:`numpy.round_`
-* :func:`numpy.row_stack`
+* :func:`numpy.round_` (NumPy < 2.0 only; removed in NumPy 2.0)
+* :func:`numpy.row_stack` (NumPy < 2.5 only; removed in NumPy 2.5, use
+  :func:`numpy.vstack`)
 * :func:`numpy.searchsorted` (only the 3 first arguments)
 * :func:`numpy.select` (only using homogeneous lists or tuples for the first
   two arguments, condlist and choicelist). Additionally, these two arguments

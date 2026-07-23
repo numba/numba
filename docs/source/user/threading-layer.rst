@@ -154,9 +154,8 @@ and requirements are as follows:
 |                      | Windows   | MS OpenMP libraries (very likely this will|
 |                      |           | already exist)                            |
 |                      |           |                                           |
-|                      | OSX       | Either the ``intel-openmp`` package or the|
-|                      |           | ``llvm-openmp`` package                   |
-|                      |           | (``conda install`` the package as named). |
+|                      | OSX       | The ``llvm-openmp`` package (``$ conda    |
+|                      | (arm64)   | install llvm-openmp``)                    |
 +----------------------+-----------+-------------------------------------------+
 | ``workqueue``        | All       | None                                      |
 +----------------------+-----------+-------------------------------------------+
@@ -187,7 +186,7 @@ system level libraries, some additional things to note:
   ``spawn`` is essentially ``fork`` followed by ``exec`` it is safe to ``spawn``
   from a non-main thread, but as this cannot be differentiated from just a
   ``fork`` call the warning message will still be displayed.
-* On OSX, the ``intel-openmp`` package is required to enable the OpenMP based
+* On OSX (arm64), the ``llvm-openmp`` package is required to enable the OpenMP based
   threading layer.
 
 .. _setting_the_number_of_threads:

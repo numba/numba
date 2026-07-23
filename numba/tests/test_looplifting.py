@@ -3,7 +3,8 @@ import numpy as np
 
 from numba.core import types
 from numba.core.compiler import compile_extra, Flags
-from numba.tests.support import TestCase, tag, MemoryLeakMixin
+from numba.tests.support import (TestCase, tag, MemoryLeakMixin,
+                                 numpy_sincos_low_precision)
 import unittest
 
 
@@ -550,10 +551,50 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
         kwargs = dict(a=1.7, b=1.7, c=0.6, d=1.2, x0=0, y0=0, n=200)
         got = foo(**kwargs)
         expected = foo.py_func(**kwargs)
-        self.assertPreciseEqual(got[0], expected[0])
-        self .assertPreciseEqual(got[1], expected[1])
+        ulps = 4 if numpy_sincos_low_precision else 1
+        self.assertPreciseEqual(
+            got[0], expected[0], prec='double', ulps=ulps,
+        )
+        self.assertPreciseEqual(
+            got[1], expected[1], prec='double', ulps=ulps,
+        )
         [lifted] = foo.overloads[foo.signatures[0]].lifted
         self.assertEqual(len(lifted.nopython_signatures), 1)
+
+    def test_lift_zip_and_enumerate(self):
+        # From issue https://github.com/numba/numba/issues/10076
+        from numba import jit
+
+        @jit(forceobj=True)
+        def udt_zip(X, Y):
+            i = 0
+            for x, y in zip(X, Y):
+                i = i + x
+            return i
+
+
+        @jit(forceobj=True)
+        def udt_enumerate(X, Y):
+            i = 0
+            for n, x in enumerate(X):
+                i = i + x
+            return i
+
+
+        @jit(forceobj=True)
+        def udt_enumerate_zip(X, Y):
+            i = 0
+            for n, (x, y) in enumerate(zip(X, Y)):
+                i = i + x
+            return i
+
+        X = np.ones(5)
+        Y = np.ones(5)
+
+        self.assertEqual(udt_zip(X, Y), udt_zip.py_func(X, Y))
+        self.assertEqual(udt_enumerate(X, Y), udt_enumerate.py_func(X, Y))
+        self.assertEqual(udt_enumerate_zip(X, Y),
+                         udt_enumerate_zip.py_func(X, Y))
 
 
 if __name__ == '__main__':

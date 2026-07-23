@@ -1,14 +1,19 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from numba.tests.support import TestCase
 
 from numba import njit
 from numba.core import ir
-from numba.misc.coverage_support import NotifyLocBase, _the_registry
+from numba.misc.coverage_support import (
+    NotifyLocBase,
+    _the_registry,
+    coverage_available,
+)
 
 
 class TestMiscCoverageSupport(TestCase):
+    @TestCase.run_test_in_subprocess(envvars={"NUMBA_JIT_COVERAGE": "1"})
     def test_custom_loc_notifier(self):
         class MyNotify(NotifyLocBase):
             records = []
@@ -68,6 +73,24 @@ class TestMiscCoverageSupport(TestCase):
         self.assertIn(("NOTIFY", loc.with_lineno(offset + 2)), MyNotify.records)
 
         self.assertIn(("CLOSE", None), MyNotify.records)
+
+
+class TestNumbaTracerToolId(TestCase):
+    @unittest.skipUnless(coverage_available, "coverage not installed")
+    def test_tool_id_in_tracer_kwargs_accepted(self):
+        # Regression test for https://github.com/numba/numba/issues/10589.
+        # coverage >= 7.13.1 injects tool_id into tracer_kwargs when using the
+        # sysmon core; NumbaTracer must accept it without raising TypeError.
+        from numba.misc.coverage_support import NotifyCompilerCoverage
+
+        collector = MagicMock()
+        collector.core.tracer_kwargs = {'tool_id': 1, 'packed_arcs': False}
+        collector.branch = False
+        collector.should_start_context = None
+        collector.switch_context = None
+        collector.tracers = []
+
+        NotifyCompilerCoverage(collector)
 
 
 if __name__ == "__main__":

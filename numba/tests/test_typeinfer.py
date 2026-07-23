@@ -10,11 +10,12 @@ from numba.core import errors, ir, types, typing, typeinfer, utils
 from numba.core.typeconv import Conversion
 from numba.extending import overload_method
 
-from numba.tests.support import TestCase, tag
+from numba.tests.support import TestCase, tag, override_config
 from numba.tests.test_typeconv import CompatibilityTestMixin
 from numba.core.untyped_passes import TranslateByteCode, IRProcessing
 from numba.core.typed_passes import PartialTypeInference
 from numba.core.compiler_machinery import FunctionPass, register_pass
+from numba.core.bytecode import FunctionIdentity
 import unittest
 
 
@@ -930,6 +931,49 @@ class TestPartialTypingErrors(unittest.TestCase):
         self.assertTrue(isinstance(typing_errs, list) and len(typing_errs) == 1)
         self.assertTrue(isinstance(typing_errs[0], errors.TypingError) and
                         "Cannot unify" in typing_errs[0].msg)
+
+
+
+class TestTypeInferFailCache(unittest.TestCase):
+    @staticmethod
+    def mock_callstack_register():
+        # All the mock objects needed to stand up a callstack
+        callstack = typing.context.CallStack()
+        targetctx = numba.core.registry.cpu_target.target_context
+        typingctx = numba.core.registry.cpu_target.typing_context
+
+        def func():
+            pass
+
+        fid = FunctionIdentity.from_function(func)
+        fir = ir.FunctionIR({}, False, fid, ir.unknown_loc, {}, 0, ())
+        infer = typeinfer.TypeInferer(typingctx, fir, None)
+        return callstack, callstack.register(targetctx, infer, fid, ())
+
+    def test_fail_cache(self):
+        callstack, cb_register = self.mock_callstack_register()
+        with cb_register:
+            # mock since lookup_resolve_cache only needs a hashable object
+            functype = object()
+            resolve_cache = callstack.lookup_resolve_cache(functype, (), ())
+            self.assertFalse(resolve_cache.has_failed_previously())
+            resolve_cache.mark_failed()
+
+            resolve_cache = callstack.lookup_resolve_cache(functype, (), ())
+            self.assertTrue(resolve_cache.has_failed_previously())
+
+    def test_config_to_disable_fail_cache(self):
+        callstack, cb_register = self.mock_callstack_register()
+        config_override = override_config("DISABLE_TYPEINFER_FAIL_CACHE", True)
+        with config_override, cb_register:
+            # mock since lookup_resolve_cache only needs a hashable object
+            functype = object()
+            resolve_cache = callstack.lookup_resolve_cache(functype, (), ())
+            self.assertFalse(resolve_cache.has_failed_previously())
+            resolve_cache.mark_failed()
+
+            resolve_cache = callstack.lookup_resolve_cache(functype, (), ())
+            self.assertFalse(resolve_cache.has_failed_previously())
 
 
 if __name__ == '__main__':

@@ -2,7 +2,7 @@
 .. _simulator:
 
 =================================================
-Debugging CUDA Python with the the CUDA Simulator
+Debugging CUDA Python with the CUDA Simulator
 =================================================
 
 .. cuda-deprecated::

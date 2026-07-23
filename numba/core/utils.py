@@ -760,12 +760,20 @@ def dump_llvm(fndesc, module):
 
 
 class _lazy_pformat(object):
+    """ Lazily generate strings that may be useful only for debugging.
+        pformat is the default formatter but you can pass lazy_func kwarg
+        to use a different formatter.
+    """
     def __init__(self, *args, **kwargs):
+        self.func = pformat
         self.args = args
         self.kwargs = kwargs
+        if "lazy_func" in kwargs:
+            self.func = kwargs["lazy_func"]
+            del kwargs["lazy_func"]
 
     def __str__(self):
-        return pformat(*self.args, **self.kwargs)
+        return self.func(*self.args, **self.kwargs)
 
 
 class _LazyJSONEncoder(json.JSONEncoder):

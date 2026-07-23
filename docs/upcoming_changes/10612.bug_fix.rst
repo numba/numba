@@ -1,0 +1,12 @@
+Fix ``omp_set_nested`` deprecation warning in the OpenMP threading layer
+------------------------------------------------------------------------
+
+Numba's OpenMP threading layer called the deprecated ``omp_set_nested``
+routine when initializing its thread pool. On OpenMP 5.0+ runtimes (for
+example the Intel/LLVM ``libomp`` shipped with MKL), this caused the message
+``OMP: Info #273: omp_set_nested routine deprecated, please use
+omp_set_max_active_levels instead.`` to be emitted when running a parallel
+function with ``NUMBA_THREADING_LAYER=omp``. The threading layer now probes
+for ``omp_set_max_active_levels`` in the loaded OpenMP runtime and uses it
+when present, falling back to ``omp_set_nested`` only when the newer routine
+is unavailable (`#5275 <https://github.com/numba/numba/issues/5275>`_).

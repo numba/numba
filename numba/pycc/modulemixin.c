@@ -197,6 +197,19 @@ PYCC(pycc_init_) (PyObject *module, PyMethodDef *defs,
         }
         Py_DECREF(func);
     }
+    /* Recreate other environment objects 
+       envgvs is expected to end with a NULL pointer.
+    */
+    for (; envgvs[i]; ++i) {
+        EnvironmentObject *envobj;
+        envobj = recreate_environment(module, envs[i]);
+        if (envobj == NULL) {
+            goto error;
+        }
+        // Store the environment pointer into the global
+        *envgvs[i] = envobj;
+        Py_DECREF(envobj);
+    }
     Py_DECREF(docobj);
     Py_DECREF(modname);
     return 0;

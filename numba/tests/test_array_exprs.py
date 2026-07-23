@@ -9,7 +9,7 @@ from numba.core import utils, types, typing, ir, compiler, cpu, cgutils
 from numba.core.compiler import Compiler, Flags
 from numba.core.registry import cpu_target
 from numba.tests.support import (MemoryLeakMixin, TestCase, temp_directory,
-                                 create_temp_module)
+                                 create_temp_module, numpy_sincos_low_precision)
 from numba.extending import (
     overload,
     models,
@@ -90,8 +90,10 @@ def distance_matrix(vectors):
 
 class RewritesTester(Compiler):
     @classmethod
-    def mk_pipeline(cls, args, return_type=None, flags=None, locals={},
+    def mk_pipeline(cls, args, return_type=None, flags=None, locals=None,
                     library=None, typing_context=None, target_context=None):
+        if locals is None:
+            locals = {}
         if not flags:
             flags = Flags()
         flags.nrt = True
@@ -103,8 +105,10 @@ class RewritesTester(Compiler):
                    flags, locals)
 
     @classmethod
-    def mk_no_rw_pipeline(cls, args, return_type=None, flags=None, locals={},
+    def mk_no_rw_pipeline(cls, args, return_type=None, flags=None, locals=None,
                           library=None, **kws):
+        if locals is None:
+            locals = {}
         if not flags:
             flags = Flags()
         flags.no_rewrites = True
@@ -243,9 +247,12 @@ class TestArrayExpressions(MemoryLeakMixin, TestCase):
             fn(A, B, out)
             return out
 
+        ulps = 4 if numpy_sincos_low_precision else 1
         expected = run_func(fn)
-        self.assertPreciseEqual(expected, run_func(control_cfunc))
-        self.assertPreciseEqual(expected, run_func(test_cfunc))
+        self.assertPreciseEqual(expected, run_func(control_cfunc),
+                                prec='double', ulps=ulps)
+        self.assertPreciseEqual(expected, run_func(test_cfunc),
+                                prec='double', ulps=ulps)
 
         return Namespace(locals())
 

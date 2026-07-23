@@ -13,8 +13,51 @@ from collections import defaultdict
 from functools import wraps
 from abc import abstractmethod
 
-# Filled at the end
-__all__ = []
+__all__ = [
+    "ByteCodeSupportError",
+    "CompilerError",
+    "ConstantInferenceError",
+    "DeprecationError",
+    "ForbiddenConstruct",
+    "ForceLiteralArg",
+    "IRError",
+    "InternalError",
+    "InternalTargetMismatchError",
+    "LiteralTypingError",
+    "LoweringError",
+    "NonexistentTargetError",
+    "NotDefinedError",
+    "NumbaAssertionError",
+    "NumbaAttributeError",
+    "NumbaDebugInfoWarning",
+    "NumbaDeprecationWarning",
+    "NumbaError",
+    "NumbaExperimentalFeatureWarning",
+    "NumbaIRAssumptionWarning",
+    "NumbaIndexError",
+    "NumbaInvalidConfigWarning",
+    "NumbaKeyError",
+    "NumbaNotImplementedError",
+    "NumbaParallelSafetyWarning",
+    "NumbaPedanticWarning",
+    "NumbaPendingDeprecationWarning",
+    "NumbaPerformanceWarning",
+    "NumbaRuntimeError",
+    "NumbaSystemWarning",
+    "NumbaTypeError",
+    "NumbaTypeSafetyWarning",
+    "NumbaValueError",
+    "NumbaWarning",
+    "RedefinedError",
+    "RequireLiteralValue",
+    "TypingError",
+    "UnsupportedBytecodeError",
+    "UnsupportedError",
+    "UnsupportedParforsError",
+    "UnsupportedRewriteError",
+    "UntypedAttributeError",
+    "VerificationError",
+]
 
 
 def _is_numba_core_config_loaded():
@@ -364,8 +407,8 @@ feedback_details = """
 Please report the error message and traceback, along with a minimal reproducer
 at: https://github.com/numba/numba/issues/new?template=bug_report.md
 
-If more help is needed please feel free to speak to the Numba core developers
-directly at: https://gitter.im/numba/numba
+If more help is needed please feel free to ask on the Numba discourse forum:
+https://numba.discourse.group/
 
 Thanks in advance for your help in improving Numba!
 """
@@ -559,6 +602,9 @@ class NumbaError(Exception):
         Add contextual info.  The exception message is expanded with the new
         contextual information.
         """
+        if msg in self.contexts:
+            # avoid duplicating contexts
+            return self
         self.contexts.append(msg)
         f = termcolor().errmsg('{0}\n') + termcolor().filename('During: {1}')
         newmsg = f.format(self, msg)
@@ -834,6 +880,11 @@ class NumbaRuntimeError(NumbaError):
 
 
 def _format_msg(fmt, args, kwargs):
+    # If no formatting arguments are supplied, return the string unchanged.
+    # This avoids KeyError when fmt contains curly braces, which can be
+    # interpreted as format fields.
+    if not args and not kwargs:
+        return fmt
     return fmt.format(*args, **kwargs)
 
 
@@ -860,8 +911,3 @@ def new_error_context(fmt_, *args, **kwargs):
     except NumbaError as e:
         e.add_context(_format_msg(fmt_, args, kwargs))
         raise
-
-
-__all__ += [name for (name, value) in globals().items()
-            if not name.startswith('_') and isinstance(value, type)
-            and issubclass(value, (Exception, Warning))]

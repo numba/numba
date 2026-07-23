@@ -1,5 +1,5 @@
 try:
-    # This is usually the the first C extension import performed when importing
+    # This is usually the first C extension import performed when importing
     # Numba, if it fails to import, provide some feedback
     from numba.core.typeconv import _typeconv
 except ImportError as e:

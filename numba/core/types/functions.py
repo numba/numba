@@ -3,9 +3,10 @@ from collections import namedtuple, defaultdict
 import itertools
 import logging
 import textwrap
+import weakref
 from shutil import get_terminal_size
 
-from .abstract import Callable, DTypeSpec, Dummy, Literal, Type, weakref
+from .abstract import Callable, DTypeSpec, Dummy, Literal, Type
 from .common import Opaque
 from .misc import unliteral
 from numba.core import errors, utils, types, config
@@ -216,8 +217,11 @@ class _ResolutionFailures(object):
         """
         if isinstance(error, Exception) and hasattr(error, '__traceback__'):
             # traceback is unavailable in py2
-            frame = traceback.extract_tb(error.__traceback__)[-1]
-            return "{}:{}".format(frame[0], frame[1])
+            frame_list = traceback.extract_tb(error.__traceback__)
+            # Check if length of frame_list is 0
+            if len(frame_list) != 0:
+                frame = frame_list[-1]
+                return "{}:{}".format(frame[0], frame[1])
 
     def raise_error(self):
         for faillist in self._failures.values():
@@ -565,7 +569,7 @@ class Dispatcher(WeakType, Callable, Dummy):
         """
         return self.get_overload(sig)
 
-    def unify(self, context, other):
+    def unify(self, typingctx, other):
         return utils.unified_function_type((self, other), require_precise=False)
 
     def can_convert_to(self, typingctx, other):
@@ -596,7 +600,8 @@ class ExternalFunctionPointer(BaseFunction):
                                                  signature)
         from numba.core.types import ffi_forced_object
         if sig.return_type == ffi_forced_object:
-            raise TypeError("Cannot return a pyobject from a external function")
+            msg = "Cannot return a pyobject from an external function"
+            raise errors.TypingError(msg)
         self.sig = sig
         self.requires_gil = any(a == ffi_forced_object for a in self.sig.args)
         self.get_pointer = get_pointer
@@ -607,7 +612,8 @@ class ExternalFunctionPointer(BaseFunction):
 
                 def generic(self, args, kws):
                     if kws:
-                        raise TypeError("does not support keyword arguments")
+                        msg = "does not support keyword arguments"
+                        raise errors.TypingError(msg)
                     # Make ffi_forced_object a bottom type to allow any type to
                     # be casted to it. This is the only place that support
                     # ffi_forced_object.

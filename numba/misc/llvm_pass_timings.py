@@ -11,7 +11,7 @@ from numba.core import config
 import llvmlite.binding as llvm
 
 
-class RecordLLVMPassTimings:
+class RecordLLVMPassTimingsLegacy:
     """A helper context manager to track LLVM pass timings.
     """
 
@@ -28,6 +28,38 @@ class RecordLLVMPassTimings:
         """
         self._data = llvm.report_and_reset_timings()
         llvm.set_time_passes(False)
+        return
+
+    def get(self):
+        """Retrieve timing data for processing.
+
+        Returns
+        -------
+        timings: ProcessedPassTimings
+        """
+        return ProcessedPassTimings(self._data)
+
+
+class RecordLLVMPassTimings:
+    """A helper context manager to track LLVM pass timings.
+    """
+
+    __slots__ = ["_data", "_pb"]
+
+    def __init__(self, pb):
+        self._pb = pb
+        self._data = None
+
+    def __enter__(self):
+        """Enables the pass timing in LLVM.
+        """
+        self._pb.start_pass_timing()
+        return self
+
+    def __exit__(self, exc_val, exc_type, exc_tb):
+        """Reset timings and save report internally.
+        """
+        self._data = self._pb.finish_pass_timing()
         return
 
     def get(self):
@@ -265,6 +297,11 @@ class ProcessedPassTimings:
                         break
             # Check that we have reach the end of the report
             remaining = '\n'.join(line_iter)
+
+            # FIXME: Need to handle parsing of Analysis execution timing report
+            if "Analysis execution timing report" in remaining:
+                return
+
             if remaining:
                 raise ValueError(
                     f"unexpected text after parser finished:\n{remaining}"
@@ -290,7 +327,32 @@ class PassTimingsCollection(Sequence):
         self._records = []
 
     @contextmanager
-    def record(self, name):
+    def record_legacy(self, name):
+        """Record new timings and append to this collection.
+
+        Note: this is mainly for internal use inside the compiler pipeline.
+
+        See also ``RecordLLVMPassTimingsLegacy``
+
+        Parameters
+        ----------
+        name: str
+            Name for the records.
+        """
+        if config.LLVM_PASS_TIMINGS:
+            # Recording of pass timings is enabled
+            with RecordLLVMPassTimingsLegacy() as timings:
+                yield
+            rec = timings.get()
+            # Only keep non-empty records
+            if rec:
+                self._append(name, rec)
+        else:
+            # Do nothing. Recording of pass timings is disabled.
+            yield
+
+    @contextmanager
+    def record(self, name, pb):
         """Record new timings and append to this collection.
 
         Note: this is mainly for internal use inside the compiler pipeline.
@@ -304,7 +366,7 @@ class PassTimingsCollection(Sequence):
         """
         if config.LLVM_PASS_TIMINGS:
             # Recording of pass timings is enabled
-            with RecordLLVMPassTimings() as timings:
+            with RecordLLVMPassTimings(pb) as timings:
                 yield
             rec = timings.get()
             # Only keep non-empty records

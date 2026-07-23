@@ -515,11 +515,13 @@ class JITTimsortMixin(object):
     test_merge_at = None
     test_merge_force_collapse = None
 
-    def wrap_with_mergestate(self, timsort, func, _cache={}):
+    def wrap_with_mergestate(self, timsort, func, _cache=None):
         """
         Wrap *func* into another compiled function inserting a runtime-created
         mergestate as the first function argument.
         """
+        if _cache is None:
+            _cache = {}
         key = timsort, func
         if key in _cache:
             return _cache[key]
@@ -859,7 +861,9 @@ class TestNumpySort(TestCase):
         # The original wasn't mutated
         self.assertPreciseEqual(val, orig)
 
-    def check_argsort(self, pyfunc, cfunc, val, kwargs={}):
+    def check_argsort(self, pyfunc, cfunc, val, kwargs=None):
+        if kwargs is None:
+            kwargs = {}
         orig = copy.copy(val)
         expected = pyfunc(val, **kwargs)
         got = cfunc(val, **kwargs)

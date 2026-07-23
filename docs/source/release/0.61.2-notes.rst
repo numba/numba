@@ -1,0 +1,82 @@
+
+Version 0.61.2 (07 April 2025)
+==============================
+
+This is a maintenance release that adds support for NumPy 2.2 and fixes some
+regressions reported against 0.61.0.
+
+Highlights
+~~~~~~~~~~
+
+Support for NumPy 2.2
+---------------------
+
+Numba now supports NumPy 2.2, with the following notable changes:
+
+- ``np.empty(0)`` cannot be treated as a boolean value anymore. This is a
+  breaking change for code that relies on this behavior. The following code
+  will raise a ``ValueError``:
+
+  .. code-block:: python
+
+      import numpy as np
+      if np.empty(0):
+          print("This will not be printed")
+
+- Generic timedeltas can no longer be hashed due to undefined time units.
+
+- From NumPy 2.2 onwards, hash values for ``numpy.timedelta64`` and
+  ``numpy.datetime64`` instances computed in Numba compiled code do not match
+  the NumPy hash values of the same. Prior to NumPy 2.2, NumPy hash values for
+  ``numpy.timedelta64`` and ``numpy.datetime64`` instances were equivalent to
+  their integer value representation. From NumPy 2.2 onwards, their hash value
+  is the same as the hash of the equivalent type from the built-in ``datetime``
+  module, Numba does not replicate this behaviour.
+
+- ``np.trimzeros`` now also trims ``\0`` values.
+
+(`PR-#9919 <https://github.com/numba/numba/pull/9919>`__)
+
+
+Bug Fixes
+~~~~~~~~~
+
+Fix static type checker support for ``numba.core.types``
+--------------------------------------------------------
+
+When Numba 0.61 introduced the split type system, it resulted in dynamic type 
+behavior that was incompatible with static type checkers. To resolve this,
+we've added a type stub file (``.pyi``) for ``numba.core.types`` that provides
+explicit type annotations.
+
+(`PR-#9945 <https://github.com/numba/numba/pull/9945>`__)
+
+Fix issue in code generation for array set-slice.
+-------------------------------------------------
+
+The code generation for array set-slice was inadvertently written as being CPU
+target specific. This is now rectified and refactored so as to provide a
+"generic" target version that should be safe to use everywhere, along with an
+``@overload``-able stub to allow targets to implement custom versions as needed.
+
+(`PR-#9972 <https://github.com/numba/numba/pull/9972>`__)
+
+Pull-Requests:
+
+* PR `#9919 <https://github.com/numba/numba/pull/9919>`_: Support for NumPy 2.2 (`kc611 <https://github.com/kc611>`__)
+* PR `#9920 <https://github.com/numba/numba/pull/9920>`_: adding win-64 builder for Numba conda packages (`swap357 <https://github.com/swap357>`__ `esc <https://github.com/esc>`__)
+* PR `#9940 <https://github.com/numba/numba/pull/9940>`_: add GHA workflow for building numba wheels for win-64 (`swap357 <https://github.com/swap357>`__)
+* PR `#9945 <https://github.com/numba/numba/pull/9945>`_: Add type stub to numba.core.types to help static type checkers. (`sklam <https://github.com/sklam>`__)
+* PR `#9964 <https://github.com/numba/numba/pull/9964>`_: remove upper pin on NumPy (`esc <https://github.com/esc>`__)
+* PR `#9965 <https://github.com/numba/numba/pull/9965>`_: update win-64 conda builder test matrix (`swap357 <https://github.com/swap357>`__)
+* PR `#9972 <https://github.com/numba/numba/pull/9972>`_: Fix issue with error handling in slice assignment. (`stuartarchibald <https://github.com/stuartarchibald>`__)
+* PR `#9999 <https://github.com/numba/numba/pull/9999>`_: Added release notes and version table entry for 0.61.1rc1 (`kc611 <https://github.com/kc611>`__)
+* PR `#10002 <https://github.com/numba/numba/pull/10002>`_: GHA workflows and other cherry picks for release0.61.1 (`sklam <https://github.com/sklam>`__ `swap357 <https://github.com/swap357>`__ `kc611 <https://github.com/kc611>`__)
+
+Authors:
+
+* `esc <https://github.com/esc>`_
+* `kc611 <https://github.com/kc611>`_
+* `sklam <https://github.com/sklam>`_
+* `stuartarchibald <https://github.com/stuartarchibald>`_
+* `swap357 <https://github.com/swap357>`_
