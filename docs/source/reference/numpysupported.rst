@@ -605,6 +605,7 @@ The following top-level functions are supported:
 * :func:`numpy.swapaxes`
 * :func:`numpy.take` (only the 2 first arguments)
 * :func:`numpy.take_along_axis` (the axis argument must be a literal value)
+* :func:`numpy.tile` (``reps`` must be an integer or a tuple of integers)
 * :func:`numpy.transpose`
 * :func:`numpy.trapezoid` (only the 3 first arguments)
 * :func:`numpy.trapz` (only the 3 first arguments)

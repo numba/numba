@@ -3034,6 +3034,159 @@ def array_repeat(a, repeats):
     return array_repeat_impl
 
 
+@register_jitable
+def _np_tile_repeat_blocks(flat, block_size, nrep):
+    """Equivalent to c.reshape(-1, block_size).repeat(nrep, 0).ravel()
+    but in 1-D to keep the return type stable for Numba's type inference.
+    Numba's np.repeat has no axis parameter."""
+    n_blocks = len(flat) // block_size
+    out = np.empty(n_blocks * nrep * block_size, dtype=flat.dtype)
+    pos = 0
+    for i in range(n_blocks):
+        start = i * block_size
+        end = start + block_size
+        for _ in range(nrep):
+            out[pos:pos + block_size] = flat[start:end]
+            pos += block_size
+    return out
+
+
+def _np_tile_get_effective_ndim(A):
+    """Return the ndim of np.asarray(A) at compile time."""
+    if isinstance(A, types.Array):
+        return A.ndim
+    elif isinstance(A, (types.Integer, types.Float, types.Boolean,
+                        types.Complex)):
+        return 0
+    elif isinstance(A, (types.BaseTuple, types.List)):
+        return 1
+    return None
+
+
+def _generate_np_tile_promote(a_ndim, target_ndim):
+    """Generate a register_jitable that promotes an array from a_ndim
+    to target_ndim via expand_dims (equivalent to ndmin=target_ndim).
+    Uses separate variables per expand_dims call because Numba cannot
+    unify types across loop iterations that change an array's ndim."""
+    if a_ndim >= target_ndim:
+        @register_jitable
+        def _promote(arr):
+            return arr
+    else:
+        lines = ["def _promote(arr):"]
+        prev = "arr"
+        for i in range(target_ndim - a_ndim):
+            cur = f"arr{i}"
+            lines.append(f"    {cur} = np.expand_dims({prev}, 0)")
+            prev = cur
+        lines.append(f"    return {prev}")
+        ns = {}
+        exec("\n".join(lines), globals(), ns)
+        _promote = register_jitable(ns['_promote'])
+
+    return _promote
+
+
+@overload(np.tile)
+def np_tile(A, reps):
+    # Following NumPy's algorithm:
+    # https://github.com/numpy/numpy/blob/v2.4.0/numpy/lib/_shape_base_impl.py
+    # Deviations due to Numba limitations:
+    #   - np.array(A, ndmin=d) not supported → _generate_np_tile_promote
+    #   - np.repeat has no axis → _np_tile_repeat_blocks on flat data
+    #   - tuple concatenation limited → tuple_setitem with pre-allocated buffers
+
+    if not type_can_asarray(A):
+        msg = 'The argument "A" must be array-like'
+        raise errors.TypingError(msg)
+
+    if isinstance(reps, types.Integer):
+        a_ndim = _np_tile_get_effective_ndim(A)
+        if a_ndim is None:
+            msg = 'np.tile: unsupported input type'
+            raise errors.TypingError(msg)
+        out_ndim = max(a_ndim, 1)
+        shape_out_buf = tuple(range(out_ndim))
+        promote = _generate_np_tile_promote(a_ndim, out_ndim)
+
+        def np_tile_int_impl(A, reps):
+            if reps < 0:
+                raise ValueError("negative dimensions are not allowed")
+            arr = promote(np.asarray(A))
+            # Build shape_out = arr.shape[:-1] + (arr.shape[-1] * reps,)
+            shape_out = shape_out_buf
+            for i in range(out_ndim - 1):
+                shape_out = tuple_setitem(shape_out, i, arr.shape[i])
+            shape_out = tuple_setitem(
+                shape_out, out_ndim - 1, arr.shape[out_ndim - 1] * reps)
+            if reps == 0 or arr.size == 0:
+                return np.empty(shape_out, dtype=arr.dtype)
+            # Core loop: for each dim, repeat flat blocks of size n
+            n = arr.size
+            c = arr.flatten()
+            for i in range(out_ndim):
+                dim_in = arr.shape[i]
+                nrep = reps if i == out_ndim - 1 else 1
+                if nrep != 1:
+                    c = _np_tile_repeat_blocks(c, n, nrep)
+                n = n // dim_in
+            return c.reshape(shape_out)
+
+        return np_tile_int_impl
+
+    elif (isinstance(reps, types.UniTuple)
+          and isinstance(reps.dtype, types.Integer)):
+        d = len(reps)
+        a_ndim = _np_tile_get_effective_ndim(A)
+        if a_ndim is None:
+            msg = 'np.tile: unsupported input type'
+            raise errors.TypingError(msg)
+        out_ndim = max(a_ndim, d)
+        shape_out_buf = tuple(range(out_ndim))
+        padded_buf = tuple(range(out_ndim))
+        promote = _generate_np_tile_promote(a_ndim, out_ndim)
+
+        def np_tile_tuple_impl(A, reps):
+            has_zero = False
+            for r in reps:
+                if r < 0:
+                    raise ValueError("negative dimensions are not allowed")
+                if r == 0:
+                    has_zero = True
+            arr = promote(np.asarray(A))
+            # Build padded reps: (1,)*(nd-d) + reps
+            nd = out_ndim
+            padded = padded_buf
+            extra = nd - d
+            for i in range(extra):
+                padded = tuple_setitem(padded, i, 1)
+            for i in range(d):
+                padded = tuple_setitem(padded, extra + i, reps[i])
+            # Build shape_out = tuple(s * t for s, t in zip(arr.shape, padded))
+            shape_out = shape_out_buf
+            for i in range(nd):
+                shape_out = tuple_setitem(
+                    shape_out, i, arr.shape[i] * padded[i])
+            if has_zero or arr.size == 0:
+                return np.empty(shape_out, dtype=arr.dtype)
+            # Core loop: same as integer path, but using padded reps
+            n = arr.size
+            c = arr.flatten()
+            for i in range(nd):
+                dim_in = arr.shape[i]
+                nrep = padded[i]
+                if nrep != 1:
+                    c = _np_tile_repeat_blocks(c, n, nrep)
+                n = n // dim_in
+            return c.reshape(shape_out)
+
+        return np_tile_tuple_impl
+    else:
+        msg = ('The argument "reps" must be an integer or '
+               'a tuple of integers')
+        raise errors.TypingError(msg)
+
+
 @intrinsic
 def _intrin_get_itemsize(tyctx, dtype):
     """Computes the itemsize of the dtype"""
