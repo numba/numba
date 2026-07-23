@@ -325,6 +325,7 @@ Pull-Requests:
 * PR `#10713 <https://github.com/numba/numba/pull/10713>`_: Add AI tool use policy. (`stuartarchibald <https://github.com/stuartarchibald>`_)
 * PR `#10714 <https://github.com/numba/numba/pull/10714>`_: Update actions/checkout action to v7.0.1 (`renovate[bot] <https://github.com/apps/renovate>`_)
 * PR `#10722 <https://github.com/numba/numba/pull/10722>`_: add win-arm64 workflows to upload config (`swap357 <https://github.com/swap357>`_)
+* PR `#10724 <https://github.com/numba/numba/pull/10724>`_: Changelog `0.67` (`swap357 <https://github.com/swap357>`_)
 
 Authors:
 
