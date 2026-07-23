@@ -1522,7 +1522,7 @@ def isneginf(x, out=None):
 
 @overload(np.isposinf)
 def isposinf(x, out=None):
-    fn = register_jitable(lambda x: ~x)
+    fn = register_jitable(lambda x: np.logical_not(x))
     return is_np_inf_impl(x, out, fn)
 
 
@@ -1813,7 +1813,7 @@ def np_nancumprod(a):
             out = np.empty(a.size, retty)
             c = one
             for idx, v in enumerate(a.flat):
-                if ~is_nan(v):
+                if not is_nan(v):
                     c *= v
                 out[idx] = c
             return out
@@ -1838,7 +1838,7 @@ def np_nancumsum(a):
             out = np.empty(a.size, retty)
             c = zero
             for idx, v in enumerate(a.flat):
-                if ~is_nan(v):
+                if not is_nan(v):
                     c += v
                 out[idx] = c
             return out
@@ -2123,15 +2123,15 @@ def _collect_percentiles_inner(a, q):
             if percentile == 100:
                 val = np.max(a)
                 # heuristics to handle infinite values a la NumPy
-                if ~np.all(np.isfinite(a)):
-                    if ~np.isfinite(val):
+                if not np.all(np.isfinite(a)):
+                    if not np.isfinite(val):
                         val = np.nan
 
             # bypass pivoting where requested percentile is 0
             elif percentile == 0:
                 val = np.min(a)
                 # convoluted heuristics to handle infinite values a la NumPy
-                if ~np.all(np.isfinite(a)):
+                if not np.all(np.isfinite(a)):
                     num_pos_inf = np.sum(a == np.inf)
                     num_neg_inf = np.sum(a == -np.inf)
                     num_finite = n - (num_neg_inf + num_pos_inf)
@@ -2161,7 +2161,7 @@ def _collect_percentiles_inner(a, q):
 @register_jitable
 def _can_collect_percentiles(a, nan_mask, skip_nan):
     if skip_nan:
-        a = a[~nan_mask]
+        a = a[np.logical_not(nan_mask)]
         if len(a) == 0:
             return False  # told to skip nan, but no elements remain
     else:
@@ -2214,7 +2214,7 @@ def _collect_percentiles(a, q, check_q, factor, skip_nan):
     nan_mask = np.isnan(temp_arry)
 
     if _can_collect_percentiles(temp_arry, nan_mask, skip_nan):
-        temp_arry = temp_arry[~nan_mask]
+        temp_arry = temp_arry[np.logical_not(nan_mask)]
         out = _collect_percentiles_inner(temp_arry, q)
     else:
         out = np.full(len(q), np.nan)
@@ -3549,7 +3549,8 @@ def _check_val_int(a, val):
     v_max = iinfo.max
 
     # check finite values are within bounds
-    if np.any(~np.isfinite(val)) or np.any(val < v_min) or np.any(val > v_max):
+    not_finite = np.logical_not(np.isfinite(val))
+    if np.any(not_finite) or np.any(val < v_min) or np.any(val > v_max):
         raise ValueError('Unable to safely conform val to a.dtype')
 
 
