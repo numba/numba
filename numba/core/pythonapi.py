@@ -827,11 +827,11 @@ class PythonAPI(object):
     def set_iterate(self, set):
         builder = self.builder
 
-        hashptr = cgutils.alloca_once(builder, self.py_hash_t, name="hashptr")
-        keyptr = cgutils.alloca_once(builder, self.pyobj, name="keyptr")
+        hashptr = cgutils.alloca_once(builder, self.py_hash_t, name=".hashptr")
+        keyptr = cgutils.alloca_once(builder, self.pyobj, name=".keyptr")
         posptr = cgutils.alloca_once_value(builder,
                                            Constant(self.py_ssize_t, 0),
-                                           name="posptr")
+                                           name=".posptr")
 
         bb_body = builder.append_basic_block("bb_body")
         bb_end = builder.append_basic_block("bb_end")
