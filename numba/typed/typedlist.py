@@ -9,6 +9,7 @@ it should really quack like the CPython `list`.
 
 """
 from collections.abc import MutableSequence
+from types import GenericAlias
 
 from numba.core.types import ListType
 from numba.core.imputils import numba_typeref_ctor
@@ -26,21 +27,6 @@ from numba.core.extending import (
 from numba.typed import listobject
 from numba.core.errors import TypingError, LoweringError
 from numba.core.typing.templates import Signature
-import typing as pt
-
-
-Int_or_Slice = pt.Union["pt.SupportsIndex", slice]
-
-
-T_co = pt.TypeVar('T_co', covariant=True)
-
-
-class _Sequence(pt.Protocol[T_co]):
-    def __getitem__(self, i: int) -> T_co:
-        ...
-
-    def __len__(self) -> int:
-        ...
 
 
 DEFAULT_ALLOCATED = listobject.DEFAULT_ALLOCATED
@@ -186,17 +172,16 @@ def _from_meminfo_ptr(ptr, listtype):
     return List(meminfo=ptr, lsttype=listtype)
 
 
-T = pt.TypeVar('T')
-T_or_ListT = pt.Union[T, 'List[T]']
-
-
-class List(MutableSequence, pt.Generic[T]):
+class List(MutableSequence):
     """A typed-list usable in Numba compiled functions.
 
     Implements the MutableSequence interface.
     """
 
     _legal_kwargs = ["lsttype", "meminfo", "allocated"]
+
+    # enable using `List` as generic type at runtime
+    __class_getitem__ = classmethod(GenericAlias)
 
     def __new__(cls,
                 *args,
@@ -299,7 +284,7 @@ class List(MutableSequence, pt.Generic[T]):
         lsttype = types.ListType(typeof(item))
         self._list_type, self._opaque = self._parse_arg(lsttype)
 
-    def __len__(self) -> int:
+    def __len__(self):
         if not self._typed:
             return 0
         else:
@@ -338,58 +323,44 @@ class List(MutableSequence, pt.Generic[T]):
     def __ge__(self, other):
         return _ge(self, other)
 
-    def append(self, item: T) -> None:
+    def append(self, item):
         if not self._typed:
             self._initialise_list(item)
         _append(self, item)
 
-    # noqa F811 comments required due to github.com/PyCQA/pyflakes/issues/592
-    # noqa E704 required to follow overload style of using ... in the same line
-    @pt.overload  # type: ignore[override]
-    def __setitem__(self, i: int, o: T) -> None: ...  # noqa: F811, E704
-    @pt.overload
-    def __setitem__(self, s: slice, o: 'List[T]') -> None: ...  # noqa: F811, E704, E501
-
-    def __setitem__(self, i: Int_or_Slice, item: T_or_ListT) -> None:  # noqa: F811, E501
+    def __setitem__(self, i, item):
         if not self._typed:
             self._initialise_list(item)
         _setitem(self, i, item)
 
-    # noqa F811 comments required due to github.com/PyCQA/pyflakes/issues/592
-    # noqa E704 required to follow overload style of using ... in the same line
-    @pt.overload
-    def __getitem__(self, i: int) -> T: ...  # noqa: F811, E704
-    @pt.overload
-    def __getitem__(self, i: slice) -> 'List[T]': ...  # noqa: F811, E704
-
-    def __getitem__(self, i: Int_or_Slice) -> T_or_ListT:  # noqa: F811
+    def __getitem__(self, i):
         if not self._typed:
             raise IndexError
         else:
             return _getitem(self, i)
 
-    def __iter__(self) -> pt.Iterator[T]:
+    def __iter__(self):
         for i in range(len(self)):
             yield self[i]
 
-    def __contains__(self, item: T) -> bool:  # type: ignore[override]
+    def __contains__(self, item):
         return _contains(self, item)
 
-    def __delitem__(self, i: Int_or_Slice) -> None:
+    def __delitem__(self, i):
         _delitem(self, i)
 
-    def insert(self, i: int, item: T) -> None:
+    def insert(self, i, item):
         if not self._typed:
             self._initialise_list(item)
         _insert(self, i, item)
 
-    def count(self, item: T) -> int:
+    def count(self, item):
         return _count(self, item)
 
-    def pop(self, i: "pt.SupportsIndex" = -1) -> T:
+    def pop(self, i=-1):
         return _pop(self, i)
 
-    def extend(self, iterable: "_Sequence[T]") -> None: #type: ignore[override]
+    def extend(self, iterable):
         # Empty iterable, do nothing
         if len(iterable) == 0:
             return None
@@ -400,7 +371,7 @@ class List(MutableSequence, pt.Generic[T]):
             self._initialise_list(iterable[0])
         return _extend(self, iterable)
 
-    def remove(self, item: T) -> None:
+    def remove(self, item):
         return _remove(self, item)
 
     def clear(self):
@@ -412,8 +383,7 @@ class List(MutableSequence, pt.Generic[T]):
     def copy(self):
         return _copy(self)
 
-    def index(self, item: T, start: pt.Optional[int] = None,
-              stop: pt.Optional[int] = None) -> int:
+    def index(self, item, start=None, stop=None):
         return _index(self, item, start, stop)
 
     def sort(self, key=None, reverse=False):
