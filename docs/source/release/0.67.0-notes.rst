@@ -1,0 +1,272 @@
+
+Version 0.67.0 (Release Date)
+=============================
+
+
+Highlights
+~~~~~~~~~~
+
+Support for NumPy 2.5
+---------------------
+
+Numba now supports NumPy 2.5, with the following notable changes:
+
+- ``np.linalg.eig`` and ``np.linalg.eigvals`` now return complex
+  eigenvalues/eigenvectors for real input, matching NumPy 2.5. Previously,
+  real input produced real results and raised an error if the eigenvalues
+  turned out to be complex.
+
+- ``np.sign`` on ``timedelta64`` values now returns ``float64`` (with
+  ``NaT`` mapping to ``nan``), matching NumPy 2.5.
+
+- ``np.row_stack`` has been removed in NumPy 2.5. Use ``np.vstack``
+  instead.
+
+- The two-dimensional cross product has been removed in NumPy 2.5, so the
+  ``numba.np.extensions.cross2d`` helper is only available with
+  NumPy < 2.5.
+
+(`PR-#10645 <https://github.com/numba/numba/pull/10645>`__)
+
+
+Improvements
+~~~~~~~~~~~~
+
+``np.sum`` now supports dynamic ``axis`` argument.
+--------------------------------------------------
+
+The ``np.sum`` function now supports a dynamic ``axis`` argument,
+allowing users to specify the axis along which to perform the
+operation at runtime. The limitation of only supporting a static
+axis up to ``axis=3`` has also been removed.
+
+(`PR-#10625 <https://github.com/numba/numba/pull/10625>`__)
+
+``np.cumsum`` now supports dynamic ``axis`` argument.
+-----------------------------------------------------
+
+The ``np.cumsum`` function now supports a dynamic ``axis`` argument,
+allowing users to specify the axis along which to perform the
+operation at runtime.
+
+(`PR-#10657 <https://github.com/numba/numba/pull/10657>`__)
+
+Speed up legacy binomial sampling and align BTPE with NumPy 2.5
+---------------------------------------------------------------
+
+``np.random.binomial`` (RandomState) now uses NumPy's BTPE algorithm for large
+means (``n * min(p, 1 - p) > 30``) instead of BINV, substantially speeding up
+sampling for large ``n`` or mid-range probabilities while preserving the
+RandomState stream. The BTPE rejection squeeze shared by the RandomState and
+``Generator`` paths is also corrected: ``Generator.binomial`` now tracks NumPy
+2.5's fixed squeeze (https://github.com/numpy/numpy/pull/31238) when running
+against ``numpy >= 2.5``, matching NumPy's output, and is left unchanged under
+older NumPy. The legacy ``np.random.binomial`` stream is unchanged.
+
+(`PR-#10694 <https://github.com/numba/numba/pull/10694>`__)
+
+
+NumPy Support
+~~~~~~~~~~~~~
+
+Added ``ddof`` argument to ``np.nanvar`` and ``np.nanstd``
+----------------------------------------------------------
+
+The ``ddof`` (Delta Degrees of Freedom) argument is now supported in
+``np.nanvar`` and ``np.nanstd`` in nopython mode, matching NumPy behaviour.
+Default ``ddof=0`` preserves backward compatibility.
+
+(`PR-#10540 <https://github.com/numba/numba/pull/10540>`__)
+
+Added support for ``np.insert``
+-------------------------------
+
+``numpy.insert`` is now supported in nopython mode. The ``arr``, ``obj`` and
+``values`` arguments are supported, where ``obj`` may be an integer or a
+sequence/array of integers. As with ``numpy.delete``, the insertion is
+performed on the flattened input array (the ``axis`` argument is not yet
+supported).
+
+(`PR-#10660 <https://github.com/numba/numba/pull/10660>`__)
+
+
+Performance Improvements and Changes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Use topological iteration order in liveness fix-point analysis
+--------------------------------------------------------------
+
+Previously, ``compute_live_map`` and ``compute_live_variables`` iterated over
+basic blocks in dict-insertion order during their fix-point loops, which could
+require a number of iterations proportional to the loop-nesting depth (or to how
+far block order had drifted from topological order after inlining/merging) to
+converge. Both fix-points now iterate in topological order (and reverse
+topological order for the backward liveness pass), which converges in a small
+constant number of iterations regardless of graph size. This is a
+behavior-preserving change that reduces compilation time, most noticeably on
+large generated or unrolled functions with many basic blocks.
+
+(`PR-#10616 <https://github.com/numba/numba/pull/10616>`__)
+
+Use set for on_stack membership test in back-edge detection
+-----------------------------------------------------------
+
+Previously, ``_find_back_edges`` tested ``cur_node in stack`` where ``stack``
+is a list, making each membership check O(n). The DFS now maintains a parallel
+``on_stack`` set for O(1) lookups, improving back-edge detection performance.
+
+(`PR-#10618 <https://github.com/numba/numba/pull/10618>`__)
+
+
+Bug Fixes
+~~~~~~~~~
+
+Fix ``omp_set_nested`` deprecation warning in the OpenMP threading layer
+------------------------------------------------------------------------
+
+Numba's OpenMP threading layer called the deprecated ``omp_set_nested``
+routine when initializing its thread pool. On OpenMP 5.0+ runtimes (for
+example the Intel/LLVM ``libomp`` shipped with MKL), this caused the message
+``OMP: Info #273: omp_set_nested routine deprecated, please use
+omp_set_max_active_levels instead.`` to be emitted when running a parallel
+function with ``NUMBA_THREADING_LAYER=omp``. The threading layer now probes
+for ``omp_set_max_active_levels`` in the loaded OpenMP runtime and uses it
+when present, falling back to ``omp_set_nested`` only when the newer routine
+is unavailable (`#5275 <https://github.com/numba/numba/issues/5275>`_).
+
+(`PR-#10612 <https://github.com/numba/numba/pull/10612>`__)
+
+Make ``pycc`` AOT-compiled extensions reproducible
+--------------------------------------------------
+
+Extension modules produced by ``numba.pycc`` are now byte-for-byte
+identical across independent builds of the same source on Linux and MacOS.
+Previously, several mangled LLVM symbol names and global names
+embedded process-specific values (``id(obj)``, the default ``object.__repr__``
+of ``CPUContext``), so two builds of the same module produced AOT binaries with
+different MD5 hashes.
+
+(`PR-#10615 <https://github.com/numba/numba/pull/10615>`__)
+
+Fix silent miscompile when reassigning a nonlocal in an inner function
+----------------------------------------------------------------------
+
+Assigning a ``nonlocal`` variable more than once inside an inner function
+dropped every write after the first without error. Numba now raises an
+``UnsupportedError`` at compile time instead of miscompiling.
+
+(`PR-#10637 <https://github.com/numba/numba/pull/10637>`__)
+
+Sort ``numba.cext`` C sources for reproducible AOT builds
+---------------------------------------------------------
+
+``numba.pycc`` collected its C mixin sources via ``os.listdir``, whose
+order is filesystem-defined and varies across hosts. This made the source
+(and hence symbol) order of AOT-compiled binaries non-deterministic across
+build machines. The sources are now sorted so independent builds produce
+byte-for-byte identical binaries.
+
+(`PR-#10666 <https://github.com/numba/numba/pull/10666>`__)
+
+Make ``pycc`` AOT-compiled extensions reproducible on macOS with debug builds
+-----------------------------------------------------------------------------
+
+Extension modules produced by ``numba.pycc`` on macOS are now byte-for-byte
+identical across independent builds even when the interpreter's ``sysconfig``
+compiles extensions with debug information (``-g``). Previously, the macOS
+linker embedded an ``N_OSO`` debug-map entry per object file holding the
+object's absolute path inside a randomly-named temporary build directory
+(and its modification time), so two builds of the same module produced AOT
+binaries with different hashes. The macOS link step now passes ``-Wl,-S`` to
+strip the debug map while preserving the symbols required at runtime.
+
+(`PR-#10669 <https://github.com/numba/numba/pull/10669>`__)
+
+Fix a miscompile in ``pointer_add``
+-----------------------------------
+
+``pointer_add`` built the offset pointer through a ``ptrtoint``/``inttoptr``
+round-trip, producing a pointer with no provenance that LLVM could miscompile
+once inlined, returning invalid results or raising spurious exceptions.
+It now uses a byte-wise ``getelementptr`` instead, which preserves provenance.
+Fixed spurious errors during element access on non-contiguous (``'A'`` layout) arrays.
+
+(`PR-#10696 <https://github.com/numba/numba/pull/10696>`__)
+
+Fix loss of ``@intrinsic`` lowering across compilation targets
+--------------------------------------------------------------
+
+An intrinsic typed on a second target (for example CUDA after the CPU)
+replaced the shared implementation cache entry with a closure whose lowering
+was registered only on that target, so a later compilation on the first
+target failed with ``NotImplementedError: No definition for lowering``. The
+implementation cache is now keyed by the typing context as well as the
+argument types.
+
+(`PR-#10699 <https://github.com/numba/numba/pull/10699>`__)
+
+Fix Dynamic Raise Exception Message Handling
+--------------------------------------------
+
+Raising a dynamic exception with a literal message stored in a variable could cause the compiled code to display a different literal value.
+Numba now handles dynamic exception message variables self-consistently, and prevents message collisions between variables with the same underlying storage representation.
+
+(`PR-#10702 <https://github.com/numba/numba/pull/10702>`__)
+
+Fix internal ``KeyError`` in ``literal_unroll`` when a variable name is reused
+------------------------------------------------------------------------------
+
+Iterating with ``literal_unroll`` failed with an internal ``KeyError`` when a
+variable indexed in the loop body had its name reused elsewhere in the
+function. Numba now raises an ``UnsupportedError`` naming the variable.
+
+(`PR-#10710 <https://github.com/numba/numba/pull/10710>`__)
+
+
+Documentation Changes
+~~~~~~~~~~~~~~~~~~~~~
+
+Add Windows on ARM64 to support policy Tier 1.5
+-----------------------------------------------
+
+The :ref:`Support Tiers <support_tiers>` documentation now lists ``win-arm64``
+(Windows on 64-bit ARM) as a Tier 1.5 release configuration.  Wheel and conda
+packages are initially provided for Python 3.14 only; support for additional
+Python versions may be added in the future.
+
+(`PR-#10569 <https://github.com/numba/numba/pull/10569>`__)
+
+Add AI tool use policy.
+-----------------------
+
+The Numba org now has an AI tool use policy:
+https://numba.readthedocs.io/en/stable/reference/ai_tools_policy.html
+
+(`PR-#10713 <https://github.com/numba/numba/pull/10713>`__)
+
+
+Infrastructure Related Changes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Add Windows on ARM64 CI and build support
+-----------------------------------------
+
+Added GitHub Actions workflows to build and test Numba conda packages and
+wheels on ``win-arm64`` runners. The conda recipe now supports ARM64
+Windows builds with VS2022. Several tests that trigger an LLVM 22
+AArch64 frame lowering assertion on ``win-arm64`` are skipped pending
+fix (`llvm/llvm-project#204060 <https://github.com/llvm/llvm-project/issues/204060>`_).
+
+(`PR-#10644 <https://github.com/numba/numba/pull/10644>`__)
+
+Re-enable win-arm64 tests after LLVM FrameLowering fix
+------------------------------------------------------
+
+Several tests that were temporarily skipped on ``win-arm64`` due to an LLVM 22
+AArch64 frame lowering assertion when JIT-compiling functions with 40 or more
+arguments are now run again. The ``win-arm64`` CI workflows use a patched
+LLVM build that includes the upstream fix (`llvm/llvm-project#204347
+<https://github.com/llvm/llvm-project/pull/204347>`_;
+`numba/llvmlite#1439 <https://github.com/numba/llvmlite/pull/1439>`_).
+
+(`PR-#10664 <https://github.com/numba/numba/pull/10664>`__)

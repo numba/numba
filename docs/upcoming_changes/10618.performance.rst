@@ -1,7 +1,0 @@
-Use set for on_stack membership test in back-edge detection
------------------------------------------------------------
-
-Previously, ``_find_back_edges`` tested ``cur_node in stack`` where ``stack``
-is a list, making each membership check O(n). The DFS now maintains a parallel
-``on_stack`` set for O(1) lookups, improving back-edge detection performance.
-

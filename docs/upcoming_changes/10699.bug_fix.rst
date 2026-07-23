@@ -1,9 +1,0 @@
-Fix loss of ``@intrinsic`` lowering across compilation targets
---------------------------------------------------------------
-
-An intrinsic typed on a second target (for example CUDA after the CPU)
-replaced the shared implementation cache entry with a closure whose lowering
-was registered only on that target, so a later compilation on the first
-target failed with ``NotImplementedError: No definition for lowering``. The
-implementation cache is now keyed by the typing context as well as the
-argument types.

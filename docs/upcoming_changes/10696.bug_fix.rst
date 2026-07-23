@@ -1,8 +1,0 @@
-Fix a miscompile in ``pointer_add``
------------------------------------
-
-``pointer_add`` built the offset pointer through a ``ptrtoint``/``inttoptr``
-round-trip, producing a pointer with no provenance that LLVM could miscompile
-once inlined, returning invalid results or raising spurious exceptions.
-It now uses a byte-wise ``getelementptr`` instead, which preserves provenance.
-Fixed spurious errors during element access on non-contiguous (``'A'`` layout) arrays.
