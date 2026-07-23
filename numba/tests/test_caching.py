@@ -528,6 +528,61 @@ class TestCache(DispatcherCacheUsecasesTest):
         f = mod.add_usecase
         self.assertPreciseEqual(f(2, 3), 15)
 
+    def _corrupt_cache_file(self, suffix, data=b""):
+        # Simulate an interrupted or partial write to a cache file.
+        [name] = [fn for fn in self.cache_contents()
+                  if fn.endswith(suffix)]
+        with open(os.path.join(self.cache_dir, name), "wb") as f:
+            f.write(data)
+
+    def test_corrupt_data_file(self):
+        # An empty data file is a miss, not an EOFError (#10434)
+        mod = self.import_module()
+        f = mod.add_usecase
+        self.assertPreciseEqual(f(2, 3), 6)
+        self.check_pycache(2)  # 1 index, 1 data
+        self._corrupt_cache_file(".nbc")
+        mod = self.import_module()
+        f = mod.add_usecase
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always', NumbaWarning)
+            self.assertPreciseEqual(f(2, 3), 6)
+        self.check_hits(f, 0, 1)
+        msgs = [str(x.message) for x in w]
+        self.assertTrue(any('is corrupt and will be rebuilt' in m
+                            for m in msgs), msgs)
+
+    def test_corrupt_index_file(self):
+        # A garbage index file is a miss, not an UnpicklingError (#10434)
+        mod = self.import_module()
+        f = mod.add_usecase
+        self.assertPreciseEqual(f(2, 3), 6)
+        self.check_pycache(2)  # 1 index, 1 data
+        self._corrupt_cache_file(".nbi", b"not a pickle")
+        mod = self.import_module()
+        f = mod.add_usecase
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always', NumbaWarning)
+            self.assertPreciseEqual(f(2, 3), 6)
+        self.check_hits(f, 0, 1)
+        msgs = [str(x.message) for x in w]
+        self.assertTrue(any('is corrupt and will be rebuilt' in m
+                            for m in msgs), msgs)
+
+    def test_valid_cache_no_warning(self):
+        # A valid cache hit must not emit a corrupt-cache warning (#10434)
+        mod = self.import_module()
+        f = mod.add_usecase
+        self.assertPreciseEqual(f(2, 3), 6)
+        mod = self.import_module()
+        f = mod.add_usecase
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always', NumbaWarning)
+            self.assertPreciseEqual(f(2, 3), 6)
+        self.check_hits(f, 1, 0)
+        msgs = [str(x.message) for x in w]
+        self.assertFalse(any('is corrupt' in m for m in msgs), msgs)
+
     def test_same_names(self):
         # Function with the same names should still disambiguate
         mod = self.import_module()
