@@ -6988,18 +6988,28 @@ def lt_implementation(dtype):
         return default_lt
 
 
-@lower_builtin("array.sort", types.Array)
+@lower_builtin("array.sort", types.Array, types.StringLiteral)
 def array_sort(context, builder, sig, args):
-    arytype = sig.args[0]
+    arytype, kind = sig.args
 
-    sort_func = get_sort_func(kind='quicksort',
+    sort_func = get_sort_func(kind=kind.literal_value,
                               lt_impl=lt_implementation(arytype.dtype))
 
-    def array_sort_impl(arr):
-        # Note we clobber the return value
-        sort_func(arr)
+    if kind.literal_value == 'mergesort' and arytype.ndim > 1:
+        def array_sort_impl(arr):
+            # mergesort only sorts 1D arrays, so sort each slice along
+            # the last axis as quicksort does for multidimensional arrays
+            for idx in np.ndindex(arr.shape[:-1]):
+                sort_func(arr[idx])
+    else:
+        def array_sort_impl(arr):
+            # Note we clobber the return value
+            sort_func(arr)
 
-    return context.compile_internal(builder, array_sort_impl, sig, args)
+    innersig = sig.replace(args=sig.args[:1])
+    innerargs = args[:1]
+    return context.compile_internal(builder, array_sort_impl,
+                                    innersig, innerargs)
 
 
 @overload(np.sort)
