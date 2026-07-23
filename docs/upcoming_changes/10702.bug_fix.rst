@@ -1,5 +1,0 @@
-Fix Dynamic Raise Exception Message Handling
---------------------------------------------
-
-Raising a dynamic exception with a literal message stored in a variable could cause the compiled code to display a different literal value.
-Numba now handles dynamic exception message variables self-consistently, and prevents message collisions between variables with the same underlying storage representation.

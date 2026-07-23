@@ -1,6 +1,0 @@
-Add AI tool use policy.
------------------------
-
-The Numba org now has an AI tool use policy:
-https://numba.readthedocs.io/en/stable/reference/ai_tools_policy.html
-
