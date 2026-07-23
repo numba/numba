@@ -1,0 +1,6 @@
+Guard against unrelated 'coverage' modules on sys.path
+------------------------------------------------------
+
+Fix ``AttributeError: module 'coverage' has no attribute 'types'`` in
+``numba.misc.coverage_support`` when an unrelated directory or module named
+``coverage`` exists on ``sys.path``.
