@@ -1631,6 +1631,11 @@ class Interpreter(object):
         """
         self._inject_call(eh.end_try_block, 'end_try_block')
 
+    def _insert_exception_match_end(self):
+        """Insert IR-nodes to mark the end of 'except' block.
+        """
+        self._inject_call(eh.end_matching_block, 'end_matching_block')
+
     def _insert_exception_variables(self):
         """Insert IR-nodes to initialize the exception variables.
         """
@@ -3269,17 +3274,15 @@ class Interpreter(object):
                         loc=self.loc)
         self.current_block.append(bra)
 
-    def op_RERAISE(self, inst, exc):
+    def op_RERAISE(self, inst, exc, lasti):
         tryblk = self.dfainfo.active_try_block
         if tryblk is not None:
-            stmt = ir.TryRaise(exception=None, loc=self.loc)
-            self.current_block.append(stmt)
             self._insert_try_block_end()
+            self._insert_exception_match_end()
             self.current_block.append(ir.Jump(tryblk['end'], loc=self.loc))
         else:
-            # Numba can't handle this case and it's caught else where, this is a
-            # runtime guard in case this is reached by unknown means.
-            msg = (f"Unreachable condition reached (op code RERAISE executed)"
+            self._insert_exception_match_end()
+            msg = (f"Unreachable condition reached (op code RERAISE executed) "
                    f"{error_extras['reportable']}")
             stmt = ir.StaticRaise(AssertionError, (msg,), self.loc)
             self.current_block.append(stmt)
