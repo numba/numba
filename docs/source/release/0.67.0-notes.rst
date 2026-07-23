@@ -4,7 +4,7 @@ Version 0.67.0 (TBD)
 
 This is a major Numba release. Numba now adds support for NumPy 2.5.
 This release also ships Python 3.14 conda packages and wheels for
-Windows ARM64. It adds ``np.insert``, and a dynamic ``axis``
+Windows ARM64. It also adds JIT-compilation support for ``np.insert`` and dynamic ``axis``
 argument for ``np.sum`` and ``np.cumsum``.
 
 Please find a summary of all noteworthy items below.
