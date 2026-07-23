@@ -224,7 +224,9 @@ class TestWrappers(TestCase):
         sig = foo.signatures[0]
 
         ol = foo.overloads[sig]
-        name = ol.fndesc.mangled_name.replace("$", r"\$")
+        name = ol.fndesc.mangled_name
+        name = ol.library._symbol_map.get(name, name)
+        name = name.replace("$", r"\$")
         p1 = r".*call.*{}".format(name)
         p2 = r".*(#[0-9]+).*"
         call_site = re.compile(p1 + p2)
