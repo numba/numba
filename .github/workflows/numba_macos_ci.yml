@@ -1,0 +1,77 @@
+name: numba_macos_ci
+
+on:
+  pull_request:
+
+# Add concurrency control
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  macOS:
+    name: macOS ${{ matrix.name }}
+    runs-on: macos-14
+    env:
+      # Change the following along with adding new TEST_START_INDEX entries in matrix
+      # NOTE: Azure uses TEST_COUNT=19 (shards 0-18), GHA macOS uses shards 19-21
+      TEST_COUNT: 22
+      CONDA_ENV: numba_ci
+      PYTHON: ${{ matrix.python }}
+      NUMPY: ${{ matrix.numpy }}
+      TEST_START_INDEX: ${{ matrix.test_start_index }}
+    defaults:
+      run:
+        shell: bash -el {0}
+    strategy:
+      matrix:
+        include:
+          - name: py310_np123
+            python: '3.10'
+            numpy: '1.23'
+            test_threading: 'tbb'
+            test_start_index: 19
+          - name: py312_np126
+            python: '3.12'
+            numpy: '1.26'
+            test_start_index: 20
+          - name: py313_np23
+            python: '3.13'
+            numpy: '2.3'
+            test_start_index: 21
+      fail-fast: false
+
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Setup conda environment
+        run: |
+          set -e
+          # Only export TEST_THREADING if it has a value (script expects unset, not empty)
+          if [ -n "${{ matrix.test_threading }}" ]; then
+            export TEST_THREADING="${{ matrix.test_threading }}"
+          fi
+          echo "Installing Miniconda"
+          buildscripts/incremental/install_miniconda.sh
+          export PATH=$HOME/miniconda3/bin:$PATH
+          echo "Setting up Conda environment"
+          buildscripts/incremental/setup_conda_environment.sh
+
+      - name: Build
+        run: |
+          set -e
+          export PATH=$HOME/miniconda3/bin:$PATH
+          buildscripts/incremental/build.sh
+
+      - name: Test
+        run: |
+          set -e
+          # Only export TEST_THREADING if it has a value (script expects unset, not empty)
+          if [ -n "${{ matrix.test_threading }}" ]; then
+            export TEST_THREADING="${{ matrix.test_threading }}"
+          fi
+          export PATH=$HOME/miniconda3/bin:$PATH
+          buildscripts/incremental/test.sh
