@@ -23,7 +23,7 @@ numba\.core\.untyped_passes\..*
 numba\.core\.utils\..*
 numba\.cpython\..*
 numba\.cuda\..*
-numba\.experimental\..*
+numba\.experimental\.structref
 numba\.misc\..*
 numba\.mviewbuf
 numba\.np\.(arraymath|arrayobj|linalg|npyimpl|numpy_support|random|types|ufunc_db|unsafe)\..*
