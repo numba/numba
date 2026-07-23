@@ -158,6 +158,34 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder',
         assert ctx.get_data_type(self.base_type) == store_value.type
         bld.store(store_value, self._load_effective_address(indices))
 
+    def guard_broadcast(self, loopshape, argno):
+        # Check that this input array broadcasts onto the output (loop)
+        # shape. Used when the output array is provided by the caller (an
+        # in-place operator like a += b or an explicit out=), where the
+        # broadcast check in _build_array is skipped (issue #9166).
+        msg = "unable to broadcast argument %d to output array" % argno
+        def raise_impl(loop_shape, array_shape):
+            nloop = len(loop_shape)
+            narr = len(array_shape)
+            incompatible = narr > nloop
+            if not incompatible:
+                offset = nloop - narr
+                for i in range(narr):
+                    dim = array_shape[i]
+                    if dim != 1 and dim != loop_shape[offset + i]:
+                        incompatible = True
+            if incompatible:
+                raise ValueError(msg)
+
+        context, builder = self.context, self.builder
+        sig = types.none(
+            types.UniTuple(types.intp, len(loopshape)),
+            types.UniTuple(types.intp, len(self.shape)),
+        )
+        tup = (context.make_tuple(builder, sig.args[0], loopshape),
+               context.make_tuple(builder, sig.args[1], self.shape))
+        context.compile_internal(builder, raise_impl, sig, tup)
+
 
 class _ArrayGUHelper(namedtuple('_ArrayHelper', ('context', 'builder',
                                                  'shape', 'strides', 'data',
@@ -497,6 +525,16 @@ def numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
         raise RuntimeError(
             "Not enough inputs to {}, expected {} got {}"
             .format(ufunc.__name__, ufunc.nin, len(arguments)))
+
+    # When the output array is provided by the caller (an in-place operator
+    # like a += b or an explicit out=), the broadcast check that _build_array
+    # runs for an implicit output is skipped. Validate here that every input
+    # broadcasts onto the provided output shape (issue #9166).
+    for provided_output in arguments[ufunc.nin:]:
+        if isinstance(provided_output, _ArrayHelper):
+            for argno, inp in enumerate(arguments[:ufunc.nin]):
+                if isinstance(inp, _ArrayHelper):
+                    inp.guard_broadcast(provided_output.shape, argno)
 
     for out_i, ret_ty in enumerate(_unpack_output_types(ufunc, sig)):
         if ufunc.nin + out_i >= len(arguments):

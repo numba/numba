@@ -1151,6 +1151,71 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
         self.inplace_int_op_test(operator.irshift, [0, 5, -10, -51],
                                  [0, 1, 4, 14])
 
+    def test_inplace_broadcast_mismatch(self):
+        # Issue #9166: an in-place operator whose operands do not broadcast
+        # must raise like NumPy, not silently ignore the shape mismatch.
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        @njit
+        def inplace_and(a, b):
+            a &= b
+            return a
+
+        @njit
+        def inplace_add(a, b):
+            a += b
+            return a
+
+        with self.assertRaises(ValueError) as raises:
+            inplace_and(np.array([True, False, True]),
+                        np.array([True, False]))
+        self.assertIn("unable to broadcast", str(raises.exception))
+
+        with self.assertRaises(ValueError) as raises:
+            inplace_add(np.ones((3, 4)), np.ones(3))
+        self.assertIn("unable to broadcast", str(raises.exception))
+
+        # The input must not have more dimensions than the output either.
+        with self.assertRaises(ValueError):
+            inplace_add(np.ones(4), np.ones((3, 4)))
+
+        # Valid broadcasts keep working: right-aligned and size-1.
+        got = inplace_add(np.ones((3, 4)), np.arange(4.0))
+        np.testing.assert_array_equal(got, np.ones((3, 4)) + np.arange(4.0))
+        got = inplace_add(np.ones((3, 4)), np.ones(1))
+        np.testing.assert_array_equal(got, np.full((3, 4), 2.0))
+
+    def test_out_broadcast_errors(self):
+        # Issue #9166, ported from NumPy's
+        # TestUfunc.test_out_broadcast_errors. A caller-provided output may
+        # broadcast the inputs, but it cannot be smaller than the result, so
+        # a too-small out must raise instead of silently writing.
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        @njit
+        def positive_out(a, out):
+            return np.positive(a, out)
+
+        @njit
+        def add_out(a, b, out):
+            return np.add(a, b, out)
+
+        cases = [
+            (np.ones(1), np.empty(())),
+            (np.ones(2), np.empty(1)),
+            (np.ones((4, 3)), np.empty((4, 1))),
+        ]
+        for arr, out in cases:
+            with self.assertRaises(ValueError) as raises:
+                positive_out(arr, out)
+            self.assertIn("unable to broadcast", str(raises.exception))
+
+            with self.assertRaises(ValueError) as raises:
+                add_out(np.ones(()), arr, out)
+            self.assertIn("unable to broadcast", str(raises.exception))
+
     def test_unary_positive_array_op_2(self):
         '''
         Verify that the unary positive operator copies values, and doesn't
