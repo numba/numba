@@ -574,7 +574,9 @@ def dot_2_impl(name, a, b):
                                    "dimensions") % name)
             return signature(return_type, a, b), _dot2_codegen
 
-        if a.layout not in 'CF' or b.layout not in 'CF':
+        if (
+            a.layout not in "CF" or b.layout not in "CF"
+        ) and not config.DISABLE_PERFORMANCE_WARNINGS:
             warnings.warn(
                 "%s is faster on contiguous arrays, called on %s" % (
                     name, (a, b),), NumbaPerformanceWarning)
@@ -605,7 +607,9 @@ def vdot(left, right):
                     "np.vdot() arguments must all have the same dtype")
             return signature(left.dtype, left, right), codegen
 
-        if left.layout not in 'CF' or right.layout not in 'CF':
+        if (
+            left.layout not in "CF" or right.layout not in "CF"
+        ) and not config.DISABLE_PERFORMANCE_WARNINGS:
             warnings.warn(
                 "np.vdot() is faster on contiguous arrays, called on %s"
                 % ((left, right),), NumbaPerformanceWarning)
@@ -808,8 +812,11 @@ def dot_3(a, b, out):
 
             return signature(out, a, b, out), codegen
 
-        if a.layout not in 'CF' or b.layout not in 'CF' or out.layout\
-            not in 'CF':
+        if (
+            a.layout not in "CF"
+            or b.layout not in "CF"
+            or out.layout not in "CF"
+        ) and not config.DISABLE_PERFORMANCE_WARNINGS:
             warnings.warn(
                 "np.vdot() is faster on contiguous arrays, called on %s"
                 % ((a, b),), NumbaPerformanceWarning)

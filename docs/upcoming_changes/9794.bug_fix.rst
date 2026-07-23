@@ -1,0 +1,7 @@
+Add missing ``config.DISABLE_PERFORMANCE_WARNINGS`` checks
+----------------------------------------------------------
+
+A bug where some Numba functions raise a ``NumbaPerformanceWarning``
+despite setting ``config.DISABLE_PERFORMANCE_WARNINGS`` (or the
+``NUMBA_DISABLE_PERFORMANCE_WARNINGS`` environment variable) has been
+fixed.
