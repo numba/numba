@@ -1786,6 +1786,15 @@ class TestNestedArrays(TestCase):
 
         self.assertEqual(expected, actual)
 
+    def test_issue_10235(self):
+        array = np.empty(1, dtype=[("mask", bool,2)])
+
+        @njit
+        def func(array):
+            return array[0]["mask"][0]
+
+        self.assertEqual(func(array), func.py_func(array))
+
 
 if __name__ == '__main__':
     unittest.main()
