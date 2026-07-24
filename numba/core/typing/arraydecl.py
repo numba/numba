@@ -138,8 +138,11 @@ def get_array_index_type(ary, idx):
 
         def keeps_contiguity(ty, is_innermost):
             # A slice can only keep an array contiguous if it is the
-            # innermost index and it is not strided
+            # innermost index and it is not strided. A newaxis (None)
+            # index never affects contiguity, as it just inserts a new
+            # dimension of size 1 without touching the underlying data.
             return (ty is types.ellipsis or isinstance(ty, types.Integer)
+                    or is_nonelike(ty)
                     or (is_innermost and isinstance(ty, types.SliceType)
                         and not ty.has_step))
 
@@ -148,8 +151,14 @@ def get_array_index_type(ary, idx):
             Whether indexing with the given indices (from outer to inner in
             physical layout order) can keep an array contiguous.
             """
-            for ty in outer_indices[:-1]:
-                if not keeps_contiguity(ty, False):
+            for i, ty in enumerate(outer_indices[:-1]):
+                # An index is still "innermost" for contiguity purposes if
+                # every index after it is a newaxis, since those don't
+                # correspond to any physical dimension of the source array.
+                is_innermost = all(
+                    is_nonelike(t) for t in outer_indices[i + 1:]
+                )
+                if not keeps_contiguity(ty, is_innermost):
                     return False
             if outer_indices and not keeps_contiguity(outer_indices[-1], True):
                 return False

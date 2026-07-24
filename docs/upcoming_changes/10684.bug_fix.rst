@@ -1,0 +1,10 @@
+Fix false ``NumbaPerformanceWarning`` when indexing with ``newaxis``
+--------------------------------------------------------------------
+
+Indexing a contiguous array with ``np.newaxis`` (for example
+``x[:, None]``) was incorrectly treated as breaking contiguity, since the
+slice preceding the ``newaxis`` was no longer considered the innermost
+index. This caused a spurious ``NumbaPerformanceWarning`` to be raised
+from ``np.dot()``, ``np.vdot()``, and ``@`` when one of their operands had
+been reshaped with ``newaxis``, even though the array was still
+contiguous (`#10086 <https://github.com/numba/numba/issues/10086>`_).
