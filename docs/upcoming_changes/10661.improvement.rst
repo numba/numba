@@ -1,0 +1,6 @@
+Enable tuple types in ``np.sum`` function.
+------------------------------------------
+
+The ``np.sum`` function now supports tuple types for the ``axis`` argument,
+allowing users to specify multiple axes along which to perform the operation
+at runtime.

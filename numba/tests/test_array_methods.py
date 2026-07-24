@@ -1493,6 +1493,15 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                         py_res = pyfunc(arr, axis=axis, dtype=out_dtype)
                         nb_res = cfunc(arr, axis=axis, dtype=out_dtype)
                         self.assertPreciseEqual(py_res, nb_res)
+    
+    def test_sum_axis_tuple(self):
+        """ test sum with axis as a tuple """
+        pyfunc = array_sum_axis_kws
+        cfunc = jit(nopython=True)(pyfunc)
+        a = np.ones((2, 3, 4))
+        self.assertPreciseEqual(pyfunc(a, (0, 1)), cfunc(a, (0, 1)))
+        self.assertPreciseEqual(pyfunc(a, (0, 2)), cfunc(a, (0, 2)))
+        self.assertPreciseEqual(pyfunc(a, (1, 2)), cfunc(a, (1, 2)))
 
     def test_sum_axis_dtype_pos_arg(self):
         """ testing that axis and dtype inputs work when passed as positional """
