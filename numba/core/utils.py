@@ -449,6 +449,21 @@ class UniqueDict(dict):
 
 
 def runonce(fn):
+    """Decorator that ensures the wrapped zero-argument function is called at most once.
+
+    The first call executes *fn* and caches the result.  Subsequent calls
+    return the cached result without re-executing *fn*.
+
+    Parameters
+    ----------
+    fn : callable
+        A zero-argument callable to be memoised.
+
+    Returns
+    -------
+    callable
+        A wrapper that calls *fn* only on the first invocation.
+    """
     @functools.wraps(fn)
     def inner():
         if not inner._ran:
@@ -505,6 +520,21 @@ class BenchmarkResult(object):
 
 
 def format_time(tm):
+    """Format a time value in seconds as a human-readable string with SI prefix.
+
+    Selects the largest SI time unit (s, ms, us, ns, ps) such that the
+    displayed value is at least 1, then formats to one decimal place.
+
+    Parameters
+    ----------
+    tm : float
+        Time in seconds.
+
+    Returns
+    -------
+    str
+        Human-readable time string, e.g. ``"1.5ms"`` or ``"300.0us"``.
+    """
     units = "s ms us ns ps".split()
     base = 1
     for unit in units[:-1]:
@@ -517,6 +547,23 @@ def format_time(tm):
 
 
 def benchmark(func, maxsec=1):
+    """Benchmark a zero-argument callable and return a :class:`BenchmarkResult`.
+
+    Determines an appropriate repeat count automatically so that the total
+    measurement time is close to *maxsec* seconds, then runs the benchmark.
+
+    Parameters
+    ----------
+    func : callable
+        Zero-argument callable to time.
+    maxsec : float, optional
+        Target maximum total measurement time in seconds.  Defaults to 1.
+
+    Returns
+    -------
+    BenchmarkResult
+        Object containing the raw timings and derived statistics.
+    """
     timer = timeit.Timer(func)
     number = 1
     result = timer.repeat(1, number)
