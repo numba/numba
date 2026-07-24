@@ -542,30 +542,40 @@ def _numpy_sum_axis(typingctx, aryty, axisty, dtype):
     return sig, codegen
 
 
+@register_jitable
+def check_axis_bounds(a, axis):
+    if axis is not None:
+        if isinstance(axis, tuple):
+            for ax in axis:
+                if ax < -a.ndim or ax >= a.ndim:
+                    raise ValueError(
+                        f"axis {ax} is out of bounds for "
+                        f"array of dimension {a.ndim}"
+                    )
+        elif axis < -a.ndim or axis >= a.ndim:
+            raise ValueError(
+                f"axis {axis} is out of bounds for "
+                f"array of dimension {a.ndim}"
+            )
+
+
 @overload(np.sum)
 @overload_method(types.Array, "sum")
 def array_sum(a, axis=None, dtype=None):
-    if not (isinstance(axis, types.Integer) or is_nonelike(axis)):
+    if not (isinstance(axis, types.Integer) or
+            is_nonelike(axis) or isinstance(axis, types.UniTuple)):
         raise TypingError(
-            "NumPy sum only suppports integer axis value"
+            "NumPy sum only supports integer axis value or tuple of integers"
         )
     if isinstance(a, types.Array):
         axis_length = axis.count if isinstance(axis, types.UniTuple) else 1
         if is_nonelike(axis) or a.ndim == axis_length:
             def array_sum_impl(a, axis=None, dtype=None):
-                if axis is not None and (axis < -a.ndim or axis >= a.ndim):
-                    raise ValueError(
-                        f"axis {axis} is out of bounds for "
-                        f"array of dimension {a.ndim}"
-                    )
+                check_axis_bounds(a, axis)
                 return _numpy_sum(a, axis, dtype)
         else:
             def array_sum_impl(a, axis=None, dtype=None):
-                if axis is not None and (axis < -a.ndim or axis >= a.ndim):
-                    raise ValueError(
-                        f"axis {axis} is out of bounds for "
-                        f"array of dimension {a.ndim}"
-                    )
+                check_axis_bounds(a, axis)
                 return _numpy_sum_axis(a, axis, dtype)
 
         return array_sum_impl
