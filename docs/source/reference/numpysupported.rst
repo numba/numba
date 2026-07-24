@@ -618,6 +618,10 @@ The following top-level functions are supported:
 * :func:`numpy.triu_indices_from` (second argument ``k`` must be an integer)
 * :func:`numpy.union1d` (For unicode arrays, only supports arrays of the same dtype)
 * :func:`numpy.unique` (only the first argument)
+* :func:`numpy.unravel_index` (``indices`` must be an integer or boolean
+  scalar or array; ``shape`` must be a homogeneous tuple of integers, or
+  the empty tuple; ``order`` must be omitted or a compile-time literal
+  ``'C'`` or ``'F'``)
 * :func:`numpy.unwrap` (third argument ``axis`` must equal -1)
 * :func:`numpy.vander`
 * :func:`numpy.vsplit`
