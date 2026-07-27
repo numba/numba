@@ -6,6 +6,7 @@ Caching mechanism for compiled functions.
 from abc import ABCMeta, abstractmethod
 import contextlib
 import errno
+import functools
 import hashlib
 import importlib
 import inspect
@@ -156,6 +157,15 @@ class _CacheLocator(metaclass=ABCMeta):
         return '_'.join([parentdir, hashed])
 
 
+@functools.lru_cache(maxsize=None)
+def _hash_source_file(path, st_mtime, st_size):
+    # Note: keep the arguments to this function so that the memoization key is
+    # based on the file's mtime and size, so that if the file changes while
+    # the process is running, it will be re-hashed.
+    with open(path, 'rb') as f:
+        return hashlib.sha256(f.read()).digest()
+
+
 class _SourceFileBackedLocatorMixin(object):
     """
     A cache locator mixin for functions which are backed by a well-known
@@ -164,10 +174,11 @@ class _SourceFileBackedLocatorMixin(object):
 
     def get_source_stamp(self):
         if getattr(sys, 'frozen', False):
-            with open(sys.executable, 'rb') as f:
-                return hashlib.sha256(f.read()).digest()
-        with open(self._py_file, 'rb') as f:
-            return hashlib.sha256(f.read()).digest()
+            path = sys.executable
+        else:
+            path = self._py_file
+        st = os.stat(path)
+        return _hash_source_file(path, st.st_mtime, st.st_size)
 
     def get_disambiguator(self):
         return str(self._lineno)
