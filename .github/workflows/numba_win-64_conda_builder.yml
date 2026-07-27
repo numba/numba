@@ -47,7 +47,7 @@ jobs:
     needs: load-matrix
     runs-on: windows-2025
     env:
-      EXTRA_CHANNELS: ''
+      EXTRA_CHANNELS: ${{ matrix.python_version_full == '3.15' && '-c ad-testing/label/py315' || '' }}
     defaults:
       run:
         shell: bash -elx {0}
@@ -121,7 +121,7 @@ jobs:
     needs: [load-matrix, win-64-build-conda]
     runs-on: windows-2025
     env:
-      EXTRA_CHANNELS: ''
+      EXTRA_CHANNELS: ${{ matrix.python_version_full == '3.15' && '-c ad-testing/label/py315' || '' }}
     defaults:
       run:
         shell: bash -elx {0}
