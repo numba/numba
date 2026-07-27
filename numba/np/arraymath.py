@@ -1934,30 +1934,14 @@ def _median_inner(temp_arry, n):
 
 @overload(np.median)
 def np_median(a):
-    # Scalar case: the median of a single value is that value. NumPy promotes
-    # integer and boolean scalars to float64, while floating-point and complex
-    # scalars keep their dtype.
-    if isinstance(a, (types.Integer, types.Boolean)):
-        def scalar_median(a):
-            return np.float64(a)
-        return scalar_median
-    elif isinstance(a, (types.Float, types.Complex)):
-        # Adding a same-dtype zero matches NumPy: its median goes through a mean
-        # reduction that normalises negative zero to positive zero, while the
-        # dtype is left unchanged (and inf/nan are untouched).
-        zero = as_dtype(a).type(0)
-
-        def scalar_median(a):
-            return a + zero
-        return scalar_median
-    elif isinstance(a, types.NPTimedelta):
-        # NumPy returns a timedelta64 scalar unchanged, preserving its unit.
-        # The mean reduction is well defined here because adding two
-        # timedelta64 operands and dividing by two are both supported, and NaT
-        # propagates.
-        def scalar_median(a):
-            return a
-        return scalar_median
+    # Scalar case: the median of a single value is that value. NumPy's
+    # scalar promotion here (int/bool -> float64, float/complex/timedelta64
+    # unchanged) is identical to np.mean()'s, since median-of-one-value is a
+    # mean-of-one-value under the hood -- reuse array_mean()'s scalar
+    # branches directly instead of duplicating the dtype handling.
+    if isinstance(a, (types.Integer, types.Boolean, types.Float,
+                      types.Complex, types.NPTimedelta)):
+        return array_mean(a)
     elif isinstance(a, types.NPDatetime):
         # NumPy does not support median on datetime64 input. Its median goes
         # through a mean reduction, and 'add' is undefined for two datetime64
