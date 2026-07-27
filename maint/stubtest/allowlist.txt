@@ -4,6 +4,7 @@ numba\.cloudpickle\..*
 numba\.core\.boxing\..*
 numba\.core\.bytecode\..*
 numba\.core\.byteflow\..*
+numba\.core\.caching\._hash_source_file
 numba\.core\.compiler\..*
 numba\.core\.compiler_machinery\..*
 numba\.core\.config\..*
