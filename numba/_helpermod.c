@@ -68,11 +68,11 @@ build_c_helpers_dict(void)
     declmethod(nextafter);
     declmethod(nextafterf);
     declmethod(complex_adaptor);
-    declmethod(adapt_ndarray);
+    // declmethod(adapt_ndarray);
     declmethod(ndarray_new);
     declmethod(extract_record_data);
     declmethod(get_buffer);
-    declmethod(adapt_buffer);
+    // declmethod(adapt_buffer);
     declmethod(release_buffer);
     declmethod(extract_np_datetime);
     declmethod(create_np_datetime);

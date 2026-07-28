@@ -163,9 +163,9 @@ build_c_helpers_dict(void)
 #define declmethod(func) _declpointer(#func, &NRT_##func)
 #define declmethod_internal(func) _declpointer(#func, &func)
 
-declmethod(adapt_ndarray_from_python);
-declmethod(adapt_ndarray_to_python_acqref);
-declmethod(adapt_buffer_from_python);
+// declmethod(adapt_ndarray_from_python);
+// declmethod(adapt_ndarray_to_python_acqref);
+// declmethod(adapt_buffer_from_python);
 declmethod(meminfo_new_from_pyobject);
 declmethod(meminfo_as_pyobject);
 declmethod(meminfo_from_pyobject);
@@ -203,7 +203,6 @@ MOD_INIT(_nrt_python) {
     MOD_DEF(m, "_nrt_python", "No docs", ext_methods)
     if (m == NULL)
         return MOD_ERROR_VAL;
-    import_array();
     NRT_MemSys_init();
     if (init_nrt_python_module(m))
         return MOD_ERROR_VAL;

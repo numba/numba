@@ -32,8 +32,6 @@
 #include <numpy/ndarrayobject.h>
 #include <numpy/arrayscalars.h>
 
-#include "_arraystruct.h"
-
 
 #if (PY_MAJOR_VERSION == 3) && (PY_MINOR_VERSION == 11)
     /*
@@ -324,33 +322,6 @@ CLEANUP:
     return record;
 }
 
-NUMBA_EXPORT_FUNC(int)
-numba_adapt_ndarray(PyObject *obj, arystruct_t* arystruct) {
-    PyArrayObject *ndary;
-    int i, ndim;
-    npy_intp *p;
-
-    if (!PyArray_Check(obj)) {
-        return -1;
-    }
-
-    ndary = (PyArrayObject*)obj;
-    ndim = PyArray_NDIM(ndary);
-
-    arystruct->data = PyArray_DATA(ndary);
-    arystruct->nitems = PyArray_SIZE(ndary);
-    arystruct->itemsize = PyArray_ITEMSIZE(ndary);
-    arystruct->parent = obj;
-    p = arystruct->shape_and_strides;
-    for (i = 0; i < ndim; i++, p++) {
-        *p = PyArray_DIM(ndary, i);
-    }
-    for (i = 0; i < ndim; i++, p++) {
-        *p = PyArray_STRIDE(ndary, i);
-    }
-    arystruct->meminfo = NULL;
-    return 0;
-}
 
 NUMBA_EXPORT_FUNC(int)
 numba_get_buffer(PyObject *obj, Py_buffer *buf)
@@ -359,26 +330,27 @@ numba_get_buffer(PyObject *obj, Py_buffer *buf)
     return PyObject_GetBuffer(obj, buf, PyBUF_RECORDS_RO);
 }
 
-NUMBA_EXPORT_FUNC(void)
-numba_adapt_buffer(Py_buffer *buf, arystruct_t *arystruct)
-{
-    int i;
-    npy_intp *p;
+// TODO: This needs buffer type
+// NUMBA_EXPORT_FUNC(void)
+// numba_adapt_buffer(Py_buffer *buf, arystruct_t *arystruct)
+// {
+//     int i;
+//     npy_intp *p;
 
-    arystruct->data = buf->buf;
-    arystruct->itemsize = buf->itemsize;
-    arystruct->parent = buf->obj;
-    arystruct->nitems = 1;
-    p = arystruct->shape_and_strides;
-    for (i = 0; i < buf->ndim; i++, p++) {
-        *p = buf->shape[i];
-        arystruct->nitems *= buf->shape[i];
-    }
-    for (i = 0; i < buf->ndim; i++, p++) {
-        *p = buf->strides[i];
-    }
-    arystruct->meminfo = NULL;
-}
+//     arystruct->data = buf->buf;
+//     arystruct->itemsize = buf->itemsize;
+//     arystruct->parent = buf->obj;
+//     arystruct->nitems = 1;
+//     p = arystruct->shape_and_strides;
+//     for (i = 0; i < buf->ndim; i++, p++) {
+//         *p = buf->shape[i];
+//         arystruct->nitems *= buf->shape[i];
+//     }
+//     for (i = 0; i < buf->ndim; i++, p++) {
+//         *p = buf->strides[i];
+//     }
+//     arystruct->meminfo = NULL;
+// }
 
 NUMBA_EXPORT_FUNC(void)
 numba_release_buffer(Py_buffer *buf)

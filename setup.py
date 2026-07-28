@@ -192,6 +192,11 @@ def get_ext_modules():
                              extra_compile_args=['-std=c++11'],
                              )
 
+    ext_np_helperlib = Extension(name="numba.np._nphelperlib",
+                             sources=["numba/np/_nphelperlib.c"],
+                             depends=["numba/np/_nphelperlib.c"],
+                             **np_compile_args)
+
     ext_np_ufunc = Extension(name="numba.np.ufunc._internal",
                              sources=["numba/np/ufunc/_internal.c"],
                              depends=["numba/np/ufunc/_ufunc.c",
@@ -370,7 +375,7 @@ def get_ext_modules():
                                 include_dirs=["numba"])
 
     ext_modules = [ext_dynfunc, ext_dispatcher, ext_helperlib,
-                   ext_typeconv, ext_np_ufunc, ext_npyufunc_num_threads,
+                   ext_typeconv, ext_np_helperlib, ext_np_ufunc, ext_npyufunc_num_threads,
                    ext_mviewbuf, ext_nrt_python, ext_jitclass_box,
                    ext_cuda_extras, ext_devicearray]
 
