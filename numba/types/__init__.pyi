@@ -1,5 +1,15 @@
 from numba.core.types import *
 
+# also expose all `numba.core.types` implicit re-exports that are not in `__all__`
+from numba.core.types.abstract import *
+from numba.core.types.containers import *
+from numba.core.types.function_type import *
+from numba.core.types.functions import *
+from numba.core.types.iterators import *
+from numba.core.types.misc import *
+from numba.core.types.npytypes import *
+from numba.core.types.scalars import *
+
 __all__ = [
     "b1",
     "bool",
