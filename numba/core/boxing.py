@@ -130,27 +130,6 @@ def box_none(typ, val, c):
 def unbox_none(typ, val, c):
     return NativeValue(c.context.get_dummy_value())
 
-
-@box(types.NPDatetime)
-def box_npdatetime(typ, val, c):
-    return c.pyapi.create_np_datetime(val, typ.unit_code)
-
-@unbox(types.NPDatetime)
-def unbox_npdatetime(typ, obj, c):
-    val = c.pyapi.extract_np_datetime(obj)
-    return NativeValue(val, is_error=c.pyapi.c_api_error())
-
-
-@box(types.NPTimedelta)
-def box_nptimedelta(typ, val, c):
-    return c.pyapi.create_np_timedelta(val, typ.unit_code)
-
-@unbox(types.NPTimedelta)
-def unbox_nptimedelta(typ, obj, c):
-    val = c.pyapi.extract_np_timedelta(obj)
-    return NativeValue(val, is_error=c.pyapi.c_api_error())
-
-
 @box(types.RawPointer)
 def box_raw_pointer(typ, val, c):
     """

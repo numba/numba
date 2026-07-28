@@ -26,9 +26,6 @@ source deactivate
 # Display root environment (for debugging)
 conda list
 
-# Pin conda<26 to work around conda 26 regression, issue #10461
-$CONDA_INSTALL "conda<26"
-
 # If VANILLA_INSTALL is yes, then only Python, NumPy and pip are installed, this
 # is to catch tests/code paths that require an optional package and are not
 # guarding against the possibility that it does not exist in the environment.
@@ -68,7 +65,7 @@ fi
 
 # Python 3.14+ requires setuptools
 if [ ! $PYTHON \< "3.14" ]; then
-    $CONDA_INSTALL ${EXTRA_CHANNELS} setuptools
+    $CONDA_INSTALL ${EXTRA_CHANNELS} "setuptools>=69.0.0"
 fi
 
 # Install the compiler toolchain and gdb (if available)
@@ -88,10 +85,10 @@ elif  [[ $(uname) == Darwin ]]; then
 fi
 
 # Install latest correct build
-$CONDA_INSTALL -c numba/label/dev llvmlite=0.48
+$CONDA_INSTALL -c numba/label/dev llvmlite=0.49
 
 # Install dependencies for building the documentation
-if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx docutils sphinx_rtd_theme pygments numpydoc; fi
+if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx sphinx_rtd_theme pygments numpydoc; fi
 if [ "$BUILD_DOC" == "yes" ]; then $PIP_INSTALL rstcheck; fi
 # Install dependencies for code coverage
 if [ "$RUN_COVERAGE" == "yes" ]; then $CONDA_INSTALL coverage; fi

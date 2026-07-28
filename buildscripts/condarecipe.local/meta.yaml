@@ -26,14 +26,15 @@ requirements:
   build:
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
+    - vs2022_{{ target_platform }}                      # [win and arm64]
     # OpenMP headers from llvm needed for OSX.
     - llvm-openmp={{ c_compiler_version }}              # [osx]
   host:
     - python
     - numpy
-    - setuptools
+    - setuptools >=69.0.0
     # On channel https://anaconda.org/numba/
-    - llvmlite >=0.48.0dev0,<0.48
+    - llvmlite >=0.49.0dev0,<0.49
     # TBB devel version is to match TBB libs.
     # NOTE: ppc64le and aarch64 are pending testing so excluded for now.
     - tbb-devel >=2021.6       # [not (aarch64 or ppc64le)]
@@ -41,7 +42,7 @@ requirements:
     - python >=3.10
     - numpy >=1.22.3
     # On channel https://anaconda.org/numba/
-    - llvmlite >=0.48.0dev0,<0.48
+    - llvmlite >=0.49.0dev0,<0.49
   run_constrained:
     # If TBB is present it must be at least version 2021.6
     - tbb >=2021.6    # [not (aarch64 or ppc64le)]
@@ -69,7 +70,7 @@ test:
     - scipy
     - ipython                  # [not aarch64]
     # for pycc
-    - setuptools
+    - setuptools >=69.0.0
     - pyyaml
     - pygments
     - intel-cmplr-lib-rt       # [linux and x86_64]
@@ -77,9 +78,9 @@ test:
     - llvm-openmp              # [osx]
     # This is for driving gdb tests
     - pexpect                  # [linux64]
-    # For testing ipython. At the time of writing ipykernel was not available
-    # for Python 3.12.
-    - ipykernel                # [not py==312]
+    # For testing ipython. ipykernel is not available on Python 3.12, or on
+    # win-arm64 (bootstrap channel).
+    - ipykernel                # [not (py==312 or (win and arm64))]
     # For memory monitoring
     - psutil
     # Need these for AOT. Do not init msvc as it may not be present

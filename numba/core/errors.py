@@ -407,8 +407,8 @@ feedback_details = """
 Please report the error message and traceback, along with a minimal reproducer
 at: https://github.com/numba/numba/issues/new?template=bug_report.md
 
-If more help is needed please feel free to speak to the Numba core developers
-directly at: https://gitter.im/numba/numba
+If more help is needed please feel free to ask on the Numba discourse forum:
+https://numba.discourse.group/
 
 Thanks in advance for your help in improving Numba!
 """

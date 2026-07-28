@@ -222,7 +222,6 @@ exclude =
     numba/core/typing/ctypes_utils.py
     numba/core/typing/enumdecl.py
     numba/core/typing/cffi_utils.py
-    numba/core/typing/npdatetime.py
     numba/core/annotations/type_annotations.py
     numba/testing/ddt.py
     numba/testing/loader.py

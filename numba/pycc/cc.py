@@ -42,6 +42,14 @@ class CC(object):
     _extra_ldflags = {
         # Comment out due to odd behavior with GCC 4.9+ with LTO
         # 'posix': ['-flto'],
+        # On macOS, if the object files carry debug info (e.g. when the
+        # interpreter's sysconfig compiles extensions with ``-g``), ld
+        # embeds an N_OSO debug-map entry per object holding the object's
+        # absolute path and mtime. Because pycc builds the objects in a
+        # randomly-named temp directory, those paths (and mtimes) make the
+        # emitted binary non-reproducible (see issue #10668). ``-Wl,-S``
+        # strips the debug map while keeping the symbols needed at runtime.
+        'darwin': ['-Wl,-S'],
         }
 
     def __init__(self, extension_name, source_module=None):

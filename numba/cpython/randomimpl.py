@@ -16,6 +16,7 @@ from numba.core.imputils import Registry
 from numba.core.typing import signature
 from numba.core import types, cgutils
 from numba.core.errors import NumbaTypeError
+from numba.cpython._binomial import make_binomial_btpe
 from numba.np.random._constants import LONG_MAX
 
 registry = Registry('randomimpl')
@@ -102,7 +103,7 @@ def get_rnd_shuffle(builder):
     fnty = ir.FunctionType(ir.VoidType(), (rnd_state_ptr_t,))
     fn = cgutils.get_or_insert_function(builder.function.module, fnty,
                                         "numba_rnd_shuffle")
-    fn.args[0].add_attribute("nocapture")
+    fn.args[0].add_attribute("captures(none)")
     return fn
 
 
@@ -1227,15 +1228,51 @@ def vonmises_impl(mu, kappa, size):
         return _impl
 
 
+@register_jitable
+def _binomial_btpe_next_double(bitgen):
+    # Legacy np.random path: the BTPE core's ``bitgen`` is unused; draw from
+    # np.random's global MT19937 state.
+    return np.random.random()
+
+
+@register_jitable
+def _binomial_btpe_squeeze(A, xm, m, n, y, r, q):
+    # np.random's case-52 Stirling squeeze, frozen at NumPy's legacy constants
+    # for RandomState stream reproducibility, do
+    # not "correct" to the NumPy 2.5 Generator values. Keep in sync with NumPy's
+    # legacy_random_binomial_btpe.
+    x1 = y + 1
+    f1 = m + 1
+    z = n + 1 - m
+    w = n - y + 1
+    x2 = x1 * x1
+    f2 = f1 * f1
+    z2 = z * z
+    w2 = w * w
+    return A > (xm * math.log(f1 / x1) + (n - m + 0.5) * math.log(z / w) +
+               (y - m) * math.log(w * r / (x1 * q)) +
+               (13680. - (462. - (132. - (99. - 140. / f2) / f2) / f2)
+                / f2) / f1 / 166320. +
+               (13680. - (462. - (132. - (99. - 140. / z2) / z2) / z2)
+                / z2) / z / 166320. +
+               (13680. - (462. - (132. - (99. - 140. / x2) / x2) / x2)
+                / x2) / x1 / 166320. +
+               (13680. - (462. - (132. - (99. - 140. / w2) / w2) / w2)
+                / w2) / w / 166320.)
+
+
+_binomial_btpe = make_binomial_btpe(_binomial_btpe_next_double,
+                                    _binomial_btpe_squeeze)
+
+
 @overload(np.random.binomial)
 def binomial_impl(n, p):
     if isinstance(n, types.Integer) and isinstance(
             p, (types.Float, types.Integer)):
         def _impl(n, p):
             """
-            Binomial distribution.  Numpy's variant of the BINV algorithm
-            is used.
-            (Numpy uses BTPE for n*p >= 30, though)
+            Binomial distribution.  Numpy's BINV algorithm is used for small
+            means; Numpy's BTPE algorithm is used for large means.
             """
             if n < 0:
                 raise ValueError("binomial(): n <= 0")
@@ -1251,17 +1288,20 @@ def binomial_impl(n, p):
                 p = 1.0 - p
             q = 1.0 - p
 
+            np_prod = n * p
+            if np_prod > 30.0:
+                X = _binomial_btpe(0, n, p)  # bitgen arg unused for np.random
+                return n - X if flipped else X
+
             niters = 1
             qn = q ** n
             while qn <= 1e-308:
                 # Underflow => split into several iterations
-                # Note this is much slower than Numpy's BTPE
                 niters <<= 2
                 n >>= 2
                 qn = q ** n
                 assert n > 0
 
-            np_prod = n * p
             bound = min(n, np_prod + 10.0 * math.sqrt(np_prod * q + 1))
 
             total = 0

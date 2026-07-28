@@ -107,6 +107,12 @@ and only called locally, but not passed as argument or returned as
 result. The use of closure variables (variables defined in outer scopes)
 within an inner function is also supported.
 
+Assigning a ``nonlocal`` variable more than once inside an inner function is
+not supported and raises an ``UnsupportedError``. The check is structural, so
+the error is raised even when the later assignment is in a branch that never
+runs. Assign the variable once, or return its value from the inner function and
+reassign it in the caller.
+
 Recursive calls
 '''''''''''''''
 
@@ -407,6 +413,9 @@ than to act as a token to permit the use of this feature. Example use:
       iteration.
     * Only one :func:`literal_unroll` call is permitted per loop nest (i.e.
       nested heterogeneous tuple iteration loops are forbidden).
+    * A variable that is indexed in the loop body must have a single
+      definition, for example its name cannot be reused elsewhere in the
+      function.
     * The usual type inference/stability rules still apply.
 
 A more involved use of :func:`literal_unroll` might be type specific dispatch,
