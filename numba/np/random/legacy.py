@@ -16,8 +16,10 @@ from numba.cpython.randomimpl import (
     _randrange_preprocessor, _randrange_impl, uniform_impl,
     _betavariate_impl, _gammavariate_impl, _lognormvariate_impl,
     _vonmisesvariate_impl, _seed_impl, _gauss_impl, int64_t,
-    double, rnd_state_ptr_t, do_shuffle_impl
+    double, rnd_state_ptr_t, do_shuffle_impl, GuassArgs
 )
+
+numpy_guass_args = GuassArgs("np", np.random.random)
 
 
 def get_np_state_ptr(context, builder):
@@ -91,8 +93,9 @@ def np_gauss_impl2(loc, scale):
             scale_preprocessor = _double_preprocessor(scale)
             return (
                 signature(types.float64, loc, scale),
-                _gauss_impl("np", loc_preprocessor,
-                            scale_preprocessor, np.random.random)
+                _gauss_impl(numpy_guass_args,
+                            loc_preprocessor,
+                            scale_preprocessor)
             )
         return lambda loc, scale: _impl(loc, scale)
 

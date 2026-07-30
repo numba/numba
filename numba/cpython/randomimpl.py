@@ -13,6 +13,7 @@ from numba.core.imputils import Registry
 from numba.core.typing import signature
 from numba.core import types, cgutils
 from numba.core.errors import NumbaTypeError
+from collections import namedtuple
 
 registry = Registry('randomimpl')
 lower = registry.lower
@@ -41,6 +42,9 @@ rnd_state_t = ir.LiteralStructType([
     int32_t,
     ])
 rnd_state_ptr_t = ir.PointerType(rnd_state_t)
+
+GuassArgs = namedtuple('GuassArgs', ['state', 'random_function'])
+cpython_guass_args = GuassArgs("py", random.random)
 
 
 def get_state_ptr(context, builder, name):
@@ -230,7 +234,7 @@ def gauss_impl(mu, sigma):
             loc_preprocessor = _double_preprocessor(mu)
             scale_preprocessor = _double_preprocessor(sigma)
             return signature(types.float64, mu, sigma),\
-                   _gauss_impl("py", loc_preprocessor, scale_preprocessor, random.random)
+                   _gauss_impl(cpython_guass_args, loc_preprocessor, scale_preprocessor)
         return lambda mu, sigma: _impl(mu, sigma)
 
 
@@ -253,14 +257,14 @@ def _gauss_pair_impl(_random):
     return compute_gauss_pair
 
 
-def _gauss_impl(state, loc_preprocessor, scale_preprocessor, _random_func):
+def _gauss_impl(state_args, loc_preprocessor, scale_preprocessor):
     def _impl(context, builder, sig, args):
         # The type for all computations (either float or double)
         ty = sig.return_type
         llty = context.get_data_type(ty)
-        _random = _random_func
+        _random = state_args.random_function
 
-        state_ptr = get_state_ptr(context, builder, state)
+        state_ptr = get_state_ptr(context, builder, state_args.state)
 
         ret = cgutils.alloca_once(builder, llty, name="result")
 
