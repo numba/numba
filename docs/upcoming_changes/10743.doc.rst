@@ -1,0 +1,5 @@
+Correct the documented ``jit`` nopython default
+-----------------------------------------------
+
+The reference documentation now shows that ``nopython=True`` is the default
+for :func:`numba.jit` and clarifies how to explicitly select object mode.
