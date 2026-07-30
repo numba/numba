@@ -79,6 +79,20 @@ support for explicit parallel loops. One can use Numba's ``prange`` instead of
 make sure that the loop does not have cross iteration dependencies except for
 supported reductions.
 
+For multidimensional iteration, Numba provides ``pndindex``. It yields an
+index tuple for each point in an N-dimensional shape, and is equivalent to
+``numpy.ndindex`` when executed without parallel compilation. For example::
+
+    from numba import njit, pndindex
+    import numpy as np
+
+    @njit(parallel=True)
+    def set_diagonal(a):
+        for i, j in pndindex(a.shape):
+            if i == j:
+                a[i, j] = 1
+        return a
+
 A reduction is inferred automatically if a variable is updated by a supported binary
 function/operator using its previous value in the loop body.  The following
 functions/operators are supported: ``+=``, ``+``, ``-=``, ``-``, ``*=``,
