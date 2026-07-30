@@ -540,12 +540,12 @@ def check_axis_bounds(a, axis):
         if isinstance(axis, tuple):
             for ax in axis:
                 if ax < -a.ndim or ax >= a.ndim:
-                    raise np.exceptions.AxisError(
+                    raise ValueError(
                         f"axis {ax} is out of bounds for "
                         f"array of dimension {a.ndim}"
                     )
         elif axis < -a.ndim or axis >= a.ndim:
-            raise np.exceptions.AxisError(
+            raise ValueError(
                 f"axis {axis} is out of bounds for "
                 f"array of dimension {a.ndim}"
             )
