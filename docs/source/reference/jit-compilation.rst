@@ -7,7 +7,7 @@ JIT functions
 -------------
 
 
-.. decorator:: numba.jit(signature_or_function=None, nopython=False, nogil=False, cache=False, forceobj=False, parallel=False, error_model='python', fastmath=False, locals={}, boundscheck=False, inline="never", forceinline=False)
+.. decorator:: numba.jit(signature_or_function=None, nopython=True, nogil=False, cache=False, forceobj=False, parallel=False, error_model='python', fastmath=False, locals={}, boundscheck=False, inline="never", forceinline=False)
 
    Compile the decorated function on-the-fly to produce efficient machine
    code.  All parameters are optional.
@@ -50,8 +50,9 @@ JIT functions
      exists, a new specialization is compiled on-the-fly, stored for later
      use, and executed with the converted arguments.
 
-   If true, *nopython* forces the function to be compiled in :term:`nopython
-   mode`. If not possible, compilation will raise an error.
+   *nopython* defaults to true and compiles the function in :term:`nopython
+   mode`. If compilation in this mode is not possible, an error is raised.
+   Set *forceobj* to true to compile in :term:`object mode` instead.
 
    If true, *forceobj* forces the function to be compiled in :term:`object
    mode`.  Since object mode is slower than nopython mode, this is mostly
