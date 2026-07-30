@@ -352,7 +352,7 @@ def tuple_additem(context, builder, tuplety, tupleval, idx, val):
     return builder.load(stack)
 
 
-def get_mask(context, builder, mask_length, axis, inverted=False):
+def get_mask(context, builder, mask_length, axis):
     # Return a tuple of booleans where the value is True if the
     # dimension is not the axis and False if it is the axis.
     # Axis is a runtime value.
@@ -403,24 +403,16 @@ def get_mask(context, builder, mask_length, axis, inverted=False):
                 context.call_conv.return_user_exc(
                     builder, ValueError,
                     ("Axis out of bounds.",))
-        for i in range(mask_length):
-            idx = Constant(ll_intp, i)
-            offptr = builder.gep(stack, [idx.type(0), idx], inbounds=True)
+            offptr = builder.gep(stack, [idx.type(0), _axis], inbounds=True)
 
-            if _axis is not None:
-                val = builder.icmp_signed('!=', idx, _axis)
-            else:
-                val = Constant(ll_bool, 1)
+            with builder.if_then(
+                builder.icmp_signed('==', builder.load(offptr),
+                                    Constant(ll_bool, 0))):
+                context.call_conv.return_user_exc(
+                    builder, ValueError,
+                    ("duplicate value in 'axis'",))
 
-            val = builder.and_(builder.load(offptr), val)
-            builder.store(val, offptr)
-
-    if inverted:
-        for i in range(mask_length):
-            idx = Constant(ll_intp, i)
-            offptr = builder.gep(stack, [idx.type(0), idx], inbounds=True)
-            val = builder.not_(builder.load(offptr))
-            builder.store(val, offptr)
+            builder.store(Constant(ll_bool, 0), offptr)
 
     return builder.load(stack)
 
@@ -548,30 +540,51 @@ def check_axis_bounds(a, axis):
         if isinstance(axis, tuple):
             for ax in axis:
                 if ax < -a.ndim or ax >= a.ndim:
-                    raise ValueError(
+                    raise np.exceptions.AxisError(
                         f"axis {ax} is out of bounds for "
                         f"array of dimension {a.ndim}"
                     )
         elif axis < -a.ndim or axis >= a.ndim:
-            raise ValueError(
+            raise np.exceptions.AxisError(
                 f"axis {axis} is out of bounds for "
                 f"array of dimension {a.ndim}"
             )
+
+
+@register_jitable
+def check_duplicates(axis, ndim):
+    if axis is not None and isinstance(axis, tuple):
+        if len(axis) != len(np.unique(np.array(axis) % ndim)):
+            raise ValueError("duplicate value in 'axis'")
 
 
 @overload(np.sum)
 @overload_method(types.Array, "sum")
 def array_sum(a, axis=None, dtype=None):
     if not (isinstance(axis, types.Integer) or
-            is_nonelike(axis) or isinstance(axis, types.UniTuple)):
+            is_nonelike(axis) or (
+                isinstance(axis, types.UniTuple) and
+                isinstance(axis.dtype, types.Integer))
+            or (
+                isinstance(axis, types.Tuple) and
+                axis.count == 0)):
         raise TypingError(
             "NumPy sum only supports integer axis value or tuple of integers"
         )
     if isinstance(a, types.Array):
-        axis_length = axis.count if isinstance(axis, types.UniTuple) else 1
-        if is_nonelike(axis) or a.ndim == axis_length:
+        if isinstance(axis, types.Tuple) and axis.count == 0:
+            if is_nonelike(dtype):
+                def array_sum_impl(a, axis=None, dtype=None):
+                    return a
+            else:
+                def array_sum_impl(a, axis=None, dtype=None):
+                    return a.astype(dtype)
+        elif is_nonelike(axis) or a.ndim <= (
+            axis.count if isinstance(
+                axis, (types.Tuple, types.UniTuple)) else 1):
             def array_sum_impl(a, axis=None, dtype=None):
                 check_axis_bounds(a, axis)
+                check_duplicates(axis, a.ndim)
                 return _numpy_sum(a, axis, dtype)
         else:
             def array_sum_impl(a, axis=None, dtype=None):

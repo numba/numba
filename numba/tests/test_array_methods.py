@@ -5,7 +5,7 @@ import unittest
 import warnings
 
 import numpy as np
-
+import itertools
 from numba import jit, njit, typeof
 from numba.core import types
 from numba.core.errors import TypingError, NumbaValueError
@@ -1498,10 +1498,38 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         """ test sum with axis as a tuple """
         pyfunc = array_sum_axis_kws
         cfunc = jit(nopython=True)(pyfunc)
-        a = np.ones((2, 3, 4))
-        self.assertPreciseEqual(pyfunc(a, (0, 1)), cfunc(a, (0, 1)))
-        self.assertPreciseEqual(pyfunc(a, (0, 2)), cfunc(a, (0, 2)))
-        self.assertPreciseEqual(pyfunc(a, (1, 2)), cfunc(a, (1, 2)))
+        a = np.arange(2 * 3 * 4).reshape(2, 3, 4)
+        
+        my_list = [-2, -1, 0, 1, 2]
+        all_combinations = [tuple(combo) for r in range(0, len(my_list) + 1) for combo in itertools.combinations(my_list, r)]
+        for axes in all_combinations:
+            # Check for duplicate axis
+            np_axes = (np.array(axes) % 3)
+            if len(np_axes) == len(np.unique(np_axes)):
+                self.assertPreciseEqual(pyfunc(a, axes), cfunc(a, axes))
+
+    def test_sum_axis_tuple_duplicates(self):
+        """ test sum with axis as a tuple """
+        self.disable_leak_check()
+        pyfunc = array_sum_axis_kws
+        cfunc = jit(nopython=True)(pyfunc)
+        a = np.arange(2 * 3 * 4).reshape(2, 3, 4)
+        
+        my_list = [-2, -1, 0, 1, 2]
+        all_combinations = [tuple(combo) for r in range(0, len(my_list) + 1) for combo in itertools.combinations(my_list, r)]
+        for axes in all_combinations:
+            # Check for duplicate axis
+            np_axes = (np.array(axes) % 3)
+            if len(np_axes) != len(np.unique(np_axes)):
+                with self.assertRaises(ValueError) as c_raises:
+                    cfunc(a, axes)
+                self.assertIn(
+                    "duplicate value in 'axis'",
+                    str(c_raises.exception)
+                )
+                with self.assertRaises(ValueError) as py_raises:
+                    pyfunc(a, axes)
+                self.assertEqual(str(c_raises.exception), str(py_raises.exception))
 
     def test_sum_axis_dtype_pos_arg(self):
         """ testing that axis and dtype inputs work when passed as positional """
