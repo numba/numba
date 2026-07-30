@@ -50,9 +50,10 @@ JIT functions
      exists, a new specialization is compiled on-the-fly, stored for later
      use, and executed with the converted arguments.
 
-   *nopython* defaults to true and compiles the function in :term:`nopython
-   mode`. If compilation in this mode is not possible, an error is raised.
-   Set *forceobj* to true to compile in :term:`object mode` instead.
+   *nopython* defaults to true and compiles the function in :term:`nopython mode`.
+   If compilation in this mode is not possible, an error is raised. Supplying
+   ``nopython=False`` is deprecated and has no effect; set *forceobj* to true to
+   compile in :term:`object mode` instead.
 
    If true, *forceobj* forces the function to be compiled in :term:`object
    mode`.  Since object mode is slower than nopython mode, this is mostly
