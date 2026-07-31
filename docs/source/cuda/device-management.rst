@@ -65,6 +65,40 @@ The Device List
 The Device List is a list of all the GPUs in the system, and can be indexed to
 obtain a context manager that ensures execution on the selected GPU.
 
+Using multiple GPUs
+-------------------
+
+A device context manager can be used to select a GPU for a block of work. Each
+device has its own device memory, so allocate or copy arrays while that device is
+selected. Passing a stream makes the data transfers and kernel launch explicit;
+synchronize the stream when the result is needed.
+
+.. code-block:: python
+
+   import numpy as np
+   from numba import cuda
+
+   @cuda.jit
+   def add_kernel(a, b, out):
+       i = cuda.grid(1)
+       if i < out.size:
+           out[i] = a[i] + b[i]
+
+   x = np.arange(1024, dtype=np.float32)
+   y = np.ones_like(x)
+   threads = 128
+   blocks = (x.size + threads - 1) // threads
+
+   for device_id in (0, 1):
+       with cuda.gpus[device_id]:
+           stream = cuda.stream()
+           d_x = cuda.to_device(x, stream=stream)
+           d_y = cuda.to_device(y, stream=stream)
+           d_out = cuda.device_array_like(d_x, stream=stream)
+           add_kernel[blocks, threads, stream](d_x, d_y, d_out)
+           d_out.copy_to_host(x, stream=stream)
+           stream.synchronize()
+
 .. attribute:: numba.cuda.gpus
    :noindex:
 .. attribute:: numba.cuda.cudadrv.devices.gpus
