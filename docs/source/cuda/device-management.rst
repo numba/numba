@@ -96,7 +96,8 @@ synchronize the stream when the result is needed.
            d_y = cuda.to_device(y, stream=stream)
            d_out = cuda.device_array_like(d_x, stream=stream)
            add_kernel[blocks, threads, stream](d_x, d_y, d_out)
-           d_out.copy_to_host(x, stream=stream)
+           out = np.empty_like(x)
+           d_out.copy_to_host(out, stream=stream)
            stream.synchronize()
 
 .. attribute:: numba.cuda.gpus
