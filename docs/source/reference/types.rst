@@ -114,6 +114,38 @@ e.g. declaring the type of a :ref:`typed.List <feature-typed-list>`.::
 Note that this feature is only supported for simple numerical types. Application
 to compound types, e.g. record types, is not supported.
 
+Container types
+---------------
+
+Numba also provides types for containers from :mod:`numba.typed`. These types
+are useful when declaring signatures or inspecting compiled functions.
+
+.. class:: numba.types.ListType(item_type)
+
+   Type of a typed list whose elements have the given *item_type*. Create values
+   with :class:`numba.typed.List`.
+
+.. class:: numba.types.SetType(item_type)
+
+   Type of a typed set whose elements have the given *item_type*.
+
+.. class:: numba.types.DictType(key_type, value_type)
+
+   Type of a typed dictionary with the given key and value types. Create values
+   with :class:`numba.typed.Dict`.
+
+.. class:: numba.types.Tuple(*types)
+
+   Type of a tuple whose element types are listed in *types*.
+
+.. class:: numba.types.UniTuple(dtype, count)
+
+   Type of a tuple with *count* elements, all having the same *dtype*.
+
+.. class:: numba.types.NamedTuple(typename, types)
+
+   Type of a tuple with named fields and the specified element *types*.
+
 Functions
 ---------
 
