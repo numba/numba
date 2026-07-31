@@ -286,7 +286,8 @@ How do I clear the CUDA driver JIT cache?
 
 The NVIDIA CUDA driver may cache JIT-compiled PTX under ``~/.nv/`` on Linux.
 This cache is separate from the cache created by Numba CPU compilation. If a
-CUDA linker error persists after changing a kernel or updating the CUDA toolchain,
+CUDA linker error persists after changing a kernel or updating the CUDA
+toolchain,
 removing the contents of ``~/.nv/ComputeCache`` allows the driver to rebuild the
 cache the next time the kernel is compiled.
 
