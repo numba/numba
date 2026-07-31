@@ -286,3 +286,16 @@ of using ``ctypes`` is that it is invariant to the usage of JIT decorators.
 
    print(example(3, 4)) # 7
    print(example.py_func(3, 4)) # 7
+
+NumPy arrays can be passed to a ``ctypes``-bound function through their
+``.ctypes`` attribute. For a C function that accepts a ``void *`` argument,
+pass the array address with ``array.ctypes.data``::
+
+   c_func.argtypes = [ctypes.c_void_p]
+
+   @njit
+   def sum_array(values):
+       return c_func(values.ctypes.data)
+
+For a typed pointer argument, use the corresponding ``.ctypes`` pointer helper
+when calling the function from Python.
