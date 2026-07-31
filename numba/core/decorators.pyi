@@ -36,6 +36,7 @@ _FunctionT = TypeVar("_FunctionT", bound=Callable[..., object])
 
 @type_check_only
 class _JITOptions(TypedDict, total=False):
+    nopython: bool
     looplift: bool
     nogil: bool
     parallel: bool
