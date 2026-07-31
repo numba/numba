@@ -281,6 +281,15 @@ A more radical alternative is :ref:`ahead-of-time compilation <pycc>`.
 GPU Programming
 ===============
 
+How do I clear the CUDA driver JIT cache?
+----------------------------------------------
+
+The NVIDIA CUDA driver may cache JIT-compiled PTX under ``~/.nv/`` on Linux.
+This cache is separate from the cache created by Numba CPU compilation. If a
+CUDA linker error persists after changing a kernel or updating the CUDA toolchain,
+removing the contents of ``~/.nv/ComputeCache`` allows the driver to rebuild the
+cache the next time the kernel is compiled.
+
 How do I work around the ``CUDA initialized before forking`` error?
 -------------------------------------------------------------------
 
