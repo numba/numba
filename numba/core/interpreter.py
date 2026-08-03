@@ -2931,7 +2931,7 @@ class Interpreter(object):
 
     def op_BINARY_OP(self, inst, op, lhs, rhs, res):
         if op == "[]":
-            # Special case 3.14 -- body of BINARY_SUBSCR now here
+            # Special case 3.14+: body of BINARY_SUBSCR now here
             lhs = self.get(lhs)
             rhs = self.get(rhs)
             expr = ir.Expr.getitem(lhs, index=rhs, loc=self.loc)

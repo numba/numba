@@ -1651,7 +1651,7 @@ class TraceRunner(object):
         rhs = state.pop()
         lhs = state.pop()
         if op == '[]':
-            # Special case 3.14 -- body of BINARY_SUBSCR now here
+            # Special case 3.14+: body of BINARY_SUBSCR now here
             assert PYVERSION in ((3, 14), (3, 15))
             res = state.make_temp()
             state.append(inst, op=op, lhs=lhs, rhs=rhs, res=res)
@@ -1982,6 +1982,8 @@ class TraceRunner(object):
 
     if PYVERSION in ((3, 14), (3, 15)):
         def op_LOAD_COMMON_CONSTANT(self, state, inst):
+            # 3.14 used this mainly for AssertionError; 3.15 also emits it
+            # for builtins/types and plain literals in _common_constants.
             oparg = inst.arg
             const = dis._common_constants[oparg]
             name = getattr(const, '__name__', 'common_constant')
