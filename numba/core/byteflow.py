@@ -1982,12 +1982,15 @@ class TraceRunner(object):
 
     if PYVERSION in ((3, 14), (3, 15)):
         def op_LOAD_COMMON_CONSTANT(self, state, inst):
-            # 3.14 used this mainly for AssertionError; 3.15 also emits it
-            # for builtins/types and plain literals in _common_constants.
+            # Keep in sync with dis._common_constants and
+            # interpreter.op_LOAD_COMMON_CONSTANT.
             oparg = inst.arg
             const = dis._common_constants[oparg]
-            name = getattr(const, '__name__', 'common_constant')
-            res = state.make_temp(name)
+            if const not in (AssertionError, NotImplementedError,
+                             tuple, all, any, list, set,
+                             None, '', True, False, -1):
+                raise NotImplementedError(const)
+            res = state.make_temp('common_constant')
             state.append(inst, res=res, idx=oparg)
             state.push(res)
     elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
