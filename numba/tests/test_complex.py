@@ -125,7 +125,8 @@ class TestComplexNaNRecovery(BaseComplexTest, TestCase):
     """
 
     def special_values(self):
-        reals = [-0.0, +0.0, 1, -1,
+        # 1e200 (large finite) is here so mul can overflow before recovering
+        reals = [-0.0, +0.0, 1, -1, 1e200,
                  float('-inf'), float('+inf'), float('nan')]
         return [complex(x, y) for x, y in itertools.product(reals, reals)]
 
@@ -140,6 +141,13 @@ class TestComplexNaNRecovery(BaseComplexTest, TestCase):
                                         self.special_values()))
         value_types = [(types.complex128, types.complex128)]
         self.run_binary(div_usecase, value_types, values, flags=flags)
+
+    def test_div_zero(self, flags=no_pyobj_flags):
+        cfunc = jit((types.complex128, types.complex128), **flags)(div_usecase)
+        for denom in [0j, complex(0.0, 0.0), complex(-0.0, -0.0),
+                      complex(0.0, -0.0), complex(-0.0, 0.0)]:
+            with self.assertRaises(ZeroDivisionError):
+                cfunc(1+1j, denom)
 
 
 class TestCMath(BaseComplexTest, TestCase):
