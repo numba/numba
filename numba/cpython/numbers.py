@@ -1137,28 +1137,26 @@ def complex_div_impl(context, builder, sig, args):
         bimag = b.imag
         abs_breal = abs(breal)
         abs_bimag = abs(bimag)
-        if not breal and not bimag:
-            raise ZeroDivisionError("complex division by zero")
         if abs_breal >= abs_bimag:
-            # Divide tops and bottom by b.real
-            if not breal:
-                res = complex(NAN, NAN)
+            # divide tops and bottom by b.real
+            if abs_breal == 0.0:
+                raise ZeroDivisionError("complex division by zero")
             else:
                 ratio = bimag / breal
                 denom = breal + bimag * ratio
                 res = complex(
                     (areal + aimag * ratio) / denom,
                     (aimag - areal * ratio) / denom)
+        elif abs_bimag >= abs_breal:
+            # divide tops and bottom by b.imag
+            ratio = breal / bimag
+            denom = breal * ratio + bimag
+            res = complex(
+                (areal * ratio + aimag) / denom,
+                (aimag * ratio - areal) / denom)
         else:
-            # Divide tops and bottom by b.imag
-            if not bimag:
-                res = complex(NAN, NAN)
-            else:
-                ratio = breal / bimag
-                denom = breal * ratio + bimag
-                res = complex(
-                    (areal * ratio + aimag) / denom,
-                    (aimag * ratio - areal) / denom)
+            # At least one of b.real or b.imag is a NaN
+            res = complex(NAN, NAN)
 
         if (utils.PYVERSION >= (3, 14)
                 and math.isnan(res.real) and math.isnan(res.imag)):
