@@ -69,6 +69,7 @@ Memory Layout:
 * :attr:`~numpy.ndarray.size`
 * :attr:`~numpy.ndarray.itemsize`
 * :attr:`~numpy.ndarray.nbytes`
+* :meth:`~numpy.ndarray.tobytes` (without arguments)
 
 .. note::
   The object returned by the :attr:`~numpy.ndarray.flags` attribute supports
