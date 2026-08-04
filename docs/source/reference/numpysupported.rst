@@ -847,7 +847,7 @@ Mathematical functions
     This is only available with NumPy < 2.5; NumPy 2.5 removed support for
     the 2-dimensional cross product.
 * :func:`numpy.interp` (only the 3 first arguments)
-* :func:`numpy.nan_to_num` (only the 3 first arguments)
+* :func:`numpy.nan_to_num`
 * :func:`numpy.sinc`
 * :func:`numpy.round_` (NumPy < 2.0 only; removed in NumPy 2.0)
 * :func:`numpy.trapz` (only the 3 first arguments)
@@ -1092,7 +1092,7 @@ Set routines
 ============
 
 * :func:`numpy.unique` (only the first argument)
-* :func:`numpy.intersect1d` (only 3 first arguments: ar1, ar2, and assume_unique)
+* :func:`numpy.intersect1d` (only 3 first arguments: ``ar1``, ``ar2``, and ``assume_unique``)
 * :func:`numpy.union1d` (For unicode arrays, only supports arrays of the same dtype)
 * :func:`numpy.isin` (matching pre-1.24 behaviour without the ``kind`` keyword)
 * :func:`numpy.setxor1d`
