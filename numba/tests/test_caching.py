@@ -230,8 +230,9 @@ class BaseCacheTest(TestCase):
 
     @staticmethod
     def _module_cached_path(module):
-        # Python 3.15 no longer sets module.__cached__, use __spec__.cached
-        # instead (see https://docs.python.org/3/deprecations/pending-removal-in-3.15.html)
+        # Python 3.15 no longer sets module.__cached__, use
+        # __spec__.cached instead. See:
+        # https://docs.python.org/3/deprecations/pending-removal-in-3.15.html
         cached = getattr(module, '__cached__', None)
         if cached is not None:
             return cached
