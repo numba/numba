@@ -1,11 +1,10 @@
-from itertools import product, cycle
+from itertools import product, cycle, permutations, chain
 import gc
 import sys
 import unittest
 import warnings
 
 import numpy as np
-import itertools
 from numba import jit, njit, typeof
 from numba.core import types
 from numba.core.errors import TypingError, NumbaValueError
@@ -1493,16 +1492,18 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                         py_res = pyfunc(arr, axis=axis, dtype=out_dtype)
                         nb_res = cfunc(arr, axis=axis, dtype=out_dtype)
                         self.assertPreciseEqual(py_res, nb_res)
-    
+
     def test_sum_axis_tuple(self):
         """ test sum with axis as a tuple """
         pyfunc = array_sum_axis_kws
         cfunc = jit(nopython=True)(pyfunc)
         a = np.arange(2 * 3 * 4).reshape(2, 3, 4)
-        
-        my_list = [-2, -1, 0, 1, 2]
-        all_combinations = [tuple(combo) for r in range(0, len(my_list) + 1) for combo in itertools.combinations(my_list, r)]
-        for axes in all_combinations:
+
+        data = [-2, -1, 0, 1, 2]
+        all_perms = list(chain.from_iterable(
+            permutations(data, r) for r in range(len(data) + 1)
+        ))
+        for axes in all_perms:
             # Check for duplicate axis
             np_axes = (np.array(axes) % 3)
             if len(np_axes) == len(np.unique(np_axes)):
@@ -1512,13 +1513,36 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         """ test sum with axis as a tuple """
         self.disable_leak_check()
         pyfunc = array_sum_axis_kws
+        err = ValueError if numpy_version < (1, 25) else np.exceptions.AxisError
         cfunc = jit(nopython=True)(pyfunc)
         a = np.arange(2 * 3 * 4).reshape(2, 3, 4)
-        
-        my_list = [-2, -1, 0, 1, 2]
-        all_combinations = [tuple(combo) for r in range(0, len(my_list) + 1) for combo in itertools.combinations(my_list, r)]
-        for axes in all_combinations:
+
+        data = [-3, -2, -1, 0, 1, 2, 3]
+        all_perms = list(chain.from_iterable(
+            permutations(data, r) for r in range(len(data) + 1)
+        ))
+        for axes in all_perms:
+            print(f"Testing axes: {axes}")
             # Check for duplicate axis
+            if 3 in axes:
+                # 3 is out of bounds for an array of dimension 3
+                # but -3 is not.
+                with self.assertRaises(err) as c_raises:
+                    cfunc(a, axes)
+                # This will raise a different exception than the duplicate
+                # axis case, so we need to check for the correct error
+                # message.
+                self.assertIn(
+                    "out of bounds for array of dimension 3",
+                    str(c_raises.exception)
+                )
+                with self.assertRaises(np.exceptions.AxisError) as py_raises:
+                    pyfunc(a, axes)
+                self.assertEqual(
+                    str(c_raises.exception),
+                    str(py_raises.exception)
+                )
+                continue
             np_axes = (np.array(axes) % 3)
             if len(np_axes) != len(np.unique(np_axes)):
                 with self.assertRaises(ValueError) as c_raises:
@@ -1529,7 +1553,10 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                 )
                 with self.assertRaises(ValueError) as py_raises:
                     pyfunc(a, axes)
-                self.assertEqual(str(c_raises.exception), str(py_raises.exception))
+                self.assertEqual(
+                    str(c_raises.exception),
+                    str(py_raises.exception)
+                )
 
     def test_sum_axis_dtype_pos_arg(self):
         """ testing that axis and dtype inputs work when passed as positional """

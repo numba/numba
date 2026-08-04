@@ -534,18 +534,22 @@ def _numpy_sum_axis(typingctx, aryty, axisty, dtype):
     return sig, codegen
 
 
+axis_bound_err = ValueError if numpy_version < (1, 25)\
+    else np.exceptions.AxisError
+
+
 @register_jitable
 def check_axis_bounds(a, axis):
     if axis is not None:
         if isinstance(axis, tuple):
             for ax in axis:
                 if ax < -a.ndim or ax >= a.ndim:
-                    raise ValueError(
+                    raise axis_bound_err(
                         f"axis {ax} is out of bounds for "
                         f"array of dimension {a.ndim}"
                     )
         elif axis < -a.ndim or axis >= a.ndim:
-            raise ValueError(
+            raise axis_bound_err(
                 f"axis {axis} is out of bounds for "
                 f"array of dimension {a.ndim}"
             )
