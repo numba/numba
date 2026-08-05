@@ -554,10 +554,14 @@ class ByteCodePy312(ByteCodePy311):
                     # so don't turn it into a NOP.
                     # Python 3.13.5 reverted the change.
                     # Python 3.15 likewise keeps the GET_ITER.
-                    if (sys.version_info[:3] != (3, 13, 4)
-                            and PYVERSION < (3, 15)):
-                        # Add the inst to potentially be replaced to NOP.
-                        current_nop_fixes.add(next_inst)
+                    if PYVERSION in ((3, 12), (3, 13), (3, 14)):
+                        if sys.version_info[:3] != (3, 13, 4):
+                            # Add the inst to potentially be replaced to NOP.
+                            current_nop_fixes.add(next_inst)
+                    elif PYVERSION in ((3, 15),):
+                        pass
+                    else:
+                        raise NotImplementedError(PYVERSION)
                     # Loop up next instruction.
                     next_inst = self.table[self.ordered_offsets[index + 3]]
 
