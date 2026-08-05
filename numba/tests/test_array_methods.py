@@ -1820,6 +1820,56 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                         with self.assertRaisesRegex(ValueError, msg):
                             cfunc(a, None, None)
 
+    def test_clip_out_shape_mismatch(self):
+        # Issue #10682: an `out` that does not match the shape of the result
+        # used to be written past its end, silently returning a wrong array.
+        # NumPy raises instead, because it never broadcasts `out` itself.
+        # Disable leak check since we expect an error to be raised
+        self.disable_leak_check()
+
+        has_out = (np_clip, np_clip_kwargs, array_clip, array_clip_kwargs)
+
+        a = np.linspace(-10, 10, 5)
+        a_min_arr = np.zeros_like(a)
+        a_max_arr = np.full_like(a, 5)
+        # covers every implementation branch: scalar/scalar, scalar/None,
+        # None/scalar, scalar/array, array/scalar, None/array, array/None
+        # and array/array
+        min_max = ((-5, 5), (-5, None), (None, 5), (-5, a_max_arr),
+                   (a_min_arr, 5), (None, a_max_arr), (a_min_arr, None),
+                   (a_min_arr, a_max_arr))
+
+        msg = "clip: the shape of the 'out' array does not match"
+        for pyfunc in has_out:
+            cfunc = jit(nopython=True)(pyfunc)
+            for a_min, a_max in min_max:
+                # too small, and too large: NumPy rejects both
+                for bad in (np.empty(a.size - 1), np.empty(a.size + 1)):
+                    with self.assertRaisesRegex(ValueError, msg):
+                        cfunc(a, a_min, a_max, bad)
+
+    def test_clip_out_no_out_of_bounds_write(self):
+        # Issue #10682: writing past the end of a too-small `out` corrupted
+        # whatever followed it in memory. Clip into a view of a larger
+        # buffer and check the rest of that buffer is left alone.
+        # Disable leak check since we expect an error to be raised
+        self.disable_leak_check()
+
+        cfunc = jit(nopython=True)(np_clip)
+
+        a = np.arange(5.0)
+        buf = np.full(8, 999.0)
+        with self.assertRaises(ValueError):
+            cfunc(a, 0.0, 3.0, buf[:3])
+
+        np.testing.assert_equal(buf, np.full(8, 999.0))
+
+    def test_clip_out_bad_ndim(self):
+        cfunc = jit(nopython=True)(np_clip)
+        msg = '.*The argument "out" must have the same number of dimensions.*'
+        with self.assertRaisesRegex(TypingError, msg):
+            cfunc(np.arange(5.0), 0.0, 3.0, np.empty((2, 5)))
+
     def test_clip_bad_array(self):
         cfunc = jit(nopython=True)(np_clip)
         msg = '.*The argument "a" must be array-like.*'
