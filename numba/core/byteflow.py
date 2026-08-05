@@ -1605,12 +1605,14 @@ class TraceRunner(object):
                      res=res)
 
     def op_GET_ITER(self, state, inst):
-        if PYVERSION >= (3, 15):
-            # 3.15+: GET_ITER keeps iterable on stack and pushes iterator
+        if PYVERSION in ((3, 15), ):
+            # 3.15: GET_ITER keeps iterable on stack and pushes iterator
             # on top. POP_ITER later cleans up both.
             value = state.get_tos()
-        else:
+        elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13), (3, 14)):
             value = state.pop()
+        else:
+            raise NotImplementedError(PYVERSION)
         res = state.make_temp()
         state.append(inst, value=value, res=res)
         state.push(res)
