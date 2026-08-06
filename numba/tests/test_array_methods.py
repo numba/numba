@@ -1536,7 +1536,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                     "out of bounds for array of dimension 3",
                     str(c_raises.exception)
                 )
-                with self.assertRaises(np.exceptions.AxisError) as py_raises:
+                with self.assertRaises(err) as py_raises:
                     pyfunc(a, axes)
                 self.assertEqual(
                     str(c_raises.exception),
