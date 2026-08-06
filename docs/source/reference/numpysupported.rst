@@ -69,7 +69,6 @@ Memory layout:
 * :attr:`~numpy.ndarray.size`
 * :attr:`~numpy.ndarray.itemsize`
 * :attr:`~numpy.ndarray.nbytes`
-* :meth:`~numpy.ndarray.tobytes` (without arguments)
 
 .. note::
   The object returned by the :attr:`~numpy.ndarray.flags` attribute supports
@@ -117,6 +116,7 @@ Array conversion:
 * :meth:`~numpy.ndarray.astype` (only the 1-argument form)
 * :meth:`~numpy.ndarray.copy` (without arguments)
 * :meth:`~numpy.ndarray.view` (only the 1-argument form)
+* :meth:`~numpy.ndarray.tobytes` (without arguments)
 
 Shape manipulation:
 '''''''''''''''''''
@@ -441,6 +441,9 @@ Indexing routines
 
 * :func:`~numpy.lib.stride_tricks.as_strided` (the *strides* argument
   is mandatory, the *subok* argument is not supported)
+* :func:`~numpy.lib.stride_tricks.sliding_window_view` (the *subok* argument is
+  not supported, the *writeable* argument is not supported with the returned
+  view always being writeable)
 * :func:`numpy.fill_diagonal`
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`
@@ -480,10 +483,6 @@ Masked arrays
 ===========================
 Universal functions (ufunc)
 ===========================
-
-* :func:`~numpy.lib.stride_tricks.sliding_window_view` (the *subok* argument is
-  not supported, the *writeable* argument is not supported with the returned
-  view always being writeable)
 
 .. _supported_ufuncs:
 
