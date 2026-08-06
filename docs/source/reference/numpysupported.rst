@@ -59,7 +59,7 @@ Array attributes
 
 The following attributes of NumPy arrays are supported. 
 
-Memory Layout:
+Memory layout:
 ''''''''''''''
 
 * :attr:`~numpy.ndarray.flags`
@@ -80,7 +80,7 @@ Data type:
 
 * :attr:`~numpy.ndarray.dtype`
 
-Other Attributes:
+Other attributes:
 '''''''''''''''''
 
 * :attr:`~numpy.ndarray.T`
@@ -401,7 +401,7 @@ Built-in scalar types
 
 * :class:`numpy.bool_`
 
-number
+Number
 ------
 
 * :class:`numpy.intc`
@@ -456,7 +456,7 @@ Indexing routines
 * :func:`numpy.take_along_axis` (the axis argument must be a literal value)
 * :func:`numpy.indices` (only the first argument)
 
-Iterating Over Arrays
+Iterating over arrays
 =====================
 
 Arrays support normal iteration.
@@ -729,7 +729,7 @@ Array manipulation routines
 * :func:`numpy.resize`
 * :func:`numpy.trim_zeros` (for NumPy array arguments only)
 
-Datetime Support Functions
+Datetime support functions
 ==========================
 
 ==============  =============  ===============
@@ -883,7 +883,7 @@ Random sampling (numpy.random)
 
 .. _numpy-random:
 
-Generator Objects
+Generator objects
 -----------------
 Numba supports :py:class:`numpy.random.Generator()` objects. As of version 0.56, users can pass
 individual NumPy :py:class:`Generator` objects into Numba functions and use their
@@ -968,7 +968,7 @@ The following :py:class:`Generator` methods are supported:
   happen when fused-multiply-add is used instead of multiplication
   followed by addition.
 
-RandomState and legacy Random number generation
+RandomState and legacy random number generation
 -----------------------------------------------
 
 Numba supports top-level functions from the
