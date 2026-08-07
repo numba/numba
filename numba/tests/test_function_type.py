@@ -1417,8 +1417,9 @@ class TestFunctionTypeReturnMismatch(TestCase):
             r = fn()
             return len(r), r == "hello", r == ""
 
-        with self.assertRaises(TypeError):
+        with self.assertRaises(TypeError) as raises:
             probe(gm)
+        self.assertIn("mismatch of return type", str(raises.exception))
 
     def test_literal_int_vs_float64(self):
         @njit
@@ -1429,8 +1430,9 @@ class TestFunctionTypeReturnMismatch(TestCase):
         def probe(fn):
             return fn()
 
-        with self.assertRaises(TypeError):
+        with self.assertRaises(TypeError) as raises:
             probe(gm)
+        self.assertIn("mismatch of return type", str(raises.exception))
 
 
 if __name__ == '__main__':

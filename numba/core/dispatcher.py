@@ -670,7 +670,20 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             conv = self.typingctx.install_possible_conversions(args, sig.args)
             if conv:
                 found = True
-        return found
+        if found:
+            return True
+        # No conversion worked, re-raise return-type rejects from
+        # get_compile_result as TypeError (see
+        # https://github.com/numba/numba/issues/10755).
+        for sig in self.nopython_signatures:
+            for actual, formal in zip(args, sig.args):
+                if (isinstance(actual, types.Dispatcher) and
+                        isinstance(formal, types.FunctionType)):
+                    try:
+                        actual.dispatcher.get_compile_result(formal.signature)
+                    except errors.TypingError as e:
+                        raise TypeError(str(e)) from None
+        return False
 
     def __repr__(self):
         return "%s(%s)" % (type(self).__name__, self.py_func)
@@ -929,14 +942,17 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
                 msg = f"{sig} not available and compilation disabled"
                 raise errors.TypingError(msg)
         cres = self.overloads[atypes]
-        # A precise FunctionType return type must match the return type of
-        # the compiled function (see https://github.com/numba/numba/issues/10755).
+        # A precise FunctionType return must use the same LLVM value type
+        # as the compiled return (no cast is inserted at the call; see
+        # https://github.com/numba/numba/issues/10755).
         _, return_type = sigutils.normalize_signature(sig)
-        if (return_type is not None and return_type.is_precise()
-                and cres.signature.return_type != return_type):
-            msg = (f"mismatch of return type: {cres.signature.return_type} "
-                   f"vs {return_type}")
-            raise errors.TypingError(msg)
+        if return_type is not None and return_type.is_precise():
+            actual = cres.signature.return_type
+            if (self.targetctx.get_value_type(actual) !=
+                    self.targetctx.get_value_type(return_type)):
+                msg = (f"mismatch of return type: {actual} "
+                       f"vs {return_type}")
+                raise errors.TypingError(msg)
         return cres
 
     def recompile(self):
