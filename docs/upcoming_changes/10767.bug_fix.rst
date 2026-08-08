@@ -1,0 +1,4 @@
+PR #10767: Fix ``np.clip`` returning wrong shape when ``a_min`` or ``a_max``
+broadcasts to a shape larger than ``a``. Previously the result was allocated
+with ``np.empty_like(a)`` before the broadcast was computed, so a larger bound
+silently produced the wrong shape and wrote outside the result buffer.
