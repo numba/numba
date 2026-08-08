@@ -1994,6 +1994,31 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             with self.assertRaisesRegex(ValueError, msg):
                 cfunc(a, a_min, a_max)
 
+    def test_clip_broadcast_shape(self):
+        # Regression test for #10760: when a_min or a_max broadcasts to a
+        # shape larger than a, np.clip must return the broadcast shape.
+        a = np.arange(3.0).reshape(3, 1)
+        big = np.zeros((3, 4))
+
+        # both bounds arrays (_np_clip_impl path)
+        cfunc = jit(nopython=True)(np_clip_no_out)
+        got = cfunc(a, big, 3.0)
+        expected = np.clip(a, big, 3.0)
+        self.assertEqual(got.shape, expected.shape)
+        np.testing.assert_array_equal(got, expected)
+
+        # a_min=None, a_max is a larger array (np_clip_na path)
+        got = cfunc(a, None, big)
+        expected = np.clip(a, None, big)
+        self.assertEqual(got.shape, expected.shape)
+        np.testing.assert_array_equal(got, expected)
+
+        # a_max=None, a_min is a larger array (np_clip_an path)
+        got = cfunc(a, big, None)
+        expected = np.clip(a, big, None)
+        self.assertEqual(got.shape, expected.shape)
+        np.testing.assert_array_equal(got, expected)
+
     def test_conj(self):
         for pyfunc in [array_conj, array_conjugate]:
             cfunc = jit(nopython=True)(pyfunc)
