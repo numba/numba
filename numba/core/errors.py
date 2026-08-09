@@ -8,7 +8,6 @@ import contextlib
 import os
 import warnings
 import numba.core.config
-import numpy as np
 from collections import defaultdict
 from functools import wraps
 from abc import abstractmethod
@@ -714,7 +713,7 @@ class TypingError(NumbaError):
 class UntypedAttributeError(TypingError):
     def __init__(self, value, attr, loc=None):
         module = getattr(value, 'pymod', None)
-        if module is not None and module == np:
+        if module is not None and module.__package__ == 'numpy':
             # unsupported numpy feature.
             msg = ("Use of unsupported NumPy function 'numpy.%s' "
                    "or unsupported use of the function.") % attr

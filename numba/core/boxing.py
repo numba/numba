@@ -10,7 +10,6 @@ from numba.core.errors import NumbaNotImplementedError, TypingError
 from numba.core.typing.typeof import typeof, Purpose
 
 from numba.cpython import setobj, listobj
-from numba.np import numpy_support
 from contextlib import contextmanager, ExitStack
 
 
@@ -406,97 +405,6 @@ def unbox_string_literal(typ, obj, c):
 
 # NOTE: boxing functions are supposed to steal any NRT references in
 # the given native value.
-
-@box(types.Array)
-def box_array(typ, val, c):
-    nativearycls = c.context.make_array(typ)
-    nativeary = nativearycls(c.context, c.builder, value=val)
-    if c.context.enable_nrt:
-        np_dtype = numpy_support.as_dtype(typ.dtype)
-        dtypeptr = c.env_manager.read_const(c.env_manager.add_const(np_dtype))
-        newary = c.pyapi.nrt_adapt_ndarray_to_python(typ, val, dtypeptr)
-        # Steals NRT ref
-        c.context.nrt.decref(c.builder, typ, val)
-        return newary
-    else:
-        parent = nativeary.parent
-        c.pyapi.incref(parent)
-        return parent
-
-
-@unbox(types.Buffer)
-def unbox_buffer(typ, obj, c):
-    """
-    Convert a Py_buffer-providing object to a native array structure.
-    """
-    buf = c.pyapi.alloca_buffer()
-    res = c.pyapi.get_buffer(obj, buf)
-    is_error = cgutils.is_not_null(c.builder, res)
-
-    nativearycls = c.context.make_array(typ)
-    nativeary = nativearycls(c.context, c.builder)
-    aryptr = nativeary._getpointer()
-
-    with cgutils.if_likely(c.builder, c.builder.not_(is_error)):
-        ptr = c.builder.bitcast(aryptr, c.pyapi.voidptr)
-        if c.context.enable_nrt:
-            c.pyapi.nrt_adapt_buffer_from_python(buf, ptr)
-        else:
-            c.pyapi.numba_buffer_adaptor(buf, ptr)
-
-    def cleanup():
-        c.pyapi.release_buffer(buf)
-
-    return NativeValue(c.builder.load(aryptr), is_error=is_error,
-                       cleanup=cleanup)
-
-@unbox(types.Array)
-def unbox_array(typ, obj, c):
-    """
-    Convert a Numpy array object to a native array structure.
-    """
-    # This is necessary because unbox_buffer() does not work on some
-    # dtypes, e.g. datetime64 and timedelta64.
-    # TODO check matching dtype.
-    #      currently, mismatching dtype will still work and causes
-    #      potential memory corruption
-    nativearycls = c.context.make_array(typ)
-    nativeary = nativearycls(c.context, c.builder)
-    aryptr = nativeary._getpointer()
-
-    ptr = c.builder.bitcast(aryptr, c.pyapi.voidptr)
-    if c.context.enable_nrt:
-        errcode = c.pyapi.nrt_adapt_ndarray_from_python(obj, ptr)
-    else:
-        errcode = c.pyapi.numba_array_adaptor(obj, ptr)
-
-    # TODO: here we have minimal typechecking by the itemsize.
-    #       need to do better
-    try:
-        expected_itemsize = numpy_support.as_dtype(typ.dtype).itemsize
-    except NumbaNotImplementedError:
-        # Don't check types that can't be `as_dtype()`-ed
-        itemsize_mismatch = cgutils.false_bit
-    else:
-        expected_itemsize = nativeary.itemsize.type(expected_itemsize)
-        itemsize_mismatch = c.builder.icmp_unsigned(
-            '!=',
-            nativeary.itemsize,
-            expected_itemsize,
-            )
-
-    failed = c.builder.or_(
-        cgutils.is_not_null(c.builder, errcode),
-        itemsize_mismatch,
-    )
-    # Handle error
-    with c.builder.if_then(failed, likely=False):
-        c.pyapi.err_set_string("PyExc_TypeError",
-                               "can't unbox array from PyObject into "
-                               "native value.  The object maybe of a "
-                               "different type")
-    return NativeValue(c.builder.load(aryptr), is_error=failed)
-
 
 @box(types.Tuple)
 @box(types.UniTuple)

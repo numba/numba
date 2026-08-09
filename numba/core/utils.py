@@ -18,7 +18,6 @@ from pprint import pformat
 
 from types import ModuleType
 from importlib import import_module
-import numpy as np
 
 from inspect import signature as pysignature # noqa: F401
 from inspect import Signature as pySignature # noqa: F401
@@ -495,12 +494,12 @@ class BenchmarkResult(object):
     def __init__(self, func, records, loop):
         self.func = func
         self.loop = loop
-        self.records = np.array(records) / loop
-        self.best = np.min(self.records)
+        self.records = [r / loop for r in records]
+        self.best = min(self.records)
 
     def __repr__(self):
         name = getattr(self.func, "__name__", self.func)
-        args = (name, self.loop, self.records.size, format_time(self.best))
+        args = (name, self.loop, len(self.records), format_time(self.best))
         return "%20s: %10d loops, best of %d: %s per loop" % args
 
 

@@ -16,7 +16,6 @@ import numba.core.entrypoints
 # base.
 from numba.core.cpu_options import (ParallelOptions, # noqa F401
                                     FastMathOptions, InlineOptions) # noqa F401
-from numba.np import ufunc_db
 
 # Keep those structures in sync with _dynfunc.c.
 
@@ -144,6 +143,8 @@ class CPUContext(BaseContext):
 
         # fix for #8940
         from numba.np.unsafe import ndarray # noqa F401
+        # TODO: Hide all NumPy features behind a flag
+
 
     @property
     def target_data(self):
@@ -301,10 +302,6 @@ class CPUContext(BaseContext):
         '''
         aryty = types.Array(types.int32, ndim, 'A')
         return self.get_abi_sizeof(self.get_value_type(aryty))
-
-    # Overrides
-    def get_ufunc_info(self, ufunc_key):
-        return ufunc_db.get_ufunc_info(ufunc_key)
 
 
 # ----------------------------------------------------------------------------
