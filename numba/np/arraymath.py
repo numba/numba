@@ -902,13 +902,13 @@ def array_var(a):
 
         return array_var_impl
 
+
 @overload(np.std)
 @overload_method(types.Array, "std")
 def array_std(a):
     if isinstance(a, types.Array):
         def array_std_impl(a):
             return a.var() ** 0.5
-
         return array_std_impl
 
     # Integers and booleans default to float64(0.0) in numpy.std
