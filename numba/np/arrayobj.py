@@ -7549,6 +7549,7 @@ def nan_to_num_impl(x, copy=True, nan=0.0, posinf=None, neginf=None):
                                  "array-like")
     return impl
 
+
 def make_constant_array(self, builder, typ, ary):
     """
     Create an array structure reifying the given constant array.
@@ -7570,7 +7571,9 @@ def make_constant_array(self, builder, typ, ary):
         flat = ary.flatten(order=typ.layout)
         # Note: we use `bytearray(flat.data)` instead of `bytearray(flat)` to
         #       workaround issue #1850 which is due to numpy issue #3147
-        consts = cgutils.create_constant_array(ir.IntType(8), bytearray(flat.data))
+        consts = cgutils.create_constant_array(
+            ir.IntType(8), bytearray(flat.data)
+        )
         data = cgutils.global_constant(builder, ".const.array.data", consts)
         # Ensure correct data alignment (issue #1933)
         data.align = self.get_abi_alignment(datatype)
@@ -7600,8 +7603,10 @@ def make_constant_array(self, builder, typ, ary):
 
     return cary._getvalue()
 
+
 BaseContext.make_array = lambda self, typ: make_array(typ)
-BaseContext.populate_array = lambda self, ary, **kwargs: populate_array(ary, **kwargs)
+BaseContext.populate_array = \
+    lambda self, ary, **kwargs: populate_array(ary, **kwargs)
 BaseContext.make_constant_array = make_constant_array
 
 
@@ -7648,6 +7653,7 @@ def unbox_buffer(typ, obj, c):
     return NativeValue(c.builder.load(aryptr), is_error=is_error,
                        cleanup=cleanup)
 
+
 @unbox(types.Array)
 def unbox_array(typ, obj, c):
     """
@@ -7681,7 +7687,7 @@ def unbox_array(typ, obj, c):
             '!=',
             nativeary.itemsize,
             expected_itemsize,
-            )
+        )
 
     failed = c.builder.or_(
         cgutils.is_not_null(c.builder, errcode),

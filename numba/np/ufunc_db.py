@@ -1216,4 +1216,5 @@ def _fill_ufunc_db(ufunc_db):
         'mm->m': npdatetime.timedelta_mod_timedelta,
     })
 
+
 CPUContext.get_ufunc_info = lambda self, ufunc_key: get_ufunc_info(ufunc_key)

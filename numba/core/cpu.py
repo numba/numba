@@ -145,7 +145,6 @@ class CPUContext(BaseContext):
         from numba.np.unsafe import ndarray # noqa F401
         # TODO: Hide all NumPy features behind a flag
 
-
     @property
     def target_data(self):
         return self._internal_codegen.target_data

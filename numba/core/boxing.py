@@ -905,6 +905,7 @@ def unbox_generator(typ, obj, c):
 
 @box(types.DType)
 def box_dtype(typ, val, c):
+    from numba.np import numpy_support
     np_dtype = numpy_support.as_dtype(typ.dtype)
     return c.pyapi.unserialize(c.pyapi.serialize_object(np_dtype))
 
@@ -915,6 +916,7 @@ def unbox_dtype(typ, val, c):
 
 @box(types.NumberClass)
 def box_number_class(typ, val, c):
+    from numba.np import numpy_support
     np_dtype = numpy_support.as_dtype(typ.dtype)
     return c.pyapi.unserialize(c.pyapi.serialize_object(np_dtype))
 
