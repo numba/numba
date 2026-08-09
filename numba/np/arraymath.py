@@ -872,18 +872,23 @@ def array_var(a):
     if isinstance(a, (types.Integer, types.Boolean)):
         def _scalar_var(a):
             return np.float64(0.0)
+
         return _scalar_var
 
     elif isinstance(a, types.Float):
-        typed_zero = _as_dtype(a).type(0)
+        typed_zero = as_dtype(a).type(0)
+
         def _scalar_var(a):
             return typed_zero
+
         return _scalar_var
 
     elif isinstance(a, types.Complex):
-        real_zero = _as_dtype(a.underlying_float).type(0)
+        real_zero = as_dtype(a.underlying_float).type(0)
+
         def _scalar_var(a):
             return real_zero
+
         return _scalar_var
 
     elif isinstance(a, types.Array):
@@ -894,8 +899,8 @@ def array_var(a):
                 val = (v.item() - m)
                 ssd += np.real(val * np.conj(val))
             return ssd / a.size
-        return array_var_impl
 
+        return array_var_impl
 
 @overload(np.std)
 @overload_method(types.Array, "std")
