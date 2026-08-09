@@ -888,16 +888,12 @@ def array_var(a):
 
     elif isinstance(a, types.Array):
         def array_var_impl(a):
-            # Compute the mean
             m = a.mean()
-
-            # Compute the sum of square diffs
             ssd = 0
             for v in np.nditer(a):
                 val = (v.item() - m)
                 ssd += np.real(val * np.conj(val))
             return ssd / a.size
-
         return array_var_impl
 
 
