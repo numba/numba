@@ -507,18 +507,6 @@ class _EnvReloader(object):
         # Numba thread pool size (defaults to number of CPUs on the system).
         _NUMBA_NUM_THREADS = _readenv("NUMBA_NUM_THREADS", int,
                                       NUMBA_DEFAULT_NUM_THREADS)
-        # TODO: Find correct place for this check
-        # if ('NUMBA_NUM_THREADS' in globals()
-        #         and globals()['NUMBA_NUM_THREADS'] != _NUMBA_NUM_THREADS):
-
-        # from numba.np.ufunc import parallel
-        # if parallel._is_initialized:
-        #     raise RuntimeError("Cannot set NUMBA_NUM_THREADS to a "
-        #                         "different value once the threads have been "
-        #                         "launched (currently have %s, "
-        #                         "trying to set %s)" %
-        #                         (_NUMBA_NUM_THREADS,
-        #                         globals()['NUMBA_NUM_THREADS']))
 
         NUMBA_NUM_THREADS = _NUMBA_NUM_THREADS
         del _NUMBA_NUM_THREADS

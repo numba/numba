@@ -5,7 +5,7 @@ Provide math calls that uses intrinsics or libc math functions.
 import math
 import operator
 import sys
-import numpy as np
+import ctypes
 
 import llvmlite.ir
 from llvmlite.ir import Constant
@@ -23,19 +23,25 @@ lower = registry.lower
 
 
 # Helpers, shared with cmathimpl.
-_NP_FLT_FINFO = np.finfo(np.dtype('float32'))
-FLT_MAX = _NP_FLT_FINFO.max
-FLT_MIN = _NP_FLT_FINFO.tiny
+# --- float (32-bit) ---
+f = ctypes.c_float()
+f_as_int = ctypes.cast(ctypes.pointer(f), ctypes.POINTER(ctypes.c_uint32))
 
-_NP_DBL_FINFO = np.finfo(np.dtype('float64'))
-DBL_MAX = _NP_DBL_FINFO.max
-DBL_MIN = _NP_DBL_FINFO.tiny
+f_as_int.contents.value = 0x00800000   # smallest normalized positive float
+FLT_MIN = f.value
 
-FLOAT_ABS_MASK = 0x7fffffff
-FLOAT_SIGN_MASK = 0x80000000
-DOUBLE_ABS_MASK = 0x7fffffffffffffff
-DOUBLE_SIGN_MASK = 0x8000000000000000
+f_as_int.contents.value = 0x7F7FFFFF   # largest finite float
+FLT_MAX = f.value
 
+# --- double (64-bit) ---
+d = ctypes.c_double()
+d_as_int = ctypes.cast(ctypes.pointer(d), ctypes.POINTER(ctypes.c_uint64))
+
+d_as_int.contents.value = 0x0010000000000000   # smallest normalized positive double
+DBL_MIN = d.value
+
+d_as_int.contents.value = 0x7FEFFFFFFFFFFFFF   # largest finite double
+DBL_MAX = d.value
 
 def is_nan(builder, val):
     """
@@ -454,14 +460,14 @@ def gcd_impl(context, builder, sig, args):
         zb = trailing_zeros(b)
         k = min(za, zb)
         # Uses np.*_shift instead of operators due to return types
-        u = _unsigned(abs(np.right_shift(a, za)))
-        v = _unsigned(abs(np.right_shift(b, zb)))
+        u = _unsigned(abs(a >> za))
+        v = _unsigned(abs(b >> zb))
         while u != v:
             if u > v:
                 u, v = v, u
             v -= u
-            v = np.right_shift(v, trailing_zeros(v))
-        r = np.left_shift(T(u), k)
+            v = v >> trailing_zeros(v)
+        r = T(u << k)
         return r
 
     res = context.compile_internal(builder, gcd, sig, args)
