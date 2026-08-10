@@ -31,6 +31,25 @@ class TestCFFI(TestCase):
         self.assertEqual(len(signature.args), 1)
         self.assertEqual(signature.args[0], types.double)
 
+    def test_type_map_complex(self):
+        # 'float _Complex' / 'double _Complex' map to numba complex types.
+        self.assertEqual(
+            cffi_support.map_type(mod.ffi.typeof('float _Complex')),
+            types.complex64)
+        self.assertEqual(
+            cffi_support.map_type(mod.ffi.typeof('double _Complex')),
+            types.complex128)
+
+    def test_type_map_complex_signature(self):
+        # Complex argument/return types map correctly within a signature.
+        from cffi import FFI
+        ffi = FFI()
+        ffi.cdef("double _Complex cprod(float _Complex a, double _Complex b);")
+        signature = cffi_support.map_type(ffi.typeof('cprod'))
+        self.assertEqual(signature.return_type, types.complex128)
+        self.assertEqual(list(signature.args),
+                         [types.complex64, types.complex128])
+
     def _test_function(self, pyfunc, flags=enable_pyobj_flags):
         cfunc = jit((types.double,), **flags)(pyfunc)
 
