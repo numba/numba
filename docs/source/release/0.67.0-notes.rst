@@ -1,6 +1,6 @@
 
-Version 0.67.0 (TBD)
-====================
+Version 0.67.0 (11 August 2026)
+===============================
 
 This is a major Numba release. Numba now adds support for NumPy 2.5.
 This release also ships Python 3.14 conda packages and wheels for
