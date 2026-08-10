@@ -5,7 +5,7 @@ from numba.np.ufunc.sigparse import parse_signature
 from numba.np.ufunc.ufunc_base import UfuncBase, UfuncLowererBase
 from numba.np.numpy_support import ufunc_find_matching_loop
 from numba.core import serialize, errors
-from numba.core.typing import npydecl
+from numba.np import npydecl
 from numba.core.typing.templates import signature, AbstractTemplate
 import functools
 

@@ -21,7 +21,7 @@ from numba.np.numpy_support import (
     ufunc_find_matching_loop, select_array_wrapper, from_dtype, _ufunc_loop_sig
 )
 from numba.np.arrayobj import _getitem_array_generic
-from numba.core.typing import npydecl
+from numba.np import npydecl
 from numba.core.extending import overload, intrinsic
 
 from numba.core import errors

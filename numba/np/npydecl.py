@@ -500,10 +500,6 @@ def _parse_nested_sequence(context, typ):
         return 0, typ
 
 
-def _infer_dtype_from_inputs(inputs):
-    return dtype
-
-
 def _homogeneous_dims(context, func_name, arrays):
     ndim = arrays[0].ndim
     for a in arrays:

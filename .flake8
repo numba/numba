@@ -216,7 +216,7 @@ exclude =
     numba/core/typing/builtins.py
     numba/core/typing/randomdecl.py
     numba/core/typing/setdecl.py
-    numba/core/typing/npydecl.py
+    numba/np/npydecl.py
     numba/core/typing/arraydecl.py
     numba/core/typing/collections.py
     numba/core/typing/ctypes_utils.py

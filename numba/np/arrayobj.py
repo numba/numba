@@ -36,11 +36,11 @@ from numba.cpython import slicing
 from numba.cpython.charseq import _make_constant_bytes, bytes_type
 from numba.cpython.unsafe.tuple import tuple_setitem, build_full_slice_tuple
 from numba.core.extending import overload_classmethod
-from numba.core.typing.npydecl import (parse_dtype as ty_parse_dtype,
-                                       parse_shape as ty_parse_shape,
-                                       _parse_nested_sequence,
-                                       _sequence_of_arrays,
-                                       _choose_concatenation_layout)
+from numba.np.npydecl import (
+    parse_dtype as ty_parse_dtype, parse_shape as ty_parse_shape,
+    _parse_nested_sequence, _sequence_of_arrays,
+    _choose_concatenation_layout
+)
 from numba.np import types as npy_types
 from numba.core.base import BaseContext
 from numba.core.pythonapi import box, unbox, NativeValue

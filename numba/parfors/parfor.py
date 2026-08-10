@@ -85,13 +85,13 @@ from numba.core.ir_utils import (
 from numba.core.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
 from numba.core.controlflow import CFGraph
-from numba.core.typing import npydecl, signature
+from numba.core.typing import signature
 from numba.core.types.functions import Function
 from numba.parfors.array_analysis import (random_int_args, random_1arg_size,
                                   random_2arg_sizelast, random_3arg_sizelast,
                                   random_calls, assert_equiv)
 from numba.parfors.ir_utils import mk_alloc
-from numba.np import types as npy_types
+from numba.np import npydecl, types as npy_types
 from numba.core.extending import overload
 import copy
 import numpy

@@ -24,10 +24,12 @@ from numba.core.ir_utils import (
     GuardException,
 )
 from numba.core.analysis import compute_cfg_from_blocks
-from numba.core.typing import npydecl, signature
+from numba.core.typing import signature
 import copy
 from numba.core.extending import intrinsic
 import llvmlite
+
+from numba.np import npydecl
 
 UNKNOWN_CLASS = -1
 CONST_CLASS = 0

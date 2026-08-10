@@ -9,7 +9,7 @@ from numba.core import cgutils, types, serialize, sigutils, errors
 from numba.core.extending import (is_jitted, overload_attribute,
                                   overload_method, register_jitable,
                                   intrinsic)
-from numba.core.typing import npydecl
+from numba.np import npydecl
 from numba.core.typing.templates import AbstractTemplate, signature
 from numba.cpython.unsafe.tuple import tuple_setitem
 from numba.np.ufunc import _internal

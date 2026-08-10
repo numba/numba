@@ -8,9 +8,7 @@ from numba.core.typing.templates import (AttributeTemplate, AbstractTemplate,
                                          signature, bound_function)
 # import time side effect: array operations requires typing support of sequence
 # defined in collections: e.g. array.shape[i]
-from numba.core.typing import collections
 from numba.core.errors import (TypingError, RequireLiteralValue, NumbaTypeError,
-                               NumbaNotImplementedError, NumbaAssertionError,
                                NumbaKeyError, NumbaIndexError, NumbaValueError)
 from numba.core.cgutils import is_nonelike
 
@@ -227,7 +225,7 @@ class SetItemBuffer(AbstractTemplate):
                     res = val
             elif isinstance(val, types.Sequence):
                 if (res.ndim == 1 and
-                    self.context.can_convert(val.dtype, res.dtype)):
+                        self.context.can_convert(val.dtype, res.dtype)):
                     # Allow assignment of sequence to 1d array
                     res = val
                 else:
@@ -475,7 +473,9 @@ class ArrayAttribute(AttributeTemplate):
             def argsort_stub(kind='quicksort'):
                 pass
             pysig = utils.pysignature(argsort_stub)
-            sig = signature(types.Array(types.intp, 1, 'C'), kind).replace(pysig=pysig)
+            sig = signature(
+                types.Array(types.intp, 1, 'C'), kind
+            ).replace(pysig=pysig)
             return sig
 
     @bound_function("array.view")
@@ -668,7 +668,8 @@ class StaticSetItemLiteralRecord(AbstractTemplate):
     def generic(self, args, kws):
         # Resolution of members for records
         target, idx, value = args
-        if isinstance(target, types.Record) and isinstance(idx, types.StringLiteral):
+        if isinstance(target, types.Record) \
+                and isinstance(idx, types.StringLiteral):
             if idx.literal_value not in target.fields:
                 msg = (f"Field '{idx.literal_value}' was not found in record "
                        f"with fields {tuple(target.fields.keys())}")
