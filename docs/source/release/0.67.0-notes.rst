@@ -1,6 +1,6 @@
 
-Version 0.67.0 (TBD)
-====================
+Version 0.67.0 (11 August 2026)
+===============================
 
 This is a major Numba release. Numba now adds support for NumPy 2.5.
 This release also ships Python 3.14 conda packages and wheels for
@@ -327,6 +327,7 @@ Pull-Requests:
 * PR `#10714 <https://github.com/numba/numba/pull/10714>`_: Update actions/checkout action to v7.0.1 (`renovate[bot] <https://github.com/apps/renovate>`_)
 * PR `#10722 <https://github.com/numba/numba/pull/10722>`_: add win-arm64 workflows to upload config (`swap357 <https://github.com/swap357>`_)
 * PR `#10724 <https://github.com/numba/numba/pull/10724>`_: Changelog `0.67` (`swap357 <https://github.com/swap357>`_)
+* PR `#10772 <https://github.com/numba/numba/pull/10772>`_: update final release date for `0.67.0` (`swap357 <https://github.com/swap357>`_)
 
 Authors:
 
