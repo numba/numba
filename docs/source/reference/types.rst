@@ -299,13 +299,13 @@ structured types can also be constructed programmatically.
       >>> ty[:, :]
       unaligned array(Record([('row', '<f8'), ('col', '<f8')]), 2d, A)
 
-.. class:: numba.types.NPDatetime(unit)
+.. class:: numba.np.types.NPDatetime(unit)
 
    Create a Numba type for NumPy datetimes of the given *unit*.  *unit*
    should be a string amongst the codes recognized by NumPy (e.g.
    ``Y``, ``M``, ``D``, etc.).
 
-.. class:: numba.types.NPTimedelta(unit)
+.. class:: numba.np.types.NPTimedelta(unit)
 
    Create a Numba type for NumPy timedeltas of the given *unit*.  *unit*
    should be a string amongst the codes recognized by NumPy (e.g.

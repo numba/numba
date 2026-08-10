@@ -1,6 +1,5 @@
 import struct
 
-import numpy as np
 from numba.core import utils
 import ctypes
 
@@ -12,8 +11,6 @@ from .misc import *
 from .npytypes import *
 from .scalars import *
 from .function_type import *
-
-numpy_version = tuple(map(int, np.__version__.split('.')[:2]))
 
 # Short names
 
@@ -54,8 +51,6 @@ void = none
 
 
 boolean = bool_ = Boolean('bool')
-if numpy_version >= (2, 0):
-    bool = bool_
 
 byte = uint8 = Integer('uint8')
 uint16 = Integer('uint16')
@@ -145,8 +140,6 @@ c16 = complex128
 
 np_float_ = float32
 np_double = double = float64
-if numpy_version < (2, 0):
-    float_ = float32
 
 _make_signed = lambda x: globals()["int%d" % (ctypes.sizeof(x) * 8)]
 _make_unsigned = lambda x: globals()["uint%d" % (ctypes.sizeof(x) * 8)]
@@ -227,8 +220,3 @@ deferred_type
 '''
 
 __all__ = all_str.split()
-if numpy_version >= (2, 0):
-    __all__.remove('float_')
-    __all__.append('bool')
-
-from numba.np.types.datetime import NPDatetime, NPTimedelta

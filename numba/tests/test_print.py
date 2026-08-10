@@ -6,7 +6,7 @@ import unittest
 from numba import jit, njit
 from numba.core import types, errors, utils
 from numba.tests.support import (captured_stdout, TestCase, EnableNRTStatsMixin)
-
+from numba.np import types as npy_types
 
 def print_value(x):
     print(x)
@@ -58,7 +58,7 @@ class TestPrint(EnableNRTStatsMixin, TestCase):
         self.check_values(types.boolean, (True, False))
         self.check_values(types.float64, (1.5, 100.0**10.0, float('nan')))
         self.check_values(types.complex64, (1+1j,))
-        self.check_values(types.NPTimedelta('ms'), (np.timedelta64(100, 'ms'),))
+        self.check_values(npy_types.NPTimedelta('ms'), (np.timedelta64(100, 'ms'),))
 
         cfunc = njit((types.float32,))(print_value)
         with captured_stdout():

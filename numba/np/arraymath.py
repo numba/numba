@@ -449,6 +449,7 @@ def get_ret_dtype_if_any(aryty, dtype):
 
 @intrinsic
 def _numpy_sum(typingctx, aryty, axisty, dtype):
+    from numba.np import types as npy_types
     ret_dtype = get_ret_dtype_if_any(aryty, dtype)
     sig = ret_dtype(aryty, axisty, dtype)
 
@@ -456,7 +457,7 @@ def _numpy_sum(typingctx, aryty, axisty, dtype):
         ary, _, _ = args
 
         ary = make_array(aryty)(context, builder, ary)
-        if isinstance(ret_dtype, types.NPTimedelta):
+        if isinstance(ret_dtype, npy_types.NPTimedelta):
             zero = context.get_constant(ret_dtype, ret_dtype(0))
         else:
             zero = context.get_constant(ret_dtype, 0)
@@ -611,6 +612,7 @@ def array_prod(a):
 
 @intrinsic
 def _numpy_cumsum(typingctx, aryty, axisty, dtype):
+    from numba.np import types as npy_types
     ret_dtype = get_ret_dtype_if_any(aryty, dtype)
 
     ret = types.Array(ret_dtype, aryty.ndim, layout='C')
@@ -620,7 +622,7 @@ def _numpy_cumsum(typingctx, aryty, axisty, dtype):
         ary, _, _ = args
 
         ary = make_array(aryty)(context, builder, ary)
-        if isinstance(ret_dtype, types.NPTimedelta):
+        if isinstance(ret_dtype, npy_types.NPTimedelta):
             zero = context.get_constant(ret_dtype, ret_dtype(0))
         else:
             zero = context.get_constant(ret_dtype, 0)
