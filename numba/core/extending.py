@@ -10,6 +10,7 @@ from numba.core import types, errors, utils, config
 
 # Exported symbols
 from numba.core.typing.typeof import typeof_impl  # noqa: F401
+from numba.np.types import typeof # noqa F401
 from numba.core.typing.asnumbatype import as_numba_type  # noqa: F401
 from numba.core.typing.templates import infer, infer_getattr  # noqa: F401
 from numba.core.imputils import (  # noqa: F401
