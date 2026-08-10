@@ -33,6 +33,7 @@ from numba.core import types, typing, utils, errors, ir, analysis, postproc, rew
 from numba import prange, pndindex
 from numba.np.npdatetime_helpers import datetime_minimum, datetime_maximum
 from numba.np.numpy_support import as_dtype, numpy_version
+from numba.np import arraydecl 
 from numba.core.typing.templates import infer_global, AbstractTemplate
 from numba.stencils.stencilparfor import StencilPass
 from numba.core.extending import register_jitable, lower_builtin
@@ -1950,7 +1951,7 @@ class ConvertSetItemPass:
             # create a new target array via getitem
             subarr_var = ir.Var(scope, mk_unique_var("$subarr"), loc)
             getitem_call = ir.Expr.getitem(target, index, loc)
-            subarr_typ = typing.arraydecl.get_array_index_type( arr_typ, index_typ).result
+            subarr_typ = arraydecl.get_array_index_type( arr_typ, index_typ).result
             pass_states.typemap[subarr_var.name] = subarr_typ
             pass_states.calltypes[getitem_call] = self._type_getitem((arr_typ, index_typ))
             init_block.append(ir.Assign(getitem_call, subarr_var, loc))

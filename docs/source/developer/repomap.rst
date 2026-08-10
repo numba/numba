@@ -334,9 +334,9 @@ that must be matched during type inference.
 - :ghfile:`numba/core/typing/builtins.py` - Python builtin global functions and
   operators
 - :ghfile:`numba/core/typing/setdecl.py` - Python sets
-- :ghfile:`numba/core/typing/npydecl.py` - NumPy ndarray (and operators), NumPy
+- :ghfile:`numba/np/npydecl.py` - NumPy ndarray (and operators), NumPy
   functions
-- :ghfile:`numba/core/typing/arraydecl.py` - Python ``array`` module
+- :ghfile:`numba/np/arraydecl.py` - Python ``array`` module
 - :ghfile:`numba/core/typing/context.py` - Implementation of typing context
   (class that collects methods used in type inference)
 - :ghfile:`numba/core/typing/collections.py` - Generic container operations and
