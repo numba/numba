@@ -7,12 +7,10 @@ numpy_version = tuple(map(int, np.__version__.split('.')[:2]))
 
 if numpy_version >= (2, 0):
     types.bool = types.bool_
+    types.__all__.append('bool')
 
 if numpy_version < (2, 0):
     types.float_ = types.float32
-
-if numpy_version >= (2, 0):
-    types.__all__.remove('float_')
-    types.__all__.append('bool')
+    types.__all__.append('float_')
 
 from numba.np.types.datetime import NPDatetime, NPTimedelta

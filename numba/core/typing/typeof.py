@@ -110,7 +110,7 @@ def _typeof_type(val, c):
 
     for _type in _extra_types:
         if issubclass(val, _type):
-            return _extra_types[_type]
+            return _extra_types[_type](val)
 
 
 @typeof_impl.register(bool)

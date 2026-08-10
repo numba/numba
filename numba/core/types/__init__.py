@@ -196,7 +196,6 @@ long_
 ulong
 longlong
 ulonglong
-float_
 double
 void
 none
