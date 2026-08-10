@@ -23,13 +23,12 @@ from numba.core.typing import signature
 from numba.cpython.listobj import ListIterInstance
 from numba.cpython.rangeobj import range_impl_map
 from numba.np.arrayobj import make_array
-
+from numba.core.ir_utils import merge_adjacent_blocks
 from numba.np.unsafe.ndarray import empty_inferred as unsafe_empty_inferred
 import operator
 import numba.misc.special
 from numba.core.inline_closurecall import (
-    _make_debug_print, InlineClosureCallPass,
-    merge_adjacent_blocks, debug_print, _debug_dump
+    _make_debug_print, InlineClosureCallPass, _debug_dump
 )
 
 
@@ -829,7 +828,7 @@ class RewriteArrayOfConsts(rewrites.Rewrite):
         return self.crnt_block
 
 
-def _inline_array_call_method(self, modified):
+def _inline_array_call_method(self, modified, debug_print):
     # Identify loop structure
     if modified:
         # Need to do some cleanups if closure inlining kicked in
