@@ -805,12 +805,13 @@ def array_cumprod(a):
 @overload(np.mean)
 @overload_method(types.Array, "mean")
 def array_mean(a):
+    from numba.np import types as npy_types
     if isinstance(a, (types.Integer, types.Boolean)):
         # Integers and Booleans default to float64 in numpy.mean
         def _scalar_mean(a):
             return np.float64(a) + 0.0
         return _scalar_mean
-    elif isinstance(a, NPTimedelta):
+    elif isinstance(a, npy_types.NPTimedelta):
         def _temporal_scalar_mean(a):
             return a
         return _temporal_scalar_mean
@@ -830,8 +831,8 @@ def array_mean(a):
         acc_init = get_accumulator(dtype, 0)
 
         # Check if this is a datetime/timedelta type
-        is_datetime_like = isinstance(a.dtype, (types.NPDatetime,
-                                                types.NPTimedelta))
+        is_datetime_like = isinstance(a.dtype, (npy_types.NPDatetime,
+                                                npy_types.NPTimedelta))
         # Is complex array
         is_complex = isinstance(a.dtype, types.Complex)
 
