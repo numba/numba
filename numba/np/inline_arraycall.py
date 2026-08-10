@@ -28,7 +28,7 @@ from numba.np.unsafe.ndarray import empty_inferred as unsafe_empty_inferred
 import operator
 import numba.misc.special
 from numba.core.inline_closurecall import (
-    _make_debug_print, InlineClosureCall,
+    _make_debug_print, InlineClosureCallPass,
     merge_adjacent_blocks, debug_print, _debug_dump
 )
 
@@ -854,4 +854,4 @@ def _inline_array_call_method(self, modified):
         _fix_nested_array(self.func_ir)
 
 
-InlineClosureCall._inline_arraycall = _inline_array_call_method
+InlineClosureCallPass._inline_arraycall = _inline_array_call_method
