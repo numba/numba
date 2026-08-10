@@ -11,6 +11,6 @@ if numpy_version >= (2, 0):
 
 if numpy_version < (2, 0):
     types.float_ = types.float32
-    types.__all__.append('float_')
+    # types.__all__.append('float_')
 
 from numba.np.types.datetime import NPDatetime, NPTimedelta
