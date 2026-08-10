@@ -851,6 +851,7 @@ def _inline_array_call_method(self, modified, debug_print):
             modified = True
     if modified:
         _fix_nested_array(self.func_ir)
+    return modified
 
 
 InlineClosureCallPass._inline_arraycall = _inline_array_call_method

@@ -105,7 +105,7 @@ class InlineClosureCallPass(object):
                             modified = True
 
         if hasattr(self, "_inline_arraycall") and enable_inline_arraycall:
-            self._inline_arraycall(modified, debug_print)
+            modified = self._inline_arraycall(modified, debug_print)
 
         if modified:
             # clean up now dead/unreachable blocks, e.g. unconditionally raising

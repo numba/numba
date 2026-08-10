@@ -6372,7 +6372,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                                     cfunc123(p, period=period,
                                              discont=discont))
 
-    @unittest.skip("Fails due to append issue in parfors")
     def test_unwrap_exception(self):
         cfunc = njit(unwrap)
         self.disable_leak_check()
