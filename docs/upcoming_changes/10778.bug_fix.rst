@@ -1,0 +1,6 @@
+Fix scalar handling in``np.nanprod``
+-------------------------------------------------------
+
+Fix scalar handling in the ``np.nanprod`` function. Previously,
+this function would fail when called with scalar inputs. It now properly
+handles scalar and array inputs.
