@@ -114,6 +114,34 @@ e.g. declaring the type of a :ref:`typed.List <feature-typed-list>`.::
 Note that this feature is only supported for simple numerical types. Application
 to compound types, e.g. record types, is not supported.
 
+Containers
+----------
+
+Numba supports strongly-typed containers that can be passed to or returned
+from JIT-compiled functions, or used within :ref:`numba.objmode <objmode>`.
+
+.. class:: numba.types.ListType(item_type)
+
+    Represents a typed list containing elements of *item_type*.
+    Created implicitly when using :ref:`numba.typed.List <feature-typed-list>`.
+
+    ::
+
+        >>> from numba import types, typed
+        >>> list_type = types.ListType(types.float64)
+        >>> typed.List.empty_list(types.float64)
+
+.. class:: numba.types.DictType(key_type, value_type)
+
+    Represents a typed dictionary with keys of *key_type* and values of *value_type*.
+    Created implicitly when using :ref:`numba.typed.Dict <feature-typed-dict>`.
+
+    ::
+
+        >>> from numba import types, typed
+        >>> dict_type = types.DictType(types.unicode_type, types.int64)
+        >>> typed.Dict.empty_dict(types.unicode_type, types.int64)
+        
 Functions
 ---------
 
