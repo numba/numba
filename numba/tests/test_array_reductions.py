@@ -616,6 +616,29 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_nanprod_basic(self):
         self.check_reduction_basic(array_nanprod)
 
+    def test_nanprod_scalar(self):
+        self.check_scalar_basic(array_nanprod)
+
+        cfunc = jit(nopython=True)(array_nanprod)
+
+        def check(arg):
+            expected = array_nanprod(arg)
+            got = cfunc(arg)
+            self.assertPreciseEqual(got, expected)
+
+        # check less precise integer cases are upcasted
+        check(np.int8(2))
+        check(np.uint8(2))
+        check(np.int16(3))
+        check(np.uint16(3))
+        check(np.int32(4))
+        check(np.uint32(4))
+
+        # complex cases
+        check(np.complex64(0j))
+        check(np.complex128(1j))
+
+
     def test_nanstd_basic(self):
         self.check_reduction_basic(array_nanstd)
 
@@ -956,6 +979,10 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         # handle complex cases not tested in self.check_scalar_basic
         check(np.complex64(1j))
         check(np.complex128(0j))
+        check(np.complex128(complex(np.nan, 1.0)))
+        check(np.complex128(complex(1.0, np.nan)))
+        check(np.complex128('nan'))
+
 
     def check_cumulative(self, pyfunc):
         arr = np.arange(2, 10, dtype=np.int16)
