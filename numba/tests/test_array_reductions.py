@@ -637,6 +637,9 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         # complex cases
         check(np.complex64(0j))
         check(np.complex128(1j))
+        check(np.complex128(complex(np.nan, 1.0)))
+        check(np.complex128(complex(1.0, np.nan)))
+        check(np.complex128('nan'))
 
 
     def test_nanstd_basic(self):
@@ -979,9 +982,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         # handle complex cases not tested in self.check_scalar_basic
         check(np.complex64(1j))
         check(np.complex128(0j))
-        check(np.complex128(complex(np.nan, 1.0)))
-        check(np.complex128(complex(1.0, np.nan)))
-        check(np.complex128('nan'))
+
 
 
     def check_cumulative(self, pyfunc):
