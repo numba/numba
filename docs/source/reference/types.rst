@@ -118,7 +118,7 @@ Containers
 ----------
 
 Numba supports strongly-typed containers that can be passed to or returned
-from JIT-compiled functions, or used within :ref:`numba.objmode <withobjmode>`.
+from JIT-compiled functions, or used within ``numba.objmode``.
 
 .. class:: numba.types.ListType(item_type)
 
