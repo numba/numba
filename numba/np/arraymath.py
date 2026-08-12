@@ -579,7 +579,7 @@ def array_sum(a, axis=None, dtype=None):
         if isinstance(axis, types.Tuple) and axis.count == 0:
             if is_nonelike(dtype):
                 def array_sum_impl(a, axis=None, dtype=None):
-                    return a.copy()
+                    return np.copy(a)
             else:
                 def array_sum_impl(a, axis=None, dtype=None):
                     return a.astype(dtype)
