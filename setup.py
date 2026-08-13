@@ -128,6 +128,16 @@ def is_building():
     return any(bc in sys.argv[1:] for bc in build_commands)
 
 
+def _get_cpp_std_args():
+    """Return extra_compile_args for the C++ standard used by extensions."""
+    if sys.platform.startswith('win') and 'MSC' in sys.version:
+        # MSVC ignores -std=c++11. 3.15 needs /std:c++20.
+        if sys.version_info[:2] >= (3, 15):
+            return ['/std:c++20']
+        return []
+    return ['-std=c++11']
+
+
 def get_ext_modules():
     """
     Return a list of Extension instances for the setup() call.
@@ -140,12 +150,14 @@ def get_ext_modules():
     if sys.platform != 'win32':
         np_compile_args['libraries'] = ['m',]
 
+    cpp_std_args = _get_cpp_std_args()
+
     ext_devicearray = Extension(name='numba._devicearray',
                                 sources=['numba/_devicearray.cpp'],
                                 depends=['numba/_pymodule.h',
                                          'numba/_devicearray.h'],
                                 include_dirs=['numba'],
-                                extra_compile_args=['-std=c++11'],
+                                extra_compile_args=list(cpp_std_args),
                                 )
 
     ext_dynfunc = Extension(name='numba._dynfunc',
@@ -164,7 +176,7 @@ def get_ext_modules():
                                depends=["numba/_pymodule.h",
                                         "numba/_typeof.h",
                                         "numba/_hashtable.h"],
-                               extra_compile_args=['-std=c++11'],
+                               extra_compile_args=list(cpp_std_args),
                                **np_compile_args)
 
     ext_helperlib = Extension(name="numba._helperlib",
@@ -189,7 +201,7 @@ def get_ext_modules():
                              sources=["numba/core/typeconv/typeconv.cpp",
                                       "numba/core/typeconv/_typeconv.cpp"],
                              depends=["numba/_pymodule.h"],
-                             extra_compile_args=['-std=c++11'],
+                             extra_compile_args=list(cpp_std_args),
                              )
 
     ext_np_ufunc = Extension(name="numba.np.ufunc._internal",
@@ -241,7 +253,7 @@ def get_ext_modules():
     have_openmp = True
     if sys.platform.startswith('win'):
         if 'MSC' in sys.version:
-            cpp11flags = []
+            cpp11flags = list(cpp_std_args)
             ompcompileflags = ['-openmp']
             omplinkflags = []
         else:
