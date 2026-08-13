@@ -1781,7 +1781,8 @@ def np_nanprod(a):
 
         if isinstance(a, (types.Integer, types.Boolean)):
             # No NaN type possible for Integers and Booleans
-            retty = types.intp # upcast to intp
+            retty = types.intp # to platform default
+
             def nanprod_int_scalar_impl(a):
                 return retty(a)
             return nanprod_int_scalar_impl
@@ -1791,6 +1792,7 @@ def np_nanprod(a):
             retty = a
             one = retty(1)
             isnan = get_isnan(a)
+
             def nanprod_float_scalar_impl(a):
                 if isnan(a):
                     return one
