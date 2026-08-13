@@ -166,6 +166,16 @@ def _hash_source_file(path, st_mtime, st_size):
         return hashlib.sha256(f.read()).digest()
 
 
+@functools.lru_cache(maxsize=None)
+def _hash_zipped_source_file(zip_path, internal_path, st_mtime, st_size):
+    # Note: keep the arguments to this function so that the memoization key is
+    # based on the zip file's mtime and size, so that if the file changes
+    # while the process is running, it will be re-hashed.
+    with zipfile.ZipFile(zip_path) as zf:
+        with zf.open(internal_path) as f:
+            return hashlib.sha256(f.read()).digest()
+
+
 class _SourceFileBackedLocatorMixin(object):
     """
     A cache locator mixin for functions which are backed by a well-known
@@ -374,9 +384,9 @@ class ZipCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
         return self._cache_path
 
     def get_source_stamp(self):
-        with zipfile.ZipFile(self._zip_path) as zf:
-            with zf.open(self._internal_path) as f:
-                return hashlib.sha256(f.read()).digest()
+        st = os.stat(self._zip_path)
+        return _hash_zipped_source_file(self._zip_path, self._internal_path,
+                                        st.st_mtime, st.st_size)
 
     @classmethod
     def from_function(cls, py_func, py_file):
