@@ -1,11 +1,10 @@
-from itertools import product, cycle
+from itertools import product, cycle, permutations, chain
 import gc
 import sys
 import unittest
 import warnings
 
 import numpy as np
-
 from numba import jit, njit, typeof
 from numba.core import types
 from numba.core.errors import TypingError, NumbaValueError
@@ -278,6 +277,9 @@ def array_dot_chain(a, b):
 
 def array_ctor(n, dtype):
     return np.ones(n, dtype=dtype)
+
+def nb_sum_empty_axis(a):
+    return a.sum(axis=())
 
 class TestArrayMethods(MemoryLeakMixin, TestCase):
     """
@@ -1494,6 +1496,90 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                         nb_res = cfunc(arr, axis=axis, dtype=out_dtype)
                         self.assertPreciseEqual(py_res, nb_res)
 
+    def test_sum_axis_tuple(self):
+        """ test sum with axis as a tuple """
+        pyfunc = array_sum_axis_kws
+        cfunc = jit(nopython=True)(pyfunc)
+        a = np.arange(2 * 3 * 4).reshape(2, 3, 4)
+
+        data = [-2, -1, 0, 1, 2]
+        all_perms = list(chain.from_iterable(
+            permutations(data, r) for r in range(len(data) + 1)
+        ))
+        for axes in all_perms:
+            with self.subTest(axes=axes):
+                # Check for duplicate axis
+                np_axes = (np.array(axes) % 3)
+                if len(np_axes) == len(np.unique(np_axes)):
+                    self.assertPreciseEqual(pyfunc(a, axes), cfunc(a, axes))
+
+    def test_sum_axis_tuple_duplicates(self):
+        """ test sum with axis as a tuple """
+        self.disable_leak_check()
+        pyfunc = array_sum_axis_kws
+        err = ValueError if numpy_version < (1, 25) else np.exceptions.AxisError
+        cfunc = jit(nopython=True)(pyfunc)
+        a = np.arange(2 * 3 * 4).reshape(2, 3, 4)
+
+        data = [-3, -2, -1, 0, 1, 2, 3]
+        all_perms = list(chain.from_iterable(
+            permutations(data, r) for r in range(len(data) + 1)
+        ))
+        for axes in all_perms:
+            with self.subTest(axes=axes):
+                # Check for duplicate axis
+                if 3 in axes:
+                    # 3 is out of bounds for an array of dimension 3
+                    # but -3 is not.
+                    with self.assertRaises(err) as c_raises:
+                        cfunc(a, axes)
+                    # This will raise a different exception than the duplicate
+                    # axis case, so we need to check for the correct error
+                    # message.
+                    self.assertIn(
+                        "out of bounds for array of dimension 3",
+                        str(c_raises.exception)
+                    )
+                    with self.assertRaises(err) as py_raises:
+                        pyfunc(a, axes)
+                    self.assertEqual(
+                        str(c_raises.exception),
+                        str(py_raises.exception)
+                    )
+                    continue
+                np_axes = (np.array(axes) % 3)
+                if len(np_axes) != len(np.unique(np_axes)):
+                    with self.assertRaises(ValueError) as c_raises:
+                        cfunc(a, axes)
+                    self.assertIn(
+                        "duplicate value in 'axis'",
+                        str(c_raises.exception)
+                    )
+                    with self.assertRaises(ValueError) as py_raises:
+                        pyfunc(a, axes)
+                    self.assertEqual(
+                        str(c_raises.exception),
+                        str(py_raises.exception)
+                    )
+
+    def test_sum_empty_order_layout(self):
+        pyfunc = nb_sum_empty_axis
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # C ordered array
+        a = np.arange(6).reshape(2, 3)
+        self.assertPreciseEqual(pyfunc(a),
+                                cfunc(a))
+
+        # NumPy returns an F-contiguous array here; Numba returns C-order.
+        a = np.asfortranarray(np.arange(6).reshape(2, 3))
+
+        expected = pyfunc(a)
+        got = cfunc(a)
+
+        self.assertEqual(expected.flags.f_contiguous,
+                         got.flags.f_contiguous)
+        
     def test_sum_axis_dtype_pos_arg(self):
         """ testing that axis and dtype inputs work when passed as positional """
         pyfunc = array_sum_axis_dtype_pos
