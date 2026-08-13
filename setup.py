@@ -133,7 +133,7 @@ def _get_cpp_std_args():
     if sys.platform.startswith('win') and 'MSC' in sys.version:
         # MSVC ignores -std=c++11. 3.15 needs /std:c++20.
         if sys.version_info[:2] >= (3, 15):
-            return ['/std:c++20']
+            return ['/std:c++20', '/permissive']
         return []
     return ['-std=c++11']
 
