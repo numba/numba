@@ -1,6 +1,5 @@
 import itertools
 
-import numpy as np
 import operator
 
 from numba.core import types, errors
@@ -804,8 +803,8 @@ class NumberClassAttribute(AttributeTemplate):
             # TODO: When we refactor NumberClass, we should move this logic 
             # to the NumPy module. For now, we special case the datetime-like 
             # types here.
-            from numba.np.types.datetime import NPTimedelta, NPDatetime
             if isinstance(val, (types.BaseTuple, types.Sequence)):
+                import numpy as np
                 # Array constructor, e.g. np.int32([1, 2])
                 fnty = self.context.resolve_value_type(np.array)
                 sig = fnty.get_call_type(self.context, (val, types.DType(ty)),
@@ -814,7 +813,7 @@ class NumberClassAttribute(AttributeTemplate):
             elif isinstance(val, (types.Number, types.Boolean, types.IntEnumMember)):
                  # Scalar constructor, e.g. np.int32(42)
                  return ty
-            elif isinstance(val, (NPDatetime, NPTimedelta)):
+            elif val.__class__.__name__ in ("NPDatetime", "NPTimedelta"):
                 # Constructor cast from datetime-like, e.g.
                 # > np.int64(np.datetime64("2000-01-01"))
                 if ty.bitwidth == 64:

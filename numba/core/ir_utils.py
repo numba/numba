@@ -800,15 +800,16 @@ def _add_alias(lhs, rhs, alias_map, arg_aliases):
     return
 
 def is_immutable_type(var, typemap):
-    from numba.np.types.datetime import _NPDatetimeBase
     # Conservatively, assume mutable if type not available
     if typemap is None or var not in typemap:
         return False
     typ = typemap[var]
     # TODO: add more immutable types
     # TODO: Refactor and make use of .mutable attribute
-    if isinstance(typ, (types.Number, _NPDatetimeBase,
+    if isinstance(typ, (types.Number,
                         types.iterators.RangeType)):
+        return True
+    if typ.__class__.__name__ in ("NPDatetime", "NPTimedelta"):
         return True
     if typ==types.string:
         return True

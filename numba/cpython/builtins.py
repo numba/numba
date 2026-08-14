@@ -814,16 +814,14 @@ def ol_isinstance(var, typs):
     # required and this means that if there is a bug in the logic of the
     # comparison tree `isinstance` returns False! It's therefore safer to just
     # reject the compilation as untypable!
-    from numba.np import types as npy_types
     supported_var_ty = (types.Number, types.Bytes, types.RangeType,
                         types.DictType, types.LiteralStrKeyDict, types.List,
                         types.ListType, types.Tuple, types.UniTuple, types.Set,
                         types.Function, types.ClassType, types.UnicodeType,
                         types.ClassInstanceType, types.NoneType, types.Array,
                         types.Boolean, types.Float, types.UnicodeCharSeq,
-                        types.Complex, npy_types.NPDatetime, npy_types.NPTimedelta,
-                        types.SetType)
-    if not isinstance(var_ty, supported_var_ty):
+                        types.Complex, types.SetType)
+    if not (isinstance(var_ty, supported_var_ty) or var_ty.__class__.__name__ == "NPDatetime" or var_ty.__class__.__name__ == "NPTimedelta"):
         msg = f'isinstance() does not support variables of type "{var_ty}".'
         raise NumbaTypeError(msg)
 
@@ -875,10 +873,9 @@ def ol_isinstance(var, typs):
             return true_impl if type(var_ty) is key else false_impl
         else:
             numba_typ = as_numba_type(key)
-            from numba.np import types as npy_types
             if var_ty == numba_typ:
                 return true_impl
-            elif isinstance(numba_typ, (npy_types.NPDatetime, npy_types.NPTimedelta)):
+            elif numba_typ.__class__.__name__ in ("NPDatetime", "NPTimedelta"):
                 if isinstance(var_ty, type(numba_typ)):
                     return true_impl
             elif isinstance(numba_typ, types.ClassType) and \

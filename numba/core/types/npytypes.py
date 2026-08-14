@@ -10,7 +10,6 @@ from numba.core.typeconv import Conversion
 from numba.core import utils
 from .misc import UnicodeType
 from .containers import Bytes
-import numpy as np
 
 class CharSeq(Type):
     """
@@ -518,6 +517,7 @@ class Array(Buffer):
     def box_type(self):
         """Returns the Python type to box to.
         """
+        import numpy as np
         return np.ndarray
 
     def __repr__(self):
