@@ -810,7 +810,6 @@ class Context(BaseContext):
 
     def load_additional_registries(self):
         from . import (
-            cffi_utils,
             cmathdecl,
             enumdecl,
             listdecl,
@@ -818,7 +817,6 @@ class Context(BaseContext):
             setdecl,
             dictdecl,
         )
-        self.install_registry(cffi_utils.registry)
         self.install_registry(cmathdecl.registry)
         self.install_registry(enumdecl.registry)
         self.install_registry(listdecl.registry)

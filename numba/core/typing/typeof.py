@@ -49,7 +49,7 @@ def typeof_impl(val, c):
 
     # cffi is handled here as it does not expose a public base class
     # for exported functions or CompiledFFI instances.
-    from numba.core.typing import cffi_utils
+    from numba.cffi import cffi_utils
     if cffi_utils.SUPPORTED:
         if cffi_utils.is_cffi_func(val):
             return cffi_utils.make_function_type(val)
