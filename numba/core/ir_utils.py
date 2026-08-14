@@ -613,6 +613,16 @@ def remove_dead_random_call(rhs, lives, call_list):
 
 remove_call_handlers.append(remove_dead_random_call)
 
+def dot_3_mv_check_args(a, b, out):
+    m, _n = a.shape
+    n, = b.shape
+    if n != _n:
+        raise ValueError("incompatible array sizes for dot(a, b) "
+                         "(matrix * vector)")
+    if out.shape != (m,):
+        raise ValueError("incompatible output array size for "
+                         "dot(a, b, out) (matrix * vector)")
+
 def has_no_side_effect(rhs, lives, call_table):
     """ Returns True if this expression has no side effects that
         would prevent re-ordering.
@@ -643,7 +653,6 @@ def has_no_side_effect(rhs, lives, call_table):
                call_list[0]._name == 'unsafe_empty_inferred')):
             return True
         from numba.core.registry import CPUDispatcher
-        from numba.np.linalg import dot_3_mv_check_args
         if isinstance(call_list[0], CPUDispatcher):
             py_func = call_list[0].py_func
             if py_func == dot_3_mv_check_args:
