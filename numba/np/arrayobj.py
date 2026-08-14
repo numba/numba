@@ -43,6 +43,7 @@ from numba.np.npydecl import (
 )
 from numba.np import types as npy_types
 from numba.core.base import BaseContext
+from numba.core.typing.context import Context
 from numba.core.pythonapi import box, unbox, NativeValue
 from numba.np import numpy_support
 from numba.core.errors import NumbaNotImplementedError
@@ -7700,3 +7701,15 @@ def unbox_array(typ, obj, c):
                                "native value.  The object maybe of a "
                                "different type")
     return NativeValue(c.builder.load(aryptr), is_error=failed)
+
+
+# Patch core registries to load additional npy registries
+load_additional_core_registries = Context.load_additional_registries
+
+
+def load_additional_npy_registries(self):
+    from numba.np import arraydecl, npydecl  # noqa: F401, E501
+    self.install_registry(npydecl.registry)
+
+
+Context.load_additional_registries = load_additional_npy_registries

@@ -809,7 +809,6 @@ class BaseContext(object):
 class Context(BaseContext):
 
     def load_additional_registries(self):
-        from numba.np import arraydecl, npydecl  # noqa: F401, E501
         from . import (
             cffi_utils,
             cmathdecl,
@@ -824,6 +823,5 @@ class Context(BaseContext):
         self.install_registry(enumdecl.registry)
         self.install_registry(listdecl.registry)
         self.install_registry(mathdecl.registry)
-        self.install_registry(npydecl.registry)
         self.install_registry(setdecl.registry)
         self.install_registry(dictdecl.registry)
