@@ -140,6 +140,28 @@ class TestSlices(MemoryLeakMixin, TestCase):
             else:
                 self.assertPreciseEqual(expected, cfunc(args, array))
 
+    def test_slice_constructor_layout(self):
+        """
+        Test that a None step keeps an array contiguous, like an omitted one.
+        """
+        def omitted_step(a, i, j):
+            return a[slice(i, j)]
+
+        def none_step(a, i, j):
+            return a[slice(i, j, None)]
+
+        def int_step(a, i, j, k):
+            return a[slice(i, j, k)]
+
+        arr = np.arange(10)
+        for pyfunc, args, layout in [(omitted_step, (arr, 1, 5), 'C'),
+                                     (none_step, (arr, 1, 5), 'C'),
+                                     (int_step, (arr, 1, 5, 2), 'A')]:
+            cfunc = jit(nopython=True)(pyfunc)
+            self.assertPreciseEqual(cfunc(*args), pyfunc(*args))
+            self.assertEqual(cfunc.nopython_signatures[0].return_type.layout,
+                             layout)
+
     def test_slice_indices(self):
         """Test that a numba slice returns same result for .indices as a python one."""
         slices = starmap(
