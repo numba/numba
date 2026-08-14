@@ -865,6 +865,55 @@ def peep_hole_list_to_tuple(func_ir):
 
                 the_build_list = init.target
 
+                # Buffer runs of consecutive `append`s so they can be emitted as
+                # a single build_tuple. One binary add per append makes the IR
+                # -- and the LLVM produced when lowering it -- quadratic in the
+                # number of items. This is severe for calls with many arguments:
+                # CPython emits this bytecode for every call with more than 30.
+                pending_appends = []
+
+                def can_buffer(stmt):
+                    """Is stmt part of an uninterrupted run of appends?
+
+                    Anything else (an extend, a walrus assignment between
+                    arguments, ...) must flush first, so the coalesced
+                    build_tuple keeps its place in the statement order.
+                    """
+                    if not (isinstance(stmt, ir.Assign)
+                            and isinstance(stmt.value, ir.Expr)):
+                        return False
+                    e = stmt.value
+                    if e.op == 'getattr':
+                        # dropped below; does not interrupt the run
+                        return (e.value.name == const_list
+                                and stmt.target.name in appends)
+                    return (e.op == 'call' and e.func.name in appends
+                            and isinstance(e.args[0], ir.Var))
+
+                def flush_pending_appends(acc, loc):
+                    if not pending_appends:
+                        return acc
+                    items = list(pending_appends)
+                    pending_appends.clear()
+                    scope = items[0].scope
+                    tup_var = scope.redefine("$_list_append_tuple", loc=loc)
+                    append_and_fix(
+                        ir.Assign(ir.Expr.build_tuple(items, loc), tup_var, loc)
+                    )
+                    if acc is the_build_list and not init.value.items:
+                        # accumulator is still the empty list this peephole
+                        # started from, so the add would be a no-op
+                        return tup_var
+                    acc_var = scope.redefine("$_list_append_acc", loc=loc)
+                    append_and_fix(
+                        ir.Assign(
+                            ir.Expr.binop(fn=operator.add, lhs=acc,
+                                          rhs=tup_var, loc=loc),
+                            acc_var, loc,
+                        )
+                    )
+                    return acc_var
+
                 # Do the transform on the peep hole
                 if _DEBUG:
                     print("\nBLOCK:")
@@ -878,6 +927,8 @@ def peep_hole_list_to_tuple(func_ir):
                 t2l_agn = region[0][1]
                 acc = the_build_list
                 for x in peep_hole:
+                    if not can_buffer(x):
+                        acc = flush_pending_appends(acc, x.loc)
                     if isinstance(x, ir.Assign):
                         if isinstance(x.value, ir.Expr):
                             expr = x.value
@@ -896,6 +947,11 @@ def peep_hole_list_to_tuple(func_ir):
                                 fname = expr.func.name
                                 if fname in extends or fname in appends:
                                     arg = expr.args[0]
+                                    if can_buffer(x):
+                                        pending_appends.append(arg)
+                                        func_ir._definitions.pop(x.target.name,
+                                                                 None)
+                                        continue
                                     if isinstance(arg, ir.Var):
                                         tmp_name = "%s_var_%s" % (fname,
                                                                   arg.name)
@@ -955,6 +1011,7 @@ def peep_hole_list_to_tuple(func_ir):
                     else:
                         # stick everything else in as-is
                         new_hole.append(x)
+                acc = flush_pending_appends(acc, the_build_list.loc)
                 # Finally write the result back into the original build list as
                 # everything refers to it.
                 append_and_fix(ir.Assign(acc, t2l_agn.target,
