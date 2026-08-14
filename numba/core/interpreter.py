@@ -865,26 +865,22 @@ def peep_hole_list_to_tuple(func_ir):
 
                 the_build_list = init.target
 
-                # Buffer runs of consecutive `append`s so they can be emitted as
-                # a single build_tuple. One binary add per append makes the IR
-                # -- and the LLVM produced when lowering it -- quadratic in the
-                # number of items. This is severe for calls with many arguments:
-                # CPython emits this bytecode for every call with more than 30.
+                # Buffer runs of consecutive `append`s into one build_tuple: a
+                # binary add per item makes the IR, and the LLVM lowered from
+                # it, quadratic in the number of items.
                 pending_appends = []
 
                 def can_buffer(stmt):
                     """Is stmt part of an uninterrupted run of appends?
 
-                    Anything else (an extend, a walrus assignment between
-                    arguments, ...) must flush first, so the coalesced
-                    build_tuple keeps its place in the statement order.
+                    Anything else must flush first, to keep statement order.
                     """
                     if not (isinstance(stmt, ir.Assign)
                             and isinstance(stmt.value, ir.Expr)):
                         return False
                     e = stmt.value
                     if e.op == 'getattr':
-                        # dropped below; does not interrupt the run
+                        # dropped below, so it does not interrupt the run
                         return (e.value.name == const_list
                                 and stmt.target.name in appends)
                     return (e.op == 'call' and e.func.name in appends
@@ -901,8 +897,7 @@ def peep_hole_list_to_tuple(func_ir):
                         ir.Assign(ir.Expr.build_tuple(items, loc), tup_var, loc)
                     )
                     if acc is the_build_list and not init.value.items:
-                        # accumulator is still the empty list this peephole
-                        # started from, so the add would be a no-op
+                        # accumulator is still the empty initial list
                         return tup_var
                     acc_var = scope.redefine("$_list_append_acc", loc=loc)
                     append_and_fix(
