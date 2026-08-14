@@ -27,33 +27,7 @@
  *
  */
 
-#if (PY_MAJOR_VERSION >= 3) && ((PY_MINOR_VERSION == 12) || (PY_MINOR_VERSION == 13) || (PY_MINOR_VERSION == 14) || (PY_MINOR_VERSION == 15))
-
-#ifndef Py_BUILD_CORE
-    #define Py_BUILD_CORE 1
-#endif
-#include "internal/pycore_frame.h"
-// This is a fix suggested in the comments in https://github.com/python/cpython/issues/108216
-// specifically https://github.com/python/cpython/issues/108216#issuecomment-1696565797
-#ifdef HAVE_STD_ATOMIC
-#  undef HAVE_STD_ATOMIC
-#endif
-#undef _PyGC_FINALIZED
-
-/* dynamic_annotations.h is needed for building Python with --with-valgrind 
- * support. The following include is to workaround issues described in
- * https://github.com/numba/numba/pull/10073
- */
-#include "dynamic_annotations.h"
-#if (PY_MINOR_VERSION == 12)
-    #include "internal/pycore_atomic.h"
-#endif
-#include "internal/pycore_interp.h"
-#include "internal/pycore_pyerrors.h"
-#include "internal/pycore_call.h"
-#include "cpython/code.h"
-
-#elif (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 11)
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION == 11)
 #ifndef Py_BUILD_CORE
     #define Py_BUILD_CORE 1
 #endif
@@ -703,6 +677,27 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
 // NOTE: Do NOT extend this block to 3.13+. Use the public
 // PyMonitoring_Fire*Event API below instead.
 
+#ifndef Py_BUILD_CORE
+    #define Py_BUILD_CORE 1
+#endif
+#include "internal/pycore_frame.h"
+// This is a fix suggested in the comments in https://github.com/python/cpython/issues/108216
+// specifically https://github.com/python/cpython/issues/108216#issuecomment-1696565797
+#ifdef HAVE_STD_ATOMIC
+#  undef HAVE_STD_ATOMIC
+#endif
+#undef _PyGC_FINALIZED
+
+/* dynamic_annotations.h is needed for building Python with --with-valgrind 
+ * support. The following include is to workaround issues described in
+ * https://github.com/numba/numba/pull/10073
+ */
+#include "dynamic_annotations.h"
+#include "internal/pycore_atomic.h"
+#include "internal/pycore_call.h"
+#include "internal/pycore_interp.h"
+#include "internal/pycore_pyerrors.h"
+#include "cpython/code.h"
 #include "internal/pycore_instruments.h"
 
 // From: https://github.com/python/cpython/blob/0ab2384c5f56625e99bb35417cadddfe24d347e1/Python/instrumentation.c#L863-L868
