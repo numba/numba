@@ -1369,7 +1369,7 @@ def constant_integer(context, builder, ty, pyval):
     # to NumPy module
     is_np_bool = (
         getattr(type(pyval), "__module__", "") == "numpy"
-        and type(pyval).__name__ == "bool_"
+        and "bool" in type(pyval).__name__
     )
     if is_np_bool:
         pyval = bool(pyval)
