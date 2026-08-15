@@ -8,7 +8,7 @@ from .containers import *
 from .functions import *
 from .iterators import *
 from .misc import *
-from .npytypes import *
+from ...np.npytypes import *
 from .scalars import *
 from .function_type import *
 

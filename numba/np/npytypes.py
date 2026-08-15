@@ -1,64 +1,15 @@
 import collections
 import warnings
 from functools import cached_property
+import numpy as np
 
 from llvmlite import ir
 
-from .abstract import DTypeSpec, IteratorType, MutableSequence, Number, Type
-from .common import Buffer, Opaque, SimpleIteratorType
+from ..core.types.abstract import (
+    DTypeSpec, IteratorType, MutableSequence, Number, Type
+)
+from ..core.types.common import Buffer, Opaque, SimpleIteratorType
 from numba.core.typeconv import Conversion
-from numba.core import utils
-from .misc import UnicodeType
-from .containers import Bytes
-
-class CharSeq(Type):
-    """
-    A fixed-length 8-bit character sequence.
-    """
-    mutable = True
-
-    def __init__(self, count):
-        self.count = count
-        name = "[char x %d]" % count
-        super(CharSeq, self).__init__(name)
-
-    @property
-    def key(self):
-        return self.count
-
-    def can_convert_from(self, typingctx, other):
-        if isinstance(other, Bytes):
-            return Conversion.safe
-
-
-class UnicodeCharSeq(Type):
-    """
-    A fixed-length unicode character sequence.
-    """
-    mutable = True
-
-    def __init__(self, count):
-        self.count = count
-        name = "[unichr x %d]" % count
-        super(UnicodeCharSeq, self).__init__(name)
-
-    @property
-    def key(self):
-        return self.count
-
-    def can_convert_to(self, typingctx, other):
-        if isinstance(other, UnicodeCharSeq):
-            return Conversion.safe
-
-    def can_convert_from(self, typingctx, other):
-        if isinstance(other, UnicodeType):
-            # Assuming that unicode_type itemsize is not greater than
-            # numpy.dtype('U1').itemsize that UnicodeCharSeq is based
-            # on.
-            return Conversion.safe
-
-    def __repr__(self):
-        return f"UnicodeCharSeq({self.count})"
 
 
 _RecordField = collections.namedtuple(
@@ -95,7 +46,8 @@ class Record(Type):
         lltypes = []
         for k, ty in name_types:
             if not isinstance(ty, (Number, NestedArray)):
-                msg = "Only Number and NestedArray types are supported, found: {}. "
+                msg = "Only Number and NestedArray types are supported,"
+                " found: {}. "
                 raise TypeError(msg.format(ty))
             if isinstance(ty, NestedArray):
                 datatype = ctx.data_model_manager[ty].as_storage_type()
@@ -214,7 +166,6 @@ class Record(Type):
     @property
     def dtype(self):
         from numba.np.numpy_support import as_struct_dtype
-
         return as_struct_dtype(self)
 
     def can_convert_to(self, typingctx, other):
@@ -238,17 +189,18 @@ class Record(Type):
             return Conversion.safe
 
     def __repr__(self):
-        fields = [f"('{f_name}', " +
-                  f"{{'type': {repr(f_info.type)}, " +
-                  f"'offset': {f_info.offset}, " +
-                  f"'alignment': {f_info.alignment}, " +
-                  f"'title': {f_info.title}, " +
-                  f"}}" +
-                  ")"
-                  for f_name, f_info in self.fields.items()
-                  ]
+        fields = [
+            f"('{f_name}', " +
+            f"{{'type': {repr(f_info.type)}, " +
+            f"'offset': {f_info.offset}, " +
+            f"'alignment': {f_info.alignment}, " +
+            f"'title': {f_info.title},}}" +
+            ")"
+            for f_name, f_info in self.fields.items()
+        ]
         fields = "[" + ", ".join(fields) + "]"
         return f"Record({fields}, {self.size}, {self.aligned})"
+
 
 class DType(DTypeSpec, Opaque):
     """
@@ -301,7 +253,7 @@ class NumpyNdEnumerateType(SimpleIteratorType):
     """
 
     def __init__(self, arrty):
-        from . import Tuple, UniTuple, intp
+        from ..core.types import Tuple, UniTuple, intp
         self.array_type = arrty
         yield_type = Tuple((UniTuple(intp, arrty.ndim), arrty.dtype))
         name = "ndenumerate({arrayty})".format(arrayty=arrty)
@@ -359,7 +311,7 @@ class NumpyNdIterType(IteratorType):
 
     @property
     def yield_type(self):
-        from . import BaseTuple
+        from ..core.types import BaseTuple
         views = self.views
         if len(views) > 1:
             return BaseTuple.from_types(views)
@@ -390,7 +342,8 @@ class NumpyNdIterType(IteratorType):
                 else:
                     kind = 'indexed'
                 if layout == 'C':
-                    # If iterating in C order, broadcasting is done on the outer indices
+                    # If iterating in C order, broadcasting is done on the
+                    # outer indices
                     indexer = (kind, ndim - a.ndim, ndim)
                 else:
                     indexer = (kind, 0, a.ndim)
@@ -424,7 +377,7 @@ class NumpyNdIndexType(SimpleIteratorType):
     """
 
     def __init__(self, ndim):
-        from . import UniTuple, intp
+        from ..core.types import UniTuple, intp
         self.ndim = ndim
         yield_type = UniTuple(intp, self.ndim)
         name = "ndindex(ndim={ndim})".format(ndim=ndim)
@@ -444,8 +397,10 @@ class Array(Buffer):
                  aligned=True):
         if readonly:
             self.mutable = False
-        if (not aligned or
-            (isinstance(dtype, Record) and not dtype.aligned)):
+        if (
+            not aligned or
+            (isinstance(dtype, Record) and not dtype.aligned)
+        ):
             self.aligned = False
         if isinstance(dtype, NestedArray):
             ndim += dtype.ndim
@@ -503,11 +458,15 @@ class Array(Buffer):
         """
         Convert this Array to the *other*.
         """
-        if (isinstance(other, Array) and other.ndim == self.ndim
-            and other.dtype == self.dtype):
-            if (other.layout in ('A', self.layout)
+        if (
+            isinstance(other, Array) and other.ndim == self.ndim
+            and other.dtype == self.dtype
+        ):
+            if (
+                other.layout in ('A', self.layout)
                 and (self.mutable or not other.mutable)
-                and (self.aligned or not other.aligned)):
+                and (self.aligned or not other.aligned)
+            ):
                 return Conversion.safe
 
     def is_precise(self):
@@ -517,14 +476,14 @@ class Array(Buffer):
     def box_type(self):
         """Returns the Python type to box to.
         """
-        import numpy as np
         return np.ndarray
 
     def __repr__(self):
         return (
             f"Array({repr(self.dtype)}, {self.ndim}, '{self.layout}', "
             f"{not self.mutable}, aligned={self.aligned})"
-                )
+        )
+
 
 class ArrayCTypes(Type):
     """
@@ -552,7 +511,7 @@ class ArrayCTypes(Type):
         passed to a ctypes function accepting a c_void_p, not a typed
         pointer.
         """
-        from . import CPointer, voidptr
+        from ..core.types import CPointer, voidptr
         # XXX what about readonly
         if isinstance(other, CPointer) and other.dtype == self.dtype:
             return Conversion.safe
@@ -613,8 +572,8 @@ class NestedArray(Array):
         stride = self.size
         strides = []
         for i in reversed(self._shape):
-             strides.append(stride)
-             stride *= i
+            strides.append(stride)
+            stride *= i
         return tuple(reversed(strides))
 
     @property
@@ -639,7 +598,9 @@ class NumPyRandomGeneratorType(Type):
 
 class PolynomialType(Type):
     def __init__(self, coef, domain=None, window=None, n_args=1):
-        super(PolynomialType, self).__init__(name=f'PolynomialType({coef}, {domain}, {domain}, {n_args})')
+        super(PolynomialType, self).__init__(
+            name=f'PolynomialType({coef}, {domain}, {domain}, {n_args})'
+        )
         self.coef = coef
         self.domain = domain
         self.window = window

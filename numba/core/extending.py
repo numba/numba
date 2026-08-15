@@ -7,6 +7,7 @@ from types import MappingProxyType
 
 import numba
 from numba.core import types, errors, utils, config
+from numba.np import npytypes  # noqa: F401
 
 # Exported symbols
 from numba.core.typing.typeof import typeof_impl  # noqa: F401
@@ -17,6 +18,7 @@ from numba.core.imputils import (  # noqa: F401
     lower_builtin, lower_getattr, lower_getattr_generic,  # noqa: F401
     lower_setattr, lower_setattr_generic, lower_cast)  # noqa: F401
 from numba.core.datamodel import models   # noqa: F401
+from numba.np import npymodels   # noqa: F401
 from numba.core.datamodel import register_default as register_model  # noqa: F401, E501
 from numba.core.pythonapi import box, unbox, reflect, NativeValue  # noqa: F401
 from numba._helperlib import _import_cython_function  # noqa: F401
