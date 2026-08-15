@@ -12,7 +12,9 @@ from numba import jit, njit, typeof
 from numba.core import errors
 from numba.np.numpy_support import numpy_version
 from numba.tests.support import (TestCase, tag, needs_lapack, needs_blas,
-                                 _is_armv7l, EnableNRTStatsMixin)
+                                 _is_armv7l, EnableNRTStatsMixin, has_lapack,
+                                 available_memory_bytes)
+from numba.np.linalg import _LAPACK_ILP64
 from .matmul_usecase import matmul_usecase
 import unittest
 
@@ -2213,6 +2215,31 @@ class TestLinalgNorm(TestLinalgSystems):
         # assert 2D input raises for an invalid norm kind kwarg
         self.assert_invalid_norm_kind(cfunc, (np.array([[1., 2.], [3., 4.]],
                                                        dtype=np.float64), 6))
+
+    # x below is 2**31 * 8 bytes (~16 GiB); require some headroom on top of
+    # that for the rest of the test process before attempting it.
+    _NORM_ILP64_BYTES_NEEDED = 2 ** 31 * 8 + 2 * 2 ** 30
+
+    # An LP64 nrm2 call can't represent a length of 2**31, so this needs an
+    # ILP64 scipy/BLAS and enough free memory to allocate x.
+    @needs_lapack
+    @unittest.skipIf(
+        not has_lapack or not _LAPACK_ILP64
+        or (available_memory_bytes() or 0) < _NORM_ILP64_BYTES_NEEDED,
+        "requires an ILP64 scipy/BLAS and enough free memory for a "
+        "2**31-element float64 array"
+    )
+    def test_norm_ilp64(self):
+        x = np.zeros(2**31, dtype=np.float64)
+        x[-1] = 1.0
+
+        def func(x):
+            return np.linalg.norm(x)
+
+        cfunc = njit(func)
+
+        np.testing.assert_allclose(func(x), 1.0, atol=1e-14)
+        np.testing.assert_allclose(cfunc(x), 1.0, atol=1e-14)
 
 
 class TestLinalgCond(TestLinalgBase):
