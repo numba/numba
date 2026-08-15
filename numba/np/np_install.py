@@ -10,6 +10,7 @@ def load_additional_npy_registries(self):
 
     self.install_registry(npydecl.registry)
     self.install_registry(cffi_utils.registry)
+    load_additional_core_registries(self)
 
 
 Context.load_additional_registries = load_additional_npy_registries
