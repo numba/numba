@@ -333,7 +333,7 @@ class StencilFunc(object):
             print("get_return_type", argtys)
             ir_utils.dump_blocks(self.kernel_ir.blocks)
 
-        if not isinstance(argtys[0], types.npytypes.Array):
+        if not isinstance(argtys[0], types.Array):
             raise NumbaValueError("The first argument to a stencil kernel must "
                                   "be the primary input array.")
 
@@ -345,11 +345,11 @@ class StencilFunc(object):
                 argtys,
                 None,
                 {})
-        if isinstance(return_type, types.npytypes.Array):
+        if isinstance(return_type, types.Array):
             raise NumbaValueError(
                 "Stencil kernel must return a scalar and not a numpy array.")
 
-        real_ret = types.npytypes.Array(return_type, argtys[0].ndim,
+        real_ret = types.Array(return_type, argtys[0].ndim,
                                                      argtys[0].layout)
         return (real_ret, typemap, calltypes)
 
@@ -779,7 +779,7 @@ class StencilFunc(object):
             result = kwargs['out']
             rdtype = result.dtype
             rttype = numpy_support.from_dtype(rdtype)
-            result_type = types.npytypes.Array(rttype, result.ndim,
+            result_type = types.Array(rttype, result.ndim,
                                                numpy_support.map_layout(result))
             array_types = tuple([typing.typeof.typeof(x) for x in args])
             array_types_full = tuple([typing.typeof.typeof(x) for x in args] +

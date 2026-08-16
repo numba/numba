@@ -8,7 +8,6 @@ from .containers import *
 from .functions import *
 from .iterators import *
 from .misc import *
-from ...np.npytypes import *
 from .scalars import *
 from .function_type import *
 
@@ -25,8 +24,6 @@ py2_string_type = Opaque('str')
 unicode_type = UnicodeType('unicode_type')
 string = unicode_type
 unknown = Dummy('unknown')
-npy_rng = NumPyRandomGeneratorType('rng')
-npy_bitgen = NumPyRandomBitGeneratorType('bitgen')
 
 # _undef_var is used to represent undefined variables in the type system.
 _undef_var = UndefVar('_undef_var')

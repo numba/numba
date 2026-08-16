@@ -1035,9 +1035,9 @@ def fix_setitem_type(stmt, typemap, calltypes):
     # test_optional t_typ can be Optional with array
     if not isinstance(
             s_typ,
-            types.npytypes.Array) or not isinstance(
+            types.Array) or not isinstance(
             t_typ,
-            types.npytypes.Array):
+            types.Array):
         return
     if s_typ.layout == 'A' and t_typ.layout != 'A':
         new_s_typ = s_typ.copy(layout=t_typ.layout)
@@ -1294,7 +1294,7 @@ def canonicalize_array_math(func_ir, typemap, calltypes, typingctx):
                 # replace A.func with np.func, and save A in saved_arr_arg
                 if (rhs.op == 'getattr' and rhs.attr in arr_math
                         and isinstance(
-                            typemap[rhs.value.name], types.npytypes.Array)):
+                            typemap[rhs.value.name], types.Array)):
                     rhs = stmt.value
                     arr = rhs.value
                     saved_arr_arg[lhs] = arr

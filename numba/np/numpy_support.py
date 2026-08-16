@@ -144,7 +144,7 @@ def as_dtype(nbtype):
         return as_struct_dtype(nbtype)
     if isinstance(nbtype, types.EnumMember):
         return as_dtype(nbtype.dtype)
-    if isinstance(nbtype, types.npytypes.DType):
+    if isinstance(nbtype, types.DType):
         return as_dtype(nbtype.dtype)
     if isinstance(nbtype, types.NumberClass):
         return as_dtype(nbtype.dtype)

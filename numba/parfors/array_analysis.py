@@ -3181,7 +3181,7 @@ class ArrayAnalysis(object):
 
     def _isarray(self, varname):
         typ = self.typemap[varname]
-        return isinstance(typ, types.npytypes.Array) and typ.ndim > 0
+        return isinstance(typ, types.Array) and typ.ndim > 0
 
     def _istuple(self, varname):
         typ = self.typemap[varname]

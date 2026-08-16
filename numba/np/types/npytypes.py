@@ -5,10 +5,10 @@ import numpy as np
 
 from llvmlite import ir
 
-from ..core.types.abstract import (
+from ...core.types.abstract import (
     DTypeSpec, IteratorType, MutableSequence, Number, Type
 )
-from ..core.types.common import Buffer, Opaque, SimpleIteratorType
+from ...core.types.common import Buffer, Opaque, SimpleIteratorType
 from numba.core.typeconv import Conversion
 
 
@@ -253,7 +253,7 @@ class NumpyNdEnumerateType(SimpleIteratorType):
     """
 
     def __init__(self, arrty):
-        from ..core.types import Tuple, UniTuple, intp
+        from ...core.types import Tuple, UniTuple, intp
         self.array_type = arrty
         yield_type = Tuple((UniTuple(intp, arrty.ndim), arrty.dtype))
         name = "ndenumerate({arrayty})".format(arrayty=arrty)
@@ -311,7 +311,7 @@ class NumpyNdIterType(IteratorType):
 
     @property
     def yield_type(self):
-        from ..core.types import BaseTuple
+        from ...core.types import BaseTuple
         views = self.views
         if len(views) > 1:
             return BaseTuple.from_types(views)
@@ -377,7 +377,7 @@ class NumpyNdIndexType(SimpleIteratorType):
     """
 
     def __init__(self, ndim):
-        from ..core.types import UniTuple, intp
+        from ...core.types import UniTuple, intp
         self.ndim = ndim
         yield_type = UniTuple(intp, self.ndim)
         name = "ndindex(ndim={ndim})".format(ndim=ndim)
@@ -511,7 +511,7 @@ class ArrayCTypes(Type):
         passed to a ctypes function accepting a c_void_p, not a typed
         pointer.
         """
-        from ..core.types import CPointer, voidptr
+        from ...core.types import CPointer, voidptr
         # XXX what about readonly
         if isinstance(other, CPointer) and other.dtype == self.dtype:
             return Conversion.safe

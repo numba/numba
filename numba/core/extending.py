@@ -7,7 +7,7 @@ from types import MappingProxyType
 
 import numba
 from numba.core import types, errors, utils, config
-from numba.np import npytypes  # noqa: F401
+from numba.np.types import npytypes  # noqa: F401
 
 # Exported symbols
 from numba.core.typing.typeof import typeof_impl  # noqa: F401
