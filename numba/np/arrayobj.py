@@ -2693,6 +2693,19 @@ def np_clip(a, a_min, a_max, out=None):
     a_min_is_none = a_min is None or isinstance(a_min, types.NoneType)
     a_max_is_none = a_max is None or isinstance(a_max, types.NoneType)
 
+    def _get_dtype(t):
+        if hasattr(t, 'dtype'):
+            return as_dtype(t.dtype)
+        return as_dtype(t)
+
+    dt_a = _get_dtype(a)
+    dt_min = _get_dtype(a_min) if not a_min_is_none else None
+    dt_max = _get_dtype(a_max) if not a_max_is_none else None
+
+    dts = [dt for dt in (dt_a, dt_min, dt_max) if dt is not None]
+    promoted_dt = np.result_type(*dts)
+    nb_promoted_dt = from_dtype(promoted_dt)
+
     if a_min_is_none and a_max_is_none:
         # Raises value error when both a_min and a_max are None
         def np_clip_nn(a, a_min, a_max, out=None):
@@ -2700,15 +2713,16 @@ def np_clip(a, a_min, a_max, out=None):
 
         return np_clip_nn
 
-    a_min_is_scalar = isinstance(a_min, types.Number)
-    a_max_is_scalar = isinstance(a_max, types.Number)
+    a_min_is_scalar = isinstance(a_min, (types.Number, types.Boolean))
+    a_max_is_scalar = isinstance(a_max, (types.Number, types.Boolean))
 
     if a_min_is_scalar and a_max_is_scalar:
         def np_clip_ss(a, a_min, a_max, out=None):
             # a_min and a_max are scalars
             # since their shape will be empty
             # so broadcasting is not needed at all
-            ret = np.empty_like(a) if out is None else out
+            ret = np.empty(a.shape, dtype=nb_promoted_dt) \
+                if out is None else out
             for index in np.ndindex(a.shape):
                 val_a = a[index]
                 ret[index] = min(max(val_a, a_min), a_max)
@@ -2722,7 +2736,9 @@ def np_clip(a, a_min, a_max, out=None):
                 # a_min is a scalar
                 # since its shape will be empty
                 # so broadcasting is not needed at all
-                ret = np.empty_like(a) if out is None else out
+                ret = np.empty(
+                    a.shape, dtype=nb_promoted_dt
+                ) if out is None else out
                 for index in np.ndindex(a.shape):
                     val_a = a[index]
                     ret[index] = max(val_a, a_min)
@@ -2737,7 +2753,10 @@ def np_clip(a, a_min, a_max, out=None):
                 # broadcast it to shape of a
                 # by using np.full_like
                 a_min_full = np.full_like(a, a_min)
-                return _np_clip_impl(a, a_min_full, a_max, out)
+                ret = np.empty(
+                    a.shape, dtype=nb_promoted_dt
+                ) if out is None else out
+                return _np_clip_impl(a, a_min_full, a_max, ret)
 
             return np_clip_sa
     elif not a_min_is_scalar and a_max_is_scalar:
@@ -2746,7 +2765,9 @@ def np_clip(a, a_min, a_max, out=None):
                 # a_max is a scalar
                 # since its shape will be empty
                 # so broadcasting is not needed at all
-                ret = np.empty_like(a) if out is None else out
+                ret = np.empty(
+                    a.shape, dtype=nb_promoted_dt
+                ) if out is None else out
                 for index in np.ndindex(a.shape):
                     val_a = a[index]
                     ret[index] = min(val_a, a_max)
@@ -2761,7 +2782,10 @@ def np_clip(a, a_min, a_max, out=None):
                 # broadcast it to shape of a
                 # by using np.full_like
                 a_max_full = np.full_like(a, a_max)
-                return _np_clip_impl(a, a_min, a_max_full, out)
+                ret = np.empty(
+                    a.shape, dtype=nb_promoted_dt
+                ) if out is None else out
+                return _np_clip_impl(a, a_min, a_max_full, ret)
 
             return np_clip_as
     else:
@@ -2769,7 +2793,9 @@ def np_clip(a, a_min, a_max, out=None):
         if a_min_is_none:
             def np_clip_na(a, a_min, a_max, out=None):
                 # a_max is a numpy array but a_min is None
-                ret = np.empty_like(a) if out is None else out
+                ret = np.empty(
+                    a.shape, dtype=nb_promoted_dt
+                ) if out is None else out
                 a_b, a_max_b = np.broadcast_arrays(a, a_max)
                 return _np_clip_impl_none(a_b, a_max_b, True, ret)
 
@@ -2777,7 +2803,9 @@ def np_clip(a, a_min, a_max, out=None):
         elif a_max_is_none:
             def np_clip_an(a, a_min, a_max, out=None):
                 # a_min is a numpy array but a_max is None
-                ret = np.empty_like(a) if out is None else out
+                ret = np.empty(
+                    a.shape, dtype=nb_promoted_dt
+                ) if out is None else out
                 a_b, a_min_b = np.broadcast_arrays(a, a_min)
                 return _np_clip_impl_none(a_b, a_min_b, False, ret)
 
@@ -2787,7 +2815,10 @@ def np_clip(a, a_min, a_max, out=None):
                 # Both a_min and a_max are clearly arrays
                 # because none of the above branches
                 # returned
-                return _np_clip_impl(a, a_min, a_max, out)
+                ret = np.empty(
+                    a.shape, dtype=nb_promoted_dt
+                ) if out is None else out
+                return _np_clip_impl(a, a_min, a_max, ret)
 
             return np_clip_aa
 
