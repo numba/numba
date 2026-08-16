@@ -126,6 +126,14 @@ def hypot(x, y):
     return math.hypot(x, y)
 
 
+def isclose(x, y):
+    return math.isclose(x, y)
+
+
+def isclose_tol(x, y, rel_tol, abs_tol):
+    return math.isclose(x, y, rel_tol=rel_tol, abs_tol=abs_tol)
+
+
 def nextafter(x, y):
     return math.nextafter(x, y)
 
@@ -455,6 +463,59 @@ class TestMathLib(TestCase):
                 self.assertRaisesRegex(RuntimeWarning,
                                         'overflow encountered in .*scalar',
                                         naive_hypot, val, val)
+
+    def test_isclose(self):
+        pyfunc = isclose
+        x_types = [types.int64, types.uint64,
+                   types.float32, types.float64]
+        x_values = [1, 2, 3, 4]
+        y_values = [x + 2 for x in x_values]
+        self.run_binary(pyfunc, x_types, x_values, y_values)
+
+        cfunc = njit(pyfunc)
+        inf = float('inf')
+        nan = float('nan')
+        close_cases = [
+            (1.0, 1.0),
+            (1.0, 1.0 + 1e-12),
+            (0.0, 0.0),
+            (inf, inf),
+        ]
+        not_close_cases = [
+            (1.0, 1.1),
+            (inf, -inf),
+            (inf, 5.0),
+            (nan, nan),
+            (nan, 1.0),
+        ]
+        for x, y in close_cases:
+            msg = 'for inputs (%r, %r)' % (x, y)
+            self.assertEqual(cfunc(x, y), pyfunc(x, y), msg=msg)
+            self.assertTrue(cfunc(x, y), msg=msg)
+        for x, y in not_close_cases:
+            msg = 'for inputs (%r, %r)' % (x, y)
+            self.assertEqual(cfunc(x, y), pyfunc(x, y), msg=msg)
+            self.assertFalse(cfunc(x, y), msg=msg)
+
+        tol_pyfunc = isclose_tol
+        tol_cfunc = njit(tol_pyfunc)
+        tol_cases = [
+            (1.0, 1.2, 0.0, 0.5),
+            (1.0, 1.2, 0.0, 0.1),
+            (100.0, 100.5, 0.01, 0.0),
+            (100.0, 105.0, 0.01, 0.0),
+        ]
+        for x, y, rel_tol, abs_tol in tol_cases:
+            msg = 'for inputs (%r, %r, %r, %r)' % (x, y, rel_tol, abs_tol)
+            got = tol_cfunc(x, y, rel_tol, abs_tol)
+            expected = tol_pyfunc(x, y, rel_tol, abs_tol)
+            self.assertEqual(got, expected, msg=msg)
+
+        # negative tolerances are rejected, same as in CPython
+        with self.assertRaises(ValueError):
+            tol_cfunc(1.0, 1.0, -1.0, 0.0)
+        with self.assertRaises(ValueError):
+            tol_cfunc(1.0, 1.0, 0.0, -1.0)
 
     def test_nextafter(self):
         pyfunc = nextafter
