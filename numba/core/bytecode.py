@@ -1,8 +1,7 @@
 import sys
-from collections import namedtuple, OrderedDict
+from collections import defaultdict, namedtuple, OrderedDict
 import dis
 import inspect
-import itertools
 
 from types import CodeType, ModuleType
 
@@ -625,7 +624,7 @@ class FunctionIdentity(serialize.ReduceMixin):
     being compiled, not necessarily the top-level user function
     (the two might be distinct).
     """
-    _unique_ids = itertools.count(1)
+    _unique_ids = defaultdict(int)
 
     @classmethod
     def from_function(cls, pyfunc):
@@ -663,7 +662,8 @@ class FunctionIdentity(serialize.ReduceMixin):
         # Even the same function definition can be compiled into
         # several different function objects with distinct closure
         # variables, so we make sure to disambiguate using an unique id.
-        uid = next(cls._unique_ids)
+        uid = cls._unique_ids[self.func_qualname] + 1
+        cls._unique_ids[self.func_qualname] = uid
         self.unique_name = '{}${}'.format(self.func_qualname, uid)
         self.unique_id = uid
 
