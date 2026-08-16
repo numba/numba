@@ -35,8 +35,8 @@ _exported = {
     "NumpyFlatType": NumpyFlatType,
     "NumpyNdIndexType": NumpyNdIndexType,
     "PolynomialType": PolynomialType,
-    "np_rng": npy_rng,
-    "np_bitgen": npy_bitgen,
+    "npy_rng": npy_rng,
+    "npy_bitgen": npy_bitgen,
 }
 
 for _name, _obj in _exported.items():
