@@ -1,0 +1,1 @@
+Fixed typeof() support for ctypes values and pointers.
