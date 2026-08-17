@@ -1,1 +1,4 @@
-Added documentation for ``ListType`` and ``DictType`` container types in reference manual (#3349).
+Added documentation for ListType and DictType container types in reference manual (#3349).
+
+- Documented numba.types.ListType methods and properties.
+- Documented numba.types.DictType methods and properties.
