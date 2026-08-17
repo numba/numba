@@ -880,17 +880,6 @@ def unbox_generator(typ, obj, c):
     return c.pyapi.to_native_generator(obj, typ)
 
 
-@box(types.NumberClass)
-def box_number_class(typ, val, c):
-    from numba.np import numpy_support
-    np_dtype = numpy_support.as_dtype(typ.dtype)
-    return c.pyapi.unserialize(c.pyapi.serialize_object(np_dtype))
-
-@unbox(types.NumberClass)
-def unbox_number_class(typ, val, c):
-    return NativeValue(c.context.get_dummy_value())
-
-
 @box(types.PyObject)
 @box(types.Object)
 def box_pyobject(typ, val, c):

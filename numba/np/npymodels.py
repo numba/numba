@@ -151,3 +151,4 @@ class NestedArrayModel(ArrayModel):
 register_default(types.Array)(ArrayModel)
 
 register_default(types.DType)(OpaqueModel)
+register_default(types.NumberClass)(OpaqueModel)

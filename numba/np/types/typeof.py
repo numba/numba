@@ -55,6 +55,11 @@ def typeof_numpy_polynomial(val, c):
     return types.PolynomialType(coef, domain, window)
 
 
+@typeof_impl.register(types.NumberClass)
+def _typeof_number_class(val, c):
+    return val
+
+
 _extra_types[np.generic] = lambda x: types.NumberClass(
     numpy_support.from_dtype(x)
 )

@@ -227,3 +227,37 @@ def box_numpy_random_generator(typ, val, c):
     # Steal NRT ref
     c.context.nrt.decref(c.builder, typ, val)
     return c.builder.load(res)
+
+
+@box(types.NumberClass)
+def box_number_class(typ, val, c):
+    from numba.np import numpy_support
+    np_dtype = numpy_support.as_dtype(typ.dtype)
+    return c.pyapi.unserialize(c.pyapi.serialize_object(np_dtype))
+
+
+@unbox(types.NumberClass)
+def unbox_number_class(typ, val, c):
+    return NativeValue(c.context.get_dummy_value())
+
+
+@box(types.NPDatetime)
+def box_npdatetime(typ, val, c):
+    return c.pyapi.create_np_datetime(val, typ.unit_code)
+
+
+@unbox(types.NPDatetime)
+def unbox_npdatetime(typ, obj, c):
+    val = c.pyapi.extract_np_datetime(obj)
+    return NativeValue(val, is_error=c.pyapi.c_api_error())
+
+
+@box(types.NPTimedelta)
+def box_nptimedelta(typ, val, c):
+    return c.pyapi.create_np_timedelta(val, typ.unit_code)
+
+
+@unbox(types.NPTimedelta)
+def unbox_nptimedelta(typ, obj, c):
+    val = c.pyapi.extract_np_timedelta(obj)
+    return NativeValue(val, is_error=c.pyapi.c_api_error())

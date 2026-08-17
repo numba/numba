@@ -224,11 +224,6 @@ def _typeof_enum_class(val, c):
     return typecls(cls, dtypes.pop())
 
 
-@typeof_impl.register(types.NumberClass)
-def _typeof_number_class(val, c):
-    return val
-
-
 @typeof_impl.register(types.Literal)
 def _typeof_literal(val, c):
     return val

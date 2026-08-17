@@ -121,7 +121,6 @@ class CPUContext(BaseContext):
         from numba.typed import typedlist, listobject # noqa F401
         from numba.typed import typedset, setobject # noqa F401
         from numba.experimental import jitclass, function_type # noqa F401
-        from numba.np.types import datetime_registry # noqa F401
         from numba.np import npdatetime # noqa F401
 
         # Add target specific implementations
@@ -146,6 +145,7 @@ class CPUContext(BaseContext):
         # TODO: Hide all NumPy features behind a flag
         from numba.np import inline_arraycall # noqa F401
         from numba.np import np_install # noqa F401
+        from numba.np import np_overloads # noqa F401
 
     @property
     def target_data(self):

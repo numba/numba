@@ -1,9 +1,8 @@
 import numpy as np
-import sys
-import inspect
 from numba import types
-from .datetime import NPDatetime, NPTimedelta
 from .npytypes import *
+from .datetime import NPDatetime, NPTimedelta
+from .numberclass import NumberClass
 
 numpy_version = tuple(map(int, np.__version__.split('.')[:2]))
 
@@ -37,6 +36,7 @@ _exported = {
     "PolynomialType": PolynomialType,
     "npy_rng": npy_rng,
     "npy_bitgen": npy_bitgen,
+    "NumberClass": NumberClass,
 }
 
 for _name, _obj in _exported.items():
