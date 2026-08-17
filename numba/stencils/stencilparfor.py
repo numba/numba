@@ -274,7 +274,7 @@ class StencilPass(object):
                 return_type_name = 'bool_'
             dtype_np_attr_call = ir.Expr.getattr(dtype_g_np_var, return_type_name, loc)
             dtype_attr_var = ir.Var(scope, mk_unique_var("$np_attr_attr"), loc)
-            self.typemap[dtype_attr_var.name] = types.functions.NumberClass(return_type.dtype)
+            self.typemap[dtype_attr_var.name] = types.NumberClass(return_type.dtype)
             dtype_attr_assign = ir.Assign(dtype_np_attr_call, dtype_attr_var, loc)
             init_block.body.append(dtype_attr_assign)
 
