@@ -308,4 +308,3 @@ def _typeof_ctypes_data(val, c):
         return ctypes_utils.from_ctypes(type(val))
     except (TypeError, ValueError):
         return None
-    
