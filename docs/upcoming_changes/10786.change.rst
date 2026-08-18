@@ -1,6 +1,7 @@
 Relax NumPy ``sin``/``cos`` test comparisons on Linux x86_64 with NumPy < 1.25
 ------------------------------------------------------------------------------
 
-Apply the missing 4-ULP allowance in remaining ``sin``/``cos`` tests, and
-skip tests where NumPy < 1.25 error cannot be matched by relative ULP
-comparison.
+Follow-up to PR #10572, which added a 4-ULP allowance for NumPy < 1.25
+``sin``/``cos`` on Linux x86_64. Apply that allowance in the remaining tests
+that were missed, and skip tests where the NumPy < 1.25 error cannot be
+matched by relative ULP comparison.
