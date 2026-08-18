@@ -21,15 +21,19 @@ concurrency:
 env:
   CONDA_CHANNEL_LLVMLITE: numba/label/dev
   WIN_ARM64_CONDA_CHANNEL: bootstrap-win-arm64-round-2-native
-  PYTHON_VERSION: "3.14"
   NUMPY_VERSION: "2.3"
 
 jobs:
   win-arm64-build-conda:
-    name: win-arm64-build-conda (py 3.14, np 2.3)
+    name: win-arm64-build-conda (py ${{ matrix.python_version }}, np 2.3)
     runs-on: windows-11-arm
+    strategy:
+      matrix:
+        python_version: ["3.11", "3.12", "3.13", "3.14"]
+      fail-fast: false
     env:
       EXTRA_CHANNELS: ''
+      PYTHON_VERSION: ${{ matrix.python_version }}
     defaults:
       run:
         shell: bash -elx {0}
@@ -105,11 +109,16 @@ jobs:
           if-no-files-found: error
 
   win-arm64-test:
-    name: win-arm64-test-conda (py 3.14, np 2.3)
+    name: win-arm64-test-conda (py ${{ matrix.python_version }}, np 2.3)
     needs: win-arm64-build-conda
     runs-on: windows-11-arm
+    strategy:
+      matrix:
+        python_version: ["3.11", "3.12", "3.13", "3.14"]
+      fail-fast: false
     env:
       EXTRA_CHANNELS: ''
+      PYTHON_VERSION: ${{ matrix.python_version }}
     defaults:
       run:
         shell: bash -elx {0}
