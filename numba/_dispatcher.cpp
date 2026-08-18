@@ -35,7 +35,7 @@
 
 /* Python 3.12 pycore_atomic.h ARM64 MSVC path is invalid C++ (C2664).
  * Skip that header; stubs copy CPython's generic fallback:
- * https://github.com/python/cpython/blob/v3.12.10/Include/internal/pycore_atomic.h#L515-L552
+ * https://github.com/python/cpython/blob/v3.12.14/Include/internal/pycore_atomic.h#L515-L552
  * Broken ARM64 MSVC load (missing casts):
  * https://github.com/python/cpython/blob/v3.12.14/Include/internal/pycore_atomic.h#L437
  */
