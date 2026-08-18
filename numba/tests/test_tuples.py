@@ -721,10 +721,11 @@ class TestTupleBuild(TestCase):
         # Heterogeneous
         check(lambda a: tuple(a), (4, 5.5))
 
-    def test_many_positional_args_are_one_build_tuple(self):
+    def test_many_positional_args_become_direct_call(self):
         # CPython emits BUILD_LIST/LIST_APPEND/LIST_TO_TUPLE/CALL_FUNCTION_EX
-        # for calls with more than 30 arguments. Coalescing the appends keeps
-        # the IR (and the LLVM generated from it) linear in the argument count
+        # for calls with more than 30 arguments. Coalescing the appends and
+        # inlining the resulting tuple as direct call arguments keeps the IR
+        # (and the LLVM generated from it) linear in the argument count
         # instead of quadratic.
         from numba.core import compiler, ir
 
@@ -736,30 +737,42 @@ class TestTupleBuild(TestCase):
         exec(src, glbls)
 
         func_ir = compiler.run_frontend(glbls["f"])
-        build_tuples = [
+        exprs = [
             stmt.value
             for blk in func_ir.blocks.values()
             for stmt in blk.body
             if isinstance(stmt, ir.Assign)
             and isinstance(stmt.value, ir.Expr)
-            and stmt.value.op == "build_tuple"
         ]
-        # all the appends land in a single build_tuple (the empty list the
-        # peephole starts from may survive as dead code)
-        self.assertEqual(
-            [len(bt.items) for bt in build_tuples if bt.items], [n_args]
+        # no concatenation chain and no argument tuple survive (the empty
+        # list the peephole starts from may survive as dead code)
+        self.assertFalse([e for e in exprs if e.op == "binop"])
+        self.assertFalse(
+            [e for e in exprs if e.op == "build_tuple" and e.items]
         )
-        binops = [
-            stmt
-            for blk in func_ir.blocks.values()
-            for stmt in blk.body
-            if isinstance(stmt, ir.Assign)
-            and isinstance(stmt.value, ir.Expr)
-            and stmt.value.op == "binop"
-        ]
-        self.assertFalse(binops)
+        [call] = [e for e in exprs if e.op == "call"]
+        self.assertEqual(len(call.args), n_args)
+        self.assertIsNone(call.vararg)
 
         self.assertPreciseEqual(glbls["f"](3), (3,) * n_args)
+
+    def test_star_call_with_reused_tuple(self):
+        # the vararg tuple cannot be inlined when it has other uses; the
+        # call must still compile and compute correctly through the tuple
+        @jit(nopython=True)
+        def inner(*args):
+            return args
+
+        n = 33
+        glbls = {"inner": inner}
+        src = (
+            "def f(x):\n    t = (%s,)\n    return inner(*t), len(t)\n"
+            % ", ".join(["x"] * n)
+        )
+        exec(src, glbls)
+        pyfunc = glbls["f"]
+        cfunc = jit(nopython=True)(pyfunc)
+        self.assertPreciseEqual(cfunc(4), pyfunc(4))
 
     def test_many_positional_args_mixed_with_unpack(self):
         # runs of appends are coalesced around the extends, order preserved

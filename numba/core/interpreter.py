@@ -540,11 +540,31 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
             a_val = 1 if flag else 0
             f(a=a_val, ...)""")
 
+    def var_use_count(name):
+        """Number of times *name* is read (definition sites excluded)."""
+        count = 0
+        for blk in func_ir.blocks.values():
+            for stmt in blk.body:
+                if isinstance(stmt, ir.Assign):
+                    if isinstance(stmt.value, ir.Expr):
+                        used = stmt.value.list_vars()
+                    elif isinstance(stmt.value, ir.Var):
+                        used = [stmt.value]
+                    else:
+                        used = []
+                else:
+                    used = stmt.list_vars()
+                count += sum(1 for v in used if v.name == name)
+        return count
+
     # Track which definitions have already been deleted
     already_deleted_defs = collections.defaultdict(set)
     for blk in func_ir.blocks.values():
         blk_changed = False
         new_body = []
+        # target name -> (blk.body index, new_body index) of build_tuple
+        # assignments already emitted in this block
+        buildtuple_pos = {}
         for i, stmt in enumerate(blk.body):
             if (
                 isinstance(stmt, ir.Assign)
@@ -752,7 +772,44 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                     expr = func_ir._definitions[vararg_name][0]
                     if isinstance(expr, ir.Expr) and expr.op == "list_to_tuple":
                         raise UnsupportedBytecodeError(errmsg)
+                    # A single-use build_tuple vararg (the shape the
+                    # list_to_tuple peephole leaves for calls with more than
+                    # 30 arguments) is inlined as direct call arguments: a
+                    # wide vararg call round-trips every argument through one
+                    # wide tuple, which types and lowers quadratically in the
+                    # item count.
+                    if (
+                        isinstance(expr, ir.Expr)
+                        and expr.op == "build_tuple"
+                        and not call.args
+                        and vararg_name in buildtuple_pos
+                        and var_use_count(vararg_name) == 1
+                    ):
+                        blk_changed = True
+                        old_i, new_i = buildtuple_pos[vararg_name]
+                        new_body[new_i] = None
+                        _remove_assignment_definition(
+                            blk.body, old_i, func_ir, already_deleted_defs
+                        )
+                        new_call = ir.Expr.call(
+                            call.func,
+                            list(expr.items),
+                            call.kws,
+                            call.loc,
+                            target=call.target,
+                        )
+                        _remove_assignment_definition(
+                            blk.body, i, func_ir, already_deleted_defs
+                        )
+                        stmt = ir.Assign(new_call, stmt.target, stmt.loc)
+                        func_ir._definitions[stmt.target.name].append(new_call)
 
+            if (
+                isinstance(stmt, ir.Assign)
+                and isinstance(stmt.value, ir.Expr)
+                and stmt.value.op == "build_tuple"
+            ):
+                buildtuple_pos[stmt.target.name] = (i, len(new_body))
             new_body.append(stmt)
         # Replace the block body if we changed the IR
         if blk_changed:
