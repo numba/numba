@@ -1,4 +1,4 @@
 Document container types in reference manual
------------------------------------------------------------
+============================================
 
-Updated the documentation for Numba types to reference``ListType``, ``DictType``, and ``SetType``.
+Updated the documentation for Numba types to reference ``ListType``, ``DictType``, and ``SetType``.
