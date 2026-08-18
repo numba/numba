@@ -37,7 +37,7 @@
  * Skip that header; stubs copy CPython's generic fallback:
  * https://github.com/python/cpython/blob/v3.12.10/Include/internal/pycore_atomic.h#L515-L552
  * Broken ARM64 MSVC load (missing casts):
- * https://github.com/python/cpython/blob/v3.12.10/Include/internal/pycore_atomic.h#L437
+ * https://github.com/python/cpython/blob/v3.12.14/Include/internal/pycore_atomic.h#L437
  */
 #if (PY_MINOR_VERSION == 12) && defined(_M_ARM64) && defined(_MSC_VER)
 #ifndef Py_ATOMIC_H
