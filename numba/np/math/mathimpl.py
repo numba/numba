@@ -276,6 +276,10 @@ def frexp_impl(context, builder, sig, args):
 
 # @lower(math.ldexp, types.Float, types.intc)
 def ldexp_impl(context, builder, sig, args):
+    # Reached from numba.np.npyfuncs.np_real_ldexp_impl, i.e. the
+    # np.ldexp ufunc path.  It makes the same extern call as
+    # numba.cpython.mathimpl.ldexp_impl and needs the same `signext` on
+    # the exponent - see the comment there (numba#8489).
     val, exp = args
     fltty, intty = map(context.get_data_type, sig.args)
     fnty = llvmlite.ir.FunctionType(fltty, (fltty, intty))
@@ -284,6 +288,7 @@ def ldexp_impl(context, builder, sig, args):
         "double": "numba_ldexp",
         }[str(fltty)]
     fn = cgutils.insert_pure_function(builder.module, fnty, name=fname)
+    fn.args[1].add_attribute('signext')
     res = builder.call(fn, (val, exp))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 

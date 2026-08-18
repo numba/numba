@@ -265,55 +265,37 @@ def frexp_impl(context, builder, sig, args):
     fltty = context.get_data_type(sig.args[0])
     intty = context.get_data_type(sig.return_type[1])
     expptr = cgutils.alloca_once(builder, intty, name='exp')
-    # Pointer parameter first: see numba_frexp's comment in _helperlib.c
-    # (ppc64le ABI-lowering workaround, numba#8489).
-    fnty = llvmlite.ir.FunctionType(fltty, (llvmlite.ir.PointerType(intty), fltty))
+    fnty = llvmlite.ir.FunctionType(fltty, (fltty, llvmlite.ir.PointerType(intty)))
     fname = {
         "float": "numba_frexpf",
         "double": "numba_frexp",
         }[str(fltty)]
     fn = cgutils.get_or_insert_function(builder.module, fnty, fname)
-    res = builder.call(fn, (expptr, val))
+    res = builder.call(fn, (val, expptr))
     res = cgutils.make_anonymous_struct(builder, (res, builder.load(expptr)))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-def _ldexp_impl(x, n):
-    # Avoids a native (double, int) extern call whose argument shape
-    # triggers a PPC64LE LLVM ABI-lowering bug (numba#8489) at numba's
-    # OWN JIT function-call boundary (see numba/core/callconv.py --
-    # every jitted function's own argument list is passed in its
-    # natural declared order, so no call-site reordering can fix a
-    # bug baked into math.ldexp's own (x, exp) signature). Instead,
-    # avoid crossing any such call boundary at all: clamp n into a
-    # safe range wide enough to span the full subnormal-to-overflow
-    # exponent range of a double (~2097 steps in either direction),
-    # then apply repeated doubling/halving -- IEEE 754 float
-    # multiplication naturally produces correct overflow-to-inf,
-    # gradual-underflow-through-subnormals, and flush-to-zero
-    # behaviour at each individual step.
-    if not math.isfinite(x) or x == 0.0 or n == 0:
-        return x
-    if n > 2100:
-        n = 2100
-    elif n < -2100:
-        n = -2100
-    if n > 0:
-        for _ in range(n):
-            x = x * 2.0
-            if not math.isfinite(x):
-                break
-    else:
-        for _ in range(-n):
-            x = x * 0.5
-            if x == 0.0:
-                break
-    return x
-
-
 @lower(math.ldexp, types.Float, types.intc)
 def ldexp_impl(context, builder, sig, args):
-    return context.compile_internal(builder, _ldexp_impl, sig, args)
+    val, exp = args
+    fltty, intty = map(context.get_data_type, sig.args)
+    fnty = llvmlite.ir.FunctionType(fltty, (fltty, intty))
+    fname = {
+        "float": "numba_ldexpf",
+        "double": "numba_ldexp",
+        }[str(fltty)]
+    fn = cgutils.insert_pure_function(builder.module, fnty, name=fname)
+    # numba#8489: the exponent is a C `int`.  A bare i32 parameter
+    # carries no signedness, so LLVM zero-extends it into the 64-bit
+    # GPR, while the GCC-compiled helper produces and relies on
+    # sign-extension per the PowerPC64LE ELFv2 ABI (at -O2 it forwards
+    # the register untouched).  A negative exponent then arrives as a
+    # huge positive one and ldexp saturates to inf.  `signext` makes
+    # LLVM emit the sign-extending form and match the callee.
+    fn.args[1].add_attribute('signext')
+    res = builder.call(fn, (val, exp))
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 # -----------------------------------------------------------------------------

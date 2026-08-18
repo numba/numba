@@ -94,24 +94,8 @@ numba_urem(uint64_t a, uint64_t b) {
 /* provide frexp and ldexp; these wrappers deal with special cases
  * (zero, nan, infinity) directly, to sidestep platform differences.
  */
-/* NOTE(ppc64le workaround, numba#8489, llvm/llvm-project#214260): the
- * parameter order below is (int/pointer, float) rather than the more
- * natural (float, int/pointer). This works around an LLVM PowerPC64LE
- * ELFv2 ABI-lowering bug: when a JIT-compiled caller passes a
- * float/double parameter before an integer/pointer parameter, LLVM
- * incorrectly shadows an extra GPR slot for the float argument,
- * shifting the following integer argument's register by one position.
- * AOT/GCC-compiled callees (these functions) use the true ABI register
- * instead, so the JIT caller and this callee disagree on which
- * register carries the integer argument, producing a garbage value
- * (observed as `math.ldexp` returning `inf` on ppc64le). Putting the
- * integer/pointer parameter first avoids the erroneous shadow
- * entirely, since no float parameter precedes it. The corresponding
- * LLVM IR call-site changes are in numba/cpython/mathimpl.py's
- * frexp_impl/ldexp_impl.
- */
 NUMBA_EXPORT_FUNC(double)
-numba_frexp(int *exp, double x)
+numba_frexp(double x, int *exp)
 {
     if (!Py_IS_FINITE(x) || !x)
         *exp = 0;
@@ -121,7 +105,7 @@ numba_frexp(int *exp, double x)
 }
 
 NUMBA_EXPORT_FUNC(float)
-numba_frexpf(int *exp, float x)
+numba_frexpf(float x, int *exp)
 {
     if (Py_IS_NAN(x) || Py_IS_INFINITY(x) || !x)
         *exp = 0;
