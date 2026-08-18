@@ -1,0 +1,8 @@
+Document object identity behavior in nopython mode
+--------------------------------------------------
+
+The "Deviations from Python Semantics" reference page now documents that
+Numba does not generally preserve Python object identity across the
+boundary of a jitted function - including a caveat that arrays and
+``jitclass`` instances can still share underlying memory despite not
+being ``is``-identical.
