@@ -1,0 +1,1 @@
+Fix scalar handling for np.var overload.
