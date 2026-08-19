@@ -5732,17 +5732,17 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 np_nbfunc(condlist, choicelist, default)
             self.assertIn(expected_text, str(e.exception))
 
+    # Near-zero window endpoints differ in sign under NumPy<1.25 sincos.
+    @unittest.skipIf(numpy_sincos_low_precision,
+                     "NumPy<1.25 sincos vs libm")
     def test_windowing(self):
         def check_window(func):
             np_pyfunc = func
             np_nbfunc = njit(func)
-            ulps = 4 if numpy_sincos_low_precision else 1
-
             for M in [0, 1, 5, 12]:
                 expected = np_pyfunc(M)
                 got = np_nbfunc(M)
-                self.assertPreciseEqual(expected, got, prec='double',
-                                        ulps=ulps)
+                self.assertPreciseEqual(expected, got, prec='double')
 
             for M in ['a', 1.1, 1j]:
                 with self.assertRaises(TypingError) as raises:

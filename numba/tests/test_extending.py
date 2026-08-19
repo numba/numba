@@ -687,7 +687,9 @@ class TestPandasLike(TestCase):
         self.assertIsInstance(ss, Series)
         self.assertIsInstance(ss._index, Index)
         self.assertIs(ss._index._data, i._data)
-        self.assertPreciseEqual(ss._values, np.cos(np.sin(s._values)))
+        ulps = 4 if numpy_sincos_low_precision else 1
+        self.assertPreciseEqual(ss._values, np.cos(np.sin(s._values)),
+                                prec='double', ulps=ulps)
 
     def test_series_constructor(self):
         i = Index(np.int32([42, 8, -5]))

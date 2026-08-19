@@ -1,0 +1,5 @@
+Preserve array layout when slicing with a ``None`` step
+-------------------------------------------------------
+
+Previously, a slice with an explicit ``None`` step was typed as a three-member slice,
+so ``x[a:b:None]`` inferred an ``"A"`` layout where ``x[a:b]`` inferred ``"C"``.

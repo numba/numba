@@ -1119,6 +1119,33 @@ class TestMiscIssues(TestCase):
         self.assertEqual(bar(((foo1, foo2),)), 4)
         self.assertEqual(bar(((foo1, foo2), (foo1, foo3))), 9)  # reproducer
 
+    def test_issue_10758(self):
+        # See https://github.com/numba/numba/issues/10758
+        # Two functions with different signatures can't be unified. That used
+        # to hit a bare assert and raise an AssertionError with no message.
+
+        @cfunc(float64(float64))
+        def f(x):
+            return x + 1.0
+
+        @cfunc(int64(int64))
+        def g(x):
+            return x + 1
+
+        @cfunc(float64(float64))
+        def h(x):
+            return x + 2.0
+
+        @njit
+        def foo(pair, x):
+            return pair[0](x), pair[1](x)
+
+        with self.assertRaisesRegex(ValueError, 'mismatch of argument types:'):
+            foo((f, g), 1.0)  # reproducer
+
+        # matching signatures still unify
+        self.assertEqual(foo((f, h), 1.0), (2.0, 3.0))
+
 
 class TestBasicSubtyping(TestCase):
     def test_basic(self):

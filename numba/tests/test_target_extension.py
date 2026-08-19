@@ -888,7 +888,9 @@ class TestTargetOffload(TestCase):
         def foo(x):
             return np.sin(x), np.cos(x)  # np.sin is DPU, np.cos is CPU
 
-        self.assertPreciseEqual(foo(5), (314159.0, np.cos(5)))
+        self.assertPreciseEqual(
+            foo(5), (314159.0, np.cos(5)), prec='double', ulps=ulps,
+        )
 
 
 if __name__ == "__main__":

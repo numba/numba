@@ -680,6 +680,58 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
 #ifndef Py_BUILD_CORE
     #define Py_BUILD_CORE 1
 #endif
+
+/* Python 3.12 pycore_atomic.h ARM64 MSVC path is invalid C++ (C2664).
+ * Skip that header; stubs copy CPython's generic fallback:
+ * https://github.com/python/cpython/blob/v3.12.14/Include/internal/pycore_atomic.h#L515-L552
+ * Broken ARM64 MSVC load (missing casts):
+ * https://github.com/python/cpython/blob/v3.12.14/Include/internal/pycore_atomic.h#L437
+ */
+#if defined(_M_ARM64) && defined(_MSC_VER)
+#ifndef Py_ATOMIC_H
+#define Py_ATOMIC_H
+#endif
+#if 1
+typedef enum _Py_memory_order {
+    _Py_memory_order_relaxed,
+    _Py_memory_order_acquire,
+    _Py_memory_order_release,
+    _Py_memory_order_acq_rel,
+    _Py_memory_order_seq_cst
+} _Py_memory_order;
+
+typedef struct _Py_atomic_address {
+    uintptr_t _value;
+} _Py_atomic_address;
+
+typedef struct _Py_atomic_int {
+    int _value;
+} _Py_atomic_int;
+/* Fall back to other compilers and processors by assuming that simple
+   volatile accesses are atomic.  This is false, so people should port
+   this. */
+#define _Py_atomic_signal_fence(/*memory_order*/ ORDER) ((void)0)
+#define _Py_atomic_thread_fence(/*memory_order*/ ORDER) ((void)0)
+#define _Py_atomic_store_explicit(ATOMIC_VAL, NEW_VAL, ORDER) \
+    ((ATOMIC_VAL)->_value = NEW_VAL)
+#define _Py_atomic_load_explicit(ATOMIC_VAL, ORDER) \
+    ((ATOMIC_VAL)->_value)
+#endif
+
+/* Standardized shortcuts. */
+#define _Py_atomic_store(ATOMIC_VAL, NEW_VAL) \
+    _Py_atomic_store_explicit((ATOMIC_VAL), (NEW_VAL), _Py_memory_order_seq_cst)
+#define _Py_atomic_load(ATOMIC_VAL) \
+    _Py_atomic_load_explicit((ATOMIC_VAL), _Py_memory_order_seq_cst)
+
+/* Python-local extensions */
+
+#define _Py_atomic_store_relaxed(ATOMIC_VAL, NEW_VAL) \
+    _Py_atomic_store_explicit((ATOMIC_VAL), (NEW_VAL), _Py_memory_order_relaxed)
+#define _Py_atomic_load_relaxed(ATOMIC_VAL) \
+    _Py_atomic_load_explicit((ATOMIC_VAL), _Py_memory_order_relaxed)
+#endif
+
 #include "internal/pycore_frame.h"
 // This is a fix suggested in the comments in https://github.com/python/cpython/issues/108216
 // specifically https://github.com/python/cpython/issues/108216#issuecomment-1696565797
@@ -693,7 +745,9 @@ call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyO
  * https://github.com/numba/numba/pull/10073
  */
 #include "dynamic_annotations.h"
-#include "internal/pycore_atomic.h"
+#if !(defined(_M_ARM64) && defined(_MSC_VER))
+    #include "internal/pycore_atomic.h"
+#endif
 #include "internal/pycore_call.h"
 #include "internal/pycore_interp.h"
 #include "internal/pycore_pyerrors.h"
