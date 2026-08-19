@@ -1,1 +1,1 @@
-Fixed scalar support for np.var overload.
+Fix scalar handling for np.var overload.
