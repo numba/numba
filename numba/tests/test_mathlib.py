@@ -735,9 +735,18 @@ class TestFrexpLdexp(TestCase):
                  (ldexp, np.float32(2.5), 'numba_ldexpf'),
                  (np_ldexp, 2.5, 'numba_ldexp'),
                  (np_ldexp, np.float32(2.5), 'numba_ldexpf')]
+        # The exponent is np.int32 rather than a plain Python int: the
+        # np.ldexp ufunc only ever has int32 exponent loops on Windows
+        # with NumPy < 2.0 (C long is 32-bit there, so NumPy registers
+        # no wider loop), and ufunc typing requires a *safe* input cast,
+        # so an int64 exponent resolves to no loop at all.  See the
+        # IS_WIN32 remap of 'fl->f'/'dl->d' in numba/np/ufunc_db.py.
+        # int32 hits 'fi->f'/'di->d', which exist on every platform and
+        # NumPy version, and reaches the same np_real_ldexp_impl
+        # lowering, so the signext assertion below is unaffected.
         for pyfunc, x, symbol in cases:
             cfunc = njit(pyfunc)
-            cfunc(x, 3)
+            cfunc(x, np.int32(3))
             llvm_ir = '\n'.join(cfunc.inspect_llvm().values())
             match = re.search(
                 r'declare[^@\n]*@%s\(([^)]*)\)' % (symbol,), llvm_ir)
@@ -755,9 +764,11 @@ class TestFrexpLdexp(TestCase):
         # `signext`.  Cover it directly so the two cannot drift apart.
         cfunc = njit(np_ldexp)
 
+        # np.int32 exponents: see test_ldexp_declaration_has_signext_exponent
+        # for why a plain Python int is not portable here.
         for v in [1.0, -1.0, 2.5, -2.5, math.pi, 1e100, 1e-100]:
             for n in [-200, -53, -10, -1, 0, 1, 10, 53, 200]:
-                self.assertPreciseEqual(cfunc(v, n),
+                self.assertPreciseEqual(cfunc(v, np.int32(n)),
                                         float(np.ldexp(v, n)),
                                         msg='for input (%r, %r)' % (v, n))
 
@@ -768,7 +779,7 @@ class TestFrexpLdexp(TestCase):
                      (7.162365283163292e-228, -319),
                      (1.5259499737847772e-83, -796),
                      (6.458979912260433e-06, -1048)]:
-            self.assertPreciseEqual(cfunc(v, n),
+            self.assertPreciseEqual(cfunc(v, np.int32(n)),
                                     float(np.ldexp(v, n)),
                                     msg='for input (%r, %r)' % (v, n))
 
