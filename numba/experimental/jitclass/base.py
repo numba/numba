@@ -543,8 +543,48 @@ def imp_dtor(context, module, instance_type):
         alloc_fe_type = instance_type.get_data_type()
         alloc_type = context.get_value_type(alloc_fe_type)
 
+        # Reconstruct the meminfo pointer using runtime helper.
+        get_mi_fnty = llvmir.FunctionType(llvoidptr, [llvoidptr])
+        get_mi = cgutils.get_or_insert_function(
+            module, get_mi_fnty, "NRT_MemInfo_from_data"
+        )
+        meminfo_ptr = builder.call(get_mi, [dtor_fn.args[0]])
+
         ptr = builder.bitcast(dtor_fn.args[0], alloc_type.as_pointer())
         data = context.make_helper(builder, alloc_fe_type, ref=ptr)
+
+        # Call user-defined __del__ if present
+        # (only for jitclass instance types)
+        jit_methods = getattr(instance_type, "jit_methods", None)
+        user_dtor = None if jit_methods is None else jit_methods.get("__del__")
+        if user_dtor is not None:
+            pyapi = context.get_python_api(builder)
+            gil_state = pyapi.gil_ensure()
+
+            inst_struct = context.make_helper(builder, instance_type)
+            inst_struct.meminfo = builder.bitcast(
+                meminfo_ptr, inst_struct.meminfo.type
+            )
+            inst_struct.data = builder.bitcast(
+                dtor_fn.args[0], inst_struct.data.type
+            )
+            disp_type = types.Dispatcher(user_dtor)
+            sig = disp_type.get_call_type(
+                context.typing_context, (instance_type,), {}
+            )
+            # Compile the original Python function directly and call it
+            # without status propagation because this destructor is not a
+            # normal Numba function and lacks the hidden excinfo argument.
+            cres = context.compile_subroutine(
+                builder, user_dtor.py_func, sig, caching=True
+            )
+            status, _ = context.call_internal_no_propagate(
+                builder, cres.fndesc, sig, (inst_struct._getvalue(),)
+            )
+            # Swallow exceptions: Python also suppresses __del__ errors.
+            del status
+
+            pyapi.gil_release(gil_state)
 
         context.nrt.decref(builder, alloc_fe_type, data._getvalue())
 
