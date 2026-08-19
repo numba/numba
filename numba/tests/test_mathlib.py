@@ -584,20 +584,6 @@ class TestMathLib(TestCase):
 
 
 class TestFrexpLdexp(TestCase):
-    """
-    Corner-case coverage for math.frexp and math.ldexp.
-
-    These also guard the ppc64le fix for numba #8489.  A bare ``i32``
-    parameter on an extern declaration carries no signedness, so LLVM
-    zero-extends the exponent into the 64-bit GPR while the
-    GCC-compiled ``numba_ldexp`` relies on sign-extension per the
-    PowerPC64LE ELFv2 ABI.  A negative exponent therefore arrives as a
-    huge positive one and the result saturates to inf.  The many
-    negative exponents exercised below are what catch that at runtime;
-    ``test_ldexp_declaration_has_signext_exponent`` pins the mechanism
-    itself and needs no ppc64le host.
-    """
-
     def test_frexp_wide_range(self):
         pyfunc = frexp
         cfunc = njit(pyfunc)
@@ -611,8 +597,7 @@ class TestFrexpLdexp(TestCase):
                                     msg='for input %r' % (x,))
 
     def test_frexp_exponent_over_full_double_range(self):
-        # A wrong integer register shows up as a bogus exponent, so walk
-        # every exponent a double can produce, subnormals included.
+        # Walk every exponent a double can produce, subnormals included.
         cfunc = njit(frexp)
         for e in range(-1073, 1025):
             x = math.ldexp(0.75, e)
@@ -622,7 +607,7 @@ class TestFrexpLdexp(TestCase):
                              msg='for exponent %d' % (e,))
 
     def test_frexp_float32(self):
-        # Exercises numba_frexpf, whose parameter order changed too.
+        # Exercises the float32 helper, numba_frexpf.
         cfunc = njit(frexp)
         for v in [1.0, -1.0, 2.5, -2.5, 0.5, 1e30, -1e30, 1e-30,
                   0.0, -0.0, float('inf'), float('-inf'), float('nan')]:
@@ -655,8 +640,7 @@ class TestFrexpLdexp(TestCase):
 
     def test_ldexp_overflows_to_inf(self):
         # Numba saturates like C's ldexp; CPython raises OverflowError.
-        # Pin that intentional divergence so a change to the lowering
-        # cannot alter it unnoticed.
+        # Pin that intentional divergence.
         cfunc = njit(ldexp)
         for x in [1.0, -1.0, DBL_MAX, -DBL_MAX]:
             for n in [1200, 2000, 2100, 2101, 100000, 2 ** 31 - 1]:
@@ -683,8 +667,7 @@ class TestFrexpLdexp(TestCase):
         self.assertPreciseEqual(cfunc(-DBL_MAX, -2100), -0.0)
 
     def test_ldexp_frexp_roundtrip(self):
-        # End-to-end check of both halves of the workaround: an exponent
-        # corrupted on either side of the ABI boundary breaks identity.
+        # A corrupted exponent on either side breaks the identity.
         pyfunc = frexp_ldexp_roundtrip
         cfunc = njit(pyfunc)
         x_values = [1.0, -1.0, 2.5, -2.5, math.pi, 1e300, -1e300, 1e-300,
@@ -719,31 +702,19 @@ class TestFrexpLdexp(TestCase):
                     msg='for input (%r, %r)' % (v, n))
 
     def test_ldexp_declaration_has_signext_exponent(self):
-        # numba #8489.  Without `signext` LLVM zero-extends the exponent
-        # into the 64-bit GPR, while the GCC-compiled numba_ldexp relies
-        # on sign-extension, so ldexp(x, -2) becomes ldexp(x, 2**32 - 2)
-        # and returns inf on ppc64le.  The declaration is
-        # target-independent, so this pins the fix on any host.
-        #
-        # Four cases: both lowerings (math.ldexp via
-        # numba/cpython/mathimpl.py, np.ldexp via
-        # numba/np/math/mathimpl.py) times both helper symbols
-        # (numba_ldexp for float64, numba_ldexpf for float32).  The
-        # trailing \( in the pattern keeps numba_ldexp from matching
-        # numba_ldexpf.
+        # See issue #8489.  The declaration is target-independent, so
+        # this checks the signext on any host.  Both lowerings
+        # (math.ldexp, np.ldexp) times both helper symbols; the
+        # trailing \( in the pattern below keeps numba_ldexp from
+        # matching numba_ldexpf.
         cases = [(ldexp, 2.5, 'numba_ldexp'),
                  (ldexp, np.float32(2.5), 'numba_ldexpf'),
                  (np_ldexp, 2.5, 'numba_ldexp'),
                  (np_ldexp, np.float32(2.5), 'numba_ldexpf')]
-        # The exponent is np.int32 rather than a plain Python int: the
-        # np.ldexp ufunc only ever has int32 exponent loops on Windows
-        # with NumPy < 2.0 (C long is 32-bit there, so NumPy registers
-        # no wider loop), and ufunc typing requires a *safe* input cast,
-        # so an int64 exponent resolves to no loop at all.  See the
-        # IS_WIN32 remap of 'fl->f'/'dl->d' in numba/np/ufunc_db.py.
-        # int32 hits 'fi->f'/'di->d', which exist on every platform and
-        # NumPy version, and reaches the same np_real_ldexp_impl
-        # lowering, so the signext assertion below is unaffected.
+        # np.int32, not a plain int: on Windows with NumPy < 2.0 the
+        # np.ldexp ufunc has no int64 exponent loop, and ufunc typing
+        # requires a safe cast, so int64 resolves to no loop at all.
+        # See the IS_WIN32 remap in numba/np/ufunc_db.py.
         for pyfunc, x, symbol in cases:
             cfunc = njit(pyfunc)
             cfunc(x, np.int32(3))
@@ -758,22 +729,19 @@ class TestFrexpLdexp(TestCase):
             self.assertIn('signext', params[1], msg=match.group(0))
 
     def test_np_ldexp_matches_numpy(self):
-        # np.ldexp reaches its own lowering: numba/np/npyfuncs.py's
-        # np_real_ldexp_impl calls numba.np.math.mathimpl.ldexp_impl,
-        # a separate copy of the extern call that needs its own
-        # `signext`.  Cover it directly so the two cannot drift apart.
+        # np.ldexp goes through a separate copy of the extern call, in
+        # numba/np/math/mathimpl.py.  Cover it so the two cannot drift.
         cfunc = njit(np_ldexp)
 
-        # np.int32 exponents: see test_ldexp_declaration_has_signext_exponent
-        # for why a plain Python int is not portable here.
+        # np.int32 exponents: see
+        # test_ldexp_declaration_has_signext_exponent.
         for v in [1.0, -1.0, 2.5, -2.5, math.pi, 1e100, 1e-100]:
             for n in [-200, -53, -10, -1, 0, 1, 10, 53, 200]:
                 self.assertPreciseEqual(cfunc(v, np.int32(n)),
                                         float(np.ldexp(v, n)),
                                         msg='for input (%r, %r)' % (v, n))
 
-        # Subnormal results must be correctly rounded here too; NumPy's
-        # ldexp is the oracle.
+        # Subnormal results must be correctly rounded here too.
         for v, n in [(4.359607055276148e-151, -574),
                      (-6.853580717782567e-197, -423),
                      (7.162365283163292e-228, -319),
