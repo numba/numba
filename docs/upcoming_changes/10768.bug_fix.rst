@@ -1,1 +1,4 @@
 Fixed scalar handling for ``np.var`` overload.
+
+This change ensures that scalar inputs passed to ``np.var``
+are correctly processed without raising typing errors.
