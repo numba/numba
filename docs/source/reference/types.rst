@@ -117,7 +117,7 @@ to compound types, e.g. record types, is not supported.
 Container Types
 ---------------
 
-* ``numba.types.ListType``: Represents the type of the experimental typed list container. See :ref:`pysupported-typed-list`.
+* ``numba.types.ListType``: Represents the type of the experimental typed list container. See :ref:`pysupported-typed-lists`.
 * ``numba.types.DictType``: Represents the type of the experimental typed dictionary container. See :ref:`pysupported-typed-dict`.
 * ``numba.types.SetType``: Represents the type of the experimental typed set container. See :ref:`pysupported-typed-sets`.
 
