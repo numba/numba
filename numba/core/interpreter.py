@@ -786,12 +786,39 @@ def peep_hole_list_to_tuple(func_ir):
     2. Sets an accumulator's initial value as the target of the BUILD_TUPLE
     3. Searches for 'extend' on the original list and turns these into binary
        additions on the accumulator.
-    4. Searches for 'append' on the original list and turns these into a
-       `BUILD_TUPLE` which is then appended via binary addition to the
-       accumulator.
+    4. Searches for 'append' on the original list, collecting runs of them
+       into a single `BUILD_TUPLE` which is then appended via binary addition
+       to the accumulator (an append-only window becomes the result itself).
     5. Assigns the accumulator to the variable that exits the peephole and the
        rest of the block/code refers to as the result of the unpack operation.
     6. Patches up
+
+    Step 4 coalesces because CPython emits this bytecode for every call with
+    more than 30 arguments, and a `BUILD_TUPLE` per item leaves a tuple of
+    every prefix length, i.e. IR (and LLVM lowered from it) quadratic in the
+    item count. For `f(x[0], x[1], ..., x[30])` the emitted IR used to be::
+
+        $14build_list.2 = build_tuple(items=[])
+        $20binary_subscr.5 = getitem(value=x, index=$const18.4.1)
+        $24list_append.6_var = build_tuple(items=[$20binary_subscr.5])
+        $24list_append.7 = $14build_list.2 + $24list_append.6_var
+        $30binary_subscr.10 = getitem(value=x, index=$const28.9.2)
+        $34list_append.11_var = build_tuple(items=[$30binary_subscr.10])
+        $34list_append.12 = $24list_append.7 + $34list_append.11_var
+        ...                    # 29 more tuples, of widths 3, 4, ..., 31
+        $326call_intrinsic_1.158 = $324list_append.157
+        $328call_function_ex.159 = call $4load_global.0(
+            *$326call_intrinsic_1.158, vararg=$326call_intrinsic_1.158)
+
+    and is now a single tuple, built once and passed straight to the call::
+
+        $20binary_subscr.5 = getitem(value=x, index=$const18.4.1)
+        $30binary_subscr.10 = getitem(value=x, index=$const28.9.2)
+        ...
+        $326call_intrinsic_1.158 = build_tuple(items=[$20binary_subscr.5,
+            $30binary_subscr.10, ..., $320binary_subscr.155])
+        $328call_function_ex.159 = call $4load_global.0(
+            *$326call_intrinsic_1.158, vararg=$326call_intrinsic_1.158)
     """
     _DEBUG = False
 
