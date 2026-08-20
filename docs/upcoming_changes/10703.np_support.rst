@@ -1,0 +1,7 @@
+Added ``kind`` argument to ``ndarray.sort``
+-------------------------------------------
+
+``ndarray.sort`` now accepts the ``kind`` argument in nopython mode and
+supports ``"mergesort"`` in addition to the default ``"quicksort"``, matching
+the ``kind`` support already available in ``ndarray.argsort``. The default
+value keeps the existing behaviour.

@@ -39,6 +39,12 @@ jit_quicksort = make_jit_quicksort()
 def sort_usecase(val):
     val.sort()
 
+def sort_kind_usecase(val, is_stable=False):
+    if is_stable:
+        val.sort(kind='mergesort')
+    else:
+        val.sort(kind='quicksort')
+
 def argsort_usecase(val):
     return val.argsort()
 
@@ -846,11 +852,13 @@ class TestNumpySort(TestCase):
             return True
         return False
 
-    def check_sort_inplace(self, pyfunc, cfunc, val):
+    def check_sort_inplace(self, pyfunc, cfunc, val, kwargs=None):
+        if kwargs is None:
+            kwargs = {}
         expected = copy.copy(val)
         got = copy.copy(val)
-        pyfunc(expected)
-        cfunc(got)
+        pyfunc(expected, **kwargs)
+        cfunc(got, **kwargs)
         self.assertPreciseEqual(got, expected)
 
     def check_sort_copy(self, pyfunc, cfunc, val):
@@ -899,6 +907,50 @@ class TestNumpySort(TestCase):
             np.random.shuffle(imag)
             orig = np.array([complex(*x) for x in zip(real, imag)])
             self.check_sort_inplace(pyfunc, cfunc, orig)
+
+    def test_array_sort_kind_int(self):
+        def check(pyfunc, is_stable):
+            cfunc = jit(nopython=True)(pyfunc)
+            for orig in self.int_arrays():
+                self.check_sort_inplace(pyfunc, cfunc, orig,
+                                        dict(is_stable=is_stable))
+
+        check(sort_kind_usecase, is_stable=True)
+        check(sort_kind_usecase, is_stable=False)
+
+    def test_array_sort_kind_float(self):
+        def check(pyfunc, is_stable):
+            cfunc = jit(nopython=True)(pyfunc)
+            for orig in self.float_arrays():
+                self.check_sort_inplace(pyfunc, cfunc, orig,
+                                        dict(is_stable=is_stable))
+
+        check(sort_kind_usecase, is_stable=True)
+        check(sort_kind_usecase, is_stable=False)
+
+    def test_array_sort_kind_complex(self):
+        def check(pyfunc, is_stable):
+            cfunc = jit(nopython=True)(pyfunc)
+            for real in self.float_arrays():
+                imag = real[::]
+                np.random.shuffle(imag)
+                orig = np.array([complex(*x) for x in zip(real, imag)])
+                self.check_sort_inplace(pyfunc, cfunc, orig,
+                                        dict(is_stable=is_stable))
+
+        check(sort_kind_usecase, is_stable=True)
+        check(sort_kind_usecase, is_stable=False)
+
+    def test_array_sort_kind_multidim(self):
+        def check(pyfunc, is_stable):
+            cfunc = jit(nopython=True)(pyfunc)
+            for shape in ((4, 5), (3, 4, 5), (2, 30)):
+                orig = np.random.random(shape) * 100
+                self.check_sort_inplace(pyfunc, cfunc, orig,
+                                        dict(is_stable=is_stable))
+
+        check(sort_kind_usecase, is_stable=True)
+        check(sort_kind_usecase, is_stable=False)
 
     def test_np_sort_int(self):
         pyfunc = np_sort_usecase
@@ -1226,6 +1278,34 @@ class TestSortSlashSortedWithKey(MemoryLeakMixin, TestCase):
 
             expect = "an integer is required for 'reverse'"
             self.assertIn(expect, str(raises.exception))
+
+
+class TestArraySort(MemoryLeakMixin, TestCase):
+    """Tests specific to array.sort"""
+
+    def test_exceptions(self):
+
+        @njit
+        def nonliteral_kind(kind):
+            np.arange(5).sort(kind=kind)
+
+        # check non-literal kind
+        with self.assertRaises(errors.TypingError) as raises:
+            # valid spelling but not literal
+            nonliteral_kind('quicksort')
+
+        expect = '"kind" must be a string literal'
+        self.assertIn(expect, str(raises.exception))
+
+        @njit
+        def unsupported_kwarg():
+            np.arange(5).sort(foo='')
+
+        with self.assertRaises(errors.TypingError) as raises:
+            unsupported_kwarg()
+
+        expect = "Unsupported keywords: ['foo']"
+        self.assertIn(expect, str(raises.exception))
 
 
 class TestArrayArgsort(MemoryLeakMixin, TestCase):
