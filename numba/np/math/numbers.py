@@ -425,7 +425,6 @@ def real_sign_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-# @lower_builtin("complex.conjugate", types.Complex)
 def complex_conjugate_impl(context, builder, sig, args):
     from numba.cpython import mathimpl
     z = context.make_complex(builder, sig.args[0], args[0])
@@ -436,6 +435,7 @@ def complex_conjugate_impl(context, builder, sig, args):
 
 def real_conjugate_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, args[0])
+
 
 def complex_power_impl(context, builder, sig, args):
     [ca, cb] = args
@@ -477,6 +477,7 @@ def complex_power_impl(context, builder, sig, args):
 
     res = builder.load(pc)
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 def complex_add_impl(context, builder, sig, args):
     [cx, cy] = args
