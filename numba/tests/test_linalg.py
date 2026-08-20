@@ -329,6 +329,25 @@ class TestProduct(EnableNRTStatsMixin, TestCase):
         with self.check_contiguity_warning(cfunc.py_func):
             cfunc(a, b)
 
+    @needs_blas
+    def test_no_contiguity_warning_with_newaxis(self):
+        # See issue #10086: indexing with np.newaxis (None) only inserts a
+        # size-1 dimension and does not make an otherwise-contiguous array
+        # non-contiguous, so it should not trigger a NumbaPerformanceWarning.
+        def dot_with_newaxis(a, x):
+            return np.dot(a, x[:, None])
+
+        m, n = 5, 5
+        dtype = np.float64
+        a = self.sample_matrix(m, n, dtype)
+        x = self.sample_vector(n, dtype)
+
+        cfunc = jit(nopython=True)(dot_with_newaxis)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always', errors.NumbaPerformanceWarning)
+            cfunc(a, x)
+        self.assertEqual(len(w), 0)
+
 
 # Implementation definitions for the purpose of jitting.
 
