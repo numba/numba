@@ -31,6 +31,28 @@ class TestCFFI(TestCase):
         self.assertEqual(len(signature.args), 1)
         self.assertEqual(signature.args[0], types.double)
 
+    def test_type_map_complex(self):
+        # 'float _Complex' / 'double _Complex' map to numba complex types.
+        self.assertEqual(
+            cffi_support.map_type(mod.ffi.typeof('float _Complex')),
+            types.complex64)
+        self.assertEqual(
+            cffi_support.map_type(mod.ffi.typeof('double _Complex')),
+            types.complex128)
+
+    def test_type_map_complex_compound(self):
+        # Complex types map correctly when reached via pointer/array types.
+        # Note: a full function signature is deliberately not tested here.
+        # In ABI mode cffi flags any function whose result or arguments
+        # involve a complex type as variadic (ffi.typeof(...).ellipsis is
+        # True), which map_type rejects as an unsupported vararg function.
+        self.assertEqual(
+            cffi_support.map_type(mod.ffi.typeof('float _Complex *')),
+            types.CPointer(types.complex64))
+        self.assertEqual(
+            cffi_support.map_type(mod.ffi.typeof('double _Complex[4]')),
+            types.NestedArray(dtype=types.complex128, shape=(4,)))
+
     def _test_function(self, pyfunc, flags=enable_pyobj_flags):
         cfunc = jit((types.double,), **flags)(pyfunc)
 
