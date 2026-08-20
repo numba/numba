@@ -201,7 +201,7 @@ class ParforLoweringBuilder:
         index : ir.Var
             the index
         typ : ir.Var
-            the ty
+            the return type
 
         Returns
         -------
