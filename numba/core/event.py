@@ -31,6 +31,20 @@ The following events are built in:
 Applications can register callbacks that are listening for specific events using
 ``register(kind: str, listener: Listener)``, where ``listener`` is an instance
 of ``Listener`` that defines custom actions on occurrence of the specific event.
+
+Thread semantics
+----------------
+
+There are two ways to attach a listener, with different thread semantics:
+
+- ``register()``/``unregister()`` attach a listener **process-wide**: it
+  receives events broadcast on **any** thread. Such a listener must therefore
+  be thread-safe itself, because ``notify()`` can be invoked concurrently
+  from multiple threads.
+- ``install_listener()``/``install_timer()``/``install_recorder()`` attach a
+  listener for the **calling thread only**: it receives just the events
+  broadcast on the thread that entered the context manager. This makes scoped
+  listeners safe to use during concurrent compilation on multiple threads.
 """
 
 import os
@@ -177,10 +191,33 @@ class Event:
 
 
 _registered = defaultdict(list)
+# Lock guarding mutation of ``_registered``.
+_registered_lock = threading.Lock()
+
+# Thread-local registry for listeners installed via the ``install_*``
+# context managers. Such listeners only receive events broadcast on the
+# thread that installed them.
+_thread_local = threading.local()
+
+
+def _get_thread_registered():
+    """Return the calling thread's registry of scoped listeners.
+
+    The registry is a ``defaultdict(list)`` mapping event kind to the list
+    of listeners installed (via ``install_listener``) on the calling thread.
+    It is created lazily on first use.
+    """
+    registered = getattr(_thread_local, "registered", None)
+    if registered is None:
+        registered = _thread_local.registered = defaultdict(list)
+    return registered
 
 
 def register(kind, listener):
     """Register a listener for a given event kind.
+
+    The listener is registered process-wide and will receive events
+    broadcast on any thread. It must therefore be thread-safe.
 
     Parameters
     ----------
@@ -189,7 +226,8 @@ def register(kind, listener):
     """
     assert isinstance(listener, Listener)
     kind = _guard_kind(kind)
-    _registered[kind].append(listener)
+    with _registered_lock:
+        _registered[kind].append(listener)
 
 
 def unregister(kind, listener):
@@ -202,18 +240,32 @@ def unregister(kind, listener):
     """
     assert isinstance(listener, Listener)
     kind = _guard_kind(kind)
-    lst = _registered[kind]
-    lst.remove(listener)
+    with _registered_lock:
+        lst = _registered[kind]
+        lst.remove(listener)
+        if not lst:
+            # Drop the empty entry so a balanced register/unregister
+            # pair leaves no trace in the registry.
+            del _registered[kind]
 
 
 def broadcast(event):
     """Broadcast an event to all registered listeners.
 
+    The event is delivered to all process-wide listeners (see
+    ``register()``) followed by the listeners installed on the calling
+    thread for the event's kind (see ``install_listener()``).
+
     Parameters
     ----------
     event : Event
     """
-    for listener in _registered[event.kind]:
+    with _registered_lock:
+        # Snapshot so concurrent register/unregister cannot skip or
+        # double-deliver. Use .get() to avoid autovivifying keys.
+        listeners = list(_registered.get(event.kind, ()))
+    listeners += list(_get_thread_registered().get(event.kind, ()))
+    for listener in listeners:
         listener.notify(event)
 
 
@@ -320,6 +372,10 @@ def install_listener(kind, listener):
     """Install a listener for event "kind" temporarily within the duration of
     the context.
 
+    The listener is installed on the calling thread only: it receives just
+    the events broadcast on the thread that entered this context manager.
+    Use ``register()`` instead for process-wide, all-threads delivery.
+
     Returns
     -------
     res : Listener
@@ -333,11 +389,14 @@ def install_listener(kind, listener):
     >>> other_code()     # listener will be unregistered by this point.
 
     """
-    register(kind, listener)
+    # Capture the per-thread list once so that removal at exit targets the
+    # same registry that was appended to at entry.
+    lst = _get_thread_registered()[_guard_kind(kind)]
+    lst.append(listener)
     try:
         yield listener
     finally:
-        unregister(kind, listener)
+        lst.remove(listener)
 
 
 @contextmanager
