@@ -32,7 +32,7 @@ jobs:
     runs-on: windows-11-arm
     strategy:
       matrix:
-        python_version: ["3.11", "3.12", "3.13", "3.14"]
+        python_version: ["3.12", "3.13", "3.14"]
       fail-fast: false
     env:
       PYTHON_VERSION: ${{ matrix.python_version }}
@@ -103,7 +103,7 @@ jobs:
     runs-on: windows-11-arm
     strategy:
       matrix:
-        python_version: ["3.11", "3.12", "3.13", "3.14"]
+        python_version: ["3.12", "3.13", "3.14"]
       fail-fast: false
     env:
       PYTHON_VERSION: ${{ matrix.python_version }}
