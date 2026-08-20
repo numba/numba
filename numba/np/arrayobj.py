@@ -6111,10 +6111,10 @@ def expand_dims(context, builder, sig, args):
         (temp_ty, types.intp, sig.args[1], types.intp),
         {}
     )
-    new_shapes = context.get_function(fnty, sig)(
+    new_shapes = context.get_function(fnty, fsig)(
         builder, (arr.shape, ndim_const, args[1], one)
     )
-    new_strides = context.get_function(fnty, sig)(
+    new_strides = context.get_function(fnty, fsig)(
         builder, (arr.strides, ndim_const, args[1], zero)
     )
 
