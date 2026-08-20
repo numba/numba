@@ -43,13 +43,12 @@ jobs:
           GITHUB_WORKFLOW_INPUT: ${{ toJson(github.event.inputs) }}
           GITHUB_PLATFORM: osx-arm64
           GITHUB_PKG_TYPE: wheel
-        run: |
-          python buildscripts/github/evaluate.py
+        run: python buildscripts/github/evaluate.py
 
   osx-arm64-build:
     name: osx-arm64-build-wheel (py ${{ matrix.python_version_full }}, np ${{ matrix.numpy_build }})
     needs: load-matrix
-    runs-on: macos-14
+    runs-on: ${{ matrix.os }}
     defaults:
       run:
         shell: bash -elx {0}
@@ -162,9 +161,9 @@ jobs:
             if-no-files-found: error
 
   osx-arm64-test:
-    name: osx-arm64-test (py ${{ matrix.python_version_full }}, np ${{ matrix.numpy_test }})
+    name: osx-arm64-test-py${{ matrix.python_version_full }}-np${{ matrix.numpy_test }}-${{ matrix.os }}
     needs: [load-matrix, osx-arm64-build]
-    runs-on: macos-14
+    runs-on: ${{ matrix.os }}
     defaults:
       run:
         shell: bash -elx {0}

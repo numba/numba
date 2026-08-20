@@ -14,6 +14,7 @@ from evaluate import (  # noqa: E402
     PLATFORMS,
     CONDA_BUILD_MATRIX,
     WHEEL_BUILD_MATRIX,
+    WHEEL_TEST_MATRIX,
     evaluate,
     _python_tag,
     _canonical_version,
@@ -121,6 +122,17 @@ def test_eval_dispatch_filter_python():
     assert len(build) == 1
     assert build[0]["python_tag"] == "cp314t"
     assert build[0]["python_major_minor"] == "3.14t"
+
+
+def test_osx_arm64_wheel_runner_os():
+    # linux/win rows have no GHA `os`; osx-arm64 wheels build on macos-26
+    # and test the artifacts on macos-15
+    _, linux_test = evaluate("wheel", "pull_request", None, "linux-64")
+    assert all("os" not in r for r in linux_test)
+    build, test = evaluate("wheel", "pull_request", None, "osx-arm64")
+    assert all(r["os"] == "macos-26" for r in build)
+    assert len(test) == len(WHEEL_TEST_MATRIX)
+    assert all(r["os"] == "macos-15" for r in test)
 
 
 def test_eval_dispatch_filter_numpy():

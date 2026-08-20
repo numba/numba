@@ -69,6 +69,8 @@ def _entry(py_version, numpy_key, numpy_value, with_tag=False):
 #   numpy_test           pinned numpy in test env.
 #   platform             tagged on every row but unused in YAML today (one
 #                        workflow per platform); kept for downstream consumers.
+#   os                   GHA runs-on; osx-arm64 wheels only (build on
+#                        macos-26, test the artifacts on macos-15).
 
 # ---- Conda matrices ----
 
@@ -147,6 +149,11 @@ _LABELS = {
 }
 _BUILD_LABELS = frozenset(_LABELS.values())
 
+# osx-arm64 wheel jobs build on macos-26; tests install those artifacts
+# on macos-15 (macos-26 already covered by the build host).
+_OSX_ARM64_WHEEL_BUILD_OS = "macos-26"
+_OSX_ARM64_WHEEL_TEST_OS = "macos-15"
+
 
 def _filter(rows, key, value):
     return [r for r in rows if r.get(key) == value] if value else rows
@@ -190,6 +197,9 @@ def evaluate(pkg_type, event, pr_labels, platform, inputs="{}"):
 
     build = [dict(r, platform=platform) for r in build]
     test = [dict(r, platform=platform) for r in test]
+    if platform == "osx-arm64" and pkg_type == "wheel":
+        build = [dict(r, os=_OSX_ARM64_WHEEL_BUILD_OS) for r in build]
+        test = [dict(r, os=_OSX_ARM64_WHEEL_TEST_OS) for r in test]
     return build, test
 
 
