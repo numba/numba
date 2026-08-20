@@ -333,169 +333,6 @@ def real_mul_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-def real_div_impl(context, builder, sig, args):
-    with cgutils.if_zero(builder, args[1]):
-        context.error_model.fp_zero_division(builder, ("division by zero",))
-    res = builder.fdiv(*args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-def real_divmod(context, builder, x, y):
-    assert x.type == y.type
-    floatty = x.type
-
-    module = builder.module
-    fname = context.mangler(".numba.python.rem", [x.type])
-    fnty = ir.FunctionType(floatty, (floatty, floatty, ir.PointerType(floatty)))
-    fn = cgutils.get_or_insert_function(module, fnty, fname)
-
-    if fn.is_declaration:
-        fn.linkage = 'linkonce_odr'
-        fnbuilder = ir.IRBuilder(fn.append_basic_block('entry'))
-        fx, fy, pmod = fn.args
-        div, mod = real_divmod_func_body(context, fnbuilder, fx, fy)
-        fnbuilder.store(mod, pmod)
-        fnbuilder.ret(div)
-
-    pmod = cgutils.alloca_once(builder, floatty)
-    quotient = builder.call(fn, (x, y, pmod))
-    return quotient, builder.load(pmod)
-
-
-def real_divmod_func_body(context, builder, vx, wx):
-    # Reference Objects/floatobject.c
-    #
-    # float_divmod(PyObject *v, PyObject *w)
-    # {
-    #     double vx, wx;
-    #     double div, mod, floordiv;
-    #     CONVERT_TO_DOUBLE(v, vx);
-    #     CONVERT_TO_DOUBLE(w, wx);
-    #     mod = fmod(vx, wx);
-    #     /* fmod is typically exact, so vx-mod is *mathematically* an
-    #        exact multiple of wx.  But this is fp arithmetic, and fp
-    #        vx - mod is an approximation; the result is that div may
-    #        not be an exact integral value after the division, although
-    #        it will always be very close to one.
-    #     */
-    #     div = (vx - mod) / wx;
-    #     if (mod) {
-    #         /* ensure the remainder has the same sign as the denominator */
-    #         if ((wx < 0) != (mod < 0)) {
-    #             mod += wx;
-    #             div -= 1.0;
-    #         }
-    #     }
-    #     else {
-    #         /* the remainder is zero, and in the presence of signed zeroes
-    #            fmod returns different results across platforms; ensure
-    #            it has the same sign as the denominator; we'd like to do
-    #            "mod = wx * 0.0", but that may get optimized away */
-    #         mod *= mod;  /* hide "mod = +0" from optimizer */
-    #         if (wx < 0.0)
-    #             mod = -mod;
-    #     }
-    #     /* snap quotient to nearest integral value */
-    #     if (div) {
-    #         floordiv = floor(div);
-    #         if (div - floordiv > 0.5)
-    #             floordiv += 1.0;
-    #     }
-    #     else {
-    #         /* div is zero - get the same sign as the true quotient */
-    #         div *= div;             /* hide "div = +0" from optimizers */
-    #         floordiv = div * vx / wx; /* zero w/ sign of vx/wx */
-    #     }
-    #     return Py_BuildValue("(dd)", floordiv, mod);
-    # }
-    pmod = cgutils.alloca_once(builder, vx.type)
-    pdiv = cgutils.alloca_once(builder, vx.type)
-    pfloordiv = cgutils.alloca_once(builder, vx.type)
-
-    mod = builder.frem(vx, wx)
-    div = builder.fdiv(builder.fsub(vx, mod), wx)
-
-    builder.store(mod, pmod)
-    builder.store(div, pdiv)
-
-    # Note the use of negative zero for proper negating with `ZERO - x`
-    ZERO = vx.type(0.0)
-    NZERO = vx.type(-0.0)
-    ONE = vx.type(1.0)
-    mod_istrue = builder.fcmp_unordered('!=', mod, ZERO)
-    wx_ltz = builder.fcmp_ordered('<', wx, ZERO)
-    mod_ltz = builder.fcmp_ordered('<', mod, ZERO)
-
-    with builder.if_else(mod_istrue, likely=True) as (if_nonzero_mod, if_zero_mod):
-        with if_nonzero_mod:
-            # `mod` is non-zero or NaN
-            # Ensure the remainder has the same sign as the denominator
-            wx_ltz_ne_mod_ltz = builder.icmp_unsigned('!=', wx_ltz, mod_ltz)
-
-            with builder.if_then(wx_ltz_ne_mod_ltz):
-                builder.store(builder.fsub(div, ONE), pdiv)
-                builder.store(builder.fadd(mod, wx), pmod)
-
-        with if_zero_mod:
-            # `mod` is zero, select the proper sign depending on
-            # the denominator's sign
-            mod = builder.select(wx_ltz, NZERO, ZERO)
-            builder.store(mod, pmod)
-
-    del mod, div
-
-    div = builder.load(pdiv)
-    div_istrue = builder.fcmp_ordered('!=', div, ZERO)
-
-    with builder.if_then(div_istrue):
-        realtypemap = {'float': types.float32,
-                       'double': types.float64}
-        realtype = realtypemap[str(wx.type)]
-        floorfn = context.get_function(math.floor,
-                                       typing.signature(realtype, realtype))
-        floordiv = floorfn(builder, [div])
-        floordivdiff = builder.fsub(div, floordiv)
-        floordivincr = builder.fadd(floordiv, ONE)
-        HALF = Constant(wx.type, 0.5)
-        pred = builder.fcmp_ordered('>', floordivdiff, HALF)
-        floordiv = builder.select(pred, floordivincr, floordiv)
-        builder.store(floordiv, pfloordiv)
-
-    with cgutils.ifnot(builder, div_istrue):
-        div = builder.fmul(div, div)
-        builder.store(div, pdiv)
-        floordiv = builder.fdiv(builder.fmul(div, vx), wx)
-        builder.store(floordiv, pfloordiv)
-
-    return builder.load(pfloordiv), builder.load(pmod)
-
-
-# @lower_builtin(divmod, types.Float, types.Float)
-def real_divmod_impl(context, builder, sig, args, loc=None):
-    x, y = args
-    quot = cgutils.alloca_once(builder, x.type, name="quot")
-    rem = cgutils.alloca_once(builder, x.type, name="rem")
-
-    with builder.if_else(cgutils.is_scalar_zero(builder, y), likely=False
-                         ) as (if_zero, if_non_zero):
-        with if_zero:
-            if not context.error_model.fp_zero_division(
-                builder, ("modulo by zero",), loc):
-                # No exception raised => compute the nan result,
-                # and set the FP exception word for Numpy warnings.
-                q = builder.fdiv(x, y)
-                r = builder.frem(x, y)
-                builder.store(q, quot)
-                builder.store(r, rem)
-        with if_non_zero:
-            q, r = real_divmod(context, builder, x, y)
-            builder.store(q, quot)
-            builder.store(r, rem)
-
-    return cgutils.pack_array(builder,
-                              (builder.load(quot), builder.load(rem)))
-
-
 def real_power_impl(context, builder, sig, args):
     x, y = args
     module = builder.module
@@ -588,7 +425,6 @@ def real_sign_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-# @lower_builtin("complex.conjugate", types.Complex)
 def complex_conjugate_impl(context, builder, sig, args):
     from numba.cpython import mathimpl
     z = context.make_complex(builder, sig.args[0], args[0])
@@ -599,6 +435,7 @@ def complex_conjugate_impl(context, builder, sig, args):
 
 def real_conjugate_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, args[0])
+
 
 def complex_power_impl(context, builder, sig, args):
     [ca, cb] = args
@@ -640,6 +477,7 @@ def complex_power_impl(context, builder, sig, args):
 
     res = builder.load(pc)
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 def complex_add_impl(context, builder, sig, args):
     [cx, cy] = args
@@ -711,30 +549,6 @@ def complex_negate_impl(context, builder, sig, args):
 def complex_positive_impl(context, builder, sig, args):
     [val] = args
     return impl_ret_untracked(context, builder, sig.return_type, val)
-
-
-def complex_eq_impl(context, builder, sig, args):
-    [cx, cy] = args
-    typ = sig.args[0]
-    x = context.make_complex(builder, typ, value=cx)
-    y = context.make_complex(builder, typ, value=cy)
-
-    reals_are_eq = builder.fcmp_ordered('==', x.real, y.real)
-    imags_are_eq = builder.fcmp_ordered('==', x.imag, y.imag)
-    res = builder.and_(reals_are_eq, imags_are_eq)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
-def complex_ne_impl(context, builder, sig, args):
-    [cx, cy] = args
-    typ = sig.args[0]
-    x = context.make_complex(builder, typ, value=cx)
-    y = context.make_complex(builder, typ, value=cy)
-
-    reals_are_ne = builder.fcmp_unordered('!=', x.real, y.real)
-    imags_are_ne = builder.fcmp_unordered('!=', x.imag, y.imag)
-    res = builder.or_(reals_are_ne, imags_are_ne)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 def complex_abs_impl(context, builder, sig, args):
