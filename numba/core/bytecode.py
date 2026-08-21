@@ -10,7 +10,7 @@ from numba.core import errors, utils, serialize
 from numba.core.utils import PYVERSION
 
 
-if PYVERSION in ((3, 12), (3, 13), (3, 14)):
+if PYVERSION in ((3, 12), (3, 13), (3, 14), (3, 15)):
     from opcode import _inline_cache_entries
     # Instruction/opcode length in bytes
     INSTR_LEN = 2
@@ -105,7 +105,7 @@ class ByteCodeInst(object):
         # https://bugs.python.org/issue27129
         # https://github.com/python/cpython/pull/25069
         assert self.is_jump
-        if PYVERSION in ((3, 13), (3, 14)):
+        if PYVERSION in ((3, 13), (3, 14), (3, 15)):
             if self.opcode in (dis.opmap[k]
                                for k in ["JUMP_BACKWARD",
                                          "JUMP_BACKWARD_NO_INTERRUPT"]):
@@ -127,7 +127,7 @@ class ByteCodeInst(object):
         else:
             raise NotImplementedError(PYVERSION)
 
-        if PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13), (3, 14)):
+        if PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13), (3, 14), (3, 15)):
             if self.opcode in JREL_OPS:
                 return self.next + self.arg * 2
             else:
@@ -159,7 +159,7 @@ NO_ARG_LEN = 1
 OPCODE_NOP = dis.opname.index('NOP')
 
 
-if PYVERSION in ((3, 13), (3, 14)):
+if PYVERSION in ((3, 13), (3, 14), (3, 15)):
 
     def _unpack_opargs(code):
         buf = []
@@ -383,7 +383,7 @@ class _ByteCode(object):
 
 
 def _fix_LOAD_GLOBAL_arg(arg):
-    if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
+    if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14), (3, 15)):
         return arg >> 1
     elif PYVERSION in ((3, 10),):
         return arg
@@ -484,6 +484,17 @@ class ByteCodePy312(ByteCodePy311):
             Update for Python 3.13.1, there's now a GET_ITER before FOR_ITER.
             This patch the GET_ITER to NOP to minimize changes downstream
             (e.g. array-comprehension).
+
+            Update for Python 3.15, a ternary ``x if c else y`` in a
+            comprehension inserts NOT_TAKEN and splits the exception
+            table into two same-target entries:
+
+                ExceptionTable:
+                  L1 to L3 -> L9   # ends at NOT_TAKEN
+                  L4 to L8 -> L9   # resumes after NOT_TAKEN
+
+            Merge those halves so the pattern below still matches
+            (e.g. array-comprehension).
         """
         def pop_and_merge_exceptions(entries: list,
                                      entry_to_remove: _ExceptionTableEntry):
@@ -542,16 +553,41 @@ class ByteCodePy312(ByteCodePy311):
                     # In Python 3.13.4, this becomes the only GET_ITER,
                     # so don't turn it into a NOP.
                     # Python 3.13.5 reverted the change.
-                    if sys.version_info[:3] != (3, 13, 4):
-                        # Add the inst to potentially be replaced to NOP.
-                        current_nop_fixes.add(next_inst)
+                    # Python 3.15 likewise keeps the GET_ITER.
+                    if PYVERSION in ((3, 12), (3, 13), (3, 14)):
+                        if sys.version_info[:3] != (3, 13, 4):
+                            # Add the inst to potentially be replaced to NOP.
+                            current_nop_fixes.add(next_inst)
+                    elif PYVERSION in ((3, 15),):
+                        pass
+                    else:
+                        raise NotImplementedError(PYVERSION)
                     # Loop up next instruction.
                     next_inst = self.table[self.ordered_offsets[index + 3]]
 
                 if not next_inst.opname == "FOR_ITER":
                     continue
 
-                if PYVERSION in ((3, 13), (3, 14)):
+                if PYVERSION in ((3, 15),):
+                    # NOT_TAKEN may split one region into two same-target
+                    # entries. Merge them and retry.
+                    end_inst = self.table.get(entry.end)
+                    if (entry in entries
+                            and end_inst is not None
+                            and end_inst.opname == "NOT_TAKEN"):
+                        i = entries.index(entry)
+                        if (i + 1 < len(entries)
+                                and entries[i + 1].target == entry.target
+                                and entries[i + 1].start == end_inst.next):
+                            nxt = entries[i + 1]
+                            entries[i] = _ExceptionTableEntry(
+                                entry.start, nxt.end, entry.target,
+                                entry.depth, nxt.lasti)
+                            entries.pop(i + 1)
+                            work_remaining = True
+                            continue
+
+                if PYVERSION in ((3, 13), (3, 14), (3, 15)):
                     # Check end of pattern, two instructions.
                     # Check for the corresponding END_FOR, exception table end
                     # is non-inclusive, so subtract one.
@@ -563,7 +599,7 @@ class ByteCodePy312(ByteCodePy311):
                     if PYVERSION in ((3, 13), ):
                         if not next_inst.opname == "POP_TOP":
                             continue
-                    elif PYVERSION in ((3, 14), ):
+                    elif PYVERSION in ((3, 14), (3, 15)):
                         if not next_inst.opname == "POP_ITER":
                             continue
                     else:
@@ -609,7 +645,7 @@ class ByteCodePy312(ByteCodePy311):
 
 if PYVERSION == (3, 11):
     ByteCode = ByteCodePy311
-elif PYVERSION in ((3, 12), (3, 13), (3, 14)):
+elif PYVERSION in ((3, 12), (3, 13), (3, 14), (3, 15)):
     ByteCode = ByteCodePy312
 elif PYVERSION < (3, 11):
     ByteCode = _ByteCode

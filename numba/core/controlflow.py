@@ -8,7 +8,7 @@ from numba.core.utils import PYVERSION
 
 # List of bytecodes creating a new block in the control flow graph
 # (in addition to explicit jump labels).
-if PYVERSION in ((3, 14),):
+if PYVERSION in ((3, 14), (3, 15)):
     NEW_BLOCKERS = frozenset([
         'SETUP_LOOP', 'FOR_ITER', 'SETUP_WITH', 'BEFORE_WITH', 'LOAD_SPECIAL'
     ])
@@ -983,7 +983,7 @@ class ControlFlowAnalysis(object):
         self._curblock.terminating = True
         self._force_new_block = True
 
-    if PYVERSION in ((3, 12), (3, 13), (3, 14)):
+    if PYVERSION in ((3, 12), (3, 13), (3, 14), (3, 15)):
         def op_RETURN_CONST(self, inst):
             self._curblock.terminating = True
             self._force_new_block = True

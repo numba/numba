@@ -64,25 +64,25 @@ requirements:
 
 test:
   requires:
-    - jinja2
+    - jinja2                   # [py<315]
     # Required to test optional Numba features
-    - cffi
-    - scipy
-    - ipython                  # [not aarch64]
+    - cffi                     # [py<315]
+    - scipy                    # [py<315]
+    - ipython                  # [py<315 and not aarch64]
     # for pycc
     - setuptools >=69.0.0
-    - pyyaml
-    - pygments
+    - pyyaml                   # [py<315]
+    - pygments                 # [py<315]
     - intel-cmplr-lib-rt       # [linux and x86_64]
     - tbb >=2021.6             # [not (aarch64 or ppc64le)]
     - llvm-openmp              # [osx]
     # This is for driving gdb tests
-    - pexpect                  # [linux64]
+    - pexpect                  # [py<315 and linux64]
     # For testing ipython. ipykernel is not available on Python 3.12, or on
-    # win-arm64 (bootstrap channel).
-    - ipykernel                # [not (py==312 or (win and arm64))]
+    # win-arm64 (bootstrap channel). Also missing from ad-testing/label/py315.
+    - ipykernel                # [py<315 and not (py==312 or (win and arm64))]
     # For memory monitoring
-    - psutil
+    - psutil                   # [py<315]
     # Need these for AOT. Do not init msvc as it may not be present
     - {{ compiler('c') }}      # [not (win or aarch64)]
     - {{ compiler('cxx') }}    # [not (win or aarch64)]

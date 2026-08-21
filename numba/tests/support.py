@@ -114,6 +114,10 @@ skip_unless_py314_or_later = unittest.skipUnless(
     "needs Python 3.14+"
 )
 
+skip_if_py315= unittest.skipIf(
+     utils.PYVERSION == (3, 15), "Test unstable on 3.15"
+ )
+
 skip_if_linux_aarch64 = unittest.skipIf(
     sys.platform.startswith('linux') and platform.machine() == 'aarch64',
     "Not supported on Linux aarch64"
@@ -176,6 +180,13 @@ def expected_failure_py313(fn):
 
 def expected_failure_py314(fn):
     if utils.PYVERSION == (3, 14):
+        return unittest.expectedFailure(fn)
+    else:
+        return fn
+
+
+def expected_failure_py315(fn):
+    if utils.PYVERSION == (3, 15):
         return unittest.expectedFailure(fn)
     else:
         return fn

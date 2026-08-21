@@ -282,7 +282,7 @@ def _drop_ignored_attrs(dct):
     drop = set(['__weakref__',
                 '__module__',
                 '__dict__'])
-    if utils.PYVERSION in ((3, 13), (3, 14)):
+    if utils.PYVERSION in ((3, 13), (3, 14), (3, 15)):
         # new in python 3.13
         drop |= set(['__firstlineno__', '__static_attributes__'])
 
