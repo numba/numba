@@ -1,6 +1,8 @@
 import warnings
 import functools
 import locale
+import os
+import sys
 import weakref
 import ctypes
 import html
@@ -8,6 +10,81 @@ import textwrap
 
 import llvmlite.binding as ll
 import llvmlite.ir as llvmir
+
+
+# OrcJIT migration debugging: when NUMBA_ORCJIT_DEBUG=1, dump per-library
+# pre-add symbol tables, post-add rename maps, and per-lookup hits/misses to
+# stdout. Off by default; the helpers short-circuit when the flag is unset
+# so production overhead is one env-var read at import.
+_ORCJIT_DEBUG = bool(int(os.environ.get("NUMBA_ORCJIT_DEBUG", "0") or "0"))
+
+
+def _orcjit_debug_dump_module_symbols(library_name, ll_module):
+    if not _ORCJIT_DEBUG:
+        return
+    defs, decls = [], []
+    for fn in ll_module.functions:
+        bucket = decls if fn.is_declaration else defs
+        bucket.append(("func", fn.linkage, fn.name))
+    for gv in ll_module.global_variables:
+        bucket = decls if gv.is_declaration else defs
+        bucket.append(("gv", gv.linkage, gv.name))
+    print(f"[DBG codegen] _add_module library={library_name!r} "
+          f"defs={len(defs)} decls={len(decls)}", flush=True)
+    for kind, link, name in defs:
+        print(f"  def  {kind:4s} {str(link):14s} : {name}", flush=True)
+    for kind, link, name in decls:
+        print(f"  decl {kind:4s} {str(link):14s} : {name}", flush=True)
+    sys.stdout.flush()
+
+
+def _orcjit_debug_dump_rename_map(engine, jit_handle, ll_module):
+    if not _ORCJIT_DEBUG:
+        return
+    try:
+        rmap = (engine._ee._get_rename_map(jit_handle)
+                if jit_handle is not None else {})
+    except Exception as e:
+        print(f"[DBG codegen] _get_rename_map failed: {e!r}", flush=True)
+        return
+    print(f"[DBG codegen] handle={jit_handle} rename map size={len(rmap)}",
+          flush=True)
+    for old, new in rmap.items():
+        print(f"  rename      : {old}  ->  {new}", flush=True)
+    pre_defined = [fn.name for fn in ll_module.functions
+                   if not fn.is_declaration]
+    pre_defined += [gv.name for gv in ll_module.global_variables
+                    if not gv.is_declaration]
+    not_renamed = [n for n in pre_defined if n not in rmap]
+    print(f"[DBG codegen] not-renamed defined symbols ({len(not_renamed)}):",
+          flush=True)
+    for n in not_renamed:
+        print(f"  preserved   : {n}", flush=True)
+
+
+def _orcjit_debug_lookup(library_name, jit_handle, name, defined, addr=None):
+    if not _ORCJIT_DEBUG:
+        return
+    print(f"[DBG codegen] get_pointer_to_function lib={library_name!r} "
+          f"handle={jit_handle} name={name!r} defined={defined}", flush=True)
+    if defined and addr is not None:
+        print(f"[DBG codegen]   -> addr=0x{addr:x}", flush=True)
+
+
+def _orcjit_debug_finalize(library_name, jit_handle, when):
+    if not _ORCJIT_DEBUG:
+        return
+    print(f"[DBG codegen] finalize_object {when} lib={library_name!r} "
+          f"handle={jit_handle}", flush=True)
+
+
+def _orcjit_debug_resolve(pending, results):
+    if not _ORCJIT_DEBUG or not pending:
+        return
+    print(f"[DBG codegen] RuntimeLinker.resolve pending={pending!r}",
+          flush=True)
+    for name, addr in results:
+        print(f"[DBG codegen]   resolved {name!r} -> 0x{addr:x}", flush=True)
 
 from abc import abstractmethod, ABCMeta
 from numba.core import utils, config, cgutils
@@ -649,13 +726,16 @@ class CPUCodeLibrary(CodeLibrary):
             str(self._codegen._create_empty_module(self.name)))
         self._final_module.name = cgutils.normalize_ir_text(self.name)
         self._shared_module = None
+        self._jit_handle = None
 
     def _optimize_functions(self, ll_module):
         """
         Internal: run function-level optimizations inside *ll_module*.
         """
-        # Enforce data layout to enable layout-specific optimizations
-        ll_module.data_layout = self._codegen._data_layout
+        # Data layout deliberately *not* set here: the engine's compileAndAdd
+        # path sets it from the engine's TargetMachine just before codegen, so
+        # the MCJIT-era "set on every llvm.Module by hand" step is now redundant
+        # and would only invite layout-string drift between Numba and the engine.
         for func in ll_module.functions:
             # Run function-level optimizations to reduce memory usage and improve
             # module-level optimization.
@@ -796,15 +876,28 @@ class CPUCodeLibrary(CodeLibrary):
         self._finalize_dynamic_globals()
         self._verify_declare_only_symbols()
 
-        # Remember this on the module, for the object cache hooks
-        self._final_module.__library = weakref.proxy(self)
+        # Register this library under the module identifier *before*
+        # _add_module: the engine fires its notify callback synchronously
+        # from inside compileAndAdd (within _add_module) once the framed
+        # blob is ready, and the trampoline keys back into _libs_by_module_id
+        # to find the owning library. Registering after _add_module would
+        # miss that fire-and-forget call. Module identifier == library name
+        # here; collisions are not currently a concern because two libraries
+        # never share a name in the same Codegen.
+        regs = getattr(self._codegen, '_libs_by_module_id', None)
+        if regs is not None:
+            regs[self._final_module.name] = weakref.ref(self)
 
-        # It seems add_module() must be done only here and not before
-        # linking in other modules, otherwise get_pointer_to_function()
-        # could fail.
-        cleanup = self._codegen._add_module(self._final_module)
-        if cleanup:
-            weakref.finalize(self, cleanup)
+        # _add_module() must be done after all linking_libraries have been
+        # link_in'd so the inliner can act on the merged module; doing it
+        # earlier breaks subsequent get_pointer_to_function() calls.
+        # AOTCPUCodegen._add_module returns None — AOT has no JIT engine to
+        # publish symbols into, only object emission.
+        _orcjit_debug_dump_module_symbols(self._name, self._final_module)
+        self._jit_handle = self._codegen._add_module(self._final_module)
+        _orcjit_debug_dump_rename_map(self._codegen._engine,
+                                      self._jit_handle, self._final_module)
+
         self._finalize_specific()
 
         self._finalized = True
@@ -888,32 +981,30 @@ class CPUCodeLibrary(CodeLibrary):
                              ))
         print()
 
-    @classmethod
-    def _object_compiled_hook(cls, ll_module, buf):
+    def _on_object_compiled(self, buf):
         """
-        `ll_module` was compiled into object code `buf`.
+        Engine notify hit for this library's module. `buf` is the framed
+        object blob (NORC header + rename map + object bytes) ready for
+        on-disk caching. Captured here so serialize_using_object_code()
+        can return it later from `_get_compiled_object`.
         """
-        try:
-            self = ll_module.__library
-        except AttributeError:
-            return
         if self._object_caching_enabled:
             self._compiled = True
             self._compiled_object = buf
 
-    @classmethod
-    def _object_getbuffer_hook(cls, ll_module):
+    def _on_object_getbuffer(self):
         """
-        Return a cached object code for `ll_module`.
+        Source-compat shim. Under Option 5 cache hits load through
+        add_object_file directly (see `_unserialize` kind='object'); the
+        engine never queries this on the hit path. Retained because
+        CPUCodegen._init still wires a `get` callback; the engine
+        accepts the wiring but does not call it.
         """
-        try:
-            self = ll_module.__library
-        except AttributeError:
-            return
         if self._object_caching_enabled and self._compiled_object:
             buf = self._compiled_object
             self._compiled_object = None
             return buf
+        return None
 
     def serialize_using_bitcode(self):
         """
@@ -945,12 +1036,38 @@ class CPUCodeLibrary(CodeLibrary):
             return self
         elif kind == 'object':
             object_code, shared_bitcode = data
+            # Keep the bytes for re-serialization (chained caching) and
+            # disassembly (`get_disasm_cfg`).
             self.enable_object_caching()
             self._set_compiled_object(object_code)
+            # `shared_bitcode` is only used as a source for downstream
+            # `_get_module_for_linking` calls when *this* cached library is
+            # itself link_in'd into another library. The engine sees only
+            # the object bytes.
             self._shared_module = ll.parse_bitcode(shared_bitcode)
-            self._finalize_final_module()
-            # Load symbols from cache
-            self._codegen._engine._load_defined_symbols(self._shared_module)
+            # Cache-replay path: feed the framed object blob straight into
+            # the engine. The framed prefix carries the rename map captured
+            # at compile time; addObjectFile parses it and installs the map
+            # on the returned handle, so per-handle lookups still translate
+            # original → cached-renamed names without recomputing hashes.
+            # Critically we do NOT round-trip through compileAndAdd here —
+            # re-running the renamer on the bitcode could produce different
+            # hashes (e.g. if the bitcode has been linked-in helpers it
+            # would otherwise see fresh) and mismatch the .o's symtab.
+            self._jit_handle = self._codegen._engine.add_object_file(
+                object_code, name=self.name)
+            # The cached .o has `.numba.unresolved$<sym>` external decls as
+            # placeholders for recursive call sites. The live-compile path
+            # patches them via add_global_mapping inside
+            # _scan_and_fix_unresolved_refs; we must do the same on replay
+            # against the shared bitcode, which still carries the decls.
+            # Side effect: records this library's defined function names
+            # against `_jit_handle` so a sibling library finalizing later
+            # in the same process can resolve cross-module recursion
+            # against the post-rename names from this library.
+            self._codegen._scan_and_fix_unresolved_refs(self._shared_module,
+                                                       self._jit_handle)
+            self._finalized = True
             return self
         else:
             raise ValueError("unsupported serialization kind %r" % (kind,))
@@ -999,15 +1116,35 @@ class JITCodeLibrary(CPUCodeLibrary):
         """
         self._ensure_finalized()
         ee = self._codegen._engine
-        if not ee.is_symbol_defined(name):
+        defined = ee.is_symbol_defined(name, handle=self._jit_handle)
+        if not defined:
+            _orcjit_debug_lookup(self._name, self._jit_handle, name, False)
             return 0
-        else:
-            return self._codegen._engine.get_function_address(name)
+        addr = ee.get_function_address(name, handle=self._jit_handle)
+        _orcjit_debug_lookup(self._name, self._jit_handle, name, True, addr)
+        return addr
 
     def _finalize_specific(self):
-        self._codegen._scan_and_fix_unresolved_refs(self._final_module)
+        self._codegen._scan_and_fix_unresolved_refs(self._final_module,
+                                                    self._jit_handle)
+        _orcjit_debug_finalize(self._name, self._jit_handle, "start")
         with self._recorded_timings.record_legacy("Finalize object"):
             self._codegen._engine.finalize_object()
+        _orcjit_debug_finalize(self._name, self._jit_handle, "done")
+
+    def set_env(self, env_name, env):
+        """Patch this library's env GV named *env_name* to point at *env*.
+
+        Used to be a Codegen-level helper that did a flat
+        get_global_value_address. It must now be library-scoped: env GVs
+        are content-hash-renamed in lockstep with their referencing
+        function (via !numba.env_for, see base.declare_env_global), so the
+        original `env_name` only resolves to storage if translated through
+        *this* library's per-handle rename map.
+        """
+        gvaddr = self.get_pointer_to_function(env_name)
+        envptr = (ctypes.c_void_p * 1).from_address(gvaddr)
+        envptr[0] = ctypes.c_void_p(id(env))
 
 
 class RuntimeLinker(object):
@@ -1018,7 +1155,13 @@ class RuntimeLinker(object):
 
     def __init__(self):
         self._unresolved = utils.UniqueDict()
-        self._defined = set()
+        # IR-level name -> defining library's JIT handle. Used to be a flat
+        # set in MCJIT days when the engine had one symbol table. Under the
+        # OrcJIT renamer, each library carries its own old→new map keyed
+        # by handle; recording the handle at scan time lets `resolve()`
+        # translate the IR name to its post-rename linker name in the
+        # owning library's map.
+        self._defined = {}
         self._resolved = []
 
     def scan_unresolved_symbols(self, module, engine):
@@ -1040,13 +1183,14 @@ class RuntimeLinker(object):
                 engine.add_global_mapping(gv, ctypes.addressof(ptr))
                 self._unresolved[sym] = ptr
 
-    def scan_defined_symbols(self, module):
+    def scan_defined_symbols(self, module, handle):
         """
-        Scan and track all defined symbols.
+        Scan and track all defined symbols, recording the *handle* of the
+        library that owns each one.
         """
         for fn in module.functions:
             if not fn.is_declaration:
-                self._defined.add(fn.name)
+                self._defined[fn.name] = handle
 
     def resolve(self, engine):
         """
@@ -1054,16 +1198,20 @@ class RuntimeLinker(object):
         """
         # An iterator to get all unresolved but available symbols
         pending = [name for name in self._unresolved if name in self._defined]
+        results = []
         # Resolve pending symbols
         for name in pending:
-            # Get runtime address
-            fnptr = engine.get_function_address(name)
+            # Get runtime address: handle-aware lookup, since the engine's
+            # renamer rewrote the IR-level name to `name_<hash>`.
+            fnptr = engine.get_function_address(name, handle=self._defined[name])
+            results.append((name, fnptr))
             # Fix all usage
             ptr = self._unresolved[name]
             ptr.value = fnptr
             self._resolved.append((name, ptr))   # keep ptr alive
             # Delete resolved
             del self._unresolved[name]
+        _orcjit_debug_resolve(pending, results)
 
 def _proxy(old):
     @functools.wraps(old)
@@ -1073,58 +1221,53 @@ def _proxy(old):
 
 
 class JitEngine(object):
-    """Wraps an ExecutionEngine to provide custom symbol tracking.
-    Since the symbol tracking is incomplete  (doesn't consider
-    loaded code object), we are not putting it in llvmlite.
+    """Thin wrapper over NewOrcJIT preserving the MCJIT-era call shape.
+
+    Pre-OrcJIT this class carried Numba-side bookkeeping for "which
+    symbols does this engine know about" (a Python-side `_defined_symbols`
+    set mirroring what MCJIT couldn't tell us). Under OrcJIT all that
+    state lives in the binding: rename maps, defined-name sets per handle,
+    process-symbol resolver chain. The methods below are a stable façade
+    for `codegen.py` and `compiler.py` so we did not have to rewrite every
+    `engine.<x>` call site to talk to NewOrcJIT directly.
     """
     def __init__(self, ee):
         self._ee = ee
-        # Track symbol defined via codegen'd Module
-        # but not any cached object.
-        # NOTE: `llvm::ExecutionEngine` will catch duplicated symbols and
-        # we are not going to protect against that.  A proper duplicated
-        # symbol detection will need a more logic to check for the linkage
-        # (e.g. like `weak` linkage symbol can override).   This
-        # `_defined_symbols` set will be just enough to tell if a symbol
-        # exists and will not cause the `EE` symbol lookup to `exit(1)`
-        # when symbol-not-found.
-        self._defined_symbols = set()
 
-    def is_symbol_defined(self, name):
-        """Is the symbol defined in this session?
-        """
-        return name in self._defined_symbols
-
-    def _load_defined_symbols(self, mod):
-        """Extract symbols from the module
-        """
-        for gsets in (mod.functions, mod.global_variables):
-            self._defined_symbols |= {gv.name for gv in gsets
-                                      if not gv.is_declaration}
+    def is_symbol_defined(self, name, handle=None):
+        return self._ee.is_symbol_defined(name, handle=handle)
 
     def add_module(self, module):
-        """Override ExecutionEngine.add_module
-        to keep info about defined symbols.
+        """Add an llvmlite Module; return the engine's opaque handle."""
+        return self._ee.add_ir_module(module)
+
+    def add_object_file(self, blob, name=None):
+        """Add precompiled object bytes (framed or raw); return a handle.
+
+        Used by the cache-replay path to bypass the IR compile layer
+        entirely — the engine consumes the object directly, no rename
+        pass, no IRCompileLayer promise.
         """
-        self._load_defined_symbols(module)
-        return self._ee.add_module(module)
+        if name is None:
+            return self._ee.add_object_file(blob)
+        return self._ee.add_object_file(blob, name=name)
 
     def add_global_mapping(self, gv, addr):
-        """Override ExecutionEngine.add_global_mapping
-        to keep info about defined symbols.
-        """
-        self._defined_symbols.add(gv.name)
+        # Binding accepts either a string or an object with a .name attribute.
         return self._ee.add_global_mapping(gv, addr)
 
+    def get_function_address(self, name, handle=None):
+        return self._ee.get_function_address(name, handle=handle)
+
+    def get_global_value_address(self, name: str):
+        # No handle: cross-library lookup against the flat linker-name table.
+        return self._ee.get_function_address(name)
+
     #
-    # The remaining methods are re-export of the ExecutionEngine APIs
+    # Re-exports of the underlying engine APIs.
     #
-    set_object_cache = _proxy(ll.ExecutionEngine.set_object_cache)
-    finalize_object = _proxy(ll.ExecutionEngine.finalize_object)
-    get_function_address = _proxy(ll.ExecutionEngine.get_function_address)
-    get_global_value_address = _proxy(
-        ll.ExecutionEngine.get_global_value_address
-        )
+    set_object_cache = _proxy(ll.NewOrcJIT.set_object_cache)
+    finalize_object = _proxy(ll.NewOrcJIT.finalize_object)
 
 
 class Codegen(metaclass=ABCMeta):
@@ -1184,16 +1327,36 @@ class CPUCodegen(Codegen):
     def _init(self, llvm_module):
         assert list(llvm_module.global_variables) == [], "Module isn't empty"
 
+        # Module-identifier → library weakref. Populated by each library in
+        # _finalize_final_module right before _add_module. compileAndAdd
+        # fires the notify trampoline synchronously, so the entry must be
+        # in place at that point. WeakRef so dead libraries drop out
+        # naturally — captures here would otherwise keep them alive across
+        # the whole codegen lifetime.
+        self._libs_by_module_id = {}
+
         target = ll.Target.from_triple(ll.get_process_triple())
         tm_options = dict(opt=config.OPT)
         self._tm_features = self._customize_tm_features()
         self._customize_tm_options(tm_options)
         tm = target.create_target_machine(**tm_options)
-        use_lmm = config.USE_LLVMLITE_MEMORY_MANAGER
-        engine = ll.create_mcjit_compiler(llvm_module, tm, use_lmm=use_lmm)
+        # Engine is created with its own TargetMachine built from
+        # JITTargetMachineBuilder::detectHost. The `tm` constructed above
+        # is kept on self._tm for codegen-time uses (emit_assembly,
+        # disassembly, AOT object emit) but does NOT drive the JIT — the
+        # engine's internal TM does. Two TMs, same host triple, no
+        # observable divergence.
+        engine = ll.create_new_orcjit()
+        # The seeded `llvm_module` is empty (see assert above); adding it
+        # is a leftover from the MCJIT bootstrap, where the engine
+        # demanded an initial module. Kept for shape parity; harmless.
+        engine.add_ir_module(llvm_module)
 
-        if config.ENABLE_PROFILING:
-            engine.enable_jit_events()
+        # ENABLE_PROFILING / enable_jit_events: low-priority gap (see
+        # orcjit_migration.md Status). ORC's GDB/perf event hooks exist
+        # but are not yet wired through.
+        # if config.ENABLE_PROFILING:
+        #     engine.enable_jit_events()
 
         self._tm = tm
         self._engine = JitEngine(engine)
@@ -1218,8 +1381,28 @@ class CPUCodegen(Codegen):
             self._loopvect = False
             self._opt_level = 0
 
-        self._engine.set_object_cache(self._library_class._object_compiled_hook,
-                                      self._library_class._object_getbuffer_hook)
+        # Notify trampoline: fired by compileAndAdd in C++ once the framed
+        # blob is ready. Routes back to the owning library so
+        # `serialize_using_object_code` can return the bytes on disk.
+        def _notify(key, blob):
+            ref = self._libs_by_module_id.get(key)
+            lib = ref() if ref is not None else None
+            if lib is not None:
+                lib._on_object_compiled(blob)
+
+        # _get is kept for API symmetry with the MCJIT-era ObjectCache
+        # contract; the engine accepts the wiring but never calls it
+        # (cache hits go through library._unserialize → add_object_file
+        # directly). Removing it from this signature would just force
+        # callers to know that detail.
+        def _get(key):
+            ref = self._libs_by_module_id.get(key)
+            lib = ref() if ref is not None else None
+            if lib is None:
+                return None
+            return lib._on_object_getbuffer()
+
+        self._engine.set_object_cache(_notify, _get)
 
     def _create_empty_module(self, name):
         ir_module = llvmir.Module(cgutils.normalize_ir_text(name))
@@ -1302,9 +1485,9 @@ class CPUCodegen(Codegen):
         return (self._llvm_module.triple, self._get_host_cpu_name(),
                 self._tm_features)
 
-    def _scan_and_fix_unresolved_refs(self, module):
+    def _scan_and_fix_unresolved_refs(self, module, handle):
         self._rtlinker.scan_unresolved_symbols(module, self._engine)
-        self._rtlinker.scan_defined_symbols(module)
+        self._rtlinker.scan_defined_symbols(module, handle)
         self._rtlinker.resolve(self._engine)
 
     def insert_unresolved_ref(self, builder, fnty, name):
@@ -1400,21 +1583,8 @@ class JITCPUCodegen(CPUCodegen):
         return self._get_host_cpu_features()
 
     def _add_module(self, module):
-        self._engine.add_module(module)
-        # XXX: disabling remove module due to MCJIT engine leakage in
-        #      removeModule.  The removeModule causes consistent access
-        #      violation with certain test combinations.
-        # # Early bind the engine method to avoid keeping a reference to self.
-        # return functools.partial(self._engine.remove_module, module)
+        return self._engine.add_module(module)
 
-    def set_env(self, env_name, env):
-        """Set the environment address.
-
-        Update the GlobalVariable named *env_name* to the address of *env*.
-        """
-        gvaddr = self._engine.get_global_value_address(env_name)
-        envptr = (ctypes.c_void_p * 1).from_address(gvaddr)
-        envptr[0] = ctypes.c_void_p(id(env))
 
 
 def initialize_llvm():
