@@ -1529,14 +1529,14 @@ class Interpreter(object):
             # marking and has no impact to semantic.
             if firstinst.opname == 'END_FOR':
                 firstinst = self.bytecode[firstinst.next]
-            self.loc = self.loc.with_lineno(firstinst.lineno)
+            self.loc = self.loc.with_lineno(firstinst.lineno, firstinst.colno)
             self._start_new_block(block.offset)
             if blkct == 0:
                 # Is first block
                 self.init_first_block()
             for offset, kws in self.dfainfo.insts:
                 inst = self.bytecode[offset]
-                self.loc = self.loc.with_lineno(inst.lineno)
+                self.loc = self.loc.with_lineno(inst.lineno, inst.colno)
                 yield inst, kws
             self._end_current_block()
 
