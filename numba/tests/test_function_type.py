@@ -1431,5 +1431,36 @@ class TestExceptionInFunctionType(MemoryLeakMixin, TestCase):
         self.assertIn(str(MyError(101)), err)
 
 
+class TestFunctionTypeReturnMismatch(TestCase):
+    """https://github.com/numba/numba/issues/10755"""
+
+    def test_literal_str_vs_unicode(self):
+        @njit
+        def gm():
+            return "hello"
+
+        @njit((types.FunctionType(types.unicode_type()),))
+        def probe(fn):
+            r = fn()
+            return len(r), r == "hello", r == ""
+
+        with self.assertRaises(TypeError) as raises:
+            probe(gm)
+        self.assertIn("mismatch of return type", str(raises.exception))
+
+    def test_literal_int_vs_float64(self):
+        @njit
+        def gm():
+            return 7
+
+        @njit((types.FunctionType(float64()),))
+        def probe(fn):
+            return fn()
+
+        with self.assertRaises(TypeError) as raises:
+            probe(gm)
+        self.assertIn("mismatch of return type", str(raises.exception))
+
+
 if __name__ == '__main__':
     unittest.main()
