@@ -721,6 +721,77 @@ class TestTupleBuild(TestCase):
         # Heterogeneous
         check(lambda a: tuple(a), (4, 5.5))
 
+    def test_many_positional_args_become_direct_call(self):
+        # CPython emits BUILD_LIST/LIST_APPEND/LIST_TO_TUPLE/CALL_FUNCTION_EX
+        # for calls with more than 30 arguments. Coalescing the appends and
+        # inlining the resulting tuple as direct call arguments keeps the IR
+        # (and the LLVM generated from it) linear in the argument count
+        # instead of quadratic.
+        from numba.core import compiler, ir
+
+        n_args = 35
+        glbls = {"g": jit(nopython=True)(lambda *a: a)}
+        # variables, not constants: CPython builds a constant tuple and a single
+        # LIST_EXTEND for literal arguments, which is not the path under test
+        src = "def f(x):\n    return g(%s)\n" % ", ".join(["x"] * n_args)
+        exec(src, glbls)
+
+        func_ir = compiler.run_frontend(glbls["f"])
+        exprs = [
+            stmt.value
+            for blk in func_ir.blocks.values()
+            for stmt in blk.body
+            if isinstance(stmt, ir.Assign)
+            and isinstance(stmt.value, ir.Expr)
+        ]
+        # no concatenation chain and no argument tuple survive (the empty
+        # list the peephole starts from may survive as dead code)
+        self.assertFalse([e for e in exprs if e.op == "binop"])
+        self.assertFalse(
+            [e for e in exprs if e.op == "build_tuple" and e.items]
+        )
+        [call] = [e for e in exprs if e.op == "call"]
+        self.assertEqual(len(call.args), n_args)
+        self.assertIsNone(call.vararg)
+
+        self.assertPreciseEqual(glbls["f"](3), (3,) * n_args)
+
+    def test_star_call_with_reused_tuple(self):
+        # the vararg tuple cannot be inlined when it has other uses; the
+        # call must still compile and compute correctly through the tuple
+        @jit(nopython=True)
+        def inner(*args):
+            return args
+
+        n = 33
+        glbls = {"inner": inner}
+        src = (
+            "def f(x):\n    t = (%s,)\n    return inner(*t), len(t)\n"
+            % ", ".join(["x"] * n)
+        )
+        exec(src, glbls)
+        pyfunc = glbls["f"]
+        cfunc = jit(nopython=True)(pyfunc)
+        self.assertPreciseEqual(cfunc(4), pyfunc(4))
+
+    def test_many_positional_args_mixed_with_unpack(self):
+        # runs of appends are coalesced around the extends, order preserved
+        @jit(nopython=True)
+        def inner(*args):
+            return args
+
+        n = 33
+        glbls = {"inner": inner}
+        src = (
+            "def f(t, x):\n    return inner(%s, *t, x, *t)\n"
+            % ", ".join(["x"] * n)
+        )
+        exec(src, glbls)
+        pyfunc = glbls["f"]
+        cfunc = jit(nopython=True)(pyfunc)
+        for arg in ((4, 5), (4, 5.5)):
+            self.assertPreciseEqual(cfunc(arg, 1), pyfunc(arg, 1))
+
     def test_unpack_with_predicate_fails(self):
         # this fails as the list_to_tuple/list_extend peephole bytecode
         # rewriting needed for Python 3.9+ cannot yet traverse the CFG.

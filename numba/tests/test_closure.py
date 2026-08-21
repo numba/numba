@@ -433,11 +433,10 @@ class TestInlinedClosure(TestCase):
         msg = "The use of yield in a closure is unsupported."
         self.assertIn(msg, str(raises.exception))
 
-        with self.assertRaises(UnsupportedError) as raises:
-            cfunc = jit(nopython=True)(outer22)
-            cfunc()
-        msg = "Calling a closure with *args is unsupported."
-        self.assertIn(msg, str(raises.exception))
+        # a single-use tuple vararg is inlined as direct arguments by the
+        # CALL_FUNCTION_EX peephole, so this closure call now compiles
+        cfunc = jit(nopython=True)(outer22)
+        self.assertEqual(cfunc(), outer22())
 
     def test_closure_renaming_scheme(self):
         # See #7380, this checks that inlined (from closure) variables have a

@@ -540,11 +540,31 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
             a_val = 1 if flag else 0
             f(a=a_val, ...)""")
 
+    def var_use_count(name):
+        """Number of times *name* is read (definition sites excluded)."""
+        count = 0
+        for blk in func_ir.blocks.values():
+            for stmt in blk.body:
+                if isinstance(stmt, ir.Assign):
+                    if isinstance(stmt.value, ir.Expr):
+                        used = stmt.value.list_vars()
+                    elif isinstance(stmt.value, ir.Var):
+                        used = [stmt.value]
+                    else:
+                        used = []
+                else:
+                    used = stmt.list_vars()
+                count += sum(1 for v in used if v.name == name)
+        return count
+
     # Track which definitions have already been deleted
     already_deleted_defs = collections.defaultdict(set)
     for blk in func_ir.blocks.values():
         blk_changed = False
         new_body = []
+        # target name -> (blk.body index, new_body index) of build_tuple
+        # assignments already emitted in this block
+        buildtuple_pos = {}
         for i, stmt in enumerate(blk.body):
             if (
                 isinstance(stmt, ir.Assign)
@@ -752,7 +772,44 @@ def peep_hole_call_function_ex_to_call_function_kw(func_ir):
                     expr = func_ir._definitions[vararg_name][0]
                     if isinstance(expr, ir.Expr) and expr.op == "list_to_tuple":
                         raise UnsupportedBytecodeError(errmsg)
+                    # A single-use build_tuple vararg (the shape the
+                    # list_to_tuple peephole leaves for calls with more than
+                    # 30 arguments) is inlined as direct call arguments: a
+                    # wide vararg call round-trips every argument through one
+                    # wide tuple, which types and lowers quadratically in the
+                    # item count.
+                    if (
+                        isinstance(expr, ir.Expr)
+                        and expr.op == "build_tuple"
+                        and not call.args
+                        and vararg_name in buildtuple_pos
+                        and var_use_count(vararg_name) == 1
+                    ):
+                        blk_changed = True
+                        old_i, new_i = buildtuple_pos[vararg_name]
+                        new_body[new_i] = None
+                        _remove_assignment_definition(
+                            blk.body, old_i, func_ir, already_deleted_defs
+                        )
+                        new_call = ir.Expr.call(
+                            call.func,
+                            list(expr.items),
+                            call.kws,
+                            call.loc,
+                            target=call.target,
+                        )
+                        _remove_assignment_definition(
+                            blk.body, i, func_ir, already_deleted_defs
+                        )
+                        stmt = ir.Assign(new_call, stmt.target, stmt.loc)
+                        func_ir._definitions[stmt.target.name].append(new_call)
 
+            if (
+                isinstance(stmt, ir.Assign)
+                and isinstance(stmt.value, ir.Expr)
+                and stmt.value.op == "build_tuple"
+            ):
+                buildtuple_pos[stmt.target.name] = (i, len(new_body))
             new_body.append(stmt)
         # Replace the block body if we changed the IR
         if blk_changed:
@@ -786,12 +843,38 @@ def peep_hole_list_to_tuple(func_ir):
     2. Sets an accumulator's initial value as the target of the BUILD_TUPLE
     3. Searches for 'extend' on the original list and turns these into binary
        additions on the accumulator.
-    4. Searches for 'append' on the original list and turns these into a
-       `BUILD_TUPLE` which is then appended via binary addition to the
-       accumulator.
+    4. Searches for 'append' on the original list, collecting runs of them
+       into a single `BUILD_TUPLE` which is then appended via binary addition
+       to the accumulator (an append-only window becomes the result itself).
     5. Assigns the accumulator to the variable that exits the peephole and the
        rest of the block/code refers to as the result of the unpack operation.
     6. Patches up
+
+    Step 4 coalesces because CPython emits this bytecode for every call with
+    more than 30 arguments, and a `BUILD_TUPLE` per item leaves a tuple of
+    every prefix length, i.e. IR (and LLVM lowered from it) quadratic in the
+    item count. For `f(x[0], x[1], ..., x[30])` the emitted IR used to be::
+
+        $14build_list.2 = build_tuple(items=[])
+        $20binary_subscr.5 = getitem(value=x, index=$const18.4.1)
+        $24list_append.6_var = build_tuple(items=[$20binary_subscr.5])
+        $24list_append.7 = $14build_list.2 + $24list_append.6_var
+        $30binary_subscr.10 = getitem(value=x, index=$const28.9.2)
+        $34list_append.11_var = build_tuple(items=[$30binary_subscr.10])
+        $34list_append.12 = $24list_append.7 + $34list_append.11_var
+        ...                    # 29 more tuples, of widths 3, 4, ..., 31
+        $326call_intrinsic_1.158 = $324list_append.157
+        $328call_function_ex.159 = call $4load_global.0(
+            *$326call_intrinsic_1.158, vararg=$326call_intrinsic_1.158)
+
+    and is now, with the single `build_tuple` inlined into the call by
+    `peep_hole_call_function_ex_to_call_function_kw`, no tuple at all::
+
+        $20binary_subscr.5 = getitem(value=x, index=$const18.4.1)
+        $30binary_subscr.10 = getitem(value=x, index=$const28.9.2)
+        ...
+        $328call_function_ex.159 = call $4load_global.0($20binary_subscr.5,
+            $30binary_subscr.10, ..., $320binary_subscr.155)
     """
     _DEBUG = False
 
@@ -865,6 +948,51 @@ def peep_hole_list_to_tuple(func_ir):
 
                 the_build_list = init.target
 
+                # Buffer appended items and emit them as one build_tuple: a
+                # binary add per item makes the IR, and the LLVM lowered from
+                # it, quadratic in the number of items. Only an `extend` (which
+                # reads the accumulator) forces a flush; item values are
+                # computed by statements that stay in place, so buffering past
+                # them preserves evaluation order.
+                pending_appends = []
+
+                def flush_pending_appends(acc, loc, target=None):
+                    """Emit pending appends as one build_tuple. When `target`
+                    is given, an append-only window is written to it as a
+                    plain build_tuple (which the CALL_FUNCTION_EX peephole
+                    requires for calls with kwargs); any other shape keeps
+                    the assignment of the accumulator to `target`."""
+                    if pending_appends:
+                        items = list(pending_appends)
+                        pending_appends.clear()
+                        scope = items[0].scope
+                        tup = ir.Expr.build_tuple(items, loc)
+                        if acc is the_build_list and not init.value.items:
+                            # accumulator is still the empty initial list
+                            if target is not None:
+                                append_and_fix(ir.Assign(tup, target, loc))
+                                return target
+                            acc = scope.redefine("$_list_append_tuple",
+                                                 loc=loc)
+                            append_and_fix(ir.Assign(tup, acc, loc))
+                            return acc
+                        tup_var = scope.redefine("$_list_append_tuple",
+                                                 loc=loc)
+                        append_and_fix(ir.Assign(tup, tup_var, loc))
+                        acc_var = scope.redefine("$_list_append_acc", loc=loc)
+                        append_and_fix(
+                            ir.Assign(
+                                ir.Expr.binop(fn=operator.add, lhs=acc,
+                                              rhs=tup_var, loc=loc),
+                                acc_var, loc,
+                            )
+                        )
+                        acc = acc_var
+                    if target is not None:
+                        append_and_fix(ir.Assign(acc, target, loc))
+                        return target
+                    return acc
+
                 # Do the transform on the peep hole
                 if _DEBUG:
                     print("\nBLOCK:")
@@ -896,6 +1024,13 @@ def peep_hole_list_to_tuple(func_ir):
                                 fname = expr.func.name
                                 if fname in extends or fname in appends:
                                     arg = expr.args[0]
+                                    if (fname in appends
+                                            and isinstance(arg, ir.Var)):
+                                        pending_appends.append(arg)
+                                        func_ir._definitions.pop(x.target.name,
+                                                                 None)
+                                        continue
+                                    acc = flush_pending_appends(acc, x.loc)
                                     if isinstance(arg, ir.Var):
                                         tmp_name = "%s_var_%s" % (fname,
                                                                   arg.name)
@@ -955,10 +1090,12 @@ def peep_hole_list_to_tuple(func_ir):
                     else:
                         # stick everything else in as-is
                         new_hole.append(x)
-                # Finally write the result back into the original build list as
-                # everything refers to it.
-                append_and_fix(ir.Assign(acc, t2l_agn.target,
-                                         the_build_list.loc))
+                # Finally write the result back into the original build list
+                # as everything refers to it. Flushing straight into it keeps
+                # an all-append window a plain build_tuple, which the
+                # CALL_FUNCTION_EX peephole requires for calls with kwargs.
+                flush_pending_appends(acc, the_build_list.loc,
+                                      target=t2l_agn.target)
                 if _DEBUG:
                     print("\nNEW HOLE:")
                     for x in new_hole:
