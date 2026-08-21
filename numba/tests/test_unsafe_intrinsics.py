@@ -134,7 +134,7 @@ class TestBytesIntrinsic(TestCase):
         def foo(dst, dst_index, src, src_index, nbytes):
             # last arg is assume 1 byte alignment
             memcpy_region(dst.ctypes.data, dst_index,
-                          src.ctypes.data, src_index, nbytes, 1)
+                          src.ctypes.data, src_index, nbytes)
 
         d = np.zeros(10, dtype=np.int8)
         s = np.arange(10, dtype=np.int8)
