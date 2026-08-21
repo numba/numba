@@ -649,6 +649,7 @@ class CPUCodeLibrary(CodeLibrary):
             str(self._codegen._create_empty_module(self.name)))
         self._final_module.name = cgutils.normalize_ir_text(self.name)
         self._shared_module = None
+        self._symbol_map = {}  # original name -> renamed name in EE
 
     def _optimize_functions(self, ll_module):
         """
@@ -757,7 +758,25 @@ class CPUCodeLibrary(CodeLibrary):
             dump("FUNCTION OPTIMIZED DUMP %s" % self.name,
                  self.get_llvm_str(), 'llvm')
 
-        # Link libraries for shared code
+        # Link libraries for shared code.
+        # Pass 1: rename declarations in this module to match the already-
+        # renamed definitions that linking libraries have published to the EE.
+        # This must happen before link_in so that LLVM can unify call sites
+        # with definitions by name during the actual linking step.
+        seen = set()
+        for library in self._linking_libraries:
+            if library not in seen:
+                seen.add(library)
+                for original, renamed in library._symbol_map.items():
+                    try:
+                        f = self._final_module.get_function(original)
+                    except NameError:
+                        pass
+                    else:
+                        if f.is_declaration:
+                            f.name = renamed
+
+        # Pass 2: link in the modules now that call sites match definitions.
         seen = set()
         for library in self._linking_libraries:
             if library not in seen:
@@ -799,6 +818,8 @@ class CPUCodeLibrary(CodeLibrary):
         # Remember this on the module, for the object cache hooks
         self._final_module.__library = weakref.proxy(self)
 
+        self._pre_add_module()
+
         # It seems add_module() must be done only here and not before
         # linking in other modules, otherwise get_pointer_to_function()
         # could fail.
@@ -826,7 +847,10 @@ class CPUCodeLibrary(CodeLibrary):
                 yield fn
 
     def get_function(self, name):
-        return self._final_module.get_function(name)
+        # If the library renamed its exported symbols, callers may still ask
+        # for the original (unmangled-rename) name; resolve through the map.
+        return self._final_module.get_function(
+            self._symbol_map.get(name, name))
 
     def _sentry_cache_disable_inspection(self):
         if self._disable_inspection:
@@ -920,7 +944,8 @@ class CPUCodeLibrary(CodeLibrary):
         Serialize this library using its bitcode as the cached representation.
         """
         self._ensure_finalized()
-        return (self.name, 'bitcode', self._final_module.as_bitcode())
+        data = (self._final_module.as_bitcode(), self._symbol_map)
+        return (self.name, 'bitcode', data)
 
     def serialize_using_object_code(self):
         """
@@ -930,7 +955,8 @@ class CPUCodeLibrary(CodeLibrary):
         """
         self._ensure_finalized()
         data = (self._get_compiled_object(),
-                self._get_module_for_linking().as_bitcode())
+                self._get_module_for_linking().as_bitcode(),
+                self._symbol_map)
         return (self.name, 'object', data)
 
     @classmethod
@@ -939,18 +965,28 @@ class CPUCodeLibrary(CodeLibrary):
         self = codegen.create_library(name)
         assert isinstance(self, cls)
         if kind == 'bitcode':
-            # No need to re-run optimizations, just make the module ready
-            self._final_module = ll.parse_bitcode(data)
+            # No need to re-run optimizations, just make the module ready.
+            # Restore _symbol_map before _finalize_final_module so that
+            # _pre_add_module skips re-renaming already-renamed symbols.
+            bitcode, symbol_map = data
+            self._final_module = ll.parse_bitcode(bitcode)
+            self._symbol_map = symbol_map
             self._finalize_final_module()
             return self
         elif kind == 'object':
-            object_code, shared_bitcode = data
+            object_code, shared_bitcode, symbol_map = data
             self.enable_object_caching()
             self._set_compiled_object(object_code)
             self._shared_module = ll.parse_bitcode(shared_bitcode)
+            # Restore the symbol map so get_pointer_to_function can translate
+            # Numba-level names to the renamed names baked into the object code.
+            self._symbol_map = symbol_map
             self._finalize_final_module()
-            # Load symbols from cache
-            self._codegen._engine._load_defined_symbols(self._shared_module)
+            # Load renamed symbol names into the EE's defined-symbol set.
+            # _load_defined_symbols reads current names from the module, but
+            # _shared_module still has original names at this point, so
+            # populate directly from the restored symbol_map instead.
+            self._codegen._engine._defined_symbols.update(symbol_map.values())
             return self
         else:
             raise ValueError("unsupported serialization kind %r" % (kind,))
@@ -977,6 +1013,9 @@ class AOTCodeLibrary(CPUCodeLibrary):
         self._ensure_finalized()
         return self._final_module.as_bitcode()
 
+    def _pre_add_module(self):
+        pass
+
     def _finalize_specific(self):
         pass
 
@@ -999,13 +1038,40 @@ class JITCodeLibrary(CPUCodeLibrary):
         """
         self._ensure_finalized()
         ee = self._codegen._engine
-        if not ee.is_symbol_defined(name):
+        resolved = self._symbol_map.get(name, name)
+        if not ee.is_symbol_defined(resolved):
             return 0
         else:
-            return self._codegen._engine.get_function_address(name)
+            return self._codegen._engine.get_function_address(resolved)
+
+    def _pre_add_module(self):
+        # If _symbol_map was restored from cache the module is already renamed;
+        # skip the rename pass but still record the pre-rename bitcode so that
+        # a re-serialization produces consistent output.
+        if self._symbol_map:
+            return
+
+        # Rename all locally-defined symbols to avoid collisions with on-disk
+        # cache entries that share the same uid. Runs after linking and
+        # verification (so the module is sound) but before _add_module hands
+        # the module to the EE (so the EE interns the renamed names).
+        # NRT runtime functions ("NRT_" / "nrt_") are part of the shared
+        # stdlib and must keep their canonical names so that other modules
+        # (and debuginfo) can resolve them.
+        import hashlib
+        m = self._final_module
+        for f in m.functions:
+            if f.is_function and not f.is_declaration:
+                n = f.name
+                if n.startswith(("NRT_", "nrt_")):
+                    continue
+                hashed = hashlib.sha256(str(f).encode()).hexdigest()[:16]
+                f.name = f"{n}_{hashed}"
+                self._symbol_map[n] = f.name
 
     def _finalize_specific(self):
-        self._codegen._scan_and_fix_unresolved_refs(self._final_module)
+        self._codegen._scan_and_fix_unresolved_refs(
+            self._final_module, symbol_map=self._symbol_map)
         with self._recorded_timings.record_legacy("Finalize object"):
             self._codegen._engine.finalize_object()
 
@@ -1019,6 +1085,9 @@ class RuntimeLinker(object):
     def __init__(self):
         self._unresolved = utils.UniqueDict()
         self._defined = set()
+        # Maps an original (pre-rename) mangled name to the renamed name
+        # actually present in _defined. Populated as libraries finalize.
+        self._aliases = {}
         self._resolved = []
 
     def scan_unresolved_symbols(self, module, engine):
@@ -1040,24 +1109,38 @@ class RuntimeLinker(object):
                 engine.add_global_mapping(gv, ctypes.addressof(ptr))
                 self._unresolved[sym] = ptr
 
-    def scan_defined_symbols(self, module):
+    def scan_defined_symbols(self, module, symbol_map=None):
         """
-        Scan and track all defined symbols.
+        Scan and track all defined symbols. *symbol_map*, if given, maps
+        original (pre-rename) names to the renamed names so that unresolved
+        references using the original names can still be matched.
         """
         for fn in module.functions:
             if not fn.is_declaration:
                 self._defined.add(fn.name)
+        if symbol_map:
+            self._aliases.update(symbol_map)
 
     def resolve(self, engine):
         """
         Fix unresolved symbols if they are defined.
         """
-        # An iterator to get all unresolved but available symbols
-        pending = [name for name in self._unresolved if name in self._defined]
+        # An unresolved name resolves either directly or via the rename alias.
+        def lookup(name):
+            if name in self._defined:
+                return name
+            renamed = self._aliases.get(name)
+            if renamed is not None and renamed in self._defined:
+                return renamed
+            return None
+
+        pending = [(name, lookup(name)) for name in self._unresolved]
         # Resolve pending symbols
-        for name in pending:
-            # Get runtime address
-            fnptr = engine.get_function_address(name)
+        for name, defname in pending:
+            if defname is None:
+                continue
+            # Get runtime address (use the actual defined/renamed name)
+            fnptr = engine.get_function_address(defname)
             # Fix all usage
             ptr = self._unresolved[name]
             ptr.value = fnptr
@@ -1302,9 +1385,9 @@ class CPUCodegen(Codegen):
         return (self._llvm_module.triple, self._get_host_cpu_name(),
                 self._tm_features)
 
-    def _scan_and_fix_unresolved_refs(self, module):
+    def _scan_and_fix_unresolved_refs(self, module, symbol_map=None):
         self._rtlinker.scan_unresolved_symbols(module, self._engine)
-        self._rtlinker.scan_defined_symbols(module)
+        self._rtlinker.scan_defined_symbols(module, symbol_map=symbol_map)
         self._rtlinker.resolve(self._engine)
 
     def insert_unresolved_ref(self, builder, fnty, name):
