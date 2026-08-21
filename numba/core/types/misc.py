@@ -3,7 +3,6 @@ from numba.core.types.common import (Dummy, IterableType, Opaque,
                                      SimpleIteratorType)
 from numba.core.typeconv import Conversion
 from numba.core.errors import TypingError, LiteralTypingError
-from numba.core.ir import UndefinedType
 from numba.core.utils import get_hashable_key
 
 
@@ -554,3 +553,54 @@ class UnicodeIteratorType(SimpleIteratorType):
         name = "iter_unicode"
         self.data = dtype
         super(UnicodeIteratorType, self).__init__(name, dtype)
+
+
+class CharSeq(Type):
+    """
+    A fixed-length 8-bit character sequence.
+    """
+    mutable = True
+
+    def __init__(self, count):
+        self.count = count
+        name = "[char x %d]" % count
+        super(CharSeq, self).__init__(name)
+
+    @property
+    def key(self):
+        return self.count
+
+    def can_convert_from(self, typingctx, other):
+        from numba.core.types.containers import Bytes
+        if isinstance(other, Bytes):
+            return Conversion.safe
+
+
+class UnicodeCharSeq(Type):
+    """
+    A fixed-length unicode character sequence.
+    """
+    mutable = True
+
+    def __init__(self, count):
+        self.count = count
+        name = "[unichr x %d]" % count
+        super(UnicodeCharSeq, self).__init__(name)
+
+    @property
+    def key(self):
+        return self.count
+
+    def can_convert_to(self, typingctx, other):
+        if isinstance(other, UnicodeCharSeq):
+            return Conversion.safe
+
+    def can_convert_from(self, typingctx, other):
+        if isinstance(other, UnicodeType):
+            # Assuming that unicode_type itemsize is not greater than
+            # numpy.dtype('U1').itemsize that UnicodeCharSeq is based
+            # on.
+            return Conversion.safe
+
+    def __repr__(self):
+        return f"UnicodeCharSeq({self.count})"

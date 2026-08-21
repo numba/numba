@@ -3,7 +3,6 @@ Hash implementations for Numba types
 """
 
 import math
-import numpy as np
 import sys
 import ctypes
 import warnings
@@ -99,8 +98,8 @@ def process_return(val):
                           '_PyHASH_MODULUS': _Py_uhash_t,
                           '_PyHASH_BITS': types.intc})
 def _Py_HashDouble(v):
-    if not np.isfinite(v):
-        if (np.isinf(v)):
+    if not math.isfinite(v):
+        if (math.isinf(v)):
             if (v > 0):
                 return _PyHASH_INF
             else:
@@ -277,7 +276,7 @@ def float_hash(val):
     else:
         def impl(val):
             # widen the 32bit float to 64bit
-            fpextended = np.float64(_fpext(val))
+            fpextended = types.float64(_fpext(val))
             hashed = _Py_HashDouble(fpextended)
             return hashed
     return impl
@@ -709,7 +708,7 @@ def _Py_HashBytes(val, _len):
         # /* Optimize hashing of very small strings with inline DJBX33A. */
         _hash = _Py_uhash_t(5381)  # /* DJBX33A starts with 5381 */
         for idx in range(_len):
-            _hash = ((_hash << 5) + _hash) + np.uint8(grab_byte(val, idx))
+            _hash = ((_hash << 5) + _hash) + types.uint8(grab_byte(val, idx))
 
         _hash ^= _len
         _hash ^= _load_hashsecret('djbx33a_suffix')

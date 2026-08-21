@@ -613,6 +613,16 @@ def remove_dead_random_call(rhs, lives, call_list):
 
 remove_call_handlers.append(remove_dead_random_call)
 
+def dot_3_mv_check_args(a, b, out):
+    m, _n = a.shape
+    n, = b.shape
+    if n != _n:
+        raise ValueError("incompatible array sizes for dot(a, b) "
+                         "(matrix * vector)")
+    if out.shape != (m,):
+        raise ValueError("incompatible output array size for "
+                         "dot(a, b, out) (matrix * vector)")
+
 def has_no_side_effect(rhs, lives, call_table):
     """ Returns True if this expression has no side effects that
         would prevent re-ordering.
@@ -643,7 +653,6 @@ def has_no_side_effect(rhs, lives, call_table):
                call_list[0]._name == 'unsafe_empty_inferred')):
             return True
         from numba.core.registry import CPUDispatcher
-        from numba.np.linalg import dot_3_mv_check_args
         if isinstance(call_list[0], CPUDispatcher):
             py_func = call_list[0].py_func
             if py_func == dot_3_mv_check_args:
@@ -791,15 +800,16 @@ def _add_alias(lhs, rhs, alias_map, arg_aliases):
     return
 
 def is_immutable_type(var, typemap):
-    from numba.np.types.datetime import _NPDatetimeBase
     # Conservatively, assume mutable if type not available
     if typemap is None or var not in typemap:
         return False
     typ = typemap[var]
     # TODO: add more immutable types
     # TODO: Refactor and make use of .mutable attribute
-    if isinstance(typ, (types.Number, _NPDatetimeBase,
+    if isinstance(typ, (types.Number,
                         types.iterators.RangeType)):
+        return True
+    if typ.__class__.__name__ in ("NPDatetime", "NPTimedelta"):
         return True
     if typ==types.string:
         return True
@@ -1025,9 +1035,9 @@ def fix_setitem_type(stmt, typemap, calltypes):
     # test_optional t_typ can be Optional with array
     if not isinstance(
             s_typ,
-            types.npytypes.Array) or not isinstance(
+            types.Array) or not isinstance(
             t_typ,
-            types.npytypes.Array):
+            types.Array):
         return
     if s_typ.layout == 'A' and t_typ.layout != 'A':
         new_s_typ = s_typ.copy(layout=t_typ.layout)
@@ -1284,7 +1294,7 @@ def canonicalize_array_math(func_ir, typemap, calltypes, typingctx):
                 # replace A.func with np.func, and save A in saved_arr_arg
                 if (rhs.op == 'getattr' and rhs.attr in arr_math
                         and isinstance(
-                            typemap[rhs.value.name], types.npytypes.Array)):
+                            typemap[rhs.value.name], types.Array)):
                     rhs = stmt.value
                     arr = rhs.value
                     saved_arr_arg[lhs] = arr

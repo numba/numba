@@ -6,7 +6,7 @@ import textwrap
 import weakref
 from shutil import get_terminal_size
 
-from .abstract import Callable, DTypeSpec, Dummy, Literal, Type
+from .abstract import Callable, Dummy, Literal, Type
 from .common import Opaque
 from .misc import unliteral
 from numba.core import errors, utils, types, config
@@ -673,35 +673,6 @@ class NamedTupleClass(Callable, Opaque):
     @property
     def key(self):
         return self.instance_class
-
-
-class NumberClass(Callable, DTypeSpec, Opaque):
-    """
-    Type class for number classes (e.g. "np.float64").
-    """
-
-    def __init__(self, instance_type):
-        self.instance_type = instance_type
-        name = "class(%s)" % (instance_type,)
-        super(NumberClass, self).__init__(name)
-
-    def get_call_type(self, context, args, kws):
-        # Overridden by the __call__ constructor resolution in typing.builtins
-        return None
-
-    def get_call_signatures(self):
-        return (), True
-
-    def get_impl_key(self, sig):
-        return type(self)
-
-    @property
-    def key(self):
-        return self.instance_type
-
-    @property
-    def dtype(self):
-        return self.instance_type
 
 
 _RecursiveCallOverloads = namedtuple("_RecursiveCallOverloads", "qualname,uid")

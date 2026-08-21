@@ -481,7 +481,7 @@ class BaseContext(object):
 
     def _load_builtins(self):
         # Initialize declarations
-        from numba.core.typing import builtins, arraydecl  # noqa: F401, E501
+        from numba.core.typing import builtins  # noqa: F401, E501
         from numba.core.typing import ctypes_utils, bufproto           # noqa: F401, E501
         from numba.core.unsafe import eh                    # noqa: F401
 
@@ -810,20 +810,16 @@ class Context(BaseContext):
 
     def load_additional_registries(self):
         from . import (
-            cffi_utils,
             cmathdecl,
             enumdecl,
             listdecl,
             mathdecl,
-            npydecl,
             setdecl,
             dictdecl,
         )
-        self.install_registry(cffi_utils.registry)
         self.install_registry(cmathdecl.registry)
         self.install_registry(enumdecl.registry)
         self.install_registry(listdecl.registry)
         self.install_registry(mathdecl.registry)
-        self.install_registry(npydecl.registry)
         self.install_registry(setdecl.registry)
         self.install_registry(dictdecl.registry)

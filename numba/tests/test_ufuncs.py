@@ -13,7 +13,7 @@ from numba.core import types
 from numba.np.numpy_support import from_dtype
 from numba.core.errors import LoweringError, TypingError
 from numba.tests.support import TestCase, MemoryLeakMixin
-from numba.core.typing.npydecl import supported_ufuncs
+from numba.np.npydecl import supported_ufuncs
 from numba.np import numpy_support
 from numba.core.registry import cpu_target
 from numba.core.base import BaseContext

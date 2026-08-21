@@ -66,7 +66,7 @@ def mk_alloc(typingctx, typemap, calltypes, lhs, size_var, dtype, scope, loc,
     # alloc call: lhs = empty_attr(size_var, typ_var)
     typ_var = ir.Var(scope, mk_unique_var("$np_typ_var"), loc)
     if typemap:
-        typemap[typ_var.name] = types.functions.NumberClass(dtype)
+        typemap[typ_var.name] = types.NumberClass(dtype)
     # If dtype is a datetime/timedelta with a unit,
     # then it won't return a valid type and instead can be created
     # with a string. i.e. "datetime64[ns]")
@@ -86,7 +86,7 @@ def mk_alloc(typingctx, typemap, calltypes, lhs, size_var, dtype, scope, loc,
 
     if calltypes:
         cac = typemap[attr_var.name].get_call_type(
-            typingctx, [size_typ, types.functions.NumberClass(dtype)], {})
+            typingctx, [size_typ, types.NumberClass(dtype)], {})
         # By default, all calls to "empty" are typed as returning a standard
         # NumPy ndarray.  If we are allocating a ndarray subclass here then
         # just change the return type to be that of the subclass.

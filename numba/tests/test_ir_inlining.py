@@ -1332,7 +1332,7 @@ class TestInlineMiscIssues(TestCase):
 
         @overload(output_factory, inline='always')
         def ol_output_factory(array, dtype):
-            if isinstance(array, types.npytypes.Array):
+            if isinstance(array, types.Array):
                 def impl(array, dtype):
                     shape = array.shape[3:]
                     return np.zeros(shape, dtype=dtype)

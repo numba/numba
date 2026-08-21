@@ -6,7 +6,7 @@ from llvmlite import ir
 import llvmlite.binding as ll
 
 from numba.core.imputils import Registry, lower_cast
-from numba.core.typing.npydecl import parse_dtype
+from numba.np.npydecl import parse_dtype
 from numba.core.datamodel import models
 from numba.core import types, cgutils
 from numba.np import ufunc_db

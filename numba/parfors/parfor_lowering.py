@@ -187,7 +187,7 @@ def _lower_parfor_parallel_std(lowerer, parfor):
 
             # If this is reduction over an array,
             # the reduction array has just one added per-worker dimension.
-            if isinstance(redvar_typ, types.npytypes.Array):
+            if isinstance(redvar_typ, types.Array):
                 redarrdim = redvar_typ.ndim + 1
             else:
                 redarrdim = 1
@@ -207,7 +207,7 @@ def _lower_parfor_parallel_std(lowerer, parfor):
             size_var_list = [num_threads_var]
 
             # If this is a reduction over an array...
-            if isinstance(redvar_typ, types.npytypes.Array):
+            if isinstance(redvar_typ, types.Array):
                 # Add code to get the shape of the array being reduced over.
                 redshape_var = pfbdr.assign(
                     rhs=ir.Expr.getattr(redvar, "shape", loc),
@@ -246,7 +246,7 @@ def _lower_parfor_parallel_std(lowerer, parfor):
             init_val = parfor_reddict[red_name].init_val
 
             if init_val is not None:
-                if isinstance(redvar_typ, types.npytypes.Array):
+                if isinstance(redvar_typ, types.Array):
                     # Create an array of identity values for the reduction.
                     # First, create a variable for np.full.
                     full_func_node = pfbdr.bind_global_function(
@@ -913,7 +913,7 @@ def _hoist_internal(inst, dep_on_param, call_table, hoisted, not_hoisted,
         if config.DEBUG_ARRAY_OPT >= 1:
             print("Will hoist instruction", inst, target_type)
         hoisted.append(inst)
-        if not isinstance(target_type, types.npytypes.Array):
+        if not isinstance(target_type, types.Array):
             dep_on_param += [inst.target.name]
         return True
     else:
@@ -1037,7 +1037,7 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
     return hoisted, not_hoisted
 
 def redtyp_is_scalar(redtype):
-    return not isinstance(redtype, types.npytypes.Array)
+    return not isinstance(redtype, types.Array)
 
 def redtyp_to_redarraytype(redtyp):
     """Go from a reducation variable type to a reduction array type used to hold
@@ -1045,17 +1045,17 @@ def redtyp_to_redarraytype(redtyp):
     """
     redarrdim = 1
     # If the reduction type is an array then allocate reduction array with ndim+1 dimensions.
-    if isinstance(redtyp, types.npytypes.Array):
+    if isinstance(redtyp, types.Array):
         redarrdim += redtyp.ndim
         # We don't create array of array but multi-dimensional reduction array with same dtype.
         redtyp = redtyp.dtype
-    return types.npytypes.Array(redtyp, redarrdim, "C")
+    return types.Array(redtyp, redarrdim, "C")
 
 def redarraytype_to_sig(redarraytyp):
     """Given a reduction array type, find the type of the reduction argument to the gufunc.
     """
-    assert isinstance(redarraytyp, types.npytypes.Array)
-    return types.npytypes.Array(redarraytyp.dtype, redarraytyp.ndim, redarraytyp.layout)
+    assert isinstance(redarraytyp, types.Array)
+    return types.Array(redarraytyp.dtype, redarraytyp.ndim, redarraytyp.layout)
 
 def legalize_names_with_typemap(names, typemap):
     """ We use ir_utils.legalize_names to replace internal IR variable names
@@ -1277,7 +1277,7 @@ def _create_gufunc_for_parfor_body(
     for pindex in range(len(parfor_params_orig)):
         if (ascontig and
             pindex < len(parfor_inputs) and
-            isinstance(param_types[pindex], types.npytypes.Array)):
+            isinstance(param_types[pindex], types.Array)):
             parfor_params.append(parfor_params_orig[pindex]+"param")
         else:
             parfor_params.append(parfor_params_orig[pindex])
@@ -1374,7 +1374,7 @@ def _create_gufunc_for_parfor_body(
         gufunc_txt += ")\n"
 
     for pindex in range(len(parfor_inputs)):
-        if ascontig and isinstance(param_types[pindex], types.npytypes.Array):
+        if ascontig and isinstance(param_types[pindex], types.Array):
             gufunc_txt += ("    " + parfor_params_orig[pindex]
                 + " = np.ascontiguousarray(" + parfor_params[pindex] + ")\n")
 
@@ -1463,7 +1463,7 @@ def _create_gufunc_for_parfor_body(
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_ir dump after renaming ")
         gufunc_ir.dump()
-    gufunc_param_types = [types.npytypes.Array(
+    gufunc_param_types = [types.Array(
             index_var_typ, 1, "C")] + param_types
     if config.DEBUG_ARRAY_OPT:
         print(
@@ -1642,7 +1642,7 @@ def replace_var_with_array_in_block(vars, block, typemap, calltypes):
             new_block.append(ir.Assign(inst.value, val_var, loc))
             setitem_node = ir.SetItem(inst.target, const_var, val_var, loc)
             calltypes[setitem_node] = signature(
-                types.none, types.npytypes.Array(typemap[inst.target.name], 1, "C"), types.intp, typemap[inst.target.name])
+                types.none, types.Array(typemap[inst.target.name], 1, "C"), types.intp, typemap[inst.target.name])
             new_block.append(setitem_node)
             continue
         elif isinstance(inst, parfor.Parfor):
@@ -1661,7 +1661,7 @@ def replace_var_with_array(vars, loop_body, typemap, calltypes):
     for v in vars:
         el_typ = typemap[v]
         typemap.pop(v, None)
-        typemap[v] = types.npytypes.Array(el_typ, 1, "C")
+        typemap[v] = types.Array(el_typ, 1, "C")
 
 def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr_arg_types,
                          loop_ranges, redvars, reddict, redarrdict, init_block, index_var_typ, races,
@@ -1966,7 +1966,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     assert len(expr_args) == len(outer_sig.args[1:])
     for var, arg, aty, gu_sig in zip(expr_args, all_args,
                                      expr_arg_types, sin + sout):
-        if isinstance(aty, types.npytypes.Array):
+        if isinstance(aty, types.Array):
             i = aty.ndim - len(gu_sig)
         else:
             i = 0

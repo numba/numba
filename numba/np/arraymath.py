@@ -436,6 +436,7 @@ def get_ret_dtype_if_any(aryty, dtype):
 
 @intrinsic
 def _numpy_sum(typingctx, aryty, axisty, dtype):
+    from numba.np import types as npy_types
     ret_dtype = get_ret_dtype_if_any(aryty, dtype)
     sig = ret_dtype(aryty, axisty, dtype)
 
@@ -443,7 +444,7 @@ def _numpy_sum(typingctx, aryty, axisty, dtype):
         ary, _, _ = args
 
         ary = make_array(aryty)(context, builder, ary)
-        if isinstance(ret_dtype, types.NPTimedelta):
+        if isinstance(ret_dtype, npy_types.NPTimedelta):
             zero = context.get_constant(ret_dtype, ret_dtype(0))
         else:
             zero = context.get_constant(ret_dtype, 0)
@@ -634,6 +635,7 @@ def array_prod(a):
 
 @intrinsic
 def _numpy_cumsum(typingctx, aryty, axisty, dtype):
+    from numba.np import types as npy_types
     ret_dtype = get_ret_dtype_if_any(aryty, dtype)
 
     ret = types.Array(ret_dtype, aryty.ndim, layout='C')
@@ -643,7 +645,7 @@ def _numpy_cumsum(typingctx, aryty, axisty, dtype):
         ary, _, _ = args
 
         ary = make_array(aryty)(context, builder, ary)
-        if isinstance(ret_dtype, types.NPTimedelta):
+        if isinstance(ret_dtype, npy_types.NPTimedelta):
             zero = context.get_constant(ret_dtype, ret_dtype(0))
         else:
             zero = context.get_constant(ret_dtype, 0)
@@ -826,12 +828,13 @@ def array_cumprod(a):
 @overload(np.mean)
 @overload_method(types.Array, "mean")
 def array_mean(a):
+    from numba.np import types as npy_types
     if isinstance(a, (types.Integer, types.Boolean)):
         # Integers and Booleans default to float64 in numpy.mean
         def _scalar_mean(a):
             return np.float64(a) + 0.0
         return _scalar_mean
-    elif isinstance(a, NPTimedelta):
+    elif isinstance(a, npy_types.NPTimedelta):
         def _temporal_scalar_mean(a):
             return a
         return _temporal_scalar_mean
@@ -851,8 +854,8 @@ def array_mean(a):
         acc_init = get_accumulator(dtype, 0)
 
         # Check if this is a datetime/timedelta type
-        is_datetime_like = isinstance(a.dtype, (types.NPDatetime,
-                                                types.NPTimedelta))
+        is_datetime_like = isinstance(a.dtype, (npy_types.NPDatetime,
+                                                npy_types.NPTimedelta))
         # Is complex array
         is_complex = isinstance(a.dtype, types.Complex)
 

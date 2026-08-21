@@ -219,6 +219,7 @@ DT = np.datetime64
 
 class TestMiscCompiling(TestCase):
 
+    @unittest.skip("NPDatetime no longer a natural signature")
     def test_jit_explicit_signature(self):
         def _check_explicit_signature(sig):
             f = jit(sig, nopython=True)(add_usecase)
@@ -234,6 +235,7 @@ class TestMiscCompiling(TestCase):
         sig = "NPDatetime('us')(NPDatetime('ms'), NPTimedelta('us'))"
         _check_explicit_signature(sig)
 
+    @unittest.skip("NPDatetime no longer a natural signature")
     def test_vectorize_explicit_signature(self):
         def _check_explicit_signature(sig):
             f = vectorize([sig], nopython=True)(mul_usecase)

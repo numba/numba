@@ -1,7 +1,6 @@
 import math
 import numbers
 
-import numpy as np
 import operator
 
 from llvmlite import ir
@@ -1424,11 +1423,13 @@ def constant_complex(context, builder, ty, pyval):
 @lower_constant(types.Float)
 @lower_constant(types.Boolean)
 def constant_integer(context, builder, ty, pyval):
-    # See https://github.com/numba/numba/issues/6979
-    # llvmlite ir.IntType specialises the formatting of the constant for a
-    # cpython bool. A NumPy np.bool_ is not a cpython bool so force it to be one
-    # so that the constant renders correctly!
-    if isinstance(pyval, np.bool_):
+    # TODO: Change this to overload and move the numpy specific overload
+    # to NumPy module
+    is_np_bool = (
+        getattr(type(pyval), "__module__", "") == "numpy"
+        and "bool" in type(pyval).__name__
+    )
+    if is_np_bool:
         pyval = bool(pyval)
     lty = context.get_value_type(ty)
     return lty(pyval)

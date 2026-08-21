@@ -20,9 +20,12 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, Fixup
                              WithLifting, PreserveIR, InlineClosureLikes)
 
 from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
-                           NopythonRewrites, PreParforPass, ParforPass,
-                           DumpParforDiagnostics, NativeLowering,
+                           NopythonRewrites, NativeLowering,
                            IRLegalization, NoPythonBackend, NativeLowering)
+from numba.parfors.parfor_passes import (
+    PreParforPass, ParforPass, ParforFusionPass, ParforPreLoweringPass,
+    DumpParforDiagnostics, NativeParforLowering
+)   
 import numpy as np
 from numba.tests.support import skip_parfors_unsupported, needs_blas, TestCase
 import unittest
