@@ -246,7 +246,7 @@ class _BaseHandler:
         Parameters
         -----------
         states : dict
-        assign : numba.ir.Stmt
+        stmt : numba.ir.Stmt
 
         Returns
         -------

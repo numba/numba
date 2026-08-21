@@ -1,0 +1,7 @@
+Fix parameter name mismatches in docstrings
+-------------------------------------------
+
+Corrected several docstring parameter names that did not match their
+function signatures in ``numba.core.callconv``, ``numba.core.ssa``,
+``numba.core.withcontexts``, ``numba.misc.memoryutils`` and
+``numba.parfors.parfor_lowering_utils``.
