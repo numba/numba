@@ -1810,11 +1810,16 @@ class TraceRunner(object):
             # This isn't handled, but the state is set up anyway
             exc = state.pop()
             if inst.arg != 0:
-                state.pop()     # lasti
-            state.append(inst, exc=exc)
+                lasti = state.pop()
+            else:
+                lasti = None
 
             if state.has_active_try():
+                state.append(inst, exc=exc, lasti=lasti)
                 self._adjust_except_stack(state)
+            elif (lasti is not None):
+                state.append(inst, exc=exc, lasti=lasti)
+                state.terminate()
             else:
                 state.terminate()
 

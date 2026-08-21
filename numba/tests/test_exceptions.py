@@ -236,6 +236,32 @@ class TestRaising(TestCase):
     def test_raise_nested_nopython(self):
         self.check_raise_nested(no_pyobj_flags, nopython=True)
 
+    def test_exception_matching(self):
+        def raise_matching():
+            x = 1
+            y = 0
+            try:
+                try:
+                    y += 1
+                    raise ValueError
+                except TypeError:
+                    x = 0
+                finally:
+                    y += 1
+            except ValueError:
+                y += 1
+            except TypeError:
+                x = 0
+            finally:
+                y += 1
+            if (x == 0):
+                return 0
+            return y
+        pyfunc = raise_matching
+        cfunc = njit(())(pyfunc)
+        res = cfunc()
+        self.assertEqual(res, 4)
+
     def check_reraise(self, flags):
         def raise_exc(exc):
             raise exc
