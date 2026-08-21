@@ -3183,7 +3183,7 @@ class Interpreter(object):
         callres = ir.Expr.call(self.get(name), (self.get(maybeNone),), (),
                                loc=self.loc)
 
-        pname = f"$pred{inst.offset}"
+        pname = "$%spred" % (inst.offset)
         predicate = self.store(value=callres, name=pname)
         branch = ir.Branch(cond=predicate,
                            truebr=truebr,
