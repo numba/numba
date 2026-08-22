@@ -1526,6 +1526,18 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         # install tests for reduction functions
         install_tests(dtypes_to_test, reduction_funcs)
 
+        def test_var_scalar(self):
+                def py_func(x):
+                    return np.var(x)
+
+                cfunc = njit(py_func)
+
+        
+                for val in [5, 3.14, 2 + 3j, True]:
+                  expected = py_func(val)
+                  actual = cfunc(val)
+                  self.assertEqual(actual, expected)
+
 
 TestArrayReductions.install_generated_tests()
 
