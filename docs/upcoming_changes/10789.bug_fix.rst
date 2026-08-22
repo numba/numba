@@ -1,0 +1,10 @@
+Fix ``math.ldexp`` and ``np.ldexp`` with negative exponents on PowerPC64LE
+--------------------------------------------------------------------------
+
+The exponent argument of the ``numba_ldexp`` and ``numba_ldexpf`` helpers is a
+C ``int``, and ABIs such as PowerPC64LE ELFv2 require the caller to sign-extend
+it into the full argument register. The declaration Numba emitted used a bare
+``i32`` parameter, which carries no signedness, so LLVM did not sign-extend it
+and a negative exponent reached the callee as a large positive one. Both
+lowerings, for ``math.ldexp`` and for the ``np.ldexp`` ufunc, now mark the
+exponent parameter ``signext``.
