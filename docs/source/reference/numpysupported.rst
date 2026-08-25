@@ -218,6 +218,46 @@ The following scalar types and features are not supported:
 * **Half-precision and extended-precision** real and complex numbers
 * **Nested structured scalars** the fields of structured scalars may not contain other structured scalars
 
+The following constructors are supported, both with a numeric input (to
+construct a scalar) or a sequence (to construct an array):
+
+Built-in scalar types
+---------------------
+
+* :class:`numpy.bool_`
+
+Number
+------
+
+* :class:`numpy.intc`
+* :class:`numpy.uintc`
+
+Integer types (signed)
+----------------------
+
+* :class:`numpy.intp`
+* :class:`numpy.int8`
+* :class:`numpy.int16`
+* :class:`numpy.int32`
+* :class:`numpy.int64`
+
+Integer types (unsigned)
+------------------------
+
+* :class:`numpy.uintp`
+* :class:`numpy.uint8`
+* :class:`numpy.uint16`
+* :class:`numpy.uint32`
+* :class:`numpy.uint64`
+
+Inexact types
+-------------
+
+* :class:`numpy.float32`
+* :class:`numpy.float64`
+* :class:`numpy.complex64`
+* :class:`numpy.complex128`
+
 The operations supported on NumPy scalars are almost the same as on the
 equivalent built-in types such as ``int`` or ``float``.  You can use a type's
 constructor to convert from a different type or width. In addition you can use
@@ -393,71 +433,8 @@ version raises an error because of the unsupported use of attribute access.
 .. note::
    This behavior will eventually be deprecated and removed.
 
-The following constructors are supported, both with a numeric input (to
-construct a scalar) or a sequence (to construct an array):
-
-Built-in scalar types
----------------------
-
-* :class:`numpy.bool_`
-
-Number
-------
-
-* :class:`numpy.intc`
-* :class:`numpy.uintc`
-
-Integer types (signed)
-----------------------
-
-* :class:`numpy.intp`
-* :class:`numpy.int8`
-* :class:`numpy.int16`
-* :class:`numpy.int32`
-* :class:`numpy.int64`
-
-Integer types (unsigned)
-------------------------
-
-* :class:`numpy.uintp`
-* :class:`numpy.uint8`
-* :class:`numpy.uint16`
-* :class:`numpy.uint32`
-* :class:`numpy.uint64`
-
-Inexact types
--------------
-
-* :class:`numpy.float32`
-* :class:`numpy.float64`
-* :class:`numpy.complex64`
-* :class:`numpy.complex128`
-
 .. Data type objects (dtype)
 .. =========================
-
-Indexing routines
-=================
-
-* :func:`~numpy.lib.stride_tricks.as_strided` (the *strides* argument
-  is mandatory, the *subok* argument is not supported)
-* :func:`~numpy.lib.stride_tricks.sliding_window_view` (the *subok* argument is
-  not supported, the *writeable* argument is not supported with the returned
-  view always being writeable)
-* :func:`numpy.fill_diagonal`
-* :class:`numpy.ndenumerate`
-* :class:`numpy.ndindex`
-* :class:`numpy.nditer` (only the first argument)
-* :func:`numpy.select` (only using homogeneous lists or tuples for the first
-  two arguments, condlist and choicelist). Additionally, these two arguments
-  can only contain arrays (unlike NumPy that also accepts tuples).
-* :func:`numpy.tril_indices` (all arguments must be integer)
-* :func:`numpy.tril_indices_from` (second argument ``k`` must be an integer)
-* :func:`numpy.triu_indices` (all arguments must be integer)
-* :func:`numpy.triu_indices_from` (second argument ``k`` must be an integer)
-* :func:`numpy.take` (only the 2 first arguments)
-* :func:`numpy.take_along_axis` (the axis argument must be a literal value)
-* :func:`numpy.indices` (only the first argument)
 
 Iterating over arrays
 =====================
@@ -751,6 +728,29 @@ attributes:
 * :class:`numpy.iinfo`
 * :class:`numpy.finfo` (``machar`` attribute not supported)
 * :class:`numpy.MachAr` (with no arguments to the constructor)
+
+Indexing routines
+=================
+
+* :func:`~numpy.lib.stride_tricks.as_strided` (the *strides* argument
+  is mandatory, the *subok* argument is not supported)
+* :func:`~numpy.lib.stride_tricks.sliding_window_view` (the *subok* argument is
+  not supported, the *writeable* argument is not supported with the returned
+  view always being writeable)
+* :func:`numpy.fill_diagonal`
+* :class:`numpy.ndenumerate`
+* :class:`numpy.ndindex`
+* :class:`numpy.nditer` (only the first argument)
+* :func:`numpy.select` (only using homogeneous lists or tuples for the first
+  two arguments, condlist and choicelist). Additionally, these two arguments
+  can only contain arrays (unlike NumPy that also accepts tuples).
+* :func:`numpy.tril_indices` (all arguments must be integer)
+* :func:`numpy.tril_indices_from` (second argument ``k`` must be an integer)
+* :func:`numpy.triu_indices` (all arguments must be integer)
+* :func:`numpy.triu_indices_from` (second argument ``k`` must be an integer)
+* :func:`numpy.take` (only the 2 first arguments)
+* :func:`numpy.take_along_axis` (the axis argument must be a literal value)
+* :func:`numpy.indices` (only the first argument)
 
 Linear algebra (numpy.linalg)
 =============================
