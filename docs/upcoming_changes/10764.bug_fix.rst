@@ -1,0 +1,8 @@
+Fix first-class function return-type mismatch
+---------------------------------------------
+
+Passing a jit-compiled function as a first-class function
+(``numba.types.FunctionType``) argument whose declared return type does
+not use the same LLVM value type as the compiled function's return type
+now raises an error instead of silently producing a corrupted return
+value (no cast is inserted at the call).
