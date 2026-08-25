@@ -209,6 +209,7 @@ def available_memory_bytes():
             pass
     return None
 
+
 _msg = "SciPy needed for test"
 skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
 
