@@ -729,7 +729,7 @@ class TestTupleBuild(TestCase):
         from numba.core import compiler, ir
 
         n_args = 35
-        glbls = {"g": jit(nopython=True)(lambda *a: a)}
+        glbls = {"g": jit(lambda *a: a)}
         # variables, not constants: CPython builds a constant tuple and a single
         # LIST_EXTEND for literal arguments, which is not the path under test
         src = "def f(x):\n    return g(%s)\n" % ", ".join(["x"] * n_args)
@@ -763,7 +763,7 @@ class TestTupleBuild(TestCase):
 
     def test_many_positional_args_mixed_with_unpack(self):
         # runs of appends are coalesced around the extends, order preserved
-        @jit(nopython=True)
+        @jit
         def inner(*args):
             return args
 
@@ -775,7 +775,7 @@ class TestTupleBuild(TestCase):
         )
         exec(src, glbls)
         pyfunc = glbls["f"]
-        cfunc = jit(nopython=True)(pyfunc)
+        cfunc = jit(pyfunc)
         for arg in ((4, 5), (4, 5.5)):
             self.assertPreciseEqual(cfunc(arg, 1), pyfunc(arg, 1))
 
