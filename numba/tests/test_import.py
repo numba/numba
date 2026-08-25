@@ -22,7 +22,6 @@ class TestNumbaImport(TestCase):
                    'numba.tests',
                    'numba.core.typing.collections',
                    'numba.core.typing.listdecl',
-                   'numba.np.types.datetime_registry',
                    ]
 
         # Sanity check the modules still exist...

@@ -1,7 +1,7 @@
 import sys
 import operator
+import math
 
-import numpy as np
 from llvmlite.ir import IntType, Constant
 
 from numba.core.cgutils import is_nonelike
@@ -279,7 +279,7 @@ def _malloc_string(typingctx, kind, char_bytes, length, is_ascii):
 def _empty_string(kind, length, is_ascii=0):
     char_width = _kind_to_byte_width(kind)
     s = _malloc_string(kind, char_width, length, is_ascii)
-    _set_code_point(s, length, np.uint32(0))    # Write NULL character
+    _set_code_point(s, length, types.uint32(0))    # Write NULL character
     return s
 
 
@@ -2292,7 +2292,7 @@ def _gen_unicode_upper_or_lower(lower):
     def _do_upper_or_lower(data, length, res, maxchars):
         k = 0
         for idx in range(length):
-            mapped = np.zeros(3, dtype=_Py_UCS4)
+            mapped = [_Py_UCS4(0)] * 3
             code_point = _get_code_point(data, idx)
             if lower:
                 n_res = _lower_ucs4(code_point, data, length, idx, mapped)
@@ -2339,9 +2339,9 @@ def unicode_upper(data):
 @register_jitable
 def _unicode_casefold(data, length, res, maxchars):
     k = 0
-    mapped = np.zeros(3, dtype=_Py_UCS4)
+    mapped = [_Py_UCS4(0)] * 3
     for idx in range(length):
-        mapped.fill(0)
+        mapped = [_Py_UCS4(0)] * 3
         code_point = _get_code_point(data, idx)
         n_res = _PyUnicode_ToFoldedFull(code_point, mapped)
         for m in mapped[:n_res]:
@@ -2371,7 +2371,7 @@ def unicode_casefold(data):
 def _unicode_capitalize(data, length, res, maxchars):
     k = 0
     maxchar = 0
-    mapped = np.zeros(3, dtype=_Py_UCS4)
+    mapped = [_Py_UCS4(0)] * 3
     code_point = _get_code_point(data, 0)
 
     n_res = _PyUnicode_ToTitleFull(code_point, mapped)
@@ -2381,7 +2381,7 @@ def _unicode_capitalize(data, length, res, maxchars):
         _set_code_point(res, k, m)
         k += 1
     for idx in range(1, length):
-        mapped.fill(0)
+        mapped = [_Py_UCS4(0)] * 3
         code_point = _get_code_point(data, idx)
         n_res = _lower_ucs4(code_point, data, length, idx, mapped)
         for m in mapped[:n_res]:
@@ -2414,9 +2414,9 @@ def _unicode_title(data, length, res, maxchars):
     """This is a translation of the function that titles a unicode string."""
     k = 0
     previous_cased = False
-    mapped = np.empty(3, dtype=_Py_UCS4)
+    mapped = [_Py_UCS4(0)] * 3
     for idx in range(length):
-        mapped.fill(0)
+        mapped = [_Py_UCS4(0)] * 3
         code_point = _get_code_point(data, idx)
         if previous_cased:
             n_res = _lower_ucs4(code_point, data, length, idx, mapped)
@@ -2476,9 +2476,9 @@ def _ascii_swapcase(data, res):
 def _unicode_swapcase(data, length, res, maxchars):
     k = 0
     maxchar = 0
-    mapped = np.empty(3, dtype=_Py_UCS4)
+    mapped = [_Py_UCS4(0)] * 3
     for idx in range(length):
-        mapped.fill(0)
+        mapped = [_Py_UCS4(0)] * 3
         code_point = _get_code_point(data, idx)
         if _PyUnicode_IsUppercase(code_point):
             n_res = _lower_ucs4(code_point, data, length, idx, mapped)
@@ -2573,7 +2573,7 @@ def integer_str(n):
             flag = True
         if n == 0:
             return '0'
-        length = flag + 1 + int(np.floor(np.log10(n)))
+        length = flag + 1 + int(math.floor(math.log10(n)))
         kind = PY_UNICODE_1BYTE_KIND
         char_width = _kind_to_byte_width(kind)
         s = _malloc_string(kind, char_width, length, True)

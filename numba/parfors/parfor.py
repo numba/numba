@@ -33,6 +33,7 @@ from numba.core import types, typing, utils, errors, ir, analysis, postproc, rew
 from numba import prange, pndindex
 from numba.np.npdatetime_helpers import datetime_minimum, datetime_maximum
 from numba.np.numpy_support import as_dtype, numpy_version
+from numba.np import arraydecl 
 from numba.core.typing.templates import infer_global, AbstractTemplate
 from numba.stencils.stencilparfor import StencilPass
 from numba.core.extending import register_jitable, lower_builtin
@@ -85,13 +86,13 @@ from numba.core.ir_utils import (
 from numba.core.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
 from numba.core.controlflow import CFGraph
-from numba.core.typing import npydecl, signature
+from numba.core.typing import signature
 from numba.core.types.functions import Function
 from numba.parfors.array_analysis import (random_int_args, random_1arg_size,
                                   random_2arg_sizelast, random_3arg_sizelast,
                                   random_calls, assert_equiv)
 from numba.parfors.ir_utils import mk_alloc
-from numba.np import types as npy_types
+from numba.np import npydecl, types as npy_types
 from numba.core.extending import overload
 import copy
 import numpy
@@ -339,8 +340,8 @@ def dotmv_parallel_impl(a, b):
 
 def dot_parallel_impl(return_type, atyp, btyp):
     # Note that matrix matrix multiply is not translated.
-    if (isinstance(atyp, types.npytypes.Array) and
-        isinstance(btyp, types.npytypes.Array)):
+    if (isinstance(atyp, types.Array) and
+        isinstance(btyp, types.Array)):
         if atyp.ndim == btyp.ndim == 1:
             return dotvv_parallel_impl
         # TODO: evaluate support for dotvm and enable
@@ -1572,7 +1573,7 @@ class PreParforPass(object):
                                 len(callname) == 2 and
                                 isinstance(callname[1], ir.Var) and
                                 isinstance(self.typemap[callname[1].name],
-                                           types.npytypes.Array)):
+                                           types.Array)):
                                 repl_func = replace_functions_ndarray.get(callname[0], None)
                                 if repl_func is not None:
                                     # Add the array that the method is on to the arg list.
@@ -1620,7 +1621,7 @@ class PreParforPass(object):
                         # Replace getattr call "A.dtype" with numpy.dtype(<actual type>).
                         # This helps remove superfluous dependencies from parfor.
                         typ = self.typemap[expr.value.name]
-                        if isinstance(typ, types.npytypes.Array):
+                        if isinstance(typ, types.Array):
                             # Convert A.dtype to four statements.
                             # 1) Get numpy global.
                             # 2) Create var for known type of array as string
@@ -1660,7 +1661,7 @@ class PreParforPass(object):
 
                             # Call numpy.dtype on the statically coded type two steps above.
                             dtype_var = ir.Var(scope, mk_unique_var("$dtype_var"), loc)
-                            self.typemap[dtype_var.name] = types.npytypes.DType(dtype)
+                            self.typemap[dtype_var.name] = types.DType(dtype)
                             dtype_getattr = ir.Expr.call(dtype_attr_var, [typ_var], (), loc)
                             dtype_assign = ir.Assign(dtype_getattr, dtype_var, loc)
                             self.calltypes[dtype_getattr] = signature(
@@ -1745,9 +1746,9 @@ class ConvertInplaceBinop:
                         target_typ = pass_states.typemap[target.name]
                         value_typ = pass_states.typemap[value.name]
                         # Handle A op= ...
-                        if isinstance(target_typ, types.npytypes.Array):
+                        if isinstance(target_typ, types.Array):
                             # RHS is an array
-                            if isinstance(value_typ, types.npytypes.Array):
+                            if isinstance(value_typ, types.Array):
                                 new_instr = self._inplace_binop_to_parfor(equiv_set,
                                         loc, expr.immutable_fn, target, value)
                                 self.rewritten.append(
@@ -1867,8 +1868,8 @@ class ConvertSetItemPass:
                     index_typ = pass_states.typemap[index.name]
                     value_typ = pass_states.typemap[value.name]
                     # Handle A[boolean_array] = <scalar or array>
-                    if isinstance(target_typ, types.npytypes.Array):
-                        if (isinstance(index_typ, types.npytypes.Array) and
+                    if isinstance(target_typ, types.Array):
+                        if (isinstance(index_typ, types.Array) and
                             isinstance(index_typ.dtype, types.Boolean) and
                             target_typ.ndim == index_typ.ndim):
                             # RHS is a scalar number
@@ -1881,7 +1882,7 @@ class ConvertSetItemPass:
                                 )
                                 instr = new_instr
                             # RHS is an array
-                            elif isinstance(value_typ, types.npytypes.Array):
+                            elif isinstance(value_typ, types.Array):
                                 val_def = guard(get_definition, pass_states.func_ir,
                                                 value.name)
                                 if (isinstance(val_def, ir.Expr) and
@@ -1916,7 +1917,7 @@ class ConvertSetItemPass:
                             # shape of the output and number of dimensions set is
                             # equal to the number of dimensions on the right side.
                             if (shape is not None and
-                                (not isinstance(value_typ, types.npytypes.Array) or
+                                (not isinstance(value_typ, types.Array) or
                                  sliced_dims == value_typ.ndim)):
                                 new_instr = self._setitem_to_parfor(equiv_set,
                                         loc, target, index, value, shape=shape)
@@ -1950,7 +1951,7 @@ class ConvertSetItemPass:
             # create a new target array via getitem
             subarr_var = ir.Var(scope, mk_unique_var("$subarr"), loc)
             getitem_call = ir.Expr.getitem(target, index, loc)
-            subarr_typ = typing.arraydecl.get_array_index_type( arr_typ, index_typ).result
+            subarr_typ = arraydecl.get_array_index_type( arr_typ, index_typ).result
             pass_states.typemap[subarr_var.name] = subarr_typ
             pass_states.calltypes[getitem_call] = self._type_getitem((arr_typ, index_typ))
             init_block.append(ir.Assign(getitem_call, subarr_var, loc))
@@ -2001,7 +2002,7 @@ class ConvertSetItemPass:
             ])
 
         value_typ = pass_states.typemap[value.name]
-        if isinstance(value_typ, types.npytypes.Array):
+        if isinstance(value_typ, types.Array):
             value_var = ir.Var(scope, mk_unique_var("$value_var"), loc)
             pass_states.typemap[value_var.name] = value_typ.dtype
             getitem_call = ir.Expr.getitem(value, index_var, loc)
@@ -2117,22 +2118,22 @@ class ConvertNumpyPass:
             block.body = new_body
 
     def _is_C_order(self, arr_name):
-        if isinstance(arr_name, types.npytypes.Array):
+        if isinstance(arr_name, types.Array):
             return arr_name.layout == 'C' and arr_name.ndim > 0
         elif arr_name is str:
             typ = self.pass_states.typemap[arr_name]
-            return (isinstance(typ, types.npytypes.Array) and
+            return (isinstance(typ, types.Array) and
                     typ.layout == 'C' and
                     typ.ndim > 0)
         else:
             return False
 
     def _is_C_or_F_order(self, arr_name):
-        if isinstance(arr_name, types.npytypes.Array):
+        if isinstance(arr_name, types.Array):
             return (arr_name.layout == 'C' or arr_name.layout == 'F') and arr_name.ndim > 0
         elif arr_name is str:
             typ = self.pass_states.typemap[arr_name]
-            return (isinstance(typ, types.npytypes.Array) and
+            return (isinstance(typ, types.Array) and
                     (typ.layout == 'C' or typ.layout == 'F') and
                     typ.ndim > 0)
         else:
@@ -2935,8 +2936,8 @@ def _find_mask(typemap, func_ir, arr_def):
     value_typ = typemap[value.name]
     index_typ = typemap[index.name]
     ndim = value_typ.ndim
-    require(isinstance(value_typ, types.npytypes.Array))
-    if (isinstance(index_typ, types.npytypes.Array) and
+    require(isinstance(value_typ, types.Array))
+    if (isinstance(index_typ, types.Array) and
         isinstance(index_typ.dtype, types.Boolean) and
         ndim == index_typ.ndim):
         return value, index, index_typ.dtype, None
@@ -2951,13 +2952,13 @@ def _find_mask(typemap, func_ir, arr_def):
         for ind in seq:
             index_typ = typemap[ind.name]
             # Handle boolean mask
-            if (isinstance(index_typ, types.npytypes.Array) and
+            if (isinstance(index_typ, types.Array) and
                 isinstance(index_typ.dtype, types.Boolean)):
                 mask_var = ind
                 mask_typ = index_typ.dtype
                 mask_indices.append(None)
             # Handle integer array selector
-            elif (isinstance(index_typ, types.npytypes.Array) and
+            elif (isinstance(index_typ, types.Array) and
                 isinstance(index_typ.dtype, types.Integer)):
                 mask_var = ind
                 mask_typ = index_typ.dtype
@@ -3434,7 +3435,7 @@ def _gen_arrayexpr_getitem(
     if ndims == 0:
         # call np.ravel
         ravel_var = ir.Var(var.scope, mk_unique_var("$ravel"), loc)
-        ravel_typ = types.npytypes.Array(dtype=var_typ.dtype, ndim=1, layout='C')
+        ravel_typ = types.Array(dtype=var_typ.dtype, ndim=1, layout='C')
         typemap[ravel_var.name] = ravel_typ
         stmts = ir_utils.gen_np_call('ravel', numpy.ravel, ravel_var, [var], typingctx, typemap, calltypes)
         init_block.body.extend(stmts)
@@ -4665,7 +4666,7 @@ def has_cross_iter_dep(
         for stmt in b.body:
             # Make sure SetItem accesses are fusion safe.
             if isinstance(stmt, (ir.SetItem, ir.StaticSetItem)):
-                if isinstance(typemap[stmt.target.name], types.npytypes.Array):
+                if isinstance(typemap[stmt.target.name], types.Array):
                     # Check index safety with prior array accesses.
                     if check_index(stmt.index,
                                    stmt.target.name,
@@ -4687,7 +4688,7 @@ def has_cross_iter_dep(
                     op = stmt.value.op
                     # Make sure getitem accesses are fusion safe.
                     if op in ['getitem', 'static_getitem']:
-                        if isinstance(typemap[stmt.value.value.name], types.npytypes.Array):
+                        if isinstance(typemap[stmt.value.value.name], types.Array):
                             # Check index safety with prior array accesses.
                             if check_index(stmt.value.index,
                                            stmt.value.value.name,
@@ -4702,7 +4703,7 @@ def has_cross_iter_dep(
                         # If there is a call in the parfor body that takes some
                         # array parameter then we have no way to analyze what
                         # that call is doing so presume it is unsafe for fusion.
-                        if (any([isinstance(typemap[x.name], types.npytypes.Array)
+                        if (any([isinstance(typemap[x.name], types.Array)
                             for x in stmt.value.list_vars()])):
                             return True, index_positions, indexed_arrays, non_indexed_arrays
 

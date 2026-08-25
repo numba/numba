@@ -21,7 +21,7 @@ from numba.np.numpy_support import (
     ufunc_find_matching_loop, select_array_wrapper, from_dtype, _ufunc_loop_sig
 )
 from numba.np.arrayobj import _getitem_array_generic
-from numba.core.typing import npydecl
+from numba.np import npydecl
 from numba.core.extending import overload, intrinsic
 
 from numba.core import errors
@@ -858,7 +858,7 @@ def _make_dtype_object(typingctx, desc):
         # Convert the str description into np.dtype then to numba type.
         nb_type = from_dtype(np.dtype(desc.literal_value))
         return from_nb_type(nb_type)
-    elif isinstance(desc, types.functions.NumberClass):
+    elif isinstance(desc, types.NumberClass):
         thestr = str(desc.dtype)
         # Convert the str description into np.dtype then to numba type.
         nb_type = from_dtype(np.dtype(thestr))
@@ -868,7 +868,7 @@ def _make_dtype_object(typingctx, desc):
 def numpy_dtype(dtype):
     """Provide an implementation so that numpy.dtype function can be lowered.
     """
-    if isinstance(dtype, (types.Literal, types.functions.NumberClass)):
+    if isinstance(dtype, (types.Literal, types.NumberClass)):
         def imp(dtype):
             return _make_dtype_object(dtype)
         return imp

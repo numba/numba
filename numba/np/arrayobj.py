@@ -36,12 +36,16 @@ from numba.cpython import slicing
 from numba.cpython.charseq import _make_constant_bytes, bytes_type
 from numba.cpython.unsafe.tuple import tuple_setitem, build_full_slice_tuple
 from numba.core.extending import overload_classmethod
-from numba.core.typing.npydecl import (parse_dtype as ty_parse_dtype,
-                                       parse_shape as ty_parse_shape,
-                                       _parse_nested_sequence,
-                                       _sequence_of_arrays,
-                                       _choose_concatenation_layout)
+from numba.np.npydecl import (
+    parse_dtype as ty_parse_dtype, parse_shape as ty_parse_shape,
+    _parse_nested_sequence, _sequence_of_arrays,
+    _choose_concatenation_layout
+)
 from numba.np import types as npy_types
+from numba.core.base import BaseContext
+from numba.core.pythonapi import box, unbox, NativeValue
+from numba.np import numpy_support
+from numba.core.errors import NumbaNotImplementedError
 
 
 def set_range_metadata(builder, load, lower_bound, upper_bound):
@@ -7567,3 +7571,155 @@ def nan_to_num_impl(x, copy=True, nan=0.0, posinf=None, neginf=None):
         raise errors.TypingError("The first argument must be a scalar or an "
                                  "array-like")
     return impl
+
+
+def make_constant_array(self, builder, typ, ary):
+    """
+    Create an array structure reifying the given constant array.
+    A low-level contiguous array constant is created in the LLVM IR.
+    """
+    datatype = self.get_data_type(typ.dtype)
+    # don't freeze ary of non-contig or bigger than 1MB
+    size_limit = 10**6
+
+    if (self.allow_dynamic_globals and
+            (typ.layout not in 'FC' or ary.nbytes > size_limit)):
+        # get pointer from the ary
+        dataptr = ary.ctypes.data
+        data = self.add_dynamic_addr(builder, dataptr, info=str(type(dataptr)))
+        rt_addr = self.add_dynamic_addr(builder, id(ary), info=str(type(ary)))
+    else:
+        # Handle data: reify the flattened array in "C" or "F" order as a
+        # global array of bytes.
+        flat = ary.flatten(order=typ.layout)
+        # Note: we use `bytearray(flat.data)` instead of `bytearray(flat)` to
+        #       workaround issue #1850 which is due to numpy issue #3147
+        consts = cgutils.create_constant_array(
+            ir.IntType(8), bytearray(flat.data)
+        )
+        data = cgutils.global_constant(builder, ".const.array.data", consts)
+        # Ensure correct data alignment (issue #1933)
+        data.align = self.get_abi_alignment(datatype)
+        # No reference to parent ndarray
+        rt_addr = None
+
+    # Handle shape
+    llintp = self.get_value_type(types.intp)
+    shapevals = [self.get_constant(types.intp, s) for s in ary.shape]
+    cshape = cgutils.create_constant_array(llintp, shapevals)
+
+    # Handle strides
+    stridevals = [self.get_constant(types.intp, s) for s in ary.strides]
+    cstrides = cgutils.create_constant_array(llintp, stridevals)
+
+    # Create array structure
+    cary = self.make_array(typ)(self, builder)
+
+    intp_itemsize = self.get_constant(types.intp, ary.dtype.itemsize)
+    self.populate_array(cary,
+                        data=builder.bitcast(data, cary.data.type),
+                        shape=cshape,
+                        strides=cstrides,
+                        itemsize=intp_itemsize,
+                        parent=rt_addr,
+                        meminfo=None)
+
+    return cary._getvalue()
+
+
+BaseContext.make_array = lambda self, typ: make_array(typ)
+BaseContext.populate_array = \
+    lambda self, ary, **kwargs: populate_array(ary, **kwargs)
+BaseContext.make_constant_array = make_constant_array
+
+
+@box(types.Array)
+def box_array(typ, val, c):
+    nativearycls = c.context.make_array(typ)
+    nativeary = nativearycls(c.context, c.builder, value=val)
+    if c.context.enable_nrt:
+        np_dtype = numpy_support.as_dtype(typ.dtype)
+        dtypeptr = c.env_manager.read_const(c.env_manager.add_const(np_dtype))
+        newary = c.pyapi.nrt_adapt_ndarray_to_python(typ, val, dtypeptr)
+        # Steals NRT ref
+        c.context.nrt.decref(c.builder, typ, val)
+        return newary
+    else:
+        parent = nativeary.parent
+        c.pyapi.incref(parent)
+        return parent
+
+
+@unbox(types.Buffer)
+def unbox_buffer(typ, obj, c):
+    """
+    Convert a Py_buffer-providing object to a native array structure.
+    """
+    buf = c.pyapi.alloca_buffer()
+    res = c.pyapi.get_buffer(obj, buf)
+    is_error = cgutils.is_not_null(c.builder, res)
+
+    nativearycls = c.context.make_array(typ)
+    nativeary = nativearycls(c.context, c.builder)
+    aryptr = nativeary._getpointer()
+
+    with cgutils.if_likely(c.builder, c.builder.not_(is_error)):
+        ptr = c.builder.bitcast(aryptr, c.pyapi.voidptr)
+        if c.context.enable_nrt:
+            c.pyapi.nrt_adapt_buffer_from_python(buf, ptr)
+        else:
+            c.pyapi.numba_buffer_adaptor(buf, ptr)
+
+    def cleanup():
+        c.pyapi.release_buffer(buf)
+
+    return NativeValue(c.builder.load(aryptr), is_error=is_error,
+                       cleanup=cleanup)
+
+
+@unbox(types.Array)
+def unbox_array(typ, obj, c):
+    """
+    Convert a Numpy array object to a native array structure.
+    """
+    # This is necessary because unbox_buffer() does not work on some
+    # dtypes, e.g. datetime64 and timedelta64.
+    # TODO check matching dtype.
+    #      currently, mismatching dtype will still work and causes
+    #      potential memory corruption
+    nativearycls = c.context.make_array(typ)
+    nativeary = nativearycls(c.context, c.builder)
+    aryptr = nativeary._getpointer()
+
+    ptr = c.builder.bitcast(aryptr, c.pyapi.voidptr)
+    if c.context.enable_nrt:
+        errcode = c.pyapi.nrt_adapt_ndarray_from_python(obj, ptr)
+    else:
+        errcode = c.pyapi.numba_array_adaptor(obj, ptr)
+
+    # TODO: here we have minimal typechecking by the itemsize.
+    #       need to do better
+    try:
+        expected_itemsize = numpy_support.as_dtype(typ.dtype).itemsize
+    except NumbaNotImplementedError:
+        # Don't check types that can't be `as_dtype()`-ed
+        itemsize_mismatch = cgutils.false_bit
+    else:
+        expected_itemsize = nativeary.itemsize.type(expected_itemsize)
+        itemsize_mismatch = c.builder.icmp_unsigned(
+            '!=',
+            nativeary.itemsize,
+            expected_itemsize,
+        )
+
+    failed = c.builder.or_(
+        cgutils.is_not_null(c.builder, errcode),
+        itemsize_mismatch,
+    )
+    # Handle error
+    with c.builder.if_then(failed, likely=False):
+        c.pyapi.err_set_string("PyExc_TypeError",
+                               "can't unbox array from PyObject into "
+                               "native value.  The object maybe of a "
+                               "different type")
+    return NativeValue(c.builder.load(aryptr), is_error=failed)

@@ -8,7 +8,7 @@ import numpy as np
 import operator
 
 from numba.core import types, targetconfig, ir, rewrites, compiler
-from numba.core.typing import npydecl
+from numba.np import npydecl
 from numba.np.ufunc.dufunc import DUFunc
 
 

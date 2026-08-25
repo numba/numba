@@ -6,7 +6,7 @@ from numba import jit, njit
 from numba.core import types
 from numba.tests.support import TestCase
 
-from numba.core.inline_closurecall import length_of_iterator
+from numba.np.inline_arraycall import length_of_iterator
 
 def loop1(n):
     s = 0

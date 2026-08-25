@@ -1,6 +1,5 @@
 import itertools
 
-import numpy as np
 import operator
 
 from numba.core import types, errors
@@ -789,56 +788,6 @@ class SliceAttribute(AttributeTemplate):
 
 
 #-------------------------------------------------------------------------------
-
-
-@infer_getattr
-class NumberClassAttribute(AttributeTemplate):
-    key = types.NumberClass
-
-    def resolve___call__(self, classty):
-        """
-        Resolve a NumPy number class's constructor (e.g. calling numpy.int32(...))
-        """
-        ty = classty.instance_type
-
-        def typer(val):
-            # TODO: When we refactor NumberClass, we should move this logic 
-            # to the NumPy module. For now, we special case the datetime-like 
-            # types here.
-            from numba.np.types.datetime import NPTimedelta, NPDatetime
-            if isinstance(val, (types.BaseTuple, types.Sequence)):
-                # Array constructor, e.g. np.int32([1, 2])
-                fnty = self.context.resolve_value_type(np.array)
-                sig = fnty.get_call_type(self.context, (val, types.DType(ty)),
-                                         {})
-                return sig.return_type
-            elif isinstance(val, (types.Number, types.Boolean, types.IntEnumMember)):
-                 # Scalar constructor, e.g. np.int32(42)
-                 return ty
-            elif isinstance(val, (NPDatetime, NPTimedelta)):
-                # Constructor cast from datetime-like, e.g.
-                # > np.int64(np.datetime64("2000-01-01"))
-                if ty.bitwidth == 64:
-                    return ty
-                else:
-                    msg = (f"Cannot cast {val} to {ty} as {ty} is not 64 bits "
-                           "wide.")
-                    raise errors.TypingError(msg)
-            else:
-                if (isinstance(val, types.Array) and val.ndim == 0 and
-                    val.dtype == ty):
-                    # This is 0d array -> scalar degrading
-                    return ty
-                else:
-                    # unsupported
-                    msg = f"Casting {val} to {ty} directly is unsupported."
-                    if isinstance(val, types.Array):
-                        # array casts are supported a different way.
-                        msg += f" Try doing '<array>.astype(np.{ty})' instead"
-                    raise errors.TypingError(msg)
-
-        return types.Function(make_callable_template(key=ty, typer=typer))
-
 
 @infer_getattr
 class TypeRefAttribute(AttributeTemplate):

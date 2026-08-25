@@ -1,6 +1,5 @@
 """Shared BTPE binomial sampler, factored out of the legacy ``np.random`` path
-(``numba.cpython.randomimpl``) and the ``Generator`` path
-(``numba.np.random.distributions``).
+(``numba.cpython.randomimpl``) and the ``Generator`` path.
 
 The two paths differ only in (1) how a uniform double is drawn and (2) the
 ``case == 52`` squeeze test (whose Stirling constants are frozen at NumPy's

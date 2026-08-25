@@ -173,28 +173,6 @@ class _ObjModeContextType(WithContext):
     is the same as passing Python objects into arguments of a nopython
     function.
 
-    Example::
-
-        import numpy as np
-        from numba import njit, objmode, types
-
-        def bar(x):
-            # This code is executed by the interpreter.
-            return np.asarray(list(reversed(x.tolist())))
-
-        # Output type as global variable
-        out_ty = types.intp[:]
-
-        @njit
-        def foo():
-            x = np.arange(5)
-            y = np.zeros_like(x)
-            with objmode(y='intp[:]', z=out_ty):  # annotate return type
-                # this region is executed by object-mode.
-                y += bar(x)
-                z = y
-            return y, z
-
     .. note:: Known limitations:
 
         - with-block cannot use incoming list objects.

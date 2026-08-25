@@ -3,12 +3,7 @@ from functools import singledispatch
 import ctypes
 import enum
 
-import numpy as np
-from numpy.random.bit_generator import BitGenerator
-
 from numba.core import types, utils, errors
-from numba.np import numpy_support
-
 
 # terminal color markup
 _termcolor = errors.termcolor()
@@ -22,6 +17,7 @@ class Purpose(enum.Enum):
 
 
 _TypeofContext = namedtuple("_TypeofContext", ("purpose",))
+_extra_types = {}
 
 
 def typeof(val, purpose=Purpose.argument):
@@ -53,7 +49,7 @@ def typeof_impl(val, c):
 
     # cffi is handled here as it does not expose a public base class
     # for exported functions or CompiledFFI instances.
-    from numba.core.typing import cffi_utils
+    from numba.cffi import cffi_utils
     if cffi_utils.SUPPORTED:
         if cffi_utils.is_cffi_func(val):
             return cffi_utils.make_function_type(val)
@@ -97,9 +93,6 @@ def _typeof_type(val, c):
     if issubclass(val, tuple) and hasattr(val, "_asdict"):
         return types.NamedTupleClass(val)
 
-    if issubclass(val, np.generic):
-        return types.NumberClass(numpy_support.from_dtype(val))
-
     if issubclass(val, types.Type):
         return types.TypeRef(val)
 
@@ -114,6 +107,10 @@ def _typeof_type(val, c):
     from numba.typed import Set
     if issubclass(val, Set):
         return types.TypeRef(types.SetType)
+
+    for _type in _extra_types:
+        if issubclass(val, _type):
+            return _extra_types[_type](val)
 
 
 @typeof_impl.register(bool)
@@ -144,16 +141,6 @@ def _typeof_int(val, c):
     else:
         raise ValueError("Int value is too large: %s" % val)
     return typ
-
-
-@typeof_impl.register(np.generic)
-def _typeof_numpy_scalar(val, c):
-    try:
-        return numpy_support.map_arrayscalar_type(val)
-    except errors.NumbaNotImplementedError:
-        pass
-    except NotImplementedError:
-        pass
 
 
 @typeof_impl.register(str)
@@ -237,31 +224,6 @@ def _typeof_enum_class(val, c):
     return typecls(cls, dtypes.pop())
 
 
-@typeof_impl.register(np.dtype)
-def _typeof_dtype(val, c):
-    tp = numpy_support.from_dtype(val)
-    return types.DType(tp)
-
-
-@typeof_impl.register(np.ndarray)
-def _typeof_ndarray(val, c):
-    if isinstance(val, np.ma.MaskedArray):
-        msg = "Unsupported array type: numpy.ma.MaskedArray."
-        raise errors.NumbaTypeError(msg)
-    try:
-        dtype = numpy_support.from_dtype(val.dtype)
-    except errors.NumbaNotImplementedError:
-        raise errors.NumbaValueError(f"Unsupported array dtype: {val.dtype}")
-    layout = numpy_support.map_layout(val)
-    readonly = not val.flags.writeable
-    return types.Array(dtype, val.ndim, layout, readonly=readonly)
-
-
-@typeof_impl.register(types.NumberClass)
-def _typeof_number_class(val, c):
-    return val
-
-
 @typeof_impl.register(types.Literal)
 def _typeof_literal(val, c):
     return val
@@ -280,21 +242,3 @@ def _typeof_nb_type(val, c):
         return types.NumberClass(val)
     else:
         return types.TypeRef(val)
-
-
-@typeof_impl.register(BitGenerator)
-def typeof_numpy_random_bitgen(val, c):
-    return types.NumPyRandomBitGeneratorType(val)
-
-
-@typeof_impl.register(np.random.Generator)
-def typeof_random_generator(val, c):
-    return types.NumPyRandomGeneratorType(val)
-
-
-@typeof_impl.register(np.polynomial.polynomial.Polynomial)
-def typeof_numpy_polynomial(val, c):
-    coef = typeof(val.coef)
-    domain = typeof(val.domain)
-    window = typeof(val.window)
-    return types.PolynomialType(coef, domain, window)

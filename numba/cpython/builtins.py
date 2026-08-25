@@ -354,26 +354,6 @@ def complex_impl(context, builder, sig, args):
     res = cmplx._getvalue()
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-
-@lower_builtin(types.NumberClass, types.Any)
-def number_constructor(context, builder, sig, args):
-    """
-    Call a number class, e.g. np.int32(...)
-    """
-    if isinstance(sig.return_type, types.Array):
-        # Array constructor
-        dt = sig.return_type.dtype
-        def foo(*arg_hack):
-            return np.array(arg_hack, dtype=dt)
-        res = context.compile_internal(builder, foo, sig, args)
-        return impl_ret_untracked(context, builder, sig.return_type, res)
-    else:
-        # Scalar constructor
-        [val] = args
-        [valty] = sig.args
-        return context.cast(builder, val, valty, sig.return_type)
-
-
 #-------------------------------------------------------------------------------
 # Constants
 
@@ -820,9 +800,8 @@ def ol_isinstance(var, typs):
                         types.Function, types.ClassType, types.UnicodeType,
                         types.ClassInstanceType, types.NoneType, types.Array,
                         types.Boolean, types.Float, types.UnicodeCharSeq,
-                        types.Complex, types.NPDatetime, types.NPTimedelta,
-                        types.SetType)
-    if not isinstance(var_ty, supported_var_ty):
+                        types.Complex, types.SetType)
+    if not (isinstance(var_ty, supported_var_ty) or var_ty.__class__.__name__ == "NPDatetime" or var_ty.__class__.__name__ == "NPTimedelta"):
         msg = f'isinstance() does not support variables of type "{var_ty}".'
         raise NumbaTypeError(msg)
 
@@ -876,7 +855,7 @@ def ol_isinstance(var, typs):
             numba_typ = as_numba_type(key)
             if var_ty == numba_typ:
                 return true_impl
-            elif isinstance(numba_typ, (types.NPDatetime, types.NPTimedelta)):
+            elif numba_typ.__class__.__name__ in ("NPDatetime", "NPTimedelta"):
                 if isinstance(var_ty, type(numba_typ)):
                     return true_impl
             elif isinstance(numba_typ, types.ClassType) and \
