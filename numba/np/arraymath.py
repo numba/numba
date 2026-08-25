@@ -434,104 +434,113 @@ def get_ret_dtype_if_any(aryty, dtype):
     return ret_dtype
 
 
-@intrinsic
-def _numpy_sum(typingctx, aryty, axisty, dtype):
-    ret_dtype = get_ret_dtype_if_any(aryty, dtype)
-    sig = ret_dtype(aryty, axisty, dtype)
+def _np_func_builder(axis):
+    """
+    Build an intrinsic implementing a sum reduction.  When ``axis`` is False
+    the reduction is over the whole array (like ``_numpy_sum``); when True
+    it is along one or more axes (like ``_numpy_sum_axis``).  The two
+    variants share almost all of their code generation, differing only in
+    the accumulator (a scalar vs. an output array) and the return type.
+    """
+    @intrinsic
+    def _numpy_sum(typingctx, aryty, axisty, dtype):
+        ret_dtype = get_ret_dtype_if_any(aryty, dtype)
 
-    def codegen(context, builder, sig, args):
-        ary, _, _ = args
-
-        ary = make_array(aryty)(context, builder, ary)
-        if isinstance(ret_dtype, types.NPTimedelta):
-            zero = context.get_constant(ret_dtype, ret_dtype(0))
+        if axis:
+            axis_length = axisty.count if isinstance(axisty, types.UniTuple) else 1
+            ret = types.Array(ret_dtype, aryty.ndim - axis_length, layout='C')
         else:
-            zero = context.get_constant(ret_dtype, 0)
-        result = cgutils.alloca_once_value(builder, zero)
+            ret = ret_dtype
 
-        fnty = context.typing_context.resolve_value_type(operator.iadd)
-        fn_sig = fnty.get_call_type(
-            context.typing_context,
-            (sig.return_type, sig.return_type),
-            {}
-        )
-        if isinstance(ret_dtype, types.Boolean):
-            add_funcfn = lambda builder, args: builder.or_(*args)
-        else:
-            add_funcfn = context.get_function(fnty, fn_sig)
+        sig = ret(aryty, axisty, dtype)
 
-        # Loop on source and copy to destination
-        with ArrayIterator(context, builder, aryty, ary) as iter_val_ptr:
-            val = load_item(context, builder, aryty, iter_val_ptr)
-            res_val = add_funcfn(builder, (
-                builder.load(result),
-                context.cast(builder, val, aryty.dtype, sig.return_type)))
-            builder.store(res_val, result)
+        def codegen(context, builder, sig, args):
+            ary, axis_arg, _ = args
 
-        return impl_ret_borrowed(
-            context, builder, sig.return_type, builder.load(result)
-        )
+            ary = make_array(aryty)(context, builder, ary)
 
-    return sig, codegen
+            if axis:
+                if isinstance(axisty, types.UniTuple):
+                    axis_arg = cgutils.unpack_tuple(builder, axis_arg)
+
+                # Res shape will be a tuple one axis less than
+                # ndim and need appropriate shape calculations.
+                res_shape = get_spliced_tuple(
+                    context, builder, ary.shape.type, ary.shape, axis_arg
+                )
+                res = _empty_nd_impl(
+                    context, builder, sig.return_type,
+                    cgutils.unpack_tuple(builder, res_shape)
+                )
+                cgutils.memset(
+                    builder, res.data,
+                    builder.mul(res.itemsize, res.nitems), 0
+                )
+                mask = get_mask(context, builder, aryty.ndim, axis_arg)
+
+                def load_accumulator(ptr):
+                    return load_item(context, builder, sig.return_type, ptr)
+
+                def store_accumulator(val, ptr):
+                    store_item(context, builder, sig.return_type, val, ptr)
+
+                iter_args = (context, builder, aryty, ary, (mask,), (res,))
+            else:
+                if isinstance(ret_dtype, types.NPTimedelta):
+                    zero = context.get_constant(ret_dtype, ret_dtype(0))
+                else:
+                    zero = context.get_constant(ret_dtype, 0)
+                result = cgutils.alloca_once_value(builder, zero)
+
+                def load_accumulator(ptr):
+                    return builder.load(ptr)
+
+                def store_accumulator(val, ptr):
+                    builder.store(val, ptr)
+
+                iter_args = (context, builder, aryty, ary)
+
+            fnty = context.typing_context.resolve_value_type(operator.iadd)
+            fn_sig = fnty.get_call_type(
+                context.typing_context,
+                (ret_dtype, ret_dtype),
+                {}
+            )
+            if isinstance(ret_dtype, types.Boolean):
+                add_funcfn = lambda builder, args: builder.or_(*args)
+            else:
+                add_funcfn = context.get_function(fnty, fn_sig)
+
+            # Loop on source and copy to destination
+            with ArrayIterator(*iter_args) as iter_vals:
+                if axis:
+                    ary_iter_ptr, res_ptr_tup = iter_vals
+                    acc_ptr = res_ptr_tup[0]
+                else:
+                    ary_iter_ptr = iter_vals
+                    acc_ptr = result
+                val = load_item(context, builder, aryty, ary_iter_ptr)
+                res_val = add_funcfn(builder, (
+                    load_accumulator(acc_ptr),
+                    context.cast(builder, val, aryty.dtype, ret_dtype)))
+                store_accumulator(res_val, acc_ptr)
+
+            if axis:
+                return impl_ret_new_ref(
+                    context, builder, sig.return_type, res._getvalue()
+                )
+            else:
+                return impl_ret_borrowed(
+                    context, builder, sig.return_type, builder.load(result)
+                )
+
+        return sig, codegen
+
+    return _numpy_sum
 
 
-@intrinsic
-def _numpy_sum_axis(typingctx, aryty, axisty, dtype):
-    ret_dtype = get_ret_dtype_if_any(aryty, dtype)
-
-    axis_length = axisty.count if isinstance(axisty, types.UniTuple) else 1
-    ret = types.Array(ret_dtype, aryty.ndim - axis_length, layout='C')
-    sig = ret(aryty, axisty, dtype)
-
-    def codegen(context, builder, sig, args):
-        ary, axis, _ = args
-
-        ary = make_array(aryty)(context, builder, ary)
-        if isinstance(axisty, types.UniTuple):
-            axis = cgutils.unpack_tuple(builder, axis)
-
-        # Res shape will be a tuple one axis less than
-        # ndim and need appropriate shape calculations.
-        res_shape = get_spliced_tuple(
-            context, builder, ary.shape.type, ary.shape, axis
-        )
-        res = _empty_nd_impl(
-            context, builder, sig.return_type,
-            cgutils.unpack_tuple(builder, res_shape)
-        )
-        cgutils.memset(
-            builder, res.data,
-            builder.mul(res.itemsize, res.nitems), 0
-        )
-
-        fnty = context.typing_context.resolve_value_type(operator.iadd)
-        fn_sig = fnty.get_call_type(
-            context.typing_context,
-            (sig.return_type.dtype, sig.return_type.dtype),
-            {}
-        )
-        if isinstance(ret_dtype, types.Boolean):
-            add_funcfn = lambda builder, args: builder.or_(*args)
-        else:
-            add_funcfn = context.get_function(fnty, fn_sig)
-
-        mask = get_mask(context, builder, aryty.ndim, axis)
-        # Loop on source and copy to destination
-        with ArrayIterator(
-            context, builder, aryty, ary, (mask,), (res,)
-        ) as (ary_iter_ptr, res_ptr_tup):
-            res_ptr = res_ptr_tup[0]
-            val = load_item(context, builder, aryty, ary_iter_ptr)
-            res_val = add_funcfn(builder, (
-                load_item(context, builder, sig.return_type, res_ptr),
-                context.cast(builder, val, aryty.dtype, sig.return_type.dtype)))
-            store_item(context, builder, sig.return_type, res_val, res_ptr)
-
-        return impl_ret_new_ref(
-            context, builder, sig.return_type, res._getvalue()
-        )
-
-    return sig, codegen
+_numpy_sum = _np_func_builder(axis=False)
+_numpy_sum_axis = _np_func_builder(axis=True)
 
 
 axis_bound_err = ValueError if numpy_version < (1, 25)\
