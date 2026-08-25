@@ -12,7 +12,7 @@ from numba import jit, njit, typeof
 from numba.core import errors
 from numba.np.numpy_support import numpy_version
 from numba.tests.support import (TestCase, tag, needs_lapack, needs_blas,
-                                 _is_armv7l, EnableNRTStatsMixin, has_lapack,
+                                 _is_armv7l, EnableNRTStatsMixin,
                                  available_memory_bytes)
 from numba.np.linalg import _LAPACK_ILP64
 from .matmul_usecase import matmul_usecase
@@ -2224,7 +2224,7 @@ class TestLinalgNorm(TestLinalgSystems):
     # ILP64 scipy/BLAS and enough free memory to allocate x.
     @needs_lapack
     @unittest.skipIf(
-        not has_lapack or not _LAPACK_ILP64
+        not _LAPACK_ILP64
         or (available_memory_bytes() or 0) < _NORM_ILP64_BYTES_NEEDED,
         "requires an ILP64 scipy/BLAS and enough free memory for a "
         "2**31-element float64 array"
