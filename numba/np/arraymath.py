@@ -417,21 +417,91 @@ def get_mask(context, builder, mask_length, axis):
     return builder.load(stack)
 
 
-def get_ret_dtype_if_any(aryty, dtype):
+def get_ret_dtype_if_any(aryty, dtype, funcfn=None):
     if is_nonelike(dtype):
         ret_dtype = aryty.dtype
-        if ret_dtype == types.bool_:
-            ret_dtype = types.intp
-        if (
-            isinstance(aryty.dtype, types.Integer) and
-            aryty.dtype.bitwidth < types.intp.bitwidth
-        ):
-            # For signed integers smaller than intp,
-            # use intp as the accumulator
-            ret_dtype = types.intp
+        if funcfn not in (np.minimum, np.maximum):
+            # For sum/prod-like reductions NumPy promotes booleans and small
+            # integers to intp. min/max preserve the input dtype.
+            if ret_dtype == types.bool_:
+                ret_dtype = types.intp
+            if (
+                isinstance(aryty.dtype, types.Integer) and
+                aryty.dtype.bitwidth < types.intp.bitwidth
+            ):
+                # For signed integers smaller than intp,
+                # use intp as the accumulator
+                ret_dtype = types.intp
     else:
         ret_dtype = dtype.dtype
     return ret_dtype
+
+
+@register_jitable
+def _numpy_datetime_min(a, b):
+    # min() on datetime64 propagates NaT. np.minimum is not supported for
+    # datetime64 in Numba, so use an explicit comparison.
+    if np.isnat(a):
+        return a
+    if np.isnat(b):
+        return b
+    return a if a < b else b
+
+
+@register_jitable
+def _numpy_datetime_max(a, b):
+    # max() on datetime64 propagates NaT. np.maximum is not supported for
+    # datetime64 in Numba, so use an explicit comparison.
+    if np.isnat(a):
+        return a
+    if np.isnat(b):
+        return b
+    return a if a > b else b
+
+
+def get_reduction_identity(funcfn, ret_dtype):
+    # Return the value that, when accumulated with ``funcfn``, leaves the
+    # other operand unchanged. Used to initialise the accumulator of a
+    # reduction.
+    if funcfn is operator.iadd:
+        if isinstance(ret_dtype, types.NPTimedelta):
+            return np.timedelta64(0, 's')
+        return 0
+    elif funcfn is operator.imul:
+        if isinstance(ret_dtype, types.NPTimedelta):
+            return np.timedelta64(1, 's')
+        return 1
+    elif funcfn is np.minimum:
+        # The largest representable value of the dtype
+        if isinstance(ret_dtype, types.Float):
+            return float('inf')
+        elif isinstance(ret_dtype, types.Integer):
+            return ret_dtype.maxval
+        elif ret_dtype == types.bool_:
+            return True
+        elif isinstance(ret_dtype, types.Complex):
+            return complex(float('inf'), float('inf'))
+        elif isinstance(ret_dtype, types.NPDatetime):
+            return np.datetime64(2 ** 63 - 1, 'ns')
+        elif isinstance(ret_dtype, types.NPTimedelta):
+            return np.timedelta64(2 ** 63 - 1, 's')
+    elif funcfn is np.maximum:
+        # The smallest representable value of the dtype
+        if isinstance(ret_dtype, types.Float):
+            return float('-inf')
+        elif isinstance(ret_dtype, types.Integer):
+            return ret_dtype.minval
+        elif ret_dtype == types.bool_:
+            return False
+        elif isinstance(ret_dtype, types.Complex):
+            return complex(float('-inf'), float('-inf'))
+        elif isinstance(ret_dtype, types.NPDatetime):
+            return np.datetime64(-(2 ** 63) + 1, 'ns')
+        elif isinstance(ret_dtype, types.NPTimedelta):
+            return np.timedelta64(-(2 ** 63) + 1, 's')
+    raise NotImplementedError(
+        f"No reduction identity defined for {funcfn} on {ret_dtype}"
+    )
 
 
 def _fill_array_with_constant(context, builder, aryty, ary, value):
@@ -446,13 +516,14 @@ def _np_func_builder(axis, funcfn):
     the reduction is over the whole array (like ``_numpy_sum``); when True
     it is along one or more axes (like ``_numpy_sum_axis``).  ``funcfn`` is
     the binary operation to accumulate with (``operator.iadd`` for sum,
-    ``operator.imul`` for prod).  The two variants share almost all of their
-    code generation, differing only in the accumulator (a scalar vs. an
-    output array) and the return type.
+    ``operator.imul`` for prod, ``np.minimum`` for min and ``np.maximum``
+    for max).  The two variants share almost all of their code generation,
+    differing only in the accumulator (a scalar vs. an output array) and the
+    return type.
     """
     @intrinsic
     def _numpy_reduce(typingctx, aryty, axisty, dtype):
-        ret_dtype = get_ret_dtype_if_any(aryty, dtype)
+        ret_dtype = get_ret_dtype_if_any(aryty, dtype, funcfn)
 
         if axis:
             axis_length = axisty.count if isinstance(
@@ -481,8 +552,11 @@ def _np_func_builder(axis, funcfn):
                     context, builder, sig.return_type,
                     cgutils.unpack_tuple(builder, res_shape)
                 )
-                if funcfn is operator.imul:
-                    identity = context.get_constant(ret_dtype, 1)
+                if funcfn is operator.imul or funcfn in (
+                        np.minimum, np.maximum):
+                    identity = context.get_constant(
+                        ret_dtype, get_reduction_identity(funcfn, ret_dtype)
+                    )
                     _fill_array_with_constant(
                         context, builder, sig.return_type, res, identity
                     )
@@ -501,12 +575,9 @@ def _np_func_builder(axis, funcfn):
 
                 iter_args = (context, builder, aryty, ary, (mask,), (res,))
             else:
-                if isinstance(ret_dtype, types.NPTimedelta):
-                    identity = context.get_constant(ret_dtype, ret_dtype(0))
-                else:
-                    identity = context.get_constant(
-                        ret_dtype, 1 if funcfn is operator.imul else 0
-                    )
+                identity = context.get_constant(
+                    ret_dtype, get_reduction_identity(funcfn, ret_dtype)
+                )
                 result = cgutils.alloca_once_value(builder, identity)
 
                 def load_accumulator(ptr):
@@ -517,14 +588,25 @@ def _np_func_builder(axis, funcfn):
 
                 iter_args = (context, builder, aryty, ary)
 
-            fnty = context.typing_context.resolve_value_type(funcfn)
+            # np.minimum/np.maximum are not supported for datetime64 in
+            # Numba, so fall back to an explicit comparison that also
+            # propagates NaT.
+            reduce_func = funcfn
+            if reduce_func is np.minimum and isinstance(
+                    ret_dtype, types.NPDatetime):
+                reduce_func = _numpy_datetime_min
+            elif reduce_func is np.maximum and isinstance(
+                    ret_dtype, types.NPDatetime):
+                reduce_func = _numpy_datetime_max
+
+            fnty = context.typing_context.resolve_value_type(reduce_func)
             fn_sig = fnty.get_call_type(
                 context.typing_context,
                 (ret_dtype, ret_dtype),
                 {}
             )
             if isinstance(ret_dtype, types.Boolean):
-                if funcfn is operator.iadd:
+                if reduce_func is operator.iadd or reduce_func is np.maximum:
                     reduce_funcfn = lambda builder, args: builder.or_(*args)
                 else:
                     reduce_funcfn = lambda builder, args: builder.and_(*args)
@@ -563,7 +645,10 @@ _numpy_sum = _np_func_builder(axis=False, funcfn=operator.iadd)
 _numpy_sum_axis = _np_func_builder(axis=True, funcfn=operator.iadd)
 _numpy_prod = _np_func_builder(axis=False, funcfn=operator.imul)
 _numpy_prod_axis = _np_func_builder(axis=True, funcfn=operator.imul)
-
+_numpy_min = _np_func_builder(axis=False, funcfn=np.minimum)
+_numpy_min_axis = _np_func_builder(axis=True, funcfn=np.minimum)
+_numpy_max = _np_func_builder(axis=False, funcfn=np.maximum)
+_numpy_max_axis = _np_func_builder(axis=True, funcfn=np.maximum)
 
 axis_bound_err = ValueError if numpy_version < (1, 25)\
     else np.exceptions.AxisError
@@ -591,6 +676,35 @@ def check_duplicates(axis, ndim):
     if axis is not None and isinstance(axis, tuple):
         if len(axis) != len(np.unique(np.array(axis) % ndim)):
             raise ValueError("duplicate value in 'axis'")
+
+
+@register_jitable
+def check_empty_reduction(a, axis, operation):
+    # NumPy raises for min/max reductions over zero elements as there is no
+    # identity to fall back on. For axis reductions the number of elements
+    # reduced over is the product of the reduced dimensions.
+    if axis is None:
+        if a.size == 0:
+            raise ValueError(
+                f"zero-size array to reduction operation {operation} "
+                "which has no identity"
+            )
+    else:
+        if isinstance(axis, tuple):
+            count = 1
+            for ax in axis:
+                if ax < 0:
+                    ax = a.ndim + ax
+                count *= a.shape[ax]
+        else:
+            if axis < 0:
+                axis = a.ndim + axis
+            count = a.shape[axis]
+        if count == 0:
+            raise ValueError(
+                f"zero-size array to reduction operation {operation} "
+                "which has no identity"
+            )
 
 
 @overload(np.sum)
@@ -1191,133 +1305,86 @@ def array_std(a, axis=None):
         return std_scalar_float_impl
 
 
-@register_jitable
-def min_comparator(a, min_val):
-    return a < min_val
-
-
-@register_jitable
-def max_comparator(a, min_val):
-    return a > min_val
-
-
-@register_jitable
-def return_false(a):
-    return False
-
-
 @overload(np.min)
 @overload(np.amin)
 @overload_method(types.Array, "min")
-def npy_min(a):
-    #scalar case
-    if isinstance(a, (types.Number, types.Boolean,
-                      NPDatetime, NPTimedelta)):
-        def scalar_min(a):
+def npy_min(a, axis=None):
+    if not (isinstance(axis, types.Integer) or
+            is_nonelike(axis) or (
+                isinstance(axis, types.UniTuple) and
+                isinstance(axis.dtype, types.Integer))
+            or (
+                isinstance(axis, types.Tuple) and
+                axis.count == 0)):
+        raise TypingError(
+            "NumPy min only supports integer axis value or tuple of integers"
+        )
+    if isinstance(a, types.Array):
+        if isinstance(axis, types.Tuple) and axis.count == 0:
+            def npy_min_impl(a, axis=None):
+                return np.copy(a)
+        elif is_nonelike(axis) or a.ndim <= (
+            axis.count if isinstance(
+                axis, (types.Tuple, types.UniTuple)) else 1):
+            def npy_min_impl(a, axis=None):
+                check_axis_bounds(a, axis)
+                check_duplicates(axis, a.ndim)
+                check_empty_reduction(a, axis, "minimum")
+                return _numpy_min(a, axis, None)
+        else:
+            def npy_min_impl(a, axis=None):
+                check_axis_bounds(a, axis)
+                check_empty_reduction(a, axis, "minimum")
+                return _numpy_min_axis(a, axis, None)
+
+        return npy_min_impl
+    elif isinstance(a, (types.Number, types.Boolean,
+                        NPDatetime, NPTimedelta)):
+        def scalar_min(a, axis=None):
             return a
         return scalar_min
-
-    if not isinstance(a, types.Array):
-        return
-
-    if isinstance(a.dtype, (npy_types.NPDatetime, npy_types.NPTimedelta)):
-        pre_return_func = np.isnat
-        comparator = min_comparator
-    elif isinstance(a.dtype, types.Complex):
-        pre_return_func = return_false
-
-        def comp_func(a, min_val):
-            if a.real < min_val.real:
-                return True
-            elif a.real == min_val.real:
-                if a.imag < min_val.imag:
-                    return True
-            return False
-
-        comparator = register_jitable(comp_func)
-    elif isinstance(a.dtype, types.Float):
-        pre_return_func = np.isnan
-        comparator = min_comparator
-    else:
-        pre_return_func = return_false
-        comparator = min_comparator
-
-    def impl_min(a):
-        if a.size == 0:
-            raise ValueError("zero-size array to reduction operation "
-                             "minimum which has no identity")
-
-        it = np.nditer(a)
-        min_value = next(it).take(0)
-        if pre_return_func(min_value):
-            return min_value
-
-        for view in it:
-            v = view.item()
-            if pre_return_func(v):
-                return v
-            if comparator(v, min_value):
-                min_value = v
-        return min_value
-
-    return impl_min
+    return None
 
 
 @overload(np.max)
 @overload(np.amax)
 @overload_method(types.Array, "max")
-def npy_max(a):
-    #scalar case
-    if isinstance(a, (types.Number, types.Boolean,
-                      NPDatetime, NPTimedelta)):
-        def scalar_max(a):
+def npy_max(a, axis=None):
+    if not (isinstance(axis, types.Integer) or
+            is_nonelike(axis) or (
+                isinstance(axis, types.UniTuple) and
+                isinstance(axis.dtype, types.Integer))
+            or (
+                isinstance(axis, types.Tuple) and
+                axis.count == 0)):
+        raise TypingError(
+            "NumPy max only supports integer axis value or tuple of integers"
+        )
+    if isinstance(a, types.Array):
+        if isinstance(axis, types.Tuple) and axis.count == 0:
+            def npy_max_impl(a, axis=None):
+                return np.copy(a)
+        elif is_nonelike(axis) or a.ndim <= (
+            axis.count if isinstance(
+                axis, (types.Tuple, types.UniTuple)) else 1):
+            def npy_max_impl(a, axis=None):
+                check_axis_bounds(a, axis)
+                check_duplicates(axis, a.ndim)
+                check_empty_reduction(a, axis, "maximum")
+                return _numpy_max(a, axis, None)
+        else:
+            def npy_max_impl(a, axis=None):
+                check_axis_bounds(a, axis)
+                check_empty_reduction(a, axis, "maximum")
+                return _numpy_max_axis(a, axis, None)
+
+        return npy_max_impl
+    elif isinstance(a, (types.Number, types.Boolean,
+                        NPDatetime, NPTimedelta)):
+        def scalar_max(a, axis=None):
             return a
         return scalar_max
-
-    if not isinstance(a, types.Array):
-        return
-
-    if isinstance(a.dtype, (npy_types.NPDatetime, npy_types.NPTimedelta)):
-        pre_return_func = np.isnat
-        comparator = max_comparator
-    elif isinstance(a.dtype, types.Complex):
-        pre_return_func = return_false
-
-        def comp_func(a, max_val):
-            if a.real > max_val.real:
-                return True
-            elif a.real == max_val.real:
-                if a.imag > max_val.imag:
-                    return True
-            return False
-
-        comparator = register_jitable(comp_func)
-    elif isinstance(a.dtype, types.Float):
-        pre_return_func = np.isnan
-        comparator = max_comparator
-    else:
-        pre_return_func = return_false
-        comparator = max_comparator
-
-    def impl_max(a):
-        if a.size == 0:
-            raise ValueError("zero-size array to reduction operation "
-                             "maximum which has no identity")
-
-        it = np.nditer(a)
-        max_value = next(it).take(0)
-        if pre_return_func(max_value):
-            return max_value
-
-        for view in it:
-            v = view.item()
-            if pre_return_func(v):
-                return v
-            if comparator(v, max_value):
-                max_value = v
-        return max_value
-
-    return impl_max
+    return None
 
 
 @register_jitable
