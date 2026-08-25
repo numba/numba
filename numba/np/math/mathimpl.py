@@ -284,6 +284,9 @@ def ldexp_impl(context, builder, sig, args):
         "double": "numba_ldexp",
         }[str(fltty)]
     fn = cgutils.insert_pure_function(builder.module, fnty, name=fname)
+    # Same extern call as numba.cpython.mathimpl.ldexp_impl; see the
+    # comment there.
+    fn.args[1].add_attribute('signext')
     res = builder.call(fn, (val, exp))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
