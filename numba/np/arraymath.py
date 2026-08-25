@@ -851,27 +851,159 @@ def array_cumsum(a, axis=None, dtype=None):
         return scalar_cumsum_impl
 
 
+@intrinsic
+def _numpy_cumprod(typingctx, aryty, axisty, dtype):
+    ret_dtype = get_ret_dtype_if_any(aryty, dtype)
+
+    ret = types.Array(ret_dtype, aryty.ndim, layout='C')
+    sig = ret(aryty, axisty, dtype)
+
+    def codegen(context, builder, sig, args):
+        ary, _, _ = args
+
+        ary = make_array(aryty)(context, builder, ary)
+        if isinstance(ret_dtype, types.NPTimedelta):
+            one = context.get_constant(ret_dtype, ret_dtype(1))
+        else:
+            one = context.get_constant(ret_dtype, 1)
+        acc = cgutils.alloca_once_value(builder, one)
+
+        res = _empty_nd_impl(
+            context, builder, sig.return_type,
+            cgutils.unpack_tuple(builder, ary.shape)
+        )
+        cgutils.memset(
+            builder, res.data,
+            builder.mul(res.itemsize, res.nitems), 0
+        )
+
+        fnty = context.typing_context.resolve_value_type(operator.imul)
+        fn_sig = fnty.get_call_type(
+            context.typing_context,
+            (sig.return_type.dtype, sig.return_type.dtype),
+            {}
+        )
+        if isinstance(ret_dtype, types.Boolean):
+            mul_funcfn = lambda builder, args: builder.and_(*args)
+        else:
+            mul_funcfn = context.get_function(fnty, fn_sig)
+
+        mask = get_mask(context, builder, aryty.ndim, None)
+        # Loop on source and copy to destination
+        with ArrayIterator(context, builder, aryty, ary,
+                           (mask,), (res,)) as (iter_val_ptr, res_ptr_tup):
+            res_ptr = res_ptr_tup[0]
+            val = load_item(context, builder, aryty, iter_val_ptr)
+            res_val = mul_funcfn(builder, (
+                builder.load(acc),
+                context.cast(builder, val, aryty.dtype, sig.return_type.dtype)))
+            builder.store(res_val, acc)
+            store_item(context, builder, sig.return_type,
+                       builder.load(acc), res_ptr)
+
+        return impl_ret_new_ref(
+            context, builder, sig.return_type, res._getvalue()
+        )
+
+    return sig, codegen
+
+
+@intrinsic
+def _numpy_cumprod_axis(typingctx, aryty, axisty, dtype):
+    ret_dtype = get_ret_dtype_if_any(aryty, dtype)
+    ret = types.Array(ret_dtype, aryty.ndim, layout='C')
+    sig = ret(aryty, axisty, dtype)
+
+    def codegen(context, builder, sig, args):
+        ary, axis, _ = args
+
+        ary = make_array(aryty)(context, builder, ary)
+
+        res = _empty_nd_impl(
+            context, builder, sig.return_type,
+            cgutils.unpack_tuple(builder, ary.shape)
+        )
+        cgutils.memset(
+            builder, res.data,
+            builder.mul(res.itemsize, res.nitems), 0
+        )
+
+        acc_shape = get_spliced_tuple(
+            context, builder, ary.shape.type, ary.shape, axis
+        )
+        acc_type = types.Array(ret_dtype, aryty.ndim - 1, layout='C')
+        acc = _empty_nd_impl(
+            context, builder, acc_type,
+            cgutils.unpack_tuple(builder, acc_shape)
+        )
+        if isinstance(ret_dtype, types.NPTimedelta):
+            one = context.get_constant(ret_dtype, ret_dtype(1))
+        else:
+            one = context.get_constant(ret_dtype, 1)
+        _fill_array_with_constant(context, builder, acc_type, acc, one)
+
+        fnty = context.typing_context.resolve_value_type(operator.imul)
+        fn_sig = fnty.get_call_type(
+            context.typing_context,
+            (sig.return_type.dtype, sig.return_type.dtype),
+            {}
+        )
+        if isinstance(ret_dtype, types.Boolean):
+            mul_funcfn = lambda builder, args: builder.and_(*args)
+        else:
+            mul_funcfn = context.get_function(fnty, fn_sig)
+
+        mask = get_mask(context, builder, aryty.ndim, None)
+        inverted_mask = get_mask(context, builder, aryty.ndim, axis)
+
+        # Loop on source and copy to destination
+        with ArrayIterator(
+            context, builder, aryty, ary, (mask, inverted_mask),
+            (res, acc)
+        ) as (ary_iter_ptr, res_ptr_tup):
+            res_ptr, acc_ptr = res_ptr_tup
+            val = load_item(context, builder, aryty, ary_iter_ptr)
+            res_val = mul_funcfn(builder, (
+                load_item(context, builder, acc_type, acc_ptr),
+                context.cast(builder, val, aryty.dtype, sig.return_type.dtype)))
+            store_item(context, builder, acc_type, res_val, acc_ptr)
+            store_item(context, builder, sig.return_type,
+                       load_item(context, builder, acc_type, acc_ptr), res_ptr)
+
+        context.nrt.decref(builder, acc_type, acc._getvalue())
+
+        return impl_ret_new_ref(
+            context, builder, sig.return_type, res._getvalue()
+        )
+
+    return sig, codegen
+
+
 @overload(np.cumprod)
 @overload_method(types.Array, "cumprod")
-def array_cumprod(a):
+def array_cumprod(a, axis=None, dtype=None):
+    if not (isinstance(axis, types.Integer) or is_nonelike(axis)):
+        raise TypingError(
+            "NumPy cumprod only supports integer axis value"
+        )
     if isinstance(a, types.Array):
-        is_integer = a.dtype in types.signed_domain
-        is_bool = a.dtype == types.bool_
-        if (is_integer and a.dtype.bitwidth < types.intp.bitwidth)\
-                or is_bool:
-            dtype = as_dtype(types.intp)
+        axis_length = 1
+        if is_nonelike(axis) or a.ndim == axis_length:
+            def array_cumprod_impl(a, axis=None, dtype=None):
+                if axis is not None and (axis < -a.ndim or axis >= a.ndim):
+                    raise ValueError(
+                        f"axis {axis} is out of bounds for "
+                        f"array of dimension {a.ndim}"
+                    )
+                return _numpy_cumprod(a, axis, dtype).reshape(a.size)
         else:
-            dtype = as_dtype(a.dtype)
-
-        acc_init = get_accumulator(dtype, 1)
-
-        def array_cumprod_impl(a):
-            out = np.empty(a.size, dtype)
-            c = acc_init
-            for idx, v in enumerate(a.flat):
-                c *= v
-                out[idx] = c
-            return out
+            def array_cumprod_impl(a, axis=None, dtype=None):
+                if axis is not None and (axis < -a.ndim or axis >= a.ndim):
+                    raise ValueError(
+                        f"axis {axis} is out of bounds for "
+                        f"array of dimension {a.ndim}"
+                    )
+                return _numpy_cumprod_axis(a, axis, dtype)
 
         return array_cumprod_impl
 

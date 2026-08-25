@@ -207,6 +207,9 @@ def array_sum_axis_dtype_kws(a, dtype, axis):
 def array_cumsum_axis_dtype_kws(a, dtype, axis):
     return a.cumsum(axis=axis, dtype=dtype)
 
+def array_cumprod_axis_dtype_kws(a, dtype, axis):
+    return a.cumprod(axis=axis, dtype=dtype)
+
 def array_sum_axis_dtype_pos(a, a1, a2):
     return a.sum(a1, a2)
 
@@ -1864,6 +1867,37 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                     if axis > len(arr.shape) - 1:
                         continue
                     subtest_str = ("Testing np.cumsum with {} input and {} output "
+                                    .format(arr.dtype, out_dtype))
+                    with self.subTest(subtest_str):
+                        py_res = pyfunc(arr, axis=axis, dtype=out_dtype)
+                        nb_res = cfunc(arr, axis=axis, dtype=out_dtype)
+                        self.assertPreciseEqual(py_res, nb_res)
+
+    def test_cumprod(self):
+        """ test cumprod with axis and dtype parameters over a whole range of dtypes """
+        pyfunc = array_cumprod_axis_dtype_kws
+        cfunc = jit(nopython=True)(pyfunc)
+        signed_dtypes = [np.float64, np.float32, np.int64, np.int32,
+                      np.complex64, np.complex128]
+
+        unsigned_dtypes = [np.uint32, np.uint64, np.bool_]
+
+        out_dtypes = {np.dtype('float64'): [np.float64],
+                      np.dtype('float32'): [np.float64, np.float32],
+                      np.dtype('int64'): [np.float64, np.int64, np.float32],
+                      np.dtype('int32'): [np.float64, np.int64, np.float32, np.int32],
+                      np.dtype('uint32'): [np.float64, np.int64, np.float32],
+                      np.dtype('uint64'): [np.float64, np.uint64],
+                      np.dtype('bool'): [np.float64, np.int64, np.float32, np.int32, np.bool_],
+                      np.dtype('complex64'): [np.complex64, np.complex128],
+                      np.dtype('complex128'): [np.complex128]}
+
+        for arr in self.gen_sum_array_cases(signed_dtypes, unsigned_dtypes):
+            for out_dtype in out_dtypes[arr.dtype]:
+                for axis in (0, 1, 2):
+                    if axis > len(arr.shape) - 1:
+                        continue
+                    subtest_str = ("Testing np.cumprod with {} input and {} output "
                                     .format(arr.dtype, out_dtype))
                     with self.subTest(subtest_str):
                         py_res = pyfunc(arr, axis=axis, dtype=out_dtype)
