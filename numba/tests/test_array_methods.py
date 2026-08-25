@@ -219,6 +219,12 @@ def array_mean_axis_kws(a, axis):
 def array_mean_axis_tuple_kws(a, axis):
     return np.mean(a, axis=axis)
 
+def array_var_axis_kws(a, axis):
+    return a.var(axis=axis)
+
+def array_var_axis_tuple_kws(a, axis):
+    return np.var(a, axis=axis)
+
 def array_prod(a, *args):
     return a.prod(*args)
 
@@ -1942,6 +1948,42 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                 continue
             for axis in ((0, 1), (1, 2), (0, 2), (0, 1, 2)):
                 with self.subTest("Testing np.mean(tuple axis) with {} "
+                                  "input ".format(arr.dtype)):
+                    self.assertPreciseEqual(pyfunc(arr, axis=axis),
+                                            cfunc(arr, axis=axis))
+
+    def test_var_axis(self):
+        """ test var with axis parameter over a whole range of dtypes
+        """
+        pyfunc = array_var_axis_kws
+        cfunc = jit(nopython=True)(pyfunc)
+        signed_dtypes = [np.float64, np.float32, np.int64, np.int32,
+                         np.complex64, np.complex128]
+        unsigned_dtypes = [np.uint32, np.uint64, np.bool_]
+
+        for arr in self.gen_sum_array_cases(signed_dtypes, unsigned_dtypes):
+            for axis in (0, 1, 2):
+                if axis > len(arr.shape) - 1:
+                    continue
+                with self.subTest("Testing np.var(axis) with {} "
+                                  "input ".format(arr.dtype)):
+                    self.assertPreciseEqual(pyfunc(arr, axis=axis),
+                                            cfunc(arr, axis=axis))
+
+    def test_var_axis_tuple(self):
+        """ test var with tuple axis over a whole range of dtypes
+        """
+        pyfunc = array_var_axis_tuple_kws
+        cfunc = jit(nopython=True)(pyfunc)
+        signed_dtypes = [np.float64, np.float32, np.int64, np.int32,
+                         np.complex64, np.complex128]
+        unsigned_dtypes = [np.uint32, np.uint64, np.bool_]
+
+        for arr in self.gen_sum_array_cases(signed_dtypes, unsigned_dtypes):
+            if arr.ndim != 3:
+                continue
+            for axis in ((0, 1), (1, 2), (0, 2), (0, 1, 2)):
+                with self.subTest("Testing np.var(tuple axis) with {} "
                                   "input ".format(arr.dtype)):
                     self.assertPreciseEqual(pyfunc(arr, axis=axis),
                                             cfunc(arr, axis=axis))

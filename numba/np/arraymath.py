@@ -1013,22 +1013,140 @@ def array_mean(a, axis=None):
     return None
 
 
+@register_jitable
+def _var_1d(a, mean, count, zero):
+    # Two-pass variance of the values in ``a`` given the precomputed
+    # ``mean``. ``zero`` is the typed zero used to initialise the
+    # accumulator and ``count`` is the number of elements typed in the
+    # result precision, so the result keeps the input's precision.
+    ssd = zero
+    for v in np.nditer(a):
+        val = v.item() - mean
+        ssd += np.real(val * np.conj(val))
+    return ssd / count
+
+
 @overload(np.var)
 @overload_method(types.Array, "var")
-def array_var(a):
-    if isinstance(a, types.Array):
-        def array_var_impl(a):
-            # Compute the mean
-            m = a.mean()
+def array_var(a, axis=None):
+    if not (isinstance(axis, types.Integer) or
+            is_nonelike(axis) or (
+                isinstance(axis, types.UniTuple) and
+                isinstance(axis.dtype, types.Integer))
+            or (
+                isinstance(axis, types.Tuple) and
+                axis.count == 0)):
+        raise TypingError(
+            "NumPy var only supports integer axis value or tuple of integers"
+        )
 
-            # Compute the sum of square diffs
-            ssd = 0
-            for v in np.nditer(a):
-                val = (v.item() - m)
-                ssd += np.real(val * np.conj(val))
-            return ssd / a.size
+    if isinstance(a, (types.Integer, types.Boolean)):
+        # Integers and Booleans default to float64 in numpy.var
+        def _scalar_var(a, axis=None):
+            return np.float64(0.0)
+        return _scalar_var
+    elif isinstance(a, (types.Float, types.Complex)):
+        out_dtype = as_dtype(getattr(a, 'underlying_float', a))
+        zero = out_dtype.type(0)
 
-        return array_var_impl
+        def _scalar_var(a, axis=None):
+            return zero
+        return _scalar_var
+    elif isinstance(a, types.Array):
+        # NumPy computes the variance in the same precision as the input for
+        # floating point arrays, in float64 for integer/boolean arrays and in
+        # the precision of the underlying float for complex arrays.
+        if a.dtype in types.integer_domain | frozenset([types.bool_]):
+            var_dtype = types.float64
+        elif isinstance(a.dtype, types.Complex):
+            var_dtype = a.dtype.underlying_float
+        else:
+            var_dtype = a.dtype
+
+        nan_value = as_dtype(var_dtype).type(np.nan)
+        zero_value = as_dtype(var_dtype).type(0)
+        count_cast = as_dtype(var_dtype).type
+
+        if isinstance(axis, types.Tuple) and axis.count == 0:
+            # axis=() returns an array of zeros (the variance of a single
+            # element) cast to the appropriate dtype.
+            def array_var_impl(a, axis=None):
+                return np.zeros(a.shape, var_dtype)
+            return array_var_impl
+
+        if is_nonelike(axis):
+            def array_var_impl(a, axis=None):
+                if a.size == 0:
+                    return nan_value
+                return _var_1d(a, a.mean(), count_cast(a.size), zero_value)
+            return array_var_impl
+
+        # axis-based reduction: move the reduced axis/axes to the end of the
+        # array so the mean broadcasts correctly, then sum the squared
+        # deviations from the mean and divide by the number of elements
+        # reduced over.
+        if isinstance(axis, types.UniTuple):
+            k = axis.count
+            dest = tuple(range(a.ndim - k, a.ndim))
+            seed = (0,) * a.ndim
+
+            def array_var_axis_impl(a, axis=None):
+                check_axis_bounds(a, axis)
+                check_duplicates(axis, a.ndim)
+                if len(axis) == a.ndim:
+                    # Reducing over every axis gives a scalar result
+                    # equivalent to the whole-array variance.
+                    if a.size == 0:
+                        return nan_value
+                    return _var_1d(a, a.mean(), count_cast(a.size),
+                                   zero_value)
+                count = 1
+                for ax in axis:
+                    if ax < 0:
+                        ax = a.ndim + ax
+                    count *= a.shape[ax]
+                t = np.moveaxis(a, axis, dest)
+                m = t.mean(axis=dest)
+                # Give the mean unit dimensions in the reduced axes so it
+                # broadcasts against the moved array.
+                newshape = seed
+                for i in range(a.ndim - k):
+                    newshape = tuple_setitem(newshape, i, m.shape[i])
+                for i in range(a.ndim - k, a.ndim):
+                    newshape = tuple_setitem(newshape, i, 1)
+                m2 = np.reshape(m, newshape)
+                dev = t - m2
+                ssd = np.sum(np.real(dev * np.conj(dev)), axis=dest)
+                return ssd / count
+            return array_var_axis_impl
+        else:
+            seed = (0,) * a.ndim
+
+            def array_var_axis_impl(a, axis=None):
+                check_axis_bounds(a, axis)
+                check_duplicates(axis, a.ndim)
+                if a.ndim == 1:
+                    # Reducing over the only axis gives a scalar result
+                    # equivalent to the whole-array variance.
+                    if a.size == 0:
+                        return nan_value
+                    return _var_1d(a, a.mean(), count_cast(a.size),
+                                   zero_value)
+                if axis < 0:
+                    axis = a.ndim + axis
+                count = a.shape[axis]
+                t = np.moveaxis(a, axis, -1)
+                m = t.mean(axis=-1)
+                newshape = seed
+                for i in range(a.ndim - 1):
+                    newshape = tuple_setitem(newshape, i, m.shape[i])
+                newshape = tuple_setitem(newshape, a.ndim - 1, 1)
+                m2 = np.reshape(m, newshape)
+                dev = t - m2
+                ssd = np.sum(np.real(dev * np.conj(dev)), axis=-1)
+                return ssd / count
+            return array_var_axis_impl
+    return None
 
 
 @overload(np.std)
