@@ -891,20 +891,30 @@ def array_cumprod(a, axis=None, dtype=None):
 
 @overload(np.mean)
 @overload_method(types.Array, "mean")
-def array_mean(a):
+def array_mean(a, axis=None):
+    if not (isinstance(axis, types.Integer) or
+            is_nonelike(axis) or (
+                isinstance(axis, types.UniTuple) and
+                isinstance(axis.dtype, types.Integer))
+            or (
+                isinstance(axis, types.Tuple) and
+                axis.count == 0)):
+        raise TypingError(
+            "NumPy mean only supports integer axis value or tuple of integers"
+        )
     if isinstance(a, (types.Integer, types.Boolean)):
         # Integers and Booleans default to float64 in numpy.mean
-        def _scalar_mean(a):
+        def _scalar_mean(a, axis=None):
             return np.float64(a) + 0.0
         return _scalar_mean
     elif isinstance(a, NPTimedelta):
-        def _temporal_scalar_mean(a):
+        def _temporal_scalar_mean(a, axis=None):
             return a
         return _temporal_scalar_mean
     elif isinstance(a, (types.Float, types.Complex)):
         typed_zero = as_dtype(a).type(0)
 
-        def _scalar_mean(a):
+        def _scalar_mean(a, axis=None):
             return a + typed_zero
         return _scalar_mean
     elif isinstance(a, types.Array):
@@ -922,36 +932,84 @@ def array_mean(a):
         # Is complex array
         is_complex = isinstance(a.dtype, types.Complex)
 
-        if not is_datetime_like:
-            if is_complex:
-                # For complex, both real and imag should be nan
-                nan_value = dtype.type(complex("nan+nanj"))
+        if isinstance(axis, types.Tuple) and axis.count == 0:
+            # axis=() returns a copy of the array cast to float for
+            # integer inputs to match NumPy behaviour.
+            if is_number:
+                def array_mean_impl(a, axis=None):
+                    return a.astype(np.float64)
             else:
-                nan_value = dtype.type(np.nan)
+                def array_mean_impl(a, axis=None):
+                    return np.copy(a)
+            return array_mean_impl
 
-            # For numeric types, handle empty arrays by returning nan
-            def array_mean_impl(a):
-                # Handle empty arrays as a special case to match NumPy
-                # behavior
-                if a.size == 0:
-                    return nan_value
-                # Can't use the naive `arr.sum() / arr.size`, as it would return
-                # a wrong result on integer sum overflow.
-                c = acc_init
-                for v in np.nditer(a):
-                    c += v.item()
-                return dtype.type(c / a.size)
+        if is_nonelike(axis):
+            if not is_datetime_like:
+                if is_complex:
+                    # For complex, both real and imag should be nan
+                    nan_value = dtype.type(complex("nan+nanj"))
+                else:
+                    nan_value = dtype.type(np.nan)
+
+                # For numeric types, handle empty arrays by returning nan
+                def array_mean_impl(a, axis=None):
+                    # Handle empty arrays as a special case to match NumPy
+                    # behavior
+                    if a.size == 0:
+                        return nan_value
+                    # Can't use the naive `arr.sum() / arr.size`, as it
+                    # would return a wrong result on integer sum overflow.
+                    c = acc_init
+                    for v in np.nditer(a):
+                        c += v.item()
+                    return dtype.type(c / a.size)
+            else:
+                # For datetime/timedelta, don't add special empty array handling
+                # Let it behave as before (NumPy itself raises error for empty
+                # datetime arrays)
+                def array_mean_impl(a, axis=None):
+                    c = acc_init
+                    for v in np.nditer(a):
+                        c += v.item()
+                    return c / a.size
+
+            return array_mean_impl
         else:
-            # For datetime/timedelta, don't add special empty array handling
-            # Let it behave as before (NumPy itself raises error for empty
-            # datetime arrays)
-            def array_mean_impl(a):
-                c = acc_init
-                for v in np.nditer(a):
-                    c += v.item()
-                return c / a.size
+            # axis-based reduction: compute the sum along the given axis
+            # (using float64 accumulation for integer inputs to avoid
+            # overflow) and divide by the number of elements reduced over.
+            if is_number:
+                def array_mean_axis_impl(a, axis=None):
+                    check_axis_bounds(a, axis)
+                    check_duplicates(axis, a.ndim)
+                    if isinstance(axis, tuple):
+                        count = 1
+                        for ax in axis:
+                            if ax < 0:
+                                ax = a.ndim + ax
+                            count *= a.shape[ax]
+                    else:
+                        if axis < 0:
+                            axis = a.ndim + axis
+                        count = a.shape[axis]
+                    return np.sum(a, axis=axis, dtype=np.float64) / count
+            else:
+                def array_mean_axis_impl(a, axis=None):
+                    check_axis_bounds(a, axis)
+                    check_duplicates(axis, a.ndim)
+                    if isinstance(axis, tuple):
+                        count = 1
+                        for ax in axis:
+                            if ax < 0:
+                                ax = a.ndim + ax
+                            count *= a.shape[ax]
+                    else:
+                        if axis < 0:
+                            axis = a.ndim + axis
+                        count = a.shape[axis]
+                    return np.sum(a, axis=axis) / count
 
-        return array_mean_impl
+            return array_mean_axis_impl
     return None
 
 

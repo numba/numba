@@ -213,6 +213,12 @@ def array_cumprod_axis_dtype_kws(a, dtype, axis):
 def array_sum_axis_dtype_pos(a, a1, a2):
     return a.sum(a1, a2)
 
+def array_mean_axis_kws(a, axis):
+    return a.mean(axis=axis)
+
+def array_mean_axis_tuple_kws(a, axis):
+    return np.mean(a, axis=axis)
+
 def array_prod(a, *args):
     return a.prod(*args)
 
@@ -1903,6 +1909,42 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                         py_res = pyfunc(arr, axis=axis, dtype=out_dtype)
                         nb_res = cfunc(arr, axis=axis, dtype=out_dtype)
                         self.assertPreciseEqual(py_res, nb_res)
+
+    def test_mean_axis(self):
+        """ test mean with axis parameter over a whole range of dtypes
+        """
+        pyfunc = array_mean_axis_kws
+        cfunc = jit(nopython=True)(pyfunc)
+        signed_dtypes = [np.float64, np.float32, np.int64, np.int32,
+                         np.complex64, np.complex128]
+        unsigned_dtypes = [np.uint32, np.uint64, np.bool_]
+
+        for arr in self.gen_sum_array_cases(signed_dtypes, unsigned_dtypes):
+            for axis in (0, 1, 2):
+                if axis > len(arr.shape) - 1:
+                    continue
+                with self.subTest("Testing np.mean(axis) with {} "
+                                  "input ".format(arr.dtype)):
+                    self.assertPreciseEqual(pyfunc(arr, axis=axis),
+                                            cfunc(arr, axis=axis))
+
+    def test_mean_axis_tuple(self):
+        """ test mean with tuple axis over a whole range of dtypes
+        """
+        pyfunc = array_mean_axis_tuple_kws
+        cfunc = jit(nopython=True)(pyfunc)
+        signed_dtypes = [np.float64, np.float32, np.int64, np.int32,
+                         np.complex64, np.complex128]
+        unsigned_dtypes = [np.uint32, np.uint64, np.bool_]
+
+        for arr in self.gen_sum_array_cases(signed_dtypes, unsigned_dtypes):
+            if arr.ndim != 3:
+                continue
+            for axis in ((0, 1), (1, 2), (0, 2), (0, 1, 2)):
+                with self.subTest("Testing np.mean(tuple axis) with {} "
+                                  "input ".format(arr.dtype)):
+                    self.assertPreciseEqual(pyfunc(arr, axis=axis),
+                                            cfunc(arr, axis=axis))
 
     def test_take(self):
         pyfunc = array_take
