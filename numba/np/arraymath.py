@@ -434,20 +434,29 @@ def get_ret_dtype_if_any(aryty, dtype):
     return ret_dtype
 
 
-def _np_func_builder(axis):
+def _fill_array_with_constant(context, builder, aryty, ary, value):
+    # Fill an array with a constant value using an ArrayIterator
+    with ArrayIterator(context, builder, aryty, ary) as ptr:
+        store_item(context, builder, aryty, value, ptr)
+
+
+def _np_func_builder(axis, funcfn):
     """
-    Build an intrinsic implementing a sum reduction.  When ``axis`` is False
+    Build an intrinsic implementing a reduction.  When ``axis`` is False
     the reduction is over the whole array (like ``_numpy_sum``); when True
-    it is along one or more axes (like ``_numpy_sum_axis``).  The two
-    variants share almost all of their code generation, differing only in
-    the accumulator (a scalar vs. an output array) and the return type.
+    it is along one or more axes (like ``_numpy_sum_axis``).  ``funcfn`` is
+    the binary operation to accumulate with (``operator.iadd`` for sum,
+    ``operator.imul`` for prod).  The two variants share almost all of their
+    code generation, differing only in the accumulator (a scalar vs. an
+    output array) and the return type.
     """
     @intrinsic
-    def _numpy_sum(typingctx, aryty, axisty, dtype):
+    def _numpy_reduce(typingctx, aryty, axisty, dtype):
         ret_dtype = get_ret_dtype_if_any(aryty, dtype)
 
         if axis:
-            axis_length = axisty.count if isinstance(axisty, types.UniTuple) else 1
+            axis_length = axisty.count if isinstance(
+                axisty, types.UniTuple) else 1
             ret = types.Array(ret_dtype, aryty.ndim - axis_length, layout='C')
         else:
             ret = ret_dtype
@@ -472,10 +481,16 @@ def _np_func_builder(axis):
                     context, builder, sig.return_type,
                     cgutils.unpack_tuple(builder, res_shape)
                 )
-                cgutils.memset(
-                    builder, res.data,
-                    builder.mul(res.itemsize, res.nitems), 0
-                )
+                if funcfn is operator.imul:
+                    identity = context.get_constant(ret_dtype, 1)
+                    _fill_array_with_constant(
+                        context, builder, sig.return_type, res, identity
+                    )
+                else:
+                    cgutils.memset(
+                        builder, res.data,
+                        builder.mul(res.itemsize, res.nitems), 0
+                    )
                 mask = get_mask(context, builder, aryty.ndim, axis_arg)
 
                 def load_accumulator(ptr):
@@ -487,10 +502,12 @@ def _np_func_builder(axis):
                 iter_args = (context, builder, aryty, ary, (mask,), (res,))
             else:
                 if isinstance(ret_dtype, types.NPTimedelta):
-                    zero = context.get_constant(ret_dtype, ret_dtype(0))
+                    identity = context.get_constant(ret_dtype, ret_dtype(0))
                 else:
-                    zero = context.get_constant(ret_dtype, 0)
-                result = cgutils.alloca_once_value(builder, zero)
+                    identity = context.get_constant(
+                        ret_dtype, 1 if funcfn is operator.imul else 0
+                    )
+                result = cgutils.alloca_once_value(builder, identity)
 
                 def load_accumulator(ptr):
                     return builder.load(ptr)
@@ -500,16 +517,19 @@ def _np_func_builder(axis):
 
                 iter_args = (context, builder, aryty, ary)
 
-            fnty = context.typing_context.resolve_value_type(operator.iadd)
+            fnty = context.typing_context.resolve_value_type(funcfn)
             fn_sig = fnty.get_call_type(
                 context.typing_context,
                 (ret_dtype, ret_dtype),
                 {}
             )
             if isinstance(ret_dtype, types.Boolean):
-                add_funcfn = lambda builder, args: builder.or_(*args)
+                if funcfn is operator.iadd:
+                    reduce_funcfn = lambda builder, args: builder.or_(*args)
+                else:
+                    reduce_funcfn = lambda builder, args: builder.and_(*args)
             else:
-                add_funcfn = context.get_function(fnty, fn_sig)
+                reduce_funcfn = context.get_function(fnty, fn_sig)
 
             # Loop on source and copy to destination
             with ArrayIterator(*iter_args) as iter_vals:
@@ -520,7 +540,7 @@ def _np_func_builder(axis):
                     ary_iter_ptr = iter_vals
                     acc_ptr = result
                 val = load_item(context, builder, aryty, ary_iter_ptr)
-                res_val = add_funcfn(builder, (
+                res_val = reduce_funcfn(builder, (
                     load_accumulator(acc_ptr),
                     context.cast(builder, val, aryty.dtype, ret_dtype)))
                 store_accumulator(res_val, acc_ptr)
@@ -536,11 +556,13 @@ def _np_func_builder(axis):
 
         return sig, codegen
 
-    return _numpy_sum
+    return _numpy_reduce
 
 
-_numpy_sum = _np_func_builder(axis=False)
-_numpy_sum_axis = _np_func_builder(axis=True)
+_numpy_sum = _np_func_builder(axis=False, funcfn=operator.iadd)
+_numpy_sum_axis = _np_func_builder(axis=True, funcfn=operator.iadd)
+_numpy_prod = _np_func_builder(axis=False, funcfn=operator.imul)
+_numpy_prod_axis = _np_func_builder(axis=True, funcfn=operator.imul)
 
 
 axis_bound_err = ValueError if numpy_version < (1, 25)\
@@ -619,23 +641,45 @@ def array_sum(a, axis=None, dtype=None):
 
 @overload(np.prod)
 @overload_method(types.Array, "prod")
-def array_prod(a):
+def array_prod(a, axis=None, dtype=None):
+    if not (isinstance(axis, types.Integer) or
+            is_nonelike(axis) or (
+                isinstance(axis, types.UniTuple) and
+                isinstance(axis.dtype, types.Integer))
+            or (
+                isinstance(axis, types.Tuple) and
+                axis.count == 0)):
+        raise TypingError(
+            "NumPy prod only supports integer axis value or tuple of integers"
+        )
     if isinstance(a, types.Array):
-        dtype = as_dtype(a.dtype)
-
-        acc_init = get_accumulator(dtype, 1)
-
-        def array_prod_impl(a):
-            c = acc_init
-            for v in np.nditer(a):
-                c *= v.item()
-            return c
+        if isinstance(axis, types.Tuple) and axis.count == 0:
+            if is_nonelike(dtype):
+                def array_prod_impl(a, axis=None, dtype=None):
+                    return np.copy(a)
+            else:
+                def array_prod_impl(a, axis=None, dtype=None):
+                    return a.astype(dtype)
+        elif is_nonelike(axis) or a.ndim <= (
+            axis.count if isinstance(
+                axis, (types.Tuple, types.UniTuple)) else 1):
+            def array_prod_impl(a, axis=None, dtype=None):
+                check_axis_bounds(a, axis)
+                check_duplicates(axis, a.ndim)
+                return _numpy_prod(a, axis, dtype)
+        else:
+            def array_prod_impl(a, axis=None, dtype=None):
+                check_axis_bounds(a, axis)
+                return _numpy_prod_axis(a, axis, dtype)
 
         return array_prod_impl
     elif isinstance(a, (types.Number, types.Boolean)):
-        acc_init = as_dtype(a).type(1)
+        if is_nonelike(dtype):
+            acc_init = as_dtype(a).type(1)
+        else:
+            acc_init = as_dtype(dtype).type(1)
 
-        def scalar_prod_impl(a):
+        def scalar_prod_impl(a, axis=None, dtype=None):
             return acc_init * a
 
         return scalar_prod_impl
