@@ -685,131 +685,140 @@ def array_prod(a, axis=None, dtype=None):
         return scalar_prod_impl
 
 
-@intrinsic
-def _numpy_cumsum(typingctx, aryty, axisty, dtype):
-    ret_dtype = get_ret_dtype_if_any(aryty, dtype)
+def _np_cum_func_builder(axis, funcfn):
+    """
+    Build an intrinsic implementing a cumulative reduction.  When ``axis`` is
+    False the reduction is over the whole array (like ``_numpy_cumsum``); when
+    True it is along one axis (like ``_numpy_cumsum_axis``).  ``funcfn`` is
+    the binary operation to accumulate with (``operator.iadd`` for cumsum,
+    ``operator.imul`` for cumprod).  The two variants share almost all of
+    their code generation, differing only in the accumulator (a scalar vs. an
+    accumulator array) and how the accumulator is initialised.
+    """
+    @intrinsic
+    def _numpy_cumulative(typingctx, aryty, axisty, dtype):
+        ret_dtype = get_ret_dtype_if_any(aryty, dtype)
 
-    ret = types.Array(ret_dtype, aryty.ndim, layout='C')
-    sig = ret(aryty, axisty, dtype)
+        ret = types.Array(ret_dtype, aryty.ndim, layout='C')
+        sig = ret(aryty, axisty, dtype)
 
-    def codegen(context, builder, sig, args):
-        ary, _, _ = args
+        def codegen(context, builder, sig, args):
+            ary, axis_arg, _ = args
 
-        ary = make_array(aryty)(context, builder, ary)
-        if isinstance(ret_dtype, types.NPTimedelta):
-            zero = context.get_constant(ret_dtype, ret_dtype(0))
-        else:
-            zero = context.get_constant(ret_dtype, 0)
-        acc = cgutils.alloca_once_value(builder, zero)
+            ary = make_array(aryty)(context, builder, ary)
 
-        res = _empty_nd_impl(
-            context, builder, sig.return_type,
-            cgutils.unpack_tuple(builder, ary.shape)
-        )
-        cgutils.memset(
-            builder, res.data,
-            builder.mul(res.itemsize, res.nitems), 0
-        )
+            res = _empty_nd_impl(
+                context, builder, sig.return_type,
+                cgutils.unpack_tuple(builder, ary.shape)
+            )
+            cgutils.memset(
+                builder, res.data,
+                builder.mul(res.itemsize, res.nitems), 0
+            )
 
-        fnty = context.typing_context.resolve_value_type(operator.iadd)
-        fn_sig = fnty.get_call_type(
-            context.typing_context,
-            (sig.return_type.dtype, sig.return_type.dtype),
-            {}
-        )
-        if isinstance(ret_dtype, types.Boolean):
-            add_funcfn = lambda builder, args: builder.or_(*args)
-        else:
-            add_funcfn = context.get_function(fnty, fn_sig)
+            fnty = context.typing_context.resolve_value_type(funcfn)
+            fn_sig = fnty.get_call_type(
+                context.typing_context,
+                (sig.return_type.dtype, sig.return_type.dtype),
+                {}
+            )
+            if isinstance(ret_dtype, types.Boolean):
+                if funcfn is operator.iadd:
+                    accumulate_funcfn = (
+                        lambda builder, args: builder.or_(*args)
+                    )
+                else:
+                    accumulate_funcfn = (
+                        lambda builder, args: builder.and_(*args)
+                    )
+            else:
+                accumulate_funcfn = context.get_function(fnty, fn_sig)
 
-        mask = get_mask(context, builder, aryty.ndim, None)
-        # Loop on source and copy to destination
-        with ArrayIterator(context, builder, aryty, ary,
-                           (mask,), (res,)) as (iter_val_ptr, res_ptr_tup):
-            res_ptr = res_ptr_tup[0]
-            val = load_item(context, builder, aryty, iter_val_ptr)
-            res_val = add_funcfn(builder, (
-                builder.load(acc),
-                context.cast(builder, val, aryty.dtype, sig.return_type.dtype)))
-            builder.store(res_val, acc)
-            store_item(context, builder, sig.return_type,
-                       builder.load(acc), res_ptr)
+            if axis:
+                acc_shape = get_spliced_tuple(
+                    context, builder, ary.shape.type, ary.shape, axis_arg
+                )
+                acc_type = types.Array(ret_dtype, aryty.ndim - 1, layout='C')
+                acc = _empty_nd_impl(
+                    context, builder, acc_type,
+                    cgutils.unpack_tuple(builder, acc_shape)
+                )
+                if funcfn is operator.imul:
+                    if isinstance(ret_dtype, types.NPTimedelta):
+                        one = context.get_constant(ret_dtype, ret_dtype(1))
+                    else:
+                        one = context.get_constant(ret_dtype, 1)
+                    _fill_array_with_constant(
+                        context, builder, acc_type, acc, one
+                    )
+                else:
+                    cgutils.memset(
+                        builder, acc.data,
+                        builder.mul(acc.itemsize, acc.nitems), 0
+                    )
 
-        return impl_ret_new_ref(
-            context, builder, sig.return_type, res._getvalue()
-        )
+                mask = get_mask(context, builder, aryty.ndim, None)
+                inverted_mask = get_mask(
+                    context, builder, aryty.ndim, axis_arg
+                )
 
-    return sig, codegen
+                # Loop on source and copy to destination
+                with ArrayIterator(
+                    context, builder, aryty, ary, (mask, inverted_mask),
+                    (res, acc)
+                ) as (ary_iter_ptr, res_ptr_tup):
+                    res_ptr, acc_ptr = res_ptr_tup
+                    val = load_item(context, builder, aryty, ary_iter_ptr)
+                    res_val = accumulate_funcfn(builder, (
+                        load_item(context, builder, acc_type, acc_ptr),
+                        context.cast(builder, val, aryty.dtype,
+                                     sig.return_type.dtype)))
+                    store_item(context, builder, acc_type, res_val, acc_ptr)
+                    store_item(context, builder, sig.return_type,
+                               load_item(context, builder, acc_type, acc_ptr),
+                               res_ptr)
+
+                context.nrt.decref(builder, acc_type, acc._getvalue())
+            else:
+                if isinstance(ret_dtype, types.NPTimedelta):
+                    identity = context.get_constant(
+                        ret_dtype,
+                        ret_dtype(1 if funcfn is operator.imul else 0)
+                    )
+                else:
+                    identity = context.get_constant(
+                        ret_dtype, 1 if funcfn is operator.imul else 0
+                    )
+                acc = cgutils.alloca_once_value(builder, identity)
+
+                mask = get_mask(context, builder, aryty.ndim, None)
+                # Loop on source and copy to destination
+                with ArrayIterator(
+                    context, builder, aryty, ary, (mask,), (res,)
+                ) as (iter_val_ptr, res_ptr_tup):
+                    res_ptr = res_ptr_tup[0]
+                    val = load_item(context, builder, aryty, iter_val_ptr)
+                    res_val = accumulate_funcfn(builder, (
+                        builder.load(acc),
+                        context.cast(builder, val, aryty.dtype,
+                                     sig.return_type.dtype)))
+                    builder.store(res_val, acc)
+                    store_item(context, builder, sig.return_type,
+                               builder.load(acc), res_ptr)
+
+            return impl_ret_new_ref(
+                context, builder, sig.return_type, res._getvalue()
+            )
+
+        return sig, codegen
+
+    return _numpy_cumulative
 
 
-@intrinsic
-def _numpy_cumsum_axis(typingctx, aryty, axisty, dtype):
-    ret_dtype = get_ret_dtype_if_any(aryty, dtype)
-    ret = types.Array(ret_dtype, aryty.ndim, layout='C')
-    sig = ret(aryty, axisty, dtype)
-
-    def codegen(context, builder, sig, args):
-        ary, axis, _ = args
-
-        ary = make_array(aryty)(context, builder, ary)
-
-        res = _empty_nd_impl(
-            context, builder, sig.return_type,
-            cgutils.unpack_tuple(builder, ary.shape)
-        )
-        cgutils.memset(
-            builder, res.data,
-            builder.mul(res.itemsize, res.nitems), 0
-        )
-
-        acc_shape = get_spliced_tuple(
-            context, builder, ary.shape.type, ary.shape, axis
-        )
-        acc_type = types.Array(ret_dtype, aryty.ndim - 1, layout='C')
-        acc = _empty_nd_impl(
-            context, builder, acc_type,
-            cgutils.unpack_tuple(builder, acc_shape)
-        )
-        cgutils.memset(
-            builder, acc.data,
-            builder.mul(acc.itemsize, acc.nitems), 0
-        )
-
-        fnty = context.typing_context.resolve_value_type(operator.iadd)
-        fn_sig = fnty.get_call_type(
-            context.typing_context,
-            (sig.return_type.dtype, sig.return_type.dtype),
-            {}
-        )
-        if isinstance(ret_dtype, types.Boolean):
-            add_funcfn = lambda builder, args: builder.or_(*args)
-        else:
-            add_funcfn = context.get_function(fnty, fn_sig)
-
-        mask = get_mask(context, builder, aryty.ndim, None)
-        inverted_mask = get_mask(context, builder, aryty.ndim, axis)
-
-        # Loop on source and copy to destination
-        with ArrayIterator(
-            context, builder, aryty, ary, (mask, inverted_mask),
-            (res, acc)
-        ) as (ary_iter_ptr, res_ptr_tup):
-            res_ptr, acc_ptr = res_ptr_tup
-            val = load_item(context, builder, aryty, ary_iter_ptr)
-            res_val = add_funcfn(builder, (
-                load_item(context, builder, acc_type, acc_ptr),
-                context.cast(builder, val, aryty.dtype, sig.return_type.dtype)))
-            store_item(context, builder, acc_type, res_val, acc_ptr)
-            store_item(context, builder, sig.return_type,
-                       load_item(context, builder, acc_type, acc_ptr), res_ptr)
-
-        context.nrt.decref(builder, acc_type, acc._getvalue())
-
-        return impl_ret_new_ref(
-            context, builder, sig.return_type, res._getvalue()
-        )
-
-    return sig, codegen
+_numpy_cumsum = _np_cum_func_builder(axis=False, funcfn=operator.iadd)
+_numpy_cumsum_axis = _np_cum_func_builder(axis=True, funcfn=operator.iadd)
+_numpy_cumprod = _np_cum_func_builder(axis=False, funcfn=operator.imul)
+_numpy_cumprod_axis = _np_cum_func_builder(axis=True, funcfn=operator.imul)
 
 
 @overload(np.cumsum)
@@ -849,134 +858,6 @@ def array_cumsum(a, axis=None, dtype=None):
             return acc_init + a
 
         return scalar_cumsum_impl
-
-
-@intrinsic
-def _numpy_cumprod(typingctx, aryty, axisty, dtype):
-    ret_dtype = get_ret_dtype_if_any(aryty, dtype)
-
-    ret = types.Array(ret_dtype, aryty.ndim, layout='C')
-    sig = ret(aryty, axisty, dtype)
-
-    def codegen(context, builder, sig, args):
-        ary, _, _ = args
-
-        ary = make_array(aryty)(context, builder, ary)
-        if isinstance(ret_dtype, types.NPTimedelta):
-            one = context.get_constant(ret_dtype, ret_dtype(1))
-        else:
-            one = context.get_constant(ret_dtype, 1)
-        acc = cgutils.alloca_once_value(builder, one)
-
-        res = _empty_nd_impl(
-            context, builder, sig.return_type,
-            cgutils.unpack_tuple(builder, ary.shape)
-        )
-        cgutils.memset(
-            builder, res.data,
-            builder.mul(res.itemsize, res.nitems), 0
-        )
-
-        fnty = context.typing_context.resolve_value_type(operator.imul)
-        fn_sig = fnty.get_call_type(
-            context.typing_context,
-            (sig.return_type.dtype, sig.return_type.dtype),
-            {}
-        )
-        if isinstance(ret_dtype, types.Boolean):
-            mul_funcfn = lambda builder, args: builder.and_(*args)
-        else:
-            mul_funcfn = context.get_function(fnty, fn_sig)
-
-        mask = get_mask(context, builder, aryty.ndim, None)
-        # Loop on source and copy to destination
-        with ArrayIterator(context, builder, aryty, ary,
-                           (mask,), (res,)) as (iter_val_ptr, res_ptr_tup):
-            res_ptr = res_ptr_tup[0]
-            val = load_item(context, builder, aryty, iter_val_ptr)
-            res_val = mul_funcfn(builder, (
-                builder.load(acc),
-                context.cast(builder, val, aryty.dtype, sig.return_type.dtype)))
-            builder.store(res_val, acc)
-            store_item(context, builder, sig.return_type,
-                       builder.load(acc), res_ptr)
-
-        return impl_ret_new_ref(
-            context, builder, sig.return_type, res._getvalue()
-        )
-
-    return sig, codegen
-
-
-@intrinsic
-def _numpy_cumprod_axis(typingctx, aryty, axisty, dtype):
-    ret_dtype = get_ret_dtype_if_any(aryty, dtype)
-    ret = types.Array(ret_dtype, aryty.ndim, layout='C')
-    sig = ret(aryty, axisty, dtype)
-
-    def codegen(context, builder, sig, args):
-        ary, axis, _ = args
-
-        ary = make_array(aryty)(context, builder, ary)
-
-        res = _empty_nd_impl(
-            context, builder, sig.return_type,
-            cgutils.unpack_tuple(builder, ary.shape)
-        )
-        cgutils.memset(
-            builder, res.data,
-            builder.mul(res.itemsize, res.nitems), 0
-        )
-
-        acc_shape = get_spliced_tuple(
-            context, builder, ary.shape.type, ary.shape, axis
-        )
-        acc_type = types.Array(ret_dtype, aryty.ndim - 1, layout='C')
-        acc = _empty_nd_impl(
-            context, builder, acc_type,
-            cgutils.unpack_tuple(builder, acc_shape)
-        )
-        if isinstance(ret_dtype, types.NPTimedelta):
-            one = context.get_constant(ret_dtype, ret_dtype(1))
-        else:
-            one = context.get_constant(ret_dtype, 1)
-        _fill_array_with_constant(context, builder, acc_type, acc, one)
-
-        fnty = context.typing_context.resolve_value_type(operator.imul)
-        fn_sig = fnty.get_call_type(
-            context.typing_context,
-            (sig.return_type.dtype, sig.return_type.dtype),
-            {}
-        )
-        if isinstance(ret_dtype, types.Boolean):
-            mul_funcfn = lambda builder, args: builder.and_(*args)
-        else:
-            mul_funcfn = context.get_function(fnty, fn_sig)
-
-        mask = get_mask(context, builder, aryty.ndim, None)
-        inverted_mask = get_mask(context, builder, aryty.ndim, axis)
-
-        # Loop on source and copy to destination
-        with ArrayIterator(
-            context, builder, aryty, ary, (mask, inverted_mask),
-            (res, acc)
-        ) as (ary_iter_ptr, res_ptr_tup):
-            res_ptr, acc_ptr = res_ptr_tup
-            val = load_item(context, builder, aryty, ary_iter_ptr)
-            res_val = mul_funcfn(builder, (
-                load_item(context, builder, acc_type, acc_ptr),
-                context.cast(builder, val, aryty.dtype, sig.return_type.dtype)))
-            store_item(context, builder, acc_type, res_val, acc_ptr)
-            store_item(context, builder, sig.return_type,
-                       load_item(context, builder, acc_type, acc_ptr), res_ptr)
-
-        context.nrt.decref(builder, acc_type, acc._getvalue())
-
-        return impl_ret_new_ref(
-            context, builder, sig.return_type, res._getvalue()
-        )
-
-    return sig, codegen
 
 
 @overload(np.cumprod)
