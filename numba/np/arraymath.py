@@ -1151,27 +1151,40 @@ def array_var(a, axis=None):
 
 @overload(np.std)
 @overload_method(types.Array, "std")
-def array_std(a):
+def array_std(a, axis=None):
+    if not (isinstance(axis, types.Integer) or
+            is_nonelike(axis) or (
+                isinstance(axis, types.UniTuple) and
+                isinstance(axis.dtype, types.Integer))
+            or (
+                isinstance(axis, types.Tuple) and
+                axis.count == 0)):
+        raise TypingError(
+            "NumPy std only supports integer axis value or tuple of integers"
+        )
+
     if isinstance(a, types.Array):
-        def array_std_impl(a):
-            return a.var() ** 0.5
+        # np.sqrt is a ufunc so it preserves the precision of the variance
+        # (unlike ``** 0.5`` which would promote float32 to float64).
+        def array_std_impl(a, axis=None):
+            return np.sqrt(a.var(axis=axis))
 
         return array_std_impl
 
     # Integers and booleans default to float64(0.0) in numpy.std
     elif isinstance(a, (types.Integer, types.Boolean)):
 
-        def std_scalar_integer_impl(a):
+        def std_scalar_integer_impl(a, axis=None):
             return np.float64(0.0)
         return std_scalar_integer_impl
 
     # Floats and numbers preserve types in numpy.std
     elif isinstance(a, (types.Float, types.Complex)):
-        out_dtype = as_dtype(getattr(a,'underlying_float',a))
+        out_dtype = as_dtype(getattr(a, 'underlying_float', a))
         zero = out_dtype.type(0)
         nan_val = out_dtype.type(np.nan)
 
-        def std_scalar_float_impl(a):
+        def std_scalar_float_impl(a, axis=None):
             if not np.isfinite(a):
                 return nan_val
             return zero
