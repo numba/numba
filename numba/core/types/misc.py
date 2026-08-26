@@ -5,6 +5,10 @@ from numba.core.typeconv import Conversion
 from numba.core.errors import TypingError, LiteralTypingError
 from numba.core.ir import UndefinedType
 from numba.core.utils import get_hashable_key
+from typing import TypeVar
+
+
+_TypeT = TypeVar("_TypeT", bound=Type, default=Type)
 
 
 class PyObject(Dummy):
@@ -60,13 +64,15 @@ class StringLiteral(Literal, Dummy):
 Literal.ctor_map[str] = StringLiteral
 
 
-def unliteral(lit_type):
-    """
-    Get base type from Literal type.
-    """
+def unliteral(lit_type: _TypeT) -> Type | _TypeT:
+    """Get base type from Literal type."""
     if hasattr(lit_type, '__unliteral__'):
-        return lit_type.__unliteral__()
-    return getattr(lit_type, 'literal_type', lit_type)
+        returnMe = lit_type.__unliteral__()
+    elif hasattr(lit_type, 'literal_type'):
+        returnMe = lit_type.literal_type
+    else:
+        returnMe = lit_type
+    return returnMe
 
 
 def literal(value):
