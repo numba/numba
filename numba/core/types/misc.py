@@ -1,12 +1,10 @@
-from numba.core.types.abstract import Callable, Literal, Type, Hashable
-from numba.core.types.common import (Dummy, IterableType, Opaque,
-                                     SimpleIteratorType)
-from numba.core.typeconv import Conversion
-from numba.core.errors import TypingError, LiteralTypingError
-from numba.core.ir import UndefinedType
-from numba.core.utils import get_hashable_key
 from typing import TypeVar
 
+from numba.core.errors import LiteralTypingError, TypingError
+from numba.core.typeconv import Conversion
+from numba.core.types.abstract import Callable, Hashable, Literal, Type
+from numba.core.types.common import Dummy, IterableType, Opaque, SimpleIteratorType
+from numba.core.utils import get_hashable_key
 
 _TypeT = TypeVar("_TypeT", bound=Type, default=Type)
 

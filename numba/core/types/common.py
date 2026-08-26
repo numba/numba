@@ -2,8 +2,10 @@
 Helper classes / mixins for defining types.
 """
 
-from .abstract import ArrayCompatible, Dummy, IterableType, IteratorType
 from numba.core.errors import NumbaTypeError, NumbaValueError
+from numba.core.types.abstract import ArrayCompatible, IteratorType
+from numba.core.types.abstract import Dummy as Dummy
+from numba.core.types.abstract import IterableType as IterableType
 
 
 class Opaque(Dummy):

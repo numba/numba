@@ -1,8 +1,10 @@
-from typing import ClassVar, Literal, TypeAlias
+from typing import ClassVar, Generic, Literal, TypeAlias, TypeVar
 
-from typing_extensions import Generic, Self, TypeVar, override
+from typing_extensions import Self, override
 
-from .abstract import ArrayCompatible, Dummy, IterableType, IteratorType, Type
+from .abstract import ArrayCompatible, IteratorType, Type
+from .abstract import Dummy as Dummy
+from .abstract import IterableType as IterableType
 from .iterators import ArrayIterator
 
 _TypeT_co = TypeVar("_TypeT_co", bound=Type, default=Type, covariant=True)
@@ -11,19 +13,32 @@ _Layout: TypeAlias = Literal["C", "F", "CS", "FS", "A"]
 
 ###
 
-class Opaque(Dummy): ...
+
+class Opaque(Dummy):
+    ...
+
 
 class SimpleIterableType(IterableType[_TypeT_co], Generic[_TypeT_co]):
-    def __init__(self, name: str, iterator_type: IteratorType[_TypeT_co]) -> None: ...
+    def __init__(
+        self, name: str, iterator_type: IteratorType[_TypeT_co]
+    ) -> None:
+        ...
+
     @property
     @override
-    def iterator_type(self) -> IteratorType[_TypeT_co]: ...
+    def iterator_type(self) -> IteratorType[_TypeT_co]:
+        ...
+
 
 class SimpleIteratorType(IteratorType[_TypeT_co], Generic[_TypeT_co]):
-    def __init__(self, name: str, yield_type: _TypeT_co) -> None: ...
+    def __init__(self, name: str, yield_type: _TypeT_co) -> None:
+        ...
+
     @property
     @override
-    def yield_type(self) -> _TypeT_co: ...
+    def yield_type(self) -> _TypeT_co:
+        ...
+
 
 class Buffer(IterableType, ArrayCompatible):
     LAYOUTS: ClassVar[frozenset[_Layout]] = ...
@@ -40,24 +55,36 @@ class Buffer(IterableType, ArrayCompatible):
         layout: _Layout,
         readonly: bool = False,
         name: str | None = None,
-    ) -> None: ...
+    ) -> None:
+        ...
+
     @property  # TODO: Use generic `ArrayIterator` once we have `iterators.pyi`
     @override
-    def iterator_type(self) -> ArrayIterator: ...
+    def iterator_type(self) -> ArrayIterator:
+        ...
+
     @property
     @override
-    def as_array(self) -> Self: ...
+    def as_array(self) -> Self:
+        ...
+
     @property
     @override
-    def key(self) -> tuple[Type, int, _Layout, bool]: ...
+    def key(self) -> tuple[Type, int, _Layout, bool]:
+        ...
 
     #
     @property
-    def is_c_contig(self) -> bool: ...
+    def is_c_contig(self) -> bool:
+        ...
+
     @property
-    def is_f_contig(self) -> bool: ...
+    def is_f_contig(self) -> bool:
+        ...
+
     @property
-    def is_contig(self) -> bool: ...
+    def is_contig(self) -> bool:
+        ...
 
     #
     def copy(
@@ -65,4 +92,5 @@ class Buffer(IterableType, ArrayCompatible):
         dtype: Type | None = None,
         ndim: int | None = None,
         layout: _Layout | None = None,
-    ) -> Self: ...
+    ) -> Self:
+        ...
