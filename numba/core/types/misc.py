@@ -29,7 +29,7 @@ class Phantom(Dummy):
 
 class Undefined(Dummy):
     """
-    A type that is left imprecise.  This is used as a temporaray placeholder
+    A type that is left imprecise.  This is used as a temporary placeholder
     during type inference in the hope that the type can be later refined.
     """
 
