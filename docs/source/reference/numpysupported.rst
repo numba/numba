@@ -44,10 +44,6 @@ Array objects
 The N-dimensional array (ndarray)
 =================================
 
-`NumPy arrays <http://docs.scipy.org/doc/numpy/reference/arrays.ndarray.html>`_
-of any of the scalar types supported by Numba are supported, regardless of the shape
-or layout.
-
 .. Constructing arrays
 .. -------------------
 
