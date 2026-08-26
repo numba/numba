@@ -348,8 +348,22 @@ class Lower(BaseLower):
 
     def init(self):
         super().init()
+
         # find all singly assigned variables
         self._find_singly_assigned_variable()
+
+        # Lazily created (block, retcode slot) pair releasing this frame's
+        # owned references before returning a propagated error status.
+        # See _get_exception_cleanup_block().
+
+        self._exception_cleanup = None
+
+        # Frontend type of each stack slot, recorded when the slot is
+        # created.  Kept separately from fndesc.typemap as the latter may
+        # be temporarily swapped out (e.g. by parfor lowering) while the
+        # slots live on.
+
+        self._varmap_fetypes = {}
 
     @property
     def _disable_sroa_like_opt(self):
@@ -395,6 +409,22 @@ class Lower(BaseLower):
                     num_assigns_for_blk[stmt.target.name] += 1
                 num_assigns_by_defblk_and_var[defblk] = num_assigns_for_blk
 
+            # NRT-managed variables must live in a stack slot so that the
+            # exception cleanup block can release the references they own
+            # when an error status is propagated out of this function (see
+            # _get_exception_cleanup_block).
+
+            dmm = self.context.data_model_manager
+            typemap = self.fndesc.typemap
+
+            def must_spill(var):
+                if not self.context.enable_nrt:
+                    return False
+                fetype = typemap.get(var)
+                if fetype is None:
+                    return False
+                return dmm[fetype].contains_nrt_meminfo()
+
             # Keep only variables that are defined locally and used locally
             for var in var_assign_map:
                 if var not in alloca_vars and len(var_assign_map[var]) == 1:
@@ -403,11 +433,75 @@ class Lower(BaseLower):
                         [defblk] = var_assign_map[var]
                         # Ensure that the variable is not defined multiple
                         # times in the block
-                        if num_assigns_by_defblk_and_var[defblk][var] == 1:
+                        if (num_assigns_by_defblk_and_var[defblk][var] == 1
+                                and not must_spill(var)):
                             sav.add(var)
 
         self._singly_assigned_vars = sav
         self._blk_local_varmap = {}
+
+    def pre_lower(self):
+        super().pre_lower()
+
+        # Let the call convention route error propagation through this
+        # frame's exception cleanup block so that owned references are
+        # released; see issue #10783.  Generators manage their state
+        # differently and are not supported.
+
+        if self.context.enable_nrt and not self.func_ir.func_id.is_generator:
+            self.builder._frame_exception_cleanup = \
+                self._get_exception_cleanup_block
+
+    def post_lower(self):
+        self._emit_exception_cleanup_block()
+        super().post_lower()
+
+    def _get_exception_cleanup_block(self):
+        """
+        Get (creating it if necessary) the basic block releasing this
+        frame's owned references before returning a propagated error
+        status, along with the stack slot holding the error code to
+        return.  The block contents are emitted by
+        _emit_exception_cleanup_block() once the whole function body has
+        been lowered.
+        """
+        if self._exception_cleanup is None:
+            bb = self.function.append_basic_block('exc.cleanup')
+            retcode_slot = cgutils.alloca_once(
+                self.builder, llvmlite.ir.IntType(32), name='exc.retcode',
+            )
+            self._exception_cleanup = (bb, retcode_slot)
+
+        return self._exception_cleanup
+
+    def _emit_exception_cleanup_block(self):
+        """
+        Populate the exception cleanup block, if it was requested by a
+        call site.  Decref every NRT-managed variable slot; slots are
+        NULL-initialized and zero-filled on deletion, so at any point a
+        non-NULL slot holds exactly one reference owned by this frame and
+        decref of a NULL value is a no-op.
+        """
+        if self._exception_cleanup is None:
+            return
+
+        bb, retcode_slot = self._exception_cleanup
+        dmm = self.context.data_model_manager
+
+        with debuginfo.suspend_emission(self.builder):
+            self.builder.position_at_end(bb)
+            for name, ptr in self.varmap.items():
+                # Slots inserted into varmap by external code (e.g. parfor
+                # lowering) have no recorded frontend type; skip them.
+                fetype = self._varmap_fetypes.get(name)
+                if fetype is None:
+                    continue
+                if dmm[fetype].contains_nrt_meminfo():
+                    self.context.nrt.decref(self.builder, fetype,
+                                            self.builder.load(ptr))
+
+            retcode = self.builder.load(retcode_slot)
+            self.call_conv._return_errcode_raw(self.builder, retcode)
 
     def pre_block(self, block):
         from numba.core.unsafe import eh
@@ -1496,8 +1590,9 @@ class Lower(BaseLower):
                 self._disable_sroa_like_opt):
             # If not already defined, allocate it
             ptr = self.alloca(name, fetype)
-            # Remember the pointer
+            # Remember the pointer and the frontend type
             self.varmap[name] = ptr
+            self._varmap_fetypes[name] = fetype
 
     def getvar(self, name):
         """

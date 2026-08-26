@@ -4,7 +4,8 @@ import traceback
 
 from numba import jit, njit
 from numba.core import types, errors, utils
-from numba.tests.support import (TestCase, expected_failure_py311,
+from numba.tests.support import (TestCase, MemoryLeakMixin,
+                                 expected_failure_py311,
                                  expected_failure_py312,
                                  expected_failure_py313,
                                  expected_failure_py314,
@@ -520,6 +521,146 @@ class TestRaising(TestCase):
                 with self.assertRaises(ValueError) as e:
                     fn(arg)
                 self.assertEqual((arg,), e.exception.args)
+
+
+class TestPropagationRefCleanup(MemoryLeakMixin, TestCase):
+    """
+    Issue #10783: references owned by a function frame (arguments and
+    locals that are live across a raising call) must be released when an
+    exception raised in a callee propagates out of the frame.
+    """
+
+    def _check_raises(self, cfunc, *args):
+        with self.assertRaises(ValueError) as cm:
+            cfunc(*args)
+        self.assertIn("bad", str(cm.exception))
+
+    def test_arg_live_across_raising_call(self):
+        # The reference to `data` held by the caller's frame used to leak,
+        # pinning the array.
+        @njit
+        def callee(x):
+            if x >= 1.0:
+                raise ValueError("bad")
+            return 2.0 * x
+
+        @njit
+        def caller(data, x):
+            v = callee(x)
+            for i in range(data.size):
+                data[i] = v
+
+        data = np.zeros(4)
+        caller(data, 0.5)
+        self.assertPreciseEqual(data, np.ones(4))
+        for _ in range(10):
+            self._check_raises(caller, data, 1.5)
+
+    def test_local_alloc_live_across_raising_call(self):
+        # An array allocated in the caller, live across the raising call,
+        # in a single basic block (exercises the SSA-like fastpath).
+        @njit
+        def callee(x):
+            if x >= 1.0:
+                raise ValueError("bad")
+            return 2.0 * x
+
+        @njit
+        def caller(x):
+            a = np.ones(3)
+            v = callee(x)
+            return a[0] + v
+
+        self.assertPreciseEqual(caller(0.5), 2.0)
+        for _ in range(10):
+            self._check_raises(caller, 1.5)
+
+    def test_local_alloc_multiblock(self):
+        # Same as above but with control flow so the local lives in a
+        # stack slot.
+        @njit
+        def callee(x):
+            if x >= 1.0:
+                raise ValueError("bad")
+            return 2.0 * x
+
+        @njit
+        def caller(n, x):
+            a = np.zeros(3)
+            if n > 0:
+                a[0] = 1.0
+            v = callee(x)
+            return a[0] + v
+
+        self.assertPreciseEqual(caller(1, 0.5), 2.0)
+        for _ in range(10):
+            self._check_raises(caller, 1, 1.5)
+
+    def test_dynamic_exception_from_callee(self):
+        @njit
+        def callee(x):
+            if x >= 1.0:
+                raise ValueError("bad", x)
+            return 2.0 * x
+
+        @njit
+        def caller(data, x):
+            v = callee(x)
+            for i in range(data.size):
+                data[i] = v
+
+        data = np.zeros(4)
+        caller(data, 0.5)
+        for _ in range(10):
+            self._check_raises(caller, data, 1.5)
+
+    def test_propagation_through_two_frames(self):
+        # Each frame in the call stack must release its own references.
+        @njit
+        def callee(x):
+            if x >= 1.0:
+                raise ValueError("bad")
+            return 2.0 * x
+
+        @njit
+        def mid(data, x):
+            tmp = np.ones(2)
+            v = callee(x)
+            return tmp[0] + v + data[0]
+
+        @njit
+        def caller(data, x):
+            v = mid(data, x)
+            for i in range(data.size):
+                data[i] = v
+
+        data = np.zeros(4)
+        caller(data, 0.5)
+        for _ in range(10):
+            self._check_raises(caller, data, 1.5)
+
+    def test_caught_exception_unaffected(self):
+        # A locally caught exception must not double-release references.
+        @njit
+        def callee(x):
+            if x >= 1.0:
+                raise ValueError("bad")
+            return 2.0 * x
+
+        @njit
+        def caller(data, x):
+            try:
+                v = callee(x)
+            except Exception:
+                v = -1.0
+            for i in range(data.size):
+                data[i] = v
+            return data[0]
+
+        data = np.zeros(4)
+        self.assertPreciseEqual(caller(data, 0.5), 1.0)
+        for _ in range(10):
+            self.assertPreciseEqual(caller(data, 1.5), -1.0)
 
 
 if __name__ == '__main__':
