@@ -403,6 +403,10 @@ def array_repeat(a, repeats):
     return np.asarray(a).repeat(repeats)
 
 
+def np_tile(A, reps):
+    return np.tile(A, reps)
+
+
 def np_select(condlist, choicelist, default=0):
     return np.select(condlist, choicelist, default=default)
 
@@ -5625,6 +5629,54 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             for rep in [True, "a", "1"]:
                 with self.assertRaises(TypingError):
                     nbfunc(np.ones(1), rep)
+
+    def test_tile(self):
+        pyfunc = np_tile
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # 1-D arrays and scalars with integer and tuple reps
+        for a in (np.arange(5), np.array([]), 3.0, True, np.array([1, 2]),
+                  (1, 2, 3), [1, 2, 3]):
+            for reps in (2, 0, 1, (6,), (3, 3), (2, 1, 4)):
+                expected = pyfunc(a, reps)
+                got = cfunc(a, reps)
+                self.assertPreciseEqual(expected, got)
+
+        # Multi-dimensional arrays with integer and tuple reps
+        for a in (np.arange(6).reshape(2, 3),
+                  np.arange(24).reshape(4, 3, 2),
+                  np.arange(16).reshape(2, 2, 2, 2)):
+            for reps in (0, 1, 2, 3):
+                expected = pyfunc(a, reps)
+                got = cfunc(a, reps)
+                self.assertPreciseEqual(expected, got)
+            # Tuple reps for multi-dim arrays
+            for reps in ((2,), (1, 2), (2, 1), (2, 3), (3, 2, 1)):
+                expected = pyfunc(a, reps)
+                got = cfunc(a, reps)
+                self.assertPreciseEqual(expected, got)
+
+    def test_tile_exception(self):
+        cfunc = jit(nopython=True)(np_tile)
+
+        self.disable_leak_check()
+
+        # Negative dimensions, integer reps
+        with self.assertRaises(ValueError) as raises:
+            cfunc(np.arange(3), -1)
+        self.assertIn("negative dimensions are not allowed",
+                      str(raises.exception))
+
+        # Negative dimensions, tuple reps
+        with self.assertRaises(ValueError) as raises:
+            cfunc(np.arange(3), (2, -1))
+        self.assertIn("negative dimensions are not allowed",
+                      str(raises.exception))
+
+        # Non-integer reps
+        with self.assertTypingError() as raises:
+            cfunc(np.arange(3), 1.5)
+        self.assertIn("reps", str(raises.exception))
 
     def test_select(self):
         np_pyfunc = np_select
