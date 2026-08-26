@@ -308,5 +308,245 @@ class TestGUFuncCacheRace(TestCase):
             shutil.rmtree(tmpdir, ignore_errors=True)
 
 
+# ---------------------------------------------------------------------------
+# Multi-signature variant (follow-up to the per-qualname counter fix).
+#
+# The per-qualname counter above is still order-dependent when a single
+# @guvectorize function has more than one signature.  The unique id is only
+# assigned on a cache *miss* (during compilation); a cache *hit* returns
+# before the id is advanced.  So two processes that compile the same function
+# with a different mix of cached/uncached signatures assign different ids to
+# the same signature:
+#
+#   Process A (both signatures miss):   float32 -> id 1, float64 -> id 2
+#   Process B (float32 already cached):  float64 -> id 1
+#
+# The float64 id is baked into the mangled symbol name, so A's float64 wrapper
+# (guf-*.nbc, abi:v2) ends up paired with B's float64 kernel (.nbc, abi:v1) ->
+# null function pointer -> SIGSEGV.  The fix makes the id a pure function of
+# the function's identity, so every overload gets the same id regardless of
+# compilation order or cache state.
+# ---------------------------------------------------------------------------
+
+# A single gufunc compiled for two signatures.  Both signatures share one
+# function cache file and one wrapper cache file, keyed by overload index.
+MULTISIG_GUFUNC_MODULE = textwrap.dedent("""\
+    import numpy as np
+    from numba import guvectorize, types
+
+    @guvectorize([(types.float32[:], types.float32[:]),
+                  (types.float64[:], types.float64[:])],
+                 '(n)->(n)', cache=True)
+    def gu(x, result):
+        for i in range(x.shape[0]):
+            result[i] = x[i] + 1.0
+""")
+
+
+# Same barrier worker as above, but for the single two-signature gufunc.
+# float32 is compiled before float64 so a fresh process assigns them ids 1
+# and 2.
+MULTISIG_WORKER_SCRIPT = textwrap.dedent("""\
+    import os
+    import sys
+    import time
+
+    worker_id = sys.argv[1]
+    barrier_dir = sys.argv[2]
+    module_dir = sys.argv[3]
+
+    import numba.core.caching as _caching
+
+    _original_save_data = _caching.IndexDataCacheFile._save_data
+    _save_count = [0]
+
+    def _barrier_save_data(self, name, data):
+        _save_count[0] += 1
+        count = _save_count[0]
+
+        sig_path = os.path.join(barrier_dir, f'{worker_id}_ready_{count}')
+        with open(sig_path, 'w') as f:
+            f.write(name)
+
+        go_path = os.path.join(barrier_dir, f'{worker_id}_go_{count}')
+        deadline = time.monotonic() + 120
+        while not os.path.exists(go_path):
+            if time.monotonic() > deadline:
+                raise TimeoutError(
+                    f"Worker {worker_id} timed out at save #{count} "
+                    f"for {name}"
+                )
+            time.sleep(0.01)
+
+        return _original_save_data(self, name, data)
+
+    _caching.IndexDataCacheFile._save_data = _barrier_save_data
+
+    sys.path.insert(0, module_dir)
+    import numpy as np
+    from gufunc_module import gu
+
+    gu(np.ones(3, dtype=np.float32))
+    gu(np.ones(3, dtype=np.float64))
+
+    done_path = os.path.join(barrier_dir, f'{worker_id}_done')
+    with open(done_path, 'w') as f:
+        f.write(f'saves={_save_count[0]}')
+""")
+
+
+MULTISIG_VERIFY_SCRIPT = textwrap.dedent("""\
+    import sys
+    import numpy as np
+
+    sys.path.insert(0, sys.argv[1])
+    from gufunc_module import gu
+
+    x = np.ones(3, dtype=np.float64)
+    result = gu(x)
+    expected = x + 1.0
+    assert np.allclose(result, expected), f"Expected {expected}, got {result}"
+    print("OK")
+""")
+
+
+class TestGUFuncMultiSigCacheRace(TestCase):
+    """Reproduce the multi-signature variant of the gufunc caching race.
+
+    A single @guvectorize function with two signatures is compiled by two
+    processes with a different mix of cached signatures.  Barrier
+    synchronization at ``_save_data`` forces the interleaving that pairs one
+    signature's wrapper (abi:v2) with the other process's kernel (abi:v1).
+    See the module-level comment for the full timeline.
+    """
+
+    def _wait_for(self, path, timeout=120, proc=None):
+        """Wait for a barrier signal file, failing fast if *proc* dies."""
+        deadline = time.monotonic() + timeout
+        while not os.path.exists(path):
+            if time.monotonic() > deadline:
+                self.fail(f"Timeout waiting for {path}")
+            if proc is not None and proc.poll() is not None:
+                stderr = proc.stderr.read().decode()
+                self.fail(
+                    f"Process exited with code {proc.returncode} while "
+                    f"waiting for {os.path.basename(path)}:\n{stderr}"
+                )
+            time.sleep(0.01)
+
+    def _signal(self, path):
+        """Create a go signal file."""
+        with open(path, 'w') as f:
+            f.write('go')
+
+    def test_multi_signature_partial_cache_no_segfault(self):
+        """One gufunc, two signatures, partial cache hit -> no ABI mismatch."""
+        tmpdir = tempfile.mkdtemp(prefix='numba_msig_race_test_')
+        barrier_dir = os.path.join(tmpdir, 'barriers')
+        module_dir = os.path.join(tmpdir, 'module')
+        os.makedirs(barrier_dir)
+        os.makedirs(module_dir)
+
+        proc_a = None
+        proc_b = None
+
+        try:
+            with open(os.path.join(module_dir, 'gufunc_module.py'), 'w') as f:
+                f.write(MULTISIG_GUFUNC_MODULE)
+            worker_path = os.path.join(tmpdir, 'worker.py')
+            with open(worker_path, 'w') as f:
+                f.write(MULTISIG_WORKER_SCRIPT)
+            verify_path = os.path.join(tmpdir, 'verify.py')
+            with open(verify_path, 'w') as f:
+                f.write(MULTISIG_VERIFY_SCRIPT)
+
+            python = sys.executable
+
+            # -- Worker A: compiles both signatures from scratch. --
+            # _save_data order for a two-signature gufunc (both kernels, then
+            # both wrappers):
+            #   A_ready_1: float32 kernel  (.1.nbc)
+            #   A_ready_2: float64 kernel  (.2.nbc)
+            #   A_ready_3: float32 wrapper (guf-.1.nbc)
+            #   A_ready_4: float64 wrapper (guf-.2.nbc)
+            proc_a = subprocess.Popen(
+                [python, worker_path, 'A', barrier_dir, module_dir],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            )
+
+            # Let A save the float32 kernel (so B finds it cached), then hold
+            # A right before it writes the float64 kernel.
+            self._wait_for(os.path.join(barrier_dir, 'A_ready_1'), proc=proc_a)
+            self._signal(os.path.join(barrier_dir, 'A_go_1'))
+            self._wait_for(os.path.join(barrier_dir, 'A_ready_2'), proc=proc_a)
+
+            # -- Worker B: float32 is cached but the float64 kernel is not on --
+            # disk yet, so B compiles float64 from scratch.  With the
+            # per-qualname counter B assigns it abi:v1 (float32 was a cache
+            # hit, so the counter was never advanced) while A assigned abi:v2.
+            proc_b = subprocess.Popen(
+                [python, worker_path, 'B', barrier_dir, module_dir],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            )
+            self._wait_for(os.path.join(barrier_dir, 'B_ready_1'), proc=proc_b)
+
+            # Let A write the float64 kernel and BOTH wrappers (all abi:v2),
+            # then finish.
+            self._signal(os.path.join(barrier_dir, 'A_go_2'))
+            self._wait_for(os.path.join(barrier_dir, 'A_ready_3'), proc=proc_a)
+            self._signal(os.path.join(barrier_dir, 'A_go_3'))
+            self._wait_for(os.path.join(barrier_dir, 'A_ready_4'), proc=proc_a)
+            self._signal(os.path.join(barrier_dir, 'A_go_4'))
+            self._wait_for(os.path.join(barrier_dir, 'A_done'), proc=proc_a)
+
+            # Let B overwrite the float64 kernel (abi:v1).  B then finds A's
+            # wrappers cached and loads them -- pairing the abi:v2 float64
+            # wrapper with the abi:v1 float64 kernel.  On the buggy build B
+            # segfaults here; with the fix the ids match.
+            self._signal(os.path.join(barrier_dir, 'B_go_1'))
+            self._wait_for(os.path.join(barrier_dir, 'B_done'), timeout=120,
+                           proc=proc_b)
+
+            a_exit = proc_a.wait(timeout=30)
+            b_exit = proc_b.wait(timeout=30)
+            a_stderr = proc_a.stderr.read().decode()
+            b_stderr = proc_b.stderr.read().decode()
+
+            self.assertEqual(
+                a_exit, 0,
+                f"Worker A failed (exit={a_exit}):\n{a_stderr}",
+            )
+            self.assertEqual(
+                b_exit, 0,
+                f"Worker B failed (exit={b_exit}):\n{b_stderr}",
+            )
+
+            # -- Verify from a fresh process. --
+            # Without the fix this segfaults: the float64 kernel has abi:v1
+            # symbols but the wrapper references abi:v2 symbols.
+            result = subprocess.run(
+                [python, verify_path, module_dir],
+                capture_output=True, text=True, timeout=60,
+            )
+
+            self.assertEqual(
+                result.returncode, 0,
+                f"Verification failed (segfault from ABI mismatch?):\n"
+                f"stdout: {result.stdout}\n"
+                f"stderr: {result.stderr}",
+            )
+            self.assertIn("OK", result.stdout)
+
+        finally:
+            for proc in (proc_a, proc_b):
+                if proc is not None:
+                    try:
+                        proc.kill()
+                        proc.wait(timeout=5)
+                    except (ProcessLookupError, subprocess.TimeoutExpired):
+                        pass
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+
 if __name__ == '__main__':
     unittest.main()
