@@ -129,8 +129,11 @@ Item selection and manipulation:
 * :meth:`~numpy.ndarray.repeat` (no axis argument)
 * :meth:`~numpy.ndarray.sort` (without arguments)
 * :meth:`~numpy.ndarray.argsort` (``kind`` key word argument supported for
-   values ``'quicksort'`` and ``'mergesort'``)
+  values ``'quicksort'`` and ``'mergesort'``)
 * :meth:`~numpy.ndarray.nonzero`
+
+Where applicable, the corresponding top-level NumPy functions (such as
+:func:`numpy.argsort`) are similarly supported.
 
 .. warning::
   Sorting may be slightly slower than NumPy's implementation.
@@ -147,7 +150,7 @@ Calculation:
 * :meth:`~numpy.ndarray.conj`
 * :meth:`~numpy.ndarray.conjugate`
 * :meth:`~numpy.ndarray.sum` (with or without the ``axis`` and/or ``dtype``
-   arguments.)
+  arguments.)
 
   * ``axis`` only supports ``integer`` values.
   * If the ``axis`` argument is a compile-time constant, all valid values
@@ -174,6 +177,9 @@ Calculation:
 * :meth:`~numpy.ndarray.cumprod`
 * :meth:`~numpy.ndarray.all`
 * :meth:`~numpy.ndarray.any`
+
+The corresponding top-level NumPy functions (such as :func:`numpy.prod`)
+are similarly supported.
 
 Arithmetic, matrix multiplication, and comparison operations
 ------------------------------------------------------------
