@@ -936,15 +936,18 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         atypes = tuple(sig.args)
         if atypes not in self.overloads:
             if self._can_compile:
-                # Compiling may raise any NumbaError
-                self.compile(atypes)
+                # Pass the full signature so a declared return type (e.g. from
+                # FunctionType) seeds compilation instead of inferring a
+                # Literal return (see
+                # https://github.com/numba/numba/issues/10755).
+                self.compile(sig)
             else:
                 msg = f"{sig} not available and compilation disabled"
                 raise errors.TypingError(msg)
         cres = self.overloads[atypes]
-        # A precise FunctionType return must use the same LLVM value type
-        # as the compiled return (no cast is inserted at the call; see
-        # https://github.com/numba/numba/issues/10755).
+        # Overloads are keyed by args only, so a pre-existing overload may
+        # still have a mismatched return. Reject when LLVM value types
+        # differ (no cast is inserted at the FunctionType call).
         _, return_type = sigutils.normalize_signature(sig)
         if return_type is not None and return_type.is_precise():
             actual = cres.signature.return_type
