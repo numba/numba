@@ -612,7 +612,8 @@ class TestCFGraph(TestCase):
                       ([0, 12, 18, 21], [0, 18, 12, 21]))
         g = self.loopless2()
         self.assertIn(g.topo_order(),
-                      ([99, 18, 12, 21, 34, 42], [99, 12, 18, 21, 34, 42]))
+                      ([99, 18, 12, 21, 34, 42], [99, 12, 18, 21, 34, 42],
+                       [99, 18, 12, 21, 42, 34], [99, 12, 18, 21, 42, 34]))
         g = self.infinite_loop2()
         self.assertIn(g.topo_order(),
                       ([0, 3, 9, 16], [0, 3, 16, 9]))

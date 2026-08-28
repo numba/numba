@@ -1,0 +1,9 @@
+Fix ``AssertionError`` when unifying mismatched first-class function types
+--------------------------------------------------------------------------
+
+A tuple holding two first-class functions with the same argument count but
+different signatures raised a bare ``AssertionError`` with no message, from
+``typeof`` while typing the argument, so no Numba error context was attached
+either. ``unified_function_type`` now returns ``None`` for that case, as its
+documentation already describes, which lets ``BaseTuple.from_types`` fall back
+to a heterogeneous tuple and the call report the actual mismatch.

@@ -4,6 +4,7 @@ import importlib
 _delayed_symbols = {
     "Dict": ".typeddict",
     "List": ".typedlist",
+    "Set": ".typedset",
 }
 
 

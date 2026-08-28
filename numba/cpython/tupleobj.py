@@ -121,7 +121,7 @@ def unituple_constant(context, builder, ty, pyval):
 
 @lower_constant(types.Tuple)
 @lower_constant(types.NamedTuple)
-def unituple_constant(context, builder, ty, pyval):
+def tuple_constant(context, builder, ty, pyval):
     """
     Create a heterogeneous tuple constant.
     """

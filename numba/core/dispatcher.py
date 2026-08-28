@@ -186,8 +186,6 @@ class CompilingCounter(object):
     def __bool__(self):
         return self.counter > 0
 
-    __nonzero__ = __bool__
-
 
 class _DispatcherBase(_dispatcher.Dispatcher):
     """
@@ -672,7 +670,20 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             conv = self.typingctx.install_possible_conversions(args, sig.args)
             if conv:
                 found = True
-        return found
+        if found:
+            return True
+        # No conversion worked, re-raise return-type rejects from
+        # get_compile_result as TypeError (see
+        # https://github.com/numba/numba/issues/10755).
+        for sig in self.nopython_signatures:
+            for actual, formal in zip(args, sig.args):
+                if (isinstance(actual, types.Dispatcher) and
+                        isinstance(formal, types.FunctionType)):
+                    try:
+                        actual.dispatcher.get_compile_result(formal.signature)
+                    except errors.TypingError as e:
+                        raise TypeError(str(e)) from None
+        return False
 
     def __repr__(self):
         return "%s(%s)" % (type(self).__name__, self.py_func)
@@ -925,12 +936,27 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
         atypes = tuple(sig.args)
         if atypes not in self.overloads:
             if self._can_compile:
-                # Compiling may raise any NumbaError
-                self.compile(atypes)
+                # Pass the full signature so a declared return type (e.g. from
+                # FunctionType) seeds compilation instead of inferring a
+                # Literal return (see
+                # https://github.com/numba/numba/issues/10755).
+                self.compile(sig)
             else:
                 msg = f"{sig} not available and compilation disabled"
                 raise errors.TypingError(msg)
-        return self.overloads[atypes]
+        cres = self.overloads[atypes]
+        # Overloads are keyed by args only, so a pre-existing overload may
+        # still have a mismatched return. Reject when LLVM value types
+        # differ (no cast is inserted at the FunctionType call).
+        _, return_type = sigutils.normalize_signature(sig)
+        if return_type is not None and return_type.is_precise():
+            actual = cres.signature.return_type
+            if (self.targetctx.get_value_type(actual) !=
+                    self.targetctx.get_value_type(return_type)):
+                msg = (f"mismatch of return type: {actual} "
+                       f"vs {return_type}")
+                raise errors.TypingError(msg)
+        return cres
 
     def recompile(self):
         """

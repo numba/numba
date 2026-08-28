@@ -349,8 +349,6 @@ that must be matched during type inference.
   (maps Python object to Numba type)
 - :ghfile:`numba/core/typing/asnumbatype.py` - Implementation of
   ``as_numba_type`` operations (maps Python types to Numba type)
-- :ghfile:`numba/core/typing/npdatetime.py` - Datetime dtype support for NumPy
-  arrays
 
 
 Target Implementations (CPU)
@@ -382,8 +380,6 @@ typing and implementation to be specified together.
   needed to link generated code
 - :ghfile:`numba/core/fastmathpass.py` - Rewrite pass to add fastmath
   attributes to function call sites and binary operations
-- :ghfile:`numba/core/removerefctpass.py` - Rewrite pass to remove
-  unnecessary incref/decref pairs
 - :ghfile:`numba/core/descriptors.py` - empty base class for all target
   descriptors (is this needed?)
 - :ghfile:`numba/cpython/builtins.py` - Python builtin functions and
@@ -423,7 +419,7 @@ typing and implementation to be specified together.
 - :ghfile:`numba/np/polynomial/polynomial_core.py` - Implementations of NumPy ``Polynomial`` class
 - :ghfile:`numba/np/ufunc_db.py` - Big table mapping types to ufunc
   implementations
-
+- :ghfile:`numba/np/types/datetime.py` - Datetime and timedelta datatype support
 
 Ufunc Compiler and Runtime
 ''''''''''''''''''''''''''

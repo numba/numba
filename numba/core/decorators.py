@@ -95,7 +95,7 @@ def jit(signature_or_function=None, locals=MappingProxyType({}), cache=False,
                 enabled.
 
     Returns
-    --------
+    -------
     A callable usable as a compiled function.  Actual compiling will be
     done lazily if no explicit signatures are passed.
 
@@ -240,7 +240,7 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
 
 def njit(*args, **kws):
     """
-    Equivalent to jit(nopython=True)
+    Legacy decorator that is equivalent to the preferred API: jit().
 
     See documentation for jit function/decorator for full description.
     """

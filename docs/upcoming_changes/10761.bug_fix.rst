@@ -1,0 +1,7 @@
+Fix ``np.clip`` writing past the end of a caller-provided ``out`` array
+-----------------------------------------------------------------------
+
+``np.clip`` did not check the shape of an explicit ``out`` argument, so an
+``out`` that did not match the shape of the result was written past its end
+and a wrong array was returned with no error. The shape is now validated and
+a mismatch raises ``ValueError``, matching NumPy.

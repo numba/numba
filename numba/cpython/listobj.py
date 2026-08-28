@@ -463,7 +463,7 @@ def build_list(context, builder, list_type, items):
 
 
 @lower_builtin(list, types.IterableType)
-def list_constructor(context, builder, sig, args):
+def list_constructor_iterable(context, builder, sig, args):
 
     def list_impl(iterable):
         res = []
@@ -554,7 +554,7 @@ def getslice_list(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, result.value)
 
 @lower_builtin(operator.setitem, types.List, types.SliceType, types.Any)
-def setitem_list(context, builder, sig, args):
+def setitem_list_slice(context, builder, sig, args):
     dest = ListInstance(context, builder, sig.args[0], args[0])
     src = ListInstance(context, builder, sig.args[2], args[2])
 
@@ -1000,7 +1000,7 @@ def list_pop(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @lower_builtin("list.pop", types.List, types.Integer)
-def list_pop(context, builder, sig, args):
+def list_pop_integer(context, builder, sig, args):
     inst = ListInstance(context, builder, sig.args[0], args[0])
     idx = inst.fix_index(args[1])
 
@@ -1201,7 +1201,7 @@ def literal_list_count(lst, x):
         return impl
 
 @overload_method(types.LiteralList, 'copy')
-def literal_list_count(lst):
+def literal_list_copy(lst):
     if isinstance(lst, types.LiteralList):
         def impl(lst):
             return lst # tuples are immutable, as is this, so just return it

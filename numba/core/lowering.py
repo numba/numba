@@ -7,7 +7,7 @@ import llvmlite.ir
 from llvmlite.ir import Constant, IRBuilder
 
 from numba.core import (typing, utils, types, ir, debuginfo, funcdesc,
-                        generators, config, ir_utils, cgutils, removerefctpass,
+                        generators, config, ir_utils, cgutils,
                         targetconfig)
 from numba.core.errors import (LoweringError, new_error_context, TypingError,
                                LiteralTypingError, UnsupportedError,
@@ -203,12 +203,6 @@ class BaseLower(object):
         if config.DUMP_LLVM:
             utils.dump_llvm(self.fndesc, self.module)
 
-        # Special optimization to remove NRT on functions that do not need it.
-        if self.context.enable_nrt and self.generator_info is None:
-            removerefctpass.remove_unnecessary_nrt_usage(self.function,
-                                                         context=self.context,
-                                                         fndesc=self.fndesc)
-
         # Run target specific post lowering transformation
         self.context.post_lowering(self.module, self.library)
 
@@ -390,18 +384,26 @@ class Lower(BaseLower):
                 for var in vl:
                     var_use_map[var].add(blk)
 
+            # Compute number of assignments per variable per block so these
+            # can be accessed efficiently in next loop
+            assigns_by_defblk = {k: v.find_insts(ir.Assign)
+                                 for k,v in self.blocks.items()}
+            num_assigns_by_defblk_and_var = {}
+            for defblk, assign_stmts in assigns_by_defblk.items():
+                num_assigns_for_blk = defaultdict(int)
+                for stmt in assign_stmts:
+                    num_assigns_for_blk[stmt.target.name] += 1
+                num_assigns_by_defblk_and_var[defblk] = num_assigns_for_blk
+
             # Keep only variables that are defined locally and used locally
             for var in var_assign_map:
                 if var not in alloca_vars and len(var_assign_map[var]) == 1:
                     # Usemap does not keep locally defined variables.
                     if len(var_use_map[var]) == 0:
-                        # Ensure that the variable is not defined multiple times
-                        # in the block
                         [defblk] = var_assign_map[var]
-                        assign_stmts = self.blocks[defblk].find_insts(ir.Assign)
-                        assigns = [stmt for stmt in assign_stmts
-                                   if stmt.target.name == var]
-                        if len(assigns) == 1:
+                        # Ensure that the variable is not defined multiple
+                        # times in the block
+                        if num_assigns_by_defblk_and_var[defblk][var] == 1:
                             sav.add(var)
 
         self._singly_assigned_vars = sav
