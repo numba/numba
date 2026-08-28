@@ -1275,6 +1275,83 @@ def array_argmax(a, axis=None):
     return array_argmax_impl
 
 
+def build_array_nanarg_impl(name, operator):
+    """
+    Given an argument reduction name ('max' or 'min') and the comparison to
+    apply, return an implementation of the flattened-array logic shared by
+    np.nanargmax and np.nanargmin. NaN values are skipped, matching NumPy an
+    all-NaN or empty input raises ValueError.
+    """
+    empty_msg = f"attempt to get arg{name} of an empty sequence"
+
+    @register_jitable
+    def array_nanarg_impl(arry):
+        if arry.size == 0:
+            raise ValueError(empty_msg)
+
+        # max_value is initialised such that it is never used in a
+        # comparison: the first non-NaN element is taken unconditionally
+        # (max_idx < 0) and later comparisons only see stored values
+        max_idx = -1
+        max_value = 0
+        idx = 0
+        for v in arry.flat:
+            if not np.isnan(v):
+                if max_idx < 0 or operator(v, max_value):
+                    max_value = v
+                    max_idx = idx
+            idx += 1
+        if max_idx < 0:
+            raise ValueError("All-NaN slice encountered")
+        return max_idx
+
+    return array_nanarg_impl
+
+
+array_nanargmax_impl = build_array_nanarg_impl("max", operator.gt)
+array_nanargmin_impl = build_array_nanarg_impl("min", operator.lt)
+
+
+@overload(np.nanargmin)
+def np_nanargmin(a, axis=None):
+    if not isinstance(a, types.Array):
+        return
+    if isinstance(a.dtype, types.Float):
+        flatten_impl = array_nanargmin_impl
+    elif isinstance(a.dtype, (types.Integer, types.Boolean)):
+        # NaN is not representable, NumPy behaves like plain argmin here
+        flatten_impl = array_argmin_impl_generic
+    else:
+        return
+
+    if is_nonelike(axis):
+        def np_nanargmin_impl(a, axis=None):
+            return flatten_impl(a)
+        return np_nanargmin_impl
+    else:
+        return build_argmax_or_argmin_with_axis_impl(a, axis, flatten_impl)
+
+
+@overload(np.nanargmax)
+def np_nanargmax(a, axis=None):
+    if not isinstance(a, types.Array):
+        return
+    if isinstance(a.dtype, types.Float):
+        flatten_impl = array_nanargmax_impl
+    elif isinstance(a.dtype, (types.Integer, types.Boolean)):
+        # NaN is not representable, NumPy behaves like plain argmax here
+        flatten_impl = array_argmax_impl_generic
+    else:
+        return
+
+    if is_nonelike(axis):
+        def np_nanargmax_impl(a, axis=None):
+            return flatten_impl(a)
+        return np_nanargmax_impl
+    else:
+        return build_argmax_or_argmin_with_axis_impl(a, axis, flatten_impl)
+
+
 @overload(np.all)
 @overload_method(types.Array, "all")
 def np_all(a):

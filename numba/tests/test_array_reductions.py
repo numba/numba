@@ -607,6 +607,100 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_nanmax_basic(self):
         self.check_reduction_basic(array_nanmax)
 
+    def test_nanargmax_nanargmin(self):
+        # np.nanargmax and np.nanargmin are tested together to avoid code
+        # duplication, they only differ in the comparison applied
+        pyfuncs = [
+            lambda a, axis=None: np.nanargmax(a, axis),
+            lambda a, axis=None: np.nanargmin(a, axis),
+        ]
+
+        # floats without NaN, NaN in various positions, and integers (NumPy
+        # treats integer input like plain argmax/argmin as there is no NaN)
+        cases = [
+            np.array([1.0, 3.0, 2.0]),
+            np.array([np.nan, 1.0, 3.0]),
+            np.array([1.0, 3.0, np.nan]),
+            np.array([1.0, np.nan, 3.0, 2.0]),
+            np.array([3.0, np.nan, 1.0, 2.0]),
+            np.array([[1.0, np.nan, 3.0], [2.0, 5.0, np.nan]]),
+            np.array([1, 3, 2]),                 # int64
+            np.array([1, 3, 2], dtype=np.int32),
+        ]
+
+        for pyfunc in pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+            for arr in cases:
+                self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
+
+        # the return dtype is np.intp, both for the scalar (axis=None) result
+        # and the with-axis reduction; note Numba boxes the scalar as a
+        # Python int, the same as for np.argmax/np.argmin
+        for pyfunc in pyfuncs:
+            got = jit(nopython=True)(pyfunc)(np.array([1.0, 3.0]))
+            self.assertEqual(np.asarray(got).dtype, np.dtype(np.intp))
+            got = jit(nopython=True)(pyfunc)(
+                np.array([[1.0, 2.0], [3.0, 4.0]]), 1)
+            self.assertEqual(got.dtype, np.dtype(np.intp))
+
+        # axis=None flattens, axis=k (including negative) reduces along the
+        # given axis, matching NumPy exactly
+        arr2d = np.array([[1.0, np.nan, 3.0], [2.0, 5.0, np.nan]])
+        arr4d = np.arange(120.).reshape(2, 3, 4, 5)
+        arr4d[0, 1, 1, 2] = np.nan
+        arr4d[1, 2, 3, 4] += 100
+
+        for arr in [arr2d, arr4d]:
+            axes = list(range(arr.ndim)) + [-(i + 1) for i in range(arr.ndim)]
+            py_functions = [
+                lambda a, _axis=axis: np.nanargmax(a, axis=_axis)
+                for axis in [None] + axes
+            ] + [
+                lambda a, _axis=axis: np.nanargmin(a, axis=_axis)
+                for axis in [None] + axes
+            ]
+            c_functions = [
+                jit(nopython=True)(pyfunc) for pyfunc in py_functions
+            ]
+            for pyfunc, cfunc in zip(py_functions, c_functions):
+                self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
+
+        # errors, matching NumPy's messages exactly: empty input and all-NaN
+        # input, the latter both for the whole array and for a slice along
+        # the reduced axis
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        for pyfunc, empty_msg in [
+            (pyfuncs[0], "attempt to get argmax of an empty sequence"),
+            (pyfuncs[1], "attempt to get argmin of an empty sequence"),
+        ]:
+            cfunc = jit(nopython=True)(pyfunc)
+            empty = np.array([], dtype=np.float64)
+            with self.assertRaisesRegex(ValueError, empty_msg):
+                pyfunc(empty)
+            with self.assertRaisesRegex(ValueError, empty_msg):
+                cfunc(empty)
+
+        for pyfunc in pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+            allnan = np.array([np.nan, np.nan])
+            with self.assertRaisesRegex(ValueError,
+                                         "All-NaN slice encountered"):
+                pyfunc(allnan)
+            with self.assertRaisesRegex(ValueError,
+                                         "All-NaN slice encountered"):
+                cfunc(allnan)
+            # an all-NaN slice along the reduced axis also raises, the second
+            # column of nan_col is all-NaN
+            nan_col = np.array([[1.0, np.nan], [3.0, np.nan]])
+            with self.assertRaisesRegex(ValueError,
+                                         "All-NaN slice encountered"):
+                pyfunc(nan_col, 0)
+            with self.assertRaisesRegex(ValueError,
+                                         "All-NaN slice encountered"):
+                cfunc(nan_col, 0)
+
     def test_nanmean_basic(self):
         self.check_reduction_basic(array_nanmean)
 
