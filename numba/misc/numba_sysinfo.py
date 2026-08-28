@@ -70,6 +70,11 @@ _numpy_version = 'NumPy Version'
 _numpy_supported_simd_features = 'NumPy Supported SIMD features'
 _numpy_supported_simd_dispatch = 'NumPy Supported SIMD dispatch'
 _numpy_supported_simd_baseline = 'NumPy Supported SIMD baseline'
+# SciPy / LAPACK info
+_scipy_version = 'SciPy Version'
+_lapack_build_ilp64 = 'LAPACK Numba Built ILP64'
+_lapack_runtime_ilp64 = 'LAPACK SciPy Runtime ILP64'
+_lapack_int_width_match = 'LAPACK Int Width Match'
 # SVML info
 _svml_state, _svml_loaded = 'SVML State', 'SVML Lib Loaded'
 _llvm_svml_patched = 'LLVM SVML Patched'
@@ -430,6 +435,27 @@ def get_sysinfo():
         sys_info[_numpy_supported_simd_dispatch] = __cpu_dispatch__
         sys_info[_numpy_supported_simd_baseline] = __cpu_baseline__
 
+    # SciPy / LAPACK information
+    try:
+        from numba.np.linalg import _LAPACK_BUILD_ILP64
+        sys_info[_lapack_build_ilp64] = _LAPACK_BUILD_ILP64
+        try:
+            import scipy
+            import scipy.linalg.cython_lapack  # noqa: F401
+        except ImportError:
+            pass  # no scipy (or too old) -- nothing to compare against
+        else:
+            from numba.np.linalg import _lapack_runtime_is_ilp64
+            sys_info[_scipy_version] = scipy.__version__
+            runtime_ilp64 = _lapack_runtime_is_ilp64()
+            sys_info[_lapack_runtime_ilp64] = runtime_ilp64
+            sys_info[_lapack_int_width_match] = (
+                runtime_ilp64 == _LAPACK_BUILD_ILP64)
+    except Exception as e:
+        _warning_log.append(
+            "Warning (scipy): Probing LAPACK/BLAS integer width failed\n"
+            f"(scipy) {type(e)}: {e}")
+
     # SVML information
     # Replicate some SVML detection logic from numba.__init__ here.
     # If SVML load fails in numba.__init__ the splitting of the logic
@@ -636,6 +662,16 @@ def display_sysinfo(info=None, sep_pos=45):
         ("NumPy Supported SIMD baseline",
          DisplaySeq(info.get(_numpy_supported_simd_baseline, [])
                     or ('None found.',))),
+        ("",),
+        ("__SciPy / LAPACK Information__",),
+        ("SciPy Version", info.get(_scipy_version, 'Not Installed')),
+        ("Numba Built For",
+         'ILP64' if info.get(_lapack_build_ilp64) else 'LP64'),
+        ("SciPy Runtime Provides",
+         ('ILP64' if info[_lapack_runtime_ilp64] else 'LP64')
+         if _lapack_runtime_ilp64 in info else 'Unknown (no SciPy found)'),
+        ("LAPACK Integer Width Matches Build",
+         info.get(_lapack_int_width_match, 'Unknown (no SciPy found)')),
         ("",),
         ("__SVML Information__",),
         ("SVML State, config.USING_SVML", info.get(_svml_state, '?')),

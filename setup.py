@@ -26,6 +26,20 @@ min_numpy_run_version = "1.22"
 min_llvmlite_version = "0.50.0dev0"
 max_llvmlite_version = "0.51"
 
+
+def _detect_lapack_ilp64():
+    """
+    Decide, at build time, whether to use ILP64 BLAS/LAPACK ABI.
+
+    Set NUMBA_LAPACK_ILP64 environment variable to 1 to enable ILP64, see
+    "Build time environment variables" section of the install docs for
+    details.
+    """
+    return os.environ.get("NUMBA_LAPACK_ILP64") == "1"
+
+
+lapack_build_ilp64 = _detect_lapack_ilp64()
+
 if sys.platform.startswith('linux'):
     # Patch for #2555 to make wheels without libpython
     sysconfig.get_config_vars()['Py_ENABLE_SHARED'] = 0
@@ -174,6 +188,10 @@ def get_ext_modules():
                                        "numba/cext/listobject.c",
                                        "numba/cext/setobject.c",
                                        ],
+                              define_macros=[
+                                  ("NUMBA_LAPACK_BUILD_ILP64",
+                                   int(lapack_build_ilp64)),
+                              ],
                               # numba/_random.c needs pthreads
                               extra_link_args=install_name_tool_fixer +
                               extra_link_args,
