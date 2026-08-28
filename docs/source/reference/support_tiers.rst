@@ -159,7 +159,7 @@ Currently supported Tier 1.5 releases for the Numba and llvmlite projects:
   * ``win-64`` (Windows on ``x86_64``)
 
 * Wheel packages on the PyPI distribution system and conda packages on the 
-  Anaconda dot org distribution system for Python 3.11 and beyond.
+  Anaconda dot org distribution system for Python 3.12 and beyond.
 
   * ``win-arm64`` (Windows on 64-bit ARM)
 
