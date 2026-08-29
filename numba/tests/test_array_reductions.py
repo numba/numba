@@ -633,12 +633,14 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             for arr in cases:
                 self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
 
-        # the return dtype is np.intp, both for the scalar (axis=None) result
-        # and the with-axis reduction; note Numba boxes the scalar as a
-        # Python int, the same as for np.argmax/np.argmin
+        # the scalar (axis=None) result is boxed by Numba as a Python int,
+        # the same as for np.argmax/np.argmin; wrapping a Python int with
+        # np.asarray would give the platform default integer (int32 on
+        # Windows), so there is no NumPy dtype to assert for it. The
+        # with-axis reduction returns an array of dtype np.intp
         for pyfunc in pyfuncs:
             got = jit(nopython=True)(pyfunc)(np.array([1.0, 3.0]))
-            self.assertEqual(np.asarray(got).dtype, np.dtype(np.intp))
+            self.assertIsInstance(got, int)
             got = jit(nopython=True)(pyfunc)(
                 np.array([[1.0, 2.0], [3.0, 4.0]]), 1)
             self.assertEqual(got.dtype, np.dtype(np.intp))
