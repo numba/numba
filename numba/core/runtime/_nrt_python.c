@@ -285,7 +285,10 @@ NRT_adapt_ndarray_from_python(PyObject *obj, arystruct_t* arystruct) {
     void *data;
 
     if (!PyArray_Check(obj)) {
-        return -1;
+        obj = PyObject_CallMethod(obj, "__array__", NULL);
+        if (!obj) {
+            return -1;
+        }
     }
 
     ndary = (PyArrayObject*)obj;
