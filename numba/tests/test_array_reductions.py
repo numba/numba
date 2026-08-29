@@ -665,9 +665,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             for pyfunc, cfunc in zip(py_functions, c_functions):
                 self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
 
-        # errors, matching NumPy's messages exactly: empty input and all-NaN
-        # input, the latter both for the whole array and for a slice along
-        # the reduced axis
+        # errors: empty input and all-NaN input, the latter both for the
+        # whole array and for a slice along the reduced axis
         # Exceptions leak references
         self.disable_leak_check()
 
@@ -677,7 +676,15 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         ]:
             cfunc = jit(nopython=True)(pyfunc)
             empty = np.array([], dtype=np.float64)
-            with self.assertRaisesRegex(ValueError, empty_msg):
+            # NumPy's message for empty input is version dependent: NumPy
+            # < 2.0 reports an empty array to np.nanarg* as an all-NaN
+            # slice, NumPy >= 2.0 reports an empty sequence. Numba always
+            # raises the NumPy >= 2.0 message.
+            if numpy_version < (2, 0):
+                pyfunc_msg = "All-NaN slice encountered"
+            else:
+                pyfunc_msg = empty_msg
+            with self.assertRaisesRegex(ValueError, pyfunc_msg):
                 pyfunc(empty)
             with self.assertRaisesRegex(ValueError, empty_msg):
                 cfunc(empty)
