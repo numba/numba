@@ -200,8 +200,8 @@ class ParforLoweringBuilder:
             the object being indexed
         index : ir.Var
             the index
-        val : ir.Var
-            the ty
+        typ : ir.Var
+            the return type
 
         Returns
         -------
