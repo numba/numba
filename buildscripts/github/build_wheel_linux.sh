@@ -25,7 +25,7 @@ fi
 if [ -n "$LLVMLITE_WHEEL_PATH" ] && [ -d "$LLVMLITE_WHEEL_PATH" ]; then
     $PYTHON_EXECUTABLE -m pip install --no-cache-dir $LLVMLITE_WHEEL_PATH/*.whl
 else
-    $PYTHON_EXECUTABLE -m pip install --no-cache-dir -i $WHEELS_INDEX_URL llvmlite
+    $PYTHON_EXECUTABLE -m pip install --no-cache-dir --pre -i $WHEELS_INDEX_URL llvmlite
 fi
 
 # Change to the mounted workspace directory
