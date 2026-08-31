@@ -478,7 +478,7 @@ class TypeRef(Dummy):
     """
     def __init__(self, instance_type):
         self.instance_type = instance_type
-        super(TypeRef, self).__init__('typeref[{}]'.format(self.instance_type))
+        super(TypeRef, self).__init__('types.typeref[{}]'.format(self.instance_type))
 
     @property
     def key(self):
