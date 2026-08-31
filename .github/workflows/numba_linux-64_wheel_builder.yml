@@ -32,6 +32,7 @@ env:
   ARTIFACT_RETENTION_DAYS: 7
   WHEELS_INDEX_URL: https://pypi.anaconda.org/numba/label/dev/simple
   CONDA_CHANNEL_NUMBA: numba/label/dev
+  MANYLINUX_IMAGE: "manylinux_2_28_x86_64:2026.08.08-1"
   # Set USE_TBB to true by default, only override if explicitly set to false
   USE_TBB: ${{ github.event_name == 'workflow_dispatch' && inputs.use_tbb != false || true }}
 
@@ -97,7 +98,7 @@ jobs:
           # Run the build script inside Docker container
           docker run --rm \
             -v ${{ github.workspace }}:/io \
-            quay.io/pypa/manylinux2014_x86_64 \
+            quay.io/pypa/${{ env.MANYLINUX_IMAGE }} \
             bash /io/buildscripts/github/build_wheel_linux.sh \
             "${PYTHON_EXECUTABLE}" \
             "${USE_TBB}" \
@@ -120,7 +121,7 @@ jobs:
           # Run the repair script in Docker
           docker run --rm \
             -v ${{ github.workspace }}:/io \
-            quay.io/pypa/manylinux2014_x86_64 \
+            quay.io/pypa/${{ env.MANYLINUX_IMAGE }} \
             bash /io/buildscripts/github/repair_wheel_linux.sh \
             "$PYTHON_EXECUTABLE" \
             "$USE_TBB" \

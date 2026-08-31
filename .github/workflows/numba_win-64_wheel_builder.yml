@@ -83,7 +83,7 @@ jobs:
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
               python -m pip install llvmlite_wheels/*.whl
           else
-              python -m pip install -i ${{ env.WHEELS_INDEX_URL }} llvmlite
+              python -m pip install --pre -i ${{ env.WHEELS_INDEX_URL }} llvmlite
           fi
           python -m pip install build numpy==${{ matrix.numpy_build }} "setuptools>=69.0.0" wheel tbb==2021.6 tbb-devel==2021.6
 

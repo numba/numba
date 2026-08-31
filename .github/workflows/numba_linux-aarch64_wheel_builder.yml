@@ -27,7 +27,7 @@ env:
   ARTIFACT_RETENTION_DAYS: 7
   WHEELS_INDEX_URL: https://pypi.anaconda.org/numba/label/dev/simple
   CONDA_CHANNEL_NUMBA: numba/label/dev
-  MANYLINUX_IMAGE: "manylinux_2_28_aarch64"
+  MANYLINUX_IMAGE: "manylinux_2_28_aarch64:2026.08.08-1"
 
 jobs:
   load-matrix:

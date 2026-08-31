@@ -49,7 +49,7 @@ jobs:
   osx-arm64-build:
     name: osx-arm64-build-wheel (py ${{ matrix.python_version_full }}, np ${{ matrix.numpy_build }})
     needs: load-matrix
-    runs-on: macos-14
+    runs-on: macos-26
     defaults:
       run:
         shell: bash -elx {0}
@@ -102,7 +102,7 @@ jobs:
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
               arch -arm64 python -m pip install llvmlite_wheels/*.whl
           else
-              arch -arm64 python -m pip install -i ${{ env.WHEELS_INDEX_URL }} llvmlite
+              arch -arm64 python -m pip install --pre -i ${{ env.WHEELS_INDEX_URL }} llvmlite
           fi
           python -m pip install build numpy==${{ matrix.numpy_build }} "setuptools>=69.0.0" wheel
 
@@ -167,7 +167,7 @@ jobs:
   osx-arm64-test:
     name: osx-arm64-test (py ${{ matrix.python_version_full }}, np ${{ matrix.numpy_test }})
     needs: [load-matrix, osx-arm64-build]
-    runs-on: macos-14
+    runs-on: macos-26
     defaults:
       run:
         shell: bash -elx {0}

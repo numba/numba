@@ -32,7 +32,7 @@ jobs:
     runs-on: windows-11-arm
     strategy:
       matrix:
-        python_version: ["3.11", "3.12", "3.13", "3.14"]
+        python_version: ["3.12", "3.13", "3.14"]
       fail-fast: false
     env:
       PYTHON_VERSION: ${{ matrix.python_version }}
@@ -77,7 +77,7 @@ jobs:
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
               python -m pip install llvmlite_wheels/*.whl
           else
-              python -m pip install -i ${{ env.WHEELS_INDEX_URL }} llvmlite
+              python -m pip install --pre -i ${{ env.WHEELS_INDEX_URL }} llvmlite
           fi
           python -m pip install --pre numpy==${NUMPY_VERSION}
           python -m pip install build "setuptools>=69.0.0" wheel
@@ -103,7 +103,7 @@ jobs:
     runs-on: windows-11-arm
     strategy:
       matrix:
-        python_version: ["3.11", "3.12", "3.13", "3.14"]
+        python_version: ["3.12", "3.13", "3.14"]
       fail-fast: false
     env:
       PYTHON_VERSION: ${{ matrix.python_version }}
