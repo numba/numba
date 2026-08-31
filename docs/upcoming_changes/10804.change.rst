@@ -1,0 +1,7 @@
+Linux ``x86_64`` wheels now require ``glibc`` 2.28 or newer
+-----------------------------------------------------------
+
+``linux-64`` wheels are built as ``manylinux_2_28`` instead of
+``manylinux2014``. Installing from PyPI requires ``glibc`` 2.28 or
+newer. Systems with older ``glibc`` can remain on Numba 0.67.
+``linux-aarch64`` was already on ``manylinux_2_28``.
