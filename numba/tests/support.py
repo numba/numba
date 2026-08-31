@@ -187,6 +187,29 @@ def expected_failure_np2(fn):
     else:
         return fn
 
+
+def available_memory_bytes():
+    """
+    Best-effort lookup of currently available system memory, in bytes.
+    Returns None if it can't be determined (psutil not installed, and not
+    running on Linux where /proc/meminfo can be read directly).
+    """
+    try:
+        import psutil
+        return psutil.virtual_memory().available
+    except ImportError:
+        pass
+    if sys.platform.startswith("linux"):
+        try:
+            with open("/proc/meminfo") as f:
+                for line in f:
+                    if line.startswith("MemAvailable:"):
+                        return int(line.split()[1]) * 1024
+        except OSError:
+            pass
+    return None
+
+
 _msg = "SciPy needed for test"
 skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
 
